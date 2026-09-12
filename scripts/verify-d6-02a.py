@@ -256,8 +256,17 @@ def generated_output_policy() -> None:
     if list(TS_TARGET.rglob("*Api.ts")):
         print("Generated TypeScript API transport files are out of scope.", file=sys.stderr)
         sys.exit(1)
-    if (TS_TARGET / "runtime.ts").exists():
-        print("Generated TypeScript runtime transport is out of scope.", file=sys.stderr)
+    runtime_files = sorted(
+        path
+        for root in (TS_TARGET, TS_PACKAGE_SOURCE)
+        for path in root.rglob("runtime.ts")
+        if path.is_file()
+    )
+    if runtime_files:
+        print(
+            f"Generated/shared TypeScript runtime transport is out of scope: {runtime_files}",
+            file=sys.stderr,
+        )
         sys.exit(1)
     package_typescript_sources = sorted(TS_PACKAGE_SOURCE.rglob("*.ts"))
     transport_pattern = re.compile(r"\b(?:BaseAPI|FetchAPI|RequestInit|Response|FormData|fetch)\b")
