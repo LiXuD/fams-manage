@@ -5,6 +5,7 @@
 .playwright-cli/
 output/
 .superpowers/
+.worktrees/
 *.log
 **/operations.jsonl
 
