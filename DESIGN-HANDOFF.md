@@ -1,7 +1,7 @@
 # FAMS 项目阶段与交接入口
 
-> 唯一现役进度入口 · 更新于 2026-09-12  
-> 当前结论：第 1～5 步已完成；第 6 阶段已进入进行中，Git 已在本地 `main` 初始化；D6-01A 本轮修复/复核已完成并通过本地验证，当前状态为 `DEV_VERIFIED`；产品实现尚未开始，D6-01B 远端与 CI 尚未完成；下一步按计划进入 D6-02A。
+> 唯一现役进度入口 · 更新于 2026-09-13
+> 当前结论：第 1～5 步已完成；第 6 阶段已进入进行中，Git 已在本地 `main` 初始化；D6-01A 本轮修复/复核已完成并通过本地验证，当前状态为 `DEV_VERIFIED`；D6-02A 生成流水线已完成本地验证并交接 `IN_REVIEW`，D6-01B 远端与 CI 尚未完成，产品业务实现尚未开始。
 
 ## 1. 八步开发流程与当前进度
 
@@ -12,7 +12,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.1](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-01A 本地基线已验证，下一实际本地任务为 D6-02A；D6-01B 远端能力待外部权限 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.1](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-02A 已交接 `IN_REVIEW`；D6-01B 远端能力待外部权限 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
@@ -36,7 +36,7 @@
 
 1. 先读本文和 [PRD V1.5](docs/superpowers/specs/2026-09-03-fixed-asset-product-design.md)。
 2. 阅读[第六阶段开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)：技术架构、接口契约、Git/CI、D6-01～D6-27 台账、外部依赖及持续维护规则均在其中。Git 提交强制格式见计划 §四.4。
-3. 本轮修订已获用户确认；D6-01A 本轮修复/复核已完成本地基线、提交格式正负夹具、追溯矩阵和恢复说明，状态为 `DEV_VERIFIED`。产品实现尚未开始；下一实际本地任务为 D6-02A；D6-01B 仍等待 GitHub 私有仓库与权限，不能以本地 Git 初始化替代。先验证版本组合并交付 D6-02C 首批真实设计包，再进入 G1 业务编码；独立复核安排在 D6-02C 关闭前落实。以 [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) 的 `F01～F10`、`P01～P26`、`M01～M14` 为开发范围，以第5步[覆盖清单](docs/superpowers/specs/2026-09-11-fams-usability-test-matrix.csv)检查遗漏。
+3. 本轮修订已获用户确认；D6-01A 本轮修复/复核已完成本地基线、提交格式正负夹具、追溯矩阵和恢复说明，状态为 `DEV_VERIFIED`。D6-02A 生成流水线已完成本地验证并交接 `IN_REVIEW`，产品业务实现尚未开始；D6-01B 仍等待 GitHub 私有仓库与权限，不能以本地 Git 初始化替代。D6-02A 独立复核通过后再进入 D6-02B，并按计划交付 D6-02C 首批真实设计包，再进入 G1 业务编码；独立复核安排在 D6-02C 关闭前落实。以 [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) 的 `F01～F10`、`P01～P26`、`M01～M14` 为开发范围，以第5步[覆盖清单](docs/superpowers/specs/2026-09-11-fams-usability-test-matrix.csv)检查遗漏。
 4. 每次任务开始、受阻、送审、验证和验收时同步维护计划台账及执行记录；本文只维护项目阶段和下一步，不复制第二套任务状态。
 5. 只有 PRD 变更或开发发现设计缺口时，才重新打开第5步对应条目；无需恢复已取消的大规模用户测试方案。
 6. 本次完成 D6-01A 本地治理、Git 初始化及提交校验复核，未创建脚手架、远端仓库或配置 CI。技术选型已有计划，不代表实际能力；产品开发、正式 QA 和上线分别记录。
@@ -59,9 +59,9 @@
 | 事实面 | 状态 | 说明 |
 |---|---|---|
 | 设计文档 | `changed-and-verified` | 一期功能覆盖验证已完成并同步 |
-| 开发计划 | `in-progress` | V1.1 修订已确认；D6-01A 本轮修复/复核已 `DEV_VERIFIED`；D6-01B 远端与 CI 尚未完成；D6-02A 为下一步；独立复核人/方式待指定 |
+| 开发计划 | `in-progress` | V1.1 修订已确认；D6-01A 本轮修复/复核已 `DEV_VERIFIED`；D6-02A 生成流水线已 `IN_REVIEW`；D6-01B 远端与 CI 尚未完成；独立复核人/方式待指定 |
 | 规则 | `changed-and-verified` | AGENTS 已指向当前阶段 |
-| 产品代码 | `not-started` | 产品实现尚未开始；当前仅有本地治理产物与静态原型 |
-| 产品运行态 | `not-applicable` | 只有静态原型预览 |
+| 产品代码 | `probe-in-review` | D6-02A 仅建立代表性契约探针与生成/HTTP 验证入口并已交接复核；一期产品业务实现尚未开始 |
+| 产品运行态 | `probe-only` | D6-02A 仅验证本地最小 Spring HTTP 探针；无产品运行态或生产端点 |
 | 记忆 | `out-of-scope` | 本次未修改机器生成记忆 |
-| 工作区 | `verified-current` | 已初始化本地 Git `main`；无远端，D6-01B 待执行 |
+| 工作区 | `verified-current` | 已初始化本地 Git `main`；D6-02A 分支已完成并交接复核；无远端，D6-01B 待执行 |
