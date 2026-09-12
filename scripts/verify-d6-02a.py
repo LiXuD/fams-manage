@@ -4,24 +4,26 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+JAVA_TARGET = ROOT / "backend" / "target"
 JAVA_GENERATED = ROOT / "backend" / "target" / "generated-sources" / "openapi" / "java"
-TS_GENERATED = (
-    ROOT
-    / "packages"
-    / "api-types"
-    / "target"
-    / "generated-sources"
-    / "openapi"
-    / "typescript"
-)
+TS_TARGET = ROOT / "packages" / "api-types" / "target"
+TS_GENERATED = TS_TARGET / "generated-sources" / "openapi" / "typescript"
+TS_PACKAGE_SOURCE = ROOT / "packages" / "api-types" / "src"
+
+
+class VerificationFailure(RuntimeError):
+    """A generated-output policy assertion failed."""
 
 
 def run_rtk(command: str) -> subprocess.CompletedProcess[str]:
@@ -75,8 +77,7 @@ def require_step(label: str, command: str, expected: int = 0) -> str:
 
 def manifest(root: Path) -> dict[str, str]:
     if not root.is_dir():
-        print(f"Generated root is missing: {root}", file=sys.stderr)
-        sys.exit(1)
+        raise VerificationFailure(f"Generated root is missing: {root}")
     result: dict[str, str] = {}
     for path in sorted(path for path in root.rglob("*") if path.is_file()):
         relative = path.relative_to(root).as_posix()
@@ -84,33 +85,127 @@ def manifest(root: Path) -> dict[str, str]:
     return result
 
 
-def compare_generation() -> None:
-    require_step(
-        "clean generation 1",
-        "./mvnw -pl backend clean generate-resources -DskipTests",
-    )
-    first_java = manifest(JAVA_GENERATED)
-    first_typescript = manifest(TS_GENERATED)
+def manifest_or_empty(root: Path) -> dict[str, str]:
+    return manifest(root) if root.exists() else {}
 
-    require_step(
-        "clean generation 2",
-        "./mvnw -pl backend clean generate-resources -DskipTests",
-    )
-    second_java = manifest(JAVA_GENERATED)
-    second_typescript = manifest(TS_GENERATED)
 
-    java_differences = sorted(set(first_java) ^ set(second_java))
-    java_differences.extend(
-        sorted(path for path in set(first_java) & set(second_java) if first_java[path] != second_java[path])
+def clear_generated_outputs() -> None:
+    """Remove only the two task-owned build targets before generation."""
+
+    for root in (JAVA_TARGET, TS_TARGET):
+        if root.is_dir() and not root.is_symlink():
+            shutil.rmtree(root)
+        elif root.exists():
+            root.unlink()
+
+
+def assert_generated_roots_empty() -> None:
+    for root in (JAVA_TARGET, TS_TARGET):
+        if root.exists():
+            raise VerificationFailure(
+                f"Generated target was not empty before clean generation: {root}"
+            )
+
+
+def preexisting_differences(expected: dict[str, str], candidate: Path) -> list[str]:
+    actual = manifest_or_empty(candidate)
+    differences = sorted(set(expected) ^ set(actual))
+    differences.extend(
+        sorted(path for path in set(expected) & set(actual) if expected[path] != actual[path])
     )
-    typescript_differences = sorted(set(first_typescript) ^ set(second_typescript))
-    typescript_differences.extend(
-        sorted(
-            path
-            for path in set(first_typescript) & set(second_typescript)
-            if first_typescript[path] != second_typescript[path]
+    return differences
+
+
+def assert_preexisting_equivalent(expected: dict[str, str], candidate: Path, label: str) -> None:
+    differences = preexisting_differences(expected, candidate)
+    if differences:
+        raise VerificationFailure(f"{label} differs from authoritative generation: {differences}")
+
+
+def expect_policy_rejection(expected: dict[str, str], candidate: Path, label: str) -> None:
+    try:
+        assert_preexisting_equivalent(expected, candidate, label)
+    except VerificationFailure:
+        print(f"[generated negative case] {label}=REJECTED")
+        return
+    raise VerificationFailure(f"Generated-output negative case was accepted: {label}")
+
+
+def generated_policy_negative_cases(java_expected: dict[str, str], ts_expected: dict[str, str]) -> None:
+    with tempfile.TemporaryDirectory(prefix="d6-02a-generated-policy-") as temporary:
+        fixture_root = Path(temporary)
+        java_edit = fixture_root / "java-edit"
+        shutil.copytree(JAVA_GENERATED, java_edit)
+        java_file = next(java_edit.rglob("*.java"))
+        java_file.write_text(java_file.read_text(encoding="utf-8") + "\n// manual patch\n", encoding="utf-8")
+        expect_policy_rejection(java_expected, java_edit, "Java content edit")
+
+        ts_edit = fixture_root / "typescript-edit"
+        shutil.copytree(TS_TARGET, ts_edit)
+        ts_file = next(ts_edit.rglob("*.ts"))
+        ts_file.write_text(
+            ts_file.read_text(encoding="utf-8") + "\n// manual patch\n", encoding="utf-8"
         )
-    )
+        expect_policy_rejection(ts_expected, ts_edit, "TypeScript content edit")
+
+        ts_stale = fixture_root / "typescript-stale"
+        shutil.copytree(TS_TARGET, ts_stale)
+        (
+            ts_stale
+            / "generated-sources"
+            / "openapi"
+            / "typescript"
+            / "models"
+            / "StaleGeneratedModel.ts"
+        ).write_text(
+            "// stale generated file\n", encoding="utf-8"
+        )
+        expect_policy_rejection(ts_expected, ts_stale, "TypeScript stale extra file")
+
+        empty = fixture_root / "empty-no-preexisting-tree"
+        assert_preexisting_equivalent({}, empty, "empty pre-existing tree")
+        print("[generated negative case] empty pre-existing tree=ACCEPTED")
+
+
+def compare_generation() -> None:
+    with tempfile.TemporaryDirectory(prefix="d6-02a-preexisting-generated-") as temporary:
+        preserved = Path(temporary)
+        existing: dict[str, Path] = {}
+        for label, root in (("java", JAVA_GENERATED), ("typescript", TS_TARGET)):
+            if root.is_dir() and any(root.iterdir()):
+                existing[label] = preserved / label
+                shutil.copytree(root, existing[label])
+
+        clear_generated_outputs()
+        assert_generated_roots_empty()
+        require_step(
+            "clean generation 1",
+            "./mvnw -pl backend clean generate-resources -DskipTests",
+        )
+        first_java = manifest(JAVA_GENERATED)
+        first_typescript = manifest(TS_GENERATED)
+        first_typescript_target = manifest(TS_TARGET)
+
+        if existing:
+            for label, candidate in existing.items():
+                expected = first_java if label == "java" else first_typescript_target
+                authoritative = JAVA_GENERATED if label == "java" else TS_TARGET
+                assert_preexisting_equivalent(expected, candidate, f"pre-existing {label} tree")
+                print(f"[pre-existing generated tree] {label}=equivalent before discard ({authoritative})")
+        else:
+            print("[pre-existing generated tree] none; empty-tree path accepted")
+
+        generated_policy_negative_cases(first_java, first_typescript_target)
+
+        clear_generated_outputs()
+        assert_generated_roots_empty()
+        require_step(
+            "clean generation 2",
+            "./mvnw -pl backend clean generate-resources -DskipTests",
+        )
+
+    java_differences = preexisting_differences(first_java, JAVA_GENERATED)
+    typescript_differences = preexisting_differences(first_typescript_target, TS_TARGET)
     print(
         "[determinism] Java files="
         f"{len(first_java)}, TypeScript files={len(first_typescript)}, "
@@ -146,8 +241,7 @@ def generated_output_policy() -> None:
     generated_typescript_sources = [
         source
         for source in typescript_sources
-        if source.relative_to(TS_GENERATED).as_posix()
-        not in {"index.ts", "models/index.ts"}
+        if source.relative_to(TS_GENERATED).as_posix() not in {"index.ts", "models/index.ts"}
     ]
     if not all(
         "auto generated by OpenAPI Generator" in source.read_text(encoding="utf-8")
@@ -159,13 +253,28 @@ def generated_output_policy() -> None:
     if "businessDate: string;" not in contract_types or "occurredAt: string;" not in contract_types:
         print("Shared TypeScript dates must remain wire strings.", file=sys.stderr)
         sys.exit(1)
-    if list(TS_GENERATED.rglob("*Api.ts")):
+    if list(TS_TARGET.rglob("*Api.ts")):
         print("Generated TypeScript API transport files are out of scope.", file=sys.stderr)
+        sys.exit(1)
+    if (TS_TARGET / "runtime.ts").exists():
+        print("Generated TypeScript runtime transport is out of scope.", file=sys.stderr)
+        sys.exit(1)
+    package_typescript_sources = sorted(TS_PACKAGE_SOURCE.rglob("*.ts"))
+    transport_pattern = re.compile(r"\b(?:BaseAPI|FetchAPI|RequestInit|Response|FormData|fetch)\b")
+    for source in [*typescript_sources, *package_typescript_sources]:
+        if transport_pattern.search(source.read_text(encoding="utf-8")):
+            print(f"TypeScript transport token found in model surface: {source}", file=sys.stderr)
+            sys.exit(1)
+    ts_config = json.loads(
+        (ROOT / "packages" / "api-types" / "tsconfig.json").read_text(encoding="utf-8")
+    )
+    if ts_config.get("compilerOptions", {}).get("lib") != ["ES2022"]:
+        print("TypeScript verification must use an explicit ES2022-only lib without DOM.", file=sys.stderr)
         sys.exit(1)
     print(
         "[generated roots] Java="
         f"{JAVA_GENERATED.relative_to(ROOT)}, TypeScript={TS_GENERATED.relative_to(ROOT)}; "
-        "targets ignored, no generated files tracked, markers present, wire dates are strings, no API files"
+        "targets ignored, no generated files tracked, markers present, wire dates are strings, no transport/runtime"
     )
 
 
