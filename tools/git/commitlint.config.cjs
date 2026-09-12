@@ -14,6 +14,7 @@ const allowedTypes = [
 
 module.exports = {
   extends: ['@commitlint/config-conventional'],
+  defaultIgnores: false,
   rules: {
     'type-enum': [2, 'always', allowedTypes],
     'scope-empty': [2, 'never'],

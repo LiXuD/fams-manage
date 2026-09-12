@@ -103,6 +103,11 @@ class CommitMessageValidatorTest(unittest.TestCase):
         self.assert_rejected(COMPLIANT.replace("D6-01A", "<task-id>"))
         self.assert_rejected(COMPLIANT.replace("gpt-5.6-luna", "<actual-model>"))
 
+    def test_rejects_commitlint_default_ignored_subjects(self) -> None:
+        for title in ("Merge branch 'topic'", "fixup! docs(repo): establish baseline", "v1.2.3"):
+            with self.subTest(title=title):
+                self.assert_rejected(COMPLIANT.replace(COMPLIANT.splitlines()[0], title, 1))
+
 
 if __name__ == "__main__":
     unittest.main()
