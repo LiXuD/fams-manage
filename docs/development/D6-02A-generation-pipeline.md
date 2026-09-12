@@ -51,7 +51,7 @@ The successful run used Java `21.0.7`, Node `v24.18.0`, npm `11.16.0`, Maven `3.
 [determinism] Java files=4, TypeScript files=9, differences=0
 [generated roots] ... targets ignored, no generated files tracked, generator markers present
 [Java compile] exit=0: BUILD SUCCESS
-[locked Node install] exit=0: up to date, audited 4 packages; found 0 vulnerabilities
+[locked Node install] exit=0: added 2 packages, audited 4 packages; found 0 vulnerabilities
 [TypeScript typecheck] exit=0: TypeScript: No errors found
 [real-socket HTTP tests] exit=0: Tests run: 9, Failures: 0, Errors: 0; BUILD SUCCESS
 [commit-message suite] exit=0
