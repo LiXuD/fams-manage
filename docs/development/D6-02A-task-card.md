@@ -4,12 +4,12 @@
 
 - **ID：** D6-02A 生成流水线。
 - **目标：** 以一个 OpenAPI 3.0.4 代表契约证明 Java/Spring 接口与共享 TypeScript 模型可重复生成、可编译，并由最小 Spring 应用通过真实 socket HTTP 实现生成接口。
-- **状态：** 实现交接为 `IN_REVIEW`（2026-09-13）；独立复核完成前不得改为 `DEV_VERIFIED`。
+- **状态：** 独立任务级复核已通过，当前为 `DEV_VERIFIED`（2026-09-13）；reviewed HEAD 为 `8ca2c4a`，随后 `8cfca60` 修正 runtime 检测路径并完成全量复跑。
 - **分支 / 基线：** `feat/D6-02A-contract-generation`；`8b148e3ab4117c3bee3cfb2605cfb0feeede4b22`。
 - **前置条件：** D6-01A 本地基线、提交校验和文件分类已完成；本任务 brief、工作区规则、设计交接、TDD 规范及测试编写规范已读取。验证环境需提供 Java 21、Node 24.18.0、npm 11.16.0；Maven Wrapper 3.3.4 固定 Maven 3.9.16。
 - **规模：** M（一个代表契约，跨 `contracts/`、`backend/`、`packages/api-types/`、验证脚本和证据文档；不含产品业务实现）。
 - **实施负责人：** AI，当前 worker 使用 `gpt-5.6-luna`。
-- **复核人：** 用户负责最终验收；独立技术复核人/方式由控制器安排，不能用实施者自审替代；当前仍待独立复核。
+- **复核人：** 独立任务级复核在 reviewed HEAD `8ca2c4a` 结论为 Spec Compliance PASS clean、Task Quality PASS clean；用户仍负责最终验收。该结论只覆盖 D6-02A 探针，不替代计划要求在 D6-02C 关闭前完成的权限、事务、迁移、恢复关键独立技术复核。
 
 ## PRD、页面和 AC 边界
 
@@ -55,10 +55,10 @@
 - **TDD：** 先写真实 socket HTTP 测试并以缺路由 `404` 得到 RED，再写最小控制器、JSON 配置和错误处理得到 GREEN；生成配置与模板是验证输入，不替代手写行为测试。
 - **验证命令及预期：** `rtk run 'python3 scripts/verify-d6-02a.py'`（调用方提供固定 Java/Node 环境）返回 0；应报告 OpenAPI 验证、两次清空生成、前置输出等价/拒绝夹具、Java 编译、Node 锁定安装、`ES2022` 无 DOM TypeScript 检查、9 个真实 HTTP 用例、commit-message suite、`git diff --check` 全部通过。
 - **证据位置：** `docs/development/D6-02A-generation-pipeline.md`（可移植命令和摘要）；任务 report（本地完整命令、退出码、原始重点输出和限制，按忽略规则不跟踪）。
-- **交接：** 当前保持 `IN_REVIEW`；独立复核通过后下一实际任务为 D6-02B，随后按计划进入 D6-02C。D6-02B/C 不因本探针证据提前关闭。
+- **交接：** 当前为 `DEV_VERIFIED`；下一实际任务为 D6-02B，随后按计划进入 D6-02C，二者仍为 `NOT_STARTED`。任务级复核不替代计划范围内在 D6-02C 关闭前必须完成的权限、事务、迁移、恢复关键独立技术复核；D6-02B/C 不因本探针证据提前关闭。
 
 ## 风险与限制
 
 - **风险编号：** `R-01`（候选版本与生成兼容性，D6-02B 才冻结）、`R-02`（跨边界交付规模与返工）；`R-04`（远端/CI 能力未准备）及 `R-05`（独立技术复核待安排）沿用计划台账。
-- **复核轮次风险：** 本轮修复关闭了生成清空/漂移检测、TypeScript transport 泄漏、HTTP 类型/字段/数组断言、文档边界等审查项；它们仍需独立复核确认，不能视为人工批准。
+- **复核轮次风险：** 生成清空/漂移检测、TypeScript transport 泄漏、HTTP 类型/字段/数组断言、文档边界等审查项已由任务级独立复核确认 clean；计划范围内权限、事务、迁移、恢复关键独立技术复核仍未由本任务替代，须在 D6-02C 关闭前完成。
 - **当前限制：** 无远端 PR、CI、数据库、迁移、会话、客户端、生产运行态或完整业务契约；生成器 informational post-processing、生成 Java deprecated API、Spring 测试依赖动态 agent 等警告均已记录于证据和 report。

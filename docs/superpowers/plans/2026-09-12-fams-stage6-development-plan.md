@@ -2,7 +2,7 @@
 
 > 版本：V1.1 · 创建/更新：2026-09-12  
 > 文档状态：修订计划已确认并保存；确认依据为用户本轮“确认修订计划”。  
-> 执行状态：`IN_PROGRESS`。D6-01A 本轮修复/复核已完成并通过本地验证，当前可记 `DEV_VERIFIED`；D6-01B 远端与 CI 尚未完成；D6-02A 生成流水线已完成本地验证并交接 `IN_REVIEW`，产品业务实现尚未开始。
+> 执行状态：`IN_PROGRESS`。D6-01A 本轮修复/复核已完成并通过本地验证，当前为 `DEV_VERIFIED`；D6-01B 远端与 CI 尚未完成；D6-02A 生成流水线已完成本地验证和独立任务级复核，当前为 `DEV_VERIFIED`；D6-02B/C 尚未开始，产品业务实现尚未开始。计划范围内权限、事务、迁移、恢复关键独立技术复核仍须在 D6-02C 关闭前完成。
 > 项目阶段唯一入口：[DESIGN-HANDOFF.md](../../../DESIGN-HANDOFF.md)。  
 > 维护责任：AI 在每次任务变更和交接时更新；计划、范围及里程碑验收由用户确认。
 
@@ -429,7 +429,7 @@ Agent-Limitation: 真机弱网联调尚未完成，本任务不得标记已验�
 | 里程碑 | 任务 | 初估 | 开发前置 / 关闭依赖 | 风险 | 交付与通过条件 | 当前状态 | 证据/结果 |
 |---|---|---|---|---|---|---|---|
 | G0 开发准备 | D6-01 基线与仓库 | M | 开发启动指令 | R-04 | 分类文件、初始化单仓/私有远端、协作规则、追溯表、本地提交格式检查 | IN_PROGRESS | D6-01A 已验证；D6-01B 远端待权限 |
-| G0 | D6-02 契约与脚手架 | XL | D6-01A；内部 A → B → C | R-01/R-02 | 固定版本、生成类型、双端构建、健康和错误契约验证 | IN_PROGRESS | D6-02A `IN_REVIEW`；B/C 尚未开始 |
+| G0 | D6-02 契约与脚手架 | XL | D6-01A；内部 A → B → C | R-01/R-02 | 固定版本、生成类型、双端构建、健康和错误契约验证 | IN_PROGRESS | D6-02A `DEV_VERIFIED`；B/C 尚未开始 |
 | G0 | D6-03 环境与 CI | L | D6-02A/B；远端部分另依赖 D6-01B | R-04/R-05 | Compose、迁移、统一检查入口、PR 全部新增提交格式与 required-ci；干净环境重复启动 | NOT_STARTED | 尚未执行 |
 | G1 身份与资产底座 | D6-04 PC 登录与权限 | L | D6-02C、D6-03A | R-02/R-05/R-06 | 账号登录、初始密码、停用、角色/数据范围；真实登录后权限正确 | NOT_STARTED | 尚未执行 |
 | G1 | D6-05 基础资料 | M | D6-04 | R-02 | 组织人员、分类、仓库位置、编号字典；停用和依赖校验 | NOT_STARTED | 尚未执行 |
@@ -464,7 +464,7 @@ Agent-Limitation: 真机弱网联调尚未完成，本任务不得标记已验�
 |---|---|---|---|---|---|
 | D6-01A 本地基线 | M | 开发启动 | 文件分类、Git 初始化、追溯矩阵、commit-msg 正反例通过 | DEV_VERIFIED | 本地验证脚本退出 0；本轮修复补充 `defaultIgnores: false` 与 3 类默认忽略标题负例；见 `docs/development/` 与 D6-01A 报告 |
 | D6-01B 远端仓库 | S | D6-01A、GitHub 权限 | 私有远端、访问控制及保护能力实查；明确缺口 | NOT_STARTED | 尚未执行 |
-| D6-02A 生成流水线 | M | D6-01A | §三.1 代表模型生成/编译/实际 HTTP 契约断言全部通过，重复生成无差异 | IN_REVIEW | 2026-09-13 本地验证通过并交接；见 `docs/development/D6-02A-task-card.md`、`D6-02A-generation-pipeline.md` 及任务报告 |
+| D6-02A 生成流水线 | M | D6-01A | §三.1 代表模型生成/编译/实际 HTTP 契约断言全部通过，重复生成无差异 | DEV_VERIFIED | 2026-09-13 本地验证、任务级独立复核均通过；reviewed HEAD `8ca2c4a`，runtime 检测修正 `8cfca60` 后全量复跑通过；见 `docs/development/D6-02A-task-card.md`、`D6-02A-generation-pipeline.md` 及任务报告 |
 | D6-02B 运行兼容性 | M | D6-02A | 真实 MySQL、Flyway、会话、回滚、重启及双端构建通过；冻结候选组合 | NOT_STARTED | 尚未执行 |
 | D6-02C 首批真实设计包 | L | D6-02B | 登录/基础资料/建卡/入库完整契约、ER、状态、权限、错误码、标识与时间决策审查；重跑生成验证 | NOT_STARTED | 尚未执行 |
 | D6-03A 本地统一检查 | M | D6-02A/B | Compose、检查工具/规则/覆盖率阈值、受限指标入口；干净环境复跑及静态检查负例通过 | NOT_STARTED | 尚未执行 |
@@ -628,11 +628,11 @@ Agent-Limitation: 真机弱网联调尚未完成，本任务不得标记已验�
 ### 2. 当前检查点
 
 - 已完成：V1.0 保存与 commit 规范；三位专家两轮意见核对；用户“确认修订计划”；V1.1 修订及根交接入口/规则同步；D6-01A 本地基线验证及本轮默认忽略标题修复/复核。
-- 进行中：D6-01 父任务（D6-01B 远端子任务仍未开始）及 G0；D6-02A 已完成本地验证并处于 `IN_REVIEW`。其余 D6-02B/C、D6-03～D6-27、首批真实业务契约与兼容性验证、远端仓库及 CI、产品运行态尚未完成；独立技术复核人/方式待指定。
+- 进行中：D6-01 父任务（D6-01B 远端子任务仍未开始）及 G0；D6-02A 已完成本地验证和任务级独立复核并为 `DEV_VERIFIED`。其余 D6-02B/C、D6-03～D6-27、首批真实业务契约与兼容性验证、远端仓库及 CI、产品运行态尚未完成；计划范围内权限、事务、迁移、恢复关键独立技术复核仍待在 D6-02C 关闭前落实。
 - 当前外部条件：小程序、短信、域名和部署环境未准备；详见 §五.3。
-- 下一步：完成 D6-02A 独立复核；通过后执行 D6-02B 运行兼容性；D6-01B 待 GitHub 私有仓库与权限具备后单独核验。修订计划已确认，无需重复确认本轮同一修订。
-- 当前提交/PR：D6-01A 本轮修复提交 `338d49d`；D6-02A 原始提交 `5f24b83`、`4cf6299` 及复核修复提交 `27a8e5e`、`809bd65`、`f183951`；无远端 PR，远端尚未配置。
-- 开发/QA 验证：D6-01A 本地治理验证已执行；D6-02A 复核修复后的生成、双端编译/类型检查和随机端口 HTTP 契约测试本地验证通过，生成 Java 4/TypeScript 3 文件且两轮全树差异为 0，待独立复核；产品代码、CI、QA 和生产运行态未验证，不能以本文或历史静态原型证据替代。
+- 下一步：执行 D6-02B 运行兼容性；D6-01B 待 GitHub 私有仓库与权限具备后单独核验。D6-02C 仍为 `NOT_STARTED`，且其关闭前必须完成计划范围内权限、事务、迁移、恢复关键独立技术复核。修订计划已确认，无需重复确认本轮同一修订。
+- 当前提交/PR：D6-01A 本轮修复提交 `338d49d`；D6-02A 原始提交 `5f24b83`、`4cf6299`，复核修复提交 `27a8e5e`、`809bd65`、`f183951`，runtime 检测修正 `8cfca60`；状态文档提交见任务报告当前 HEAD；无远端 PR，远端尚未配置。
+- 开发/QA 验证：D6-01A 本地治理验证已执行；D6-02A 生成、双端编译/类型检查和随机端口 HTTP 契约测试本地验证通过，生成 Java 4/TypeScript 3 文件且两轮全树差异为 0；任务级独立复核在 reviewed HEAD `8ca2c4a` 为 clean，`8cfca60` 后全量复跑退出 0。产品代码、CI、QA 和生产运行态未验证，不能以本文或历史静态原型证据替代。
 
 ### 3. 执行记录
 
@@ -647,6 +647,7 @@ Agent-Limitation: 真机弱网联调尚未完成，本任务不得标记已验�
 | 2026-09-13 | D6-02A 生成流水线启动 | `NOT_STARTED → IN_PROGRESS`（分支 `feat/D6-02A-contract-generation`） | 已读取任务 brief、工作区规则和 TDD/测试编写规范；按 Java 21、Spring Boot 4.1.1、OpenAPI Generator 7.25.0、OpenAPI 3.0.4、Node 24.18.0 / npm 11.16.0 候选组合开始建立生成、编译与真实 HTTP 契约验证；尚无通过结论 | 先完成代表契约与生成入口，再按 RED→GREEN 实现最小 HTTP 探针；交接时置 `IN_REVIEW` |
 | 2026-09-13 | D6-02A 生成流水线交接 | `IN_PROGRESS → IN_REVIEW`（提交 `5f24b83`、`4cf6299`；无远端 PR） | `rtk run 'export JAVA_HOME=...; export PATH=...; python3 scripts/verify-d6-02a.py'` 退出 0：Java/TS 生成两次差异 0，Java 编译、Node 24.18.0 / npm 11.16.0 类型检查、9 个随机端口 HTTP 用例、commit-message suite、`git diff --check` 全部通过；目标输出未跟踪 | 由控制器安排独立复核；通过后再关闭 D6-02A 并进入 D6-02B；产品业务实现仍未开始 |
 | 2026-09-13 | D6-02A 独立复核修复轮次 | `NEEDS_FIX → IN_REVIEW`（提交 `27a8e5e`、`809bd65`、`f183951`；无远端 PR） | 修复生成前双目标清空及全树等价检测；Java/TypeScript 手改与 TypeScript 陈旧额外文件拒绝、无预存树接受；以版本化最小模板和 `generateSupportingFiles=false` 移除 runtime/Fetch/API transport，`lib=["ES2022"]` 无 DOM；HTTP 响应先校验字段/JSON 类型、数组完整顺序，日期负例仅替换目标字段。`rtk run 'export JAVA_HOME=...; export PATH=...; python3 scripts/verify-d6-02a.py'` 退出 0：Java 4、TypeScript 3、差异 0；9 个 HTTP 用例、commit-message suite、diff check 均通过 | 仍由控制器安排独立复核；通过后进入 D6-02B，D6-02C 未开始，产品业务实现仍未开始 |
+| 2026-09-13 | D6-02A 独立任务级复核关闭 | `IN_REVIEW → DEV_VERIFIED`（reviewed HEAD `8ca2c4a`；runtime 检测修正提交 `8cfca60`） | 独立复核结论：Spec Compliance PASS clean、Task Quality PASS clean、无 Critical；`8cfca60` 将 runtime 检测改为 generated/shared roots 递归精确匹配；随后 `rtk run 'export JAVA_HOME=...; export PATH=...; python3 scripts/verify-d6-02a.py'` 退出 0，Java 4/TypeScript 3、差异 0、9 个 HTTP 用例及 commit-message suite 全部通过。该任务级复核不替代 D6-02C 关闭前计划范围内权限、事务、迁移、恢复关键独立技术复核 | 下一实际任务为 D6-02B；D6-02C、D6-01B 及产品业务实现仍为 `NOT_STARTED` |
 
 ### 4. 变更记录
 

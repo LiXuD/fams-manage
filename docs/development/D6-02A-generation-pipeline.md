@@ -43,7 +43,7 @@ rtk run 'python3 scripts/verify-d6-02a.py'
 5. No generated files tracked by Git, generator markers present, wire dates remain strings, no DOM lib, and no API/runtime/transport files or tokens.
 6. Java compile, clean locked Node install, TypeScript type-check, real-socket HTTP tests, commit-message behavior suite, and `git diff --check`.
 
-The successful review-fix run used Java `21.0.7`, Node `v24.18.0`, npm `11.16.0`, Maven `3.9.16`, and reported:
+The successful closure run after runtime detection hardening (`8cfca60`) used Java `21.0.7`, Node `v24.18.0`, npm `11.16.0`, Maven `3.9.16`, and reported:
 
 ```text
 [OpenAPI validation] exit=0: Spec has no errors. / No validation issues detected.
@@ -70,6 +70,11 @@ D6-02A verification passed.
 - OpenAPI Generator emitted informational post-processing hints because `JAVA_POST_PROCESS_FILE` and `TS_POST_PROCESS_FILE` are not configured; generated output remained deterministic.
 - Generator log entries for model documentation/supporting-file skips are expected from the explicit `generateSupportingFiles=false` and documentation options; no skipped file is part of the shared model surface.
 - The custom TypeScript templates intentionally bypass the generator's supporting files so the shared package remains transport-free; this is a D6-02A boundary decision, not a final client architecture.
+- The dedicated runtime check rejects an exact `runtime.ts` recursively anywhere in the generated/shared TypeScript roots; similarly named files are not matched.
 - Javac reported deprecated API use in generated `ContractProbe`; this is supplier output and was not hand-edited.
 - Spring Boot test emitted Mockito dynamic-agent/JDK future-warning messages; tests passed. This probe does not configure a Mockito agent because it does not use mocks.
-- The candidate combination is not a D6-02B compatibility freeze. There is no database, migration, session, remote repository, CI, PC app, Mini Program app, or product business implementation in this task. The handoff remains `IN_REVIEW` pending independent review; next is D6-02B, not D6-02A.
+- The candidate combination is not a D6-02B compatibility freeze. There is no database, migration, session, remote repository, CI, PC app, Mini Program app, or product business implementation in this task. D6-02A is `DEV_VERIFIED` after task-level independent review; next is D6-02B, not D6-02A.
+
+## Review closure
+
+The task-level independent review at reviewed HEAD `8ca2c4a` reported `Spec Compliance PASS clean` and `Task Quality PASS clean`, with no Critical finding. The narrow post-review runtime-path correction is `8cfca60`; the full verifier was rerun at that correction and exited `0`. This task-level result does not satisfy or replace the plan-wide user-designated critical independent technical review for permissions, transactions, migrations, and recovery required before D6-02C closure.
