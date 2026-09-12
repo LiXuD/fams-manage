@@ -110,9 +110,10 @@
                             <inputSpec>${project.basedir}/../contracts/representative-probe.yaml</inputSpec>
                             <generatorName>typescript-fetch</generatorName>
                             <output>${project.basedir}/../packages/api-types/target/generated-sources/openapi/typescript</output>
+                            <templateDirectory>${project.basedir}/../packages/api-types/openapi-templates/typescript-fetch</templateDirectory>
                             <generateApis>false</generateApis>
                             <generateModels>true</generateModels>
-                            <generateSupportingFiles>true</generateSupportingFiles>
+                            <generateSupportingFiles>false</generateSupportingFiles>
                             <generateApiDocumentation>false</generateApiDocumentation>
                             <generateModelDocumentation>false</generateModelDocumentation>
                             <generateApiTests>false</generateApiTests>
