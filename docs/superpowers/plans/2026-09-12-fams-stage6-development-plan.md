@@ -642,7 +642,7 @@ Agent-Limitation: 真机弱网联调尚未完成，本任务不得标记已验�
 |---|---|---|---|---|
 | 2026-09-12 | 文档保存（不计作 D6 开发任务） | 总计划及 commit 规范落盘，27 项均未开始 | Python 只读检查退出 0：3 份文档、22 个本地链接有效、D6-01～27 连续且均未开始、代码块成对、提交规则及入口链接齐全、未初始化 Git；无产品或 CI 验证 | 整体计划确认及后续开发启动指令 |
 | 2026-09-12 | V1.1 修订确认与落盘（不计作 D6 开发任务） | 用户“确认修订计划”；补齐任务级修订、子任务、依赖、风险、版本关口、契约/时间/认证及复核机制 | rtk proxy python3 只读检查退出 0：3 份文档、22 个本地链接有效、代码块成对；27 项父任务与 24 项子任务均未开始；9 项风险均未验证；51 个依赖节点/157 条边无环及未定义引用。与修改前内容比对，原 27 项任务交付范围、commit 模板和示例保留。未初始化 Git；无开发、运行态或 CI 验证 | 等待开发启动指令；启动后执行 D6-01A，D6-02C 关闭前落实独立复核安排 |
-| 2026-09-12 | D6-01A 本地基线 | `IN_PROGRESS → DEV_VERIFIED`（本地提交 `652656f`、`f2c967c`） | RED：`rtk python3 tools/git/test_commit_message_validator.py` 退出 1，合规夹具因 validator 文件不存在而失败；GREEN：同命令退出 0，6 个行为测试通过；`rtk scripts/verify-d6-01a.py` 暂存完整基线退出 0：main、无 remote、hook active、8 个高风险候选忽略、398 个跟踪文件/0 个超大/0 个敏感名和内容、53 行连续矩阵、hook 正负路径通过；npm 安装有上游 `git-raw-commits` 弃用警告 | D6-02A 生成流水线；D6-01B 待 GitHub 私有仓库与权限 |
+| 2026-09-12 | D6-01A 本地基线 | `IN_PROGRESS → DEV_VERIFIED`（本地提交 `652656f`、`f2c967c`、`907437a`、`6b60ab7`） | RED：`rtk python3 tools/git/test_commit_message_validator.py` 退出 1，合规夹具因 validator 文件不存在而失败；GREEN：同命令退出 0，6 个行为测试通过；为补齐重复 trailer 负例再次 RED（原实现误收 body 内重复项）并 GREEN（6 个测试通过）；`rtk scripts/verify-d6-01a.py` 提交树退出 0：main、无 remote、hook active、8 个高风险候选忽略、398 个跟踪文件/0 个超大/0 个敏感名和内容、53 行连续矩阵、hook 正负路径通过；npm 安装有上游 `git-raw-commits` 弃用警告 | D6-02A 生成流水线；D6-01B 待 GitHub 私有仓库与权限 |
 
 ### 4. 变更记录
 
