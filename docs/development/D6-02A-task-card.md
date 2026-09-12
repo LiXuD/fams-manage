@@ -29,7 +29,7 @@ These are D6-02A candidates; D6-02B owns the final compatibility freeze.
 - Generation entry point: root `pom.xml` → `backend/pom.xml`; Maven Wrapper is at the repository root.
 - Verification entry point: `scripts/verify-d6-02a.py`.
 
-The generated TypeScript invocation sets `generateApis=false` and emits models plus the generator runtime needed by generated date conversion helpers. No generated API class is emitted or used as a Mini Program transport.
+The generated TypeScript invocation sets `dateLibrary=string`, `generateApis=false`, and emits models plus the minimal generator runtime needed by generated map helpers. Keeping wire dates as strings avoids reintroducing JavaScript timezone shifts. No generated API class is emitted or used as a Mini Program transport.
 
 ## Contract and behavior proof
 

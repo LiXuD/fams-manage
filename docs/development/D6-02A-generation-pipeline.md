@@ -6,7 +6,7 @@ The only contract input is `contracts/representative-probe.yaml` (`openapi: 3.0.
 
 Java output is generated below `backend/target/generated-sources/openapi/java` and includes `ContractProbeApi`, `ContractProbe`, and `ErrorResponse`. The handwritten controller in `backend/src/main/java/com/fams/contract/probe/` implements the generated interface and uses generated models without parallel DTOs.
 
-TypeScript output is generated below `packages/api-types/target/generated-sources/openapi/typescript` with `typescript-fetch`, `generateApis=false`, and `generateModels=true`. The generated models and their date conversion helper runtime are a shared model surface; no API class is emitted, and the generated browser Fetch runtime is not a Mini Program transport. Both output roots are under ignored `target/` directories and are recreated from the contract and POM configuration.
+TypeScript output is generated below `packages/api-types/target/generated-sources/openapi/typescript` with `typescript-fetch`, `dateLibrary=string`, `generateApis=false`, and `generateModels=true`. The generated models therefore keep `YYYY-MM-DD` and offset date-time values as wire strings; no API class is emitted, and the generated browser Fetch runtime is not a Mini Program transport. Both output roots are under ignored `target/` directories and are recreated from the contract and POM configuration.
 
 The Maven entry point is Wrapper `3.3.4` with distribution `3.9.16`. The package workspace pins Node `24.18.0`, npm `11.16.0`, and TypeScript `5.9.2` in `package-lock.json`.
 
