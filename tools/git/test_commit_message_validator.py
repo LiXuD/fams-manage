@@ -81,6 +81,11 @@ class CommitMessageValidatorTest(unittest.TestCase):
             "Agent-Limitation: Remote repository and CI remain outside this task.\n"
             "Agent-Limitation: repeated\n",
         )
+        duplicate_in_body = COMPLIANT.replace(
+            "The baseline needs reproducible local checks before product implementation.\n",
+            "Agent-Task: duplicate\n"
+            "The baseline needs reproducible local checks before product implementation.\n",
+        )
         empty = COMPLIANT.replace("Agent-Decision: Keep local feedback versioned and separate from remote CI.", "Agent-Decision:")
         out_of_order = COMPLIANT.replace(
             "Agent-Task: D6-01A\nAgent-Model: gpt-5.6-luna\n",
@@ -90,7 +95,7 @@ class CommitMessageValidatorTest(unittest.TestCase):
             "Agent-Task: D6-01A\n",
             "Agent-Task: D6-01A Agent-Model: gpt-5.6-luna\n",
         )
-        for invalid in (missing, duplicate, empty, out_of_order, same_line):
+        for invalid in (missing, duplicate, duplicate_in_body, empty, out_of_order, same_line):
             with self.subTest(message=invalid):
                 self.assert_rejected(invalid)
 

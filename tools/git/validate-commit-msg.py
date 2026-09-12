@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 
@@ -52,6 +53,14 @@ def validate_metadata(message: str) -> int:
         lines.pop()
     if not lines:
         return fail("message is empty")
+
+    all_labels = [
+        match.group(1)
+        for line in lines
+        if (match := TRAILER_PATTERN.fullmatch(line))
+    ]
+    if Counter(all_labels) != Counter(REQUIRED_TRAILERS):
+        return fail("each Agent trailer must appear exactly once")
 
     trailer_lines = lines[-len(REQUIRED_TRAILERS) :]
     labels: list[str] = []
