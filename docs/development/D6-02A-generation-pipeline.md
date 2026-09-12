@@ -40,7 +40,7 @@ rtk run 'export JAVA_HOME=/Users/lixd/Library/Java/JavaVirtualMachines/graalvm-j
 2. OpenAPI validation and two clean generation runs.
 3. SHA-256 manifests for both generated roots; the second run must have zero differences.
 4. No generated files tracked by Git and generator markers present in generated sources.
-5. Java compile, TypeScript type-check, real-socket HTTP tests, commit-message behavior suite, and `git diff --check`.
+5. Java compile, clean locked Node install, TypeScript type-check, real-socket HTTP tests, commit-message behavior suite, and `git diff --check`.
 
 The successful run used Java `21.0.7`, Node `v24.18.0`, npm `11.16.0`, Maven `3.9.16`, and reported:
 
@@ -51,6 +51,7 @@ The successful run used Java `21.0.7`, Node `v24.18.0`, npm `11.16.0`, Maven `3.
 [determinism] Java files=4, TypeScript files=9, differences=0
 [generated roots] ... targets ignored, no generated files tracked, generator markers present
 [Java compile] exit=0: BUILD SUCCESS
+[locked Node install] exit=0: up to date, audited 4 packages; found 0 vulnerabilities
 [TypeScript typecheck] exit=0: TypeScript: No errors found
 [real-socket HTTP tests] exit=0: Tests run: 9, Failures: 0, Errors: 0; BUILD SUCCESS
 [commit-message suite] exit=0

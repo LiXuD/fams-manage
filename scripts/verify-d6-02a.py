@@ -183,6 +183,7 @@ def main() -> None:
     compare_generation()
     generated_output_policy()
     require_step("Java compile", "./mvnw -pl backend clean compile -DskipTests")
+    require_step("locked Node install", "npm ci --ignore-scripts")
     require_step("TypeScript typecheck", "npm --workspace packages/api-types run typecheck")
     require_step("real-socket HTTP tests", "./mvnw -pl backend test")
     require_step("commit-message suite", "python3 tools/git/test_commit_message_validator.py")
