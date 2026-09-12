@@ -631,8 +631,8 @@ Agent-Limitation: 真机弱网联调尚未完成，本任务不得标记已验�
 - 进行中：D6-01 父任务（D6-01B 远端子任务仍未开始）及 G0；D6-02A 已完成本地验证并处于 `IN_REVIEW`。其余 D6-02B/C、D6-03～D6-27、首批真实业务契约与兼容性验证、远端仓库及 CI、产品运行态尚未完成；独立技术复核人/方式待指定。
 - 当前外部条件：小程序、短信、域名和部署环境未准备；详见 §五.3。
 - 下一步：完成 D6-02A 独立复核；通过后执行 D6-02B 运行兼容性；D6-01B 待 GitHub 私有仓库与权限具备后单独核验。修订计划已确认，无需重复确认本轮同一修订。
-- 当前提交/PR：D6-01A 本轮修复提交 `338d49d`；D6-02A 提交 `5f24b83`、`4cf6299`；无远端 PR，远端尚未配置。
-- 开发/QA 验证：D6-01A 本地治理验证已执行；D6-02A 生成、双端编译/类型检查和随机端口 HTTP 契约测试本地验证通过，待独立复核；产品代码、CI、QA 和生产运行态未验证，不能以本文或历史静态原型证据替代。
+- 当前提交/PR：D6-01A 本轮修复提交 `338d49d`；D6-02A 原始提交 `5f24b83`、`4cf6299` 及复核修复提交 `27a8e5e`、`809bd65`、`f183951`；无远端 PR，远端尚未配置。
+- 开发/QA 验证：D6-01A 本地治理验证已执行；D6-02A 复核修复后的生成、双端编译/类型检查和随机端口 HTTP 契约测试本地验证通过，生成 Java 4/TypeScript 3 文件且两轮全树差异为 0，待独立复核；产品代码、CI、QA 和生产运行态未验证，不能以本文或历史静态原型证据替代。
 
 ### 3. 执行记录
 
@@ -646,6 +646,7 @@ Agent-Limitation: 真机弱网联调尚未完成，本任务不得标记已验�
 | 2026-09-12 | D6-01A 独立复核修复轮次 | `NEEDS_FIX → IN_PROGRESS → DEV_VERIFIED`（修复提交 `338d49d`） | RED：新增 `Merge branch 'topic'`、`fixup! docs(repo): establish baseline`、`v1.2.3` 三类真实 validator 拒绝夹具后，现状退出 1，3 个子测试因 default ignore 被错误接受；GREEN：设置 `defaultIgnores: false` 后同命令退出 0，7 个测试 `OK`；`rtk scripts/verify-d6-01a.py` 目标回归退出 0，保留本地 `main`、无远端、无产品实现和无 CI 的边界；入口文档同步记录修复/复核状态 | 下一步按计划进入 D6-02A；D6-01B 远端与 CI 尚未完成 |
 | 2026-09-13 | D6-02A 生成流水线启动 | `NOT_STARTED → IN_PROGRESS`（分支 `feat/D6-02A-contract-generation`） | 已读取任务 brief、工作区规则和 TDD/测试编写规范；按 Java 21、Spring Boot 4.1.1、OpenAPI Generator 7.25.0、OpenAPI 3.0.4、Node 24.18.0 / npm 11.16.0 候选组合开始建立生成、编译与真实 HTTP 契约验证；尚无通过结论 | 先完成代表契约与生成入口，再按 RED→GREEN 实现最小 HTTP 探针；交接时置 `IN_REVIEW` |
 | 2026-09-13 | D6-02A 生成流水线交接 | `IN_PROGRESS → IN_REVIEW`（提交 `5f24b83`、`4cf6299`；无远端 PR） | `rtk run 'export JAVA_HOME=...; export PATH=...; python3 scripts/verify-d6-02a.py'` 退出 0：Java/TS 生成两次差异 0，Java 编译、Node 24.18.0 / npm 11.16.0 类型检查、9 个随机端口 HTTP 用例、commit-message suite、`git diff --check` 全部通过；目标输出未跟踪 | 由控制器安排独立复核；通过后再关闭 D6-02A 并进入 D6-02B；产品业务实现仍未开始 |
+| 2026-09-13 | D6-02A 独立复核修复轮次 | `NEEDS_FIX → IN_REVIEW`（提交 `27a8e5e`、`809bd65`、`f183951`；无远端 PR） | 修复生成前双目标清空及全树等价检测；Java/TypeScript 手改与 TypeScript 陈旧额外文件拒绝、无预存树接受；以版本化最小模板和 `generateSupportingFiles=false` 移除 runtime/Fetch/API transport，`lib=["ES2022"]` 无 DOM；HTTP 响应先校验字段/JSON 类型、数组完整顺序，日期负例仅替换目标字段。`rtk run 'export JAVA_HOME=...; export PATH=...; python3 scripts/verify-d6-02a.py'` 退出 0：Java 4、TypeScript 3、差异 0；9 个 HTTP 用例、commit-message suite、diff check 均通过 | 仍由控制器安排独立复核；通过后进入 D6-02B，D6-02C 未开始，产品业务实现仍未开始 |
 
 ### 4. 变更记录
 
