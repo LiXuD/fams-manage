@@ -68,6 +68,7 @@ D6-02A verification passed.
 ## Warnings and limits
 
 - OpenAPI Generator emitted informational post-processing hints because `JAVA_POST_PROCESS_FILE` and `TS_POST_PROCESS_FILE` are not configured; generated output remained deterministic.
+- Generator log entries for model documentation/supporting-file skips are expected from the explicit `generateSupportingFiles=false` and documentation options; no skipped file is part of the shared model surface.
 - The custom TypeScript templates intentionally bypass the generator's supporting files so the shared package remains transport-free; this is a D6-02A boundary decision, not a final client architecture.
 - Javac reported deprecated API use in generated `ContractProbe`; this is supplier output and was not hand-edited.
 - Spring Boot test emitted Mockito dynamic-agent/JDK future-warning messages; tests passed. This probe does not configure a Mockito agent because it does not use mocks.
