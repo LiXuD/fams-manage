@@ -53,16 +53,34 @@ class ContractProbeHttpTest {
 
         assertEquals(200, response.statusCode());
         JsonNode body = JSON.readTree(response.body());
-        assertEquals("9007199254740993", body.path("assetId").asText());
-        assertEquals("2026-09-13", body.path("businessDate").asText());
-        assertEquals("2026-09-13T00:15:00Z", body.path("occurredAt").asText());
-        assertEquals("IN_SERVICE", body.path("status").asText());
-        assertEquals(0, body.path("quantity").asInt());
-        assertEquals("100.00", body.path("amount").asText());
-        assertEquals("SN-SECOND", body.path("serials").path(0).asText());
-        assertEquals("SN-FIRST", body.path("serials").path(1).asText());
+        assertTrue(body.isObject());
+        assertTrue(body.has("assetId"));
+        assertTrue(body.get("assetId").isTextual());
+        assertEquals("9007199254740993", body.get("assetId").asText());
+        assertTrue(body.has("businessDate"));
+        assertTrue(body.get("businessDate").isTextual());
+        assertEquals("2026-09-13", body.get("businessDate").asText());
+        assertTrue(body.has("occurredAt"));
+        assertTrue(body.get("occurredAt").isTextual());
+        assertEquals("2026-09-13T00:15:00Z", body.get("occurredAt").asText());
+        assertTrue(body.has("status"));
+        assertTrue(body.get("status").isTextual());
+        assertEquals("IN_SERVICE", body.get("status").asText());
+        assertTrue(body.has("quantity"));
+        assertTrue(body.get("quantity").isIntegralNumber());
+        assertEquals(0, body.get("quantity").asInt());
+        assertTrue(body.has("amount"));
+        assertTrue(body.get("amount").isTextual());
+        assertEquals("100.00", body.get("amount").asText());
+        assertTrue(body.has("serials"));
+        assertTrue(body.get("serials").isArray());
+        assertEquals(2, body.get("serials").size());
+        assertTrue(body.get("serials").get(0).isTextual());
+        assertEquals("SN-SECOND", body.get("serials").get(0).asText());
+        assertTrue(body.get("serials").get(1).isTextual());
+        assertEquals("SN-FIRST", body.get("serials").get(1).asText());
         assertTrue(body.has("note"));
-        assertTrue(body.path("note").isNull());
+        assertTrue(body.get("note").isNull());
     }
 
     @Test
@@ -70,7 +88,9 @@ class ContractProbeHttpTest {
         HttpResponse<String> response = post(VALID_BODY_WITH_NOTE.replace("\n}", ",\n  \"note\": null\n}"));
 
         assertEquals(200, response.statusCode());
-        assertTrue(JSON.readTree(response.body()).path("note").isNull());
+        JsonNode body = JSON.readTree(response.body());
+        assertTrue(body.has("note"));
+        assertTrue(body.get("note").isNull());
     }
 
     @Test
@@ -78,7 +98,10 @@ class ContractProbeHttpTest {
         HttpResponse<String> response = post(VALID_BODY_WITH_NOTE.replace("\n}", ",\n  \"note\": \"\"\n}"));
 
         assertEquals(200, response.statusCode());
-        assertEquals("", JSON.readTree(response.body()).path("note").asText());
+        JsonNode body = JSON.readTree(response.body());
+        assertTrue(body.has("note"));
+        assertTrue(body.get("note").isTextual());
+        assertEquals("", body.get("note").asText());
     }
 
     @ParameterizedTest(name = "rejects {0}")
@@ -105,7 +128,11 @@ class ContractProbeHttpTest {
                 Arguments.of("null required integer", VALID_BODY.replace("\"quantity\": 0", "\"quantity\": null")),
                 Arguments.of("numeric id", VALID_BODY.replace("\"9007199254740993\"", "9007199254740993")),
                 Arguments.of("invalid enum", VALID_BODY.replace("IN_SERVICE", "UNKNOWN")),
-                Arguments.of("malformed date", VALID_BODY.replace("2026-09-13", "2026-02-30")),
+                Arguments.of(
+                        "malformed date",
+                        VALID_BODY.replace(
+                                "\"businessDate\": \"2026-09-13\"",
+                                "\"businessDate\": \"2026-02-30\"")),
                 Arguments.of("malformed date-time", VALID_BODY.replace("2026-09-13T08:15:00+08:00", "not-a-date-time")));
     }
 
