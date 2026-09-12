@@ -155,10 +155,17 @@ def generated_output_policy() -> None:
     ):
         print("A generated TypeScript source lacks the OpenAPI Generator marker.", file=sys.stderr)
         sys.exit(1)
+    contract_types = (TS_GENERATED / "models" / "ContractProbe.ts").read_text(encoding="utf-8")
+    if "businessDate: string;" not in contract_types or "occurredAt: string;" not in contract_types:
+        print("Shared TypeScript dates must remain wire strings.", file=sys.stderr)
+        sys.exit(1)
+    if list(TS_GENERATED.rglob("*Api.ts")):
+        print("Generated TypeScript API transport files are out of scope.", file=sys.stderr)
+        sys.exit(1)
     print(
         "[generated roots] Java="
         f"{JAVA_GENERATED.relative_to(ROOT)}, TypeScript={TS_GENERATED.relative_to(ROOT)}; "
-        "targets ignored, no generated files tracked, generator markers present"
+        "targets ignored, no generated files tracked, markers present, wire dates are strings, no API files"
     )
 
 
