@@ -1,0 +1,1015 @@
+{
+  "steps": {
+    "打开接收确认/before": {
+      "id": "28:6566",
+      "name": "打开接收确认",
+      "type": "FRAME",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 16,
+      "absoluteBoundingBox": {
+        "x": 1400,
+        "y": 8080,
+        "width": 520,
+        "height": 219.58999633789062
+      },
+      "children": [
+        {
+          "id": "28:6567",
+          "name": "dialog-14",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1429,
+            "y": 8109,
+            "width": 462,
+            "height": 34
+          },
+          "children": [
+            {
+              "id": "28:6568",
+              "name": "确认接收资产",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 1429,
+                "y": 8111.75,
+                "width": 126,
+                "height": 28
+              },
+              "characters": "确认接收资产",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Medium",
+                "fontWeight": 500,
+                "fontSize": 18,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 28
+              }
+            }
+          ]
+        },
+        {
+          "id": "28:6569",
+          "name": "P",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1429,
+            "y": 8159,
+            "width": 462,
+            "height": 47.59000015258789
+          },
+          "children": [
+            {
+              "id": "28:6570",
+              "name": "示例资产 FA-2026-00102。确认后责任变更为林晓，位置为产品部 /301。",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 1429,
+                "y": 8159.75,
+                "width": 427.7300109863281,
+                "height": 44
+              },
+              "characters": "示例资产 FA-2026-00102。确认后责任变更为林晓，位置为产品部 /301。",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "28:6571",
+          "name": "fams-dialog-actions",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1429,
+            "y": 8230.58984375,
+            "width": 462,
+            "height": 40
+          },
+          "children": [
+            {
+              "id": "28:6572",
+              "name": "操作 / 取消",
+              "type": "INSTANCE",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "strokes": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#e3e8f0"
+                }
+              ],
+              "cornerRadius": 8,
+              "absoluteBoundingBox": {
+                "x": 1727,
+                "y": 8230.58984375,
+                "width": 62,
+                "height": 40
+              },
+              "children": [
+                {
+                  "id": "I28:6572;6:19",
+                  "name": "确认接收",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#18263d"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 1744,
+                    "y": 8239.58984375,
+                    "width": 28,
+                    "height": 22
+                  },
+                  "characters": "取消",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 14,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 22
+                  }
+                }
+              ]
+            },
+            {
+              "id": "28:6574",
+              "name": "操作 / 确认接收",
+              "type": "INSTANCE",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "strokes": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#e3e8f0"
+                }
+              ],
+              "cornerRadius": 8,
+              "absoluteBoundingBox": {
+                "x": 1801,
+                "y": 8230.58984375,
+                "width": 90,
+                "height": 40
+              },
+              "children": [
+                {
+                  "id": "I28:6574;6:19",
+                  "name": "确认接收",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#18263d"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 1818,
+                    "y": 8239.58984375,
+                    "width": 56,
+                    "height": 22
+                  },
+                  "characters": "确认接收",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 14,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 22
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "打开接收确认/delete/28:6567": {
+      "id": "28:6567",
+      "message": "Deleted node with ID: 28:6567"
+    },
+    "打开接收确认/delete/28:6569": {
+      "id": "28:6569",
+      "message": "Deleted node with ID: 28:6569"
+    },
+    "打开接收确认/delete/28:6571": {
+      "id": "28:6571",
+      "message": "Deleted node with ID: 28:6571"
+    },
+    "stable-dialog/打开接收确认/n1/layout": "Set layout mode of frame \"打开接收确认\" to NONE",
+    "stable-dialog/打开接收确认/n1/size": "Resized node \"打开接收确认\" to width 520 and height 219.59",
+    "stable-dialog/打开接收确认/n1/fill": "Set fill color of node \"打开接收确认\" to RGBA(1, 1, 1, 1)",
+    "stable-dialog/打开接收确认/n1/stroke": "Set stroke color of node \"打开接收确认\" to RGBA(0.8901960784313725, 0.9098039215686274, 0.9411764705882353, 1) with weight 1",
+    "stable-dialog/打开接收确认/n1/radius": "Set corner radius of node \"打开接收确认\" to 16px",
+    "stable-dialog/打开接收确认/n2": {
+      "id": "28:6606",
+      "message": "Created frame \"dialog-14\" with ID: 28:6606. Use the ID as the parentId to appendChild inside this frame."
+    },
+    "stable-dialog/打开接收确认/n3": {
+      "id": "28:6607",
+      "message": "Cloned node \"01 清晰\" with new ID: 28:6607"
+    },
+    "stable-dialog/打开接收确认/n3/content": "Updated text content of node \"01 清晰\" to \"确认接收资产\"",
+    "stable-dialog/打开接收确认/n3/color": "Set fill color of node \"01 清晰\" to RGBA(0.09411764705882353, 0.14901960784313725, 0.23921568627450981, 1)",
+    "stable-dialog/打开接收确认/n3/name": "Renamed node from \"01 清晰\" to \"确认接收资产\"",
+    "stable-dialog/打开接收确认/n3/metrics": {
+      "id": "28:6607",
+      "name": "确认接收资产",
+      "type": "TEXT",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#18263d"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 160,
+        "y": 410,
+        "width": 108,
+        "height": 28
+      },
+      "characters": "确认接收资产",
+      "style": {
+        "fontFamily": "Noto Sans SC",
+        "fontStyle": "Medium",
+        "fontWeight": 500,
+        "fontSize": 18,
+        "textAlignHorizontal": "LEFT",
+        "letterSpacing": 0,
+        "lineHeightPx": 28
+      }
+    },
+    "stable-dialog/打开接收确认/n3/textsize": "Resized node \"确认接收资产\" to width 126 and height 28",
+    "stable-dialog/打开接收确认/n3/parent": "Moved node \"确认接收资产\" into \"dialog-14\" at (0, 2.75)",
+    "stable-dialog/打开接收确认/n4": {
+      "id": "28:6608",
+      "message": "Created frame \"P\" with ID: 28:6608. Use the ID as the parentId to appendChild inside this frame."
+    },
+    "stable-dialog/打开接收确认/n5": {
+      "id": "28:6609",
+      "message": "Cloned node \"产品部 / 301\" with new ID: 28:6609"
+    },
+    "stable-dialog/打开接收确认/n5/content": "Updated text content of node \"产品部 / 301\" to \"示例资产 FA-2026-00102。确认后责任变更为林晓，位置为产品部 /301。\"",
+    "stable-dialog/打开接收确认/n5/color": "Set fill color of node \"产品部 / 301\" to RGBA(0.09411764705882353, 0.14901960784313725, 0.23921568627450981, 1)",
+    "stable-dialog/打开接收确认/n5/name": "Renamed node from \"产品部 / 301\" to \"示例资产 FA-2026-00102。确认后责任变更为林晓，位置为产品部 /301。\"",
+    "stable-dialog/打开接收确认/n5/metrics": {
+      "id": "28:6609",
+      "name": "示例资产 FA-2026-00102。确认后责任变更为林晓，位置为产品部 /301。",
+      "type": "TEXT",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#18263d"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 1398,
+        "y": 411,
+        "width": 453,
+        "height": 22
+      },
+      "characters": "示例资产 FA-2026-00102。确认后责任变更为林晓，位置为产品部 /301。",
+      "style": {
+        "fontFamily": "Noto Sans SC",
+        "fontStyle": "Regular",
+        "fontWeight": 400,
+        "fontSize": 14,
+        "textAlignHorizontal": "LEFT",
+        "letterSpacing": 0,
+        "lineHeightPx": 22
+      }
+    },
+    "stable-dialog/打开接收确认/n5/textsize": "Resized node \"示例资产 FA-2026-00102。确认后责任变更为林晓，位置为产品部 /301。\" to width 427.73 and height 44",
+    "stable-dialog/打开接收确认/n5/parent": "Moved node \"示例资产 FA-2026-00102。确认后责任变更为林晓，位置为产品部 /301。\" into \"P\" at (0, 0.75)",
+    "stable-dialog/打开接收确认/n7": {
+      "id": "28:6610",
+      "message": "Created frame \"fams-dialog-actions\" with ID: 28:6610. Use the ID as the parentId to appendChild inside this frame."
+    },
+    "stable-dialog/打开接收确认/n8": {
+      "id": "28:6611",
+      "name": "FAMS/Button",
+      "x": 298,
+      "y": 0,
+      "width": 144,
+      "height": 40,
+      "mainComponentId": "6:18"
+    },
+    "stable-dialog/打开接收确认/n8/name": "Renamed node from \"FAMS/Button\" to \"操作 / 取消\"",
+    "stable-dialog/打开接收确认/n8/info": {
+      "id": "28:6611",
+      "name": "操作 / 取消",
+      "type": "INSTANCE",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 1727,
+        "y": 8230.58984375,
+        "width": 144,
+        "height": 40
+      },
+      "children": [
+        {
+          "id": "I28:6611;6:19",
+          "name": "确认接收",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1771,
+            "y": 8239.58984375,
+            "width": 56,
+            "height": 22
+          },
+          "characters": "确认接收",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        }
+      ]
+    },
+    "stable-dialog/打开接收确认/n8/label": "Updated text content of node \"确认接收\" to \"取消\"",
+    "stable-dialog/打开接收确认/n8/size": "Resized node \"操作 / 取消\" to width 62 and height 40",
+    "stable-dialog/打开接收确认/n8/padding": "Set padding (top: 0, right: 6, bottom: 0, left: 6) for frame \"操作 / 取消\"",
+    "stable-dialog/打开接收确认/n10": {
+      "id": "29:6613",
+      "name": "FAMS/Button",
+      "x": 372,
+      "y": 0,
+      "width": 144,
+      "height": 40,
+      "mainComponentId": "6:18"
+    },
+    "stable-dialog/打开接收确认/n10/name": "Renamed node from \"FAMS/Button\" to \"操作 / 确认接收\"",
+    "stable-dialog/打开接收确认/n10/info": {
+      "id": "29:6613",
+      "name": "操作 / 确认接收",
+      "type": "INSTANCE",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 1801,
+        "y": 8230.58984375,
+        "width": 144,
+        "height": 40
+      },
+      "children": [
+        {
+          "id": "I29:6613;6:19",
+          "name": "确认接收",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1845,
+            "y": 8239.58984375,
+            "width": 56,
+            "height": 22
+          },
+          "characters": "确认接收",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        }
+      ]
+    },
+    "stable-dialog/打开接收确认/n10/label": "Updated text content of node \"确认接收\" to \"确认接收\"",
+    "stable-dialog/打开接收确认/n10/size": "Resized node \"操作 / 确认接收\" to width 90 and height 40",
+    "stable-dialog/打开接收确认/n10/padding": "Set padding (top: 0, right: 6, bottom: 0, left: 6) for frame \"操作 / 确认接收\"",
+    "打开处置确认/before": {
+      "id": "28:6577",
+      "name": "打开处置确认",
+      "type": "FRAME",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 16,
+      "absoluteBoundingBox": {
+        "x": 80,
+        "y": 8600,
+        "width": 520,
+        "height": 219.58999633789062
+      },
+      "children": [
+        {
+          "id": "28:6578",
+          "name": "dialog-15",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 109,
+            "y": 8629,
+            "width": 462,
+            "height": 34
+          },
+          "children": [
+            {
+              "id": "28:6579",
+              "name": "确认处置资产",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 109,
+                "y": 8631.75,
+                "width": 126,
+                "height": 28
+              },
+              "characters": "确认处置资产",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Medium",
+                "fontWeight": 500,
+                "fontSize": 18,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 28
+              }
+            }
+          ]
+        },
+        {
+          "id": "28:6580",
+          "name": "P",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 109,
+            "y": 8679,
+            "width": 462,
+            "height": 47.59000015258789
+          },
+          "children": [
+            {
+              "id": "28:6581",
+              "name": "示例资产 FA-2026-00102。处置依据：已批准单据 CZ-001。确认后该资产将标记为已报废，不能继续领用。",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 109,
+                "y": 8679.75,
+                "width": 458.19000244140625,
+                "height": 44
+              },
+              "characters": "示例资产 FA-2026-00102。处置依据：已批准单据 CZ-001。确认后该资产将标记为已报废，不能继续领用。",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "28:6582",
+          "name": "fams-dialog-actions",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 109,
+            "y": 8750.58984375,
+            "width": 462,
+            "height": 40
+          },
+          "children": [
+            {
+              "id": "28:6583",
+              "name": "操作 / 取消",
+              "type": "INSTANCE",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "strokes": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#e3e8f0"
+                }
+              ],
+              "cornerRadius": 8,
+              "absoluteBoundingBox": {
+                "x": 407,
+                "y": 8750.58984375,
+                "width": 62,
+                "height": 40
+              },
+              "children": [
+                {
+                  "id": "I28:6583;6:19",
+                  "name": "确认接收",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#18263d"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 424,
+                    "y": 8759.58984375,
+                    "width": 28,
+                    "height": 22
+                  },
+                  "characters": "取消",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 14,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 22
+                  }
+                }
+              ]
+            },
+            {
+              "id": "28:6585",
+              "name": "操作 / 确认处置",
+              "type": "INSTANCE",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "strokes": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#e3e8f0"
+                }
+              ],
+              "cornerRadius": 8,
+              "absoluteBoundingBox": {
+                "x": 481,
+                "y": 8750.58984375,
+                "width": 90,
+                "height": 40
+              },
+              "children": [
+                {
+                  "id": "I28:6585;6:19",
+                  "name": "确认接收",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#18263d"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 498,
+                    "y": 8759.58984375,
+                    "width": 56,
+                    "height": 22
+                  },
+                  "characters": "确认处置",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 14,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 22
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "打开处置确认/delete/28:6578": {
+      "id": "28:6578",
+      "message": "Deleted node with ID: 28:6578"
+    },
+    "打开处置确认/delete/28:6580": {
+      "id": "28:6580",
+      "message": "Deleted node with ID: 28:6580"
+    },
+    "打开处置确认/delete/28:6582": {
+      "id": "28:6582",
+      "message": "Deleted node with ID: 28:6582"
+    },
+    "stable-dialog/打开处置确认/n1/layout": "Set layout mode of frame \"打开处置确认\" to NONE",
+    "stable-dialog/打开处置确认/n1/size": "Resized node \"打开处置确认\" to width 520 and height 219.59",
+    "stable-dialog/打开处置确认/n1/fill": "Set fill color of node \"打开处置确认\" to RGBA(1, 1, 1, 1)",
+    "stable-dialog/打开处置确认/n1/stroke": "Set stroke color of node \"打开处置确认\" to RGBA(0.8901960784313725, 0.9098039215686274, 0.9411764705882353, 1) with weight 1",
+    "stable-dialog/打开处置确认/n1/radius": "Set corner radius of node \"打开处置确认\" to 16px",
+    "stable-dialog/打开处置确认/n2": {
+      "id": "29:6615",
+      "message": "Created frame \"dialog-15\" with ID: 29:6615. Use the ID as the parentId to appendChild inside this frame."
+    },
+    "stable-dialog/打开处置确认/n3": {
+      "id": "29:6616",
+      "message": "Cloned node \"01 清晰\" with new ID: 29:6616"
+    },
+    "stable-dialog/打开处置确认/n3/content": "Updated text content of node \"01 清晰\" to \"确认处置资产\"",
+    "stable-dialog/打开处置确认/n3/color": "Set fill color of node \"01 清晰\" to RGBA(0.09411764705882353, 0.14901960784313725, 0.23921568627450981, 1)",
+    "stable-dialog/打开处置确认/n3/name": "Renamed node from \"01 清晰\" to \"确认处置资产\"",
+    "stable-dialog/打开处置确认/n3/metrics": {
+      "id": "29:6616",
+      "name": "确认处置资产",
+      "type": "TEXT",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#18263d"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 160,
+        "y": 410,
+        "width": 108,
+        "height": 28
+      },
+      "characters": "确认处置资产",
+      "style": {
+        "fontFamily": "Noto Sans SC",
+        "fontStyle": "Medium",
+        "fontWeight": 500,
+        "fontSize": 18,
+        "textAlignHorizontal": "LEFT",
+        "letterSpacing": 0,
+        "lineHeightPx": 28
+      }
+    },
+    "stable-dialog/打开处置确认/n3/textsize": "Resized node \"确认处置资产\" to width 126 and height 28",
+    "stable-dialog/打开处置确认/n3/parent": "Moved node \"确认处置资产\" into \"dialog-15\" at (0, 2.75)",
+    "stable-dialog/打开处置确认/n4": {
+      "id": "29:6617",
+      "message": "Created frame \"P\" with ID: 29:6617. Use the ID as the parentId to appendChild inside this frame."
+    },
+    "stable-dialog/打开处置确认/n5": {
+      "id": "29:6618",
+      "message": "Cloned node \"产品部 / 301\" with new ID: 29:6618"
+    },
+    "stable-dialog/打开处置确认/n5/content": "Updated text content of node \"产品部 / 301\" to \"示例资产 FA-2026-00102。处置依据：已批准单据 CZ-001。确认后该资产将标记为已报废，不能继续领用。\"",
+    "stable-dialog/打开处置确认/n5/color": "Set fill color of node \"产品部 / 301\" to RGBA(0.09411764705882353, 0.14901960784313725, 0.23921568627450981, 1)",
+    "stable-dialog/打开处置确认/n5/name": "Renamed node from \"产品部 / 301\" to \"示例资产 FA-2026-00102。处置依据：已批准单据 CZ-001。确认后该资产将标记为已报废，不能继续领用。\"",
+    "stable-dialog/打开处置确认/n5/metrics": {
+      "id": "29:6618",
+      "name": "示例资产 FA-2026-00102。处置依据：已批准单据 CZ-001。确认后该资产将标记为已报废，不能继续领用。",
+      "type": "TEXT",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#18263d"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 1398,
+        "y": 411,
+        "width": 665,
+        "height": 22
+      },
+      "characters": "示例资产 FA-2026-00102。处置依据：已批准单据 CZ-001。确认后该资产将标记为已报废，不能继续领用。",
+      "style": {
+        "fontFamily": "Noto Sans SC",
+        "fontStyle": "Regular",
+        "fontWeight": 400,
+        "fontSize": 14,
+        "textAlignHorizontal": "LEFT",
+        "letterSpacing": 0,
+        "lineHeightPx": 22
+      }
+    },
+    "stable-dialog/打开处置确认/n5/textsize": "Resized node \"示例资产 FA-2026-00102。处置依据：已批准单据 CZ-001。确认后该资产将标记为已报废，不能继续领用。\" to width 458.19 and height 44",
+    "stable-dialog/打开处置确认/n5/parent": "Moved node \"示例资产 FA-2026-00102。处置依据：已批准单据 CZ-001。确认后该资产将标记为已报废，不能继续领用。\" into \"P\" at (0, 0.75)",
+    "stable-dialog/打开处置确认/n7": {
+      "id": "29:6619",
+      "message": "Created frame \"fams-dialog-actions\" with ID: 29:6619. Use the ID as the parentId to appendChild inside this frame."
+    },
+    "stable-dialog/打开处置确认/n8": {
+      "id": "29:6620",
+      "name": "FAMS/Button",
+      "x": 298,
+      "y": 0,
+      "width": 144,
+      "height": 40,
+      "mainComponentId": "6:18"
+    },
+    "stable-dialog/打开处置确认/n8/name": "Renamed node from \"FAMS/Button\" to \"操作 / 取消\"",
+    "stable-dialog/打开处置确认/n8/info": {
+      "id": "29:6620",
+      "name": "操作 / 取消",
+      "type": "INSTANCE",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 407,
+        "y": 8750.58984375,
+        "width": 144,
+        "height": 40
+      },
+      "children": [
+        {
+          "id": "I29:6620;6:19",
+          "name": "确认接收",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 451,
+            "y": 8759.58984375,
+            "width": 56,
+            "height": 22
+          },
+          "characters": "确认接收",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        }
+      ]
+    },
+    "stable-dialog/打开处置确认/n8/label": "Updated text content of node \"确认接收\" to \"取消\"",
+    "stable-dialog/打开处置确认/n8/size": "Resized node \"操作 / 取消\" to width 62 and height 40",
+    "stable-dialog/打开处置确认/n8/padding": "Set padding (top: 0, right: 6, bottom: 0, left: 6) for frame \"操作 / 取消\"",
+    "stable-dialog/打开处置确认/n10": {
+      "id": "29:6622",
+      "name": "FAMS/Button",
+      "x": 372,
+      "y": 0,
+      "width": 144,
+      "height": 40,
+      "mainComponentId": "6:18"
+    },
+    "stable-dialog/打开处置确认/n10/name": "Renamed node from \"FAMS/Button\" to \"操作 / 确认处置\"",
+    "stable-dialog/打开处置确认/n10/info": {
+      "id": "29:6622",
+      "name": "操作 / 确认处置",
+      "type": "INSTANCE",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 481,
+        "y": 8750.58984375,
+        "width": 144,
+        "height": 40
+      },
+      "children": [
+        {
+          "id": "I29:6622;6:19",
+          "name": "确认接收",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 525,
+            "y": 8759.58984375,
+            "width": 56,
+            "height": 22
+          },
+          "characters": "确认接收",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        }
+      ]
+    },
+    "stable-dialog/打开处置确认/n10/label": "Updated text content of node \"确认接收\" to \"确认处置\"",
+    "stable-dialog/打开处置确认/n10/size": "Resized node \"操作 / 确认处置\" to width 90 and height 40",
+    "stable-dialog/打开处置确认/n10/padding": "Set padding (top: 0, right: 6, bottom: 0, left: 6) for frame \"操作 / 确认处置\"",
+    "composition-0/white-canvas": "Set fill color of node \"Checkbox · 原生选择控件\" to RGBA(1, 1, 1, 1)",
+    "composition-1/white-canvas": "Set fill color of node \"Radio · 原生选择控件\" to RGBA(1, 1, 1, 1)",
+    "composition-2/white-canvas": "Set fill color of node \"Steps · Complete / Current / Upcoming\" to RGBA(1, 1, 1, 1)",
+    "composition-3/white-canvas": "Set fill color of node \"Timeline · Complete / Current / Upcoming\" to RGBA(1, 1, 1, 1)",
+    "composition-4/white-canvas": "Set fill color of node \"Progress / Determinate\" to RGBA(1, 1, 1, 1)",
+    "composition-5/white-canvas": "Set fill color of node \"Progress / Indeterminate\" to RGBA(1, 1, 1, 1)",
+    "composition-6/white-canvas": "Set fill color of node \"部分履行 / 六数量守恒\" to RGBA(1, 1, 1, 1)",
+    "composition-7/white-canvas": "Set fill color of node \"筛选无结果 / 区别于无记录\" to RGBA(1, 1, 1, 1)",
+    "打开接收确认/white-canvas": "Set fill color of node \"打开接收确认\" to RGBA(1, 1, 1, 1)",
+    "打开处置确认/white-canvas": "Set fill color of node \"打开处置确认\" to RGBA(1, 1, 1, 1)"
+  },
+  "nodes": {}
+}

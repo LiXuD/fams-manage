@@ -1,0 +1,405 @@
+{
+  "capturedAt": "2026-09-11T10:31:54+08:00",
+  "channel": "pn1zl5yt",
+  "page": {
+    "id": "3:5",
+    "name": "03 · Screens & Handoff",
+    "childCount": 44
+  },
+  "screens": {
+    "count": 40,
+    "ids": {
+      "P01": "28:1885",
+      "P02": "25:1645",
+      "P03": "28:1943",
+      "P04": "28:2109",
+      "P05": "28:2236",
+      "P06": "28:2338",
+      "P07": "28:2505",
+      "P08": "28:2644",
+      "P09": "28:2723",
+      "P10": "28:2878",
+      "P11": "28:2981",
+      "P12": "28:3157",
+      "P13": "28:3305",
+      "P14": "28:3427",
+      "P15": "28:3581",
+      "P16": "28:3715",
+      "P17": "28:3869",
+      "P18": "28:4013",
+      "P19": "28:4082",
+      "P20": "28:4179",
+      "P21": "28:4302",
+      "P22": "28:4418",
+      "P23": "28:4551",
+      "P24": "28:4716",
+      "P25": "28:4865",
+      "P26": "28:5003",
+      "M01": "28:5116",
+      "M02": "26:1804",
+      "M03": "28:5161",
+      "M04": "28:5227",
+      "M05": "28:5345",
+      "M06": "28:5415",
+      "M07": "28:5479",
+      "M08": "28:5566",
+      "M09": "28:5638",
+      "M10": "28:5697",
+      "M11": "28:5772",
+      "M12": "28:5847",
+      "M13": "28:5914",
+      "M14": "28:5966"
+    },
+    "naming": "All 40 business-screen roots now use FAMS D0.4 视觉稿."
+  },
+  "hostStatus": {
+    "count": 14,
+    "nodes": [
+      {
+        "id": "28:5121",
+        "name": "系统保留区 · 宿主状态栏",
+        "characters": "系统保留区",
+        "box": {
+          "x": 386.0199890136719,
+          "y": 12509.5,
+          "width": 67.9800033569336,
+          "height": 20
+        }
+      },
+      {
+        "id": "26:1809",
+        "name": "系统保留区 · 宿主状态栏",
+        "characters": "系统保留区",
+        "box": {
+          "x": 896.02001953125,
+          "y": 12509.5,
+          "width": 67.9800033569336,
+          "height": 20
+        }
+      },
+      {
+        "id": "28:5166",
+        "name": "系统保留区 · 宿主状态栏",
+        "characters": "系统保留区",
+        "box": {
+          "x": 1406.02001953125,
+          "y": 12509.5,
+          "width": 67.9800033569336,
+          "height": 20
+        }
+      },
+      {
+        "id": "28:5232",
+        "name": "系统保留区 · 宿主状态栏",
+        "characters": "系统保留区",
+        "box": {
+          "x": 1916.02001953125,
+          "y": 12509.5,
+          "width": 67.9800033569336,
+          "height": 20
+        }
+      },
+      {
+        "id": "28:5350",
+        "name": "系统保留区 · 宿主状态栏",
+        "characters": "系统保留区",
+        "box": {
+          "x": 2426.02001953125,
+          "y": 12509.5,
+          "width": 67.9800033569336,
+          "height": 20
+        }
+      },
+      {
+        "id": "28:5420",
+        "name": "系统保留区 · 宿主状态栏",
+        "characters": "系统保留区",
+        "box": {
+          "x": 2936.02001953125,
+          "y": 12509.5,
+          "width": 67.9800033569336,
+          "height": 20
+        }
+      },
+      {
+        "id": "28:5484",
+        "name": "系统保留区 · 宿主状态栏",
+        "characters": "系统保留区",
+        "box": {
+          "x": 3446.02001953125,
+          "y": 12509.5,
+          "width": 67.9800033569336,
+          "height": 20
+        }
+      },
+      {
+        "id": "28:5571",
+        "name": "系统保留区 · 宿主状态栏",
+        "characters": "系统保留区",
+        "box": {
+          "x": 386.0199890136719,
+          "y": 14109.5,
+          "width": 67.9800033569336,
+          "height": 20
+        }
+      },
+      {
+        "id": "28:5643",
+        "name": "系统保留区 · 宿主状态栏",
+        "characters": "系统保留区",
+        "box": {
+          "x": 896.02001953125,
+          "y": 14109.5,
+          "width": 67.9800033569336,
+          "height": 20
+        }
+      },
+      {
+        "id": "28:5702",
+        "name": "系统保留区 · 宿主状态栏",
+        "characters": "系统保留区",
+        "box": {
+          "x": 1406.02001953125,
+          "y": 14109.5,
+          "width": 67.9800033569336,
+          "height": 20
+        }
+      },
+      {
+        "id": "28:5777",
+        "name": "系统保留区 · 宿主状态栏",
+        "characters": "系统保留区",
+        "box": {
+          "x": 1916.02001953125,
+          "y": 14109.5,
+          "width": 67.9800033569336,
+          "height": 20
+        }
+      },
+      {
+        "id": "28:5852",
+        "name": "系统保留区 · 宿主状态栏",
+        "characters": "系统保留区",
+        "box": {
+          "x": 2426.02001953125,
+          "y": 14109.5,
+          "width": 67.9800033569336,
+          "height": 20
+        }
+      },
+      {
+        "id": "28:5919",
+        "name": "系统保留区 · 宿主状态栏",
+        "characters": "系统保留区",
+        "box": {
+          "x": 2936.02001953125,
+          "y": 14109.5,
+          "width": 67.9800033569336,
+          "height": 20
+        }
+      },
+      {
+        "id": "28:5971",
+        "name": "系统保留区 · 宿主状态栏",
+        "characters": "系统保留区",
+        "box": {
+          "x": 3446.02001953125,
+          "y": 14109.5,
+          "width": 67.9800033569336,
+          "height": 20
+        }
+      }
+    ]
+  },
+  "sample": {
+    "root": {
+      "id": "47:6647",
+      "name": "D0.4 / 状态与字段压力样本",
+      "type": "FRAME",
+      "box": {
+        "x": 10320,
+        "y": 400,
+        "width": 1800,
+        "height": 1320
+      },
+      "childCount": 5
+    },
+    "children": [
+      {
+        "id": "47:6648",
+        "name": "D0.4 / 状态与字段压力样本",
+        "type": "TEXT",
+        "box": {
+          "x": 10352,
+          "y": 424,
+          "width": 980,
+          "height": 38
+        },
+        "childCount": 0
+      },
+      {
+        "id": "47:6649",
+        "name": "独立证据样张 · 不计入 P01–P26 / M01–M14 · 使用既有原生组件",
+        "type": "TEXT",
+        "box": {
+          "x": 10352,
+          "y": 466,
+          "width": 900,
+          "height": 22
+        },
+        "childCount": 0
+      },
+      {
+        "id": "47:6650",
+        "name": "Notice / 状态语义 · 7 个原生实例",
+        "type": "FRAME",
+        "box": {
+          "x": 10344,
+          "y": 508,
+          "width": 1080,
+          "height": 566
+        },
+        "childCount": 8
+      },
+      {
+        "id": "47:6715",
+        "name": "Field / 压力样本 · Focus / Error / ReadOnly",
+        "type": "FRAME",
+        "box": {
+          "x": 11448,
+          "y": 508,
+          "width": 648,
+          "height": 566
+        },
+        "childCount": 6
+      },
+      {
+        "id": "47:6735",
+        "name": "D0.4 / M02 M05 M14 原生说明",
+        "type": "FRAME",
+        "box": {
+          "x": 10344,
+          "y": 1104,
+          "width": 1752,
+          "height": 576
+        },
+        "childCount": 4
+      }
+    ],
+    "instanceIds": [
+      "47:6652",
+      "47:6661",
+      "47:6670",
+      "47:6679",
+      "47:6688",
+      "47:6697",
+      "47:6706",
+      "47:6718",
+      "47:6724",
+      "47:6730"
+    ]
+  },
+  "evidence": {
+    "rollbackSummary": "d04-native-pre-sync-summary.json",
+    "sampleExport": "Direct Figma PNG export returned an image block and was visually inspected.",
+    "representativeExports": [
+      "P03",
+      "P23",
+      "M02",
+      "M05",
+      "M14"
+    ],
+    "calibration": [
+      "42:6642",
+      "42:6643"
+    ],
+    "nativeSvg": "Verified in the separate D0.4 SVG icon sample frame through create_node_from_svg; see d04-native-svg-import.json."
+  },
+  "latestCurrentVerification": {
+      "verifiedAt": "2026-09-11T03:11:07.387Z",
+    "channel": "v7dkvp2o",
+    "pageBody": {
+      "screenCount": 40,
+      "textNodes": 1598,
+      "instances": 219,
+      "vectors": 0,
+      "imageFills": 0,
+      "textMismatches": 0,
+      "overflowCandidates": 0,
+      "allExportsPresent": true,
+      "hostStatus": {
+        "count": 14,
+        "allReserved": true,
+        "geometry": "72x28",
+        "children": ["d04-host-more", "d04-host-close"]
+      },
+      "evidenceFile": "d04-native-live-verification.json"
+    },
+    "visualCandidates": {
+      "evidenceFile": "../d04-work/visual-comparison-evidence.json",
+      "representativePages": ["P03", "P23", "M02", "M05", "M14"],
+      "tableDensityDecision": "default-14-22"
+    },
+    "svgImport": {
+      "status": "verified",
+      "operation": "create_node_from_svg",
+      "sampleNode": "71:13639",
+      "evidenceFile": "d04-native-svg-import.json",
+      "importedRoots": 8,
+      "vectorLayers": 18,
+      "editableVectorRoots": 8,
+      "svgExports": 8,
+      "noImageFills": true
+    },
+    "svgNavWiring": {
+      "status": "verified",
+      "screens": ["M02", "M03", "M04", "M05", "M06", "M07", "M08", "M09", "M10", "M11", "M12", "M13", "M14"],
+      "evidenceFile": "d04-native-svg-nav-wiring.json",
+      "slots": 52,
+      "vectorLayers": 117,
+      "svgExports": 52,
+      "noImageFills": true
+    },
+    "remainingBoundaries": [
+      "M01源页面没有底部导航槽",
+      "真实设备验收",
+      "生产服务、权限、并发和离线后端验收"
+    ]
+  },
+  "latestRecheck": {
+    "verifiedAt": "2026-09-11T03:24:01.404Z",
+    "channel": "v7dkvp2o",
+    "nativeComponentVerification": {
+      "componentSets": 8,
+      "components": 85,
+      "screens": 40,
+      "compositions": 10,
+      "changedScreensSinceExport": []
+    },
+    "pageBodyVerification": {
+      "verifiedAt": "2026-09-11T03:22:22.783Z",
+      "screens": 40,
+      "textNodes": 1598,
+      "instances": 219,
+      "imageFills": 0,
+      "textMismatches": 0,
+      "overflowCandidates": 0,
+      "allExportsPresent": true
+    },
+    "svgSample": {
+      "verifiedAt": "2026-09-11T03:21:49.617Z",
+      "importedRoots": 8,
+      "vectorLayers": 18,
+      "svgExports": 8,
+      "noImageFills": true
+    },
+    "svgNavWiring": {
+      "verifiedAt": "2026-09-11T03:21:42.968Z",
+      "slots": 52,
+      "vectorLayers": 117,
+      "svgExports": 52,
+      "everySlotPasses": true,
+      "noImageFills": true
+    }
+  }
+}

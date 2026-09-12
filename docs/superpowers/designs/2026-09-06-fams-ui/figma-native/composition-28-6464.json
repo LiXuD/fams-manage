@@ -1,0 +1,399 @@
+{
+  "id": "28:6464",
+  "name": "Steps · Complete / Current / Upcoming",
+  "type": "FRAME",
+  "fills": [
+    {
+      "blendMode": "NORMAL",
+      "type": "SOLID",
+      "color": "#ffffff"
+    }
+  ],
+  "absoluteBoundingBox": {
+    "x": 1400,
+    "y": 7040,
+    "width": 466,
+    "height": 71.05000305175781
+  },
+  "children": [
+    {
+      "id": "28:6465",
+      "name": "LI",
+      "type": "FRAME",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e8f5ee"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 1400,
+        "y": 7040,
+        "width": 150,
+        "height": 71.05000305175781
+      },
+      "children": [
+        {
+          "id": "28:6466",
+          "name": "B",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1413,
+            "y": 7055.5,
+            "width": 120.61000061035156,
+            "height": 16.5
+          },
+          "children": [
+            {
+              "id": "28:6467",
+              "name": "✓　管理员确认",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#206a45"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 1413,
+                "y": 7052.75,
+                "width": 102.61000061035156,
+                "height": 22
+              },
+              "characters": "✓　管理员确认",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Medium",
+                "fontWeight": 500,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "28:6468",
+          "name": "SMALL",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1413,
+            "y": 7079.39990234375,
+            "width": 148,
+            "height": 18.65999984741211
+          },
+          "children": [
+            {
+              "id": "28:6469",
+              "name": "已批准",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#53657d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 1413,
+                "y": 7078.39990234375,
+                "width": 41,
+                "height": 20
+              },
+              "characters": "已批准",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Medium",
+                "fontWeight": 500,
+                "fontSize": 12,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 20
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "28:6470",
+      "name": "LI",
+      "type": "FRAME",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#eaf0ff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#2457d6"
+        }
+      ],
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 1558,
+        "y": 7040,
+        "width": 150,
+        "height": 71.05000305175781
+      },
+      "children": [
+        {
+          "id": "28:6471",
+          "name": "B",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1571,
+            "y": 7055.5,
+            "width": 102.86000061035156,
+            "height": 16.5
+          },
+          "children": [
+            {
+              "id": "28:6472",
+              "name": "2　库管交出",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#2457d6"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 1571,
+                "y": 7052.75,
+                "width": 84.86000061035156,
+                "height": 22
+              },
+              "characters": "2　库管交出",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Medium",
+                "fontWeight": 500,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "28:6473",
+          "name": "SMALL",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1571,
+            "y": 7079.39990234375,
+            "width": 148,
+            "height": 18.65999984741211
+          },
+          "children": [
+            {
+              "id": "28:6474",
+              "name": "等待库管",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#53657d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 1571,
+                "y": 7078.39990234375,
+                "width": 52.65999984741211,
+                "height": 20
+              },
+              "characters": "等待库管",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Medium",
+                "fontWeight": 500,
+                "fontSize": 12,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 20
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "28:6475",
+      "name": "LI",
+      "type": "FRAME",
+      "fills": [
+        {
+          "opacity": 9.999999717180685e-10,
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 1716,
+        "y": 7040,
+        "width": 150,
+        "height": 71.05000305175781
+      },
+      "children": [
+        {
+          "id": "28:6476",
+          "name": "B",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1729,
+            "y": 7055.5,
+            "width": 103.22000122070312,
+            "height": 16.5
+          },
+          "children": [
+            {
+              "id": "28:6477",
+              "name": "3　本人接收",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 1729,
+                "y": 7052.75,
+                "width": 85.22000122070312,
+                "height": 22
+              },
+              "characters": "3　本人接收",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Medium",
+                "fontWeight": 500,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "28:6478",
+          "name": "SMALL",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1729,
+            "y": 7079.39990234375,
+            "width": 148,
+            "height": 18.65999984741211
+          },
+          "children": [
+            {
+              "id": "28:6479",
+              "name": "逐项核对后确认",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#53657d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 1729,
+                "y": 7078.39990234375,
+                "width": 87.66000366210938,
+                "height": 20
+              },
+              "characters": "逐项核对后确认",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Medium",
+                "fontWeight": 500,
+                "fontSize": 12,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 20
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

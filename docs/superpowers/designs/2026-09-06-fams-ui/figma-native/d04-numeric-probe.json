@@ -1,0 +1,253 @@
+{
+  "at": "2026-09-09T06:44:46.523Z",
+  "probes": [
+    {
+      "label": "body14",
+      "source": "4:57",
+      "widths": [
+        {
+          "text": "111111",
+          "width": 47,
+          "height": 22,
+          "font": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Regular",
+            "fontWeight": 400,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        },
+        {
+          "text": "888888",
+          "width": 47,
+          "height": 22,
+          "font": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Regular",
+            "fontWeight": 400,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        },
+        {
+          "text": "000000",
+          "width": 47,
+          "height": 22,
+          "font": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Regular",
+            "fontWeight": 400,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        },
+        {
+          "text": "555555",
+          "width": 47,
+          "height": 22,
+          "font": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Regular",
+            "fontWeight": 400,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        }
+      ]
+    },
+    {
+      "label": "body14medium",
+      "source": "6:7",
+      "widths": [
+        {
+          "text": "111111",
+          "width": 48,
+          "height": 22,
+          "font": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        },
+        {
+          "text": "888888",
+          "width": 48,
+          "height": 22,
+          "font": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        },
+        {
+          "text": "000000",
+          "width": 48,
+          "height": 22,
+          "font": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        },
+        {
+          "text": "555555",
+          "width": 48,
+          "height": 22,
+          "font": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        }
+      ]
+    },
+    {
+      "label": "body16",
+      "source": "4:54",
+      "widths": [
+        {
+          "text": "111111",
+          "width": 54,
+          "height": 26,
+          "font": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Regular",
+            "fontWeight": 400,
+            "fontSize": 16,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 26
+          }
+        },
+        {
+          "text": "888888",
+          "width": 54,
+          "height": 26,
+          "font": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Regular",
+            "fontWeight": 400,
+            "fontSize": 16,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 26
+          }
+        },
+        {
+          "text": "000000",
+          "width": 54,
+          "height": 26,
+          "font": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Regular",
+            "fontWeight": 400,
+            "fontSize": 16,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 26
+          }
+        },
+        {
+          "text": "555555",
+          "width": 54,
+          "height": 26,
+          "font": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Regular",
+            "fontWeight": 400,
+            "fontSize": 16,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 26
+          }
+        }
+      ]
+    },
+    {
+      "label": "heading24",
+      "source": "4:16",
+      "widths": [
+        {
+          "text": "111111",
+          "width": 85,
+          "height": 36,
+          "font": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Bold",
+            "fontWeight": 700,
+            "fontSize": 24,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 36
+          }
+        },
+        {
+          "text": "888888",
+          "width": 85,
+          "height": 36,
+          "font": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Bold",
+            "fontWeight": 700,
+            "fontSize": 24,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 36
+          }
+        },
+        {
+          "text": "000000",
+          "width": 85,
+          "height": 36,
+          "font": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Bold",
+            "fontWeight": 700,
+            "fontSize": 24,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 36
+          }
+        },
+        {
+          "text": "555555",
+          "width": 85,
+          "height": 36,
+          "font": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Bold",
+            "fontWeight": 700,
+            "fontSize": 24,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 36
+          }
+        }
+      ]
+    }
+  ]
+}

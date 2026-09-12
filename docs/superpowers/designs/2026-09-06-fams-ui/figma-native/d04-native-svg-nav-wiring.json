@@ -1,0 +1,2351 @@
+{
+  "verifiedAt": "2026-09-11T03:21:42.968Z",
+  "fileKey": "N4BgxhOTtSFpsoxcN7t4XD",
+  "channel": "v7dkvp2o",
+  "page": {
+    "id": "3:5",
+    "name": "03 · Screens & Handoff"
+  },
+  "scope": "All M02–M14 bottom-nav 24×24 icon slots present in the native page bodies",
+  "mapping": [
+    {
+      "screen": "M02",
+      "itemId": "47:7316",
+      "slotId": "47:7318",
+      "slotName": "SVG 插槽 / M02 / 首页 / 当前",
+      "asset": "home-active.svg",
+      "state": "当前",
+      "label": "首页",
+      "sourceSha256": "444ca2092f5fb9569c25c7e64e6f186dc6d78ecf16912ad9e61be31b75956cec",
+      "importedRoot": {
+        "id": "71:13676",
+        "name": "D0.4 SVG / M02 / 首页 / 当前",
+        "type": "FRAME",
+        "box": {
+          "x": 629.75,
+          "y": 13470.3896484375,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 3,
+        "vectors": [
+          {
+            "id": "71:13677",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13678",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13679",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13676-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13676-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M02",
+      "itemId": "47:7323",
+      "slotId": "47:7324",
+      "slotName": "SVG 插槽 / M02 / 扫码 / 非当前",
+      "asset": "scan-neutral.svg",
+      "state": "非当前",
+      "label": "扫码",
+      "sourceSha256": "5d2aefd5bab9230b4d0025f8f0b0acc44f338d994b025e4c60851b0fe5e5b7fb",
+      "importedRoot": {
+        "id": "71:13680",
+        "name": "D0.4 SVG / M02 / 扫码 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 725.25,
+          "y": 13470.3896484375,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13681",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13682",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13680-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13680-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M02",
+      "itemId": "47:7328",
+      "slotId": "47:7329",
+      "slotName": "SVG 插槽 / M02 / 我的 / 非当前",
+      "asset": "mine-neutral.svg",
+      "state": "非当前",
+      "label": "我的",
+      "sourceSha256": "25eb7a4d7daeb393d209c796c87e8c623b5f789597d28a0d05d4adf320472326",
+      "importedRoot": {
+        "id": "71:13683",
+        "name": "D0.4 SVG / M02 / 我的 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 820.75,
+          "y": 13470.3896484375,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13684",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13685",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13683-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13683-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M02",
+      "itemId": "47:7334",
+      "slotId": "47:7335",
+      "slotName": "SVG 插槽 / M02 / 消息 / 非当前",
+      "asset": "message-neutral.svg",
+      "state": "非当前",
+      "label": "消息",
+      "sourceSha256": "9f18e13efd497e76a900e2fcf2130cb85d08bbfccc70d61f911b2608583a08c0",
+      "importedRoot": {
+        "id": "71:13686",
+        "name": "D0.4 SVG / M02 / 消息 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 916.25,
+          "y": 13470.3896484375,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13687",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13688",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13686-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13686-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M03",
+      "itemId": "47:12583",
+      "slotId": "47:12585",
+      "slotName": "SVG 插槽 / M03 / 首页 / 当前",
+      "asset": "home-active.svg",
+      "state": "当前",
+      "label": "首页",
+      "sourceSha256": "444ca2092f5fb9569c25c7e64e6f186dc6d78ecf16912ad9e61be31b75956cec",
+      "importedRoot": {
+        "id": "71:13715",
+        "name": "D0.4 SVG / M03 / 首页 / 当前",
+        "type": "FRAME",
+        "box": {
+          "x": 1139.75,
+          "y": 13523.3798828125,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 3,
+        "vectors": [
+          {
+            "id": "71:13716",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13717",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13718",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13715-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13715-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M03",
+      "itemId": "47:12590",
+      "slotId": "47:12591",
+      "slotName": "SVG 插槽 / M03 / 扫码 / 非当前",
+      "asset": "scan-neutral.svg",
+      "state": "非当前",
+      "label": "扫码",
+      "sourceSha256": "5d2aefd5bab9230b4d0025f8f0b0acc44f338d994b025e4c60851b0fe5e5b7fb",
+      "importedRoot": {
+        "id": "71:13719",
+        "name": "D0.4 SVG / M03 / 扫码 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 1235.25,
+          "y": 13523.3798828125,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13720",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13721",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13719-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13719-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M03",
+      "itemId": "47:12595",
+      "slotId": "47:12596",
+      "slotName": "SVG 插槽 / M03 / 我的 / 非当前",
+      "asset": "mine-neutral.svg",
+      "state": "非当前",
+      "label": "我的",
+      "sourceSha256": "25eb7a4d7daeb393d209c796c87e8c623b5f789597d28a0d05d4adf320472326",
+      "importedRoot": {
+        "id": "71:13722",
+        "name": "D0.4 SVG / M03 / 我的 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 1330.75,
+          "y": 13523.3798828125,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13723",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13724",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13722-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13722-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M03",
+      "itemId": "47:12601",
+      "slotId": "47:12602",
+      "slotName": "SVG 插槽 / M03 / 消息 / 非当前",
+      "asset": "message-neutral.svg",
+      "state": "非当前",
+      "label": "消息",
+      "sourceSha256": "9f18e13efd497e76a900e2fcf2130cb85d08bbfccc70d61f911b2608583a08c0",
+      "importedRoot": {
+        "id": "71:13725",
+        "name": "D0.4 SVG / M03 / 消息 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 1426.25,
+          "y": 13523.3798828125,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13726",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13727",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13725-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13725-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M04",
+      "itemId": "47:12737",
+      "slotId": "47:12739",
+      "slotName": "SVG 插槽 / M04 / 首页 / 当前",
+      "asset": "home-active.svg",
+      "state": "当前",
+      "label": "首页",
+      "sourceSha256": "444ca2092f5fb9569c25c7e64e6f186dc6d78ecf16912ad9e61be31b75956cec",
+      "importedRoot": {
+        "id": "71:13728",
+        "name": "D0.4 SVG / M04 / 首页 / 当前",
+        "type": "FRAME",
+        "box": {
+          "x": 1649.75,
+          "y": 13748.4697265625,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 3,
+        "vectors": [
+          {
+            "id": "71:13729",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13730",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13731",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13728-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13728-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M04",
+      "itemId": "47:12744",
+      "slotId": "47:12745",
+      "slotName": "SVG 插槽 / M04 / 扫码 / 非当前",
+      "asset": "scan-neutral.svg",
+      "state": "非当前",
+      "label": "扫码",
+      "sourceSha256": "5d2aefd5bab9230b4d0025f8f0b0acc44f338d994b025e4c60851b0fe5e5b7fb",
+      "importedRoot": {
+        "id": "71:13732",
+        "name": "D0.4 SVG / M04 / 扫码 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 1745.25,
+          "y": 13748.4697265625,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13733",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13734",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13732-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13732-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M04",
+      "itemId": "47:12749",
+      "slotId": "47:12750",
+      "slotName": "SVG 插槽 / M04 / 我的 / 非当前",
+      "asset": "mine-neutral.svg",
+      "state": "非当前",
+      "label": "我的",
+      "sourceSha256": "25eb7a4d7daeb393d209c796c87e8c623b5f789597d28a0d05d4adf320472326",
+      "importedRoot": {
+        "id": "71:13735",
+        "name": "D0.4 SVG / M04 / 我的 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 1840.75,
+          "y": 13748.4697265625,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13736",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13737",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13735-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13735-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M04",
+      "itemId": "47:12755",
+      "slotId": "47:12756",
+      "slotName": "SVG 插槽 / M04 / 消息 / 非当前",
+      "asset": "message-neutral.svg",
+      "state": "非当前",
+      "label": "消息",
+      "sourceSha256": "9f18e13efd497e76a900e2fcf2130cb85d08bbfccc70d61f911b2608583a08c0",
+      "importedRoot": {
+        "id": "71:13738",
+        "name": "D0.4 SVG / M04 / 消息 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 1936.25,
+          "y": 13748.4697265625,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13739",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13740",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13738-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13738-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M05",
+      "itemId": "47:7422",
+      "slotId": "47:7424",
+      "slotName": "SVG 插槽 / M05 / 首页 / 当前",
+      "asset": "home-active.svg",
+      "state": "当前",
+      "label": "首页",
+      "sourceSha256": "444ca2092f5fb9569c25c7e64e6f186dc6d78ecf16912ad9e61be31b75956cec",
+      "importedRoot": {
+        "id": "71:13689",
+        "name": "D0.4 SVG / M05 / 首页 / 当前",
+        "type": "FRAME",
+        "box": {
+          "x": 2159.75,
+          "y": 13448.26953125,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 3,
+        "vectors": [
+          {
+            "id": "71:13690",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13691",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13692",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13689-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13689-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M05",
+      "itemId": "47:7429",
+      "slotId": "47:7430",
+      "slotName": "SVG 插槽 / M05 / 扫码 / 非当前",
+      "asset": "scan-neutral.svg",
+      "state": "非当前",
+      "label": "扫码",
+      "sourceSha256": "5d2aefd5bab9230b4d0025f8f0b0acc44f338d994b025e4c60851b0fe5e5b7fb",
+      "importedRoot": {
+        "id": "71:13693",
+        "name": "D0.4 SVG / M05 / 扫码 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 2255.25,
+          "y": 13448.26953125,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13694",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13695",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13693-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13693-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M05",
+      "itemId": "47:7434",
+      "slotId": "47:7435",
+      "slotName": "SVG 插槽 / M05 / 我的 / 非当前",
+      "asset": "mine-neutral.svg",
+      "state": "非当前",
+      "label": "我的",
+      "sourceSha256": "25eb7a4d7daeb393d209c796c87e8c623b5f789597d28a0d05d4adf320472326",
+      "importedRoot": {
+        "id": "71:13696",
+        "name": "D0.4 SVG / M05 / 我的 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 2350.75,
+          "y": 13448.26953125,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13697",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13698",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13696-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13696-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M05",
+      "itemId": "47:7440",
+      "slotId": "47:7441",
+      "slotName": "SVG 插槽 / M05 / 消息 / 非当前",
+      "asset": "message-neutral.svg",
+      "state": "非当前",
+      "label": "消息",
+      "sourceSha256": "9f18e13efd497e76a900e2fcf2130cb85d08bbfccc70d61f911b2608583a08c0",
+      "importedRoot": {
+        "id": "71:13699",
+        "name": "D0.4 SVG / M05 / 消息 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 2446.25,
+          "y": 13448.26953125,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13700",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13701",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13699-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13699-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M06",
+      "itemId": "47:12837",
+      "slotId": "47:12839",
+      "slotName": "SVG 插槽 / M06 / 首页 / 当前",
+      "asset": "home-active.svg",
+      "state": "当前",
+      "label": "首页",
+      "sourceSha256": "444ca2092f5fb9569c25c7e64e6f186dc6d78ecf16912ad9e61be31b75956cec",
+      "importedRoot": {
+        "id": "71:13741",
+        "name": "D0.4 SVG / M06 / 首页 / 当前",
+        "type": "FRAME",
+        "box": {
+          "x": 2669.75,
+          "y": 13435,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 3,
+        "vectors": [
+          {
+            "id": "71:13742",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13743",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13744",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13741-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13741-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M06",
+      "itemId": "47:12844",
+      "slotId": "47:12845",
+      "slotName": "SVG 插槽 / M06 / 扫码 / 非当前",
+      "asset": "scan-neutral.svg",
+      "state": "非当前",
+      "label": "扫码",
+      "sourceSha256": "5d2aefd5bab9230b4d0025f8f0b0acc44f338d994b025e4c60851b0fe5e5b7fb",
+      "importedRoot": {
+        "id": "71:13745",
+        "name": "D0.4 SVG / M06 / 扫码 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 2765.25,
+          "y": 13435,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13746",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13747",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13745-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13745-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M06",
+      "itemId": "47:12849",
+      "slotId": "47:12850",
+      "slotName": "SVG 插槽 / M06 / 我的 / 非当前",
+      "asset": "mine-neutral.svg",
+      "state": "非当前",
+      "label": "我的",
+      "sourceSha256": "25eb7a4d7daeb393d209c796c87e8c623b5f789597d28a0d05d4adf320472326",
+      "importedRoot": {
+        "id": "71:13748",
+        "name": "D0.4 SVG / M06 / 我的 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 2860.75,
+          "y": 13435,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13749",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13750",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13748-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13748-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M06",
+      "itemId": "47:12855",
+      "slotId": "47:12856",
+      "slotName": "SVG 插槽 / M06 / 消息 / 非当前",
+      "asset": "message-neutral.svg",
+      "state": "非当前",
+      "label": "消息",
+      "sourceSha256": "9f18e13efd497e76a900e2fcf2130cb85d08bbfccc70d61f911b2608583a08c0",
+      "importedRoot": {
+        "id": "71:13751",
+        "name": "D0.4 SVG / M06 / 消息 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 2956.25,
+          "y": 13435,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13752",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13753",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13751-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13751-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M07",
+      "itemId": "47:12960",
+      "slotId": "47:12962",
+      "slotName": "SVG 插槽 / M07 / 首页 / 当前",
+      "asset": "home-active.svg",
+      "state": "当前",
+      "label": "首页",
+      "sourceSha256": "444ca2092f5fb9569c25c7e64e6f186dc6d78ecf16912ad9e61be31b75956cec",
+      "importedRoot": {
+        "id": "71:13754",
+        "name": "D0.4 SVG / M07 / 首页 / 当前",
+        "type": "FRAME",
+        "box": {
+          "x": 3179.75,
+          "y": 13436.33984375,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 3,
+        "vectors": [
+          {
+            "id": "71:13755",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13756",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13757",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13754-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13754-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M07",
+      "itemId": "47:12967",
+      "slotId": "47:12968",
+      "slotName": "SVG 插槽 / M07 / 扫码 / 非当前",
+      "asset": "scan-neutral.svg",
+      "state": "非当前",
+      "label": "扫码",
+      "sourceSha256": "5d2aefd5bab9230b4d0025f8f0b0acc44f338d994b025e4c60851b0fe5e5b7fb",
+      "importedRoot": {
+        "id": "71:13758",
+        "name": "D0.4 SVG / M07 / 扫码 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 3275.25,
+          "y": 13436.33984375,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13759",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13760",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13758-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13758-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M07",
+      "itemId": "47:12972",
+      "slotId": "47:12973",
+      "slotName": "SVG 插槽 / M07 / 我的 / 非当前",
+      "asset": "mine-neutral.svg",
+      "state": "非当前",
+      "label": "我的",
+      "sourceSha256": "25eb7a4d7daeb393d209c796c87e8c623b5f789597d28a0d05d4adf320472326",
+      "importedRoot": {
+        "id": "71:13761",
+        "name": "D0.4 SVG / M07 / 我的 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 3370.75,
+          "y": 13436.33984375,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13762",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13763",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13761-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13761-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M07",
+      "itemId": "47:12978",
+      "slotId": "47:12979",
+      "slotName": "SVG 插槽 / M07 / 消息 / 非当前",
+      "asset": "message-neutral.svg",
+      "state": "非当前",
+      "label": "消息",
+      "sourceSha256": "9f18e13efd497e76a900e2fcf2130cb85d08bbfccc70d61f911b2608583a08c0",
+      "importedRoot": {
+        "id": "71:13764",
+        "name": "D0.4 SVG / M07 / 消息 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 3466.25,
+          "y": 13436.33984375,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13765",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13766",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13764-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13764-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M08",
+      "itemId": "47:13085",
+      "slotId": "47:13086",
+      "slotName": "SVG 插槽 / M08 / 首页 / 非当前",
+      "asset": "home-neutral.svg",
+      "state": "非当前",
+      "label": "首页",
+      "sourceSha256": "f5010159ebd816cd4b8aa25e1bbe3f91af52c8592f075529c18931a9f02bd1a1",
+      "importedRoot": {
+        "id": "71:13767",
+        "name": "D0.4 SVG / M08 / 首页 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 119.75,
+          "y": 15171.560546875,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 3,
+        "vectors": [
+          {
+            "id": "71:13768",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13769",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13770",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13767-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13767-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M08",
+      "itemId": "47:13091",
+      "slotId": "47:13093",
+      "slotName": "SVG 插槽 / M08 / 扫码 / 当前",
+      "asset": "scan-active.svg",
+      "state": "当前",
+      "label": "扫码",
+      "sourceSha256": "080ea5ec55ce59dd443d4b7c0677ca86500eba66d18fa4a86848c38531a63c44",
+      "importedRoot": {
+        "id": "71:13771",
+        "name": "D0.4 SVG / M08 / 扫码 / 当前",
+        "type": "FRAME",
+        "box": {
+          "x": 215.25,
+          "y": 15171.560546875,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13772",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13773",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13771-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13771-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M08",
+      "itemId": "47:13097",
+      "slotId": "47:13098",
+      "slotName": "SVG 插槽 / M08 / 我的 / 非当前",
+      "asset": "mine-neutral.svg",
+      "state": "非当前",
+      "label": "我的",
+      "sourceSha256": "25eb7a4d7daeb393d209c796c87e8c623b5f789597d28a0d05d4adf320472326",
+      "importedRoot": {
+        "id": "71:13774",
+        "name": "D0.4 SVG / M08 / 我的 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 310.75,
+          "y": 15171.560546875,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13775",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13776",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13774-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13774-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M08",
+      "itemId": "47:13103",
+      "slotId": "47:13104",
+      "slotName": "SVG 插槽 / M08 / 消息 / 非当前",
+      "asset": "message-neutral.svg",
+      "state": "非当前",
+      "label": "消息",
+      "sourceSha256": "9f18e13efd497e76a900e2fcf2130cb85d08bbfccc70d61f911b2608583a08c0",
+      "importedRoot": {
+        "id": "71:13777",
+        "name": "D0.4 SVG / M08 / 消息 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 406.25,
+          "y": 15171.560546875,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13778",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13779",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13777-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13777-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M09",
+      "itemId": "47:13180",
+      "slotId": "47:13182",
+      "slotName": "SVG 插槽 / M09 / 首页 / 当前",
+      "asset": "home-active.svg",
+      "state": "当前",
+      "label": "首页",
+      "sourceSha256": "444ca2092f5fb9569c25c7e64e6f186dc6d78ecf16912ad9e61be31b75956cec",
+      "importedRoot": {
+        "id": "71:13780",
+        "name": "D0.4 SVG / M09 / 首页 / 当前",
+        "type": "FRAME",
+        "box": {
+          "x": 629.75,
+          "y": 15035,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 3,
+        "vectors": [
+          {
+            "id": "71:13781",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13782",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13783",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13780-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13780-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M09",
+      "itemId": "47:13187",
+      "slotId": "47:13188",
+      "slotName": "SVG 插槽 / M09 / 扫码 / 非当前",
+      "asset": "scan-neutral.svg",
+      "state": "非当前",
+      "label": "扫码",
+      "sourceSha256": "5d2aefd5bab9230b4d0025f8f0b0acc44f338d994b025e4c60851b0fe5e5b7fb",
+      "importedRoot": {
+        "id": "71:13784",
+        "name": "D0.4 SVG / M09 / 扫码 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 725.25,
+          "y": 15035,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13785",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13786",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13784-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13784-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M09",
+      "itemId": "47:13192",
+      "slotId": "47:13193",
+      "slotName": "SVG 插槽 / M09 / 我的 / 非当前",
+      "asset": "mine-neutral.svg",
+      "state": "非当前",
+      "label": "我的",
+      "sourceSha256": "25eb7a4d7daeb393d209c796c87e8c623b5f789597d28a0d05d4adf320472326",
+      "importedRoot": {
+        "id": "71:13787",
+        "name": "D0.4 SVG / M09 / 我的 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 820.75,
+          "y": 15035,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13788",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13789",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13787-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13787-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M09",
+      "itemId": "47:13198",
+      "slotId": "47:13199",
+      "slotName": "SVG 插槽 / M09 / 消息 / 非当前",
+      "asset": "message-neutral.svg",
+      "state": "非当前",
+      "label": "消息",
+      "sourceSha256": "9f18e13efd497e76a900e2fcf2130cb85d08bbfccc70d61f911b2608583a08c0",
+      "importedRoot": {
+        "id": "71:13790",
+        "name": "D0.4 SVG / M09 / 消息 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 916.25,
+          "y": 15035,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13791",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13792",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13790-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13790-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M10",
+      "itemId": "47:13291",
+      "slotId": "47:13293",
+      "slotName": "SVG 插槽 / M10 / 首页 / 当前",
+      "asset": "home-active.svg",
+      "state": "当前",
+      "label": "首页",
+      "sourceSha256": "444ca2092f5fb9569c25c7e64e6f186dc6d78ecf16912ad9e61be31b75956cec",
+      "importedRoot": {
+        "id": "71:13793",
+        "name": "D0.4 SVG / M10 / 首页 / 当前",
+        "type": "FRAME",
+        "box": {
+          "x": 1139.75,
+          "y": 15035,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 3,
+        "vectors": [
+          {
+            "id": "71:13794",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13795",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13796",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13793-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13793-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M10",
+      "itemId": "47:13298",
+      "slotId": "47:13299",
+      "slotName": "SVG 插槽 / M10 / 扫码 / 非当前",
+      "asset": "scan-neutral.svg",
+      "state": "非当前",
+      "label": "扫码",
+      "sourceSha256": "5d2aefd5bab9230b4d0025f8f0b0acc44f338d994b025e4c60851b0fe5e5b7fb",
+      "importedRoot": {
+        "id": "71:13797",
+        "name": "D0.4 SVG / M10 / 扫码 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 1235.25,
+          "y": 15035,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13798",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13799",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13797-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13797-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M10",
+      "itemId": "47:13303",
+      "slotId": "47:13304",
+      "slotName": "SVG 插槽 / M10 / 我的 / 非当前",
+      "asset": "mine-neutral.svg",
+      "state": "非当前",
+      "label": "我的",
+      "sourceSha256": "25eb7a4d7daeb393d209c796c87e8c623b5f789597d28a0d05d4adf320472326",
+      "importedRoot": {
+        "id": "71:13800",
+        "name": "D0.4 SVG / M10 / 我的 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 1330.75,
+          "y": 15035,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13801",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13802",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13800-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13800-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M10",
+      "itemId": "47:13309",
+      "slotId": "47:13310",
+      "slotName": "SVG 插槽 / M10 / 消息 / 非当前",
+      "asset": "message-neutral.svg",
+      "state": "非当前",
+      "label": "消息",
+      "sourceSha256": "9f18e13efd497e76a900e2fcf2130cb85d08bbfccc70d61f911b2608583a08c0",
+      "importedRoot": {
+        "id": "71:13803",
+        "name": "D0.4 SVG / M10 / 消息 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 1426.25,
+          "y": 15035,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13804",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13805",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13803-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13803-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M11",
+      "itemId": "47:13420",
+      "slotId": "47:13422",
+      "slotName": "SVG 插槽 / M11 / 首页 / 当前",
+      "asset": "home-active.svg",
+      "state": "当前",
+      "label": "首页",
+      "sourceSha256": "444ca2092f5fb9569c25c7e64e6f186dc6d78ecf16912ad9e61be31b75956cec",
+      "importedRoot": {
+        "id": "71:13806",
+        "name": "D0.4 SVG / M11 / 首页 / 当前",
+        "type": "FRAME",
+        "box": {
+          "x": 1649.75,
+          "y": 15153.5,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 3,
+        "vectors": [
+          {
+            "id": "71:13807",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13808",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13809",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13806-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13806-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M11",
+      "itemId": "47:13427",
+      "slotId": "47:13428",
+      "slotName": "SVG 插槽 / M11 / 扫码 / 非当前",
+      "asset": "scan-neutral.svg",
+      "state": "非当前",
+      "label": "扫码",
+      "sourceSha256": "5d2aefd5bab9230b4d0025f8f0b0acc44f338d994b025e4c60851b0fe5e5b7fb",
+      "importedRoot": {
+        "id": "71:13810",
+        "name": "D0.4 SVG / M11 / 扫码 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 1745.25,
+          "y": 15153.5,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13811",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13812",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13810-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13810-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M11",
+      "itemId": "47:13432",
+      "slotId": "47:13433",
+      "slotName": "SVG 插槽 / M11 / 我的 / 非当前",
+      "asset": "mine-neutral.svg",
+      "state": "非当前",
+      "label": "我的",
+      "sourceSha256": "25eb7a4d7daeb393d209c796c87e8c623b5f789597d28a0d05d4adf320472326",
+      "importedRoot": {
+        "id": "71:13813",
+        "name": "D0.4 SVG / M11 / 我的 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 1840.75,
+          "y": 15153.5,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13814",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13815",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13813-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13813-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M11",
+      "itemId": "47:13438",
+      "slotId": "47:13439",
+      "slotName": "SVG 插槽 / M11 / 消息 / 非当前",
+      "asset": "message-neutral.svg",
+      "state": "非当前",
+      "label": "消息",
+      "sourceSha256": "9f18e13efd497e76a900e2fcf2130cb85d08bbfccc70d61f911b2608583a08c0",
+      "importedRoot": {
+        "id": "71:13816",
+        "name": "D0.4 SVG / M11 / 消息 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 1936.25,
+          "y": 15153.5,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13817",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13818",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13816-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13816-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M12",
+      "itemId": "47:13523",
+      "slotId": "47:13525",
+      "slotName": "SVG 插槽 / M12 / 首页 / 当前",
+      "asset": "home-active.svg",
+      "state": "当前",
+      "label": "首页",
+      "sourceSha256": "444ca2092f5fb9569c25c7e64e6f186dc6d78ecf16912ad9e61be31b75956cec",
+      "importedRoot": {
+        "id": "71:13819",
+        "name": "D0.4 SVG / M12 / 首页 / 当前",
+        "type": "FRAME",
+        "box": {
+          "x": 2159.75,
+          "y": 15035,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 3,
+        "vectors": [
+          {
+            "id": "71:13820",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13821",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13822",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13819-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13819-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M12",
+      "itemId": "47:13530",
+      "slotId": "47:13531",
+      "slotName": "SVG 插槽 / M12 / 扫码 / 非当前",
+      "asset": "scan-neutral.svg",
+      "state": "非当前",
+      "label": "扫码",
+      "sourceSha256": "5d2aefd5bab9230b4d0025f8f0b0acc44f338d994b025e4c60851b0fe5e5b7fb",
+      "importedRoot": {
+        "id": "71:13823",
+        "name": "D0.4 SVG / M12 / 扫码 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 2255.25,
+          "y": 15035,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13824",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13825",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13823-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13823-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M12",
+      "itemId": "47:13535",
+      "slotId": "47:13536",
+      "slotName": "SVG 插槽 / M12 / 我的 / 非当前",
+      "asset": "mine-neutral.svg",
+      "state": "非当前",
+      "label": "我的",
+      "sourceSha256": "25eb7a4d7daeb393d209c796c87e8c623b5f789597d28a0d05d4adf320472326",
+      "importedRoot": {
+        "id": "71:13826",
+        "name": "D0.4 SVG / M12 / 我的 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 2350.75,
+          "y": 15035,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13827",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13828",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13826-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13826-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M12",
+      "itemId": "47:13541",
+      "slotId": "47:13542",
+      "slotName": "SVG 插槽 / M12 / 消息 / 非当前",
+      "asset": "message-neutral.svg",
+      "state": "非当前",
+      "label": "消息",
+      "sourceSha256": "9f18e13efd497e76a900e2fcf2130cb85d08bbfccc70d61f911b2608583a08c0",
+      "importedRoot": {
+        "id": "71:13829",
+        "name": "D0.4 SVG / M12 / 消息 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 2446.25,
+          "y": 15035,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13830",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13831",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13829-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13829-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M13",
+      "itemId": "47:13610",
+      "slotId": "47:13611",
+      "slotName": "SVG 插槽 / M13 / 首页 / 非当前",
+      "asset": "home-neutral.svg",
+      "state": "非当前",
+      "label": "首页",
+      "sourceSha256": "f5010159ebd816cd4b8aa25e1bbe3f91af52c8592f075529c18931a9f02bd1a1",
+      "importedRoot": {
+        "id": "71:13832",
+        "name": "D0.4 SVG / M13 / 首页 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 2669.75,
+          "y": 15035,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 3,
+        "vectors": [
+          {
+            "id": "71:13833",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13834",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13835",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13832-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13832-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M13",
+      "itemId": "47:13616",
+      "slotId": "47:13617",
+      "slotName": "SVG 插槽 / M13 / 扫码 / 非当前",
+      "asset": "scan-neutral.svg",
+      "state": "非当前",
+      "label": "扫码",
+      "sourceSha256": "5d2aefd5bab9230b4d0025f8f0b0acc44f338d994b025e4c60851b0fe5e5b7fb",
+      "importedRoot": {
+        "id": "71:13836",
+        "name": "D0.4 SVG / M13 / 扫码 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 2765.25,
+          "y": 15035,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13837",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13838",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13836-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13836-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M13",
+      "itemId": "47:13621",
+      "slotId": "47:13622",
+      "slotName": "SVG 插槽 / M13 / 我的 / 非当前",
+      "asset": "mine-neutral.svg",
+      "state": "非当前",
+      "label": "我的",
+      "sourceSha256": "25eb7a4d7daeb393d209c796c87e8c623b5f789597d28a0d05d4adf320472326",
+      "importedRoot": {
+        "id": "71:13839",
+        "name": "D0.4 SVG / M13 / 我的 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 2860.75,
+          "y": 15035,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13840",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13841",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13839-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13839-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M13",
+      "itemId": "47:13627",
+      "slotId": "47:13629",
+      "slotName": "SVG 插槽 / M13 / 消息 / 当前",
+      "asset": "message-active.svg",
+      "state": "当前",
+      "label": "消息",
+      "sourceSha256": "855c2774e99b64f7ad3515b1822da17407be29e87166cae0856cc1f3f5e5669b",
+      "importedRoot": {
+        "id": "71:13842",
+        "name": "D0.4 SVG / M13 / 消息 / 当前",
+        "type": "FRAME",
+        "box": {
+          "x": 2956.25,
+          "y": 15035,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13843",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13844",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13842-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13842-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M14",
+      "itemId": "47:7518",
+      "slotId": "47:7519",
+      "slotName": "SVG 插槽 / M14 / 首页 / 非当前",
+      "asset": "home-neutral.svg",
+      "state": "非当前",
+      "label": "首页",
+      "sourceSha256": "f5010159ebd816cd4b8aa25e1bbe3f91af52c8592f075529c18931a9f02bd1a1",
+      "importedRoot": {
+        "id": "71:13702",
+        "name": "D0.4 SVG / M14 / 首页 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 3179.75,
+          "y": 15035,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 3,
+        "vectors": [
+          {
+            "id": "71:13703",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13704",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13705",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13702-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13702-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M14",
+      "itemId": "47:7524",
+      "slotId": "47:7525",
+      "slotName": "SVG 插槽 / M14 / 扫码 / 非当前",
+      "asset": "scan-neutral.svg",
+      "state": "非当前",
+      "label": "扫码",
+      "sourceSha256": "5d2aefd5bab9230b4d0025f8f0b0acc44f338d994b025e4c60851b0fe5e5b7fb",
+      "importedRoot": {
+        "id": "71:13706",
+        "name": "D0.4 SVG / M14 / 扫码 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 3275.25,
+          "y": 15035,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13707",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13708",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13706-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13706-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M14",
+      "itemId": "47:7529",
+      "slotId": "47:7531",
+      "slotName": "SVG 插槽 / M14 / 我的 / 当前",
+      "asset": "mine-active.svg",
+      "state": "当前",
+      "label": "我的",
+      "sourceSha256": "b7d21b84c0349da7f014d6134bd32cde8b2228abbd762ec372c76c71aa88cac7",
+      "importedRoot": {
+        "id": "71:13709",
+        "name": "D0.4 SVG / M14 / 我的 / 当前",
+        "type": "FRAME",
+        "box": {
+          "x": 3370.75,
+          "y": 15035,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13710",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13711",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13709-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13709-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    },
+    {
+      "screen": "M14",
+      "itemId": "47:7536",
+      "slotId": "47:7537",
+      "slotName": "SVG 插槽 / M14 / 消息 / 非当前",
+      "asset": "message-neutral.svg",
+      "state": "非当前",
+      "label": "消息",
+      "sourceSha256": "9f18e13efd497e76a900e2fcf2130cb85d08bbfccc70d61f911b2608583a08c0",
+      "importedRoot": {
+        "id": "71:13712",
+        "name": "D0.4 SVG / M14 / 消息 / 非当前",
+        "type": "FRAME",
+        "box": {
+          "x": 3466.25,
+          "y": 15035,
+          "width": 24,
+          "height": 24
+        },
+        "vectorCount": 2,
+        "vectors": [
+          {
+            "id": "71:13713",
+            "name": "Vector",
+            "type": "VECTOR"
+          },
+          {
+            "id": "71:13714",
+            "name": "Vector",
+            "type": "VECTOR"
+          }
+        ],
+        "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13712-0.svg",
+        "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13712-0.png"
+      },
+      "checks": {
+        "slotIs24x24": true,
+        "rootIs24x24": true,
+        "hasEditableVectors": true,
+        "hasSvgExport": true,
+        "noImageFills": true
+      }
+    }
+  ],
+  "totals": {
+    "slots": 52,
+    "importedRoots": 52,
+    "vectorLayers": 117,
+    "svgExports": 52
+  },
+  "discovery": {
+    "mobileScreensWithNav": [
+      "M02",
+      "M03",
+      "M04",
+      "M05",
+      "M06",
+      "M07",
+      "M08",
+      "M09",
+      "M10",
+      "M11",
+      "M12",
+      "M13",
+      "M14"
+    ],
+    "mobileScreensWithoutNav": [
+      "M01"
+    ]
+  },
+  "checks": {
+    "allExpectedSlotsWired": true,
+    "representativeTwelveWired": true,
+    "everySlotPasses": true,
+    "everyImportHasEditableVector": true,
+    "everyImportHasSvgExport": true,
+    "noImageFills": true
+  },
+  "limitations": {
+    "remainingVisualScope": "The 40 business screen bodies remain synced as existing native editable content; M02–M14 bottom-nav slots are wired where the source screen contains a bottom navigation frame. M01 intentionally has no bottom navigation frame.",
+    "productionAcceptance": "Not claimed: this workspace has no production service or real-device harness."
+  }
+}

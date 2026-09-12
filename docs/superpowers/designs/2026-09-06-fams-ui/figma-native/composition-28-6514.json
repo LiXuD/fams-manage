@@ -1,0 +1,159 @@
+{
+  "id": "28:6514",
+  "name": "Progress / Indeterminate",
+  "type": "FRAME",
+  "fills": [
+    {
+      "blendMode": "NORMAL",
+      "type": "SOLID",
+      "color": "#ffffff"
+    }
+  ],
+  "absoluteBoundingBox": {
+    "x": 1400,
+    "y": 7560,
+    "width": 514,
+    "height": 67.05000305175781
+  },
+  "children": [
+    {
+      "id": "28:6515",
+      "name": "B",
+      "type": "FRAME",
+      "fills": [
+        {
+          "opacity": 9.999999717180685e-10,
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 1400,
+        "y": 7560,
+        "width": 538,
+        "height": 22.399999618530273
+      },
+      "children": [
+        {
+          "id": "28:6516",
+          "name": "正在获取进度…",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1400,
+            "y": 7559.75,
+            "width": 103.20999908447266,
+            "height": 22
+          },
+          "characters": "正在获取进度…",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        }
+      ]
+    },
+    {
+      "id": "28:6517",
+      "name": "正在获取进度",
+      "type": "FRAME",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#f0f3f8"
+        }
+      ],
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 1400,
+        "y": 7590.39990234375,
+        "width": 514,
+        "height": 10
+      },
+      "children": [
+        {
+          "id": "30:6629",
+          "name": "读取中 / 不表示已盘数量",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#2457d6"
+            }
+          ],
+          "cornerRadius": 5,
+          "absoluteBoundingBox": {
+            "x": 1502.800048828125,
+            "y": 7590.39990234375,
+            "width": 179.89999389648438,
+            "height": 10
+          },
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "28:6518",
+      "name": "SMALL",
+      "type": "FRAME",
+      "fills": [
+        {
+          "opacity": 9.999999717180685e-10,
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 1400,
+        "y": 7608.39990234375,
+        "width": 538,
+        "height": 18.65999984741211
+      },
+      "children": [
+        {
+          "id": "28:6519",
+          "name": "待上传 2 条 · 尚未计入已盘",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1400,
+            "y": 7607.39990234375,
+            "width": 150,
+            "height": 20
+          },
+          "characters": "待上传 2 条 · 尚未计入已盘",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 12,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 20
+          }
+        }
+      ]
+    }
+  ]
+}

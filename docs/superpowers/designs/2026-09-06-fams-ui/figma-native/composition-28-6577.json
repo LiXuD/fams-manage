@@ -1,0 +1,259 @@
+{
+  "id": "28:6577",
+  "name": "打开处置确认",
+  "type": "FRAME",
+  "fills": [
+    {
+      "blendMode": "NORMAL",
+      "type": "SOLID",
+      "color": "#ffffff"
+    }
+  ],
+  "strokes": [
+    {
+      "blendMode": "NORMAL",
+      "type": "SOLID",
+      "color": "#e3e8f0"
+    }
+  ],
+  "cornerRadius": 16,
+  "absoluteBoundingBox": {
+    "x": 80,
+    "y": 8600,
+    "width": 520,
+    "height": 219.58999633789062
+  },
+  "children": [
+    {
+      "id": "29:6615",
+      "name": "dialog-15",
+      "type": "FRAME",
+      "fills": [
+        {
+          "opacity": 9.999999717180685e-10,
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 109,
+        "y": 8629,
+        "width": 462,
+        "height": 34
+      },
+      "children": [
+        {
+          "id": "29:6616",
+          "name": "确认处置资产",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 109,
+            "y": 8631.75,
+            "width": 126,
+            "height": 28
+          },
+          "characters": "确认处置资产",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 18,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 28
+          }
+        }
+      ]
+    },
+    {
+      "id": "29:6617",
+      "name": "P",
+      "type": "FRAME",
+      "fills": [
+        {
+          "opacity": 9.999999717180685e-10,
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 109,
+        "y": 8679,
+        "width": 462,
+        "height": 47.59000015258789
+      },
+      "children": [
+        {
+          "id": "29:6618",
+          "name": "示例资产 FA-2026-00102。处置依据：已批准单据 CZ-001。确认后该资产将标记为已报废，不能继续领用。",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 109,
+            "y": 8679.75,
+            "width": 458.19000244140625,
+            "height": 44
+          },
+          "characters": "示例资产 FA-2026-00102。处置依据：已批准单据 CZ-001。确认后该资产将标记为已报废，不能继续领用。",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Regular",
+            "fontWeight": 400,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        }
+      ]
+    },
+    {
+      "id": "29:6619",
+      "name": "fams-dialog-actions",
+      "type": "FRAME",
+      "fills": [
+        {
+          "opacity": 9.999999717180685e-10,
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 109,
+        "y": 8750.58984375,
+        "width": 462,
+        "height": 40
+      },
+      "children": [
+        {
+          "id": "29:6620",
+          "name": "操作 / 取消",
+          "type": "INSTANCE",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "strokes": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#e3e8f0"
+            }
+          ],
+          "cornerRadius": 8,
+          "absoluteBoundingBox": {
+            "x": 407,
+            "y": 8750.58984375,
+            "width": 62,
+            "height": 40
+          },
+          "children": [
+            {
+              "id": "I29:6620;6:19",
+              "name": "确认接收",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 424,
+                "y": 8759.58984375,
+                "width": 28,
+                "height": 22
+              },
+              "characters": "取消",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Medium",
+                "fontWeight": 500,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "30:6626",
+          "name": "FAMS/Button",
+          "type": "INSTANCE",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "strokes": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#b4232e"
+            }
+          ],
+          "cornerRadius": 8,
+          "absoluteBoundingBox": {
+            "x": 481,
+            "y": 8750.58984375,
+            "width": 90,
+            "height": 40
+          },
+          "children": [
+            {
+              "id": "I30:6626;25:3",
+              "name": "确认接收",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#b4232e"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 498,
+                "y": 8759.58984375,
+                "width": 56,
+                "height": 22
+              },
+              "characters": "确认处置",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Medium",
+                "fontWeight": 500,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

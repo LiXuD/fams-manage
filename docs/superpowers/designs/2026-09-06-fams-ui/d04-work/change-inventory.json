@@ -1,0 +1,132 @@
+{
+  "asOf": "2026-09-11",
+  "scope": "Initial local handoff inventory plus the verified D0.4 SVG/native follow-up recorded below; baseline ZIP remains unchanged",
+  "baseline": {
+    "path": "archive/2026-09-09-before-d04.zip",
+    "bytes": 7720804,
+    "sha256": "e35675690c9b6b68ffb801e5d032f18e6e1a401a0fe2b40639fb8b339122a8b2"
+  },
+  "changedSourceFiles": [
+    {
+      "path": "component-library.html",
+      "baselineSha256": "0fca43c4a79dfb22e49f225f5e0e9b1fd0beedc452e799f2d3b11e7827adea1c",
+      "currentSha256": "3f342e7d470248b535492109cfed87d236e1755a478a36b40c35734684dc84ec"
+    },
+    {
+      "path": "visual.css",
+      "baselineSha256": "7a23259b4efb9f3983dd6bd4d970841b8f081fee5e27cec664e75837dbf05987",
+      "currentSha256": "a372696f9dd4b95524046157e9dc2e66f60b6ed3f8957de6d7ed2529114da5a6"
+    },
+    {
+      "path": "visual.js",
+      "baselineSha256": "7710f3abc7fcea79009ca8013be80c44842b278850c4f08b8d922e6888586458",
+      "currentSha256": "fbab605dcf040fbfa4dcc5d92256cefc3b43524c819bdcef4017887c852aac78"
+    },
+    {
+      "path": "library/catalog.js",
+      "baselineSha256": "4876b73f46307ca8a839a1f5aa38ec6b36b66cfd83406e039d19faff7b4a5e52",
+      "currentSha256": "08c4c8f26b0adbb145c6a4c1dbc1cefd7165396dd63854128e26dcf56dad617e"
+    },
+    {
+      "path": "library/components.js",
+      "baselineSha256": "7914637301280e4f1479373a732e670ec755c0b872d8e701c5ce6d0a30415f49",
+      "currentSha256": "30a2de5b86cd5dad33de05d3294d76d2a67b95be147d23a04be459cd30c3d36c"
+    },
+    {
+      "path": "library/manifest.json",
+      "baselineSha256": "4f6069392232d0dafa01bbf2d0a6f5c8468b6421c1cd2974c30c891989bae0a7",
+      "currentSha256": "7876edad44dd9724cb34cab35e4a24ee173b9ac0688cf6db685e1b5f52b36257"
+    },
+    {
+      "path": "library/components.css",
+      "baselineSha256": "e7f8fd16310efe790e5ded287406be94e6619140e6cf5cc01ac0ec6939e64e32",
+      "currentSha256": "85c52ff9e58be39dc925bfd3add0a3fc3cb44a29b03b1dac289a4431c711aa7d"
+    },
+    {
+      "path": "scripts/build_local.py",
+      "baselineSha256": "b9b123eed56d261aa666a8104e3bcbe82dd4ce088a60bf6a3b2fda9e010e05d8",
+      "currentSha256": "dd61657752b7911025287779c88370565ebc011fccd0ffc892adaebd322eb13d"
+    }
+  ],
+  "newSourceFiles": [
+    {
+      "path": "d04-states.html",
+      "sha256": "3718efe2da27cc44347bd9404a510bc1dd99a98e18dd40416aedbce881996b32"
+    },
+    {
+      "path": "d04-states.js",
+      "sha256": "e553606632bda3dfd94b8cda4d5bae3897fd606e6ec0a63d2e18bb81d79b93e0"
+    },
+    {
+      "path": "d04-states.css",
+      "sha256": "d1c8938db3b2c30f79fd8f0dd86d0221a4805837d97530e5c87d22c72f491a3e"
+    }
+  ],
+  "checks": [
+    {
+      "check": "node --check visual.js",
+      "exitCode": 0,
+      "output": ""
+    },
+    {
+      "check": "node --check library/components.js",
+      "exitCode": 0,
+      "output": ""
+    },
+    {
+      "check": "node --check library/catalog.js",
+      "exitCode": 0,
+      "output": ""
+    },
+    {
+      "check": "node --check d04-states.js",
+      "exitCode": 0,
+      "output": ""
+    },
+    {
+      "check": "build_local.py Python syntax without execution",
+      "passed": true
+    },
+    {
+      "check": "D0.2 inline business script equality",
+      "passed": true,
+      "sourceSha256": "61e88a51033fac847d0582492ef2c473785fd66047f640d31e4d47e748b41a11"
+    },
+    {
+      "check": "generated library/data.js matches manifest",
+      "passed": true
+    }
+  ],
+  "browserRegression": "verified; see d04-work/browser-verification-2026-09-11.json",
+  "nativeD04Sync": "verified; see figma-native/d04-native-live-verification.json and d04-native-svg-import.json",
+  "implementerCompletionReportReceived": false,
+  "postInventoryFollowUp": {
+    "date": "2026-09-11",
+    "changedOrAddedAfterInitialInventory": [
+      "scripts/import-d04-svg-icons.mjs",
+      "scripts/verify-d04-native-live.mjs",
+      "scripts/build-d04-native-gallery.mjs",
+      "scripts/audit-native-delivery.mjs",
+      "scripts/local-figma-client.mjs",
+      "scripts/wire-d04-svg-nav-icons.mjs",
+      "figma-native/d04-native-svg-import.json",
+      "figma-native/d04-native-svg-import-journal.json",
+      "figma-native/d04-native-svg-nav-wiring.json",
+      "figma-native/d04-native-svg-nav-wiring-journal.json",
+      "figma-native/d04-native-direct-mcp-verification.json",
+      "figma-native/d04-native-direct-sync-evidence.json"
+    ],
+    "evidence": {
+      "svgImportedRoots": 8,
+      "svgVectorLayers": 18,
+      "svgExports": 8,
+      "svgNoImageFills": true,
+      "svgNavWiringSlots": 52,
+      "svgNavWiringVectorLayers": 117,
+      "svgNavWiringExports": 52,
+      "svgNavWiringScope": "All bottom-navigation slots present across M02-M14; M01 has no bottom-navigation frame.",
+      "acceptanceBoundaryEvidence": "d04-work/acceptance-boundary-2026-09-11.json",
+      "productionAcceptance": "not claimed"
+    }
+  }
+}

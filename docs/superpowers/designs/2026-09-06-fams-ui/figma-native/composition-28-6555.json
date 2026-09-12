@@ -1,0 +1,215 @@
+{
+  "id": "28:6555",
+  "name": "筛选无结果 / 区别于无记录",
+  "type": "FRAME",
+  "fills": [
+    {
+      "blendMode": "NORMAL",
+      "type": "SOLID",
+      "color": "#ffffff"
+    }
+  ],
+  "absoluteBoundingBox": {
+    "x": 740,
+    "y": 8080,
+    "width": 386,
+    "height": 150.1999969482422
+  },
+  "children": [
+    {
+      "id": "28:6556",
+      "name": "fams-notice",
+      "type": "FRAME",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#f7f9fc"
+        }
+      ],
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 740,
+        "y": 8080,
+        "width": 386,
+        "height": 86.19999694824219
+      },
+      "children": [
+        {
+          "id": "28:6557",
+          "name": "上分隔线",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#e3e8f0"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 740,
+            "y": 8080,
+            "width": 386,
+            "height": 1
+          },
+          "children": []
+        },
+        {
+          "id": "28:6558",
+          "name": "右分隔线",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#e3e8f0"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1125,
+            "y": 8080,
+            "width": 1,
+            "height": 86.19999694824219
+          },
+          "children": []
+        },
+        {
+          "id": "28:6559",
+          "name": "下分隔线",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#e3e8f0"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 740,
+            "y": 8165.2001953125,
+            "width": 386,
+            "height": 1
+          },
+          "children": []
+        },
+        {
+          "id": "28:6560",
+          "name": "左分隔线",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 740,
+            "y": 8080,
+            "width": 3,
+            "height": 86.19999694824219
+          },
+          "children": []
+        },
+        {
+          "id": "28:6561",
+          "name": "STRONG",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 759,
+            "y": 8099.5,
+            "width": 178,
+            "height": 16.5
+          },
+          "children": [
+            {
+              "id": "28:6562",
+              "name": "没有符合筛选条件的资产",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 759,
+                "y": 8096.75,
+                "width": 160,
+                "height": 22
+              },
+              "characters": "没有符合筛选条件的资产",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Medium",
+                "fontWeight": 500,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "28:6563",
+          "name": "P",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 759,
+            "y": 8125.39990234375,
+            "width": 350,
+            "height": 23.799999237060547
+          },
+          "children": [
+            {
+              "id": "28:6564",
+              "name": "试试调整状态或清除关键词，原有资产记录不会被删除。",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#53657d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 759,
+                "y": 8126.14990234375,
+                "width": 356,
+                "height": 22
+              },
+              "characters": "试试调整状态或清除关键词，原有资产记录不会被删除。",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

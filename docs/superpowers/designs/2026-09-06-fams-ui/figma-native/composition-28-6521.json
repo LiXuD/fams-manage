@@ -1,0 +1,825 @@
+{
+  "id": "28:6521",
+  "name": "部分履行 / 六数量守恒",
+  "type": "FRAME",
+  "fills": [
+    {
+      "blendMode": "NORMAL",
+      "type": "SOLID",
+      "color": "#ffffff"
+    }
+  ],
+  "absoluteBoundingBox": {
+    "x": 80,
+    "y": 8080,
+    "width": 217.47000122070312,
+    "height": 335.8500061035156
+  },
+  "children": [
+    {
+      "id": "28:6522",
+      "name": "fams-metric",
+      "type": "FRAME",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 12,
+      "absoluteBoundingBox": {
+        "x": 80,
+        "y": 8080,
+        "width": 104.7300033569336,
+        "height": 100.4000015258789
+      },
+      "children": [
+        {
+          "id": "28:6523",
+          "name": "SPAN",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 93,
+            "y": 8093,
+            "width": 102.7300033569336,
+            "height": 22.399999618530273
+          },
+          "children": [
+            {
+              "id": "28:6524",
+              "name": "申请总量",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#53657d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 93,
+                "y": 8092.75,
+                "width": 62,
+                "height": 22
+              },
+              "characters": "申请总量",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "28:6525",
+          "name": "STRONG",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 93,
+            "y": 8119.39990234375,
+            "width": 102.7300033569336,
+            "height": 44
+          },
+          "children": [
+            {
+              "id": "28:6526",
+              "name": "3",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 93,
+                "y": 8121.89990234375,
+                "width": 26.65999984741211,
+                "height": 39
+              },
+              "characters": "3",
+              "style": {
+                "fontFamily": "Inter",
+                "fontStyle": "Semi Bold",
+                "fontWeight": 600,
+                "fontSize": 32,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 38.727272033691406
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "28:6527",
+      "name": "fams-metric",
+      "type": "FRAME",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 12,
+      "absoluteBoundingBox": {
+        "x": 192.73001098632812,
+        "y": 8080,
+        "width": 104.7300033569336,
+        "height": 100.4000015258789
+      },
+      "children": [
+        {
+          "id": "28:6528",
+          "name": "SPAN",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 205.73001098632812,
+            "y": 8093,
+            "width": 102.7300033569336,
+            "height": 22.399999618530273
+          },
+          "children": [
+            {
+              "id": "28:6529",
+              "name": "待分配",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#53657d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 205.73001098632812,
+                "y": 8092.75,
+                "width": 48,
+                "height": 22
+              },
+              "characters": "待分配",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "28:6530",
+          "name": "STRONG",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 205.73001098632812,
+            "y": 8119.39990234375,
+            "width": 102.7300033569336,
+            "height": 44
+          },
+          "children": [
+            {
+              "id": "28:6531",
+              "name": "0",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 205.73001098632812,
+                "y": 8121.89990234375,
+                "width": 26.65999984741211,
+                "height": 39
+              },
+              "characters": "0",
+              "style": {
+                "fontFamily": "Inter",
+                "fontStyle": "Semi Bold",
+                "fontWeight": 600,
+                "fontSize": 32,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 38.727272033691406
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "28:6532",
+      "name": "fams-metric",
+      "type": "FRAME",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 12,
+      "absoluteBoundingBox": {
+        "x": 80,
+        "y": 8188.39990234375,
+        "width": 104.7300033569336,
+        "height": 119.05000305175781
+      },
+      "children": [
+        {
+          "id": "28:6533",
+          "name": "SPAN",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 93,
+            "y": 8201.400390625,
+            "width": 102.7300033569336,
+            "height": 22.399999618530273
+          },
+          "children": [
+            {
+              "id": "28:6534",
+              "name": "待交接",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#53657d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 93,
+                "y": 8201.150390625,
+                "width": 48,
+                "height": 22
+              },
+              "characters": "待交接",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "28:6535",
+          "name": "STRONG",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 93,
+            "y": 8227.7998046875,
+            "width": 102.7300033569336,
+            "height": 44
+          },
+          "children": [
+            {
+              "id": "28:6536",
+              "name": "1",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 93,
+                "y": 8230.2998046875,
+                "width": 26.65999984741211,
+                "height": 39
+              },
+              "characters": "1",
+              "style": {
+                "fontFamily": "Inter",
+                "fontStyle": "Semi Bold",
+                "fontWeight": 600,
+                "fontSize": 32,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 38.727272033691406
+              }
+            }
+          ]
+        },
+        {
+          "id": "28:6537",
+          "name": "SMALL",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 93,
+            "y": 8275.7998046875,
+            "width": 102.7300033569336,
+            "height": 18.65999984741211
+          },
+          "children": [
+            {
+              "id": "28:6538",
+              "name": "已交出待接收 1",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#53657d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 93,
+                "y": 8274.7998046875,
+                "width": 84.7300033569336,
+                "height": 20
+              },
+              "characters": "已交出待接收 1",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Medium",
+                "fontWeight": 500,
+                "fontSize": 12,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 20
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "28:6539",
+      "name": "fams-metric",
+      "type": "FRAME",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 12,
+      "absoluteBoundingBox": {
+        "x": 192.73001098632812,
+        "y": 8188.39990234375,
+        "width": 104.7300033569336,
+        "height": 119.05000305175781
+      },
+      "children": [
+        {
+          "id": "28:6540",
+          "name": "SPAN",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 205.73001098632812,
+            "y": 8201.400390625,
+            "width": 102.7300033569336,
+            "height": 22.399999618530273
+          },
+          "children": [
+            {
+              "id": "28:6541",
+              "name": "已完成",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#53657d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 205.73001098632812,
+                "y": 8201.150390625,
+                "width": 48,
+                "height": 22
+              },
+              "characters": "已完成",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "28:6542",
+          "name": "STRONG",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 205.73001098632812,
+            "y": 8227.7998046875,
+            "width": 102.7300033569336,
+            "height": 44
+          },
+          "children": [
+            {
+              "id": "28:6543",
+              "name": "1",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 205.73001098632812,
+                "y": 8230.2998046875,
+                "width": 26.65999984741211,
+                "height": 39
+              },
+              "characters": "1",
+              "style": {
+                "fontFamily": "Inter",
+                "fontStyle": "Semi Bold",
+                "fontWeight": 600,
+                "fontSize": 32,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 38.727272033691406
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "28:6544",
+      "name": "fams-metric",
+      "type": "FRAME",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 12,
+      "absoluteBoundingBox": {
+        "x": 80,
+        "y": 8315.4501953125,
+        "width": 104.7300033569336,
+        "height": 100.4000015258789
+      },
+      "children": [
+        {
+          "id": "28:6545",
+          "name": "SPAN",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 93,
+            "y": 8328.4501953125,
+            "width": 102.7300033569336,
+            "height": 22.399999618530273
+          },
+          "children": [
+            {
+              "id": "28:6546",
+              "name": "无法满足",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#53657d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 93,
+                "y": 8328.2001953125,
+                "width": 62,
+                "height": 22
+              },
+              "characters": "无法满足",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "28:6547",
+          "name": "STRONG",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 93,
+            "y": 8354.8505859375,
+            "width": 102.7300033569336,
+            "height": 44
+          },
+          "children": [
+            {
+              "id": "28:6548",
+              "name": "1",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 93,
+                "y": 8357.3505859375,
+                "width": 26.65999984741211,
+                "height": 39
+              },
+              "characters": "1",
+              "style": {
+                "fontFamily": "Inter",
+                "fontStyle": "Semi Bold",
+                "fontWeight": 600,
+                "fontSize": 32,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 38.727272033691406
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "28:6549",
+      "name": "fams-metric",
+      "type": "FRAME",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 12,
+      "absoluteBoundingBox": {
+        "x": 192.73001098632812,
+        "y": 8315.4501953125,
+        "width": 104.7300033569336,
+        "height": 100.4000015258789
+      },
+      "children": [
+        {
+          "id": "28:6550",
+          "name": "SPAN",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 205.73001098632812,
+            "y": 8328.4501953125,
+            "width": 102.7300033569336,
+            "height": 22.399999618530273
+          },
+          "children": [
+            {
+              "id": "28:6551",
+              "name": "已取消",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#53657d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 205.73001098632812,
+                "y": 8328.2001953125,
+                "width": 48,
+                "height": 22
+              },
+              "characters": "已取消",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "28:6552",
+          "name": "STRONG",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 205.73001098632812,
+            "y": 8354.8505859375,
+            "width": 102.7300033569336,
+            "height": 44
+          },
+          "children": [
+            {
+              "id": "28:6553",
+              "name": "0",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 205.73001098632812,
+                "y": 8357.3505859375,
+                "width": 26.65999984741211,
+                "height": 39
+              },
+              "characters": "0",
+              "style": {
+                "fontFamily": "Inter",
+                "fontStyle": "Semi Bold",
+                "fontWeight": 600,
+                "fontSize": 32,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 38.727272033691406
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

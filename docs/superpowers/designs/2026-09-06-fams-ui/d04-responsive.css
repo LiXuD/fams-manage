@@ -1,0 +1,19 @@
+/* D0.4 responsive review overrides: shrink grid tracks before their 390px samples. */
+main,
+main > section,
+.d04-gallery-stack,
+.d04-mobile-grid,
+.d04-example {
+  min-width: 0;
+}
+
+@media (max-width: 850px) {
+  .d04-mobile-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .d04-example[data-capture-width="390"] {
+    width: 100%;
+    margin-inline: auto;
+  }
+}

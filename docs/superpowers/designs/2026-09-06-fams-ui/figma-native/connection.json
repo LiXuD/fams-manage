@@ -1,0 +1,239 @@
+{
+  "name": "03 · Screens & Handoff",
+  "id": "3:5",
+  "type": "PAGE",
+  "children": [
+    {
+      "id": "25:1645",
+      "name": "P02 工作台 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "26:1804",
+      "name": "M02 首页 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:1885",
+      "name": "P01 登录 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:1943",
+      "name": "P03 资产列表 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:2109",
+      "name": "P04 资产详情 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:2236",
+      "name": "P05 单个与复制建卡 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:2338",
+      "name": "P06 导入与后台任务 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:2505",
+      "name": "P07 期初初始化 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:2644",
+      "name": "P08 标签打印 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:2723",
+      "name": "P09 共享审批池 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:2878",
+      "name": "P10 库管执行池 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:2981",
+      "name": "P11 统一业务详情 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:3157",
+      "name": "P12 分配与交出 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:3305",
+      "name": "P13 入库与退还验收 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:3427",
+      "name": "P14 调拨与目标变更 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:3581",
+      "name": "P15 盘点任务 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:3715",
+      "name": "P16 差异与证据复核 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:3869",
+      "name": "P17 报修与返厂 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:4013",
+      "name": "P18 科技协助 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:4082",
+      "name": "P19 报失与找回 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:4179",
+      "name": "P20 报废与处置 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:4302",
+      "name": "P21 交接异常与代确认 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:4418",
+      "name": "P22 受控转派 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:4551",
+      "name": "P23 报表与抽样 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:4716",
+      "name": "P24 基础资料与人员交接 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:4865",
+      "name": "P25 角色与系统设置 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:5003",
+      "name": "P26 消息中心 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:5116",
+      "name": "M01 绑定与资料异常 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:5161",
+      "name": "M03 申请中心 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:5227",
+      "name": "M04 我的申请与进度 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:5345",
+      "name": "M05 我的资产 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:5415",
+      "name": "M06 部门公用资产 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:5479",
+      "name": "M07 部门资产与代办 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:5566",
+      "name": "M08 扫码与资产概要 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:5638",
+      "name": "M09 待接收与实物核对 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:5697",
+      "name": "M10 我的盘点任务 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:5772",
+      "name": "M11 连续盘点 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:5847",
+      "name": "M12 待上传与回执 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:5914",
+      "name": "M13 消息与责任告知 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:5966",
+      "name": "M14 我的与账号 · FAMS D0.4 视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "28:6587",
+      "name": "交付说明 / D0.4 · 40 页原生视觉稿",
+      "type": "FRAME"
+    },
+    {
+      "id": "42:6642",
+      "name": "D0.4 / 排版与图标校准",
+      "type": "FRAME"
+    },
+    {
+      "id": "47:6647",
+      "name": "D0.4 / 状态与字段压力样本",
+      "type": "FRAME"
+    },
+    {
+      "id": "71:13639",
+      "name": "D0.4 / SVG 图标原生导入样本",
+      "type": "FRAME"
+    }
+  ],
+  "currentPage": {
+    "id": "3:5",
+    "name": "03 · Screens & Handoff",
+    "childCount": 44
+  },
+  "pages": [
+    {
+      "id": "3:5",
+      "name": "03 · Screens & Handoff",
+      "childCount": 44
+    }
+  ]
+}

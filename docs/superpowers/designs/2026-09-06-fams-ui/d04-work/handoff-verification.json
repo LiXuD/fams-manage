@@ -1,0 +1,22 @@
+{
+  "date": "2026-09-10",
+  "scope": "handoff documentation only",
+  "documentsChecked": 12,
+  "localLinksChecked": 106,
+  "brokenLocalLinks": [],
+  "sourceHashesChangedSinceInventory": [],
+  "zipIntegrity": [
+    {
+      "file": "2026-09-09-before-d04.zip",
+      "entries": 255,
+      "badEntry": null
+    },
+    {
+      "file": "2026-09-10-d04-source-checkpoint.zip",
+      "entries": 17,
+      "badEntry": null
+    }
+  ],
+  "browserRetested": false,
+  "figmaLiveRetested": false
+}

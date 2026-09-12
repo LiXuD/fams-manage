@@ -1,0 +1,2960 @@
+{
+  "id": "28:3305",
+  "name": "P13 入库与退还验收 · FAMS D0.4 视觉稿",
+  "type": "FRAME",
+  "fills": [
+    {
+      "blendMode": "NORMAL",
+      "type": "SOLID",
+      "color": "#ffffff"
+    }
+  ],
+  "strokes": [
+    {
+      "opacity": 9.999999717180685e-10,
+      "blendMode": "NORMAL",
+      "type": "SOLID",
+      "color": "#ffffff"
+    }
+  ],
+  "absoluteBoundingBox": {
+    "x": 80,
+    "y": 5320,
+    "width": 1440,
+    "height": 1202.3299560546875
+  },
+  "children": [
+    {
+      "id": "47:9656",
+      "name": "appbar",
+      "type": "FRAME",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 80,
+        "y": 5320,
+        "width": 1440,
+        "height": 64
+      },
+      "children": [
+        {
+          "id": "47:9657",
+          "name": "下分隔线",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#e3e8f0"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 80,
+            "y": 5383,
+            "width": 1440,
+            "height": 1
+          },
+          "children": []
+        },
+        {
+          "id": "47:9658",
+          "name": "STRONG",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 104,
+            "y": 5336.5,
+            "width": 204.8800048828125,
+            "height": 30
+          },
+          "children": [
+            {
+              "id": "47:9659",
+              "name": "FAMS 标记",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#2457d6"
+                }
+              ],
+              "cornerRadius": 8,
+              "absoluteBoundingBox": {
+                "x": 104,
+                "y": 5336.5,
+                "width": 30,
+                "height": 30
+              },
+              "children": [
+                {
+                  "id": "47:9660",
+                  "name": "F",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#ffffff"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 114,
+                    "y": 5339.5,
+                    "width": 24,
+                    "height": 26
+                  },
+                  "characters": "F",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Regular",
+                    "fontWeight": 400,
+                    "fontSize": 16,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 26
+                  }
+                }
+              ]
+            },
+            {
+              "id": "47:9661",
+              "name": "示例企业 · 固定资产",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 144,
+                "y": 5337.7001953125,
+                "width": 152,
+                "height": 26
+              },
+              "characters": "示例企业 · 固定资产",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 16,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 26
+              }
+            }
+          ]
+        },
+        {
+          "id": "47:9662",
+          "name": "right",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1276,
+            "y": 5333.5,
+            "width": 220,
+            "height": 36
+          },
+          "children": [
+            {
+              "id": "47:9663",
+              "name": "操作 / 消息",
+              "type": "INSTANCE",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "strokes": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#e3e8f0"
+                }
+              ],
+              "cornerRadius": 8,
+              "absoluteBoundingBox": {
+                "x": 1276,
+                "y": 5333.5,
+                "width": 50,
+                "height": 36
+              },
+              "children": [
+                {
+                  "id": "I47:9663;6:19",
+                  "name": "确认接收",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#18263d"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 1287,
+                    "y": 5340.5,
+                    "width": 28,
+                    "height": 22
+                  },
+                  "characters": "消息",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 14,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 22
+                  }
+                }
+              ]
+            },
+            {
+              "id": "47:9665",
+              "name": "操作 / 后台任务",
+              "type": "INSTANCE",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "strokes": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#e3e8f0"
+                }
+              ],
+              "cornerRadius": 8,
+              "absoluteBoundingBox": {
+                "x": 1338,
+                "y": 5333.5,
+                "width": 74,
+                "height": 36
+              },
+              "children": [
+                {
+                  "id": "I47:9665;6:19",
+                  "name": "确认接收",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#18263d"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 1347,
+                    "y": 5340.5,
+                    "width": 56,
+                    "height": 22
+                  },
+                  "characters": "后台任务",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 14,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 22
+                  }
+                }
+              ]
+            },
+            {
+              "id": "47:9667",
+              "name": "SPAN",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "opacity": 9.999999717180685e-10,
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 1424,
+                "y": 5341.91015625,
+                "width": 96,
+                "height": 19.190000534057617
+              },
+              "children": [
+                {
+                  "id": "47:9668",
+                  "name": "当前处理库管",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#53657d"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 1424,
+                    "y": 5341.41015625,
+                    "width": 78,
+                    "height": 20
+                  },
+                  "characters": "当前处理库管",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 12,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 20
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "47:9669",
+      "name": "pcbody",
+      "type": "FRAME",
+      "fills": [
+        {
+          "opacity": 9.999999717180685e-10,
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 80,
+        "y": 5384,
+        "width": 1440,
+        "height": 1138.3299560546875
+      },
+      "children": [
+        {
+          "id": "47:9670",
+          "name": "产品导航",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 80,
+            "y": 5384,
+            "width": 190,
+            "height": 1138.3299560546875
+          },
+          "children": [
+            {
+              "id": "47:9671",
+              "name": "右分隔线",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#e3e8f0"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 269,
+                "y": 5384,
+                "width": 1,
+                "height": 1138.3299560546875
+              },
+              "children": []
+            },
+            {
+              "id": "47:9672",
+              "name": "BUTTON",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "opacity": 9.999999717180685e-10,
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "cornerRadius": 8,
+              "absoluteBoundingBox": {
+                "x": 92,
+                "y": 5404,
+                "width": 165,
+                "height": 42
+              },
+              "children": [
+                {
+                  "id": "47:9673",
+                  "name": "工作台",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#53657d"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 104,
+                    "y": 5414.58984375,
+                    "width": 45,
+                    "height": 20
+                  },
+                  "characters": "工作台",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 12,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 20
+                  }
+                }
+              ]
+            },
+            {
+              "id": "47:9674",
+              "name": "BUTTON",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "opacity": 9.999999717180685e-10,
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "cornerRadius": 8,
+              "absoluteBoundingBox": {
+                "x": 92,
+                "y": 5449,
+                "width": 165,
+                "height": 42
+              },
+              "children": [
+                {
+                  "id": "47:9675",
+                  "name": "资产台账",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#53657d"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 104,
+                    "y": 5459.58984375,
+                    "width": 58,
+                    "height": 20
+                  },
+                  "characters": "资产台账",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 12,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 20
+                  }
+                }
+              ]
+            },
+            {
+              "id": "47:9676",
+              "name": "active",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#eaf0ff"
+                }
+              ],
+              "cornerRadius": 8,
+              "absoluteBoundingBox": {
+                "x": 92,
+                "y": 5494,
+                "width": 165,
+                "height": 42
+              },
+              "children": [
+                {
+                  "id": "47:9677",
+                  "name": "当前页面指示",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#2457d6"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 92,
+                    "y": 5498,
+                    "width": 3,
+                    "height": 34
+                  },
+                  "children": []
+                },
+                {
+                  "id": "47:9678",
+                  "name": "入库管理",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#2457d6"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 104,
+                    "y": 5504.58984375,
+                    "width": 58,
+                    "height": 20
+                  },
+                  "characters": "入库管理",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 12,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 20
+                  }
+                }
+              ]
+            },
+            {
+              "id": "47:9679",
+              "name": "BUTTON",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "opacity": 9.999999717180685e-10,
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "cornerRadius": 8,
+              "absoluteBoundingBox": {
+                "x": 92,
+                "y": 5539,
+                "width": 165,
+                "height": 42
+              },
+              "children": [
+                {
+                  "id": "47:9680",
+                  "name": "使用管理",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#53657d"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 104,
+                    "y": 5549.58984375,
+                    "width": 58,
+                    "height": 20
+                  },
+                  "characters": "使用管理",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 12,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 20
+                  }
+                }
+              ]
+            },
+            {
+              "id": "47:9681",
+              "name": "BUTTON",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "opacity": 9.999999717180685e-10,
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "cornerRadius": 8,
+              "absoluteBoundingBox": {
+                "x": 92,
+                "y": 5584,
+                "width": 165,
+                "height": 42
+              },
+              "children": [
+                {
+                  "id": "47:9682",
+                  "name": "报修与返厂",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#53657d"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 104,
+                    "y": 5594.58984375,
+                    "width": 71,
+                    "height": 20
+                  },
+                  "characters": "报修与返厂",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 12,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 20
+                  }
+                }
+              ]
+            },
+            {
+              "id": "47:9683",
+              "name": "BUTTON",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "opacity": 9.999999717180685e-10,
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "cornerRadius": 8,
+              "absoluteBoundingBox": {
+                "x": 92,
+                "y": 5629,
+                "width": 165,
+                "height": 42
+              },
+              "children": [
+                {
+                  "id": "47:9684",
+                  "name": "报废管理",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#53657d"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 104,
+                    "y": 5639.58984375,
+                    "width": 58,
+                    "height": 20
+                  },
+                  "characters": "报废管理",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 12,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 20
+                  }
+                }
+              ]
+            },
+            {
+              "id": "47:9685",
+              "name": "BUTTON",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "opacity": 9.999999717180685e-10,
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "cornerRadius": 8,
+              "absoluteBoundingBox": {
+                "x": 92,
+                "y": 5674,
+                "width": 165,
+                "height": 42
+              },
+              "children": [
+                {
+                  "id": "47:9686",
+                  "name": "统计分析",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#53657d"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 104,
+                    "y": 5684.58984375,
+                    "width": 58,
+                    "height": 20
+                  },
+                  "characters": "统计分析",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 12,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 20
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "47:9687",
+          "name": "content",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#f7f9fc"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 270,
+            "y": 5384,
+            "width": 1250,
+            "height": 1138.3299560546875
+          },
+          "children": [
+            {
+              "id": "47:9688",
+              "name": "crumb",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "opacity": 9.999999717180685e-10,
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 298,
+                "y": 5412,
+                "width": 1194,
+                "height": 19.190000534057617
+              },
+              "children": [
+                {
+                  "id": "47:9689",
+                  "name": "业务 / 实物验收模板",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#53657d"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 298,
+                    "y": 5411.5,
+                    "width": 115.72000122070312,
+                    "height": 20
+                  },
+                  "characters": "业务 / 实物验收模板",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 12,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 20
+                  }
+                }
+              ]
+            },
+            {
+              "id": "47:9690",
+              "name": "pagehead",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "opacity": 9.999999717180685e-10,
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 298,
+                "y": 5443.18994140625,
+                "width": 1194,
+                "height": 63.189998626708984
+              },
+              "children": [
+                {
+                  "id": "47:9691",
+                  "name": "DIV",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "opacity": 9.999999717180685e-10,
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#ffffff"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 298,
+                    "y": 5443.18994140625,
+                    "width": 365.4800109863281,
+                    "height": 63.189998626708984
+                  },
+                  "children": [
+                    {
+                      "id": "47:9692",
+                      "name": "H1",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 298,
+                        "y": 5443.18994140625,
+                        "width": 365.4800109863281,
+                        "height": 36.38999938964844
+                      },
+                      "children": [
+                        {
+                          "id": "47:9693",
+                          "name": "实物验收 · GH-2026-0906-021",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#18263d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 298,
+                            "y": 5443.18994140625,
+                            "width": 371.4800109863281,
+                            "height": 36
+                          },
+                          "characters": "实物验收 · GH-2026-0906-021",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Bold",
+                            "fontWeight": 700,
+                            "fontSize": 24,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 36
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:9694",
+                      "name": "P",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 298,
+                        "y": 5485.580078125,
+                        "width": 365.4800109863281,
+                        "height": 20.799999237060547
+                      },
+                      "children": [
+                        {
+                          "id": "47:9695",
+                          "name": "归还 · 已批准 · 当前处理库管：周宁",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#53657d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 298,
+                            "y": 5485.580078125,
+                            "width": 209.88999938964844,
+                            "height": 20
+                          },
+                          "characters": "归还 · 已批准 · 当前处理库管：周宁",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Medium",
+                            "fontWeight": 500,
+                            "fontSize": 12,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 20
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "47:9696",
+              "name": "tabs",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "opacity": 9.999999717180685e-10,
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 298,
+                "y": 5530.3798828125,
+                "width": 1194,
+                "height": 45
+              },
+              "children": [
+                {
+                  "id": "47:9697",
+                  "name": "下分隔线",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#e3e8f0"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 298,
+                    "y": 5574.3798828125,
+                    "width": 1194,
+                    "height": 1
+                  },
+                  "children": []
+                },
+                {
+                  "id": "47:9698",
+                  "name": "操作 / 归还验收",
+                  "type": "INSTANCE",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#ffffff"
+                    }
+                  ],
+                  "strokes": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#e3e8f0"
+                    }
+                  ],
+                  "cornerRadius": 8,
+                  "absoluteBoundingBox": {
+                    "x": 298,
+                    "y": 5530.3798828125,
+                    "width": 64,
+                    "height": 44
+                  },
+                  "children": [
+                    {
+                      "id": "I47:9698;6:19",
+                      "name": "确认接收",
+                      "type": "TEXT",
+                      "fills": [
+                        {
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#18263d"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 302,
+                        "y": 5541.3798828125,
+                        "width": 56,
+                        "height": 22
+                      },
+                      "characters": "归还验收",
+                      "style": {
+                        "fontFamily": "Noto Sans SC",
+                        "fontStyle": "Medium",
+                        "fontWeight": 500,
+                        "fontSize": 14,
+                        "textAlignHorizontal": "LEFT",
+                        "letterSpacing": 0,
+                        "lineHeightPx": 22
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "47:9700",
+                  "name": "BUTTON",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "opacity": 9.999999717180685e-10,
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#ffffff"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 374,
+                    "y": 5530.3798828125,
+                    "width": 64,
+                    "height": 44
+                  },
+                  "children": [
+                    {
+                      "id": "47:9701",
+                      "name": "退库验收",
+                      "type": "TEXT",
+                      "fills": [
+                        {
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#53657d"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 380,
+                        "y": 5541.9697265625,
+                        "width": 58,
+                        "height": 20
+                      },
+                      "characters": "退库验收",
+                      "style": {
+                        "fontFamily": "Noto Sans SC",
+                        "fontStyle": "Medium",
+                        "fontWeight": 500,
+                        "fontSize": 12,
+                        "textAlignHorizontal": "LEFT",
+                        "letterSpacing": 0,
+                        "lineHeightPx": 20
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "47:9702",
+                  "name": "BUTTON",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "opacity": 9.999999717180685e-10,
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#ffffff"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 450,
+                    "y": 5530.3798828125,
+                    "width": 64,
+                    "height": 44
+                  },
+                  "children": [
+                    {
+                      "id": "47:9703",
+                      "name": "入库验收",
+                      "type": "TEXT",
+                      "fills": [
+                        {
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#53657d"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 456,
+                        "y": 5541.9697265625,
+                        "width": 58,
+                        "height": 20
+                      },
+                      "characters": "入库验收",
+                      "style": {
+                        "fontFamily": "Noto Sans SC",
+                        "fontStyle": "Medium",
+                        "fontWeight": 500,
+                        "fontSize": 12,
+                        "textAlignHorizontal": "LEFT",
+                        "letterSpacing": 0,
+                        "lineHeightPx": 20
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "47:9704",
+              "name": "panel",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "strokes": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#e3e8f0"
+                }
+              ],
+              "cornerRadius": 12,
+              "absoluteBoundingBox": {
+                "x": 298,
+                "y": 5599.3798828125,
+                "width": 1194,
+                "height": 396.7300109863281
+              },
+              "children": [
+                {
+                  "id": "47:9705",
+                  "name": "H2",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "opacity": 9.999999717180685e-10,
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#ffffff"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 319,
+                    "y": 5620.3798828125,
+                    "width": 1152,
+                    "height": 28
+                  },
+                  "children": [
+                    {
+                      "id": "47:9706",
+                      "name": "实物核对",
+                      "type": "TEXT",
+                      "fills": [
+                        {
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#18263d"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 319,
+                        "y": 5619.8798828125,
+                        "width": 78,
+                        "height": 28
+                      },
+                      "characters": "实物核对",
+                      "style": {
+                        "fontFamily": "Noto Sans SC",
+                        "fontStyle": "Medium",
+                        "fontWeight": 500,
+                        "fontSize": 18,
+                        "textAlignHorizontal": "LEFT",
+                        "letterSpacing": 0,
+                        "lineHeightPx": 28
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "47:9707",
+                  "name": "kv",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "opacity": 9.999999717180685e-10,
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#ffffff"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 319,
+                    "y": 5664.3798828125,
+                    "width": 1152,
+                    "height": 91.16999816894531
+                  },
+                  "children": [
+                    {
+                      "id": "47:9708",
+                      "name": "DT",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 319,
+                        "y": 5664.3798828125,
+                        "width": 112,
+                        "height": 22.389999389648438
+                      },
+                      "children": [
+                        {
+                          "id": "47:9709",
+                          "name": "资产",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#53657d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 319,
+                            "y": 5663.8798828125,
+                            "width": 34,
+                            "height": 22
+                          },
+                          "characters": "资产",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Regular",
+                            "fontWeight": 400,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:9710",
+                      "name": "DD",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 447,
+                        "y": 5664.3798828125,
+                        "width": 1024,
+                        "height": 22.389999389648438
+                      },
+                      "children": [
+                        {
+                          "id": "47:9711",
+                          "name": "FA-2025-00817 / 办公笔记本",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#18263d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 447,
+                            "y": 5663.8798828125,
+                            "width": 191.1300048828125,
+                            "height": 22
+                          },
+                          "characters": "FA-2025-00817 / 办公笔记本",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Regular",
+                            "fontWeight": 400,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:9712",
+                      "name": "DT",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 319,
+                        "y": 5698.77001953125,
+                        "width": 112,
+                        "height": 22.389999389648438
+                      },
+                      "children": [
+                        {
+                          "id": "47:9713",
+                          "name": "原借用人",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#53657d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 319,
+                            "y": 5698.27001953125,
+                            "width": 62,
+                            "height": 22
+                          },
+                          "characters": "原借用人",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Regular",
+                            "fontWeight": 400,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:9714",
+                      "name": "DD",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 447,
+                        "y": 5698.77001953125,
+                        "width": 1024,
+                        "height": 22.389999389648438
+                      },
+                      "children": [
+                        {
+                          "id": "47:9715",
+                          "name": "林晓 / 产品部",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#18263d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 447,
+                            "y": 5698.27001953125,
+                            "width": 87.69999694824219,
+                            "height": 22
+                          },
+                          "characters": "林晓 / 产品部",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Regular",
+                            "fontWeight": 400,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:9716",
+                      "name": "DT",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 319,
+                        "y": 5733.15966796875,
+                        "width": 112,
+                        "height": 22.389999389648438
+                      },
+                      "children": [
+                        {
+                          "id": "47:9717",
+                          "name": "原到期日",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#53657d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 319,
+                            "y": 5732.65966796875,
+                            "width": 62,
+                            "height": 22
+                          },
+                          "characters": "原到期日",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Regular",
+                            "fontWeight": 400,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:9718",
+                      "name": "DD",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 447,
+                        "y": 5733.15966796875,
+                        "width": 1024,
+                        "height": 22.389999389648438
+                      },
+                      "children": [
+                        {
+                          "id": "47:9719",
+                          "name": "2026-09-05 / 历史逾期保留",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#18263d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 447,
+                            "y": 5732.65966796875,
+                            "width": 183.22999572753906,
+                            "height": 22
+                          },
+                          "characters": "2026-09-05 / 历史逾期保留",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Regular",
+                            "fontWeight": 400,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "47:9720",
+                  "name": "grid2",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "opacity": 9.999999717180685e-10,
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#ffffff"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 319,
+                    "y": 5769.5498046875,
+                    "width": 1152,
+                    "height": 92.38999938964844
+                  },
+                  "children": [
+                    {
+                      "id": "47:9721",
+                      "name": "field",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 319,
+                        "y": 5769.5498046875,
+                        "width": 590,
+                        "height": 72.38999938964844
+                      },
+                      "children": [
+                        {
+                          "id": "47:9722",
+                          "name": "验收结果",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#18263d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 319,
+                            "y": 5769.0498046875,
+                            "width": 62,
+                            "height": 22
+                          },
+                          "characters": "验收结果",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Medium",
+                            "fontWeight": 500,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        },
+                        {
+                          "id": "47:9740",
+                          "name": "acceptanceResult",
+                          "type": "FRAME",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#ffffff"
+                            }
+                          ],
+                          "strokes": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#53657d"
+                            }
+                          ],
+                          "cornerRadius": 8,
+                          "absoluteBoundingBox": {
+                            "x": 319,
+                            "y": 5797.93994140625,
+                            "width": 566,
+                            "height": 44
+                          },
+                          "children": [
+                            {
+                              "id": "47:9741",
+                              "name": "正常",
+                              "type": "TEXT",
+                              "fills": [
+                                {
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#18263d"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 331,
+                                "y": 5807.14013671875,
+                                "width": 548,
+                                "height": 22
+                              },
+                              "characters": "正常",
+                              "style": {
+                                "fontFamily": "Noto Sans SC",
+                                "fontStyle": "Medium",
+                                "fontWeight": 500,
+                                "fontSize": 14,
+                                "textAlignHorizontal": "LEFT",
+                                "letterSpacing": 0,
+                                "lineHeightPx": 22
+                              }
+                            },
+                            {
+                              "id": "47:9759",
+                              "name": "⌄",
+                              "type": "TEXT",
+                              "fills": [
+                                {
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#18263d"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 863,
+                                "y": 5806.93994140625,
+                                "width": 20,
+                                "height": 22
+                              },
+                              "characters": "⌄",
+                              "style": {
+                                "fontFamily": "Noto Sans SC",
+                                "fontStyle": "Medium",
+                                "fontWeight": 500,
+                                "fontSize": 14,
+                                "textAlignHorizontal": "LEFT",
+                                "letterSpacing": 0,
+                                "lineHeightPx": 22
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:9777",
+                      "name": "field",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 905,
+                        "y": 5769.5498046875,
+                        "width": 590,
+                        "height": 72.38999938964844
+                      },
+                      "children": [
+                        {
+                          "id": "47:9778",
+                          "name": "目标仓库 / 位置",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#18263d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 905,
+                            "y": 5769.0498046875,
+                            "width": 101.61000061035156,
+                            "height": 22
+                          },
+                          "characters": "目标仓库 / 位置",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Medium",
+                            "fontWeight": 500,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        },
+                        {
+                          "id": "47:9796",
+                          "name": "SELECT",
+                          "type": "FRAME",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#ffffff"
+                            }
+                          ],
+                          "strokes": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#53657d"
+                            }
+                          ],
+                          "cornerRadius": 8,
+                          "absoluteBoundingBox": {
+                            "x": 905,
+                            "y": 5797.93994140625,
+                            "width": 566,
+                            "height": 44
+                          },
+                          "children": [
+                            {
+                              "id": "47:9797",
+                              "name": "一号仓库 / A-05",
+                              "type": "TEXT",
+                              "fills": [
+                                {
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#18263d"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 917,
+                                "y": 5807.14013671875,
+                                "width": 548,
+                                "height": 22
+                              },
+                              "characters": "一号仓库 / A-05",
+                              "style": {
+                                "fontFamily": "Noto Sans SC",
+                                "fontStyle": "Medium",
+                                "fontWeight": 500,
+                                "fontSize": 14,
+                                "textAlignHorizontal": "LEFT",
+                                "letterSpacing": 0,
+                                "lineHeightPx": 22
+                              }
+                            },
+                            {
+                              "id": "47:9815",
+                              "name": "⌄",
+                              "type": "TEXT",
+                              "fills": [
+                                {
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#18263d"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 1449,
+                                "y": 5806.93994140625,
+                                "width": 20,
+                                "height": 22
+                              },
+                              "characters": "⌄",
+                              "style": {
+                                "fontFamily": "Noto Sans SC",
+                                "fontStyle": "Medium",
+                                "fontWeight": 500,
+                                "fontSize": 14,
+                                "textAlignHorizontal": "LEFT",
+                                "letterSpacing": 0,
+                                "lineHeightPx": 22
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "47:9833",
+                  "name": "field",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "opacity": 9.999999717180685e-10,
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#ffffff"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 319,
+                    "y": 5861.93994140625,
+                    "width": 1176,
+                    "height": 93.16999816894531
+                  },
+                  "children": [
+                    {
+                      "id": "47:9834",
+                      "name": "验收说明与依据",
+                      "type": "TEXT",
+                      "fills": [
+                        {
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#18263d"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 319,
+                        "y": 5861.43994140625,
+                        "width": 104,
+                        "height": 22
+                      },
+                      "characters": "验收说明与依据",
+                      "style": {
+                        "fontFamily": "Noto Sans SC",
+                        "fontStyle": "Medium",
+                        "fontWeight": 500,
+                        "fontSize": 14,
+                        "textAlignHorizontal": "LEFT",
+                        "letterSpacing": 0,
+                        "lineHeightPx": 22
+                      }
+                    },
+                    {
+                      "id": "47:9852",
+                      "name": "TEXTAREA",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "strokes": [
+                        {
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#53657d"
+                        }
+                      ],
+                      "cornerRadius": 8,
+                      "absoluteBoundingBox": {
+                        "x": 319,
+                        "y": 5890.330078125,
+                        "width": 1152,
+                        "height": 64.77999877929688
+                      },
+                      "children": [
+                        {
+                          "id": "47:9853",
+                          "name": "核对资产身份、当前实物和配件。",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#18263d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 331,
+                            "y": 5899.5302734375,
+                            "width": 1134,
+                            "height": 22
+                          },
+                          "characters": "核对资产身份、当前实物和配件。",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Medium",
+                            "fontWeight": 500,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "47:9871",
+              "name": "panel",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "strokes": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#e3e8f0"
+                }
+              ],
+              "cornerRadius": 12,
+              "absoluteBoundingBox": {
+                "x": 298,
+                "y": 6016.10986328125,
+                "width": 1194,
+                "height": 328.7300109863281
+              },
+              "children": [
+                {
+                  "id": "47:9872",
+                  "name": "H2",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "opacity": 9.999999717180685e-10,
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#ffffff"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 319,
+                    "y": 6037.10986328125,
+                    "width": 1152,
+                    "height": 28
+                  },
+                  "children": [
+                    {
+                      "id": "47:9873",
+                      "name": "凭证来源",
+                      "type": "TEXT",
+                      "fills": [
+                        {
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#18263d"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 319,
+                        "y": 6036.60986328125,
+                        "width": 78,
+                        "height": 28
+                      },
+                      "characters": "凭证来源",
+                      "style": {
+                        "fontFamily": "Noto Sans SC",
+                        "fontStyle": "Medium",
+                        "fontWeight": 500,
+                        "fontSize": 18,
+                        "textAlignHorizontal": "LEFT",
+                        "letterSpacing": 0,
+                        "lineHeightPx": 28
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "47:9874",
+                  "name": "kv",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "opacity": 9.999999717180685e-10,
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#ffffff"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 319,
+                    "y": 6081.10986328125,
+                    "width": 1152,
+                    "height": 228.72999572753906
+                  },
+                  "children": [
+                    {
+                      "id": "47:9875",
+                      "name": "DT",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 319,
+                        "y": 6081.10986328125,
+                        "width": 112,
+                        "height": 22.389999389648438
+                      },
+                      "children": [
+                        {
+                          "id": "47:9876",
+                          "name": "关联资产",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#53657d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 319,
+                            "y": 6080.60986328125,
+                            "width": 62,
+                            "height": 22
+                          },
+                          "characters": "关联资产",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Regular",
+                            "fontWeight": 400,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:9877",
+                      "name": "DD",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 447,
+                        "y": 6081.10986328125,
+                        "width": 1024,
+                        "height": 22.389999389648438
+                      },
+                      "children": [
+                        {
+                          "id": "47:9878",
+                          "name": "FA-2026-00102 · 领用申请 LY-2026-0906-018",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#18263d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 447,
+                            "y": 6080.60986328125,
+                            "width": 307.9100036621094,
+                            "height": 22
+                          },
+                          "characters": "FA-2026-00102 · 领用申请 LY-2026-0906-018",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Regular",
+                            "fontWeight": 400,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:9879",
+                      "name": "DT",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 319,
+                        "y": 6115.5,
+                        "width": 112,
+                        "height": 22.389999389648438
+                      },
+                      "children": [
+                        {
+                          "id": "47:9880",
+                          "name": "实际签收",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#53657d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 319,
+                            "y": 6115,
+                            "width": 62,
+                            "height": 22
+                          },
+                          "characters": "实际签收",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Regular",
+                            "fontWeight": 400,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:9881",
+                      "name": "DD",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 447,
+                        "y": 6115.5,
+                        "width": 1024,
+                        "height": 22.389999389648438
+                      },
+                      "children": [
+                        {
+                          "id": "47:9882",
+                          "name": "林晓（原批准目标）",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#18263d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 447,
+                            "y": 6115,
+                            "width": 132,
+                            "height": 22
+                          },
+                          "characters": "林晓（原批准目标）",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Regular",
+                            "fontWeight": 400,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:9883",
+                      "name": "DT",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 319,
+                        "y": 6149.8896484375,
+                        "width": 112,
+                        "height": 22.389999389648438
+                      },
+                      "children": [
+                        {
+                          "id": "47:9884",
+                          "name": "发生时间",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#53657d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 319,
+                            "y": 6149.3896484375,
+                            "width": 62,
+                            "height": 22
+                          },
+                          "characters": "发生时间",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Regular",
+                            "fontWeight": 400,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:9885",
+                      "name": "DD",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 447,
+                        "y": 6149.8896484375,
+                        "width": 1024,
+                        "height": 22.389999389648438
+                      },
+                      "children": [
+                        {
+                          "id": "47:9886",
+                          "name": "2026-09-06 10:30",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#18263d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 447,
+                            "y": 6149.3896484375,
+                            "width": 127.83999633789062,
+                            "height": 22
+                          },
+                          "characters": "2026-09-06 10:30",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Regular",
+                            "fontWeight": 400,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:9887",
+                      "name": "DT",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 319,
+                        "y": 6184.27978515625,
+                        "width": 112,
+                        "height": 22.389999389648438
+                      },
+                      "children": [
+                        {
+                          "id": "47:9888",
+                          "name": "采集方式",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#53657d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 319,
+                            "y": 6183.77978515625,
+                            "width": 62,
+                            "height": 22
+                          },
+                          "characters": "采集方式",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Regular",
+                            "fontWeight": 400,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:9889",
+                      "name": "DD",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 447,
+                        "y": 6184.27978515625,
+                        "width": 1024,
+                        "height": 22.389999389648438
+                      },
+                      "children": [
+                        {
+                          "id": "47:9890",
+                          "name": "手工记录",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#18263d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 447,
+                            "y": 6183.77978515625,
+                            "width": 62,
+                            "height": 22
+                          },
+                          "characters": "手工记录",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Regular",
+                            "fontWeight": 400,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:9891",
+                      "name": "DT",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 319,
+                        "y": 6218.669921875,
+                        "width": 112,
+                        "height": 22.389999389648438
+                      },
+                      "children": [
+                        {
+                          "id": "47:9892",
+                          "name": "所附依据",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#53657d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 319,
+                            "y": 6218.169921875,
+                            "width": 62,
+                            "height": 22
+                          },
+                          "characters": "所附依据",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Regular",
+                            "fontWeight": 400,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:9893",
+                      "name": "DD",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 447,
+                        "y": 6218.669921875,
+                        "width": 1024,
+                        "height": 22.389999389648438
+                      },
+                      "children": [
+                        {
+                          "id": "47:9894",
+                          "name": "纸质签收单（提交者声明）",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#18263d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 447,
+                            "y": 6218.169921875,
+                            "width": 174,
+                            "height": 22
+                          },
+                          "characters": "纸质签收单（提交者声明）",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Regular",
+                            "fontWeight": 400,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:9895",
+                      "name": "DT",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 319,
+                        "y": 6253.06005859375,
+                        "width": 112,
+                        "height": 22.389999389648438
+                      },
+                      "children": [
+                        {
+                          "id": "47:9896",
+                          "name": "提交记录",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#53657d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 319,
+                            "y": 6252.56005859375,
+                            "width": 62,
+                            "height": 22
+                          },
+                          "characters": "提交记录",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Regular",
+                            "fontWeight": 400,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:9897",
+                      "name": "DD",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 447,
+                        "y": 6253.06005859375,
+                        "width": 1024,
+                        "height": 22.389999389648438
+                      },
+                      "children": [
+                        {
+                          "id": "47:9898",
+                          "name": "周宁 · 当前处理库管 · 系统记录",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#18263d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 447,
+                            "y": 6252.56005859375,
+                            "width": 209,
+                            "height": 22
+                          },
+                          "characters": "周宁 · 当前处理库管 · 系统记录",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Regular",
+                            "fontWeight": 400,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:9899",
+                      "name": "DT",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 319,
+                        "y": 6287.44970703125,
+                        "width": 112,
+                        "height": 22.389999389648438
+                      },
+                      "children": [
+                        {
+                          "id": "47:9900",
+                          "name": "接收时间",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#53657d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 319,
+                            "y": 6286.94970703125,
+                            "width": 62,
+                            "height": 22
+                          },
+                          "characters": "接收时间",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Regular",
+                            "fontWeight": 400,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:9901",
+                      "name": "DD",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 447,
+                        "y": 6287.44970703125,
+                        "width": 1024,
+                        "height": 22.389999389648438
+                      },
+                      "children": [
+                        {
+                          "id": "47:9902",
+                          "name": "2026-09-06 10:36（系统记录）",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#18263d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 447,
+                            "y": 6286.94970703125,
+                            "width": 211.94000244140625,
+                            "height": 22
+                          },
+                          "characters": "2026-09-06 10:36（系统记录）",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Regular",
+                            "fontWeight": 400,
+                            "fontSize": 14,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 22
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "47:9903",
+              "name": "banner ",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#eaf0ff"
+                }
+              ],
+              "cornerRadius": 8,
+              "absoluteBoundingBox": {
+                "x": 298,
+                "y": 6364.83984375,
+                "width": 1194,
+                "height": 52.09000015258789
+              },
+              "children": [
+                {
+                  "id": "47:9904",
+                  "name": "上分隔线",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#cfdbfa"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 298,
+                    "y": 6364.83984375,
+                    "width": 1194,
+                    "height": 1
+                  },
+                  "children": []
+                },
+                {
+                  "id": "47:9905",
+                  "name": "右分隔线",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#cfdbfa"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 1491,
+                    "y": 6364.83984375,
+                    "width": 1,
+                    "height": 52.09000015258789
+                  },
+                  "children": []
+                },
+                {
+                  "id": "47:9906",
+                  "name": "下分隔线",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#cfdbfa"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 298,
+                    "y": 6415.9296875,
+                    "width": 1194,
+                    "height": 1
+                  },
+                  "children": []
+                },
+                {
+                  "id": "47:9907",
+                  "name": "左分隔线",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#2457d6"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 298,
+                    "y": 6364.83984375,
+                    "width": 3,
+                    "height": 52.09000015258789
+                  },
+                  "children": []
+                },
+                {
+                  "id": "47:9908",
+                  "name": "正常：入库并关闭借用。损坏：按批准范围同次验收并关联维修。遗失：转报失，原借用不关闭。",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#18263d"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 317,
+                    "y": 6380.83984375,
+                    "width": 565,
+                    "height": 20
+                  },
+                  "characters": "正常：入库并关闭借用。损坏：按批准范围同次验收并关联维修。遗失：转报失，原借用不关闭。",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 12,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 20
+                  }
+                }
+              ]
+            },
+            {
+              "id": "47:9909",
+              "name": "footer-actions",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "opacity": 9.999999717180685e-10,
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 298,
+                "y": 6432.93994140625,
+                "width": 1194,
+                "height": 61.38999938964844
+              },
+              "children": [
+                {
+                  "id": "47:9910",
+                  "name": "上分隔线",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#e3e8f0"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 298,
+                    "y": 6432.93994140625,
+                    "width": 1194,
+                    "height": 1
+                  },
+                  "children": []
+                },
+                {
+                  "id": "47:9911",
+                  "name": "操作 / 预览本次验收结果",
+                  "type": "INSTANCE",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#2457d6"
+                    }
+                  ],
+                  "cornerRadius": 8,
+                  "absoluteBoundingBox": {
+                    "x": 1346,
+                    "y": 6453.93994140625,
+                    "width": 146,
+                    "height": 40.38999938964844
+                  },
+                  "children": [
+                    {
+                      "id": "I47:9911;6:7",
+                      "name": "确认接收",
+                      "type": "TEXT",
+                      "fills": [
+                        {
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 1363,
+                        "y": 6463.134765625,
+                        "width": 112,
+                        "height": 22
+                      },
+                      "characters": "预览本次验收结果",
+                      "style": {
+                        "fontFamily": "Noto Sans SC",
+                        "fontStyle": "Medium",
+                        "fontWeight": 500,
+                        "fontSize": 14,
+                        "textAlignHorizontal": "LEFT",
+                        "letterSpacing": 0,
+                        "lineHeightPx": 22
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,146 @@
+{
+  "date": "2026-09-09T06:45:14.594Z",
+  "result": [
+    {
+      "label": "Noto14",
+      "size": 14,
+      "widths": [
+        {
+          "digit": "0",
+          "width": 156
+        },
+        {
+          "digit": "1",
+          "width": 156
+        },
+        {
+          "digit": "2",
+          "width": 156
+        },
+        {
+          "digit": "3",
+          "width": 156
+        },
+        {
+          "digit": "4",
+          "width": 156
+        },
+        {
+          "digit": "5",
+          "width": 156
+        },
+        {
+          "digit": "6",
+          "width": 156
+        },
+        {
+          "digit": "7",
+          "width": 156
+        },
+        {
+          "digit": "8",
+          "width": 156
+        },
+        {
+          "digit": "9",
+          "width": 156
+        }
+      ],
+      "equal": true
+    },
+    {
+      "label": "Noto16",
+      "size": 16,
+      "widths": [
+        {
+          "digit": "0",
+          "width": 178
+        },
+        {
+          "digit": "1",
+          "width": 178
+        },
+        {
+          "digit": "2",
+          "width": 178
+        },
+        {
+          "digit": "3",
+          "width": 178
+        },
+        {
+          "digit": "4",
+          "width": 178
+        },
+        {
+          "digit": "5",
+          "width": 178
+        },
+        {
+          "digit": "6",
+          "width": 178
+        },
+        {
+          "digit": "7",
+          "width": 178
+        },
+        {
+          "digit": "8",
+          "width": 178
+        },
+        {
+          "digit": "9",
+          "width": 178
+        }
+      ],
+      "equal": true
+    },
+    {
+      "label": "Inter32",
+      "size": 32,
+      "widths": [
+        {
+          "digit": "0",
+          "width": 427
+        },
+        {
+          "digit": "1",
+          "width": 308
+        },
+        {
+          "digit": "2",
+          "width": 398
+        },
+        {
+          "digit": "3",
+          "width": 417
+        },
+        {
+          "digit": "4",
+          "width": 427
+        },
+        {
+          "digit": "5",
+          "width": 405
+        },
+        {
+          "digit": "6",
+          "width": 415
+        },
+        {
+          "digit": "7",
+          "width": 388
+        },
+        {
+          "digit": "8",
+          "width": 414
+        },
+        {
+          "digit": "9",
+          "width": 415
+        }
+      ],
+      "equal": false
+    }
+  ]
+}

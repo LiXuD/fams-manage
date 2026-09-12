@@ -1,0 +1,77 @@
+{
+  "verifiedAt": "2026-09-11",
+  "lastProbe": {
+    "at": "2026-09-11T11:20:53+08:00",
+    "commands": [
+      "rtk find . -type f (runtime project/config patterns)",
+      "rtk xcrun simctl list devices --json",
+      "rtk command -v adb",
+      "rtk lsof -nP -iTCP:8785 -sTCP:LISTEN"
+    ],
+    "results": {
+      "runtimeProjectMatches": [],
+      "simulatorStates": "Available iOS 18.2 and iOS 26.3 devices are all Shutdown; bootedSimulatorCount=0",
+      "adb": "not-installed",
+      "preview": "127.0.0.1:8785 is listening and is the static workspace preview only"
+    }
+  },
+  "workspaceRoot": "/Users/lixd/IdeaProjects/Git/CodexProject/fams",
+  "scope": "D0.4 static design and prototype workspace",
+  "inventoryProbe": {
+    "method": "Read-only filename scan from the workspace root",
+    "checkedRuntimePatterns": [
+      "package.json",
+      "pom.xml",
+      "*.xcodeproj",
+      "*.xcworkspace",
+      "project.config.json",
+      "app.json",
+      "backend/**",
+      "server/**",
+      "docker-compose*.yml",
+      "*.yaml",
+      "*.yml"
+    ],
+    "matches": [],
+    "observedSurfaces": [
+      "DESIGN-HANDOFF.md",
+      "FIXED_ASSET_SYSTEM_DESIGN.md",
+      "datae.ndm2",
+      "docs/superpowers/designs/2026-09-06-fams-ui",
+      "output/playwright"
+    ]
+  },
+  "deviceToolProbe": {
+    "xcrun": "/usr/bin/xcrun",
+    "availableSimulatorRuntimes": ["iOS 18.2", "iOS 26.3"],
+    "bootedSimulatorCount": 0,
+    "adb": "not installed",
+    "interpretation": "A simulator runtime exists, but there is no FAMS app/mini-program project to install or execute; this is not real-device acceptance evidence."
+  },
+  "localServiceProbe": {
+    "workspacePreview": "127.0.0.1:8785",
+    "productionOrFamsRuntimeEndpoint": "not identified",
+    "interpretation": "The listening services and Docker containers belong to the host/other projects; no FAMS runtime artifact or endpoint is present in this workspace."
+  },
+  "gates": {
+    "realDeviceOrCamera": {
+      "status": "not_executable",
+      "reason": "No device project, device bridge, camera harness, or runtime package is present in this workspace."
+    },
+    "productionService": {
+      "status": "not_executable",
+      "reason": "No backend/service package, deployment target, or production endpoint is present in this workspace."
+    },
+    "permissionsConcurrencyOffline": {
+      "status": "not_executable",
+      "reason": "These behaviors require a real service and data/runtime harness; static prototype events cannot prove them."
+    }
+  },
+  "claimBoundary": "Local prototype, browser, and Figma evidence is valid for the documented design scope only. Real-device and production acceptance are explicitly not claimed.",
+  "requiredForClosure": [
+    "A runnable client or mini-program project connected to the delivered screens",
+    "A deployed or locally runnable backend with authentication, roles, data, concurrency, and offline fixtures",
+    "A real-device or simulator/camera execution harness",
+    "Fresh evidence for the critical business paths and negative paths in the PRD"
+  ]
+}

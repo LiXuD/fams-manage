@@ -1,0 +1,41 @@
+{
+  "date": "2026-09-09",
+  "service": "TalkToFigma",
+  "requestedChannel": "pmnn5fxj",
+  "joinResult": "Successfully joined channel: pmnn5fxj",
+  "documentRead": "Existing page and node identities verified",
+  "componentsRead": "85 native components",
+  "status": "d03-delivered-d04-partial",
+  "targetFileFromUser": "N4BgxhOTtSFpsoxcN7t4XD",
+  "targetIdentityEvidence": "Existing Foundations 4:2, Components 3:4, Button 6:54, Field 7:31 and Screens 3:5 match the previously read target file. The local MCP does not return fileKey.",
+  "componentSets": 8,
+  "nativeComponents": 85,
+  "screens": 40,
+  "textNodes": 1612,
+  "instances": 225,
+  "imageFills": 0,
+  "compositions": 10,
+  "newVariableBindings": false,
+  "prototypeReactionsAdded": false,
+  "componentMap": "figma-native/component-map.json",
+  "screenMap": "figma-native/screens-map.json",
+  "compositionMap": "figma-native/composition-map.json",
+  "verification": "NATIVE-FIGMA-VERIFICATION.md",
+  "supersedes": "Earlier ju3ayfbw delivery and 0hh48l21 timeout connection records",
+  "liveVerifiedAt": "2026-09-08T23:54:39.126Z",
+  "changedScreensSinceExport": [],
+  "liveVerification": "figma-native/live-verification.json",
+  "baselineVersion": "D0.3",
+  "handoff": {
+    "date": "2026-09-10",
+    "document": "HANDOFF-D0.4.md",
+    "freshLiveCheckPerformed": false,
+    "d04NativeChanges": [
+      "42:6642",
+      "42:6643"
+    ],
+    "d04ScreenSync": "pending",
+    "d04ComponentSync": "pending",
+    "d04BrowserRegression": "pending"
+  }
+}

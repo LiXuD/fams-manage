@@ -1,0 +1,77 @@
+{
+  "version": "D0.4",
+  "typography": {
+    "display": {
+      "size": 36,
+      "lineHeight": 48,
+      "weight": 700
+    },
+    "heading": {
+      "size": 24,
+      "lineHeight": 36,
+      "weight": 700
+    },
+    "section": {
+      "size": 18,
+      "lineHeight": 28,
+      "weight": 500
+    },
+    "body": {
+      "size": 14,
+      "lineHeight": 22,
+      "weight": 400
+    },
+    "body-medium": {
+      "size": 14,
+      "lineHeight": 22,
+      "weight": 500
+    },
+    "mobile-body": {
+      "size": 16,
+      "lineHeight": 26,
+      "weight": 400
+    },
+    "label": {
+      "size": 12,
+      "lineHeight": 20,
+      "weight": 500
+    },
+    "number": {
+      "size": 32,
+      "lineHeight": 44,
+      "weight": 600
+    }
+  },
+  "table": {
+    "bodyStyle": "body",
+    "supportingStyle": "label",
+    "cellPaddingY": 12,
+    "identityAlignment": "left",
+    "numericAlignment": "right",
+    "numericVariant": "tabular-nums"
+  },
+  "elevation": {
+    "surface": "0 8px 28px #18263d09",
+    "dialog": "0 8px 40px #18263d24"
+  },
+  "motion": {
+    "feedbackMs": 120,
+    "spinnerMs": 800,
+    "reducedMotion": "disable transitions and spinner animation"
+  },
+  "layout": {
+    "pc": [
+      1440,
+      1024
+    ],
+    "mobile": [
+      390,
+      320
+    ],
+    "pcSidebar": 190,
+    "pcContentPadding": 28,
+    "mobilePadding": 16,
+    "mobileTargetMin": 44,
+    "safeArea": "env(safe-area-inset-bottom, 0px)"
+  }
+}

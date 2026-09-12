@@ -1,0 +1,79 @@
+{
+  "verifiedAt": "2026-09-11T10:48:12+08:00",
+  "source": "TalkToFigma MCP direct readback",
+  "fileKey": "N4BgxhOTtSFpsoxcN7t4XD",
+  "channel": "v7dkvp2o",
+  "page": {
+    "id": "3:5",
+    "name": "03 · Screens & Handoff",
+    "childCount": 44,
+    "businessScreenRoots": 40
+  },
+  "structuralReadback": {
+    "allRootsUseD04Name": true,
+    "textNodes": 1598,
+    "instances": 219,
+    "vectors": 0,
+    "imageFills": 0,
+    "mobileHostCount": 14,
+    "desktopScreenCount": 26,
+    "readbackNote": "These counts and root names are fresh direct MCP readback. The readback serializer omits VECTOR descendants; the independent scan in d04-native-svg-nav-wiring.json verifies all 52 wired navigation roots and 117 editable VECTOR layers. Exact source-text equality and exported-PNG comparison remain evidenced by d04-native-live-verification.json."
+  },
+  "mobileHostGeometry": {
+    "count": 14,
+    "allReserved": true,
+    "width": 72,
+    "height": 28,
+    "children": [
+      "d04-host-more",
+      "d04-host-close"
+    ],
+    "labelTextEqualityEvidence": "figma-native/d04-native-live-verification.json"
+  },
+  "svgImport": {
+    "status": "verified",
+    "operation": "create_node_from_svg",
+    "sampleNode": "71:13639",
+    "evidence": "d04-native-svg-import.json",
+    "importedRoots": 8,
+    "vectorLayers": 18,
+    "editableVectorRoots": 8,
+    "pngExport": "figma-native/71-13639-0.png",
+    "svgExports": 8,
+    "checks": {
+      "allEightImported": true,
+      "everyImportHasVector": true,
+      "everyImportHasSvgExport": true,
+      "noImageFills": true
+    }
+  },
+  "svgNavWiring": {
+    "status": "verified",
+    "operation": "create_node_from_svg",
+    "screens": ["M02", "M03", "M04", "M05", "M06", "M07", "M08", "M09", "M10", "M11", "M12", "M13", "M14"],
+    "evidence": "d04-native-svg-nav-wiring.json",
+    "slots": 52,
+    "importedRoots": 52,
+    "vectorLayers": 117,
+    "svgExports": 52,
+    "checks": {
+      "allExpectedSlotsWired": true,
+      "allFiftyTwoWired": true,
+      "everyImportHasEditableVector": true,
+      "everyImportHasSvgExport": true,
+      "noImageFills": true
+    }
+  },
+  "boundaries": {
+    "svgImport": "Verified through the locally rebuilt TalkToFigma create_node_from_svg operation; detailed sample node IDs, VECTOR scans, PNG sample export, and SVG exports are in d04-native-svg-import.json.",
+    "svgNavWiring": "Verified for all 52 bottom-navigation slots present across M02–M14; M01 has no bottom-navigation frame. Detailed node IDs, source hashes, VECTOR scans, and SVG exports are in d04-native-svg-nav-wiring.json.",
+    "productionAcceptance": "Open: this is a local static prototype/document delivery; no real device harness, production service, permission, concurrency, or offline backend acceptance is claimed."
+  },
+  "relatedEvidence": [
+    "figma-native/d04-native-live-verification.json",
+    "figma-native/d04-native-direct-sync-evidence.json",
+    "figma-native/d04-native-svg-import.json",
+    "figma-native/d04-native-svg-nav-wiring.json",
+    "d04-work/visual-comparison-evidence.json"
+  ]
+}

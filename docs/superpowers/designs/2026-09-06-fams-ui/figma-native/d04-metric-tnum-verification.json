@@ -1,0 +1,57 @@
+{
+  "at": "2026-09-09T07:02:37.421Z",
+  "source": "42:6643",
+  "uiSetting": "Numbers / Monospace uppercase/lining; Kerning disabled",
+  "style": {
+    "fontFamily": "Inter",
+    "fontStyle": "Semi Bold",
+    "fontWeight": 600,
+    "fontSize": 32,
+    "textAlignHorizontal": "LEFT",
+    "letterSpacing": 0,
+    "lineHeightPx": 44
+  },
+  "widths": [
+    {
+      "digit": "0",
+      "width": 430
+    },
+    {
+      "digit": "1",
+      "width": 430
+    },
+    {
+      "digit": "2",
+      "width": 430
+    },
+    {
+      "digit": "3",
+      "width": 430
+    },
+    {
+      "digit": "4",
+      "width": 429
+    },
+    {
+      "digit": "5",
+      "width": 430
+    },
+    {
+      "digit": "6",
+      "width": 430
+    },
+    {
+      "digit": "7",
+      "width": 430
+    },
+    {
+      "digit": "8",
+      "width": 430
+    },
+    {
+      "digit": "9",
+      "width": 430
+    }
+  ],
+  "spread": 1
+}

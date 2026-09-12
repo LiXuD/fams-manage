@@ -1,0 +1,671 @@
+{
+  "capturedAt": "2026-09-10T10:09:25.410Z",
+  "channel": "v7dkvp2o",
+  "pages": {
+    "P01": {
+      "nodeId": "28:1885",
+      "name": "P01 登录 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:1886",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:1899",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P02": {
+      "nodeId": "25:1645",
+      "name": "P02 工作台 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "25:1646",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "26:1659",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P04": {
+      "nodeId": "28:2109",
+      "name": "P04 资产详情 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:2110",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:2123",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P05": {
+      "nodeId": "28:2236",
+      "name": "P05 单个与复制建卡 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:2237",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:2250",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P06": {
+      "nodeId": "28:2338",
+      "name": "P06 导入与后台任务 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:2339",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:2352",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P07": {
+      "nodeId": "28:2505",
+      "name": "P07 期初初始化 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:2506",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:2519",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P08": {
+      "nodeId": "28:2644",
+      "name": "P08 标签打印 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:2645",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:2658",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P09": {
+      "nodeId": "28:2723",
+      "name": "P09 共享审批池 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:2724",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:2737",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P10": {
+      "nodeId": "28:2878",
+      "name": "P10 库管执行池 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:2879",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:2892",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P11": {
+      "nodeId": "28:2981",
+      "name": "P11 统一业务详情 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:2982",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:2995",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P12": {
+      "nodeId": "28:3157",
+      "name": "P12 分配与交出 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:3158",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:3171",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P13": {
+      "nodeId": "28:3305",
+      "name": "P13 入库与退还验收 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:3306",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:3319",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P14": {
+      "nodeId": "28:3427",
+      "name": "P14 调拨与目标变更 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:3428",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:3441",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P15": {
+      "nodeId": "28:3581",
+      "name": "P15 盘点任务 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:3582",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:3595",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P16": {
+      "nodeId": "28:3715",
+      "name": "P16 差异与证据复核 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:3716",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:3729",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P17": {
+      "nodeId": "28:3869",
+      "name": "P17 报修与返厂 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:3870",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:3883",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P18": {
+      "nodeId": "28:4013",
+      "name": "P18 科技协助 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:4014",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:4027",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P19": {
+      "nodeId": "28:4082",
+      "name": "P19 报失与找回 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:4083",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:4096",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P20": {
+      "nodeId": "28:4179",
+      "name": "P20 报废与处置 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:4180",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:4193",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P21": {
+      "nodeId": "28:4302",
+      "name": "P21 交接异常与代确认 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:4303",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:4316",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P22": {
+      "nodeId": "28:4418",
+      "name": "P22 受控转派 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:4419",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:4432",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P24": {
+      "nodeId": "28:4716",
+      "name": "P24 基础资料与人员交接 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:4717",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:4730",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P25": {
+      "nodeId": "28:4865",
+      "name": "P25 角色与系统设置 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:4866",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:4879",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "P26": {
+      "nodeId": "28:5003",
+      "name": "P26 消息中心 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:5004",
+          "name": "appbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5017",
+          "name": "pcbody",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "M01": {
+      "nodeId": "28:5116",
+      "name": "M01 绑定与资料异常 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:5117",
+          "name": "statusbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5122",
+          "name": "mobilehead",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5130",
+          "name": "mobilecontent",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "M03": {
+      "nodeId": "28:5161",
+      "name": "M03 申请中心 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:5162",
+          "name": "statusbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5167",
+          "name": "mobilehead",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5175",
+          "name": "mobilecontent",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5217",
+          "name": "小程序导航",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "M04": {
+      "nodeId": "28:5227",
+      "name": "M04 我的申请与进度 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:5228",
+          "name": "statusbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5233",
+          "name": "mobilehead",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5241",
+          "name": "mobilecontent",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5335",
+          "name": "小程序导航",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "M06": {
+      "nodeId": "28:5415",
+      "name": "M06 部门公用资产 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:5416",
+          "name": "statusbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5421",
+          "name": "mobilehead",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5429",
+          "name": "mobilecontent",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5469",
+          "name": "小程序导航",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "M07": {
+      "nodeId": "28:5479",
+      "name": "M07 部门资产与代办 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:5480",
+          "name": "statusbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5485",
+          "name": "mobilehead",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5493",
+          "name": "mobilecontent",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5556",
+          "name": "小程序导航",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "M08": {
+      "nodeId": "28:5566",
+      "name": "M08 扫码与资产概要 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:5567",
+          "name": "statusbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5572",
+          "name": "mobilehead",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5580",
+          "name": "mobilecontent",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5627",
+          "name": "小程序导航",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "M09": {
+      "nodeId": "28:5638",
+      "name": "M09 待接收与实物核对 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:5639",
+          "name": "statusbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5644",
+          "name": "mobilehead",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5652",
+          "name": "mobilecontent",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5687",
+          "name": "小程序导航",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "M10": {
+      "nodeId": "28:5697",
+      "name": "M10 我的盘点任务 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:5698",
+          "name": "statusbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5703",
+          "name": "mobilehead",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5711",
+          "name": "mobilecontent",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5762",
+          "name": "小程序导航",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "M11": {
+      "nodeId": "28:5772",
+      "name": "M11 连续盘点 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:5773",
+          "name": "statusbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5778",
+          "name": "mobilehead",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5786",
+          "name": "mobilecontent",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5837",
+          "name": "小程序导航",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "M12": {
+      "nodeId": "28:5847",
+      "name": "M12 待上传与回执 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:5848",
+          "name": "statusbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5853",
+          "name": "mobilehead",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5861",
+          "name": "mobilecontent",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5904",
+          "name": "小程序导航",
+          "type": "FRAME"
+        }
+      ]
+    },
+    "M13": {
+      "nodeId": "28:5914",
+      "name": "M13 消息与责任告知 · FAMS D0.4 视觉稿",
+      "children": [
+        {
+          "id": "28:5915",
+          "name": "statusbar",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5920",
+          "name": "mobilehead",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5928",
+          "name": "mobilecontent",
+          "type": "FRAME"
+        },
+        {
+          "id": "28:5955",
+          "name": "小程序导航",
+          "type": "FRAME"
+        }
+      ]
+    }
+  }
+}

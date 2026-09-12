@@ -1,0 +1,259 @@
+{
+  "repairedAt": "2026-09-11T01:05:36.976Z",
+  "channel": "v7dkvp2o",
+  "count": 14,
+  "repaired": [
+    {
+      "screen": "M01",
+      "parentId": "47:12275",
+      "textId": "47:12276",
+      "parentBox": {
+        "x": 412,
+        "y": 12562.2998046875,
+        "width": 42,
+        "height": 22.389999389648438
+      },
+      "textBox": {
+        "x": 412,
+        "y": 12561.7998046875,
+        "width": 42,
+        "height": 22
+      },
+      "rightInset": 16
+    },
+    {
+      "screen": "M02",
+      "parentId": "47:7256",
+      "textId": "47:7257",
+      "parentBox": {
+        "x": 922,
+        "y": 12562.2998046875,
+        "width": 42,
+        "height": 22.389999389648438
+      },
+      "textBox": {
+        "x": 922,
+        "y": 12561.7998046875,
+        "width": 42,
+        "height": 22
+      },
+      "rightInset": 16
+    },
+    {
+      "screen": "M03",
+      "parentId": "47:12393",
+      "textId": "47:12394",
+      "parentBox": {
+        "x": 1432,
+        "y": 12562.2998046875,
+        "width": 42,
+        "height": 22.389999389648438
+      },
+      "textBox": {
+        "x": 1432,
+        "y": 12561.7998046875,
+        "width": 42,
+        "height": 22
+      },
+      "rightInset": 16
+    },
+    {
+      "screen": "M04",
+      "parentId": "47:12639",
+      "textId": "47:12640",
+      "parentBox": {
+        "x": 1942,
+        "y": 12562.2998046875,
+        "width": 42,
+        "height": 22.389999389648438
+      },
+      "textBox": {
+        "x": 1942,
+        "y": 12561.7998046875,
+        "width": 42,
+        "height": 22
+      },
+      "rightInset": 16
+    },
+    {
+      "screen": "M05",
+      "parentId": "47:7372",
+      "textId": "47:7373",
+      "parentBox": {
+        "x": 2452,
+        "y": 12562.2998046875,
+        "width": 42,
+        "height": 22.389999389648438
+      },
+      "textBox": {
+        "x": 2452,
+        "y": 12561.7998046875,
+        "width": 42,
+        "height": 22
+      },
+      "rightInset": 16
+    },
+    {
+      "screen": "M06",
+      "parentId": "47:12793",
+      "textId": "47:12794",
+      "parentBox": {
+        "x": 2962,
+        "y": 12562.2998046875,
+        "width": 42,
+        "height": 22.389999389648438
+      },
+      "textBox": {
+        "x": 2962,
+        "y": 12561.7998046875,
+        "width": 42,
+        "height": 22
+      },
+      "rightInset": 16
+    },
+    {
+      "screen": "M07",
+      "parentId": "47:12893",
+      "textId": "47:12894",
+      "parentBox": {
+        "x": 3472,
+        "y": 12562.2998046875,
+        "width": 42,
+        "height": 22.389999389648438
+      },
+      "textBox": {
+        "x": 3472,
+        "y": 12561.7998046875,
+        "width": 42,
+        "height": 22
+      },
+      "rightInset": 16
+    },
+    {
+      "screen": "M08",
+      "parentId": "47:13016",
+      "textId": "47:13017",
+      "parentBox": {
+        "x": 412,
+        "y": 14162.2998046875,
+        "width": 42,
+        "height": 22.389999389648438
+      },
+      "textBox": {
+        "x": 412,
+        "y": 14161.7998046875,
+        "width": 42,
+        "height": 22
+      },
+      "rightInset": 16
+    },
+    {
+      "screen": "M09",
+      "parentId": "47:13141",
+      "textId": "47:13142",
+      "parentBox": {
+        "x": 922,
+        "y": 14162.2998046875,
+        "width": 42,
+        "height": 22.389999389648438
+      },
+      "textBox": {
+        "x": 922,
+        "y": 14161.7998046875,
+        "width": 42,
+        "height": 22
+      },
+      "rightInset": 16
+    },
+    {
+      "screen": "M10",
+      "parentId": "47:13236",
+      "textId": "47:13237",
+      "parentBox": {
+        "x": 1432,
+        "y": 14162.2998046875,
+        "width": 42,
+        "height": 22.389999389648438
+      },
+      "textBox": {
+        "x": 1432,
+        "y": 14161.7998046875,
+        "width": 42,
+        "height": 22
+      },
+      "rightInset": 16
+    },
+    {
+      "screen": "M11",
+      "parentId": "47:13347",
+      "textId": "47:13348",
+      "parentBox": {
+        "x": 1942,
+        "y": 14162.2998046875,
+        "width": 42,
+        "height": 22.389999389648438
+      },
+      "textBox": {
+        "x": 1942,
+        "y": 14161.7998046875,
+        "width": 42,
+        "height": 22
+      },
+      "rightInset": 16
+    },
+    {
+      "screen": "M12",
+      "parentId": "47:13476",
+      "textId": "47:13477",
+      "parentBox": {
+        "x": 2452,
+        "y": 14162.2998046875,
+        "width": 42,
+        "height": 22.389999389648438
+      },
+      "textBox": {
+        "x": 2452,
+        "y": 14161.7998046875,
+        "width": 42,
+        "height": 22
+      },
+      "rightInset": 16
+    },
+    {
+      "screen": "M13",
+      "parentId": "47:13579",
+      "textId": "47:13580",
+      "parentBox": {
+        "x": 2962,
+        "y": 14162.2998046875,
+        "width": 42,
+        "height": 22.389999389648438
+      },
+      "textBox": {
+        "x": 2962,
+        "y": 14161.7998046875,
+        "width": 42,
+        "height": 22
+      },
+      "rightInset": 16
+    },
+    {
+      "screen": "M14",
+      "parentId": "47:7478",
+      "textId": "47:7479",
+      "parentBox": {
+        "x": 3472,
+        "y": 14162.2998046875,
+        "width": 42,
+        "height": 22.389999389648438
+      },
+      "textBox": {
+        "x": 3472,
+        "y": 14161.7998046875,
+        "width": 42,
+        "height": 22
+      },
+      "rightInset": 16
+    }
+  ]
+}

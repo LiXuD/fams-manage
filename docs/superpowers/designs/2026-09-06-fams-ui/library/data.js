@@ -1,0 +1,28 @@
+window.FamsManifest = {
+  "version": "D0.4-local-1.0",
+  "name": "FAMS UI",
+  "scope": "Visual design reference and reusable DOM/CSS components; no backend integration",
+  "families": [
+    {"id":"button","name":"Button / 按钮","factory":"button","axes":{"size":["PC","Mobile"],"kind":["Primary","Secondary","Danger"],"state":["Default","Hover","Pressed","Focus","Disabled","Loading"]},"props":["label","icon","onClick"],"prototypeSelectors":["button","button.primary","button.danger"],"rule":"页面一个主要业务动作；加载阻止重复提交；危险操作必须解释对象、依据和后果。","pages":["P09","P12","P20","M09","M11"]},
+    {"id":"field","name":"Field / 表单字段","factory":"field","axes":{"control":["Input","Select","Textarea"],"state":["Default","Focus","Error","Disabled","ReadOnly"]},"props":["id","label","value","hint","required","options","onChange"],"prototypeSelectors":[".field",".filters input",".filters select"],"rule":"标签常驻且允许两行；错误与字段关联；长值可完整核对；只读以值呈现，禁用说明原因；Select 不用输入框的 readonly 属性冒充只读。","pages":["P01","P05","P06","P14","M01","M03"]},
+    {"id":"status","name":"Status / 状态标签","factory":"status","axes":{"tone":["Neutral","Info","Success","Warning","Danger"]},"props":["label","domain"],"prototypeSelectors":[".badge"],"rule":"文字是状态事实，颜色只是辅助；资产、业务、实物、证据四个维度分别命名。","pages":["P03","P04","P11","M04","M12"]},
+    {"id":"navigation","name":"Navigation / 导航","factory":"navigation","axes":{"mode":["Sidebar","Tabs","Mobile"],"itemState":["Default","Selected","Disabled"]},"props":["id","items","selected","onChange"],"prototypeSelectors":[".appnav",".tabs",".bottomnav"],"rule":"主导航按实际权限出现；小程序顺序为首页、扫码、我的、消息；24px 单色图标配文字，当前入口同时使用品牌色和位置标记。","pages":["P02","P04","P25","M02","M14"]},
+    {"id":"table","name":"TableRow / 表格行","factory":"table","axes":{"state":["Header","Default","Hover","Selected","ReadOnly"]},"props":["columns","rows","caption","onSelect"],"prototypeSelectors":[".tablewrap","table"],"rule":"主业务行统一 14/22；身份、生命周期、正式责任、实物阶段分列；编码左对齐并使用等宽数字，金额与数量按列右对齐；宽表内部横滚。","pages":["P03","P06","P09","P10","P12","P15","P23","P24","P25","P26"]},
+    {"id":"notice","name":"Notice / 提示与结果","factory":"notice","axes":{"state":["Info","Warning","Error","Success","Empty","NoAccess","Conflict"]},"props":["title","body","actionLabel","onAction"],"prototypeSelectors":[".banner",".inline-error",".placeholder"],"rule":"说明触发条件、结果、原因、下一步与计数影响；无记录、筛选无结果、无权限、冲突、相机失败不能用同一个空态代替。","pages":["P03","P04","P09","P10","P16","P20","M08","M09","M11","M12"]},
+    {"id":"quantity","name":"Quantity / 数量与进度","factory":"metric","axes":{"state":["Default","Loading","Unavailable"]},"props":["label","value","supporting"],"prototypeSelectors":[".stats",".stat",".tile"],"rule":"0 是已知值；未知用 —；加载不伪造 0；部分完成继续展示待交接与无法满足。","pages":["P02","P11","P12","P15","M04","M10"]},
+    {"id":"asset","name":"AssetCard / 资产卡片","factory":"assetCard","axes":{"state":["Selectable","Selected","Received","ReadOnly","Conflict"]},"props":["code","name","assetState","physicalState","responsibility","target","onSelect"],"prototypeSelectors":[".mobilecontent .panel",".check"],"rule":"核对对象后逐项接收；默认不全选；生命周期与实物阶段分别展示；选中不代表已经完成交接。","pages":["P12","M05","M06","M08","M09","M11"]}
+  ],
+  "compositions": [
+    {"id":"selection","factory":"selection","name":"Checkbox / Radio","states":["Unchecked","Checked","Disabled","Mixed"],"rule":"整个标签可点击；混合选择只用于复选；使用原生键盘交互。"},
+    {"id":"steps","factory":"steps","name":"Steps / 业务步骤","states":["Complete","Current","Upcoming"],"rule":"当前步骤标明下一执行人；批准、交出、接收不能合并。"},
+    {"id":"dialog","factory":"dialog","name":"Dialog / 操作确认","states":["Confirm","Danger"],"rule":"显示对象及后果；Escape/取消可退出；关闭后焦点返回触发按钮。"},
+    {"id":"progress","factory":"progress","name":"Progress / 任务进度","states":["Determinate","Indeterminate"],"rule":"同时提供文字进度；未同步单独展示，不能计入已盘。"},
+    {"id":"timeline","factory":"timeline","name":"Timeline / 责任与证据履历","states":["Complete","Current","Upcoming"],"rule":"动作、操作者、时间分清；历史与当前不同，不伪造缺失记录。"}
+  ],
+  "statusDomains": {
+    "asset":{"label":"资产生命周期","examples":[["在库","Info"],["在用","Info"],["借出","Info"],["维修中","Warning"],["返厂维修","Warning"],["已报废","Neutral"]]},
+    "transaction":{"label":"业务进度","examples":[["待管理员确认","Warning"],["库管处理中","Info"],["领用待交接","Warning"],["部分完成","Warning"],["已完成","Success"],["已驳回","Danger"]]},
+    "physical":{"label":"实物阶段","examples":[["待交出","Neutral"],["已交出待接收","Warning"],["已接收","Success"]]},
+    "evidence":{"label":"证据与回执","examples":[["待上传","Warning"],["已接受","Success"],["迟到待复核","Warning"],["过期失效","Danger"],["明确拒绝","Danger"]]}
+  }
+};

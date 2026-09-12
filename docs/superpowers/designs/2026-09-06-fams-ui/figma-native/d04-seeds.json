@@ -1,0 +1,10 @@
+{
+  "frame": {
+    "id": "42:6642",
+    "message": "Created frame \"D0.4 / 排版与图标校准\" with ID: 42:6642. Use the ID as the parentId to appendChild inside this frame."
+  },
+  "metric": {
+    "id": "42:6643",
+    "message": "Created text \"Metric / Tabular / 32\" with ID: 42:6643"
+  }
+}

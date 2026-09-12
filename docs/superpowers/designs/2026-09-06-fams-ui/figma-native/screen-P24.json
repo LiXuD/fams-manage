@@ -1,0 +1,3461 @@
+{
+  "id": "28:4716",
+  "name": "P24 基础资料与人员交接 · FAMS D0.4 视觉稿",
+  "type": "FRAME",
+  "fills": [
+    {
+      "blendMode": "NORMAL",
+      "type": "SOLID",
+      "color": "#ffffff"
+    }
+  ],
+  "strokes": [
+    {
+      "opacity": 9.999999717180685e-10,
+      "blendMode": "NORMAL",
+      "type": "SOLID",
+      "color": "#ffffff"
+    }
+  ],
+  "absoluteBoundingBox": {
+    "x": 4880,
+    "y": 8600,
+    "width": 1440,
+    "height": 1007.8599853515625
+  },
+  "children": [
+    {
+      "id": "47:11847",
+      "name": "appbar",
+      "type": "FRAME",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 4880,
+        "y": 8600,
+        "width": 1440,
+        "height": 64
+      },
+      "children": [
+        {
+          "id": "47:11848",
+          "name": "下分隔线",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#e3e8f0"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 4880,
+            "y": 8663,
+            "width": 1440,
+            "height": 1
+          },
+          "children": []
+        },
+        {
+          "id": "47:11849",
+          "name": "STRONG",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 4904,
+            "y": 8616.5,
+            "width": 204.8800048828125,
+            "height": 30
+          },
+          "children": [
+            {
+              "id": "47:11850",
+              "name": "FAMS 标记",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#2457d6"
+                }
+              ],
+              "cornerRadius": 8,
+              "absoluteBoundingBox": {
+                "x": 4904,
+                "y": 8616.5,
+                "width": 30,
+                "height": 30
+              },
+              "children": [
+                {
+                  "id": "47:11851",
+                  "name": "F",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#ffffff"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 4914,
+                    "y": 8619.5,
+                    "width": 24,
+                    "height": 26
+                  },
+                  "characters": "F",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Regular",
+                    "fontWeight": 400,
+                    "fontSize": 16,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 26
+                  }
+                }
+              ]
+            },
+            {
+              "id": "47:11852",
+              "name": "示例企业 · 固定资产",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 4944,
+                "y": 8617.7001953125,
+                "width": 152,
+                "height": 26
+              },
+              "characters": "示例企业 · 固定资产",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 16,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 26
+              }
+            }
+          ]
+        },
+        {
+          "id": "47:11853",
+          "name": "right",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 5981.58984375,
+            "y": 8613.5,
+            "width": 314.4100036621094,
+            "height": 36
+          },
+          "children": [
+            {
+              "id": "47:11854",
+              "name": "操作 / 消息",
+              "type": "INSTANCE",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "strokes": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#e3e8f0"
+                }
+              ],
+              "cornerRadius": 8,
+              "absoluteBoundingBox": {
+                "x": 5981.58984375,
+                "y": 8613.5,
+                "width": 50,
+                "height": 36
+              },
+              "children": [
+                {
+                  "id": "I47:11854;6:19",
+                  "name": "确认接收",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#18263d"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 5992.58984375,
+                    "y": 8620.5,
+                    "width": 28,
+                    "height": 22
+                  },
+                  "characters": "消息",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 14,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 22
+                  }
+                }
+              ]
+            },
+            {
+              "id": "47:11856",
+              "name": "操作 / 后台任务",
+              "type": "INSTANCE",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "strokes": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#e3e8f0"
+                }
+              ],
+              "cornerRadius": 8,
+              "absoluteBoundingBox": {
+                "x": 6043.58984375,
+                "y": 8613.5,
+                "width": 74,
+                "height": 36
+              },
+              "children": [
+                {
+                  "id": "I47:11856;6:19",
+                  "name": "确认接收",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#18263d"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 6052.58984375,
+                    "y": 8620.5,
+                    "width": 56,
+                    "height": 22
+                  },
+                  "characters": "后台任务",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 14,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 22
+                  }
+                }
+              ]
+            },
+            {
+              "id": "47:11858",
+              "name": "SPAN",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "opacity": 9.999999717180685e-10,
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 6129.58984375,
+                "y": 8621.91015625,
+                "width": 190.41000366210938,
+                "height": 19.190000534057617
+              },
+              "children": [
+                {
+                  "id": "47:11859",
+                  "name": "系统管理员 / 交接另需业务角色",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#53657d"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 6129.58984375,
+                    "y": 8621.41015625,
+                    "width": 172.41000366210938,
+                    "height": 20
+                  },
+                  "characters": "系统管理员 / 交接另需业务角色",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 12,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 20
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "47:11860",
+      "name": "pcbody",
+      "type": "FRAME",
+      "fills": [
+        {
+          "opacity": 9.999999717180685e-10,
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 4880,
+        "y": 8664,
+        "width": 1440,
+        "height": 943.8599853515625
+      },
+      "children": [
+        {
+          "id": "47:11861",
+          "name": "产品导航",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 4880,
+            "y": 8664,
+            "width": 190,
+            "height": 943.8599853515625
+          },
+          "children": [
+            {
+              "id": "47:11862",
+              "name": "右分隔线",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#e3e8f0"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 5069,
+                "y": 8664,
+                "width": 1,
+                "height": 943.8599853515625
+              },
+              "children": []
+            },
+            {
+              "id": "47:11863",
+              "name": "active",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#eaf0ff"
+                }
+              ],
+              "cornerRadius": 8,
+              "absoluteBoundingBox": {
+                "x": 4892,
+                "y": 8684,
+                "width": 165,
+                "height": 42
+              },
+              "children": [
+                {
+                  "id": "47:11864",
+                  "name": "当前页面指示",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#2457d6"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 4892,
+                    "y": 8688,
+                    "width": 3,
+                    "height": 34
+                  },
+                  "children": []
+                },
+                {
+                  "id": "47:11865",
+                  "name": "基础资料",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#2457d6"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 4904,
+                    "y": 8694.58984375,
+                    "width": 58,
+                    "height": 20
+                  },
+                  "characters": "基础资料",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 12,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 20
+                  }
+                }
+              ]
+            },
+            {
+              "id": "47:11866",
+              "name": "BUTTON",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "opacity": 9.999999717180685e-10,
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "cornerRadius": 8,
+              "absoluteBoundingBox": {
+                "x": 4892,
+                "y": 8729,
+                "width": 165,
+                "height": 42
+              },
+              "children": [
+                {
+                  "id": "47:11867",
+                  "name": "系统管理",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#53657d"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 4904,
+                    "y": 8739.58984375,
+                    "width": 58,
+                    "height": 20
+                  },
+                  "characters": "系统管理",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 12,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 20
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "47:11868",
+          "name": "content",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#f7f9fc"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 5070,
+            "y": 8664,
+            "width": 1250,
+            "height": 943.8599853515625
+          },
+          "children": [
+            {
+              "id": "47:11869",
+              "name": "crumb",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "opacity": 9.999999717180685e-10,
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 5098,
+                "y": 8692,
+                "width": 1194,
+                "height": 19.190000534057617
+              },
+              "children": [
+                {
+                  "id": "47:11870",
+                  "name": "基础 / 组织责任",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#53657d"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 5098,
+                    "y": 8691.5,
+                    "width": 91.11000061035156,
+                    "height": 20
+                  },
+                  "characters": "基础 / 组织责任",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 12,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 20
+                  }
+                }
+              ]
+            },
+            {
+              "id": "47:11871",
+              "name": "pagehead",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "opacity": 9.999999717180685e-10,
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 5098,
+                "y": 8723.1904296875,
+                "width": 1194,
+                "height": 63.189998626708984
+              },
+              "children": [
+                {
+                  "id": "47:11872",
+                  "name": "DIV",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "opacity": 9.999999717180685e-10,
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#ffffff"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 5098,
+                    "y": 8723.1904296875,
+                    "width": 229.5,
+                    "height": 63.189998626708984
+                  },
+                  "children": [
+                    {
+                      "id": "47:11873",
+                      "name": "H1",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 5098,
+                        "y": 8723.1904296875,
+                        "width": 229.5,
+                        "height": 36.38999938964844
+                      },
+                      "children": [
+                        {
+                          "id": "47:11874",
+                          "name": "组织人员与资产交接",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#18263d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 5098,
+                            "y": 8723.1904296875,
+                            "width": 235.5,
+                            "height": 36
+                          },
+                          "characters": "组织人员与资产交接",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Bold",
+                            "fontWeight": 700,
+                            "fontSize": 24,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 36
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:11875",
+                      "name": "P",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 5098,
+                        "y": 8765.580078125,
+                        "width": 229.5,
+                        "height": 20.799999237060547
+                      },
+                      "children": [
+                        {
+                          "id": "47:11876",
+                          "name": "身份资料更新与资产业务责任分开",
+                          "type": "TEXT",
+                          "fills": [
+                            {
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#53657d"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 5098,
+                            "y": 8765.580078125,
+                            "width": 201,
+                            "height": 20
+                          },
+                          "characters": "身份资料更新与资产业务责任分开",
+                          "style": {
+                            "fontFamily": "Noto Sans SC",
+                            "fontStyle": "Medium",
+                            "fontWeight": 500,
+                            "fontSize": 12,
+                            "textAlignHorizontal": "LEFT",
+                            "letterSpacing": 0,
+                            "lineHeightPx": 20
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "47:11877",
+              "name": "tabs",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "opacity": 9.999999717180685e-10,
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 5098,
+                "y": 8810.3798828125,
+                "width": 1194,
+                "height": 45
+              },
+              "children": [
+                {
+                  "id": "47:11878",
+                  "name": "下分隔线",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#e3e8f0"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 5098,
+                    "y": 8854.3798828125,
+                    "width": 1194,
+                    "height": 1
+                  },
+                  "children": []
+                },
+                {
+                  "id": "47:11879",
+                  "name": "操作 / 组织人员",
+                  "type": "INSTANCE",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#ffffff"
+                    }
+                  ],
+                  "strokes": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#e3e8f0"
+                    }
+                  ],
+                  "cornerRadius": 8,
+                  "absoluteBoundingBox": {
+                    "x": 5098,
+                    "y": 8810.3798828125,
+                    "width": 64,
+                    "height": 44
+                  },
+                  "children": [
+                    {
+                      "id": "I47:11879;6:19",
+                      "name": "确认接收",
+                      "type": "TEXT",
+                      "fills": [
+                        {
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#18263d"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 5102,
+                        "y": 8821.3798828125,
+                        "width": 56,
+                        "height": 22
+                      },
+                      "characters": "组织人员",
+                      "style": {
+                        "fontFamily": "Noto Sans SC",
+                        "fontStyle": "Medium",
+                        "fontWeight": 500,
+                        "fontSize": 14,
+                        "textAlignHorizontal": "LEFT",
+                        "letterSpacing": 0,
+                        "lineHeightPx": 22
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "47:11881",
+                  "name": "BUTTON",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "opacity": 9.999999717180685e-10,
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#ffffff"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 5174,
+                    "y": 8810.3798828125,
+                    "width": 38,
+                    "height": 44
+                  },
+                  "children": [
+                    {
+                      "id": "47:11882",
+                      "name": "分类",
+                      "type": "TEXT",
+                      "fills": [
+                        {
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#53657d"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 5180,
+                        "y": 8821.9697265625,
+                        "width": 32,
+                        "height": 20
+                      },
+                      "characters": "分类",
+                      "style": {
+                        "fontFamily": "Noto Sans SC",
+                        "fontStyle": "Medium",
+                        "fontWeight": 500,
+                        "fontSize": 12,
+                        "textAlignHorizontal": "LEFT",
+                        "letterSpacing": 0,
+                        "lineHeightPx": 20
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "47:11883",
+                  "name": "BUTTON",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "opacity": 9.999999717180685e-10,
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#ffffff"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 5224,
+                    "y": 8810.3798828125,
+                    "width": 64,
+                    "height": 44
+                  },
+                  "children": [
+                    {
+                      "id": "47:11884",
+                      "name": "仓库位置",
+                      "type": "TEXT",
+                      "fills": [
+                        {
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#53657d"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 5230,
+                        "y": 8821.9697265625,
+                        "width": 58,
+                        "height": 20
+                      },
+                      "characters": "仓库位置",
+                      "style": {
+                        "fontFamily": "Noto Sans SC",
+                        "fontStyle": "Medium",
+                        "fontWeight": 500,
+                        "fontSize": 12,
+                        "textAlignHorizontal": "LEFT",
+                        "letterSpacing": 0,
+                        "lineHeightPx": 20
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "47:11885",
+                  "name": "BUTTON",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "opacity": 9.999999717180685e-10,
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#ffffff"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 5300,
+                    "y": 8810.3798828125,
+                    "width": 64,
+                    "height": 44
+                  },
+                  "children": [
+                    {
+                      "id": "47:11886",
+                      "name": "品牌厂商",
+                      "type": "TEXT",
+                      "fills": [
+                        {
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#53657d"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 5306,
+                        "y": 8821.9697265625,
+                        "width": 58,
+                        "height": 20
+                      },
+                      "characters": "品牌厂商",
+                      "style": {
+                        "fontFamily": "Noto Sans SC",
+                        "fontStyle": "Medium",
+                        "fontWeight": 500,
+                        "fontSize": 12,
+                        "textAlignHorizontal": "LEFT",
+                        "letterSpacing": 0,
+                        "lineHeightPx": 20
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "47:11887",
+              "name": "表格，可横向滚动查看完整字段",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "strokes": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#e3e8f0"
+                }
+              ],
+              "cornerRadius": 10,
+              "absoluteBoundingBox": {
+                "x": 5098,
+                "y": 8879.3798828125,
+                "width": 1194,
+                "height": 201
+              },
+              "children": [
+                {
+                  "id": "47:11888",
+                  "name": "TABLE",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "opacity": 9.999999717180685e-10,
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#ffffff"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 5099,
+                    "y": 8880.3798828125,
+                    "width": 1192,
+                    "height": 199
+                  },
+                  "children": [
+                    {
+                      "id": "47:11889",
+                      "name": "THEAD",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 5099,
+                        "y": 8880.3798828125,
+                        "width": 1192,
+                        "height": 40.5
+                      },
+                      "children": [
+                        {
+                          "id": "47:11890",
+                          "name": "TR",
+                          "type": "FRAME",
+                          "fills": [
+                            {
+                              "opacity": 9.999999717180685e-10,
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#ffffff"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 5099,
+                            "y": 8880.3798828125,
+                            "width": 1192,
+                            "height": 40.5
+                          },
+                          "children": [
+                            {
+                              "id": "47:11891",
+                              "name": "TH",
+                              "type": "FRAME",
+                              "fills": [
+                                {
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#f0f3f8"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 5099,
+                                "y": 8880.3798828125,
+                                "width": 122.7699966430664,
+                                "height": 40.5
+                              },
+                              "children": [
+                                {
+                                  "id": "47:11892",
+                                  "name": "下分隔线",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#e3e8f0"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5099,
+                                    "y": 8919.8798828125,
+                                    "width": 122.7699966430664,
+                                    "height": 1
+                                  },
+                                  "children": []
+                                },
+                                {
+                                  "id": "47:11893",
+                                  "name": "员工",
+                                  "type": "TEXT",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#53657d"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5113,
+                                    "y": 8889.8798828125,
+                                    "width": 30,
+                                    "height": 20
+                                  },
+                                  "characters": "员工",
+                                  "style": {
+                                    "fontFamily": "Noto Sans SC",
+                                    "fontStyle": "Medium",
+                                    "fontWeight": 500,
+                                    "fontSize": 12,
+                                    "textAlignHorizontal": "LEFT",
+                                    "letterSpacing": 0,
+                                    "lineHeightPx": 20
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "id": "47:11894",
+                              "name": "TH",
+                              "type": "FRAME",
+                              "fills": [
+                                {
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#f0f3f8"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 5221.77001953125,
+                                "y": 8880.3798828125,
+                                "width": 271.20001220703125,
+                                "height": 40.5
+                              },
+                              "children": [
+                                {
+                                  "id": "47:11895",
+                                  "name": "下分隔线",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#e3e8f0"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5221.77001953125,
+                                    "y": 8919.8798828125,
+                                    "width": 271.20001220703125,
+                                    "height": 1
+                                  },
+                                  "children": []
+                                },
+                                {
+                                  "id": "47:11896",
+                                  "name": "当前部门 / 状态",
+                                  "type": "TEXT",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#53657d"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5235.77001953125,
+                                    "y": 8889.8798828125,
+                                    "width": 88.27999877929688,
+                                    "height": 20
+                                  },
+                                  "characters": "当前部门 / 状态",
+                                  "style": {
+                                    "fontFamily": "Noto Sans SC",
+                                    "fontStyle": "Medium",
+                                    "fontWeight": 500,
+                                    "fontSize": 12,
+                                    "textAlignHorizontal": "LEFT",
+                                    "letterSpacing": 0,
+                                    "lineHeightPx": 20
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "id": "47:11897",
+                              "name": "TH",
+                              "type": "FRAME",
+                              "fills": [
+                                {
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#f0f3f8"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 5492.97021484375,
+                                "y": 8880.3798828125,
+                                "width": 214.83999633789062,
+                                "height": 40.5
+                              },
+                              "children": [
+                                {
+                                  "id": "47:11898",
+                                  "name": "下分隔线",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#e3e8f0"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5492.97021484375,
+                                    "y": 8919.8798828125,
+                                    "width": 214.83999633789062,
+                                    "height": 1
+                                  },
+                                  "children": []
+                                },
+                                {
+                                  "id": "47:11899",
+                                  "name": "角色摘要",
+                                  "type": "TEXT",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#53657d"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5506.97021484375,
+                                    "y": 8889.8798828125,
+                                    "width": 54,
+                                    "height": 20
+                                  },
+                                  "characters": "角色摘要",
+                                  "style": {
+                                    "fontFamily": "Noto Sans SC",
+                                    "fontStyle": "Medium",
+                                    "fontWeight": 500,
+                                    "fontSize": 12,
+                                    "textAlignHorizontal": "LEFT",
+                                    "letterSpacing": 0,
+                                    "lineHeightPx": 20
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "id": "47:11900",
+                              "name": "TH",
+                              "type": "FRAME",
+                              "fills": [
+                                {
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#f0f3f8"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 5707.81005859375,
+                                "y": 8880.3798828125,
+                                "width": 583.1900024414062,
+                                "height": 40.5
+                              },
+                              "children": [
+                                {
+                                  "id": "47:11901",
+                                  "name": "下分隔线",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#e3e8f0"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5707.81005859375,
+                                    "y": 8919.8798828125,
+                                    "width": 583.1900024414062,
+                                    "height": 1
+                                  },
+                                  "children": []
+                                },
+                                {
+                                  "id": "47:11902",
+                                  "name": "操作",
+                                  "type": "TEXT",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#53657d"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5721.81005859375,
+                                    "y": 8889.8798828125,
+                                    "width": 30,
+                                    "height": 20
+                                  },
+                                  "characters": "操作",
+                                  "style": {
+                                    "fontFamily": "Noto Sans SC",
+                                    "fontStyle": "Medium",
+                                    "fontWeight": 500,
+                                    "fontSize": 12,
+                                    "textAlignHorizontal": "LEFT",
+                                    "letterSpacing": 0,
+                                    "lineHeightPx": 20
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "id": "47:11903",
+                      "name": "TBODY",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 5099,
+                        "y": 8920.8798828125,
+                        "width": 1192,
+                        "height": 158.5
+                      },
+                      "children": [
+                        {
+                          "id": "47:11904",
+                          "name": "TR",
+                          "type": "FRAME",
+                          "fills": [
+                            {
+                              "opacity": 9.999999717180685e-10,
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#ffffff"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 5099,
+                            "y": 8920.8798828125,
+                            "width": 1192,
+                            "height": 47
+                          },
+                          "children": [
+                            {
+                              "id": "47:11905",
+                              "name": "TD",
+                              "type": "FRAME",
+                              "fills": [
+                                {
+                                  "opacity": 9.999999717180685e-10,
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#ffffff"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 5099,
+                                "y": 8920.8798828125,
+                                "width": 122.7699966430664,
+                                "height": 47
+                              },
+                              "children": [
+                                {
+                                  "id": "47:11906",
+                                  "name": "下分隔线",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#e3e8f0"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5099,
+                                    "y": 8966.8798828125,
+                                    "width": 122.7699966430664,
+                                    "height": 1
+                                  },
+                                  "children": []
+                                },
+                                {
+                                  "id": "47:11907",
+                                  "name": "林晓",
+                                  "type": "TEXT",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#18263d"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5113,
+                                    "y": 8932.8798828125,
+                                    "width": 34,
+                                    "height": 22
+                                  },
+                                  "characters": "林晓",
+                                  "style": {
+                                    "fontFamily": "Noto Sans SC",
+                                    "fontStyle": "Regular",
+                                    "fontWeight": 400,
+                                    "fontSize": 14,
+                                    "textAlignHorizontal": "LEFT",
+                                    "letterSpacing": 0,
+                                    "lineHeightPx": 22
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "id": "47:11908",
+                              "name": "TD",
+                              "type": "FRAME",
+                              "fills": [
+                                {
+                                  "opacity": 9.999999717180685e-10,
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#ffffff"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 5221.77001953125,
+                                "y": 8920.8798828125,
+                                "width": 271.20001220703125,
+                                "height": 47
+                              },
+                              "children": [
+                                {
+                                  "id": "47:11909",
+                                  "name": "下分隔线",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#e3e8f0"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5221.77001953125,
+                                    "y": 8966.8798828125,
+                                    "width": 271.20001220703125,
+                                    "height": 1
+                                  },
+                                  "children": []
+                                },
+                                {
+                                  "id": "47:11910",
+                                  "name": "研发部 / 有效",
+                                  "type": "TEXT",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#18263d"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5235.77001953125,
+                                    "y": 8932.8798828125,
+                                    "width": 87.69999694824219,
+                                    "height": 22
+                                  },
+                                  "characters": "研发部 / 有效",
+                                  "style": {
+                                    "fontFamily": "Noto Sans SC",
+                                    "fontStyle": "Regular",
+                                    "fontWeight": 400,
+                                    "fontSize": 14,
+                                    "textAlignHorizontal": "LEFT",
+                                    "letterSpacing": 0,
+                                    "lineHeightPx": 22
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "id": "47:11911",
+                              "name": "TD",
+                              "type": "FRAME",
+                              "fills": [
+                                {
+                                  "opacity": 9.999999717180685e-10,
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#ffffff"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 5492.97021484375,
+                                "y": 8920.8798828125,
+                                "width": 214.83999633789062,
+                                "height": 47
+                              },
+                              "children": [
+                                {
+                                  "id": "47:11912",
+                                  "name": "下分隔线",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#e3e8f0"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5492.97021484375,
+                                    "y": 8966.8798828125,
+                                    "width": 214.83999633789062,
+                                    "height": 1
+                                  },
+                                  "children": []
+                                },
+                                {
+                                  "id": "47:11913",
+                                  "name": "普通员工",
+                                  "type": "TEXT",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#18263d"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5506.97021484375,
+                                    "y": 8932.8798828125,
+                                    "width": 62,
+                                    "height": 22
+                                  },
+                                  "characters": "普通员工",
+                                  "style": {
+                                    "fontFamily": "Noto Sans SC",
+                                    "fontStyle": "Regular",
+                                    "fontWeight": 400,
+                                    "fontSize": 14,
+                                    "textAlignHorizontal": "LEFT",
+                                    "letterSpacing": 0,
+                                    "lineHeightPx": 22
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "id": "47:11914",
+                              "name": "TD",
+                              "type": "FRAME",
+                              "fills": [
+                                {
+                                  "opacity": 9.999999717180685e-10,
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#ffffff"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 5707.81005859375,
+                                "y": 8920.8798828125,
+                                "width": 583.1900024414062,
+                                "height": 47
+                              },
+                              "children": [
+                                {
+                                  "id": "47:11915",
+                                  "name": "下分隔线",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#e3e8f0"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5707.81005859375,
+                                    "y": 8966.8798828125,
+                                    "width": 583.1900024414062,
+                                    "height": 1
+                                  },
+                                  "children": []
+                                },
+                                {
+                                  "id": "47:11916",
+                                  "name": "调岗已生效，原产品部资产待正式交接",
+                                  "type": "TEXT",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#18263d"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5721.81005859375,
+                                    "y": 8932.8798828125,
+                                    "width": 244,
+                                    "height": 22
+                                  },
+                                  "characters": "调岗已生效，原产品部资产待正式交接",
+                                  "style": {
+                                    "fontFamily": "Noto Sans SC",
+                                    "fontStyle": "Regular",
+                                    "fontWeight": 400,
+                                    "fontSize": 14,
+                                    "textAlignHorizontal": "LEFT",
+                                    "letterSpacing": 0,
+                                    "lineHeightPx": 22
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "47:11917",
+                          "name": "TR",
+                          "type": "FRAME",
+                          "fills": [
+                            {
+                              "opacity": 9.999999717180685e-10,
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#ffffff"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 5099,
+                            "y": 8967.8798828125,
+                            "width": 1192,
+                            "height": 47
+                          },
+                          "children": [
+                            {
+                              "id": "47:11918",
+                              "name": "TD",
+                              "type": "FRAME",
+                              "fills": [
+                                {
+                                  "opacity": 9.999999717180685e-10,
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#ffffff"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 5099,
+                                "y": 8967.8798828125,
+                                "width": 122.7699966430664,
+                                "height": 47
+                              },
+                              "children": [
+                                {
+                                  "id": "47:11919",
+                                  "name": "下分隔线",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#e3e8f0"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5099,
+                                    "y": 9013.8798828125,
+                                    "width": 122.7699966430664,
+                                    "height": 1
+                                  },
+                                  "children": []
+                                },
+                                {
+                                  "id": "47:11920",
+                                  "name": "陈悦",
+                                  "type": "TEXT",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#18263d"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5113,
+                                    "y": 8979.8798828125,
+                                    "width": 34,
+                                    "height": 22
+                                  },
+                                  "characters": "陈悦",
+                                  "style": {
+                                    "fontFamily": "Noto Sans SC",
+                                    "fontStyle": "Regular",
+                                    "fontWeight": 400,
+                                    "fontSize": 14,
+                                    "textAlignHorizontal": "LEFT",
+                                    "letterSpacing": 0,
+                                    "lineHeightPx": 22
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "id": "47:11921",
+                              "name": "TD",
+                              "type": "FRAME",
+                              "fills": [
+                                {
+                                  "opacity": 9.999999717180685e-10,
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#ffffff"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 5221.77001953125,
+                                "y": 8967.8798828125,
+                                "width": 271.20001220703125,
+                                "height": 47
+                              },
+                              "children": [
+                                {
+                                  "id": "47:11922",
+                                  "name": "下分隔线",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#e3e8f0"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5221.77001953125,
+                                    "y": 9013.8798828125,
+                                    "width": 271.20001220703125,
+                                    "height": 1
+                                  },
+                                  "children": []
+                                },
+                                {
+                                  "id": "47:11923",
+                                  "name": "产品部 / 有效",
+                                  "type": "TEXT",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#18263d"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5235.77001953125,
+                                    "y": 8979.8798828125,
+                                    "width": 87.69999694824219,
+                                    "height": 22
+                                  },
+                                  "characters": "产品部 / 有效",
+                                  "style": {
+                                    "fontFamily": "Noto Sans SC",
+                                    "fontStyle": "Regular",
+                                    "fontWeight": 400,
+                                    "fontSize": 14,
+                                    "textAlignHorizontal": "LEFT",
+                                    "letterSpacing": 0,
+                                    "lineHeightPx": 22
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "id": "47:11924",
+                              "name": "TD",
+                              "type": "FRAME",
+                              "fills": [
+                                {
+                                  "opacity": 9.999999717180685e-10,
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#ffffff"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 5492.97021484375,
+                                "y": 8967.8798828125,
+                                "width": 214.83999633789062,
+                                "height": 47
+                              },
+                              "children": [
+                                {
+                                  "id": "47:11925",
+                                  "name": "下分隔线",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#e3e8f0"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5492.97021484375,
+                                    "y": 9013.8798828125,
+                                    "width": 214.83999633789062,
+                                    "height": 1
+                                  },
+                                  "children": []
+                                },
+                                {
+                                  "id": "47:11926",
+                                  "name": "部门资产员",
+                                  "type": "TEXT",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#18263d"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5506.97021484375,
+                                    "y": 8979.8798828125,
+                                    "width": 76,
+                                    "height": 22
+                                  },
+                                  "characters": "部门资产员",
+                                  "style": {
+                                    "fontFamily": "Noto Sans SC",
+                                    "fontStyle": "Regular",
+                                    "fontWeight": 400,
+                                    "fontSize": 14,
+                                    "textAlignHorizontal": "LEFT",
+                                    "letterSpacing": 0,
+                                    "lineHeightPx": 22
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "id": "47:11927",
+                              "name": "TD",
+                              "type": "FRAME",
+                              "fills": [
+                                {
+                                  "opacity": 9.999999717180685e-10,
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#ffffff"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 5707.81005859375,
+                                "y": 8967.8798828125,
+                                "width": 583.1900024414062,
+                                "height": 47
+                              },
+                              "children": [
+                                {
+                                  "id": "47:11928",
+                                  "name": "下分隔线",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#e3e8f0"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5707.81005859375,
+                                    "y": 9013.8798828125,
+                                    "width": 583.1900024414062,
+                                    "height": 1
+                                  },
+                                  "children": []
+                                },
+                                {
+                                  "id": "47:11929",
+                                  "name": "本部门公用责任人",
+                                  "type": "TEXT",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#18263d"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5721.81005859375,
+                                    "y": 8979.8798828125,
+                                    "width": 118,
+                                    "height": 22
+                                  },
+                                  "characters": "本部门公用责任人",
+                                  "style": {
+                                    "fontFamily": "Noto Sans SC",
+                                    "fontStyle": "Regular",
+                                    "fontWeight": 400,
+                                    "fontSize": 14,
+                                    "textAlignHorizontal": "LEFT",
+                                    "letterSpacing": 0,
+                                    "lineHeightPx": 22
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "47:11930",
+                          "name": "TR",
+                          "type": "FRAME",
+                          "fills": [
+                            {
+                              "opacity": 9.999999717180685e-10,
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#ffffff"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 5099,
+                            "y": 9014.8798828125,
+                            "width": 1192,
+                            "height": 64.5
+                          },
+                          "children": [
+                            {
+                              "id": "47:11931",
+                              "name": "TD",
+                              "type": "FRAME",
+                              "fills": [
+                                {
+                                  "opacity": 9.999999717180685e-10,
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#ffffff"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 5099,
+                                "y": 9014.8798828125,
+                                "width": 122.7699966430664,
+                                "height": 64.5
+                              },
+                              "children": [
+                                {
+                                  "id": "47:11932",
+                                  "name": "赵明",
+                                  "type": "TEXT",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#18263d"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5113,
+                                    "y": 9035.8798828125,
+                                    "width": 34,
+                                    "height": 22
+                                  },
+                                  "characters": "赵明",
+                                  "style": {
+                                    "fontFamily": "Noto Sans SC",
+                                    "fontStyle": "Regular",
+                                    "fontWeight": 400,
+                                    "fontSize": 14,
+                                    "textAlignHorizontal": "LEFT",
+                                    "letterSpacing": 0,
+                                    "lineHeightPx": 22
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "id": "47:11933",
+                              "name": "TD",
+                              "type": "FRAME",
+                              "fills": [
+                                {
+                                  "opacity": 9.999999717180685e-10,
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#ffffff"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 5221.77001953125,
+                                "y": 9014.8798828125,
+                                "width": 271.20001220703125,
+                                "height": 64.5
+                              },
+                              "children": [
+                                {
+                                  "id": "47:11934",
+                                  "name": "行政部 / 已停用",
+                                  "type": "TEXT",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#18263d"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5235.77001953125,
+                                    "y": 9035.8798828125,
+                                    "width": 101.69999694824219,
+                                    "height": 22
+                                  },
+                                  "characters": "行政部 / 已停用",
+                                  "style": {
+                                    "fontFamily": "Noto Sans SC",
+                                    "fontStyle": "Regular",
+                                    "fontWeight": 400,
+                                    "fontSize": 14,
+                                    "textAlignHorizontal": "LEFT",
+                                    "letterSpacing": 0,
+                                    "lineHeightPx": 22
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "id": "47:11935",
+                              "name": "TD",
+                              "type": "FRAME",
+                              "fills": [
+                                {
+                                  "opacity": 9.999999717180685e-10,
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#ffffff"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 5492.97021484375,
+                                "y": 9014.8798828125,
+                                "width": 214.83999633789062,
+                                "height": 64.5
+                              },
+                              "children": [
+                                {
+                                  "id": "47:11936",
+                                  "name": "原库管员",
+                                  "type": "TEXT",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#18263d"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5506.97021484375,
+                                    "y": 9035.8798828125,
+                                    "width": 62,
+                                    "height": 22
+                                  },
+                                  "characters": "原库管员",
+                                  "style": {
+                                    "fontFamily": "Noto Sans SC",
+                                    "fontStyle": "Regular",
+                                    "fontWeight": 400,
+                                    "fontSize": 14,
+                                    "textAlignHorizontal": "LEFT",
+                                    "letterSpacing": 0,
+                                    "lineHeightPx": 22
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "id": "47:11937",
+                              "name": "TD",
+                              "type": "FRAME",
+                              "fills": [
+                                {
+                                  "opacity": 9.999999717180685e-10,
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#ffffff"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 5707.81005859375,
+                                "y": 9014.8798828125,
+                                "width": 583.1900024414062,
+                                "height": 64.5
+                              },
+                              "children": [
+                                {
+                                  "id": "47:11938",
+                                  "name": "操作 / 由资产管理员受控转派",
+                                  "type": "INSTANCE",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#ffffff"
+                                    }
+                                  ],
+                                  "strokes": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#e3e8f0"
+                                    }
+                                  ],
+                                  "cornerRadius": 8,
+                                  "absoluteBoundingBox": {
+                                    "x": 5721.81005859375,
+                                    "y": 9027.3798828125,
+                                    "width": 174,
+                                    "height": 40
+                                  },
+                                  "children": [
+                                    {
+                                      "id": "I47:11938;6:19",
+                                      "name": "确认接收",
+                                      "type": "TEXT",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#18263d"
+                                        }
+                                      ],
+                                      "absoluteBoundingBox": {
+                                        "x": 5738.81005859375,
+                                        "y": 9036.3798828125,
+                                        "width": 140,
+                                        "height": 22
+                                      },
+                                      "characters": "由资产管理员受控转派",
+                                      "style": {
+                                        "fontFamily": "Noto Sans SC",
+                                        "fontStyle": "Medium",
+                                        "fontWeight": 500,
+                                        "fontSize": 14,
+                                        "textAlignHorizontal": "LEFT",
+                                        "letterSpacing": 0,
+                                        "lineHeightPx": 22
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "47:11940",
+              "name": "panel",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "strokes": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#e3e8f0"
+                }
+              ],
+              "cornerRadius": 12,
+              "absoluteBoundingBox": {
+                "x": 5098,
+                "y": 9104.3798828125,
+                "width": 1194,
+                "height": 415.0899963378906
+              },
+              "children": [
+                {
+                  "id": "47:11941",
+                  "name": "H2",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "opacity": 9.999999717180685e-10,
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#ffffff"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 5119,
+                    "y": 9125.3798828125,
+                    "width": 1152,
+                    "height": 28
+                  },
+                  "children": [
+                    {
+                      "id": "47:11942",
+                      "name": "林晓 · 责任清理清单",
+                      "type": "TEXT",
+                      "fills": [
+                        {
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#18263d"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 5119,
+                        "y": 9124.8798828125,
+                        "width": 171,
+                        "height": 28
+                      },
+                      "characters": "林晓 · 责任清理清单",
+                      "style": {
+                        "fontFamily": "Noto Sans SC",
+                        "fontStyle": "Medium",
+                        "fontWeight": 500,
+                        "fontSize": 18,
+                        "textAlignHorizontal": "LEFT",
+                        "letterSpacing": 0,
+                        "lineHeightPx": 28
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "47:11943",
+                  "name": "表格，可横向滚动查看完整字段",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#ffffff"
+                    }
+                  ],
+                  "strokes": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#e3e8f0"
+                    }
+                  ],
+                  "cornerRadius": 10,
+                  "absoluteBoundingBox": {
+                    "x": 5119,
+                    "y": 9169.3798828125,
+                    "width": 1152,
+                    "height": 237
+                  },
+                  "children": [
+                    {
+                      "id": "47:11944",
+                      "name": "TABLE",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "opacity": 9.999999717180685e-10,
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#ffffff"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 5120,
+                        "y": 9170.3798828125,
+                        "width": 1150,
+                        "height": 235
+                      },
+                      "children": [
+                        {
+                          "id": "47:11945",
+                          "name": "THEAD",
+                          "type": "FRAME",
+                          "fills": [
+                            {
+                              "opacity": 9.999999717180685e-10,
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#ffffff"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 5120,
+                            "y": 9170.3798828125,
+                            "width": 1150,
+                            "height": 40.5
+                          },
+                          "children": [
+                            {
+                              "id": "47:11946",
+                              "name": "TR",
+                              "type": "FRAME",
+                              "fills": [
+                                {
+                                  "opacity": 9.999999717180685e-10,
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#ffffff"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 5120,
+                                "y": 9170.3798828125,
+                                "width": 1150,
+                                "height": 40.5
+                              },
+                              "children": [
+                                {
+                                  "id": "47:11947",
+                                  "name": "TH",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#f0f3f8"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5120,
+                                    "y": 9170.3798828125,
+                                    "width": 252.80999755859375,
+                                    "height": 40.5
+                                  },
+                                  "children": [
+                                    {
+                                      "id": "47:11948",
+                                      "name": "下分隔线",
+                                      "type": "FRAME",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#e3e8f0"
+                                        }
+                                      ],
+                                      "absoluteBoundingBox": {
+                                        "x": 5120,
+                                        "y": 9209.8798828125,
+                                        "width": 252.80999755859375,
+                                        "height": 1
+                                      },
+                                      "children": []
+                                    },
+                                    {
+                                      "id": "47:11949",
+                                      "name": "关系",
+                                      "type": "TEXT",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#53657d"
+                                        }
+                                      ],
+                                      "absoluteBoundingBox": {
+                                        "x": 5134,
+                                        "y": 9179.8798828125,
+                                        "width": 30,
+                                        "height": 20
+                                      },
+                                      "characters": "关系",
+                                      "style": {
+                                        "fontFamily": "Noto Sans SC",
+                                        "fontStyle": "Medium",
+                                        "fontWeight": 500,
+                                        "fontSize": 12,
+                                        "textAlignHorizontal": "LEFT",
+                                        "letterSpacing": 0,
+                                        "lineHeightPx": 20
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "id": "47:11950",
+                                  "name": "TH",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#f0f3f8"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5372.81005859375,
+                                    "y": 9170.3798828125,
+                                    "width": 542.030029296875,
+                                    "height": 40.5
+                                  },
+                                  "children": [
+                                    {
+                                      "id": "47:11951",
+                                      "name": "下分隔线",
+                                      "type": "FRAME",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#e3e8f0"
+                                        }
+                                      ],
+                                      "absoluteBoundingBox": {
+                                        "x": 5372.81005859375,
+                                        "y": 9209.8798828125,
+                                        "width": 542.030029296875,
+                                        "height": 1
+                                      },
+                                      "children": []
+                                    },
+                                    {
+                                      "id": "47:11952",
+                                      "name": "遗留情况",
+                                      "type": "TEXT",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#53657d"
+                                        }
+                                      ],
+                                      "absoluteBoundingBox": {
+                                        "x": 5386.81005859375,
+                                        "y": 9179.8798828125,
+                                        "width": 54,
+                                        "height": 20
+                                      },
+                                      "characters": "遗留情况",
+                                      "style": {
+                                        "fontFamily": "Noto Sans SC",
+                                        "fontStyle": "Medium",
+                                        "fontWeight": 500,
+                                        "fontSize": 12,
+                                        "textAlignHorizontal": "LEFT",
+                                        "letterSpacing": 0,
+                                        "lineHeightPx": 20
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "id": "47:11953",
+                                  "name": "TH",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#f0f3f8"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5914.83984375,
+                                    "y": 9170.3798828125,
+                                    "width": 355.1600036621094,
+                                    "height": 40.5
+                                  },
+                                  "children": [
+                                    {
+                                      "id": "47:11954",
+                                      "name": "下分隔线",
+                                      "type": "FRAME",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#e3e8f0"
+                                        }
+                                      ],
+                                      "absoluteBoundingBox": {
+                                        "x": 5914.83984375,
+                                        "y": 9209.8798828125,
+                                        "width": 355.1600036621094,
+                                        "height": 1
+                                      },
+                                      "children": []
+                                    },
+                                    {
+                                      "id": "47:11955",
+                                      "name": "正式业务",
+                                      "type": "TEXT",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#53657d"
+                                        }
+                                      ],
+                                      "absoluteBoundingBox": {
+                                        "x": 5928.83984375,
+                                        "y": 9179.8798828125,
+                                        "width": 54,
+                                        "height": 20
+                                      },
+                                      "characters": "正式业务",
+                                      "style": {
+                                        "fontFamily": "Noto Sans SC",
+                                        "fontStyle": "Medium",
+                                        "fontWeight": 500,
+                                        "fontSize": 12,
+                                        "textAlignHorizontal": "LEFT",
+                                        "letterSpacing": 0,
+                                        "lineHeightPx": 20
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "47:11956",
+                          "name": "TBODY",
+                          "type": "FRAME",
+                          "fills": [
+                            {
+                              "opacity": 9.999999717180685e-10,
+                              "blendMode": "NORMAL",
+                              "type": "SOLID",
+                              "color": "#ffffff"
+                            }
+                          ],
+                          "absoluteBoundingBox": {
+                            "x": 5120,
+                            "y": 9210.8798828125,
+                            "width": 1150,
+                            "height": 194.5
+                          },
+                          "children": [
+                            {
+                              "id": "47:11957",
+                              "name": "TR",
+                              "type": "FRAME",
+                              "fills": [
+                                {
+                                  "opacity": 9.999999717180685e-10,
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#ffffff"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 5120,
+                                "y": 9210.8798828125,
+                                "width": 1150,
+                                "height": 65
+                              },
+                              "children": [
+                                {
+                                  "id": "47:11958",
+                                  "name": "TD",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "opacity": 9.999999717180685e-10,
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#ffffff"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5120,
+                                    "y": 9210.8798828125,
+                                    "width": 252.80999755859375,
+                                    "height": 65
+                                  },
+                                  "children": [
+                                    {
+                                      "id": "47:11959",
+                                      "name": "下分隔线",
+                                      "type": "FRAME",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#e3e8f0"
+                                        }
+                                      ],
+                                      "absoluteBoundingBox": {
+                                        "x": 5120,
+                                        "y": 9274.8798828125,
+                                        "width": 252.80999755859375,
+                                        "height": 1
+                                      },
+                                      "children": []
+                                    },
+                                    {
+                                      "id": "47:11960",
+                                      "name": "个人在用",
+                                      "type": "TEXT",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#18263d"
+                                        }
+                                      ],
+                                      "absoluteBoundingBox": {
+                                        "x": 5134,
+                                        "y": 9231.8798828125,
+                                        "width": 62,
+                                        "height": 22
+                                      },
+                                      "characters": "个人在用",
+                                      "style": {
+                                        "fontFamily": "Noto Sans SC",
+                                        "fontStyle": "Regular",
+                                        "fontWeight": 400,
+                                        "fontSize": 14,
+                                        "textAlignHorizontal": "LEFT",
+                                        "letterSpacing": 0,
+                                        "lineHeightPx": 22
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "id": "47:11961",
+                                  "name": "TD",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "opacity": 9.999999717180685e-10,
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#ffffff"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5372.81005859375,
+                                    "y": 9210.8798828125,
+                                    "width": 542.030029296875,
+                                    "height": 65
+                                  },
+                                  "children": [
+                                    {
+                                      "id": "47:11962",
+                                      "name": "下分隔线",
+                                      "type": "FRAME",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#e3e8f0"
+                                        }
+                                      ],
+                                      "absoluteBoundingBox": {
+                                        "x": 5372.81005859375,
+                                        "y": 9274.8798828125,
+                                        "width": 542.030029296875,
+                                        "height": 1
+                                      },
+                                      "children": []
+                                    },
+                                    {
+                                      "id": "47:11963",
+                                      "name": "2 件，原责任仍为产品部",
+                                      "type": "TEXT",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#18263d"
+                                        }
+                                      ],
+                                      "absoluteBoundingBox": {
+                                        "x": 5386.81005859375,
+                                        "y": 9231.8798828125,
+                                        "width": 158.08999633789062,
+                                        "height": 22
+                                      },
+                                      "characters": "2 件，原责任仍为产品部",
+                                      "style": {
+                                        "fontFamily": "Noto Sans SC",
+                                        "fontStyle": "Regular",
+                                        "fontWeight": 400,
+                                        "fontSize": 14,
+                                        "textAlignHorizontal": "LEFT",
+                                        "letterSpacing": 0,
+                                        "lineHeightPx": 22
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "id": "47:11964",
+                                  "name": "TD",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "opacity": 9.999999717180685e-10,
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#ffffff"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5914.83984375,
+                                    "y": 9210.8798828125,
+                                    "width": 355.1600036621094,
+                                    "height": 65
+                                  },
+                                  "children": [
+                                    {
+                                      "id": "47:11965",
+                                      "name": "下分隔线",
+                                      "type": "FRAME",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#e3e8f0"
+                                        }
+                                      ],
+                                      "absoluteBoundingBox": {
+                                        "x": 5914.83984375,
+                                        "y": 9274.8798828125,
+                                        "width": 355.1600036621094,
+                                        "height": 1
+                                      },
+                                      "children": []
+                                    },
+                                    {
+                                      "id": "47:11966",
+                                      "name": "操作 / 调拨结构",
+                                      "type": "INSTANCE",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#ffffff"
+                                        }
+                                      ],
+                                      "strokes": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#e3e8f0"
+                                        }
+                                      ],
+                                      "cornerRadius": 8,
+                                      "absoluteBoundingBox": {
+                                        "x": 5928.83984375,
+                                        "y": 9223.3798828125,
+                                        "width": 90,
+                                        "height": 40
+                                      },
+                                      "children": [
+                                        {
+                                          "id": "I47:11966;6:19",
+                                          "name": "确认接收",
+                                          "type": "TEXT",
+                                          "fills": [
+                                            {
+                                              "blendMode": "NORMAL",
+                                              "type": "SOLID",
+                                              "color": "#18263d"
+                                            }
+                                          ],
+                                          "absoluteBoundingBox": {
+                                            "x": 5945.83984375,
+                                            "y": 9232.3798828125,
+                                            "width": 56,
+                                            "height": 22
+                                          },
+                                          "characters": "调拨结构",
+                                          "style": {
+                                            "fontFamily": "Noto Sans SC",
+                                            "fontStyle": "Medium",
+                                            "fontWeight": 500,
+                                            "fontSize": 14,
+                                            "textAlignHorizontal": "LEFT",
+                                            "letterSpacing": 0,
+                                            "lineHeightPx": 22
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "id": "47:11968",
+                              "name": "TR",
+                              "type": "FRAME",
+                              "fills": [
+                                {
+                                  "opacity": 9.999999717180685e-10,
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#ffffff"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 5120,
+                                "y": 9275.8798828125,
+                                "width": 1150,
+                                "height": 65
+                              },
+                              "children": [
+                                {
+                                  "id": "47:11969",
+                                  "name": "TD",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "opacity": 9.999999717180685e-10,
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#ffffff"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5120,
+                                    "y": 9275.8798828125,
+                                    "width": 252.80999755859375,
+                                    "height": 65
+                                  },
+                                  "children": [
+                                    {
+                                      "id": "47:11970",
+                                      "name": "下分隔线",
+                                      "type": "FRAME",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#e3e8f0"
+                                        }
+                                      ],
+                                      "absoluteBoundingBox": {
+                                        "x": 5120,
+                                        "y": 9339.8798828125,
+                                        "width": 252.80999755859375,
+                                        "height": 1
+                                      },
+                                      "children": []
+                                    },
+                                    {
+                                      "id": "47:11971",
+                                      "name": "未结借用",
+                                      "type": "TEXT",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#18263d"
+                                        }
+                                      ],
+                                      "absoluteBoundingBox": {
+                                        "x": 5134,
+                                        "y": 9296.8798828125,
+                                        "width": 62,
+                                        "height": 22
+                                      },
+                                      "characters": "未结借用",
+                                      "style": {
+                                        "fontFamily": "Noto Sans SC",
+                                        "fontStyle": "Regular",
+                                        "fontWeight": 400,
+                                        "fontSize": 14,
+                                        "textAlignHorizontal": "LEFT",
+                                        "letterSpacing": 0,
+                                        "lineHeightPx": 22
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "id": "47:11972",
+                                  "name": "TD",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "opacity": 9.999999717180685e-10,
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#ffffff"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5372.81005859375,
+                                    "y": 9275.8798828125,
+                                    "width": 542.030029296875,
+                                    "height": 65
+                                  },
+                                  "children": [
+                                    {
+                                      "id": "47:11973",
+                                      "name": "下分隔线",
+                                      "type": "FRAME",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#e3e8f0"
+                                        }
+                                      ],
+                                      "absoluteBoundingBox": {
+                                        "x": 5372.81005859375,
+                                        "y": 9339.8798828125,
+                                        "width": 542.030029296875,
+                                        "height": 1
+                                      },
+                                      "children": []
+                                    },
+                                    {
+                                      "id": "47:11974",
+                                      "name": "1 件，维修中",
+                                      "type": "TEXT",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#18263d"
+                                        }
+                                      ],
+                                      "absoluteBoundingBox": {
+                                        "x": 5386.81005859375,
+                                        "y": 9296.8798828125,
+                                        "width": 86.13999938964844,
+                                        "height": 22
+                                      },
+                                      "characters": "1 件，维修中",
+                                      "style": {
+                                        "fontFamily": "Noto Sans SC",
+                                        "fontStyle": "Regular",
+                                        "fontWeight": 400,
+                                        "fontSize": 14,
+                                        "textAlignHorizontal": "LEFT",
+                                        "letterSpacing": 0,
+                                        "lineHeightPx": 22
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "id": "47:11975",
+                                  "name": "TD",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "opacity": 9.999999717180685e-10,
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#ffffff"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5914.83984375,
+                                    "y": 9275.8798828125,
+                                    "width": 355.1600036621094,
+                                    "height": 65
+                                  },
+                                  "children": [
+                                    {
+                                      "id": "47:11976",
+                                      "name": "下分隔线",
+                                      "type": "FRAME",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#e3e8f0"
+                                        }
+                                      ],
+                                      "absoluteBoundingBox": {
+                                        "x": 5914.83984375,
+                                        "y": 9339.8798828125,
+                                        "width": 355.1600036621094,
+                                        "height": 1
+                                      },
+                                      "children": []
+                                    },
+                                    {
+                                      "id": "47:11977",
+                                      "name": "操作 / 维修去向",
+                                      "type": "INSTANCE",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#ffffff"
+                                        }
+                                      ],
+                                      "strokes": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#e3e8f0"
+                                        }
+                                      ],
+                                      "cornerRadius": 8,
+                                      "absoluteBoundingBox": {
+                                        "x": 5928.83984375,
+                                        "y": 9288.3798828125,
+                                        "width": 90,
+                                        "height": 40
+                                      },
+                                      "children": [
+                                        {
+                                          "id": "I47:11977;6:19",
+                                          "name": "确认接收",
+                                          "type": "TEXT",
+                                          "fills": [
+                                            {
+                                              "blendMode": "NORMAL",
+                                              "type": "SOLID",
+                                              "color": "#18263d"
+                                            }
+                                          ],
+                                          "absoluteBoundingBox": {
+                                            "x": 5945.83984375,
+                                            "y": 9297.3798828125,
+                                            "width": 56,
+                                            "height": 22
+                                          },
+                                          "characters": "维修去向",
+                                          "style": {
+                                            "fontFamily": "Noto Sans SC",
+                                            "fontStyle": "Medium",
+                                            "fontWeight": 500,
+                                            "fontSize": 14,
+                                            "textAlignHorizontal": "LEFT",
+                                            "letterSpacing": 0,
+                                            "lineHeightPx": 22
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "id": "47:11979",
+                              "name": "TR",
+                              "type": "FRAME",
+                              "fills": [
+                                {
+                                  "opacity": 9.999999717180685e-10,
+                                  "blendMode": "NORMAL",
+                                  "type": "SOLID",
+                                  "color": "#ffffff"
+                                }
+                              ],
+                              "absoluteBoundingBox": {
+                                "x": 5120,
+                                "y": 9340.8798828125,
+                                "width": 1150,
+                                "height": 64.5
+                              },
+                              "children": [
+                                {
+                                  "id": "47:11980",
+                                  "name": "TD",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "opacity": 9.999999717180685e-10,
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#ffffff"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5120,
+                                    "y": 9340.8798828125,
+                                    "width": 252.80999755859375,
+                                    "height": 64.5
+                                  },
+                                  "children": [
+                                    {
+                                      "id": "47:11981",
+                                      "name": "待接收",
+                                      "type": "TEXT",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#18263d"
+                                        }
+                                      ],
+                                      "absoluteBoundingBox": {
+                                        "x": 5134,
+                                        "y": 9361.8798828125,
+                                        "width": 48,
+                                        "height": 22
+                                      },
+                                      "characters": "待接收",
+                                      "style": {
+                                        "fontFamily": "Noto Sans SC",
+                                        "fontStyle": "Regular",
+                                        "fontWeight": 400,
+                                        "fontSize": 14,
+                                        "textAlignHorizontal": "LEFT",
+                                        "letterSpacing": 0,
+                                        "lineHeightPx": 22
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "id": "47:11982",
+                                  "name": "TD",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "opacity": 9.999999717180685e-10,
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#ffffff"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5372.81005859375,
+                                    "y": 9340.8798828125,
+                                    "width": 542.030029296875,
+                                    "height": 64.5
+                                  },
+                                  "children": [
+                                    {
+                                      "id": "47:11983",
+                                      "name": "1 项，新目标需有效",
+                                      "type": "TEXT",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#18263d"
+                                        }
+                                      ],
+                                      "absoluteBoundingBox": {
+                                        "x": 5386.81005859375,
+                                        "y": 9361.8798828125,
+                                        "width": 128.13999938964844,
+                                        "height": 22
+                                      },
+                                      "characters": "1 项，新目标需有效",
+                                      "style": {
+                                        "fontFamily": "Noto Sans SC",
+                                        "fontStyle": "Regular",
+                                        "fontWeight": 400,
+                                        "fontSize": 14,
+                                        "textAlignHorizontal": "LEFT",
+                                        "letterSpacing": 0,
+                                        "lineHeightPx": 22
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "id": "47:11984",
+                                  "name": "TD",
+                                  "type": "FRAME",
+                                  "fills": [
+                                    {
+                                      "opacity": 9.999999717180685e-10,
+                                      "blendMode": "NORMAL",
+                                      "type": "SOLID",
+                                      "color": "#ffffff"
+                                    }
+                                  ],
+                                  "absoluteBoundingBox": {
+                                    "x": 5914.83984375,
+                                    "y": 9340.8798828125,
+                                    "width": 355.1600036621094,
+                                    "height": 64.5
+                                  },
+                                  "children": [
+                                    {
+                                      "id": "47:11985",
+                                      "name": "操作 / 交接异常",
+                                      "type": "INSTANCE",
+                                      "fills": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#ffffff"
+                                        }
+                                      ],
+                                      "strokes": [
+                                        {
+                                          "blendMode": "NORMAL",
+                                          "type": "SOLID",
+                                          "color": "#e3e8f0"
+                                        }
+                                      ],
+                                      "cornerRadius": 8,
+                                      "absoluteBoundingBox": {
+                                        "x": 5928.83984375,
+                                        "y": 9353.3798828125,
+                                        "width": 90,
+                                        "height": 40
+                                      },
+                                      "children": [
+                                        {
+                                          "id": "I47:11985;6:19",
+                                          "name": "确认接收",
+                                          "type": "TEXT",
+                                          "fills": [
+                                            {
+                                              "blendMode": "NORMAL",
+                                              "type": "SOLID",
+                                              "color": "#18263d"
+                                            }
+                                          ],
+                                          "absoluteBoundingBox": {
+                                            "x": 5945.83984375,
+                                            "y": 9362.3798828125,
+                                            "width": 56,
+                                            "height": 22
+                                          },
+                                          "characters": "交接异常",
+                                          "style": {
+                                            "fontFamily": "Noto Sans SC",
+                                            "fontStyle": "Medium",
+                                            "fontWeight": 500,
+                                            "fontSize": 14,
+                                            "textAlignHorizontal": "LEFT",
+                                            "letterSpacing": 0,
+                                            "lineHeightPx": 22
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "47:11987",
+                  "name": "banner ",
+                  "type": "FRAME",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#eaf0ff"
+                    }
+                  ],
+                  "cornerRadius": 8,
+                  "absoluteBoundingBox": {
+                    "x": 5119,
+                    "y": 9430.3798828125,
+                    "width": 1152,
+                    "height": 52.09000015258789
+                  },
+                  "children": [
+                    {
+                      "id": "47:11988",
+                      "name": "上分隔线",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#cfdbfa"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 5119,
+                        "y": 9430.3798828125,
+                        "width": 1152,
+                        "height": 1
+                      },
+                      "children": []
+                    },
+                    {
+                      "id": "47:11989",
+                      "name": "右分隔线",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#cfdbfa"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 6270,
+                        "y": 9430.3798828125,
+                        "width": 1,
+                        "height": 52.09000015258789
+                      },
+                      "children": []
+                    },
+                    {
+                      "id": "47:11990",
+                      "name": "下分隔线",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#cfdbfa"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 5119,
+                        "y": 9481.4697265625,
+                        "width": 1152,
+                        "height": 1
+                      },
+                      "children": []
+                    },
+                    {
+                      "id": "47:11991",
+                      "name": "左分隔线",
+                      "type": "FRAME",
+                      "fills": [
+                        {
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#2457d6"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 5119,
+                        "y": 9430.3798828125,
+                        "width": 3,
+                        "height": 52.09000015258789
+                      },
+                      "children": []
+                    },
+                    {
+                      "id": "47:11992",
+                      "name": "系统管理员只维护身份；以下业务跳转仍需显式业务权限，不能代审批或代执行。",
+                      "type": "TEXT",
+                      "fills": [
+                        {
+                          "blendMode": "NORMAL",
+                          "type": "SOLID",
+                          "color": "#18263d"
+                        }
+                      ],
+                      "absoluteBoundingBox": {
+                        "x": 5138,
+                        "y": 9446.3798828125,
+                        "width": 474,
+                        "height": 20
+                      },
+                      "characters": "系统管理员只维护身份；以下业务跳转仍需显式业务权限，不能代审批或代执行。",
+                      "style": {
+                        "fontFamily": "Noto Sans SC",
+                        "fontStyle": "Medium",
+                        "fontWeight": 500,
+                        "fontSize": 12,
+                        "textAlignHorizontal": "LEFT",
+                        "letterSpacing": 0,
+                        "lineHeightPx": 20
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "47:11993",
+              "name": "操作 / 资料维护说明",
+              "type": "INSTANCE",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "strokes": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#e3e8f0"
+                }
+              ],
+              "cornerRadius": 8,
+              "absoluteBoundingBox": {
+                "x": 5098,
+                "y": 9539.4697265625,
+                "width": 118,
+                "height": 40.38999938964844
+              },
+              "children": [
+                {
+                  "id": "I47:11993;6:19",
+                  "name": "确认接收",
+                  "type": "TEXT",
+                  "fills": [
+                    {
+                      "blendMode": "NORMAL",
+                      "type": "SOLID",
+                      "color": "#18263d"
+                    }
+                  ],
+                  "absoluteBoundingBox": {
+                    "x": 5115,
+                    "y": 9548.6650390625,
+                    "width": 84,
+                    "height": 22
+                  },
+                  "characters": "资料维护说明",
+                  "style": {
+                    "fontFamily": "Noto Sans SC",
+                    "fontStyle": "Medium",
+                    "fontWeight": 500,
+                    "fontSize": 14,
+                    "textAlignHorizontal": "LEFT",
+                    "letterSpacing": 0,
+                    "lineHeightPx": 22
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

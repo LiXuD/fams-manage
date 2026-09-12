@@ -1,0 +1,35 @@
+{
+  "results": [
+    {
+      "page": "screens",
+      "width": 1440,
+      "images": 40,
+      "loaded": 40,
+      "overflow": false,
+      "figmaLinks": 60
+    },
+    {
+      "page": "compositions",
+      "width": 1440,
+      "images": 10,
+      "loaded": 10,
+      "overflow": false
+    },
+    {
+      "page": "screens",
+      "width": 390,
+      "images": 40,
+      "loaded": 40,
+      "overflow": false,
+      "figmaLinks": 60
+    },
+    {
+      "page": "compositions",
+      "width": 390,
+      "images": 10,
+      "loaded": 10,
+      "overflow": false
+    }
+  ],
+  "pageErrors": []
+}

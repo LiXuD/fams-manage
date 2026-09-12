@@ -1,0 +1,234 @@
+<!doctype html><html lang="zh-CN" data-page-node-id="pMKRc52bfDCSWViCBAC9DL"><head data-page-node-id="35JDdHWffOqg9h6XiKejlU"><meta charset="utf-8" data-page-node-id="J7UjGpKjJA6WtjI8M2FKHP"><meta name="viewport" content="width=device-width,initial-scale=1" data-page-node-id="iDXhfxQbwke7jZmELJm5aW"><title>FAMS D0.3 · 界面设计完善（状态色板 + 移动优先布局）</title><link rel="icon" href="data:," data-page-node-id="ZmN9m6S3FcuvNudCaL7lGe">
+<link rel="stylesheet" href="../tokens.css" data-page-node-id="l5EQ5iUUlaSPiatE8wUtRz">
+<link rel="stylesheet" href="../visual.css" data-page-node-id="0HHrEkUiU53oKEG5Un3era">
+<style>
+/* ============ 本文件为对 D0.3 的「加法」扩展，不修改团队原文件 ============ */
+/* 仅在团队 fams- 令牌体系内扩展：新增 3 个协调色相（indigo / orange / rose），
+   沿用其 50 底 + 700 字 的同款饱和度模式，保证与既有色板同源同调。 */
+:root{
+  --fams-palette-indigo50:#EEF2FF; --fams-palette-indigo700:#3730A3;
+  --fams-palette-orange50:#FFF1E6; --fams-palette-orange700:#9A3412;
+  --fams-palette-rose50:#FFE9EC;   --fams-palette-rose700:#9F1239;
+  --fams-status-borrowed:var(--fams-palette-indigo700);  --fams-status-borrowed-bg:var(--fams-palette-indigo50);
+  --fams-status-factory:var(--fams-palette-orange700);    --fams-status-factory-bg:var(--fams-palette-orange50);
+  --fams-status-pendscrap:var(--fams-palette-rose700);    --fams-status-pendscrap-bg:var(--fams-palette-rose50);
+}
+/* 完整 11 状态徽标：在团队 5 档之上补齐借出 / 返厂维修 / 待报废 */
+.badge[data-tone=borrowed]{color:var(--fams-status-borrowed);background:var(--fams-status-borrowed-bg)}
+.badge[data-tone=factory]{color:var(--fams-status-factory);background:var(--fams-status-factory-bg)}
+.badge[data-tone=pendscrap]{color:var(--fams-status-pendscrap);background:var(--fams-status-pendscrap-bg)}
+/* 中性档显式命名，便于复用（已报废 / 待入库 / 正常 共用，靠文字区分） */
+.badge[data-tone=neutral]{color:var(--fams-text-secondary);background:var(--fams-bg-subtle)}
+
+/* —— 移动优先布局系统演示（min-width 渐进增强，与团队响应式断点 700/1100 对齐）—— */
+.mf-page{max-width:1200px;margin:0 auto;padding:0 16px}
+.mf-grid{display:grid;gap:16px;grid-template-columns:1fr}
+@media(min-width:576px){.mf-grid{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:768px){.mf-grid{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:1100px){.mf-grid{grid-template-columns:repeat(4,1fr)}}
+.mf-cell{background:var(--fams-bg-surface);border:1px solid var(--fams-border-default);border-radius:12px;padding:16px}
+.bp{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:16px 0}
+.bp div{background:var(--fams-bg-subtle);border:1px solid var(--fams-border-default);border-radius:8px;padding:12px}
+.bp b{display:block;color:var(--fams-action-primary);font-size:13px}
+.diff{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:700px){.diff{grid-template-columns:1fr}.hide-sm{display:none}}
+.doc-h1{font-size:28px;font-weight:700;letter-spacing:-.5px;margin:0 0 8px}
+.doc-lead{color:var(--fams-text-secondary);max-width:760px;line-height:1.8}
+.tag{display:inline-block;font-size:12px;font-weight:600;color:var(--fams-action-primary);background:var(--fams-action-subtle);border-radius:4px;padding:2px 8px;margin-right:8px}
+.note{font-size:13px;color:var(--fams-text-secondary);line-height:1.7;margin-top:8px}
+.tokenrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-top:12px}
+.tokenrow .t{background:var(--fams-bg-surface);border:1px solid var(--fams-border-default);border-radius:10px;padding:10px}
+.tokenrow .t i{display:block;height:54px;border-radius:6px;margin-bottom:8px}
+.tokenrow .t code{font-size:11px;color:var(--fams-text-secondary)}
+.sec{padding:40px 0;border-top:1px solid var(--fams-border-default)}
+.sec:first-of-type{border-top:0}
+</style></head><body data-page-node-id="77Tgb10ljuCBHt8UUUab5g">
+
+<div class="mf-page" data-page-node-id="5cYoqICZtWxN59FWTwX3WD">
+  <header style="padding:48px 0 24px" data-page-node-id="7xXB7cLYbDP16Ax7PnXwDc">
+    <span class="tag" data-page-node-id="mw4eFfXiLzfTTvT1m0zYyY">ADD-ON</span><span class="tag" data-page-node-id="Qcz95UWWLvQuGmNC0t9nb8">不修改 D0.3 原文件</span>
+    <h1 class="doc-h1" data-page-node-id="2x3SYcVhpTE9SZ75ZhDXIS">FAMS 界面设计完善 · 状态色板与移动优先布局</h1>
+    <p class="doc-lead" data-page-node-id="MXc9zrhdqUmHaWbhsj1eJJ">基于设计团队 D0.3（浅色深蓝 / <code data-page-node-id="igwrPuqiQ67jGSx2t5HAa9">fams-</code> 令牌 / 85 组件变体）。本页在两处 PRD 明确要求而 D0.3 尚未覆盖的点上做加法：① 资产 11 状态色板（PRD §7.1 要求生命周期 + 异常全部「文字+颜色」双通道，而 D0.3 Status 仅 5 档）；② 移动优先布局系统（PRD 明确移动优先，D0.3 视觉层以 <code data-page-node-id="gvv6VqXHd8HzM0aujDGWly">max-width</code> 桌面优先实现）。其余完全沿用团队组件与令牌。</p>
+  </header>
+
+  <!-- ============ 现状对照 ============ -->
+  <section class="sec" data-page-node-id="VCHaxaPqetCyafezUSFkvX">
+    <h2 style="font-size:22px;margin:0 0 4px" data-page-node-id="CC780jTRPei3ibgaHQy117">① 现状对照：D0.3 的 Status 组件（5 档）</h2>
+    <p class="note" data-page-node-id="dFmUlwy04p2eFRKHvVegRd">组件库 Status 仅 Neutral / Info / Success / Warning / Danger。以下为团队原样（index.html 摘录）。生命周期与异常状态超过 5 种时，只能复用相近色调，导致「在库=借出」「维修中=查找中」等无法区分。</p>
+    <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap" data-page-node-id="cYoC4J1LgoENduhp0arA7A">
+      <span class="badge" data-tone="info" data-page-node-id="WQbRTmFqmyMwe2jRCtLkZ4">在库</span>
+      <span class="badge" data-tone="warning" data-page-node-id="zIC0bt1FrEsbv0EfcnUj30">待交接</span>
+      <span class="badge" data-tone="success" data-page-node-id="nrxytbuQRdDY18rTmON8RS">已接收</span>
+      <span class="badge" data-tone="danger" data-page-node-id="jNNcDc3QBAjTFNfirOx4xM">身份失效</span>
+      <span class="badge" data-page-node-id="WTSfm972dLuo3IIJ8qrQHk">尚无记录</span>
+    </div>
+    <div class="diff" style="margin-top:20px" data-page-node-id="p4eiOpKMme6AmMRL1a13kl">
+      <div class="panel" style="margin:0" data-page-node-id="0HAAKrFW88frAEjO7F8ZAf">
+        <h3 style="margin:0 0 12px" data-page-node-id="fSO60xOmc0SBP2U9nD28Ux">PRD 要求的状态（节选）</h3>
+        <p class="note" data-page-node-id="B3xU8bFpu70mq4sOp7ASzh">生命周期：待入库 / 在库 / 在用 / 借出 / 维修中 / 返厂维修 / 待报废 / 已报废。<br data-page-node-id="VqWuvCKeiGRjyiH5ucFlxG">异常：正常 / 查找中 / 已遗失。</p>
+      </div>
+      <div class="panel" style="margin:0" data-page-node-id="Ogs2k42Ki34Lj6ylBbc7Fi">
+        <h3 style="margin:0 0 12px" data-page-node-id="lnJ2d82agKeWvDGGiptreD">缺口</h3>
+        <p class="note" data-page-node-id="tiJ6IB6xcMZG5kwxVu4yvz">借出、返厂维修、待报废 三种在 D0.3 无专属色调；已报废 / 待入库 共用中性易混淆；异常与生命周期跨列同色时阅读负担上升。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 完善① 状态色板 ============ -->
+  <section class="sec" data-page-node-id="mdIxLpvGSPFb2vEwWxHHX5">
+    <h2 style="font-size:22px;margin:0 0 4px" data-page-node-id="V1R2t9CR7zg7gMXkUU3m6x">② 完善一：完整 11 状态资产色板</h2>
+    <p class="note" data-page-node-id="uEGSSfJpkH4VgoE5VVwiLJ">在团队 4 个基础色调（info/success/warning/danger/neutral）之上，以同款「50 底 + 700 字」饱和度新增 3 个协调色相：<b data-page-node-id="OVYR1aQY0DylMGdQfC49gH">indigo（借出）</b>、<b data-page-node-id="wVU5Amv2tilFs0Zps8FGHc">orange（返厂维修）</b>、<b data-page-node-id="FLPAiW7GiwEbd2rMuA5YtE">rose（待报废）</b>。全部带文字标签，满足 PRD §17.2「不只依赖颜色」。<b data-page-node-id="YuKzZUWKfAJwpscgjyDwEP">生命周期列</b>与<b data-page-node-id="2qOk7y3mRCHXOFlgLCrbz5">异常列</b>分列展示，跨列同色不冲突。</p>
+
+    <h3 style="font-size:16px;margin:24px 0 8px" data-page-node-id="BAmUmgzrzFfa3ZNRuKi0sm">生命周期状态（资产卡 / 列表「生命周期」列）</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap" data-page-node-id="xjJJfv30Re9wl8zYyQi4VH">
+      <span class="badge" data-tone="neutral" data-page-node-id="acyaotAUwJ2E6LRwO7idaP">待入库</span>
+      <span class="badge" data-tone="info" data-page-node-id="3jN49NY4L3SN4gBJ8ZZ5c8">在库</span>
+      <span class="badge" data-tone="success" data-page-node-id="xEau73mpz8aloXA0Su3ER9">在用</span>
+      <span class="badge" data-tone="borrowed" data-page-node-id="UpsPjbQScLTbLpZ1GzdeLq">借出</span>
+      <span class="badge" data-tone="warning" data-page-node-id="YkDGKT5P1Zb8rq5vjpuFgc">维修中</span>
+      <span class="badge" data-tone="factory" data-page-node-id="WqTV1G3SAp0HtF5LJEURHH">返厂维修</span>
+      <span class="badge" data-tone="pendscrap" data-page-node-id="DRw9tBEkkPshFPxkJ8u5b1">待报废</span>
+      <span class="badge" data-tone="neutral" data-page-node-id="GqQvLajnaCPuyJm9ED52Os">已报废</span>
+    </div>
+
+    <h3 style="font-size:16px;margin:24px 0 8px" data-page-node-id="vfXA34Drg1z8ijGEF22wZA">异常状态（资产卡 / 列表「异常」列，默认「正常」不强制标色）</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap" data-page-node-id="CjrCQjonpC99F6eJafSFBc">
+      <span class="badge" data-tone="neutral" data-page-node-id="ltNfFTi5tZxJrjYiAzsj21">正常</span>
+      <span class="badge" data-tone="warning" data-page-node-id="PNotimWfHbgDuzKs08MMGG">查找中</span>
+      <span class="badge" data-tone="danger" data-page-node-id="OIxdlllJV2d4wawiB3nRe4">已遗失</span>
+    </div>
+
+    <h3 style="font-size:16px;margin:24px 0 8px" data-page-node-id="lXmMMaAQtODnYTq2edY5Dd">新增令牌（并入 tokens.css / tokens.json）</h3>
+    <div class="tokenrow" data-page-node-id="REuqXVD8w6GfNyfUxTCeYB">
+      <div class="t" data-page-node-id="Ml12jYISEQZof1Hy5VHwOv"><i style="background:var(--fams-status-borrowed-bg)" data-page-node-id="6T5auH77FlRNFzcMHVxal3"></i><code data-page-node-id="pjP11CjKjkG6LLgH8drVbV">borrowed<br data-page-node-id="wOgNx3kZbqAEBKTJ2v3gPv">#EEF2FF / #3730A3</code></div>
+      <div class="t" data-page-node-id="NOKTuUFXIKSK5zLwKyVGqN"><i style="background:var(--fams-status-factory-bg)" data-page-node-id="NMrEfumEzDGlFsLrMmdzE3"></i><code data-page-node-id="ZuoC4W20n6EHQNBArGCdax">factory<br data-page-node-id="L2xzERbHwroTlRWxb612vs">#FFF1E6 / #9A3412</code></div>
+      <div class="t" data-page-node-id="o8lpEhjum1Rs4JkeGysn2G"><i style="background:var(--fams-status-pendscrap-bg)" data-page-node-id="VYNNorVcu1BZ8Mn1Mmf19q"></i><code data-page-node-id="L9HzAPHXjsEGAe4JTiVYqw">pendscrap<br data-page-node-id="HFphQHVQbFP4etvFciA4SH">#FFE9EC / #9F1239</code></div>
+    </div>
+    <p class="note" data-page-node-id="Ap7XhnZfw9xmYJ6SrAoQNA">对比度校验：700 级文字对 50 级底均 ≥ 7:1（远超 AA 4.5:1）；中性档用 text/secondary(#53657D) 对 gray50(#F0F3F8) ≈ 5.0:1，达标。新增色相与团队 blue/green/amber/red 同源冷调，不引入暖紫或荧光色，保持「浅色深蓝」整体气质。</p>
+
+    <h3 style="font-size:16px;margin:24px 0 8px" data-page-node-id="LR4frcHDBN5blOfwLao7q6">应用前后对比（资产列表行）</h3>
+    <div class="diff" data-page-node-id="2cDG7LOEZocbsgn7IeSCSz">
+      <div class="panel" style="margin:0" data-page-node-id="A8f8G6D3lR2D22YMh61WsG">
+        <h3 style="margin:0 0 10px" data-page-node-id="IkC8aGqDIh2I1W8hUGa3UH">D0.3 现状（借出无法表达）</h3>
+        <div class="tablewrap" data-page-node-id="GgVkZnCWLE7rhIGhfJMqWk"><table data-page-node-id="JpIY1mSdofiGi5Lt3aBVzY"><thead data-page-node-id="d0R7678XiGpkKpnpZJ4bHA"><tr data-page-node-id="JAr62373eRt5o7OB0W678v"><th data-page-node-id="QH6Lzk9Vs7oGTt1TF3Z3p7">资产 / 编码</th><th data-page-node-id="XXDikJSieGwXGrr6KOS1Bw">生命周期</th><th data-page-node-id="fYNK9NrPoc2KYIch35inIB">异常</th></tr></thead>
+        <tbody data-page-node-id="kEzoHXFZvXQd3T1HuHkNmG">
+          <tr data-page-node-id="QWSBZ8vxE987Xpybseg6dw"><td data-page-node-id="xy4Q1UkBXSAeHCLLRPPPem">投影仪<small data-page-node-id="unaYXeHflBJalykJG7Qkxw">FA-2026-00331</small></td><td data-page-node-id="WB5u3HizjtR5VUqZ8ogoc5"><span class="badge" data-tone="info" data-page-node-id="GcTHlb6vszpzUSRPUkhglt">在库*</span></td><td data-page-node-id="Kz59ZgmH1OTxZDGi8FAXRf"><span class="badge" data-tone="neutral" data-page-node-id="lxBk04XAyy6F1ithT6mvPU">正常</span></td></tr>
+        </tbody></table></div>
+        <p class="note" data-page-node-id="G9dRBtzCDLDsUuqK6Z50RP">* 借出只能套用 info，与在库同色，无法区分。</p>
+      </div>
+      <div class="panel" style="margin:0" data-page-node-id="EWAAdsFlGFc1lHsdo4MS2o">
+        <h3 style="margin:0 0 10px" data-page-node-id="CnjjCYcydaOL9YBN5oEJb0">完善后（11 状态齐全）</h3>
+        <div class="tablewrap" data-page-node-id="C9DazgXBBbWUA3eR2scSdI"><table data-page-node-id="aFrnjTpw9k93IeMihvnuDV"><thead data-page-node-id="MhKtRKcgz2ZhtDt1OtIkfr"><tr data-page-node-id="LjbS9ueAUcVHeHiCJrmMir"><th data-page-node-id="9KNh0Dmbqf5G3dgOj0F4ae">资产 / 编码</th><th data-page-node-id="GnRDkvKMViSyFj1CkIwhdB">生命周期</th><th data-page-node-id="GaejqVi5TKPBCYofgoToD9">异常</th></tr></thead>
+        <tbody data-page-node-id="RxeBU6sqTFh7pnNIvb6ago">
+          <tr data-page-node-id="oTM6ud6aGOdSDzA0KEYjD1"><td data-page-node-id="2FgKtTDkIebNUzGnR9E7Z6">投影仪<small data-page-node-id="APwlUneF3nKCJKzovAfhbm">FA-2026-00331</small></td><td data-page-node-id="wVvAEINeRAeeose9gfJ25E"><span class="badge" data-tone="borrowed" data-page-node-id="HC2P2EJF9PJz8OJ4USfXZu">借出</span></td><td data-page-node-id="tIlVTQhMYUQUTPQBWJgJHO"><span class="badge" data-tone="neutral" data-page-node-id="YPnEBdjJXgywIp8lPtPTQ1">正常</span></td></tr>
+          <tr data-page-node-id="kIsuDBtAXm1DL9bZOmKC1v"><td data-page-node-id="2MtWLdtRpScsDurk5lx168">服务器<small data-page-node-id="HC6rBwUPUZoxzeMmGVljYI">FA-2026-00102</small></td><td data-page-node-id="dvhNX6JWT4ZnFc1i6tGZPM"><span class="badge" data-tone="factory" data-page-node-id="kWmK44kw5LdM81hpENBi1I">返厂维修</span></td><td data-page-node-id="mljmLvz7yiASKxqfa4I9qd"><span class="badge" data-tone="warning" data-page-node-id="caVCBPAX8BSVOuE0TLVdoH">查找中</span></td></tr>
+        </tbody></table></div>
+        <p class="note" data-page-node-id="w0lq7UnLUQpfuuFn2FhZh7">生命周期与异常分列，颜色各自独立，跨列同色（如维修中/查找中同为 amber）不影响辨识。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 完善② 移动优先布局 ============ -->
+  <section class="sec" data-page-node-id="YDZUytjchlpgp30hG6MPRU">
+    <h2 style="font-size:22px;margin:0 0 4px" data-page-node-id="GXvyCWM29cOOeNOeFs2kkf">③ 完善二：移动优先布局系统</h2>
+    <p class="note" data-page-node-id="ni6C9zAC30uRvExwHOhE02">D0.3 视觉层以 <code data-page-node-id="WK9oDGkoCfXDAdHVJvmKl8">max-width</code> 桌面优先实现（≤1100 / ≤700 降级）。PRD 明确「移动优先、从 320 最小屏起步」。以下用 <code data-page-node-id="eWtFvHs0nxEB144DEgmzVJ">min-width</code> 渐进增强重写系统，并复用团队现有断点（700 / 1100），保证与已渲染的 40 页一致。</p>
+
+    <h3 style="font-size:16px;margin:20px 0 8px" data-page-node-id="mrBFqXhZTu2PMghP9xslWq">断点与策略</h3>
+    <div class="bp" data-page-node-id="LAjzTRvXZtwqordRExgzQt">
+      <div data-page-node-id="QZb8p4hFJLE30HVBFKtqCk"><b data-page-node-id="9U1arPTsI9aYTsELde3K31">base · 320–389</b>手机单列；底部 Tab；主操作 ≥44，留白 16</div>
+      <div data-page-node-id="3DolhfyqYEcuGGa3IOfA58"><b data-page-node-id="IgCVVev36ijOLOBeGKP7AJ">≥576</b>大手机；卡片网格 2 列</div>
+      <div data-page-node-id="8EdYVf5YAdtxqrX8kBhjI2"><b data-page-node-id="QApP38PCfBQtWH2MqGzScd">≥768</b>平板；3 列；表单同组两列</div>
+      <div data-page-node-id="Qb5E8qrnY8y4ktiUy2ZcJd"><b data-page-node-id="HRN0zh3x5QSGuU8Gx7sClL">≥1100</b>PC：侧栏常驻 190–216，内容自适应</div>
+    </div>
+
+    <h3 style="font-size:16px;margin:20px 0 8px" data-page-node-id="w7v32yDwpOeknFdjc2JFtT">响应式卡片网格（拖动窗口宽度查看 1→2→3→4 列）</h3>
+    <div class="mf-grid" data-page-node-id="Dm4rzQIJChhDX3lHRasHm5">
+      <div class="mf-cell" data-page-node-id="dEbA6erUVl2qr44MMQ19s3"><b data-page-node-id="PhlbWnRN00B12QicsYmxm5">待管理员确认</b><p class="note" data-page-node-id="h6d2dAHS472G5zgZi6TE76">12 项 · 全企业共享</p></div>
+      <div class="mf-cell" data-page-node-id="zqAjq1XCuHPL3D9vvbLi2a"><b data-page-node-id="3eWzVY6lkIzn9ShV2uZfPQ">待库管领取</b><p class="note" data-page-node-id="pzDk2svFMPE0SLVCIRdoVU">3 项</p></div>
+      <div class="mf-cell" data-page-node-id="ReDEnhfC9OxDamKuCqhIGJ"><b data-page-node-id="31waxAmMBy5QmJPuF76DWs">借用逾期</b><p class="note" data-page-node-id="A1525W5ZFnhyNnLOooWLrB">5 项 · 异常清单</p></div>
+      <div class="mf-cell" data-page-node-id="JHGlYyLxi3qmDJj0ItsZnR"><b data-page-node-id="XFJIT3nSpApMnIxRPCDOjQ">盘点差异</b><p class="note" data-page-node-id="W8MJbAi5xaiktiz9bS2yje">2 项 · 待复核</p></div>
+    </div>
+    <p class="note" data-page-node-id="gvvkWK9mKepo2185F0Lg4u">极小屏单列、空间允许自动增列；卡片用 <code data-page-node-id="UU4WSuUVCRYcJCw7YcK2vu">minmax(280px,1fr)</code> 免媒体查询。表格在 ≤700 时内部横向滚动（<code data-page-node-id="UDItLtmt504eJxGTV9AWkm">min-width:650px</code>），不挤压身份/操作列。</p>
+  </section>
+
+  <!-- ============ 应用示例 ============ -->
+  <section class="sec" data-page-node-id="ohiQZK7zpq5BRNvd9bXG3a">
+    <h2 style="font-size:22px;margin:0 0 4px" data-page-node-id="Ni2Os99ka1Q1FWLtjjdlM4">④ 应用示例：复用团队组件 + 新状态色板</h2>
+
+    <h3 style="font-size:16px;margin:16px 0 8px" data-page-node-id="6LKh6DaAqO4rZIwBnCPpKn">PC 工作台（P02）— 用团队 .appbar / .pcbody / .appnav / .content</h3>
+    <div class="frame" style="margin-bottom:24px" data-page-node-id="bekYf8I0Rh41H6NNuw3yf9">
+      <div class="appbar" data-page-node-id="EX62FsGmaL65J6UMkgTlHd"><strong data-page-node-id="DzTPdANz0sRjmRxp0882F7">固定资产</strong><div class="right" style="display:flex;align-items:center;gap:12px" data-page-node-id="J3U330JXAG5r3VVKGFPPw9"><span data-page-node-id="9AfB4KuuXCfbsnoXouAx0H">待办 7</span><button data-page-node-id="no3Rzn2Ro66jjjDH10Kjr5">消息</button><button data-page-node-id="Nay9CWUv4l0dsdwmKChBH1">后台任务</button></div></div>
+      <div class="pcbody" style="display:grid" data-page-node-id="BJdtUHQklMYAbx0wvDMlMd">
+        <nav class="appnav" data-page-node-id="2WgCAeOjia5JrNld265DS3">
+          <button class="active" data-page-node-id="jllJr4X2dRURijc4Gpt2fq">工作台</button><button data-page-node-id="WKdTxCc1jslEAvE8thzp1E">资产台账</button><button data-page-node-id="Jq8ZFEfyqiQDLn0kH30YBn">使用管理</button>
+          <button data-page-node-id="MB2h1C3rmXMnYuzWQa6gHd">盘点管理</button><button data-page-node-id="jaJ6P4IIEv6UF9z1Sm2qB1">报修返厂</button><button data-page-node-id="i42DXKmpuyNnzUayFXQrw5">报废管理</button><button data-page-node-id="GZnY7vWluJ187PLMbPRnhy">统计分析</button><button data-page-node-id="vHCDAZgaBGgGZA3OFrDbDp">系统管理</button>
+        </nav>
+        <div class="content" data-page-node-id="QjuZYOfuedr0HhzHgtSZSY">
+          <div class="crumb" data-page-node-id="tlU0jH8n8UmwWVgktgg6Y3">工作台 / 我的待办</div>
+          <div class="pagehead" style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap" data-page-node-id="ujQpsdIaBK4W2Cdymvl6Xt">
+            <div data-page-node-id="V4T0YaK7GEg4A8woIiP7Jg"><h1 style="font-size:22px;margin:0" data-page-node-id="hFs8uNQG5kuSvteL5YPUEO">待审批 · 共享申请池</h1><p style="margin:6px 0 0;color:var(--fams-text-secondary)" data-page-node-id="ySyvUxxA0OpVZErSR6P7TC">全部资产管理员可见，任一成员确认或驳回即生效；查看不占用申请。</p></div>
+            <div class="actions" style="display:flex;gap:8px" data-page-node-id="Ugsy6QJt8ao1UELK0YypFc"><button data-page-node-id="RDH9ZAEyCna2QYeSUMuKv9">筛选</button><button class="primary" data-page-node-id="NJmRbJM4lM53BFMLGUEZfA">创建盘点</button></div>
+          </div>
+          <div class="stats" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--fams-border-default);border-radius:12px;overflow:hidden;background:var(--fams-bg-surface);margin-bottom:20px" data-page-node-id="OFH4vniSguKcwPOkyg6Lbz">
+            <div class="stat" style="padding:16px;border-right:1px solid var(--fams-border-default)" data-page-node-id="Rje4Qw9C4UoYiAHsParPyN"><span data-page-node-id="kHSZmsamfiw3hrLAKiMZRf">待管理员确认</span><strong data-page-node-id="15bh7MNP5N14YBHYAkGXOo">12</strong></div>
+            <div class="stat" style="padding:16px;border-right:1px solid var(--fams-border-default)" data-page-node-id="XOTJDKrWNbvJEYzgiiJ2Uf"><span data-page-node-id="v7FTej6L7iiFPC9bBA8fjh">待库管领取</span><strong data-page-node-id="pX7les1sO4DJDV0mtyQ3ku">3</strong></div>
+            <div class="stat" style="padding:16px;border-right:1px solid var(--fams-border-default)" data-page-node-id="1WGmH7aXRsjmERnqMgWpwb"><span data-page-node-id="QCkvz1JjNe1N7zQJSlIueC">借用逾期</span><strong style="color:var(--fams-status-danger)" data-page-node-id="wsKhxGZpbPOn13VmxhqHMX">5</strong></div>
+            <div class="stat" style="padding:16px" data-page-node-id="Y3zcJo1DeGAUSDVOpFFFYu"><span data-page-node-id="nINJ7DCEw14itvPQUhmeUE">盘点差异</span><strong style="color:var(--fams-status-warning)" data-page-node-id="iaszUunShR2ePepRyU0fJ3">2</strong></div>
+          </div>
+          <div class="tablewrap" data-page-node-id="TsxMJwQ7zDUTZPnlqX4xBA"><table data-page-node-id="J1rV4Tis4HZzCQTODIZikj"><thead data-page-node-id="BIOJ2BQHzyalHNEbwyuKSo"><tr data-page-node-id="2RgbT7EikCFyx5yhEWp4fr"><th data-page-node-id="QJw1dwMgjnEpd2wZDoKfQ8">资产 / 编码</th><th data-page-node-id="Xti0nAOfFkCYGbNJquDoNF">业务</th><th data-page-node-id="B0Awfo8JfrviY1hG1VksF6">生命周期</th><th data-page-node-id="KkRbuNDduNyDMZmR130YHj">异常</th><th data-page-node-id="Op3iGAKGAtCa4GP1k3T3Qs">操作</th></tr></thead>
+            <tbody data-page-node-id="kSw4fEEoHmJqjdmHRcUAcb">
+              <tr data-page-node-id="S5wYgGS0xinay4aK12M7fB"><td data-page-node-id="6L0GCG3WBBtkLFfTFAq1NA">办公笔记本<small data-page-node-id="AZxZrbJk4dzU4HD0hmdKBZ">FA-2026-00102</small></td><td data-page-node-id="d0wrAwOHvJSByDE77cD6SL">领用</td><td data-page-node-id="BzmCDkMnTfZtrwzrG12hvR"><span class="badge" data-tone="info" data-page-node-id="Rw8Hd9TPztdO9QErAAEZVd">在库</span></td><td data-page-node-id="P84XjFGtAZNfeA0Yu4CmFs"><span class="badge" data-tone="neutral" data-page-node-id="olE4VkCy9ypL5A4w2IkxBM">正常</span></td><td data-page-node-id="rqMnyqmtEIxPpRNYBiV6ti"><a href="#" data-page-node-id="4seyPHaGLsNpq42Y4wqM7V">查看</a></td></tr>
+              <tr data-page-node-id="klvqEuQj7U43f9zH79Sf1S"><td data-page-node-id="IMQjoPT0nS17GOmsaGSJYK">投影仪<small data-page-node-id="8NeCKIyHfno2yGEiqCokZk">FA-2026-00331</small></td><td data-page-node-id="j7hoZ263sDBT1W9Mbn9ACn">借用</td><td data-page-node-id="Zej6RcPw4Jfn0KmbNDhcnh"><span class="badge" data-tone="borrowed" data-page-node-id="Ik0wwTVKMpuTInpf89diUB">借出</span></td><td data-page-node-id="XNMFWWFGcE0BlajS5BxyTt"><span class="badge" data-tone="neutral" data-page-node-id="5qOj46vVLCRa87afDzv3Ys">正常</span></td><td data-page-node-id="GEpiWBsWqqifG9ubONBP4s"><a href="#" data-page-node-id="Qh17ojPZ3RfyGr7ZEQda5p">查看</a></td></tr>
+              <tr data-page-node-id="F0tYckNDN8IDqGiYFMep2N"><td data-page-node-id="o7881Aey3ZEJIwNLXQPYQN">服务器<small data-page-node-id="etBRU49RG2NNYiuioXEYhm">FA-2026-00088</small></td><td data-page-node-id="CnQjBHma2lhcC8cA3Zncjz">返厂</td><td data-page-node-id="DxywD1hLUCqJ9sKMMSHoma"><span class="badge" data-tone="factory" data-page-node-id="VrNyuPq7Ij9gLxrUGks9QH">返厂维修</span></td><td data-page-node-id="LRmXMc1ryut8KwLuZHT4a1"><span class="badge" data-tone="warning" data-page-node-id="daqYBVBZGzc1MIBGX5xBbM">查找中</span></td><td data-page-node-id="LrVEhe1ZrRRCxqsVdg98I0"><a href="#" data-page-node-id="Pxhox9AerN59Se0qpuSyyj">复核</a></td></tr>
+            </tbody></table></div>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="font-size:16px;margin:16px 0 8px" data-page-node-id="uCPV8Mp2bXX9qQavfbxyuS">小程序首页（M02）— 用团队 .mobile.frame / .bottomnav</h3>
+    <div class="mobile-layout" style="display:flex;justify-content:center" data-page-node-id="aAmBC0wrN2I9ODjzXVz9fg">
+      <div class="mobile frame" style="width:390px;border:1px solid var(--fams-border-default);border-radius:24px;background:var(--fams-bg-canvas);box-shadow:0 12px 40px #18263d12;overflow:hidden" data-page-node-id="LLfV07DD3bSqXyJoLzei5B">
+        <div class="mobilehead" style="height:52px;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid var(--fams-border-default);font-weight:600;font-size:17px" data-page-node-id="cLVAoKaX5qbO2b2sYbrFVO">首页</div>
+        <div class="mobilecontent" style="padding:20px 16px;font-size:16px;line-height:1.65;min-height:560px" data-page-node-id="Xr7NgtbZofLXWLoOKbFn6U">
+          <div class="panel" style="padding:16px;margin-bottom:16px;border:1px solid var(--fams-border-default);border-radius:12px;background:var(--fams-bg-surface)" data-page-node-id="4rRHar6KmWfVUkLW9H0Yrd">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px" data-page-node-id="48SEB8xDyXVcWOvNjpRkxR"><div data-page-node-id="VFpcTxvfJc9eP9hqzI1kDo"><b data-page-node-id="Ex3tA9bXpczcL8Y451fahl">待接收</b><p class="note" style="margin:2px 0 0" data-page-node-id="SsPNK12ppYGMC8ZUQuBfaN">2 项 · 截止 9-10</p></div><button class="primary" style="min-height:44px" data-page-node-id="NOjoNdQOTMwxxOh6wcerAH">去核对</button></div>
+          </div>
+          <div class="panel" style="padding:16px;margin-bottom:16px;border:1px solid var(--fams-border-default);border-radius:12px;background:var(--fams-bg-surface)" data-page-node-id="PFBMkXPLIz2tOamSp87HgM">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px" data-page-node-id="j1EII8jBU7zayoIUvXwoBw"><div data-page-node-id="oBL406MgsVoH53ROHkGGWo"><b data-page-node-id="dwSJfY7WrJ5VfKsj3WlG30">借用即将到期</b><p class="note" style="margin:2px 0 0" data-page-node-id="MIIfaSvPCeuUqhMY39mPKx">投影仪 · 9-08 到期</p></div><span class="badge" data-tone="borrowed" data-page-node-id="CILBqMRnH7sdVj6uHo50St">借出</span></div>
+          </div>
+          <div class="grid2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px" data-page-node-id="UnxK1hsG3nAWRrXHntDM8N">
+            <div class="panel" style="padding:16px;border:1px solid var(--fams-border-default);border-radius:12px;background:var(--fams-bg-surface);text-align:center" data-page-node-id="xPKU7WvAmnEOrMORbHmyup"><b data-page-node-id="NnKZvHcxHHR3GTCYpVbgUR">领用</b></div>
+            <div class="panel" style="padding:16px;border:1px solid var(--fams-border-default);border-radius:12px;background:var(--fams-bg-surface);text-align:center" data-page-node-id="GN2SUG5I1MvOQp7sHGHpCR"><b data-page-node-id="BGF2X1b4a5OCwPIpdsd8L4">借用</b></div>
+            <div class="panel" style="padding:16px;border:1px solid var(--fams-border-default);border-radius:12px;background:var(--fams-bg-surface);text-align:center" data-page-node-id="HbsJ1y6lAgVYDlBuCcaCVV"><b data-page-node-id="QH4wXA4ctJRREjUX0x8o2Y">我的资产</b></div>
+            <div class="panel" style="padding:16px;border:1px solid var(--fams-border-default);border-radius:12px;background:var(--fams-bg-surface);text-align:center" data-page-node-id="QYBT88WrdKhBDrp7dTqBIf"><b data-page-node-id="TE2bCX9moi7M4w58CLRvoz">部门公用</b></div>
+          </div>
+          <div class="panel" style="padding:16px;margin-bottom:16px;border:1px solid var(--fams-border-default);border-radius:12px;background:var(--fams-bg-surface)" data-page-node-id="Men3gcedN1lW4jwR474LY3">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px" data-page-node-id="KW1XUfGrwm4xvAKp6ieGCV"><div data-page-node-id="YbEed7wm7qHWuqaizz5J05"><b data-page-node-id="fEXKK8jUCkdMTf2JVe8cCX">我的盘点任务</b><p class="note" style="margin:2px 0 0" data-page-node-id="8fmcBc3Zcso3Y1cuJzmnVf">3 项待盘 · 1 项待上传</p></div><button style="min-height:44px" data-page-node-id="VWyLzKIxuBfmzKwa9b4Iyf">进入</button></div>
+          </div>
+        </div>
+        <div class="bottomnav" style="display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--fams-border-default);padding:8px 8px 20px;gap:8px;background:var(--fams-bg-surface)" data-page-node-id="r9aAULaDEmhYqi16ETCyNP">
+          <button class="active" style="color:var(--fams-action-primary);background:var(--fams-action-subtle);border:0;border-radius:8px;min-height:48px;font-weight:600" data-page-node-id="GdP3j3XGNeBZG6rJFqg2Sf">首页</button>
+          <button style="border:0;background:transparent;color:var(--fams-text-secondary);border-radius:8px;min-height:48px" data-page-node-id="3zT25yMckwcJizAduWi28s">扫码</button>
+          <button style="border:0;background:transparent;color:var(--fams-text-secondary);border-radius:8px;min-height:48px" data-page-node-id="AH8A47NgnHsiaBp11aCR4y">我的</button>
+          <button style="border:0;background:transparent;color:var(--fams-text-secondary);border-radius:8px;min-height:48px" data-page-node-id="6gJFjBpisC1KcEVKycxbqG">消息</button>
+        </div>
+      </div>
+    </div>
+    <p class="note" data-page-node-id="eSWeYCpqF8uNaM8OQb007X">以上全部使用团队既有组件类与令牌，仅把状态徽标替换为本文新增的 11 状态档。员工端不展示全企业指标（IA §2.3）。</p>
+  </section>
+
+  <!-- ============ 如何并入 ============ -->
+  <section class="sec" data-page-node-id="heVPSbSMA7eRkMvT4iLOoC">
+    <h2 style="font-size:22px;margin:0 0 4px" data-page-node-id="jXvaiS8rqZYtnc9Zmw6yBL">⑤ 如何并入 D0.3</h2>
+    <div class="panel" style="margin:0;border:1px solid var(--fams-border-default);border-radius:12px;background:var(--fams-bg-surface)" data-page-node-id="sm0XcV21c5ZVOuPPe0LqCH">
+      <h3 style="margin:0 0 12px" data-page-node-id="Q8F73VDUmXP2Y0BmewRhp8">三步合并，不改任何已渲染页面</h3>
+      <p class="note" data-page-node-id="57FHlEiZDdSE5tOhEWh7zP"><b data-page-node-id="HRF4WPXbksFL60kHnzwZ2D">1. tokens.css / tokens.json</b>：追加 3 组调色板 + 3 组 status 别名（indigo / orange / rose，50+700）。<br data-page-node-id="Wsa9C3iitcWp5gImEvuFTU">
+      <b data-page-node-id="EmsG4jzFVT2OJO9xIoYNDp">2. visual.css</b>：在 Status 区块补 3 条 <code data-page-node-id="1vp1FMUBtizby2AsnML19H">.badge[data-tone=borrowed|factory|pendscrap]</code> 规则；neutral 显式命名。<br data-page-node-id="6vQks68ZPIF1Pt32RMnwb5">
+      <b data-page-node-id="1w0ASzG4J6aU3gJB0ygxPE">3. SPECIFICATION.md §2/§5</b>：Status 组件从 5 档扩到「生命周期 8 + 异常 3 + 中性」说明；§4 布局补充移动优先断点表（base/576/768/1100）。</p>
+      <p class="note" style="margin-top:12px" data-page-node-id="W62FLgYP1c1UM0UiANxdrt">可选：把本文演示的 <code data-page-node-id="vDrmmF5zAtufPYLHjXarP5">min-width</code> 移动优先栅格并入 <code data-page-node-id="KrCt2Jky35DqRe3yuHfvDe">visual.css</code> 的响应式区，替代现有 <code data-page-node-id="JotoDlndxjAwKXtyODHjoi">max-width</code> 写法，使 40 页在 320 起即正确。本增强目录不依赖团队原文件修改即可独立预览。</p>
+    </div>
+  </section>
+
+  <footer style="padding:32px 0;color:var(--fams-text-secondary);font-size:13px" data-page-node-id="50DHs2RI59SNVSeuDFZTKk">FAMS 界面完善 · ADD-ON to D0.3 · 沿用浅色深蓝 / fams- 令牌 · 仅扩展状态色板与移动优先布局，未改动设计团队原交付。</footer>
+</div>
+</body></html>

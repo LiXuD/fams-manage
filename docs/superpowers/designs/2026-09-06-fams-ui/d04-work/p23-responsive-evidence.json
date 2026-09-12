@@ -1,0 +1,25 @@
+{
+  "verifiedAt": "2026-09-11T09:47:14+08:00",
+  "source": "Playwright real browser against local HTTP server 127.0.0.1:8785",
+  "page": "P23",
+  "viewport": "1024x1140",
+  "urlPattern": "prototype.html?present=1&page=P23",
+  "checks": {
+    "twoColumnGrid": {
+      "width": 824,
+      "height": 408,
+      "panelWidths": [402, 402]
+    },
+    "summaryValueWidths": [232, 232, 232, 232, 232, 232],
+    "stageTable": {
+      "clientWidth": 358,
+      "scrollWidth": 358,
+      "horizontalOverflow": false
+    },
+    "stageActionWidths": [68, 68, 68, 68],
+    "pageTitle": "P23 报表与抽样 · FAMS D0.4 视觉稿",
+    "result": "pass"
+  },
+  "regression": "scripts/verify-p23-responsive.js",
+  "scope": "This proves the 1024px prototype layout and table action visibility; it is not a real-device or production-service acceptance."
+}

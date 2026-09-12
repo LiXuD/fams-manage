@@ -1,0 +1,4 @@
+/* Keep the scan caption outside the inner scan frame's bottom stroke. */
+.d04-scan-stage::before {
+  inset: 40px 58px 48px;
+}

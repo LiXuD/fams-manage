@@ -1,0 +1,442 @@
+{
+  "P02": {
+    "nodeId": "25:1645",
+    "title": "P02 工作台 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1004.67,
+    "x": 1680,
+    "y": 400,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/25-1645-0.png"
+    ]
+  },
+  "M02": {
+    "nodeId": "26:1804",
+    "title": "M02 首页 · FAMS D0.4 视觉稿",
+    "width": 390,
+    "height": 1006.58,
+    "x": 590,
+    "y": 12500,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/26-1804-0.png"
+    ]
+  },
+  "P01": {
+    "nodeId": "28:1885",
+    "title": "P01 登录 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1000,
+    "x": 80,
+    "y": 400,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-1885-0.png"
+    ]
+  },
+  "P03": {
+    "nodeId": "28:1943",
+    "title": "P03 资产列表 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1000,
+    "x": 3280,
+    "y": 400,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-1943-0.png"
+    ]
+  },
+  "P04": {
+    "nodeId": "28:2109",
+    "title": "P04 资产详情 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1058.05,
+    "x": 4880,
+    "y": 400,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-2109-0.png"
+    ]
+  },
+  "P05": {
+    "nodeId": "28:2236",
+    "title": "P05 单个与复制建卡 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1042.38,
+    "x": 80,
+    "y": 2040,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-2236-0.png"
+    ]
+  },
+  "P06": {
+    "nodeId": "28:2338",
+    "title": "P06 导入与后台任务 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1019.35,
+    "x": 1680,
+    "y": 2040,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-2338-0.png"
+    ]
+  },
+  "P07": {
+    "nodeId": "28:2505",
+    "title": "P07 期初初始化 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1130.66,
+    "x": 3280,
+    "y": 2040,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-2505-0.png"
+    ]
+  },
+  "P08": {
+    "nodeId": "28:2644",
+    "title": "P08 标签打印 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1000,
+    "x": 4880,
+    "y": 2040,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-2644-0.png"
+    ]
+  },
+  "P09": {
+    "nodeId": "28:2723",
+    "title": "P09 共享审批池 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1000,
+    "x": 80,
+    "y": 3680,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-2723-0.png"
+    ]
+  },
+  "P10": {
+    "nodeId": "28:2878",
+    "title": "P10 库管执行池 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1000,
+    "x": 1680,
+    "y": 3680,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-2878-0.png"
+    ]
+  },
+  "P11": {
+    "nodeId": "28:2981",
+    "title": "P11 统一业务详情 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1009.25,
+    "x": 3280,
+    "y": 3680,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-2981-0.png"
+    ]
+  },
+  "P12": {
+    "nodeId": "28:3157",
+    "title": "P12 分配与交出 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1000,
+    "x": 4880,
+    "y": 3680,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-3157-0.png"
+    ]
+  },
+  "P13": {
+    "nodeId": "28:3305",
+    "title": "P13 入库与退还验收 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1202.26,
+    "x": 80,
+    "y": 5320,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-3305-0.png"
+    ]
+  },
+  "P14": {
+    "nodeId": "28:3427",
+    "title": "P14 调拨与目标变更 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1207.65,
+    "x": 1680,
+    "y": 5320,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-3427-0.png"
+    ]
+  },
+  "P15": {
+    "nodeId": "28:3581",
+    "title": "P15 盘点任务 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1000,
+    "x": 3280,
+    "y": 5320,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-3581-0.png"
+    ]
+  },
+  "P16": {
+    "nodeId": "28:3715",
+    "title": "P16 差异与证据复核 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1172.96,
+    "x": 4880,
+    "y": 5320,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-3715-0.png"
+    ]
+  },
+  "P17": {
+    "nodeId": "28:3869",
+    "title": "P17 报修与返厂 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1000,
+    "x": 80,
+    "y": 6960,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-3869-0.png"
+    ]
+  },
+  "P18": {
+    "nodeId": "28:4013",
+    "title": "P18 科技协助 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1000,
+    "x": 1680,
+    "y": 6960,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-4013-0.png"
+    ]
+  },
+  "P19": {
+    "nodeId": "28:4082",
+    "title": "P19 报失与找回 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1000,
+    "x": 3280,
+    "y": 6960,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-4082-0.png"
+    ]
+  },
+  "P20": {
+    "nodeId": "28:4179",
+    "title": "P20 报废与处置 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1414.76,
+    "x": 4880,
+    "y": 6960,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-4179-0.png"
+    ]
+  },
+  "P21": {
+    "nodeId": "28:4302",
+    "title": "P21 交接异常与代确认 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1033.27,
+    "x": 80,
+    "y": 8600,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-4302-0.png"
+    ]
+  },
+  "P22": {
+    "nodeId": "28:4418",
+    "title": "P22 受控转派 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1096.35,
+    "x": 1680,
+    "y": 8600,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-4418-0.png"
+    ]
+  },
+  "P23": {
+    "nodeId": "28:4551",
+    "title": "P23 报表与抽样 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1140.17,
+    "x": 3280,
+    "y": 8600,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-4551-0.png"
+    ]
+  },
+  "P24": {
+    "nodeId": "28:4716",
+    "title": "P24 基础资料与人员交接 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1059.77,
+    "x": 4880,
+    "y": 8600,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-4716-0.png"
+    ]
+  },
+  "P25": {
+    "nodeId": "28:4865",
+    "title": "P25 角色与系统设置 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1000,
+    "x": 80,
+    "y": 10240,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-4865-0.png"
+    ]
+  },
+  "P26": {
+    "nodeId": "28:5003",
+    "title": "P26 消息中心 · FAMS D0.4 视觉稿",
+    "width": 1440,
+    "height": 1000,
+    "x": 1680,
+    "y": 10240,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-5003-0.png"
+    ]
+  },
+  "M01": {
+    "nodeId": "28:5116",
+    "title": "M01 绑定与资料异常 · FAMS D0.4 视觉稿",
+    "width": 390,
+    "height": 1000,
+    "x": 80,
+    "y": 12500,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-5116-0.png"
+    ]
+  },
+  "M03": {
+    "nodeId": "28:5161",
+    "title": "M03 申请中心 · FAMS D0.4 视觉稿",
+    "width": 390,
+    "height": 1074.17,
+    "x": 1100,
+    "y": 12500,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-5161-0.png"
+    ]
+  },
+  "M04": {
+    "nodeId": "28:5227",
+    "title": "M04 我的申请与进度 · FAMS D0.4 视觉稿",
+    "width": 390,
+    "height": 1298.04,
+    "x": 1610,
+    "y": 12500,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-5227-0.png"
+    ]
+  },
+  "M05": {
+    "nodeId": "28:5345",
+    "title": "M05 我的资产 · FAMS D0.4 视觉稿",
+    "width": 390,
+    "height": 1155.67,
+    "x": 2120,
+    "y": 12500,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-5345-0.png"
+    ]
+  },
+  "M06": {
+    "nodeId": "28:5415",
+    "title": "M06 部门公用资产 · FAMS D0.4 视觉稿",
+    "width": 390,
+    "height": 1000,
+    "x": 2630,
+    "y": 12500,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-5415-0.png"
+    ]
+  },
+  "M07": {
+    "nodeId": "28:5479",
+    "title": "M07 部门资产与代办 · FAMS D0.4 视觉稿",
+    "width": 390,
+    "height": 1000,
+    "x": 3140,
+    "y": 12500,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-5479-0.png"
+    ]
+  },
+  "M08": {
+    "nodeId": "28:5566",
+    "title": "M08 扫码与资产概要 · FAMS D0.4 视觉稿",
+    "width": 390,
+    "height": 1122.25,
+    "x": 80,
+    "y": 14100,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-5566-0.png"
+    ]
+  },
+  "M09": {
+    "nodeId": "28:5638",
+    "title": "M09 待接收与实物核对 · FAMS D0.4 视觉稿",
+    "width": 390,
+    "height": 1000,
+    "x": 590,
+    "y": 14100,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-5638-0.png"
+    ]
+  },
+  "M10": {
+    "nodeId": "28:5697",
+    "title": "M10 我的盘点任务 · FAMS D0.4 视觉稿",
+    "width": 390,
+    "height": 1000,
+    "x": 1100,
+    "y": 14100,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-5697-0.png"
+    ]
+  },
+  "M11": {
+    "nodeId": "28:5772",
+    "title": "M11 连续盘点 · FAMS D0.4 视觉稿",
+    "width": 390,
+    "height": 1104.2,
+    "x": 1610,
+    "y": 14100,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-5772-0.png"
+    ]
+  },
+  "M12": {
+    "nodeId": "28:5847",
+    "title": "M12 待上传与回执 · FAMS D0.4 视觉稿",
+    "width": 390,
+    "height": 1000,
+    "x": 2120,
+    "y": 14100,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-5847-0.png"
+    ]
+  },
+  "M13": {
+    "nodeId": "28:5914",
+    "title": "M13 消息与责任告知 · FAMS D0.4 视觉稿",
+    "width": 390,
+    "height": 1000,
+    "x": 2630,
+    "y": 14100,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-5914-0.png"
+    ]
+  },
+  "M14": {
+    "nodeId": "28:5966",
+    "title": "M14 我的与账号 · FAMS D0.4 视觉稿",
+    "width": 390,
+    "height": 1000,
+    "x": 3140,
+    "y": 14100,
+    "exports": [
+      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/28-5966-0.png"
+    ]
+  }
+}

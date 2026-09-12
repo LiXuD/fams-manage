@@ -1,0 +1,1995 @@
+[
+  {
+    "id": "6:54",
+    "name": "FAMS/Button",
+    "type": "COMPONENT_SET",
+    "cornerRadius": 5,
+    "absoluteBoundingBox": {
+      "x": 80,
+      "y": 346,
+      "width": 1032,
+      "height": 456
+    },
+    "children": [
+      {
+        "id": "6:6",
+        "name": "Size=PC, Kind=Primary, State=Default",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#2457d6"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 104,
+          "y": 370,
+          "width": 144,
+          "height": 40
+        },
+        "children": [
+          {
+            "id": "6:7",
+            "name": "确认接收",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#ffffff"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 148,
+              "y": 379,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "确认接收",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:8",
+        "name": "Size=PC, Kind=Primary, State=Hover",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#1943ae"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 272,
+          "y": 370,
+          "width": 144,
+          "height": 40
+        },
+        "children": [
+          {
+            "id": "6:9",
+            "name": "确认接收",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#ffffff"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 316,
+              "y": 379,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "确认接收",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:10",
+        "name": "Size=PC, Kind=Primary, State=Pressed",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#153580"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 440,
+          "y": 370,
+          "width": 144,
+          "height": 40
+        },
+        "children": [
+          {
+            "id": "6:11",
+            "name": "确认接收",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#ffffff"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 484,
+              "y": 379,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "确认接收",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:12",
+        "name": "Size=PC, Kind=Primary, State=Focus",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#2457d6"
+          }
+        ],
+        "strokes": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#2457d6"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 608,
+          "y": 370,
+          "width": 144,
+          "height": 40
+        },
+        "children": [
+          {
+            "id": "6:13",
+            "name": "确认接收",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#ffffff"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 652,
+              "y": 379,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "确认接收",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:14",
+        "name": "Size=PC, Kind=Primary, State=Disabled",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#f0f3f8"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 776,
+          "y": 370,
+          "width": 144,
+          "height": 40
+        },
+        "children": [
+          {
+            "id": "6:15",
+            "name": "确认接收",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#53657d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 820,
+              "y": 379,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "确认接收",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:16",
+        "name": "Size=PC, Kind=Primary, State=Loading",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#2457d6"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 944,
+          "y": 370,
+          "width": 144,
+          "height": 40
+        },
+        "children": [
+          {
+            "id": "6:17",
+            "name": "提交中…",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#ffffff"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 988,
+              "y": 379,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "提交中…",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:18",
+        "name": "Size=PC, Kind=Secondary, State=Default",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#ffffff"
+          }
+        ],
+        "strokes": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#e3e8f0"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 104,
+          "y": 442,
+          "width": 144,
+          "height": 40
+        },
+        "children": [
+          {
+            "id": "6:19",
+            "name": "确认接收",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#18263d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 148,
+              "y": 451,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "确认接收",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:20",
+        "name": "Size=PC, Kind=Secondary, State=Hover",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#ffffff"
+          }
+        ],
+        "strokes": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#e3e8f0"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 272,
+          "y": 442,
+          "width": 144,
+          "height": 40
+        },
+        "children": [
+          {
+            "id": "6:21",
+            "name": "确认接收",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#18263d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 316,
+              "y": 451,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "确认接收",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:22",
+        "name": "Size=PC, Kind=Secondary, State=Pressed",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#ffffff"
+          }
+        ],
+        "strokes": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#e3e8f0"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 440,
+          "y": 442,
+          "width": 144,
+          "height": 40
+        },
+        "children": [
+          {
+            "id": "6:23",
+            "name": "确认接收",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#18263d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 484,
+              "y": 451,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "确认接收",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:24",
+        "name": "Size=PC, Kind=Secondary, State=Focus",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#ffffff"
+          }
+        ],
+        "strokes": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#2457d6"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 608,
+          "y": 442,
+          "width": 144,
+          "height": 40
+        },
+        "children": [
+          {
+            "id": "6:25",
+            "name": "确认接收",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#18263d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 652,
+              "y": 451,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "确认接收",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:26",
+        "name": "Size=PC, Kind=Secondary, State=Disabled",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#f0f3f8"
+          }
+        ],
+        "strokes": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#e3e8f0"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 776,
+          "y": 442,
+          "width": 144,
+          "height": 40
+        },
+        "children": [
+          {
+            "id": "6:27",
+            "name": "确认接收",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#53657d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 820,
+              "y": 451,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "确认接收",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:28",
+        "name": "Size=PC, Kind=Secondary, State=Loading",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#ffffff"
+          }
+        ],
+        "strokes": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#e3e8f0"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 944,
+          "y": 442,
+          "width": 144,
+          "height": 40
+        },
+        "children": [
+          {
+            "id": "6:29",
+            "name": "提交中…",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#18263d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 988,
+              "y": 451,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "提交中…",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:30",
+        "name": "Size=Mobile, Kind=Primary, State=Default",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#2457d6"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 104,
+          "y": 514,
+          "width": 144,
+          "height": 48
+        },
+        "children": [
+          {
+            "id": "6:31",
+            "name": "确认接收",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#ffffff"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 148,
+              "y": 527,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "确认接收",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:32",
+        "name": "Size=Mobile, Kind=Primary, State=Hover",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#1943ae"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 272,
+          "y": 514,
+          "width": 144,
+          "height": 48
+        },
+        "children": [
+          {
+            "id": "6:33",
+            "name": "确认接收",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#ffffff"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 316,
+              "y": 527,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "确认接收",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:34",
+        "name": "Size=Mobile, Kind=Primary, State=Pressed",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#153580"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 440,
+          "y": 514,
+          "width": 144,
+          "height": 48
+        },
+        "children": [
+          {
+            "id": "6:35",
+            "name": "确认接收",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#ffffff"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 484,
+              "y": 527,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "确认接收",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:36",
+        "name": "Size=Mobile, Kind=Primary, State=Focus",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#2457d6"
+          }
+        ],
+        "strokes": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#2457d6"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 608,
+          "y": 514,
+          "width": 144,
+          "height": 48
+        },
+        "children": [
+          {
+            "id": "6:37",
+            "name": "确认接收",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#ffffff"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 652,
+              "y": 527,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "确认接收",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:38",
+        "name": "Size=Mobile, Kind=Primary, State=Disabled",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#f0f3f8"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 776,
+          "y": 514,
+          "width": 144,
+          "height": 48
+        },
+        "children": [
+          {
+            "id": "6:39",
+            "name": "确认接收",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#53657d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 820,
+              "y": 527,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "确认接收",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:40",
+        "name": "Size=Mobile, Kind=Primary, State=Loading",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#2457d6"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 944,
+          "y": 514,
+          "width": 144,
+          "height": 48
+        },
+        "children": [
+          {
+            "id": "6:41",
+            "name": "提交中…",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#ffffff"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 988,
+              "y": 527,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "提交中…",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:42",
+        "name": "Size=Mobile, Kind=Secondary, State=Default",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#ffffff"
+          }
+        ],
+        "strokes": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#e3e8f0"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 104,
+          "y": 586,
+          "width": 144,
+          "height": 48
+        },
+        "children": [
+          {
+            "id": "6:43",
+            "name": "确认接收",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#18263d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 148,
+              "y": 599,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "确认接收",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:44",
+        "name": "Size=Mobile, Kind=Secondary, State=Hover",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#ffffff"
+          }
+        ],
+        "strokes": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#e3e8f0"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 272,
+          "y": 586,
+          "width": 144,
+          "height": 48
+        },
+        "children": [
+          {
+            "id": "6:45",
+            "name": "确认接收",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#18263d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 316,
+              "y": 599,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "确认接收",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:46",
+        "name": "Size=Mobile, Kind=Secondary, State=Pressed",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#ffffff"
+          }
+        ],
+        "strokes": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#e3e8f0"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 440,
+          "y": 586,
+          "width": 144,
+          "height": 48
+        },
+        "children": [
+          {
+            "id": "6:47",
+            "name": "确认接收",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#18263d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 484,
+              "y": 599,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "确认接收",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:48",
+        "name": "Size=Mobile, Kind=Secondary, State=Focus",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#ffffff"
+          }
+        ],
+        "strokes": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#2457d6"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 608,
+          "y": 586,
+          "width": 144,
+          "height": 48
+        },
+        "children": [
+          {
+            "id": "6:49",
+            "name": "确认接收",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#18263d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 652,
+              "y": 599,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "确认接收",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:50",
+        "name": "Size=Mobile, Kind=Secondary, State=Disabled",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#f0f3f8"
+          }
+        ],
+        "strokes": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#e3e8f0"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 776,
+          "y": 586,
+          "width": 144,
+          "height": 48
+        },
+        "children": [
+          {
+            "id": "6:51",
+            "name": "确认接收",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#53657d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 820,
+              "y": 599,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "确认接收",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "6:52",
+        "name": "Size=Mobile, Kind=Secondary, State=Loading",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#ffffff"
+          }
+        ],
+        "strokes": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#e3e8f0"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 944,
+          "y": 586,
+          "width": 144,
+          "height": 48
+        },
+        "children": [
+          {
+            "id": "6:53",
+            "name": "提交中…",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#18263d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 988,
+              "y": 599,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "提交中…",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      },
+      {
+        "id": "25:2",
+        "name": "Size=PC, Kind=Danger, State=Default",
+        "type": "COMPONENT",
+        "fills": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#ffffff"
+          }
+        ],
+        "strokes": [
+          {
+            "blendMode": "NORMAL",
+            "type": "SOLID",
+            "color": "#e3e8f0"
+          }
+        ],
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 104,
+          "y": 658,
+          "width": 144,
+          "height": 40
+        },
+        "children": [
+          {
+            "id": "25:3",
+            "name": "确认接收",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#18263d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 148,
+              "y": 667,
+              "width": 56,
+              "height": 22
+            },
+            "characters": "确认接收",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "7:31",
+    "name": "FAMS/Field",
+    "type": "COMPONENT_SET",
+    "cornerRadius": 5,
+    "absoluteBoundingBox": {
+      "x": 1280,
+      "y": 346,
+      "width": 1056,
+      "height": 312
+    },
+    "children": [
+      {
+        "id": "7:6",
+        "name": "State=Default",
+        "type": "COMPONENT",
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 1304,
+          "y": 370,
+          "width": 320,
+          "height": 120
+        },
+        "children": [
+          {
+            "id": "7:7",
+            "name": "接收位置 *",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#18263d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 1304,
+              "y": 370,
+              "width": 66,
+              "height": 22
+            },
+            "characters": "接收位置 *",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          },
+          {
+            "id": "7:8",
+            "name": "Input",
+            "type": "FRAME",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#ffffff"
+              }
+            ],
+            "strokes": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#9aa8ba"
+              }
+            ],
+            "cornerRadius": 8,
+            "absoluteBoundingBox": {
+              "x": 1304,
+              "y": 400,
+              "width": 320,
+              "height": 44
+            },
+            "children": [
+              {
+                "id": "7:9",
+                "name": "产品部 / 301",
+                "type": "TEXT",
+                "fills": [
+                  {
+                    "blendMode": "NORMAL",
+                    "type": "SOLID",
+                    "color": "#18263d"
+                  }
+                ],
+                "absoluteBoundingBox": {
+                  "x": 1312,
+                  "y": 411,
+                  "width": 78,
+                  "height": 22
+                },
+                "characters": "产品部 / 301",
+                "style": {
+                  "fontFamily": "Noto Sans SC",
+                  "fontStyle": "Regular",
+                  "fontWeight": 400,
+                  "fontSize": 14,
+                  "textAlignHorizontal": "LEFT",
+                  "letterSpacing": 0,
+                  "lineHeightPx": 22
+                }
+              }
+            ]
+          },
+          {
+            "id": "7:10",
+            "name": "请填写资产实际存放位置",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#53657d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 1304,
+              "y": 452,
+              "width": 132,
+              "height": 20
+            },
+            "characters": "请填写资产实际存放位置",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 12,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 20
+            }
+          }
+        ]
+      },
+      {
+        "id": "7:11",
+        "name": "State=Focus",
+        "type": "COMPONENT",
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 1648,
+          "y": 370,
+          "width": 320,
+          "height": 120
+        },
+        "children": [
+          {
+            "id": "7:12",
+            "name": "接收位置 *",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#18263d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 1648,
+              "y": 370,
+              "width": 66,
+              "height": 22
+            },
+            "characters": "接收位置 *",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          },
+          {
+            "id": "7:13",
+            "name": "Input",
+            "type": "FRAME",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#ffffff"
+              }
+            ],
+            "strokes": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#2457d6"
+              }
+            ],
+            "cornerRadius": 8,
+            "absoluteBoundingBox": {
+              "x": 1648,
+              "y": 400,
+              "width": 320,
+              "height": 44
+            },
+            "children": [
+              {
+                "id": "7:14",
+                "name": "产品部 / 301",
+                "type": "TEXT",
+                "fills": [
+                  {
+                    "blendMode": "NORMAL",
+                    "type": "SOLID",
+                    "color": "#18263d"
+                  }
+                ],
+                "absoluteBoundingBox": {
+                  "x": 1656,
+                  "y": 411,
+                  "width": 78,
+                  "height": 22
+                },
+                "characters": "产品部 / 301",
+                "style": {
+                  "fontFamily": "Noto Sans SC",
+                  "fontStyle": "Regular",
+                  "fontWeight": 400,
+                  "fontSize": 14,
+                  "textAlignHorizontal": "LEFT",
+                  "letterSpacing": 0,
+                  "lineHeightPx": 22
+                }
+              }
+            ]
+          },
+          {
+            "id": "7:15",
+            "name": "请填写资产实际存放位置",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#53657d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 1648,
+              "y": 452,
+              "width": 132,
+              "height": 20
+            },
+            "characters": "请填写资产实际存放位置",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 12,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 20
+            }
+          }
+        ]
+      },
+      {
+        "id": "7:16",
+        "name": "State=Error",
+        "type": "COMPONENT",
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 1992,
+          "y": 370,
+          "width": 320,
+          "height": 120
+        },
+        "children": [
+          {
+            "id": "7:17",
+            "name": "接收位置 *",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#18263d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 1992,
+              "y": 370,
+              "width": 66,
+              "height": 22
+            },
+            "characters": "接收位置 *",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          },
+          {
+            "id": "7:18",
+            "name": "Input",
+            "type": "FRAME",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#ffffff"
+              }
+            ],
+            "strokes": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#b4232e"
+              }
+            ],
+            "cornerRadius": 8,
+            "absoluteBoundingBox": {
+              "x": 1992,
+              "y": 400,
+              "width": 320,
+              "height": 44
+            },
+            "children": [
+              {
+                "id": "7:19",
+                "name": "Text",
+                "type": "TEXT",
+                "fills": [
+                  {
+                    "blendMode": "NORMAL",
+                    "type": "SOLID",
+                    "color": "#18263d"
+                  }
+                ],
+                "absoluteBoundingBox": {
+                  "x": 2000,
+                  "y": 411,
+                  "width": 0,
+                  "height": 22
+                },
+                "style": {
+                  "fontFamily": "Noto Sans SC",
+                  "fontStyle": "Regular",
+                  "fontWeight": 400,
+                  "fontSize": 14,
+                  "textAlignHorizontal": "LEFT",
+                  "letterSpacing": 0,
+                  "lineHeightPx": 22
+                }
+              }
+            ]
+          },
+          {
+            "id": "7:20",
+            "name": "请选择实际接收位置",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#b4232e"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 1992,
+              "y": 452,
+              "width": 108,
+              "height": 20
+            },
+            "characters": "请选择实际接收位置",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 12,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 20
+            }
+          }
+        ]
+      },
+      {
+        "id": "7:21",
+        "name": "State=Disabled",
+        "type": "COMPONENT",
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 1304,
+          "y": 514,
+          "width": 320,
+          "height": 120
+        },
+        "children": [
+          {
+            "id": "7:22",
+            "name": "接收位置 *",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#18263d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 1304,
+              "y": 514,
+              "width": 66,
+              "height": 22
+            },
+            "characters": "接收位置 *",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          },
+          {
+            "id": "7:23",
+            "name": "Input",
+            "type": "FRAME",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#f0f3f8"
+              }
+            ],
+            "strokes": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#9aa8ba"
+              }
+            ],
+            "cornerRadius": 8,
+            "absoluteBoundingBox": {
+              "x": 1304,
+              "y": 544,
+              "width": 320,
+              "height": 44
+            },
+            "children": [
+              {
+                "id": "7:24",
+                "name": "产品部 / 301",
+                "type": "TEXT",
+                "fills": [
+                  {
+                    "blendMode": "NORMAL",
+                    "type": "SOLID",
+                    "color": "#53657d"
+                  }
+                ],
+                "absoluteBoundingBox": {
+                  "x": 1312,
+                  "y": 555,
+                  "width": 78,
+                  "height": 22
+                },
+                "characters": "产品部 / 301",
+                "style": {
+                  "fontFamily": "Noto Sans SC",
+                  "fontStyle": "Regular",
+                  "fontWeight": 400,
+                  "fontSize": 14,
+                  "textAlignHorizontal": "LEFT",
+                  "letterSpacing": 0,
+                  "lineHeightPx": 22
+                }
+              }
+            ]
+          },
+          {
+            "id": "7:25",
+            "name": "他人处理中，暂不可编辑",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#53657d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 1304,
+              "y": 596,
+              "width": 132,
+              "height": 20
+            },
+            "characters": "他人处理中，暂不可编辑",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 12,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 20
+            }
+          }
+        ]
+      },
+      {
+        "id": "7:26",
+        "name": "State=ReadOnly",
+        "type": "COMPONENT",
+        "cornerRadius": 8,
+        "absoluteBoundingBox": {
+          "x": 1648,
+          "y": 514,
+          "width": 320,
+          "height": 120
+        },
+        "children": [
+          {
+            "id": "7:27",
+            "name": "接收位置 *",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#18263d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 1648,
+              "y": 514,
+              "width": 66,
+              "height": 22
+            },
+            "characters": "接收位置 *",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 14,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 22
+            }
+          },
+          {
+            "id": "7:28",
+            "name": "Input",
+            "type": "FRAME",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#ffffff"
+              }
+            ],
+            "strokes": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#9aa8ba"
+              }
+            ],
+            "cornerRadius": 8,
+            "absoluteBoundingBox": {
+              "x": 1648,
+              "y": 544,
+              "width": 320,
+              "height": 44
+            },
+            "children": [
+              {
+                "id": "7:29",
+                "name": "产品部 / 301",
+                "type": "TEXT",
+                "fills": [
+                  {
+                    "blendMode": "NORMAL",
+                    "type": "SOLID",
+                    "color": "#18263d"
+                  }
+                ],
+                "absoluteBoundingBox": {
+                  "x": 1656,
+                  "y": 555,
+                  "width": 78,
+                  "height": 22
+                },
+                "characters": "产品部 / 301",
+                "style": {
+                  "fontFamily": "Noto Sans SC",
+                  "fontStyle": "Regular",
+                  "fontWeight": 400,
+                  "fontSize": 14,
+                  "textAlignHorizontal": "LEFT",
+                  "letterSpacing": 0,
+                  "lineHeightPx": 22
+                }
+              }
+            ]
+          },
+          {
+            "id": "7:30",
+            "name": "责任与位置通过业务动作变更",
+            "type": "TEXT",
+            "fills": [
+              {
+                "blendMode": "NORMAL",
+                "type": "SOLID",
+                "color": "#53657d"
+              }
+            ],
+            "absoluteBoundingBox": {
+              "x": 1648,
+              "y": 596,
+              "width": 156,
+              "height": 20
+            },
+            "characters": "责任与位置通过业务动作变更",
+            "style": {
+              "fontFamily": "Noto Sans SC",
+              "fontStyle": "Medium",
+              "fontWeight": 500,
+              "fontSize": 12,
+              "textAlignHorizontal": "LEFT",
+              "letterSpacing": 0,
+              "lineHeightPx": 20
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "3:5",
+    "name": "03 · Screens & Handoff",
+    "type": "CANVAS",
+    "children": []
+  }
+]

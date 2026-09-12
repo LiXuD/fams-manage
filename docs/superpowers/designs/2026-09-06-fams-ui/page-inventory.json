@@ -1,0 +1,525 @@
+[
+  {
+    "id": "P01",
+    "name": "登录",
+    "category": "员工身份 / 系统入口",
+    "rule": "账号绑定企业员工；初次改密、停用与锁定明确反馈。",
+    "role": "企业员工",
+    "localVisual": "prototype.html?page=P01",
+    "presentation": "prototype.html?present=1&page=P01",
+    "screenshot": "screens/P01.png",
+    "componentExamples": [
+      "field"
+    ]
+  },
+  {
+    "id": "P02",
+    "name": "工作台",
+    "category": "任务入口 / 兼岗合并",
+    "rule": "共享待审批、待领取与我处理中分区；指标可下钻，异常有下一步。",
+    "role": "资产管理员 + 库管员",
+    "localVisual": "prototype.html?page=P02",
+    "presentation": "prototype.html?present=1&page=P02",
+    "screenshot": "screens/P02.png",
+    "componentExamples": [
+      "navigation",
+      "quantity"
+    ]
+  },
+  {
+    "id": "P03",
+    "name": "资产列表",
+    "category": "台账 / 查找与筛选",
+    "rule": "固定身份列；正式责任、实物去向和业务占用同时可理解。",
+    "role": "库管员",
+    "localVisual": "prototype.html?page=P03",
+    "presentation": "prototype.html?present=1&page=P03",
+    "screenshot": "screens/P03.png",
+    "componentExamples": [
+      "status",
+      "table",
+      "notice"
+    ]
+  },
+  {
+    "id": "P04",
+    "name": "资产详情",
+    "category": "台账 / 唯一资产入口",
+    "rule": "常驻概要与九页签；待交接不作为资产生命周期。",
+    "role": "资产管理员",
+    "localVisual": "prototype.html?page=P04",
+    "presentation": "prototype.html?present=1&page=P04",
+    "screenshot": "screens/P04.png",
+    "componentExamples": [
+      "status",
+      "navigation",
+      "notice"
+    ]
+  },
+  {
+    "id": "P05",
+    "name": "单个与复制建卡",
+    "category": "台账 / 建卡表单",
+    "rule": "基础身份、仓库位置与扩展资料分区；不采集资产原值。",
+    "role": "库管员",
+    "localVisual": "prototype.html?page=P05",
+    "presentation": "prototype.html?present=1&page=P05",
+    "screenshot": "screens/P05.png",
+    "componentExamples": [
+      "field"
+    ]
+  },
+  {
+    "id": "P06",
+    "name": "导入与后台任务",
+    "category": "台账 / 批次向导",
+    "rule": "错误定位至原始行；离开页面后台任务继续。",
+    "role": "库管员",
+    "localVisual": "prototype.html?page=P06",
+    "presentation": "prototype.html?present=1&page=P06",
+    "screenshot": "screens/P06.png",
+    "componentExamples": [
+      "field",
+      "table"
+    ]
+  },
+  {
+    "id": "P07",
+    "name": "期初初始化",
+    "category": "台账 / 受控核验发布",
+    "rule": "库管准备、管理员核验；原状态与未结承接资料成组展示。",
+    "role": "资产管理员",
+    "localVisual": "prototype.html?page=P07",
+    "presentation": "prototype.html?present=1&page=P07",
+    "screenshot": "screens/P07.png",
+    "componentExamples": []
+  },
+  {
+    "id": "P08",
+    "name": "标签打印",
+    "category": "台账 / 标签任务",
+    "rule": "只打印正式发布卡片；重打不改变身份。",
+    "role": "库管员",
+    "localVisual": "prototype.html?page=P08",
+    "presentation": "prototype.html?present=1&page=P08",
+    "screenshot": "screens/P08.png",
+    "componentExamples": []
+  },
+  {
+    "id": "P09",
+    "name": "共享审批池",
+    "category": "工作台 / 管理决定",
+    "rule": "任意一名管理员决定；仅查看不占用；兼岗批准不自动认领。",
+    "role": "资产管理员",
+    "localVisual": "prototype.html?page=P09",
+    "presentation": "prototype.html?present=1&page=P09",
+    "screenshot": "screens/P09.png",
+    "componentExamples": [
+      "button",
+      "table",
+      "notice"
+    ]
+  },
+  {
+    "id": "P10",
+    "name": "库管执行池",
+    "category": "工作台 / 共享执行",
+    "rule": "查看不占用；开始处理后整单独占；他人处理只读。",
+    "role": "库管员",
+    "localVisual": "prototype.html?page=P10",
+    "presentation": "prototype.html?present=1&page=P10",
+    "screenshot": "screens/P10.png",
+    "componentExamples": [
+      "table",
+      "notice"
+    ]
+  },
+  {
+    "id": "P11",
+    "name": "统一业务详情",
+    "category": "业务 / 单据与后续",
+    "rule": "需求、执行、实物阶段和原单后续在同一入口可追溯。",
+    "role": "资产管理员 + 库管员",
+    "localVisual": "prototype.html?page=P11",
+    "presentation": "prototype.html?present=1&page=P11",
+    "screenshot": "screens/P11.png",
+    "componentExamples": [
+      "status",
+      "quantity"
+    ]
+  },
+  {
+    "id": "P12",
+    "name": "分配与交出",
+    "category": "业务 / 库管执行",
+    "rule": "申请 3 件、分配 2 件、1 件无法满足；逐项交出与接收。",
+    "role": "当前处理库管",
+    "localVisual": "prototype.html?page=P12",
+    "presentation": "prototype.html?present=1&page=P12",
+    "screenshot": "screens/P12.png",
+    "componentExamples": [
+      "button",
+      "table",
+      "quantity",
+      "asset"
+    ]
+  },
+  {
+    "id": "P13",
+    "name": "入库与退还验收",
+    "category": "业务 / 实物验收模板",
+    "rule": "正常、损坏、缺件和归还遗失有明确后续；不伪造归还。",
+    "role": "当前处理库管",
+    "localVisual": "prototype.html?page=P13",
+    "presentation": "prototype.html?present=1&page=P13",
+    "screenshot": "screens/P13.png",
+    "componentExamples": []
+  },
+  {
+    "id": "P14",
+    "name": "调拨与目标变更",
+    "category": "业务 / 前后对比",
+    "rule": "跨仓库分组提示；整单一个库管，实际目标人接收。",
+    "role": "当前处理库管",
+    "localVisual": "prototype.html?page=P14",
+    "presentation": "prototype.html?present=1&page=P14",
+    "screenshot": "screens/P14.png",
+    "componentExamples": [
+      "field"
+    ]
+  },
+  {
+    "id": "P15",
+    "name": "盘点任务",
+    "category": "盘点 / 组织与封存",
+    "rule": "范围、人员、进度、未盘原因与未同步情况；终态不重开。",
+    "role": "资产管理员",
+    "localVisual": "prototype.html?page=P15",
+    "presentation": "prototype.html?present=1&page=P15",
+    "screenshot": "screens/P15.png",
+    "componentExamples": [
+      "table",
+      "quantity"
+    ]
+  },
+  {
+    "id": "P16",
+    "name": "差异与证据复核",
+    "category": "盘点 / 复核裁决",
+    "rule": "快照、现场证据、当前资产对照；多个差异分别闭环。",
+    "role": "资产管理员",
+    "localVisual": "prototype.html?page=P16",
+    "presentation": "prototype.html?present=1&page=P16",
+    "screenshot": "screens/P16.png",
+    "componentExamples": [
+      "notice"
+    ]
+  },
+  {
+    "id": "P17",
+    "name": "报修与返厂",
+    "category": "维修 / 轮次与去向",
+    "rule": "科技意见、原责任、实物去向、多轮返厂与最终返还分开。",
+    "role": "当前处理库管",
+    "localVisual": "prototype.html?page=P17",
+    "presentation": "prototype.html?present=1&page=P17",
+    "screenshot": "screens/P17.png",
+    "componentExamples": []
+  },
+  {
+    "id": "P18",
+    "name": "科技协助",
+    "category": "维修 / 被邀请意见",
+    "rule": "只追加被邀请工单的意见，不取得整单执行权。",
+    "role": "科技协助人员",
+    "localVisual": "prototype.html?page=P18",
+    "presentation": "prototype.html?present=1&page=P18",
+    "screenshot": "screens/P18.png",
+    "componentExamples": []
+  },
+  {
+    "id": "P19",
+    "name": "报失与找回",
+    "category": "异常 / 查找与责任",
+    "rule": "确认遗失后仍保留原责任与后续跟进。",
+    "role": "当前处理库管",
+    "localVisual": "prototype.html?page=P19",
+    "presentation": "prototype.html?present=1&page=P19",
+    "screenshot": "screens/P19.png",
+    "componentExamples": []
+  },
+  {
+    "id": "P20",
+    "name": "报废与处置",
+    "category": "退出 / 执行与纠正",
+    "rule": "批准、报废执行和处置三种事实；受控冲正不覆盖历史。",
+    "role": "当前处理库管",
+    "localVisual": "prototype.html?page=P20",
+    "presentation": "prototype.html?present=1&page=P20",
+    "screenshot": "screens/P20.png",
+    "componentExamples": [
+      "button",
+      "notice"
+    ]
+  },
+  {
+    "id": "P21",
+    "name": "交接异常与代确认",
+    "category": "交接 / 真实凭证",
+    "rule": "库管申请、单管理员决定、当前库管执行，再通知生效责任人。",
+    "role": "当前处理库管",
+    "localVisual": "prototype.html?page=P21",
+    "presentation": "prototype.html?present=1&page=P21",
+    "screenshot": "screens/P21.png",
+    "componentExamples": []
+  },
+  {
+    "id": "P22",
+    "name": "受控转派",
+    "category": "异常 / 整单处理交接",
+    "rule": "核对实物、原处理人、未同步情况，转派不解锁资产。",
+    "role": "资产管理员",
+    "localVisual": "prototype.html?page=P22",
+    "presentation": "prototype.html?present=1&page=P22",
+    "screenshot": "screens/P22.png",
+    "componentExamples": []
+  },
+  {
+    "id": "P23",
+    "name": "报表与抽样",
+    "category": "统计 / 可追溯口径",
+    "rule": "20 类报表共用模板；保留分子分母、抽样来源与补录前结果。",
+    "role": "审计只读 / 抽样登记另授权",
+    "localVisual": "prototype.html?page=P23",
+    "presentation": "prototype.html?present=1&page=P23",
+    "screenshot": "screens/P23.png",
+    "componentExamples": [
+      "table"
+    ]
+  },
+  {
+    "id": "P24",
+    "name": "基础资料与人员交接",
+    "category": "基础 / 组织责任",
+    "rule": "员工调岗不重写资产；停用即时撤权，遗留责任正式交接。",
+    "role": "系统管理员 / 交接另需业务角色",
+    "localVisual": "prototype.html?page=P24",
+    "presentation": "prototype.html?present=1&page=P24",
+    "screenshot": "screens/P24.png",
+    "componentExamples": [
+      "table"
+    ]
+  },
+  {
+    "id": "P25",
+    "name": "角色与系统设置",
+    "category": "系统 / 显式授权",
+    "rule": "配置角色不等于拥有业务权限；恢复成员后原待办仍保留。",
+    "role": "系统管理员",
+    "localVisual": "prototype.html?page=P25",
+    "presentation": "prototype.html?present=1&page=P25",
+    "screenshot": "screens/P25.png",
+    "componentExamples": [
+      "navigation",
+      "table"
+    ]
+  },
+  {
+    "id": "P26",
+    "name": "消息中心",
+    "category": "全局 / 站内结果",
+    "rule": "业务结果与个人阅读分开；外部触达不决定业务完成。",
+    "role": "资产管理员 + 库管员",
+    "localVisual": "prototype.html?page=P26",
+    "presentation": "prototype.html?present=1&page=P26",
+    "screenshot": "screens/P26.png",
+    "componentExamples": [
+      "table"
+    ]
+  },
+  {
+    "id": "M01",
+    "name": "绑定与资料异常",
+    "category": "账号 / 初次绑定",
+    "rule": "工号与企业登记手机号短信验证；未登录也有内部支持入口。",
+    "role": "普通员工",
+    "localVisual": "prototype.html?page=M01",
+    "presentation": "prototype.html?present=1&page=M01",
+    "screenshot": "screens/M01.png",
+    "componentExamples": [
+      "field"
+    ]
+  },
+  {
+    "id": "M02",
+    "name": "首页",
+    "category": "现场 / 当前待办",
+    "rule": "优先待接收、借用临期和盘点；不放全企业指标。",
+    "role": "普通员工",
+    "localVisual": "prototype.html?page=M02",
+    "presentation": "prototype.html?present=1&page=M02",
+    "screenshot": "screens/M02.png",
+    "componentExamples": [
+      "navigation"
+    ]
+  },
+  {
+    "id": "M03",
+    "name": "申请中心",
+    "category": "申请 / 按业务变化的表单",
+    "rule": "领借按需求申请，退还等选择本人或代办范围资产。",
+    "role": "普通员工",
+    "localVisual": "prototype.html?page=M03",
+    "presentation": "prototype.html?present=1&page=M03",
+    "screenshot": "screens/M03.png",
+    "componentExamples": [
+      "field"
+    ]
+  },
+  {
+    "id": "M04",
+    "name": "我的申请与进度",
+    "category": "申请 / 数量与后续",
+    "rule": "明确已完成、待交接与无法满足；重新申请保留来源。",
+    "role": "普通员工",
+    "localVisual": "prototype.html?page=M04",
+    "presentation": "prototype.html?present=1&page=M04",
+    "screenshot": "screens/M04.png",
+    "componentExamples": [
+      "status",
+      "quantity"
+    ]
+  },
+  {
+    "id": "M05",
+    "name": "我的资产",
+    "category": "保管 / 在用与借用",
+    "rule": "个人资产与公用资产分开；借用申请完成仍需归还。",
+    "role": "普通员工",
+    "localVisual": "prototype.html?page=M05",
+    "presentation": "prototype.html?present=1&page=M05",
+    "screenshot": "screens/M05.png",
+    "componentExamples": [
+      "asset"
+    ]
+  },
+  {
+    "id": "M06",
+    "name": "部门公用资产",
+    "category": "部门 / 公用概要",
+    "rule": "普通员工可报修；接收仅指定责任人。",
+    "role": "普通员工",
+    "localVisual": "prototype.html?page=M06",
+    "presentation": "prototype.html?present=1&page=M06",
+    "screenshot": "screens/M06.png",
+    "componentExamples": [
+      "asset"
+    ]
+  },
+  {
+    "id": "M07",
+    "name": "部门资产与代办",
+    "category": "部门 / 资产员工作",
+    "rule": "个人和公用必要明细均可代申请；不能代个人接收。",
+    "role": "部门资产员",
+    "localVisual": "prototype.html?page=M07",
+    "presentation": "prototype.html?present=1&page=M07",
+    "screenshot": "screens/M07.png",
+    "componentExamples": []
+  },
+  {
+    "id": "M08",
+    "name": "扫码与资产概要",
+    "category": "扫码 / 情境识别",
+    "rule": "扫码只识别身份，按当前权限和业务阶段提供动作。",
+    "role": "普通员工",
+    "localVisual": "prototype.html?page=M08",
+    "presentation": "prototype.html?present=1&page=M08",
+    "screenshot": "screens/M08.png",
+    "componentExamples": [
+      "notice",
+      "asset"
+    ]
+  },
+  {
+    "id": "M09",
+    "name": "待接收与实物核对",
+    "category": "交接 / 实际接收",
+    "rule": "仅已交出且本人可接收项；确认或反馈不符，拒收不解锁。",
+    "role": "实际接收人",
+    "localVisual": "prototype.html?page=M09",
+    "presentation": "prototype.html?present=1&page=M09",
+    "screenshot": "screens/M09.png",
+    "componentExamples": [
+      "button",
+      "notice",
+      "asset"
+    ]
+  },
+  {
+    "id": "M10",
+    "name": "我的盘点任务",
+    "category": "盘点 / 执行入口",
+    "rule": "任务进度与待上传分别显示；可确认已完成同步。",
+    "role": "被分配执行人",
+    "localVisual": "prototype.html?page=M10",
+    "presentation": "prototype.html?present=1&page=M10",
+    "screenshot": "screens/M10.png",
+    "componentExamples": [
+      "quantity"
+    ]
+  },
+  {
+    "id": "M11",
+    "name": "连续盘点",
+    "category": "盘点 / 现场核实",
+    "rule": "常驻房间，逐件一致一次保存；离线未知不能直接算盘盈。",
+    "role": "被分配执行人",
+    "localVisual": "prototype.html?page=M11",
+    "presentation": "prototype.html?present=1&page=M11",
+    "screenshot": "screens/M11.png",
+    "componentExamples": [
+      "button",
+      "notice",
+      "asset"
+    ]
+  },
+  {
+    "id": "M12",
+    "name": "待上传与回执",
+    "category": "盘点 / 离线证据",
+    "rule": "本地持久化起 72 小时；迟到不改报告，过期安排补盘。",
+    "role": "被分配执行人",
+    "localVisual": "prototype.html?page=M12",
+    "presentation": "prototype.html?present=1&page=M12",
+    "screenshot": "screens/M12.png",
+    "componentExamples": [
+      "status",
+      "notice"
+    ]
+  },
+  {
+    "id": "M13",
+    "name": "消息与责任告知",
+    "category": "通知 / 结果与下一步",
+    "rule": "代确认成功后告知责任；无需再接收一次；零微信可用。",
+    "role": "普通员工",
+    "localVisual": "prototype.html?page=M13",
+    "presentation": "prototype.html?present=1&page=M13",
+    "screenshot": "screens/M13.png",
+    "componentExamples": []
+  },
+  {
+    "id": "M14",
+    "name": "我的与账号",
+    "category": "账号 / 个人记录",
+    "rule": "本人历史、绑定、离线记录和退出；身份失效优先。",
+    "role": "普通员工",
+    "localVisual": "prototype.html?page=M14",
+    "presentation": "prototype.html?present=1&page=M14",
+    "screenshot": "screens/M14.png",
+    "componentExamples": [
+      "navigation"
+    ]
+  }
+]

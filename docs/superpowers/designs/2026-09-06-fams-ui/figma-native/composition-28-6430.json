@@ -1,0 +1,457 @@
+{
+  "id": "28:6430",
+  "name": "Checkbox · 原生选择控件",
+  "type": "FRAME",
+  "fills": [
+    {
+      "blendMode": "NORMAL",
+      "type": "SOLID",
+      "color": "#ffffff"
+    }
+  ],
+  "absoluteBoundingBox": {
+    "x": 80,
+    "y": 7040,
+    "width": 260,
+    "height": 192
+  },
+  "children": [
+    {
+      "id": "28:6431",
+      "name": "fams-selection",
+      "type": "FRAME",
+      "fills": [
+        {
+          "opacity": 9.999999717180685e-10,
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 80,
+        "y": 7040,
+        "width": 204.9499969482422,
+        "height": 48
+      },
+      "children": [
+        {
+          "id": "28:6432",
+          "name": "select-16",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "strokes": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "cornerRadius": 2,
+          "absoluteBoundingBox": {
+            "x": 80,
+            "y": 7054,
+            "width": 20,
+            "height": 20
+          },
+          "children": []
+        },
+        {
+          "id": "28:6433",
+          "name": "SPAN",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 112,
+            "y": 7052.7998046875,
+            "width": 172.9499969482422,
+            "height": 22.399999618530273
+          },
+          "children": [
+            {
+              "id": "28:6434",
+              "name": "Checkbox / Unchecked",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 112,
+                "y": 7052.5498046875,
+                "width": 154.9499969482422,
+                "height": 22
+              },
+              "characters": "Checkbox / Unchecked",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "28:6435",
+      "name": "fams-selection",
+      "type": "FRAME",
+      "fills": [
+        {
+          "opacity": 9.999999717180685e-10,
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 80,
+        "y": 7088,
+        "width": 204.9499969482422,
+        "height": 48
+      },
+      "children": [
+        {
+          "id": "28:6436",
+          "name": "select-17",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "strokes": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "cornerRadius": 2,
+          "absoluteBoundingBox": {
+            "x": 80,
+            "y": 7102,
+            "width": 20,
+            "height": 20
+          },
+          "children": [
+            {
+              "id": "28:6437",
+              "name": "✓",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#000000"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 82,
+                "y": 7102,
+                "width": 22,
+                "height": 20
+              },
+              "characters": "✓",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Medium",
+                "fontWeight": 500,
+                "fontSize": 12,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 20
+              }
+            }
+          ]
+        },
+        {
+          "id": "28:6438",
+          "name": "SPAN",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 112,
+            "y": 7100.7998046875,
+            "width": 156.9499969482422,
+            "height": 22.399999618530273
+          },
+          "children": [
+            {
+              "id": "28:6439",
+              "name": "Checkbox / Checked",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 112,
+                "y": 7100.5498046875,
+                "width": 138.9499969482422,
+                "height": 22
+              },
+              "characters": "Checkbox / Checked",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "28:6440",
+      "name": "fams-selection",
+      "type": "FRAME",
+      "fills": [
+        {
+          "opacity": 9.999999717180685e-10,
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 80,
+        "y": 7136,
+        "width": 204.9499969482422,
+        "height": 48
+      },
+      "children": [
+        {
+          "id": "28:6441",
+          "name": "select-18",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#f0f3f8"
+            }
+          ],
+          "strokes": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "cornerRadius": 2,
+          "absoluteBoundingBox": {
+            "x": 80,
+            "y": 7150,
+            "width": 20,
+            "height": 20
+          },
+          "children": []
+        },
+        {
+          "id": "28:6442",
+          "name": "SPAN",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 112,
+            "y": 7148.7998046875,
+            "width": 156.27000427246094,
+            "height": 22.399999618530273
+          },
+          "children": [
+            {
+              "id": "28:6443",
+              "name": "Checkbox / Disabled",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#53657d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 112,
+                "y": 7148.5498046875,
+                "width": 138.27000427246094,
+                "height": 22
+              },
+              "characters": "Checkbox / Disabled",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "28:6444",
+      "name": "fams-selection",
+      "type": "FRAME",
+      "fills": [
+        {
+          "opacity": 9.999999717180685e-10,
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 80,
+        "y": 7184,
+        "width": 204.9499969482422,
+        "height": 48
+      },
+      "children": [
+        {
+          "id": "28:6445",
+          "name": "select-19",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "strokes": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "cornerRadius": 2,
+          "absoluteBoundingBox": {
+            "x": 80,
+            "y": 7198,
+            "width": 20,
+            "height": 20
+          },
+          "children": [
+            {
+              "id": "30:6630",
+              "name": "部分选中",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#2457d6"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 85,
+                "y": 7207,
+                "width": 10,
+                "height": 2
+              },
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "28:6446",
+          "name": "SPAN",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 112,
+            "y": 7196.7998046875,
+            "width": 138.58999633789062,
+            "height": 22.399999618530273
+          },
+          "children": [
+            {
+              "id": "28:6447",
+              "name": "Checkbox / Mixed",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 112,
+                "y": 7196.5498046875,
+                "width": 120.58999633789062,
+                "height": 22
+              },
+              "characters": "Checkbox / Mixed",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

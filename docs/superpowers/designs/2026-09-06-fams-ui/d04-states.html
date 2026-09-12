@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FAMS D0.4 · 状态与视觉比选</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="library/components.css">
+  <link rel="stylesheet" href="d04-states.css">
+  <link rel="stylesheet" href="d04-scan-caption.css">
+  <link rel="stylesheet" href="d04-responsive.css">
+</head>
+<body>
+  <header class="d04-gallery-header">
+    <div><small>D0.4 · SIMULATED HANDOFF GALLERY</small><h1>异常状态、排版压力与视觉比选</h1><p>所有示例均为虚构的设计样张，不调用相机、权限、接口或服务端；状态变化只发生在本页。</p></div>
+    <nav><a href="component-library.html">组件库</a><a href="prototype.html?page=P03">40 页原型</a></nav>
+  </header>
+  <main>
+    <section aria-labelledby="page-state-title"><div class="d04-section-title"><small>01 / PAGE STATES</small><h2 id="page-state-title">页面级异常与可见退路</h2></div><div id="page-states" class="d04-gallery-stack"></div></section>
+    <section aria-labelledby="field-title"><div class="d04-section-title"><small>02 / FIELD STRESS</small><h2 id="field-title">Field 长文案与三类控件</h2></div><div id="field-stress" class="d04-mobile-grid"></div></section>
+    <section aria-labelledby="interaction-title"><div class="d04-section-title"><small>03 / INTERACTION HANDOFF</small><h2 id="interaction-title">焦点顺序与扫码运动状态</h2></div><div id="interaction-handoff" class="d04-mobile-grid"></div></section>
+    <section aria-labelledby="m12-title"><div class="d04-section-title"><small>04 / EXISTING M12</small><h2 id="m12-title">沿用已有离线回执情境</h2><p>迟到、过期与身份失效直接进入 M12 现有情境，避免复制另一套行为。</p></div><div id="existing-m12" class="d04-link-row"></div></section>
+    <section aria-labelledby="compare-title"><div class="d04-section-title"><small>05 / A-B COMPARISON</small><h2 id="compare-title">一次只比较一个视觉变量</h2><p>默认原型仍使用冷灰画布、M02 纯色顶部和 14px/22px 表格。暖画布、M02 微渐变及 14px/20px 紧凑表格通过独立查询参数启用，可组合但不会写入业务状态。</p></div><div id="comparisons" class="d04-gallery-stack"></div></section>
+  </main>
+  <script src="library/components.js"></script>
+  <script src="d04-states.js?v=d04-compact-comparison-v1"></script>
+</body>
+</html>

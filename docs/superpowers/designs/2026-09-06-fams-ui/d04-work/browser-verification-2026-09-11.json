@@ -1,0 +1,67 @@
+{
+  "verifiedAt": "2026-09-11T09:57:51+08:00",
+  "source": "Playwright CLI run-code against local HTTP server 127.0.0.1:8785",
+  "build": {
+    "sourceSha256": "61e88a51033fac847d0582492ef2c473785fd66047f640d31e4d47e748b41a11",
+    "auditStatic": "pass",
+    "tokens": 56,
+    "pages": 40,
+    "componentFamilies": 8,
+    "variants": 85,
+    "brokenLocalLinks": 0
+  },
+  "verifyLocal": {
+    "galleryImages": 40,
+    "duplicateIds": 0,
+    "invalidUnlabelledControls": 0,
+    "testedViewports": ["PC 1440", "PC 1024", "mobile 390", "mobile 320"],
+    "allOverflowChecksPassed": true,
+    "interactionsPassed": 13,
+    "pageErrors": 0,
+    "requestFailures": 0
+  },
+  "verifyD04States": {
+    "examples": 24,
+    "comparisonIframes": 10,
+    "viewports": [1440, 390, 320],
+    "allOverflowChecksPassed": true,
+    "focusOpenTabClosePassed": true,
+    "scanStateChecksPassed": true,
+    "pageErrors": 0
+  },
+  "p23Responsive": {
+    "viewport": "1024x1140",
+    "panelWidths": [402, 402],
+    "summaryValueWidth": 232,
+    "stageTableClientWidth": 358,
+    "stageTableScrollWidth": 358,
+    "stageActionWidth": 68,
+    "passed": true
+  },
+  "boundary": "These are local static-prototype checks. They do not prove real-device, camera, production-service, permission, concurrency, offline-backend, or usability-study acceptance.",
+  "latestRecheck": {
+    "verifiedAt": "2026-09-11T11:28:29+08:00",
+    "source": "Fresh Playwright CLI run-code in named session fams-final",
+    "p23Responsive": {
+      "viewport": "1024x1140",
+      "gridWidth": 824,
+      "panelWidths": [402, 402],
+      "summaryValueWidth": 232,
+      "stageTableClientWidth": 358,
+      "stageTableScrollWidth": 358,
+      "stageActionWidth": 68,
+      "documentOverflow": false
+    },
+    "d04States": {
+      "viewports": [1440, 390, 320],
+      "examplesPerViewport": 24,
+      "comparisonIframesPerViewport": 10,
+      "documentOverflow": false,
+      "focusOpenTabClosePassed": true,
+      "scanStarted": true,
+      "scanStoppedTextMatches": 2,
+      "pageErrors": 0,
+      "consoleErrors": 0
+    }
+  }
+}

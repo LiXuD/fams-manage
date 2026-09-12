@@ -1,0 +1,252 @@
+{
+  "id": "28:6566",
+  "name": "打开接收确认",
+  "type": "FRAME",
+  "fills": [
+    {
+      "blendMode": "NORMAL",
+      "type": "SOLID",
+      "color": "#ffffff"
+    }
+  ],
+  "strokes": [
+    {
+      "blendMode": "NORMAL",
+      "type": "SOLID",
+      "color": "#e3e8f0"
+    }
+  ],
+  "cornerRadius": 16,
+  "absoluteBoundingBox": {
+    "x": 1400,
+    "y": 8080,
+    "width": 520,
+    "height": 219.58999633789062
+  },
+  "children": [
+    {
+      "id": "28:6606",
+      "name": "dialog-14",
+      "type": "FRAME",
+      "fills": [
+        {
+          "opacity": 9.999999717180685e-10,
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 1429,
+        "y": 8109,
+        "width": 462,
+        "height": 34
+      },
+      "children": [
+        {
+          "id": "28:6607",
+          "name": "确认接收资产",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1429,
+            "y": 8111.75,
+            "width": 126,
+            "height": 28
+          },
+          "characters": "确认接收资产",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 18,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 28
+          }
+        }
+      ]
+    },
+    {
+      "id": "28:6608",
+      "name": "P",
+      "type": "FRAME",
+      "fills": [
+        {
+          "opacity": 9.999999717180685e-10,
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 1429,
+        "y": 8159,
+        "width": 462,
+        "height": 47.59000015258789
+      },
+      "children": [
+        {
+          "id": "28:6609",
+          "name": "示例资产 FA-2026-00102。确认后责任变更为林晓，位置为产品部 /301。",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1429,
+            "y": 8159.75,
+            "width": 427.7300109863281,
+            "height": 44
+          },
+          "characters": "示例资产 FA-2026-00102。确认后责任变更为林晓，位置为产品部 /301。",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Regular",
+            "fontWeight": 400,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        }
+      ]
+    },
+    {
+      "id": "28:6610",
+      "name": "fams-dialog-actions",
+      "type": "FRAME",
+      "fills": [
+        {
+          "opacity": 9.999999717180685e-10,
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 1429,
+        "y": 8230.58984375,
+        "width": 462,
+        "height": 40
+      },
+      "children": [
+        {
+          "id": "28:6611",
+          "name": "操作 / 取消",
+          "type": "INSTANCE",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "strokes": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#e3e8f0"
+            }
+          ],
+          "cornerRadius": 8,
+          "absoluteBoundingBox": {
+            "x": 1727,
+            "y": 8230.58984375,
+            "width": 62,
+            "height": 40
+          },
+          "children": [
+            {
+              "id": "I28:6611;6:19",
+              "name": "确认接收",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 1744,
+                "y": 8239.58984375,
+                "width": 28,
+                "height": 22
+              },
+              "characters": "取消",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Medium",
+                "fontWeight": 500,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "29:6624",
+          "name": "FAMS/Button",
+          "type": "INSTANCE",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#2457d6"
+            }
+          ],
+          "cornerRadius": 8,
+          "absoluteBoundingBox": {
+            "x": 1801,
+            "y": 8230.58984375,
+            "width": 90,
+            "height": 40
+          },
+          "children": [
+            {
+              "id": "I29:6624;6:7",
+              "name": "确认接收",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#ffffff"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 1818,
+                "y": 8239.58984375,
+                "width": 56,
+                "height": 22
+              },
+              "characters": "确认接收",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Medium",
+                "fontWeight": 500,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,332 @@
+{
+  "id": "28:6449",
+  "name": "Radio · 原生选择控件",
+  "type": "FRAME",
+  "fills": [
+    {
+      "blendMode": "NORMAL",
+      "type": "SOLID",
+      "color": "#ffffff"
+    }
+  ],
+  "absoluteBoundingBox": {
+    "x": 740,
+    "y": 7040,
+    "width": 240,
+    "height": 144
+  },
+  "children": [
+    {
+      "id": "28:6450",
+      "name": "fams-selection",
+      "type": "FRAME",
+      "fills": [
+        {
+          "opacity": 9.999999717180685e-10,
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 740,
+        "y": 7040,
+        "width": 177.0399932861328,
+        "height": 48
+      },
+      "children": [
+        {
+          "id": "28:6451",
+          "name": "select-20",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "strokes": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "cornerRadius": 10,
+          "absoluteBoundingBox": {
+            "x": 740,
+            "y": 7054,
+            "width": 20,
+            "height": 20
+          },
+          "children": []
+        },
+        {
+          "id": "28:6452",
+          "name": "SPAN",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 772,
+            "y": 7052.7998046875,
+            "width": 145.0399932861328,
+            "height": 22.399999618530273
+          },
+          "children": [
+            {
+              "id": "28:6453",
+              "name": "Radio / Unchecked",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 772,
+                "y": 7052.5498046875,
+                "width": 127.04000091552734,
+                "height": 22
+              },
+              "characters": "Radio / Unchecked",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "28:6454",
+      "name": "fams-selection",
+      "type": "FRAME",
+      "fills": [
+        {
+          "opacity": 9.999999717180685e-10,
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 740,
+        "y": 7088,
+        "width": 177.0399932861328,
+        "height": 48
+      },
+      "children": [
+        {
+          "id": "28:6455",
+          "name": "select-21",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "strokes": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "cornerRadius": 10,
+          "absoluteBoundingBox": {
+            "x": 740,
+            "y": 7102,
+            "width": 20,
+            "height": 20
+          },
+          "children": [
+            {
+              "id": "30:6631",
+              "name": "已选中",
+              "type": "FRAME",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#2457d6"
+                }
+              ],
+              "cornerRadius": 4,
+              "absoluteBoundingBox": {
+                "x": 746,
+                "y": 7108,
+                "width": 8,
+                "height": 8
+              },
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "28:6457",
+          "name": "SPAN",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 772,
+            "y": 7100.7998046875,
+            "width": 129.0399932861328,
+            "height": 22.399999618530273
+          },
+          "children": [
+            {
+              "id": "28:6458",
+              "name": "Radio / Checked",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 772,
+                "y": 7100.5498046875,
+                "width": 111.04000091552734,
+                "height": 22
+              },
+              "characters": "Radio / Checked",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "28:6459",
+      "name": "fams-selection",
+      "type": "FRAME",
+      "fills": [
+        {
+          "opacity": 9.999999717180685e-10,
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "absoluteBoundingBox": {
+        "x": 740,
+        "y": 7136,
+        "width": 177.0399932861328,
+        "height": 48
+      },
+      "children": [
+        {
+          "id": "28:6460",
+          "name": "select-22",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#f0f3f8"
+            }
+          ],
+          "strokes": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "cornerRadius": 10,
+          "absoluteBoundingBox": {
+            "x": 740,
+            "y": 7150,
+            "width": 20,
+            "height": 20
+          },
+          "children": []
+        },
+        {
+          "id": "28:6461",
+          "name": "SPAN",
+          "type": "FRAME",
+          "fills": [
+            {
+              "opacity": 9.999999717180685e-10,
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 772,
+            "y": 7148.7998046875,
+            "width": 128.36000061035156,
+            "height": 22.399999618530273
+          },
+          "children": [
+            {
+              "id": "28:6462",
+              "name": "Radio / Disabled",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#53657d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 772,
+                "y": 7148.5498046875,
+                "width": 110.36000061035156,
+                "height": 22
+              },
+              "characters": "Radio / Disabled",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

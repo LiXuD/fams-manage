@@ -1,0 +1,71 @@
+{
+  "fileKey": "N4BgxhOTtSFpsoxcN7t4XD",
+  "foundations": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"collections\":[\"VariableCollectionId:2:2\",\"VariableCollectionId:2:3\"],\"variables\":{\"palette/white\":\"VariableID:2:4\",\"palette/gray25\":\"VariableID:2:5\",\"palette/gray50\":\"VariableID:2:6\",\"palette/gray100\":\"VariableID:2:7\",\"palette/gray300\":\"VariableID:2:8\",\"palette/gray500\":\"VariableID:2:9\",\"palette/gray700\":\"VariableID:2:10\",\"palette/gray900\":\"VariableID:2:11\",\"palette/blue50\":\"VariableID:2:12\",\"palette/blue600\":\"VariableID:2:13\",\"palette/blue700\":\"VariableID:2:14\",\"palette/blue800\":\"VariableID:2:15\",\"palette/green50\":\"VariableID:2:16\",\"palette/green700\":\"VariableID:2:17\",\"palette/amber50\":\"VariableID:2:18\",\"palette/amber700\":\"VariableID:2:19\",\"palette/red50\":\"VariableID:2:20\",\"palette/red700\":\"VariableID:2:21\",\"bg/canvas\":\"VariableID:2:22\",\"bg/surface\":\"VariableID:2:23\",\"bg/subtle\":\"VariableID:2:24\",\"text/primary\":\"VariableID:2:25\",\"text/secondary\":\"VariableID:2:26\",\"text/inverse\":\"VariableID:2:27\",\"border/default\":\"VariableID:2:28\",\"border/strong\":\"VariableID:2:29\",\"action/primary\":\"VariableID:2:30\",\"action/hover\":\"VariableID:2:31\",\"action/pressed\":\"VariableID:2:32\",\"action/subtle\":\"VariableID:2:33\",\"status/success\":\"VariableID:2:34\",\"status/success-bg\":\"VariableID:2:35\",\"status/warning\":\"VariableID:2:36\",\"status/warning-bg\":\"VariableID:2:37\",\"status/danger\":\"VariableID:2:38\",\"status/danger-bg\":\"VariableID:2:39\",\"focus/ring\":\"VariableID:2:40\",\"space/0\":\"VariableID:2:41\",\"space/4\":\"VariableID:2:42\",\"space/8\":\"VariableID:2:43\",\"space/12\":\"VariableID:2:44\",\"space/16\":\"VariableID:2:45\",\"space/24\":\"VariableID:2:46\",\"space/32\":\"VariableID:2:47\",\"space/48\":\"VariableID:2:48\",\"radius/0\":\"VariableID:2:49\",\"radius/4\":\"VariableID:2:50\",\"radius/8\":\"VariableID:2:51\",\"radius/12\":\"VariableID:2:52\",\"size/24\":\"VariableID:2:53\",\"size/32\":\"VariableID:2:54\",\"size/40\":\"VariableID:2:55\",\"size/44\":\"VariableID:2:56\",\"size/48\":\"VariableID:2:57\",\"size/56\":\"VariableID:2:58\",\"size/64\":\"VariableID:2:59\"},\"styles\":{\"Display\":\"S:3bb01bfdf6ae8ae2c1417693fef72a20ebc9b9e3,\",\"Heading\":\"S:848d6947083a2c78d9323ff70be420873c8c25fe,\",\"Section\":\"S:48c8eeff13b23c9aa03932cfd5f94ab1516cefcd,\",\"Body\":\"S:67f8abcf75cf9544e6b8fb14d34f2dc2d9b01dce,\",\"Body Strong\":\"S:e3188cc09be0261ba669399b2f013e9894fd1bbc,\",\"Mobile Body\":\"S:0c3db1b4dda3a5fbbf9f5105949fb83cdaf20089,\",\"Label\":\"S:f365196160404a2e85f6e49611db3cb1b233eba7,\",\"Metric\":\"S:d714710d5e5c775f976dc46d977c3b2246e384c1,\"},\"effects\":[\"S:dc95e59c23eabb152cd78840f2cb9720f3a7e7e3,\"]}"
+      }
+    ],
+    "isError": false
+  },
+  "pages": {
+    "foundations": "0:1",
+    "components": "3:4",
+    "screens": "3:5"
+  },
+  "results": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"createdNodeIds\":[\"4:2\",\"4:3\",\"4:4\",\"4:5\",\"4:6\",\"4:7\",\"4:8\",\"4:9\",\"4:10\",\"4:11\",\"4:12\",\"4:13\",\"4:14\",\"4:15\",\"4:16\",\"4:17\",\"4:18\",\"4:19\",\"4:20\",\"4:21\",\"4:22\",\"4:23\",\"4:24\",\"4:25\",\"4:26\",\"4:27\",\"4:28\",\"4:29\",\"4:30\",\"4:31\",\"4:32\",\"4:33\",\"4:34\",\"4:35\",\"4:36\",\"4:37\",\"4:38\",\"4:39\",\"4:40\",\"4:41\",\"4:42\",\"4:43\",\"4:44\",\"4:45\",\"4:46\",\"4:47\",\"4:48\",\"4:49\",\"4:50\",\"4:51\",\"4:52\",\"4:53\",\"4:54\",\"4:55\",\"4:56\",\"4:57\",\"4:58\",\"4:59\",\"4:60\",\"4:61\",\"4:62\",\"4:63\",\"4:64\"],\"frameId\":\"4:2\"}"
+        }
+      ],
+      "isError": false
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"createdNodeIds\":[\"6:2\",\"6:3\",\"6:4\",\"6:5\",\"6:6\",\"6:7\",\"6:8\",\"6:9\",\"6:10\",\"6:11\",\"6:12\",\"6:13\",\"6:14\",\"6:15\",\"6:16\",\"6:17\",\"6:18\",\"6:19\",\"6:20\",\"6:21\",\"6:22\",\"6:23\",\"6:24\",\"6:25\",\"6:26\",\"6:27\",\"6:28\",\"6:29\",\"6:30\",\"6:31\",\"6:32\",\"6:33\",\"6:34\",\"6:35\",\"6:36\",\"6:37\",\"6:38\",\"6:39\",\"6:40\",\"6:41\",\"6:42\",\"6:43\",\"6:44\",\"6:45\",\"6:46\",\"6:47\",\"6:48\",\"6:49\",\"6:50\",\"6:51\",\"6:52\",\"6:53\",\"6:54\"],\"setId\":\"6:54\",\"docId\":\"6:2\",\"variants\":[{\"id\":\"6:6\",\"name\":\"Size=PC, Kind=Primary, State=Default\"},{\"id\":\"6:8\",\"name\":\"Size=PC, Kind=Primary, State=Hover\"},{\"id\":\"6:10\",\"name\":\"Size=PC, Kind=Primary, State=Pressed\"},{\"id\":\"6:12\",\"name\":\"Size=PC, Kind=Primary, State=Focus\"},{\"id\":\"6:14\",\"name\":\"Size=PC, Kind=Primary, State=Disabled\"},{\"id\":\"6:16\",\"name\":\"Size=PC, Kind=Primary, State=Loading\"},{\"id\":\"6:18\",\"name\":\"Size=PC, Kind=Secondary, State=Default\"},{\"id\":\"6:20\",\"name\":\"Size=PC, Kind=Secondary, State=Hover\"},{\"id\":\"6:22\",\"name\":\"Size=PC, Kind=Secondary, State=Pressed\"},{\"id\":\"6:24\",\"name\":\"Size=PC, Kind=Secondary, State=Focus\"},{\"id\":\"6:26\",\"name\":\"Size=PC, Kind=Secondary, State=Disabled\"},{\"id\":\"6:28\",\"name\":\"Size=PC, Kind=Secondary, State=Loading\"},{\"id\":\"6:30\",\"name\":\"Size=Mobile, Kind=Primary, State=Default\"},{\"id\":\"6:32\",\"name\":\"Size=Mobile, Kind=Primary, State=Hover\"},{\"id\":\"6:34\",\"name\":\"Size=Mobile, Kind=Primary, State=Pressed\"},{\"id\":\"6:36\",\"name\":\"Size=Mobile, Kind=Primary, State=Focus\"},{\"id\":\"6:38\",\"name\":\"Size=Mobile, Kind=Primary, State=Disabled\"},{\"id\":\"6:40\",\"name\":\"Size=Mobile, Kind=Primary, State=Loading\"},{\"id\":\"6:42\",\"name\":\"Size=Mobile, Kind=Secondary, State=Default\"},{\"id\":\"6:44\",\"name\":\"Size=Mobile, Kind=Secondary, State=Hover\"},{\"id\":\"6:46\",\"name\":\"Size=Mobile, Kind=Secondary, State=Pressed\"},{\"id\":\"6:48\",\"name\":\"Size=Mobile, Kind=Secondary, State=Focus\"},{\"id\":\"6:50\",\"name\":\"Size=Mobile, Kind=Secondary, State=Disabled\"},{\"id\":\"6:52\",\"name\":\"Size=Mobile, Kind=Secondary, State=Loading\"}]}"
+        }
+      ],
+      "isError": false
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"createdNodeIds\":[\"7:2\",\"7:3\",\"7:4\",\"7:5\",\"7:6\",\"7:7\",\"7:8\",\"7:9\",\"7:10\",\"7:11\",\"7:12\",\"7:13\",\"7:14\",\"7:15\",\"7:16\",\"7:17\",\"7:18\",\"7:19\",\"7:20\",\"7:21\",\"7:22\",\"7:23\",\"7:24\",\"7:25\",\"7:26\",\"7:27\",\"7:28\",\"7:29\",\"7:30\",\"7:31\"],\"setId\":\"7:31\",\"docId\":\"7:2\",\"variants\":[{\"id\":\"7:6\",\"name\":\"State=Default\"},{\"id\":\"7:11\",\"name\":\"State=Focus\"},{\"id\":\"7:16\",\"name\":\"State=Error\"},{\"id\":\"7:21\",\"name\":\"State=Disabled\"},{\"id\":\"7:26\",\"name\":\"State=ReadOnly\"}]}"
+        }
+      ],
+      "isError": false
+    }
+  ],
+  "phase": "blocked-by-figma-mcp-quota",
+  "completed": [
+    "56 variables",
+    "8 text styles",
+    "1 effect style",
+    "foundations board",
+    "24 button variants",
+    "5 field variants"
+  ],
+  "pending": [
+    "Field metadata validation",
+    "Secondary button hover and pressed fills",
+    "6 remaining component families",
+    "page instances",
+    "Figma final QA",
+    "Sync border/strong alias to palette/gray500",
+    "Add gap between focus ring and primary button"
+  ],
+  "lastAccessCheck": "2026-09-07 resumed turn 3: Figma Starter MCP quota exhausted",
+  "objectiveScope": "Figma only, based on D0.2; Mobbin removed by user",
+  "resumedBlockedAudit": {
+    "round": 3,
+    "blocker": "Figma MCP Starter call limit",
+    "goalStatus": "blocked"
+  }
+}

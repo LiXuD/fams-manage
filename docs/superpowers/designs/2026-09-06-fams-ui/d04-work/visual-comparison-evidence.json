@@ -1,0 +1,191 @@
+{
+  "capturedAt": "2026-09-11",
+  "source": "d04-states.html comparison iframes and prototype.html?present=1; local HTTP server 127.0.0.1:8785",
+  "method": "Same source data, same viewport, one visual variable per pair; visual inspection only, no user-study or performance claim. Required 1440/1024 PC and 390/320 mobile captures are recorded where applicable.",
+  "candidates": [
+    {
+      "id": "P03-canvas",
+      "viewport": "1440x1000",
+      "cool": {
+        "file": "output/playwright/fams-ui/d04-compare-P03-cool.png",
+        "sha256Prefix": "e3ecc06efd8f32a6"
+      },
+      "warm": {
+        "file": "output/playwright/fams-ui/d04-compare-P03-warm.png",
+        "sha256Prefix": "1e455aa10e1cbfe3"
+      },
+      "additionalViewports": [
+        {
+          "viewport": "1024x900",
+          "cool": {
+            "file": "output/playwright/fams-ui/d04-compare-P03-cool-1024.png",
+            "sha256": "e85405cb861163504efc51746e3d2727b5168bd9ef4d3d56079429d36535d082"
+          },
+          "warm": {
+            "file": "output/playwright/fams-ui/d04-compare-P03-warm-1024.png",
+            "sha256": "a6bbd3d219abdcb7ec63c416dd197aa51c7be7f5ce0e2b6729ef3653dfc818e4"
+          }
+        }
+      ],
+      "observation": "两版正文、表格与操作位置一致；微暖版只改变画布色相，未观察到足以抵消冷灰令牌一致性损失的清晰度收益。",
+      "decision": "保留默认冷灰画布。"
+    },
+    {
+      "id": "P23-canvas",
+      "viewport": "1440x1140",
+      "cool": {
+        "file": "output/playwright/fams-ui/d04-compare-P23-cool.png",
+        "sha256Prefix": "669ec6bfa8e59219"
+      },
+      "warm": {
+        "file": "output/playwright/fams-ui/d04-compare-P23-warm.png",
+        "sha256Prefix": "71734bcf618b6cba"
+      },
+      "additionalViewports": [
+        {
+          "viewport": "1024x1140",
+          "cool": {
+            "file": "output/playwright/fams-ui/d04-compare-P23-cool-1024.png",
+            "sha256": "bb9978a3b25311ebfccac41f141f13b0370fb6032cb1011947a25d8d0a32a66d"
+          },
+          "warm": {
+            "file": "output/playwright/fams-ui/d04-compare-P23-warm-1024.png",
+            "sha256": "dc5fd1b8d3a5059654b8d0b452f6f184364868f922c59584413da6d84313d841"
+          }
+        }
+      ],
+      "observation": "阶段数字、下钻链接和样本表结构相同；微暖版没有改善信息分组，冷灰版与 P03 和既有令牌保持同一中性基线。",
+      "decision": "保留默认冷灰画布。"
+    },
+    {
+      "id": "P03-table-density",
+      "viewport": "1440x1000",
+      "default": {
+        "file": "output/playwright/fams-ui/d04-compare-P03-table-default.png",
+        "sha256": "e3ecc06efd8f32a6a51e1a70b29377b1867ef482b72aadf56bdd705e220aa63a",
+        "tokens": "14px/22px body text; existing table spacing"
+      },
+      "compact": {
+        "file": "output/playwright/fams-ui/d04-compare-P03-table-compact.png",
+        "sha256": "11579f8920c33bbf13b54c35d48fada0037cb1e10dfac357ce9317f3b6937e03",
+        "tokens": "14px/20px table text; 10px vertical cell padding"
+      },
+      "additionalViewports": [
+        {
+          "viewport": "1024x900",
+          "default": {
+            "file": "output/playwright/fams-ui/d04-compare-P03-table-default-1024.png",
+            "sha256": "52d3b9e9e9ddd876449a79f460ef9bbc32d0b3697baaceea567ff69aa822316c"
+          },
+          "compact": {
+            "file": "output/playwright/fams-ui/d04-compare-P03-table-compact-1024.png",
+            "sha256": "1620b15bfe82b25ce8ada28869f19f2972f4bd165328fc9049e5b37abb26c065"
+          }
+        }
+      ],
+      "observation": "紧凑版略微降低阶段明细与样本记录的纵向占用，正文、列宽、链接和按钮位置未发生语义变化；收益有限，且默认 14px/22px 的阅读节奏更稳妥。",
+      "decision": "保留默认 14px/22px；紧凑版只作为已记录候选，不改为默认。"
+    },
+    {
+      "id": "P23-table-density",
+      "viewport": "1440x1140",
+      "default": {
+        "file": "output/playwright/fams-ui/d04-compare-P23-table-default.png",
+        "sha256": "4932cd2882bbfcbc9ebab215ac5118bd99205d2628986fdcc7513b703c2a89ee",
+        "tokens": "14px/22px body text; existing table spacing"
+      },
+      "compact": {
+        "file": "output/playwright/fams-ui/d04-compare-P23-table-compact.png",
+        "sha256": "25b96d85cd7d6335169b8340269a65a1cf0a7c1aab26c54841efcbfa1b6a5bcf",
+        "tokens": "14px/20px table text; 10px vertical cell padding"
+      },
+      "additionalViewports": [
+        {
+          "viewport": "1024x1140",
+          "default": {
+            "file": "output/playwright/fams-ui/d04-compare-P23-table-default-1024.png",
+            "sha256": "c14ea9f8940e514e0856722a7d9af6eb24b2803a9b07475ce0c99a1e7a8f1ca9"
+          },
+          "compact": {
+            "file": "output/playwright/fams-ui/d04-compare-P23-table-compact-1024.png",
+            "sha256": "c4eeed5c65b2886cb1fd368adc000ddb8c45eca997f7194bd8658a0f62c3b5c8"
+          }
+        }
+      ],
+      "observation": "紧凑版让阶段明细和样本补录记录更短，但在当前内容量下没有形成必须释放的可用空间；两版均保持列对齐、数字阅读和操作链接可见。",
+      "decision": "保留默认 14px/22px；不以原型截图比选替代真实用户可用性或生产验收。"
+    },
+    {
+      "id": "M02-header",
+      "viewport": "390x1040",
+      "pure": {
+        "file": "output/playwright/fams-ui/d04-compare-M02-pure.png",
+        "sha256Prefix": "aa8cc2cba0ab5987"
+      },
+      "gradient": {
+        "file": "output/playwright/fams-ui/d04-compare-M02-gradient.png",
+        "sha256Prefix": "eee64e4fe875c5a2"
+      },
+      "additionalViewports": [
+        {
+          "viewport": "320x1000",
+          "pure": {
+            "file": "output/playwright/fams-ui/d04-compare-M02-pure-320.png",
+            "sha256": "9aeae355279a5e907114cb6dc3c8099a662662238498de6ceb6d43af7e2e8160"
+          },
+          "gradient": {
+            "file": "output/playwright/fams-ui/d04-compare-M02-gradient-320.png",
+            "sha256": "314e1f2fb9354b10e19cdbbfe80ee84b3d1b2f831fd1da4accbe483c130e6bd0"
+          }
+        }
+      ],
+      "observation": "静态微渐变只增加首屏蓝色层次，纯色顶部的标题、卡片和告警关系更克制，且不把候选效果扩散至其他移动页。",
+      "decision": "保留 M02 纯色顶部。"
+    }
+  ],
+  "mobileGroupingReview": [
+    {
+      "id": "M05",
+      "viewport": "390x1018",
+      "file": "output/playwright/fams-ui/d04-compare-M05-check.png",
+      "sha256Prefix": "4c08c0905a68ea0c",
+      "additionalViewports": [
+        {
+          "viewport": "320x1018",
+          "file": "output/playwright/fams-ui/d04-compare-M05-grouping-320.png",
+          "sha256": "837d67f2807676102c067280d12f737928df5b3440dec1110a366c5d8705ce1d"
+        }
+      ],
+      "finding": "“我在用的 / 我借用的”分段与两张资产卡片清楚分组；资产概要置于卡片内，退库、报修、报废及归还、延期动作分层；本地实测 390/320 均无横向溢出，交互目标高度不低于 44px。"
+    },
+    {
+      "id": "M14",
+      "viewport": "390x1005",
+      "file": "output/playwright/fams-ui/d04-compare-M14-check.png",
+      "sha256Prefix": "2cd69fbf711174b8",
+      "additionalViewports": [
+        {
+          "viewport": "320x1005",
+          "file": "output/playwright/fams-ui/d04-compare-M14-grouping-320.png",
+          "sha256": "1ec89620843bfa5a967a4ccbf7dceea8284969fb102e2c0067ebcbbfdad368d1"
+        }
+      ],
+      "finding": "“我的记录”与“账号与绑定”使用独立面板；绑定/退出操作和不可逆风险提示分离；底部导航保持“我的”当前态；本地实测 390/320 均无横向溢出，交互目标高度不低于 44px。"
+    }
+  ],
+  "chosenDefaults": {
+    "canvas": "cool-neutral",
+    "m02Header": "solid",
+    "m05M14Grouping": "keep-current-grouping",
+    "tableDensity": "default-14-22"
+  },
+  "responsiveVerification": {
+    "artifact": "d04-work/p23-responsive-evidence.json",
+    "P23At1024": "summary and stage panels are 402px each; stage table fits its 358px content box; action links are 68px wide",
+    "mobileWidths": [390, 320]
+  },
+  "openCoverage": [
+    "14/20 紧凑表格方案已完成 P03/P23 同视口候选比选；当前仅作视觉候选记录，未进行真实用户研究、真实设备或生产性能验收。",
+    "候选比较是原型视觉审查，不等同于真实设备、生产服务或可用性研究验收。"
+  ]
+}

@@ -1,0 +1,561 @@
+NAME: "FAMS · D0.3 视觉规范与组件系统"
+
+GLOBAL_VARS:
+fill_8aa2313b:
+  - '#F7F9FC'
+layout_177c5efc:
+  mode: none
+  sizing:
+    horizontal: hug
+    vertical: hug
+FAMS/Label:
+  fontFamily: Noto Sans SC
+  fontStyle: Medium
+  fontWeight: 500
+  fontSize: 12
+  lineHeight: 20px
+  textAlignHorizontal: LEFT
+  textAlignVertical: TOP
+fill_985eadb0:
+  - '#2457D6'
+FAMS/Display:
+  fontFamily: Noto Sans SC
+  fontStyle: Bold
+  fontWeight: 700
+  fontSize: 36
+  lineHeight: 48px
+  textAlignHorizontal: LEFT
+  textAlignVertical: TOP
+fill_2d1c68b3:
+  - '#18263D'
+layout_93034994:
+  mode: none
+  sizing:
+    horizontal: fixed
+    vertical: hug
+  dimensions:
+    width: 1104
+FAMS/Body:
+  fontFamily: Noto Sans SC
+  fontStyle: Regular
+  fontWeight: 400
+  fontSize: 14
+  lineHeight: 22px
+  textAlignHorizontal: LEFT
+  textAlignVertical: TOP
+fill_517f2c57:
+  - '#53657D'
+FAMS/Section:
+  fontFamily: Noto Sans SC
+  fontStyle: Medium
+  fontWeight: 500
+  fontSize: 18
+  lineHeight: 28px
+  textAlignHorizontal: LEFT
+  textAlignVertical: TOP
+fill_658ab2fa:
+  - '#FFFFFF'
+layout_e0e936cd:
+  mode: none
+  sizing:
+    horizontal: fixed
+    vertical: hug
+  dimensions:
+    width: 300
+FAMS/Heading:
+  fontFamily: Noto Sans SC
+  fontStyle: Bold
+  fontWeight: 700
+  fontSize: 24
+  lineHeight: 36px
+  textAlignHorizontal: LEFT
+  textAlignVertical: TOP
+layout_b23eb001:
+  mode: column
+  sizing:
+    horizontal: fixed
+    vertical: fixed
+  dimensions:
+    width: 138
+    height: 64
+FAMS/Body Strong:
+  fontFamily: Noto Sans SC
+  fontStyle: Medium
+  fontWeight: 500
+  fontSize: 14
+  lineHeight: 22px
+  textAlignHorizontal: LEFT
+  textAlignVertical: TOP
+fill_f6b4dcdd:
+  - '#B4232E'
+layout_5310c6a2:
+  mode: none
+  sizing:
+    horizontal: fixed
+    vertical: hug
+  dimensions:
+    width: 150
+FAMS/Mobile Body:
+  fontFamily: Noto Sans SC
+  fontStyle: Regular
+  fontWeight: 400
+  fontSize: 16
+  lineHeight: 26px
+  textAlignHorizontal: LEFT
+  textAlignVertical: TOP
+fill_aa03aafc:
+  - '#1943AE'
+fill_01bbf9ba:
+  - '#153580'
+fill_46ae5822:
+  - '#F0F3F8'
+fill_0ef20b2f:
+  - '#E3E8F0'
+layout_210b801b:
+  mode: row
+  alignSelf: stretch
+  padding: 8px
+  alignItems: center
+  gap: 8px
+  sizing:
+    horizontal: fill
+    vertical: fixed
+  dimensions:
+    height: 44
+fill_b2ec9744:
+  - '#9AA8BA'
+
+ELEMENTS:
+EL-a72bcc0c:
+  type: TEXT
+  layout: layout_177c5efc
+  text: FAMS  /  D0.3
+  textStyle: FAMS/Label
+  fills: fill_985eadb0
+EL-5639a969:
+  type: FRAME
+  layout:
+    mode: column
+    gap: 8px
+    sizing:
+      horizontal: fixed
+      vertical: hug
+    dimensions:
+      width: 325
+EL-a1575365:
+  type: FRAME
+  layout:
+    mode: column
+    padding: 16px
+    gap: 12px
+    sizing:
+      horizontal: fixed
+      vertical: hug
+    dimensions:
+      width: 170
+  fills: fill_658ab2fa
+  borderRadius: 8px
+EL-4848f3c9:
+  type: FRAME
+  layout:
+    mode: row
+    alignSelf: stretch
+    gap: 24px
+    sizing:
+      horizontal: fill
+      vertical: hug
+EL-d993cf03:
+  type: TEXT
+  layout: layout_177c5efc
+  text: 确认接收
+  textStyle: FAMS/Body Strong
+  fills: fill_658ab2fa
+  componentPropertyReferences:
+    text: Label
+EL-9bd7268b:
+  type: TEXT
+  layout: layout_177c5efc
+  text: 确认接收
+  textStyle: FAMS/Body Strong
+  fills: fill_517f2c57
+  componentPropertyReferences:
+    text: Label
+EL-7d978fe3:
+  type: TEXT
+  layout: layout_177c5efc
+  text: 提交中…
+  textStyle: FAMS/Body Strong
+  fills: fill_658ab2fa
+  componentPropertyReferences:
+    text: Label
+EL-597fa440:
+  type: TEXT
+  layout: layout_177c5efc
+  text: 确认接收
+  textStyle: FAMS/Body Strong
+  fills: fill_2d1c68b3
+  componentPropertyReferences:
+    text: Label
+EL-ec99c788:
+  type: TEXT
+  layout: layout_177c5efc
+  text: 提交中…
+  textStyle: FAMS/Body Strong
+  fills: fill_2d1c68b3
+  componentPropertyReferences:
+    text: Label
+EL-42dc970f:
+  type: TEXT
+  layout: layout_177c5efc
+  text: 接收位置 \*
+  textStyle: FAMS/Body Strong
+  fills: fill_2d1c68b3
+  componentPropertyReferences:
+    text: Label
+EL-c0bbf4c4:
+  type: FRAME
+  layout: layout_210b801b
+  fills: fill_658ab2fa
+  strokes: fill_b2ec9744
+  strokeWeight: 1px
+  borderRadius: 8px
+EL-1ead57e7:
+  type: TEXT
+  layout: layout_177c5efc
+  text: 产品部 / 301
+  textStyle: FAMS/Body
+  fills: fill_2d1c68b3
+  componentPropertyReferences:
+    text: Value
+EL-0b9b1bf6:
+  type: TEXT
+  layout: layout_177c5efc
+  text: 请填写资产实际存放位置
+  textStyle: FAMS/Label
+  fills: fill_517f2c57
+  componentPropertyReferences:
+    text: Hint
+
+COMPONENTS:
+6:6:
+  id: 6:6
+  key: 68a00a730e22e94fa6918de2f200d92fb9fc2a91
+  name: Size=PC, Kind=Primary, State=Default
+  componentSetId: 6:54
+6:8:
+  id: 6:8
+  key: f06069f0ee8636ea8b94711cf29ec0f07fdc5564
+  name: Size=PC, Kind=Primary, State=Hover
+  componentSetId: 6:54
+6:10:
+  id: 6:10
+  key: ae7f378b1a7803a54d804b6debb1fcac193d41ec
+  name: Size=PC, Kind=Primary, State=Pressed
+  componentSetId: 6:54
+6:12:
+  id: 6:12
+  key: 0e5f8b01cf6a3d6ab7ccafaa6dd4398ccd0a47a4
+  name: Size=PC, Kind=Primary, State=Focus
+  componentSetId: 6:54
+6:14:
+  id: 6:14
+  key: 7b575985dfde771de93879490cc87079de4010a2
+  name: Size=PC, Kind=Primary, State=Disabled
+  componentSetId: 6:54
+6:16:
+  id: 6:16
+  key: 13f605d9777dade727db844c3ca5b5e74ca42056
+  name: Size=PC, Kind=Primary, State=Loading
+  componentSetId: 6:54
+6:18:
+  id: 6:18
+  key: 2424d097662e162b989659550db540df1ba1b688
+  name: Size=PC, Kind=Secondary, State=Default
+  componentSetId: 6:54
+6:20:
+  id: 6:20
+  key: 47fc3567583ad770e91fe4e9c840d8ddbd703823
+  name: Size=PC, Kind=Secondary, State=Hover
+  componentSetId: 6:54
+6:22:
+  id: 6:22
+  key: 2a7adad5cb4732fef3d2d472e99b4768468b8e26
+  name: Size=PC, Kind=Secondary, State=Pressed
+  componentSetId: 6:54
+6:24:
+  id: 6:24
+  key: 7938a4aaddc9cb083aa98bf5cd34db233fe986d0
+  name: Size=PC, Kind=Secondary, State=Focus
+  componentSetId: 6:54
+6:26:
+  id: 6:26
+  key: 7b4eb61e285c3d34c3fec8b10c5dd736e6f5d7e1
+  name: Size=PC, Kind=Secondary, State=Disabled
+  componentSetId: 6:54
+6:28:
+  id: 6:28
+  key: 6bbce990997baad2ce070742d8aebf2ede553ea7
+  name: Size=PC, Kind=Secondary, State=Loading
+  componentSetId: 6:54
+6:30:
+  id: 6:30
+  key: 4a139eb31067ba6023e63caa5bda6fda20080bcf
+  name: Size=Mobile, Kind=Primary, State=Default
+  componentSetId: 6:54
+6:32:
+  id: 6:32
+  key: 7364866cff0c59f1bde209867178f61c68a5b6f8
+  name: Size=Mobile, Kind=Primary, State=Hover
+  componentSetId: 6:54
+6:34:
+  id: 6:34
+  key: 4031953898903021c41d5f57cf6e0c05af7bf79a
+  name: Size=Mobile, Kind=Primary, State=Pressed
+  componentSetId: 6:54
+6:36:
+  id: 6:36
+  key: 6da8596b20385433bd1a26bfc3e4fa65e77f67fa
+  name: Size=Mobile, Kind=Primary, State=Focus
+  componentSetId: 6:54
+6:38:
+  id: 6:38
+  key: 0eb2341810644e7279d38d1ae3cf27429ee7f7bb
+  name: Size=Mobile, Kind=Primary, State=Disabled
+  componentSetId: 6:54
+6:40:
+  id: 6:40
+  key: 4767f8436a48dc24b2856d6aefd14a7e80b463b4
+  name: Size=Mobile, Kind=Primary, State=Loading
+  componentSetId: 6:54
+6:42:
+  id: 6:42
+  key: 3884b22ce41de0a7976237f70719ddab8cad913a
+  name: Size=Mobile, Kind=Secondary, State=Default
+  componentSetId: 6:54
+6:44:
+  id: 6:44
+  key: f05a16bbe7fc55d23e7571c5f1e0617f75987ff9
+  name: Size=Mobile, Kind=Secondary, State=Hover
+  componentSetId: 6:54
+6:46:
+  id: 6:46
+  key: de41fa897d46e704fba2fa96c82795718e31fd5b
+  name: Size=Mobile, Kind=Secondary, State=Pressed
+  componentSetId: 6:54
+6:48:
+  id: 6:48
+  key: a1f9a37ccfc1f6f00e53add9634ffca9bb4001e7
+  name: Size=Mobile, Kind=Secondary, State=Focus
+  componentSetId: 6:54
+6:50:
+  id: 6:50
+  key: b97045cc6161f800a05e647bb3aa2b3c77326434
+  name: Size=Mobile, Kind=Secondary, State=Disabled
+  componentSetId: 6:54
+6:52:
+  id: 6:52
+  key: 649f80f536f44779bde19044ba8280e3c006c754
+  name: Size=Mobile, Kind=Secondary, State=Loading
+  componentSetId: 6:54
+7:6:
+  id: 7:6
+  key: 5ced45b9bd3fef6464d2b5773de54e17ddc1f2ef
+  name: State=Default
+  componentSetId: 7:31
+7:11:
+  id: 7:11
+  key: eee936554eecf080beab26881107a2a9eb28b2d1
+  name: State=Focus
+  componentSetId: 7:31
+7:16:
+  id: 7:16
+  key: 020fe1d56fd418272e8276ccb4be4e2f65fb5bfa
+  name: State=Error
+  componentSetId: 7:31
+7:21:
+  id: 7:21
+  key: 574e0c8c011df71f533a2d28da1fc4687644a0e1
+  name: State=Disabled
+  componentSetId: 7:31
+7:26:
+  id: 7:26
+  key: 7926ec25899e1c452321ef8e4dbfcf3f1d6eeb1c
+  name: State=ReadOnly
+  componentSetId: 7:31
+
+COMPONENT_SETS:
+6:54:
+  id: 6:54
+  key: 07781f679dde3e60fd12c03be02e866dd4b12834
+  name: FAMS/Button
+  description: FAMS D0.3 / Button · Edit text through component properties. Preserve business state semantics.
+  propertyDefinitions:
+    Label:
+      type: text
+      defaultValue: 确认接收
+7:31:
+  id: 7:31
+  key: 3afd2d13829441e25c707e4e7074f8b6a26d0a76
+  name: FAMS/Field
+  description: FAMS D0.3 / Field · Edit text through component properties. Preserve business state semantics.
+  propertyDefinitions:
+    Label:
+      type: text
+      defaultValue: 接收位置 *
+    Value:
+      type: text
+      defaultValue: 产品部 / 301
+    Hint:
+      type: text
+      defaultValue: 请填写资产实际存放位置
+
+NODES:
+[CANVAS] "01 · Foundations & Guidelines" #0:1
+  [FRAME] "让每一次资产交接，都清楚有据。" #4:2 layout={"mode":"column","padding":"48px","gap":"24px","sizing":{"horizontal":"fixed","vertical":"hug"},"dimensions":{"width":1200}} fills=fill_8aa2313b
+    [TEXT] #4:3 template=EL-a72bcc0c
+    [TEXT] #4:4 layout=layout_177c5efc fills=fill_2d1c68b3 textStyle=FAMS/Display text="让每一次资产交接，都清楚有据。"
+    [TEXT] #4:5 layout=layout_93034994 fills=fill_517f2c57 textStyle=FAMS/Body text="FAMS 固定资产 · 视觉设计与规范 / D0.3\\n浅色企业工作台 · 双端共用语义 · 真实责任与实物阶段分开"
+    [FRAME] "Design principles" #4:6 layout={"mode":"row","alignSelf":"stretch","padding":"32px","gap":"32px","sizing":{"horizontal":"fill","vertical":"hug"}} fills=fill_985eadb0
+      [FRAME] "01 清晰" #4:7 template=EL-5639a969
+        [TEXT] #4:8 layout=layout_177c5efc fills=fill_658ab2fa textStyle=FAMS/Section text="01 清晰"
+        [TEXT] #4:9 layout=layout_e0e936cd fills=fill_658ab2fa textStyle=FAMS/Body text="先看当前责任，再看下一动作"
+      [FRAME] "02 克制" #4:10 template=EL-5639a969
+        [TEXT] #4:11 layout=layout_177c5efc fills=fill_658ab2fa textStyle=FAMS/Section text="02 克制"
+        [TEXT] #4:12 layout=layout_e0e936cd fills=fill_658ab2fa textStyle=FAMS/Body text="颜色用于行动与结果，减少装饰"
+      [FRAME] "03 可信" #4:13 template=EL-5639a969
+        [TEXT] #4:14 layout=layout_177c5efc fills=fill_658ab2fa textStyle=FAMS/Section text="03 可信"
+        [TEXT] #4:15 layout=layout_e0e936cd fills=fill_658ab2fa textStyle=FAMS/Body text="交出、接收、回执分别确认"
+    [TEXT] #4:16 layout=layout_177c5efc fills=fill_2d1c68b3 textStyle=FAMS/Heading text="色彩 / Color"
+    [FRAME] "Semantic swatches" #4:17 layout={"mode":"row","alignSelf":"stretch","gap":"16px","sizing":{"horizontal":"fill","vertical":"hug"}}
+      [FRAME] "主操作" #4:18 template=EL-a1575365
+        [FRAME] "Swatch" #4:19 layout=layout_b23eb001 fills=fill_985eadb0
+        [TEXT] #4:20 layout=layout_177c5efc fills=fill_2d1c68b3 textStyle="FAMS/Body Strong" text="主操作"
+        [TEXT] #4:21 layout=layout_177c5efc fills=fill_517f2c57 textStyle=FAMS/Label text="action/primary"
+      [FRAME] "正文" #4:22 template=EL-a1575365
+        [FRAME] "Swatch" #4:23 layout=layout_b23eb001 fills=fill_2d1c68b3
+        [TEXT] #4:24 layout=layout_177c5efc fills=fill_2d1c68b3 textStyle="FAMS/Body Strong" text="正文"
+        [TEXT] #4:25 layout=layout_177c5efc fills=fill_517f2c57 textStyle=FAMS/Label text="text/primary"
+      [FRAME] "辅助文字" #4:26 template=EL-a1575365
+        [FRAME] "Swatch" #4:27 layout=layout_b23eb001 fills=fill_517f2c57
+        [TEXT] #4:28 layout=layout_177c5efc fills=fill_2d1c68b3 textStyle="FAMS/Body Strong" text="辅助文字"
+        [TEXT] #4:29 layout=layout_177c5efc fills=fill_517f2c57 textStyle=FAMS/Label text="text/secondary"
+      [FRAME] "完成" #4:30 template=EL-a1575365
+        [FRAME] "Swatch" #4:31 layout=layout_b23eb001 fills=["#206A45"]
+        [TEXT] #4:32 layout=layout_177c5efc fills=fill_2d1c68b3 textStyle="FAMS/Body Strong" text="完成"
+        [TEXT] #4:33 layout=layout_177c5efc fills=fill_517f2c57 textStyle=FAMS/Label text="status/success"
+      [FRAME] "待处理" #4:34 template=EL-a1575365
+        [FRAME] "Swatch" #4:35 layout=layout_b23eb001 fills=["#8A5300"]
+        [TEXT] #4:36 layout=layout_177c5efc fills=fill_2d1c68b3 textStyle="FAMS/Body Strong" text="待处理"
+        [TEXT] #4:37 layout=layout_177c5efc fills=fill_517f2c57 textStyle=FAMS/Label text="status/warning"
+      [FRAME] "错误" #4:38 template=EL-a1575365
+        [FRAME] "Swatch" #4:39 layout=layout_b23eb001 fills=fill_f6b4dcdd
+        [TEXT] #4:40 layout=layout_177c5efc fills=fill_2d1c68b3 textStyle="FAMS/Body Strong" text="错误"
+        [TEXT] #4:41 layout=layout_177c5efc fills=fill_517f2c57 textStyle=FAMS/Label text="status/danger"
+    [TEXT] #4:42 layout=layout_177c5efc fills=fill_2d1c68b3 textStyle=FAMS/Heading text="字号 / Typography"
+    [FRAME] "Display" #4:43 template=EL-4848f3c9
+      [TEXT] #4:44 layout=layout_5310c6a2 fills=fill_517f2c57 textStyle=FAMS/Label text="Display"
+      [TEXT] #4:45 layout=layout_177c5efc fills=fill_2d1c68b3 textStyle=FAMS/Display text="资产管理，井然有序"
+    [FRAME] "Heading" #4:46 template=EL-4848f3c9
+      [TEXT] #4:47 layout=layout_5310c6a2 fills=fill_517f2c57 textStyle=FAMS/Label text="Heading"
+      [TEXT] #4:48 layout=layout_177c5efc fills=fill_2d1c68b3 textStyle=FAMS/Heading text="台账与交接"
+    [FRAME] "Section" #4:49 template=EL-4848f3c9
+      [TEXT] #4:50 layout=layout_5310c6a2 fills=fill_517f2c57 textStyle=FAMS/Label text="Section"
+      [TEXT] #4:51 layout=layout_177c5efc fills=fill_2d1c68b3 textStyle=FAMS/Section text="待处理事项"
+    [FRAME] "Mobile Body" #4:52 template=EL-4848f3c9
+      [TEXT] #4:53 layout=layout_5310c6a2 fills=fill_517f2c57 textStyle=FAMS/Label text="Mobile Body"
+      [TEXT] #4:54 layout=layout_177c5efc fills=fill_2d1c68b3 textStyle="FAMS/Mobile Body" text="请核对编号与实物后确认接收"
+    [FRAME] "Body" #4:55 template=EL-4848f3c9
+      [TEXT] #4:56 layout=layout_5310c6a2 fills=fill_517f2c57 textStyle=FAMS/Label text="Body"
+      [TEXT] #4:57 layout=layout_177c5efc fills=fill_2d1c68b3 textStyle=FAMS/Body text="正式责任、实物去向和业务占用分别展示"
+    [FRAME] "Label" #4:58 template=EL-4848f3c9
+      [TEXT] #4:59 layout=layout_5310c6a2 fills=fill_517f2c57 textStyle=FAMS/Label text="Label"
+      [TEXT] #4:60 layout=layout_177c5efc fills=fill_2d1c68b3 textStyle=FAMS/Label text="FA-2026-00102 · 已交出待接收"
+    [TEXT] #4:61 layout=layout_177c5efc fills=fill_2d1c68b3 textStyle=FAMS/Heading text="节奏 / Layout"
+    [TEXT] #4:62 layout=layout_177c5efc fills=fill_517f2c57 textStyle=FAMS/Body text="PC 1440：侧栏 216 · 顶栏 64 · 内容间距 32 · 表格行 64\\n小程序 390：左右 16 · 正文 16/26 · 主按钮 48 · 点击区至少 44\\n间距 4 / 8 / 12 / 16 / 24 / 32 / 48，圆角 4 / 8 / 12。"
+    [TEXT] #4:63 layout=layout_177c5efc fills=fill_2d1c68b3 textStyle=FAMS/Heading text="状态不是一种颜色"
+    [TEXT] #4:64 layout=layout_93034994 fills=fill_517f2c57 textStyle=FAMS/Body text="资产：在库 / 在用等生命周期；业务：待管理员确认 / 部分完成；实物：待交出 / 已交出待接收；证据：待上传 / 已入账 / 迟到 / 过期。\\n待交接不能出现在资产生命周期筛选中；离线保存成功不等于服务端已接纳。"
+[CANVAS] "02 · Component Library" #3:4
+  [FRAME] "Button / 按钮" #6:2 layout={"mode":"column","padding":"48px","gap":"24px","sizing":{"horizontal":"fixed","vertical":"hug"},"dimensions":{"width":1050}} fills=fill_8aa2313b
+    [TEXT] #6:3 template=EL-a72bcc0c
+    [TEXT] #6:4 layout=layout_177c5efc fills=fill_2d1c68b3 textStyle=FAMS/Display text="Button / 按钮"
+    [TEXT] #6:5 layout={"mode":"none","sizing":{"horizontal":"fixed","vertical":"hug"},"dimensions":{"width":954}} fills=fill_517f2c57 textStyle=FAMS/Body text="PC 40 / Mobile 48 · Primary / Secondary × Default / Hover / Pressed / Focus / Disabled / Loading。加载中阻止重复提交；禁用需在附近解释原因。"
+  [COMPONENT_SET] "FAMS/Button" #6:54 layout={"mode":"none","sizing":{},"dimensions":{"width":1032,"height":312}} borderRadius=5px
+    [COMPONENT] "Size=PC, Kind=Primary, State=Default" #6:6 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":24,"y":24},"dimensions":{"width":144,"height":40}} fills=fill_985eadb0 borderRadius=8px
+      [TEXT] #6:7 template=EL-d993cf03
+    [COMPONENT] "Size=PC, Kind=Primary, State=Hover" #6:8 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":192,"y":24},"dimensions":{"width":144,"height":40}} fills=fill_aa03aafc borderRadius=8px
+      [TEXT] #6:9 template=EL-d993cf03
+    [COMPONENT] "Size=PC, Kind=Primary, State=Pressed" #6:10 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":360,"y":24},"dimensions":{"width":144,"height":40}} fills=fill_01bbf9ba borderRadius=8px
+      [TEXT] #6:11 template=EL-d993cf03
+    [COMPONENT] "Size=PC, Kind=Primary, State=Focus" #6:12 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":528,"y":24},"dimensions":{"width":144,"height":40}} fills=fill_985eadb0 strokes=fill_985eadb0 strokeWeight=3px borderRadius=8px
+      [TEXT] #6:13 template=EL-d993cf03
+    [COMPONENT] "Size=PC, Kind=Primary, State=Disabled" #6:14 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":696,"y":24},"dimensions":{"width":144,"height":40}} fills=fill_46ae5822 borderRadius=8px
+      [TEXT] #6:15 template=EL-9bd7268b
+    [COMPONENT] "Size=PC, Kind=Primary, State=Loading" #6:16 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":864,"y":24},"dimensions":{"width":144,"height":40}} fills=fill_985eadb0 borderRadius=8px
+      [TEXT] #6:17 template=EL-7d978fe3
+    [COMPONENT] "Size=PC, Kind=Secondary, State=Default" #6:18 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":24,"y":96},"dimensions":{"width":144,"height":40}} fills=fill_658ab2fa strokes=fill_0ef20b2f strokeWeight=1px borderRadius=8px
+      [TEXT] #6:19 template=EL-597fa440
+    [COMPONENT] "Size=PC, Kind=Secondary, State=Hover" #6:20 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":192,"y":96},"dimensions":{"width":144,"height":40}} fills=fill_658ab2fa strokes=fill_0ef20b2f strokeWeight=1px borderRadius=8px
+      [TEXT] #6:21 template=EL-597fa440
+    [COMPONENT] "Size=PC, Kind=Secondary, State=Pressed" #6:22 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":360,"y":96},"dimensions":{"width":144,"height":40}} fills=fill_658ab2fa strokes=fill_0ef20b2f strokeWeight=1px borderRadius=8px
+      [TEXT] #6:23 template=EL-597fa440
+    [COMPONENT] "Size=PC, Kind=Secondary, State=Focus" #6:24 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":528,"y":96},"dimensions":{"width":144,"height":40}} fills=fill_658ab2fa strokes=fill_985eadb0 strokeWeight=3px borderRadius=8px
+      [TEXT] #6:25 template=EL-597fa440
+    [COMPONENT] "Size=PC, Kind=Secondary, State=Disabled" #6:26 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":696,"y":96},"dimensions":{"width":144,"height":40}} fills=fill_46ae5822 strokes=fill_0ef20b2f strokeWeight=1px borderRadius=8px
+      [TEXT] #6:27 template=EL-9bd7268b
+    [COMPONENT] "Size=PC, Kind=Secondary, State=Loading" #6:28 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":864,"y":96},"dimensions":{"width":144,"height":40}} fills=fill_658ab2fa strokes=fill_0ef20b2f strokeWeight=1px borderRadius=8px
+      [TEXT] #6:29 template=EL-ec99c788
+    [COMPONENT] "Size=Mobile, Kind=Primary, State=Default" #6:30 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":24,"y":168},"dimensions":{"width":144,"height":48}} fills=fill_985eadb0 borderRadius=8px
+      [TEXT] #6:31 template=EL-d993cf03
+    [COMPONENT] "Size=Mobile, Kind=Primary, State=Hover" #6:32 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":192,"y":168},"dimensions":{"width":144,"height":48}} fills=fill_aa03aafc borderRadius=8px
+      [TEXT] #6:33 template=EL-d993cf03
+    [COMPONENT] "Size=Mobile, Kind=Primary, State=Pressed" #6:34 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":360,"y":168},"dimensions":{"width":144,"height":48}} fills=fill_01bbf9ba borderRadius=8px
+      [TEXT] #6:35 template=EL-d993cf03
+    [COMPONENT] "Size=Mobile, Kind=Primary, State=Focus" #6:36 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":528,"y":168},"dimensions":{"width":144,"height":48}} fills=fill_985eadb0 strokes=fill_985eadb0 strokeWeight=3px borderRadius=8px
+      [TEXT] #6:37 template=EL-d993cf03
+    [COMPONENT] "Size=Mobile, Kind=Primary, State=Disabled" #6:38 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":696,"y":168},"dimensions":{"width":144,"height":48}} fills=fill_46ae5822 borderRadius=8px
+      [TEXT] #6:39 template=EL-9bd7268b
+    [COMPONENT] "Size=Mobile, Kind=Primary, State=Loading" #6:40 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":864,"y":168},"dimensions":{"width":144,"height":48}} fills=fill_985eadb0 borderRadius=8px
+      [TEXT] #6:41 template=EL-7d978fe3
+    [COMPONENT] "Size=Mobile, Kind=Secondary, State=Default" #6:42 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":24,"y":240},"dimensions":{"width":144,"height":48}} fills=fill_658ab2fa strokes=fill_0ef20b2f strokeWeight=1px borderRadius=8px
+      [TEXT] #6:43 template=EL-597fa440
+    [COMPONENT] "Size=Mobile, Kind=Secondary, State=Hover" #6:44 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":192,"y":240},"dimensions":{"width":144,"height":48}} fills=fill_658ab2fa strokes=fill_0ef20b2f strokeWeight=1px borderRadius=8px
+      [TEXT] #6:45 template=EL-597fa440
+    [COMPONENT] "Size=Mobile, Kind=Secondary, State=Pressed" #6:46 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":360,"y":240},"dimensions":{"width":144,"height":48}} fills=fill_658ab2fa strokes=fill_0ef20b2f strokeWeight=1px borderRadius=8px
+      [TEXT] #6:47 template=EL-597fa440
+    [COMPONENT] "Size=Mobile, Kind=Secondary, State=Focus" #6:48 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":528,"y":240},"dimensions":{"width":144,"height":48}} fills=fill_658ab2fa strokes=fill_985eadb0 strokeWeight=3px borderRadius=8px
+      [TEXT] #6:49 template=EL-597fa440
+    [COMPONENT] "Size=Mobile, Kind=Secondary, State=Disabled" #6:50 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":696,"y":240},"dimensions":{"width":144,"height":48}} fills=fill_46ae5822 strokes=fill_0ef20b2f strokeWeight=1px borderRadius=8px
+      [TEXT] #6:51 template=EL-9bd7268b
+    [COMPONENT] "Size=Mobile, Kind=Secondary, State=Loading" #6:52 layout={"mode":"row","padding":"8px","justifyContent":"center","alignItems":"center","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":864,"y":240},"dimensions":{"width":144,"height":48}} fills=fill_658ab2fa strokes=fill_0ef20b2f strokeWeight=1px borderRadius=8px
+      [TEXT] #6:53 template=EL-ec99c788
+  [FRAME] "Field / 输入与校验" #7:2 layout={"mode":"column","padding":"48px","gap":"24px","sizing":{"horizontal":"fixed","vertical":"hug"},"dimensions":{"width":1150}} fills=fill_8aa2313b
+    [TEXT] #7:3 template=EL-a72bcc0c
+    [TEXT] #7:4 layout=layout_177c5efc fills=fill_2d1c68b3 textStyle=FAMS/Display text="Field / 输入与校验"
+    [TEXT] #7:5 layout={"mode":"none","sizing":{"horizontal":"fixed","vertical":"hug"},"dimensions":{"width":1054}} fills=fill_517f2c57 textStyle=FAMS/Body text="标签常驻，错误信息靠近字段；必填标记须配合文字。只读展示既有值，禁用解释原因。"
+  [COMPONENT_SET] "FAMS/Field" #7:31 layout={"mode":"none","sizing":{},"dimensions":{"width":1056,"height":312}} borderRadius=5px
+    [COMPONENT] "State=Default" #7:6 layout={"mode":"column","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":24,"y":24},"dimensions":{"width":320,"height":120}} borderRadius=8px
+      [TEXT] #7:7 template=EL-42dc970f
+      [FRAME] "Input" #7:8 template=EL-c0bbf4c4
+        [TEXT] #7:9 template=EL-1ead57e7
+      [TEXT] #7:10 template=EL-0b9b1bf6
+    [COMPONENT] "State=Focus" #7:11 layout={"mode":"column","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":368,"y":24},"dimensions":{"width":320,"height":120}} borderRadius=8px
+      [TEXT] #7:12 template=EL-42dc970f
+      [FRAME] "Input" #7:13 layout=layout_210b801b fills=fill_658ab2fa strokes=fill_985eadb0 strokeWeight=2px borderRadius=8px
+        [TEXT] #7:14 template=EL-1ead57e7
+      [TEXT] #7:15 template=EL-0b9b1bf6
+    [COMPONENT] "State=Error" #7:16 layout={"mode":"column","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":712,"y":24},"dimensions":{"width":320,"height":120}} borderRadius=8px
+      [TEXT] #7:17 template=EL-42dc970f
+      [FRAME] "Input" #7:18 layout=layout_210b801b fills=fill_658ab2fa strokes=fill_f6b4dcdd strokeWeight=1px borderRadius=8px
+        [TEXT] #7:19 layout=layout_177c5efc fills=fill_2d1c68b3 componentPropertyReferences={"text":"Value"} textStyle=FAMS/Body
+      [TEXT] #7:20 layout=layout_177c5efc fills=fill_f6b4dcdd componentPropertyReferences={"text":"Hint"} textStyle=FAMS/Label text="请选择实际接收位置"
+    [COMPONENT] "State=Disabled" #7:21 layout={"mode":"column","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":24,"y":168},"dimensions":{"width":320,"height":120}} borderRadius=8px
+      [TEXT] #7:22 template=EL-42dc970f
+      [FRAME] "Input" #7:23 layout=layout_210b801b fills=fill_46ae5822 strokes=fill_b2ec9744 strokeWeight=1px borderRadius=8px
+        [TEXT] #7:24 layout=layout_177c5efc fills=fill_517f2c57 componentPropertyReferences={"text":"Value"} textStyle=FAMS/Body text="产品部 / 301"
+      [TEXT] #7:25 layout=layout_177c5efc fills=fill_517f2c57 componentPropertyReferences={"text":"Hint"} textStyle=FAMS/Label text="他人处理中，暂不可编辑"
+    [COMPONENT] "State=ReadOnly" #7:26 layout={"mode":"column","gap":"8px","sizing":{"horizontal":"fixed","vertical":"fixed"},"locationRelativeToParent":{"x":368,"y":168},"dimensions":{"width":320,"height":120}} borderRadius=8px
+      [TEXT] #7:27 template=EL-42dc970f
+      [FRAME] "Input" #7:28 template=EL-c0bbf4c4
+        [TEXT] #7:29 template=EL-1ead57e7
+      [TEXT] #7:30 layout=layout_177c5efc fills=fill_517f2c57 componentPropertyReferences={"text":"Hint"} textStyle=FAMS/Label text="责任与位置通过业务动作变更"
+[CANVAS] "03 · Screens & Handoff" #3:5

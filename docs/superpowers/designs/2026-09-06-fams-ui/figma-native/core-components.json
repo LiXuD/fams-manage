@@ -1,0 +1,2252 @@
+{
+  "steps": {
+    "button-size": "Resized node \"FAMS/Button\" to width 1032 and height 456",
+    "danger-PC-Default": "Cloned node \"Size=PC, Kind=Secondary, State=Default\" with new ID: 25:2 at position (24, 312)",
+    "danger-PC-Default-name": "Renamed node from \"Size=PC, Kind=Secondary, State=Default\" to \"Size=PC, Kind=Danger, State=Default\"",
+    "danger-PC-Default-info": {
+      "id": "25:2",
+      "name": "Size=PC, Kind=Danger, State=Default",
+      "type": "COMPONENT",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 104,
+        "y": 658,
+        "width": 144,
+        "height": 40
+      },
+      "children": [
+        {
+          "id": "25:3",
+          "name": "确认接收",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 148,
+            "y": 667,
+            "width": 56,
+            "height": 22
+          },
+          "characters": "确认接收",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        }
+      ]
+    },
+    "danger-PC-Default-bg": "Set fill color of node \"Size=PC, Kind=Danger, State=Default\" to RGBA(1, 1, 1, 1)",
+    "danger-PC-Default-stroke": "Set stroke color of node \"Size=PC, Kind=Danger, State=Default\" to RGBA(0.7058823529411765, 0.13725490196078433, 0.1803921568627451, 1) with weight 1",
+    "danger-PC-Default-label": "Updated text content of node \"确认接收\" to \"确认处置\"",
+    "danger-PC-Default-fg": "Set fill color of node \"确认接收\" to RGBA(0.7058823529411765, 0.13725490196078433, 0.1803921568627451, 1)",
+    "danger-PC-Hover": {
+      "id": "25:4",
+      "message": "Cloned node \"Size=PC, Kind=Secondary, State=Hover\" with new ID: 25:4 at position (192, 312)"
+    },
+    "danger-PC-Hover-name": "Renamed node from \"Size=PC, Kind=Secondary, State=Hover\" to \"Size=PC, Kind=Danger, State=Hover\"",
+    "danger-PC-Hover-info": {
+      "id": "25:4",
+      "name": "Size=PC, Kind=Danger, State=Hover",
+      "type": "COMPONENT",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 272,
+        "y": 658,
+        "width": 144,
+        "height": 40
+      },
+      "children": [
+        {
+          "id": "25:5",
+          "name": "确认接收",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 316,
+            "y": 667,
+            "width": 56,
+            "height": 22
+          },
+          "characters": "确认接收",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        }
+      ]
+    },
+    "danger-PC-Hover-bg": "Set fill color of node \"Size=PC, Kind=Danger, State=Hover\" to RGBA(1, 0.9411764705882353, 0.9372549019607843, 1)",
+    "danger-PC-Hover-stroke": "Set stroke color of node \"Size=PC, Kind=Danger, State=Hover\" to RGBA(0.7058823529411765, 0.13725490196078433, 0.1803921568627451, 1) with weight 1",
+    "danger-PC-Hover-label": "Updated text content of node \"确认接收\" to \"确认处置\"",
+    "danger-PC-Hover-fg": "Set fill color of node \"确认接收\" to RGBA(0.7058823529411765, 0.13725490196078433, 0.1803921568627451, 1)",
+    "danger-PC-Pressed": {
+      "id": "25:6",
+      "message": "Cloned node \"Size=PC, Kind=Secondary, State=Pressed\" with new ID: 25:6 at position (360, 312)"
+    },
+    "danger-PC-Pressed-name": "Renamed node from \"Size=PC, Kind=Secondary, State=Pressed\" to \"Size=PC, Kind=Danger, State=Pressed\"",
+    "danger-PC-Pressed-info": {
+      "id": "25:6",
+      "name": "Size=PC, Kind=Danger, State=Pressed",
+      "type": "COMPONENT",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 440,
+        "y": 658,
+        "width": 144,
+        "height": 40
+      },
+      "children": [
+        {
+          "id": "25:7",
+          "name": "确认接收",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 484,
+            "y": 667,
+            "width": 56,
+            "height": 22
+          },
+          "characters": "确认接收",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        }
+      ]
+    },
+    "danger-PC-Pressed-bg": "Set fill color of node \"Size=PC, Kind=Danger, State=Pressed\" to RGBA(0.7058823529411765, 0.13725490196078433, 0.1803921568627451, 1)",
+    "danger-PC-Pressed-stroke": "Set stroke color of node \"Size=PC, Kind=Danger, State=Pressed\" to RGBA(0.7058823529411765, 0.13725490196078433, 0.1803921568627451, 1) with weight 1",
+    "danger-PC-Pressed-label": "Updated text content of node \"确认接收\" to \"确认处置\"",
+    "danger-PC-Pressed-fg": "Set fill color of node \"确认接收\" to RGBA(1, 1, 1, 1)",
+    "danger-PC-Focus": {
+      "id": "25:8",
+      "message": "Cloned node \"Size=PC, Kind=Secondary, State=Focus\" with new ID: 25:8 at position (528, 312)"
+    },
+    "danger-PC-Focus-name": "Renamed node from \"Size=PC, Kind=Secondary, State=Focus\" to \"Size=PC, Kind=Danger, State=Focus\"",
+    "danger-PC-Focus-info": {
+      "id": "25:8",
+      "name": "Size=PC, Kind=Danger, State=Focus",
+      "type": "COMPONENT",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#2457d6"
+        }
+      ],
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 608,
+        "y": 658,
+        "width": 144,
+        "height": 40
+      },
+      "children": [
+        {
+          "id": "25:9",
+          "name": "确认接收",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 652,
+            "y": 667,
+            "width": 56,
+            "height": 22
+          },
+          "characters": "确认接收",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        }
+      ]
+    },
+    "danger-PC-Focus-bg": "Set fill color of node \"Size=PC, Kind=Danger, State=Focus\" to RGBA(1, 1, 1, 1)",
+    "danger-PC-Focus-stroke": "Set stroke color of node \"Size=PC, Kind=Danger, State=Focus\" to RGBA(0.1411764705882353, 0.3411764705882353, 0.8392156862745098, 1) with weight 3",
+    "danger-PC-Focus-label": "Updated text content of node \"确认接收\" to \"确认处置\"",
+    "danger-PC-Focus-fg": "Set fill color of node \"确认接收\" to RGBA(0.7058823529411765, 0.13725490196078433, 0.1803921568627451, 1)",
+    "danger-PC-Disabled": {
+      "id": "25:10",
+      "message": "Cloned node \"Size=PC, Kind=Secondary, State=Disabled\" with new ID: 25:10 at position (696, 312)"
+    },
+    "danger-PC-Disabled-name": "Renamed node from \"Size=PC, Kind=Secondary, State=Disabled\" to \"Size=PC, Kind=Danger, State=Disabled\"",
+    "danger-PC-Disabled-info": {
+      "id": "25:10",
+      "name": "Size=PC, Kind=Danger, State=Disabled",
+      "type": "COMPONENT",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#f0f3f8"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 776,
+        "y": 658,
+        "width": 144,
+        "height": 40
+      },
+      "children": [
+        {
+          "id": "25:11",
+          "name": "确认接收",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 820,
+            "y": 667,
+            "width": 56,
+            "height": 22
+          },
+          "characters": "确认接收",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        }
+      ]
+    },
+    "danger-PC-Disabled-bg": "Set fill color of node \"Size=PC, Kind=Danger, State=Disabled\" to RGBA(0.9411764705882353, 0.9529411764705882, 0.9725490196078431, 1)",
+    "danger-PC-Disabled-stroke": "Set stroke color of node \"Size=PC, Kind=Danger, State=Disabled\" to RGBA(0.8901960784313725, 0.9098039215686274, 0.9411764705882353, 1) with weight 1",
+    "danger-PC-Disabled-label": "Updated text content of node \"确认接收\" to \"暂不可处置\"",
+    "danger-PC-Disabled-fg": "Set fill color of node \"确认接收\" to RGBA(0.3254901960784314, 0.396078431372549, 0.49019607843137253, 1)",
+    "danger-PC-Loading": {
+      "id": "25:12",
+      "message": "Cloned node \"Size=PC, Kind=Secondary, State=Loading\" with new ID: 25:12 at position (864, 312)"
+    },
+    "danger-PC-Loading-name": "Renamed node from \"Size=PC, Kind=Secondary, State=Loading\" to \"Size=PC, Kind=Danger, State=Loading\"",
+    "danger-PC-Loading-info": {
+      "id": "25:12",
+      "name": "Size=PC, Kind=Danger, State=Loading",
+      "type": "COMPONENT",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 944,
+        "y": 658,
+        "width": 144,
+        "height": 40
+      },
+      "children": [
+        {
+          "id": "25:13",
+          "name": "提交中…",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 988,
+            "y": 667,
+            "width": 56,
+            "height": 22
+          },
+          "characters": "提交中…",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        }
+      ]
+    },
+    "danger-PC-Loading-bg": "Set fill color of node \"Size=PC, Kind=Danger, State=Loading\" to RGBA(1, 1, 1, 1)",
+    "danger-PC-Loading-stroke": "Set stroke color of node \"Size=PC, Kind=Danger, State=Loading\" to RGBA(0.7058823529411765, 0.13725490196078433, 0.1803921568627451, 1) with weight 1",
+    "danger-PC-Loading-label": "Updated text content of node \"提交中…\" to \"处理中…\"",
+    "danger-PC-Loading-fg": "Set fill color of node \"提交中…\" to RGBA(0.7058823529411765, 0.13725490196078433, 0.1803921568627451, 1)",
+    "danger-Mobile-Default": {
+      "id": "25:14",
+      "message": "Cloned node \"Size=Mobile, Kind=Secondary, State=Default\" with new ID: 25:14 at position (24, 384)"
+    },
+    "danger-Mobile-Default-name": "Renamed node from \"Size=Mobile, Kind=Secondary, State=Default\" to \"Size=Mobile, Kind=Danger, State=Default\"",
+    "danger-Mobile-Default-info": {
+      "id": "25:14",
+      "name": "Size=Mobile, Kind=Danger, State=Default",
+      "type": "COMPONENT",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 104,
+        "y": 730,
+        "width": 144,
+        "height": 48
+      },
+      "children": [
+        {
+          "id": "25:15",
+          "name": "确认接收",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 148,
+            "y": 743,
+            "width": 56,
+            "height": 22
+          },
+          "characters": "确认接收",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        }
+      ]
+    },
+    "danger-Mobile-Default-bg": "Set fill color of node \"Size=Mobile, Kind=Danger, State=Default\" to RGBA(1, 1, 1, 1)",
+    "danger-Mobile-Default-stroke": "Set stroke color of node \"Size=Mobile, Kind=Danger, State=Default\" to RGBA(0.7058823529411765, 0.13725490196078433, 0.1803921568627451, 1) with weight 1",
+    "danger-Mobile-Default-label": "Updated text content of node \"确认接收\" to \"确认处置\"",
+    "danger-Mobile-Default-fg": "Set fill color of node \"确认接收\" to RGBA(0.7058823529411765, 0.13725490196078433, 0.1803921568627451, 1)",
+    "danger-Mobile-Hover": {
+      "id": "25:16",
+      "message": "Cloned node \"Size=Mobile, Kind=Secondary, State=Hover\" with new ID: 25:16 at position (192, 384)"
+    },
+    "danger-Mobile-Hover-name": "Renamed node from \"Size=Mobile, Kind=Secondary, State=Hover\" to \"Size=Mobile, Kind=Danger, State=Hover\"",
+    "danger-Mobile-Hover-info": {
+      "id": "25:16",
+      "name": "Size=Mobile, Kind=Danger, State=Hover",
+      "type": "COMPONENT",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 272,
+        "y": 730,
+        "width": 144,
+        "height": 48
+      },
+      "children": [
+        {
+          "id": "25:17",
+          "name": "确认接收",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 316,
+            "y": 743,
+            "width": 56,
+            "height": 22
+          },
+          "characters": "确认接收",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        }
+      ]
+    },
+    "danger-Mobile-Hover-bg": "Set fill color of node \"Size=Mobile, Kind=Danger, State=Hover\" to RGBA(1, 0.9411764705882353, 0.9372549019607843, 1)",
+    "danger-Mobile-Hover-stroke": "Set stroke color of node \"Size=Mobile, Kind=Danger, State=Hover\" to RGBA(0.7058823529411765, 0.13725490196078433, 0.1803921568627451, 1) with weight 1",
+    "danger-Mobile-Hover-label": "Updated text content of node \"确认接收\" to \"确认处置\"",
+    "danger-Mobile-Hover-fg": "Set fill color of node \"确认接收\" to RGBA(0.7058823529411765, 0.13725490196078433, 0.1803921568627451, 1)",
+    "danger-Mobile-Pressed": {
+      "id": "25:18",
+      "message": "Cloned node \"Size=Mobile, Kind=Secondary, State=Pressed\" with new ID: 25:18 at position (360, 384)"
+    },
+    "danger-Mobile-Pressed-name": "Renamed node from \"Size=Mobile, Kind=Secondary, State=Pressed\" to \"Size=Mobile, Kind=Danger, State=Pressed\"",
+    "danger-Mobile-Pressed-info": {
+      "id": "25:18",
+      "name": "Size=Mobile, Kind=Danger, State=Pressed",
+      "type": "COMPONENT",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 440,
+        "y": 730,
+        "width": 144,
+        "height": 48
+      },
+      "children": [
+        {
+          "id": "25:19",
+          "name": "确认接收",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 484,
+            "y": 743,
+            "width": 56,
+            "height": 22
+          },
+          "characters": "确认接收",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        }
+      ]
+    },
+    "danger-Mobile-Pressed-bg": "Set fill color of node \"Size=Mobile, Kind=Danger, State=Pressed\" to RGBA(0.7058823529411765, 0.13725490196078433, 0.1803921568627451, 1)",
+    "danger-Mobile-Pressed-stroke": "Set stroke color of node \"Size=Mobile, Kind=Danger, State=Pressed\" to RGBA(0.7058823529411765, 0.13725490196078433, 0.1803921568627451, 1) with weight 1",
+    "danger-Mobile-Pressed-label": "Updated text content of node \"确认接收\" to \"确认处置\"",
+    "danger-Mobile-Pressed-fg": "Set fill color of node \"确认接收\" to RGBA(1, 1, 1, 1)",
+    "danger-Mobile-Focus": {
+      "id": "25:20",
+      "message": "Cloned node \"Size=Mobile, Kind=Secondary, State=Focus\" with new ID: 25:20 at position (528, 384)"
+    },
+    "danger-Mobile-Focus-name": "Renamed node from \"Size=Mobile, Kind=Secondary, State=Focus\" to \"Size=Mobile, Kind=Danger, State=Focus\"",
+    "danger-Mobile-Focus-info": {
+      "id": "25:20",
+      "name": "Size=Mobile, Kind=Danger, State=Focus",
+      "type": "COMPONENT",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#2457d6"
+        }
+      ],
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 608,
+        "y": 730,
+        "width": 144,
+        "height": 48
+      },
+      "children": [
+        {
+          "id": "25:21",
+          "name": "确认接收",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 652,
+            "y": 743,
+            "width": 56,
+            "height": 22
+          },
+          "characters": "确认接收",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        }
+      ]
+    },
+    "danger-Mobile-Focus-bg": "Set fill color of node \"Size=Mobile, Kind=Danger, State=Focus\" to RGBA(1, 1, 1, 1)",
+    "danger-Mobile-Focus-stroke": "Set stroke color of node \"Size=Mobile, Kind=Danger, State=Focus\" to RGBA(0.1411764705882353, 0.3411764705882353, 0.8392156862745098, 1) with weight 3",
+    "danger-Mobile-Focus-label": "Updated text content of node \"确认接收\" to \"确认处置\"",
+    "danger-Mobile-Focus-fg": "Set fill color of node \"确认接收\" to RGBA(0.7058823529411765, 0.13725490196078433, 0.1803921568627451, 1)",
+    "danger-Mobile-Disabled": {
+      "id": "25:22",
+      "message": "Cloned node \"Size=Mobile, Kind=Secondary, State=Disabled\" with new ID: 25:22 at position (696, 384)"
+    },
+    "danger-Mobile-Disabled-name": "Renamed node from \"Size=Mobile, Kind=Secondary, State=Disabled\" to \"Size=Mobile, Kind=Danger, State=Disabled\"",
+    "danger-Mobile-Disabled-info": {
+      "id": "25:22",
+      "name": "Size=Mobile, Kind=Danger, State=Disabled",
+      "type": "COMPONENT",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#f0f3f8"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 776,
+        "y": 730,
+        "width": 144,
+        "height": 48
+      },
+      "children": [
+        {
+          "id": "25:23",
+          "name": "确认接收",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 820,
+            "y": 743,
+            "width": 56,
+            "height": 22
+          },
+          "characters": "确认接收",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        }
+      ]
+    },
+    "danger-Mobile-Disabled-bg": "Set fill color of node \"Size=Mobile, Kind=Danger, State=Disabled\" to RGBA(0.9411764705882353, 0.9529411764705882, 0.9725490196078431, 1)",
+    "danger-Mobile-Disabled-stroke": "Set stroke color of node \"Size=Mobile, Kind=Danger, State=Disabled\" to RGBA(0.8901960784313725, 0.9098039215686274, 0.9411764705882353, 1) with weight 1",
+    "danger-Mobile-Disabled-label": "Updated text content of node \"确认接收\" to \"暂不可处置\"",
+    "danger-Mobile-Disabled-fg": "Set fill color of node \"确认接收\" to RGBA(0.3254901960784314, 0.396078431372549, 0.49019607843137253, 1)",
+    "danger-Mobile-Loading": {
+      "id": "25:24",
+      "message": "Cloned node \"Size=Mobile, Kind=Secondary, State=Loading\" with new ID: 25:24 at position (864, 384)"
+    },
+    "danger-Mobile-Loading-name": "Renamed node from \"Size=Mobile, Kind=Secondary, State=Loading\" to \"Size=Mobile, Kind=Danger, State=Loading\"",
+    "danger-Mobile-Loading-info": {
+      "id": "25:24",
+      "name": "Size=Mobile, Kind=Danger, State=Loading",
+      "type": "COMPONENT",
+      "fills": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#ffffff"
+        }
+      ],
+      "strokes": [
+        {
+          "blendMode": "NORMAL",
+          "type": "SOLID",
+          "color": "#e3e8f0"
+        }
+      ],
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 944,
+        "y": 730,
+        "width": 144,
+        "height": 48
+      },
+      "children": [
+        {
+          "id": "25:25",
+          "name": "提交中…",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 988,
+            "y": 743,
+            "width": 56,
+            "height": 22
+          },
+          "characters": "提交中…",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        }
+      ]
+    },
+    "danger-Mobile-Loading-bg": "Set fill color of node \"Size=Mobile, Kind=Danger, State=Loading\" to RGBA(1, 1, 1, 1)",
+    "danger-Mobile-Loading-stroke": "Set stroke color of node \"Size=Mobile, Kind=Danger, State=Loading\" to RGBA(0.7058823529411765, 0.13725490196078433, 0.1803921568627451, 1) with weight 1",
+    "danger-Mobile-Loading-label": "Updated text content of node \"提交中…\" to \"处理中…\"",
+    "danger-Mobile-Loading-fg": "Set fill color of node \"提交中…\" to RGBA(0.7058823529411765, 0.13725490196078433, 0.1803921568627451, 1)",
+    "input-name-0": "Renamed node from \"State=Default\" to \"Control=Input, State=Default\"",
+    "input-place-0": "Moved node \"Control=Input, State=Default\" to position (24, 24)",
+    "input-border-0": "Set stroke color of node \"Input\" to RGBA(0.3254901960784314, 0.396078431372549, 0.49019607843137253, 1) with weight 1",
+    "field-Select-Default": {
+      "id": "25:26",
+      "message": "Cloned node \"Control=Input, State=Default\" with new ID: 25:26 at position (368, 24)"
+    },
+    "field-Select-Default-name": "Renamed node from \"Control=Input, State=Default\" to \"Control=Select, State=Default\"",
+    "field-Select-Default-info": {
+      "id": "25:26",
+      "name": "Control=Select, State=Default",
+      "type": "COMPONENT",
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 1648,
+        "y": 370,
+        "width": 320,
+        "height": 120
+      },
+      "children": [
+        {
+          "id": "25:27",
+          "name": "接收位置 *",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1648,
+            "y": 370,
+            "width": 66,
+            "height": 22
+          },
+          "characters": "接收位置 *",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        },
+        {
+          "id": "25:28",
+          "name": "Input",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "strokes": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "cornerRadius": 8,
+          "absoluteBoundingBox": {
+            "x": 1648,
+            "y": 400,
+            "width": 320,
+            "height": 44
+          },
+          "children": [
+            {
+              "id": "25:29",
+              "name": "产品部 / 301",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 1656,
+                "y": 411,
+                "width": 78,
+                "height": 22
+              },
+              "characters": "产品部 / 301",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "25:30",
+          "name": "请填写资产实际存放位置",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1648,
+            "y": 452,
+            "width": 132,
+            "height": 20
+          },
+          "characters": "请填写资产实际存放位置",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 12,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 20
+          }
+        }
+      ]
+    },
+    "field-Select-Default-layout": "Set layout mode of frame \"Input\" to NONE",
+    "field-Select-Default-arrow": {
+      "id": "25:31",
+      "message": "Created text \"展开选项\" with ID: 25:31"
+    },
+    "field-Textarea-Default": {
+      "id": "25:32",
+      "message": "Cloned node \"Control=Input, State=Default\" with new ID: 25:32 at position (712, 24)"
+    },
+    "field-Textarea-Default-name": "Renamed node from \"Control=Input, State=Default\" to \"Control=Textarea, State=Default\"",
+    "field-Textarea-Default-info": {
+      "id": "25:32",
+      "name": "Control=Textarea, State=Default",
+      "type": "COMPONENT",
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 1992,
+        "y": 370,
+        "width": 320,
+        "height": 120
+      },
+      "children": [
+        {
+          "id": "25:33",
+          "name": "接收位置 *",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1992,
+            "y": 370,
+            "width": 66,
+            "height": 22
+          },
+          "characters": "接收位置 *",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        },
+        {
+          "id": "25:34",
+          "name": "Input",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "strokes": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "cornerRadius": 8,
+          "absoluteBoundingBox": {
+            "x": 1992,
+            "y": 400,
+            "width": 320,
+            "height": 44
+          },
+          "children": [
+            {
+              "id": "25:35",
+              "name": "产品部 / 301",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 2000,
+                "y": 411,
+                "width": 78,
+                "height": 22
+              },
+              "characters": "产品部 / 301",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "25:36",
+          "name": "请填写资产实际存放位置",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1992,
+            "y": 452,
+            "width": 132,
+            "height": 20
+          },
+          "characters": "请填写资产实际存放位置",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 12,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 20
+          }
+        }
+      ]
+    },
+    "field-Textarea-Default-control-size": "Resized node \"Input\" to width 320 and height 88",
+    "field-Textarea-Default-size": "Resized node \"Control=Textarea, State=Default\" to width 320 and height 160",
+    "input-name-1": "Renamed node from \"State=Focus\" to \"Control=Input, State=Focus\"",
+    "input-place-1": "Moved node \"Control=Input, State=Focus\" to position (24, 212)",
+    "field-Select-Focus": {
+      "id": "25:37",
+      "message": "Cloned node \"Control=Input, State=Focus\" with new ID: 25:37 at position (368, 212)"
+    },
+    "field-Select-Focus-name": "Renamed node from \"Control=Input, State=Focus\" to \"Control=Select, State=Focus\"",
+    "field-Select-Focus-info": {
+      "id": "25:37",
+      "name": "Control=Select, State=Focus",
+      "type": "COMPONENT",
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 1648,
+        "y": 558,
+        "width": 320,
+        "height": 120
+      },
+      "children": [
+        {
+          "id": "25:38",
+          "name": "接收位置 *",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1648,
+            "y": 558,
+            "width": 66,
+            "height": 22
+          },
+          "characters": "接收位置 *",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        },
+        {
+          "id": "25:39",
+          "name": "Input",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "strokes": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#2457d6"
+            }
+          ],
+          "cornerRadius": 8,
+          "absoluteBoundingBox": {
+            "x": 1648,
+            "y": 588,
+            "width": 320,
+            "height": 44
+          },
+          "children": [
+            {
+              "id": "25:40",
+              "name": "产品部 / 301",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 1656,
+                "y": 599,
+                "width": 78,
+                "height": 22
+              },
+              "characters": "产品部 / 301",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "25:41",
+          "name": "请填写资产实际存放位置",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1648,
+            "y": 640,
+            "width": 132,
+            "height": 20
+          },
+          "characters": "请填写资产实际存放位置",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 12,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 20
+          }
+        }
+      ]
+    },
+    "field-Select-Focus-layout": "Set layout mode of frame \"Input\" to NONE",
+    "field-Select-Focus-arrow": {
+      "id": "25:42",
+      "message": "Created text \"展开选项\" with ID: 25:42"
+    },
+    "field-Textarea-Focus": {
+      "id": "25:43",
+      "message": "Cloned node \"Control=Input, State=Focus\" with new ID: 25:43 at position (712, 212)"
+    },
+    "field-Textarea-Focus-name": "Renamed node from \"Control=Input, State=Focus\" to \"Control=Textarea, State=Focus\"",
+    "field-Textarea-Focus-info": {
+      "id": "25:43",
+      "name": "Control=Textarea, State=Focus",
+      "type": "COMPONENT",
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 1992,
+        "y": 558,
+        "width": 320,
+        "height": 120
+      },
+      "children": [
+        {
+          "id": "25:44",
+          "name": "接收位置 *",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1992,
+            "y": 558,
+            "width": 66,
+            "height": 22
+          },
+          "characters": "接收位置 *",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        },
+        {
+          "id": "25:45",
+          "name": "Input",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "strokes": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#2457d6"
+            }
+          ],
+          "cornerRadius": 8,
+          "absoluteBoundingBox": {
+            "x": 1992,
+            "y": 588,
+            "width": 320,
+            "height": 44
+          },
+          "children": [
+            {
+              "id": "25:46",
+              "name": "产品部 / 301",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 2000,
+                "y": 599,
+                "width": 78,
+                "height": 22
+              },
+              "characters": "产品部 / 301",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "25:47",
+          "name": "请填写资产实际存放位置",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1992,
+            "y": 640,
+            "width": 132,
+            "height": 20
+          },
+          "characters": "请填写资产实际存放位置",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 12,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 20
+          }
+        }
+      ]
+    },
+    "field-Textarea-Focus-control-size": "Resized node \"Input\" to width 320 and height 88",
+    "field-Textarea-Focus-size": "Resized node \"Control=Textarea, State=Focus\" to width 320 and height 160",
+    "input-name-2": "Renamed node from \"State=Error\" to \"Control=Input, State=Error\"",
+    "input-place-2": "Moved node \"Control=Input, State=Error\" to position (24, 400)",
+    "field-Select-Error": {
+      "id": "25:48",
+      "message": "Cloned node \"Control=Input, State=Error\" with new ID: 25:48 at position (368, 400)"
+    },
+    "field-Select-Error-name": "Renamed node from \"Control=Input, State=Error\" to \"Control=Select, State=Error\"",
+    "field-Select-Error-info": {
+      "id": "25:48",
+      "name": "Control=Select, State=Error",
+      "type": "COMPONENT",
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 1648,
+        "y": 746,
+        "width": 320,
+        "height": 120
+      },
+      "children": [
+        {
+          "id": "25:49",
+          "name": "接收位置 *",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1648,
+            "y": 746,
+            "width": 66,
+            "height": 22
+          },
+          "characters": "接收位置 *",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        },
+        {
+          "id": "25:50",
+          "name": "Input",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "strokes": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#b4232e"
+            }
+          ],
+          "cornerRadius": 8,
+          "absoluteBoundingBox": {
+            "x": 1648,
+            "y": 776,
+            "width": 320,
+            "height": 44
+          },
+          "children": [
+            {
+              "id": "25:51",
+              "name": "Text",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 1656,
+                "y": 787,
+                "width": 0,
+                "height": 22
+              },
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "25:52",
+          "name": "请选择实际接收位置",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#b4232e"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1648,
+            "y": 828,
+            "width": 108,
+            "height": 20
+          },
+          "characters": "请选择实际接收位置",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 12,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 20
+          }
+        }
+      ]
+    },
+    "field-Select-Error-layout": "Set layout mode of frame \"Input\" to NONE",
+    "field-Select-Error-arrow": {
+      "id": "25:53",
+      "message": "Created text \"展开选项\" with ID: 25:53"
+    },
+    "field-Textarea-Error": {
+      "id": "25:54",
+      "message": "Cloned node \"Control=Input, State=Error\" with new ID: 25:54 at position (712, 400)"
+    },
+    "field-Textarea-Error-name": "Renamed node from \"Control=Input, State=Error\" to \"Control=Textarea, State=Error\"",
+    "field-Textarea-Error-info": {
+      "id": "25:54",
+      "name": "Control=Textarea, State=Error",
+      "type": "COMPONENT",
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 1992,
+        "y": 746,
+        "width": 320,
+        "height": 120
+      },
+      "children": [
+        {
+          "id": "25:55",
+          "name": "接收位置 *",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1992,
+            "y": 746,
+            "width": 66,
+            "height": 22
+          },
+          "characters": "接收位置 *",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        },
+        {
+          "id": "25:56",
+          "name": "Input",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "strokes": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#b4232e"
+            }
+          ],
+          "cornerRadius": 8,
+          "absoluteBoundingBox": {
+            "x": 1992,
+            "y": 776,
+            "width": 320,
+            "height": 44
+          },
+          "children": [
+            {
+              "id": "25:57",
+              "name": "Text",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 2000,
+                "y": 787,
+                "width": 0,
+                "height": 22
+              },
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "25:58",
+          "name": "请选择实际接收位置",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#b4232e"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1992,
+            "y": 828,
+            "width": 108,
+            "height": 20
+          },
+          "characters": "请选择实际接收位置",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 12,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 20
+          }
+        }
+      ]
+    },
+    "field-Textarea-Error-control-size": "Resized node \"Input\" to width 320 and height 88",
+    "field-Textarea-Error-size": "Resized node \"Control=Textarea, State=Error\" to width 320 and height 160",
+    "input-name-3": "Renamed node from \"State=Disabled\" to \"Control=Input, State=Disabled\"",
+    "input-place-3": "Moved node \"Control=Input, State=Disabled\" to position (24, 588)",
+    "input-border-3": "Set stroke color of node \"Input\" to RGBA(0.3254901960784314, 0.396078431372549, 0.49019607843137253, 1) with weight 1",
+    "field-Select-Disabled": {
+      "id": "25:59",
+      "message": "Cloned node \"Control=Input, State=Disabled\" with new ID: 25:59 at position (368, 588)"
+    },
+    "field-Select-Disabled-name": "Renamed node from \"Control=Input, State=Disabled\" to \"Control=Select, State=Disabled\"",
+    "field-Select-Disabled-info": {
+      "id": "25:59",
+      "name": "Control=Select, State=Disabled",
+      "type": "COMPONENT",
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 1648,
+        "y": 934,
+        "width": 320,
+        "height": 120
+      },
+      "children": [
+        {
+          "id": "25:60",
+          "name": "接收位置 *",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1648,
+            "y": 934,
+            "width": 66,
+            "height": 22
+          },
+          "characters": "接收位置 *",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        },
+        {
+          "id": "25:61",
+          "name": "Input",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#f0f3f8"
+            }
+          ],
+          "strokes": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "cornerRadius": 8,
+          "absoluteBoundingBox": {
+            "x": 1648,
+            "y": 964,
+            "width": 320,
+            "height": 44
+          },
+          "children": [
+            {
+              "id": "25:62",
+              "name": "产品部 / 301",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#53657d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 1656,
+                "y": 975,
+                "width": 78,
+                "height": 22
+              },
+              "characters": "产品部 / 301",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "25:63",
+          "name": "他人处理中，暂不可编辑",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1648,
+            "y": 1016,
+            "width": 132,
+            "height": 20
+          },
+          "characters": "他人处理中，暂不可编辑",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 12,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 20
+          }
+        }
+      ]
+    },
+    "field-Select-Disabled-layout": "Set layout mode of frame \"Input\" to NONE",
+    "field-Select-Disabled-arrow": {
+      "id": "25:64",
+      "message": "Created text \"展开选项\" with ID: 25:64"
+    },
+    "field-Textarea-Disabled": {
+      "id": "25:65",
+      "message": "Cloned node \"Control=Input, State=Disabled\" with new ID: 25:65 at position (712, 588)"
+    },
+    "field-Textarea-Disabled-name": "Renamed node from \"Control=Input, State=Disabled\" to \"Control=Textarea, State=Disabled\"",
+    "field-Textarea-Disabled-info": {
+      "id": "25:65",
+      "name": "Control=Textarea, State=Disabled",
+      "type": "COMPONENT",
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 1992,
+        "y": 934,
+        "width": 320,
+        "height": 120
+      },
+      "children": [
+        {
+          "id": "25:66",
+          "name": "接收位置 *",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1992,
+            "y": 934,
+            "width": 66,
+            "height": 22
+          },
+          "characters": "接收位置 *",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        },
+        {
+          "id": "25:67",
+          "name": "Input",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#f0f3f8"
+            }
+          ],
+          "strokes": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "cornerRadius": 8,
+          "absoluteBoundingBox": {
+            "x": 1992,
+            "y": 964,
+            "width": 320,
+            "height": 44
+          },
+          "children": [
+            {
+              "id": "25:68",
+              "name": "产品部 / 301",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#53657d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 2000,
+                "y": 975,
+                "width": 78,
+                "height": 22
+              },
+              "characters": "产品部 / 301",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "25:69",
+          "name": "他人处理中，暂不可编辑",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1992,
+            "y": 1016,
+            "width": 132,
+            "height": 20
+          },
+          "characters": "他人处理中，暂不可编辑",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 12,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 20
+          }
+        }
+      ]
+    },
+    "field-Textarea-Disabled-control-size": "Resized node \"Input\" to width 320 and height 88",
+    "field-Textarea-Disabled-size": "Resized node \"Control=Textarea, State=Disabled\" to width 320 and height 160",
+    "input-name-4": "Renamed node from \"State=ReadOnly\" to \"Control=Input, State=ReadOnly\"",
+    "input-place-4": "Moved node \"Control=Input, State=ReadOnly\" to position (24, 776)",
+    "input-border-4": "Set stroke color of node \"Input\" to RGBA(0.3254901960784314, 0.396078431372549, 0.49019607843137253, 1) with weight 1",
+    "field-Select-ReadOnly": {
+      "id": "25:70",
+      "message": "Cloned node \"Control=Input, State=ReadOnly\" with new ID: 25:70 at position (368, 776)"
+    },
+    "field-Select-ReadOnly-name": "Renamed node from \"Control=Input, State=ReadOnly\" to \"Control=Select, State=ReadOnly\"",
+    "field-Select-ReadOnly-info": {
+      "id": "25:70",
+      "name": "Control=Select, State=ReadOnly",
+      "type": "COMPONENT",
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 1648,
+        "y": 1122,
+        "width": 320,
+        "height": 120
+      },
+      "children": [
+        {
+          "id": "25:71",
+          "name": "接收位置 *",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1648,
+            "y": 1122,
+            "width": 66,
+            "height": 22
+          },
+          "characters": "接收位置 *",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        },
+        {
+          "id": "25:72",
+          "name": "Input",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "strokes": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "cornerRadius": 8,
+          "absoluteBoundingBox": {
+            "x": 1648,
+            "y": 1152,
+            "width": 320,
+            "height": 44
+          },
+          "children": [
+            {
+              "id": "25:73",
+              "name": "产品部 / 301",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 1656,
+                "y": 1163,
+                "width": 78,
+                "height": 22
+              },
+              "characters": "产品部 / 301",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "25:74",
+          "name": "责任与位置通过业务动作变更",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1648,
+            "y": 1204,
+            "width": 156,
+            "height": 20
+          },
+          "characters": "责任与位置通过业务动作变更",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 12,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 20
+          }
+        }
+      ]
+    },
+    "field-Textarea-ReadOnly": {
+      "id": "25:75",
+      "message": "Cloned node \"Control=Input, State=ReadOnly\" with new ID: 25:75 at position (712, 776)"
+    },
+    "field-Textarea-ReadOnly-name": "Renamed node from \"Control=Input, State=ReadOnly\" to \"Control=Textarea, State=ReadOnly\"",
+    "field-Textarea-ReadOnly-info": {
+      "id": "25:75",
+      "name": "Control=Textarea, State=ReadOnly",
+      "type": "COMPONENT",
+      "cornerRadius": 8,
+      "absoluteBoundingBox": {
+        "x": 1992,
+        "y": 1122,
+        "width": 320,
+        "height": 120
+      },
+      "children": [
+        {
+          "id": "25:76",
+          "name": "接收位置 *",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#18263d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1992,
+            "y": 1122,
+            "width": 66,
+            "height": 22
+          },
+          "characters": "接收位置 *",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 14,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 22
+          }
+        },
+        {
+          "id": "25:77",
+          "name": "Input",
+          "type": "FRAME",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#ffffff"
+            }
+          ],
+          "strokes": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "cornerRadius": 8,
+          "absoluteBoundingBox": {
+            "x": 1992,
+            "y": 1152,
+            "width": 320,
+            "height": 44
+          },
+          "children": [
+            {
+              "id": "25:78",
+              "name": "产品部 / 301",
+              "type": "TEXT",
+              "fills": [
+                {
+                  "blendMode": "NORMAL",
+                  "type": "SOLID",
+                  "color": "#18263d"
+                }
+              ],
+              "absoluteBoundingBox": {
+                "x": 2000,
+                "y": 1163,
+                "width": 78,
+                "height": 22
+              },
+              "characters": "产品部 / 301",
+              "style": {
+                "fontFamily": "Noto Sans SC",
+                "fontStyle": "Regular",
+                "fontWeight": 400,
+                "fontSize": 14,
+                "textAlignHorizontal": "LEFT",
+                "letterSpacing": 0,
+                "lineHeightPx": 22
+              }
+            }
+          ]
+        },
+        {
+          "id": "25:79",
+          "name": "责任与位置通过业务动作变更",
+          "type": "TEXT",
+          "fills": [
+            {
+              "blendMode": "NORMAL",
+              "type": "SOLID",
+              "color": "#53657d"
+            }
+          ],
+          "absoluteBoundingBox": {
+            "x": 1992,
+            "y": 1204,
+            "width": 156,
+            "height": 20
+          },
+          "characters": "责任与位置通过业务动作变更",
+          "style": {
+            "fontFamily": "Noto Sans SC",
+            "fontStyle": "Medium",
+            "fontWeight": 500,
+            "fontSize": 12,
+            "textAlignHorizontal": "LEFT",
+            "letterSpacing": 0,
+            "lineHeightPx": 20
+          }
+        }
+      ]
+    },
+    "field-Textarea-ReadOnly-control-size": "Resized node \"Input\" to width 320 and height 88",
+    "field-Textarea-ReadOnly-size": "Resized node \"Control=Textarea, State=ReadOnly\" to width 320 and height 160",
+    "field-set-size": "Resized node \"FAMS/Field\" to width 1056 and height 976",
+    "6:20-hover": "Set fill color of node \"Size=PC, Kind=Secondary, State=Hover\" to RGBA(0.9411764705882353, 0.9529411764705882, 0.9725490196078431, 1)",
+    "6:44-hover": "Set fill color of node \"Size=Mobile, Kind=Secondary, State=Hover\" to RGBA(0.9411764705882353, 0.9529411764705882, 0.9725490196078431, 1)",
+    "6:22-pressed": "Set fill color of node \"Size=PC, Kind=Secondary, State=Pressed\" to RGBA(0.9176470588235294, 0.9411764705882353, 1, 1)",
+    "6:46-pressed": "Set fill color of node \"Size=Mobile, Kind=Secondary, State=Pressed\" to RGBA(0.9176470588235294, 0.9411764705882353, 1, 1)"
+  },
+  "danger": [
+    {
+      "id": "25:2",
+      "size": "PC",
+      "state": "Default"
+    },
+    {
+      "id": "25:4",
+      "size": "PC",
+      "state": "Hover"
+    },
+    {
+      "id": "25:6",
+      "size": "PC",
+      "state": "Pressed"
+    },
+    {
+      "id": "25:8",
+      "size": "PC",
+      "state": "Focus"
+    },
+    {
+      "id": "25:10",
+      "size": "PC",
+      "state": "Disabled"
+    },
+    {
+      "id": "25:12",
+      "size": "PC",
+      "state": "Loading"
+    },
+    {
+      "id": "25:14",
+      "size": "Mobile",
+      "state": "Default"
+    },
+    {
+      "id": "25:16",
+      "size": "Mobile",
+      "state": "Hover"
+    },
+    {
+      "id": "25:18",
+      "size": "Mobile",
+      "state": "Pressed"
+    },
+    {
+      "id": "25:20",
+      "size": "Mobile",
+      "state": "Focus"
+    },
+    {
+      "id": "25:22",
+      "size": "Mobile",
+      "state": "Disabled"
+    },
+    {
+      "id": "25:24",
+      "size": "Mobile",
+      "state": "Loading"
+    }
+  ],
+  "fields": [
+    {
+      "id": "25:26",
+      "control": "Select",
+      "state": "Default"
+    },
+    {
+      "id": "25:32",
+      "control": "Textarea",
+      "state": "Default"
+    },
+    {
+      "id": "25:37",
+      "control": "Select",
+      "state": "Focus"
+    },
+    {
+      "id": "25:43",
+      "control": "Textarea",
+      "state": "Focus"
+    },
+    {
+      "id": "25:48",
+      "control": "Select",
+      "state": "Error"
+    },
+    {
+      "id": "25:54",
+      "control": "Textarea",
+      "state": "Error"
+    },
+    {
+      "id": "25:59",
+      "control": "Select",
+      "state": "Disabled"
+    },
+    {
+      "id": "25:65",
+      "control": "Textarea",
+      "state": "Disabled"
+    },
+    {
+      "id": "25:70",
+      "control": "Select",
+      "state": "ReadOnly"
+    },
+    {
+      "id": "25:75",
+      "control": "Textarea",
+      "state": "ReadOnly"
+    }
+  ]
+}

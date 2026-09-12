@@ -1,0 +1,126 @@
+{
+  "verifiedAt": "2026-09-11T03:21:49.617Z",
+  "fileKey": "N4BgxhOTtSFpsoxcN7t4XD",
+  "channel": "v7dkvp2o",
+  "page": {
+    "id": "3:5",
+    "name": "03 · Screens & Handoff"
+  },
+  "sample": {
+    "id": "71:13639",
+    "name": "D0.4 / SVG 图标原生导入样本",
+    "absoluteBoundingBox": {
+      "x": 9200,
+      "y": 980,
+      "width": 1000,
+      "height": 500
+    },
+    "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13639-0.png",
+    "childCount": 18
+  },
+  "assets": [
+    {
+      "asset": "home-active.svg",
+      "sourceSha256": "444ca2092f5fb9569c25c7e64e6f186dc6d78ecf16912ad9e61be31b75956cec",
+      "nodeId": "71:13642",
+      "name": "SVG / 首页 / 当前",
+      "type": "FRAME",
+      "width": 72,
+      "height": 72,
+      "vectorCount": 3,
+      "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13642-0.svg"
+    },
+    {
+      "asset": "home-neutral.svg",
+      "sourceSha256": "f5010159ebd816cd4b8aa25e1bbe3f91af52c8592f075529c18931a9f02bd1a1",
+      "nodeId": "71:13647",
+      "name": "SVG / 首页 / 非当前",
+      "type": "FRAME",
+      "width": 72,
+      "height": 72,
+      "vectorCount": 3,
+      "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13647-0.svg"
+    },
+    {
+      "asset": "message-active.svg",
+      "sourceSha256": "855c2774e99b64f7ad3515b1822da17407be29e87166cae0856cc1f3f5e5669b",
+      "nodeId": "71:13652",
+      "name": "SVG / 消息 / 当前",
+      "type": "FRAME",
+      "width": 72,
+      "height": 72,
+      "vectorCount": 2,
+      "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13652-0.svg"
+    },
+    {
+      "asset": "message-neutral.svg",
+      "sourceSha256": "9f18e13efd497e76a900e2fcf2130cb85d08bbfccc70d61f911b2608583a08c0",
+      "nodeId": "71:13656",
+      "name": "SVG / 消息 / 非当前",
+      "type": "FRAME",
+      "width": 72,
+      "height": 72,
+      "vectorCount": 2,
+      "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13656-0.svg"
+    },
+    {
+      "asset": "scan-active.svg",
+      "sourceSha256": "080ea5ec55ce59dd443d4b7c0677ca86500eba66d18fa4a86848c38531a63c44",
+      "nodeId": "71:13660",
+      "name": "SVG / 扫码 / 当前",
+      "type": "FRAME",
+      "width": 72,
+      "height": 72,
+      "vectorCount": 2,
+      "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13660-0.svg"
+    },
+    {
+      "asset": "scan-neutral.svg",
+      "sourceSha256": "5d2aefd5bab9230b4d0025f8f0b0acc44f338d994b025e4c60851b0fe5e5b7fb",
+      "nodeId": "71:13664",
+      "name": "SVG / 扫码 / 非当前",
+      "type": "FRAME",
+      "width": 72,
+      "height": 72,
+      "vectorCount": 2,
+      "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13664-0.svg"
+    },
+    {
+      "asset": "mine-active.svg",
+      "sourceSha256": "b7d21b84c0349da7f014d6134bd32cde8b2228abbd762ec372c76c71aa88cac7",
+      "nodeId": "71:13668",
+      "name": "SVG / 我的 / 当前",
+      "type": "FRAME",
+      "width": 72,
+      "height": 72,
+      "vectorCount": 2,
+      "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13668-0.svg"
+    },
+    {
+      "asset": "mine-neutral.svg",
+      "sourceSha256": "25eb7a4d7daeb393d209c796c87e8c623b5f789597d28a0d05d4adf320472326",
+      "nodeId": "71:13672",
+      "name": "SVG / 我的 / 非当前",
+      "type": "FRAME",
+      "width": 72,
+      "height": 72,
+      "vectorCount": 2,
+      "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13672-0.svg"
+    }
+  ],
+  "totals": {
+    "importedRoots": 8,
+    "vectorLayers": 18,
+    "editableVectorRoots": 8
+  },
+  "checks": {
+    "allEightImported": true,
+    "everyImportHasVector": true,
+    "everyImportHasSvgExport": true,
+    "noImageFills": true
+  },
+  "limitations": {
+    "scope": "Separate native sample frame; existing 40 business screen roots remain unchanged.",
+    "productionAcceptance": "Not claimed: this workspace has no production service or real-device harness."
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "retrievedOn": "2026-09-07",
+  "service": "Framelink_Figma_MCP",
+  "fileKey": "N4BgxhOTtSFpsoxcN7t4XD",
+  "sourceSha256": "c0724b7c9ba9878ce8b6dbaec13cea6b17d814dcc7f43b49164a2d2a379ed4eb",
+  "capabilities": [
+    "get_figma_data",
+    "download_figma_images"
+  ],
+  "canWriteFigma": false,
+  "frames": [
+    {
+      "id": "4:2",
+      "name": "Foundations",
+      "image": "foundations.png"
+    },
+    {
+      "id": "6:54",
+      "name": "FAMS/Button",
+      "variants": 24,
+      "image": "buttons.png"
+    },
+    {
+      "id": "7:31",
+      "name": "FAMS/Field",
+      "variants": 5,
+      "image": "fields.png"
+    }
+  ],
+  "screensPage": {
+    "id": "3:5",
+    "childrenInResponse": 0
+  },
+  "textStylesReferencedByNodes": {
+    "FAMS/Label": {
+      "family": "Noto Sans SC",
+      "style": "Medium",
+      "weight": 500,
+      "size": 12,
+      "lineHeight": 20.0
+    },
+    "FAMS/Display": {
+      "family": "Noto Sans SC",
+      "style": "Bold",
+      "weight": 700,
+      "size": 36,
+      "lineHeight": 48.0
+    },
+    "FAMS/Body": {
+      "family": "Noto Sans SC",
+      "style": "Regular",
+      "weight": 400,
+      "size": 14,
+      "lineHeight": 22.0
+    },
+    "FAMS/Section": {
+      "family": "Noto Sans SC",
+      "style": "Medium",
+      "weight": 500,
+      "size": 18,
+      "lineHeight": 28.0
+    },
+    "FAMS/Heading": {
+      "family": "Noto Sans SC",
+      "style": "Bold",
+      "weight": 700,
+      "size": 24,
+      "lineHeight": 36.0
+    },
+    "FAMS/Body Strong": {
+      "family": "Noto Sans SC",
+      "style": "Medium",
+      "weight": 500,
+      "size": 14,
+      "lineHeight": 22.0
+    },
+    "FAMS/Mobile Body": {
+      "family": "Noto Sans SC",
+      "style": "Regular",
+      "weight": 400,
+      "size": 16,
+      "lineHeight": 26.0
+    }
+  },
+  "fieldControlHeight": 44,
+  "buttonHeights": {
+    "PC": 40,
+    "Mobile": 48
+  },
+  "sectionWeight": 500,
+  "localExtensions": [
+    "Danger buttons and remaining component families",
+    "40 pages based on D0.2 interactions",
+    "Metric text style not referenced by returned Figma nodes"
+  ],
+  "intentionalAdaptations": [
+    "Interactive borders use #53657D for contrast",
+    "Focus ring offset 3px to stay visible on primary actions",
+    "Secondary hover/pressed distinguish interaction states",
+    "System Chinese font stack and responsive mobile text",
+    "Responsive sidebar 190px and content 28px within the prior local layout"
+  ]
+}
