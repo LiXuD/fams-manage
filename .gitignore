@@ -1,0 +1,44 @@
+# Operating-system metadata
+.DS_Store
+
+# Local browser and runtime evidence (retained locally; never repository input)
+.playwright-cli/
+output/
+.superpowers/
+*.log
+**/operations.jsonl
+
+# Dependency and build output
+node_modules/
+target/
+dist/
+coverage/
+.vite/
+.cache/
+__pycache__/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+
+# Early business reference model (not a product schema)
+datae.ndm2
+
+# Large/generated Figma journals and layout dumps; source scripts regenerate them.
+docs/superpowers/designs/2026-09-06-fams-ui/figma-native/*journal*.json
+docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-layout-spec.json
+docs/superpowers/designs/2026-09-06-fams-ui/figma-native/layout-spec.json
+docs/superpowers/designs/2026-09-06-fams-ui/figma-native/native-page-structure.json
+docs/superpowers/designs/2026-09-06-fams-ui/figma-native/*capture-output.txt
+docs/superpowers/designs/2026-09-06-fams-ui/figma-native/*verification-output.txt
+
+# Generated image exports are local by default. The approved D0.4 page exports
+# and 40-page static review exports are explicitly re-included below.
+**/*.png
+!docs/superpowers/designs/2026-09-06-fams-ui/screens/*.png
+!docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-live-*.png

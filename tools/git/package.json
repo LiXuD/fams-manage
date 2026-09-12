@@ -1,0 +1,10 @@
+{
+  "name": "@fams/commit-governance",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Pinned local commit-message title checker for FAMS",
+  "devDependencies": {
+    "@commitlint/cli": "19.8.1",
+    "@commitlint/config-conventional": "19.8.1"
+  }
+}
