@@ -1,0 +1,27 @@
+{
+  "operationId": "createNumberingRule",
+  "kind": "rejection",
+  "status": 400,
+  "scenario": "INBOUND_RECEIPT cannot use CATEGORY_PREFIX mode.",
+  "requestSchema": "NumberingRuleCreateRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "numbering-rule-create-example-0006",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "code": "RECEIPT-CATEGORY-INVALID",
+    "target": "INBOUND_RECEIPT",
+    "mode": "CATEGORY_PREFIX",
+    "datePart": "YYYYMM",
+    "sequenceLength": 5
+  },
+  "response": {
+    "code": "NUMBERING_MODE_NOT_ALLOWED_FOR_TARGET",
+    "message": "INBOUND_RECEIPT numbering rules must use ENTERPRISE mode.",
+    "requestId": "00000000-0000-4000-8000-000000000020",
+    "fieldErrors": {
+      "mode": "CATEGORY_PREFIX is valid only for ASSET."
+    }
+  }
+}
