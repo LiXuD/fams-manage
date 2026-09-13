@@ -4,12 +4,12 @@
 
 - **ID：** D6-02B 运行兼容性。
 - **目标：** 在 D6-02A 生成链路之上，以真实、固定摘要的 MySQL 8.4 容器证明 Spring Boot、MyBatis、Flyway、Spring Session JDBC、事务、应用重启、数据库重启及 Java/共享 TypeScript 构建可以共同工作。
-- **状态：** `IN_REVIEW`（2026-09-13）；独立复核问题已完成两轮修复且本地完整门禁返回 0，尚待修复轮规格与质量复核，不能提前写为 `DEV_VERIFIED`。
+- **状态：** `DEV_VERIFIED`（2026-09-13）；独立复核问题已完成两轮修复并关闭，控制器在 reviewed implementation HEAD `ff8f166` 上完成统一入口全量复跑，退出 0。
 - **分支 / 基线：** `feat/D6-02B-runtime-compatibility`；`c9069f10a5a58a7d101f66490bee3a2ed51cced0`。
-- **实现提交：** `777103b`（依赖、profile 与迁移）、`11f2626`（MyBatis/事务/会话 HTTP 探针）、`a6a3eb8`（真实运行门禁）、`c6e7ed2`（门禁防假通过修复）、`97304b5`（测试数据库强隔离）、`04d93cc`（Flyway 异常类判据）。
+- **实现提交：** `777103b`（依赖、profile 与迁移）、`11f2626`（MyBatis/事务/会话 HTTP 探针）、`a6a3eb8`（真实运行门禁）、`c6e7ed2`（门禁防假通过修复）、`97304b5`（测试数据库强隔离）、`04d93cc`（Flyway 异常类判据）、`ff8f166`（验证状态与工作流状态分离）。
 - **规模：** M；一个运行兼容性闭环，不含业务表、业务契约、客户端应用或项目级 Compose/CI。
 - **实施负责人：** `luna-worker`（`gpt-5.6-luna`）完成依赖、迁移、探针和验证器初稿；其额度中断后由控制器接管验证器防假通过测试、证据和交接文档，控制器模型无法核实。
-- **复核人：** 独立任务级会话 `/root/d6_01a_task_review` 首轮给出 `Spec Compliance: FAIL`、`Task Quality: FAIL`；其额度受限后由未参与 D6-02B 实施的 `/root/d6_02a_luna_worker` 定向复核，确认 5/6 项处理、Flyway 包名误判仍开放。`04d93cc` 已补负例并修复，当前待再次复核；历史 RED 命令缺口继续如实保留。用户仍负责产品与里程碑验收；该任务复核不能替代 D6-02C 关闭前计划要求的权限、事务、迁移、恢复关键独立技术复核。
+- **复核人：** 独立任务级会话 `/root/d6_01a_task_review` 首轮给出 `Spec Compliance: FAIL`、`Task Quality: FAIL`；其额度受限后由未参与 D6-02B 实施的 `/root/d6_02a_luna_worker` 定向复核，确认 5/6 项处理并发现 Flyway 包名误判仍开放。`04d93cc` 补负例并修复后，原独立会话确认该问题已处理且无新增 Critical/Important；`ff8f166` 的状态语义修正也经同一会话定向复核为已处理且无新增 Critical/Important。历史 RED 命令缺口继续如实保留。用户仍负责产品与里程碑验收；该任务复核不能替代 D6-02C 关闭前计划要求的权限、事务、迁移、恢复关键独立技术复核。
 
 ## PRD、页面与 AC 边界
 
@@ -33,7 +33,7 @@
 | OpenAPI Generator | 7.25.0 |
 | Node / npm / TypeScript | 24.18.0 / 11.16.0 / 5.9.2 |
 
-只有独立复核与控制器最终复跑通过后，D6-02B 才能关闭并把该组合写为 D6 阶段冻结输入。版本升级须另立任务，不能在后续业务提交中隐式漂移。
+独立复核与控制器最终复跑均已通过，该组合现为 D6 阶段冻结输入。版本升级须另立任务，不能在后续业务提交中隐式漂移。
 
 ## 运行边界与接口
 
@@ -65,10 +65,10 @@
 
 - **统一入口：** `scripts/verify-d6-02b.py`。
 - **固定环境命令：** 调用者将 Java 21.0.7 与 Node 24.18.0 放在 `PATH` 后运行 `rtk run 'python3 scripts/verify-d6-02b.py'`。
-- **本地结果：** 依赖树精确版本通过；完整 D6-02A 门禁在任何生成构建前通过；真实 MySQL/Flyway/MyBatis/事务/Session/双重重启通过；16 个验证器测试、15 个启用 profile 的 Java 测试、共享 TypeScript 检查、7 个提交信息夹具、差异检查和敏感/机器路径扫描均返回 0。
+- **本地结果：** 在 reviewed implementation HEAD `ff8f166` 上，依赖树精确版本通过；完整 D6-02A 门禁在任何生成构建前通过；真实 MySQL/Flyway/MyBatis/事务/Session/双重重启通过；16 个验证器测试、15 个启用 profile 的 Java 测试、共享 TypeScript 检查、7 个提交信息夹具、差异检查和敏感/机器路径扫描均返回 0；验证后精确容器、卷与进程枚举为空。
 - **可移植证据：** [D6-02B-runtime-compatibility.md](D6-02B-runtime-compatibility.md)。
 - **本机原始报告：** `.superpowers/sdd/2026-09-12-fams-stage6-development-plan/task-d6-02b-report.md`，按仓库规则忽略且凭据已脱敏。
-- **交接：** 当前只到 `IN_REVIEW`；同一独立会话复核修复轮和控制器对 reviewed HEAD 的完整复跑均通过后才能改为 `DEV_VERIFIED`，然后进入 D6-02C。
+- **交接：** 当前为 `DEV_VERIFIED`；候选组合已冻结，下一实际任务为仍未开始的 D6-02C。
 
 ## 回滚与限制
 

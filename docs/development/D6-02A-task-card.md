@@ -29,7 +29,7 @@
 | TypeScript | 5.9.2，锁定于 `package-lock.json` |
 | Maven Wrapper / distribution | 3.3.4 / 3.9.16 |
 
-这些只是 D6-02A 候选组合；D6-02B 才负责最终兼容性冻结。
+这些是 D6-02A 当时的候选组合；D6-02B 已完成最终兼容性冻结，后续升级须另立任务。
 
 - **权威输入：** `contracts/representative-probe.yaml`，不得手改生成输出。
 - **Java 目录：** 生成接口/模型位于 `backend/target/generated-sources/openapi/java`；手写探针应用及测试均归属 `backend/`。
@@ -55,10 +55,10 @@
 - **TDD：** 先写真实 socket HTTP 测试并以缺路由 `404` 得到 RED，再写最小控制器、JSON 配置和错误处理得到 GREEN；生成配置与模板是验证输入，不替代手写行为测试。
 - **验证命令及预期：** `rtk run 'python3 scripts/verify-d6-02a.py'`（调用方提供固定 Java/Node 环境）返回 0；应报告 OpenAPI 验证、两次清空生成、前置输出等价/拒绝夹具、Java 编译、Node 锁定安装、`ES2022` 无 DOM TypeScript 检查、9 个真实 HTTP 用例、commit-message suite、`git diff --check` 全部通过。
 - **证据位置：** `docs/development/D6-02A-generation-pipeline.md`（可移植命令和摘要）；任务 report（本地完整命令、退出码、原始重点输出和限制，按忽略规则不跟踪）。
-- **交接：** 当前为 `DEV_VERIFIED`；D6-02B 已完成本地兼容性实现交接并为 `IN_REVIEW`，通过独立复核后才进入仍为 `NOT_STARTED` 的 D6-02C。D6-02A 任务级复核不替代计划范围内在 D6-02C 关闭前必须完成的权限、事务、迁移、恢复关键独立技术复核；后续任务不因本探针证据提前关闭。
+- **交接：** 当前为 `DEV_VERIFIED`；D6-02B 已通过独立复核与 reviewed HEAD 全量复跑并为 `DEV_VERIFIED`，D6-02C 是下一任务。D6-02A/B 任务级复核不替代计划范围内在 D6-02C 关闭前必须完成的权限、事务、迁移、恢复关键独立技术复核；后续任务不因探针证据提前关闭。
 
 ## 风险与限制
 
-- **风险编号：** `R-01`（候选版本与生成兼容性，D6-02B 才冻结）、`R-02`（跨边界交付规模与返工）；`R-04`（远端/CI 能力未准备）及 `R-05`（独立技术复核待安排）沿用计划台账。
+- **风险编号：** `R-01`（候选版本与生成兼容性已由 D6-02B 在探针范围缓解并冻结）、`R-02`（跨边界交付规模与返工）；`R-04`（远端/CI 能力未准备）及 `R-05`（关键独立技术复核待安排）沿用计划台账。
 - **复核轮次风险：** 生成清空/漂移检测、TypeScript transport 泄漏、HTTP 类型/字段/数组断言、文档边界等审查项已由任务级独立复核确认 clean；计划范围内权限、事务、迁移、恢复关键独立技术复核仍未由本任务替代，须在 D6-02C 关闭前完成。
 - **当前限制：** 无远端 PR、CI、数据库、迁移、会话、客户端、生产运行态或完整业务契约；生成器 informational post-processing、生成 Java deprecated API、Spring 测试依赖动态 agent 等警告均已记录于证据和 report。

@@ -2,7 +2,7 @@
 
 ## 结论与边界
 
-D6-02B 已完成本地实现交接，当前为 `IN_REVIEW`。固定候选组合在一台 macOS ARM64 主机和 Docker Linux ARM64 引擎中通过真实运行门禁；这证明本任务声明的兼容性路径，不证明远端 CI、跨架构执行、产品业务、登录权限、QA、部署或生产可用性。
+D6-02B 当前为 `DEV_VERIFIED`。固定候选组合在一台 macOS ARM64 主机和 Docker Linux ARM64 引擎中通过真实运行门禁，独立复核问题已完成两轮修复并关闭，控制器在 reviewed implementation HEAD `ff8f166` 上全量复跑退出 0；这证明本任务声明的兼容性路径，不证明远端 CI、跨架构执行、产品业务、登录权限、QA、部署或生产可用性。
 
 “双端构建”在本任务中沿用 D6-02A 已实现的两个契约消费面：Java 后端编译/测试与 transport-free 共享 TypeScript 模型检查。PC Vue 与原生微信小程序尚未创建，不能将共享类型包描述为两个客户端已经构建。
 
@@ -96,7 +96,7 @@ RuntimeCompatibilityHttpTest: tests=3, failures=0, errors=0, skipped=0
 rtk run 'python3 scripts/verify-d6-02b.py'
 ```
 
-本地调用使用 Oracle GraalVM 21.0.7 与 Node 24.18.0 的机器路径，但这些绝对路径不进入版本化脚本。最新交接前完整运行退出 `0`，关键观察为：
+本地调用使用 Oracle GraalVM 21.0.7 与 Node 24.18.0 的机器路径，但这些绝对路径不进入版本化脚本。独立复核关闭后，控制器在 `ff8f166` 上的最新完整运行退出 `0`，关键观察为：
 
 ```text
 [invalid migration] startup refused the intentionally invalid V999 fixture
@@ -126,4 +126,4 @@ rtk run 'python3 scripts/verify-d6-02b.py'
 - 本地成功使用 ARM64；验证器也接受 Docker Official 多架构摘要在 Linux AMD64 上与引擎精确匹配，但本任务没有实际 AMD64 运行证据。
 - MySQL 镜像需预先以固定摘要存在；本轮预检已实际 pull。D6-03A 才负责可重复的项目级 Compose/统一环境入口。
 - 任务没有业务数据、备份恢复、升级旧 schema、并发写、多版本应用兼容、认证权限、客户端或生产负载结论。
-- 当前状态保持 `IN_REVIEW`。独立复核首轮 4 个 Important 和敏感扫描 Minor 已按 `c6e7ed2`、`97304b5` 修复；定向复核发现的 Flyway 包名残留误判已按 `04d93cc` 修复，历史 RED 命令不可恢复的证据缺口仍如实保留。独立会话复核修复轮并由控制器对 reviewed HEAD 再跑统一入口后，才允许冻结该组合、改为 `DEV_VERIFIED` 并进入 D6-02C。
+- 当前状态为 `DEV_VERIFIED`。独立复核首轮 4 个 Important 和敏感扫描 Minor 已按 `c6e7ed2`、`97304b5` 修复；定向复核发现的 Flyway 包名残留误判已按 `04d93cc` 修复，原独立会话确认无新增 Critical/Important；`ff8f166` 的状态语义修正也经定向复核关闭。控制器随后在 `ff8f166` 上完整运行统一入口并精确清理，候选组合据此冻结。历史 RED 命令不可恢复的证据缺口仍如实保留；下一实际任务为 D6-02C。
