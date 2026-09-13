@@ -822,6 +822,130 @@ class DesignPackageContractTest(unittest.TestCase):
             {"createLocation", "updateLocation", "disableLocation", "enableLocation"},
         )
 
+    def test_numbering_rule_management_and_allocation_policy_are_explicit(self) -> None:
+        document = self.load_contract()
+        paths = document["paths"]
+        schemas = document["components"]["schemas"]
+        operations = {
+            operation["operationId"]: operation
+            for item in paths.values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        required_operations = {
+            "listNumberingRules",
+            "getNumberingRule",
+            "createNumberingRule",
+            "updateNumberingRule",
+            "disableNumberingRule",
+            "enableNumberingRule",
+        }
+        missing = sorted(required_operations - set(operations))
+        self.assertFalse(missing, f"numbering contract remains RED: {missing}")
+        if missing:
+            return
+        self.assertIn("/numbering-rules", paths)
+        self.assertIn("/numbering-rules/{numberingRuleId}", paths)
+        self.assertIn("/numbering-rules/{numberingRuleId}/disable", paths)
+        self.assertIn("/numbering-rules/{numberingRuleId}/enable", paths)
+        self.assertEqual(
+            {"Page", "PageSize"},
+            {
+                parameter["$ref"].rsplit("/", 1)[-1]
+                for parameter in paths["/numbering-rules"]["get"]["parameters"]
+            },
+        )
+        for path, item in paths.items():
+            if not path.startswith("/numbering-rules"):
+                continue
+            self.assertNotIn("delete", item)
+            for method, operation in item.items():
+                if method not in {"get", "post", "patch"}:
+                    continue
+                with self.subTest(method=method, path=path):
+                    self.assertEqual(["SYSTEM_ADMIN"], operation["x-actor"]["roles"])
+                    self.assertIn("401", operation["responses"])
+                    self.assertIn("403", operation["responses"])
+        for schema_name in (
+            "NumberingRule",
+            "NumberingRuleCreateRequest",
+            "NumberingRuleUpdateRequest",
+            "NumberingTarget",
+            "NumberingMode",
+            "NumberingDatePart",
+        ):
+            self.assertIn(schema_name, schemas)
+        self.assertEqual({"ASSET", "INBOUND_RECEIPT"}, set(schemas["NumberingTarget"]["enum"]))
+        self.assertEqual({"ENTERPRISE", "CATEGORY_PREFIX"}, set(schemas["NumberingMode"]["enum"]))
+        self.assertEqual(
+            {"NONE", "YYYY", "YYYYMM", "YYYYMMDD"},
+            set(schemas["NumberingDatePart"]["enum"]),
+        )
+        for schema_name in ("NumberingRuleCreateRequest", "NumberingRuleUpdateRequest"):
+            with self.subTest(schema=schema_name):
+                self.assertNotIn("status", schemas[schema_name]["properties"])
+                self.assertFalse(schemas[schema_name].get("additionalProperties", True))
+        self.assertEqual(1, schemas["NumberingRuleUpdateRequest"].get("minProperties"))
+        self.assertNotIn("required", schemas["NumberingRuleUpdateRequest"])
+        rule_fields = {
+            "code",
+            "target",
+            "mode",
+            "fixedPrefix",
+            "datePart",
+            "sequenceLength",
+            "status",
+            "version",
+        }
+        self.assertTrue(rule_fields.issubset(schemas["NumberingRule"]["properties"]))
+        self.assertEqual(
+            "ReferenceStatus",
+            schemas["NumberingRule"]["properties"]["status"]["$ref"].rsplit("/", 1)[-1],
+        )
+        for operation_id in ("createNumberingRule", "updateNumberingRule"):
+            operation_text = json.dumps(operations[operation_id], sort_keys=True).lower()
+            for term in ("namespace", "category", "snapshot", "permanent", "reuse"):
+                self.assertIn(term, operation_text)
+        for operation_id in ("updateNumberingRule", "enableNumberingRule", "disableNumberingRule"):
+            refs = {
+                parameter.get("$ref", "").rsplit("/", 1)[-1]
+                for parameter in operations[operation_id].get("parameters", [])
+            }
+            self.assertIn("IfMatchVersion", refs)
+        for operation_id in ("enableNumberingRule", "updateNumberingRule"):
+            operation_text = json.dumps(operations[operation_id], sort_keys=True).lower()
+            for term in ("overlap", "current", "409"):
+                self.assertIn(term, operation_text)
+        category_prefix_text = json.dumps(operations["enableNumberingRule"], sort_keys=True).lower()
+        for term in ("prefix", "missing", "conflict", "ambiguous"):
+            self.assertIn(term, category_prefix_text)
+        allocation_text = json.dumps(document, sort_keys=True).lower()
+        for term in ("short transaction", "gap", "failed", "cancelled", "preview", "client"):
+            self.assertIn(term, allocation_text)
+
+    def test_numbering_examples_cover_rule_conflicts_and_gap_policy_without_fake_execution(self) -> None:
+        files = sorted(EXAMPLES.glob("masterdata-numbering-*.json"))
+        self.assertGreaterEqual(len(files), 8)
+        values = [json.loads(path.read_text(encoding="utf-8")) for path in files]
+        self.assertEqual({"positive", "rejection"}, {value["kind"] for value in values})
+        operation_ids = {value["operationId"] for value in values}
+        self.assertTrue(
+            {
+                "createNumberingRule",
+                "updateNumberingRule",
+                "disableNumberingRule",
+                "enableNumberingRule",
+            }.issubset(operation_ids)
+        )
+        evidence = [value for value in values if value.get("evidenceType") == "allocation-policy"]
+        self.assertTrue(evidence)
+        evidence_text = json.dumps(evidence, sort_keys=True).lower()
+        for term in ("gap", "failed", "cancelled", "not reused", "not implemented"):
+            self.assertIn(term, evidence_text)
+        all_text = json.dumps(values, sort_keys=True).lower()
+        for term in ("duplicate", "overlap", "missing", "conflict"):
+            self.assertIn(term, all_text)
+
     def test_catalog_business_writes_have_short_transaction_audit_and_error_boundaries(self) -> None:
         document = self.load_contract()
         management_prefixes = ("/asset-categories", "/brands", "/manufacturers")
