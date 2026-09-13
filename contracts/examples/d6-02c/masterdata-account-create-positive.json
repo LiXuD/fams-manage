@@ -2,7 +2,7 @@
   "operationId": "createSystemAccount",
   "kind": "positive",
   "status": 201,
-  "requestSchema": "SystemAccountInput",
+  "requestSchema": "SystemAccountCreateRequest",
   "responseSchema": "SystemAccount",
   "headers": {
     "Idempotency-Key": "account-create-example-1",
@@ -11,13 +11,13 @@
   "payload": {
     "username": "warehouse.operator",
     "employeeId": "3001",
-    "status": "ACTIVE"
+    "initialPassword": "temporary password 123"
   },
   "response": {
     "id": "7001",
     "username": "warehouse.operator",
     "employeeId": "3001",
-    "status": "ACTIVE",
+    "status": "ENABLED",
     "version": 0,
     "requiresInitialPasswordChange": true,
     "createdAt": "2026-09-14T10:00:00Z",

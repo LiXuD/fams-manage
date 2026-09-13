@@ -2,7 +2,7 @@
   "operationId": "createOrganization",
   "kind": "positive",
   "status": 201,
-  "requestSchema": "OrganizationInput",
+  "requestSchema": "OrganizationCreateRequest",
   "responseSchema": "Organization",
   "headers": {
     "Idempotency-Key": "org-create-identity-0001",
@@ -10,8 +10,7 @@
   },
   "payload": {
     "code": "HQ",
-    "name": "Headquarters",
-    "status": "ACTIVE"
+    "name": "Headquarters"
   },
   "response": {
     "id": "2001",

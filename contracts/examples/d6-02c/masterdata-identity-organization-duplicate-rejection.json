@@ -2,7 +2,7 @@
   "operationId": "createOrganization",
   "kind": "rejection",
   "status": 409,
-  "requestSchema": "OrganizationInput",
+  "requestSchema": "OrganizationCreateRequest",
   "responseSchema": "ErrorResponse",
   "expectedErrorCode": "ORGANIZATION_CODE_CONFLICT",
   "headers": {
@@ -11,8 +11,7 @@
   },
   "payload": {
     "code": "HQ",
-    "name": "Duplicate Headquarters",
-    "status": "ACTIVE"
+    "name": "Duplicate Headquarters"
   },
   "response": {
     "code": "ORGANIZATION_CODE_CONFLICT",

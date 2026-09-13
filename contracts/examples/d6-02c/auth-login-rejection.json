@@ -11,7 +11,7 @@
   },
   "response": {
     "code": "AUTHENTICATION_FAILED",
-    "message": "The system account is not active.",
+    "message": "Authentication failed.",
     "requestId": "a8e0ebd7-0a42-4efd-90e1-5dc8d8a10202",
     "fieldErrors": {}
   }

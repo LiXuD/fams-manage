@@ -2,7 +2,7 @@
   "operationId": "updateOrganization",
   "kind": "positive",
   "status": 200,
-  "requestSchema": "OrganizationInput",
+  "requestSchema": "OrganizationUpdateRequest",
   "responseSchema": "Organization",
   "headers": {
     "Idempotency-Key": "org-update-identity-0001",
@@ -11,8 +11,7 @@
   },
   "payload": {
     "code": "HQ",
-    "name": "Headquarters and Operations",
-    "status": "ACTIVE"
+    "name": "Headquarters and Operations"
   },
   "response": {
     "id": "2001",
