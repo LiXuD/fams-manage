@@ -664,6 +664,104 @@ components:
           type: string
           minLength: 1
           maxLength: 500
+    AssetQrToken:
+      type: string
+      minLength: 43
+      maxLength: 43
+      pattern: '^[A-Za-z0-9_-]{43}$'
+      description: >-
+        Opaque 256-bit base64url lookup token. It contains no asset id, asset code,
+        or PII; it is only a lookup key and never grants permission.
+    AssetTag:
+      type: object
+      additionalProperties: false
+      required: [enterpriseName, assetName, assetCode, qrToken, qrCode]
+      description: >-
+        Printable label data: enterprise name, asset name, permanent asset code, and
+        an opaque QR code payload. The token is not an authorization credential.
+      properties:
+        enterpriseName:
+          type: string
+        assetName:
+          type: string
+        assetCode:
+          type: string
+        qrToken:
+          $ref: '#/components/schemas/AssetQrToken'
+        qrCode:
+          type: string
+          description: QR payload containing only the opaque access token lookup key.
+    AssetTagReprintRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+    AssetTagPrintSelection:
+      type: object
+      additionalProperties: false
+      required: [assetId, version]
+      properties:
+        assetId:
+          $ref: '#/components/schemas/Id'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    AssetTagBatchPrintRequest:
+      type: object
+      additionalProperties: false
+      required: [assets]
+      properties:
+        assets:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/AssetTagPrintSelection'
+    AssetTagPrintJobStatus:
+      type: string
+      enum: [QUEUED, COMPLETED, FAILED]
+    AssetTagPrintJob:
+      type: object
+      additionalProperties: false
+      required: [jobId, status, assetCode]
+      properties:
+        jobId:
+          $ref: '#/components/schemas/Id'
+        status:
+          $ref: '#/components/schemas/AssetTagPrintJobStatus'
+        assetCode:
+          type: string
+        tag:
+          $ref: '#/components/schemas/AssetTag'
+    AssetTagBatchPrintItem:
+      type: object
+      additionalProperties: false
+      required: [assetId, assetCode]
+      properties:
+        assetId:
+          $ref: '#/components/schemas/Id'
+        assetCode:
+          type: string
+        tag:
+          $ref: '#/components/schemas/AssetTag'
+    AssetTagBatchPrintJob:
+      type: object
+      additionalProperties: false
+      required: [jobId, status, items]
+      properties:
+        jobId:
+          $ref: '#/components/schemas/Id'
+        status:
+          $ref: '#/components/schemas/AssetTagPrintJobStatus'
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/AssetTagBatchPrintItem'
     LoginRequest:
       type: object
       required: [username, password]
@@ -2220,6 +2318,124 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Asset'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /assets/{assetId}/tag:
+    parameters:
+      - $ref: '#/components/parameters/AssetId'
+    get:
+      tags: [Assets]
+      operationId: getAssetTag
+      summary: Read the current asset label within the caller's authorized scope.
+      x-actor:
+        required: true
+        roles: [ASSET_ADMIN, WAREHOUSE_OPERATOR, AUDIT_READ_ONLY]
+      x-data-scope: >-
+        ASSET_ADMIN and WAREHOUSE_OPERATOR retain the enterprise-wide asset business
+        view; AUDIT_READ_ONLY requires an explicitly authorized audit scope. SYSTEM_ADMIN
+        receives no automatic asset business permission.
+      x-sensitive-fields-policy: Tag output excludes service phone, attachments, and sensitive history.
+      responses:
+        '200':
+          description: Current printable tag data.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetTag'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /assets/{assetId}/tag/reprint:
+    parameters:
+      - $ref: '#/components/parameters/AssetId'
+    post:
+      tags: [Assets]
+      operationId: reprintAssetTag
+      summary: Reprint an ACTIVE asset label without changing its code or token.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [WAREHOUSE_OPERATOR]
+      x-version:
+        required: true
+        precondition: If-Match-Version must equal the current asset version.
+      x-transaction:
+        boundary: Validate ACTIVE state, create or reuse the print job, and audit atomically.
+      x-audit-event:
+        event: ASSET_TAG_REPRINT_REQUESTED
+      x-error-codes: [ASSET_TAG_NOT_FOUND, ASSET_TAG_NOT_PRINTABLE, ASSET_TAG_VERSION_CONFLICT, ASSET_TAG_PRINT_JOB_CONFLICT]
+      x-invariants: >-
+        Only a published ACTIVE asset card is printable. DRAFT, PENDING_INBOUND, and
+        CANCELLED cards are rejected. Reprint keeps assetCode and qrToken unchanged;
+        the same idempotency key and payload returns the same job and result.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetTagReprintRequest'
+      responses:
+        '202':
+          description: Reprint job accepted or replayed idempotently.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetTagPrintJob'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /asset-tag-print-jobs:
+    post:
+      tags: [Assets]
+      operationId: batchPrintAssetTags
+      summary: Print selected ACTIVE asset labels as one all-or-nothing job.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [WAREHOUSE_OPERATOR]
+      x-version:
+        required: true
+        precondition: Every selected asset version is checked before the job is created.
+      x-transaction:
+        boundary: Validate every selected asset and create the complete print job atomically.
+      x-audit-event:
+        event: ASSET_TAG_BATCH_PRINT_REQUESTED
+      x-error-codes: [ASSET_TAG_BATCH_INVALID, ASSET_TAG_NOT_PRINTABLE, ASSET_TAG_VERSION_CONFLICT, ASSET_TAG_SCOPE_FORBIDDEN, ASSET_TAG_PRINT_JOB_CONFLICT]
+      x-invariants: >-
+        The request contains only selected assets with versions. The job is all-or-nothing:
+        any invalid, missing, unauthorized, stale, DRAFT, PENDING_INBOUND, or CANCELLED
+        item rejects the whole job with 409 and per-item errors; no partial or unknown
+        output is produced.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetTagBatchPrintRequest'
+      responses:
+        '202':
+          description: Complete batch print job accepted or replayed idempotently.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetTagBatchPrintJob'
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
