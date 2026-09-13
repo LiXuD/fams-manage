@@ -1,0 +1,21 @@
+{
+  "operationId": "createBrand",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "BrandCreateRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "brand-create-example-0002",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "code": "LENOVO",
+    "name": "Duplicate Lenovo code"
+  },
+  "response": {
+    "code": "BRAND_CODE_CONFLICT",
+    "message": "Brand code is already registered and cannot be reused.",
+    "requestId": "00000000-0000-4000-8000-000000000003",
+    "fieldErrors": {"code": "already used"}
+  }
+}

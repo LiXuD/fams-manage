@@ -1,0 +1,21 @@
+{
+  "operationId": "updateAssetCategory",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "AssetCategoryUpdateRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "category-update-example-0002",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "1"
+  },
+  "payload": {
+    "parentCategory": {"id": "8101", "version": 1}
+  },
+  "response": {
+    "code": "ASSET_CATEGORY_CYCLE",
+    "message": "A category cannot become its own ancestor.",
+    "requestId": "00000000-0000-4000-8000-000000000002",
+    "fieldErrors": {"parentCategory": "would create a cycle"}
+  }
+}

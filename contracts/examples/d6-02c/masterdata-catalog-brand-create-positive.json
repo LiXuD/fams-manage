@@ -1,0 +1,26 @@
+{
+  "operationId": "createBrand",
+  "kind": "positive",
+  "status": 201,
+  "requestSchema": "BrandCreateRequest",
+  "responseSchema": "Brand",
+  "headers": {
+    "Idempotency-Key": "brand-create-example-0001",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "code": "LENOVO",
+    "name": "Lenovo",
+    "defaultManufacturer": {"id": "8201", "version": 3},
+    "description": "Managed laptop brand."
+  },
+  "response": {
+    "id": "8301",
+    "code": "LENOVO",
+    "name": "Lenovo",
+    "status": "ACTIVE",
+    "version": 0,
+    "defaultManufacturer": {"id": "8201", "version": 3},
+    "description": "Managed laptop brand."
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "operationId": "listActiveBrandReferences",
+  "kind": "positive",
+  "status": 200,
+  "responseSchema": "BrandActiveReferencePage",
+  "headers": {},
+  "payload": {"page": 1, "pageSize": 20},
+  "response": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 1,
+    "items": [
+      {
+        "id": "8301",
+        "code": "LENOVO",
+        "name": "Lenovo Business",
+        "version": 3,
+        "defaultManufacturerId": "8201"
+      }
+    ]
+  }
+}

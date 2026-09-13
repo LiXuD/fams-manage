@@ -1,0 +1,23 @@
+{
+  "operationId": "disableAssetCategory",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "CatalogStatusChangeRequest",
+  "responseSchema": "AssetCategory",
+  "headers": {
+    "Idempotency-Key": "category-disable-example-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "4"
+  },
+  "payload": {
+    "reason": "Category retired; referenced asset cards retain history."
+  },
+  "response": {
+    "id": "8101",
+    "code": "LAPTOP",
+    "name": "Laptop",
+    "status": "DISABLED",
+    "version": 5,
+    "description": "Historical category remains readable for existing cards."
+  }
+}
