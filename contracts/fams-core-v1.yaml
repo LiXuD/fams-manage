@@ -3090,7 +3090,7 @@ paths:
       x-audit-event:
         event: LOCATION_DISABLED
       x-error-codes: [LOCATION_ALREADY_DISABLED, LOCATION_HAS_CURRENT_ASSETS, LOCATION_HAS_OPEN_REFERENCES, LOCATION_HAS_ENABLED_CHILDREN]
-      x-invariants: Disable requires no current location assets, no open business or inbound references, and no enabled child nodes; disable is not cascaded; historical relations remain readable.
+      x-invariants: Disable requires no current location assets, no open business or inbound references, and no enabled child nodes; disable is not cascaded; location code is unique and never reused; historical relations remain readable.
       x-required-error-statuses: [400, 401, 403, 404, 409]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -3134,7 +3134,7 @@ paths:
       x-audit-event:
         event: LOCATION_ENABLED
       x-error-codes: [LOCATION_ALREADY_ENABLED, LOCATION_PARENT_DISABLED, LOCATION_WAREHOUSE_DISABLED]
-      x-invariants: Enabling a warehouse-bound location requires an enabled parent and enabled associated warehouse; an office location without a warehouse may be enabled for later in-use scenarios but never inbound acceptance.
+      x-invariants: Enabling a warehouse-bound location requires an enabled parent and enabled associated warehouse; location code is unique and never reused; an office location without a warehouse may be enabled for later in-use scenarios but never inbound acceptance.
       x-inbound-target-rule: >-
         An inbound target must be ACTIVE and belong to the target ACTIVE warehouse; an office location without a warehouse cannot be used for inbound acceptance.
       x-required-error-statuses: [400, 401, 403, 404, 409]
