@@ -154,6 +154,12 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Id'
+    QrToken:
+      name: token
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/AssetQrToken'
     AssetCodeFilter:
       name: assetCode
       in: query
@@ -699,6 +705,15 @@ components:
           type: string
           minLength: 1
           maxLength: 500
+    AssetTagReplaceRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
     AssetTagPrintSelection:
       type: object
       additionalProperties: false
@@ -762,6 +777,25 @@ components:
           minItems: 1
           items:
             $ref: '#/components/schemas/AssetTagBatchPrintItem'
+    AssetQrAccessResult:
+      type: object
+      additionalProperties: false
+      required: [assetCode, assetName, lifecycle, exception, cardStage]
+      description: >-
+        Authenticated QR lookup summary. A SCRAPPED asset exposes necessary status
+        only; service phone, private files, and sensitive historical details are never
+        included. The QR token is a lookup key, not a permission.
+      properties:
+        assetCode:
+          type: string
+        assetName:
+          type: string
+        lifecycle:
+          $ref: '#/components/schemas/AssetLifecycle'
+        exception:
+          $ref: '#/components/schemas/AssetException'
+        cardStage:
+          $ref: '#/components/schemas/AssetCardStage'
     LoginRequest:
       type: object
       required: [username, password]
@@ -2441,6 +2475,92 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+
+  /assets/{assetId}/tag/replace:
+    parameters:
+      - $ref: '#/components/parameters/AssetId'
+    post:
+      tags: [Assets]
+      operationId: replaceAssetTag
+      summary: Atomically rotate an ACTIVE asset QR token and invalidate the old token.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [WAREHOUSE_OPERATOR]
+      x-version:
+        required: true
+        precondition: If-Match-Version must equal the current asset version.
+      x-transaction:
+        boundary: Validate ACTIVE state, rotate the token, invalidate the old token, and audit atomically.
+      x-audit-event:
+        event: ASSET_TAG_REPLACED
+      x-error-codes: [ASSET_TAG_NOT_FOUND, ASSET_TAG_NOT_PRINTABLE, ASSET_TAG_VERSION_CONFLICT, ASSET_TAG_ROTATION_CONFLICT]
+      x-invariants: >-
+        Replacement requires a reason and an ACTIVE published asset. The token rotation
+        is atomic: the old token is immediately invalid, the new token is stored, and
+        assetCode is unchanged. An idempotent retry with the same idempotency key and
+        payload returns the same new token and result; every rotation is audited.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetTagReplaceRequest'
+      responses:
+        '200':
+          description: New tag with the rotated token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetTag'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /asset-access/{token}:
+    parameters:
+      - $ref: '#/components/parameters/QrToken'
+    get:
+      tags: [Assets]
+      operationId: resolveAssetAccessToken
+      summary: Resolve an opaque QR token to an authorized asset summary.
+      x-actor:
+        required: true
+        roles: [ASSET_ADMIN, WAREHOUSE_OPERATOR, AUDIT_READ_ONLY, EMPLOYEE, DEPARTMENT_ASSET_MANAGER]
+      x-data-scope: >-
+        Current authentication and permission or business relationship are checked.
+        ASSET_ADMIN and WAREHOUSE_OPERATOR retain enterprise-wide business access;
+        AUDIT_READ_ONLY uses its explicitly authorized audit scope; employees and
+        department asset managers require a permitted asset relationship. SYSTEM_ADMIN
+        receives no automatic asset business permission.
+      x-token-policy: >-
+        The QR token is only a lookup key and does not grant permission. Invalid, old,
+        or guessed tokens use one uniform 404 response after current authentication
+        and authorization checks; unauthenticated and unauthorized requests use 401
+        and 403. A SCRAPPED asset returns necessary status only, without sensitive history.
+      x-error-codes: [ASSET_ACCESS_NOT_FOUND, ASSET_ACCESS_UNAUTHORIZED, ASSET_ACCESS_FORBIDDEN]
+      responses:
+        '200':
+          description: Authorized non-sensitive asset scan summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetQrAccessResult'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: Uniform response for invalid, old, or guessed tokens.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /auth/login:
     post:

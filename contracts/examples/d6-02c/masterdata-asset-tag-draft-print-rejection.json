@@ -5,6 +5,7 @@
   "scenario": "draft cannot be printed",
   "pathParameters": {"assetId": "10001"},
   "asset": {"cardStage": "DRAFT", "lifecycle": "WAITING_INBOUND"},
+  "payload": {},
   "response": {
     "code": "ASSET_TAG_NOT_PRINTABLE",
     "message": "Only an ACTIVE asset card can be printed.",
