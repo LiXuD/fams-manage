@@ -9,6 +9,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -16,6 +19,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -30,20 +35,27 @@ import tools.jackson.databind.ObjectMapper;
 @SpringBootTest(
         classes = RuntimeCompatibilityHttpTest.TestApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = {
-                "spring.profiles.active=runtime-compatibility",
-                "spring.datasource.url=${D6_02B_TEST_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/fams_runtime_compatibility}",
-                "spring.datasource.username=${D6_02B_TEST_DATASOURCE_USERNAME:runtime}",
-                "spring.datasource.password=${D6_02B_TEST_DATASOURCE_PASSWORD:runtime}"
-        })
+        properties = "spring.profiles.active=runtime-compatibility")
 @EnabledIfSystemProperty(named = "d6.02b.runtime", matches = "true")
 class RuntimeCompatibilityHttpTest {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+    private static final Pattern TASK_DATABASE_URL = Pattern.compile(
+            "jdbc:mysql://127\\.0\\.0\\.1:(\\d{4,5})/"
+                    + "(fams-d6-02b-db-[0-9a-f]{16})"
+                    + "\\?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC");
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
     @Value("${local.server.port}")
     private int port;
+
+    @DynamicPropertySource
+    static void configureTaskDatabase(DynamicPropertyRegistry registry) {
+        DatabaseSettings settings = DatabaseSettings.fromEnvironment(System.getenv());
+        registry.add("spring.datasource.url", settings::url);
+        registry.add("spring.datasource.username", settings::username);
+        registry.add("spring.datasource.password", settings::password);
+    }
 
     @Test
     void commitsAndReadsAProbeThroughRealHttp() throws Exception {
@@ -130,6 +142,42 @@ class RuntimeCompatibilityHttpTest {
             builder.method(method, HttpRequest.BodyPublishers.ofString(body));
         }
         return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    record DatabaseSettings(String url, String username, String password) {
+
+        static DatabaseSettings fromEnvironment(Map<String, String> environment) {
+            String url = required(environment, "D6_02B_TEST_DATASOURCE_URL");
+            Matcher urlMatcher = TASK_DATABASE_URL.matcher(url);
+            if (!urlMatcher.matches()) {
+                throw new IllegalStateException(
+                        "D6_02B_TEST_DATASOURCE_URL must identify a task-owned random database");
+            }
+            int port = Integer.parseInt(urlMatcher.group(1));
+            if (port < 1024 || port > 65535) {
+                throw new IllegalStateException("D6_02B_TEST_DATASOURCE_URL contains an invalid host port");
+            }
+
+            String username = required(environment, "D6_02B_TEST_DATASOURCE_USERNAME");
+            if (!"d6_02b_runtime".equals(username)) {
+                throw new IllegalStateException(
+                        "D6_02B_TEST_DATASOURCE_USERNAME must use the task-owned account");
+            }
+            String password = required(environment, "D6_02B_TEST_DATASOURCE_PASSWORD");
+            if (password.length() < 32) {
+                throw new IllegalStateException(
+                        "D6_02B_TEST_DATASOURCE_PASSWORD must be an unpredictable task credential");
+            }
+            return new DatabaseSettings(url, username, password);
+        }
+
+        private static String required(Map<String, String> environment, String key) {
+            String value = environment.get(key);
+            if (value == null || value.isBlank()) {
+                throw new IllegalStateException(key + " is required before the test context starts");
+            }
+            return value;
+        }
     }
 
     @SpringBootApplication(scanBasePackages = "com.fams")
