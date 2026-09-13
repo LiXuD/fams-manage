@@ -773,11 +773,15 @@ class DesignPackageContractTest(unittest.TestCase):
             set(active["x-actor"]["roles"]),
         )
 
-    def test_warehouse_location_writes_and_examples_cover_frozen_boundaries(self) -> None:
+    def _assert_writes_and_examples_cover_frozen_boundaries(
+        self,
+        management_prefix: str,
+        example_prefix: str,
+        operation_ids: set[str],
+    ) -> None:
         document = self.load_contract()
-        management_prefixes = ("/warehouses", "/locations")
         for path, item in document["paths"].items():
-            if not path.startswith(management_prefixes):
+            if not path.startswith(management_prefix):
                 continue
             for method, operation in item.items():
                 if method not in {"post", "patch"} or not operation.get("x-business-write"):
@@ -797,27 +801,26 @@ class DesignPackageContractTest(unittest.TestCase):
                     }
                     self.assertIn("IdempotencyKey", refs)
                     self.assertIn("CsrfToken", refs)
-        for prefix, operation_ids in {
-            "masterdata-warehouse-": {
-                "createWarehouse",
-                "updateWarehouse",
-                "disableWarehouse",
-                "enableWarehouse",
-            },
-            "masterdata-location-": {
-                "createLocation",
-                "updateLocation",
-                "disableLocation",
-                "enableLocation",
-            },
-        }.items():
-            files = sorted(EXAMPLES.glob(f"{prefix}*.json"))
-            with self.subTest(prefix=prefix):
-                self.assertGreaterEqual(len(files), 8)
-                values = [json.loads(path.read_text(encoding="utf-8")) for path in files]
-                self.assertEqual({"positive", "rejection"}, {value["kind"] for value in values})
-                self.assertTrue(operation_ids.issubset({value["operationId"] for value in values}))
-                self.assertTrue(all("payload" in value for value in values))
+        files = sorted(EXAMPLES.glob(f"{example_prefix}*.json"))
+        self.assertGreaterEqual(len(files), 8)
+        values = [json.loads(path.read_text(encoding="utf-8")) for path in files]
+        self.assertEqual({"positive", "rejection"}, {value["kind"] for value in values})
+        self.assertTrue(operation_ids.issubset({value["operationId"] for value in values}))
+        self.assertTrue(all("payload" in value for value in values))
+
+    def test_warehouse_writes_and_examples_cover_frozen_boundaries(self) -> None:
+        self._assert_writes_and_examples_cover_frozen_boundaries(
+            "/warehouses",
+            "masterdata-warehouse-",
+            {"createWarehouse", "updateWarehouse", "disableWarehouse", "enableWarehouse"},
+        )
+
+    def test_location_writes_and_examples_cover_frozen_boundaries(self) -> None:
+        self._assert_writes_and_examples_cover_frozen_boundaries(
+            "/locations",
+            "masterdata-location-",
+            {"createLocation", "updateLocation", "disableLocation", "enableLocation"},
+        )
 
     def test_catalog_business_writes_have_short_transaction_audit_and_error_boundaries(self) -> None:
         document = self.load_contract()
