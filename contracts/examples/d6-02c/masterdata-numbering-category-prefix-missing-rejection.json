@@ -1,0 +1,21 @@
+{
+  "operationId": "enableNumberingRule",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "CatalogStatusChangeRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "numbering-rule-enable-example-0003",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "4"
+  },
+  "payload": {
+    "reason": "A selectable asset category is missing numberingPrefix."
+  },
+  "response": {
+    "code": "NUMBERING_CATEGORY_PREFIX_MISSING",
+    "message": "Every selectable category needs a legal numbering prefix before enable.",
+    "requestId": "00000000-0000-4000-8000-000000000018",
+    "fieldErrors": {"category": "numberingPrefix is missing"}
+  }
+}
