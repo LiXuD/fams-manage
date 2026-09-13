@@ -1582,19 +1582,308 @@ class DesignPackageContractTest(unittest.TestCase):
         future_schemas = ("Organization", "Employee", "Asset", "InboundReceipt")
         missing = [name for name in future_schemas if name not in schemas]
         self.assertFalse(missing, f"later domain schemas remain RED: {missing}")
-        if missing:
-            return
+        id_schema = schemas["Id"]
+        self.assertEqual("string", id_schema["type"])
+        self.assertEqual("^[0-9]+$", id_schema["pattern"])
         for name in future_schemas:
+            if name not in schemas:
+                continue
             with self.subTest(schema=name):
-                self.assertEqual("string", schemas[name]["properties"]["id"]["type"])
-                self.assertEqual("^[0-9]+$", schemas[name]["properties"]["id"]["pattern"])
-        self.assertEqual("string", schemas["Asset"]["properties"]["businessDate"]["type"])
-        self.assertEqual("date", schemas["Asset"]["properties"]["businessDate"]["format"])
+                self.assertEqual(
+                    "#/components/schemas/Id",
+                    schemas[name]["properties"]["id"]["$ref"],
+                )
+        if "Asset" in schemas:
+            self.assertEqual(
+                "#/components/schemas/BusinessDate",
+                schemas["Asset"]["properties"]["createdBusinessDate"]["$ref"],
+            )
+            self.assertNotIn("businessDate", schemas["Asset"]["properties"])
         self.assertEqual("date-time", schemas["AuditEvent"]["properties"]["occurredAt"]["format"])
         self.assertEqual("string", schemas["Money"]["type"])
         self.assertEqual("^[0-9]+\\.[0-9]{2}$", schemas["Money"]["pattern"])
         self.assertIn("PERSONAL", schemas["UsageMode"]["enum"])
         self.assertIn("SHARED", schemas["UsageMode"]["enum"])
+
+    def test_asset_read_contract_exposes_scoped_ledger_and_id_time_shapes(self) -> None:
+        document = self.load_contract()
+        paths = document["paths"]
+        schemas = document["components"]["schemas"]
+        operations = {
+            operation["operationId"]: operation
+            for item in paths.values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        required_operations = {"listAssets", "getAsset"}
+        missing = sorted(required_operations - set(operations))
+        self.assertFalse(missing, f"asset read contract remains RED: {missing}")
+        if missing:
+            return
+        self.assertIn("Assets", {tag["name"] for tag in document["tags"]})
+        self.assertIn("/assets", paths)
+        self.assertIn("/assets/{assetId}", paths)
+        self.assertNotIn("post", paths["/assets"])
+        self.assertNotIn("patch", paths["/assets/{assetId}"])
+        self.assertNotIn("delete", paths["/assets/{assetId}"])
+        expected_roles = {"ASSET_ADMIN", "WAREHOUSE_OPERATOR", "AUDIT_READ_ONLY"}
+        for operation_id in required_operations:
+            with self.subTest(operation=operation_id):
+                operation = operations[operation_id]
+                self.assertEqual(expected_roles, set(operation["x-actor"]["roles"]))
+                self.assertNotIn("SYSTEM_ADMIN", operation["x-actor"]["roles"])
+                self.assertIn("200", operation["responses"])
+                self.assertIn("401", operation["responses"])
+                self.assertIn("403", operation["responses"])
+        list_assets = operations["listAssets"]
+        list_refs = {
+            parameter.get("$ref", "").rsplit("/", 1)[-1]
+            for parameter in list_assets.get("parameters", [])
+        }
+        self.assertTrue({"Page", "PageSize"}.issubset(list_refs))
+        filter_refs = {
+            "AssetCodeFilter",
+            "AssetNameFilter",
+            "SerialNumberFilter",
+            "AssetCategoryFilter",
+            "AssetLifecycleFilter",
+            "AssetExceptionFilter",
+            "AssetWarehouseFilter",
+            "AssetLocationFilter",
+            "AssetOrganizationFilter",
+        }
+        self.assertTrue(filter_refs.issubset(list_refs))
+        self.assertEqual(
+            "PageAsset",
+            list_assets["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].rsplit("/", 1)[-1],
+        )
+        self.assertEqual(
+            "Asset",
+            operations["getAsset"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].rsplit("/", 1)[-1],
+        )
+
+        required_schemas = {
+            "Asset",
+            "PageAsset",
+            "AssetLifecycle",
+            "AssetException",
+            "AssetCardStage",
+            "AssetCustodySummary",
+            "AssetBusinessSummary",
+        }
+        missing_schemas = sorted(required_schemas - set(schemas))
+        self.assertFalse(missing_schemas, f"asset read schemas remain RED: {missing_schemas}")
+        if missing_schemas:
+            return
+        asset = schemas["Asset"]
+        asset_fields = {
+            "id",
+            "assetCode",
+            "name",
+            "lifecycle",
+            "exception",
+            "cardStage",
+            "version",
+            "createdBusinessDate",
+            "createdAt",
+            "parameterVersionId",
+            "plannedInboundWarehouse",
+            "plannedInboundLocation",
+            "currentCustody",
+            "openBusinessSummary",
+        }
+        self.assertTrue(asset_fields.issubset(asset["properties"]))
+        self.assertEqual("#/components/schemas/Id", asset["properties"]["id"]["$ref"])
+        self.assertEqual(
+            "#/components/schemas/BusinessDate",
+            asset["properties"]["createdBusinessDate"]["$ref"],
+        )
+        self.assertNotIn("businessDate", asset["properties"])
+        self.assertEqual("#/components/schemas/Instant", asset["properties"]["createdAt"]["$ref"])
+        self.assertTrue({"WAITING_INBOUND", "IN_STOCK"}.issubset(schemas["AssetLifecycle"]["enum"]))
+        self.assertTrue({"DRAFT", "SUBMITTED", "CANCELLED"}.issubset(schemas["AssetCardStage"]["enum"]))
+        custody = schemas["AssetCustodySummary"]
+        self.assertIn("oneOf", custody)
+        custody_text = json.dumps(custody, sort_keys=True).lower()
+        for term in ("personal", "shared", "responsib", "mutually", "exclusive"):
+            self.assertIn(term, custody_text)
+        self.assertIn("formal", json.dumps(asset, sort_keys=True).lower())
+        self.assertIn("unsettled", json.dumps(schemas["AssetBusinessSummary"], sort_keys=True).lower())
+
+    def test_asset_draft_mutations_and_examples_preserve_card_boundaries(self) -> None:
+        document = self.load_contract()
+        paths = document["paths"]
+        schemas = document["components"]["schemas"]
+        operations = {
+            operation["operationId"]: operation
+            for item in paths.values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        required_operations = {"createAsset", "updateAsset", "copyAsset", "cancelAssetCard"}
+        missing = sorted(required_operations - set(operations))
+        self.assertFalse(missing, f"asset draft mutations remain RED: {missing}")
+        if missing:
+            return
+        self.assertIn("/assets/{assetId}/copy", paths)
+        self.assertIn("/assets/{assetId}/cancel", paths)
+        for operation_id in required_operations:
+            with self.subTest(operation=operation_id):
+                operation = operations[operation_id]
+                self.assertTrue(operation.get("x-business-write"))
+                self.assertEqual(["WAREHOUSE_OPERATOR"], operation["x-actor"]["roles"])
+                self.assertTrue(operation.get("x-version"))
+                self.assertTrue(operation.get("x-transaction"))
+                self.assertTrue(operation.get("x-audit-event"))
+                self.assertTrue(
+                    {400, 401, 403, 404, 409}.issubset(set(operation["x-required-error-statuses"]))
+                )
+                refs = {
+                    parameter.get("$ref", "").rsplit("/", 1)[-1]
+                    for parameter in operation.get("parameters", [])
+                }
+                self.assertTrue({"IdempotencyKey", "CsrfToken"}.issubset(refs))
+        request_schema_by_operation = {
+            "createAsset": "AssetCreateRequest",
+            "updateAsset": "AssetUpdateRequest",
+            "copyAsset": "AssetCopyRequest",
+            "cancelAssetCard": "AssetCancelRequest",
+        }
+        for operation_id, schema_name in request_schema_by_operation.items():
+            with self.subTest(operation=operation_id):
+                request_ref = operations[operation_id]["requestBody"]["content"]["application/json"]["schema"]["$ref"]
+                self.assertEqual(schema_name, request_ref.rsplit("/", 1)[-1])
+                self.assertIn(schema_name, schemas)
+
+        create_schema = schemas["AssetCreateRequest"]
+        self.assertEqual({"name"}, set(create_schema["required"]))
+        self.assertFalse(create_schema.get("additionalProperties", True))
+        allowed_fields = {
+            "name",
+            "category",
+            "model",
+            "unit",
+            "organization",
+            "plannedInboundWarehouse",
+            "plannedInboundLocation",
+            "brand",
+            "manufacturer",
+            "serialNumber",
+            "acquisitionDate",
+            "warrantyExpiryDate",
+            "serviceProvider",
+            "serviceContact",
+            "servicePhone",
+            "source",
+            "notes",
+            "attachments",
+            "extensionValues",
+        }
+        self.assertTrue(allowed_fields.issubset(create_schema["properties"]))
+        forbidden_fields = {
+            "assetCode",
+            "lifecycle",
+            "exception",
+            "cardStage",
+            "currentCustody",
+            "usageMode",
+            "responsibleEmployee",
+            "createdBusinessDate",
+            "parameterVersionId",
+        }
+        for schema_name in ("AssetCreateRequest", "AssetUpdateRequest", "AssetCopyRequest"):
+            self.assertTrue(forbidden_fields.isdisjoint(schemas[schema_name]["properties"]))
+        for field in (
+            "category",
+            "organization",
+            "plannedInboundWarehouse",
+            "plannedInboundLocation",
+            "brand",
+            "manufacturer",
+        ):
+            with self.subTest(reference=field):
+                self.assertEqual(
+                    "CatalogReference",
+                    create_schema["properties"][field]["$ref"].rsplit("/", 1)[-1],
+                )
+        update_schema = schemas["AssetUpdateRequest"]
+        self.assertEqual(1, update_schema.get("minProperties"))
+        self.assertNotIn("required", update_schema)
+        self.assertFalse(update_schema.get("additionalProperties", True))
+        copy_schema = schemas["AssetCopyRequest"]
+        self.assertEqual({"quantity"}, set(copy_schema["required"]))
+        self.assertEqual(1, copy_schema["properties"]["quantity"]["minimum"])
+        self.assertEqual(100, copy_schema["properties"]["quantity"]["maximum"])
+        self.assertEqual({"reason"}, set(schemas["AssetCancelRequest"]["required"]))
+
+        update_text = json.dumps(operations["updateAsset"], sort_keys=True).lower()
+        for term in (
+            "draft",
+            "pending_inbound",
+            "active",
+            "descriptive",
+            "lock",
+            "assetcode",
+            "category",
+            "organization",
+            "lifecycle",
+            "responsibility",
+        ):
+            self.assertIn(term, update_text)
+        create_text = json.dumps(operations["createAsset"], sort_keys=True).lower()
+        for term in (
+            "assetcode",
+            "permanent",
+            "waiting_inbound",
+            "normal",
+            "draft",
+            "planned",
+            "custody",
+            "parameterversionid",
+            "createdbusinessdate",
+            "createdat",
+            "creator",
+            "serial",
+        ):
+            self.assertIn(term, create_text)
+        copy_text = json.dumps(operations["copyAsset"], sort_keys=True).lower()
+        for term in ("100", "independent", "serial", "attachment", "history", "gap", "transaction", "partial"):
+            self.assertIn(term, copy_text)
+        cancel_text = json.dumps(operations["cancelAssetCard"], sort_keys=True).lower()
+        for term in ("draft", "creator", "lock", "tombstone", "never reused", "physical", "read-only"):
+            self.assertIn(term, cancel_text)
+
+        examples = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted(EXAMPLES.glob("masterdata-asset-*.json"))
+        ]
+        self.assertGreaterEqual(len(examples), 10)
+        self.assertTrue(all("evidence" in value for value in examples))
+        operation_ids = {value["operationId"] for value in examples}
+        self.assertTrue(required_operations.issubset(operation_ids))
+        minimal = [
+            value
+            for value in examples
+            if value.get("operationId") == "createAsset"
+            and value.get("kind") == "positive"
+            and set(value.get("payload", {})) == {"name"}
+        ]
+        self.assertTrue(minimal)
+        minimal_response = minimal[0]["response"]
+        self.assertEqual("WAITING_INBOUND", minimal_response["lifecycle"])
+        self.assertEqual("NORMAL", minimal_response["exception"])
+        self.assertEqual("DRAFT", minimal_response["cardStage"])
+        self.assertTrue(any(value.get("operationId") == "copyAsset" for value in examples))
+        cancelled = [value for value in examples if value.get("operationId") == "cancelAssetCard"]
+        self.assertTrue(cancelled)
+        self.assertTrue(any(value.get("response", {}).get("cardStage") == "CANCELLED" for value in cancelled))
+        rejection_text = json.dumps(
+            [value for value in examples if value.get("kind") == "rejection"], sort_keys=True
+        ).lower()
+        for term in ("serial", "disabled", "expired", "non-creator", "lock", "lifecycle", "responsibility"):
+            self.assertIn(term, rejection_text)
+        self.assertTrue(any(value.get("status") == 409 and "serial" in json.dumps(value).lower() for value in examples))
+        self.assertTrue(any(value.get("status") == 409 and "code" in json.dumps(value).lower() for value in examples))
 
 
 class DesignPackageEvidenceTest(unittest.TestCase):
