@@ -360,6 +360,244 @@ class DesignPackageContractTest(unittest.TestCase):
         ]
         self.assertEqual(len(operation_ids), len(set(operation_ids)))
 
+    def test_catalog_group_a_management_and_active_reference_surfaces_are_explicit(self) -> None:
+        document = self.load_contract()
+        paths = document["paths"]
+        management = {
+            "asset-categories": "AssetCategory",
+            "brands": "Brand",
+            "manufacturers": "Manufacturer",
+        }
+        required_operations = {
+            "AssetCategory": {
+                "listAssetCategories",
+                "getAssetCategory",
+                "createAssetCategory",
+                "updateAssetCategory",
+                "disableAssetCategory",
+                "enableAssetCategory",
+            },
+            "Brand": {
+                "listBrands",
+                "getBrand",
+                "createBrand",
+                "updateBrand",
+                "disableBrand",
+                "enableBrand",
+            },
+            "Manufacturer": {
+                "listManufacturers",
+                "getManufacturer",
+                "createManufacturer",
+                "updateManufacturer",
+                "disableManufacturer",
+                "enableManufacturer",
+            },
+        }
+        operations = {
+            operation["operationId"]: operation
+            for item in paths.values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        missing_operations = sorted(
+            operation_id
+            for operation_ids in required_operations.values()
+            for operation_id in operation_ids
+            if operation_id not in operations
+        )
+        self.assertFalse(missing_operations, f"catalog group A remains RED: {missing_operations}")
+        if missing_operations:
+            return
+        for collection, resource in management.items():
+            with self.subTest(collection=collection):
+                self.assertIn(f"/{collection}", paths)
+                self.assertIn("get", paths[f"/{collection}"])
+                self.assertIn("Page", paths[f"/{collection}"]["get"]["parameters"][0]["$ref"])
+                self.assertIn("PageSize", paths[f"/{collection}"]["get"]["parameters"][1]["$ref"])
+                for path, item in paths.items():
+                    if not path.startswith(f"/{collection}") or path.endswith("/active-references"):
+                        continue
+                    self.assertNotIn("delete", item)
+                    for method, operation in item.items():
+                        if method not in {"get", "post", "patch"}:
+                            continue
+                        self.assertEqual(["SYSTEM_ADMIN"], operation.get("x-actor", {}).get("roles"))
+                        self.assertIn("401", operation["responses"])
+                        self.assertIn("403", operation["responses"])
+        active_reference_operations = {
+            "listActiveAssetCategoryReferences": "AssetCategoryActiveReferencePage",
+            "listActiveBrandReferences": "BrandActiveReferencePage",
+            "listActiveManufacturerReferences": "ManufacturerActiveReferencePage",
+        }
+        for operation_id, response_schema in active_reference_operations.items():
+            with self.subTest(operation=operation_id):
+                self.assertIn(operation_id, operations)
+                operation = operations[operation_id]
+                self.assertEqual(
+                    {"WAREHOUSE_OPERATOR", "ASSET_ADMIN"},
+                    set(operation["x-actor"]["roles"]),
+                )
+                self.assertEqual(
+                    response_schema,
+                    operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].rsplit("/", 1)[-1],
+                )
+                self.assertIn("401", operation["responses"])
+                self.assertIn("403", operation["responses"])
+        forbidden_prefixes = ("/warehouses", "/locations", "/assets", "/inbound")
+        self.assertFalse(any(path.startswith(forbidden_prefixes) for path in paths))
+
+    def test_asset_category_tree_and_patch_schema_rules_are_explicit(self) -> None:
+        document = self.load_contract()
+        schemas = document["components"]["schemas"]
+        required_schemas = {
+            "AssetCategory",
+            "AssetCategoryCreateRequest",
+            "AssetCategoryUpdateRequest",
+            "CatalogReference",
+            "ExtensionFieldTemplate",
+        }
+        missing_schemas = sorted(required_schemas - set(schemas))
+        self.assertFalse(missing_schemas, f"catalog schemas remain RED: {missing_schemas}")
+        if missing_schemas:
+            return
+        category_fields = {
+            "code",
+            "name",
+            "parentCategory",
+            "status",
+            "description",
+            "suggestedUnit",
+            "numberingPrefix",
+            "extensionFieldTemplate",
+        }
+        self.assertTrue(category_fields.issubset(schemas["AssetCategory"]["properties"]))
+        for schema_name in ("AssetCategoryCreateRequest", "AssetCategoryUpdateRequest"):
+            with self.subTest(schema=schema_name):
+                self.assertNotIn("status", schemas[schema_name]["properties"])
+                self.assertFalse(schemas[schema_name].get("additionalProperties", True))
+        category_create = schemas["AssetCategoryCreateRequest"]
+        category_update = schemas["AssetCategoryUpdateRequest"]
+        self.assertEqual(
+            "CatalogReference",
+            category_create["properties"]["parentCategory"]["$ref"].rsplit("/", 1)[-1],
+        )
+        self.assertEqual(
+            "CatalogReference",
+            category_update["properties"]["parentCategory"]["$ref"].rsplit("/", 1)[-1],
+        )
+        self.assertEqual(1, category_update.get("minProperties"))
+        self.assertNotIn("required", category_update)
+        reference = schemas["CatalogReference"]
+        self.assertEqual({"id", "version"}, set(reference["required"]))
+        self.assertEqual("Id", reference["properties"]["id"]["$ref"].rsplit("/", 1)[-1])
+        category = schemas["AssetCategory"]
+        self.assertEqual(
+            "ReferenceStatus",
+            category["properties"]["status"]["$ref"].rsplit("/", 1)[-1],
+        )
+        operations = {
+            operation["operationId"]: operation
+            for item in document["paths"].values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        category_update_text = json.dumps(operations["updateAssetCategory"], sort_keys=True).lower()
+        for term in ("cycle", "version", "409", "unique", "reuse"):
+            self.assertIn(term, category_update_text)
+
+    def test_brand_manufacturer_references_and_active_selector_minimality_are_explicit(self) -> None:
+        document = self.load_contract()
+        schemas = document["components"]["schemas"]
+        required_schemas = {
+            "Brand",
+            "BrandCreateRequest",
+            "BrandUpdateRequest",
+            "Manufacturer",
+            "ManufacturerCreateRequest",
+            "ManufacturerUpdateRequest",
+            "BrandActiveReference",
+            "ManufacturerActiveReference",
+        }
+        missing_schemas = sorted(required_schemas - set(schemas))
+        self.assertFalse(missing_schemas, f"brand/manufacturer schemas remain RED: {missing_schemas}")
+        if missing_schemas:
+            return
+        self.assertEqual(
+            "CatalogReference",
+            schemas["BrandCreateRequest"]["properties"]["defaultManufacturer"]["$ref"].rsplit("/", 1)[-1],
+        )
+        self.assertEqual(
+            "CatalogReference",
+            schemas["BrandUpdateRequest"]["properties"]["defaultManufacturer"]["$ref"].rsplit("/", 1)[-1],
+        )
+        for schema_name in ("BrandUpdateRequest", "ManufacturerUpdateRequest"):
+            with self.subTest(schema=schema_name):
+                self.assertNotIn("status", schemas[schema_name]["properties"])
+                self.assertEqual(1, schemas[schema_name].get("minProperties"))
+                self.assertNotIn("required", schemas[schema_name])
+        for schema_name in ("Brand", "Manufacturer"):
+            with self.subTest(schema=schema_name):
+                self.assertEqual(
+                    "ReferenceStatus",
+                    schemas[schema_name]["properties"]["status"]["$ref"].rsplit("/", 1)[-1],
+                )
+        for schema_name in ("BrandActiveReference", "ManufacturerActiveReference"):
+            with self.subTest(schema=schema_name):
+                self.assertEqual(
+                    {"id", "code", "name", "version"},
+                    set(schemas[schema_name]["required"]),
+                )
+                self.assertTrue(
+                    {"id", "code", "name", "version"}.issuperset(schemas[schema_name]["properties"])
+                )
+                self.assertNotIn("phone", json.dumps(schemas[schema_name]).lower())
+                self.assertNotIn("email", json.dumps(schemas[schema_name]).lower())
+        self.assertIn("defaultManufacturerId", schemas["BrandActiveReference"]["properties"])
+        operations = {
+            operation["operationId"]: operation
+            for item in document["paths"].values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        for operation_id in (
+            "disableBrand",
+            "disableManufacturer",
+            "disableAssetCategory",
+        ):
+            with self.subTest(operation=operation_id):
+                operation_text = json.dumps(operations[operation_id], sort_keys=True).lower()
+                for term in ("referenced", "history", "new", "disabled"):
+                    self.assertIn(term, operation_text)
+
+    def test_catalog_business_writes_have_short_transaction_audit_and_error_boundaries(self) -> None:
+        document = self.load_contract()
+        management_prefixes = ("/asset-categories", "/brands", "/manufacturers")
+        for path, item in document["paths"].items():
+            if not path.startswith(management_prefixes):
+                continue
+            for method, operation in item.items():
+                if method not in {"post", "patch"}:
+                    continue
+                with self.subTest(method=method, path=path):
+                    if not operation.get("x-business-write"):
+                        continue
+                    self.assertTrue(operation.get("x-actor"))
+                    self.assertTrue(operation.get("x-version"))
+                    self.assertTrue(operation.get("x-transaction"))
+                    self.assertIn("short", json.dumps(operation["x-transaction"]).lower())
+                    self.assertTrue(operation.get("x-audit-event"))
+                    self.assertIsInstance(operation.get("x-required-error-statuses"), list)
+                    self.assertIn("401", operation["responses"])
+                    self.assertIn("403", operation["responses"])
+                    self.assertIn("409", operation["responses"])
+                    refs = {
+                        parameter.get("$ref", "").rsplit("/", 1)[-1]
+                        for parameter in operation.get("parameters", [])
+                    }
+                    self.assertIn("IdempotencyKey", refs)
+                    self.assertIn("CsrfToken", refs)
+
     def test_organization_operations_expose_tree_and_disable_invariants(self) -> None:
         document = self.load_contract()
         paths = document["paths"]
@@ -636,6 +874,42 @@ class DesignPackageEvidenceTest(unittest.TestCase):
             }.issubset(operation_ids)
         )
         self.assertFalse({"grantRolePermission", "revokeRolePermission"} & operation_ids)
+
+    def test_catalog_group_a_examples_are_machine_readable_and_cover_lifecycle_boundaries(self) -> None:
+        self.assertTrue(EXAMPLES.is_dir(), f"missing examples directory: {EXAMPLES}")
+        files = sorted(EXAMPLES.glob("masterdata-catalog-*.json"))
+        self.assertGreaterEqual(len(files), 12)
+        operation_ids: set[str] = set()
+        kinds: set[str] = set()
+        for path in files:
+            with self.subTest(path=path.name):
+                value = json.loads(path.read_text(encoding="utf-8"))
+                self.assertIn(value.get("kind"), {"positive", "rejection"})
+                self.assertTrue(value.get("operationId"))
+                self.assertIsInstance(value.get("status"), int)
+                self.assertIn("payload", value)
+                operation_ids.add(value["operationId"])
+                kinds.add(value["kind"])
+        self.assertEqual({"positive", "rejection"}, kinds)
+        self.assertTrue(
+            {
+                "createAssetCategory",
+                "updateAssetCategory",
+                "disableAssetCategory",
+                "enableAssetCategory",
+                "createBrand",
+                "updateBrand",
+                "disableBrand",
+                "enableBrand",
+                "createManufacturer",
+                "updateManufacturer",
+                "disableManufacturer",
+                "enableManufacturer",
+            }.issubset(operation_ids)
+        )
+        self.assertIn("listActiveAssetCategoryReferences", operation_ids)
+        self.assertIn("listActiveBrandReferences", operation_ids)
+        self.assertIn("listActiveManufacturerReferences", operation_ids)
 
     def test_examples_are_machine_readable_and_named(self) -> None:
         self.assertTrue(EXAMPLES.is_dir(), f"missing examples directory: {EXAMPLES}")
