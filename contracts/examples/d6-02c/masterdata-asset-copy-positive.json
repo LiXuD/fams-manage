@@ -2,9 +2,16 @@
   "operationId": "copyAsset",
   "kind": "positive",
   "status": 201,
+  "actor": "warehouse.operator",
   "requestSchema": "AssetCopyRequest",
   "responseSchema": "AssetCopyResult",
   "pathParameters": {"assetId": "10002"},
+  "source": {
+    "cardStage": "ACTIVE",
+    "lifecycle": "IN_USE",
+    "businessLock": true,
+    "createdBy": "warehouse.other"
+  },
   "headers": {
     "Idempotency-Key": "asset-copy-draft-0001",
     "X-CSRF-Token": "csrf-token-example-123456",
@@ -54,5 +61,5 @@
       }
     ]
   },
-  "evidence": "Contract evidence only; runtime number reservation is not implemented in this design package."
+  "evidence": "Contract evidence only; a visible non-cancelled active source may be copied despite its lock or creator. Runtime number reservation is not implemented in this design package."
 }
