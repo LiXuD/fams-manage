@@ -1,0 +1,2399 @@
+openapi: 3.0.4
+info:
+  title: FAMS core first-slice contract
+  version: 1.0.0
+  description: >-
+    Contract-first design package for authentication, master data, asset cards,
+    labels, and daily inbound receipt handling. This is a design boundary;
+    product controllers and persistence implementations are intentionally absent.
+servers:
+  - url: /api/v1
+tags:
+  - name: Auth
+    description: System-account authentication and session boundaries.
+  - name: MasterData
+    description: Organization, employee, classification, warehouse, and parameter data.
+  - name: Assets
+    description: Asset cards, labels, and ledger views.
+  - name: Inbound
+    description: Daily inbound receipt approval and warehouse execution.
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Establish a session with a system account.
+      x-business-write: false
+      x-exception-rationale: Version and idempotency are N/A because authentication has no existing business aggregate; the login attempt is still audited.
+      x-non-applicable: [version, idempotency]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated session metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /auth/password:
+    post:
+      tags: [Auth]
+      operationId: changeInitialPassword
+      summary: Complete the mandatory first-password change.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ACCOUNT]
+      x-version:
+        required: true
+        precondition: Session user version is current.
+      x-transaction:
+        boundary: Update password state and security audit atomically.
+      x-audit-event:
+        event: AUTH_INITIAL_PASSWORD_CHANGED
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Updated authenticated user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      operationId: getCurrentUser
+      summary: Read the current system account and role snapshot.
+      responses:
+        '200':
+          description: Current user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /auth/permissions:
+    get:
+      tags: [Auth]
+      operationId: getMyPermissions
+      summary: Read effective permissions and data scope.
+      responses:
+        '200':
+          description: Effective permission snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: End the current session.
+      x-business-write: false
+      x-exception-rationale: Version and idempotency are N/A because logout invalidates the session rather than changing a business aggregate.
+      x-non-applicable: [version, idempotency]
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Session ended.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /organizations:
+    get:
+      tags: [MasterData]
+      operationId: listOrganizations
+      summary: List organizations in the tenant.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Organization page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageOrganization'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [MasterData]
+      operationId: createOrganization
+      summary: Create an organization.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: Parent organization version is current when supplied.
+      x-transaction:
+        boundary: Insert organization and audit event atomically.
+      x-audit-event:
+        event: ORGANIZATION_CREATED
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationInput'
+      responses:
+        '201':
+          description: Created organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /organizations/{organizationId}:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [MasterData]
+      operationId: getOrganization
+      summary: Read an organization.
+      responses:
+        '200':
+          description: Organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [MasterData]
+      operationId: updateOrganization
+      summary: Update an organization without silently rewriting asset responsibility.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match version must equal the stored organization version.
+      x-transaction:
+        boundary: Conditional update and audit event are one short transaction.
+      x-audit-event:
+        event: ORGANIZATION_UPDATED
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationInput'
+      responses:
+        '200':
+          description: Updated organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /employees:
+    get:
+      tags: [MasterData]
+      operationId: listEmployees
+      summary: List employees and their active status.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Employee page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageEmployee'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MasterData]
+      operationId: createEmployee
+      summary: Create an employee account relation.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: Organization and employee identity versions are current.
+      x-transaction:
+        boundary: Insert employee and audit event atomically.
+      x-audit-event:
+        event: EMPLOYEE_CREATED
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmployeeInput'
+      responses:
+        '201':
+          description: Created employee.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Employee'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /employees/{employeeId}:
+    parameters:
+      - $ref: '#/components/parameters/EmployeeId'
+    get:
+      tags: [MasterData]
+      operationId: getEmployee
+      summary: Read an employee.
+      responses:
+        '200':
+          description: Employee.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Employee'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [MasterData]
+      operationId: updateEmployee
+      summary: Update employee status or organization relation.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match version must equal the stored employee version.
+      x-transaction:
+        boundary: Conditional employee update and audit event are one transaction.
+      x-audit-event:
+        event: EMPLOYEE_UPDATED
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmployeeInput'
+      responses:
+        '200':
+          description: Updated employee.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Employee'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /categories:
+    get:
+      tags: [MasterData]
+      operationId: listCategories
+      summary: List the asset category tree nodes.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Category page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageCategory'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MasterData]
+      operationId: createCategory
+      summary: Create a category tree node.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: Parent category version is current when supplied.
+      x-transaction:
+        boundary: Insert category and audit event atomically.
+      x-audit-event:
+        event: CATEGORY_CREATED
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryInput'
+      responses:
+        '201':
+          description: Created category.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /categories/{categoryId}:
+    parameters:
+      - $ref: '#/components/parameters/CategoryId'
+    get:
+      tags: [MasterData]
+      operationId: getCategory
+      summary: Read a category.
+      responses:
+        '200':
+          description: Category.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [MasterData]
+      operationId: updateCategory
+      summary: Rename or disable a category without deleting history.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match version must equal the stored category version.
+      x-transaction:
+        boundary: Conditional category update and audit event are one transaction.
+      x-audit-event:
+        event: CATEGORY_UPDATED
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryInput'
+      responses:
+        '200':
+          description: Updated category.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /warehouses:
+    get:
+      tags: [MasterData]
+      operationId: listWarehouses
+      summary: List warehouses.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Warehouse page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageWarehouse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MasterData]
+      operationId: createWarehouse
+      summary: Create a warehouse.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: Warehouse code is unique and not reused.
+      x-transaction:
+        boundary: Insert warehouse and audit event atomically.
+      x-audit-event:
+        event: WAREHOUSE_CREATED
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WarehouseInput'
+      responses:
+        '201':
+          description: Created warehouse.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Warehouse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /warehouses/{warehouseId}:
+    parameters:
+      - $ref: '#/components/parameters/WarehouseId'
+    get:
+      tags: [MasterData]
+      operationId: getWarehouse
+      summary: Read a warehouse.
+      responses:
+        '200':
+          description: Warehouse.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Warehouse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [MasterData]
+      operationId: updateWarehouse
+      summary: Update or disable a warehouse only when no assets depend on it.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match version must equal the stored warehouse version.
+      x-transaction:
+        boundary: Conditional warehouse update and audit event are one transaction.
+      x-audit-event:
+        event: WAREHOUSE_UPDATED
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WarehouseInput'
+      responses:
+        '200':
+          description: Updated warehouse.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Warehouse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /locations:
+    get:
+      tags: [MasterData]
+      operationId: listLocations
+      summary: List locations in a warehouse.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/WarehouseQuery'
+      responses:
+        '200':
+          description: Location page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageLocation'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MasterData]
+      operationId: createLocation
+      summary: Create a warehouse location.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: Warehouse version is current and location code is unique.
+      x-transaction:
+        boundary: Insert location and audit event atomically.
+      x-audit-event:
+        event: LOCATION_CREATED
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationInput'
+      responses:
+        '201':
+          description: Created location.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /locations/{locationId}:
+    parameters:
+      - $ref: '#/components/parameters/LocationId'
+    get:
+      tags: [MasterData]
+      operationId: getLocation
+      summary: Read a location.
+      responses:
+        '200':
+          description: Location.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [MasterData]
+      operationId: updateLocation
+      summary: Update or disable a location when no assets depend on it.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match version must equal the stored location version.
+      x-transaction:
+        boundary: Conditional location update and audit event are one transaction.
+      x-audit-event:
+        event: LOCATION_UPDATED
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationInput'
+      responses:
+        '200':
+          description: Updated location.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /brands:
+    get:
+      tags: [MasterData]
+      operationId: listBrands
+      summary: List brands.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Brand page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageBrand'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MasterData]
+      operationId: createBrand
+      summary: Create a brand.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: Brand name is unique.
+      x-transaction:
+        boundary: Insert brand and audit event atomically.
+      x-audit-event:
+        event: BRAND_CREATED
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BrandInput'
+      responses:
+        '201':
+          description: Created brand.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Brand'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /brands/{brandId}:
+    parameters:
+      - $ref: '#/components/parameters/BrandId'
+    get:
+      tags: [MasterData]
+      operationId: getBrand
+      summary: Read a brand.
+      responses:
+        '200':
+          description: Brand.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Brand'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [MasterData]
+      operationId: updateBrand
+      summary: Rename or disable a brand without deleting history.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match version must equal the stored brand version.
+      x-transaction:
+        boundary: Conditional brand update and audit event are one transaction.
+      x-audit-event:
+        event: BRAND_UPDATED
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BrandInput'
+      responses:
+        '200':
+          description: Updated brand.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Brand'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /vendors:
+    get:
+      tags: [MasterData]
+      operationId: listVendors
+      summary: List vendors.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Vendor page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageVendor'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MasterData]
+      operationId: createVendor
+      summary: Create a vendor.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: Vendor name is unique.
+      x-transaction:
+        boundary: Insert vendor and audit event atomically.
+      x-audit-event:
+        event: VENDOR_CREATED
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VendorInput'
+      responses:
+        '201':
+          description: Created vendor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vendor'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /vendors/{vendorId}:
+    parameters:
+      - $ref: '#/components/parameters/VendorId'
+    get:
+      tags: [MasterData]
+      operationId: getVendor
+      summary: Read a vendor.
+      responses:
+        '200':
+          description: Vendor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vendor'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [MasterData]
+      operationId: updateVendor
+      summary: Rename or disable a vendor without deleting history.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match version must equal the stored vendor version.
+      x-transaction:
+        boundary: Conditional vendor update and audit event are one transaction.
+      x-audit-event:
+        event: VENDOR_UPDATED
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VendorInput'
+      responses:
+        '200':
+          description: Updated vendor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vendor'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /numbering-rules:
+    get:
+      tags: [MasterData]
+      operationId: listNumberingRules
+      summary: List numbering rules.
+      responses:
+        '200':
+          description: Numbering rule page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageNumberingRule'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MasterData]
+      operationId: createNumberingRule
+      summary: Configure a non-reusable asset-number sequence.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: Rule version is current and generated numbers are never reused.
+      x-transaction:
+        boundary: Update numbering rule and audit event atomically.
+      x-audit-event:
+        event: NUMBERING_RULE_CREATED
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NumberingRuleInput'
+      responses:
+        '201':
+          description: Created numbering rule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NumberingRule'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /numbering-rules/{ruleId}:
+    parameters:
+      - $ref: '#/components/parameters/RuleId'
+    get:
+      tags: [MasterData]
+      operationId: getNumberingRule
+      summary: Read a numbering rule.
+      responses:
+        '200':
+          description: Numbering rule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NumberingRule'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [MasterData]
+      operationId: updateNumberingRule
+      summary: Update a numbering rule without reusing issued numbers.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match version must equal the stored rule version.
+      x-transaction:
+        boundary: Conditional rule update and audit event are one transaction.
+      x-audit-event:
+        event: NUMBERING_RULE_UPDATED
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NumberingRuleInput'
+      responses:
+        '200':
+          description: Updated numbering rule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NumberingRule'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /parameters:
+    get:
+      tags: [MasterData]
+      operationId: listBusinessParameters
+      summary: Read enterprise parameters.
+      responses:
+        '200':
+          description: Business parameter page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageBusinessParameter'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MasterData]
+      operationId: createBusinessParameter
+      summary: Add an enterprise parameter.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: Parameter key is unique and version is current.
+      x-transaction:
+        boundary: Upsert parameter and audit event atomically.
+      x-audit-event:
+        event: BUSINESS_PARAMETER_CREATED
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessParameterInput'
+      responses:
+        '201':
+          description: Created parameter.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessParameter'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /parameters/{parameterId}:
+    parameters:
+      - $ref: '#/components/parameters/ParameterId'
+    get:
+      tags: [MasterData]
+      operationId: getBusinessParameter
+      summary: Read an enterprise parameter.
+      responses:
+        '200':
+          description: Business parameter.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessParameter'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [MasterData]
+      operationId: updateBusinessParameter
+      summary: Update an enterprise parameter.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match version must equal the stored parameter version.
+      x-transaction:
+        boundary: Conditional parameter update and audit event are one transaction.
+      x-audit-event:
+        event: BUSINESS_PARAMETER_UPDATED
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessParameterInput'
+      responses:
+        '200':
+          description: Updated business parameter.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessParameter'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /assets:
+    get:
+      tags: [Assets]
+      operationId: listAssets
+      summary: Search the asset ledger with stable pagination.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/AssetStatusQuery'
+        - $ref: '#/components/parameters/UsageModeQuery'
+      responses:
+        '200':
+          description: Asset ledger page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageAsset'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Assets]
+      operationId: createAsset
+      summary: Create a draft asset card with a permanent code.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN, ASSET_ADMIN]
+      x-version:
+        required: true
+        precondition: Referenced master-data versions are current; asset code is unique.
+      x-transaction:
+        boundary: Insert asset, opaque QR access identifier, and audit event atomically.
+      x-audit-event:
+        event: ASSET_CREATED
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetInput'
+      responses:
+        '201':
+          description: Created asset card.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /assets/{assetId}:
+    parameters:
+      - $ref: '#/components/parameters/AssetId'
+    get:
+      tags: [Assets]
+      operationId: getAsset
+      summary: Read an asset card and append-only history summary.
+      responses:
+        '200':
+          description: Asset card.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Assets]
+      operationId: updateAsset
+      summary: Update an asset card under optimistic version control.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN, ASSET_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match version must equal the stored asset version.
+      x-transaction:
+        boundary: Conditional asset update, history entry, and audit event are one transaction.
+      x-audit-event:
+        event: ASSET_UPDATED
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetInput'
+      responses:
+        '200':
+          description: Updated asset card.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /assets/{assetId}/copy:
+    parameters:
+      - $ref: '#/components/parameters/AssetId'
+    post:
+      tags: [Assets]
+      operationId: copyAsset
+      summary: Copy descriptive fields into a new draft without copying identity or history.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN, ASSET_ADMIN]
+      x-version:
+        required: true
+        precondition: Source asset version is current.
+      x-transaction:
+        boundary: Insert copied draft, fresh code, fresh QR access id, and audit event atomically.
+      x-audit-event:
+        event: ASSET_COPIED
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetCopyRequest'
+      responses:
+        '201':
+          description: New draft asset.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /assets/{assetId}/labels:
+    parameters:
+      - $ref: '#/components/parameters/AssetId'
+    post:
+      tags: [Assets]
+      operationId: printAssetLabel
+      summary: Reprint a stable QR label or explicitly replace its opaque access id.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN, ASSET_ADMIN, WAREHOUSE]
+      x-version:
+        required: true
+        precondition: If-Match version must equal the stored asset version.
+      x-transaction:
+        boundary: Label intent, optional QR replacement, and audit event are one transaction.
+      x-audit-event:
+        event: ASSET_LABEL_PRINTED
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LabelPrintRequest'
+      responses:
+        '200':
+          description: Label metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LabelPrintResult'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /inbound-receipts:
+    get:
+      tags: [Inbound]
+      operationId: listInboundReceipts
+      summary: List daily inbound receipts visible to the current role.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/InboundStatusQuery'
+      responses:
+        '200':
+          description: Inbound receipt page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageInboundReceipt'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Inbound]
+      operationId: createInboundReceipt
+      summary: Create a daily inbound receipt draft.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN, ASSET_ADMIN, WAREHOUSE]
+      x-version:
+        required: true
+        precondition: Referenced master-data versions and draft version are current.
+      x-transaction:
+        boundary: Insert receipt draft and audit event atomically.
+      x-audit-event:
+        event: INBOUND_RECEIPT_CREATED
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InboundReceiptInput'
+      responses:
+        '201':
+          description: Created inbound receipt draft.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundReceipt'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /inbound-receipts/{receiptId}:
+    parameters:
+      - $ref: '#/components/parameters/ReceiptId'
+    get:
+      tags: [Inbound]
+      operationId: getInboundReceipt
+      summary: Read receipt status, approval scope, and executor ownership.
+      responses:
+        '200':
+          description: Inbound receipt.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundReceipt'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Inbound]
+      operationId: updateInboundReceipt
+      summary: Update a draft inbound receipt before submission.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN, ASSET_ADMIN, WAREHOUSE]
+      x-version:
+        required: true
+        precondition: If-Match version must equal draft receipt version.
+      x-transaction:
+        boundary: Conditional draft update and audit event are one transaction.
+      x-audit-event:
+        event: INBOUND_RECEIPT_UPDATED
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InboundReceiptInput'
+      responses:
+        '200':
+          description: Updated inbound receipt draft.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundReceipt'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /inbound-receipts/{receiptId}/submit:
+    parameters:
+      - $ref: '#/components/parameters/ReceiptId'
+    post:
+      tags: [Inbound]
+      operationId: submitInboundReceipt
+      summary: Submit a draft and freeze its approval scope.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN, ASSET_ADMIN, WAREHOUSE]
+      x-version:
+        required: true
+        precondition: If-Match draft version; all required rows and codes validate.
+      x-transaction:
+        boundary: Freeze receipt scope, transition to PENDING_APPROVAL, and audit atomically.
+      x-audit-event:
+        event: INBOUND_RECEIPT_SUBMITTED
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      responses:
+        '200':
+          description: Submitted receipt.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundReceipt'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /inbound-receipts/{receiptId}/decisions:
+    parameters:
+      - $ref: '#/components/parameters/ReceiptId'
+    post:
+      tags: [Inbound]
+      operationId: decideInboundReceipt
+      summary: One administrator approves or rejects a submitted receipt.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN, ASSET_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match submitted receipt version; decision is still pending.
+      x-transaction:
+        boundary: Acquire decision lock, record one decision, transition state, and audit atomically.
+      x-audit-event:
+        event: INBOUND_RECEIPT_DECIDED
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InboundDecisionRequest'
+      responses:
+        '200':
+          description: Decided receipt.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundReceipt'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /inbound-receipts/{receiptId}/claims:
+    parameters:
+      - $ref: '#/components/parameters/ReceiptId'
+    post:
+      tags: [Inbound]
+      operationId: claimInboundReceipt
+      summary: Claim the one persistent warehouse execution right.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [WAREHOUSE]
+      x-version:
+        required: true
+        precondition: Approved receipt version is current and no executor is active.
+      x-transaction:
+        boundary: Acquire persistent executor lock and audit event atomically.
+      x-audit-event:
+        event: INBOUND_RECEIPT_CLAIMED
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimInboundRequest'
+      responses:
+        '200':
+          description: Receipt with the current executor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundReceipt'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /inbound-receipts/{receiptId}/acceptance:
+    parameters:
+      - $ref: '#/components/parameters/ReceiptId'
+    post:
+      tags: [Inbound]
+      operationId: acceptInboundReceipt
+      summary: Execute an approved receipt under its claimed warehouse lock.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [WAREHOUSE]
+      x-version:
+        required: true
+        precondition: Current executor, approved scope, location, and receipt version match.
+      x-transaction:
+        boundary: Validate all rows, create assets, transition receipt, release executor lock, and audit atomically.
+      x-audit-event:
+        event: INBOUND_RECEIPT_ACCEPTED
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InboundAcceptanceRequest'
+      responses:
+        '200':
+          description: Completed inbound receipt.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundReceipt'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Same key and payload returns the original result; a different payload conflicts.
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 128
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      description: Double-submit CSRF token paired with the secure session cookie.
+      schema:
+        type: string
+        minLength: 16
+    IfMatchVersion:
+      name: If-Match-Version
+      in: header
+      required: true
+      description: Optimistic version precondition for an existing aggregate.
+      schema:
+        type: integer
+        format: int64
+        minimum: 0
+    OrganizationId:
+      name: organizationId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    EmployeeId:
+      name: employeeId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    CategoryId:
+      name: categoryId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    WarehouseId:
+      name: warehouseId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    LocationId:
+      name: locationId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    BrandId:
+      name: brandId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    VendorId:
+      name: vendorId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    RuleId:
+      name: ruleId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    ParameterId:
+      name: parameterId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    AssetId:
+      name: assetId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    ReceiptId:
+      name: receiptId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        format: int32
+        minimum: 0
+        default: 0
+    PageSize:
+      name: pageSize
+      in: query
+      required: false
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 200
+        default: 50
+    WarehouseQuery:
+      name: warehouseId
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/Id'
+    AssetStatusQuery:
+      name: status
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/AssetStatus'
+    UsageModeQuery:
+      name: usageMode
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/UsageMode'
+    InboundStatusQuery:
+      name: status
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/InboundStatus'
+  responses:
+    BadRequest:
+      description: Request validation or state precondition failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Session is absent, expired, or disabled.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Role or data/business relation is not authorized.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource does not exist in the caller's visible scope.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Version, uniqueness, idempotency, or persistent lock conflict.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    Id:
+      type: string
+      pattern: '^[0-9]+$'
+      description: Signed MySQL BIGINT represented as a decimal JSON string.
+      example: '9007199254740993'
+    Money:
+      type: string
+      pattern: '^[0-9]+\.[0-9]{2}$'
+      description: Decimal money text with explicit two-place scale.
+      example: '1200.00'
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 128
+        password:
+          type: string
+          minLength: 1
+          maxLength: 128
+          writeOnly: true
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          minLength: 1
+          writeOnly: true
+        newPassword:
+          type: string
+          minLength: 12
+          writeOnly: true
+    SessionResponse:
+      type: object
+      required: [sessionId, csrfToken, expiresAt, requiresInitialPasswordChange]
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        csrfToken:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        requiresInitialPasswordChange:
+          type: boolean
+    CurrentUser:
+      type: object
+      required: [id, username, status, roles, requiresInitialPasswordChange]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        username:
+          type: string
+        status:
+          $ref: '#/components/schemas/AccountStatus'
+        roles:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/Role'
+        requiresInitialPasswordChange:
+          type: boolean
+    PermissionSnapshot:
+      type: object
+      required: [userId, permissions, dataScopes]
+      properties:
+        userId:
+          $ref: '#/components/schemas/Id'
+        permissions:
+          type: array
+          items:
+            type: string
+        dataScopes:
+          type: array
+          items:
+            type: string
+    OrganizationInput:
+      type: object
+      required: [code, name, status]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        status:
+          $ref: '#/components/schemas/ReferenceStatus'
+        parentId:
+          $ref: '#/components/schemas/Id'
+    Organization:
+      allOf:
+        - $ref: '#/components/schemas/OrganizationInput'
+        - type: object
+          required: [id, version]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            version:
+              type: integer
+              format: int64
+              minimum: 0
+    EmployeeInput:
+      type: object
+      required: [employeeNo, displayName, organizationId, status]
+      properties:
+        employeeNo:
+          type: string
+          minLength: 1
+          maxLength: 64
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 128
+        organizationId:
+          $ref: '#/components/schemas/Id'
+        phone:
+          type: string
+          maxLength: 32
+        status:
+          $ref: '#/components/schemas/ReferenceStatus'
+    Employee:
+      allOf:
+        - $ref: '#/components/schemas/EmployeeInput'
+        - type: object
+          required: [id, version]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            version:
+              type: integer
+              format: int64
+              minimum: 0
+    CategoryInput:
+      type: object
+      required: [code, name, status]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        parentId:
+          $ref: '#/components/schemas/Id'
+        status:
+          $ref: '#/components/schemas/ReferenceStatus'
+    Category:
+      allOf:
+        - $ref: '#/components/schemas/CategoryInput'
+        - type: object
+          required: [id, version]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            version:
+              type: integer
+              format: int64
+              minimum: 0
+    WarehouseInput:
+      type: object
+      required: [code, name, status]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        status:
+          $ref: '#/components/schemas/ReferenceStatus'
+    Warehouse:
+      allOf:
+        - $ref: '#/components/schemas/WarehouseInput'
+        - type: object
+          required: [id, version]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            version:
+              type: integer
+              format: int64
+              minimum: 0
+    LocationInput:
+      type: object
+      required: [warehouseId, code, name, status]
+      properties:
+        warehouseId:
+          $ref: '#/components/schemas/Id'
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        status:
+          $ref: '#/components/schemas/ReferenceStatus'
+    Location:
+      allOf:
+        - $ref: '#/components/schemas/LocationInput'
+        - type: object
+          required: [id, version]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            version:
+              type: integer
+              format: int64
+              minimum: 0
+    BrandInput:
+      type: object
+      required: [name, status]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        status:
+          $ref: '#/components/schemas/ReferenceStatus'
+    Brand:
+      allOf:
+        - $ref: '#/components/schemas/BrandInput'
+        - type: object
+          required: [id, version]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            version:
+              type: integer
+              format: int64
+              minimum: 0
+    VendorInput:
+      type: object
+      required: [name, status]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        status:
+          $ref: '#/components/schemas/ReferenceStatus'
+        contact:
+          type: string
+          maxLength: 128
+    Vendor:
+      allOf:
+        - $ref: '#/components/schemas/VendorInput'
+        - type: object
+          required: [id, version]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            version:
+              type: integer
+              format: int64
+              minimum: 0
+    NumberingRuleInput:
+      type: object
+      required: [prefix, nextNumber, width, status]
+      properties:
+        prefix:
+          type: string
+          minLength: 1
+          maxLength: 16
+        nextNumber:
+          type: integer
+          format: int64
+          minimum: 1
+        width:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 16
+        status:
+          $ref: '#/components/schemas/ReferenceStatus'
+    NumberingRule:
+      allOf:
+        - $ref: '#/components/schemas/NumberingRuleInput'
+        - type: object
+          required: [id, version]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            version:
+              type: integer
+              format: int64
+              minimum: 0
+    BusinessParameterInput:
+      type: object
+      required: [key, value, status]
+      properties:
+        key:
+          type: string
+          minLength: 1
+          maxLength: 128
+        value:
+          type: string
+          minLength: 1
+          maxLength: 512
+        status:
+          $ref: '#/components/schemas/ReferenceStatus'
+    BusinessParameter:
+      allOf:
+        - $ref: '#/components/schemas/BusinessParameterInput'
+        - type: object
+          required: [id, version]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            version:
+              type: integer
+              format: int64
+              minimum: 0
+    AssetInput:
+      type: object
+      required: [assetCode, name, categoryId, status, usageMode, quantity, businessDate]
+      properties:
+        assetCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+        categoryId:
+          $ref: '#/components/schemas/Id'
+        brandId:
+          $ref: '#/components/schemas/Id'
+        vendorId:
+          $ref: '#/components/schemas/Id'
+        status:
+          $ref: '#/components/schemas/AssetStatus'
+        abnormalStatus:
+          $ref: '#/components/schemas/AbnormalStatus'
+        usageMode:
+          $ref: '#/components/schemas/UsageMode'
+        responsibleEmployeeId:
+          $ref: '#/components/schemas/Id'
+        warehouseId:
+          $ref: '#/components/schemas/Id'
+        locationId:
+          $ref: '#/components/schemas/Id'
+        quantity:
+          type: integer
+          format: int32
+          minimum: 0
+        businessDate:
+          type: string
+          format: date
+        amount:
+          $ref: '#/components/schemas/Money'
+        serialNumbers:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+        note:
+          type: string
+          nullable: true
+    Asset:
+      allOf:
+        - $ref: '#/components/schemas/AssetInput'
+        - type: object
+          required: [id, version, qrAccessId, createdAt, updatedAt]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            version:
+              type: integer
+              format: int64
+              minimum: 0
+            qrAccessId:
+              type: string
+              minLength: 20
+              maxLength: 128
+              description: Opaque random identifier; never an encoded business id.
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+    AssetCopyRequest:
+      type: object
+      required: [assetCode, businessDate]
+      properties:
+        assetCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+        businessDate:
+          type: string
+          format: date
+        note:
+          type: string
+          nullable: true
+    LabelPrintRequest:
+      type: object
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          enum: [REPRINT, REPLACE]
+    LabelPrintResult:
+      type: object
+      required: [assetId, qrAccessId, mode, printedAt]
+      properties:
+        assetId:
+          $ref: '#/components/schemas/Id'
+        qrAccessId:
+          type: string
+        mode:
+          type: string
+          enum: [REPRINT, REPLACE]
+        printedAt:
+          type: string
+          format: date-time
+    InboundReceiptInput:
+      type: object
+      required: [receiptNumber, warehouseId, receiptDate, items]
+      properties:
+        receiptNumber:
+          type: string
+          minLength: 1
+          maxLength: 64
+        warehouseId:
+          $ref: '#/components/schemas/Id'
+        receiptDate:
+          type: string
+          format: date
+        vendorId:
+          $ref: '#/components/schemas/Id'
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/InboundItem'
+    InboundReceipt:
+      allOf:
+        - $ref: '#/components/schemas/InboundReceiptInput'
+        - type: object
+          required: [id, version, status, createdAt, updatedAt]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            version:
+              type: integer
+              format: int64
+              minimum: 0
+            status:
+              $ref: '#/components/schemas/InboundStatus'
+            approvedScope:
+              type: string
+              description: Frozen approval scope snapshot.
+            currentExecutorId:
+              $ref: '#/components/schemas/Id'
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+    InboundItem:
+      type: object
+      required: [lineNo, assetName, quantity]
+      properties:
+        lineNo:
+          type: integer
+          format: int32
+          minimum: 1
+        assetName:
+          type: string
+          minLength: 1
+          maxLength: 256
+        categoryId:
+          $ref: '#/components/schemas/Id'
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+        amount:
+          $ref: '#/components/schemas/Money'
+    InboundDecisionRequest:
+      type: object
+      required: [decision, comment]
+      properties:
+        decision:
+          type: string
+          enum: [APPROVE, REJECT]
+        comment:
+          type: string
+          minLength: 1
+          maxLength: 1000
+    ClaimInboundRequest:
+      type: object
+      required: [warehouseId]
+      properties:
+        warehouseId:
+          $ref: '#/components/schemas/Id'
+    InboundAcceptanceRequest:
+      type: object
+      required: [receiptDate, locationId, items]
+      properties:
+        receiptDate:
+          type: string
+          format: date
+        locationId:
+          $ref: '#/components/schemas/Id'
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/AcceptanceItem'
+    AcceptanceItem:
+      type: object
+      required: [lineNo, quantity]
+      properties:
+        lineNo:
+          type: integer
+          format: int32
+          minimum: 1
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+        serialNumbers:
+          type: array
+          items:
+            type: string
+    ErrorResponse:
+      type: object
+      required: [code, message, requestId, fieldErrors]
+      properties:
+        code:
+          type: string
+          minLength: 1
+        message:
+          type: string
+          minLength: 1
+        requestId:
+          type: string
+          format: uuid
+        fieldErrors:
+          type: object
+          additionalProperties:
+            type: string
+    AuditEvent:
+      type: object
+      required: [eventId, eventType, actorId, occurredAt]
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Id'
+        eventType:
+          type: string
+        actorId:
+          $ref: '#/components/schemas/Id'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Id'
+    PageMeta:
+      type: object
+      required: [page, pageSize, totalElements]
+      properties:
+        page:
+          type: integer
+          format: int32
+          minimum: 0
+        pageSize:
+          type: integer
+          format: int32
+          minimum: 1
+        totalElements:
+          type: integer
+          format: int64
+          minimum: 0
+    PageOrganization:
+      allOf: [{ $ref: '#/components/schemas/PageMeta' }, { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/Organization' } } } }]
+    PageEmployee:
+      allOf: [{ $ref: '#/components/schemas/PageMeta' }, { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/Employee' } } } }]
+    PageCategory:
+      allOf: [{ $ref: '#/components/schemas/PageMeta' }, { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/Category' } } } }]
+    PageWarehouse:
+      allOf: [{ $ref: '#/components/schemas/PageMeta' }, { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/Warehouse' } } } }]
+    PageLocation:
+      allOf: [{ $ref: '#/components/schemas/PageMeta' }, { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/Location' } } } }]
+    PageBrand:
+      allOf: [{ $ref: '#/components/schemas/PageMeta' }, { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/Brand' } } } }]
+    PageVendor:
+      allOf: [{ $ref: '#/components/schemas/PageMeta' }, { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/Vendor' } } } }]
+    PageNumberingRule:
+      allOf: [{ $ref: '#/components/schemas/PageMeta' }, { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/NumberingRule' } } } }]
+    PageBusinessParameter:
+      allOf: [{ $ref: '#/components/schemas/PageMeta' }, { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/BusinessParameter' } } } }]
+    PageAsset:
+      allOf: [{ $ref: '#/components/schemas/PageMeta' }, { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/Asset' } } } }]
+    PageLocationEntry:
+      allOf: [{ $ref: '#/components/schemas/PageMeta' }, { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/Location' } } } }]
+    PageInboundReceipt:
+      allOf: [{ $ref: '#/components/schemas/PageMeta' }, { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/InboundReceipt' } } } }]
+    AccountStatus:
+      type: string
+      enum: [ACTIVE, DISABLED, LOCKED]
+    ReferenceStatus:
+      type: string
+      enum: [ACTIVE, DISABLED]
+    Role:
+      type: string
+      enum: [SYSTEM_ADMIN, ASSET_ADMIN, WAREHOUSE, TECH, AUDIT, EMPLOYEE]
+    AssetStatus:
+      type: string
+      enum: [DRAFT, PENDING_INBOUND, IN_STOCK, IN_USE, BORROWED, UNDER_REPAIR, FACTORY_REPAIR, PENDING_DISPOSAL, DISPOSED]
+    AbnormalStatus:
+      type: string
+      enum: [NORMAL, SEARCHING, LOST]
+    UsageMode:
+      type: string
+      enum: [PERSONAL, SHARED]
+    InboundStatus:
+      type: string
+      enum: [DRAFT, PENDING_APPROVAL, REJECTED, APPROVED, PROCESSING, COMPLETED]
