@@ -1333,15 +1333,18 @@ components:
         - workWeek
         - holidays
         - adjustedWorkdays
-        - adminProcessingDeadline
-        - warehouseOperatorClaimDeadline
-        - handoverDeadline
-        - messageEscalationThreshold
+        - adminDecisionDeadlineWorkdays
+        - warehouseClaimDeadlineWorkdays
+        - warehouseFirstExecutionDeadlineWorkdays
+        - handoverAcceptanceDeadlineNaturalDays
+        - notificationEscalationThresholds
       description: >-
         Immutable business-parameter snapshot. Timezone is a legal IANA ZoneId;
         calendar dates use BusinessDate and instants use UTC Instant. Natural days
-        run from 00:00 through 24:00 in this timezone; workdays use this snapshot's
-        calendar. Holidays and adjusted workdays must be unique and cannot overlap.
+        run from 00:00 through 24:00 in this timezone; workday deadlines use this
+        snapshot's work week and calendar. Holidays and adjusted workdays must be
+        unique and cannot overlap. Existing object deadlines are not recalculated
+        when a later snapshot becomes active.
       properties:
         timezone:
           type: string
@@ -1365,30 +1368,78 @@ components:
           uniqueItems: true
           items:
             $ref: '#/components/schemas/BusinessDate'
-        adminProcessingDeadline:
+        adminDecisionDeadlineWorkdays:
           type: integer
           format: int32
           minimum: 1
-          x-unit: minutes
-          description: Positive administrator processing window in minutes.
-        warehouseOperatorClaimDeadline:
+          default: 2
+          x-unit: workdays
+          description: Positive administrator decision deadline measured in this version's workdays.
+        warehouseClaimDeadlineWorkdays:
           type: integer
           format: int32
           minimum: 1
-          x-unit: minutes
-          description: Positive warehouse-operator claim window in minutes.
-        handoverDeadline:
+          default: 1
+          x-unit: workdays
+          description: Positive warehouse claim deadline measured in this version's workdays.
+        warehouseFirstExecutionDeadlineWorkdays:
           type: integer
           format: int32
           minimum: 1
-          x-unit: minutes
-          description: Positive handover window in minutes.
-        messageEscalationThreshold:
+          default: 2
+          x-unit: workdays
+          description: Positive first-execution deadline measured in this version's workdays.
+        handoverAcceptanceDeadlineNaturalDays:
           type: integer
           format: int32
           minimum: 1
-          x-unit: minutes
-          description: Positive message escalation threshold in minutes.
+          default: 3
+          x-unit: natural-days
+          description: Positive handover-acceptance deadline measured in natural days in this version's timezone.
+        notificationEscalationThresholds:
+          $ref: '#/components/schemas/NotificationEscalationThresholds'
+          description: Controlled notification thresholds; workday and natural-day units are not converted to one minute value.
+    NotificationEscalationThresholds:
+      type: object
+      additionalProperties: false
+      required:
+        - administratorUnreadHours
+        - onDutyWarehouseOperatorUnreadHours
+        - firstExecutionOverdueNaturalDays
+        - receiptDueUnreadHours
+      description: >-
+        Controlled notification escalation thresholds. Hours are elapsed hours;
+        natural-days use the parameter version's timezone. These thresholds are
+        intentionally not flattened into a single minute value.
+      properties:
+        administratorUnreadHours:
+          type: integer
+          format: int32
+          minimum: 1
+          default: 4
+          x-unit: hours
+          description: Administrator unread escalation threshold in elapsed hours.
+        onDutyWarehouseOperatorUnreadHours:
+          type: integer
+          format: int32
+          minimum: 1
+          default: 4
+          x-unit: hours
+          description: On-duty warehouse-operator unread escalation threshold in elapsed hours.
+        firstExecutionOverdueNaturalDays:
+          type: integer
+          format: int32
+          minimum: 1
+          default: 1
+          x-unit: natural-days
+          description: Escalate one natural day after the first-execution deadline is overdue.
+        receiptDueUnreadHours:
+          type: integer
+          format: int32
+          minimum: 1
+          default: 24
+          x-unit: hours
+          description: Receipt-due unread escalation threshold in elapsed hours.
     BusinessParameterVersionActor:
       type: object
       additionalProperties: false
@@ -1470,12 +1521,12 @@ components:
     ConfigurationAnomaly:
       type: object
       additionalProperties: false
-      required: [id, type, status, detectedAt, resolvedAt, dedupKey, relatedTodos]
+      required: [id, type, status, detectedAt, dedupKey, relatedTodos]
       description: >-
         Read-only configuration anomaly. System facts may automatically mark an
-        anomaly RESOLVED; there is no manual ignore, delete, or close operation, and
-        related todos are retained with their original request, parameter version,
-        and deadline.
+        anomaly RESOLVED; resolvedAt is required for RESOLVED and omitted while OPEN.
+        There is no manual ignore, delete, or close operation, and related todos are
+        retained with their original request, parameter version, and deadline.
       properties:
         id:
           $ref: '#/components/schemas/Id'
@@ -1486,9 +1537,9 @@ components:
         detectedAt:
           $ref: '#/components/schemas/Instant'
         resolvedAt:
-          nullable: true
-          allOf:
-            - $ref: '#/components/schemas/Instant'
+          type: string
+          format: date-time
+          description: UTC Instant required when status is RESOLVED and omitted when status is OPEN.
         dedupKey:
           type: string
           minLength: 1

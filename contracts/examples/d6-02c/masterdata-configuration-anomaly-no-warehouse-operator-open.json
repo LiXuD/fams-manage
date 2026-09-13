@@ -12,7 +12,6 @@
     "type": "NO_WAREHOUSE_OPERATOR",
     "status": "OPEN",
     "detectedAt": "2026-09-14T03:11:00Z",
-    "resolvedAt": null,
     "dedupKey": "NO_WAREHOUSE_OPERATOR:enterprise",
     "relatedTodos": [
       {
