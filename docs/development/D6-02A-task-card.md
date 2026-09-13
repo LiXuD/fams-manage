@@ -55,7 +55,7 @@
 - **TDD：** 先写真实 socket HTTP 测试并以缺路由 `404` 得到 RED，再写最小控制器、JSON 配置和错误处理得到 GREEN；生成配置与模板是验证输入，不替代手写行为测试。
 - **验证命令及预期：** `rtk run 'python3 scripts/verify-d6-02a.py'`（调用方提供固定 Java/Node 环境）返回 0；应报告 OpenAPI 验证、两次清空生成、前置输出等价/拒绝夹具、Java 编译、Node 锁定安装、`ES2022` 无 DOM TypeScript 检查、9 个真实 HTTP 用例、commit-message suite、`git diff --check` 全部通过。
 - **证据位置：** `docs/development/D6-02A-generation-pipeline.md`（可移植命令和摘要）；任务 report（本地完整命令、退出码、原始重点输出和限制，按忽略规则不跟踪）。
-- **交接：** 当前为 `DEV_VERIFIED`；下一实际任务为 D6-02B，随后按计划进入 D6-02C，二者仍为 `NOT_STARTED`。任务级复核不替代计划范围内在 D6-02C 关闭前必须完成的权限、事务、迁移、恢复关键独立技术复核；D6-02B/C 不因本探针证据提前关闭。
+- **交接：** 当前为 `DEV_VERIFIED`；D6-02B 已完成本地兼容性实现交接并为 `IN_REVIEW`，通过独立复核后才进入仍为 `NOT_STARTED` 的 D6-02C。D6-02A 任务级复核不替代计划范围内在 D6-02C 关闭前必须完成的权限、事务、迁移、恢复关键独立技术复核；后续任务不因本探针证据提前关闭。
 
 ## 风险与限制
 

@@ -73,7 +73,7 @@ D6-02A verification passed.
 - The dedicated runtime check rejects an exact `runtime.ts` recursively anywhere in the generated/shared TypeScript roots; similarly named files are not matched.
 - Javac reported deprecated API use in generated `ContractProbe`; this is supplier output and was not hand-edited.
 - Spring Boot test emitted Mockito dynamic-agent/JDK future-warning messages; tests passed. This probe does not configure a Mockito agent because it does not use mocks.
-- The candidate combination is not a D6-02B compatibility freeze. There is no database, migration, session, remote repository, CI, PC app, Mini Program app, or product business implementation in this task. D6-02A is `DEV_VERIFIED` after task-level independent review; next is D6-02B, not D6-02A.
+- The candidate combination in this D6-02A evidence is not itself a D6-02B compatibility freeze. D6-02B has since reached `IN_REVIEW` with separate database/session evidence; D6-02A still contains no database, migration, session, remote repository, CI, PC app, Mini Program app, or product business implementation. D6-02A remains `DEV_VERIFIED`; D6-02C is next only after D6-02B review closes.
 
 ## Review closure
 
