@@ -1699,7 +1699,10 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertNotIn("businessDate", asset["properties"])
         self.assertEqual("#/components/schemas/Instant", asset["properties"]["createdAt"]["$ref"])
         self.assertTrue({"WAITING_INBOUND", "IN_STOCK"}.issubset(schemas["AssetLifecycle"]["enum"]))
-        self.assertTrue({"DRAFT", "SUBMITTED", "CANCELLED"}.issubset(schemas["AssetCardStage"]["enum"]))
+        self.assertEqual(
+            {"DRAFT", "PENDING_INBOUND", "ACTIVE", "CANCELLED"},
+            set(schemas["AssetCardStage"]["enum"]),
+        )
         custody = schemas["AssetCustodySummary"]
         self.assertIn("oneOf", custody)
         custody_text = json.dumps(custody, sort_keys=True).lower()
@@ -1707,6 +1710,130 @@ class DesignPackageContractTest(unittest.TestCase):
             self.assertIn(term, custody_text)
         self.assertIn("formal", json.dumps(asset, sort_keys=True).lower())
         self.assertIn("unsettled", json.dumps(schemas["AssetBusinessSummary"], sort_keys=True).lower())
+
+    def test_asset_state_vocabularies_match_prd_without_overloading_exception_states(self) -> None:
+        document = self.load_contract()
+        schemas = document["components"]["schemas"]
+        self.assertEqual(
+            {
+                "WAITING_INBOUND",
+                "IN_STOCK",
+                "IN_USE",
+                "BORROWED",
+                "UNDER_REPAIR",
+                "FACTORY_REPAIR",
+                "PENDING_SCRAP",
+                "SCRAPPED",
+            },
+            set(schemas["AssetLifecycle"]["enum"]),
+        )
+        self.assertEqual({"NORMAL", "SEARCHING", "LOST"}, set(schemas["AssetException"]["enum"]))
+        self.assertNotIn("LOST", schemas["AssetLifecycle"]["enum"])
+        self.assertNotIn("OVERDUE", schemas["AssetException"]["enum"])
+
+    def test_asset_custody_distinguishes_storage_personal_shared_and_orgs(self) -> None:
+        document = self.load_contract()
+        schemas = document["components"]["schemas"]
+        custody = schemas["AssetCustodySummary"]
+        self.assertEqual(3, len(custody["oneOf"]))
+        branches = {
+            branch["properties"]["custodyType"]["enum"][0]: branch
+            for branch in custody["oneOf"]
+        }
+        self.assertEqual({"STORAGE", "PERSONAL", "SHARED"}, set(branches))
+
+        storage = branches["STORAGE"]
+        self.assertTrue({"custodyType", "warehouse", "location"}.issubset(storage["required"]))
+        self.assertNotIn("usageMode", storage["properties"])
+        self.assertNotIn("responsibleEmployee", storage["properties"])
+        self.assertNotIn("departmentResponsibleEmployee", storage["properties"])
+        self.assertFalse(storage.get("additionalProperties", True))
+
+        personal = branches["PERSONAL"]
+        self.assertTrue(
+            {"custodyType", "usingOrganization", "responsibleEmployee", "location"}.issubset(
+                personal["required"]
+            )
+        )
+        self.assertNotIn("sharedResponsibleEmployees", personal["properties"])
+        self.assertNotIn("departmentResponsibleEmployee", personal["properties"])
+        self.assertEqual(
+            "OrganizationReference",
+            personal["properties"]["usingOrganization"]["$ref"].rsplit("/", 1)[-1],
+        )
+        self.assertFalse(personal.get("additionalProperties", True))
+
+        shared = branches["SHARED"]
+        self.assertTrue(
+            {"custodyType", "usingOrganization", "departmentResponsibleEmployee", "location"}.issubset(
+                shared["required"]
+            )
+        )
+        self.assertNotIn("responsibleEmployee", shared["properties"])
+        self.assertNotIn("sharedResponsibleEmployees", shared["properties"])
+        self.assertEqual(
+            "OrganizationReference",
+            shared["properties"]["usingOrganization"]["$ref"].rsplit("/", 1)[-1],
+        )
+        self.assertFalse(shared.get("additionalProperties", True))
+
+        self.assertEqual(
+            "OrganizationReference",
+            schemas["Asset"]["properties"]["organization"]["$ref"].rsplit("/", 1)[-1],
+        )
+        for schema_name in ("AssetCreateRequest", "AssetUpdateRequest"):
+            self.assertEqual(
+                "OrganizationReference",
+                schemas[schema_name]["properties"]["organization"]["$ref"].rsplit("/", 1)[-1],
+            )
+
+    def test_asset_read_scope_and_copy_accept_any_visible_non_cancelled_source(self) -> None:
+        document = self.load_contract()
+        operations = {
+            operation["operationId"]: operation
+            for item in document["paths"].values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        for operation_id in ("listAssets", "getAsset"):
+            scope_text = json.dumps(operations[operation_id], sort_keys=True).lower()
+            for phrase in (
+                "enterprise-wide",
+                "not narrowed",
+                "explicitly authorized audit scope",
+                "system_admin",
+                "no automatic",
+            ):
+                self.assertIn(phrase, scope_text)
+
+        copy = operations["copyAsset"]
+        copy_text = json.dumps(copy, sort_keys=True).lower()
+        for phrase in ("non-cancelled", "active", "business lock", "does not block", "new card", "source version"):
+            self.assertIn(phrase, copy_text)
+        self.assertNotIn("source draft version", copy_text)
+        self.assertNotIn("ASSET_NOT_CREATOR", copy["x-error-codes"])
+        self.assertNotIn("ASSET_DRAFT_LOCKED", copy["x-error-codes"])
+        self.assertIn("ASSET_SOURCE_CANCELLED", copy["x-error-codes"])
+
+        positive_examples = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted(EXAMPLES.glob("masterdata-asset-copy-*.json"))
+            if json.loads(path.read_text(encoding="utf-8")).get("kind") == "positive"
+        ]
+        self.assertTrue(positive_examples)
+        source = positive_examples[0]["source"]
+        self.assertEqual("ACTIVE", source["cardStage"])
+        self.assertTrue(source["businessLock"])
+        self.assertNotEqual(source["createdBy"], positive_examples[0]["actor"])
+        self.assertTrue(
+            any(
+                value.get("kind") == "rejection"
+                and value.get("operationId") == "copyAsset"
+                and value.get("error", {}).get("code") == "ASSET_SOURCE_CANCELLED"
+                for path in sorted(EXAMPLES.glob("masterdata-asset-copy-*.json"))
+                for value in [json.loads(path.read_text(encoding="utf-8"))]
+            )
+        )
 
     def test_asset_draft_mutations_and_examples_preserve_card_boundaries(self) -> None:
         document = self.load_contract()
