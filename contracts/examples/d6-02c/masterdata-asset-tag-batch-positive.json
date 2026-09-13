@@ -6,7 +6,8 @@
   "actor": "warehouse.operator",
   "headers": {
     "Idempotency-Key": "asset-tag-batch-print-0001",
-    "X-CSRF-Token": "csrf-token-example-123456"
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "Location": "/api/v1/asset-tag-print-jobs/88002"
   },
   "payload": {
     "assets": [
@@ -18,6 +19,7 @@
   "response": {
     "jobId": "88002",
     "status": "COMPLETED",
+    "location": "/api/v1/asset-tag-print-jobs/88002",
     "items": [
       {"assetId": "10002", "assetCode": "FA-2026-000002"},
       {"assetId": "10007", "assetCode": "FA-2026-000007"}

@@ -8,7 +8,8 @@
   "headers": {
     "Idempotency-Key": "asset-tag-reprint-0001",
     "X-CSRF-Token": "csrf-token-example-123456",
-    "If-Match-Version": "7"
+    "If-Match-Version": "7",
+    "Location": "/api/v1/asset-tag-print-jobs/88001"
   },
   "payload": {"reason": "Print a replacement copy for the same tag."},
   "before": {
@@ -23,7 +24,8 @@
   "response": {
     "jobId": "88001",
     "status": "COMPLETED",
-    "assetCode": "FA-2026-000002"
+    "assetCode": "FA-2026-000002",
+    "location": "/api/v1/asset-tag-print-jobs/88001"
   },
   "evidence": "Contract evidence only; repeated idempotent reprint is specified to return the same job/result."
 }
