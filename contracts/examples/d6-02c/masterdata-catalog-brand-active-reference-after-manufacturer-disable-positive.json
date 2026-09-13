@@ -1,0 +1,22 @@
+{
+  "operationId": "listActiveBrandReferences",
+  "kind": "positive",
+  "status": 200,
+  "scenario": "The enabled brand history is not rewritten; a disabled manufacturer is omitted from the active default suggestion.",
+  "responseSchema": "BrandActiveReferencePage",
+  "headers": {},
+  "payload": {"page": 1, "pageSize": 20},
+  "response": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 1,
+    "items": [
+      {
+        "id": "8301",
+        "code": "LENOVO",
+        "name": "Lenovo Business",
+        "version": 4
+      }
+    ]
+  }
+}
