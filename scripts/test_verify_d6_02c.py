@@ -1035,6 +1035,236 @@ class DesignPackageContractTest(unittest.TestCase):
             all(value["response"]["code"] == "NUMBERING_RULE_FIXED_PREFIX_NOT_ALLOWED" for value in invalid_fixed_prefix)
         )
 
+    def test_business_parameters_and_configuration_anomalies_are_explicit(self) -> None:
+        document = self.load_contract()
+        paths = document["paths"]
+        schemas = document["components"]["schemas"]
+        operations = {
+            operation["operationId"]: operation
+            for item in paths.values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        required_operations = {
+            "listBusinessParameterVersions",
+            "getCurrentBusinessParameterVersion",
+            "getBusinessParameterVersion",
+            "createBusinessParameterVersion",
+            "listConfigurationAnomalies",
+            "getConfigurationAnomaly",
+        }
+        missing = sorted(required_operations - set(operations))
+        self.assertFalse(missing, f"business parameter contract remains RED: {missing}")
+        if missing:
+            return
+
+        self.assertIn("/business-parameters", paths)
+        self.assertIn("/business-parameters/current", paths)
+        self.assertIn("/business-parameters/{parameterVersionId}", paths)
+        self.assertNotIn("patch", paths["/business-parameters/{parameterVersionId}"])
+        self.assertNotIn("delete", paths["/business-parameters/{parameterVersionId}"])
+        for operation_id in (
+            "listBusinessParameterVersions",
+            "getCurrentBusinessParameterVersion",
+            "getBusinessParameterVersion",
+            "listConfigurationAnomalies",
+            "getConfigurationAnomaly",
+        ):
+            with self.subTest(operation=operation_id):
+                operation = operations[operation_id]
+                self.assertEqual(["SYSTEM_ADMIN"], operation["x-actor"]["roles"])
+                self.assertIn("401", operation["responses"])
+                self.assertIn("403", operation["responses"])
+
+        create = operations["createBusinessParameterVersion"]
+        self.assertEqual(["SYSTEM_ADMIN"], create["x-actor"]["roles"])
+        self.assertTrue(create.get("x-business-write"))
+        self.assertTrue(create.get("x-version"))
+        create_text = json.dumps(create, sort_keys=True).lower()
+        for term in ("if-match-version", "current version", "short transaction", "before", "after", "audit"):
+            self.assertIn(term, create_text)
+        refs = {
+            parameter.get("$ref", "").rsplit("/", 1)[-1]
+            for parameter in create.get("parameters", [])
+        }
+        self.assertTrue({"IfMatchVersion", "IdempotencyKey", "CsrfToken"}.issubset(refs))
+        self.assertEqual({400, 401, 403, 409}, set(create["x-required-error-statuses"]))
+        self.assertEqual(
+            "BusinessParameterVersion",
+            create["responses"]["201"]["content"]["application/json"]["schema"]["$ref"].rsplit("/", 1)[-1],
+        )
+
+        required_schemas = {
+            "BusinessParameterVersion",
+            "BusinessParameterVersionCreateRequest",
+            "BusinessParameterSnapshot",
+            "BusinessParameterVersionStatus",
+            "ConfigurationAnomaly",
+            "ConfigurationAnomalyType",
+            "ConfigurationAnomalyStatus",
+            "PageBusinessParameterVersion",
+            "PageConfigurationAnomaly",
+            "TodoReference",
+        }
+        missing_schemas = sorted(required_schemas - set(schemas))
+        self.assertFalse(missing_schemas, f"business parameter schemas remain RED: {missing_schemas}")
+        if missing_schemas:
+            return
+
+        snapshot = schemas["BusinessParameterSnapshot"]
+        snapshot_fields = {
+            "timezone",
+            "workWeek",
+            "holidays",
+            "adjustedWorkdays",
+            "adminProcessingDeadline",
+            "warehouseOperatorClaimDeadline",
+            "handoverDeadline",
+            "messageEscalationThreshold",
+        }
+        self.assertTrue(snapshot_fields.issubset(snapshot["required"]))
+        timezone = snapshot["properties"]["timezone"]
+        self.assertEqual("Asia/Shanghai", timezone["default"])
+        self.assertIn("iana", json.dumps(timezone).lower())
+        self.assertIn("timezone", json.dumps(snapshot).lower())
+        self.assertEqual(
+            {"MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"},
+            set(snapshot["properties"]["workWeek"]["items"]["enum"]),
+        )
+        for field in ("holidays", "adjustedWorkdays"):
+            with self.subTest(calendar_field=field):
+                items = snapshot["properties"][field]["items"]
+                self.assertEqual("BusinessDate", items["$ref"].rsplit("/", 1)[-1])
+                self.assertTrue(snapshot["properties"][field]["uniqueItems"])
+        for field in (
+            "adminProcessingDeadline",
+            "warehouseOperatorClaimDeadline",
+            "handoverDeadline",
+            "messageEscalationThreshold",
+        ):
+            with self.subTest(duration_field=field):
+                property_schema = snapshot["properties"][field]
+                self.assertEqual("integer", property_schema["type"])
+                self.assertEqual(1, property_schema["minimum"])
+                self.assertEqual("minutes", property_schema["x-unit"])
+
+        version = schemas["BusinessParameterVersion"]
+        self.assertTrue(
+            {
+                "id",
+                "version",
+                "status",
+                "effectiveAt",
+                "actor",
+                "snapshot",
+            }.issubset(version["required"])
+        )
+        self.assertEqual({"ACTIVE", "SUPERSEDED"}, set(schemas["BusinessParameterVersionStatus"]["enum"]))
+        self.assertEqual(
+            "Instant",
+            version["properties"]["effectiveAt"]["$ref"].rsplit("/", 1)[-1],
+        )
+        self.assertEqual(
+            "BusinessParameterSnapshot",
+            version["properties"]["snapshot"]["$ref"].rsplit("/", 1)[-1],
+        )
+        semantic_text = json.dumps(
+            [create, version, snapshot], sort_keys=True
+        ).lower()
+        for term in (
+            "newly created",
+            "parameterversionid",
+            "computed",
+            "deadline",
+            "not recalculate",
+            "historical",
+            "businessdate",
+            "instant",
+            "00:00",
+        ):
+            self.assertIn(term, semantic_text)
+        create_schema = schemas["BusinessParameterVersionCreateRequest"]
+        self.assertEqual("BusinessParameterSnapshot", create_schema["properties"]["snapshot"]["$ref"].rsplit("/", 1)[-1])
+        self.assertIn("current", json.dumps(create_schema).lower())
+        self.assertIn("conflict", json.dumps(create_schema).lower())
+
+        anomaly = schemas["ConfigurationAnomaly"]
+        self.assertTrue(
+            {
+                "id",
+                "type",
+                "status",
+                "detectedAt",
+                "resolvedAt",
+                "dedupKey",
+                "relatedTodos",
+            }.issubset(anomaly["required"])
+        )
+        self.assertEqual(
+            {"NO_ASSET_ADMIN", "NO_WAREHOUSE_OPERATOR", "SMS_CHANNEL_MISSING", "WECHAT_TEMPLATE_MISSING"},
+            set(schemas["ConfigurationAnomalyType"]["enum"]),
+        )
+        self.assertEqual({"OPEN", "RESOLVED"}, set(schemas["ConfigurationAnomalyStatus"]["enum"]))
+        anomaly_text = json.dumps(anomaly, sort_keys=True).lower()
+        for term in ("dedup", "todo", "retained", "automatically", "ignore", "delete"):
+            self.assertIn(term, anomaly_text)
+        self.assertIn("Instant", json.dumps(anomaly["properties"]["detectedAt"]))
+        self.assertIn("Instant", json.dumps(anomaly["properties"]["resolvedAt"]))
+        self.assertEqual("TodoReference", anomaly["properties"]["relatedTodos"]["items"]["$ref"].rsplit("/", 1)[-1])
+
+        for path, item in paths.items():
+            if not path.startswith("/configuration-anomalies"):
+                continue
+            self.assertNotIn("post", item)
+            self.assertNotIn("patch", item)
+            self.assertNotIn("delete", item)
+        self.assertEqual(
+            {"Page", "PageSize"},
+            {
+                parameter["$ref"].rsplit("/", 1)[-1]
+                for parameter in paths["/configuration-anomalies"]["get"]["parameters"]
+            },
+        )
+        forbidden_operations = {"ignoreConfigurationAnomaly", "resolveConfigurationAnomaly", "deleteConfigurationAnomaly"}
+        self.assertTrue(forbidden_operations.isdisjoint(operations))
+
+        parameter_examples = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted(EXAMPLES.glob("masterdata-business-parameter-*.json"))
+        ]
+        self.assertGreaterEqual(len(parameter_examples), 5)
+        parameter_operation_ids = {value["operationId"] for value in parameter_examples}
+        self.assertTrue(
+            {
+                "listBusinessParameterVersions",
+                "getCurrentBusinessParameterVersion",
+                "createBusinessParameterVersion",
+            }.issubset(parameter_operation_ids)
+        )
+        self.assertTrue(any(value.get("status") == 409 for value in parameter_examples))
+        self.assertTrue(any(value.get("status") == 400 for value in parameter_examples))
+        parameter_text = json.dumps(parameter_examples, sort_keys=True).lower()
+        for term in ("if-match", "holiday", "duplicate", "threshold", "not implemented"):
+            self.assertIn(term, parameter_text)
+
+        anomaly_examples = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted(EXAMPLES.glob("masterdata-configuration-anomaly-*.json"))
+        ]
+        self.assertGreaterEqual(len(anomaly_examples), 4)
+        anomaly_types = {
+            value.get("response", {}).get("type")
+            for value in anomaly_examples
+            if value.get("response", {}).get("type")
+        }
+        self.assertEqual(
+            {"NO_ASSET_ADMIN", "NO_WAREHOUSE_OPERATOR", "SMS_CHANNEL_MISSING", "WECHAT_TEMPLATE_MISSING"},
+            anomaly_types,
+        )
+        recovery_text = json.dumps(anomaly_examples, sort_keys=True).lower()
+        for term in ("resolved", "retained", "original", "todo", "automatic"):
+            self.assertIn(term, recovery_text)
+
     def test_catalog_business_writes_have_short_transaction_audit_and_error_boundaries(self) -> None:
         document = self.load_contract()
         management_prefixes = ("/asset-categories", "/brands", "/manufacturers")
