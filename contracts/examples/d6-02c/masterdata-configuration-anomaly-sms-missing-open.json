@@ -12,7 +12,6 @@
     "type": "SMS_CHANNEL_MISSING",
     "status": "OPEN",
     "detectedAt": "2026-09-14T03:12:00Z",
-    "resolvedAt": null,
     "dedupKey": "SMS_CHANNEL_MISSING:default",
     "relatedTodos": [
       {

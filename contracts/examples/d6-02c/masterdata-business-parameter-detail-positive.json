@@ -18,10 +18,16 @@
       "workWeek": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"],
       "holidays": [],
       "adjustedWorkdays": [],
-      "adminProcessingDeadline": 1440,
-      "warehouseOperatorClaimDeadline": 480,
-      "handoverDeadline": 240,
-      "messageEscalationThreshold": 60
+      "adminDecisionDeadlineWorkdays": 2,
+      "warehouseClaimDeadlineWorkdays": 1,
+      "warehouseFirstExecutionDeadlineWorkdays": 2,
+      "handoverAcceptanceDeadlineNaturalDays": 3,
+      "notificationEscalationThresholds": {
+        "administratorUnreadHours": 4,
+        "onDutyWarehouseOperatorUnreadHours": 4,
+        "firstExecutionOverdueNaturalDays": 1,
+        "receiptDueUnreadHours": 24
+      }
     }
   }
 }
