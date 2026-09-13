@@ -2,7 +2,7 @@
 
 > 版本：V1.1 · 创建/更新：2026-09-12  
 > 文档状态：修订计划已确认并保存；确认依据为用户本轮“确认修订计划”。  
-> 执行状态：`IN_PROGRESS`。D6-01A、D6-02A 当前为 `DEV_VERIFIED`；D6-01B 远端与 CI 尚未完成；D6-02B 已完成本地真实运行兼容性实现交接，当前为 `IN_REVIEW`，尚待独立任务级复核及 reviewed HEAD 全量复跑；D6-02C 尚未开始，产品业务实现尚未开始。计划范围内权限、事务、迁移、恢复关键独立技术复核仍须在 D6-02C 关闭前完成。
+> 执行状态：`IN_PROGRESS`。D6-01A、D6-02A 当前为 `DEV_VERIFIED`；D6-01B 远端与 CI 尚未完成；D6-02B 独立任务级复核首轮问题已修复，当前仍为 `IN_REVIEW`，尚待修复轮复核及 reviewed HEAD 全量复跑；D6-02C 尚未开始，产品业务实现尚未开始。计划范围内权限、事务、迁移、恢复关键独立技术复核仍须在 D6-02C 关闭前完成。
 > 项目阶段唯一入口：[DESIGN-HANDOFF.md](../../../DESIGN-HANDOFF.md)。  
 > 维护责任：AI 在每次任务变更和交接时更新；计划、范围及里程碑验收由用户确认。
 
@@ -465,7 +465,7 @@ Agent-Limitation: 真机弱网联调尚未完成，本任务不得标记已验�
 | D6-01A 本地基线 | M | 开发启动 | 文件分类、Git 初始化、追溯矩阵、commit-msg 正反例通过 | DEV_VERIFIED | 本地验证脚本退出 0；本轮修复补充 `defaultIgnores: false` 与 3 类默认忽略标题负例；见 `docs/development/` 与 D6-01A 报告 |
 | D6-01B 远端仓库 | S | D6-01A、GitHub 权限 | 私有远端、访问控制及保护能力实查；明确缺口 | NOT_STARTED | 尚未执行 |
 | D6-02A 生成流水线 | M | D6-01A | §三.1 代表模型生成/编译/实际 HTTP 契约断言全部通过，重复生成无差异 | DEV_VERIFIED | 2026-09-13 本地验证、任务级独立复核均通过；reviewed HEAD `8ca2c4a`，runtime 检测修正 `8cfca60` 后全量复跑通过；见 `docs/development/D6-02A-task-card.md`、`D6-02A-generation-pipeline.md` 及任务报告 |
-| D6-02B 运行兼容性 | M | D6-02A | 真实 MySQL、Flyway、会话、回滚、重启及双端构建通过；冻结候选组合 | IN_REVIEW | 固定摘要 MySQL 8.4.11、Flyway、MyBatis 事务、JDBC Session、应用/数据库重启、Java/共享 TS 构建本地门禁退出 0；见 `docs/development/D6-02B-task-card.md`、`D6-02B-runtime-compatibility.md`；独立复核待执行 |
+| D6-02B 运行兼容性 | M | D6-02A | 真实 MySQL、Flyway、会话、回滚、重启及双端构建通过；冻结候选组合 | IN_REVIEW | 固定摘要 MySQL 8.4.11、Flyway、MyBatis 事务、JDBC Session、应用/数据库重启、Java/共享 TS 构建本地门禁退出 0；独立复核首轮问题已修复，修复轮复核待执行；见 `docs/development/D6-02B-task-card.md`、`D6-02B-runtime-compatibility.md` |
 | D6-02C 首批真实设计包 | L | D6-02B | 登录/基础资料/建卡/入库完整契约、ER、状态、权限、错误码、标识与时间决策审查；重跑生成验证 | NOT_STARTED | 尚未执行 |
 | D6-03A 本地统一检查 | M | D6-02A/B | Compose、检查工具/规则/覆盖率阈值、受限指标入口；干净环境复跑及静态检查负例通过 | NOT_STARTED | 尚未执行 |
 | D6-03B 远端 CI | M | D6-03A、D6-01B | PR 全部提交校验、required-ci 汇总、保护关联；违规负例失败且正常版本通过，绑定实际提交 | NOT_STARTED | 尚未执行 |
@@ -628,11 +628,11 @@ Agent-Limitation: 真机弱网联调尚未完成，本任务不得标记已验�
 ### 2. 当前检查点
 
 - 已完成：V1.0 保存与 commit 规范；三位专家两轮意见核对；用户“确认修订计划”；V1.1 修订及根交接入口/规则同步；D6-01A 本地基线验证及本轮默认忽略标题修复/复核。
-- 进行中：D6-01 父任务（D6-01B 远端子任务仍未开始）及 G0；D6-02A 为 `DEV_VERIFIED`，D6-02B 已完成本地实现交接并为 `IN_REVIEW`。D6-02C、D6-03～D6-27、首批真实业务契约、远端仓库及 CI、产品运行态尚未完成；D6-02B 独立任务级复核待执行，计划范围内权限、事务、迁移、恢复关键独立技术复核仍待在 D6-02C 关闭前落实。
+- 进行中：D6-01 父任务（D6-01B 远端子任务仍未开始）及 G0；D6-02A 为 `DEV_VERIFIED`，D6-02B 独立任务级复核首轮问题已修复并保持 `IN_REVIEW`。D6-02C、D6-03～D6-27、首批真实业务契约、远端仓库及 CI、产品运行态尚未完成；D6-02B 修复轮复核待执行，计划范围内权限、事务、迁移、恢复关键独立技术复核仍待在 D6-02C 关闭前落实。
 - 当前外部条件：小程序、短信、域名和部署环境未准备；详见 §五.3。
-- 下一步：对 D6-02B 执行独立任务级规格/质量复核，并在 reviewed HEAD 全量复跑；两者通过后冻结组合、改为 `DEV_VERIFIED` 并进入 D6-02C。D6-01B 待 GitHub 私有仓库与权限具备后单独核验。D6-02C 仍为 `NOT_STARTED`，且其关闭前必须完成计划范围内权限、事务、迁移、恢复关键独立技术复核。
-- 当前提交/PR：D6-01A 本轮修复提交 `338d49d`；D6-02A 原始/复核提交见任务卡；D6-02B 实现提交 `777103b`、`11f2626`、`a6a3eb8`，交接文档提交见任务报告当前 HEAD；无远端 PR，远端尚未配置。
-- 开发/QA 验证：D6-01A 本地治理和 D6-02A 生成/双端类型/真实 HTTP 已验证；D6-02B 在本地 Docker Linux ARM64 上以真实固定摘要 MySQL 验证 V1/V2 Flyway、MyBatis 写读、失败事务零残留、JDBC Session、应用/数据库重启、8 个验证器测试、12 个启用 profile 的 Java 测试（0 skipped）、共享 TypeScript 及完整 D6-02A 回归，统一入口退出 0 并完成精确清理。D6-02B 尚待独立复核；产品业务、CI、QA 和生产运行态未验证。
+- 下一步：由同一独立任务级会话复核 D6-02B 修复轮，并在 reviewed HEAD 全量复跑；两者通过后冻结组合、改为 `DEV_VERIFIED` 并进入 D6-02C。D6-01B 待 GitHub 私有仓库与权限具备后单独核验。D6-02C 仍为 `NOT_STARTED`，且其关闭前必须完成计划范围内权限、事务、迁移、恢复关键独立技术复核。
+- 当前提交/PR：D6-01A 本轮修复提交 `338d49d`；D6-02A 原始/复核提交见任务卡；D6-02B 实现提交 `777103b`、`11f2626`、`a6a3eb8`，首轮复核修复提交 `c6e7ed2`、`97304b5`，交接文档提交见任务报告当前 HEAD；无远端 PR，远端尚未配置。
+- 开发/QA 验证：D6-01A 本地治理和 D6-02A 生成/双端类型/真实 HTTP 已验证；D6-02B 在本地 Docker Linux ARM64 上以真实固定摘要 MySQL 验证 V1/V2 Flyway、MyBatis 写读、失败事务零残留、JDBC Session、应用/数据库重启、15 个验证器测试、15 个启用 profile 的 Java 测试（0 skipped）、共享 TypeScript 及生成前完整 D6-02A 回归，统一入口退出 0 并完成精确清理。D6-02B 尚待修复轮复核；产品业务、CI、QA 和生产运行态未验证。
 
 ### 3. 执行记录
 
@@ -649,6 +649,7 @@ Agent-Limitation: 真机弱网联调尚未完成，本任务不得标记已验�
 | 2026-09-13 | D6-02A 独立复核修复轮次 | `NEEDS_FIX → IN_REVIEW`（提交 `27a8e5e`、`809bd65`、`f183951`；无远端 PR） | 修复生成前双目标清空及全树等价检测；Java/TypeScript 手改与 TypeScript 陈旧额外文件拒绝、无预存树接受；以版本化最小模板和 `generateSupportingFiles=false` 移除 runtime/Fetch/API transport，`lib=["ES2022"]` 无 DOM；HTTP 响应先校验字段/JSON 类型、数组完整顺序，日期负例仅替换目标字段。`rtk run 'export JAVA_HOME=...; export PATH=...; python3 scripts/verify-d6-02a.py'` 退出 0：Java 4、TypeScript 3、差异 0；9 个 HTTP 用例、commit-message suite、diff check 均通过 | 仍由控制器安排独立复核；通过后进入 D6-02B，D6-02C 未开始，产品业务实现仍未开始 |
 | 2026-09-13 | D6-02A 独立任务级复核关闭 | `IN_REVIEW → DEV_VERIFIED`（reviewed HEAD `8ca2c4a`；runtime 检测修正提交 `8cfca60`） | 独立复核结论：Spec Compliance PASS clean、Task Quality PASS clean、无 Critical；`8cfca60` 将 runtime 检测改为 generated/shared roots 递归精确匹配；随后 `rtk run 'export JAVA_HOME=...; export PATH=...; python3 scripts/verify-d6-02a.py'` 退出 0，Java 4/TypeScript 3、差异 0、9 个 HTTP 用例及 commit-message suite 全部通过。该任务级复核不替代 D6-02C 关闭前计划范围内权限、事务、迁移、恢复关键独立技术复核 | 下一实际任务为 D6-02B；D6-02C、D6-01B 及产品业务实现仍为 `NOT_STARTED` |
 | 2026-09-13 | D6-02B 运行兼容性交接 | `NOT_STARTED → IN_PROGRESS → IN_REVIEW`（实现提交 `777103b`、`11f2626`、`a6a3eb8`；无远端 PR） | 固定 Java 21.0.7、Boot 4.1.1、MyBatis Starter/Core/Spring 4.1.0/3.5.19/4.1.0、Flyway 12.4.0、Session 4.1.1、Connector/J 9.7.0、Node/npm 24.18.0/11.16.0 与 MySQL 8.4.11 摘要；`rtk run 'export JAVA_HOME=...; export PATH=...; python3 scripts/verify-d6-02b.py'` 退出 0：非法迁移拒绝并隔离重建，V1/V2 与 InnoDB，MyBatis 写读，失败事务零残留，真实 Session cookie，应用及数据库同卷重启，8 个验证器测试、12 个启用 profile 的 Java 测试 0 skipped、共享 TypeScript 与完整 D6-02A 门禁通过；精确容器/卷/进程清理完成。实施代理额度中断后控制器只接管验证器防假通过与交接收尾，见任务卡限制 | 安排独立任务级规格/质量复核并对 reviewed HEAD 全量复跑；通过后才冻结组合、关闭 D6-02B 并进入 D6-02C；产品业务仍未开始 |
+| 2026-09-13 | D6-02B 独立复核修复轮次 | `IN_REVIEW → NEEDS_FIX → IN_REVIEW`（修复提交 `c6e7ed2`、`97304b5`；无远端 PR） | 独立任务会话首轮为 Spec/Quality FAIL：清理命令失败可误报、无关启动失败可满足非法迁移、专属 JUnit 有固定数据库回退、D6-02A 门禁晚于生成，另有敏感扫描漏配；逐项建立 RED 后修复。D6-02A 现先于生成构建，V999 要求 Flyway/文件/SQL 三重证据，JUnit 在 context 前拒绝非随机任务库，清理尽力执行且任一退出/超时不可验证均失败；敏感扫描补齐。完整门禁退出 0：15 个验证器测试、15 个启用 profile 的 Java 测试 0 skipped、真实 MySQL 全路径与清理通过；历史 RED 精确命令仍不可恢复并如实保留 | 由同一独立会话复核修复轮；通过后控制器对 reviewed HEAD 全量复跑，再决定 `DEV_VERIFIED` |
 
 ### 4. 变更记录
 

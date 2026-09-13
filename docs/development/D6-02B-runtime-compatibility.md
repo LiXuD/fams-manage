@@ -65,28 +65,28 @@ expected: <200> but was: <404>
 GREEN 由统一入口在真实任务 MySQL 上强制 `-Dd6.02b.runtime=true`，并同时检查 Maven 总计与专属 XML：
 
 ```text
-Tests run: 12, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 15, Failures: 0, Errors: 0, Skipped: 0
 RuntimeCompatibilityHttpTest: tests=3, failures=0, errors=0, skipped=0
 ```
 
-验证器解析逻辑本身先经历 RED（7 个测试因三个所需函数不存在而 error），再实现同一解析路径后 GREEN 为 7/7；增加报告证明约束后再次 RED 为 1 error、GREEN 为 8/8。
+验证器解析逻辑本身先经历 RED（7 个测试因三个所需函数不存在而 error），再实现同一解析路径后 GREEN 为 7/7；增加报告证明约束后再次 RED 为 1 error、GREEN 为 8/8。独立复核首轮的可复现问题继续按 TDD 修复：Docker 命令全部失败仍误报清理成功、Docker 超时中断后续清理、端口冲突日志被当作 V999 失败、D6-02A 门禁顺序 helper 缺失、敏感扫描 helper 缺失均先 RED；修复后 Python 套件为 15/15。专属 Java 数据库输入测试先因 `DatabaseSettings` 不存在而编译失败，加入启动前严格校验后为 3/3。
 
 ## 真实运行路径
 
 统一入口按以下顺序执行：
 
 1. 严格检查 Java、Node、npm、Maven Wrapper/distribution、Docker engine、镜像摘要和镜像/引擎平台一致性；错误 Java、摘要与架构夹具必须被拒绝。
-2. 从 Maven runtime dependency tree 检查所有候选解析版本，并拒绝 JPA/Hibernate/ORM auto-DDL 泄漏。
-3. 构建可执行 Spring Boot jar；创建唯一卷并用固定摘要启动 MySQL，`mysqladmin ping` 等待实际可用。
-4. 以正常 V1/V2 加上非法 V999 启动应用；进程必须非 0，日志必须说明迁移问题。
+2. 在任何会重生成输出的 D6-02B Maven 构建前运行完整 D6-02A 门禁，使原有 Java/TypeScript 生成树手改或陈旧文件不能被覆盖后误判通过。
+3. 从 Maven runtime dependency tree 检查所有候选解析版本，拒绝 JPA/Hibernate/ORM auto-DDL 泄漏，再构建可执行 Spring Boot jar、创建唯一卷并用固定摘要启动 MySQL。
+4. 以正常 V1/V2 加上非法 V999 启动应用；进程必须非 0，日志必须同时出现 Flyway 异常、精确 V999 文件和 SQL 失败原因，无关启动失败不得满足。
 5. 仅删除并重建该随机数据库；无 profile 启动的应用可以运行，但所有 `/runtime-compatibility/**` 请求为 404。
 6. 正常 profile 启动并验证三张表均为 InnoDB、Flyway history 只有成功 V1/V2。
 7. 真实 HTTP 写入和读取同一个 MyBatis 值；故意事务先写两行再抛异常，HTTP 409、两次 HTTP 404 与 SQL count 0 共同证明回滚。
 8. 真实 HTTP 设置 Session proof，保存 `Set-Cookie`；同 cookie 读取成功，无 cookie 和伪 cookie 均 401，数据库存在一条 JDBC Session。
 9. 停止并重启应用；Flyway history 不变，探针行和同一 cookie 的会话 proof 仍可读。
 10. 停止应用，重启同名 MySQL 容器并复用同一卷，再启动应用；迁移历史、探针行与会话仍可读。
-11. 运行 8 个验证器测试、启用 DB profile 的 Java 测试、默认 Java 回归、锁定 npm 安装、共享 TypeScript typecheck、完整 D6-02A 门禁、提交规则夹具、diff 与敏感/机器路径扫描。
-12. 无论前面成功或失败都停止精确应用进程、删除临时日志、容器与卷；清理失败将总退出码改为 1，并再次枚举精确名称。
+11. 运行 15 个验证器测试、用严格任务数据库输入启用 profile 的 15 个 Java 测试、默认 Java 回归、锁定 npm 安装、共享 TypeScript typecheck、提交规则夹具、diff 与敏感/机器路径扫描。
+12. 无论前面成功或失败都停止精确应用进程、删除临时日志、容器与卷；逐项检查前置枚举、删除、后置枚举及超时，同时尽力完成全部步骤；任一结果不可验证都把总退出码改为 1。
 
 ## 复跑命令与本地结果
 
@@ -108,8 +108,8 @@ rtk run 'python3 scripts/verify-d6-02b.py'
 [JDBC session] real cookie mutation/read works; missing and wrong cookies are rejected
 [application restart] committed data, session, and unchanged migration history persisted
 [database restart] same volume retained Flyway history, probe row, and JDBC session
-[verifier parser tests] Ran 8 tests — OK
-[real runtime HTTP tests] Tests run: 12, Failures: 0, Errors: 0, Skipped: 0
+[verifier parser tests] Ran 15 tests — OK
+[real runtime HTTP tests] Tests run: 15, Failures: 0, Errors: 0, Skipped: 0
 [shared TypeScript typecheck] TypeScript: No errors found
 [D6-02A complete gate] exit=0
 [commit-message fixtures] Ran 7 tests — OK
@@ -121,9 +121,9 @@ rtk run 'python3 scripts/verify-d6-02b.py'
 
 ## 警告、未证明项与交接
 
-- 默认 `mvn test` 为保护本地环境会跳过 3 个需真实任务数据库的 profile 专属测试；D6-02B 统一入口在同一轮运行中显式启用并证明专属套件与总计均为 0 skipped。D6-02A 回归因此会如实显示 3 skipped，不能将那一行单独当作 D6-02B 通过证据。
+- 默认 `mvn test` 为保护本地环境会跳过 3 个需真实任务数据库的 profile 专属测试，同时运行其余 12 个测试；D6-02B 统一入口不提供固定 URL/凭据回退，而是在 Spring context 前严格校验随机任务数据库输入，并证明总计 15 个测试为 0 skipped。D6-02A 回归中的 3 skipped 不能单独当作 D6-02B 通过证据。
 - Spring 测试依赖发出 Mockito/Byte Buddy 动态 agent 的未来 JDK 警告；当前 Java 21 路径通过，通用测试代理与质量规则由 D6-03A 决定。
 - 本地成功使用 ARM64；验证器也接受 Docker Official 多架构摘要在 Linux AMD64 上与引擎精确匹配，但本任务没有实际 AMD64 运行证据。
 - MySQL 镜像需预先以固定摘要存在；本轮预检已实际 pull。D6-03A 才负责可重复的项目级 Compose/统一环境入口。
 - 任务没有业务数据、备份恢复、升级旧 schema、并发写、多版本应用兼容、认证权限、客户端或生产负载结论。
-- 当前状态保持 `IN_REVIEW`。独立任务级复核通过并由控制器对 reviewed HEAD 再跑统一入口后，才允许冻结该组合、改为 `DEV_VERIFIED` 并进入 D6-02C。
+- 当前状态保持 `IN_REVIEW`。独立复核首轮 4 个 Important 和敏感扫描 Minor 已按 `c6e7ed2`、`97304b5` 修复；历史 RED 命令不可恢复的证据缺口仍如实保留。同一独立会话复核修复轮并由控制器对 reviewed HEAD 再跑统一入口后，才允许冻结该组合、改为 `DEV_VERIFIED` 并进入 D6-02C。
