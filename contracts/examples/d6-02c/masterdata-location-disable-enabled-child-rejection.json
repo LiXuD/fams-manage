@@ -1,0 +1,21 @@
+{
+  "operationId": "disableLocation",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "CatalogStatusChangeRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "location-disable-example-0003",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "3"
+  },
+  "payload": {
+    "reason": "Attempt to retire a parent with an enabled child node."
+  },
+  "response": {
+    "code": "LOCATION_HAS_ENABLED_CHILDREN",
+    "message": "Location cannot be disabled while enabled child locations remain.",
+    "requestId": "00000000-0000-4000-8000-000000000013",
+    "fieldErrors": {"locationId": "enabled child remains"}
+  }
+}

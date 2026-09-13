@@ -1,0 +1,24 @@
+{
+  "operationId": "createLocation",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "LocationCreateRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "location-create-example-0003",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "code": "SH01-B1-A02",
+    "name": "Mismatched warehouse bin",
+    "type": "BIN",
+    "parentLocation": {"id": "8502", "version": 1},
+    "warehouse": {"id": "8402", "version": 1}
+  },
+  "response": {
+    "code": "LOCATION_WAREHOUSE_MISMATCH",
+    "message": "Location parent and warehouse must belong to the same warehouse tree.",
+    "requestId": "00000000-0000-4000-8000-000000000014",
+    "fieldErrors": {"warehouse": "does not match parent"}
+  }
+}

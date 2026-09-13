@@ -1,0 +1,24 @@
+{
+  "operationId": "listActiveLocationReferences",
+  "kind": "positive",
+  "status": 200,
+  "responseSchema": "LocationActiveReferencePage",
+  "headers": {},
+  "payload": {"page": 1, "pageSize": 20},
+  "response": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 1,
+    "items": [
+      {
+        "id": "8503",
+        "code": "SH01-B1-A01",
+        "name": "Shanghai bin A01 - audited",
+        "version": 3,
+        "type": "BIN",
+        "parentLocation": {"id": "8502", "version": 1},
+        "warehouse": {"id": "8401", "version": 3}
+      }
+    ]
+  }
+}

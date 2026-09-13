@@ -1,0 +1,23 @@
+{
+  "operationId": "createLocation",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "LocationCreateRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "location-create-example-0004",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "code": "SH01-B1-A03",
+    "name": "Disabled warehouse bin",
+    "type": "BIN",
+    "warehouse": {"id": "8401", "version": 4}
+  },
+  "response": {
+    "code": "LOCATION_WAREHOUSE_DISABLED",
+    "message": "A disabled warehouse cannot receive a new location reference.",
+    "requestId": "00000000-0000-4000-8000-000000000015",
+    "fieldErrors": {"warehouse": "warehouse is disabled"}
+  }
+}

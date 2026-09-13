@@ -1,0 +1,25 @@
+{
+  "operationId": "disableLocation",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "CatalogStatusChangeRequest",
+  "responseSchema": "Location",
+  "headers": {
+    "Idempotency-Key": "location-disable-example-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "1"
+  },
+  "payload": {
+    "reason": "Location retired after assets and open references were cleared."
+  },
+  "response": {
+    "id": "8503",
+    "code": "SH01-B1-A01",
+    "name": "Shanghai bin A01 - audited",
+    "type": "BIN",
+    "status": "DISABLED",
+    "version": 2,
+    "parentLocation": {"id": "8502", "version": 1},
+    "warehouse": {"id": "8401", "version": 3}
+  }
+}
