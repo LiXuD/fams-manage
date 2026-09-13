@@ -1,0 +1,21 @@
+{
+  "operationId": "disableWarehouse",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "CatalogStatusChangeRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "warehouse-disable-example-0003",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "3"
+  },
+  "payload": {
+    "reason": "Attempt to retire warehouse while an inbound reference remains open."
+  },
+  "response": {
+    "code": "WAREHOUSE_HAS_OPEN_INBOUND_REFERENCES",
+    "message": "Warehouse cannot be disabled while open business or inbound references remain.",
+    "requestId": "00000000-0000-4000-8000-000000000009",
+    "fieldErrors": {"warehouseId": "open references remain"}
+  }
+}

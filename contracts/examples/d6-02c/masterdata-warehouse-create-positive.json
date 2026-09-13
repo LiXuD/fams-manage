@@ -1,0 +1,24 @@
+{
+  "operationId": "createWarehouse",
+  "kind": "positive",
+  "status": 201,
+  "requestSchema": "WarehouseCreateRequest",
+  "responseSchema": "Warehouse",
+  "headers": {
+    "Idempotency-Key": "warehouse-create-example-0001",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "code": "SH-01",
+    "name": "Shanghai Main Warehouse",
+    "description": "Primary enterprise warehouse."
+  },
+  "response": {
+    "id": "8401",
+    "code": "SH-01",
+    "name": "Shanghai Main Warehouse",
+    "status": "ACTIVE",
+    "version": 0,
+    "description": "Primary enterprise warehouse."
+  }
+}
