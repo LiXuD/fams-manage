@@ -573,6 +573,61 @@ class DesignPackageContractTest(unittest.TestCase):
                 for term in ("referenced", "history", "new", "disabled"):
                     self.assertIn(term, operation_text)
 
+    def test_catalog_disabled_relation_guards_and_extension_labels_are_explicit(self) -> None:
+        document = self.load_contract()
+        schemas = document["components"]["schemas"]
+        operations = {
+            operation["operationId"]: operation
+            for item in document["paths"].values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        extension_template = schemas["ExtensionFieldTemplate"]
+        self.assertIn("label", extension_template["required"])
+        for operation_id in ("createBrand", "updateBrand"):
+            with self.subTest(operation=operation_id):
+                operation = operations[operation_id]
+                self.assertIn(
+                    "BRAND_DEFAULT_MANUFACTURER_DISABLED",
+                    operation["x-error-codes"],
+                )
+                self.assertIn("disabled", json.dumps(operation).lower())
+        for operation_id in ("createAssetCategory", "updateAssetCategory"):
+            with self.subTest(operation=operation_id):
+                operation = operations[operation_id]
+                self.assertIn("ASSET_CATEGORY_PARENT_DISABLED", operation["x-error-codes"])
+                self.assertIn("disabled", json.dumps(operation).lower())
+        enable_category = operations["enableAssetCategory"]
+        self.assertIn("ASSET_CATEGORY_PARENT_DISABLED", enable_category["x-error-codes"])
+        enable_text = json.dumps(enable_category, sort_keys=True).lower()
+        for term in ("ancestor", "active", "enabled"):
+            self.assertIn(term, enable_text)
+
+    def test_disabled_manufacturer_keeps_history_but_is_omitted_from_active_brand_selector(self) -> None:
+        document = self.load_contract()
+        operations = {
+            operation["operationId"]: operation
+            for item in document["paths"].values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        disable_text = json.dumps(operations["disableManufacturer"], sort_keys=True).lower()
+        for term in ("enabled brand", "allowed", "history", "not rewrite"):
+            self.assertIn(term, disable_text)
+        selector_text = json.dumps(operations["listActiveBrandReferences"], sort_keys=True).lower()
+        for term in ("disabled", "omit", "default"):
+            self.assertIn(term, selector_text)
+        selector_examples = []
+        for path in sorted(EXAMPLES.glob("masterdata-catalog-*.json")):
+            value = json.loads(path.read_text(encoding="utf-8"))
+            if value.get("operationId") != "listActiveBrandReferences":
+                continue
+            items = value.get("response", {}).get("items", [])
+            if any("defaultManufacturerId" not in item for item in items):
+                selector_examples.append(value)
+        self.assertTrue(selector_examples, "missing selector example without disabled manufacturer default")
+        self.assertIn("history", json.dumps(selector_examples).lower())
+
     def test_catalog_business_writes_have_short_transaction_audit_and_error_boundaries(self) -> None:
         document = self.load_contract()
         management_prefixes = ("/asset-categories", "/brands", "/manufacturers")
