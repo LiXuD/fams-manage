@@ -134,6 +134,18 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Id'
+    BusinessParameterVersionId:
+      name: parameterVersionId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    ConfigurationAnomalyId:
+      name: anomalyId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
   responses:
     BadRequest:
       description: Request validation or state precondition failed.
@@ -1310,6 +1322,191 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/NumberingRule'
+    BusinessParameterVersionStatus:
+      type: string
+      enum: [ACTIVE, SUPERSEDED]
+    BusinessParameterSnapshot:
+      type: object
+      additionalProperties: false
+      required:
+        - timezone
+        - workWeek
+        - holidays
+        - adjustedWorkdays
+        - adminProcessingDeadline
+        - warehouseOperatorClaimDeadline
+        - handoverDeadline
+        - messageEscalationThreshold
+      description: >-
+        Immutable business-parameter snapshot. Timezone is a legal IANA ZoneId;
+        calendar dates use BusinessDate and instants use UTC Instant. Natural days
+        run from 00:00 through 24:00 in this timezone; workdays use this snapshot's
+        calendar. Holidays and adjusted workdays must be unique and cannot overlap.
+      properties:
+        timezone:
+          type: string
+          pattern: '^[A-Za-z][A-Za-z0-9._+-]*(?:/[A-Za-z0-9._+-]+)*$'
+          default: Asia/Shanghai
+          description: IANA timezone identifier validated by the server's ZoneId database.
+        workWeek:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY]
+        holidays:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/BusinessDate'
+        adjustedWorkdays:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/BusinessDate'
+        adminProcessingDeadline:
+          type: integer
+          format: int32
+          minimum: 1
+          x-unit: minutes
+          description: Positive administrator processing window in minutes.
+        warehouseOperatorClaimDeadline:
+          type: integer
+          format: int32
+          minimum: 1
+          x-unit: minutes
+          description: Positive warehouse-operator claim window in minutes.
+        handoverDeadline:
+          type: integer
+          format: int32
+          minimum: 1
+          x-unit: minutes
+          description: Positive handover window in minutes.
+        messageEscalationThreshold:
+          type: integer
+          format: int32
+          minimum: 1
+          x-unit: minutes
+          description: Positive message escalation threshold in minutes.
+    BusinessParameterVersionActor:
+      type: object
+      additionalProperties: false
+      required: [id, username]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        username:
+          type: string
+          description: System-account username recorded for the atomic audit event.
+    BusinessParameterVersionCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [snapshot]
+      description: >-
+        Full replacement snapshot for a new immutable version. The current version
+        is guarded by If-Match-Version; a stale value is a version conflict. There
+        is no future scheduled version in V1.
+      properties:
+        snapshot:
+          $ref: '#/components/schemas/BusinessParameterSnapshot'
+    BusinessParameterVersion:
+      type: object
+      additionalProperties: false
+      required: [id, version, status, effectiveAt, actor, snapshot]
+      description: >-
+        Immutable parameter version. A newly created version becomes ACTIVE
+        immediately and supersedes the previous version. Newly created business
+        objects store parameterVersionId and the computed deadline snapshot; existing
+        documents, todos, and deadlines are not recalculated, and historical business
+        dates are not reinterpreted when a later timezone changes.
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        status:
+          $ref: '#/components/schemas/BusinessParameterVersionStatus'
+        effectiveAt:
+          $ref: '#/components/schemas/Instant'
+        actor:
+          $ref: '#/components/schemas/BusinessParameterVersionActor'
+        snapshot:
+          $ref: '#/components/schemas/BusinessParameterSnapshot'
+    PageBusinessParameterVersion:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/BusinessParameterVersion'
+    ConfigurationAnomalyType:
+      type: string
+      enum: [NO_ASSET_ADMIN, NO_WAREHOUSE_OPERATOR, SMS_CHANNEL_MISSING, WECHAT_TEMPLATE_MISSING]
+    ConfigurationAnomalyStatus:
+      type: string
+      enum: [OPEN, RESOLVED]
+    TodoReference:
+      type: object
+      additionalProperties: false
+      required: [id, kind, parameterVersionId, deadline]
+      description: Original pending work is retained with its request, parameter version, and deadline history.
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        kind:
+          type: string
+        parameterVersionId:
+          $ref: '#/components/schemas/Id'
+        deadline:
+          $ref: '#/components/schemas/Instant'
+        status:
+          type: string
+    ConfigurationAnomaly:
+      type: object
+      additionalProperties: false
+      required: [id, type, status, detectedAt, resolvedAt, dedupKey, relatedTodos]
+      description: >-
+        Read-only configuration anomaly. System facts may automatically mark an
+        anomaly RESOLVED; there is no manual ignore, delete, or close operation, and
+        related todos are retained with their original request, parameter version,
+        and deadline.
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        type:
+          $ref: '#/components/schemas/ConfigurationAnomalyType'
+        status:
+          $ref: '#/components/schemas/ConfigurationAnomalyStatus'
+        detectedAt:
+          $ref: '#/components/schemas/Instant'
+        resolvedAt:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Instant'
+        dedupKey:
+          type: string
+          minLength: 1
+          description: Stable key used to deduplicate an open anomaly.
+        relatedTodos:
+          type: array
+          items:
+            $ref: '#/components/schemas/TodoReference'
+    PageConfigurationAnomaly:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConfigurationAnomaly'
 paths:
   /auth/login:
     post:
@@ -1563,6 +1760,168 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+
+  /business-parameters:
+    get:
+      tags: [MasterData]
+      operationId: listBusinessParameterVersions
+      summary: List immutable business-parameter versions.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Business-parameter version page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageBusinessParameterVersion'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MasterData]
+      operationId: createBusinessParameterVersion
+      summary: Create and immediately activate a new immutable business-parameter version.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version must equal the current active parameter version at commit time.
+      x-transaction:
+        boundary: Validate the current version and complete snapshot, then write the new version, supersede the old version, and audit atomically in one short transaction.
+      x-audit-event:
+        event: BUSINESS_PARAMETER_VERSION_CREATED
+        before-after: Capture the previous and new parameter snapshots as the before/after audit pair.
+      x-error-codes: [BUSINESS_PARAMETER_VERSION_CONFLICT, BUSINESS_PARAMETER_TIMEZONE_INVALID, BUSINESS_PARAMETER_DATE_DUPLICATE, BUSINESS_PARAMETER_DATE_CONFLICT, BUSINESS_PARAMETER_DURATION_INVALID]
+      x-validation: >-
+        The server validates the IANA timezone, unique dates, and non-overlapping
+        holidays and adjusted workdays. Every duration is positive; invalid input
+        returns 400. There is no scheduled future version or cancellation endpoint
+        in V1.
+      x-invariants: >-
+        The new version is ACTIVE immediately and the prior version becomes
+        SUPERSEDED. Parameters apply only to newly created documents and tasks. At
+        creation, each business object stores parameterVersionId and the computed
+        deadline snapshot; existing documents, todos, and deadlines are not
+        recalculated. Historical business dates are not reinterpreted when timezone
+        configuration changes. Natural days use 00:00 through 24:00 in the selected
+        timezone, while workdays use that version's calendar.
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessParameterVersionCreateRequest'
+      responses:
+        '201':
+          description: New active business-parameter version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessParameterVersion'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /business-parameters/current:
+    get:
+      tags: [MasterData]
+      operationId: getCurrentBusinessParameterVersion
+      summary: Get the immediately effective business-parameter version.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-invariants: Current means ACTIVE now; V1 has no future scheduled or manually switchable version.
+      responses:
+        '200':
+          description: Current active business-parameter version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessParameterVersion'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /business-parameters/{parameterVersionId}:
+    parameters:
+      - $ref: '#/components/parameters/BusinessParameterVersionId'
+    get:
+      tags: [MasterData]
+      operationId: getBusinessParameterVersion
+      summary: Get one immutable business-parameter version, including superseded history.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      responses:
+        '200':
+          description: Business-parameter version detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessParameterVersion'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /configuration-anomalies:
+    get:
+      tags: [MasterData]
+      operationId: listConfigurationAnomalies
+      summary: List retained configuration anomalies for administrator follow-up.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-invariants: >-
+        This is a read-only projection. System facts may resolve an anomaly, while
+        related todos remain retained with their original request and deadline history.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Configuration anomaly page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageConfigurationAnomaly'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /configuration-anomalies/{anomalyId}:
+    parameters:
+      - $ref: '#/components/parameters/ConfigurationAnomalyId'
+    get:
+      tags: [MasterData]
+      operationId: getConfigurationAnomaly
+      summary: Get one retained configuration anomaly.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-invariants: >-
+        Anomaly status is derived from system facts; there is no manual ignore,
+        delete, resolve, or close operation, and original todos are retained.
+      responses:
+        '200':
+          description: Configuration anomaly detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigurationAnomaly'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /organizations/{organizationId}/disable:
     parameters:

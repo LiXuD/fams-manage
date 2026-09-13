@@ -1,0 +1,42 @@
+{
+  "operationId": "createBusinessParameterVersion",
+  "kind": "positive",
+  "status": 201,
+  "requestSchema": "BusinessParameterVersionCreateRequest",
+  "responseSchema": "BusinessParameterVersion",
+  "headers": {
+    "Idempotency-Key": "business-parameter-create-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "1"
+  },
+  "payload": {
+    "snapshot": {
+      "timezone": "Asia/Shanghai",
+      "workWeek": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"],
+      "holidays": ["2026-10-01", "2026-10-02"],
+      "adjustedWorkdays": ["2026-10-10"],
+      "adminProcessingDeadline": 1440,
+      "warehouseOperatorClaimDeadline": 480,
+      "handoverDeadline": 240,
+      "messageEscalationThreshold": 60
+    }
+  },
+  "response": {
+    "id": "9102",
+    "version": 2,
+    "status": "ACTIVE",
+    "effectiveAt": "2026-09-14T03:00:00Z",
+    "actor": {"id": "7001", "username": "system.admin"},
+    "snapshot": {
+      "timezone": "Asia/Shanghai",
+      "workWeek": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"],
+      "holidays": ["2026-10-01", "2026-10-02"],
+      "adjustedWorkdays": ["2026-10-10"],
+      "adminProcessingDeadline": 1440,
+      "warehouseOperatorClaimDeadline": 480,
+      "handoverDeadline": 240,
+      "messageEscalationThreshold": 60
+    }
+  },
+  "evidence": "Contract evidence only; runtime parameter persistence and deadline calculation are not implemented in this design package."
+}

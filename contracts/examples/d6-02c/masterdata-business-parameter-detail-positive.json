@@ -1,0 +1,27 @@
+{
+  "operationId": "getBusinessParameterVersion",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": null,
+  "responseSchema": "BusinessParameterVersion",
+  "pathParameters": {"parameterVersionId": "9099"},
+  "payload": {},
+  "evidence": "Contract evidence only; no runtime implementation is claimed.",
+  "response": {
+    "id": "9099",
+    "version": 0,
+    "status": "SUPERSEDED",
+    "effectiveAt": "2026-01-01T00:00:00Z",
+    "actor": {"id": "7001", "username": "system.admin"},
+    "snapshot": {
+      "timezone": "Asia/Shanghai",
+      "workWeek": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"],
+      "holidays": [],
+      "adjustedWorkdays": [],
+      "adminProcessingDeadline": 1440,
+      "warehouseOperatorClaimDeadline": 480,
+      "handoverDeadline": 240,
+      "messageEscalationThreshold": 60
+    }
+  }
+}

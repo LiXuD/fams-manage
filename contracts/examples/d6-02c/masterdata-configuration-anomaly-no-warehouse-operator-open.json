@@ -1,0 +1,27 @@
+{
+  "operationId": "getConfigurationAnomaly",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": null,
+  "responseSchema": "ConfigurationAnomaly",
+  "pathParameters": {"anomalyId": "9302"},
+  "payload": {},
+  "evidence": "Contract evidence only; no runtime implementation is claimed.",
+  "response": {
+    "id": "9302",
+    "type": "NO_WAREHOUSE_OPERATOR",
+    "status": "OPEN",
+    "detectedAt": "2026-09-14T03:11:00Z",
+    "resolvedAt": null,
+    "dedupKey": "NO_WAREHOUSE_OPERATOR:enterprise",
+    "relatedTodos": [
+      {
+        "id": "9402",
+        "kind": "INBOUND_RECEIPT_CLAIM",
+        "parameterVersionId": "9101",
+        "deadline": "2026-09-14T11:11:00Z",
+        "status": "PENDING"
+      }
+    ]
+  }
+}

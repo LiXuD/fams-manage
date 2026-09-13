@@ -1,0 +1,32 @@
+{
+  "operationId": "createBusinessParameterVersion",
+  "kind": "rejection",
+  "status": 400,
+  "scenario": "A holiday cannot also be listed as an adjusted workday.",
+  "requestSchema": "BusinessParameterVersionCreateRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "business-parameter-create-0003",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "1"
+  },
+  "payload": {
+    "snapshot": {
+      "timezone": "Asia/Shanghai",
+      "workWeek": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"],
+      "holidays": ["2026-10-01"],
+      "adjustedWorkdays": ["2026-10-01"],
+      "adminProcessingDeadline": 1440,
+      "warehouseOperatorClaimDeadline": 480,
+      "handoverDeadline": 240,
+      "messageEscalationThreshold": 60
+    }
+  },
+  "evidence": "Contract evidence only; no runtime implementation is claimed.",
+  "response": {
+    "code": "BUSINESS_PARAMETER_DATE_CONFLICT",
+    "message": "A date cannot be both a holiday and an adjusted workday.",
+    "requestId": "00000000-0000-4000-8000-000000000031",
+    "fieldErrors": {"adjustedWorkdays": "date overlaps holidays"}
+  }
+}
