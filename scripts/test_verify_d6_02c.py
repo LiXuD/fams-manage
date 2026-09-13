@@ -1265,6 +1265,109 @@ class DesignPackageContractTest(unittest.TestCase):
         for term in ("resolved", "retained", "original", "todo", "automatic"):
             self.assertIn(term, recovery_text)
 
+    def test_business_parameter_deadlines_use_prd_units_and_open_anomaly_resolution_is_optional(self) -> None:
+        document = self.load_contract()
+        schemas = document["components"]["schemas"]
+        snapshot = schemas["BusinessParameterSnapshot"]
+        required_deadlines = {
+            "adminDecisionDeadlineWorkdays": 2,
+            "warehouseClaimDeadlineWorkdays": 1,
+            "warehouseFirstExecutionDeadlineWorkdays": 2,
+            "handoverAcceptanceDeadlineNaturalDays": 3,
+        }
+        self.assertTrue(set(required_deadlines).issubset(snapshot["required"]))
+        self.assertNotIn("adminProcessingDeadline", snapshot["properties"])
+        self.assertNotIn("warehouseOperatorClaimDeadline", snapshot["properties"])
+        self.assertNotIn("handoverDeadline", snapshot["properties"])
+        self.assertNotIn("messageEscalationThreshold", snapshot["properties"])
+        expected_units = {
+            "adminDecisionDeadlineWorkdays": "workdays",
+            "warehouseClaimDeadlineWorkdays": "workdays",
+            "warehouseFirstExecutionDeadlineWorkdays": "workdays",
+            "handoverAcceptanceDeadlineNaturalDays": "natural-days",
+        }
+        for field, default in required_deadlines.items():
+            with self.subTest(deadline=field):
+                property_schema = snapshot["properties"][field]
+                self.assertEqual("integer", property_schema["type"])
+                self.assertEqual(1, property_schema["minimum"])
+                self.assertEqual(default, property_schema["default"])
+                self.assertEqual(expected_units[field], property_schema["x-unit"])
+
+        thresholds = schemas["NotificationEscalationThresholds"]
+        threshold_fields = {
+            "administratorUnreadHours": (4, "hours"),
+            "onDutyWarehouseOperatorUnreadHours": (4, "hours"),
+            "firstExecutionOverdueNaturalDays": (1, "natural-days"),
+            "receiptDueUnreadHours": (24, "hours"),
+        }
+        self.assertTrue(set(threshold_fields).issubset(thresholds["required"]))
+        self.assertEqual(
+            "NotificationEscalationThresholds",
+            snapshot["properties"]["notificationEscalationThresholds"]["$ref"].rsplit("/", 1)[-1],
+        )
+        self.assertIn("notificationEscalationThresholds", snapshot["required"])
+        for field, (default, unit) in threshold_fields.items():
+            with self.subTest(threshold=field):
+                property_schema = thresholds["properties"][field]
+                self.assertEqual("integer", property_schema["type"])
+                self.assertEqual(1, property_schema["minimum"])
+                self.assertEqual(default, property_schema["default"])
+                self.assertEqual(unit, property_schema["x-unit"])
+        calendar_text = json.dumps(snapshot, sort_keys=True).lower()
+        for term in ("workday", "work week", "natural day", "timezone", "not recalculat"):
+            self.assertIn(term, calendar_text)
+
+        anomaly = schemas["ConfigurationAnomaly"]
+        self.assertNotIn("resolvedAt", anomaly["required"])
+        resolved_at = anomaly["properties"]["resolvedAt"]
+        self.assertEqual("string", resolved_at["type"])
+        self.assertEqual("date-time", resolved_at["format"])
+        self.assertNotIn("nullable", resolved_at)
+        self.assertNotIn("allOf", resolved_at)
+        resolution_text = json.dumps(anomaly, sort_keys=True).lower()
+        for term in ("open", "omitted", "resolved", "required"):
+            self.assertIn(term, resolution_text)
+
+        parameter_examples = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted(EXAMPLES.glob("masterdata-business-parameter-*.json"))
+        ]
+        self.assertTrue(parameter_examples)
+        parameter_text = json.dumps(parameter_examples, sort_keys=True).lower()
+        for field in required_deadlines:
+            self.assertIn(field.lower(), parameter_text)
+        self.assertIn("notificationescalationthresholds", parameter_text)
+        non_positive = [
+            value
+            for value in parameter_examples
+            if value.get("status") == 400
+            and "threshold" in value.get("scenario", "").lower()
+        ]
+        self.assertTrue(non_positive)
+        self.assertTrue(
+            any(
+                threshold_value <= 0
+                for value in non_positive
+                for threshold_value in value["payload"]["snapshot"]["notificationEscalationThresholds"].values()
+            )
+        )
+
+        anomaly_examples = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted(EXAMPLES.glob("masterdata-configuration-anomaly-*.json"))
+        ]
+        open_examples = [
+            value for value in anomaly_examples if value.get("response", {}).get("status") == "OPEN"
+        ]
+        resolved_examples = [
+            value for value in anomaly_examples if value.get("response", {}).get("status") == "RESOLVED"
+        ]
+        self.assertTrue(open_examples)
+        self.assertTrue(resolved_examples)
+        self.assertTrue(all("resolvedAt" not in value["response"] for value in open_examples))
+        self.assertTrue(all(value["response"].get("resolvedAt") for value in resolved_examples))
+
     def test_catalog_business_writes_have_short_transaction_audit_and_error_boundaries(self) -> None:
         document = self.load_contract()
         management_prefixes = ("/asset-categories", "/brands", "/manufacturers")
