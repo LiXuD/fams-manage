@@ -1,0 +1,23 @@
+{
+  "operationId": "listActiveAssetCategoryReferences",
+  "kind": "positive",
+  "status": 200,
+  "responseSchema": "AssetCategoryActiveReferencePage",
+  "headers": {},
+  "payload": {"page": 1, "pageSize": 20},
+  "response": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 1,
+    "items": [
+      {
+        "id": "8101",
+        "code": "LAPTOP",
+        "name": "Laptop",
+        "version": 6,
+        "suggestedUnit": "台",
+        "numberingPrefix": "LP"
+      }
+    ]
+  }
+}

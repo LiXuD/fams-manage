@@ -1,0 +1,24 @@
+{
+  "operationId": "createManufacturer",
+  "kind": "positive",
+  "status": 201,
+  "requestSchema": "ManufacturerCreateRequest",
+  "responseSchema": "Manufacturer",
+  "headers": {
+    "Idempotency-Key": "manufacturer-create-example-0001",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "code": "FOXCONN",
+    "name": "Foxconn",
+    "description": "Contract manufacturing partner."
+  },
+  "response": {
+    "id": "8201",
+    "code": "FOXCONN",
+    "name": "Foxconn",
+    "status": "ACTIVE",
+    "version": 0,
+    "description": "Contract manufacturing partner."
+  }
+}

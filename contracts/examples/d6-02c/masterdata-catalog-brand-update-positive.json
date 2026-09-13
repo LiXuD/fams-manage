@@ -1,0 +1,23 @@
+{
+  "operationId": "updateBrand",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "BrandUpdateRequest",
+  "responseSchema": "Brand",
+  "headers": {
+    "Idempotency-Key": "brand-update-example-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "0"
+  },
+  "payload": {
+    "name": "Lenovo Business"
+  },
+  "response": {
+    "id": "8301",
+    "code": "LENOVO",
+    "name": "Lenovo Business",
+    "status": "ACTIVE",
+    "version": 1,
+    "defaultManufacturer": {"id": "8201", "version": 3}
+  }
+}

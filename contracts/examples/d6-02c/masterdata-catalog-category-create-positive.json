@@ -1,0 +1,34 @@
+{
+  "operationId": "createAssetCategory",
+  "kind": "positive",
+  "status": 201,
+  "requestSchema": "AssetCategoryCreateRequest",
+  "responseSchema": "AssetCategory",
+  "headers": {
+    "Idempotency-Key": "category-create-example-0001",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "code": "LAPTOP",
+    "name": "Laptop",
+    "description": "Portable computers",
+    "suggestedUnit": "台",
+    "numberingPrefix": "LP",
+    "extensionFieldTemplate": [
+      {"key": "screenSize", "label": "Screen size", "type": "NUMBER", "required": false}
+    ]
+  },
+  "response": {
+    "id": "8101",
+    "code": "LAPTOP",
+    "name": "Laptop",
+    "status": "ACTIVE",
+    "version": 0,
+    "description": "Portable computers",
+    "suggestedUnit": "台",
+    "numberingPrefix": "LP",
+    "extensionFieldTemplate": [
+      {"key": "screenSize", "label": "Screen size", "type": "NUMBER", "required": false}
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "operationId": "enableBrand",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "CatalogStatusChangeRequest",
+  "responseSchema": "Brand",
+  "headers": {
+    "Idempotency-Key": "brand-enable-example-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "2"
+  },
+  "payload": {
+    "reason": "Brand approved for new references again."
+  },
+  "response": {
+    "id": "8301",
+    "code": "LENOVO",
+    "name": "Lenovo Business",
+    "status": "ACTIVE",
+    "version": 3,
+    "defaultManufacturer": {"id": "8201", "version": 3}
+  }
+}
