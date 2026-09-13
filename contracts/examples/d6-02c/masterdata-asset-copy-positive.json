@@ -1,0 +1,58 @@
+{
+  "operationId": "copyAsset",
+  "kind": "positive",
+  "status": 201,
+  "requestSchema": "AssetCopyRequest",
+  "responseSchema": "AssetCopyResult",
+  "pathParameters": {"assetId": "10002"},
+  "headers": {
+    "Idempotency-Key": "asset-copy-draft-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "0"
+  },
+  "payload": {
+    "quantity": 3,
+    "reason": "Prepare three equivalent laptop drafts for receiving."
+  },
+  "response": {
+    "assets": [
+      {
+        "id": "10003",
+        "assetCode": "FA-2026-000003",
+        "name": "Dell Latitude 7450",
+        "lifecycle": "WAITING_INBOUND",
+        "exception": "NORMAL",
+        "cardStage": "DRAFT",
+        "version": 0,
+        "createdBusinessDate": "2026-09-14",
+        "createdAt": "2026-09-14T04:10:00Z",
+        "parameterVersionId": "9101"
+      },
+      {
+        "id": "10004",
+        "assetCode": "FA-2026-000004",
+        "name": "Dell Latitude 7450",
+        "lifecycle": "WAITING_INBOUND",
+        "exception": "NORMAL",
+        "cardStage": "DRAFT",
+        "version": 0,
+        "createdBusinessDate": "2026-09-14",
+        "createdAt": "2026-09-14T04:10:00Z",
+        "parameterVersionId": "9101"
+      },
+      {
+        "id": "10005",
+        "assetCode": "FA-2026-000005",
+        "name": "Dell Latitude 7450",
+        "lifecycle": "WAITING_INBOUND",
+        "exception": "NORMAL",
+        "cardStage": "DRAFT",
+        "version": 0,
+        "createdBusinessDate": "2026-09-14",
+        "createdAt": "2026-09-14T04:10:00Z",
+        "parameterVersionId": "9101"
+      }
+    ]
+  },
+  "evidence": "Contract evidence only; runtime number reservation is not implemented in this design package."
+}

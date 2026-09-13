@@ -1,0 +1,28 @@
+{
+  "operationId": "updateAsset",
+  "kind": "rejection",
+  "status": 400,
+  "scenario": "A caller tries to write lifecycle and responsibility directly on an asset card.",
+  "requestSchema": "AssetUpdateRequest",
+  "responseSchema": "ErrorResponse",
+  "pathParameters": {"assetId": "10002"},
+  "headers": {
+    "Idempotency-Key": "asset-update-state-responsibility-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "5"
+  },
+  "payload": {
+    "lifecycle": "IN_USE",
+    "responsibleEmployee": {"id": "3001", "version": 2}
+  },
+  "response": {
+    "code": "ASSET_FIELD_NOT_EDITABLE",
+    "message": "Lifecycle and responsibility changes require controlled business processes.",
+    "requestId": "00000000-0000-4000-8000-000000000046",
+    "fieldErrors": {
+      "lifecycle": "direct lifecycle writes are forbidden",
+      "responsibleEmployee": "responsibility follows a business document"
+    }
+  },
+  "evidence": "Contract evidence only; runtime validation is not implemented in this design package."
+}
