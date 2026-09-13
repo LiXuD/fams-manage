@@ -968,7 +968,7 @@ class DesignPackageContractTest(unittest.TestCase):
                     "CATEGORY_PREFIX:fixedPrefix",
                     operation.get("x-rejected-prefix-combinations", []),
                 )
-                self.assertIn("NUMBERING_RULE_TARGET_MODE_CONFLICT", operation["x-error-codes"])
+                self.assertIn("NUMBERING_MODE_NOT_ALLOWED_FOR_TARGET", operation["x-error-codes"])
                 self.assertIn("NUMBERING_RULE_FIXED_PREFIX_NOT_ALLOWED", operation["x-error-codes"])
                 validation = json.dumps(operation, sort_keys=True).lower()
                 for term in (
@@ -1011,7 +1011,7 @@ class DesignPackageContractTest(unittest.TestCase):
         ]
         self.assertTrue(invalid_inbound)
         self.assertTrue(
-            all(value["response"]["code"] == "NUMBERING_RULE_TARGET_MODE_CONFLICT" for value in invalid_inbound)
+            all(value["response"]["code"] == "NUMBERING_MODE_NOT_ALLOWED_FOR_TARGET" for value in invalid_inbound)
         )
         category_positive = [
             value
