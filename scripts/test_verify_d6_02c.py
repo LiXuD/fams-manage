@@ -1928,7 +1928,7 @@ class DesignPackageContractTest(unittest.TestCase):
         ):
             with self.subTest(reference=field):
                 self.assertEqual(
-                    "CatalogReference",
+                    "OrganizationReference" if field == "organization" else "CatalogReference",
                     create_schema["properties"][field]["$ref"].rsplit("/", 1)[-1],
                 )
         update_schema = schemas["AssetUpdateRequest"]
