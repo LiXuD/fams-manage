@@ -1,0 +1,14 @@
+{
+  "operationId": "resolveAssetAccessToken",
+  "kind": "rejection",
+  "status": 401,
+  "scenario": "valid token without current authentication",
+  "pathParameters": {"token": "n8Qv2Lr5Xc7Zp1Tm4Hs6Kd9Fg3Wa0Yu8Ji5Be2Ro7S"},
+  "response": {
+    "code": "UNAUTHORIZED",
+    "message": "A current authenticated session is required.",
+    "requestId": "33333333-3333-4333-8333-333333333333",
+    "fieldErrors": {}
+  },
+  "evidence": "Contract evidence only; QR tokens never bypass current authentication or authorization."
+}

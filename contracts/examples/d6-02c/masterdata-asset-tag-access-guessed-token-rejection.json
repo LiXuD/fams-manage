@@ -1,0 +1,14 @@
+{
+  "operationId": "resolveAssetAccessToken",
+  "kind": "rejection",
+  "status": 404,
+  "scenario": "guessed token",
+  "pathParameters": {"token": "zZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZz"},
+  "response": {
+    "code": "ASSET_ACCESS_NOT_FOUND",
+    "message": "Asset access token was not found.",
+    "requestId": "22222222-2222-4222-8222-222222222222",
+    "fieldErrors": {}
+  },
+  "evidence": "Contract evidence only; guessed tokens are indistinguishable from old tokens."
+}

@@ -1,0 +1,15 @@
+{
+  "operationId": "reprintAssetTag",
+  "kind": "rejection",
+  "status": 409,
+  "scenario": "draft cannot be printed",
+  "pathParameters": {"assetId": "10001"},
+  "asset": {"cardStage": "DRAFT", "lifecycle": "WAITING_INBOUND"},
+  "response": {
+    "code": "ASSET_TAG_NOT_PRINTABLE",
+    "message": "Only an ACTIVE asset card can be printed.",
+    "requestId": "44444444-4444-4444-8444-444444444444",
+    "fieldErrors": {"assetId": "cardStage is DRAFT"}
+  },
+  "evidence": "Contract evidence only; draft print rejection is not runtime implemented."
+}

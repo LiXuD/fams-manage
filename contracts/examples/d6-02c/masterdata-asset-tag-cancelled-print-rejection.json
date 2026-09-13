@@ -1,0 +1,15 @@
+{
+  "operationId": "reprintAssetTag",
+  "kind": "rejection",
+  "status": 409,
+  "scenario": "cancelled cannot be printed",
+  "pathParameters": {"assetId": "10006"},
+  "asset": {"cardStage": "CANCELLED", "lifecycle": "WAITING_INBOUND"},
+  "response": {
+    "code": "ASSET_TAG_NOT_PRINTABLE",
+    "message": "Only an ACTIVE asset card can be printed.",
+    "requestId": "66666666-6666-4666-8666-666666666666",
+    "fieldErrors": {"assetId": "cardStage is CANCELLED"}
+  },
+  "evidence": "Contract evidence only; cancelled print rejection is not runtime implemented."
+}

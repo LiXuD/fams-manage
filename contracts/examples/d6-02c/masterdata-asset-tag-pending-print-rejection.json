@@ -1,0 +1,15 @@
+{
+  "operationId": "reprintAssetTag",
+  "kind": "rejection",
+  "status": 409,
+  "scenario": "pending inbound cannot be printed",
+  "pathParameters": {"assetId": "10008"},
+  "asset": {"cardStage": "PENDING_INBOUND", "lifecycle": "WAITING_INBOUND"},
+  "response": {
+    "code": "ASSET_TAG_NOT_PRINTABLE",
+    "message": "Only an ACTIVE asset card can be printed.",
+    "requestId": "55555555-5555-4555-8555-555555555555",
+    "fieldErrors": {"assetId": "cardStage is PENDING_INBOUND"}
+  },
+  "evidence": "Contract evidence only; pending-inbound print rejection is not runtime implemented."
+}
