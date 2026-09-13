@@ -1,0 +1,28 @@
+{
+  "operationId": "createNumberingRule",
+  "kind": "rejection",
+  "status": 400,
+  "scenario": "CATEGORY_PREFIX cannot carry a caller-supplied fixedPrefix.",
+  "requestSchema": "NumberingRuleCreateRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "numbering-rule-create-example-0007",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "code": "ASSET-CATEGORY-FIXED-INVALID",
+    "target": "ASSET",
+    "mode": "CATEGORY_PREFIX",
+    "fixedPrefix": "FA",
+    "datePart": "YYYY",
+    "sequenceLength": 6
+  },
+  "response": {
+    "code": "NUMBERING_RULE_FIXED_PREFIX_NOT_ALLOWED",
+    "message": "CATEGORY_PREFIX numbering rules must omit fixedPrefix.",
+    "requestId": "00000000-0000-4000-8000-000000000021",
+    "fieldErrors": {
+      "fixedPrefix": "Use the active asset category numberingPrefix instead."
+    }
+  }
+}

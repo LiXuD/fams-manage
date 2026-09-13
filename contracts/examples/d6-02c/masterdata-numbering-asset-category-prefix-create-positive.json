@@ -1,0 +1,28 @@
+{
+  "operationId": "createNumberingRule",
+  "kind": "positive",
+  "status": 201,
+  "requestSchema": "NumberingRuleCreateRequest",
+  "responseSchema": "NumberingRule",
+  "headers": {
+    "Idempotency-Key": "numbering-rule-create-example-0005",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "code": "ASSET-CATEGORY-PREFIX",
+    "target": "ASSET",
+    "mode": "CATEGORY_PREFIX",
+    "datePart": "YYYY",
+    "sequenceLength": 6
+  },
+  "response": {
+    "id": "8603",
+    "code": "ASSET-CATEGORY-PREFIX",
+    "target": "ASSET",
+    "mode": "CATEGORY_PREFIX",
+    "datePart": "YYYY",
+    "sequenceLength": 6,
+    "status": "ACTIVE",
+    "version": 0
+  }
+}

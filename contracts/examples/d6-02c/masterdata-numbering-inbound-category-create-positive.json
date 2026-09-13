@@ -9,17 +9,19 @@
     "X-CSRF-Token": "csrf-token-example-123456"
   },
   "payload": {
-    "code": "RECEIPT-CATEGORY",
+    "code": "RECEIPT-ENTERPRISE",
     "target": "INBOUND_RECEIPT",
-    "mode": "CATEGORY_PREFIX",
+    "mode": "ENTERPRISE",
+    "fixedPrefix": "IR",
     "datePart": "YYYYMM",
     "sequenceLength": 5
   },
   "response": {
     "id": "8602",
-    "code": "RECEIPT-CATEGORY",
+    "code": "RECEIPT-ENTERPRISE",
     "target": "INBOUND_RECEIPT",
-    "mode": "CATEGORY_PREFIX",
+    "mode": "ENTERPRISE",
+    "fixedPrefix": "IR",
     "datePart": "YYYYMM",
     "sequenceLength": 5,
     "status": "ACTIVE",

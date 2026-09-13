@@ -1229,7 +1229,9 @@ components:
         fixedPrefix:
           type: string
           maxLength: 32
-          description: Optional fixed prefix for the enterprise mode; never copied into category records.
+          description: >-
+            Optional fixed prefix for ENTERPRISE. CATEGORY_PREFIX is only valid for
+            ASSET, must omit fixedPrefix, and reads the active AssetCategory.numberingPrefix.
         datePart:
           $ref: '#/components/schemas/NumberingDatePart'
         sequenceLength:
@@ -1250,6 +1252,9 @@ components:
         fixedPrefix:
           type: string
           maxLength: 32
+          description: >-
+            Optional only for ENTERPRISE. CATEGORY_PREFIX is only valid for ASSET,
+            must omit fixedPrefix, and reads the active AssetCategory.numberingPrefix.
         datePart:
           $ref: '#/components/schemas/NumberingDatePart'
         sequenceLength:
@@ -1278,6 +1283,10 @@ components:
           $ref: '#/components/schemas/NumberingMode'
         fixedPrefix:
           type: string
+          description: >-
+            Present only for ENTERPRISE. CATEGORY_PREFIX is only valid for ASSET,
+            omits fixedPrefix, and derives its prefix from the active
+            AssetCategory.numberingPrefix.
         datePart:
           $ref: '#/components/schemas/NumberingDatePart'
         sequenceLength:
@@ -3301,7 +3310,16 @@ paths:
         boundary: Validate the namespace and rule configuration, then persist the rule and audit in one short transaction.
       x-audit-event:
         event: NUMBERING_RULE_CREATED
-      x-error-codes: [NUMBERING_RULE_CODE_CONFLICT, NUMBERING_RULE_TARGET_CONFLICT, NUMBERING_CATEGORY_PREFIX_MISSING, NUMBERING_CATEGORY_PREFIX_CONFLICT]
+      x-error-codes: [NUMBERING_RULE_CODE_CONFLICT, NUMBERING_RULE_TARGET_CONFLICT, NUMBERING_CATEGORY_PREFIX_MISSING, NUMBERING_CATEGORY_PREFIX_CONFLICT, NUMBERING_MODE_NOT_ALLOWED_FOR_TARGET, NUMBERING_RULE_FIXED_PREFIX_NOT_ALLOWED]
+      x-allowed-target-modes: ['ASSET:ENTERPRISE', 'ASSET:CATEGORY_PREFIX', 'INBOUND_RECEIPT:ENTERPRISE']
+      x-rejected-target-modes: ['INBOUND_RECEIPT:CATEGORY_PREFIX']
+      x-rejected-prefix-combinations: ['CATEGORY_PREFIX:fixedPrefix']
+      x-combination-validation: >-
+        CATEGORY_PREFIX is valid only for ASSET and derives its prefix from the
+        active AssetCategory.numberingPrefix. INBOUND_RECEIPT is valid only with
+        ENTERPRISE mode because its business number uses an independent enterprise
+        sequence. CATEGORY_PREFIX must omit fixedPrefix; ENTERPRISE may optionally
+        carry fixedPrefix. Any rejected target or mode combination returns 400.
       x-invariants: Rule code and rule identity are permanent and never reused; only one current rule may be effective for a target; category prefixes are read from AssetCategory and are not copied per category.
       x-allocation-policy:
         internal-only: true
@@ -3368,7 +3386,16 @@ paths:
         boundary: Validate target overlap and category-prefix snapshot, then update and audit in one short transaction.
       x-audit-event:
         event: NUMBERING_RULE_UPDATED
-      x-error-codes: [NUMBERING_RULE_TARGET_CONFLICT, NUMBERING_CATEGORY_PREFIX_MISSING, NUMBERING_CATEGORY_PREFIX_CONFLICT]
+      x-error-codes: [NUMBERING_RULE_TARGET_CONFLICT, NUMBERING_CATEGORY_PREFIX_MISSING, NUMBERING_CATEGORY_PREFIX_CONFLICT, NUMBERING_MODE_NOT_ALLOWED_FOR_TARGET, NUMBERING_RULE_FIXED_PREFIX_NOT_ALLOWED]
+      x-allowed-target-modes: ['ASSET:ENTERPRISE', 'ASSET:CATEGORY_PREFIX', 'INBOUND_RECEIPT:ENTERPRISE']
+      x-rejected-target-modes: ['INBOUND_RECEIPT:CATEGORY_PREFIX']
+      x-rejected-prefix-combinations: ['CATEGORY_PREFIX:fixedPrefix']
+      x-combination-validation: >-
+        CATEGORY_PREFIX is valid only for ASSET and derives its prefix from the
+        active AssetCategory.numberingPrefix. INBOUND_RECEIPT is valid only with
+        ENTERPRISE mode because its business number uses an independent enterprise
+        sequence. CATEGORY_PREFIX must omit fixedPrefix; ENTERPRISE may optionally
+        carry fixedPrefix. Any rejected target or mode combination returns 400.
       x-invariants: Rule code and rule identity are permanent and never reused; an update causing an overlapping current target rule returns 409; changes affect only new allocations and never rewrite existing codes or business numbers.
       x-allocation-policy:
         internal-only: true
@@ -3462,7 +3489,16 @@ paths:
         boundary: Validate current-target overlap and category prefixes, then enable and audit in one short transaction.
       x-audit-event:
         event: NUMBERING_RULE_ENABLED
-      x-error-codes: [NUMBERING_RULE_ALREADY_ENABLED, NUMBERING_RULE_TARGET_CONFLICT, NUMBERING_CATEGORY_PREFIX_MISSING, NUMBERING_CATEGORY_PREFIX_CONFLICT]
+      x-error-codes: [NUMBERING_RULE_ALREADY_ENABLED, NUMBERING_RULE_TARGET_CONFLICT, NUMBERING_CATEGORY_PREFIX_MISSING, NUMBERING_CATEGORY_PREFIX_CONFLICT, NUMBERING_MODE_NOT_ALLOWED_FOR_TARGET, NUMBERING_RULE_FIXED_PREFIX_NOT_ALLOWED]
+      x-allowed-target-modes: ['ASSET:ENTERPRISE', 'ASSET:CATEGORY_PREFIX', 'INBOUND_RECEIPT:ENTERPRISE']
+      x-rejected-target-modes: ['INBOUND_RECEIPT:CATEGORY_PREFIX']
+      x-rejected-prefix-combinations: ['CATEGORY_PREFIX:fixedPrefix']
+      x-combination-validation: >-
+        CATEGORY_PREFIX is valid only for ASSET and derives its prefix from the
+        active AssetCategory.numberingPrefix. INBOUND_RECEIPT is valid only with
+        ENTERPRISE mode because its business number uses an independent enterprise
+        sequence. CATEGORY_PREFIX must omit fixedPrefix; ENTERPRISE may optionally
+        carry fixedPrefix. Any rejected target or mode combination returns 400.
       x-invariants: Only one current rule may be enabled for each target; overlap returns 409. CATEGORY_PREFIX requires every selectable category to have a legal, non-ambiguous prefix; missing or conflicting prefixes are rejected.
       x-allocation-policy:
         internal-only: true
