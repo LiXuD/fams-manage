@@ -16,6 +16,8 @@ tags:
     description: System-account authentication and session boundaries.
   - name: MasterData
     description: Organization, employee, and system-account configuration boundaries.
+  - name: Assets
+    description: Asset-card and ledger read boundaries; business mutations remain scoped to warehouse operators.
 components:
   securitySchemes:
     sessionCookie:
@@ -146,6 +148,66 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Id'
+    AssetId:
+      name: assetId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    AssetCodeFilter:
+      name: assetCode
+      in: query
+      required: false
+      schema:
+        type: string
+    AssetNameFilter:
+      name: name
+      in: query
+      required: false
+      schema:
+        type: string
+    SerialNumberFilter:
+      name: serialNumber
+      in: query
+      required: false
+      schema:
+        type: string
+    AssetCategoryFilter:
+      name: assetCategoryId
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/Id'
+    AssetLifecycleFilter:
+      name: lifecycle
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/AssetLifecycle'
+    AssetExceptionFilter:
+      name: exception
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/AssetException'
+    AssetWarehouseFilter:
+      name: warehouseId
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/Id'
+    AssetLocationFilter:
+      name: locationId
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/Id'
+    AssetOrganizationFilter:
+      name: organizationId
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/Id'
   responses:
     BadRequest:
       description: Request validation or state precondition failed.
@@ -260,6 +322,176 @@ components:
     UsageMode:
       type: string
       enum: [PERSONAL, SHARED]
+    AssetLifecycle:
+      type: string
+      enum: [WAITING_INBOUND, IN_STOCK, IN_USE, BORROWED, MAINTENANCE, SCRAPPED, LOST]
+    AssetException:
+      type: string
+      enum: [NORMAL, OVERDUE, PENDING_REPAIR, MISSING]
+    AssetCardStage:
+      type: string
+      enum: [DRAFT, SUBMITTED, CANCELLED]
+    AssetCreatorReference:
+      type: object
+      additionalProperties: false
+      required: [id, username]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        username:
+          type: string
+    AttachmentReference:
+      type: object
+      additionalProperties: false
+      required: [id, version]
+      description: Versioned attachment identity; attachment content and export permissions are separate concerns.
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    AssetCustodySummary:
+      type: object
+      additionalProperties: false
+      description: >-
+        Read-only formal custody summary. PERSONAL has exactly one responsible
+        employee; SHARED has one or more shared responsible employees. These
+        responsibility shapes are mutually exclusive and are not writable on a draft.
+      oneOf:
+        - type: object
+          required: [usageMode, responsibleEmployee, warehouse, location]
+          properties:
+            usageMode:
+              type: string
+              enum: [PERSONAL]
+            responsibleEmployee:
+              $ref: '#/components/schemas/EmployeeReference'
+            warehouse:
+              $ref: '#/components/schemas/CatalogReference'
+            location:
+              $ref: '#/components/schemas/CatalogReference'
+        - type: object
+          required: [usageMode, sharedResponsibleEmployees, warehouse, location]
+          properties:
+            usageMode:
+              type: string
+              enum: [SHARED]
+            sharedResponsibleEmployees:
+              type: array
+              minItems: 1
+              items:
+                $ref: '#/components/schemas/EmployeeReference'
+            warehouse:
+              $ref: '#/components/schemas/CatalogReference'
+            location:
+              $ref: '#/components/schemas/CatalogReference'
+    AssetBusinessSummary:
+      type: object
+      additionalProperties: false
+      required: [unsettledBusinessCount, overdueBusinessCount]
+      description: Read-only summary of formal custody and current unsettled business relations.
+      properties:
+        unsettledBusinessCount:
+          type: integer
+          format: int32
+          minimum: 0
+        overdueBusinessCount:
+          type: integer
+          format: int32
+          minimum: 0
+        latestBusinessReference:
+          $ref: '#/components/schemas/Id'
+    Asset:
+      type: object
+      additionalProperties: false
+      required: [id, assetCode, name, lifecycle, exception, cardStage, version, createdBusinessDate, createdAt, parameterVersionId]
+      description: >-
+        Asset card and ledger read model. planned inbound warehouse and location are
+        not formal custody; currentCustody is established only after inbound acceptance.
+        Sensitive service fields, attachments, and export are separately authorized.
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        assetCode:
+          type: string
+          description: Server-assigned enterprise-unique permanent code; never reused.
+        name:
+          type: string
+        category:
+          $ref: '#/components/schemas/CatalogReference'
+        model:
+          type: string
+        unit:
+          type: string
+        organization:
+          $ref: '#/components/schemas/CatalogReference'
+        plannedInboundWarehouse:
+          $ref: '#/components/schemas/CatalogReference'
+        plannedInboundLocation:
+          $ref: '#/components/schemas/CatalogReference'
+        brand:
+          $ref: '#/components/schemas/CatalogReference'
+        manufacturer:
+          $ref: '#/components/schemas/CatalogReference'
+        serialNumber:
+          type: string
+        acquisitionDate:
+          $ref: '#/components/schemas/BusinessDate'
+        warrantyExpiryDate:
+          $ref: '#/components/schemas/BusinessDate'
+        serviceProvider:
+          type: string
+        serviceContact:
+          type: string
+        servicePhone:
+          type: string
+          x-sensitive: true
+        source:
+          type: string
+        notes:
+          type: string
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttachmentReference'
+          x-sensitive: true
+        extensionValues:
+          type: object
+          additionalProperties: true
+        lifecycle:
+          $ref: '#/components/schemas/AssetLifecycle'
+        exception:
+          $ref: '#/components/schemas/AssetException'
+        cardStage:
+          $ref: '#/components/schemas/AssetCardStage'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        createdBusinessDate:
+          $ref: '#/components/schemas/BusinessDate'
+        createdAt:
+          $ref: '#/components/schemas/Instant'
+        parameterVersionId:
+          $ref: '#/components/schemas/Id'
+        creator:
+          $ref: '#/components/schemas/AssetCreatorReference'
+        currentCustody:
+          $ref: '#/components/schemas/AssetCustodySummary'
+        openBusinessSummary:
+          $ref: '#/components/schemas/AssetBusinessSummary'
+    PageAsset:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Asset'
     LoginRequest:
       type: object
       required: [username, password]
@@ -1559,6 +1791,65 @@ components:
               items:
                 $ref: '#/components/schemas/ConfigurationAnomaly'
 paths:
+  /assets:
+    get:
+      tags: [Assets]
+      operationId: listAssets
+      summary: List assets with scoped ledger filters and stable one-page pagination.
+      x-actor:
+        required: true
+        roles: [ASSET_ADMIN, WAREHOUSE_OPERATOR, AUDIT_READ_ONLY]
+      x-data-scope: >-
+        Each role is evaluated against its own organization or warehouse data scope.
+        SYSTEM_ADMIN does not receive asset business permission automatically.
+      x-sensitive-fields-policy: Service phone, attachments, and export require separate authorization.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/AssetCodeFilter'
+        - $ref: '#/components/parameters/AssetNameFilter'
+        - $ref: '#/components/parameters/SerialNumberFilter'
+        - $ref: '#/components/parameters/AssetCategoryFilter'
+        - $ref: '#/components/parameters/AssetLifecycleFilter'
+        - $ref: '#/components/parameters/AssetExceptionFilter'
+        - $ref: '#/components/parameters/AssetWarehouseFilter'
+        - $ref: '#/components/parameters/AssetLocationFilter'
+        - $ref: '#/components/parameters/AssetOrganizationFilter'
+      responses:
+        '200':
+          description: Scoped asset page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageAsset'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /assets/{assetId}:
+    parameters:
+      - $ref: '#/components/parameters/AssetId'
+    get:
+      tags: [Assets]
+      operationId: getAsset
+      summary: Read an asset card, custody, and current unsettled-business summary.
+      x-actor:
+        required: true
+        roles: [ASSET_ADMIN, WAREHOUSE_OPERATOR, AUDIT_READ_ONLY]
+      x-data-scope: >-
+        Each role is evaluated against its own organization or warehouse data scope;
+        SYSTEM_ADMIN does not receive asset business permission automatically.
+      x-sensitive-fields-policy: Service phone, attachments, and export require separate authorization.
+      responses:
+        '200':
+          description: Asset card details with formal custody and unsettled-business summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /auth/login:
     post:
       tags: [Auth]
