@@ -1,0 +1,28 @@
+{
+  "operationId": "updateInboundReceipt",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "InboundReceiptUpdateRequest",
+  "actor": "warehouse.operator.17",
+  "pathParameters": {"receiptId": "7001"},
+  "headers": {
+    "Idempotency-Key": "inbound-update-disabled-reference-0001",
+    "X-CSRF-Token": "csrf-inbound-update-123456",
+    "If-Match-Version": "1"
+  },
+  "payload": {
+    "items": [
+      {
+        "asset": {"id": "10021", "version": 2},
+        "targetWarehouse": {"id": "5002", "version": 9},
+        "targetLocation": {"id": "5201", "version": 3}
+      }
+    ]
+  },
+  "error": {
+    "code": "INBOUND_MASTER_DATA_DISABLED",
+    "message": "Disabled or expired inbound references cannot be selected.",
+    "fieldErrors": {"items[0].targetWarehouse": "warehouse is DISABLED"}
+  },
+  "evidence": "Contract evidence only; disabled references are rejected in draft writes."
+}

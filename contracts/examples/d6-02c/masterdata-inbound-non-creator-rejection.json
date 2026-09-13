@@ -1,0 +1,20 @@
+{
+  "operationId": "updateInboundReceipt",
+  "kind": "rejection",
+  "status": 403,
+  "requestSchema": "InboundReceiptUpdateRequest",
+  "actor": "warehouse.operator.99",
+  "pathParameters": {"receiptId": "7001"},
+  "headers": {
+    "Idempotency-Key": "inbound-update-receipt-unauthorized-0001",
+    "X-CSRF-Token": "csrf-inbound-update-123456",
+    "If-Match-Version": "0"
+  },
+  "payload": {"notes": "Attempt to edit another operator's draft."},
+  "error": {
+    "code": "INBOUND_NOT_CREATOR",
+    "message": "Only the receipt creator may edit a draft.",
+    "fieldErrors": {"receiptId": "creator relation is required"}
+  },
+  "evidence": "Contract evidence only; another operator's draft is not editable."
+}

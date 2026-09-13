@@ -1,0 +1,26 @@
+{
+  "operationId": "createInboundReceipt",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "InboundReceiptCreateRequest",
+  "actor": "warehouse.operator.17",
+  "headers": {
+    "Idempotency-Key": "inbound-create-location-mismatch-0001",
+    "X-CSRF-Token": "csrf-inbound-create-123456"
+  },
+  "payload": {
+    "items": [
+      {
+        "asset": {"id": "10022", "version": 3},
+        "targetWarehouse": {"id": "5001", "version": 4},
+        "targetLocation": {"id": "5201", "version": 3}
+      }
+    ]
+  },
+  "error": {
+    "code": "INBOUND_WAREHOUSE_LOCATION_MISMATCH",
+    "message": "The target location must belong to the target warehouse.",
+    "fieldErrors": {"items[0].targetLocation": "location belongs to warehouse 5002"}
+  },
+  "evidence": "Contract evidence only; each final item target is checked for warehouse membership."
+}
