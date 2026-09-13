@@ -144,6 +144,19 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertTrue(all(value["status"] == 401 for value in login_rejections))
         response_keys = {tuple(sorted(value["response"])) for value in login_rejections}
         self.assertEqual({("code", "fieldErrors", "message", "requestId")}, response_keys)
+        response_values = {
+            (
+                value["status"],
+                value["response"]["code"],
+                value["response"]["message"],
+                tuple(sorted(value["response"]["fieldErrors"].items())),
+            )
+            for value in login_rejections
+        }
+        self.assertEqual(
+            {(401, "AUTHENTICATION_FAILED", "Authentication failed.", ())},
+            response_values,
+        )
 
     def test_identity_master_data_reads_and_writes_are_system_admin_only(self) -> None:
         document = self.load_contract()
@@ -197,6 +210,10 @@ class DesignPackageContractTest(unittest.TestCase):
                     "OrganizationReference",
                     schemas[schema_name]["properties"][reference_name]["$ref"].rsplit("/", 1)[-1],
                 )
+        for schema_name in ("OrganizationUpdateRequest", "EmployeeUpdateRequest"):
+            with self.subTest(schema=schema_name, patch_semantics=True):
+                self.assertEqual(1, schemas[schema_name].get("minProperties"))
+                self.assertNotIn("required", schemas[schema_name])
 
     def test_employee_disable_revokes_all_access_without_blocking_on_pending_work(self) -> None:
         document = self.load_contract()
@@ -212,9 +229,40 @@ class DesignPackageContractTest(unittest.TestCase):
             self.assertIn(term, side_effects)
         self.assertIn("never blocked", side_effects)
 
+    def test_employee_enable_is_explicit_and_does_not_restore_account_access(self) -> None:
+        document = self.load_contract()
+        operations = {
+            operation["operationId"]: operation
+            for path, item in document["paths"].items()
+            if path.startswith("/employees")
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        self.assertIn("enableEmployee", operations)
+        if "enableEmployee" not in operations:
+            return
+        operation = operations["enableEmployee"]
+        self.assertEqual(["SYSTEM_ADMIN"], operation["x-actor"]["roles"])
+        self.assertTrue(operation["x-version"])
+        self.assertTrue(operation["x-transaction"])
+        self.assertTrue(operation["x-audit-event"])
+        enable_text = json.dumps(operation, sort_keys=True).lower()
+        for phrase in (
+            "only restores the employee enabled state",
+            "does not automatically restore revoked roles",
+            "does not automatically grant business permissions",
+            "system account status remains controlled by its separate operation",
+        ):
+            self.assertIn(phrase, enable_text)
+
     def test_system_account_credentials_are_write_only_and_default_enabled(self) -> None:
         document = self.load_contract()
         schemas = document["components"]["schemas"]
+        self.assertNotIn("AccountStatus", schemas)
+        self.assertEqual(
+            "SystemAccountStatus",
+            schemas["CurrentUser"]["properties"]["status"]["$ref"].rsplit("/", 1)[-1],
+        )
         self.assertIn("/system-accounts", document["paths"])
         self.assertIn("SystemAccountCreateRequest", schemas)
         self.assertIn("InitialPasswordResetRequest", schemas)
@@ -229,6 +277,16 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertNotIn("status", create_schema["properties"])
         self.assertIn("initialPassword", create_schema["properties"])
         self.assertTrue(create_schema["properties"]["initialPassword"]["writeOnly"])
+        self.assertIn("EmployeeReference", schemas)
+        employee_reference = schemas["EmployeeReference"]
+        self.assertEqual({"id", "version"}, set(employee_reference["required"]))
+        self.assertEqual({"id", "version"}, set(employee_reference["properties"]))
+        self.assertIn("employee", create_schema["properties"])
+        self.assertEqual(
+            "EmployeeReference",
+            create_schema["properties"]["employee"]["$ref"].rsplit("/", 1)[-1],
+        )
+        self.assertNotIn("employeeId", create_schema["properties"])
         account = schemas["SystemAccount"]
         self.assertEqual("SystemAccountStatus", account["properties"]["status"]["$ref"].rsplit("/", 1)[-1])
         status_values = set(schemas["SystemAccountStatus"]["enum"])
@@ -262,6 +320,11 @@ class DesignPackageContractTest(unittest.TestCase):
         role_text = json.dumps(role_schema).lower()
         self.assertIn("businessscope", role_text)
         self.assertIn("systemadminbusinesspermissions", role_text)
+        self.assertEqual(
+            [False],
+            role_schema["properties"]["systemAdminBusinessPermissions"].get("enum"),
+        )
+        self.assertIn("enum", role_schema["properties"]["businessScope"])
         revoke = operations["revokeSystemAccountRole"]
         revoke_text = json.dumps(revoke, sort_keys=True).lower()
         self.assertNotIn("last_admin", revoke_text)
@@ -542,6 +605,7 @@ class DesignPackageEvidenceTest(unittest.TestCase):
                 "createEmployee",
                 "updateEmployee",
                 "disableEmployee",
+                "enableEmployee",
             }.issubset(operation_ids)
         )
 
