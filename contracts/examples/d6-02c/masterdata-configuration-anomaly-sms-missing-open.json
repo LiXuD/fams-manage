@@ -1,0 +1,27 @@
+{
+  "operationId": "getConfigurationAnomaly",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": null,
+  "responseSchema": "ConfigurationAnomaly",
+  "pathParameters": {"anomalyId": "9303"},
+  "payload": {},
+  "evidence": "Contract evidence only; no runtime implementation is claimed.",
+  "response": {
+    "id": "9303",
+    "type": "SMS_CHANNEL_MISSING",
+    "status": "OPEN",
+    "detectedAt": "2026-09-14T03:12:00Z",
+    "resolvedAt": null,
+    "dedupKey": "SMS_CHANNEL_MISSING:default",
+    "relatedTodos": [
+      {
+        "id": "9403",
+        "kind": "NOTIFICATION_RETRY",
+        "parameterVersionId": "9101",
+        "deadline": "2026-09-14T04:12:00Z",
+        "status": "PENDING"
+      }
+    ]
+  }
+}
