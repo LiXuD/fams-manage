@@ -160,6 +160,12 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/AssetQrToken'
+    PrintJobId:
+      name: printJobId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
     AssetCodeFilter:
       name: assetCode
       in: query
@@ -777,6 +783,25 @@ components:
           minItems: 1
           items:
             $ref: '#/components/schemas/AssetTagBatchPrintItem'
+    AssetTagPrintJobResult:
+      oneOf:
+        - $ref: '#/components/schemas/AssetTagPrintJob'
+        - $ref: '#/components/schemas/AssetTagBatchPrintJob'
+      description: >-
+        Recoverable result envelope for either a single or batch print job. QUEUED,
+        COMPLETED, and FAILED states remain queryable after the initial response.
+    AssetTagReplacementResult:
+      type: object
+      additionalProperties: false
+      required: [tag, assetVersion]
+      description: The rotated tag plus the asset version produced by the atomic update.
+      properties:
+        tag:
+          $ref: '#/components/schemas/AssetTag'
+        assetVersion:
+          type: integer
+          format: int64
+          minimum: 0
     AssetQrAccessResult:
       type: object
       additionalProperties: false
@@ -2421,6 +2446,11 @@ paths:
       responses:
         '202':
           description: Reprint job accepted or replayed idempotently.
+          headers:
+            Location:
+              description: URL /asset-tag-print-jobs/{printJobId} for recovering the print job result.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -2466,6 +2496,11 @@ paths:
       responses:
         '202':
           description: Complete batch print job accepted or replayed idempotently.
+          headers:
+            Location:
+              description: URL /asset-tag-print-jobs/{printJobId} for recovering the batch print job result.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -2475,6 +2510,33 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+
+  /asset-tag-print-jobs/{printJobId}:
+    parameters:
+      - $ref: '#/components/parameters/PrintJobId'
+    get:
+      tags: [Assets]
+      operationId: getAssetTagPrintJob
+      summary: Recover a queued, completed, or failed print-job result.
+      x-actor:
+        required: true
+        roles: [WAREHOUSE_OPERATOR]
+      x-job-access: >-
+        Only the print-job creator or a permitted recovery relation may read the job.
+        SYSTEM_ADMIN receives no automatic job access.
+      x-recovery-semantics: >-
+        QUEUED, COMPLETED, and FAILED results remain queryable after the initial 202
+        response or a client restart.
+      responses:
+        '200':
+          description: Recoverable single or batch print-job result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetTagPrintJobResult'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /assets/{assetId}/tag/replace:
     parameters:
@@ -2499,7 +2561,7 @@ paths:
         Replacement requires a reason and an ACTIVE published asset. The token rotation
         is atomic: the old token is immediately invalid, the new token is stored, and
         assetCode is unchanged. An idempotent retry with the same idempotency key and
-        payload returns the same new token and result; every rotation is audited.
+        payload returns the same new token and same version result; every rotation is audited.
       x-required-error-statuses: [400, 401, 403, 404, 409]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -2513,11 +2575,11 @@ paths:
               $ref: '#/components/schemas/AssetTagReplaceRequest'
       responses:
         '200':
-          description: New tag with the rotated token.
+          description: New tag with the rotated token and updated asset version.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AssetTag'
+                $ref: '#/components/schemas/AssetTagReplacementResult'
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }

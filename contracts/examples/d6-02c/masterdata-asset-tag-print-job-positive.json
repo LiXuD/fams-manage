@@ -1,0 +1,16 @@
+{
+  "operationId": "getAssetTagPrintJob",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "AssetTagPrintJobResult",
+  "pathParameters": {"printJobId": "88001"},
+  "actor": "warehouse.operator",
+  "payload": {},
+  "response": {
+    "jobId": "88001",
+    "status": "QUEUED",
+    "assetCode": "FA-2026-000002"
+  },
+  "recovery": "The creator can query the Location from the 202 response after a client restart.",
+  "evidence": "Contract evidence only; queued, completed, and failed job recovery is not runtime implemented."
+}
