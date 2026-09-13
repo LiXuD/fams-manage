@@ -1,0 +1,17 @@
+{
+  "operationId": "login",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "LoginRequest",
+  "responseSchema": "SessionResponse",
+  "payload": {
+    "username": "asset.admin",
+    "password": "correct horse battery staple"
+  },
+  "response": {
+    "sessionId": "f7f1c2b0-6a4d-4d5f-9fb1-8b2de8c10101",
+    "csrfToken": "csrf-token-example-123456",
+    "expiresAt": "2026-09-13T08:15:00Z",
+    "requiresInitialPasswordChange": false
+  }
+}
