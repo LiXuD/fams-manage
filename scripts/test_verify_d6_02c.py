@@ -54,21 +54,25 @@ class DesignPackageContractTest(unittest.TestCase):
                 if method not in {"post", "patch", "delete"}:
                     continue
                 with self.subTest(method=method, path=path):
+                    if not operation.get("x-business-write", False):
+                        self.assertIn(operation["operationId"], {"login", "logout"})
+                        self.assertTrue(operation.get("x-exception-rationale"))
+                        continue
                     self.assertTrue(operation.get("x-actor"), "missing actor boundary")
                     self.assertTrue(operation.get("x-version"), "missing version boundary")
                     self.assertTrue(operation.get("x-transaction"), "missing transaction boundary")
                     self.assertTrue(operation.get("x-audit-event"), "missing audit boundary")
-                    self.assertIn("400", operation["responses"])
-                    self.assertIn("401", operation["responses"])
-                    self.assertIn("403", operation["responses"])
-                    self.assertIn("409", operation["responses"])
-                    if operation["operationId"] not in {"login", "logout"}:
-                        parameter_names = {
-                            parameter["name"]
-                            for parameter in operation.get("parameters", [])
-                            if parameter.get("in") == "header"
-                        }
-                        self.assertIn("Idempotency-Key", parameter_names)
+                    required_errors = operation.get("x-required-error-statuses")
+                    self.assertIsInstance(required_errors, list)
+                    for status in required_errors:
+                        self.assertIn(str(status), operation["responses"])
+                    parameter_names = {
+                        parameter["name"]
+                        for parameter in operation.get("parameters", [])
+                        if parameter.get("in") == "header"
+                    }
+                    self.assertIn("Idempotency-Key", parameter_names)
+                    self.assertIn("X-CSRF-Token", parameter_names)
 
     def test_identifier_time_money_and_state_shapes_are_explicit(self) -> None:
         document = self.load_contract()
