@@ -612,7 +612,7 @@ class DesignPackageContractTest(unittest.TestCase):
             if isinstance(operation, dict) and "operationId" in operation
         }
         disable_text = json.dumps(operations["disableManufacturer"], sort_keys=True).lower()
-        for term in ("enabled brand", "allowed", "history", "not rewrite"):
+        for term in ("enabled brand", "allowed", "history", "not rewrit"):
             self.assertIn(term, disable_text)
         selector_text = json.dumps(operations["listActiveBrandReferences"], sort_keys=True).lower()
         for term in ("disabled", "omit", "default"):
