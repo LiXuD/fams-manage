@@ -1,7 +1,7 @@
 # FAMS 项目阶段与交接入口
 
 > 唯一现役进度入口 · 更新于 2026-09-13
-> 当前结论：第 1～5 步已完成；第 6 阶段已进入进行中，Git 已在本地 `main` 初始化；D6-01A、D6-02A 当前为 `DEV_VERIFIED`；D6-02B 独立复核首轮问题已修复并完成真实运行回归，当前仍为 `IN_REVIEW`，尚待修复轮复核及 reviewed HEAD 全量复跑；D6-01B 远端与 CI 尚未完成，产品业务实现尚未开始。
+> 当前结论：第 1～5 步已完成；第 6 阶段已进入进行中，Git 已在本地 `main` 初始化；D6-01A、D6-02A 当前为 `DEV_VERIFIED`；D6-02B 独立复核问题已完成两轮修复及真实运行回归，当前仍为 `IN_REVIEW`，尚待修复轮复核及 reviewed HEAD 全量复跑；D6-01B 远端与 CI 尚未完成，产品业务实现尚未开始。
 
 ## 1. 八步开发流程与当前进度
 
@@ -36,7 +36,7 @@
 
 1. 先读本文和 [PRD V1.5](docs/superpowers/specs/2026-09-03-fixed-asset-product-design.md)。
 2. 阅读[第六阶段开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)：技术架构、接口契约、Git/CI、D6-01～D6-27 台账、外部依赖及持续维护规则均在其中。Git 提交强制格式见计划 §四.4。
-3. 本轮修订已获用户确认；D6-01A、D6-02A 状态为 `DEV_VERIFIED`。D6-02B 已用固定摘要的真实 MySQL 验证 Flyway、MyBatis 事务回滚、JDBC Session、应用/数据库重启以及 Java/共享 TypeScript 构建；独立复核首轮指出的清理、非法迁移判据、测试数据库回退和生成门禁顺序问题已修复，本地门禁退出 0，当前仅为 `IN_REVIEW`。修复轮复核和 reviewed HEAD 全量复跑通过后才进入 D6-02C。产品业务实现尚未开始；D6-01B 仍等待 GitHub 私有仓库与权限。计划范围内权限、事务、迁移、恢复的关键独立技术复核仍须在 D6-02C 关闭前落实，不得由本任务级复核替代。以 [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) 的 `F01～F10`、`P01～P26`、`M01～M14` 为开发范围，以第5步[覆盖清单](docs/superpowers/specs/2026-09-11-fams-usability-test-matrix.csv)检查遗漏。
+3. 本轮修订已获用户确认；D6-01A、D6-02A 状态为 `DEV_VERIFIED`。D6-02B 已用固定摘要的真实 MySQL 验证 Flyway、MyBatis 事务回滚、JDBC Session、应用/数据库重启以及 Java/共享 TypeScript 构建；独立复核指出的清理、非法迁移判据、测试数据库回退和生成门禁顺序问题已完成两轮修复，本地门禁退出 0，当前仅为 `IN_REVIEW`。修复轮复核和 reviewed HEAD 全量复跑通过后才进入 D6-02C。产品业务实现尚未开始；D6-01B 仍等待 GitHub 私有仓库与权限。计划范围内权限、事务、迁移、恢复的关键独立技术复核仍须在 D6-02C 关闭前落实，不得由本任务级复核替代。以 [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) 的 `F01～F10`、`P01～P26`、`M01～M14` 为开发范围，以第5步[覆盖清单](docs/superpowers/specs/2026-09-11-fams-usability-test-matrix.csv)检查遗漏。
 4. 每次任务开始、受阻、送审、验证和验收时同步维护计划台账及执行记录；本文只维护项目阶段和下一步，不复制第二套任务状态。D6-02B 的版本冻结结论尚待修复轮独立复核；更广泛关键独立技术复核仍按计划维护。
 5. 只有 PRD 变更或开发发现设计缺口时，才重新打开第5步对应条目；无需恢复已取消的大规模用户测试方案。
 6. 本次已完成 D6-01A 本地治理、D6-02A 契约生成验证，并将 D6-02B 真实运行兼容性实现送审；尚未创建产品客户端脚手架、业务后端、远端仓库或 CI。兼容性探针不等于产品能力；产品开发、正式 QA 和上线分别记录。

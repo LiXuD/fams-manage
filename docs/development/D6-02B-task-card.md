@@ -4,12 +4,12 @@
 
 - **ID：** D6-02B 运行兼容性。
 - **目标：** 在 D6-02A 生成链路之上，以真实、固定摘要的 MySQL 8.4 容器证明 Spring Boot、MyBatis、Flyway、Spring Session JDBC、事务、应用重启、数据库重启及 Java/共享 TypeScript 构建可以共同工作。
-- **状态：** `IN_REVIEW`（2026-09-13）；独立复核首轮问题已修复且本地完整门禁返回 0，尚待修复轮规格与质量复核，不能提前写为 `DEV_VERIFIED`。
+- **状态：** `IN_REVIEW`（2026-09-13）；独立复核问题已完成两轮修复且本地完整门禁返回 0，尚待修复轮规格与质量复核，不能提前写为 `DEV_VERIFIED`。
 - **分支 / 基线：** `feat/D6-02B-runtime-compatibility`；`c9069f10a5a58a7d101f66490bee3a2ed51cced0`。
-- **实现提交：** `777103b`（依赖、profile 与迁移）、`11f2626`（MyBatis/事务/会话 HTTP 探针）、`a6a3eb8`（真实运行门禁）、`c6e7ed2`（门禁防假通过修复）、`97304b5`（测试数据库强隔离）。
+- **实现提交：** `777103b`（依赖、profile 与迁移）、`11f2626`（MyBatis/事务/会话 HTTP 探针）、`a6a3eb8`（真实运行门禁）、`c6e7ed2`（门禁防假通过修复）、`97304b5`（测试数据库强隔离）、`04d93cc`（Flyway 异常类判据）。
 - **规模：** M；一个运行兼容性闭环，不含业务表、业务契约、客户端应用或项目级 Compose/CI。
 - **实施负责人：** `luna-worker`（`gpt-5.6-luna`）完成依赖、迁移、探针和验证器初稿；其额度中断后由控制器接管验证器防假通过测试、证据和交接文档，控制器模型无法核实。
-- **复核人：** 独立任务级会话 `/root/d6_01a_task_review` 首轮给出 `Spec Compliance: FAIL`、`Task Quality: FAIL`；4 个 Important 和 1 个可修复 Minor 已处理，历史 RED 命令缺口继续如实保留，当前待同一会话复核。用户仍负责产品与里程碑验收；该任务复核不能替代 D6-02C 关闭前计划要求的权限、事务、迁移、恢复关键独立技术复核。
+- **复核人：** 独立任务级会话 `/root/d6_01a_task_review` 首轮给出 `Spec Compliance: FAIL`、`Task Quality: FAIL`；其额度受限后由未参与 D6-02B 实施的 `/root/d6_02a_luna_worker` 定向复核，确认 5/6 项处理、Flyway 包名误判仍开放。`04d93cc` 已补负例并修复，当前待再次复核；历史 RED 命令缺口继续如实保留。用户仍负责产品与里程碑验收；该任务复核不能替代 D6-02C 关闭前计划要求的权限、事务、迁移、恢复关键独立技术复核。
 
 ## PRD、页面与 AC 边界
 
@@ -47,7 +47,7 @@
 
 - **权威机制：** Flyway 是唯一建表机制；`spring.session.jdbc.initialize-schema=never`。正常位置只包含不可变 `V1` 探针表和 `V2` Spring Session 表。
 - **会话 schema 来源：** Spring Session 4.1.1 官方 `schema-mysql.sql`，在迁移头部记录版本与原始链接。
-- **失败夹具：** `invalid-migration` profile 追加独立 `V999` 非法 SQL；启动必须非 0，且日志同时包含 Flyway 异常、精确 V999 文件和 SQL 失败原因，端口冲突或连接失败不得满足。该夹具不进入正常迁移位置。
+- **失败夹具：** `invalid-migration` profile 追加独立 `V999` 非法 SQL；启动必须非 0，且日志同时包含明确 Flyway 异常类、精确 V999 文件和 SQL 失败原因，仅有包名、端口冲突或连接失败不得满足。该夹具不进入正常迁移位置。
 - **恢复：** 不提供 Flyway down/undo，也不修改已执行迁移。验证器只删除并重建其随机、严格前缀的临时数据库，再由正常迁移前向恢复。
 - **持久性：** 同一个任务卷上重启应用进程和 MySQL 容器；迁移历史保持 V1/V2 各一次，已提交探针值与 JDBC Session proof 均保持可读。
 - **环境隔离：** 每次生成不可预测数据库密码、随机监听端口、唯一容器/卷/数据库名；专属 JUnit 在 Spring context 启动前强制校验这些输入且没有固定 URL/凭据回退。未连接或修改本机已有 MySQL schema。
@@ -57,7 +57,7 @@
 
 1. 先建立 3 个真实 socket 期望；缺实现时 Surefire 为 `Tests run: 3, Failures: 3`，预期 201/409/200 的路由均实际返回 404。原始报告在 GREEN 前由控制器读取；`luna-worker` 额度中断导致其精确 RED shell 调用未保留，作为证据限制明确记录。
 2. 最小实现及修复后，启用 profile 并连接任务 MySQL 的测试为 `Tests run: 15, Failures: 0, Errors: 0, Skipped: 0`，其中运行兼容性套件 XML 精确为 3/0/0/0，另有 3 个测试验证数据库输入缺失或不安全时在连接前失败。
-3. 防假通过验证器现有 15 个 Python 行为测试：除精确版本、摘要、架构、zero-skipped 和报告证据外，还拒绝无关启动失败冒充 V999、Docker 清理/枚举失败或超时、生成前门禁顺序错误、敏感 token 与机器路径漏检。
+3. 防假通过验证器现有 16 个 Python 行为测试：除精确版本、摘要、架构、zero-skipped 和报告证据外，还拒绝无关启动失败或仅 Flyway 包名冒充 V999、Docker 清理/枚举失败或超时、生成前门禁顺序错误、敏感 token 与机器路径漏检。
 4. 实际正向路径覆盖 Flyway 新建、MyBatis 写读、真实会话、应用重启、数据库重启、Java 与共享 TypeScript 构建。
 5. 实际拒绝/恢复路径覆盖缺 profile 404、非法迁移启动失败、事务两行全部回滚、缺失/错误 cookie 401、版本/镜像夹具拒绝、失败后精确清理。
 
@@ -65,7 +65,7 @@
 
 - **统一入口：** `scripts/verify-d6-02b.py`。
 - **固定环境命令：** 调用者将 Java 21.0.7 与 Node 24.18.0 放在 `PATH` 后运行 `rtk run 'python3 scripts/verify-d6-02b.py'`。
-- **本地结果：** 依赖树精确版本通过；完整 D6-02A 门禁在任何生成构建前通过；真实 MySQL/Flyway/MyBatis/事务/Session/双重重启通过；15 个验证器测试、15 个启用 profile 的 Java 测试、共享 TypeScript 检查、7 个提交信息夹具、差异检查和敏感/机器路径扫描均返回 0。
+- **本地结果：** 依赖树精确版本通过；完整 D6-02A 门禁在任何生成构建前通过；真实 MySQL/Flyway/MyBatis/事务/Session/双重重启通过；16 个验证器测试、15 个启用 profile 的 Java 测试、共享 TypeScript 检查、7 个提交信息夹具、差异检查和敏感/机器路径扫描均返回 0。
 - **可移植证据：** [D6-02B-runtime-compatibility.md](D6-02B-runtime-compatibility.md)。
 - **本机原始报告：** `.superpowers/sdd/2026-09-12-fams-stage6-development-plan/task-d6-02b-report.md`，按仓库规则忽略且凭据已脱敏。
 - **交接：** 当前只到 `IN_REVIEW`；同一独立会话复核修复轮和控制器对 reviewed HEAD 的完整复跑均通过后才能改为 `DEV_VERIFIED`，然后进入 D6-02C。
