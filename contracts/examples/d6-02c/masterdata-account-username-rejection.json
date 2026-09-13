@@ -11,7 +11,7 @@
   },
   "payload": {
     "username": "warehouse.operator",
-    "employeeId": "3002",
+    "employee": {"id": "3002", "version": 1},
     "initialPassword": "temporary password 456"
   },
   "response": {

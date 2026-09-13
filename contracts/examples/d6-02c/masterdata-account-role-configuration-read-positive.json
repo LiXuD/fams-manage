@@ -9,7 +9,7 @@
   "response": {
     "role": "ASSET_ADMIN",
     "permissions": ["asset.card.read", "asset.card.update"],
-    "businessScope": "enterprise-wide",
+    "businessScope": "ENTERPRISE_WIDE",
     "systemAdminBusinessPermissions": false,
     "configurationWarnings": []
   }
