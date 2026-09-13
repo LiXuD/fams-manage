@@ -1,0 +1,21 @@
+{
+  "operationId": "updateLocation",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "LocationUpdateRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "location-update-example-0002",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "1"
+  },
+  "payload": {
+    "parentLocation": {"id": "8503", "version": 1}
+  },
+  "response": {
+    "code": "LOCATION_CYCLE",
+    "message": "A location cannot become its own ancestor.",
+    "requestId": "00000000-0000-4000-8000-000000000011",
+    "fieldErrors": {"parentLocation": "would create a cycle"}
+  }
+}

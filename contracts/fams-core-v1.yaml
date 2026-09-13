@@ -122,6 +122,12 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Id'
+    LocationId:
+      name: locationId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
   responses:
     BadRequest:
       description: Request validation or state precondition failed.
@@ -1071,6 +1077,125 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/WarehouseActiveReference'
+    LocationType:
+      type: string
+      enum: [BUILDING, FLOOR, ROOM, AREA, BIN]
+    LocationCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name, type]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        type:
+          $ref: '#/components/schemas/LocationType'
+        parentLocation:
+          $ref: '#/components/schemas/CatalogReference'
+          description: Optional parent location id and version; omit for a root location.
+        warehouse:
+          $ref: '#/components/schemas/CatalogReference'
+          description: Optional warehouse id and version; omit for an office or other non-warehouse location.
+        description:
+          type: string
+          maxLength: 500
+    LocationUpdateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: PATCH fields; status changes use the explicit enable or disable operation.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        type:
+          $ref: '#/components/schemas/LocationType'
+        parentLocation:
+          $ref: '#/components/schemas/CatalogReference'
+          description: Omit to retain the parent; id and version are required when supplied.
+        warehouse:
+          $ref: '#/components/schemas/CatalogReference'
+          description: Omit to retain the warehouse; id and version are required when supplied.
+        description:
+          type: string
+          maxLength: 500
+    Location:
+      type: object
+      additionalProperties: false
+      required: [id, code, name, type, status, version]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        code:
+          type: string
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/LocationType'
+        parentLocation:
+          $ref: '#/components/schemas/CatalogReference'
+        warehouse:
+          $ref: '#/components/schemas/CatalogReference'
+        status:
+          $ref: '#/components/schemas/ReferenceStatus'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        description:
+          type: string
+    PageLocation:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Location'
+    LocationActiveReference:
+      type: object
+      additionalProperties: false
+      required: [id, code, name, version]
+      description: Minimal active selector; office locations may omit warehouse.
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        code:
+          type: string
+        name:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        type:
+          $ref: '#/components/schemas/LocationType'
+        warehouse:
+          $ref: '#/components/schemas/CatalogReference'
+        parentLocation:
+          $ref: '#/components/schemas/CatalogReference'
+    LocationActiveReferencePage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/LocationActiveReference'
 paths:
   /auth/login:
     post:
@@ -2791,6 +2916,245 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Warehouse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /locations:
+    get:
+      tags: [MasterData]
+      operationId: listLocations
+      summary: List locations with one-based stable pagination.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Location page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageLocation'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MasterData]
+      operationId: createLocation
+      summary: Create a root or child location.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: Parent and warehouse CatalogReference id/version values are current when supplied; code is unique and never reused.
+      x-transaction:
+        boundary: Validate location tree and warehouse relation, insert location, and audit in one short transaction.
+      x-audit-event:
+        event: LOCATION_CREATED
+      x-error-codes: [LOCATION_CODE_CONFLICT, LOCATION_PARENT_NOT_FOUND, LOCATION_PARENT_VERSION_CONFLICT, LOCATION_PARENT_DISABLED, LOCATION_WAREHOUSE_NOT_FOUND, LOCATION_WAREHOUSE_VERSION_CONFLICT, LOCATION_WAREHOUSE_DISABLED, LOCATION_WAREHOUSE_MISMATCH, LOCATION_CYCLE]
+      x-invariants: Parent changes are cycle-safe; disabled parents and warehouses are rejected; location code is unique and never reused.
+      x-inbound-target-rule: >-
+        Only an ACTIVE location whose warehouse reference resolves to the target ACTIVE warehouse can be selected as an inbound target. An office location without a warehouse may remain available for later in-use scenarios but cannot be used for inbound acceptance.
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationCreateRequest'
+      responses:
+        '201':
+          description: Created location.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /locations/active-references:
+    get:
+      tags: [MasterData]
+      operationId: listActiveLocationReferences
+      summary: List active locations for safe selectors and inbound preflight.
+      x-business-write: false
+      x-actor:
+        required: true
+        roles: [WAREHOUSE_OPERATOR, ASSET_ADMIN]
+      x-non-applicable: [version, idempotency, csrf]
+      x-inbound-target-rule: >-
+        An inbound target must be ACTIVE and belong to the target ACTIVE warehouse; active office locations without a warehouse are excluded from inbound acceptance choices.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Minimal active location references; no identity-sensitive fields are exposed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationActiveReferencePage'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /locations/{locationId}:
+    parameters:
+      - $ref: '#/components/parameters/LocationId'
+    get:
+      tags: [MasterData]
+      operationId: getLocation
+      summary: Read a location, including disabled historical state.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      responses:
+        '200':
+          description: Location details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [MasterData]
+      operationId: updateLocation
+      summary: Patch location metadata and relations without changing status.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version and supplied parent or warehouse id/version values must be current.
+      x-transaction:
+        boundary: Validate location code, tree cycle, and warehouse relation in one short transaction before audit.
+      x-audit-event:
+        event: LOCATION_UPDATED
+      x-error-codes: [LOCATION_CODE_CONFLICT, LOCATION_PARENT_NOT_FOUND, LOCATION_PARENT_VERSION_CONFLICT, LOCATION_PARENT_DISABLED, LOCATION_WAREHOUSE_NOT_FOUND, LOCATION_WAREHOUSE_VERSION_CONFLICT, LOCATION_WAREHOUSE_DISABLED, LOCATION_WAREHOUSE_MISMATCH, LOCATION_CYCLE]
+      x-invariants: Parent changes are cycle-safe; disabled parents and warehouses are rejected; location code is unique and never reused; historical relations remain readable.
+      x-inbound-target-rule: >-
+        Only an ACTIVE location whose warehouse reference resolves to the target ACTIVE warehouse can be selected as an inbound target. An office location without a warehouse cannot be used for inbound acceptance.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationUpdateRequest'
+      responses:
+        '200':
+          description: Updated location.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /locations/{locationId}/disable:
+    parameters:
+      - $ref: '#/components/parameters/LocationId'
+    post:
+      tags: [MasterData]
+      operationId: disableLocation
+      summary: Disable a location without cascading to child locations.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored location version.
+      x-transaction:
+        boundary: Validate assets, open references, and child state, change status, and audit in one short transaction.
+      x-audit-event:
+        event: LOCATION_DISABLED
+      x-error-codes: [LOCATION_ALREADY_DISABLED, LOCATION_HAS_CURRENT_ASSETS, LOCATION_HAS_OPEN_REFERENCES, LOCATION_HAS_ENABLED_CHILDREN]
+      x-invariants: Disable requires no current location assets, no open business or inbound references, and no enabled child nodes; disable is not cascaded; historical relations remain readable.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogStatusChangeRequest'
+      responses:
+        '200':
+          description: Disabled location with history preserved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /locations/{locationId}/enable:
+    parameters:
+      - $ref: '#/components/parameters/LocationId'
+    post:
+      tags: [MasterData]
+      operationId: enableLocation
+      summary: Re-enable a location after its parent and warehouse are valid.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored location version.
+      x-transaction:
+        boundary: Validate parent and warehouse status, change location status, and audit in one short transaction.
+      x-audit-event:
+        event: LOCATION_ENABLED
+      x-error-codes: [LOCATION_ALREADY_ENABLED, LOCATION_PARENT_DISABLED, LOCATION_WAREHOUSE_DISABLED]
+      x-invariants: Enabling a warehouse-bound location requires an enabled parent and enabled associated warehouse; an office location without a warehouse may be enabled for later in-use scenarios but never inbound acceptance.
+      x-inbound-target-rule: >-
+        An inbound target must be ACTIVE and belong to the target ACTIVE warehouse; an office location without a warehouse cannot be used for inbound acceptance.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogStatusChangeRequest'
+      responses:
+        '200':
+          description: Enabled location.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
