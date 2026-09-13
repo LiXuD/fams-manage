@@ -1,0 +1,27 @@
+{
+  "operationId": "batchPrintAssetTags",
+  "kind": "positive",
+  "status": 202,
+  "requestSchema": "AssetTagBatchPrintRequest",
+  "actor": "warehouse.operator",
+  "headers": {
+    "Idempotency-Key": "asset-tag-batch-print-0001",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "assets": [
+      {"assetId": "10002", "version": 7},
+      {"assetId": "10007", "version": 3}
+    ]
+  },
+  "allOrNothing": true,
+  "response": {
+    "jobId": "88002",
+    "status": "COMPLETED",
+    "items": [
+      {"assetId": "10002", "assetCode": "FA-2026-000002"},
+      {"assetId": "10007", "assetCode": "FA-2026-000007"}
+    ]
+  },
+  "evidence": "Contract evidence only; all selected assets are ACTIVE and runtime printing is not implemented."
+}

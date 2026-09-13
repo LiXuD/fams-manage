@@ -2010,6 +2010,212 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertTrue(any(value.get("status") == 409 and "serial" in json.dumps(value).lower() for value in examples))
         self.assertTrue(any(value.get("status") == 409 and "code" in json.dumps(value).lower() for value in examples))
 
+    def test_asset_tag_read_reprint_and_batch_print_contract_is_explicit(self) -> None:
+        document = self.load_contract()
+        paths = document["paths"]
+        schemas = document["components"]["schemas"]
+        operations = {
+            operation["operationId"]: operation
+            for item in paths.values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        required_operations = {
+            "getAssetTag",
+            "reprintAssetTag",
+            "batchPrintAssetTags",
+        }
+        missing = sorted(required_operations - set(operations))
+        self.assertFalse(missing, f"asset tag printing remains RED: {missing}")
+        if missing:
+            return
+
+        self.assertIn("Assets", {tag["name"] for tag in document["tags"]})
+        self.assertIn("/assets/{assetId}/tag", paths)
+        self.assertIn("/assets/{assetId}/tag/reprint", paths)
+        self.assertIn("/asset-tag-print-jobs", paths)
+        expected_read_roles = {"ASSET_ADMIN", "WAREHOUSE_OPERATOR", "AUDIT_READ_ONLY"}
+        self.assertEqual(expected_read_roles, set(operations["getAssetTag"]["x-actor"]["roles"]))
+        self.assertNotIn("SYSTEM_ADMIN", operations["getAssetTag"]["x-actor"]["roles"])
+        for operation_id in ("reprintAssetTag", "batchPrintAssetTags"):
+            with self.subTest(operation=operation_id):
+                operation = operations[operation_id]
+                self.assertEqual(["WAREHOUSE_OPERATOR"], operation["x-actor"]["roles"])
+                self.assertTrue(operation.get("x-business-write"))
+                self.assertTrue(operation.get("x-version"))
+                self.assertTrue(operation.get("x-transaction"))
+                self.assertTrue(operation.get("x-audit-event"))
+                self.assertTrue(
+                    {400, 401, 403, 404, 409}.issubset(
+                        set(operation["x-required-error-statuses"])
+                    )
+                )
+                refs = {
+                    parameter.get("$ref", "").rsplit("/", 1)[-1]
+                    for parameter in operation.get("parameters", [])
+                }
+                self.assertTrue({"IdempotencyKey", "CsrfToken"}.issubset(refs))
+
+        tag = schemas["AssetTag"]
+        self.assertTrue(
+            {"enterpriseName", "assetName", "assetCode", "qrCode", "qrToken"}.issubset(
+                tag["required"]
+            )
+        )
+        self.assertNotIn("assetId", schemas["AssetQrToken"].get("properties", {}))
+        token = schemas["AssetQrToken"]
+        self.assertEqual("string", token["type"])
+        self.assertEqual("^[A-Za-z0-9_-]{43}$", token["pattern"])
+        self.assertEqual(43, token["minLength"])
+        self.assertEqual(43, token["maxLength"])
+        token_text = json.dumps(token, sort_keys=True).lower()
+        for term in ("opaque", "256-bit", "base64url", "asset id", "asset code", "pii"):
+            self.assertIn(term, token_text)
+
+        batch = operations["batchPrintAssetTags"]
+        batch_text = json.dumps(batch, sort_keys=True).lower()
+        for term in ("all-or-nothing", "no partial", "selected", "per-item", "active", "draft"):
+            self.assertIn(term, batch_text)
+        batch_request = schemas["AssetTagBatchPrintRequest"]
+        self.assertEqual({"assets"}, set(batch_request["required"]))
+        self.assertEqual(1, batch_request["properties"]["assets"]["minItems"])
+        self.assertFalse(batch_request.get("additionalProperties", True))
+
+        examples = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted(EXAMPLES.glob("masterdata-asset-tag-*.json"))
+        ]
+        self.assertGreaterEqual(len(examples), 7)
+        self.assertTrue(all("evidence" in value for value in examples))
+        example_operations = {value["operationId"] for value in examples}
+        self.assertTrue(required_operations.issubset(example_operations))
+        reprint = [
+            value
+            for value in examples
+            if value.get("operationId") == "reprintAssetTag" and value.get("kind") == "positive"
+        ]
+        self.assertTrue(reprint)
+        self.assertTrue(reprint[0].get("idempotencyReplayReturnsSameResult"))
+        self.assertEqual(reprint[0]["before"]["qrToken"], reprint[0]["after"]["qrToken"])
+        self.assertEqual(reprint[0]["before"]["assetCode"], reprint[0]["after"]["assetCode"])
+        for stage in ("DRAFT", "PENDING_INBOUND", "CANCELLED"):
+            with self.subTest(stage=stage):
+                self.assertTrue(
+                    any(
+                        value.get("kind") == "rejection"
+                        and value.get("asset", {}).get("cardStage") == stage
+                        and value.get("operationId") in {"reprintAssetTag", "batchPrintAssetTags"}
+                        for value in examples
+                    )
+                )
+
+    def test_asset_tag_rotation_and_access_token_policy_is_explicit(self) -> None:
+        document = self.load_contract()
+        paths = document["paths"]
+        schemas = document["components"]["schemas"]
+        operations = {
+            operation["operationId"]: operation
+            for item in paths.values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        required_operations = {"replaceAssetTag", "resolveAssetAccessToken"}
+        missing = sorted(required_operations - set(operations))
+        self.assertFalse(missing, f"asset tag rotation/access remains RED: {missing}")
+        if missing:
+            return
+
+        self.assertIn("/assets/{assetId}/tag/replace", paths)
+        self.assertIn("/asset-access/{token}", paths)
+        replace = operations["replaceAssetTag"]
+        self.assertEqual(["WAREHOUSE_OPERATOR"], replace["x-actor"]["roles"])
+        self.assertTrue(replace.get("x-business-write"))
+        self.assertTrue(replace.get("x-version"))
+        self.assertTrue(replace.get("x-transaction"))
+        self.assertTrue(replace.get("x-audit-event"))
+        self.assertTrue(
+            {400, 401, 403, 404, 409}.issubset(set(replace["x-required-error-statuses"]))
+        )
+        replace_refs = {
+            parameter.get("$ref", "").rsplit("/", 1)[-1]
+            for parameter in replace.get("parameters", [])
+        }
+        self.assertTrue({"IdempotencyKey", "CsrfToken", "IfMatchVersion"}.issubset(replace_refs))
+        replace_request = schemas["AssetTagReplaceRequest"]
+        self.assertEqual({"reason"}, set(replace_request["required"]))
+        replace_text = json.dumps(replace, sort_keys=True).lower()
+        for term in (
+            "atomic",
+            "rotate",
+            "old token",
+            "immediately invalid",
+            "audit",
+            "idempotent",
+            "same",
+            "new token",
+        ):
+            self.assertIn(term, replace_text)
+
+        access = operations["resolveAssetAccessToken"]
+        self.assertEqual(
+            {"ASSET_ADMIN", "WAREHOUSE_OPERATOR", "AUDIT_READ_ONLY"},
+            set(access["x-actor"]["roles"]),
+        )
+        self.assertNotEqual([], access.get("security", [{"sessionCookie": []}]))
+        self.assertIn("401", access["responses"])
+        self.assertIn("403", access["responses"])
+        self.assertIn("404", access["responses"])
+        self.assertNotIn("410", access["responses"])
+        access_text = json.dumps(access, sort_keys=True).lower()
+        for term in (
+            "current authentication",
+            "permission",
+            "invalid",
+            "old",
+            "guess",
+            "uniform",
+            "does not grant",
+            "scrapped",
+            "sensitive",
+        ):
+            self.assertIn(term, access_text)
+        token_parameter = paths["/asset-access/{token}"]["parameters"][0]
+        self.assertEqual("QrToken", token_parameter["$ref"].rsplit("/", 1)[-1])
+        result_text = json.dumps(schemas["AssetQrAccessResult"], sort_keys=True).lower()
+        self.assertNotIn("servicephone", result_text)
+        self.assertNotIn("attachments", result_text)
+        self.assertIn("necessary", result_text)
+
+        examples = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted(EXAMPLES.glob("masterdata-asset-tag-*.json"))
+        ]
+        replacement = [
+            value
+            for value in examples
+            if value.get("operationId") == "replaceAssetTag" and value.get("kind") == "positive"
+        ]
+        self.assertTrue(replacement)
+        self.assertNotEqual(
+            replacement[0]["previousQrToken"], replacement[0]["response"]["qrToken"]
+        )
+        old_token = next(
+            value
+            for value in examples
+            if value.get("operationId") == "resolveAssetAccessToken"
+            and value.get("scenario") == "old token after replacement"
+        )
+        guessed_token = next(
+            value
+            for value in examples
+            if value.get("operationId") == "resolveAssetAccessToken"
+            and value.get("scenario") == "guessed token"
+        )
+        self.assertEqual(404, old_token["status"])
+        self.assertEqual(404, guessed_token["status"])
+        for key in ("code", "message", "fieldErrors"):
+            self.assertEqual(old_token["response"][key], guessed_token["response"][key])
+
 
 class DesignPackageEvidenceTest(unittest.TestCase):
 

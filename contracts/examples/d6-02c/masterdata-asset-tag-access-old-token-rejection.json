@@ -1,0 +1,14 @@
+{
+  "operationId": "resolveAssetAccessToken",
+  "kind": "rejection",
+  "status": 404,
+  "scenario": "old token after replacement",
+  "pathParameters": {"token": "4PzJx6V7mN2qR8sT1wY5uI9oL3kD0fG6hC8bA7eZ2Q"},
+  "response": {
+    "code": "ASSET_ACCESS_NOT_FOUND",
+    "message": "Asset access token was not found.",
+    "requestId": "11111111-1111-4111-8111-111111111111",
+    "fieldErrors": {}
+  },
+  "evidence": "Contract evidence only; an old token uses the same 404 shape as a guessed token."
+}
