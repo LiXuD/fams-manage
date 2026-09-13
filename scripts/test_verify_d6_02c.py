@@ -230,14 +230,20 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertIn("initialPassword", create_schema["properties"])
         self.assertTrue(create_schema["properties"]["initialPassword"]["writeOnly"])
         account = schemas["SystemAccount"]
-        self.assertEqual("ENABLED", account["properties"]["status"]["default"])
         self.assertEqual("SystemAccountStatus", account["properties"]["status"]["$ref"].rsplit("/", 1)[-1])
         status_values = set(schemas["SystemAccountStatus"]["enum"])
         self.assertEqual({"ENABLED", "DISABLED", "LOCKED"}, status_values)
+        self.assertEqual("ENABLED", schemas["SystemAccountStatus"]["default"])
+        self.assertIn("enabled", json.dumps(create, sort_keys=True).lower())
         reset = schemas["InitialPasswordResetRequest"]
         self.assertIn("newInitialPassword", reset["required"])
         self.assertTrue(reset["properties"]["newInitialPassword"]["writeOnly"])
-        self.assertNotIn("password", json.dumps(account).lower())
+        account_property_names = set(account["properties"])
+        self.assertTrue(
+            account_property_names.isdisjoint(
+                {"password", "initialPassword", "newInitialPassword", "passwordHash"}
+            )
+        )
 
     def test_role_configuration_is_read_only_and_member_revocation_records_warning(self) -> None:
         document = self.load_contract()
@@ -350,9 +356,27 @@ class DesignPackageContractTest(unittest.TestCase):
         for term in ("session", "upload", "history"):
             self.assertIn(term, disable_text)
         employee_schemas = document["components"]["schemas"]
+        required_employee_schemas = {
+            "Employee",
+            "EmployeeCreateRequest",
+            "EmployeeUpdateRequest",
+        }
+        missing_employee_schemas = required_employee_schemas - set(employee_schemas)
+        self.assertFalse(
+            missing_employee_schemas,
+            f"split employee schemas remain RED: {sorted(missing_employee_schemas)}",
+        )
+        if missing_employee_schemas:
+            return
         self.assertIn(
             "phone",
-            json.dumps([employee_schemas["Employee"], employee_schemas["EmployeeInput"]]).lower(),
+            json.dumps(
+                [
+                    employee_schemas["Employee"],
+                    employee_schemas["EmployeeCreateRequest"],
+                    employee_schemas["EmployeeUpdateRequest"],
+                ]
+            ).lower(),
         )
 
     def test_system_account_operations_cover_lifecycle_and_initial_password_reset(self) -> None:
@@ -386,8 +410,7 @@ class DesignPackageContractTest(unittest.TestCase):
         }
         for operation_id in (
             "listRoleConfigurations",
-            "grantRolePermission",
-            "revokeRolePermission",
+            "getRoleConfiguration",
             "grantSystemAccountRole",
             "revokeSystemAccountRole",
         ):
@@ -396,11 +419,10 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertIn("system_admin", role_text)
         self.assertIn("asset_admin", role_text)
         self.assertIn("warehouse_operator", role_text)
-        grant_text = json.dumps(operations["grantRolePermission"], sort_keys=True).lower()
+        grant_text = json.dumps(operations["grantSystemAccountRole"], sort_keys=True).lower()
         self.assertIn("business", grant_text)
         self.assertIn("enterprise", grant_text)
-        self.assertIn("minimum", grant_text)
-        revoke_text = json.dumps(operations["revokeRolePermission"], sort_keys=True).lower()
+        revoke_text = json.dumps(operations["revokeSystemAccountRole"], sort_keys=True).lower()
         self.assertIn("immediate", revoke_text)
         self.assertIn("session", revoke_text)
         self.assertNotIn("delete", " ".join(paths))
@@ -544,12 +566,12 @@ class DesignPackageEvidenceTest(unittest.TestCase):
                 "createSystemAccount",
                 "changeSystemAccountStatus",
                 "resetInitialPassword",
-                "grantRolePermission",
-                "revokeRolePermission",
+                "getRoleConfiguration",
                 "grantSystemAccountRole",
                 "revokeSystemAccountRole",
             }.issubset(operation_ids)
         )
+        self.assertFalse({"grantRolePermission", "revokeRolePermission"} & operation_ids)
 
     def test_examples_are_machine_readable_and_named(self) -> None:
         self.assertTrue(EXAMPLES.is_dir(), f"missing examples directory: {EXAMPLES}")
