@@ -324,13 +324,13 @@ components:
       enum: [PERSONAL, SHARED]
     AssetLifecycle:
       type: string
-      enum: [WAITING_INBOUND, IN_STOCK, IN_USE, BORROWED, MAINTENANCE, SCRAPPED, LOST]
+      enum: [WAITING_INBOUND, IN_STOCK, IN_USE, BORROWED, UNDER_REPAIR, FACTORY_REPAIR, PENDING_SCRAP, SCRAPPED]
     AssetException:
       type: string
-      enum: [NORMAL, OVERDUE, PENDING_REPAIR, MISSING]
+      enum: [NORMAL, SEARCHING, LOST]
     AssetCardStage:
       type: string
-      enum: [DRAFT, SUBMITTED, CANCELLED]
+      enum: [DRAFT, PENDING_INBOUND, ACTIVE, CANCELLED]
     AssetCreatorReference:
       type: object
       additionalProperties: false
@@ -354,37 +354,49 @@ components:
           minimum: 0
     AssetCustodySummary:
       type: object
-      additionalProperties: false
       description: >-
-        Read-only formal custody summary. PERSONAL has exactly one responsible
-        employee; SHARED has one or more shared responsible employees. These
-        responsibility shapes are mutually exclusive and are not writable on a draft.
+        Read-only formal custody summary. STORAGE is an in-warehouse custody with
+        warehouse and location only; PERSONAL has one responsible employee and a
+        using organization; SHARED has one department responsible employee and a
+        fixed location. Owning organization is kept on the Asset and is distinct
+        from usingOrganization. These custody variants are mutually exclusive.
+        Planned inbound targets are not current custody.
       oneOf:
         - type: object
-          required: [usageMode, responsibleEmployee, warehouse, location]
+          additionalProperties: false
+          required: [custodyType, warehouse, location]
           properties:
-            usageMode:
+            custodyType:
               type: string
-              enum: [PERSONAL]
-            responsibleEmployee:
-              $ref: '#/components/schemas/EmployeeReference'
+              enum: [STORAGE]
             warehouse:
               $ref: '#/components/schemas/CatalogReference'
             location:
               $ref: '#/components/schemas/CatalogReference'
         - type: object
-          required: [usageMode, sharedResponsibleEmployees, warehouse, location]
+          additionalProperties: false
+          required: [custodyType, usingOrganization, responsibleEmployee, location]
           properties:
-            usageMode:
+            custodyType:
+              type: string
+              enum: [PERSONAL]
+            usingOrganization:
+              $ref: '#/components/schemas/OrganizationReference'
+            responsibleEmployee:
+              $ref: '#/components/schemas/EmployeeReference'
+            location:
+              $ref: '#/components/schemas/CatalogReference'
+        - type: object
+          additionalProperties: false
+          required: [custodyType, usingOrganization, departmentResponsibleEmployee, location]
+          properties:
+            custodyType:
               type: string
               enum: [SHARED]
-            sharedResponsibleEmployees:
-              type: array
-              minItems: 1
-              items:
-                $ref: '#/components/schemas/EmployeeReference'
-            warehouse:
-              $ref: '#/components/schemas/CatalogReference'
+            usingOrganization:
+              $ref: '#/components/schemas/OrganizationReference'
+            departmentResponsibleEmployee:
+              $ref: '#/components/schemas/EmployeeReference'
             location:
               $ref: '#/components/schemas/CatalogReference'
     AssetBusinessSummary:
@@ -426,7 +438,8 @@ components:
         unit:
           type: string
         organization:
-          $ref: '#/components/schemas/CatalogReference'
+          $ref: '#/components/schemas/OrganizationReference'
+          description: Owning organization; distinct from any usingOrganization in formal custody.
         plannedInboundWarehouse:
           $ref: '#/components/schemas/CatalogReference'
         plannedInboundLocation:
@@ -513,7 +526,8 @@ components:
           type: string
           maxLength: 32
         organization:
-          $ref: '#/components/schemas/CatalogReference'
+          $ref: '#/components/schemas/OrganizationReference'
+          description: Owning organization reference; distinct from formal custody usage.
         plannedInboundWarehouse:
           $ref: '#/components/schemas/CatalogReference'
         plannedInboundLocation:
@@ -576,7 +590,8 @@ components:
           type: string
           maxLength: 32
         organization:
-          $ref: '#/components/schemas/CatalogReference'
+          $ref: '#/components/schemas/OrganizationReference'
+          description: Owning organization reference; distinct from formal custody usage.
         plannedInboundWarehouse:
           $ref: '#/components/schemas/CatalogReference'
         plannedInboundLocation:
@@ -1952,13 +1967,15 @@ paths:
     get:
       tags: [Assets]
       operationId: listAssets
-      summary: List assets with scoped ledger filters and stable one-page pagination.
+      summary: List enterprise asset ledger records with stable one-page filters.
       x-actor:
         required: true
         roles: [ASSET_ADMIN, WAREHOUSE_OPERATOR, AUDIT_READ_ONLY]
       x-data-scope: >-
-        Each role is evaluated against its own organization or warehouse data scope.
-        SYSTEM_ADMIN does not receive asset business permission automatically.
+        ASSET_ADMIN and WAREHOUSE_OPERATOR receive an enterprise-wide asset ledger
+        business view that is not narrowed by organization or warehouse. AUDIT_READ_ONLY
+        is constrained to an explicitly authorized audit scope. SYSTEM_ADMIN receives
+        no automatic asset business permission.
       x-sensitive-fields-policy: Service phone, attachments, and export require separate authorization.
       parameters:
         - $ref: '#/components/parameters/Page'
@@ -2038,8 +2055,10 @@ paths:
         required: true
         roles: [ASSET_ADMIN, WAREHOUSE_OPERATOR, AUDIT_READ_ONLY]
       x-data-scope: >-
-        Each role is evaluated against its own organization or warehouse data scope;
-        SYSTEM_ADMIN does not receive asset business permission automatically.
+        ASSET_ADMIN and WAREHOUSE_OPERATOR receive an enterprise-wide asset ledger
+        business view that is not narrowed by organization or warehouse. AUDIT_READ_ONLY
+        is constrained to an explicitly authorized audit scope. SYSTEM_ADMIN receives
+        no automatic asset business permission.
       x-sensitive-fields-policy: Service phone, attachments, and export require separate authorization.
       responses:
         '200':
@@ -2110,27 +2129,31 @@ paths:
     post:
       tags: [Assets]
       operationId: copyAsset
-      summary: Copy a draft asset card into independent numbered drafts.
+      summary: Copy a visible non-cancelled asset into independent numbered drafts.
       x-business-write: true
       x-actor:
         required: true
         roles: [WAREHOUSE_OPERATOR]
       x-version:
         required: true
-        precondition: If-Match-Version must equal the source draft version and its references must still be current.
+        precondition: If-Match-Version must equal the source asset version and its reference snapshot must still be current.
       x-transaction:
         boundary: Reserve the requested number segment and persist every independent card atomically; failure cannot leave a partial set of cards.
       x-audit-event:
         event: ASSET_DRAFT_COPIED
-      x-error-codes: [ASSET_COPY_QUANTITY_INVALID, ASSET_NOT_FOUND, ASSET_NOT_CREATOR, ASSET_DRAFT_LOCKED, ASSET_REFERENCE_VERSION_CONFLICT, ASSET_CODE_ALLOCATION_CONFLICT]
+      x-error-codes: [ASSET_COPY_QUANTITY_INVALID, ASSET_NOT_FOUND, ASSET_SOURCE_CANCELLED, ASSET_REFERENCE_VERSION_CONFLICT, ASSET_CODE_ALLOCATION_CONFLICT]
       x-invariants: >-
-        Quantity is from 1 through 100. Each copy receives an independent permanent
-        assetCode and card. Only the creating operator may copy an unlocked DRAFT;
-        submitted or locked cards are rejected. Copy only category, brand, manufacturer, model, unit, and
-        extension values; never copy serial, status, planned or formal custody,
+        Quantity is from 1 through 100. A warehouse operator may copy any visible,
+        non-CANCELLED source asset, including ACTIVE, in-stock, and in-use assets;
+        source creator does not restrict copying, and a source business lock does not
+        block a read-only copy. The source version, data scope, and reference snapshot
+        are still checked. Each new card receives an
+        independent permanent assetCode, is owned by the calling warehouse operator,
+        and starts as DRAFT. Copy only category, brand, manufacturer, model, unit,
+        and extension values; never copy serial, status, planned or formal custody,
         organization, usage mode, responsibility, attachments, or history. A failed
         number segment may leave a permanent gap, but the transaction never leaves a
-        partial card set.
+        partial card set. A CANCELLED source is rejected.
       x-required-error-statuses: [400, 401, 403, 404, 409]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'

@@ -1,0 +1,24 @@
+{
+  "operationId": "copyAsset",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "AssetCopyRequest",
+  "pathParameters": {"assetId": "10006"},
+  "headers": {
+    "Idempotency-Key": "asset-copy-cancelled-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "2"
+  },
+  "source": {
+    "cardStage": "CANCELLED",
+    "assetCode": "FA-2026-000006",
+    "businessLock": false
+  },
+  "payload": {"quantity": 1},
+  "error": {
+    "code": "ASSET_SOURCE_CANCELLED",
+    "message": "A cancelled asset card cannot be used as a copy source.",
+    "fieldErrors": {"assetId": "source is cancelled"}
+  },
+  "evidence": "Contract evidence only; cancellation and copy runtime enforcement are not implemented in this design package."
+}

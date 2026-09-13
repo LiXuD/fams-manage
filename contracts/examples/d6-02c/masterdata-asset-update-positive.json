@@ -21,7 +21,7 @@
     "name": "Dell Latitude 7450",
     "lifecycle": "IN_STOCK",
     "exception": "NORMAL",
-    "cardStage": "SUBMITTED",
+    "cardStage": "ACTIVE",
     "version": 5,
     "createdBusinessDate": "2026-09-14",
     "createdAt": "2026-09-14T04:05:00Z",
