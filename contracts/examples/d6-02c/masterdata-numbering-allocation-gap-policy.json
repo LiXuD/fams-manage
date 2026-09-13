@@ -1,0 +1,19 @@
+{
+  "operationId": "numberingAllocationPolicyEvidence",
+  "evidenceType": "allocation-policy",
+  "implemented": false,
+  "kind": "positive",
+  "status": 200,
+  "scenario": "Design evidence only; runtime allocation is not implemented in this slice.",
+  "payload": {
+    "target": "ASSET",
+    "batchSize": 3,
+    "reservedSegment": ["FA-2026-000101", "FA-2026-000102", "FA-2026-000103"]
+  },
+  "response": {
+    "failedNumber": "FA-2026-000102",
+    "outcome": "failed batch leaves a permanent gap; cancelled reservations are not reused",
+    "nextAllocation": "FA-2026-000104",
+    "note": "not implemented runtime evidence; clients cannot preview or choose a number"
+  }
+}

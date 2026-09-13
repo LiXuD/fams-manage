@@ -1,0 +1,26 @@
+{
+  "operationId": "disableNumberingRule",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "CatalogStatusChangeRequest",
+  "responseSchema": "NumberingRule",
+  "headers": {
+    "Idempotency-Key": "numbering-rule-disable-example-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "1"
+  },
+  "payload": {
+    "reason": "Rule replaced; existing assigned codes remain unchanged."
+  },
+  "response": {
+    "id": "8601",
+    "code": "ASSET-ENTERPRISE",
+    "target": "ASSET",
+    "mode": "ENTERPRISE",
+    "fixedPrefix": "FA",
+    "datePart": "YYYYMMDD",
+    "sequenceLength": 7,
+    "status": "DISABLED",
+    "version": 2
+  }
+}

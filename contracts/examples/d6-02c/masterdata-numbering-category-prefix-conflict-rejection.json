@@ -1,0 +1,21 @@
+{
+  "operationId": "enableNumberingRule",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "CatalogStatusChangeRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "numbering-rule-enable-example-0004",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "4"
+  },
+  "payload": {
+    "reason": "Two selectable categories have ambiguous numbering prefixes."
+  },
+  "response": {
+    "code": "NUMBERING_CATEGORY_PREFIX_CONFLICT",
+    "message": "Category numbering prefixes must be legal and unambiguous.",
+    "requestId": "00000000-0000-4000-8000-000000000019",
+    "fieldErrors": {"category": "prefix conflicts with another category"}
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "operationId": "enableNumberingRule",
+  "kind": "rejection",
+  "status": 409,
+  "scenario": "Overlapping active rules for one target are rejected.",
+  "requestSchema": "CatalogStatusChangeRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "numbering-rule-enable-example-0002",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "4"
+  },
+  "payload": {
+    "reason": "An active ASSET rule already owns this namespace."
+  },
+  "response": {
+    "code": "NUMBERING_RULE_TARGET_CONFLICT",
+    "message": "Only one current effective numbering rule is allowed for a target.",
+    "requestId": "00000000-0000-4000-8000-000000000017",
+    "fieldErrors": {"target": "active rule already exists"}
+  }
+}

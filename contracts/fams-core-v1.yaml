@@ -128,6 +128,12 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Id'
+    NumberingRuleId:
+      name: numberingRuleId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
   responses:
     BadRequest:
       description: Request validation or state precondition failed.
@@ -1196,6 +1202,105 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/LocationActiveReference'
+    NumberingTarget:
+      type: string
+      enum: [ASSET, INBOUND_RECEIPT]
+    NumberingMode:
+      type: string
+      enum: [ENTERPRISE, CATEGORY_PREFIX]
+    NumberingDatePart:
+      type: string
+      enum: [NONE, YYYY, YYYYMM, YYYYMMDD]
+    NumberingRuleCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [code, target, mode, datePart, sequenceLength]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Permanent rule identifier; a disabled rule code cannot be reused.
+        target:
+          $ref: '#/components/schemas/NumberingTarget'
+        mode:
+          $ref: '#/components/schemas/NumberingMode'
+          description: ENTERPRISE uses one company namespace; CATEGORY_PREFIX reads current category prefixes.
+        fixedPrefix:
+          type: string
+          maxLength: 32
+          description: Optional fixed prefix for the enterprise mode; never copied into category records.
+        datePart:
+          $ref: '#/components/schemas/NumberingDatePart'
+        sequenceLength:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 16
+    NumberingRuleUpdateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: PATCH fields; rule code and status changes use dedicated operations.
+      properties:
+        target:
+          $ref: '#/components/schemas/NumberingTarget'
+        mode:
+          $ref: '#/components/schemas/NumberingMode'
+        fixedPrefix:
+          type: string
+          maxLength: 32
+        datePart:
+          $ref: '#/components/schemas/NumberingDatePart'
+        sequenceLength:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 16
+    NumberingRule:
+      type: object
+      additionalProperties: false
+      required: [id, code, target, mode, datePart, sequenceLength, status, version]
+      description: >-
+        A permanent numbering-rule identity. Rule changes apply only to allocations
+        after the change; existing asset codes and business numbers never change.
+        Backend allocation is internal to a short transaction, and a failed or
+        cancelled batch may leave a gap that is never reused; clients cannot specify
+        codes or reserve a number through preview.
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        code:
+          type: string
+        target:
+          $ref: '#/components/schemas/NumberingTarget'
+        mode:
+          $ref: '#/components/schemas/NumberingMode'
+        fixedPrefix:
+          type: string
+        datePart:
+          $ref: '#/components/schemas/NumberingDatePart'
+        sequenceLength:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 16
+        status:
+          $ref: '#/components/schemas/ReferenceStatus'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    PageNumberingRule:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/NumberingRule'
 paths:
   /auth/login:
     post:
@@ -3155,6 +3260,232 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Location'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /numbering-rules:
+    get:
+      tags: [MasterData]
+      operationId: listNumberingRules
+      summary: List numbering rules with one-based stable pagination.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Numbering-rule page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageNumberingRule'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MasterData]
+      operationId: createNumberingRule
+      summary: Create a numbering rule for an asset or inbound-receipt namespace.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: Namespace is new; the selected category configuration snapshot is current when category-prefix mode is selected.
+      x-transaction:
+        boundary: Validate the namespace and rule configuration, then persist the rule and audit in one short transaction.
+      x-audit-event:
+        event: NUMBERING_RULE_CREATED
+      x-error-codes: [NUMBERING_RULE_CODE_CONFLICT, NUMBERING_RULE_TARGET_CONFLICT, NUMBERING_CATEGORY_PREFIX_MISSING, NUMBERING_CATEGORY_PREFIX_CONFLICT]
+      x-invariants: Rule code and rule identity are permanent and never reused; only one current rule may be effective for a target; category prefixes are read from AssetCategory and are not copied per category.
+      x-allocation-policy:
+        internal-only: true
+        batch-reservation: >-
+          Backend batch creation reserves a number segment inside the same short transaction as its business write.
+        failure-gap: >-
+          A failed or cancelled batch may leave a gap or tombstone; the gap is never returned to a later allocation.
+        client-input: Clients cannot specify an asset code or business number.
+        preview: No preview endpoint reserves a number or occupies a sequence value.
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NumberingRuleCreateRequest'
+      responses:
+        '201':
+          description: Created numbering rule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NumberingRule'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /numbering-rules/{numberingRuleId}:
+    parameters:
+      - $ref: '#/components/parameters/NumberingRuleId'
+    get:
+      tags: [MasterData]
+      operationId: getNumberingRule
+      summary: Read a numbering rule and its effective namespace.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      responses:
+        '200':
+          description: Numbering-rule details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NumberingRule'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [MasterData]
+      operationId: updateNumberingRule
+      summary: Patch a numbering rule without changing status directly.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version and the category configuration snapshot are current for this namespace.
+      x-transaction:
+        boundary: Validate target overlap and category-prefix snapshot, then update and audit in one short transaction.
+      x-audit-event:
+        event: NUMBERING_RULE_UPDATED
+      x-error-codes: [NUMBERING_RULE_TARGET_CONFLICT, NUMBERING_CATEGORY_PREFIX_MISSING, NUMBERING_CATEGORY_PREFIX_CONFLICT]
+      x-invariants: Rule code and rule identity are permanent and never reused; an update causing an overlapping current target rule returns 409; changes affect only new allocations and never rewrite existing codes or business numbers.
+      x-allocation-policy:
+        internal-only: true
+        batch-reservation: Backend allocation remains inside a short transaction.
+        failure-gap: Failed or cancelled reservations may leave a gap that is never reused.
+        client-input: Clients cannot specify an asset code or business number.
+        preview: Updates never provide a preview that reserves a number.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NumberingRuleUpdateRequest'
+      responses:
+        '200':
+          description: Updated numbering rule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NumberingRule'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /numbering-rules/{numberingRuleId}/disable:
+    parameters:
+      - $ref: '#/components/parameters/NumberingRuleId'
+    post:
+      tags: [MasterData]
+      operationId: disableNumberingRule
+      summary: Disable a numbering rule for future allocations only.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored numbering-rule version.
+      x-transaction:
+        boundary: Disable the rule and record the audit event in one short transaction.
+      x-audit-event:
+        event: NUMBERING_RULE_DISABLED
+      x-error-codes: [NUMBERING_RULE_ALREADY_DISABLED]
+      x-invariants: Disabling affects only future allocations; existing asset codes and business numbers never change, and failed or cancelled gaps are never reused.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogStatusChangeRequest'
+      responses:
+        '200':
+          description: Disabled numbering rule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NumberingRule'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /numbering-rules/{numberingRuleId}/enable:
+    parameters:
+      - $ref: '#/components/parameters/NumberingRuleId'
+    post:
+      tags: [MasterData]
+      operationId: enableNumberingRule
+      summary: Enable a numbering rule after namespace and category checks.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored numbering-rule version.
+      x-transaction:
+        boundary: Validate current-target overlap and category prefixes, then enable and audit in one short transaction.
+      x-audit-event:
+        event: NUMBERING_RULE_ENABLED
+      x-error-codes: [NUMBERING_RULE_ALREADY_ENABLED, NUMBERING_RULE_TARGET_CONFLICT, NUMBERING_CATEGORY_PREFIX_MISSING, NUMBERING_CATEGORY_PREFIX_CONFLICT]
+      x-invariants: Only one current rule may be enabled for each target; overlap returns 409. CATEGORY_PREFIX requires every selectable category to have a legal, non-ambiguous prefix; missing or conflicting prefixes are rejected.
+      x-allocation-policy:
+        internal-only: true
+        failure-gap: Enabling does not reserve numbers; any failed or cancelled allocation gap remains permanent and is never reused.
+        preview: Enabling never provides a preview that reserves a number.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogStatusChangeRequest'
+      responses:
+        '200':
+          description: Enabled numbering rule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NumberingRule'
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }

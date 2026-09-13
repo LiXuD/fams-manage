@@ -1,0 +1,25 @@
+{
+  "operationId": "createNumberingRule",
+  "kind": "rejection",
+  "status": 409,
+  "scenario": "Duplicate permanent rule code is rejected and cannot be reused.",
+  "requestSchema": "NumberingRuleCreateRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "numbering-rule-create-example-0003",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "code": "ASSET-ENTERPRISE",
+    "target": "ASSET",
+    "mode": "ENTERPRISE",
+    "datePart": "YYYY",
+    "sequenceLength": 6
+  },
+  "response": {
+    "code": "NUMBERING_RULE_CODE_CONFLICT",
+    "message": "Numbering rule code is permanent and cannot be reused.",
+    "requestId": "00000000-0000-4000-8000-000000000016",
+    "fieldErrors": {"code": "already used"}
+  }
+}
