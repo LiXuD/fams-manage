@@ -927,10 +927,11 @@ def write_report(status: str, error: str | None = None) -> None:
     lines = [
         "# D6-02B implementation report (ignored local evidence)",
         "",
-        f"- Status: `{status}`",
+        f"- Verification status: `{status}`",
         f"- Base: `c9069f10a5a58a7d101f66490bee3a2ed51cced0`",
         "- Branch: `feat/D6-02B-runtime-compatibility`",
-        "- Model: `gpt-5.6-luna`",
+        "- Initial implementer model: `gpt-5.6-luna`",
+        "- Controller completion model: `无法核实`",
         "- Runtime resources: randomly named with the `fams-d6-02b-` prefix; credentials are omitted.",
         "",
         "## TDD boundary",
@@ -987,8 +988,8 @@ def main() -> int:
         exercise_absent_profile(jar)
         exercise_runtime(jar)
         run_final_checks()
-        status = "IN_REVIEW"
-        print("D6-02B verification passed; implementation remains IN_REVIEW pending independent review.")
+        status = "PASSED"
+        print("D6-02B verification passed; workflow status is recorded in task documents.")
         exit_code = 0
     except (VerificationFailure, subprocess.TimeoutExpired, OSError) as exc:
         error = str(exc)

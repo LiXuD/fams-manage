@@ -106,9 +106,12 @@ class ReportEvidenceTest(unittest.TestCase):
                 VERIFIER.OBSERVATIONS.clear()
                 VERIFIER.record_proof("cleanup", "exact resources removed")
 
-                VERIFIER.write_report("IN_REVIEW")
+                VERIFIER.write_report("PASSED")
 
                 content = report.read_text(encoding="utf-8")
+                self.assertIn("- Verification status: `PASSED`", content)
+                self.assertIn("- Initial implementer model: `gpt-5.6-luna`", content)
+                self.assertIn("- Controller completion model: `无法核实`", content)
                 self.assertIn("Tests run: 3, Failures: 3", content)
                 self.assertIn("expected routes returned HTTP 404", content)
                 self.assertIn("cleanup: exact resources removed", content)
