@@ -548,8 +548,11 @@ class DesignPackageContractTest(unittest.TestCase):
                     {"id", "code", "name", "version"},
                     set(schemas[schema_name]["required"]),
                 )
+                allowed_fields = {"id", "code", "name", "version"}
+                if schema_name == "BrandActiveReference":
+                    allowed_fields.add("defaultManufacturerId")
                 self.assertTrue(
-                    {"id", "code", "name", "version"}.issuperset(schemas[schema_name]["properties"])
+                    allowed_fields.issuperset(schemas[schema_name]["properties"])
                 )
                 self.assertNotIn("phone", json.dumps(schemas[schema_name]).lower())
                 self.assertNotIn("email", json.dumps(schemas[schema_name]).lower())
