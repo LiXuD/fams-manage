@@ -4,10 +4,13 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
+from unittest.mock import patch
 
 
 MODULE_PATH = Path(__file__).with_name("verify-d6-02b.py")
@@ -113,6 +116,173 @@ class ReportEvidenceTest(unittest.TestCase):
             VERIFIER.REPORT = original_report
             VERIFIER.PROOFS[:] = original_proofs
             VERIFIER.OBSERVATIONS[:] = original_observations
+
+
+class CleanupEvidenceTest(unittest.TestCase):
+
+    def test_rejects_failed_docker_cleanup_and_enumeration(self) -> None:
+        original_container = VERIFIER.MYSQL_CONTAINER
+        original_volume = VERIFIER.MYSQL_VOLUME
+        original_proofs = list(VERIFIER.PROOFS)
+        try:
+            VERIFIER.MYSQL_CONTAINER = "fams-d6-02b-mysql-test"
+            VERIFIER.MYSQL_VOLUME = "fams-d6-02b-volume-test"
+            VERIFIER.PROOFS.clear()
+
+            failed = subprocess.CompletedProcess(
+                args=["rtk", "docker"],
+                returncode=1,
+                stdout="",
+                stderr="Docker daemon unavailable",
+            )
+            with patch.object(VERIFIER, "run_rtk", return_value=failed) as runner:
+                with self.assertRaises(VERIFIER.VerificationFailure):
+                    VERIFIER.cleanup_resources()
+
+            self.assertEqual(6, runner.call_count)
+            self.assertFalse(any(proof.startswith("cleanup:") for proof in VERIFIER.PROOFS))
+        finally:
+            VERIFIER.MYSQL_CONTAINER = original_container
+            VERIFIER.MYSQL_VOLUME = original_volume
+            VERIFIER.PROOFS[:] = original_proofs
+
+    def test_still_attempts_all_cleanup_steps_after_a_timeout(self) -> None:
+        original_container = VERIFIER.MYSQL_CONTAINER
+        original_volume = VERIFIER.MYSQL_VOLUME
+        try:
+            VERIFIER.MYSQL_CONTAINER = "fams-d6-02b-mysql-test"
+            VERIFIER.MYSQL_VOLUME = "fams-d6-02b-volume-test"
+            failed = subprocess.CompletedProcess(
+                args=["rtk", "docker"],
+                returncode=1,
+                stdout="",
+                stderr="Docker daemon unavailable",
+            )
+            effects = [
+                subprocess.TimeoutExpired(cmd=["rtk", "docker"], timeout=60),
+                failed,
+                failed,
+                failed,
+                failed,
+                failed,
+            ]
+
+            with patch.object(VERIFIER, "run_rtk", side_effect=effects) as runner:
+                with self.assertRaises(VERIFIER.VerificationFailure):
+                    VERIFIER.cleanup_resources()
+
+            self.assertEqual(6, runner.call_count)
+        finally:
+            VERIFIER.MYSQL_CONTAINER = original_container
+            VERIFIER.MYSQL_VOLUME = original_volume
+
+
+class InvalidMigrationEvidenceTest(unittest.TestCase):
+
+    def test_rejects_an_unrelated_startup_failure_that_names_the_profile(self) -> None:
+        log = "\n".join(
+            (
+                "The following profiles are active: runtime-compatibility,invalid-migration",
+                "Web server failed to start. Port 8080 was already in use.",
+            )
+        )
+
+        with self.assertRaises(VERIFIER.VerificationFailure):
+            VERIFIER.assert_invalid_migration_failure(log)
+
+    def test_accepts_the_exact_flyway_fixture_and_sql_failure(self) -> None:
+        log = "\n".join(
+            (
+                "org.flywaydb.core.api.FlywayException: Migration failed",
+                "Migration V999__intentionally_invalid_fixture.sql failed",
+                "SQL State  : 42000",
+                "Message    : You have an error in your SQL syntax",
+            )
+        )
+
+        VERIFIER.assert_invalid_migration_failure(log)
+
+
+class RetainedContractGateOrderTest(unittest.TestCase):
+
+    def test_runs_the_d6_02a_gate_before_any_generating_build(self) -> None:
+        order: list[str] = []
+
+        def mark(label: str, result: object = None):
+            def action(*_args: object, **_kwargs: object) -> object:
+                order.append(label)
+                return result
+
+            return action
+
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(VERIFIER, "validate_versions", side_effect=mark("versions")))
+            stack.enter_context(
+                patch.object(
+                    VERIFIER,
+                    "verify_retained_d6_02a_gate",
+                    side_effect=mark("d6-02a"),
+                )
+            )
+            stack.enter_context(
+                patch.object(
+                    VERIFIER,
+                    "verify_resolved_dependencies",
+                    side_effect=mark("dependencies"),
+                )
+            )
+            stack.enter_context(
+                patch.object(
+                    VERIFIER,
+                    "build_and_package",
+                    side_effect=mark("build", Path("probe.jar")),
+                )
+            )
+            for name in (
+                "start_mysql",
+                "exercise_invalid_migration",
+                "exercise_absent_profile",
+                "exercise_runtime",
+                "run_final_checks",
+                "cleanup_resources",
+                "write_report",
+                "append_ledger",
+            ):
+                stack.enter_context(patch.object(VERIFIER, name, side_effect=mark(name)))
+
+            self.assertEqual(0, VERIFIER.main())
+
+        self.assertEqual(1, order.count("d6-02a"))
+        self.assertLess(order.index("d6-02a"), order.index("dependencies"))
+        self.assertLess(order.index("d6-02a"), order.index("build"))
+
+
+class SensitiveScanPatternTest(unittest.TestCase):
+
+    def test_detects_supported_token_and_machine_path_shapes(self) -> None:
+        samples = (
+            "token=ghp_" + "A" * 36,
+            "token=github_pat_" + "A1_" * 12,
+            "token=sk-" + "a1_" * 12,
+            "token=xoxb-" + "a1" * 12,
+            "cache=/" + "Users/example/.m2/repository",
+            "node=/" + "home/example/.nvm/versions/node",
+        )
+
+        for sample in samples:
+            with self.subTest(sample=sample):
+                self.assertTrue(VERIFIER.contains_sensitive_or_machine_path(sample))
+
+    def test_ignores_documented_placeholders_and_relative_paths(self) -> None:
+        samples = (
+            "MYSQL_PASSWORD=<redacted>",
+            "token=github_pat_<placeholder>",
+            "cache=.m2/repository",
+        )
+
+        for sample in samples:
+            with self.subTest(sample=sample):
+                self.assertFalse(VERIFIER.contains_sensitive_or_machine_path(sample))
 
 
 if __name__ == "__main__":

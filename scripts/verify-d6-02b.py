@@ -59,6 +59,18 @@ MYSQL_VOLUME: str | None = None
 MYSQL_ROOT_PASSWORD: str | None = None
 MYSQL_USER_PASSWORD: str | None = None
 MYSQL_DATABASE: str | None = None
+SENSITIVE_PATTERNS = (
+    re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+    re.compile(r"(?i)(?<![A-Za-z0-9_])(?:AKIA|ASIA)[0-9A-Z]{16}(?![0-9A-Z])"),
+    re.compile(r"(?<![A-Za-z0-9_])ghp_[A-Za-z0-9]{20,}(?![A-Za-z0-9])"),
+    re.compile(r"(?<![A-Za-z0-9_])github_pat_[A-Za-z0-9_]{20,}(?![A-Za-z0-9_])"),
+    re.compile(r"(?<![A-Za-z0-9_])sk-[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])"),
+    re.compile(r"(?<![A-Za-z0-9_])xox[bp]-[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])"),
+    re.compile(
+        r"(?<![A-Za-z0-9_])/(?:Users|home)/[A-Za-z0-9._-]+/"
+        r"(?:Library|IdeaProjects|Documents|\.m2|\.nvm)(?:/|$)"
+    ),
+)
 
 
 def redact(value: str) -> str:
@@ -86,6 +98,10 @@ def record_proof(label: str, detail: str) -> None:
     proof = f"{label}: {detail}"
     PROOFS.append(proof)
     print(f"[{label}] {detail}")
+
+
+def contains_sensitive_or_machine_path(content: str) -> bool:
+    return any(pattern.search(content) for pattern in SENSITIVE_PATTERNS)
 
 
 def run_rtk(
@@ -238,6 +254,16 @@ def validate_versions() -> None:
 
     assert_expected_failure("version mismatch fixture", wrong_java)
     assert_expected_failure("image mismatch fixture", wrong_image)
+
+
+def verify_retained_d6_02a_gate() -> None:
+    """Reject pre-existing generated drift before D6-02B can regenerate it."""
+
+    require_command(
+        "D6-02A complete gate",
+        ["run", "python3 scripts/verify-d6-02a.py"],
+        timeout=300,
+    )
 
 
 def verify_resolved_dependencies() -> None:
@@ -730,6 +756,25 @@ def exercise_absent_profile(jar: Path) -> None:
         stop_app(process, log_file)
 
 
+def assert_invalid_migration_failure(log: str) -> None:
+    """Require the exact Flyway fixture and its SQL failure, not any startup error."""
+
+    required_evidence = {
+        "Flyway exception": r"(?:org\.flywaydb|FlywayMigrateException|FlywayException)",
+        "V999 fixture": r"\bV999__intentionally_invalid_fixture\.sql\b",
+        "SQL failure": r"(?:SQL State\s*:|Error Code\s*:|SQL syntax|syntax error)",
+    }
+    missing = [
+        label
+        for label, pattern in required_evidence.items()
+        if not re.search(pattern, log, re.I)
+    ]
+    if missing:
+        raise VerificationFailure(
+            "Invalid migration startup failure lacked exact evidence: " + ", ".join(missing)
+        )
+
+
 def exercise_invalid_migration(jar: Path) -> None:
     port = choose_port()
     process, log_file = start_app(jar, "runtime-compatibility,invalid-migration", port)
@@ -742,8 +787,7 @@ def exercise_invalid_migration(jar: Path) -> None:
     log = stop_app(process, log_file)
     if process.returncode == 0:
         raise VerificationFailure("Invalid migration process exited successfully")
-    if not re.search(r"V999|invalid|syntax|migration", log, re.I):
-        raise VerificationFailure("Invalid migration failure did not identify a migration problem")
+    assert_invalid_migration_failure(log)
     record_proof(
         "invalid migration",
         "startup refused the intentionally invalid V999 fixture",
@@ -791,7 +835,6 @@ def run_final_checks() -> None:
     require_command("Java tests", ["./mvnw", "-pl", "backend", "test"], timeout=240)
     require_command("locked Node install", ["npm", "ci"], timeout=180)
     require_command("shared TypeScript typecheck", ["npm", "run", "typecheck", "--workspace", "@fams/api-types"], timeout=120)
-    require_command("D6-02A complete gate", ["run", "python3 scripts/verify-d6-02a.py"], timeout=300)
     require_command("commit-message fixtures", ["python3", "tools/git/test_commit_message_validator.py"], timeout=120)
     require_command("git diff check", ["git", "diff", "--check"], timeout=30)
 
@@ -804,12 +847,6 @@ def run_final_checks() -> None:
     # Scan only high-confidence literal credentials and absolute machine paths.
     # Generic ``password=...`` matching self-matches configuration code and
     # produces false positives for placeholders and generated test inputs.
-    sensitive_patterns = [
-        re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
-        re.compile(r"(?i)(?<![A-Za-z0-9_])(?:AKIA|ASIA)[0-9A-Z]{16}(?![0-9A-Z])"),
-        re.compile(r"(?i)(?<![A-Za-z0-9_])(?:ghp|github_pat|sk|xoxb|xoxp)-[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])"),
-        re.compile(r"(?<![A-Za-z0-9_])/(?:Users|home)/[A-Za-z0-9._-]+/(?:Library|IdeaProjects|Documents|\\.m2|\\.nvm)(?:/|$)"),
-    ]
     violations: list[str] = []
     for relative in sorted(path for path in changed if path):
         path = ROOT / relative
@@ -819,7 +856,7 @@ def run_final_checks() -> None:
             content = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue
-        for pattern in sensitive_patterns:
+        for pattern in SENSITIVE_PATTERNS:
             if pattern.search(content):
                 violations.append(f"{relative}: {pattern.pattern}")
     if violations:
@@ -828,20 +865,54 @@ def run_final_checks() -> None:
 
 
 def cleanup_resources() -> None:
+    failures: list[str] = []
+
+    def attempt(label: str, step: str, args: list[str]) -> subprocess.CompletedProcess[str] | None:
+        try:
+            result = run_rtk(args, timeout=60)
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            failures.append(f"{label} {step} raised {type(exc).__name__}")
+            return None
+        if result.returncode != 0:
+            failures.append(f"{label} {step} returned {result.returncode}")
+            return None
+        return result
+
+    def cleanup_exact(
+        label: str,
+        name: str,
+        list_args: list[str],
+        remove_args: list[str],
+    ) -> None:
+        before = attempt(label, "pre-cleanup enumeration", list_args)
+        should_remove = before is None or name in {
+            line.strip() for line in before.stdout.splitlines()
+        }
+
+        if should_remove:
+            attempt(label, "removal", remove_args)
+
+        after = attempt(label, "post-cleanup enumeration", list_args)
+        if after is not None and name in {line.strip() for line in after.stdout.splitlines()}:
+            failures.append(f"exact task {label} remained after cleanup")
+
     if MYSQL_CONTAINER:
-        run_rtk(["docker", "rm", "--force", MYSQL_CONTAINER], timeout=60)
+        cleanup_exact(
+            "container",
+            MYSQL_CONTAINER,
+            ["docker", "ps", "-a", "--format", "{{.Names}}"],
+            ["docker", "rm", "--force", MYSQL_CONTAINER],
+        )
     if MYSQL_VOLUME:
-        run_rtk(["docker", "volume", "rm", MYSQL_VOLUME], timeout=60)
-    if MYSQL_CONTAINER:
-        result = run_rtk(["docker", "ps", "-a", "--format", "{{.Names}}"])
-        remaining = [line.strip() for line in result.stdout.splitlines() if line.strip() == MYSQL_CONTAINER]
-        if remaining:
-            raise VerificationFailure("Exact task container remained after cleanup")
-    if MYSQL_VOLUME:
-        result = run_rtk(["docker", "volume", "ls", "--format", "{{.Name}}"])
-        remaining = [line.strip() for line in result.stdout.splitlines() if line.strip() == MYSQL_VOLUME]
-        if remaining:
-            raise VerificationFailure("Exact task volume remained after cleanup")
+        cleanup_exact(
+            "volume",
+            MYSQL_VOLUME,
+            ["docker", "volume", "ls", "--format", "{{.Name}}"],
+            ["docker", "volume", "rm", MYSQL_VOLUME],
+        )
+
+    if failures:
+        raise VerificationFailure("Docker cleanup could not be verified: " + "; ".join(failures))
     record_proof(
         "cleanup",
         "exact task container and volume removed; no matching resources remain",
@@ -905,6 +976,7 @@ def main() -> int:
     exit_code = 1
     try:
         validate_versions()
+        verify_retained_d6_02a_gate()
         verify_resolved_dependencies()
         jar = build_and_package()
         start_mysql()
