@@ -54,18 +54,81 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertIn("sessionCookie", document["security"][0])
 
     def test_public_common_schemas_are_explicit(self) -> None:
-        schemas = self.load_contract()["components"]["schemas"]
+        document = self.load_contract()
+        schemas = document["components"]["schemas"]
         self.assertEqual({"type": "string", "pattern": "^[0-9]+$"}, {
             key: schemas["Id"][key] for key in ("type", "pattern")
         })
         self.assertEqual("date-time", schemas["Instant"]["format"])
         self.assertEqual("date", schemas["BusinessDate"]["format"])
         self.assertEqual("^[0-9]+\\.[0-9]{2}$", schemas["Money"]["pattern"])
-        self.assertEqual({"page", "pageSize", "totalElements"}, set(schemas["PageMeta"]["required"]))
+        self.assertEqual({"page", "pageSize", "total"}, set(schemas["PageMeta"]["required"]))
+        self.assertEqual(1, schemas["PageMeta"]["properties"]["page"]["minimum"])
+        self.assertEqual(1, document["components"]["parameters"]["Page"]["schema"]["default"])
+        self.assertEqual(1, document["components"]["parameters"]["Page"]["schema"]["minimum"])
+        self.assertEqual(20, document["components"]["parameters"]["PageSize"]["schema"]["default"])
+        self.assertEqual(200, document["components"]["parameters"]["PageSize"]["schema"]["maximum"])
+        self.assertEqual(
+            {
+                "EMPLOYEE",
+                "DEPARTMENT_ASSET_MANAGER",
+                "ASSET_ADMIN",
+                "WAREHOUSE_OPERATOR",
+                "TECH_ASSISTANT",
+                "AUDIT_READ_ONLY",
+                "SYSTEM_ADMIN",
+            },
+            set(schemas["Role"]["enum"]),
+        )
         self.assertEqual(
             {"code", "message", "requestId", "fieldErrors"},
             set(schemas["ErrorResponse"]["required"]),
         )
+
+    def test_auth_session_and_cookie_boundaries_are_explicit(self) -> None:
+        document = self.load_contract()
+        session = document["components"]["schemas"]["SessionResponse"]
+        self.assertNotIn("sessionId", session["properties"])
+        self.assertEqual(
+            {
+                "csrfToken",
+                "idleExpiresAt",
+                "absoluteExpiresAt",
+                "requiresInitialPasswordChange",
+                "user",
+            },
+            set(session["required"]),
+        )
+        self.assertEqual("CurrentUser", session["properties"]["user"]["$ref"].rsplit("/", 1)[-1])
+
+        login = document["paths"]["/auth/login"]["post"]
+        login_text = json.dumps(login, sort_keys=True).lower()
+        self.assertIn("x-transaction", login)
+        self.assertIn("x-audit-event", login)
+        self.assertIn("same", login_text)
+        self.assertIn("429", login["responses"])
+        self.assertNotIn("409", login["responses"])
+        set_cookie = login["responses"]["200"]["headers"]["Set-Cookie"]
+        cookie_text = json.dumps(set_cookie).lower()
+        for token in ("secure", "httponly", "samesite=lax", "path=/api"):
+            self.assertIn(token, cookie_text)
+
+        password = document["paths"]["/auth/password"]["post"]
+        password_text = json.dumps(password, sort_keys=True).lower()
+        self.assertNotIn("system_account", password_text)
+        self.assertIn("enabled session", password_text)
+        self.assertIn("initial password", password_text)
+        self.assertEqual(
+            "SessionResponse",
+            password["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].rsplit("/", 1)[-1],
+        )
+        self.assertIn("old session", password_text)
+
+        logout = document["paths"]["/auth/logout"]["post"]
+        self.assertIn("x-transaction", logout)
+        self.assertIn("x-audit-event", logout)
+        logout_cookie = logout["responses"]["204"]["headers"]["Set-Cookie"]
+        self.assertIn("max-age=0", json.dumps(logout_cookie).lower())
 
     def test_contract_declares_the_four_first_slice_domains(self) -> None:
         document = self.load_contract()
