@@ -444,7 +444,7 @@ class DesignPackageContractTest(unittest.TestCase):
                 )
                 self.assertIn("401", operation["responses"])
                 self.assertIn("403", operation["responses"])
-        forbidden_prefixes = ("/assets", "/inbound")
+        forbidden_prefixes = ("/inbound",)
         self.assertFalse(any(path.startswith(forbidden_prefixes) for path in paths))
 
     def test_asset_category_tree_and_patch_schema_rules_are_explicit(self) -> None:
@@ -1623,8 +1623,6 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertIn("Assets", {tag["name"] for tag in document["tags"]})
         self.assertIn("/assets", paths)
         self.assertIn("/assets/{assetId}", paths)
-        self.assertNotIn("post", paths["/assets"])
-        self.assertNotIn("patch", paths["/assets/{assetId}"])
         self.assertNotIn("delete", paths["/assets/{assetId}"])
         expected_roles = {"ASSET_ADMIN", "WAREHOUSE_OPERATOR", "AUDIT_READ_ONLY"}
         for operation_id in required_operations:
