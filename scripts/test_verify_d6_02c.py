@@ -628,6 +628,197 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertTrue(selector_examples, "missing selector example without disabled manufacturer default")
         self.assertIn("history", json.dumps(selector_examples).lower())
 
+    def test_warehouse_management_and_active_reference_contract_is_explicit(self) -> None:
+        document = self.load_contract()
+        paths = document["paths"]
+        operations = {
+            operation["operationId"]: operation
+            for item in paths.values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        required_operations = {
+            "listWarehouses",
+            "getWarehouse",
+            "createWarehouse",
+            "updateWarehouse",
+            "disableWarehouse",
+            "enableWarehouse",
+            "listActiveWarehouseReferences",
+        }
+        self.assertFalse(
+            sorted(required_operations - set(operations)),
+            f"warehouse contract remains RED: {sorted(required_operations - set(operations))}",
+        )
+        if required_operations - set(operations):
+            return
+        self.assertIn("/warehouses", paths)
+        self.assertIn("/warehouses/{warehouseId}", paths)
+        self.assertIn("/warehouses/{warehouseId}/disable", paths)
+        self.assertIn("/warehouses/{warehouseId}/enable", paths)
+        self.assertEqual(
+            {"Page", "PageSize"},
+            {
+                parameter["$ref"].rsplit("/", 1)[-1]
+                for parameter in paths["/warehouses"]["get"]["parameters"]
+            },
+        )
+        for path, item in paths.items():
+            if not path.startswith("/warehouses") or path.endswith("/active-references"):
+                continue
+            self.assertNotIn("delete", item)
+            for method, operation in item.items():
+                if method not in {"get", "post", "patch"}:
+                    continue
+                with self.subTest(method=method, path=path):
+                    self.assertEqual(["SYSTEM_ADMIN"], operation["x-actor"]["roles"])
+                    self.assertIn("401", operation["responses"])
+                    self.assertIn("403", operation["responses"])
+        active = operations["listActiveWarehouseReferences"]
+        self.assertEqual(
+            {"WAREHOUSE_OPERATOR", "ASSET_ADMIN"},
+            set(active["x-actor"]["roles"]),
+        )
+        self.assertEqual(
+            "WarehouseActiveReferencePage",
+            active["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].rsplit("/", 1)[-1],
+        )
+        self.assertIn("401", active["responses"])
+        self.assertIn("403", active["responses"])
+
+        schemas = document["components"]["schemas"]
+        for schema_name in ("WarehouseCreateRequest", "WarehouseUpdateRequest"):
+            with self.subTest(schema=schema_name):
+                self.assertNotIn("status", schemas[schema_name]["properties"])
+                self.assertFalse(schemas[schema_name].get("additionalProperties", True))
+        self.assertEqual(1, schemas["WarehouseUpdateRequest"].get("minProperties"))
+        self.assertNotIn("required", schemas["WarehouseUpdateRequest"])
+        self.assertEqual(
+            "ReferenceStatus",
+            schemas["Warehouse"]["properties"]["status"]["$ref"].rsplit("/", 1)[-1],
+        )
+        disable_text = json.dumps(operations["disableWarehouse"], sort_keys=True).lower()
+        for term in ("active asset", "open", "history", "never reused"):
+            self.assertIn(term, disable_text)
+
+    def test_location_tree_and_inbound_target_rules_are_explicit(self) -> None:
+        document = self.load_contract()
+        paths = document["paths"]
+        schemas = document["components"]["schemas"]
+        operations = {
+            operation["operationId"]: operation
+            for item in paths.values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        required_operations = {
+            "listLocations",
+            "getLocation",
+            "createLocation",
+            "updateLocation",
+            "disableLocation",
+            "enableLocation",
+            "listActiveLocationReferences",
+        }
+        missing = sorted(required_operations - set(operations))
+        self.assertFalse(missing, f"location contract remains RED: {missing}")
+        if missing:
+            return
+        self.assertEqual(
+            {"BUILDING", "FLOOR", "ROOM", "AREA", "BIN"},
+            set(schemas["LocationType"]["enum"]),
+        )
+        for schema_name in ("LocationCreateRequest", "LocationUpdateRequest"):
+            with self.subTest(schema=schema_name):
+                self.assertNotIn("status", schemas[schema_name]["properties"])
+                self.assertFalse(schemas[schema_name].get("additionalProperties", True))
+        self.assertEqual(1, schemas["LocationUpdateRequest"].get("minProperties"))
+        self.assertNotIn("required", schemas["LocationUpdateRequest"])
+        for schema_name, property_name in (
+            ("LocationCreateRequest", "parentLocation"),
+            ("LocationUpdateRequest", "parentLocation"),
+            ("LocationCreateRequest", "warehouse"),
+            ("LocationUpdateRequest", "warehouse"),
+        ):
+            with self.subTest(schema=schema_name, property=property_name):
+                self.assertEqual(
+                    "CatalogReference",
+                    schemas[schema_name]["properties"][property_name]["$ref"].rsplit("/", 1)[-1],
+                )
+        location_disable = json.dumps(operations["disableLocation"], sort_keys=True).lower()
+        for term in ("current", "asset", "open", "child", "cascade", "history"):
+            self.assertIn(term, location_disable)
+        location_create = json.dumps(operations["createLocation"], sort_keys=True).lower()
+        location_update = json.dumps(operations["updateLocation"], sort_keys=True).lower()
+        for operation_text in (location_create, location_update):
+            for term in ("version", "cycle", "disabled", "409", "never reused"):
+                self.assertIn(term, operation_text)
+        location_enable = json.dumps(operations["enableLocation"], sort_keys=True).lower()
+        for term in ("parent", "warehouse", "active", "enabled"):
+            self.assertIn(term, location_enable)
+        active_schema = schemas["LocationActiveReference"]
+        self.assertTrue(
+            {"id", "code", "name", "version"}.issubset(active_schema["properties"])
+        )
+        self.assertTrue(
+            set(active_schema["properties"]).issubset(
+                {"id", "code", "name", "version", "type", "warehouse", "parentLocation"}
+            )
+        )
+        self.assertNotIn("phone", json.dumps(active_schema).lower())
+        self.assertNotIn("email", json.dumps(active_schema).lower())
+        active = operations["listActiveLocationReferences"]
+        self.assertEqual(
+            {"WAREHOUSE_OPERATOR", "ASSET_ADMIN"},
+            set(active["x-actor"]["roles"]),
+        )
+
+    def test_warehouse_location_writes_and_examples_cover_frozen_boundaries(self) -> None:
+        document = self.load_contract()
+        management_prefixes = ("/warehouses", "/locations")
+        for path, item in document["paths"].items():
+            if not path.startswith(management_prefixes):
+                continue
+            for method, operation in item.items():
+                if method not in {"post", "patch"} or not operation.get("x-business-write"):
+                    continue
+                with self.subTest(method=method, path=path):
+                    self.assertEqual(["SYSTEM_ADMIN"], operation["x-actor"]["roles"])
+                    self.assertTrue(operation.get("x-version"))
+                    self.assertIn("short", json.dumps(operation["x-transaction"]).lower())
+                    self.assertTrue(operation.get("x-audit-event"))
+                    self.assertIsInstance(operation.get("x-required-error-statuses"), list)
+                    self.assertIn("401", operation["responses"])
+                    self.assertIn("403", operation["responses"])
+                    self.assertIn("409", operation["responses"])
+                    refs = {
+                        parameter.get("$ref", "").rsplit("/", 1)[-1]
+                        for parameter in operation.get("parameters", [])
+                    }
+                    self.assertIn("IdempotencyKey", refs)
+                    self.assertIn("CsrfToken", refs)
+        for prefix, operation_ids in {
+            "masterdata-warehouse-": {
+                "createWarehouse",
+                "updateWarehouse",
+                "disableWarehouse",
+                "enableWarehouse",
+            },
+            "masterdata-location-": {
+                "createLocation",
+                "updateLocation",
+                "disableLocation",
+                "enableLocation",
+            },
+        }.items():
+            files = sorted(EXAMPLES.glob(f"{prefix}*.json"))
+            with self.subTest(prefix=prefix):
+                self.assertGreaterEqual(len(files), 8)
+                values = [json.loads(path.read_text(encoding="utf-8")) for path in files]
+                self.assertEqual({"positive", "rejection"}, {value["kind"] for value in values})
+                self.assertTrue(operation_ids.issubset({value["operationId"] for value in values}))
+                self.assertTrue(all("payload" in value for value in values))
+
     def test_catalog_business_writes_have_short_transaction_audit_and_error_boundaries(self) -> None:
         document = self.load_contract()
         management_prefixes = ("/asset-categories", "/brands", "/manufacturers")
