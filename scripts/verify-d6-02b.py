@@ -760,7 +760,10 @@ def assert_invalid_migration_failure(log: str) -> None:
     """Require the exact Flyway fixture and its SQL failure, not any startup error."""
 
     required_evidence = {
-        "Flyway exception": r"(?:org\.flywaydb|FlywayMigrateException|FlywayException)",
+        "Flyway exception class": (
+            r"\b(?:org\.flywaydb\.[A-Za-z0-9_.$]*Exception|"
+            r"Flyway[A-Za-z0-9_]*Exception)\b"
+        ),
         "V999 fixture": r"\bV999__intentionally_invalid_fixture\.sql\b",
         "SQL failure": r"(?:SQL State\s*:|Error Code\s*:|SQL syntax|syntax error)",
     }

@@ -202,6 +202,18 @@ class InvalidMigrationEvidenceTest(unittest.TestCase):
 
         VERIFIER.assert_invalid_migration_failure(log)
 
+    def test_rejects_a_package_name_without_a_flyway_exception_class(self) -> None:
+        log = "\n".join(
+            (
+                "Documentation: org.flywaydb",
+                "Migration V999__intentionally_invalid_fixture.sql failed",
+                "SQL State  : 42000",
+            )
+        )
+
+        with self.assertRaises(VERIFIER.VerificationFailure):
+            VERIFIER.assert_invalid_migration_failure(log)
+
 
 class RetainedContractGateOrderTest(unittest.TestCase):
 
