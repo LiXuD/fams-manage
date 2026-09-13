@@ -946,6 +946,95 @@ class DesignPackageContractTest(unittest.TestCase):
         for term in ("duplicate", "overlap", "missing", "conflict"):
             self.assertIn(term, all_text)
 
+    def test_numbering_target_mode_and_prefix_combinations_are_explicit(self) -> None:
+        document = self.load_contract()
+        schemas = document["components"]["schemas"]
+        operations = {
+            operation["operationId"]: operation
+            for item in document["paths"].values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        allowed = ["ASSET:ENTERPRISE", "ASSET:CATEGORY_PREFIX", "INBOUND_RECEIPT:ENTERPRISE"]
+        for operation_id in ("createNumberingRule", "updateNumberingRule", "enableNumberingRule"):
+            with self.subTest(operation=operation_id):
+                operation = operations[operation_id]
+                self.assertEqual(allowed, operation.get("x-allowed-target-modes"))
+                self.assertIn(
+                    "INBOUND_RECEIPT:CATEGORY_PREFIX",
+                    operation.get("x-rejected-target-modes", []),
+                )
+                self.assertIn(
+                    "CATEGORY_PREFIX:fixedPrefix",
+                    operation.get("x-rejected-prefix-combinations", []),
+                )
+                self.assertIn("NUMBERING_RULE_TARGET_MODE_CONFLICT", operation["x-error-codes"])
+                self.assertIn("NUMBERING_RULE_FIXED_PREFIX_NOT_ALLOWED", operation["x-error-codes"])
+                validation = json.dumps(operation, sort_keys=True).lower()
+                for term in (
+                    "category_prefix",
+                    "inbound_receipt",
+                    "enterprise",
+                    "fixedprefix",
+                    "numberingprefix",
+                    "400",
+                ):
+                    self.assertIn(term, validation)
+
+        for schema_name in ("NumberingRuleCreateRequest", "NumberingRuleUpdateRequest", "NumberingRule"):
+            with self.subTest(schema=schema_name):
+                fixed_prefix = json.dumps(schemas[schema_name]["properties"]["fixedPrefix"]).lower()
+                self.assertIn("enterprise", fixed_prefix)
+                self.assertIn("category_prefix", fixed_prefix)
+                self.assertIn("omit", fixed_prefix)
+                self.assertIn("numberingprefix", fixed_prefix)
+
+        values = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted(EXAMPLES.glob("masterdata-numbering-*.json"))
+        ]
+        inbound_positive = [
+            value
+            for value in values
+            if value.get("kind") == "positive"
+            and value.get("operationId") == "createNumberingRule"
+            and value.get("payload", {}).get("target") == "INBOUND_RECEIPT"
+        ]
+        self.assertTrue(inbound_positive)
+        self.assertTrue(all(value["payload"]["mode"] == "ENTERPRISE" for value in inbound_positive))
+        invalid_inbound = [
+            value
+            for value in values
+            if value.get("status") == 400
+            and value.get("payload", {}).get("target") == "INBOUND_RECEIPT"
+            and value.get("payload", {}).get("mode") == "CATEGORY_PREFIX"
+        ]
+        self.assertTrue(invalid_inbound)
+        self.assertTrue(
+            all(value["response"]["code"] == "NUMBERING_RULE_TARGET_MODE_CONFLICT" for value in invalid_inbound)
+        )
+        category_positive = [
+            value
+            for value in values
+            if value.get("kind") == "positive"
+            and value.get("operationId") == "createNumberingRule"
+            and value.get("payload", {}).get("target") == "ASSET"
+            and value.get("payload", {}).get("mode") == "CATEGORY_PREFIX"
+        ]
+        self.assertTrue(category_positive)
+        self.assertTrue(all("fixedPrefix" not in value["payload"] for value in category_positive))
+        invalid_fixed_prefix = [
+            value
+            for value in values
+            if value.get("status") == 400
+            and value.get("payload", {}).get("mode") == "CATEGORY_PREFIX"
+            and "fixedPrefix" in value.get("payload", {})
+        ]
+        self.assertTrue(invalid_fixed_prefix)
+        self.assertTrue(
+            all(value["response"]["code"] == "NUMBERING_RULE_FIXED_PREFIX_NOT_ALLOWED" for value in invalid_fixed_prefix)
+        )
+
     def test_catalog_business_writes_have_short_transaction_audit_and_error_boundaries(self) -> None:
         document = self.load_contract()
         management_prefixes = ("/asset-categories", "/brands", "/manufacturers")
