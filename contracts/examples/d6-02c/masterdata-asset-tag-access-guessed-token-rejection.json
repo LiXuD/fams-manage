@@ -4,6 +4,7 @@
   "status": 404,
   "scenario": "guessed token",
   "pathParameters": {"token": "zZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZz"},
+  "payload": {},
   "response": {
     "code": "ASSET_ACCESS_NOT_FOUND",
     "message": "Asset access token was not found.",

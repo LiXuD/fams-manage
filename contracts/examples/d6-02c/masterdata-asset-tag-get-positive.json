@@ -4,6 +4,7 @@
   "status": 200,
   "requestSchema": "AssetTag",
   "pathParameters": {"assetId": "10002"},
+  "payload": {},
   "asset": {"cardStage": "ACTIVE", "lifecycle": "IN_STOCK"},
   "response": {
     "enterpriseName": "FAMS Demo Enterprise",

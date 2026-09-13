@@ -10,6 +10,7 @@
     "X-CSRF-Token": "csrf-token-example-123456",
     "If-Match-Version": "7"
   },
+  "payload": {"reason": "Print a replacement copy for the same tag."},
   "before": {
     "assetCode": "FA-2026-000002",
     "qrToken": "4PzJx6V7mN2qR8sT1wY5uI9oL3kD0fG6hC8bA7eZ2Q"

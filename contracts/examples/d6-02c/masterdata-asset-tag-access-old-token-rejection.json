@@ -4,6 +4,7 @@
   "status": 404,
   "scenario": "old token after replacement",
   "pathParameters": {"token": "4PzJx6V7mN2qR8sT1wY5uI9oL3kD0fG6hC8bA7eZ2Q"},
+  "payload": {},
   "response": {
     "code": "ASSET_ACCESS_NOT_FOUND",
     "message": "Asset access token was not found.",
