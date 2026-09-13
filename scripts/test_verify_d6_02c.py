@@ -1117,10 +1117,11 @@ class DesignPackageContractTest(unittest.TestCase):
             "workWeek",
             "holidays",
             "adjustedWorkdays",
-            "adminProcessingDeadline",
-            "warehouseOperatorClaimDeadline",
-            "handoverDeadline",
-            "messageEscalationThreshold",
+            "adminDecisionDeadlineWorkdays",
+            "warehouseClaimDeadlineWorkdays",
+            "warehouseFirstExecutionDeadlineWorkdays",
+            "handoverAcceptanceDeadlineNaturalDays",
+            "notificationEscalationThresholds",
         }
         self.assertTrue(snapshot_fields.issubset(snapshot["required"]))
         timezone = snapshot["properties"]["timezone"]
@@ -1137,16 +1138,16 @@ class DesignPackageContractTest(unittest.TestCase):
                 self.assertEqual("BusinessDate", items["$ref"].rsplit("/", 1)[-1])
                 self.assertTrue(snapshot["properties"][field]["uniqueItems"])
         for field in (
-            "adminProcessingDeadline",
-            "warehouseOperatorClaimDeadline",
-            "handoverDeadline",
-            "messageEscalationThreshold",
+            "adminDecisionDeadlineWorkdays",
+            "warehouseClaimDeadlineWorkdays",
+            "warehouseFirstExecutionDeadlineWorkdays",
+            "handoverAcceptanceDeadlineNaturalDays",
         ):
             with self.subTest(duration_field=field):
                 property_schema = snapshot["properties"][field]
                 self.assertEqual("integer", property_schema["type"])
                 self.assertEqual(1, property_schema["minimum"])
-                self.assertEqual("minutes", property_schema["x-unit"])
+                self.assertIn(property_schema["x-unit"], {"workdays", "natural-days"})
 
         version = schemas["BusinessParameterVersion"]
         self.assertTrue(
@@ -1195,7 +1196,6 @@ class DesignPackageContractTest(unittest.TestCase):
                 "type",
                 "status",
                 "detectedAt",
-                "resolvedAt",
                 "dedupKey",
                 "relatedTodos",
             }.issubset(anomaly["required"])
@@ -1209,7 +1209,7 @@ class DesignPackageContractTest(unittest.TestCase):
         for term in ("dedup", "todo", "retained", "automatically", "ignore", "delete"):
             self.assertIn(term, anomaly_text)
         self.assertIn("Instant", json.dumps(anomaly["properties"]["detectedAt"]))
-        self.assertIn("Instant", json.dumps(anomaly["properties"]["resolvedAt"]))
+        self.assertEqual("date-time", anomaly["properties"]["resolvedAt"]["format"])
         self.assertEqual("TodoReference", anomaly["properties"]["relatedTodos"]["items"]["$ref"].rsplit("/", 1)[-1])
 
         for path, item in paths.items():
