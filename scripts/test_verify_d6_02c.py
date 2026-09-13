@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "contracts/fams-core-v1.yaml"
 EXAMPLES = ROOT / "contracts/examples/d6-02c"
 DOCS = ROOT / "docs/development"
+PY_YAML_VERSION = "6.0.2"
 
 
 class DesignPackageContractTest(unittest.TestCase):
@@ -22,11 +23,49 @@ class DesignPackageContractTest(unittest.TestCase):
         try:
             import yaml
 
+            self.assertEqual(PY_YAML_VERSION, yaml.__version__)
             document = yaml.safe_load(CONTRACT.read_text(encoding="utf-8"))
         except ImportError as exc:  # pragma: no cover - environment setup failure
             self.fail(f"PyYAML is required for the semantic test: {exc}")
         self.assertIsInstance(document, dict)
         return document
+
+    def test_auth_and_public_foundation_is_independently_complete(self) -> None:
+        document = self.load_contract()
+        self.assertEqual("3.0.4", document.get("openapi"))
+        self.assertEqual("/api/v1", document["servers"][0]["url"])
+        self.assertEqual({"Auth"}, {tag["name"] for tag in document["tags"]})
+        self.assertEqual(5, len(document["paths"]))
+        operations = {
+            operation["operationId"]
+            for item in document["paths"].values()
+            for method, operation in item.items()
+            if method in {"get", "post", "patch"}
+        }
+        self.assertEqual(
+            {"login", "changeInitialPassword", "getCurrentUser", "getMyPermissions", "logout"},
+            operations,
+        )
+        schemes = document["components"]["securitySchemes"]
+        self.assertEqual("cookie", schemes["sessionCookie"]["in"])
+        self.assertEqual("FAMS_SESSION", schemes["sessionCookie"]["name"])
+        self.assertEqual("X-CSRF-Token", schemes["csrfHeader"]["name"])
+        self.assertEqual("apiKey", schemes["csrfHeader"]["type"])
+        self.assertIn("sessionCookie", document["security"][0])
+
+    def test_public_common_schemas_are_explicit(self) -> None:
+        schemas = self.load_contract()["components"]["schemas"]
+        self.assertEqual({"type": "string", "pattern": "^[0-9]+$"}, {
+            key: schemas["Id"][key] for key in ("type", "pattern")
+        })
+        self.assertEqual("date-time", schemas["Instant"]["format"])
+        self.assertEqual("date", schemas["BusinessDate"]["format"])
+        self.assertEqual("^[0-9]+\\.[0-9]{2}$", schemas["Money"]["pattern"])
+        self.assertEqual({"page", "pageSize", "totalElements"}, set(schemas["PageMeta"]["required"]))
+        self.assertEqual(
+            {"code", "message", "requestId", "fieldErrors"},
+            set(schemas["ErrorResponse"]["required"]),
+        )
 
     def test_contract_declares_the_four_first_slice_domains(self) -> None:
         document = self.load_contract()
@@ -66,18 +105,27 @@ class DesignPackageContractTest(unittest.TestCase):
                     self.assertIsInstance(required_errors, list)
                     for status in required_errors:
                         self.assertIn(str(status), operation["responses"])
-                    parameter_names = {
-                        parameter["name"]
+                    header_parameters = [
+                        parameter
                         for parameter in operation.get("parameters", [])
-                        if parameter.get("in") == "header"
-                    }
-                    self.assertIn("Idempotency-Key", parameter_names)
-                    self.assertIn("X-CSRF-Token", parameter_names)
+                        if parameter.get("in") == "header" or "$ref" in parameter
+                    ]
+                    parameter_names = {parameter.get("name") for parameter in header_parameters}
+                    parameter_refs = {parameter.get("$ref", "").rsplit("/", 1)[-1] for parameter in header_parameters}
+                    self.assertTrue(
+                        "Idempotency-Key" in parameter_names or "IdempotencyKey" in parameter_refs
+                    )
+                    self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 
     def test_identifier_time_money_and_state_shapes_are_explicit(self) -> None:
         document = self.load_contract()
         schemas = document["components"]["schemas"]
-        for name in ("Organization", "Employee", "Asset", "InboundReceipt"):
+        future_schemas = ("Organization", "Employee", "Asset", "InboundReceipt")
+        missing = [name for name in future_schemas if name not in schemas]
+        self.assertFalse(missing, f"later domain schemas remain RED: {missing}")
+        if missing:
+            return
+        for name in future_schemas:
             with self.subTest(schema=name):
                 self.assertEqual("string", schemas[name]["properties"]["id"]["type"])
                 self.assertEqual("^[0-9]+$", schemas[name]["properties"]["id"]["pattern"])
@@ -91,6 +139,24 @@ class DesignPackageContractTest(unittest.TestCase):
 
 
 class DesignPackageEvidenceTest(unittest.TestCase):
+
+    def test_auth_examples_are_machine_readable_and_named(self) -> None:
+        self.assertTrue(EXAMPLES.is_dir(), f"missing examples directory: {EXAMPLES}")
+        files = sorted(EXAMPLES.glob("auth-*.json"))
+        self.assertGreaterEqual(len(files), 4)
+        kinds: set[str] = set()
+        operation_ids: set[str] = set()
+        for path in files:
+            with self.subTest(path=path.name):
+                value = json.loads(path.read_text(encoding="utf-8"))
+                self.assertIn(value.get("kind"), {"positive", "rejection"})
+                self.assertTrue(value.get("operationId"))
+                self.assertIsInstance(value.get("status"), int)
+                self.assertIn("payload", value)
+                kinds.add(value["kind"])
+                operation_ids.add(value["operationId"])
+        self.assertEqual({"positive", "rejection"}, kinds)
+        self.assertTrue({"login", "changeInitialPassword", "logout"}.issubset(operation_ids))
 
     def test_examples_are_machine_readable_and_named(self) -> None:
         self.assertTrue(EXAMPLES.is_dir(), f"missing examples directory: {EXAMPLES}")
