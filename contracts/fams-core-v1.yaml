@@ -203,9 +203,6 @@ components:
           $ref: '#/components/schemas/Instant'
         aggregateId:
           $ref: '#/components/schemas/Id'
-    AccountStatus:
-      type: string
-      enum: [ENABLED, DISABLED, LOCKED]
     Role:
       type: string
       enum: [EMPLOYEE, DEPARTMENT_ASSET_MANAGER, ASSET_ADMIN, WAREHOUSE_OPERATOR, TECH_ASSISTANT, AUDIT_READ_ONLY, SYSTEM_ADMIN]
@@ -263,7 +260,7 @@ components:
         username:
           type: string
         status:
-          $ref: '#/components/schemas/AccountStatus'
+          $ref: '#/components/schemas/SystemAccountStatus'
         roles:
           type: array
           minItems: 1
@@ -315,7 +312,7 @@ components:
     OrganizationUpdateRequest:
       type: object
       additionalProperties: false
-      required: [name]
+      minProperties: 1
       properties:
         code:
           type: string
@@ -391,7 +388,7 @@ components:
     EmployeeUpdateRequest:
       type: object
       additionalProperties: false
-      required: [displayName, organization]
+      minProperties: 1
       properties:
         employeeNo:
           type: string
@@ -452,6 +449,26 @@ components:
           type: string
           minLength: 1
           maxLength: 500
+    EnableEmployeeRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+    EmployeeReference:
+      type: object
+      required: [id, version]
+      description: A versioned employee reference used for account creation validation.
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
     SystemAccountStatus:
       type: string
       enum: [ENABLED, DISABLED, LOCKED]
@@ -459,14 +476,15 @@ components:
     SystemAccountCreateRequest:
       type: object
       additionalProperties: false
-      required: [username, employeeId, initialPassword]
+      required: [username, employee, initialPassword]
       properties:
         username:
           type: string
           minLength: 1
           maxLength: 128
-        employeeId:
-          $ref: '#/components/schemas/Id'
+        employee:
+          $ref: '#/components/schemas/EmployeeReference'
+          description: Employee id and current employee version for relation validation.
         initialPassword:
           type: string
           minLength: 12
@@ -554,9 +572,12 @@ components:
             type: string
         businessScope:
           type: string
-          description: ASSET_ADMIN and WAREHOUSE_OPERATOR permissions operate on the enterprise-wide pool.
+          enum: [PERSONAL, DEPARTMENT, DEPARTMENT_AND_DESCENDANTS, SPECIFIED_ORGANIZATION, SPECIFIED_WAREHOUSE, ENTERPRISE_WIDE, NONE]
+          description: Controlled data-scope vocabulary for the fixed V1 role baseline.
         systemAdminBusinessPermissions:
           type: boolean
+          enum: [false]
+          default: false
           description: Always false for V1; SYSTEM_ADMIN role configuration alone grants no business approval or execution rights.
         configurationWarnings:
           type: array
@@ -1044,6 +1065,50 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /employees/{employeeId}/enable:
+    parameters:
+      - $ref: '#/components/parameters/EmployeeId'
+    post:
+      tags: [MasterData]
+      operationId: enableEmployee
+      summary: Re-enable an employee without restoring roles or account access.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored employee version.
+      x-transaction:
+        boundary: Restore only the employee enabled state and audit atomically.
+      x-audit-event:
+        event: EMPLOYEE_ENABLED
+      x-error-codes: [EMPLOYEE_ALREADY_ENABLED]
+      x-invariants: Enabling only restores the employee enabled state; it does not automatically restore revoked roles and does not automatically grant business permissions. The system account status remains controlled by its separate operation; responsibility and history remain unchanged.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnableEmployeeRequest'
+      responses:
+        '200':
+          description: Enabled employee; account status and role membership are unchanged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Employee'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
   /system-accounts:
     get:
       tags: [MasterData]
@@ -1075,7 +1140,7 @@ paths:
         roles: [SYSTEM_ADMIN]
       x-version:
         required: true
-        precondition: Employee relation version is current and username is unique.
+        precondition: EmployeeReference id/version is current and username is unique.
       x-transaction:
         boundary: Insert account, initial-password marker, and audit event atomically.
       x-audit-event:
