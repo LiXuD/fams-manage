@@ -98,6 +98,24 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Role'
+    AssetCategoryId:
+      name: assetCategoryId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    BrandId:
+      name: brandId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    ManufacturerId:
+      name: manufacturerId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
   responses:
     BadRequest:
       description: Request validation or state precondition failed.
@@ -604,6 +622,360 @@ components:
           type: string
           minLength: 1
           maxLength: 500
+    CatalogReference:
+      type: object
+      additionalProperties: false
+      required: [id, version]
+      description: Versioned reference used to validate a catalog relation at write time.
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    ExtensionFieldTemplate:
+      type: object
+      additionalProperties: false
+      required: [key, type]
+      description: A bounded extension-field definition owned by an asset category.
+      properties:
+        key:
+          type: string
+          minLength: 1
+          maxLength: 64
+        label:
+          type: string
+          minLength: 1
+          maxLength: 128
+        type:
+          type: string
+          enum: [TEXT, NUMBER, DATE, BOOLEAN]
+        'required':
+          type: boolean
+          default: false
+    CatalogStatusChangeRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+    AssetCategoryCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        parentCategory:
+          $ref: '#/components/schemas/CatalogReference'
+          description: Omit for a root category; otherwise id and version are required.
+        description:
+          type: string
+          maxLength: 500
+        suggestedUnit:
+          type: string
+          maxLength: 32
+        numberingPrefix:
+          type: string
+          maxLength: 32
+        extensionFieldTemplate:
+          type: array
+          maxItems: 32
+          items:
+            $ref: '#/components/schemas/ExtensionFieldTemplate'
+    AssetCategoryUpdateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: PATCH fields; status changes use the explicit enable or disable operation.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        parentCategory:
+          $ref: '#/components/schemas/CatalogReference'
+          description: Omit to retain the parent; id and version are required when supplied.
+        description:
+          type: string
+          maxLength: 500
+        suggestedUnit:
+          type: string
+          maxLength: 32
+        numberingPrefix:
+          type: string
+          maxLength: 32
+        extensionFieldTemplate:
+          type: array
+          maxItems: 32
+          items:
+            $ref: '#/components/schemas/ExtensionFieldTemplate'
+    AssetCategory:
+      type: object
+      additionalProperties: false
+      required: [id, code, name, status, version]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        code:
+          type: string
+        name:
+          type: string
+        parentCategory:
+          $ref: '#/components/schemas/CatalogReference'
+        status:
+          $ref: '#/components/schemas/ReferenceStatus'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        description:
+          type: string
+        suggestedUnit:
+          type: string
+        numberingPrefix:
+          type: string
+        extensionFieldTemplate:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExtensionFieldTemplate'
+    PageAssetCategory:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/AssetCategory'
+    AssetCategoryActiveReference:
+      type: object
+      additionalProperties: false
+      required: [id, code, name, version]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        code:
+          type: string
+        name:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        suggestedUnit:
+          type: string
+        numberingPrefix:
+          type: string
+    AssetCategoryActiveReferencePage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/AssetCategoryActiveReference'
+    BrandCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        defaultManufacturer:
+          $ref: '#/components/schemas/CatalogReference'
+          description: Optional manufacturer id and version used as the default relation.
+        description:
+          type: string
+          maxLength: 500
+    BrandUpdateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: PATCH fields; status changes use the explicit enable or disable operation.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        defaultManufacturer:
+          $ref: '#/components/schemas/CatalogReference'
+          description: Optional manufacturer id and current version; disabled manufacturers are rejected.
+        description:
+          type: string
+          maxLength: 500
+    Brand:
+      type: object
+      additionalProperties: false
+      required: [id, code, name, status, version]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        code:
+          type: string
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/ReferenceStatus'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        defaultManufacturer:
+          $ref: '#/components/schemas/CatalogReference'
+        description:
+          type: string
+    PageBrand:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Brand'
+    BrandActiveReference:
+      type: object
+      additionalProperties: false
+      required: [id, code, name, version]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        code:
+          type: string
+        name:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        defaultManufacturerId:
+          $ref: '#/components/schemas/Id'
+    BrandActiveReferencePage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/BrandActiveReference'
+    ManufacturerCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        description:
+          type: string
+          maxLength: 500
+    ManufacturerUpdateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: PATCH fields; status changes use the explicit enable or disable operation.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        description:
+          type: string
+          maxLength: 500
+    Manufacturer:
+      type: object
+      additionalProperties: false
+      required: [id, code, name, status, version]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        code:
+          type: string
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/ReferenceStatus'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        description:
+          type: string
+    PageManufacturer:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Manufacturer'
+    ManufacturerActiveReference:
+      type: object
+      additionalProperties: false
+      required: [id, code, name, version]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        code:
+          type: string
+        name:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    ManufacturerActiveReferencePage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ManufacturerActiveReference'
 paths:
   /auth/login:
     post:
@@ -1404,6 +1776,696 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SystemAccount'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /asset-categories:
+    get:
+      tags: [MasterData]
+      operationId: listAssetCategories
+      summary: List asset categories with one-based stable pagination.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Asset-category page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageAssetCategory'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MasterData]
+      operationId: createAssetCategory
+      summary: Create a root or child asset category.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: Parent CatalogReference id/version is current when supplied; code is globally unique and never reused.
+      x-transaction:
+        boundary: Insert category, validate the parent tree, and record the audit event in one short transaction.
+      x-audit-event:
+        event: ASSET_CATEGORY_CREATED
+      x-error-codes: [ASSET_CATEGORY_CODE_CONFLICT, ASSET_CATEGORY_PARENT_NOT_FOUND, ASSET_CATEGORY_PARENT_VERSION_CONFLICT]
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetCategoryCreateRequest'
+      responses:
+        '201':
+          description: Created asset category.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetCategory'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /asset-categories/active-references:
+    get:
+      tags: [MasterData]
+      operationId: listActiveAssetCategoryReferences
+      summary: List active categories for safe business selectors.
+      x-business-write: false
+      x-actor:
+        required: true
+        roles: [WAREHOUSE_OPERATOR, ASSET_ADMIN]
+      x-non-applicable: [version, idempotency, csrf]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Minimal active category references; disabled history is excluded from new selectors.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetCategoryActiveReferencePage'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /asset-categories/{assetCategoryId}:
+    parameters:
+      - $ref: '#/components/parameters/AssetCategoryId'
+    get:
+      tags: [MasterData]
+      operationId: getAssetCategory
+      summary: Read an asset category, including disabled historical state.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      responses:
+        '200':
+          description: Asset-category details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetCategory'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [MasterData]
+      operationId: updateAssetCategory
+      summary: Patch category metadata and parent relation without changing status.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version and supplied parent id/version must be current.
+      x-transaction:
+        boundary: Validate category code, parent version, and cycle constraints in one short transaction before audit.
+      x-audit-event:
+        event: ASSET_CATEGORY_UPDATED
+      x-error-codes: [ASSET_CATEGORY_CODE_CONFLICT, ASSET_CATEGORY_PARENT_NOT_FOUND, ASSET_CATEGORY_PARENT_VERSION_CONFLICT, ASSET_CATEGORY_CYCLE]
+      x-invariants: Category code is unique and never reused; parent version is checked; a cycle is rejected with 409; disabled history remains readable.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetCategoryUpdateRequest'
+      responses:
+        '200':
+          description: Updated asset category.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetCategory'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /asset-categories/{assetCategoryId}/disable:
+    parameters:
+      - $ref: '#/components/parameters/AssetCategoryId'
+    post:
+      tags: [MasterData]
+      operationId: disableAssetCategory
+      summary: Disable a category while retaining historical references.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored category version.
+      x-transaction:
+        boundary: Change category status, retain history, and record the audit event in one short transaction.
+      x-audit-event:
+        event: ASSET_CATEGORY_DISABLED
+      x-error-codes: [ASSET_CATEGORY_ALREADY_DISABLED]
+      x-invariants: Disabling an asset-referenced category is allowed; history remains readable, but disabled categories cannot be used for new cards or new business references; code is never reused after disable.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogStatusChangeRequest'
+      responses:
+        '200':
+          description: Disabled category with historical references preserved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetCategory'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /asset-categories/{assetCategoryId}/enable:
+    parameters:
+      - $ref: '#/components/parameters/AssetCategoryId'
+    post:
+      tags: [MasterData]
+      operationId: enableAssetCategory
+      summary: Re-enable an asset category explicitly.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored category version.
+      x-transaction:
+        boundary: Change category status and record the audit event in one short transaction.
+      x-audit-event:
+        event: ASSET_CATEGORY_ENABLED
+      x-error-codes: [ASSET_CATEGORY_ALREADY_ENABLED]
+      x-invariants: Enabling changes only status; code uniqueness and historical references remain intact.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogStatusChangeRequest'
+      responses:
+        '200':
+          description: Enabled asset category.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetCategory'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /brands:
+    get:
+      tags: [MasterData]
+      operationId: listBrands
+      summary: List brands with one-based stable pagination.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Brand page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageBrand'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MasterData]
+      operationId: createBrand
+      summary: Create a brand with an optional versioned default manufacturer.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: Default manufacturer id/version is current when supplied; code is globally unique and never reused.
+      x-transaction:
+        boundary: Insert brand, validate the default manufacturer relation, and audit in one short transaction.
+      x-audit-event:
+        event: BRAND_CREATED
+      x-error-codes: [BRAND_CODE_CONFLICT, BRAND_DEFAULT_MANUFACTURER_NOT_FOUND, BRAND_DEFAULT_MANUFACTURER_VERSION_CONFLICT]
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BrandCreateRequest'
+      responses:
+        '201':
+          description: Created brand.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Brand'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /brands/active-references:
+    get:
+      tags: [MasterData]
+      operationId: listActiveBrandReferences
+      summary: List active brands for safe business selectors.
+      x-business-write: false
+      x-actor:
+        required: true
+        roles: [WAREHOUSE_OPERATOR, ASSET_ADMIN]
+      x-non-applicable: [version, idempotency, csrf]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Minimal active brand references; sensitive identity fields are not exposed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrandActiveReferencePage'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /brands/{brandId}:
+    parameters:
+      - $ref: '#/components/parameters/BrandId'
+    get:
+      tags: [MasterData]
+      operationId: getBrand
+      summary: Read a brand, including disabled historical state.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      responses:
+        '200':
+          description: Brand details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Brand'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [MasterData]
+      operationId: updateBrand
+      summary: Patch brand metadata and its optional default manufacturer.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version and supplied default manufacturer id/version must be current.
+      x-transaction:
+        boundary: Validate brand code and default manufacturer relation in one short transaction before audit.
+      x-audit-event:
+        event: BRAND_UPDATED
+      x-error-codes: [BRAND_CODE_CONFLICT, BRAND_DEFAULT_MANUFACTURER_NOT_FOUND, BRAND_DEFAULT_MANUFACTURER_VERSION_CONFLICT, BRAND_DEFAULT_MANUFACTURER_DISABLED]
+      x-invariants: Brand code is unique and never reused; a disabled manufacturer cannot become a new default; historical references remain readable.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BrandUpdateRequest'
+      responses:
+        '200':
+          description: Updated brand.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Brand'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /brands/{brandId}/disable:
+    parameters:
+      - $ref: '#/components/parameters/BrandId'
+    post:
+      tags: [MasterData]
+      operationId: disableBrand
+      summary: Disable a brand while retaining historical references.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored brand version.
+      x-transaction:
+        boundary: Change brand status, retain history, and record the audit event in one short transaction.
+      x-audit-event:
+        event: BRAND_DISABLED
+      x-error-codes: [BRAND_ALREADY_DISABLED]
+      x-invariants: Referenced brands may be disabled; history remains readable, disabled brands cannot be used for new cards or business references, and code is never reused after disable.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogStatusChangeRequest'
+      responses:
+        '200':
+          description: Disabled brand with historical references preserved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Brand'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /brands/{brandId}/enable:
+    parameters:
+      - $ref: '#/components/parameters/BrandId'
+    post:
+      tags: [MasterData]
+      operationId: enableBrand
+      summary: Re-enable a brand explicitly.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored brand version.
+      x-transaction:
+        boundary: Change brand status and record the audit event in one short transaction.
+      x-audit-event:
+        event: BRAND_ENABLED
+      x-error-codes: [BRAND_ALREADY_ENABLED]
+      x-invariants: Enabling changes only status; code uniqueness and historical references remain intact.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogStatusChangeRequest'
+      responses:
+        '200':
+          description: Enabled brand.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Brand'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /manufacturers:
+    get:
+      tags: [MasterData]
+      operationId: listManufacturers
+      summary: List manufacturers with one-based stable pagination.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Manufacturer page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageManufacturer'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MasterData]
+      operationId: createManufacturer
+      summary: Create a manufacturer.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: Code is globally unique and never reused.
+      x-transaction:
+        boundary: Insert manufacturer and record the audit event in one short transaction.
+      x-audit-event:
+        event: MANUFACTURER_CREATED
+      x-error-codes: [MANUFACTURER_CODE_CONFLICT]
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManufacturerCreateRequest'
+      responses:
+        '201':
+          description: Created manufacturer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Manufacturer'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /manufacturers/active-references:
+    get:
+      tags: [MasterData]
+      operationId: listActiveManufacturerReferences
+      summary: List active manufacturers for safe business selectors.
+      x-business-write: false
+      x-actor:
+        required: true
+        roles: [WAREHOUSE_OPERATOR, ASSET_ADMIN]
+      x-non-applicable: [version, idempotency, csrf]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Minimal active manufacturer references; sensitive identity fields are not exposed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManufacturerActiveReferencePage'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /manufacturers/{manufacturerId}:
+    parameters:
+      - $ref: '#/components/parameters/ManufacturerId'
+    get:
+      tags: [MasterData]
+      operationId: getManufacturer
+      summary: Read a manufacturer, including disabled historical state.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      responses:
+        '200':
+          description: Manufacturer details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Manufacturer'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [MasterData]
+      operationId: updateManufacturer
+      summary: Patch manufacturer metadata without changing status.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored manufacturer version.
+      x-transaction:
+        boundary: Validate manufacturer code and version in one short transaction before audit.
+      x-audit-event:
+        event: MANUFACTURER_UPDATED
+      x-error-codes: [MANUFACTURER_CODE_CONFLICT]
+      x-invariants: Manufacturer code is unique and never reused; disabled history remains readable.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManufacturerUpdateRequest'
+      responses:
+        '200':
+          description: Updated manufacturer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Manufacturer'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /manufacturers/{manufacturerId}/disable:
+    parameters:
+      - $ref: '#/components/parameters/ManufacturerId'
+    post:
+      tags: [MasterData]
+      operationId: disableManufacturer
+      summary: Disable a manufacturer while retaining historical references.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored manufacturer version.
+      x-transaction:
+        boundary: Change manufacturer status, retain history, and record the audit event in one short transaction.
+      x-audit-event:
+        event: MANUFACTURER_DISABLED
+      x-error-codes: [MANUFACTURER_ALREADY_DISABLED]
+      x-invariants: Referenced manufacturers may be disabled; history remains readable, disabled manufacturers cannot be selected as a new brand default or new card/business reference, and code is never reused after disable.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogStatusChangeRequest'
+      responses:
+        '200':
+          description: Disabled manufacturer with historical references preserved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Manufacturer'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /manufacturers/{manufacturerId}/enable:
+    parameters:
+      - $ref: '#/components/parameters/ManufacturerId'
+    post:
+      tags: [MasterData]
+      operationId: enableManufacturer
+      summary: Re-enable a manufacturer explicitly.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored manufacturer version.
+      x-transaction:
+        boundary: Change manufacturer status and record the audit event in one short transaction.
+      x-audit-event:
+        event: MANUFACTURER_ENABLED
+      x-error-codes: [MANUFACTURER_ALREADY_ENABLED]
+      x-invariants: Enabling changes only status; code uniqueness and historical references remain intact.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogStatusChangeRequest'
+      responses:
+        '200':
+          description: Enabled manufacturer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Manufacturer'
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
