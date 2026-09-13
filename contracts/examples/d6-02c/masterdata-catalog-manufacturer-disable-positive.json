@@ -2,6 +2,12 @@
   "operationId": "disableManufacturer",
   "kind": "positive",
   "status": 200,
+  "scenario": "An enabled brand keeps its historical manufacturer relation; history is not rewritten.",
+  "relatedHistory": {
+    "brandId": "8301",
+    "brandStatus": "ACTIVE",
+    "historicalDefaultManufacturerId": "8201"
+  },
   "requestSchema": "CatalogStatusChangeRequest",
   "responseSchema": "Manufacturer",
   "headers": {

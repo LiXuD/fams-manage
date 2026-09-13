@@ -2,6 +2,7 @@
   "operationId": "disableAssetCategory",
   "kind": "positive",
   "status": 200,
+  "scenario": "Referenced category is disabled while historical asset links remain readable.",
   "requestSchema": "CatalogStatusChangeRequest",
   "responseSchema": "AssetCategory",
   "headers": {

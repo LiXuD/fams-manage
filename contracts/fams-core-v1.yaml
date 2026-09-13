@@ -637,7 +637,7 @@ components:
     ExtensionFieldTemplate:
       type: object
       additionalProperties: false
-      required: [key, type]
+      required: [key, label, type]
       description: A bounded extension-field definition owned by an asset category.
       properties:
         key:
@@ -879,6 +879,7 @@ components:
           minimum: 0
         defaultManufacturerId:
           $ref: '#/components/schemas/Id'
+          description: Omitted when the historical default manufacturer is disabled; brand history is not rewritten.
     BrandActiveReferencePage:
       allOf:
         - $ref: '#/components/schemas/PageMeta'
@@ -1817,7 +1818,7 @@ paths:
         boundary: Insert category, validate the parent tree, and record the audit event in one short transaction.
       x-audit-event:
         event: ASSET_CATEGORY_CREATED
-      x-error-codes: [ASSET_CATEGORY_CODE_CONFLICT, ASSET_CATEGORY_PARENT_NOT_FOUND, ASSET_CATEGORY_PARENT_VERSION_CONFLICT]
+      x-error-codes: [ASSET_CATEGORY_CODE_CONFLICT, ASSET_CATEGORY_PARENT_NOT_FOUND, ASSET_CATEGORY_PARENT_VERSION_CONFLICT, ASSET_CATEGORY_PARENT_DISABLED]
       x-required-error-statuses: [400, 401, 403, 409]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -1898,8 +1899,8 @@ paths:
         boundary: Validate category code, parent version, and cycle constraints in one short transaction before audit.
       x-audit-event:
         event: ASSET_CATEGORY_UPDATED
-      x-error-codes: [ASSET_CATEGORY_CODE_CONFLICT, ASSET_CATEGORY_PARENT_NOT_FOUND, ASSET_CATEGORY_PARENT_VERSION_CONFLICT, ASSET_CATEGORY_CYCLE]
-      x-invariants: Category code is unique and never reused; parent version is checked; a cycle is rejected with 409; disabled history remains readable.
+      x-error-codes: [ASSET_CATEGORY_CODE_CONFLICT, ASSET_CATEGORY_PARENT_NOT_FOUND, ASSET_CATEGORY_PARENT_VERSION_CONFLICT, ASSET_CATEGORY_PARENT_DISABLED, ASSET_CATEGORY_CYCLE]
+      x-invariants: Category code is unique and never reused; parent version is checked; a cycle is rejected with 409; disabled parents are rejected; disabled history remains readable.
       x-required-error-statuses: [400, 401, 403, 404, 409]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -1986,8 +1987,8 @@ paths:
         boundary: Change category status and record the audit event in one short transaction.
       x-audit-event:
         event: ASSET_CATEGORY_ENABLED
-      x-error-codes: [ASSET_CATEGORY_ALREADY_ENABLED]
-      x-invariants: Enabling changes only status; code uniqueness and historical references remain intact.
+      x-error-codes: [ASSET_CATEGORY_ALREADY_ENABLED, ASSET_CATEGORY_PARENT_DISABLED]
+      x-invariants: Enabling changes only status after every ancestor is active; disabled parents are rejected; code uniqueness and historical references remain intact.
       x-required-error-statuses: [400, 401, 403, 404, 409]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -2047,7 +2048,7 @@ paths:
         boundary: Insert brand, validate the default manufacturer relation, and audit in one short transaction.
       x-audit-event:
         event: BRAND_CREATED
-      x-error-codes: [BRAND_CODE_CONFLICT, BRAND_DEFAULT_MANUFACTURER_NOT_FOUND, BRAND_DEFAULT_MANUFACTURER_VERSION_CONFLICT]
+      x-error-codes: [BRAND_CODE_CONFLICT, BRAND_DEFAULT_MANUFACTURER_NOT_FOUND, BRAND_DEFAULT_MANUFACTURER_VERSION_CONFLICT, BRAND_DEFAULT_MANUFACTURER_DISABLED]
       x-required-error-statuses: [400, 401, 403, 409]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -2074,7 +2075,7 @@ paths:
     get:
       tags: [MasterData]
       operationId: listActiveBrandReferences
-      summary: List active brands for safe business selectors.
+      summary: List active brands for safe business selectors; omit disabled default manufacturers.
       x-business-write: false
       x-actor:
         required: true
@@ -2403,7 +2404,7 @@ paths:
       x-audit-event:
         event: MANUFACTURER_DISABLED
       x-error-codes: [MANUFACTURER_ALREADY_DISABLED]
-      x-invariants: Referenced manufacturers may be disabled; history remains readable, disabled manufacturers cannot be selected as a new brand default or new card/business reference, and code is never reused after disable.
+      x-invariants: Disabling a manufacturer referenced by an enabled brand is allowed; history remains readable and is not rewritten. Active brand selectors omit the disabled default manufacturer, while new cards and business references cannot select it; code is never reused after disable.
       x-required-error-statuses: [400, 401, 403, 404, 409]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
