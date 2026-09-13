@@ -34,17 +34,17 @@ class DesignPackageContractTest(unittest.TestCase):
         document = self.load_contract()
         self.assertEqual("3.0.4", document.get("openapi"))
         self.assertEqual("/api/v1", document["servers"][0]["url"])
-        self.assertEqual({"Auth"}, {tag["name"] for tag in document["tags"]})
-        self.assertEqual(5, len(document["paths"]))
+        self.assertIn("Auth", {tag["name"] for tag in document["tags"]})
+        self.assertEqual(5, len([path for path in document["paths"] if path.startswith("/auth/")]))
         operations = {
             operation["operationId"]
             for item in document["paths"].values()
             for method, operation in item.items()
             if method in {"get", "post", "patch"}
         }
-        self.assertEqual(
-            {"login", "changeInitialPassword", "getCurrentUser", "getMyPermissions", "logout"},
-            operations,
+        self.assertTrue(
+            {"login", "changeInitialPassword", "getCurrentUser", "getMyPermissions", "logout"}
+            .issubset(operations)
         )
         schemes = document["components"]["securitySchemes"]
         self.assertEqual("cookie", schemes["sessionCookie"]["in"])
@@ -129,6 +129,120 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertIn("x-audit-event", logout)
         logout_cookie = logout["responses"]["204"]["headers"]["Set-Cookie"]
         self.assertIn("max-age=0", json.dumps(logout_cookie).lower())
+
+    def test_organization_operations_expose_tree_and_disable_invariants(self) -> None:
+        document = self.load_contract()
+        paths = document["paths"]
+        self.assertIn("/organizations", paths)
+        self.assertIn("/organizations/{organizationId}", paths)
+        self.assertIn("/organizations/{organizationId}/disable", paths)
+        operations = {
+            operation["operationId"]: operation
+            for item in paths.values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        self.assertIn("listOrganizations", operations)
+        self.assertIn("createOrganization", operations)
+        self.assertIn("updateOrganization", operations)
+        self.assertIn("disableOrganization", operations)
+        self.assertEqual(
+            {"Page", "PageSize"},
+            {
+                parameter["$ref"].rsplit("/", 1)[-1]
+                for parameter in paths["/organizations"]["get"]["parameters"]
+            },
+        )
+        self.assertIn("ORGANIZATION_CODE_CONFLICT", operations["createOrganization"]["x-error-codes"])
+        invariants = json.dumps(operations["updateOrganization"], sort_keys=True).lower()
+        self.assertIn("cycle", invariants)
+        self.assertIn("responsibility", invariants)
+        self.assertIn("asset", invariants)
+        disable_invariants = json.dumps(operations["disableOrganization"], sort_keys=True).lower()
+        self.assertIn("asset", disable_invariants)
+        self.assertIn("responsibility", disable_invariants)
+
+    def test_employee_operations_preserve_history_and_revoke_access_on_disable(self) -> None:
+        document = self.load_contract()
+        paths = document["paths"]
+        self.assertIn("/employees", paths)
+        self.assertIn("/employees/{employeeId}", paths)
+        self.assertIn("/employees/{employeeId}/disable", paths)
+        operations = {
+            operation["operationId"]: operation
+            for item in paths.values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        for operation_id in (
+            "listEmployees",
+            "createEmployee",
+            "updateEmployee",
+            "disableEmployee",
+        ):
+            self.assertIn(operation_id, operations)
+        self.assertIn("EMPLOYEE_NO_CONFLICT", operations["createEmployee"]["x-error-codes"])
+        update_text = json.dumps(operations["updateEmployee"], sort_keys=True).lower()
+        self.assertIn("transfer", update_text)
+        self.assertIn("asset", update_text)
+        disable_text = json.dumps(operations["disableEmployee"], sort_keys=True).lower()
+        for term in ("session", "upload", "history"):
+            self.assertIn(term, disable_text)
+        employee_schemas = document["components"]["schemas"]
+        self.assertIn(
+            "phone",
+            json.dumps([employee_schemas["Employee"], employee_schemas["EmployeeInput"]]).lower(),
+        )
+
+    def test_system_account_operations_cover_lifecycle_and_initial_password_reset(self) -> None:
+        document = self.load_contract()
+        paths = document["paths"]
+        self.assertIn("/system-accounts", paths)
+        self.assertIn("/system-accounts/{systemAccountId}/status", paths)
+        self.assertIn("/system-accounts/{systemAccountId}/initial-password-reset", paths)
+        operations = {
+            operation["operationId"]: operation
+            for item in paths.values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        for operation_id in ("createSystemAccount", "changeSystemAccountStatus", "resetInitialPassword"):
+            self.assertIn(operation_id, operations)
+        status_schema = document["components"]["schemas"]["SystemAccountStatusChangeRequest"]
+        self.assertEqual({"ENABLE", "DISABLE", "UNLOCK"}, set(status_schema["properties"]["action"]["enum"]))
+        self.assertIn("session", json.dumps(operations["changeSystemAccountStatus"]).lower())
+        self.assertIn("initial", json.dumps(operations["resetInitialPassword"]).lower())
+        self.assertIn("first", json.dumps(operations["resetInitialPassword"]).lower())
+
+    def test_role_configuration_covers_grant_revoke_and_safety_invariants(self) -> None:
+        document = self.load_contract()
+        paths = document["paths"]
+        operations = {
+            operation["operationId"]: operation
+            for item in paths.values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        for operation_id in (
+            "listRoleConfigurations",
+            "grantRolePermission",
+            "revokeRolePermission",
+            "grantSystemAccountRole",
+            "revokeSystemAccountRole",
+        ):
+            self.assertIn(operation_id, operations)
+        role_text = json.dumps(document["components"]["schemas"]["RoleConfiguration"]).lower()
+        self.assertIn("system_admin", role_text)
+        self.assertIn("asset_admin", role_text)
+        self.assertIn("warehouse_operator", role_text)
+        grant_text = json.dumps(operations["grantRolePermission"], sort_keys=True).lower()
+        self.assertIn("business", grant_text)
+        self.assertIn("enterprise", grant_text)
+        self.assertIn("minimum", grant_text)
+        revoke_text = json.dumps(operations["revokeRolePermission"], sort_keys=True).lower()
+        self.assertIn("immediate", revoke_text)
+        self.assertIn("session", revoke_text)
+        self.assertNotIn("delete", " ".join(paths))
 
     def test_contract_declares_the_four_first_slice_domains(self) -> None:
         document = self.load_contract()
@@ -220,6 +334,61 @@ class DesignPackageEvidenceTest(unittest.TestCase):
                 operation_ids.add(value["operationId"])
         self.assertEqual({"positive", "rejection"}, kinds)
         self.assertTrue({"login", "changeInitialPassword", "logout"}.issubset(operation_ids))
+
+    def test_identity_master_data_examples_are_machine_readable_and_named(self) -> None:
+        self.assertTrue(EXAMPLES.is_dir(), f"missing examples directory: {EXAMPLES}")
+        files = sorted(EXAMPLES.glob("masterdata-identity-*.json"))
+        self.assertGreaterEqual(len(files), 8)
+        operation_ids: set[str] = set()
+        kinds: set[str] = set()
+        for path in files:
+            with self.subTest(path=path.name):
+                value = json.loads(path.read_text(encoding="utf-8"))
+                self.assertIn(value.get("kind"), {"positive", "rejection"})
+                self.assertTrue(value.get("operationId"))
+                self.assertIsInstance(value.get("status"), int)
+                self.assertIn("payload", value)
+                operation_ids.add(value["operationId"])
+                kinds.add(value["kind"])
+        self.assertEqual({"positive", "rejection"}, kinds)
+        self.assertTrue(
+            {
+                "createOrganization",
+                "updateOrganization",
+                "disableOrganization",
+                "createEmployee",
+                "updateEmployee",
+                "disableEmployee",
+            }.issubset(operation_ids)
+        )
+
+    def test_account_role_examples_are_machine_readable_and_named(self) -> None:
+        self.assertTrue(EXAMPLES.is_dir(), f"missing examples directory: {EXAMPLES}")
+        files = sorted(EXAMPLES.glob("masterdata-account-*.json"))
+        self.assertGreaterEqual(len(files), 8)
+        operation_ids: set[str] = set()
+        kinds: set[str] = set()
+        for path in files:
+            with self.subTest(path=path.name):
+                value = json.loads(path.read_text(encoding="utf-8"))
+                self.assertIn(value.get("kind"), {"positive", "rejection"})
+                self.assertTrue(value.get("operationId"))
+                self.assertIsInstance(value.get("status"), int)
+                self.assertIn("payload", value)
+                operation_ids.add(value["operationId"])
+                kinds.add(value["kind"])
+        self.assertEqual({"positive", "rejection"}, kinds)
+        self.assertTrue(
+            {
+                "createSystemAccount",
+                "changeSystemAccountStatus",
+                "resetInitialPassword",
+                "grantRolePermission",
+                "revokeRolePermission",
+                "grantSystemAccountRole",
+                "revokeSystemAccountRole",
+            }.issubset(operation_ids)
+        )
 
     def test_examples_are_machine_readable_and_named(self) -> None:
         self.assertTrue(EXAMPLES.is_dir(), f"missing examples directory: {EXAMPLES}")

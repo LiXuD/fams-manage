@@ -14,6 +14,8 @@ security:
 tags:
   - name: Auth
     description: System-account authentication and session boundaries.
+  - name: MasterData
+    description: Organization, employee, and system-account configuration boundaries.
 components:
   securitySchemes:
     sessionCookie:
@@ -72,6 +74,18 @@ components:
         minimum: 1
         maximum: 200
         default: 20
+    OrganizationId:
+      name: organizationId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    EmployeeId:
+      name: employeeId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
   responses:
     BadRequest:
       description: Request validation or state precondition failed.
@@ -253,6 +267,110 @@ components:
           type: array
           items:
             type: string
+    OrganizationInput:
+      type: object
+      required: [code, name, status]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        parentId:
+          $ref: '#/components/schemas/Id'
+        status:
+          $ref: '#/components/schemas/ReferenceStatus'
+    Organization:
+      allOf:
+        - $ref: '#/components/schemas/OrganizationInput'
+        - type: object
+          required: [id, version, createdAt, updatedAt]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            version:
+              type: integer
+              format: int64
+              minimum: 0
+            createdAt:
+              $ref: '#/components/schemas/Instant'
+            updatedAt:
+              $ref: '#/components/schemas/Instant'
+    PageOrganization:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Organization'
+    DisableOrganizationRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+    EmployeeInput:
+      type: object
+      required: [employeeNo, displayName, organizationId, status]
+      properties:
+        employeeNo:
+          type: string
+          minLength: 1
+          maxLength: 64
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 128
+        organizationId:
+          $ref: '#/components/schemas/Id'
+        phone:
+          type: string
+          maxLength: 32
+          x-sensitive: true
+        status:
+          $ref: '#/components/schemas/ReferenceStatus'
+    Employee:
+      allOf:
+        - $ref: '#/components/schemas/EmployeeInput'
+        - type: object
+          required: [id, version, createdAt, updatedAt]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            version:
+              type: integer
+              format: int64
+              minimum: 0
+            createdAt:
+              $ref: '#/components/schemas/Instant'
+            updatedAt:
+              $ref: '#/components/schemas/Instant'
+    PageEmployee:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Employee'
+    DisableEmployeeRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
 paths:
   /auth/login:
     post:
@@ -383,3 +501,317 @@ paths:
                 type: string
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+
+  /organizations:
+    get:
+      tags: [MasterData]
+      operationId: listOrganizations
+      summary: List organizations with one-based stable pagination.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Organization page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageOrganization'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MasterData]
+      operationId: createOrganization
+      summary: Create an organization tree node.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: Parent organization version is current when supplied.
+      x-transaction:
+        boundary: Insert organization and its audit event atomically.
+      x-audit-event:
+        event: ORGANIZATION_CREATED
+      x-error-codes: [ORGANIZATION_CODE_CONFLICT, ORGANIZATION_PARENT_NOT_FOUND, ORGANIZATION_CYCLE]
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationInput'
+      responses:
+        '201':
+          description: Created organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /organizations/{organizationId}:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    get:
+      tags: [MasterData]
+      operationId: getOrganization
+      summary: Read an organization tree node.
+      responses:
+        '200':
+          description: Organization details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [MasterData]
+      operationId: updateOrganization
+      summary: Update an organization without rewriting asset responsibility.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored organization version.
+      x-transaction:
+        boundary: Conditional tree update and audit event are one short transaction.
+      x-audit-event:
+        event: ORGANIZATION_UPDATED
+      x-error-codes: [ORGANIZATION_CODE_CONFLICT, ORGANIZATION_PARENT_NOT_FOUND, ORGANIZATION_CYCLE, ORGANIZATION_HAS_RESPONSIBILITY]
+      x-invariants: Parent changes must be cycle-safe; changing an organization never silently rewrites asset responsibility or asset records.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationInput'
+      responses:
+        '200':
+          description: Updated organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /organizations/{organizationId}/disable:
+    parameters:
+      - $ref: '#/components/parameters/OrganizationId'
+    post:
+      tags: [MasterData]
+      operationId: disableOrganization
+      summary: Disable an organization only after dependent responsibility is resolved.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored organization version.
+      x-transaction:
+        boundary: Validate dependencies, disable organization, and audit atomically.
+      x-audit-event:
+        event: ORGANIZATION_DISABLED
+      x-error-codes: [ORGANIZATION_HAS_ASSETS, ORGANIZATION_HAS_RESPONSIBILITY, ORGANIZATION_ALREADY_DISABLED]
+      x-invariants: Disable is rejected while active assets or responsibility relations depend on the organization; history is retained.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisableOrganizationRequest'
+      responses:
+        '200':
+          description: Disabled organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /employees:
+    get:
+      tags: [MasterData]
+      operationId: listEmployees
+      summary: List employees with sensitive fields protected by permission.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Employee page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageEmployee'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MasterData]
+      operationId: createEmployee
+      summary: Create an employee and its system-account relation seed.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN, ASSET_ADMIN]
+      x-version:
+        required: true
+        precondition: Organization version is current and employee number is not reused.
+      x-transaction:
+        boundary: Insert employee relation and audit event atomically.
+      x-audit-event:
+        event: EMPLOYEE_CREATED
+      x-error-codes: [EMPLOYEE_NO_CONFLICT, EMPLOYEE_ORGANIZATION_NOT_FOUND]
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmployeeInput'
+      responses:
+        '201':
+          description: Created employee.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Employee'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /employees/{employeeId}:
+    parameters:
+      - $ref: '#/components/parameters/EmployeeId'
+    get:
+      tags: [MasterData]
+      operationId: getEmployee
+      summary: Read an employee and permission-filtered contact fields.
+      responses:
+        '200':
+          description: Employee details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Employee'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [MasterData]
+      operationId: updateEmployee
+      summary: Update employee relations without changing asset responsibility.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN, ASSET_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored employee version.
+      x-transaction:
+        boundary: Conditional employee update and audit event are one short transaction.
+      x-audit-event:
+        event: EMPLOYEE_UPDATED
+      x-error-codes: [EMPLOYEE_NO_CONFLICT, EMPLOYEE_ORGANIZATION_NOT_FOUND]
+      x-invariants: Transfer changes the employee relation only; it never rewrites current asset responsibility, and the old relation remains in history.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmployeeInput'
+      responses:
+        '200':
+          description: Updated employee.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Employee'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /employees/{employeeId}/disable:
+    parameters:
+      - $ref: '#/components/parameters/EmployeeId'
+    post:
+      tags: [MasterData]
+      operationId: disableEmployee
+      summary: Disable an employee and revoke access immediately while retaining history.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN, ASSET_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored employee version.
+      x-transaction:
+        boundary: Disable employee, revoke sessions and upload permission, retain history, and audit atomically.
+      x-audit-event:
+        event: EMPLOYEE_DISABLED
+      x-error-codes: [EMPLOYEE_ALREADY_DISABLED, EMPLOYEE_HAS_PENDING_SECURITY_ACTION]
+      x-side-effects: Disabling immediately revokes sessions and upload permission; employee, asset responsibility, and operation history are retained.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisableEmployeeRequest'
+      responses:
+        '200':
+          description: Disabled employee.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Employee'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }

@@ -1,0 +1,29 @@
+{
+  "operationId": "createEmployee",
+  "kind": "positive",
+  "status": 201,
+  "requestSchema": "EmployeeInput",
+  "responseSchema": "Employee",
+  "headers": {
+    "Idempotency-Key": "employee-create-identity-0001",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "employeeNo": "E-1001",
+    "displayName": "Lin Mei",
+    "organizationId": "2001",
+    "phone": "13800000000",
+    "status": "ACTIVE"
+  },
+  "response": {
+    "id": "3001",
+    "employeeNo": "E-1001",
+    "displayName": "Lin Mei",
+    "organizationId": "2001",
+    "phone": "13800000000",
+    "status": "ACTIVE",
+    "version": 0,
+    "createdAt": "2026-09-14T08:30:00Z",
+    "updatedAt": "2026-09-14T08:30:00Z"
+  }
+}
