@@ -1543,7 +1543,216 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertIn("login", operations)
         self.assertIn("createAsset", operations)
         self.assertIn("submitInboundReceipt", operations)
-        self.assertIn("decideInboundReceipt", operations)
+        self.assertNotIn("decideInboundReceipt", operations)
+
+    def test_inbound_draft_receipt_contract_declares_scoped_reads_and_mutations(self) -> None:
+        document = self.load_contract()
+        paths = document["paths"]
+        operations = {
+            operation["operationId"]: operation
+            for item in paths.values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        required = {
+            "listInboundReceipts",
+            "getInboundReceipt",
+            "createInboundReceipt",
+            "updateInboundReceipt",
+        }
+        missing = sorted(required - set(operations))
+        self.assertFalse(missing, f"inbound draft contract remains RED: {missing}")
+        if missing:
+            return
+
+        self.assertIn("Inbound", {tag["name"] for tag in document["tags"]})
+        self.assertIn("/inbound-receipts", paths)
+        self.assertIn("/inbound-receipts/{receiptId}", paths)
+        self.assertNotIn("delete", paths["/inbound-receipts"])
+        self.assertNotIn("delete", paths["/inbound-receipts/{receiptId}"])
+
+        read_roles = {"ASSET_ADMIN", "WAREHOUSE_OPERATOR", "AUDIT_READ_ONLY"}
+        for operation_id in ("listInboundReceipts", "getInboundReceipt"):
+            with self.subTest(operation=operation_id):
+                operation = operations[operation_id]
+                self.assertEqual(read_roles, set(operation["x-actor"]["roles"]))
+                self.assertNotIn("SYSTEM_ADMIN", operation["x-actor"]["roles"])
+                self.assertIn("200", operation["responses"])
+                self.assertIn("401", operation["responses"])
+                self.assertIn("403", operation["responses"])
+                scope = json.dumps(operation, sort_keys=True).lower()
+                for phrase in (
+                    "own",
+                    "draft",
+                    "submitted",
+                    "history",
+                    "approved",
+                    "execution",
+                    "explicit",
+                    "no automatic",
+                ):
+                    self.assertIn(phrase, scope)
+
+        for operation_id in ("createInboundReceipt", "updateInboundReceipt"):
+            with self.subTest(operation=operation_id):
+                operation = operations[operation_id]
+                self.assertTrue(operation.get("x-business-write"))
+                self.assertEqual(["WAREHOUSE_OPERATOR"], operation["x-actor"]["roles"])
+                self.assertTrue(operation.get("x-version"))
+                self.assertTrue(operation.get("x-transaction"))
+                self.assertTrue(operation.get("x-audit-event"))
+                self.assertTrue(
+                    {400, 401, 403, 404, 409}.issubset(
+                        set(operation["x-required-error-statuses"])
+                    )
+                )
+                refs = {
+                    parameter.get("$ref", "").rsplit("/", 1)[-1]
+                    for parameter in operation.get("parameters", [])
+                }
+                self.assertTrue({"IdempotencyKey", "CsrfToken"}.issubset(refs))
+                if operation_id == "updateInboundReceipt":
+                    self.assertIn("IfMatchVersion", refs)
+                text = json.dumps(operation, sort_keys=True).lower()
+                for phrase in (
+                    "creator",
+                    "draft",
+                    "server",
+                    "business number",
+                    "asset",
+                    "lock",
+                    "warehouse",
+                    "location",
+                    "snapshot",
+                ):
+                    self.assertIn(phrase, text)
+
+        request_refs = {
+            "createInboundReceipt": "InboundReceiptCreateRequest",
+            "updateInboundReceipt": "InboundReceiptUpdateRequest",
+        }
+        for operation_id, schema_name in request_refs.items():
+            request_ref = operations[operation_id]["requestBody"]["content"]["application/json"]["schema"]
+            self.assertEqual(schema_name, request_ref["$ref"].rsplit("/", 1)[-1])
+        list_refs = {
+            parameter.get("$ref", "").rsplit("/", 1)[-1]
+            for parameter in operations["listInboundReceipts"].get("parameters", [])
+        }
+        self.assertTrue({"Page", "PageSize"}.issubset(list_refs))
+
+    def test_inbound_receipt_schemas_freeze_snapshots_and_draft_input_rules(self) -> None:
+        document = self.load_contract()
+        schemas = document["components"]["schemas"]
+        required_schemas = {
+            "InboundReceipt",
+            "PageInboundReceipt",
+            "InboundReceiptStatus",
+            "InboundReceiptItem",
+            "InboundReceiptCreateRequest",
+            "InboundReceiptUpdateRequest",
+            "InboundReceiptSnapshot",
+            "InboundAssetReference",
+            "InboundTargetReference",
+        }
+        missing = sorted(required_schemas - set(schemas))
+        self.assertFalse(missing, f"inbound receipt schemas remain RED: {missing}")
+        if missing:
+            return
+
+        self.assertEqual(
+            {
+                "DRAFT",
+                "PENDING_ADMIN_DECISION",
+                "REJECTED",
+                "WAITING_WAREHOUSE_CLAIM",
+                "WAREHOUSE_PROCESSING",
+                "COMPLETED",
+                "CANCELLED",
+            },
+            set(schemas["InboundReceiptStatus"]["enum"]),
+        )
+        receipt = schemas["InboundReceipt"]
+        receipt_fields = {
+            "id",
+            "receiptNumber",
+            "status",
+            "businessDate",
+            "createdBy",
+            "createdAt",
+            "version",
+            "parameterVersionId",
+            "snapshot",
+            "items",
+        }
+        self.assertTrue(receipt_fields.issubset(set(receipt["required"])))
+        self.assertEqual("Id", receipt["properties"]["id"]["$ref"].rsplit("/", 1)[-1])
+        self.assertEqual(
+            "BusinessDate",
+            receipt["properties"]["businessDate"]["$ref"].rsplit("/", 1)[-1],
+        )
+        self.assertEqual("Instant", receipt["properties"]["createdAt"]["$ref"].rsplit("/", 1)[-1])
+        self.assertEqual("Id", receipt["properties"]["parameterVersionId"]["$ref"].rsplit("/", 1)[-1])
+        receipt_text = json.dumps(receipt, sort_keys=True).lower()
+        for phrase in ("permanent", "server", "snapshot", "target", "asset"):
+            self.assertIn(phrase, receipt_text)
+
+        item = schemas["InboundReceiptItem"]
+        self.assertTrue(
+            {
+                "asset",
+                "assetSnapshot",
+                "targetWarehouse",
+                "targetLocation",
+                "warehouseSnapshot",
+                "locationSnapshot",
+            }.issubset(set(item["required"]))
+        )
+        for schema_name in ("InboundAssetReference", "InboundTargetReference"):
+            self.assertEqual({"id", "version"}, set(schemas[schema_name]["required"]))
+            self.assertEqual(
+                "Id",
+                schemas[schema_name]["properties"]["id"]["$ref"].rsplit("/", 1)[-1],
+            )
+            self.assertIn("version", schemas[schema_name]["properties"])
+
+        create = schemas["InboundReceiptCreateRequest"]
+        update = schemas["InboundReceiptUpdateRequest"]
+        self.assertIn("items", create["required"])
+        self.assertFalse(create.get("additionalProperties", True))
+        self.assertEqual(1, update.get("minProperties"))
+        self.assertNotIn("required", update)
+        self.assertFalse(update.get("additionalProperties", True))
+        for schema in (create, update):
+            self.assertNotIn("receiptNumber", schema["properties"])
+            self.assertNotIn("status", schema["properties"])
+            self.assertNotIn("createdBy", schema["properties"])
+            self.assertNotIn("parameterVersionId", schema["properties"])
+
+    def test_inbound_draft_examples_cover_server_number_and_state_rejections(self) -> None:
+        files = sorted(EXAMPLES.glob("masterdata-inbound-*.json"))
+        self.assertGreaterEqual(len(files), 6)
+        values = [json.loads(path.read_text(encoding="utf-8")) for path in files]
+        self.assertTrue(all(value.get("evidence") for value in values))
+        self.assertEqual({"positive", "rejection"}, {value["kind"] for value in values})
+        operation_ids = {value["operationId"] for value in values}
+        self.assertTrue({"createInboundReceipt", "updateInboundReceipt"}.issubset(operation_ids))
+        create = next(
+            value
+            for value in values
+            if value["operationId"] == "createInboundReceipt" and value["kind"] == "positive"
+        )
+        self.assertEqual(201, create["status"])
+        self.assertEqual("DRAFT", create["response"]["status"])
+        self.assertTrue(create["response"]["receiptNumber"])
+        self.assertNotIn("receiptNumber", create["payload"])
+        self.assertTrue(
+            any(value["status"] == 403 and "creator" in json.dumps(value).lower() for value in values)
+        )
+        rejection_text = json.dumps(
+            [value for value in values if value["kind"] == "rejection"], sort_keys=True
+        ).lower()
+        for phrase in ("duplicate", "stale", "disabled", "mismatch"):
+            self.assertIn(phrase, rejection_text)
 
     def test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors(self) -> None:
         document = self.load_contract()
