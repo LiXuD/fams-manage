@@ -2157,10 +2157,17 @@ class DesignPackageContractTest(unittest.TestCase):
             self.assertIn(term, replace_text)
 
         access = operations["resolveAssetAccessToken"]
-        self.assertEqual(
-            {"ASSET_ADMIN", "WAREHOUSE_OPERATOR", "AUDIT_READ_ONLY"},
-            set(access["x-actor"]["roles"]),
+        access_roles = set(access["x-actor"]["roles"])
+        self.assertTrue(
+            {
+                "ASSET_ADMIN",
+                "WAREHOUSE_OPERATOR",
+                "AUDIT_READ_ONLY",
+                "EMPLOYEE",
+                "DEPARTMENT_ASSET_MANAGER",
+            }.issubset(access_roles)
         )
+        self.assertNotIn("SYSTEM_ADMIN", access_roles)
         self.assertNotEqual([], access.get("security", [{"sessionCookie": []}]))
         self.assertIn("401", access["responses"])
         self.assertIn("403", access["responses"])
