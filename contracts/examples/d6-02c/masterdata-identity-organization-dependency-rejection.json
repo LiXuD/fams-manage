@@ -1,0 +1,22 @@
+{
+  "operationId": "disableOrganization",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "DisableOrganizationRequest",
+  "responseSchema": "ErrorResponse",
+  "expectedErrorCode": "ORGANIZATION_HAS_ASSETS",
+  "headers": {
+    "Idempotency-Key": "org-disable-identity-0002",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "1"
+  },
+  "payload": {
+    "reason": "Disable while a responsibility relation remains."
+  },
+  "response": {
+    "code": "ORGANIZATION_HAS_ASSETS",
+    "message": "Organization still has active asset dependencies.",
+    "requestId": "4e3ecac4-bd08-4e84-8c4c-1c2f9a211003",
+    "fieldErrors": {}
+  }
+}

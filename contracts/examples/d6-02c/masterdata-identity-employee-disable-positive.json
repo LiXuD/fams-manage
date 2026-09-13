@@ -1,0 +1,26 @@
+{
+  "operationId": "disableEmployee",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "DisableEmployeeRequest",
+  "responseSchema": "Employee",
+  "headers": {
+    "Idempotency-Key": "employee-disable-identity-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "1"
+  },
+  "payload": {
+    "reason": "Employment ended; preserve the historical asset relation."
+  },
+  "response": {
+    "id": "3001",
+    "employeeNo": "E-1001",
+    "displayName": "Lin Mei",
+    "organizationId": "2002",
+    "phone": "13800000000",
+    "status": "DISABLED",
+    "version": 2,
+    "createdAt": "2026-09-14T08:30:00Z",
+    "updatedAt": "2026-09-14T09:10:00Z"
+  }
+}
