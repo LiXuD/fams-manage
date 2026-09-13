@@ -1,0 +1,22 @@
+{
+  "operationId": "updateAsset",
+  "kind": "rejection",
+  "status": 403,
+  "scenario": "A warehouse operator who did not create the DRAFT attempts to update it.",
+  "requestSchema": "AssetUpdateRequest",
+  "responseSchema": "ErrorResponse",
+  "pathParameters": {"assetId": "10001"},
+  "headers": {
+    "Idempotency-Key": "asset-update-non-creator-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "0"
+  },
+  "payload": {"notes": "Unauthorized draft update"},
+  "response": {
+    "code": "ASSET_NOT_CREATOR",
+    "message": "Only the creating warehouse operator may update a DRAFT.",
+    "requestId": "00000000-0000-4000-8000-000000000044",
+    "fieldErrors": {}
+  },
+  "evidence": "Contract evidence only; runtime creator authorization is not implemented in this design package."
+}

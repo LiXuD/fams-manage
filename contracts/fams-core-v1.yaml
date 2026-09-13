@@ -492,6 +492,163 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/Asset'
+    AssetCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      description: >-
+        Warehouse-operator draft input. Only name is required; non-critical fields
+        may be completed before inbound submission and all references carry id/version.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+        category:
+          $ref: '#/components/schemas/CatalogReference'
+        model:
+          type: string
+          maxLength: 128
+        unit:
+          type: string
+          maxLength: 32
+        organization:
+          $ref: '#/components/schemas/CatalogReference'
+        plannedInboundWarehouse:
+          $ref: '#/components/schemas/CatalogReference'
+        plannedInboundLocation:
+          $ref: '#/components/schemas/CatalogReference'
+        brand:
+          $ref: '#/components/schemas/CatalogReference'
+        manufacturer:
+          $ref: '#/components/schemas/CatalogReference'
+        serialNumber:
+          type: string
+          maxLength: 128
+        acquisitionDate:
+          $ref: '#/components/schemas/BusinessDate'
+        warrantyExpiryDate:
+          $ref: '#/components/schemas/BusinessDate'
+        serviceProvider:
+          type: string
+          maxLength: 256
+        serviceContact:
+          type: string
+          maxLength: 128
+        servicePhone:
+          type: string
+          maxLength: 32
+          x-sensitive: true
+        source:
+          type: string
+          maxLength: 128
+        notes:
+          type: string
+          maxLength: 2000
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttachmentReference'
+          x-sensitive: true
+        extensionValues:
+          type: object
+          additionalProperties: true
+    AssetUpdateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: >-
+        PATCH draft fields. A DRAFT creator may update all fields listed here. After
+        inbound submission only descriptive fields are eligible for a warehouse
+        operator correction; status, identity, ownership, custody, and responsibility
+        changes use controlled business processes.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+        category:
+          $ref: '#/components/schemas/CatalogReference'
+        model:
+          type: string
+          maxLength: 128
+        unit:
+          type: string
+          maxLength: 32
+        organization:
+          $ref: '#/components/schemas/CatalogReference'
+        plannedInboundWarehouse:
+          $ref: '#/components/schemas/CatalogReference'
+        plannedInboundLocation:
+          $ref: '#/components/schemas/CatalogReference'
+        brand:
+          $ref: '#/components/schemas/CatalogReference'
+        manufacturer:
+          $ref: '#/components/schemas/CatalogReference'
+        serialNumber:
+          type: string
+          maxLength: 128
+        acquisitionDate:
+          $ref: '#/components/schemas/BusinessDate'
+        warrantyExpiryDate:
+          $ref: '#/components/schemas/BusinessDate'
+        serviceProvider:
+          type: string
+          maxLength: 256
+        serviceContact:
+          type: string
+          maxLength: 128
+        servicePhone:
+          type: string
+          maxLength: 32
+          x-sensitive: true
+        source:
+          type: string
+          maxLength: 128
+        notes:
+          type: string
+          maxLength: 2000
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttachmentReference'
+          x-sensitive: true
+        extensionValues:
+          type: object
+          additionalProperties: true
+    AssetCopyRequest:
+      type: object
+      additionalProperties: false
+      required: [quantity]
+      properties:
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 100
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+    AssetCopyResult:
+      type: object
+      additionalProperties: false
+      required: [assets]
+      properties:
+        assets:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/Asset'
+    AssetCancelRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
     LoginRequest:
       type: object
       required: [username, password]
@@ -1824,6 +1981,51 @@ paths:
                 $ref: '#/components/schemas/PageAsset'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Assets]
+      operationId: createAsset
+      summary: Create a warehouse-operator asset-card draft.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [WAREHOUSE_OPERATOR]
+      x-version:
+        required: true
+        precondition: The server validates current master-data and numbering-rule versions while creating the draft.
+      x-transaction:
+        boundary: Allocate the permanent asset code, persist the draft and its parameter snapshot, and audit in one short transaction.
+      x-audit-event:
+        event: ASSET_DRAFT_CREATED
+      x-error-codes: [ASSET_NAME_REQUIRED, ASSET_CODE_ALLOCATION_CONFLICT, ASSET_SERIAL_NUMBER_CONFLICT, ASSET_REFERENCE_VERSION_CONFLICT, ASSET_MASTER_DATA_DISABLED, ASSET_NUMBERING_RULE_UNAVAILABLE]
+      x-invariants: >-
+        The server assigns an enterprise-unique assetCode that is permanent and
+        never reused. A new card starts with lifecycle WAITING_INBOUND, exception
+        NORMAL, and cardStage DRAFT. Planned inbound warehouse and location are not
+        formal custody; currentCustody is created only by inbound acceptance. The
+        card stores parameterVersionId, createdBusinessDate, createdAt as UTC Instant,
+        version, and creator. A non-empty serial number is enterprise-unique.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetCreateRequest'
+      responses:
+        '201':
+          description: Created asset-card draft.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
 
   /assets/{assetId}:
     parameters:
@@ -1849,6 +2051,157 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Assets]
+      operationId: updateAsset
+      summary: Patch allowed asset-card fields under stage and creator policy.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [WAREHOUSE_OPERATOR]
+      x-version:
+        required: true
+        precondition: If-Match-Version must equal the stored asset version and all supplied references must be current.
+      x-transaction:
+        boundary: Validate stage, creator, reference versions, and descriptive-correction policy, then update and audit in one short transaction.
+      x-audit-event:
+        event: ASSET_UPDATED
+      x-error-codes: [ASSET_NOT_FOUND, ASSET_NOT_CREATOR, ASSET_DRAFT_LOCKED, ASSET_PENDING_INBOUND, ASSET_REFERENCE_VERSION_CONFLICT, ASSET_MASTER_DATA_DISABLED, ASSET_FIELD_NOT_EDITABLE, ASSET_VERSION_CONFLICT, ASSET_SERIAL_NUMBER_CONFLICT]
+      x-stage-field-policy:
+        DRAFT:
+          allowed: All fields in AssetUpdateRequest may be changed by the creating warehouse operator while cardStage is DRAFT.
+        PENDING_INBOUND:
+          allowed: []
+          rejection: Direct updates are forbidden while awaiting inbound submission; use the later inbound business flow.
+        ACTIVE:
+          allowed: [name, model, unit, brand, manufacturer, serialNumber, acquisitionDate, warrantyExpiryDate, serviceProvider, serviceContact, servicePhone, source, notes, attachments, extensionValues]
+          descriptive-correction: A warehouse operator may correct these descriptive fields with version and audit controls.
+          lock-policy: A business lock does not block a descriptive correction unrelated to custody or responsibility.
+          forbidden: [assetCode, category, organization, plannedInboundWarehouse, plannedInboundLocation, lifecycle, exception, currentCustody, usageMode, responsibleEmployee]
+          rejection: Identity, ownership, lifecycle, exception, location, usage mode, and responsibility corrections use controlled business processes.
+      x-invariants: A disabled or expired reference is rejected; status, assetCode, lifecycle, exception, formal custody, and responsibility are never directly changed by this PATCH.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetUpdateRequest'
+      responses:
+        '200':
+          description: Updated asset card.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /assets/{assetId}/copy:
+    parameters:
+      - $ref: '#/components/parameters/AssetId'
+    post:
+      tags: [Assets]
+      operationId: copyAsset
+      summary: Copy a draft asset card into independent numbered drafts.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [WAREHOUSE_OPERATOR]
+      x-version:
+        required: true
+        precondition: If-Match-Version must equal the source draft version and its references must still be current.
+      x-transaction:
+        boundary: Reserve the requested number segment and persist every independent card atomically; failure cannot leave a partial set of cards.
+      x-audit-event:
+        event: ASSET_DRAFT_COPIED
+      x-error-codes: [ASSET_COPY_QUANTITY_INVALID, ASSET_NOT_FOUND, ASSET_NOT_CREATOR, ASSET_DRAFT_LOCKED, ASSET_REFERENCE_VERSION_CONFLICT, ASSET_CODE_ALLOCATION_CONFLICT]
+      x-invariants: >-
+        Quantity is from 1 through 100. Each copy receives an independent permanent
+        assetCode and card. Only the creating operator may copy an unlocked DRAFT;
+        submitted or locked cards are rejected. Copy only category, brand, manufacturer, model, unit, and
+        extension values; never copy serial, status, planned or formal custody,
+        organization, usage mode, responsibility, attachments, or history. A failed
+        number segment may leave a permanent gap, but the transaction never leaves a
+        partial card set.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetCopyRequest'
+      responses:
+        '201':
+          description: Independent copied asset-card drafts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetCopyResult'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /assets/{assetId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/AssetId'
+    post:
+      tags: [Assets]
+      operationId: cancelAssetCard
+      summary: Cancel an unsubmitted draft without physically deleting its tombstone.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [WAREHOUSE_OPERATOR]
+      x-version:
+        required: true
+        precondition: If-Match-Version must equal the stored draft version.
+      x-transaction:
+        boundary: Verify creator and lock state, mark the draft cancelled, and audit atomically.
+      x-audit-event:
+        event: ASSET_DRAFT_CANCELLED
+      x-error-codes: [ASSET_NOT_FOUND, ASSET_NOT_CREATOR, ASSET_DRAFT_LOCKED, ASSET_NOT_DRAFT, ASSET_VERSION_CONFLICT]
+      x-invariants: >-
+        Only an unsubmitted DRAFT without a business lock can be cancelled by its
+        creator. Physical delete is forbidden; cardStage becomes CANCELLED, the
+        assetCode becomes a permanent tombstone, and the code is never reused.
+        CANCELLED is terminal and read-only.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetCancelRequest'
+      responses:
+        '200':
+          description: Cancelled asset-card tombstone.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
 
   /auth/login:
     post:

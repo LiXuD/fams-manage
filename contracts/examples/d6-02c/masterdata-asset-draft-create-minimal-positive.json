@@ -1,0 +1,28 @@
+{
+  "operationId": "createAsset",
+  "kind": "positive",
+  "status": 201,
+  "requestSchema": "AssetCreateRequest",
+  "responseSchema": "Asset",
+  "headers": {
+    "Idempotency-Key": "asset-create-minimal-0001",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "name": "Unclassified laptop draft"
+  },
+  "response": {
+    "id": "10001",
+    "assetCode": "FA-2026-000001",
+    "name": "Unclassified laptop draft",
+    "lifecycle": "WAITING_INBOUND",
+    "exception": "NORMAL",
+    "cardStage": "DRAFT",
+    "version": 0,
+    "createdBusinessDate": "2026-09-14",
+    "createdAt": "2026-09-14T04:00:00Z",
+    "parameterVersionId": "9101",
+    "creator": {"id": "7002", "username": "warehouse.operator"}
+  },
+  "evidence": "Contract evidence only; runtime allocation is not implemented in this design package."
+}
