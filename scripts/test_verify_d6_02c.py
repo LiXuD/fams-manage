@@ -2203,9 +2203,14 @@ class DesignPackageContractTest(unittest.TestCase):
             if value.get("operationId") == "replaceAssetTag" and value.get("kind") == "positive"
         ]
         self.assertTrue(replacement)
+        replacement_response = replacement[0]["response"]
+        self.assertIn("tag", replacement_response)
+        if "tag" not in replacement_response:
+            return
         self.assertNotEqual(
-            replacement[0]["previousQrToken"], replacement[0]["response"]["qrToken"]
+            replacement[0]["previousQrToken"], replacement_response["tag"]["qrToken"]
         )
+        self.assertIsInstance(replacement_response["assetVersion"], int)
         old_token = next(
             value
             for value in examples
@@ -2222,6 +2227,68 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertEqual(404, guessed_token["status"])
         for key in ("code", "message", "fieldErrors"):
             self.assertEqual(old_token["response"][key], guessed_token["response"][key])
+
+    def test_asset_print_jobs_are_recoverable_and_replacement_returns_versioned_envelope(self) -> None:
+        document = self.load_contract()
+        paths = document["paths"]
+        schemas = document["components"]["schemas"]
+        operations = {
+            operation["operationId"]: operation
+            for item in paths.values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        self.assertIn("/asset-tag-print-jobs/{printJobId}", paths)
+        self.assertIn("PrintJobId", document["components"]["parameters"])
+        self.assertIn("getAssetTagPrintJob", operations)
+        if "getAssetTagPrintJob" not in operations:
+            return
+
+        get_job = operations["getAssetTagPrintJob"]
+        self.assertEqual(["WAREHOUSE_OPERATOR"], get_job["x-actor"]["roles"])
+        self.assertNotIn("SYSTEM_ADMIN", get_job["x-actor"]["roles"])
+        self.assertIn("200", get_job["responses"])
+        self.assertIn("401", get_job["responses"])
+        self.assertIn("403", get_job["responses"])
+        self.assertIn("404", get_job["responses"])
+        self.assertNotIn("410", get_job["responses"])
+        job_text = json.dumps(get_job, sort_keys=True).lower()
+        for term in ("creator", "recovery relation", "queued", "completed", "failed", "no automatic"):
+            self.assertIn(term, job_text)
+        self.assertEqual(
+            "PrintJobId",
+            paths["/asset-tag-print-jobs/{printJobId}"]["parameters"][0]["$ref"].rsplit("/", 1)[-1],
+        )
+        job_result = schemas["AssetTagPrintJobResult"]
+        result_refs = {
+            branch["$ref"].rsplit("/", 1)[-1]
+            for branch in job_result["oneOf"]
+        }
+        self.assertEqual({"AssetTagPrintJob", "AssetTagBatchPrintJob"}, result_refs)
+        self.assertEqual(
+            {"QUEUED", "COMPLETED", "FAILED"},
+            set(schemas["AssetTagPrintJobStatus"]["enum"]),
+        )
+
+        for operation_id in ("reprintAssetTag", "batchPrintAssetTags"):
+            response = operations[operation_id]["responses"]["202"]
+            self.assertIn("Location", response["headers"])
+            location_text = json.dumps(response["headers"]["Location"], sort_keys=True).lower()
+            self.assertIn("asset-tag-print-jobs", location_text)
+            self.assertIn("print job", response["description"].lower())
+
+        replacement = operations["replaceAssetTag"]
+        replacement_response = replacement["responses"]["200"]["content"]["application/json"]["schema"]
+        self.assertEqual("AssetTagReplacementResult", replacement_response["$ref"].rsplit("/", 1)[-1])
+        envelope = schemas["AssetTagReplacementResult"]
+        self.assertTrue({"tag", "assetVersion"}.issubset(envelope["required"]))
+        self.assertEqual(
+            "AssetTag",
+            envelope["properties"]["tag"]["$ref"].rsplit("/", 1)[-1],
+        )
+        self.assertEqual("integer", envelope["properties"]["assetVersion"]["type"])
+        replacement_text = json.dumps(replacement, sort_keys=True).lower()
+        self.assertIn("same version", replacement_text)
 
 
 class DesignPackageEvidenceTest(unittest.TestCase):
