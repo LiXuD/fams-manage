@@ -107,6 +107,7 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertIn("x-audit-event", login)
         self.assertIn("same", login_text)
         self.assertIn("429", login["responses"])
+        self.assertNotIn("403", login["responses"])
         self.assertNotIn("409", login["responses"])
         set_cookie = login["responses"]["200"]["headers"]["Set-Cookie"]
         cookie_text = json.dumps(set_cookie).lower()
@@ -122,6 +123,10 @@ class DesignPackageContractTest(unittest.TestCase):
             "SessionResponse",
             password["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].rsplit("/", 1)[-1],
         )
+        password_cookie = password["responses"]["200"]["headers"]["Set-Cookie"]
+        password_cookie_text = json.dumps(password_cookie).lower()
+        for token in ("secure", "httponly", "samesite=lax", "path=/api"):
+            self.assertIn(token, password_cookie_text)
         self.assertIn("old session", password_text)
 
         logout = document["paths"]["/auth/logout"]["post"]
@@ -129,6 +134,162 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertIn("x-audit-event", logout)
         logout_cookie = logout["responses"]["204"]["headers"]["Set-Cookie"]
         self.assertIn("max-age=0", json.dumps(logout_cookie).lower())
+
+        login_rejections = []
+        for path in sorted(EXAMPLES.glob("auth-login*-rejection*.json")):
+            value = json.loads(path.read_text(encoding="utf-8"))
+            if value.get("operationId") == "login" and value.get("kind") == "rejection":
+                login_rejections.append(value)
+        self.assertGreaterEqual(len(login_rejections), 4)
+        self.assertTrue(all(value["status"] == 401 for value in login_rejections))
+        response_keys = {tuple(sorted(value["response"])) for value in login_rejections}
+        self.assertEqual({("code", "fieldErrors", "message", "requestId")}, response_keys)
+
+    def test_identity_master_data_reads_and_writes_are_system_admin_only(self) -> None:
+        document = self.load_contract()
+        prefixes = ("/organizations", "/employees", "/system-accounts", "/role-configurations")
+        for path, item in document["paths"].items():
+            if not path.startswith(prefixes):
+                continue
+            for method, operation in item.items():
+                if method not in {"get", "post", "patch", "put", "delete"}:
+                    continue
+                with self.subTest(method=method, path=path):
+                    self.assertEqual(["SYSTEM_ADMIN"], operation.get("x-actor", {}).get("roles"))
+
+    def test_identity_inputs_split_status_mutations_and_reference_versions(self) -> None:
+        document = self.load_contract()
+        schemas = document["components"]["schemas"]
+        operations = {
+            operation["operationId"]: operation
+            for path, item in document["paths"].items()
+            if path.startswith(("/organizations", "/employees"))
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        request_schema_by_operation = {
+            "createOrganization": "OrganizationCreateRequest",
+            "updateOrganization": "OrganizationUpdateRequest",
+            "createEmployee": "EmployeeCreateRequest",
+            "updateEmployee": "EmployeeUpdateRequest",
+        }
+        for operation_id, schema_name in request_schema_by_operation.items():
+            with self.subTest(operation=operation_id):
+                ref = operations[operation_id]["requestBody"]["content"]["application/json"]["schema"]["$ref"]
+                self.assertEqual(schema_name, ref.rsplit("/", 1)[-1])
+                self.assertNotIn("status", schemas[schema_name]["properties"])
+        required_schemas = set(request_schema_by_operation.values()) | {"OrganizationReference"}
+        missing_schemas = sorted(required_schemas - set(schemas))
+        self.assertFalse(missing_schemas, f"split identity schemas remain RED: {missing_schemas}")
+        if missing_schemas:
+            return
+        reference = schemas["OrganizationReference"]
+        self.assertEqual({"id", "version"}, set(reference["required"]))
+        self.assertEqual({"id", "version"}, set(reference["properties"]))
+        for schema_name, reference_name in (
+            ("OrganizationCreateRequest", "parentOrganization"),
+            ("OrganizationUpdateRequest", "parentOrganization"),
+            ("EmployeeCreateRequest", "organization"),
+            ("EmployeeUpdateRequest", "organization"),
+        ):
+            with self.subTest(schema=schema_name):
+                self.assertEqual(
+                    "OrganizationReference",
+                    schemas[schema_name]["properties"][reference_name]["$ref"].rsplit("/", 1)[-1],
+                )
+
+    def test_employee_disable_revokes_all_access_without_blocking_on_pending_work(self) -> None:
+        document = self.load_contract()
+        operation = next(
+            operation
+            for item in document["paths"].values()
+            for operation in item.values()
+            if isinstance(operation, dict) and operation.get("operationId") == "disableEmployee"
+        )
+        self.assertFalse(any("PENDING" in code for code in operation["x-error-codes"]))
+        side_effects = json.dumps(operation, sort_keys=True).lower()
+        for term in ("session", "upload", "account access", "responsibility", "history", "todo"):
+            self.assertIn(term, side_effects)
+        self.assertIn("never blocked", side_effects)
+
+    def test_system_account_credentials_are_write_only_and_default_enabled(self) -> None:
+        document = self.load_contract()
+        schemas = document["components"]["schemas"]
+        self.assertIn("/system-accounts", document["paths"])
+        self.assertIn("SystemAccountCreateRequest", schemas)
+        self.assertIn("InitialPasswordResetRequest", schemas)
+        self.assertIn("SystemAccount", schemas)
+        self.assertIn("SystemAccountStatus", schemas)
+        if "/system-accounts" not in document["paths"]:
+            return
+        create = document["paths"]["/system-accounts"]["post"]
+        create_ref = create["requestBody"]["content"]["application/json"]["schema"]["$ref"]
+        self.assertEqual("SystemAccountCreateRequest", create_ref.rsplit("/", 1)[-1])
+        create_schema = schemas["SystemAccountCreateRequest"]
+        self.assertNotIn("status", create_schema["properties"])
+        self.assertIn("initialPassword", create_schema["properties"])
+        self.assertTrue(create_schema["properties"]["initialPassword"]["writeOnly"])
+        account = schemas["SystemAccount"]
+        self.assertEqual("ENABLED", account["properties"]["status"]["default"])
+        self.assertEqual("SystemAccountStatus", account["properties"]["status"]["$ref"].rsplit("/", 1)[-1])
+        status_values = set(schemas["SystemAccountStatus"]["enum"])
+        self.assertEqual({"ENABLED", "DISABLED", "LOCKED"}, status_values)
+        reset = schemas["InitialPasswordResetRequest"]
+        self.assertIn("newInitialPassword", reset["required"])
+        self.assertTrue(reset["properties"]["newInitialPassword"]["writeOnly"])
+        self.assertNotIn("password", json.dumps(account).lower())
+
+    def test_role_configuration_is_read_only_and_member_revocation_records_warning(self) -> None:
+        document = self.load_contract()
+        operations = {
+            operation["operationId"]: operation
+            for item in document["paths"].values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        self.assertNotIn("grantRolePermission", operations)
+        self.assertNotIn("revokeRolePermission", operations)
+        self.assertFalse(any("/grants" in path for path in document["paths"]))
+        role_schema = document["components"]["schemas"]["RoleConfiguration"]
+        self.assertNotIn("minimumActiveAdministrators", role_schema["properties"])
+        self.assertNotIn("minimumActiveWarehouseOperators", role_schema["properties"])
+        role_text = json.dumps(role_schema).lower()
+        self.assertIn("businessscope", role_text)
+        self.assertIn("systemadminbusinesspermissions", role_text)
+        revoke = operations["revokeSystemAccountRole"]
+        revoke_text = json.dumps(revoke, sort_keys=True).lower()
+        self.assertNotIn("last_admin", revoke_text)
+        self.assertNotIn("last_warehouse", revoke_text)
+        self.assertIn("warning", revoke_text)
+        self.assertIn("immediate", revoke_text)
+
+    def test_contract_has_unique_yaml_keys_and_operation_ids(self) -> None:
+        import yaml
+
+        class UniqueKeyLoader(yaml.SafeLoader):
+            pass
+
+        def construct_mapping(loader, node, deep=False):
+            mapping = {}
+            for key_node, value_node in node.value:
+                key = loader.construct_object(key_node, deep=deep)
+                self.assertNotIn(key, mapping, f"duplicate YAML key: {key}")
+                mapping[key] = loader.construct_object(value_node, deep=deep)
+            return mapping
+
+        UniqueKeyLoader.add_constructor(
+            yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+            construct_mapping,
+        )
+        with CONTRACT.open(encoding="utf-8") as stream:
+            document = yaml.load(stream, Loader=UniqueKeyLoader)
+        operation_ids = [
+            operation["operationId"]
+            for item in document["paths"].values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        ]
+        self.assertEqual(len(operation_ids), len(set(operation_ids)))
 
     def test_organization_operations_expose_tree_and_disable_invariants(self) -> None:
         document = self.load_contract()
