@@ -1,0 +1,16 @@
+{
+  "operationId": "listActiveWarehouseReferences",
+  "kind": "positive",
+  "status": 200,
+  "responseSchema": "WarehouseActiveReferencePage",
+  "headers": {},
+  "payload": {"page": 1, "pageSize": 20},
+  "response": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 1,
+    "items": [
+      {"id": "8401", "code": "SH-01", "name": "Shanghai Main Warehouse", "version": 3}
+    ]
+  }
+}

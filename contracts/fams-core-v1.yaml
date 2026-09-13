@@ -116,6 +116,12 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Id'
+    WarehouseId:
+      name: warehouseId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
   responses:
     BadRequest:
       description: Request validation or state precondition failed.
@@ -977,6 +983,94 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/ManufacturerActiveReference'
+    WarehouseCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        description:
+          type: string
+          maxLength: 500
+    WarehouseUpdateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: PATCH fields; status changes use the explicit enable or disable operation.
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        description:
+          type: string
+          maxLength: 500
+    Warehouse:
+      type: object
+      additionalProperties: false
+      required: [id, code, name, status, version]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        code:
+          type: string
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/ReferenceStatus'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        description:
+          type: string
+    PageWarehouse:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Warehouse'
+    WarehouseActiveReference:
+      type: object
+      additionalProperties: false
+      required: [id, code, name, version]
+      description: Minimal active warehouse selector; sensitive identity fields are never returned.
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        code:
+          type: string
+        name:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    WarehouseActiveReferencePage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/WarehouseActiveReference'
 paths:
   /auth/login:
     post:
@@ -2467,6 +2561,236 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Manufacturer'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /warehouses:
+    get:
+      tags: [MasterData]
+      operationId: listWarehouses
+      summary: List warehouses with one-based stable pagination.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Warehouse page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageWarehouse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MasterData]
+      operationId: createWarehouse
+      summary: Create a warehouse.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: Code is unique within the enterprise and is never reused.
+      x-transaction:
+        boundary: Insert warehouse and record the audit event in one short transaction.
+      x-audit-event:
+        event: WAREHOUSE_CREATED
+      x-error-codes: [WAREHOUSE_CODE_CONFLICT]
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WarehouseCreateRequest'
+      responses:
+        '201':
+          description: Created warehouse.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Warehouse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /warehouses/active-references:
+    get:
+      tags: [MasterData]
+      operationId: listActiveWarehouseReferences
+      summary: List active warehouses for safe business selectors.
+      x-business-write: false
+      x-actor:
+        required: true
+        roles: [WAREHOUSE_OPERATOR, ASSET_ADMIN]
+      x-non-applicable: [version, idempotency, csrf]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Minimal active warehouse references; sensitive identity fields are not exposed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarehouseActiveReferencePage'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /warehouses/{warehouseId}:
+    parameters:
+      - $ref: '#/components/parameters/WarehouseId'
+    get:
+      tags: [MasterData]
+      operationId: getWarehouse
+      summary: Read a warehouse, including disabled historical state.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      responses:
+        '200':
+          description: Warehouse details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Warehouse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [MasterData]
+      operationId: updateWarehouse
+      summary: Patch warehouse metadata without changing status.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored warehouse version.
+      x-transaction:
+        boundary: Validate warehouse code and version in one short transaction before audit.
+      x-audit-event:
+        event: WAREHOUSE_UPDATED
+      x-error-codes: [WAREHOUSE_CODE_CONFLICT]
+      x-invariants: Warehouse code is unique and never reused; disabled history remains readable.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WarehouseUpdateRequest'
+      responses:
+        '200':
+          description: Updated warehouse.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Warehouse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /warehouses/{warehouseId}/disable:
+    parameters:
+      - $ref: '#/components/parameters/WarehouseId'
+    post:
+      tags: [MasterData]
+      operationId: disableWarehouse
+      summary: Disable an empty warehouse while retaining historical references.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored warehouse version.
+      x-transaction:
+        boundary: Validate empty operational relations, change warehouse status, and audit in one short transaction.
+      x-audit-event:
+        event: WAREHOUSE_DISABLED
+      x-error-codes: [WAREHOUSE_ALREADY_DISABLED, WAREHOUSE_HAS_ACTIVE_ASSETS, WAREHOUSE_HAS_OPEN_BUSINESS_REFERENCES, WAREHOUSE_HAS_OPEN_INBOUND_REFERENCES]
+      x-invariants: Warehouse code is unique and never reused; disable requires no current active assets and no open business or inbound references; historical warehouse references remain readable.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogStatusChangeRequest'
+      responses:
+        '200':
+          description: Disabled warehouse with history preserved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Warehouse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /warehouses/{warehouseId}/enable:
+    parameters:
+      - $ref: '#/components/parameters/WarehouseId'
+    post:
+      tags: [MasterData]
+      operationId: enableWarehouse
+      summary: Re-enable a warehouse explicitly.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored warehouse version.
+      x-transaction:
+        boundary: Change warehouse status and record the audit event in one short transaction.
+      x-audit-event:
+        event: WAREHOUSE_ENABLED
+      x-error-codes: [WAREHOUSE_ALREADY_ENABLED]
+      x-invariants: Enabling changes only status; warehouse code remains unique and historical references remain intact.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogStatusChangeRequest'
+      responses:
+        '200':
+          description: Enabled warehouse.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Warehouse'
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
