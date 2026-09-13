@@ -16,7 +16,7 @@
     "id": "3001",
     "employeeNo": "E-1001",
     "displayName": "Lin Mei",
-    "organizationId": "2002",
+    "organization": {"id": "2002", "version": 4},
     "phone": "13800000000",
     "status": "DISABLED",
     "version": 2,

@@ -2,7 +2,7 @@
   "operationId": "createSystemAccount",
   "kind": "rejection",
   "status": 409,
-  "requestSchema": "SystemAccountInput",
+  "requestSchema": "SystemAccountCreateRequest",
   "responseSchema": "ErrorResponse",
   "expectedErrorCode": "SYSTEM_ACCOUNT_USERNAME_CONFLICT",
   "headers": {
@@ -12,7 +12,7 @@
   "payload": {
     "username": "warehouse.operator",
     "employeeId": "3002",
-    "status": "ACTIVE"
+    "initialPassword": "temporary password 456"
   },
   "response": {
     "code": "SYSTEM_ACCOUNT_USERNAME_CONFLICT",

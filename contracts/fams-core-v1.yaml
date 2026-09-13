@@ -3,9 +3,9 @@ info:
   title: FAMS core first-slice contract
   version: 1.0.0
   description: >-
-    Public wire foundation and authentication boundary for the first FAMS design
-    package. Master data, asset, and inbound paths are added in later bounded
-    contract increments.
+    Public wire foundation, authentication, and identity/account MasterData
+    boundaries for the first FAMS design package. Asset, inbound, and later
+    product paths are added in bounded contract increments.
 servers:
   - url: /api/v1
     description: Versioned FAMS API root.
@@ -123,6 +123,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Requested identity or account resource does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     TooManyRequests:
       description: Login or other request rate limit has been reached.
       content:
@@ -199,7 +205,7 @@ components:
           $ref: '#/components/schemas/Id'
     AccountStatus:
       type: string
-      enum: [ACTIVE, DISABLED, LOCKED]
+      enum: [ENABLED, DISABLED, LOCKED]
     Role:
       type: string
       enum: [EMPLOYEE, DEPARTMENT_ASSET_MANAGER, ASSET_ADMIN, WAREHOUSE_OPERATOR, TECH_ASSISTANT, AUDIT_READ_ONLY, SYSTEM_ADMIN]
@@ -279,9 +285,21 @@ components:
           type: array
           items:
             type: string
-    OrganizationInput:
+    OrganizationReference:
       type: object
-      required: [code, name, status]
+      required: [id, version]
+      description: A versioned reference used for tree writes and concurrency validation.
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    OrganizationCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name]
       properties:
         code:
           type: string
@@ -291,26 +309,47 @@ components:
           type: string
           minLength: 1
           maxLength: 128
-        parentId:
+        parentOrganization:
+          $ref: '#/components/schemas/OrganizationReference'
+          description: Omit for a root organization; otherwise id and version are both required.
+    OrganizationUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        parentOrganization:
+          $ref: '#/components/schemas/OrganizationReference'
+          description: Omit to retain the current parent; otherwise id and version are both required.
+    Organization:
+      type: object
+      required: [id, code, name, status, version, createdAt, updatedAt]
+      properties:
+        id:
           $ref: '#/components/schemas/Id'
+        code:
+          type: string
+        name:
+          type: string
+        parentOrganization:
+          $ref: '#/components/schemas/OrganizationReference'
         status:
           $ref: '#/components/schemas/ReferenceStatus'
-    Organization:
-      allOf:
-        - $ref: '#/components/schemas/OrganizationInput'
-        - type: object
-          required: [id, version, createdAt, updatedAt]
-          properties:
-            id:
-              $ref: '#/components/schemas/Id'
-            version:
-              type: integer
-              format: int64
-              minimum: 0
-            createdAt:
-              $ref: '#/components/schemas/Instant'
-            updatedAt:
-              $ref: '#/components/schemas/Instant'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        createdAt:
+          $ref: '#/components/schemas/Instant'
+        updatedAt:
+          $ref: '#/components/schemas/Instant'
     PageOrganization:
       allOf:
         - $ref: '#/components/schemas/PageMeta'
@@ -329,9 +368,10 @@ components:
           type: string
           minLength: 1
           maxLength: 500
-    EmployeeInput:
+    EmployeeCreateRequest:
       type: object
-      required: [employeeNo, displayName, organizationId, status]
+      additionalProperties: false
+      required: [employeeNo, displayName, organization]
       properties:
         employeeNo:
           type: string
@@ -341,30 +381,59 @@ components:
           type: string
           minLength: 1
           maxLength: 128
-        organizationId:
-          $ref: '#/components/schemas/Id'
+        organization:
+          $ref: '#/components/schemas/OrganizationReference'
+          description: Employee's organization id and current organization version.
         phone:
           type: string
           maxLength: 32
           x-sensitive: true
+    EmployeeUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [displayName, organization]
+      properties:
+        employeeNo:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Employee number remains unique when changed by an administrator.
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 128
+        organization:
+          $ref: '#/components/schemas/OrganizationReference'
+          description: New organization id and current organization version for a transfer.
+        phone:
+          type: string
+          maxLength: 32
+          x-sensitive: true
+    Employee:
+      type: object
+      required: [id, employeeNo, displayName, organization, status, version, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        employeeNo:
+          type: string
+        displayName:
+          type: string
+        organization:
+          $ref: '#/components/schemas/OrganizationReference'
+        phone:
+          type: string
+          x-sensitive: true
         status:
           $ref: '#/components/schemas/ReferenceStatus'
-    Employee:
-      allOf:
-        - $ref: '#/components/schemas/EmployeeInput'
-        - type: object
-          required: [id, version, createdAt, updatedAt]
-          properties:
-            id:
-              $ref: '#/components/schemas/Id'
-            version:
-              type: integer
-              format: int64
-              minimum: 0
-            createdAt:
-              $ref: '#/components/schemas/Instant'
-            updatedAt:
-              $ref: '#/components/schemas/Instant'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        createdAt:
+          $ref: '#/components/schemas/Instant'
+        updatedAt:
+          $ref: '#/components/schemas/Instant'
     PageEmployee:
       allOf:
         - $ref: '#/components/schemas/PageMeta'
@@ -383,9 +452,14 @@ components:
           type: string
           minLength: 1
           maxLength: 500
-    SystemAccountInput:
+    SystemAccountStatus:
+      type: string
+      enum: [ENABLED, DISABLED, LOCKED]
+      default: ENABLED
+    SystemAccountCreateRequest:
       type: object
-      required: [username, employeeId, status]
+      additionalProperties: false
+      required: [username, employeeId, initialPassword]
       properties:
         username:
           type: string
@@ -393,30 +467,43 @@ components:
           maxLength: 128
         employeeId:
           $ref: '#/components/schemas/Id'
-        status:
-          $ref: '#/components/schemas/AccountStatus'
+        initialPassword:
+          type: string
+          minLength: 12
+          writeOnly: true
+          description: Administrator-supplied temporary password; never returned by any response.
     SystemAccount:
-      allOf:
-        - $ref: '#/components/schemas/SystemAccountInput'
-        - type: object
-          required: [id, version, requiresInitialPasswordChange, createdAt, updatedAt]
-          properties:
-            id:
-              $ref: '#/components/schemas/Id'
-            version:
-              type: integer
-              format: int64
-              minimum: 0
-            requiresInitialPasswordChange:
-              type: boolean
-            failedLoginCount:
-              type: integer
-              format: int32
-              minimum: 0
-            createdAt:
-              $ref: '#/components/schemas/Instant'
-            updatedAt:
-              $ref: '#/components/schemas/Instant'
+      type: object
+      additionalProperties: false
+      required: [id, username, employeeId, status, version, requiresInitialPasswordChange, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        username:
+          type: string
+        employeeId:
+          $ref: '#/components/schemas/Id'
+        status:
+          $ref: '#/components/schemas/SystemAccountStatus'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        requiresInitialPasswordChange:
+          type: boolean
+        failedLoginCount:
+          type: integer
+          format: int32
+          minimum: 0
+        configurationWarnings:
+          type: array
+          description: Atomic configuration anomalies retained for administrator follow-up.
+          items:
+            type: string
+        createdAt:
+          $ref: '#/components/schemas/Instant'
+        updatedAt:
+          $ref: '#/components/schemas/Instant'
     PageSystemAccount:
       allOf:
         - $ref: '#/components/schemas/PageMeta'
@@ -440,49 +527,42 @@ components:
           maxLength: 500
     InitialPasswordResetRequest:
       type: object
-      required: [reason]
+      additionalProperties: false
+      required: [newInitialPassword, reason]
       properties:
-        reason:
+        newInitialPassword:
           type: string
-          minLength: 1
-          maxLength: 500
-    PermissionGrantRequest:
-      type: object
-      required: [permissionKey, reason]
-      properties:
-        permissionKey:
-          type: string
-          minLength: 1
-          maxLength: 128
+          minLength: 12
+          writeOnly: true
+          description: Administrator-supplied temporary password; never returned by any response.
         reason:
           type: string
           minLength: 1
           maxLength: 500
     RoleConfiguration:
       type: object
-      required: [role, permissions, minimumActiveAdministrators, minimumActiveWarehouseOperators]
+      description: Fixed V1 role-permission baseline; this resource is read-only and has no write endpoint.
+      required: [role, permissions, businessScope, systemAdminBusinessPermissions]
       properties:
         role:
           type: string
           enum: [EMPLOYEE, DEPARTMENT_ASSET_MANAGER, ASSET_ADMIN, WAREHOUSE_OPERATOR, TECH_ASSISTANT, AUDIT_READ_ONLY, SYSTEM_ADMIN]
         permissions:
           type: array
+          description: Fixed V1 business permissions; callers cannot dynamically grant or revoke entries.
           items:
             type: string
-        minimumActiveAdministrators:
-          type: integer
-          format: int32
-          minimum: 1
-        minimumActiveWarehouseOperators:
-          type: integer
-          format: int32
-          minimum: 1
         businessScope:
           type: string
           description: ASSET_ADMIN and WAREHOUSE_OPERATOR permissions operate on the enterprise-wide pool.
         systemAdminBusinessPermissions:
           type: boolean
-          description: SYSTEM_ADMIN role configuration alone does not grant business approval or execution rights.
+          description: Always false for V1; SYSTEM_ADMIN role configuration alone grants no business approval or execution rights.
+        configurationWarnings:
+          type: array
+          description: Read-only warning state when no configured handler remains; no authorization downgrade is automatic.
+          items:
+            type: string
     RoleConfigurationPage:
       allOf:
         - $ref: '#/components/schemas/PageMeta'
@@ -538,7 +618,6 @@ paths:
                 $ref: '#/components/schemas/SessionResponse'
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /auth/password:
@@ -570,6 +649,11 @@ paths:
       responses:
         '200':
           description: Rotated SessionResponse; the old session is invalidated after the initial password change.
+          headers:
+            Set-Cookie:
+              description: Rotated FAMS_SESSION cookie with Secure; HttpOnly; SameSite=Lax; Path=/api attributes.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -639,6 +723,9 @@ paths:
       tags: [MasterData]
       operationId: listOrganizations
       summary: List organizations with one-based stable pagination.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -674,9 +761,9 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OrganizationInput'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationCreateRequest'
       responses:
         '201':
           description: Created organization.
@@ -696,6 +783,9 @@ paths:
       tags: [MasterData]
       operationId: getOrganization
       summary: Read an organization tree node.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
       responses:
         '200':
           description: Organization details.
@@ -731,9 +821,9 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OrganizationInput'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationUpdateRequest'
       responses:
         '200':
           description: Updated organization.
@@ -796,6 +886,9 @@ paths:
       tags: [MasterData]
       operationId: listEmployees
       summary: List employees with sensitive fields protected by permission.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -815,7 +908,7 @@ paths:
       x-business-write: true
       x-actor:
         required: true
-        roles: [SYSTEM_ADMIN, ASSET_ADMIN]
+        roles: [SYSTEM_ADMIN]
       x-version:
         required: true
         precondition: Organization version is current and employee number is not reused.
@@ -831,9 +924,9 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/EmployeeInput'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeCreateRequest'
       responses:
         '201':
           description: Created employee.
@@ -853,6 +946,9 @@ paths:
       tags: [MasterData]
       operationId: getEmployee
       summary: Read an employee and permission-filtered contact fields.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
       responses:
         '200':
           description: Employee details.
@@ -870,7 +966,7 @@ paths:
       x-business-write: true
       x-actor:
         required: true
-        roles: [SYSTEM_ADMIN, ASSET_ADMIN]
+        roles: [SYSTEM_ADMIN]
       x-version:
         required: true
         precondition: If-Match-Version equals the stored employee version.
@@ -888,9 +984,9 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/EmployeeInput'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeUpdateRequest'
       responses:
         '200':
           description: Updated employee.
@@ -914,16 +1010,16 @@ paths:
       x-business-write: true
       x-actor:
         required: true
-        roles: [SYSTEM_ADMIN, ASSET_ADMIN]
+        roles: [SYSTEM_ADMIN]
       x-version:
         required: true
         precondition: If-Match-Version equals the stored employee version.
       x-transaction:
-        boundary: Disable employee, revoke sessions and upload permission, retain history, and audit atomically.
+        boundary: Disable employee, revoke sessions, upload permission, and account access, retain responsibility, history, and todos, and audit atomically.
       x-audit-event:
         event: EMPLOYEE_DISABLED
-      x-error-codes: [EMPLOYEE_ALREADY_DISABLED, EMPLOYEE_HAS_PENDING_SECURITY_ACTION]
-      x-side-effects: Disabling immediately revokes sessions and upload permission; employee, asset responsibility, and operation history are retained.
+      x-error-codes: [EMPLOYEE_ALREADY_DISABLED]
+      x-side-effects: Disabling immediately revokes sessions, upload permission, and account access; employee, asset responsibility, operation history, and pending todos are retained. This action is never blocked by business or security todo.
       x-required-error-statuses: [400, 401, 403, 404, 409]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -953,6 +1049,9 @@ paths:
       tags: [MasterData]
       operationId: listSystemAccounts
       summary: List system accounts with status and password-change flags.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -968,7 +1067,8 @@ paths:
     post:
       tags: [MasterData]
       operationId: createSystemAccount
-      summary: Create a system account requiring an initial password change.
+      summary: Create an ENABLED system account requiring an initial password change.
+      x-default-status: ENABLED
       x-business-write: true
       x-actor:
         required: true
@@ -988,9 +1088,9 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SystemAccountInput'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemAccountCreateRequest'
       responses:
         '201':
           description: Created system account with a mandatory initial password change.
@@ -1010,6 +1110,9 @@ paths:
       tags: [MasterData]
       operationId: getSystemAccount
       summary: Read a system-account lifecycle snapshot.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
       responses:
         '200':
           description: System-account details.
@@ -1036,11 +1139,12 @@ paths:
         required: true
         precondition: If-Match-Version equals the stored system-account version.
       x-transaction:
-        boundary: Change account status, revoke or restore access, enforce minimum role safety, and audit atomically.
+        boundary: Change account status, revoke or restore access, record any configuration warning, and audit atomically.
       x-audit-event:
         event: SYSTEM_ACCOUNT_STATUS_CHANGED
-      x-error-codes: [SYSTEM_ACCOUNT_ALREADY_STATE, SYSTEM_ACCOUNT_LAST_ADMIN, SYSTEM_ACCOUNT_LAST_WAREHOUSE_OPERATOR]
-      x-invariants: Disable immediately revokes sessions and upload permission; unlock clears failed-login lock; active administrator and warehouse-operator minimums cannot be violated.
+      x-error-codes: [SYSTEM_ACCOUNT_ALREADY_STATE]
+      x-invariants: Disable immediately revokes sessions, upload permission, and account access; unlock clears failed-login lock. The change always takes effect, even when no administrator or warehouse operator remains, and atomically records a configuration warning and todo without auto-approval, claim, or authorization downgrade.
+      x-configuration-warning: If no administrator or warehouse operator remains, return 200 and persist the warning and pending todo in the same transaction.
       x-required-error-statuses: [400, 401, 403, 404, 409]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -1084,7 +1188,7 @@ paths:
       x-audit-event:
         event: SYSTEM_ACCOUNT_INITIAL_PASSWORD_RESET
       x-error-codes: [SYSTEM_ACCOUNT_NOT_FOUND, SYSTEM_ACCOUNT_DISABLED, SYSTEM_ACCOUNT_ALREADY_INITIAL]
-      x-side-effects: Reset makes the next login require a first initial password change and invalidates all existing sessions.
+      x-side-effects: Reset makes the next login require a first initial password change and invalidates all existing sessions; the supplied newInitialPassword is write-only and never returned.
       x-required-error-statuses: [400, 401, 403, 404, 409]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -1113,7 +1217,10 @@ paths:
     get:
       tags: [MasterData]
       operationId: listRoleConfigurations
-      summary: List role permissions and safety constraints.
+      summary: List the fixed V1 role-permission baseline and scope.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -1133,7 +1240,10 @@ paths:
     get:
       tags: [MasterData]
       operationId: getRoleConfiguration
-      summary: Read one role's effective permissions and constraints.
+      summary: Read one fixed V1 role-permission baseline and scope.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
       responses:
         '200':
           description: Role configuration.
@@ -1144,95 +1254,6 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-
-  /role-configurations/{role}/grants:
-    parameters:
-      - $ref: '#/components/parameters/RoleName'
-    post:
-      tags: [MasterData]
-      operationId: grantRolePermission
-      summary: Grant one permission to a role under safety constraints.
-      x-business-write: true
-      x-actor:
-        required: true
-        roles: [SYSTEM_ADMIN]
-      x-version:
-        required: true
-        precondition: If-Match-Version equals the stored role-configuration version.
-      x-transaction:
-        boundary: Conditional role permission update and audit event are one transaction.
-      x-audit-event:
-        event: ROLE_PERMISSION_GRANTED
-      x-error-codes: [ROLE_PERMISSION_ALREADY_GRANTED, ROLE_CONFIGURATION_INVALID]
-      x-invariants: SYSTEM_ADMIN configuration does not automatically grant business permission; ASSET_ADMIN and WAREHOUSE_OPERATOR pool permissions are enterprise-wide; minimum active administrator and warehouse-operator counts remain configured.
-      x-required-error-statuses: [400, 401, 403, 404, 409]
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/CsrfToken'
-        - $ref: '#/components/parameters/IfMatchVersion'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PermissionGrantRequest'
-      responses:
-        '200':
-          description: Updated role configuration.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RoleConfiguration'
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
-
-  /role-configurations/{role}/grants/revoke:
-    parameters:
-      - $ref: '#/components/parameters/RoleName'
-    post:
-      tags: [MasterData]
-      operationId: revokeRolePermission
-      summary: Revoke one permission and make the change immediately effective.
-      x-business-write: true
-      x-actor:
-        required: true
-        roles: [SYSTEM_ADMIN]
-      x-version:
-        required: true
-        precondition: If-Match-Version equals the stored role-configuration version.
-      x-transaction:
-        boundary: Conditional role permission update, session invalidation, and audit event are one transaction.
-      x-audit-event:
-        event: ROLE_PERMISSION_REVOKED
-      x-error-codes: [ROLE_PERMISSION_NOT_GRANTED, ROLE_CONFIGURATION_INVALID]
-      x-invariants: Revocation is immediate; active administrator and warehouse-operator minimums cannot be violated.
-      x-side-effects: Revocation invalidates affected permission snapshots and sessions immediately; it never silently downgrades an unsafe configuration.
-      x-required-error-statuses: [400, 401, 403, 404, 409]
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/CsrfToken'
-        - $ref: '#/components/parameters/IfMatchVersion'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PermissionGrantRequest'
-      responses:
-        '200':
-          description: Updated role configuration.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RoleConfiguration'
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
 
   /system-accounts/{systemAccountId}/roles:
     parameters:
@@ -1249,10 +1270,10 @@ paths:
         required: true
         precondition: If-Match-Version equals the stored system-account version.
       x-transaction:
-        boundary: Assign role, enforce minimum active role safety, and audit atomically.
+        boundary: Assign role and audit atomically.
       x-audit-event:
         event: SYSTEM_ACCOUNT_ROLE_GRANTED
-      x-error-codes: [SYSTEM_ACCOUNT_ROLE_ALREADY_GRANTED, SYSTEM_ACCOUNT_LAST_ADMIN, SYSTEM_ACCOUNT_LAST_WAREHOUSE_OPERATOR]
+      x-error-codes: [SYSTEM_ACCOUNT_ROLE_ALREADY_GRANTED]
       x-invariants: SYSTEM_ADMIN role configuration does not auto-grant business permissions; ASSET_ADMIN and WAREHOUSE_OPERATOR use the enterprise-wide pool.
       x-required-error-statuses: [400, 401, 403, 404, 409]
       parameters:
@@ -1293,12 +1314,13 @@ paths:
         required: true
         precondition: If-Match-Version equals the stored system-account version.
       x-transaction:
-        boundary: Revoke role, invalidate affected sessions, enforce minimum role safety, and audit atomically.
+        boundary: Revoke role, invalidate affected sessions, record any configuration warning and todo, and audit atomically.
       x-audit-event:
         event: SYSTEM_ACCOUNT_ROLE_REVOKED
-      x-error-codes: [SYSTEM_ACCOUNT_ROLE_NOT_GRANTED, SYSTEM_ACCOUNT_LAST_ADMIN, SYSTEM_ACCOUNT_LAST_WAREHOUSE_OPERATOR]
-      x-invariants: Revocation is immediate and fails with a configuration error if it would leave no valid administrator or warehouse operator; no silent authorization downgrade.
-      x-side-effects: Revoked permissions and sessions become invalid immediately.
+      x-error-codes: [SYSTEM_ACCOUNT_ROLE_NOT_GRANTED]
+      x-invariants: Revocation is immediate even if it leaves no administrator or warehouse operator; atomically retain the pending todo and configuration warning, with no auto-approval, claim, or authorization downgrade.
+      x-side-effects: Revoked permissions, account access, and sessions become invalid immediately; any missing handler is recorded as a configuration warning and retained todo.
+      x-configuration-warning: If no administrator or warehouse operator remains, return 200 and persist the warning and pending todo in the same transaction.
       x-required-error-statuses: [400, 401, 403, 404, 409]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'

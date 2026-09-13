@@ -399,7 +399,7 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertIn("initial", json.dumps(operations["resetInitialPassword"]).lower())
         self.assertIn("first", json.dumps(operations["resetInitialPassword"]).lower())
 
-    def test_role_configuration_covers_grant_revoke_and_safety_invariants(self) -> None:
+    def test_role_configuration_covers_fixed_baseline_and_member_safety(self) -> None:
         document = self.load_contract()
         paths = document["paths"]
         operations = {

@@ -2,7 +2,7 @@
   "operationId": "createEmployee",
   "kind": "rejection",
   "status": 409,
-  "requestSchema": "EmployeeInput",
+  "requestSchema": "EmployeeCreateRequest",
   "responseSchema": "ErrorResponse",
   "expectedErrorCode": "EMPLOYEE_NO_CONFLICT",
   "headers": {
@@ -12,8 +12,7 @@
   "payload": {
     "employeeNo": "E-1001",
     "displayName": "Duplicate Employee",
-    "organizationId": "2001",
-    "status": "ACTIVE"
+    "organization": {"id": "2001", "version": 0}
   },
   "response": {
     "code": "EMPLOYEE_NO_CONFLICT",

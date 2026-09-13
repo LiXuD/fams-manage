@@ -4,6 +4,9 @@
   "status": 200,
   "requestSchema": "LoginRequest",
   "responseSchema": "SessionResponse",
+  "headers": {
+    "Set-Cookie": "FAMS_SESSION=new-session; Secure; HttpOnly; SameSite=Lax; Path=/api"
+  },
   "payload": {
     "username": "asset.admin",
     "password": "correct horse battery staple"
@@ -16,7 +19,7 @@
     "user": {
       "id": "1001",
       "username": "asset.admin",
-      "status": "ACTIVE",
+      "status": "ENABLED",
       "roles": ["ASSET_ADMIN"],
       "requiresInitialPasswordChange": false
     }

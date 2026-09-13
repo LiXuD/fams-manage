@@ -2,7 +2,7 @@
   "operationId": "createEmployee",
   "kind": "positive",
   "status": 201,
-  "requestSchema": "EmployeeInput",
+  "requestSchema": "EmployeeCreateRequest",
   "responseSchema": "Employee",
   "headers": {
     "Idempotency-Key": "employee-create-identity-0001",
@@ -11,15 +11,14 @@
   "payload": {
     "employeeNo": "E-1001",
     "displayName": "Lin Mei",
-    "organizationId": "2001",
-    "phone": "13800000000",
-    "status": "ACTIVE"
+    "organization": {"id": "2001", "version": 0},
+    "phone": "13800000000"
   },
   "response": {
     "id": "3001",
     "employeeNo": "E-1001",
     "displayName": "Lin Mei",
-    "organizationId": "2001",
+    "organization": {"id": "2001", "version": 0},
     "phone": "13800000000",
     "status": "ACTIVE",
     "version": 0,

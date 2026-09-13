@@ -17,7 +17,7 @@
     "id": "7001",
     "username": "warehouse.operator",
     "employeeId": "3001",
-    "status": "ACTIVE",
+    "status": "ENABLED",
     "version": 1,
     "requiresInitialPasswordChange": true,
     "failedLoginCount": 0,

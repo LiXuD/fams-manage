@@ -1,0 +1,16 @@
+{
+  "operationId": "getRoleConfiguration",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": null,
+  "responseSchema": "RoleConfiguration",
+  "pathParameters": {"role": "ASSET_ADMIN"},
+  "payload": {},
+  "response": {
+    "role": "ASSET_ADMIN",
+    "permissions": ["asset.card.read", "asset.card.update"],
+    "businessScope": "enterprise-wide",
+    "systemAdminBusinessPermissions": false,
+    "configurationWarnings": []
+  }
+}

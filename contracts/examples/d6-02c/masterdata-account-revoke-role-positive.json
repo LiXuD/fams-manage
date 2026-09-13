@@ -17,7 +17,10 @@
     "id": "7001",
     "username": "warehouse.operator",
     "employeeId": "3001",
-    "status": "ACTIVE",
+    "status": "ENABLED",
+    "configurationWarnings": [
+      "No configured handler remains; pending work and administrator alert were retained."
+    ],
     "version": 4,
     "requiresInitialPasswordChange": false,
     "createdAt": "2026-09-14T10:00:00Z",
