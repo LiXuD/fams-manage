@@ -1,0 +1,24 @@
+{
+  "operationId": "revokeRolePermission",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "PermissionGrantRequest",
+  "responseSchema": "RoleConfiguration",
+  "headers": {
+    "Idempotency-Key": "role-revoke-example-1",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "5"
+  },
+  "payload": {
+    "permissionKey": "asset.card.export",
+    "reason": "Export permission removed after the role review."
+  },
+  "response": {
+    "role": "ASSET_ADMIN",
+    "permissions": ["asset.card.read"],
+    "minimumActiveAdministrators": 1,
+    "minimumActiveWarehouseOperators": 1,
+    "businessScope": "enterprise-wide",
+    "systemAdminBusinessPermissions": false
+  }
+}

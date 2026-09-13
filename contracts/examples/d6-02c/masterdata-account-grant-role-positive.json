@@ -1,0 +1,26 @@
+{
+  "operationId": "grantSystemAccountRole",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "SystemAccountRoleRequest",
+  "responseSchema": "SystemAccount",
+  "headers": {
+    "Idempotency-Key": "account-role-grant-example-1",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "2"
+  },
+  "payload": {
+    "role": "WAREHOUSE_OPERATOR",
+    "reason": "Assigned to the exclusive current warehouse executor pool."
+  },
+  "response": {
+    "id": "7001",
+    "username": "warehouse.operator",
+    "employeeId": "3001",
+    "status": "ACTIVE",
+    "version": 3,
+    "requiresInitialPasswordChange": false,
+    "createdAt": "2026-09-14T10:00:00Z",
+    "updatedAt": "2026-09-14T10:20:00Z"
+  }
+}

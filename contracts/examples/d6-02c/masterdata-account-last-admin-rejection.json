@@ -1,0 +1,23 @@
+{
+  "operationId": "changeSystemAccountStatus",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "SystemAccountStatusChangeRequest",
+  "responseSchema": "ErrorResponse",
+  "expectedErrorCode": "SYSTEM_ACCOUNT_LAST_ADMIN",
+  "headers": {
+    "Idempotency-Key": "account-status-example-2",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "7"
+  },
+  "payload": {
+    "action": "DISABLE",
+    "reason": "Attempted to disable the only active administrator."
+  },
+  "response": {
+    "code": "SYSTEM_ACCOUNT_LAST_ADMIN",
+    "message": "At least one active administrator must remain configured.",
+    "requestId": "4e3ecac4-bd08-4e84-8c4c-1c2f9a212001",
+    "fieldErrors": {}
+  }
+}

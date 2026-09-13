@@ -86,6 +86,18 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Id'
+    SystemAccountId:
+      name: systemAccountId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    RoleName:
+      name: role
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Role'
   responses:
     BadRequest:
       description: Request validation or state precondition failed.
@@ -367,6 +379,126 @@ components:
       type: object
       required: [reason]
       properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+    SystemAccountInput:
+      type: object
+      required: [username, employeeId, status]
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 128
+        employeeId:
+          $ref: '#/components/schemas/Id'
+        status:
+          $ref: '#/components/schemas/AccountStatus'
+    SystemAccount:
+      allOf:
+        - $ref: '#/components/schemas/SystemAccountInput'
+        - type: object
+          required: [id, version, requiresInitialPasswordChange, createdAt, updatedAt]
+          properties:
+            id:
+              $ref: '#/components/schemas/Id'
+            version:
+              type: integer
+              format: int64
+              minimum: 0
+            requiresInitialPasswordChange:
+              type: boolean
+            failedLoginCount:
+              type: integer
+              format: int32
+              minimum: 0
+            createdAt:
+              $ref: '#/components/schemas/Instant'
+            updatedAt:
+              $ref: '#/components/schemas/Instant'
+    PageSystemAccount:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/SystemAccount'
+    SystemAccountStatusChangeRequest:
+      type: object
+      required: [action, reason]
+      properties:
+        action:
+          type: string
+          enum: [ENABLE, DISABLE, UNLOCK]
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+    InitialPasswordResetRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+    PermissionGrantRequest:
+      type: object
+      required: [permissionKey, reason]
+      properties:
+        permissionKey:
+          type: string
+          minLength: 1
+          maxLength: 128
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+    RoleConfiguration:
+      type: object
+      required: [role, permissions, minimumActiveAdministrators, minimumActiveWarehouseOperators]
+      properties:
+        role:
+          type: string
+          enum: [EMPLOYEE, DEPARTMENT_ASSET_MANAGER, ASSET_ADMIN, WAREHOUSE_OPERATOR, TECH_ASSISTANT, AUDIT_READ_ONLY, SYSTEM_ADMIN]
+        permissions:
+          type: array
+          items:
+            type: string
+        minimumActiveAdministrators:
+          type: integer
+          format: int32
+          minimum: 1
+        minimumActiveWarehouseOperators:
+          type: integer
+          format: int32
+          minimum: 1
+        businessScope:
+          type: string
+          description: ASSET_ADMIN and WAREHOUSE_OPERATOR permissions operate on the enterprise-wide pool.
+        systemAdminBusinessPermissions:
+          type: boolean
+          description: SYSTEM_ADMIN role configuration alone does not grant business approval or execution rights.
+    RoleConfigurationPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/RoleConfiguration'
+    SystemAccountRoleRequest:
+      type: object
+      required: [role, reason]
+      properties:
+        role:
+          $ref: '#/components/schemas/Role'
         reason:
           type: string
           minLength: 1
@@ -810,6 +942,381 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Employee'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /system-accounts:
+    get:
+      tags: [MasterData]
+      operationId: listSystemAccounts
+      summary: List system accounts with status and password-change flags.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: System-account page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageSystemAccount'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MasterData]
+      operationId: createSystemAccount
+      summary: Create a system account requiring an initial password change.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: Employee relation version is current and username is unique.
+      x-transaction:
+        boundary: Insert account, initial-password marker, and audit event atomically.
+      x-audit-event:
+        event: SYSTEM_ACCOUNT_CREATED
+      x-error-codes: [SYSTEM_ACCOUNT_USERNAME_CONFLICT, SYSTEM_ACCOUNT_EMPLOYEE_NOT_FOUND]
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SystemAccountInput'
+      responses:
+        '201':
+          description: Created system account with a mandatory initial password change.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemAccount'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /system-accounts/{systemAccountId}:
+    parameters:
+      - $ref: '#/components/parameters/SystemAccountId'
+    get:
+      tags: [MasterData]
+      operationId: getSystemAccount
+      summary: Read a system-account lifecycle snapshot.
+      responses:
+        '200':
+          description: System-account details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemAccount'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /system-accounts/{systemAccountId}/status:
+    parameters:
+      - $ref: '#/components/parameters/SystemAccountId'
+    post:
+      tags: [MasterData]
+      operationId: changeSystemAccountStatus
+      summary: Enable, disable, or unlock a system account.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored system-account version.
+      x-transaction:
+        boundary: Change account status, revoke or restore access, enforce minimum role safety, and audit atomically.
+      x-audit-event:
+        event: SYSTEM_ACCOUNT_STATUS_CHANGED
+      x-error-codes: [SYSTEM_ACCOUNT_ALREADY_STATE, SYSTEM_ACCOUNT_LAST_ADMIN, SYSTEM_ACCOUNT_LAST_WAREHOUSE_OPERATOR]
+      x-invariants: Disable immediately revokes sessions and upload permission; unlock clears failed-login lock; active administrator and warehouse-operator minimums cannot be violated.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SystemAccountStatusChangeRequest'
+      responses:
+        '200':
+          description: Updated system account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemAccount'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /system-accounts/{systemAccountId}/initial-password-reset:
+    parameters:
+      - $ref: '#/components/parameters/SystemAccountId'
+    post:
+      tags: [MasterData]
+      operationId: resetInitialPassword
+      summary: Reset an account to the mandatory initial-password flow.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored system-account version and account is eligible.
+      x-transaction:
+        boundary: Set initial-password marker, invalidate existing sessions, and audit atomically.
+      x-audit-event:
+        event: SYSTEM_ACCOUNT_INITIAL_PASSWORD_RESET
+      x-error-codes: [SYSTEM_ACCOUNT_NOT_FOUND, SYSTEM_ACCOUNT_DISABLED, SYSTEM_ACCOUNT_ALREADY_INITIAL]
+      x-side-effects: Reset makes the next login require a first initial password change and invalidates all existing sessions.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitialPasswordResetRequest'
+      responses:
+        '200':
+          description: Account requiring an initial password change.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemAccount'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /role-configurations:
+    get:
+      tags: [MasterData]
+      operationId: listRoleConfigurations
+      summary: List role permissions and safety constraints.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Role-configuration page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleConfigurationPage'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /role-configurations/{role}:
+    parameters:
+      - $ref: '#/components/parameters/RoleName'
+    get:
+      tags: [MasterData]
+      operationId: getRoleConfiguration
+      summary: Read one role's effective permissions and constraints.
+      responses:
+        '200':
+          description: Role configuration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleConfiguration'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /role-configurations/{role}/grants:
+    parameters:
+      - $ref: '#/components/parameters/RoleName'
+    post:
+      tags: [MasterData]
+      operationId: grantRolePermission
+      summary: Grant one permission to a role under safety constraints.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored role-configuration version.
+      x-transaction:
+        boundary: Conditional role permission update and audit event are one transaction.
+      x-audit-event:
+        event: ROLE_PERMISSION_GRANTED
+      x-error-codes: [ROLE_PERMISSION_ALREADY_GRANTED, ROLE_CONFIGURATION_INVALID]
+      x-invariants: SYSTEM_ADMIN configuration does not automatically grant business permission; ASSET_ADMIN and WAREHOUSE_OPERATOR pool permissions are enterprise-wide; minimum active administrator and warehouse-operator counts remain configured.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PermissionGrantRequest'
+      responses:
+        '200':
+          description: Updated role configuration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleConfiguration'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /role-configurations/{role}/grants/revoke:
+    parameters:
+      - $ref: '#/components/parameters/RoleName'
+    post:
+      tags: [MasterData]
+      operationId: revokeRolePermission
+      summary: Revoke one permission and make the change immediately effective.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored role-configuration version.
+      x-transaction:
+        boundary: Conditional role permission update, session invalidation, and audit event are one transaction.
+      x-audit-event:
+        event: ROLE_PERMISSION_REVOKED
+      x-error-codes: [ROLE_PERMISSION_NOT_GRANTED, ROLE_CONFIGURATION_INVALID]
+      x-invariants: Revocation is immediate; active administrator and warehouse-operator minimums cannot be violated.
+      x-side-effects: Revocation invalidates affected permission snapshots and sessions immediately; it never silently downgrades an unsafe configuration.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PermissionGrantRequest'
+      responses:
+        '200':
+          description: Updated role configuration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleConfiguration'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /system-accounts/{systemAccountId}/roles:
+    parameters:
+      - $ref: '#/components/parameters/SystemAccountId'
+    post:
+      tags: [MasterData]
+      operationId: grantSystemAccountRole
+      summary: Grant a configured role to a system account.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored system-account version.
+      x-transaction:
+        boundary: Assign role, enforce minimum active role safety, and audit atomically.
+      x-audit-event:
+        event: SYSTEM_ACCOUNT_ROLE_GRANTED
+      x-error-codes: [SYSTEM_ACCOUNT_ROLE_ALREADY_GRANTED, SYSTEM_ACCOUNT_LAST_ADMIN, SYSTEM_ACCOUNT_LAST_WAREHOUSE_OPERATOR]
+      x-invariants: SYSTEM_ADMIN role configuration does not auto-grant business permissions; ASSET_ADMIN and WAREHOUSE_OPERATOR use the enterprise-wide pool.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SystemAccountRoleRequest'
+      responses:
+        '200':
+          description: Updated system account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemAccount'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /system-accounts/{systemAccountId}/roles/revoke:
+    parameters:
+      - $ref: '#/components/parameters/SystemAccountId'
+    post:
+      tags: [MasterData]
+      operationId: revokeSystemAccountRole
+      summary: Revoke a role immediately without unsafe permission downgrade.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the stored system-account version.
+      x-transaction:
+        boundary: Revoke role, invalidate affected sessions, enforce minimum role safety, and audit atomically.
+      x-audit-event:
+        event: SYSTEM_ACCOUNT_ROLE_REVOKED
+      x-error-codes: [SYSTEM_ACCOUNT_ROLE_NOT_GRANTED, SYSTEM_ACCOUNT_LAST_ADMIN, SYSTEM_ACCOUNT_LAST_WAREHOUSE_OPERATOR]
+      x-invariants: Revocation is immediate and fails with a configuration error if it would leave no valid administrator or warehouse operator; no silent authorization downgrade.
+      x-side-effects: Revoked permissions and sessions become invalid immediately.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SystemAccountRoleRequest'
+      responses:
+        '200':
+          description: Updated system account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemAccount'
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
