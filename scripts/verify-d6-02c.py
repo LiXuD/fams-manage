@@ -683,11 +683,13 @@ def main() -> None:
     )
     try:
         verify_real_contract_generation()
+        clear_generated_outputs()
         require_command(
             "D6-02A retained gate",
             ["run", "python3 scripts/verify-d6-02a.py"],
             timeout=900,
         )
+        clear_generated_outputs()
         require_command(
             "D6-02B retained gate",
             ["run", "python3 scripts/verify-d6-02b.py"],
