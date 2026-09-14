@@ -174,6 +174,12 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Id'
+    InboundReceiptItemId:
+      name: itemId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
     InboundReceiptStatusFilter:
       name: status
       in: query
@@ -2209,10 +2215,14 @@ components:
           $ref: '#/components/schemas/InboundTargetReference'
         targetLocation:
           $ref: '#/components/schemas/InboundTargetReference'
+    InboundReceiptItemExecutionStatus:
+      type: string
+      enum: [PENDING, ACCEPTED]
+      description: PENDING until the current processor records one successful physical acceptance.
     InboundReceiptItem:
       type: object
       additionalProperties: false
-      required: [id, asset, assetSnapshot, targetWarehouse, targetLocation, warehouseSnapshot, locationSnapshot]
+      required: [id, executionStatus, asset, assetSnapshot, targetWarehouse, targetLocation, warehouseSnapshot, locationSnapshot]
       description: >-
         Persisted item with versioned identities and immutable code/name snapshots for
         the asset, warehouse, and location selected for this receipt. businessLock is
@@ -2220,6 +2230,8 @@ components:
       properties:
         id:
           $ref: '#/components/schemas/Id'
+        executionStatus:
+          $ref: '#/components/schemas/InboundReceiptItemExecutionStatus'
         asset:
           $ref: '#/components/schemas/InboundAssetReference'
         assetSnapshot:
@@ -2234,6 +2246,8 @@ components:
           $ref: '#/components/schemas/InboundCatalogSnapshot'
         businessLock:
           $ref: '#/components/schemas/InboundAssetBusinessLock'
+        acceptance:
+          $ref: '#/components/schemas/InboundAcceptanceRecord'
     InboundAssetBusinessLock:
       type: object
       additionalProperties: false
@@ -2443,6 +2457,104 @@ components:
           type: integer
           format: int64
           minimum: 0
+        archivedAt:
+          $ref: '#/components/schemas/Instant'
+          description: Present when a terminal receipt archives this ownership and removes write authority.
+    InboundAcceptanceRequest:
+      type: object
+      additionalProperties: false
+      required: [assetVersion, lockVersion, observedAssetCode]
+      properties:
+        assetVersion:
+          type: integer
+          format: int64
+          minimum: 0
+        lockVersion:
+          type: integer
+          format: int64
+          minimum: 0
+        observedAssetCode:
+          type: string
+          minLength: 1
+          maxLength: 128
+        notes:
+          type: string
+          maxLength: 1000
+    InboundAcceptanceRecord:
+      type: object
+      additionalProperties: false
+      required: [id, receiptItemId, assetId, acceptedBy, acceptedAt, businessDate, receiptVersionBefore, assetVersionBefore, assetVersionAfter, lockVersion, observedAssetCode, storageCustody]
+      description: Immutable physical acceptance fact for one receipt item and one asset.
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        receiptItemId:
+          $ref: '#/components/schemas/Id'
+        assetId:
+          $ref: '#/components/schemas/Id'
+        acceptedBy:
+          $ref: '#/components/schemas/AssetCreatorReference'
+        acceptedAt:
+          $ref: '#/components/schemas/Instant'
+        businessDate:
+          $ref: '#/components/schemas/BusinessDate'
+        receiptVersionBefore:
+          type: integer
+          format: int64
+          minimum: 0
+        assetVersionBefore:
+          type: integer
+          format: int64
+          minimum: 0
+        assetVersionAfter:
+          type: integer
+          format: int64
+          minimum: 0
+        lockVersion:
+          type: integer
+          format: int64
+          minimum: 0
+        observedAssetCode:
+          type: string
+        storageCustody:
+          $ref: '#/components/schemas/AssetCustodySummary'
+        notes:
+          type: string
+    InboundAcceptedAsset:
+      type: object
+      additionalProperties: false
+      required: [id, assetCode, lifecycle, exception, cardStage, version, currentCustody, inboundBusinessDate]
+      description: Minimal post-acceptance asset result; the full asset ledger remains separately scoped.
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        assetCode:
+          type: string
+        lifecycle:
+          $ref: '#/components/schemas/AssetLifecycle'
+        exception:
+          $ref: '#/components/schemas/AssetException'
+        cardStage:
+          $ref: '#/components/schemas/AssetCardStage'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        currentCustody:
+          $ref: '#/components/schemas/AssetCustodySummary'
+        inboundBusinessDate:
+          $ref: '#/components/schemas/BusinessDate'
+    InboundAcceptanceResult:
+      type: object
+      additionalProperties: false
+      required: [receipt, item, asset]
+      properties:
+        receipt:
+          $ref: '#/components/schemas/InboundReceipt'
+        item:
+          $ref: '#/components/schemas/InboundReceiptItem'
+        asset:
+          $ref: '#/components/schemas/InboundAcceptedAsset'
     InboundReceipt:
       type: object
       additionalProperties: false
@@ -2481,7 +2593,9 @@ components:
           description: The one effective administrator decision; absent before a decision wins.
         currentProcessor:
           $ref: '#/components/schemas/InboundProcessingOwnership'
-          description: Unique whole-receipt warehouse owner; absent until an explicit claim wins.
+          description: >-
+            Unique whole-receipt warehouse owner; absent until an explicit claim wins.
+            A terminal receipt retains it with archivedAt solely as history and write access is revoked.
         warehouseFirstExecutionDueAt:
           $ref: '#/components/schemas/Instant'
           description: First-execution deadline computed at claim from the frozen calendar snapshot.
@@ -2504,6 +2618,8 @@ components:
           $ref: '#/components/schemas/Instant'
         cancellationReason:
           type: string
+        completedAt:
+          $ref: '#/components/schemas/Instant'
     PageInboundReceipt:
       allOf:
         - $ref: '#/components/schemas/PageMeta'
@@ -2943,6 +3059,88 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InboundReceipt'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /inbound-receipts/{receiptId}/items/{itemId}/accept:
+    parameters:
+      - $ref: '#/components/parameters/InboundReceiptId'
+      - $ref: '#/components/parameters/InboundReceiptItemId'
+    post:
+      tags: [Inbound]
+      operationId: acceptInboundReceiptItem
+      summary: Accept one physical asset into storage as the current receipt processor.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [WAREHOUSE_OPERATOR]
+      x-version:
+        required: true
+        precondition: >-
+          If-Match-Version supplies the current receipt version; the request supplies the
+          current asset version and active lock version for this receipt item.
+      x-transaction:
+        boundary: >-
+          In one item short transaction, verify processing ownership and approved scope,
+          record the immutable acceptance, update the asset and storage custody, release
+          exactly that business lock, update item and receipt versions, and write audit.
+          Any failure causes full rollback with no partial item, asset, custody, lock,
+          receipt, ownership, or success-audit effect.
+      x-audit-event:
+        event: INBOUND_ITEM_ACCEPTED
+      x-error-codes:
+        - INBOUND_NOT_FOUND
+        - INBOUND_ITEM_NOT_FOUND
+        - INBOUND_NOT_CURRENT_PROCESSOR
+        - INBOUND_NOT_PROCESSING
+        - INBOUND_ITEM_ALREADY_ACCEPTED
+        - INBOUND_ACCEPTANCE_VERSION_CONFLICT
+        - INBOUND_APPROVED_SCOPE_MISMATCH
+        - INBOUND_OBSERVED_ASSET_CODE_MISMATCH
+        - INBOUND_ASSET_STATE_CONFLICT
+        - INBOUND_ASSET_INCOMPLETE
+        - INBOUND_ASSET_LOCK_CONFLICT
+        - INBOUND_TARGET_INACTIVE
+        - INBOUND_WAREHOUSE_LOCATION_MISMATCH
+        - INBOUND_ACCEPTANCE_ATOMIC_ROLLBACK
+        - INBOUND_IDEMPOTENCY_CONFLICT
+      x-invariants: >-
+        Only the current processor may accept one item; every other warehouse operator
+        remains read-only. The service compares receipt version, asset version, lock version,
+        observed asset code, approved scope, asset completeness, active warehouse, active
+        location, and warehouse membership. The asset must be lifecycle WAITING_INBOUND,
+        cardStage PENDING_INBOUND, exception NORMAL, and locked by this exact item. Success
+        changes it to lifecycle IN_STOCK and cardStage ACTIVE, creates STORAGE custody from
+        the approved warehouse/location, records inbound business date and acceptance fact,
+        and releases only that business lock. With remaining items, the receipt stays
+        WAREHOUSE_PROCESSING and ownership remains active. The last item moves the receipt
+        to COMPLETED, archives processing ownership, marks the ownership archived, and makes
+        the completed receipt read-only;
+        it cannot be deleted or edited. This one-item API has no partial batch outcome. The
+        same idempotent request after response loss returns the original result; a different
+        key or payload against an accepted item returns its actual acceptance. Transaction
+        failure performs rollback and leaves the item safely retryable.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InboundAcceptanceRequest'
+      responses:
+        '200':
+          description: Accepted item, post-state asset, and updated receipt or idempotent replay.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundAcceptanceResult'
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }

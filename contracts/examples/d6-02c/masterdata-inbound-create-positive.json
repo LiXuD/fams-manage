@@ -47,6 +47,7 @@
     "items": [
       {
         "id": "7101",
+        "executionStatus": "PENDING",
         "asset": {"id": "10021", "version": 2},
         "assetSnapshot": {"assetCode": "FA-2026-000021", "assetName": "Latitude 7450"},
         "targetWarehouse": {"id": "5001", "version": 4},
@@ -56,6 +57,7 @@
       },
       {
         "id": "7102",
+        "executionStatus": "PENDING",
         "asset": {"id": "10022", "version": 3},
         "assetSnapshot": {"assetCode": "FA-2026-000022", "assetName": "ThinkPad T14"},
         "targetWarehouse": {"id": "5001", "version": 4},
