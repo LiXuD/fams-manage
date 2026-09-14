@@ -1,0 +1,14 @@
+{
+  "operationId": "deleteAssetSavedFilter",
+  "kind": "positive",
+  "status": 204,
+  "pathParameters": {"savedFilterId": "9502"},
+  "headers": {
+    "Idempotency-Key": "asset-saved-filter-delete-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "1"
+  },
+  "payload": {},
+  "response": null,
+  "evidence": "Contract evidence only; deleting a personal saved filter does not delete assets, history, or current permission rules."
+}

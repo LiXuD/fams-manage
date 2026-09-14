@@ -1,0 +1,27 @@
+{
+  "operationId": "updateAssetSavedFilter",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "AssetSavedFilterUpdateRequest",
+  "responseSchema": "AssetSavedFilter",
+  "pathParameters": {"savedFilterId": "9502"},
+  "headers": {
+    "Idempotency-Key": "asset-saved-filter-update-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "0"
+  },
+  "payload": {
+    "name": "本组织长期未盘点",
+    "criteria": {"longUninventoried": true, "organizationId": "2001"}
+  },
+  "response": {
+    "id": "9502",
+    "ownerAccountId": "7001",
+    "name": "本组织长期未盘点",
+    "criteria": {"longUninventoried": true, "organizationId": "2001"},
+    "version": 1,
+    "createdAt": "2026-09-14T05:20:00Z",
+    "updatedAt": "2026-09-14T05:25:00Z"
+  },
+  "evidence": "Contract evidence only; the current owner updates a personal preference under optimistic version control."
+}
