@@ -11,9 +11,10 @@
     "If-Match-Version": "4"
   },
   "payload": {"assetVersion": 3, "lockVersion": 0, "observedAssetCode": "FA-2026-000021"},
-  "error": {
+  "response": {
     "code": "INBOUND_ACCEPTANCE_ATOMIC_ROLLBACK",
     "message": "Acceptance failed and every item effect was rolled back.",
+    "requestId": "00000000-0000-4000-8000-000000000002",
     "fieldErrors": {"assetId": "concurrent asset update"}
   },
   "persistedEffects": {

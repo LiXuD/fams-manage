@@ -22,9 +22,10 @@
       }
     ]
   },
-  "error": {
+  "response": {
     "code": "INBOUND_DUPLICATE_ASSET",
     "message": "An asset may appear only once in a receipt.",
+    "requestId": "00000000-0000-4000-8000-000000000010",
     "fieldErrors": {"items[1].asset.id": "duplicate asset"}
   },
   "evidence": "Contract evidence only; duplicate assets are rejected before persistence."

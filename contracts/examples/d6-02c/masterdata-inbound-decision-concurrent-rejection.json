@@ -11,9 +11,10 @@
     "If-Match-Version": "2"
   },
   "payload": {"decision": "REJECTED", "reason": "Competing decision."},
-  "error": {
+  "response": {
     "code": "INBOUND_DECISION_ALREADY_EFFECTIVE",
     "message": "Another administrator decision is already effective.",
+    "requestId": "00000000-0000-4000-8000-000000000008",
     "fieldErrors": {"receiptId": "actual receipt version is 3"}
   },
   "actualEffectiveDecision": {

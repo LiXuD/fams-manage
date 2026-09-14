@@ -10,9 +10,10 @@
     "If-Match-Version": "1"
   },
   "payload": {},
-  "error": {
+  "response": {
     "code": "INBOUND_ASSET_LOCK_CONFLICT",
     "message": "An asset already has an active business lock.",
+    "requestId": "00000000-0000-4000-8000-000000000017",
     "fieldErrors": {"items[0].asset.id": "locked by receipt IR-2026-000099"}
   },
   "evidence": "Contract evidence only; an existing asset lock blocks the entire submission."

@@ -2723,7 +2723,7 @@ class DesignPackageContractTest(unittest.TestCase):
             any(
                 value.get("kind") == "rejection"
                 and value.get("operationId") == "copyAsset"
-                and value.get("error", {}).get("code") == "ASSET_SOURCE_CANCELLED"
+                and value.get("response", {}).get("code") == "ASSET_SOURCE_CANCELLED"
                 for path in sorted(EXAMPLES.glob("masterdata-asset-copy-*.json"))
                 for value in [json.loads(path.read_text(encoding="utf-8"))]
             )

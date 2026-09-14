@@ -10,9 +10,10 @@
     "If-Match-Version": "4"
   },
   "payload": {"assetVersion": 3, "lockVersion": 0, "observedAssetCode": "FA-2026-000021"},
-  "error": {
+  "response": {
     "code": "INBOUND_TARGET_INVALID",
     "message": "An inactive location or warehouse membership mismatch blocks acceptance.",
+    "requestId": "00000000-0000-4000-8000-000000000003",
     "fieldErrors": {"targetLocation": "location is DISABLED"}
   },
   "evidence": "Contract evidence only; current target activity and membership are rechecked."

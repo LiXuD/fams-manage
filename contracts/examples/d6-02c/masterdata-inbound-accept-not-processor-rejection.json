@@ -10,9 +10,10 @@
     "If-Match-Version": "4"
   },
   "payload": {"assetVersion": 3, "lockVersion": 0, "observedAssetCode": "FA-2026-000021"},
-  "error": {
+  "response": {
     "code": "INBOUND_NOT_CURRENT_PROCESSOR",
     "message": "The caller is not current processor and has read-only access.",
+    "requestId": "00000000-0000-4000-8000-000000000004",
     "fieldErrors": {"receiptId": "current processor is warehouse.operator.17"}
   },
   "evidence": "Contract evidence only; another warehouse operator cannot accept an item."

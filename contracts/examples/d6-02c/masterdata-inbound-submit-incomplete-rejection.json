@@ -10,9 +10,10 @@
     "If-Match-Version": "1"
   },
   "payload": {},
-  "error": {
+  "response": {
     "code": "INBOUND_ASSET_INCOMPLETE",
     "message": "Every asset must be complete before inbound submission.",
+    "requestId": "00000000-0000-4000-8000-000000000015",
     "fieldErrors": {"items[0].asset.specification": "specification is required"}
   },
   "evidence": "Contract evidence only; an incomplete asset prevents every receipt effect."

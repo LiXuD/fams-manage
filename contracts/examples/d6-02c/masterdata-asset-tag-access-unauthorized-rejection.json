@@ -3,7 +3,7 @@
   "kind": "rejection",
   "status": 401,
   "scenario": "valid token without current authentication",
-  "pathParameters": {"token": "n8Qv2Lr5Xc7Zp1Tm4Hs6Kd9Fg3Wa0Yu8Ji5Be2Ro7S"},
+  "pathParameters": {"token": "n8Qv2Lr5Xc7Zp1Tm4Hs6Kd9Fg3Wa0Yu8Ji5Be2Ro7SB"},
   "payload": {},
   "response": {
     "code": "UNAUTHORIZED",
