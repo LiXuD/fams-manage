@@ -11,11 +11,27 @@
     "X-CSRF-Token": "csrf-token-example-123456",
     "If-Match-Version": "2"
   },
+  "before": {
+    "id": "801",
+    "systemAccountId": "701",
+    "role": "AUDIT_READ_ONLY",
+    "status": "ACTIVE",
+    "dataScopes": [
+      {
+        "scopeType": "SPECIFIED_ORGANIZATIONS",
+        "organizations": [{"id": "2001", "version": 4}],
+        "warehouses": []
+      }
+    ],
+    "fieldPermissions": ["SYSTEM_OPERATION_LOG"],
+    "version": 2,
+    "updatedAt": "2026-09-14T06:00:00Z"
+  },
   "payload": {
     "reason": "Audit assignment ended."
   },
   "response": {
-    "id": "801",
+    "id": "802",
     "systemAccountId": "701",
     "role": "AUDIT_READ_ONLY",
     "status": "REVOKED",
@@ -24,5 +40,5 @@
     "version": 3,
     "updatedAt": "2026-09-14T07:00:00Z"
   },
-  "evidence": "Contract evidence only; runtime revocation and auth_epoch invalidation are not implemented."
+  "evidence": "Contract evidence only; revocation creates empty generation id 802 and retains id 801 as history."
 }

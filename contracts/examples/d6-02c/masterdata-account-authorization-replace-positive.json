@@ -11,6 +11,22 @@
     "X-CSRF-Token": "csrf-token-example-123456",
     "If-Match-Version": "1"
   },
+  "before": {
+    "id": "800",
+    "systemAccountId": "701",
+    "role": "AUDIT_READ_ONLY",
+    "status": "ACTIVE",
+    "dataScopes": [
+      {
+        "scopeType": "SPECIFIED_ORGANIZATIONS",
+        "organizations": [{"id": "2002", "version": 1}],
+        "warehouses": []
+      }
+    ],
+    "fieldPermissions": [],
+    "version": 1,
+    "updatedAt": "2026-09-13T06:00:00Z"
+  },
   "payload": {
     "dataScopes": [
       {
@@ -38,5 +54,5 @@
     "version": 2,
     "updatedAt": "2026-09-14T06:00:00Z"
   },
-  "evidence": "Contract evidence only; runtime atomic replacement and session invalidation are not implemented."
+  "evidence": "Contract evidence only; replacement creates generation id 801 and retains id 800 as history."
 }

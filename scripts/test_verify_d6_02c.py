@@ -550,6 +550,50 @@ class DesignPackageContractTest(unittest.TestCase):
         ):
             self.assertIn(phrase, contract_text)
 
+    def test_account_authorization_examples_use_distinct_generation_ids(self) -> None:
+        replace = json.loads(
+            (EXAMPLES / "masterdata-account-authorization-replace-positive.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        read = json.loads(
+            (EXAMPLES / "masterdata-account-authorization-read-positive.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        revoke = json.loads(
+            (EXAMPLES / "masterdata-account-authorization-revoke-positive.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        regrant = json.loads(
+            (EXAMPLES / "masterdata-account-authorization-regrant-positive.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+        generations = [
+            replace["before"],
+            replace["response"],
+            revoke["response"],
+            regrant["response"],
+        ]
+        self.assertEqual([1, 2, 3, 4], [item["version"] for item in generations])
+        self.assertEqual(4, len({item["id"] for item in generations}))
+        self.assertEqual(str(replace["before"]["version"]), replace["headers"]["If-Match-Version"])
+        self.assertEqual(replace["response"], read["response"])
+        self.assertEqual(replace["response"], revoke["before"])
+        self.assertEqual(str(replace["response"]["version"]), revoke["headers"]["If-Match-Version"])
+        self.assertEqual(revoke["response"], regrant["before"])
+        self.assertEqual(str(revoke["response"]["version"]), regrant["headers"]["If-Match-Version"])
+        self.assertEqual([], revoke["response"]["dataScopes"])
+        self.assertEqual([], revoke["response"]["fieldPermissions"])
+        self.assertEqual(replace["payload"]["dataScopes"], regrant["payload"]["dataScopes"])
+        self.assertEqual(
+            replace["payload"]["fieldPermissions"],
+            regrant["payload"]["fieldPermissions"],
+        )
+
     def test_contract_has_unique_yaml_keys_and_operation_ids(self) -> None:
         import yaml
 
