@@ -1,0 +1,60 @@
+{
+  "operationId": "submitInboundReceipt",
+  "kind": "positive",
+  "status": 200,
+  "actor": "warehouse.operator.17",
+  "pathParameters": {"receiptId": "7001"},
+  "headers": {
+    "Idempotency-Key": "inbound-submit-receipt-0001",
+    "X-CSRF-Token": "csrf-inbound-submit-123456",
+    "If-Match-Version": "1"
+  },
+  "payload": {},
+  "response": {
+    "id": "7001",
+    "receiptNumber": "IR-2026-000001",
+    "status": "PENDING_ADMIN_DECISION",
+    "businessDate": "2026-09-14",
+    "createdBy": {"id": "17", "username": "warehouse.operator.17"},
+    "createdAt": "2026-09-14T02:15:00Z",
+    "submittedAt": "2026-09-14T03:00:00Z",
+    "adminDecisionDueAt": "2026-09-16T15:59:59.999Z",
+    "version": 2,
+    "parameterVersionId": "9001",
+    "snapshot": {
+      "parameterVersionId": "9001",
+      "businessDate": "2026-09-14",
+      "timezone": "Asia/Shanghai",
+      "adminDecisionDeadlineWorkdays": 2
+    },
+    "items": [
+      {
+        "id": "7101",
+        "asset": {"id": "10021", "version": 2},
+        "assetSnapshot": {"assetCode": "FA-2026-000021", "assetName": "Latitude 7450"},
+        "targetWarehouse": {"id": "5001", "version": 4},
+        "targetLocation": {"id": "5101", "version": 6},
+        "warehouseSnapshot": {"code": "WH-SH-01", "name": "Shanghai Main Warehouse"},
+        "locationSnapshot": {"code": "SH-F1-A01", "name": "Floor 1 A01"},
+        "businessLock": {
+          "assetId": "10021",
+          "businessType": "INBOUND",
+          "businessId": "7001",
+          "businessItemId": "7101",
+          "lockVersion": 0,
+          "acquiredAt": "2026-09-14T03:00:00Z"
+        }
+      }
+    ]
+  },
+  "assetAfter": {
+    "id": "10021",
+    "version": 3,
+    "cardStage": "PENDING_INBOUND",
+    "lifecycle": "WAITING_INBOUND",
+    "exception": "NORMAL",
+    "currentCustody": null
+  },
+  "idempotencyReplayReturnsSameResult": true,
+  "evidence": "Contract evidence only; submission, locks, deadline, and shared todo are not runtime implemented."
+}

@@ -1,0 +1,19 @@
+{
+  "operationId": "submitInboundReceipt",
+  "kind": "rejection",
+  "status": 409,
+  "actor": "warehouse.operator.17",
+  "pathParameters": {"receiptId": "7001"},
+  "headers": {
+    "Idempotency-Key": "inbound-submit-incomplete-0001",
+    "X-CSRF-Token": "csrf-inbound-submit-123456",
+    "If-Match-Version": "1"
+  },
+  "payload": {},
+  "error": {
+    "code": "INBOUND_ASSET_INCOMPLETE",
+    "message": "Every asset must be complete before inbound submission.",
+    "fieldErrors": {"items[0].asset.specification": "specification is required"}
+  },
+  "evidence": "Contract evidence only; an incomplete asset prevents every receipt effect."
+}

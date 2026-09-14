@@ -1754,6 +1754,147 @@ class DesignPackageContractTest(unittest.TestCase):
         for phrase in ("duplicate", "stale", "disabled", "mismatch"):
             self.assertIn(phrase, rejection_text)
 
+    def test_inbound_submit_and_cancel_freeze_atomic_lock_and_race_semantics(self) -> None:
+        document = self.load_contract()
+        operations = {
+            operation["operationId"]: operation
+            for item in document["paths"].values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        required = {"submitInboundReceipt", "cancelInboundReceipt"}
+        missing = sorted(required - set(operations))
+        self.assertFalse(missing, f"inbound submit/cancel remains RED: {missing}")
+        if missing:
+            return
+
+        for operation_id in sorted(required):
+            with self.subTest(operation=operation_id):
+                operation = operations[operation_id]
+                self.assertEqual(["WAREHOUSE_OPERATOR"], operation["x-actor"]["roles"])
+                self.assertTrue(operation.get("x-business-write"))
+                self.assertTrue(operation.get("x-version"))
+                self.assertTrue(operation.get("x-transaction"))
+                self.assertTrue(operation.get("x-audit-event"))
+                self.assertTrue(
+                    {400, 401, 403, 404, 409}.issubset(
+                        set(operation["x-required-error-statuses"])
+                    )
+                )
+                refs = {
+                    parameter.get("$ref", "").rsplit("/", 1)[-1]
+                    for parameter in operation.get("parameters", [])
+                }
+                self.assertTrue(
+                    {"IdempotencyKey", "CsrfToken", "IfMatchVersion"}.issubset(refs)
+                )
+
+        submit = operations["submitInboundReceipt"]
+        submit_text = json.dumps(submit, sort_keys=True).lower()
+        for phrase in (
+            "complete",
+            "all assets",
+            "business lock",
+            "rollback",
+            "waiting_inbound",
+            "pending_inbound",
+            "custody",
+            "shared",
+            "deadline",
+            "parameter",
+            "current processor",
+            "idempotent",
+            "restart",
+            "timeout",
+            "processing ownership",
+        ):
+            self.assertIn(phrase, submit_text)
+
+        cancel = operations["cancelInboundReceipt"]
+        cancel_text = json.dumps(cancel, sort_keys=True).lower()
+        for phrase in (
+            "creator",
+            "draft",
+            "pending_admin_decision",
+            "race",
+            "decision",
+            "version",
+            "release",
+            "history",
+            "active todo",
+            "approved",
+            "terminal",
+            "idempotent",
+        ):
+            self.assertIn(phrase, cancel_text)
+        request_ref = cancel["requestBody"]["content"]["application/json"]["schema"]["$ref"]
+        self.assertEqual("InboundReceiptCancelRequest", request_ref.rsplit("/", 1)[-1])
+
+    def test_inbound_lock_deadline_and_submit_cancel_examples_are_explicit(self) -> None:
+        document = self.load_contract()
+        schemas = document["components"]["schemas"]
+        required = {
+            "InboundAssetBusinessLock",
+            "InboundReceiptCancelRequest",
+            "InboundReceiptSnapshot",
+        }
+        missing = sorted(required - set(schemas))
+        self.assertFalse(missing, f"inbound submit/cancel schemas remain RED: {missing}")
+        if missing:
+            return
+
+        lock = schemas["InboundAssetBusinessLock"]
+        self.assertEqual(
+            {"assetId", "businessType", "businessId", "businessItemId", "lockVersion", "acquiredAt"},
+            set(lock["required"]),
+        )
+        self.assertEqual(["INBOUND"], lock["properties"]["businessType"]["enum"])
+        self.assertEqual("Instant", lock["properties"]["acquiredAt"]["$ref"].rsplit("/", 1)[-1])
+        item = schemas["InboundReceiptItem"]
+        self.assertIn("id", item["required"])
+        self.assertIn("businessLock", item["properties"])
+        snapshot = schemas["InboundReceiptSnapshot"]
+        self.assertTrue(
+            {"parameterVersionId", "businessDate", "timezone", "adminDecisionDeadlineWorkdays"}
+            .issubset(set(snapshot["required"]))
+        )
+        cancel = schemas["InboundReceiptCancelRequest"]
+        self.assertEqual({"reason"}, set(cancel["required"]))
+        self.assertFalse(cancel.get("additionalProperties", True))
+
+        receipt = schemas["InboundReceipt"]
+        for field in ("submittedAt", "adminDecisionDueAt"):
+            self.assertIn(field, receipt["properties"])
+            self.assertEqual(
+                "Instant", receipt["properties"][field]["$ref"].rsplit("/", 1)[-1]
+            )
+
+        files = sorted(EXAMPLES.glob("masterdata-inbound-*.json"))
+        values = [json.loads(path.read_text(encoding="utf-8")) for path in files]
+        submit_values = [value for value in values if value["operationId"] == "submitInboundReceipt"]
+        cancel_values = [value for value in values if value["operationId"] == "cancelInboundReceipt"]
+        self.assertGreaterEqual(len(submit_values), 5)
+        self.assertGreaterEqual(len(cancel_values), 2)
+        positive_submit = next(value for value in submit_values if value["kind"] == "positive")
+        self.assertEqual("PENDING_ADMIN_DECISION", positive_submit["response"]["status"])
+        self.assertTrue(positive_submit["idempotencyReplayReturnsSameResult"])
+        self.assertEqual("PENDING_INBOUND", positive_submit["assetAfter"]["cardStage"])
+        self.assertEqual("WAITING_INBOUND", positive_submit["assetAfter"]["lifecycle"])
+        self.assertIsNone(positive_submit["assetAfter"]["currentCustody"])
+        self.assertTrue(positive_submit["response"]["items"][0]["businessLock"])
+        rejection_text = json.dumps(
+            [value for value in submit_values if value["kind"] == "rejection"],
+            sort_keys=True,
+        ).lower()
+        for phrase in ("incomplete", "lock", "rollback", "mismatch"):
+            self.assertIn(phrase, rejection_text)
+        positive_cancel = next(value for value in cancel_values if value["kind"] == "positive")
+        self.assertEqual("CANCELLED", positive_cancel["response"]["status"])
+        self.assertEqual("DRAFT", positive_cancel["assetAfter"]["cardStage"])
+        self.assertFalse(positive_cancel["activeLockAfter"])
+        conflict = next(value for value in cancel_values if value["kind"] == "rejection")
+        self.assertIn("decision", json.dumps(conflict, sort_keys=True).lower())
+
     def test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors(self) -> None:
         document = self.load_contract()
         for path, item in document["paths"].items():
