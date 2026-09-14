@@ -1,7 +1,7 @@
 # FAMS 项目阶段与交接入口
 
 > 唯一现役进度入口 · 更新于 2026-09-15
-> 当前结论：第 1～5 步已完成；第 6 阶段已进入进行中，Git 已在本地 `main` 初始化；D6-01A、D6-02A、D6-02B 当前为 `DEV_VERIFIED`，D6-02B 固定候选组合已冻结；D6-02C 首批真实设计包已通过任务级复核和 reviewed HEAD 本地门禁，仍因关键独立技术复核待指定而为 `IN_REVIEW`；D6-01B 远端与 CI 尚未完成，产品业务实现尚未开始。
+> 当前结论：第 1～5 步已完成；第 6 阶段已进入进行中，Git 已在本地 `main` 初始化；D6-01A、D6-02A、D6-02B 当前为 `DEV_VERIFIED`，D6-02B 固定候选组合已冻结；D6-02C 首批真实设计包已通过任务级复核和 reviewed HEAD 本地门禁，用户本人关键独立技术复核正在进行，仍为 `IN_REVIEW`；D6-01B 远端与 CI 尚未完成，产品业务实现尚未开始。
 
 ## 1. 八步开发流程与当前进度
 
@@ -12,7 +12,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.1](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-02A/B 已 `DEV_VERIFIED`；D6-02C 任务级复核已通过但仍为 `IN_REVIEW`；D6-01B 远端能力待外部权限 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.1](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-02A/B 已 `DEV_VERIFIED`；D6-02C 等待用户本人关键复核结论；D6-01B 远端能力待外部权限 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
@@ -36,10 +36,10 @@
 
 1. 先读本文和 [PRD V1.5](docs/superpowers/specs/2026-09-03-fixed-asset-product-design.md)。
 2. 阅读[第六阶段开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)：技术架构、接口契约、Git/CI、D6-01～D6-27 台账、外部依赖及持续维护规则均在其中。Git 提交强制格式见计划 §四.4。
-3. 本轮修订已获用户确认；D6-01A、D6-02A、D6-02B 状态为 `DEV_VERIFIED`，D6-02C 为 `IN_REVIEW`。D6-02C 已完成登录/权限、基础资料、建卡/台账/标签与日常入库的 OpenAPI、示例、数据/权限/错误设计、追溯、本地完整门禁及任务级非实施者复核；当前须由用户指定权限、事务、迁移、恢复关键独立技术复核人/方式，关闭后才能决定 `DEV_VERIFIED`。尚无产品业务实现；D6-01B 仍等待 GitHub 私有仓库与权限。以 [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) 的 `F01～F10`、`P01～P26`、`M01～M14` 为开发范围，以第5步[覆盖清单](docs/superpowers/specs/2026-09-11-fams-usability-test-matrix.csv)检查遗漏。
+3. 本轮修订已获用户确认；D6-01A、D6-02A、D6-02B 状态为 `DEV_VERIFIED`，D6-02C 为 `IN_REVIEW`。D6-02C 已完成登录/权限、基础资料、建卡/台账/标签与日常入库的 OpenAPI、示例、数据/权限/错误设计、追溯、本地完整门禁及任务级非实施者复核；用户已指定本人按 [关键独立技术复核单](docs/development/D6-02C-critical-technical-review.md) 审阅权限、事务、迁移和恢复，当前等待逐域结论，关闭后才能决定 `DEV_VERIFIED`。尚无产品业务实现；D6-01B 仍等待 GitHub 私有仓库与权限。以 [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) 的 `F01～F10`、`P01～P26`、`M01～M14` 为开发范围，以第5步[覆盖清单](docs/superpowers/specs/2026-09-11-fams-usability-test-matrix.csv)检查遗漏。
 4. 每次任务开始、受阻、送审、验证和验收时同步维护计划台账及执行记录；本文只维护项目阶段和下一步，不复制第二套任务状态。D6-02B 的版本冻结结论已由复核和真实运行证据关闭；更广泛关键独立技术复核仍按计划维护。
 5. 只有 PRD 变更或开发发现设计缺口时，才重新打开第5步对应条目；无需恢复已取消的大规模用户测试方案。
-6. 本次已完成 D6-01A 本地治理、D6-02A 契约生成验证和 D6-02B 真实运行兼容性验证；D6-02C 任务级复核已关闭，但关键独立技术复核尚未关闭。尚未创建产品客户端脚手架、业务后端、产品迁移、远端仓库或 CI。契约和兼容性探针不等于产品能力；产品开发、正式 QA 和上线分别记录。
+6. 本次已完成 D6-01A 本地治理、D6-02A 契约生成验证和 D6-02B 真实运行兼容性验证；D6-02C 任务级复核已关闭，用户本人关键独立技术复核已开始但尚无结论。尚未创建产品客户端脚手架、业务后端、产品迁移、远端仓库或 CI。契约和兼容性探针不等于产品能力；产品开发、正式 QA 和上线分别记录。
 
 ## 4. 文档责任
 
@@ -59,9 +59,9 @@
 | 事实面 | 状态 | 说明 |
 |---|---|---|
 | 设计文档 | `changed-and-verified` | 一期功能覆盖验证已完成并同步 |
-| 开发计划 | `in-progress` | V1.1 修订已确认；D6-01A、D6-02A、D6-02B 已 `DEV_VERIFIED`，D6-02C 为 `IN_REVIEW`；D6-01B 远端与 CI 尚未完成；D6-02C 关键独立技术复核仍待指定 |
+| 开发计划 | `in-progress` | V1.1 修订已确认；D6-01A、D6-02A、D6-02B 已 `DEV_VERIFIED`，D6-02C 为 `IN_REVIEW`；D6-01B 远端与 CI 尚未完成；用户本人关键独立技术复核待结论 |
 | 规则 | `changed-and-verified` | AGENTS 已指向当前阶段 |
-| 产品代码 | `design-in-review` | D6-02A 契约探针与 D6-02B 兼容性探针已验证；D6-02C 设计包完成任务级复核与本地门禁；一期产品业务实现尚未开始 |
+| 产品代码 | `design-in-review` | D6-02A 契约探针与 D6-02B 兼容性探针已验证；D6-02C 设计包完成任务级复核与本地门禁，用户本人关键复核进行中；一期产品业务实现尚未开始 |
 | 产品运行态 | `probe-only` | D6-02B 仅验证本地真实 MySQL 技术闭环；无产品运行态、客户端或生产端点 |
 | 记忆 | `out-of-scope` | 本次未修改机器生成记忆 |
-| 工作区 | `verified-current` | 已初始化本地 Git `main`；D6-02A/B 已 `DEV_VERIFIED`；D6-02C 隔离分支任务级复核为 CLEAN、状态仍为 `IN_REVIEW`；无远端，D6-01B 待执行 |
+| 工作区 | `verified-current` | 已初始化本地 Git `main`；D6-02A/B 已 `DEV_VERIFIED`；D6-02C 隔离分支任务级复核为 CLEAN、用户关键复核待结论，状态仍为 `IN_REVIEW`；无远端，D6-01B 待执行 |

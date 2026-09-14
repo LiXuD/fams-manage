@@ -4,12 +4,12 @@
 
 - **ID：** D6-02C 首批真实设计包。
 - **目标：** 在 D6-02B 冻结的工具链上，定稿登录与权限、基础资料、建卡/台账/标签、日常入库首批真实设计包，为 D6-04～D6-07 业务编码提供唯一契约和数据设计输入。
-- **状态：** `IN_REVIEW`（2026-09-15）；设计包、本地门禁与任务级非实施者复核已完成，用户指定的关键独立技术复核尚未落实，因此不能记为 `DEV_VERIFIED`。
+- **状态：** `IN_REVIEW`（2026-09-15）；设计包、本地门禁与任务级非实施者复核已完成；用户已指定本人执行关键独立技术复核，结论尚待提交，因此不能记为 `DEV_VERIFIED`。
 - **分支 / 基线：** `feat/D6-02C-first-design-package`；`9a181cdd5924efbde8d5de83e05c2b9f92a70d86`。
 - **前置条件：** D6-02A、D6-02B 均为 `DEV_VERIFIED`；固定运行/契约工具组合不得在本任务内隐式升级。
 - **规模：** L；覆盖四个紧密关联的 G1 前置设计域，产物必须共同形成可生成、可追溯、可独立审查的一致设计包。
 - **实施负责人：** `luna-worker` 按 `/Users/lixd/.codex/agents/luna-worker.toml` 使用 `gpt-5.6-luna`、reasoning `max` 完成前段契约增量；该代理达到使用上限后，控制器继续完成剩余契约、设计文档、验证器、集成和交接，控制器模型无法核实。各提交 trailer 保留实际执行归属。
-- **复核人：** 非实施者代理已对 reviewed implementation HEAD `d3b8d6c` 给出 Spec Compliance PASS、Task Quality PASS、CLEAN（Critical 0 / Important 0）；计划要求的权限、事务、迁移、恢复关键独立技术复核人/方式仍待用户指定。该复核关闭且其问题修复、控制器再次完整复跑前，本任务不能关闭为 `DEV_VERIFIED`。
+- **复核人：** 非实施者代理已对 reviewed implementation HEAD `d3b8d6c` 给出 Spec Compliance PASS、Task Quality PASS、CLEAN（Critical 0 / Important 0）；用户于 2026-09-15 明确指定本人审阅权限、事务、迁移和恢复设计，复核单见 `D6-02C-critical-technical-review.md`，当前等待用户逐域结论。该复核关闭且其问题修复、控制器再次完整复跑前，本任务不能关闭为 `DEV_VERIFIED`。
 
 ## 权威范围与追溯
 
@@ -27,6 +27,7 @@
 | `docs/development/D6-02C-domain-data-design.md` | ER、表/字段/唯一约束/索引、状态、标识、时间、二维码、迁移及恢复设计 |
 | `docs/development/D6-02C-permission-error-contract.md` | 角色/数据范围/业务关系权限矩阵、错误码、事务、并发与幂等边界 |
 | `docs/development/D6-02C-traceability.csv` | PRD/页面/AC → operationId/schema/table/验证项映射 |
+| `docs/development/D6-02C-critical-technical-review.md` | 用户关键独立技术复核的固定对象、四域清单、证据和结论模板；当前不得预填通过 |
 | `scripts/verify-d6-02c.py` 与测试 | 校验契约/文档一致性，重复生成 Java/纯 TypeScript 类型并编译，保留 D6-02A/B 回归入口 |
 
 本任务只提交设计与可执行验证，不提交产品 Controller、Service、Mapper、页面或产品数据迁移。既有 `runtime-compatibility` profile 和探针表不转为产品 schema。
@@ -40,6 +41,7 @@
 - 真实契约连续生成两次：Java 163 个文件、TypeScript target 159 个文件、全树差异 0；Java 21 隔离编译及 transport-free TypeScript 5.9.2 隔离编译均退出 0。
 - 2026-09-15 在 reviewed implementation HEAD `d3b8d6c` 使用 Oracle GraalVM 21.0.7、Node 24.18.0 / npm 11.16.0、Python 3.12 / PyYAML 6.0.2 运行 `rtk ... python3 scripts/verify-d6-02c.py` 退出 0：81 个 D6-02C 单元测试通过、OpenAPI 无错误、真实契约生成/编译通过、D6-02A 与 D6-02B 完整保留门禁均退出 0、`git diff --check` 退出 0，并清理任务拥有的生成目录。
 - 任务级复核首轮在 `86fd596` 报告 6 个 Important；修复组织选择器、资产草稿隔离、入库创建者读取、授权配置及数据字典后，第二轮在 `bdd81ae` 保留 3 个 Important。控制器以 `a206c72`、`f50e77e`、`ade9e3a` 修复生成证据保护、授权代次和入库日期快照；第三轮仅剩授权示例复用代次主键，`d3b8d6c` 补齐四代连续示例后，第四轮为 PASS / CLEAN。
+- 用户已指定本人执行关键独立技术复核；复核对象固定为 `d3b8d6c`，权限、事务、迁移、恢复逐域清单与回复模板已建立。指定动作不等于通过，当前没有用户复核结论。
 - 首次直接使用机器默认 Java 25 / Node 16 的复跑被 D6-02A 正确拒绝，不计作通过；切换到计划固定运行时后才取得上述绿色证据。
 - 本地历史把先加入过宽契约再删除的相邻提交压为净结果提交 `302a8f8`，并以 `codex/backup-d6-02c-pre-squash-20260914` 保留可恢复指针；重写前后树差异为 0。送审前实现候选为 `69e81bf`，任务级 reviewed implementation HEAD 为 `d3b8d6c`。
 
