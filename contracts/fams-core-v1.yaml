@@ -3577,10 +3577,13 @@ paths:
         required: true
         roles: [ASSET_ADMIN, WAREHOUSE_OPERATOR, AUDIT_READ_ONLY]
       x-data-scope: >-
-        ASSET_ADMIN and WAREHOUSE_OPERATOR receive an enterprise-wide asset ledger
-        business view that is not narrowed by organization or warehouse. AUDIT_READ_ONLY
-        is constrained to an explicitly authorized audit scope. SYSTEM_ADMIN receives
-        no automatic asset business permission.
+        A WAREHOUSE_OPERATOR sees its own DRAFT cards, while a DRAFT owned by any other
+        account is absent from the list. ASSET_ADMIN and WAREHOUSE_OPERATOR receive the
+        enterprise business view only for PENDING_INBOUND and ACTIVE cards. A card
+        cancelled before first submission remains visible only to its creator. Detail,
+        timeline, and copy requests by another account resolve as ASSET_NOT_FOUND.
+        AUDIT_READ_ONLY is constrained to an explicitly authorized audit scope and cannot
+        use that scope to expose restricted drafts. SYSTEM_ADMIN has no automatic access.
       x-sensitive-fields-policy: Service phone, attachments, and export require separate authorization.
       x-filter-semantics:
         identity: Asset code, name, serial number, category, lifecycle, and exception filters are conjunctive.
@@ -3691,10 +3694,12 @@ paths:
         required: true
         roles: [ASSET_ADMIN, WAREHOUSE_OPERATOR, AUDIT_READ_ONLY]
       x-data-scope: >-
-        ASSET_ADMIN and WAREHOUSE_OPERATOR receive an enterprise-wide asset ledger
-        business view that is not narrowed by organization or warehouse. AUDIT_READ_ONLY
-        is constrained to an explicitly authorized audit scope. SYSTEM_ADMIN receives
-        no automatic asset business permission.
+        A WAREHOUSE_OPERATOR may read its own DRAFT card. A DRAFT owned by another account
+        and a card cancelled before first submission are returned as ASSET_NOT_FOUND unless
+        the caller is their creator. ASSET_ADMIN and WAREHOUSE_OPERATOR receive the
+        enterprise business view for PENDING_INBOUND and ACTIVE cards. AUDIT_READ_ONLY is
+        limited to an explicit scope that never exposes restricted drafts; SYSTEM_ADMIN has
+        no automatic asset access.
       x-sensitive-fields-policy: Service phone, attachments, and export require separate authorization.
       x-detail-sections:
         - BASIC_INFORMATION
@@ -3785,9 +3790,12 @@ paths:
         required: true
         roles: [ASSET_ADMIN, WAREHOUSE_OPERATOR, AUDIT_READ_ONLY]
       x-data-scope: >-
-        ASSET_ADMIN and WAREHOUSE_OPERATOR use the enterprise asset business view;
-        AUDIT_READ_ONLY is limited to an explicitly authorized audit scope. SYSTEM_ADMIN
-        receives no automatic asset business permission.
+        A WAREHOUSE_OPERATOR may read the timeline of its own DRAFT card. A DRAFT owned by
+        another account and a card cancelled before first submission resolve as
+        ASSET_NOT_FOUND unless the caller is their creator. PENDING_INBOUND and ACTIVE cards
+        use the ASSET_ADMIN and WAREHOUSE_OPERATOR enterprise business view. AUDIT_READ_ONLY
+        is limited to an explicit scope that never exposes restricted drafts; SYSTEM_ADMIN
+        has no automatic asset access.
       x-history-navigation: >-
         Events are ordered reverse chronological by occurredAt and stable id. Each event may
         link to its original document, but following that link performs a fresh authorized
@@ -3828,11 +3836,13 @@ paths:
         event: ASSET_DRAFT_COPIED
       x-error-codes: [ASSET_COPY_QUANTITY_INVALID, ASSET_NOT_FOUND, ASSET_SOURCE_CANCELLED, ASSET_REFERENCE_VERSION_CONFLICT, ASSET_CODE_ALLOCATION_CONFLICT]
       x-invariants: >-
-        Quantity is from 1 through 100. A warehouse operator may copy any visible,
-        non-CANCELLED source asset, including ACTIVE, in-stock, and in-use assets;
-        source creator does not restrict copying, and a source business lock does not
-        block a read-only copy. The source version, data scope, and reference snapshot
-        are still checked. Each new card receives an
+        Quantity is from 1 through 100. A DRAFT source is visible to and copyable by only
+        its creator; another account receives ASSET_NOT_FOUND. For PENDING_INBOUND or ACTIVE
+        sources, a warehouse operator may copy any asset visible through the enterprise
+        business view, including in-stock and in-use assets; source creator does not restrict
+        those submitted cards, and a source business lock does not block a read-only copy.
+        The source version, stage-aware data scope, and reference snapshot are still checked.
+        Each new card receives an
         independent permanent assetCode, is owned by the calling warehouse operator,
         and starts as DRAFT. Copy only category, brand, manufacturer, model, unit,
         and extension values; never copy serial, status, planned or formal custody,

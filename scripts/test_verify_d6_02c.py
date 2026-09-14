@@ -2415,6 +2415,41 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertIn("formal", json.dumps(asset, sort_keys=True).lower())
         self.assertIn("unsettled", json.dumps(schemas["AssetBusinessSummary"], sort_keys=True).lower())
 
+    def test_asset_draft_visibility_is_creator_only_across_reads_and_copy(self) -> None:
+        document = self.load_contract()
+        operations = {
+            operation["operationId"]: operation
+            for item in document["paths"].values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        for operation_id in ("listAssets", "getAsset", "listAssetTimeline"):
+            with self.subTest(operation=operation_id):
+                scope = json.dumps(operations[operation_id], sort_keys=True).lower()
+                for phrase in (
+                    "own draft",
+                    "other account",
+                    "pending_inbound",
+                    "active",
+                    "asset_not_found",
+                ):
+                    self.assertIn(phrase, scope)
+
+        copy_text = json.dumps(operations["copyAsset"], sort_keys=True).lower()
+        for phrase in ("draft source", "only its creator", "asset_not_found"):
+            self.assertIn(phrase, copy_text)
+
+        examples = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted(EXAMPLES.glob("masterdata-asset-*-other-draft-rejection.json"))
+        ]
+        self.assertEqual(
+            {"getAsset", "copyAsset"},
+            {value["operationId"] for value in examples},
+        )
+        self.assertTrue(all(value["status"] == 404 for value in examples))
+        self.assertTrue(all(value["response"]["code"] == "ASSET_NOT_FOUND" for value in examples))
+
     def test_asset_ledger_covers_prd_default_columns_and_advanced_filters(self) -> None:
         document = self.load_contract()
         operations = {
