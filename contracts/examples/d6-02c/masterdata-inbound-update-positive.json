@@ -24,7 +24,12 @@
     "id": "7001",
     "receiptNumber": "IR-2026-000001",
     "status": "DRAFT",
+    "businessDate": "2026-09-14",
+    "createdBy": {"id": "17", "username": "warehouse.operator.17"},
+    "createdAt": "2026-09-14T02:15:00Z",
     "version": 1,
+    "parameterVersionId": "9001",
+    "snapshot": {"parameterVersionId": "9001", "businessDate": "2026-09-14"},
     "items": [
       {
         "asset": {"id": "10021", "version": 2},
