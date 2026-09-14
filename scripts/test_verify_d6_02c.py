@@ -529,6 +529,27 @@ class DesignPackageContractTest(unittest.TestCase):
         ):
             self.assertIn(phrase, permission_text)
 
+    def test_account_authorization_generations_allow_regrant_without_losing_history(self) -> None:
+        domain_text = (DOCS / "D6-02C-domain-data-design.md").read_text(encoding="utf-8")
+        contract_text = CONTRACT.read_text(encoding="utf-8")
+
+        for phrase in (
+            "generation_no",
+            "current_guard",
+            "uk_account_authorization_generation",
+            "uk_account_current_authorization",
+            "授予 → 替换 → 撤销 → 重新授予",
+            "新的 authorization_id",
+        ):
+            self.assertIn(phrase, domain_text)
+
+        for phrase in (
+            "new ACTIVE authorization generation",
+            "new REVOKED authorization generation",
+            "same scopes and field permissions can be granted again",
+        ):
+            self.assertIn(phrase, contract_text)
+
     def test_contract_has_unique_yaml_keys_and_operation_ids(self) -> None:
         import yaml
 

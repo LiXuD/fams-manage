@@ -1565,8 +1565,9 @@ components:
       additionalProperties: false
       required: [id, systemAccountId, role, status, dataScopes, fieldPermissions, version, updatedAt]
       description: >-
-        Current controlled scope and sensitive-field configuration for one account-role
-        pair. Fixed role actions and fixed shared-pool visibility remain immutable.
+        Latest authorization generation for one account-role pair. Each replacement or
+        revocation creates a new row and id while prior generations and their child grants
+        remain auditable. Fixed role actions and shared-pool visibility remain immutable.
       properties:
         id:
           $ref: '#/components/schemas/Id'
@@ -1589,6 +1590,7 @@ components:
           type: integer
           format: int64
           minimum: 0
+          description: Monotonic generation number used by If-Match-Version.
         updatedAt:
           $ref: '#/components/schemas/Instant'
     SystemAccountAuthorizationReplaceRequest:
@@ -5305,13 +5307,15 @@ paths:
       x-version:
         required: true
         precondition: >-
-          If-Match-Version is zero only when no configuration exists; otherwise it equals
-          the current authorization version. The account and fixed role membership must be current.
+          If-Match-Version is zero only when no generation has ever existed; otherwise it
+          equals the latest ACTIVE or REVOKED generation number. The account and fixed role
+          membership must be current.
       x-transaction:
         boundary: >-
           Validate the current account, fixed role membership, allowed scope combinations,
-          organization and warehouse versions, then replace all active child grants, advance
-          authorization version and account auth_epoch, invalidate sessions immediately, and audit.
+          organization and warehouse versions, supersede the latest generation, then insert a
+          new ACTIVE authorization generation with a new id and complete immutable child grants.
+          Advance account auth_epoch, invalidate sessions immediately, and audit atomically.
       x-audit-event:
         event: SYSTEM_ACCOUNT_AUTHORIZATION_REPLACED
       x-error-codes:
@@ -5328,7 +5332,8 @@ paths:
         visibility and WAREHOUSE_OPERATOR all-approved-request visibility remain fixed and are
         unioned independently of general scopes. Field permission does not grant record access,
         record access does not grant a sensitive field, and disabled referenced scope rows stop
-        contributing immediately. Replacement retains previous rows as revoked history.
+        contributing immediately. Prior generations and children remain history;
+        same scopes and field permissions can be granted again under a later authorization id.
       x-required-error-statuses: [400, 401, 403, 404, 409]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -5370,9 +5375,9 @@ paths:
         precondition: If-Match-Version equals the current ACTIVE authorization version.
       x-transaction:
         boundary: >-
-          Mark the current authorization and its child grants revoked, advance its version
-          and account auth_epoch, invalidate sessions immediately, preserve fixed role membership,
-          and write the audit event atomically.
+          Supersede the current ACTIVE generation, insert a new REVOKED authorization generation
+          with a new id and no child grants, advance account auth_epoch, invalidate sessions
+          immediately, preserve fixed role membership, and write the audit event atomically.
       x-audit-event:
         event: SYSTEM_ACCOUNT_AUTHORIZATION_REVOKED
       x-error-codes:
@@ -5385,7 +5390,8 @@ paths:
       x-invariants: >-
         Revocation removes only configurable current scopes and sensitive fields. It does not
         edit the fixed role baseline or silently remove role membership, but effective access
-        from this configuration ends immediately and historical grant facts remain auditable.
+        from this configuration ends immediately. Historical generations and child facts remain
+        immutable and auditable; a later replacement may regrant the same values under a new id.
       x-required-error-statuses: [400, 401, 403, 404, 409]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'

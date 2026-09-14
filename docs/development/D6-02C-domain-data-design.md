@@ -85,17 +85,27 @@ erDiagram
 | `fams_employee` | `employee_no_normalized`、`name`、`organization_id`、`mobile_ciphertext`、`mobile_lookup_hash`、`status` | 工号唯一；手机号密文保存、HMAC 摘要等值查找；`idx_employee_org_status`；停用不删除历史身份 |
 | `fams_system_account` | `employee_id`、`username_normalized`、`password_hash`、`status`、`initial_password_required`、`failed_attempts`、`locked_until`、`auth_epoch` | 员工和用户名各自唯一；停用、锁定、改密、角色变化更新 `auth_epoch` 使旧会话失效 |
 | `fams_account_role` | `account_id`、`role_code`、`granted_at`、`granted_by` | `uk_account_role(account_id,role_code)`；角色代码与 OpenAPI `Role` 一致 |
-| `fams_account_authorization` | `account_id`、`role_code`、`authorization_status`、`version`、`changed_by`、`change_reason`、`updated_at` | `uk_account_authorization(account_id,role_code)`；仅配置一般范围和独立字段权限；固定角色动作不可编辑；撤销保留历史状态 |
-| `fams_account_data_scope` | `authorization_id`、`scope_type`、`scope_status`、`version` | `uk_account_scope_type(authorization_id,scope_type)`；代码限定为 `DataScopeType`；指定范围的明细由下列关联表承接 |
+| `fams_account_authorization` | `account_id`、`role_code`、`generation_no`、`authorization_status`、`predecessor_authorization_id`、`superseded_at`、`current_guard`、`changed_by`、`change_reason` | `uk_account_authorization_generation(account_id,role_code,generation_no)`；`uk_account_current_authorization(account_id,role_code,current_guard)`；API `version` 映射 `generation_no`；固定角色动作不可编辑 |
+| `fams_account_data_scope` | `authorization_id`、`scope_type` | `uk_account_scope_type(authorization_id,scope_type)`；属于一个不可变授权代次；代码限定为 `DataScopeType`；指定范围明细由下列关联表承接 |
 | `fams_account_scope_organization` | `data_scope_id`、`organization_id`、`organization_version_at_grant` | `uk_account_scope_org(data_scope_id,organization_id)`；仅用于 `SPECIFIED_ORGANIZATIONS`，保留授予时版本并在每次读取时重验当前状态 |
 | `fams_account_scope_warehouse` | `data_scope_id`、`warehouse_id`、`warehouse_version_at_grant` | `uk_account_scope_warehouse(data_scope_id,warehouse_id)`；仅用于 `SPECIFIED_WAREHOUSES`，停用仓库立即不再贡献有效范围 |
-| `fams_account_field_permission` | `authorization_id`、`permission_code`、`permission_status`、`granted_at`、`revoked_at` | `uk_account_field_permission(authorization_id,permission_code)`；代码限定为 `SensitiveFieldPermission`；记录可见不推导字段权限 |
+| `fams_account_field_permission` | `authorization_id`、`permission_code`、`granted_at` | `uk_account_field_permission(authorization_id,permission_code)`；属于一个不可变授权代次；代码限定为 `SensitiveFieldPermission`；记录可见不推导字段权限 |
 | `fams_security_event` | `account_id`、`event_type`、`request_id`、`occurred_at`、`detail_json` | `idx_security_account_time`、`idx_security_request`；详情不得写明文密码或完整 Cookie |
 
-授权配置按账号与已授予角色成对保存。更新或撤销时在同一事务替换当前子项、增加授权版本及
-`fams_system_account.auth_epoch`、使旧会话失效并记录审计。角色撤销、账号/员工停用立即使整组配置无效；
-组织或仓库停用时对应指定范围立即停止贡献访问，但历史授予事实不物理删除。固定的资产管理员全部已提交
-申请和库管全部已批准申请能力独立求并集，不能被一般范围误过滤，也不能借一般范围扩大动作权限。
+授权配置按账号与已授予角色成对保存，并以不可变授权代次承载子项。`current_guard` 是
+`CASE WHEN superseded_at IS NULL THEN 1 ELSE NULL END` 的持久生成列；MySQL 唯一索引允许历史行拥有多个
+`NULL`，但一个账号角色只能有一个最新代次。写入先锁定最新代次并比较 `generation_no`：从未配置时只接受
+`If-Match-Version: 0`，否则必须匹配最新代次，包括最新状态为 `REVOKED` 的情况。
+
+替换时先给旧代次填写 `superseded_at`，再以新的 authorization_id 和递增 `generation_no` 插入 `ACTIVE`
+代次及完整子项；撤销时同样结束旧代次，再插入无子项的 `REVOKED` 代次。父代次除结束标记外不改写，
+既有范围和字段子行永不覆盖或删除。授权的“授予 → 替换 → 撤销 → 重新授予”依次形成 1、2、3、4 代；
+第 4 代使用新的 authorization_id，因此可合法重新插入与第 1 或第 2 代相同的 scope/permission 唯一键，
+同时保留所有旧代次。每次写入还增加 `fams_system_account.auth_epoch`、使旧会话失效并记录审计。
+
+角色撤销、账号/员工停用立即使整组配置无效；组织或仓库停用时对应指定范围立即停止贡献访问，但历史授予
+事实不物理删除。固定的资产管理员全部已提交申请和库管全部已批准申请能力独立求并集，不能被一般范围
+误过滤，也不能借一般范围扩大动作权限。
 
 员工停用与账号停用在一个事务内更新；资产责任清理通过异常清单和后续正式业务完成，不能因此延迟访问撤销。
 
