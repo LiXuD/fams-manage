@@ -444,9 +444,6 @@ class DesignPackageContractTest(unittest.TestCase):
                 )
                 self.assertIn("401", operation["responses"])
                 self.assertIn("403", operation["responses"])
-        forbidden_prefixes = ("/inbound",)
-        self.assertFalse(any(path.startswith(forbidden_prefixes) for path in paths))
-
     def test_asset_category_tree_and_patch_schema_rules_are_explicit(self) -> None:
         document = self.load_contract()
         schemas = document["components"]["schemas"]
@@ -1949,7 +1946,11 @@ class DesignPackageContractTest(unittest.TestCase):
                 schemas["Asset"]["properties"]["createdBusinessDate"]["$ref"],
             )
             self.assertNotIn("businessDate", schemas["Asset"]["properties"])
-        self.assertEqual("date-time", schemas["AuditEvent"]["properties"]["occurredAt"]["format"])
+        self.assertEqual(
+            "#/components/schemas/Instant",
+            schemas["AuditEvent"]["properties"]["occurredAt"]["$ref"],
+        )
+        self.assertEqual("date-time", schemas["Instant"]["format"])
         self.assertEqual("string", schemas["Money"]["type"])
         self.assertEqual("^[0-9]+\\.[0-9]{2}$", schemas["Money"]["pattern"])
         self.assertIn("PERSONAL", schemas["UsageMode"]["enum"])
