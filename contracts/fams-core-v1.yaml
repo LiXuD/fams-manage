@@ -18,6 +18,8 @@ tags:
     description: Organization, employee, and system-account configuration boundaries.
   - name: Assets
     description: Asset-card and ledger read boundaries; business mutations remain scoped to warehouse operators.
+  - name: Inbound
+    description: Inbound receipt draft and lifecycle boundaries; approval and warehouse execution are later slices.
 components:
   securitySchemes:
     sessionCookie:
@@ -166,6 +168,24 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Id'
+    InboundReceiptId:
+      name: receiptId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    InboundReceiptStatusFilter:
+      name: status
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/InboundReceiptStatus'
+    InboundReceiptNumberFilter:
+      name: receiptNumber
+      in: query
+      required: false
+      schema:
+        type: string
     AssetCodeFilter:
       name: assetCode
       in: query
@@ -2119,7 +2139,380 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/ConfigurationAnomaly'
+    InboundReceiptStatus:
+      type: string
+      enum: [DRAFT, PENDING_ADMIN_DECISION, REJECTED, WAITING_WAREHOUSE_CLAIM, WAREHOUSE_PROCESSING, COMPLETED, CANCELLED]
+      description: V1 receipt states; administrator decision and warehouse acceptance are later operations.
+    InboundAssetReference:
+      type: object
+      additionalProperties: false
+      required: [id, version]
+      description: >-
+        Versioned asset identity selected for a draft. The server validates that the
+        card is DRAFT, WAITING_INBOUND, NORMAL, and has no active business lock.
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    InboundTargetReference:
+      type: object
+      additionalProperties: false
+      required: [id, version]
+      description: >-
+        Versioned warehouse or location identity. The server requires an enabled
+        reference and checks that the final location belongs to the target warehouse.
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    InboundAssetSnapshot:
+      type: object
+      additionalProperties: false
+      required: [assetCode, assetName]
+      description: Server-captured asset code and name snapshot retained on the receipt item.
+      properties:
+        assetCode:
+          type: string
+          minLength: 1
+        assetName:
+          type: string
+          minLength: 1
+    InboundCatalogSnapshot:
+      type: object
+      additionalProperties: false
+      required: [code, name]
+      description: Server-captured code and name snapshot for an inbound target reference.
+      properties:
+        code:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+    InboundReceiptItemInput:
+      type: object
+      additionalProperties: false
+      required: [asset]
+      description: >-
+        Draft item input. A request may provide default targets and override them per
+        item; before persistence every item must have an effective warehouse and location.
+      properties:
+        asset:
+          $ref: '#/components/schemas/InboundAssetReference'
+        targetWarehouse:
+          $ref: '#/components/schemas/InboundTargetReference'
+        targetLocation:
+          $ref: '#/components/schemas/InboundTargetReference'
+    InboundReceiptItem:
+      type: object
+      additionalProperties: false
+      required: [asset, assetSnapshot, targetWarehouse, targetLocation, warehouseSnapshot, locationSnapshot]
+      description: >-
+        Persisted item with versioned identities and immutable code/name snapshots for
+        the asset, warehouse, and location selected for this receipt.
+      properties:
+        asset:
+          $ref: '#/components/schemas/InboundAssetReference'
+        assetSnapshot:
+          $ref: '#/components/schemas/InboundAssetSnapshot'
+        targetWarehouse:
+          $ref: '#/components/schemas/InboundTargetReference'
+        targetLocation:
+          $ref: '#/components/schemas/InboundTargetReference'
+        warehouseSnapshot:
+          $ref: '#/components/schemas/InboundCatalogSnapshot'
+        locationSnapshot:
+          $ref: '#/components/schemas/InboundCatalogSnapshot'
+    InboundReceiptSnapshot:
+      type: object
+      additionalProperties: false
+      required: [parameterVersionId, businessDate]
+      description: >-
+        Immutable parameter and business-date snapshot captured when the receipt draft
+        is created. Later parameter versions do not reinterpret this receipt date.
+      properties:
+        parameterVersionId:
+          $ref: '#/components/schemas/Id'
+        businessDate:
+          $ref: '#/components/schemas/BusinessDate'
+    InboundReceiptCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [businessDate, items]
+      description: >-
+        Creator-only draft input. The server assigns the permanent INBOUND_RECEIPT
+        business number; callers cannot provide receiptNumber or status.
+      properties:
+        businessDate:
+          $ref: '#/components/schemas/BusinessDate'
+        defaultTargetWarehouse:
+          $ref: '#/components/schemas/InboundTargetReference'
+          description: Optional batch default overridden by an item's targetWarehouse.
+        defaultTargetLocation:
+          $ref: '#/components/schemas/InboundTargetReference'
+          description: Optional batch default overridden by an item's targetLocation.
+        items:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/InboundReceiptItemInput'
+        notes:
+          type: string
+          maxLength: 2000
+    InboundReceiptUpdateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: >-
+        Creator-only PATCH for a DRAFT receipt. Omitted fields remain unchanged; status,
+        receiptNumber, creator, and parameterVersionId are never client-editable.
+      properties:
+        businessDate:
+          $ref: '#/components/schemas/BusinessDate'
+        defaultTargetWarehouse:
+          $ref: '#/components/schemas/InboundTargetReference'
+        defaultTargetLocation:
+          $ref: '#/components/schemas/InboundTargetReference'
+        items:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/InboundReceiptItemInput'
+        notes:
+          type: string
+          maxLength: 2000
+    InboundReceipt:
+      type: object
+      additionalProperties: false
+      required: [id, receiptNumber, status, businessDate, createdBy, createdAt, version, parameterVersionId, snapshot, items]
+      description: >-
+        Inbound receipt aggregate. receiptNumber is a server-assigned permanent business
+        number from the INBOUND_RECEIPT rule; every asset and target warehouse/location
+        reference has a versioned code/name snapshot retained for history. No multi-level
+        approval or procurement acceptance is implied.
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        receiptNumber:
+          type: string
+          minLength: 1
+          description: Server-assigned permanent business number; clients never provide it.
+        status:
+          $ref: '#/components/schemas/InboundReceiptStatus'
+        businessDate:
+          $ref: '#/components/schemas/BusinessDate'
+        createdBy:
+          $ref: '#/components/schemas/AssetCreatorReference'
+        createdAt:
+          $ref: '#/components/schemas/Instant'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        parameterVersionId:
+          $ref: '#/components/schemas/Id'
+        snapshot:
+          $ref: '#/components/schemas/InboundReceiptSnapshot'
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/InboundReceiptItem'
+        notes:
+          type: string
+    PageInboundReceipt:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/InboundReceipt'
 paths:
+  /inbound-receipts:
+    get:
+      tags: [Inbound]
+      operationId: listInboundReceipts
+      summary: List inbound receipts within the fixed role and relationship scopes.
+      x-actor:
+        required: true
+        roles: [ASSET_ADMIN, WAREHOUSE_OPERATOR, AUDIT_READ_ONLY]
+      x-data-scope: >-
+        WAREHOUSE_OPERATOR sees only own DRAFT receipts plus every approved receipt and
+        its execution status; ASSET_ADMIN sees every submitted receipt and its history;
+        AUDIT_READ_ONLY requires an explicit authorized audit scope. SYSTEM_ADMIN has no
+        automatic inbound business access.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/InboundReceiptStatusFilter'
+        - $ref: '#/components/parameters/InboundReceiptNumberFilter'
+      responses:
+        '200':
+          description: Scoped inbound-receipt page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageInboundReceipt'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Inbound]
+      operationId: createInboundReceipt
+      summary: Create a creator-owned inbound receipt draft with a server business number.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [WAREHOUSE_OPERATOR]
+      x-version:
+        required: true
+        precondition: Every asset, warehouse, and location reference version must be current.
+      x-transaction:
+        boundary: >-
+          Validate creator-owned DRAFT assets, duplicate selection, active warehouse and
+          location versions, and warehouse membership; allocate the permanent server
+          business number, persist target snapshots, and audit in one short transaction.
+          Draft creation does not acquire an asset business lock.
+      x-audit-event:
+        event: INBOUND_DRAFT_CREATED
+      x-error-codes:
+        - INBOUND_ASSET_NOT_FOUND
+        - INBOUND_ASSET_NOT_CREATOR
+        - INBOUND_ASSET_NOT_DRAFT
+        - INBOUND_ASSET_LOCKED
+        - INBOUND_DUPLICATE_ASSET
+        - INBOUND_REFERENCE_VERSION_CONFLICT
+        - INBOUND_MASTER_DATA_DISABLED
+        - INBOUND_WAREHOUSE_LOCATION_MISMATCH
+        - INBOUND_NUMBERING_RULE_UNAVAILABLE
+        - INBOUND_IDEMPOTENCY_CONFLICT
+      x-invariants: >-
+        Only the creator may place their unsubmitted asset card in this DRAFT receipt.
+        Every asset must be cardStage DRAFT, lifecycle WAITING_INBOUND, exception NORMAL,
+        and free of an active business lock. The server allocates the permanent business
+        number. Each effective warehouse and location is explicit and saved with an
+        immutable code/name snapshot; defaults may be overridden per item.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InboundReceiptCreateRequest'
+      responses:
+        '201':
+          description: Created creator-owned inbound receipt draft.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundReceipt'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /inbound-receipts/{receiptId}:
+    parameters:
+      - $ref: '#/components/parameters/InboundReceiptId'
+    get:
+      tags: [Inbound]
+      operationId: getInboundReceipt
+      summary: Read an inbound receipt within its fixed role and relationship scope.
+      x-actor:
+        required: true
+        roles: [ASSET_ADMIN, WAREHOUSE_OPERATOR, AUDIT_READ_ONLY]
+      x-data-scope: >-
+        WAREHOUSE_OPERATOR sees only an own DRAFT receipt or any approved receipt and its
+        execution status; ASSET_ADMIN sees every submitted receipt and its history;
+        AUDIT_READ_ONLY requires an explicit authorized audit scope. SYSTEM_ADMIN has no
+        automatic inbound business access.
+      responses:
+        '200':
+          description: Scoped inbound-receipt detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundReceipt'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Inbound]
+      operationId: updateInboundReceipt
+      summary: Update a creator-owned inbound receipt while it remains a draft.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [WAREHOUSE_OPERATOR]
+      x-version:
+        required: true
+        precondition: >-
+          If-Match-Version must equal the receipt version and every supplied asset,
+          warehouse, and location reference version must be current.
+      x-transaction:
+        boundary: >-
+          Validate creator ownership, DRAFT state, receipt version, asset lock state,
+          duplicate selection, active warehouse/location versions and membership; replace
+          the resolved items and snapshots, advance the version, and audit atomically.
+      x-audit-event:
+        event: INBOUND_DRAFT_UPDATED
+      x-error-codes:
+        - INBOUND_NOT_FOUND
+        - INBOUND_NOT_CREATOR
+        - INBOUND_NOT_DRAFT
+        - INBOUND_VERSION_CONFLICT
+        - INBOUND_ASSET_NOT_FOUND
+        - INBOUND_ASSET_NOT_CREATOR
+        - INBOUND_ASSET_NOT_DRAFT
+        - INBOUND_ASSET_LOCKED
+        - INBOUND_DUPLICATE_ASSET
+        - INBOUND_REFERENCE_VERSION_CONFLICT
+        - INBOUND_MASTER_DATA_DISABLED
+        - INBOUND_WAREHOUSE_LOCATION_MISMATCH
+        - INBOUND_IDEMPOTENCY_CONFLICT
+      x-invariants: >-
+        Only the creator may edit an unsubmitted DRAFT. The server business number,
+        creator, and parameter snapshot never change. Every asset must remain an eligible
+        DRAFT without a business lock; every effective warehouse and location is current,
+        explicit, mutually consistent, and persisted with a refreshed code/name snapshot.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InboundReceiptUpdateRequest'
+      responses:
+        '200':
+          description: Updated inbound receipt draft.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundReceipt'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
   /assets:
     get:
       tags: [Assets]

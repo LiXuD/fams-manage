@@ -10,6 +10,7 @@
     "X-Actor": "warehouse.operator.17"
   },
   "payload": {
+    "businessDate": "2026-09-14",
     "defaultTargetWarehouse": {"id": "5001", "version": 4},
     "defaultTargetLocation": {"id": "5101", "version": 6},
     "items": [
