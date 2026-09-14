@@ -1671,6 +1671,39 @@ class DesignPackageContractTest(unittest.TestCase):
         }
         self.assertTrue({"Page", "PageSize"}.issubset(list_refs))
 
+    def test_inbound_creator_can_read_progress_and_results_after_submission(self) -> None:
+        document = self.load_contract()
+        operations = {
+            operation["operationId"]: operation
+            for item in document["paths"].values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        for operation_id in ("listInboundReceipts", "getInboundReceipt"):
+            with self.subTest(operation=operation_id):
+                scope = json.dumps(operations[operation_id], sort_keys=True).lower()
+                for phrase in (
+                    "creator",
+                    "every stage",
+                    "pending_admin_decision",
+                    "rejected",
+                    "cancelled",
+                    "response unknown",
+                    "other warehouse operator",
+                    "approved",
+                ):
+                    self.assertIn(phrase, scope)
+
+        examples = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted(EXAMPLES.glob("masterdata-inbound-creator-pending-read-*.json"))
+        ]
+        self.assertEqual({"positive", "rejection"}, {value["kind"] for value in examples})
+        positive = next(value for value in examples if value["kind"] == "positive")
+        rejection = next(value for value in examples if value["kind"] == "rejection")
+        self.assertEqual("PENDING_ADMIN_DECISION", positive["response"]["status"])
+        self.assertEqual(404, rejection["status"])
+
     def test_inbound_receipt_schemas_freeze_snapshots_and_draft_input_rules(self) -> None:
         document = self.load_contract()
         schemas = document["components"]["schemas"]

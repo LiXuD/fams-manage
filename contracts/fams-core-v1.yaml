@@ -2914,10 +2914,13 @@ paths:
         required: true
         roles: [ASSET_ADMIN, WAREHOUSE_OPERATOR, AUDIT_READ_ONLY]
       x-data-scope: >-
-        WAREHOUSE_OPERATOR sees only own DRAFT receipts plus every approved receipt and
-        its execution status; ASSET_ADMIN sees every submitted receipt and its history;
-        AUDIT_READ_ONLY requires an explicit authorized audit scope. SYSTEM_ADMIN has no
-        automatic inbound business access.
+        A WAREHOUSE_OPERATOR creator sees its own receipt at every stage: DRAFT,
+        PENDING_ADMIN_DECISION, REJECTED, WAITING_WAREHOUSE_CLAIM, WAREHOUSE_PROCESSING,
+        COMPLETED, or CANCELLED. This relationship preserves necessary progress, result,
+        history, current version, and response unknown recovery without granting new write
+        permission. Any other warehouse operator sees only approved receipts and execution
+        status. ASSET_ADMIN sees every submitted receipt and its history; AUDIT_READ_ONLY
+        requires an explicit scope. SYSTEM_ADMIN has no automatic inbound business access.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -3002,10 +3005,13 @@ paths:
         required: true
         roles: [ASSET_ADMIN, WAREHOUSE_OPERATOR, AUDIT_READ_ONLY]
       x-data-scope: >-
-        WAREHOUSE_OPERATOR sees only an own DRAFT receipt or any approved receipt and its
-        execution status; ASSET_ADMIN sees every submitted receipt and its history;
-        AUDIT_READ_ONLY requires an explicit authorized audit scope. SYSTEM_ADMIN has no
-        automatic inbound business access.
+        A WAREHOUSE_OPERATOR creator sees its own receipt at every stage: DRAFT,
+        PENDING_ADMIN_DECISION, REJECTED, WAITING_WAREHOUSE_CLAIM, WAREHOUSE_PROCESSING,
+        COMPLETED, or CANCELLED. This relationship preserves necessary progress, result,
+        history, current version, and response unknown recovery without granting new write
+        permission. Any other warehouse operator sees only approved receipts and execution
+        status. ASSET_ADMIN sees every submitted receipt and its history; AUDIT_READ_ONLY
+        requires an explicit scope. SYSTEM_ADMIN has no automatic inbound business access.
       responses:
         '200':
           description: Scoped inbound-receipt detail.

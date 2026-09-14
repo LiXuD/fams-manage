@@ -1,0 +1,16 @@
+{
+  "operationId": "getInboundReceipt",
+  "kind": "rejection",
+  "status": 404,
+  "scenario": "Another warehouse operator attempts to read an unapproved pending receipt.",
+  "responseSchema": "ErrorResponse",
+  "pathParameters": {"receiptId": "7001"},
+  "payload": {},
+  "response": {
+    "code": "INBOUND_NOT_FOUND",
+    "message": "Inbound receipt was not found.",
+    "requestId": "00000000-0000-4000-8000-000000000094",
+    "fieldErrors": {}
+  },
+  "evidence": "Contract evidence only; runtime creator and approval relationship checks are not implemented."
+}

@@ -1,0 +1,42 @@
+{
+  "operationId": "getInboundReceipt",
+  "kind": "positive",
+  "status": 200,
+  "scenario": "The creator reloads a submitted receipt after a lost response.",
+  "responseSchema": "InboundReceipt",
+  "pathParameters": {"receiptId": "7001"},
+  "payload": {},
+  "response": {
+    "id": "7001",
+    "receiptNumber": "IR-2026-000001",
+    "status": "PENDING_ADMIN_DECISION",
+    "businessDate": "2026-09-14",
+    "createdBy": {"id": "17", "username": "warehouse.operator.17"},
+    "createdAt": "2026-09-14T02:15:00Z",
+    "submittedAt": "2026-09-14T03:00:00Z",
+    "adminDecisionDueAt": "2026-09-16T15:59:59.999Z",
+    "version": 2,
+    "parameterVersionId": "9001",
+    "snapshot": {
+      "parameterVersionId": "9001",
+      "businessDate": "2026-09-14",
+      "timezone": "Asia/Shanghai",
+      "adminDecisionDeadlineWorkdays": 2,
+      "warehouseClaimDeadlineWorkdays": 1,
+      "warehouseFirstExecutionDeadlineWorkdays": 2
+    },
+    "items": [
+      {
+        "id": "7101",
+        "executionStatus": "PENDING",
+        "asset": {"id": "10021", "version": 2},
+        "assetSnapshot": {"assetCode": "FA-2026-000021", "assetName": "Latitude 7450"},
+        "targetWarehouse": {"id": "5001", "version": 4},
+        "targetLocation": {"id": "5101", "version": 6},
+        "warehouseSnapshot": {"code": "WH-SH-01", "name": "Shanghai Main Warehouse"},
+        "locationSnapshot": {"code": "SH-F1-A01", "name": "Floor 1 A01"}
+      }
+    ]
+  },
+  "evidence": "Contract evidence only; runtime creator progress recovery is not implemented."
+}
