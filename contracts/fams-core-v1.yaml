@@ -246,6 +246,89 @@ components:
       required: false
       schema:
         $ref: '#/components/schemas/Id'
+    AssetUsageModeFilter:
+      name: usageMode
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/UsageMode'
+    AssetUsingOrganizationFilter:
+      name: usingOrganizationId
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/Id'
+    AssetResponsibleEmployeeFilter:
+      name: responsibleEmployeeId
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/Id'
+    AssetDepartmentResponsibleEmployeeFilter:
+      name: departmentResponsibleEmployeeId
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/Id'
+    AssetCurrentProcessorFilter:
+      name: currentProcessorId
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/Id'
+    AssetBusinessReferenceFilter:
+      name: businessReference
+      in: query
+      required: false
+      description: Exact business receipt id or business number.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+    AssetInboundDateFromFilter:
+      name: inboundDateFrom
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/BusinessDate'
+    AssetInboundDateToFilter:
+      name: inboundDateTo
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/BusinessDate'
+    AssetLastInventoryDateFromFilter:
+      name: lastInventoryDateFrom
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/BusinessDate'
+    AssetLastInventoryDateToFilter:
+      name: lastInventoryDateTo
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/BusinessDate'
+    AssetBorrowOverdueFilter:
+      name: borrowOverdue
+      in: query
+      required: false
+      schema:
+        type: boolean
+    AssetLongUninventoriedFilter:
+      name: longUninventoried
+      in: query
+      required: false
+      schema:
+        type: boolean
+    AssetTimelineEventTypeFilter:
+      name: eventType
+      in: query
+      required: false
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
   responses:
     BadRequest:
       description: Request validation or state precondition failed.
@@ -453,6 +536,14 @@ components:
           minimum: 0
         latestBusinessReference:
           $ref: '#/components/schemas/Id'
+        currentBusinessId:
+          $ref: '#/components/schemas/Id'
+        currentBusinessNumber:
+          type: string
+        currentBusinessType:
+          type: string
+        currentProcessor:
+          $ref: '#/components/schemas/AssetCreatorReference'
     Asset:
       type: object
       additionalProperties: false
@@ -478,6 +569,9 @@ components:
         organization:
           $ref: '#/components/schemas/OrganizationReference'
           description: Owning organization; distinct from any usingOrganization in formal custody.
+        usageMode:
+          $ref: '#/components/schemas/UsageMode'
+          description: Formal PERSONAL or SHARED use; absent while the asset remains in storage.
         plannedInboundWarehouse:
           $ref: '#/components/schemas/CatalogReference'
         plannedInboundLocation:
@@ -533,6 +627,10 @@ components:
           $ref: '#/components/schemas/AssetCustodySummary'
         openBusinessSummary:
           $ref: '#/components/schemas/AssetBusinessSummary'
+        inboundBusinessDate:
+          $ref: '#/components/schemas/BusinessDate'
+        lastInventoryBusinessDate:
+          $ref: '#/components/schemas/BusinessDate'
     PageAsset:
       allOf:
         - $ref: '#/components/schemas/PageMeta'
@@ -543,6 +641,45 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/Asset'
+    AssetTimelineEvent:
+      type: object
+      additionalProperties: false
+      required: [id, eventType, occurredAt, summary, sourceBusinessType, sourceBusinessId]
+      description: >-
+        Read-only asset history projection. A link identifies an original business
+        document but never bypasses current authorization or sensitive-field policy.
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        eventType:
+          type: string
+        occurredAt:
+          $ref: '#/components/schemas/Instant'
+        businessDate:
+          $ref: '#/components/schemas/BusinessDate'
+        summary:
+          type: string
+        sourceBusinessType:
+          type: string
+        sourceBusinessId:
+          $ref: '#/components/schemas/Id'
+        sourceBusinessNumber:
+          type: string
+        actor:
+          $ref: '#/components/schemas/AssetCreatorReference'
+        detailLink:
+          type: string
+          description: Relative link to the original document, subject to fresh authorization.
+    PageAssetTimelineEvent:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/AssetTimelineEvent'
     AssetCreateRequest:
       type: object
       additionalProperties: false
@@ -3161,6 +3298,25 @@ paths:
         is constrained to an explicitly authorized audit scope. SYSTEM_ADMIN receives
         no automatic asset business permission.
       x-sensitive-fields-policy: Service phone, attachments, and export require separate authorization.
+      x-filter-semantics:
+        identity: Asset code, name, serial number, category, lifecycle, and exception filters are conjunctive.
+        organizations: >-
+          Owning organization and using organization are distinct criteria; warehouse and
+          location match the current formal custody rather than a planned inbound target.
+        responsibility: >-
+          Responsible employee selects PERSONAL custody, while department responsible
+          employee selects the exclusive SHARED custody executor.
+        current-work: >-
+          Current processor and business receipt match the active unsettled business relation;
+          a receipt id or exact receipt number can be supplied.
+        dates: >-
+          Inbound and last-inventory date ranges are inclusive at both supplied boundaries.
+        alerts: >-
+          Borrow overdue and long uninventoried are server-derived business flags evaluated
+          from the frozen business rule and calendar inputs applicable to the record.
+        authorization: >-
+          Every filter is intersected with current permission scope; saved criteria, identifiers,
+          and business relations never expand visibility.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -3170,9 +3326,21 @@ paths:
         - $ref: '#/components/parameters/AssetCategoryFilter'
         - $ref: '#/components/parameters/AssetLifecycleFilter'
         - $ref: '#/components/parameters/AssetExceptionFilter'
+        - $ref: '#/components/parameters/AssetUsageModeFilter'
         - $ref: '#/components/parameters/AssetWarehouseFilter'
         - $ref: '#/components/parameters/AssetLocationFilter'
         - $ref: '#/components/parameters/AssetOrganizationFilter'
+        - $ref: '#/components/parameters/AssetUsingOrganizationFilter'
+        - $ref: '#/components/parameters/AssetResponsibleEmployeeFilter'
+        - $ref: '#/components/parameters/AssetDepartmentResponsibleEmployeeFilter'
+        - $ref: '#/components/parameters/AssetCurrentProcessorFilter'
+        - $ref: '#/components/parameters/AssetBusinessReferenceFilter'
+        - $ref: '#/components/parameters/AssetInboundDateFromFilter'
+        - $ref: '#/components/parameters/AssetInboundDateToFilter'
+        - $ref: '#/components/parameters/AssetLastInventoryDateFromFilter'
+        - $ref: '#/components/parameters/AssetLastInventoryDateToFilter'
+        - $ref: '#/components/parameters/AssetBorrowOverdueFilter'
+        - $ref: '#/components/parameters/AssetLongUninventoriedFilter'
       responses:
         '200':
           description: Scoped asset page.
@@ -3244,6 +3412,21 @@ paths:
         is constrained to an explicitly authorized audit scope. SYSTEM_ADMIN receives
         no automatic asset business permission.
       x-sensitive-fields-policy: Service phone, attachments, and export require separate authorization.
+      x-detail-sections:
+        - BASIC_INFORMATION
+        - CURRENT_CUSTODY
+        - TAG_AND_ATTACHMENTS
+        - USE_BORROW_TRANSFER
+        - INVENTORY
+        - REPAIR_AND_FACTORY
+        - LOSS_AND_RECOVERY
+        - SCRAP
+        - OPERATION_LOG
+      x-history-navigation: >-
+        The nine stable sections are the PC detail information architecture. Later domain
+        contracts populate their business sections without widening this asset read model.
+        Only authorized fields are returned, sensitive fields remain separately gated, and
+        every original document link requires fresh permission evaluation when followed.
       responses:
         '200':
           description: Asset card details with formal custody and unsettled-business summary.
@@ -3306,6 +3489,40 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+
+  /assets/{assetId}/timeline:
+    parameters:
+      - $ref: '#/components/parameters/AssetId'
+    get:
+      tags: [Assets]
+      operationId: listAssetTimeline
+      summary: List authorized asset events in reverse chronological order.
+      x-actor:
+        required: true
+        roles: [ASSET_ADMIN, WAREHOUSE_OPERATOR, AUDIT_READ_ONLY]
+      x-data-scope: >-
+        ASSET_ADMIN and WAREHOUSE_OPERATOR use the enterprise asset business view;
+        AUDIT_READ_ONLY is limited to an explicitly authorized audit scope. SYSTEM_ADMIN
+        receives no automatic asset business permission.
+      x-history-navigation: >-
+        Events are ordered reverse chronological by occurredAt and stable id. Each event may
+        link to its original document, but following that link performs a fresh authorized
+        access check. Sensitive fields remain omitted unless separately authorized; a timeline
+        item never grants access to a business document or attachment.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/AssetTimelineEventTypeFilter'
+      responses:
+        '200':
+          description: Authorized asset timeline page, newest event first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageAssetTimelineEvent'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /assets/{assetId}/copy:
     parameters:
