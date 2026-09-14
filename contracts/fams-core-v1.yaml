@@ -2142,7 +2142,7 @@ components:
     InboundReceiptStatus:
       type: string
       enum: [DRAFT, PENDING_ADMIN_DECISION, REJECTED, WAITING_WAREHOUSE_CLAIM, WAREHOUSE_PROCESSING, COMPLETED, CANCELLED]
-      description: V1 receipt states; administrator decision and warehouse acceptance are later operations.
+      description: V1 receipt states; administrator decision and warehouse acceptance are separate operations.
     InboundAssetReference:
       type: object
       additionalProperties: false
@@ -2212,11 +2212,14 @@ components:
     InboundReceiptItem:
       type: object
       additionalProperties: false
-      required: [asset, assetSnapshot, targetWarehouse, targetLocation, warehouseSnapshot, locationSnapshot]
+      required: [id, asset, assetSnapshot, targetWarehouse, targetLocation, warehouseSnapshot, locationSnapshot]
       description: >-
         Persisted item with versioned identities and immutable code/name snapshots for
-        the asset, warehouse, and location selected for this receipt.
+        the asset, warehouse, and location selected for this receipt. businessLock is
+        absent in DRAFT and present while a submitted receipt owns the active asset lock.
       properties:
+        id:
+          $ref: '#/components/schemas/Id'
         asset:
           $ref: '#/components/schemas/InboundAssetReference'
         assetSnapshot:
@@ -2229,18 +2232,53 @@ components:
           $ref: '#/components/schemas/InboundCatalogSnapshot'
         locationSnapshot:
           $ref: '#/components/schemas/InboundCatalogSnapshot'
+        businessLock:
+          $ref: '#/components/schemas/InboundAssetBusinessLock'
+    InboundAssetBusinessLock:
+      type: object
+      additionalProperties: false
+      required: [assetId, businessType, businessId, businessItemId, lockVersion, acquiredAt]
+      description: >-
+        Persistent active lock acquired at receipt submission. It survives restart,
+        client timeout, and logout until a legal decision, cancellation, or acceptance
+        transition releases it; it is independent of warehouse processing ownership.
+      properties:
+        assetId:
+          $ref: '#/components/schemas/Id'
+        businessType:
+          type: string
+          enum: [INBOUND]
+        businessId:
+          $ref: '#/components/schemas/Id'
+        businessItemId:
+          $ref: '#/components/schemas/Id'
+        lockVersion:
+          type: integer
+          format: int64
+          minimum: 0
+        acquiredAt:
+          $ref: '#/components/schemas/Instant'
     InboundReceiptSnapshot:
       type: object
       additionalProperties: false
-      required: [parameterVersionId, businessDate]
+      required: [parameterVersionId, businessDate, timezone, adminDecisionDeadlineWorkdays]
       description: >-
         Immutable parameter and business-date snapshot captured when the receipt draft
-        is created. Later parameter versions do not reinterpret this receipt date.
+        is created. Later parameter versions do not reinterpret this receipt date or
+        reset its administrator decision deadline.
       properties:
         parameterVersionId:
           $ref: '#/components/schemas/Id'
         businessDate:
           $ref: '#/components/schemas/BusinessDate'
+        timezone:
+          type: string
+          minLength: 1
+        adminDecisionDeadlineWorkdays:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 30
     InboundReceiptCreateRequest:
       type: object
       additionalProperties: false
@@ -2289,6 +2327,15 @@ components:
         notes:
           type: string
           maxLength: 2000
+    InboundReceiptCancelRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
     InboundReceipt:
       type: object
       additionalProperties: false
@@ -2313,6 +2360,12 @@ components:
           $ref: '#/components/schemas/AssetCreatorReference'
         createdAt:
           $ref: '#/components/schemas/Instant'
+        submittedAt:
+          $ref: '#/components/schemas/Instant'
+          description: First successful submission instant, retained after cancellation or rejection.
+        adminDecisionDueAt:
+          $ref: '#/components/schemas/Instant'
+          description: Deadline computed at submission from the frozen parameter/calendar snapshot.
         version:
           type: integer
           format: int64
@@ -2327,6 +2380,10 @@ components:
           items:
             $ref: '#/components/schemas/InboundReceiptItem'
         notes:
+          type: string
+        cancelledAt:
+          $ref: '#/components/schemas/Instant'
+        cancellationReason:
           type: string
     PageInboundReceipt:
       allOf:
@@ -2503,6 +2560,138 @@ paths:
       responses:
         '200':
           description: Updated inbound receipt draft.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundReceipt'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /inbound-receipts/{receiptId}/submit:
+    parameters:
+      - $ref: '#/components/parameters/InboundReceiptId'
+    post:
+      tags: [Inbound]
+      operationId: submitInboundReceipt
+      summary: Atomically submit a complete inbound draft to the administrator shared pool.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [WAREHOUSE_OPERATOR]
+      x-version:
+        required: true
+        precondition: >-
+          If-Match-Version must equal the DRAFT receipt version; every asset and target
+          reference version is rechecked at the submission instant.
+      x-transaction:
+        boundary: >-
+          Revalidate the complete receipt and all assets, acquire every active business
+          lock, advance every card stage, create one shared approval todo, persist the
+          deadline and audit, and commit as one short transaction. A failure at any item
+          causes full rollback: no receipt, asset, lock, todo, or success-audit effect remains.
+      x-audit-event:
+        event: INBOUND_SUBMITTED
+      x-error-codes:
+        - INBOUND_NOT_FOUND
+        - INBOUND_NOT_CREATOR
+        - INBOUND_NOT_DRAFT
+        - INBOUND_VERSION_CONFLICT
+        - INBOUND_ASSET_INCOMPLETE
+        - INBOUND_ASSET_VERSION_CONFLICT
+        - INBOUND_ASSET_LOCK_CONFLICT
+        - INBOUND_REFERENCE_VERSION_CONFLICT
+        - INBOUND_MASTER_DATA_DISABLED
+        - INBOUND_WAREHOUSE_LOCATION_MISMATCH
+        - INBOUND_SUBMIT_ATOMIC_ROLLBACK
+        - INBOUND_IDEMPOTENCY_CONFLICT
+      x-invariants: >-
+        Only the creator submits a DRAFT receipt. All assets must have complete name,
+        category, specification, unit, active owning organization, target warehouse and
+        target location data; the targets must remain active and mutually consistent.
+        Every asset must be WAITING_INBOUND, NORMAL, DRAFT, current, and unlocked.
+        Submission atomically acquires one business lock per asset, changes cardStage to
+        PENDING_INBOUND, and leaves lifecycle WAITING_INBOUND and current custody empty.
+        The receipt enters PENDING_ADMIN_DECISION in the all-ASSET_ADMIN shared pool; its
+        administrator deadline uses the frozen parameter and calendar snapshot, while
+        current processor remains unset. Asset business lock and warehouse processing
+        ownership are independent controls. The same idempotent request returns the
+        original result. Application restart, logout, or client timeout never releases
+        submitted locks or creates a second todo.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      responses:
+        '200':
+          description: Receipt submitted and locked atomically, or the original idempotent result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundReceipt'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /inbound-receipts/{receiptId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/InboundReceiptId'
+    post:
+      tags: [Inbound]
+      operationId: cancelInboundReceipt
+      summary: Cancel a creator-owned draft or pending-decision inbound receipt.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [WAREHOUSE_OPERATOR]
+      x-version:
+        required: true
+        precondition: >-
+          If-Match-Version must equal the current DRAFT or PENDING_ADMIN_DECISION
+          receipt version and competes atomically with an administrator decision.
+      x-transaction:
+        boundary: >-
+          Win the receipt-version race, record the creator reason, release this receipt's
+          active locks, restore affected cards, close the active todo, retain history,
+          advance the receipt to CANCELLED, and audit in one short transaction.
+      x-audit-event:
+        event: INBOUND_CANCELLED_BEFORE_DECISION
+      x-error-codes:
+        - INBOUND_NOT_FOUND
+        - INBOUND_NOT_CREATOR
+        - INBOUND_CANCELLATION_NOT_ALLOWED
+        - INBOUND_VERSION_CONFLICT
+        - INBOUND_DECISION_ALREADY_EFFECTIVE
+        - INBOUND_LOCK_RELEASE_CONFLICT
+        - INBOUND_IDEMPOTENCY_CONFLICT
+      x-invariants: >-
+        Only the creator may cancel DRAFT or PENDING_ADMIN_DECISION. Cancellation and an
+        administrator decision race on the same receipt version; only the first legal
+        action wins. DRAFT cancellation touches no lock. Pending-decision cancellation
+        must release every receipt business lock, return each cardStage to DRAFT, close
+        the active todo, and retain receipt, todo, and lock history. If a decision wins,
+        the conflict returns the actual effective result and does not save cancellation.
+        An approved or other terminal receipt cannot be initiator-cancelled. The same
+        idempotent request returns the original result and never repeats release effects.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InboundReceiptCancelRequest'
+      responses:
+        '200':
+          description: Receipt cancelled before a decision, or original idempotent result.
           content:
             application/json:
               schema:

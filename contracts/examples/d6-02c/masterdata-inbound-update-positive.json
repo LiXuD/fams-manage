@@ -29,9 +29,15 @@
     "createdAt": "2026-09-14T02:15:00Z",
     "version": 1,
     "parameterVersionId": "9001",
-    "snapshot": {"parameterVersionId": "9001", "businessDate": "2026-09-14"},
+    "snapshot": {
+      "parameterVersionId": "9001",
+      "businessDate": "2026-09-14",
+      "timezone": "Asia/Shanghai",
+      "adminDecisionDeadlineWorkdays": 2
+    },
     "items": [
       {
+        "id": "7101",
         "asset": {"id": "10021", "version": 2},
         "assetSnapshot": {"assetCode": "FA-2026-000021", "assetName": "Latitude 7450"},
         "targetWarehouse": {"id": "5001", "version": 4},
