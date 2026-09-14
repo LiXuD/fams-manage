@@ -2658,9 +2658,10 @@ components:
       additionalProperties: false
       required: [parameterVersionId, businessDate, timezone, adminDecisionDeadlineWorkdays, warehouseClaimDeadlineWorkdays, warehouseFirstExecutionDeadlineWorkdays]
       description: >-
-        Immutable parameter and business-date snapshot captured when the receipt draft
-        is created. Later parameter versions do not reinterpret this receipt date or
-        reset its administrator decision deadline.
+        Effective parameter and business-date snapshot for the receipt. While DRAFT,
+        businessDate and snapshot.businessDate change atomically; parameter version,
+        timezone, and deadline-day settings remain those captured at creation. A
+        successful submission freezes every snapshot field for all later states.
       properties:
         parameterVersionId:
           $ref: '#/components/schemas/Id'
@@ -2715,7 +2716,9 @@ components:
       minProperties: 1
       description: >-
         Creator-only PATCH for a DRAFT receipt. Omitted fields remain unchanged; status,
-        receiptNumber, creator, and parameterVersionId are never client-editable.
+        receiptNumber, creator, and parameterVersionId are never client-editable. A
+        businessDate change updates the receipt businessDate and snapshot.businessDate
+        atomically; successful submission freezes that date against later writes.
       properties:
         businessDate:
           $ref: '#/components/schemas/BusinessDate'

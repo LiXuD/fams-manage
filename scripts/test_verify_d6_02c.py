@@ -1976,6 +1976,38 @@ class DesignPackageContractTest(unittest.TestCase):
             self.assertNotIn("createdBy", schema["properties"])
             self.assertNotIn("parameterVersionId", schema["properties"])
 
+    def test_inbound_draft_business_date_updates_snapshot_then_freezes_on_submit(self) -> None:
+        document = self.load_contract()
+        schemas = document["components"]["schemas"]
+        snapshot_text = json.dumps(schemas["InboundReceiptSnapshot"], sort_keys=True).lower()
+        update_text = json.dumps(schemas["InboundReceiptUpdateRequest"], sort_keys=True).lower()
+        for phrase in ("while draft", "atomically", "successful submission freezes"):
+            self.assertIn(phrase, snapshot_text)
+        for phrase in ("businessdate", "snapshot.businessdate", "atomically", "submission"):
+            self.assertIn(phrase, update_text)
+
+        domain_text = (DOCS / "D6-02C-domain-data-design.md").read_text(encoding="utf-8")
+        self.assertIn("草稿期间可修改", domain_text)
+        self.assertIn("提交成功时冻结", domain_text)
+
+        example = json.loads(
+            (EXAMPLES / "masterdata-inbound-update-positive.json").read_text(encoding="utf-8")
+        )
+        self.assertNotEqual(example["before"]["businessDate"], example["payload"]["businessDate"])
+        self.assertEqual(
+            example["before"]["businessDate"],
+            example["before"]["snapshot"]["businessDate"],
+        )
+        self.assertEqual(example["payload"]["businessDate"], example["response"]["businessDate"])
+        self.assertEqual(
+            example["payload"]["businessDate"],
+            example["response"]["snapshot"]["businessDate"],
+        )
+        self.assertEqual(
+            example["before"]["snapshot"]["parameterVersionId"],
+            example["response"]["snapshot"]["parameterVersionId"],
+        )
+
     def test_inbound_draft_examples_cover_server_number_and_state_rejections(self) -> None:
         files = sorted(EXAMPLES.glob("masterdata-inbound-*.json"))
         self.assertGreaterEqual(len(files), 6)

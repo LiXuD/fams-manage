@@ -282,7 +282,7 @@ OpenAPI `Asset` 到事实来源的完整映射：
 | `creator_account_id` | `BIGINT NOT NULL` | FK `fams_system_account.id`；创建关系在全阶段保留 |
 | `creator_username_snapshot` | `VARCHAR(128) NOT NULL` | 创建时账号名快照，不随账号改名变化 |
 | `receipt_status` | `VARCHAR(40) NOT NULL` | `InboundReceiptStatus` 的七个稳定代码 |
-| `business_date` | `DATE NOT NULL` | 客户端业务日期，经企业日历规则校验但不做时区换日 |
+| `business_date` | `DATE NOT NULL` | 客户端业务日期；草稿期间可修改并经企业日历校验，提交成功时冻结；不做时区换日 |
 | `parameter_version_id` | `BIGINT NOT NULL` | FK 参数版本；建草稿后不改写 |
 | `timezone_snapshot` | `VARCHAR(64) NOT NULL` | 创建时参数时区快照 |
 | `admin_decision_deadline_workdays` | `TINYINT UNSIGNED NOT NULL` | `1..30`；创建时冻结 |
@@ -300,8 +300,10 @@ OpenAPI `Asset` 到事实来源的完整映射：
 | `created_at` / `updated_at` | `DATETIME(3) NOT NULL` | UTC 毫秒精度 |
 | `created_by` / `updated_by` | `BIGINT NOT NULL` | 实际操作账号 |
 
-`parameter_version_id/business_date/timezone_snapshot/三个工作日时限` 共同组成
-`InboundReceiptSnapshot`，无需另存可漂移 JSON。日期截止时刻落在独立 UTC 列，重启时不重算。
+`parameter_version_id/timezone_snapshot/三个工作日时限` 在创建时固定；`business_date` 在草稿期间可修改，
+且每次保存都让顶层 `businessDate` 与 `InboundReceiptSnapshot.businessDate` 原子映射同一列。提交成功时冻结
+整个 `InboundReceiptSnapshot`，后续状态不得再修改业务日期。无需另存可漂移 JSON；日期截止时刻落在
+独立 UTC 列，提交时使用已冻结日期与参数计算，重启时不重算。
 
 #### 6.1.2 明细与目标快照
 
@@ -404,7 +406,7 @@ OpenAPI 入库读模型到事实来源的完整映射：
 | `parameterVersionId`、`snapshot`、`items` | 单头冻结参数列与按 `receipt_id` 稳定排序的明细 |
 | `decision`、`currentProcessor` | 唯一决定行与最新处理权行；终态处理权仍带归档时刻 |
 | `cancelledAt`、`cancellationReason`、`completedAt` | 单头取消/完成事实列 |
-| `InboundReceiptSnapshot`: `parameterVersionId`、`businessDate`、`timezone` | 单头参数 ID、业务日期与时区快照 |
+| `InboundReceiptSnapshot`: `parameterVersionId`、`businessDate`、`timezone` | 单头参数 ID、`business_date` 与时区；业务日期随草稿保存同步，提交后冻结 |
 | `adminDecisionDeadlineWorkdays`、`warehouseClaimDeadlineWorkdays`、`warehouseFirstExecutionDeadlineWorkdays` | 单头三个冻结工作日数 |
 | `InboundReceiptItem`: `id`、`executionStatus`、`asset`、`targetWarehouse`、`targetLocation` | 明细主键、执行状态及三组 ID/版本快照 |
 | `assetSnapshot`、`warehouseSnapshot`、`locationSnapshot` | 明细的不可变编码/名称快照列 |
@@ -433,7 +435,7 @@ OpenAPI 入库读模型到事实来源的完整映射：
 
 | 当前状态 | 动作 | 下一状态 | 同一事务内的事实 |
 |---|---|---|---|
-| `DRAFT` | 创建人保存 | `DRAFT` | 单头/明细版本、目标当前有效性、审计 |
+| `DRAFT` | 创建人保存 | `DRAFT` | 单头/明细版本、业务日期与读模型快照同步、目标当前有效性、审计 |
 | `DRAFT` | 创建人提交 | `PENDING_ADMIN_DECISION` | 重验资料完整性与引用版本，为全部资产取得业务锁，生成管理员共享待办 |
 | `DRAFT` | 创建人取消 | `CANCELLED` | 记录原因；未取得资产锁 |
 | `PENDING_ADMIN_DECISION` | 管理员批准 | `WAITING_WAREHOUSE_CLAIM` | 唯一决定、批准范围、关闭管理员待办、生成一条去重库管池待办 |
