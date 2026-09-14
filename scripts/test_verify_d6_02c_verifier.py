@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 MODULE_PATH = Path(__file__).with_name("verify-d6-02c.py")
@@ -104,6 +105,36 @@ class ContractEvidenceTest(unittest.TestCase):
 
 
 class GeneratedTreeTest(unittest.TestCase):
+
+    def test_generation_refuses_preexisting_outputs_without_deleting_them(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="d6-02c-preexisting-output-") as temporary:
+            root = Path(temporary)
+            java_target = root / "java-target"
+            typescript_target = root / "typescript-target"
+            java_marker = java_target / "ManualPatch.java"
+            typescript_marker = typescript_target / "StaleGeneratedModel.ts"
+            java_target.mkdir()
+            typescript_target.mkdir()
+            java_marker.write_text("// manual patch\n", encoding="utf-8")
+            typescript_marker.write_text("// stale generated model\n", encoding="utf-8")
+
+            with (
+                mock.patch.object(
+                    VERIFIER,
+                    "OWNED_GENERATED_TARGETS",
+                    (java_target, typescript_target),
+                ),
+                mock.patch.object(VERIFIER, "require_command") as command,
+            ):
+                with self.assertRaises(VERIFIER.VerificationFailure):
+                    VERIFIER.verify_real_contract_generation()
+
+            command.assert_not_called()
+            self.assertEqual("// manual patch\n", java_marker.read_text(encoding="utf-8"))
+            self.assertEqual(
+                "// stale generated model\n",
+                typescript_marker.read_text(encoding="utf-8"),
+            )
 
     def test_transport_free_template_imports_referenced_models_as_types(self) -> None:
         template = (

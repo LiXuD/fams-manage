@@ -474,6 +474,19 @@ def clear_generated_outputs() -> None:
             target.unlink()
 
 
+def assert_generated_outputs_absent() -> None:
+    existing = [target for target in OWNED_GENERATED_TARGETS if target.exists()]
+    if existing:
+        relative = [
+            target.relative_to(ROOT).as_posix() if target.is_relative_to(ROOT) else target.name
+            for target in existing
+        ]
+        raise VerificationFailure(
+            "pre-existing generated output must be inspected and explicitly removed: "
+            f"{relative}"
+        )
+
+
 def run_rtk(args: list[str], timeout: float = 600) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["rtk", *args],
@@ -621,7 +634,7 @@ def compile_generated_typescript_in_isolation() -> None:
 
 def verify_real_contract_generation() -> None:
     override = f"-Dopenapi.input-spec={CONTRACT}"
-    clear_generated_outputs()
+    assert_generated_outputs_absent()
     require_command(
         "real contract generation 1",
         ["./mvnw", "-pl", "backend", "clean", "generate-resources", "-DskipTests", override],
