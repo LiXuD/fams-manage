@@ -1,0 +1,19 @@
+{
+  "operationId": "acceptInboundReceiptItem",
+  "kind": "rejection",
+  "status": 409,
+  "actor": "warehouse.operator.17",
+  "pathParameters": {"receiptId": "7001", "itemId": "7101"},
+  "headers": {
+    "Idempotency-Key": "inbound-accept-stale-version-0001",
+    "X-CSRF-Token": "csrf-inbound-accept-123456",
+    "If-Match-Version": "3"
+  },
+  "payload": {"assetVersion": 2, "lockVersion": 0, "observedAssetCode": "FA-2026-000021"},
+  "error": {
+    "code": "INBOUND_ACCEPTANCE_VERSION_CONFLICT",
+    "message": "A stale receipt, asset, or lock version cannot be accepted.",
+    "fieldErrors": {"receiptVersion": "current 4", "assetVersion": "current 3"}
+  },
+  "evidence": "Contract evidence only; every concurrent version must be current."
+}
