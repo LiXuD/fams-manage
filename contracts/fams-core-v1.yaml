@@ -2261,7 +2261,7 @@ components:
     InboundReceiptSnapshot:
       type: object
       additionalProperties: false
-      required: [parameterVersionId, businessDate, timezone, adminDecisionDeadlineWorkdays]
+      required: [parameterVersionId, businessDate, timezone, adminDecisionDeadlineWorkdays, warehouseClaimDeadlineWorkdays, warehouseFirstExecutionDeadlineWorkdays]
       description: >-
         Immutable parameter and business-date snapshot captured when the receipt draft
         is created. Later parameter versions do not reinterpret this receipt date or
@@ -2275,6 +2275,16 @@ components:
           type: string
           minLength: 1
         adminDecisionDeadlineWorkdays:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 30
+        warehouseClaimDeadlineWorkdays:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 30
+        warehouseFirstExecutionDeadlineWorkdays:
           type: integer
           format: int32
           minimum: 1
@@ -2336,6 +2346,87 @@ components:
           type: string
           minLength: 1
           maxLength: 500
+    InboundDecisionResult:
+      type: string
+      enum: [APPROVED, REJECTED]
+    InboundApproveRequest:
+      type: object
+      additionalProperties: false
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [APPROVED]
+        comment:
+          type: string
+          maxLength: 1000
+    InboundRejectRequest:
+      type: object
+      additionalProperties: false
+      required: [decision, reason]
+      properties:
+        decision:
+          type: string
+          enum: [REJECTED]
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1000
+    InboundDecisionRequest:
+      description: One administrator approval, or a rejection with a required reason.
+      oneOf:
+        - $ref: '#/components/schemas/InboundApproveRequest'
+        - $ref: '#/components/schemas/InboundRejectRequest'
+    InboundApprovalScopeItem:
+      type: object
+      additionalProperties: false
+      required: [receiptItemId, asset, targetWarehouse, targetLocation]
+      properties:
+        receiptItemId:
+          $ref: '#/components/schemas/Id'
+        asset:
+          $ref: '#/components/schemas/InboundAssetReference'
+        targetWarehouse:
+          $ref: '#/components/schemas/InboundTargetReference'
+        targetLocation:
+          $ref: '#/components/schemas/InboundTargetReference'
+    InboundApprovalScope:
+      type: object
+      additionalProperties: false
+      required: [receiptVersion, items]
+      description: Immutable approved or rejected scope captured from one submitted receipt version.
+      properties:
+        receiptVersion:
+          type: integer
+          format: int64
+          minimum: 0
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/InboundApprovalScopeItem'
+    InboundDecision:
+      type: object
+      additionalProperties: false
+      required: [id, result, decidedReceiptVersion, decidedBy, decidedAt, scope]
+      description: The one effective administrator decision for a submitted receipt version.
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        result:
+          $ref: '#/components/schemas/InboundDecisionResult'
+        decidedReceiptVersion:
+          type: integer
+          format: int64
+          minimum: 0
+        decidedBy:
+          $ref: '#/components/schemas/AssetCreatorReference'
+        decidedAt:
+          $ref: '#/components/schemas/Instant'
+        comment:
+          type: string
+        scope:
+          $ref: '#/components/schemas/InboundApprovalScope'
     InboundReceipt:
       type: object
       additionalProperties: false
@@ -2366,6 +2457,12 @@ components:
         adminDecisionDueAt:
           $ref: '#/components/schemas/Instant'
           description: Deadline computed at submission from the frozen parameter/calendar snapshot.
+        warehouseClaimDueAt:
+          $ref: '#/components/schemas/Instant'
+          description: Deadline computed at approval from the frozen parameter/calendar snapshot.
+        decision:
+          $ref: '#/components/schemas/InboundDecision'
+          description: The one effective administrator decision; absent before a decision wins.
         version:
           type: integer
           format: int64
@@ -2692,6 +2789,76 @@ paths:
       responses:
         '200':
           description: Receipt cancelled before a decision, or original idempotent result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundReceipt'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /inbound-receipts/{receiptId}/decision:
+    parameters:
+      - $ref: '#/components/parameters/InboundReceiptId'
+    post:
+      tags: [Inbound]
+      operationId: decideInboundReceipt
+      summary: Record the one effective administrator decision for a submitted receipt.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [ASSET_ADMIN]
+      x-version:
+        required: true
+        precondition: >-
+          If-Match-Version must equal the PENDING_ADMIN_DECISION receipt version and
+          competes with every other administrator decision and creator cancellation.
+      x-transaction:
+        boundary: >-
+          Atomically win the receipt-version race and persist the one effective decision
+          with its approved scope. Approval closes the administrator todo, opens exactly
+          one shared warehouse todo and stores its deadline. Rejection closes the todo,
+          releases every receipt asset lock and restores every card to DRAFT. Any failure
+          rolls back the receipt, decision, todo, lock, card, and audit effects together.
+      x-audit-event:
+        event: INBOUND_ADMIN_DECIDED
+      x-error-codes:
+        - INBOUND_NOT_FOUND
+        - INBOUND_NOT_PENDING_DECISION
+        - INBOUND_VERSION_CONFLICT
+        - INBOUND_DECISION_ALREADY_EFFECTIVE
+        - INBOUND_CANCELLATION_ALREADY_EFFECTIVE
+        - INBOUND_DECISION_REASON_REQUIRED
+        - INBOUND_LOCK_RELEASE_CONFLICT
+        - INBOUND_IDEMPOTENCY_CONFLICT
+      x-invariants: >-
+        All asset administrators can view the shared pending request, and view does not
+        reserve it. The first legal decision on the current receipt version becomes the
+        one effective decision; every losing request receives the actual effective
+        decision and creates no duplicate todo or audit success. The immutable approved
+        scope captures the submitted receipt version and every item target. APPROVED moves
+        the receipt to WAITING_WAREHOUSE_CLAIM, retains each asset business lock and
+        PENDING_INBOUND card, leaves current processor unset, and opens the shared
+        warehouse pool. REJECTED records its reason, releases every lock, restores each
+        card to DRAFT, and opens no warehouse task. A dual-role administrator approval
+        does not claim warehouse processing ownership. The same idempotent request returns
+        its original result; a different payload under the same key conflicts.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InboundDecisionRequest'
+      responses:
+        '200':
+          description: Effective approval or rejection, including an idempotent replay.
           content:
             application/json:
               schema:

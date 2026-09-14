@@ -40,7 +40,9 @@
       "parameterVersionId": "9001",
       "businessDate": "2026-09-14",
       "timezone": "Asia/Shanghai",
-      "adminDecisionDeadlineWorkdays": 2
+      "adminDecisionDeadlineWorkdays": 2,
+      "warehouseClaimDeadlineWorkdays": 1,
+      "warehouseFirstExecutionDeadlineWorkdays": 2
     },
     "items": [
       {
