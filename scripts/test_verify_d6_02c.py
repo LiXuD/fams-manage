@@ -366,6 +366,141 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertIn("warning", revoke_text)
         self.assertIn("immediate", revoke_text)
 
+    def test_account_authorization_models_controlled_scopes_and_sensitive_fields(self) -> None:
+        document = self.load_contract()
+        schemas = document["components"]["schemas"]
+        required_schemas = {
+            "DataScopeType",
+            "DataScopeGrant",
+            "SensitiveFieldPermission",
+            "SystemAccountAuthorization",
+            "SystemAccountAuthorizationReplaceRequest",
+            "SystemAccountAuthorizationRevokeRequest",
+        }
+        self.assertFalse(
+            sorted(required_schemas - set(schemas)),
+            f"authorization schemas remain RED: {sorted(required_schemas - set(schemas))}",
+        )
+        if required_schemas - set(schemas):
+            return
+
+        self.assertEqual(
+            {
+                "SELF",
+                "OWN_ORGANIZATION",
+                "OWN_ORGANIZATION_AND_DESCENDANTS",
+                "SPECIFIED_ORGANIZATIONS",
+                "SPECIFIED_WAREHOUSES",
+                "ENTERPRISE",
+            },
+            set(schemas["DataScopeType"]["enum"]),
+        )
+        self.assertTrue(
+            {
+                "EMPLOYEE_PHONE",
+                "ASSET_SERVICE_PHONE",
+                "BUSINESS_ATTACHMENT",
+                "REPAIR_COST",
+                "BULK_EXPORT",
+                "SCRAP_ATTACHMENT",
+                "SYSTEM_OPERATION_LOG",
+            }.issubset(set(schemas["SensitiveFieldPermission"]["enum"]))
+        )
+        data_scope = schemas["DataScopeGrant"]
+        self.assertEqual(
+            {"scopeType", "organizations", "warehouses"},
+            set(data_scope["required"]),
+        )
+        scope_text = json.dumps(data_scope, sort_keys=True).lower()
+        for phrase in ("specified_organizations", "specified_warehouses", "non-empty", "current"):
+            self.assertIn(phrase, scope_text)
+
+        authorization = schemas["SystemAccountAuthorization"]
+        self.assertTrue(
+            {
+                "id",
+                "systemAccountId",
+                "role",
+                "status",
+                "dataScopes",
+                "fieldPermissions",
+                "version",
+                "updatedAt",
+            }.issubset(set(authorization["required"]))
+        )
+
+        paths = document["paths"]
+        resource = "/system-accounts/{systemAccountId}/authorization/{role}"
+        revoke_resource = f"{resource}/revoke"
+        self.assertIn(resource, paths)
+        self.assertIn(revoke_resource, paths)
+        if resource not in paths or revoke_resource not in paths:
+            return
+        operations = {
+            operation["operationId"]: operation
+            for item in paths.values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        self.assertTrue(
+            {
+                "getSystemAccountAuthorization",
+                "replaceSystemAccountAuthorization",
+                "revokeSystemAccountAuthorization",
+            }.issubset(operations)
+        )
+        for operation_id in (
+            "getSystemAccountAuthorization",
+            "replaceSystemAccountAuthorization",
+            "revokeSystemAccountAuthorization",
+        ):
+            with self.subTest(operation=operation_id):
+                operation = operations[operation_id]
+                self.assertEqual(["SYSTEM_ADMIN"], operation["x-actor"]["roles"])
+                operation_text = json.dumps(operation, sort_keys=True).lower()
+                for phrase in ("fixed role", "current", "immediate"):
+                    self.assertIn(phrase, operation_text)
+
+        for operation_id in (
+            "replaceSystemAccountAuthorization",
+            "revokeSystemAccountAuthorization",
+        ):
+            operation = operations[operation_id]
+            self.assertTrue(operation.get("x-business-write"))
+            self.assertIn("auth_epoch", json.dumps(operation, sort_keys=True).lower())
+            refs = {
+                parameter.get("$ref", "").rsplit("/", 1)[-1]
+                for parameter in operation.get("parameters", [])
+            }
+            self.assertTrue({"IdempotencyKey", "CsrfToken", "IfMatchVersion"}.issubset(refs))
+
+        permission = schemas["PermissionSnapshot"]
+        self.assertTrue(
+            {"fieldPermissions", "authorizationVersion"}.issubset(permission["required"])
+        )
+        self.assertEqual(
+            "DataScopeGrant",
+            permission["properties"]["dataScopes"]["items"]["$ref"].rsplit("/", 1)[-1],
+        )
+        self.assertEqual(
+            "SensitiveFieldPermission",
+            permission["properties"]["fieldPermissions"]["items"]["$ref"].rsplit("/", 1)[-1],
+        )
+
+        examples = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted(EXAMPLES.glob("masterdata-account-authorization-*.json"))
+        ]
+        self.assertGreaterEqual(len(examples), 4)
+        self.assertEqual({"positive", "rejection"}, {value["kind"] for value in examples})
+        self.assertTrue(
+            {
+                "getSystemAccountAuthorization",
+                "replaceSystemAccountAuthorization",
+                "revokeSystemAccountAuthorization",
+            }.issubset({value["operationId"] for value in examples})
+        )
+
     def test_contract_has_unique_yaml_keys_and_operation_ids(self) -> None:
         import yaml
 

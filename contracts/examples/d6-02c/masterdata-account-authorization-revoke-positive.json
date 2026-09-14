@@ -1,0 +1,28 @@
+{
+  "operationId": "revokeSystemAccountAuthorization",
+  "kind": "positive",
+  "status": 200,
+  "scenario": "A system administrator revokes all configurable access for one auditor role.",
+  "requestSchema": "SystemAccountAuthorizationRevokeRequest",
+  "responseSchema": "SystemAccountAuthorization",
+  "pathParameters": {"systemAccountId": "701", "role": "AUDIT_READ_ONLY"},
+  "headers": {
+    "Idempotency-Key": "account-authorization-revoke-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "2"
+  },
+  "payload": {
+    "reason": "Audit assignment ended."
+  },
+  "response": {
+    "id": "801",
+    "systemAccountId": "701",
+    "role": "AUDIT_READ_ONLY",
+    "status": "REVOKED",
+    "dataScopes": [],
+    "fieldPermissions": [],
+    "version": 3,
+    "updatedAt": "2026-09-14T07:00:00Z"
+  },
+  "evidence": "Contract evidence only; runtime revocation and auth_epoch invalidation are not implemented."
+}

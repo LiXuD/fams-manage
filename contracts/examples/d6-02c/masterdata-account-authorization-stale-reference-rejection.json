@@ -1,0 +1,32 @@
+{
+  "operationId": "replaceSystemAccountAuthorization",
+  "kind": "rejection",
+  "status": 409,
+  "scenario": "The supplied organization version is no longer current.",
+  "requestSchema": "SystemAccountAuthorizationReplaceRequest",
+  "responseSchema": "ErrorResponse",
+  "pathParameters": {"systemAccountId": "701", "role": "AUDIT_READ_ONLY"},
+  "headers": {
+    "Idempotency-Key": "account-authorization-replace-0002",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "2"
+  },
+  "payload": {
+    "dataScopes": [
+      {
+        "scopeType": "SPECIFIED_ORGANIZATIONS",
+        "organizations": [{"id": "2001", "version": 3}],
+        "warehouses": []
+      }
+    ],
+    "fieldPermissions": ["SYSTEM_OPERATION_LOG"],
+    "reason": "Extend the current audit assignment."
+  },
+  "response": {
+    "code": "AUTHORIZATION_REFERENCE_VERSION_CONFLICT",
+    "message": "An authorization scope reference is stale.",
+    "requestId": "00000000-0000-4000-8000-000000000095",
+    "fieldErrors": {"dataScopes[0].organizations[0].version": "current version is 4"}
+  },
+  "evidence": "Contract evidence only; runtime reference-version enforcement is not implemented."
+}

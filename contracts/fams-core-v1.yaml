@@ -443,6 +443,36 @@ components:
     Role:
       type: string
       enum: [EMPLOYEE, DEPARTMENT_ASSET_MANAGER, ASSET_ADMIN, WAREHOUSE_OPERATOR, TECH_ASSISTANT, AUDIT_READ_ONLY, SYSTEM_ADMIN]
+    DataScopeType:
+      type: string
+      enum: [SELF, OWN_ORGANIZATION, OWN_ORGANIZATION_AND_DESCENDANTS, SPECIFIED_ORGANIZATIONS, SPECIFIED_WAREHOUSES, ENTERPRISE]
+      description: Controlled V1 vocabulary for general data access; it does not replace business-relation checks.
+    SensitiveFieldPermission:
+      type: string
+      enum: [EMPLOYEE_PHONE, ASSET_SERVICE_PHONE, BUSINESS_ATTACHMENT, REPAIR_COST, BULK_EXPORT, SCRAP_ATTACHMENT, SYSTEM_OPERATION_LOG]
+      description: Independently granted field or action capabilities; none is implied by record visibility.
+    DataScopeGrant:
+      type: object
+      additionalProperties: false
+      required: [scopeType, organizations, warehouses]
+      description: >-
+        One current general data scope. SPECIFIED_ORGANIZATIONS requires a non-empty
+        organizations array and an empty warehouses array; SPECIFIED_WAREHOUSES requires
+        the inverse. Other scope types require both arrays empty. Every referenced row and
+        version must be current when configured and is re-evaluated on every business read.
+      properties:
+        scopeType:
+          $ref: '#/components/schemas/DataScopeType'
+        organizations:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/OrganizationReference'
+        warehouses:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/CatalogReference'
     ReferenceStatus:
       type: string
       enum: [ACTIVE, DISABLED]
@@ -1154,7 +1184,12 @@ components:
           type: boolean
     PermissionSnapshot:
       type: object
-      required: [userId, permissions, dataScopes]
+      additionalProperties: false
+      required: [userId, permissions, dataScopes, fieldPermissions, authorizationVersion]
+      description: >-
+        Effective current permission projection after account, employee, role, data-scope,
+        business-relation, and sensitive-field checks. A saved or session-cached snapshot
+        never survives an authorizationVersion change.
       properties:
         userId:
           $ref: '#/components/schemas/Id'
@@ -1165,7 +1200,16 @@ components:
         dataScopes:
           type: array
           items:
-            type: string
+            $ref: '#/components/schemas/DataScopeGrant'
+        fieldPermissions:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/SensitiveFieldPermission'
+        authorizationVersion:
+          type: integer
+          format: int64
+          minimum: 0
     OrganizationReference:
       type: object
       required: [id, version]
@@ -1509,6 +1553,67 @@ components:
       properties:
         role:
           $ref: '#/components/schemas/Role'
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+    SystemAccountAuthorizationStatus:
+      type: string
+      enum: [ACTIVE, REVOKED]
+    SystemAccountAuthorization:
+      type: object
+      additionalProperties: false
+      required: [id, systemAccountId, role, status, dataScopes, fieldPermissions, version, updatedAt]
+      description: >-
+        Current controlled scope and sensitive-field configuration for one account-role
+        pair. Fixed role actions and fixed shared-pool visibility remain immutable.
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        systemAccountId:
+          $ref: '#/components/schemas/Id'
+        role:
+          $ref: '#/components/schemas/Role'
+        status:
+          $ref: '#/components/schemas/SystemAccountAuthorizationStatus'
+        dataScopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataScopeGrant'
+        fieldPermissions:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/SensitiveFieldPermission'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        updatedAt:
+          $ref: '#/components/schemas/Instant'
+    SystemAccountAuthorizationReplaceRequest:
+      type: object
+      additionalProperties: false
+      required: [dataScopes, fieldPermissions, reason]
+      properties:
+        dataScopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataScopeGrant'
+        fieldPermissions:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/SensitiveFieldPermission'
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+    SystemAccountAuthorizationRevokeRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
         reason:
           type: string
           minLength: 1
@@ -5158,6 +5263,147 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SystemAccount'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /system-accounts/{systemAccountId}/authorization/{role}:
+    parameters:
+      - $ref: '#/components/parameters/SystemAccountId'
+      - $ref: '#/components/parameters/RoleName'
+    get:
+      tags: [MasterData]
+      operationId: getSystemAccountAuthorization
+      summary: Read current controlled scopes and sensitive-field permissions for one account role.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-authorization-policy: >-
+        This resource configures only current general scopes and independent sensitive fields.
+        The fixed role action baseline remains immutable. Account, employee, or role invalidation
+        removes effective access immediately even when the historical configuration is retained.
+      responses:
+        '200':
+          description: Current account-role authorization configuration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemAccountAuthorization'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [MasterData]
+      operationId: replaceSystemAccountAuthorization
+      summary: Atomically replace controlled scopes and sensitive-field permissions for one account role.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: >-
+          If-Match-Version is zero only when no configuration exists; otherwise it equals
+          the current authorization version. The account and fixed role membership must be current.
+      x-transaction:
+        boundary: >-
+          Validate the current account, fixed role membership, allowed scope combinations,
+          organization and warehouse versions, then replace all active child grants, advance
+          authorization version and account auth_epoch, invalidate sessions immediately, and audit.
+      x-audit-event:
+        event: SYSTEM_ACCOUNT_AUTHORIZATION_REPLACED
+      x-error-codes:
+        - SYSTEM_ACCOUNT_NOT_FOUND
+        - SYSTEM_ACCOUNT_ROLE_NOT_GRANTED
+        - AUTHORIZATION_VERSION_CONFLICT
+        - AUTHORIZATION_SCOPE_INVALID
+        - AUTHORIZATION_REFERENCE_VERSION_CONFLICT
+        - AUTHORIZATION_REFERENCE_DISABLED
+        - AUTHORIZATION_FIELD_NOT_ALLOWED
+        - AUTHORIZATION_IDEMPOTENCY_CONFLICT
+      x-invariants: >-
+        Fixed role actions never become dynamically editable. ASSET_ADMIN all-submitted-request
+        visibility and WAREHOUSE_OPERATOR all-approved-request visibility remain fixed and are
+        unioned independently of general scopes. Field permission does not grant record access,
+        record access does not grant a sensitive field, and disabled referenced scope rows stop
+        contributing immediately. Replacement retains previous rows as revoked history.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SystemAccountAuthorizationReplaceRequest'
+      responses:
+        '200':
+          description: Replaced account-role authorization and invalidated stale sessions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemAccountAuthorization'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /system-accounts/{systemAccountId}/authorization/{role}/revoke:
+    parameters:
+      - $ref: '#/components/parameters/SystemAccountId'
+      - $ref: '#/components/parameters/RoleName'
+    post:
+      tags: [MasterData]
+      operationId: revokeSystemAccountAuthorization
+      summary: Revoke all configurable scopes and sensitive-field permissions for one account role.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the current ACTIVE authorization version.
+      x-transaction:
+        boundary: >-
+          Mark the current authorization and its child grants revoked, advance its version
+          and account auth_epoch, invalidate sessions immediately, preserve fixed role membership,
+          and write the audit event atomically.
+      x-audit-event:
+        event: SYSTEM_ACCOUNT_AUTHORIZATION_REVOKED
+      x-error-codes:
+        - SYSTEM_ACCOUNT_NOT_FOUND
+        - SYSTEM_ACCOUNT_ROLE_NOT_GRANTED
+        - AUTHORIZATION_NOT_FOUND
+        - AUTHORIZATION_ALREADY_REVOKED
+        - AUTHORIZATION_VERSION_CONFLICT
+        - AUTHORIZATION_IDEMPOTENCY_CONFLICT
+      x-invariants: >-
+        Revocation removes only configurable current scopes and sensitive fields. It does not
+        edit the fixed role baseline or silently remove role membership, but effective access
+        from this configuration ends immediately and historical grant facts remain auditable.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SystemAccountAuthorizationRevokeRequest'
+      responses:
+        '200':
+          description: Revoked authorization with empty current grants and retained history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemAccountAuthorization'
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
