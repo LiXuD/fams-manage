@@ -3329,6 +3329,103 @@ class DesignPackageEvidenceTest(unittest.TestCase):
         self.assertTrue(any(row["AC"] == "AC-10" for row in rows))
         self.assertTrue(any(row["AC"] == "AC-18" for row in rows))
 
+        domain_text = (DOCS / "D6-02C-domain-data-design.md").read_text(encoding="utf-8")
+        for marker in (
+            "BIGINT AUTO_INCREMENT",
+            "DATETIME(3)",
+            "active_guard",
+            "fams_asset_business_lock",
+            "fams_inbound_receipt",
+            "fams_inbound_decision",
+            "fams_inbound_processing_ownership",
+            "fams_inbound_acceptance",
+            "fams_idempotency_record",
+            "fams_asset_saved_filter",
+            "db/migration/product",
+            "runtime_compatibility",
+            "forward-only",
+            "response unknown",
+        ):
+            with self.subTest(domain_marker=marker):
+                self.assertIn(marker, domain_text)
+        self.assertIn("设计目标，不是已执行迁移", domain_text)
+
+        permission_text = (DOCS / "D6-02C-permission-error-contract.md").read_text(
+            encoding="utf-8"
+        )
+        for marker in (
+            "SYSTEM_ADMIN",
+            "不自动获得",
+            "Idempotency-Key",
+            "If-Match-Version",
+            "ASSET_SAVED_FILTER_NOT_FOUND",
+            "INBOUND_DECISION_ALREADY_EFFECTIVE",
+            "INBOUND_NOT_CURRENT_PROCESSOR",
+            "同键同载荷",
+            "响应未知",
+            "当前权限",
+        ):
+            with self.subTest(permission_marker=marker):
+                self.assertIn(marker, permission_text)
+
+        requirements = {row["PRD"] for row in rows if row["PRD"]}
+        self.assertTrue(
+            {
+                "PRD-BASE-001",
+                "PRD-BASE-002",
+                "PRD-BASE-003",
+                "PRD-BASE-004",
+                "PRD-BASE-005",
+                "PRD-BASE-006",
+                "PRD-ASSET-001",
+                "PRD-ASSET-003",
+                "PRD-ASSET-004",
+                "PRD-ASSET-005",
+                "PRD-ASSET-006",
+                "PRD-ASSET-007",
+                "PRD-IN-001",
+                "PRD-IN-002",
+            }.issubset(requirements)
+        )
+        pages = {row["Page"] for row in rows if row["Page"]}
+        self.assertTrue(
+            {"P01", "P02", "P03", "P04", "P05", "P08", "P09", "P10", "P11", "P13", "P24", "P25"}
+            .issubset(pages)
+        )
+        acceptance = {row["AC"] for row in rows if row["AC"]}
+        self.assertTrue({"AC-01", "AC-10", "AC-18", "AC-19"}.issubset(acceptance))
+        export_rows = [row for row in rows if row["PRD"] == "PRD-ASSET-005-export"]
+        self.assertEqual(1, len(export_rows))
+        self.assertIn("D6-25", export_rows[0]["verification"])
+
+    def test_real_contract_generator_override_and_verifier_entry_are_declared(self) -> None:
+        pom_text = (ROOT / "backend/pom.xml").read_text(encoding="utf-8")
+        self.assertIn("<openapi-generator.version>7.25.0</openapi-generator.version>", pom_text)
+        self.assertIn("<openapi.input-spec>", pom_text)
+        self.assertEqual(3, pom_text.count("<inputSpec>${openapi.input-spec}</inputSpec>"))
+
+        verifier = ROOT / "scripts/verify-d6-02c.py"
+        self.assertTrue(verifier.is_file(), "missing D6-02C executable verifier")
+        if not verifier.is_file():
+            return
+        verifier_text = verifier.read_text(encoding="utf-8")
+        for marker in (
+            "contracts/fams-core-v1.yaml",
+            "validate_examples",
+            "assert_all_local_refs",
+            "scripts/verify-d6-02a.py",
+            "scripts/verify-d6-02b.py",
+            "openapi.input-spec",
+            "determinism",
+            "git diff --check",
+        ):
+            with self.subTest(verifier_marker=marker):
+                self.assertIn(marker, verifier_text)
+        requirements = (ROOT / "scripts/requirements-d6-02c.txt").read_text(
+            encoding="utf-8"
+        ).splitlines()
+        self.assertEqual(["PyYAML==6.0.2"], [line for line in requirements if line.strip()])
+
 
 if __name__ == "__main__":
     unittest.main()
