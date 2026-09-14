@@ -40,6 +40,7 @@
     "items": [
       {
         "id": "7101",
+        "executionStatus": "PENDING",
         "asset": {"id": "10021", "version": 2},
         "assetSnapshot": {"assetCode": "FA-2026-000021", "assetName": "Latitude 7450"},
         "targetWarehouse": {"id": "5001", "version": 4},

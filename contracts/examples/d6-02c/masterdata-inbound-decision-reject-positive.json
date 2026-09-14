@@ -51,6 +51,7 @@
     "items": [
       {
         "id": "7111",
+        "executionStatus": "PENDING",
         "asset": {"id": "10031", "version": 1},
         "assetSnapshot": {"assetCode": "FA-2026-000031", "assetName": "ThinkPad T14"},
         "targetWarehouse": {"id": "5001", "version": 4},
