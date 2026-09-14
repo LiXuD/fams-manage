@@ -634,7 +634,6 @@ def compile_generated_typescript_in_isolation() -> None:
 
 def verify_real_contract_generation() -> None:
     override = f"-Dopenapi.input-spec={CONTRACT}"
-    assert_generated_outputs_absent()
     require_command(
         "real contract generation 1",
         ["./mvnw", "-pl", "backend", "clean", "generate-resources", "-DskipTests", override],
@@ -667,6 +666,7 @@ def verify_real_contract_generation() -> None:
 
 
 def main() -> None:
+    assert_generated_outputs_absent()
     document = load_contract()
     assert_all_local_refs(document)
     assert_unique_operation_ids(document)

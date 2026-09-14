@@ -106,7 +106,43 @@ class ContractEvidenceTest(unittest.TestCase):
 
 class GeneratedTreeTest(unittest.TestCase):
 
-    def test_generation_refuses_preexisting_outputs_without_deleting_them(self) -> None:
+    def test_main_refuses_preexisting_outputs_before_commands_or_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="d6-02c-main-preexisting-output-") as temporary:
+            root = Path(temporary)
+            java_target = root / "java-target"
+            typescript_target = root / "typescript-target"
+            java_marker = java_target / "ManualPatch.java"
+            typescript_marker = typescript_target / "StaleGeneratedModel.ts"
+            java_target.mkdir()
+            typescript_target.mkdir()
+            java_marker.write_text("// manual patch\n", encoding="utf-8")
+            typescript_marker.write_text("// stale generated model\n", encoding="utf-8")
+
+            with (
+                mock.patch.object(
+                    VERIFIER,
+                    "OWNED_GENERATED_TARGETS",
+                    (java_target, typescript_target),
+                ),
+                mock.patch.object(
+                    VERIFIER,
+                    "load_contract",
+                    wraps=VERIFIER.load_contract,
+                ) as load_contract,
+                mock.patch.object(VERIFIER, "require_command") as command,
+            ):
+                with self.assertRaises(VERIFIER.VerificationFailure):
+                    VERIFIER.main()
+
+            load_contract.assert_not_called()
+            command.assert_not_called()
+            self.assertEqual("// manual patch\n", java_marker.read_text(encoding="utf-8"))
+            self.assertEqual(
+                "// stale generated model\n",
+                typescript_marker.read_text(encoding="utf-8"),
+            )
+
+    def test_preflight_refuses_preexisting_outputs_without_deleting_them(self) -> None:
         with tempfile.TemporaryDirectory(prefix="d6-02c-preexisting-output-") as temporary:
             root = Path(temporary)
             java_target = root / "java-target"
@@ -124,12 +160,10 @@ class GeneratedTreeTest(unittest.TestCase):
                     "OWNED_GENERATED_TARGETS",
                     (java_target, typescript_target),
                 ),
-                mock.patch.object(VERIFIER, "require_command") as command,
             ):
                 with self.assertRaises(VERIFIER.VerificationFailure):
-                    VERIFIER.verify_real_contract_generation()
+                    VERIFIER.assert_generated_outputs_absent()
 
-            command.assert_not_called()
             self.assertEqual("// manual patch\n", java_marker.read_text(encoding="utf-8"))
             self.assertEqual(
                 "// stale generated model\n",
