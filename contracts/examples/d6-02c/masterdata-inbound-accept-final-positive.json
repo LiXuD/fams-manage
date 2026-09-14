@@ -1,0 +1,124 @@
+{
+  "operationId": "acceptInboundReceiptItem",
+  "kind": "positive",
+  "scenario": "last item",
+  "status": 200,
+  "actor": "warehouse.operator.17",
+  "pathParameters": {"receiptId": "7003", "itemId": "7121"},
+  "headers": {
+    "Idempotency-Key": "inbound-accept-item-7121-0001",
+    "X-CSRF-Token": "csrf-inbound-accept-123456",
+    "If-Match-Version": "4"
+  },
+  "payload": {
+    "assetVersion": 2,
+    "lockVersion": 0,
+    "observedAssetCode": "FA-2026-000041"
+  },
+  "response": {
+    "receipt": {
+      "id": "7003",
+      "receiptNumber": "IR-2026-000003",
+      "status": "COMPLETED",
+      "businessDate": "2026-09-14",
+      "createdBy": {"id": "17", "username": "warehouse.operator.17"},
+      "createdAt": "2026-09-14T02:35:00Z",
+      "submittedAt": "2026-09-14T03:02:00Z",
+      "adminDecisionDueAt": "2026-09-16T15:59:59.999Z",
+      "warehouseClaimDueAt": "2026-09-15T15:59:59.999Z",
+      "warehouseFirstExecutionDueAt": "2026-09-16T15:59:59.999Z",
+      "version": 5,
+      "parameterVersionId": "9001",
+      "snapshot": {
+        "parameterVersionId": "9001",
+        "businessDate": "2026-09-14",
+        "timezone": "Asia/Shanghai",
+        "adminDecisionDeadlineWorkdays": 2,
+        "warehouseClaimDeadlineWorkdays": 1,
+        "warehouseFirstExecutionDeadlineWorkdays": 2
+      },
+      "currentProcessor": {
+        "processor": {"id": "17", "username": "warehouse.operator.17"},
+        "claimedAt": "2026-09-14T03:10:00Z",
+        "ownershipVersion": 0,
+        "archivedAt": "2026-09-14T03:22:00Z"
+      },
+      "items": [
+        {
+          "id": "7121",
+          "executionStatus": "ACCEPTED",
+          "asset": {"id": "10041", "version": 1},
+          "assetSnapshot": {"assetCode": "FA-2026-000041", "assetName": "MacBook Air"},
+          "targetWarehouse": {"id": "5001", "version": 4},
+          "targetLocation": {"id": "5104", "version": 3},
+          "warehouseSnapshot": {"code": "WH-SH-01", "name": "Shanghai Main Warehouse"},
+          "locationSnapshot": {"code": "SH-F1-A04", "name": "Floor 1 A04"},
+          "acceptance": {
+            "id": "7302",
+            "receiptItemId": "7121",
+            "assetId": "10041",
+            "acceptedBy": {"id": "17", "username": "warehouse.operator.17"},
+            "acceptedAt": "2026-09-14T03:22:00Z",
+            "businessDate": "2026-09-14",
+            "receiptVersionBefore": 4,
+            "assetVersionBefore": 2,
+            "assetVersionAfter": 3,
+            "lockVersion": 0,
+            "observedAssetCode": "FA-2026-000041",
+            "storageCustody": {
+              "custodyType": "STORAGE",
+              "warehouse": {"id": "5001", "version": 4},
+              "location": {"id": "5104", "version": 3}
+            }
+          }
+        }
+      ]
+    },
+    "item": {
+      "id": "7121",
+      "executionStatus": "ACCEPTED",
+      "asset": {"id": "10041", "version": 1},
+      "assetSnapshot": {"assetCode": "FA-2026-000041", "assetName": "MacBook Air"},
+      "targetWarehouse": {"id": "5001", "version": 4},
+      "targetLocation": {"id": "5104", "version": 3},
+      "warehouseSnapshot": {"code": "WH-SH-01", "name": "Shanghai Main Warehouse"},
+      "locationSnapshot": {"code": "SH-F1-A04", "name": "Floor 1 A04"},
+      "acceptance": {
+        "id": "7302",
+        "receiptItemId": "7121",
+        "assetId": "10041",
+        "acceptedBy": {"id": "17", "username": "warehouse.operator.17"},
+        "acceptedAt": "2026-09-14T03:22:00Z",
+        "businessDate": "2026-09-14",
+        "receiptVersionBefore": 4,
+        "assetVersionBefore": 2,
+        "assetVersionAfter": 3,
+        "lockVersion": 0,
+        "observedAssetCode": "FA-2026-000041",
+        "storageCustody": {
+          "custodyType": "STORAGE",
+          "warehouse": {"id": "5001", "version": 4},
+          "location": {"id": "5104", "version": 3}
+        }
+      }
+    },
+    "asset": {
+      "id": "10041",
+      "assetCode": "FA-2026-000041",
+      "lifecycle": "IN_STOCK",
+      "exception": "NORMAL",
+      "cardStage": "ACTIVE",
+      "version": 3,
+      "currentCustody": {
+        "custodyType": "STORAGE",
+        "warehouse": {"id": "5001", "version": 4},
+        "location": {"id": "5104", "version": 3}
+      },
+      "inboundBusinessDate": "2026-09-14"
+    }
+  },
+  "activeBusinessLockAfter": false,
+  "processingOwnershipArchived": true,
+  "idempotencyReplayReturnsSameResult": true,
+  "evidence": "Contract evidence only; final completion and ownership archival are not runtime proof."
+}

@@ -1,0 +1,28 @@
+{
+  "operationId": "acceptInboundReceiptItem",
+  "kind": "rejection",
+  "status": 409,
+  "scenario": "asset update fails after acceptance validation",
+  "actor": "warehouse.operator.17",
+  "pathParameters": {"receiptId": "7001", "itemId": "7101"},
+  "headers": {
+    "Idempotency-Key": "inbound-accept-rollback-0001",
+    "X-CSRF-Token": "csrf-inbound-accept-123456",
+    "If-Match-Version": "4"
+  },
+  "payload": {"assetVersion": 3, "lockVersion": 0, "observedAssetCode": "FA-2026-000021"},
+  "error": {
+    "code": "INBOUND_ACCEPTANCE_ATOMIC_ROLLBACK",
+    "message": "Acceptance failed and every item effect was rolled back.",
+    "fieldErrors": {"assetId": "concurrent asset update"}
+  },
+  "persistedEffects": {
+    "itemAccepted": false,
+    "assetChanged": false,
+    "custodyCreated": false,
+    "businessLockReleased": false,
+    "receiptAdvanced": false,
+    "auditSuccessRecorded": false
+  },
+  "evidence": "Contract evidence only; rollback leaves the item retryable under the current state."
+}
