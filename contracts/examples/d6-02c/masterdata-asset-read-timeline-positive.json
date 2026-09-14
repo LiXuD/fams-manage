@@ -1,0 +1,29 @@
+{
+  "operationId": "listAssetTimeline",
+  "kind": "positive",
+  "status": 200,
+  "responseSchema": "PageAssetTimelineEvent",
+  "pathParameters": {"assetId": "10022"},
+  "query": {"eventType": "INBOUND_ACCEPTED", "page": 1, "pageSize": 20},
+  "payload": {},
+  "response": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 1,
+    "items": [
+      {
+        "id": "9401",
+        "eventType": "INBOUND_ACCEPTED",
+        "occurredAt": "2026-08-02T03:15:00Z",
+        "businessDate": "2026-08-02",
+        "summary": "Asset accepted into the North Campus warehouse.",
+        "sourceBusinessType": "INBOUND_RECEIPT",
+        "sourceBusinessId": "9201",
+        "sourceBusinessNumber": "IN-2026-000118",
+        "actor": {"id": "7002", "username": "warehouse.operator"},
+        "detailLink": "/inbound-receipts/9201"
+      }
+    ]
+  },
+  "evidence": "Contract evidence only; events are returned newest first and original-document navigation is re-authorized at request time."
+}

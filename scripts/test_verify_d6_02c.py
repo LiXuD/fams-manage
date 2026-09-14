@@ -2381,6 +2381,132 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertIn("formal", json.dumps(asset, sort_keys=True).lower())
         self.assertIn("unsettled", json.dumps(schemas["AssetBusinessSummary"], sort_keys=True).lower())
 
+    def test_asset_ledger_covers_prd_default_columns_and_advanced_filters(self) -> None:
+        document = self.load_contract()
+        operations = {
+            operation["operationId"]: operation
+            for item in document["paths"].values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        schemas = document["components"]["schemas"]
+        operation = operations["listAssets"]
+        refs = {
+            parameter.get("$ref", "").rsplit("/", 1)[-1]
+            for parameter in operation.get("parameters", [])
+        }
+        expected = {
+            "AssetUsageModeFilter",
+            "AssetUsingOrganizationFilter",
+            "AssetResponsibleEmployeeFilter",
+            "AssetDepartmentResponsibleEmployeeFilter",
+            "AssetCurrentProcessorFilter",
+            "AssetBusinessReferenceFilter",
+            "AssetInboundDateFromFilter",
+            "AssetInboundDateToFilter",
+            "AssetLastInventoryDateFromFilter",
+            "AssetLastInventoryDateToFilter",
+            "AssetBorrowOverdueFilter",
+            "AssetLongUninventoriedFilter",
+        }
+        self.assertTrue(expected.issubset(refs), f"missing ledger filters: {sorted(expected - refs)}")
+        filter_text = json.dumps(operation.get("x-filter-semantics", {}), sort_keys=True).lower()
+        for phrase in (
+            "owning organization",
+            "using organization",
+            "responsible employee",
+            "department responsible employee",
+            "current processor",
+            "business receipt",
+            "inclusive",
+            "borrow overdue",
+            "long uninventoried",
+            "current permission",
+        ):
+            self.assertIn(phrase, filter_text)
+
+        asset = schemas["Asset"]
+        for field in ("usageMode", "inboundBusinessDate", "lastInventoryBusinessDate"):
+            self.assertIn(field, asset["properties"])
+        self.assertEqual(
+            "UsageMode", asset["properties"]["usageMode"]["$ref"].rsplit("/", 1)[-1]
+        )
+        for field in ("inboundBusinessDate", "lastInventoryBusinessDate"):
+            self.assertEqual(
+                "BusinessDate", asset["properties"][field]["$ref"].rsplit("/", 1)[-1]
+            )
+        summary = schemas["AssetBusinessSummary"]
+        self.assertTrue(
+            {"currentBusinessId", "currentBusinessNumber", "currentBusinessType", "currentProcessor"}
+            .issubset(summary["properties"])
+        )
+
+    def test_asset_detail_declares_nine_sections_and_reverse_timeline_navigation(self) -> None:
+        document = self.load_contract()
+        paths = document["paths"]
+        operations = {
+            operation["operationId"]: operation
+            for item in paths.values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        self.assertIn("listAssetTimeline", operations)
+        if "listAssetTimeline" not in operations:
+            return
+        detail = operations["getAsset"]
+        self.assertEqual(
+            [
+                "BASIC_INFORMATION",
+                "CURRENT_CUSTODY",
+                "TAG_AND_ATTACHMENTS",
+                "USE_BORROW_TRANSFER",
+                "INVENTORY",
+                "REPAIR_AND_FACTORY",
+                "LOSS_AND_RECOVERY",
+                "SCRAP",
+                "OPERATION_LOG",
+            ],
+            detail["x-detail-sections"],
+        )
+        detail_text = json.dumps(detail, sort_keys=True).lower()
+        for phrase in ("later domain", "authorized", "sensitive", "original document"):
+            self.assertIn(phrase, detail_text)
+
+        timeline = operations["listAssetTimeline"]
+        self.assertEqual(
+            {"ASSET_ADMIN", "WAREHOUSE_OPERATOR", "AUDIT_READ_ONLY"},
+            set(timeline["x-actor"]["roles"]),
+        )
+        self.assertNotIn("SYSTEM_ADMIN", timeline["x-actor"]["roles"])
+        refs = {
+            parameter.get("$ref", "").rsplit("/", 1)[-1]
+            for parameter in timeline.get("parameters", [])
+        }
+        self.assertTrue({"Page", "PageSize", "AssetTimelineEventTypeFilter"}.issubset(refs))
+        self.assertEqual(
+            "PageAssetTimelineEvent",
+            timeline["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].rsplit("/", 1)[-1],
+        )
+        timeline_text = json.dumps(timeline, sort_keys=True).lower()
+        for phrase in ("reverse chronological", "original document", "authorized", "sensitive"):
+            self.assertIn(phrase, timeline_text)
+        event = document["components"]["schemas"]["AssetTimelineEvent"]
+        self.assertTrue(
+            {"id", "eventType", "occurredAt", "summary", "sourceBusinessType", "sourceBusinessId"}
+            .issubset(set(event["required"]))
+        )
+
+        values = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted(EXAMPLES.glob("masterdata-asset-read-*.json"))
+        ]
+        self.assertGreaterEqual(len(values), 3)
+        self.assertTrue(all(value.get("evidence") for value in values))
+        self.assertTrue(
+            {"listAssets", "getAsset", "listAssetTimeline"}
+            .issubset({value["operationId"] for value in values})
+        )
+
     def test_asset_state_vocabularies_match_prd_without_overloading_exception_states(self) -> None:
         document = self.load_contract()
         schemas = document["components"]["schemas"]

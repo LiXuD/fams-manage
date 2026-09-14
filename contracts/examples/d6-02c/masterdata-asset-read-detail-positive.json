@@ -1,0 +1,37 @@
+{
+  "operationId": "getAsset",
+  "kind": "positive",
+  "status": 200,
+  "responseSchema": "Asset",
+  "pathParameters": {"assetId": "10022"},
+  "payload": {},
+  "response": {
+    "id": "10022",
+    "assetCode": "FA-2026-000022",
+    "name": "Shared Projector",
+    "category": {"id": "4102", "version": 1},
+    "model": "EB-L630U",
+    "organization": {"id": "2001", "version": 4},
+    "usageMode": "SHARED",
+    "lifecycle": "IN_USE",
+    "exception": "NORMAL",
+    "cardStage": "ACTIVE",
+    "currentCustody": {
+      "custodyType": "SHARED",
+      "usingOrganization": {"id": "2003", "version": 2},
+      "departmentResponsibleEmployee": {"id": "3010", "version": 5},
+      "location": {"id": "6010", "version": 4}
+    },
+    "openBusinessSummary": {
+      "unsettledBusinessCount": 0,
+      "overdueBusinessCount": 0
+    },
+    "inboundBusinessDate": "2026-08-02",
+    "lastInventoryBusinessDate": "2026-09-10",
+    "version": 11,
+    "createdBusinessDate": "2026-07-28",
+    "createdAt": "2026-07-28T06:00:00Z",
+    "parameterVersionId": "9098"
+  },
+  "evidence": "Contract evidence only; later business tabs and sensitive fields remain permission-gated and runtime detail assembly is not implemented."
+}
