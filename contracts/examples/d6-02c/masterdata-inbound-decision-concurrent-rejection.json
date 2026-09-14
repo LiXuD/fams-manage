@@ -1,0 +1,27 @@
+{
+  "operationId": "decideInboundReceipt",
+  "kind": "rejection",
+  "status": 409,
+  "scenario": "another administrator won the receipt-version race",
+  "actor": "asset.admin.33",
+  "pathParameters": {"receiptId": "7001"},
+  "headers": {
+    "Idempotency-Key": "inbound-decision-concurrent-0001",
+    "X-CSRF-Token": "csrf-inbound-decision-123456",
+    "If-Match-Version": "2"
+  },
+  "payload": {"decision": "REJECTED", "reason": "Competing decision."},
+  "error": {
+    "code": "INBOUND_DECISION_ALREADY_EFFECTIVE",
+    "message": "Another administrator decision is already effective.",
+    "fieldErrors": {"receiptId": "actual receipt version is 3"}
+  },
+  "actualEffectiveDecision": {
+    "id": "7201",
+    "result": "APPROVED",
+    "decidedBy": {"id": "31", "username": "asset.admin.31"},
+    "decidedAt": "2026-09-14T03:05:00Z"
+  },
+  "duplicateWarehouseTodoCreated": false,
+  "evidence": "Contract evidence only; concurrent decision uniqueness is not runtime implemented."
+}

@@ -1540,7 +1540,7 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertIn("login", operations)
         self.assertIn("createAsset", operations)
         self.assertIn("submitInboundReceipt", operations)
-        self.assertNotIn("decideInboundReceipt", operations)
+        self.assertIn("decideInboundReceipt", operations)
 
     def test_inbound_draft_receipt_contract_declares_scoped_reads_and_mutations(self) -> None:
         document = self.load_contract()
@@ -1891,6 +1891,187 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertFalse(positive_cancel["activeLockAfter"])
         conflict = next(value for value in cancel_values if value["kind"] == "rejection")
         self.assertIn("decision", json.dumps(conflict, sort_keys=True).lower())
+
+    def test_inbound_single_admin_decision_contract_is_atomic_and_scope_preserving(self) -> None:
+        document = self.load_contract()
+        operations = {
+            operation["operationId"]: operation
+            for item in document["paths"].values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        self.assertIn("decideInboundReceipt", operations)
+        if "decideInboundReceipt" not in operations:
+            return
+        operation = operations["decideInboundReceipt"]
+        self.assertEqual(["ASSET_ADMIN"], operation["x-actor"]["roles"])
+        self.assertTrue(operation.get("x-business-write"))
+        self.assertTrue(operation.get("x-version"))
+        self.assertTrue(operation.get("x-transaction"))
+        self.assertTrue(operation.get("x-audit-event"))
+        self.assertTrue(
+            {400, 401, 403, 404, 409}.issubset(set(operation["x-required-error-statuses"]))
+        )
+        refs = {
+            parameter.get("$ref", "").rsplit("/", 1)[-1]
+            for parameter in operation.get("parameters", [])
+        }
+        self.assertTrue({"IdempotencyKey", "CsrfToken", "IfMatchVersion"}.issubset(refs))
+        request_ref = operation["requestBody"]["content"]["application/json"]["schema"]["$ref"]
+        self.assertEqual("InboundDecisionRequest", request_ref.rsplit("/", 1)[-1])
+        text = json.dumps(operation, sort_keys=True).lower()
+        for phrase in (
+            "all asset administrators",
+            "view",
+            "does not reserve",
+            "first legal decision",
+            "one effective",
+            "receipt version",
+            "actual effective decision",
+            "approved scope",
+            "waiting_warehouse_claim",
+            "rejected",
+            "release",
+            "pending_inbound",
+            "draft",
+            "current processor",
+            "dual-role",
+            "does not claim",
+            "idempotent",
+        ):
+            self.assertIn(phrase, text)
+
+    def test_inbound_decision_schemas_and_examples_capture_unique_outcomes(self) -> None:
+        document = self.load_contract()
+        schemas = document["components"]["schemas"]
+        required = {
+            "InboundDecisionRequest",
+            "InboundApproveRequest",
+            "InboundRejectRequest",
+            "InboundDecision",
+            "InboundApprovalScope",
+        }
+        missing = sorted(required - set(schemas))
+        self.assertFalse(missing, f"inbound decision schemas remain RED: {missing}")
+        if missing:
+            return
+        request = schemas["InboundDecisionRequest"]
+        refs = {
+            item["$ref"].rsplit("/", 1)[-1]
+            for item in request["oneOf"]
+        }
+        self.assertEqual({"InboundApproveRequest", "InboundRejectRequest"}, refs)
+        self.assertEqual(["APPROVED"], schemas["InboundApproveRequest"]["properties"]["decision"]["enum"])
+        self.assertEqual(["REJECTED"], schemas["InboundRejectRequest"]["properties"]["decision"]["enum"])
+        self.assertIn("reason", schemas["InboundRejectRequest"]["required"])
+        decision = schemas["InboundDecision"]
+        self.assertTrue(
+            {"id", "result", "decidedReceiptVersion", "decidedBy", "decidedAt", "scope"}
+            .issubset(set(decision["required"]))
+        )
+        receipt = schemas["InboundReceipt"]
+        self.assertIn("decision", receipt["properties"])
+        self.assertIn("warehouseClaimDueAt", receipt["properties"])
+        snapshot = schemas["InboundReceiptSnapshot"]
+        self.assertTrue(
+            {"warehouseClaimDeadlineWorkdays", "warehouseFirstExecutionDeadlineWorkdays"}
+            .issubset(set(snapshot["required"]))
+        )
+        values = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted(EXAMPLES.glob("masterdata-inbound-decision-*.json"))
+        ]
+        self.assertGreaterEqual(len(values), 3)
+        self.assertTrue(all(value.get("evidence") for value in values))
+        self.assertEqual({"positive", "rejection"}, {value["kind"] for value in values})
+        approved = next(value for value in values if value.get("response", {}).get("status") == "WAITING_WAREHOUSE_CLAIM")
+        rejected = next(value for value in values if value.get("response", {}).get("status") == "REJECTED")
+        conflict = next(value for value in values if value["kind"] == "rejection")
+        self.assertTrue(approved["assetAfter"]["businessLockRetained"])
+        self.assertEqual("PENDING_INBOUND", approved["assetAfter"]["cardStage"])
+        self.assertIsNone(approved["response"].get("currentProcessor"))
+        self.assertFalse(rejected["assetAfter"]["businessLockRetained"])
+        self.assertEqual("DRAFT", rejected["assetAfter"]["cardStage"])
+        self.assertIn("actualEffectiveDecision", conflict)
+
+    def test_inbound_claim_contract_freezes_explicit_whole_receipt_ownership(self) -> None:
+        document = self.load_contract()
+        operations = {
+            operation["operationId"]: operation
+            for item in document["paths"].values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        self.assertIn("claimInboundReceipt", operations)
+        if "claimInboundReceipt" not in operations:
+            return
+        operation = operations["claimInboundReceipt"]
+        self.assertEqual(["WAREHOUSE_OPERATOR"], operation["x-actor"]["roles"])
+        self.assertTrue(operation.get("x-business-write"))
+        self.assertTrue(operation.get("x-version"))
+        self.assertTrue(operation.get("x-transaction"))
+        self.assertTrue(operation.get("x-audit-event"))
+        refs = {
+            parameter.get("$ref", "").rsplit("/", 1)[-1]
+            for parameter in operation.get("parameters", [])
+        }
+        self.assertTrue({"IdempotencyKey", "CsrfToken", "IfMatchVersion"}.issubset(refs))
+        text = json.dumps(operation, sort_keys=True).lower()
+        for phrase in (
+            "explicit",
+            "view",
+            "does not claim",
+            "creator",
+            "must claim",
+            "first legal",
+            "whole receipt",
+            "one current processor",
+            "other warehouse operators",
+            "read-only",
+            "actual processor",
+            "business locks unchanged",
+            "approved scope unchanged",
+            "restart",
+            "logout",
+            "timeout",
+            "no automatic release",
+            "idempotent",
+        ):
+            self.assertIn(phrase, text)
+
+    def test_inbound_claim_schema_and_examples_preserve_processing_ownership(self) -> None:
+        document = self.load_contract()
+        schemas = document["components"]["schemas"]
+        self.assertIn("InboundProcessingOwnership", schemas)
+        if "InboundProcessingOwnership" not in schemas:
+            return
+        ownership = schemas["InboundProcessingOwnership"]
+        self.assertEqual(
+            {"processor", "claimedAt", "ownershipVersion"}, set(ownership["required"])
+        )
+        receipt = schemas["InboundReceipt"]
+        self.assertEqual(
+            "InboundProcessingOwnership",
+            receipt["properties"]["currentProcessor"]["$ref"].rsplit("/", 1)[-1],
+        )
+        self.assertIn("warehouseFirstExecutionDueAt", receipt["properties"])
+        values = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted(EXAMPLES.glob("masterdata-inbound-claim-*.json"))
+        ]
+        self.assertGreaterEqual(len(values), 2)
+        positive = next(value for value in values if value["kind"] == "positive")
+        conflict = next(value for value in values if value["kind"] == "rejection")
+        self.assertEqual("WAREHOUSE_PROCESSING", positive["response"]["status"])
+        self.assertEqual(
+            positive["actor"], positive["response"]["currentProcessor"]["processor"]["username"]
+        )
+        self.assertTrue(positive["creatorStillHadToClaim"])
+        self.assertTrue(positive["businessLocksUnchanged"])
+        self.assertEqual(
+            positive["response"]["currentProcessor"]["processor"],
+            conflict["actualProcessor"]["processor"],
+        )
 
     def test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors(self) -> None:
         document = self.load_contract()
