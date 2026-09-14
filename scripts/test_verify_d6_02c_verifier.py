@@ -74,6 +74,7 @@ class ContractEvidenceTest(unittest.TestCase):
         VERIFIER.assert_unique_operation_ids(document)
         VERIFIER.assert_write_contracts(document)
         VERIFIER.validate_examples(document)
+        VERIFIER.assert_traceability(document)
 
     def test_missing_local_ref_is_rejected(self) -> None:
         document = {"broken": {"$ref": "#/components/schemas/Missing"}, "components": {"schemas": {}}}
@@ -84,6 +85,22 @@ class ContractEvidenceTest(unittest.TestCase):
         VERIFIER.assert_pyyaml_version("6.0.2")
         with self.assertRaises(VERIFIER.VerificationFailure):
             VERIFIER.assert_pyyaml_version("6.0.3")
+
+    def test_traceability_rejects_unknown_contract_symbols(self) -> None:
+        document = VERIFIER.load_contract()
+        row = {
+            "PRD": "PRD-TEST",
+            "Page": "P01",
+            "AC": "",
+            "operationId": "unknownOperation",
+            "schema": "UnknownSchema",
+            "table": "fams_missing_table",
+            "verification": "test",
+            "status": "DESIGNED",
+            "notes": "negative fixture",
+        }
+        with self.assertRaises(VERIFIER.VerificationFailure):
+            VERIFIER.assert_traceability_row(document, row, "", 2)
 
 
 class GeneratedTreeTest(unittest.TestCase):

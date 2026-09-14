@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 import os
@@ -22,6 +23,9 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "contracts/fams-core-v1.yaml"
 EXAMPLES = ROOT / "contracts/examples/d6-02c"
+DOMAIN_DESIGN = ROOT / "docs/development/D6-02C-domain-data-design.md"
+PERMISSION_CONTRACT = ROOT / "docs/development/D6-02C-permission-error-contract.md"
+TRACEABILITY = ROOT / "docs/development/D6-02C-traceability.csv"
 JAVA_TARGET = ROOT / "backend/target"
 JAVA_GENERATED = JAVA_TARGET / "generated-sources/openapi/java"
 TS_TARGET = ROOT / "packages/api-types/target"
@@ -373,6 +377,76 @@ def validate_examples(document: dict[str, Any]) -> None:
             )
 
 
+def split_traceability_symbols(value: str) -> list[str]:
+    return [symbol.strip() for symbol in value.split(";") if symbol.strip()]
+
+
+def assert_traceability_row(
+    document: dict[str, Any],
+    row: dict[str, str],
+    domain_text: str,
+    row_number: int,
+) -> None:
+    operation_ids = set(operations(document))
+    schema_names = set(document.get("components", {}).get("schemas", {}))
+    deferred = row.get("status", "").startswith("DEFERRED_")
+
+    if not row.get("PRD") or not row.get("Page") or not row.get("verification"):
+        raise VerificationFailure(f"traceability row {row_number} lacks a required value")
+    for symbol in split_traceability_symbols(row.get("operationId", "")):
+        if symbol == "NOT_DEFINED" and deferred:
+            continue
+        if symbol not in operation_ids:
+            raise VerificationFailure(
+                f"traceability row {row_number} has unknown operationId: {symbol}"
+            )
+    for symbol in split_traceability_symbols(row.get("schema", "")):
+        if symbol == "NOT_DEFINED" and deferred:
+            continue
+        if symbol not in schema_names:
+            raise VerificationFailure(
+                f"traceability row {row_number} has unknown schema: {symbol}"
+            )
+    for symbol in split_traceability_symbols(row.get("table", "")):
+        if symbol == "NOT_DEFINED" and deferred:
+            continue
+        if symbol not in domain_text:
+            raise VerificationFailure(
+                f"traceability row {row_number} has undocumented table: {symbol}"
+            )
+    if deferred and "D6-25" not in row.get("verification", ""):
+        raise VerificationFailure(
+            f"traceability row {row_number} has no deferred verification owner"
+        )
+
+
+def assert_traceability(document: dict[str, Any]) -> None:
+    for path in (DOMAIN_DESIGN, PERMISSION_CONTRACT, TRACEABILITY):
+        if not path.is_file():
+            raise VerificationFailure(f"missing design evidence: {path}")
+    with TRACEABILITY.open(encoding="utf-8", newline="") as source:
+        reader = csv.DictReader(source)
+        required = {
+            "PRD",
+            "Page",
+            "AC",
+            "operationId",
+            "schema",
+            "table",
+            "verification",
+            "status",
+            "notes",
+        }
+        if reader.fieldnames is None or not required.issubset(reader.fieldnames):
+            raise VerificationFailure("traceability CSV headers are incomplete")
+        rows = list(reader)
+    if len(rows) < 20:
+        raise VerificationFailure("traceability CSV must contain at least 20 mappings")
+    domain_text = DOMAIN_DESIGN.read_text(encoding="utf-8")
+    for row_number, row in enumerate(rows, start=2):
+        assert_traceability_row(document, row, domain_text, row_number)
+
+
 def manifest(root: Path) -> dict[str, str]:
     if not root.is_dir():
         raise VerificationFailure(f"generated root is missing: {root}")
@@ -585,6 +659,7 @@ def main() -> None:
     assert_unique_operation_ids(document)
     assert_write_contracts(document)
     validate_examples(document)
+    assert_traceability(document)
     assert_generator_pom()
     print(
         f"[static contract] operations={len(operations(document))}, "

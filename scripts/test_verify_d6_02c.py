@@ -3323,7 +3323,8 @@ class DesignPackageEvidenceTest(unittest.TestCase):
         if missing:
             return
 
-        rows = list(csv.DictReader((DOCS / "D6-02C-traceability.csv").open(encoding="utf-8")))
+        with (DOCS / "D6-02C-traceability.csv").open(encoding="utf-8") as traceability:
+            rows = list(csv.DictReader(traceability))
         self.assertGreaterEqual(len(rows), 20)
         self.assertTrue({"PRD", "Page", "AC", "operationId", "schema", "table", "verification"}.issubset(rows[0]))
         self.assertTrue(any(row["AC"] == "AC-10" for row in rows))
