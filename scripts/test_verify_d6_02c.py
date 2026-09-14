@@ -501,6 +501,34 @@ class DesignPackageContractTest(unittest.TestCase):
             }.issubset({value["operationId"] for value in examples})
         )
 
+    def test_account_authorization_has_relational_persistence_and_invalidation_rules(self) -> None:
+        domain_text = (DOCS / "D6-02C-domain-data-design.md").read_text(encoding="utf-8")
+        permission_text = (
+            DOCS / "D6-02C-permission-error-contract.md"
+        ).read_text(encoding="utf-8")
+        for table in (
+            "fams_account_authorization",
+            "fams_account_data_scope",
+            "fams_account_scope_organization",
+            "fams_account_scope_warehouse",
+            "fams_account_field_permission",
+        ):
+            self.assertIn(table, domain_text)
+        for phrase in (
+            "auth_epoch",
+            "固定角色动作不可编辑",
+            "停用仓库立即不再贡献有效范围",
+            "记录可见不推导字段权限",
+        ):
+            self.assertIn(phrase, domain_text)
+        for phrase in (
+            "账号 + 已授予角色",
+            "replaceSystemAccountAuthorization",
+            "revokeSystemAccountAuthorization",
+            "记录可见与敏感字段授权互不推导",
+        ):
+            self.assertIn(phrase, permission_text)
+
     def test_contract_has_unique_yaml_keys_and_operation_ids(self) -> None:
         import yaml
 

@@ -33,6 +33,9 @@ erDiagram
     FAMS_ORGANIZATION ||--o{ FAMS_EMPLOYEE : contains
     FAMS_EMPLOYEE ||--o| FAMS_SYSTEM_ACCOUNT : binds
     FAMS_SYSTEM_ACCOUNT ||--o{ FAMS_ACCOUNT_ROLE : owns
+    FAMS_SYSTEM_ACCOUNT ||--o{ FAMS_ACCOUNT_AUTHORIZATION : configures
+    FAMS_ACCOUNT_AUTHORIZATION ||--o{ FAMS_ACCOUNT_DATA_SCOPE : scopes
+    FAMS_ACCOUNT_AUTHORIZATION ||--o{ FAMS_ACCOUNT_FIELD_PERMISSION : grants
     FAMS_ASSET_CATEGORY ||--o{ FAMS_ASSET : classifies
     FAMS_WAREHOUSE ||--o{ FAMS_LOCATION : contains
     FAMS_ASSET ||--o{ FAMS_ASSET_TAG_HISTORY : rotates
@@ -82,7 +85,17 @@ erDiagram
 | `fams_employee` | `employee_no_normalized`、`name`、`organization_id`、`mobile_ciphertext`、`mobile_lookup_hash`、`status` | 工号唯一；手机号密文保存、HMAC 摘要等值查找；`idx_employee_org_status`；停用不删除历史身份 |
 | `fams_system_account` | `employee_id`、`username_normalized`、`password_hash`、`status`、`initial_password_required`、`failed_attempts`、`locked_until`、`auth_epoch` | 员工和用户名各自唯一；停用、锁定、改密、角色变化更新 `auth_epoch` 使旧会话失效 |
 | `fams_account_role` | `account_id`、`role_code`、`granted_at`、`granted_by` | `uk_account_role(account_id,role_code)`；角色代码与 OpenAPI `Role` 一致 |
+| `fams_account_authorization` | `account_id`、`role_code`、`authorization_status`、`version`、`changed_by`、`change_reason`、`updated_at` | `uk_account_authorization(account_id,role_code)`；仅配置一般范围和独立字段权限；固定角色动作不可编辑；撤销保留历史状态 |
+| `fams_account_data_scope` | `authorization_id`、`scope_type`、`scope_status`、`version` | `uk_account_scope_type(authorization_id,scope_type)`；代码限定为 `DataScopeType`；指定范围的明细由下列关联表承接 |
+| `fams_account_scope_organization` | `data_scope_id`、`organization_id`、`organization_version_at_grant` | `uk_account_scope_org(data_scope_id,organization_id)`；仅用于 `SPECIFIED_ORGANIZATIONS`，保留授予时版本并在每次读取时重验当前状态 |
+| `fams_account_scope_warehouse` | `data_scope_id`、`warehouse_id`、`warehouse_version_at_grant` | `uk_account_scope_warehouse(data_scope_id,warehouse_id)`；仅用于 `SPECIFIED_WAREHOUSES`，停用仓库立即不再贡献有效范围 |
+| `fams_account_field_permission` | `authorization_id`、`permission_code`、`permission_status`、`granted_at`、`revoked_at` | `uk_account_field_permission(authorization_id,permission_code)`；代码限定为 `SensitiveFieldPermission`；记录可见不推导字段权限 |
 | `fams_security_event` | `account_id`、`event_type`、`request_id`、`occurred_at`、`detail_json` | `idx_security_account_time`、`idx_security_request`；详情不得写明文密码或完整 Cookie |
+
+授权配置按账号与已授予角色成对保存。更新或撤销时在同一事务替换当前子项、增加授权版本及
+`fams_system_account.auth_epoch`、使旧会话失效并记录审计。角色撤销、账号/员工停用立即使整组配置无效；
+组织或仓库停用时对应指定范围立即停止贡献访问，但历史授予事实不物理删除。固定的资产管理员全部已提交
+申请和库管全部已批准申请能力独立求并集，不能被一般范围误过滤，也不能借一般范围扩大动作权限。
 
 员工停用与账号停用在一个事务内更新；资产责任清理通过异常清单和后续正式业务完成，不能因此延迟访问撤销。
 
