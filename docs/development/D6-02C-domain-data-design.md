@@ -1,6 +1,6 @@
 # D6-02C 领域与数据设计
 
-> 状态：`REVIEW_PENDING` · 版本：V1.0 · 日期：2026-09-14  
+> 状态：`REVIEW_PENDING` · 版本：V1.1 · 日期：2026-09-14
 > 权威业务输入：PRD V1.5；权威接口输入：`contracts/fams-core-v1.yaml`。  
 > 本文是 **设计目标，不是已执行迁移**。当前没有产品表、产品 Flyway 迁移或业务运行证据。
 
@@ -129,29 +129,96 @@ erDiagram
 
 ### 5.1 资产主表
 
-`fams_asset` 是当前资产快照，关键列如下：
+`fams_asset` 是当前资产事实，不把计划入库目标、正式保管、开放业务摘要或附件塞入同一 JSON。
+以下列定义直接作为 D6-06 产品迁移输入；未标 `NULL` 的列不得保存空值。
 
-| 列组 | 列与规则 |
+| 列 | MySQL 类型 | 空值、来源与约束 |
+|---|---|---|
+| `id` | `BIGINT NOT NULL AUTO_INCREMENT` | signed 主键；API 输出十进制字符串 |
+| `asset_code` | `VARCHAR(128) NOT NULL` | 服务端编号；全企业永久唯一，取消后也不复用 |
+| `name` | `VARCHAR(256) NOT NULL` | 建草稿唯一必填业务字段；去除首尾空白后至少 1 字符 |
+| `category_id` | `BIGINT NULL` | FK `fams_asset_category.id`；提交入库前必须非空且启用 |
+| `model` | `VARCHAR(128) NULL` | OpenAPI `model` |
+| `unit` | `VARCHAR(32) NULL` | 提交入库前必须非空 |
+| `owning_organization_id` | `BIGINT NULL` | FK `fams_organization.id`；提交入库前必须非空且启用 |
+| `planned_inbound_warehouse_id` | `BIGINT NULL` | FK `fams_warehouse.id`；草稿可空，提交前必须与计划位置同时有效 |
+| `planned_inbound_location_id` | `BIGINT NULL` | FK `fams_location.id`；草稿可空，且必须属于计划仓库 |
+| `brand_id` | `BIGINT NULL` | FK `fams_brand.id`；可空，非空时写入前重验当前版本和状态 |
+| `manufacturer_id` | `BIGINT NULL` | FK `fams_manufacturer.id`；可空，非空时写入前重验当前版本和状态 |
+| `serial_number` | `VARCHAR(128) NULL` | 显示值；空字符串规范化为 `NULL` |
+| `serial_number_normalized` | `VARCHAR(128) NULL` | 非空时全企业唯一；不从客户端单独接收 |
+| `acquisition_date` | `DATE NULL` | OpenAPI `acquisitionDate`，按业务日期原样保存 |
+| `warranty_expiry_date` | `DATE NULL` | OpenAPI `warrantyExpiryDate`，不得做时区换日 |
+| `service_provider` | `VARCHAR(256) NULL` | OpenAPI `serviceProvider` |
+| `service_contact` | `VARCHAR(128) NULL` | OpenAPI `serviceContact` |
+| `service_phone_ciphertext` | `VARBINARY(512) NULL` | 加密保存；只有 `ASSET_SERVICE_PHONE` 授权时解密输出 |
+| `source_text` | `VARCHAR(128) NULL` | OpenAPI `source`，与复制来源主键分离 |
+| `notes` | `VARCHAR(2000) NULL` | OpenAPI `notes` |
+| `extension_values_json` | `JSON NULL` | 只保存通过分类模板校验的扩展值，不保存主键或状态 |
+| `lifecycle_status` | `VARCHAR(40) NOT NULL` | `AssetLifecycle`；新卡固定 `WAITING_INBOUND` |
+| `exception_status` | `VARCHAR(40) NOT NULL` | `AssetException`；新卡固定 `NORMAL` |
+| `card_stage` | `VARCHAR(40) NOT NULL` | `DRAFT/PENDING_INBOUND/ACTIVE/CANCELLED` |
+| `custody_type` | `VARCHAR(20) NULL` | `STORAGE/PERSONAL/SHARED`；正式入库前必须为 `NULL` |
+| `storage_warehouse_id` | `BIGINT NULL` | 仅 `STORAGE` 使用；FK `fams_warehouse.id` |
+| `current_location_id` | `BIGINT NULL` | 正式保管位置；FK `fams_location.id`，不是计划位置 |
+| `using_organization_id` | `BIGINT NULL` | 仅 `PERSONAL/SHARED` 使用；FK `fams_organization.id` |
+| `responsible_employee_id` | `BIGINT NULL` | 仅 `PERSONAL` 使用；FK `fams_employee.id` |
+| `department_responsible_employee_id` | `BIGINT NULL` | 仅 `SHARED` 使用；FK `fams_employee.id` |
+| `created_business_date` | `DATE NOT NULL` | 建卡时按冻结企业时区从服务端 `Clock` 取得 |
+| `inbound_business_date` | `DATE NULL` | 成功验收入库时写入；正式入库前为 `NULL` |
+| `last_inventory_business_date` | `DATE NULL` | 最近一次有效盘点业务日期；D6-06 只读映射，后续盘点更新 |
+| `parameter_version_id` | `BIGINT NOT NULL` | FK `fams_business_parameter_version.id`；建卡后不改写 |
+| `creator_account_id` | `BIGINT NOT NULL` | FK `fams_system_account.id`；草稿创建关系的稳定主体 |
+| `creator_username_snapshot` | `VARCHAR(128) NOT NULL` | 建卡时账号名快照；账号改名不重写历史显示 |
+| `source_asset_id` | `BIGINT NULL` | 复制建卡来源；FK 本表；只作追溯，不继承状态或保管 |
+| `cancelled_at` | `DATETIME(3) NULL` | 卡片取消事实；UTC，未取消为 `NULL` |
+| `cancellation_reason` | `VARCHAR(500) NULL` | 取消时必填，其他阶段为 `NULL` |
+| `version` | `BIGINT NOT NULL DEFAULT 0` | 所有资产写入使用 `WHERE id=? AND version=?` |
+| `created_at` / `updated_at` | `DATETIME(3) NOT NULL` | UTC；应用显式写入，精度到毫秒 |
+| `created_by` / `updated_by` | `BIGINT NOT NULL` | 实际账号；与历史显示快照分开 |
+
+计划入库目标与正式保管列物理分离：`planned_inbound_*` 只表达待入库意图；验收事务把已批准目标写入
+`storage_warehouse_id/current_location_id`，但不把二者改名或复用。草稿和 `PENDING_INBOUND` 的全部正式
+保管列必须为 `NULL`。同一行 `CHECK` 固定三种保管组合：`STORAGE` 只允许仓库+位置；`PERSONAL` 只允许
+使用组织+个人责任人+位置；`SHARED` 只允许使用组织+部门责任人+位置。跨表“位置属于仓库”和引用启用状态
+在短事务内锁定并校验。
+
+<!-- ASSET_API_MAPPING_BEGIN -->
+
+OpenAPI `Asset` 到事实来源的完整映射：
+
+| API 字段 | 事实来源 |
 |---|---|
-| 身份 | `asset_code` 全企业唯一且非空；`serial_number_normalized` 可空、非空时唯一；`source_asset_id` 仅记录复制来源 |
-| 基础资料 | `name`、`category_id`、`brand_id`、`manufacturer_id`、`specification`、`unit`、`extension_values_json` |
-| 状态 | `card_stage`：`DRAFT/PENDING_INBOUND/ACTIVE/CANCELLED`；`lifecycle_status` 与 `exception_status` 使用 OpenAPI 枚举 |
-| 归属与保管 | `owning_organization_id`、`usage_mode`、`using_organization_id`、`user_employee_id`、`shared_custodian_employee_id`、`warehouse_id`、`location_id` |
-| 时间 | `inbound_date DATE`、`last_inventory_at DATETIME(3)`；事件时刻另写时间线 |
-| 并发 | 公共 `version`；所有修改使用 `WHERE id=? AND version=?`，影响行数不是 1 即冲突 |
+| `id`、`assetCode`、`name`、`model`、`unit`、`serialNumber` | `fams_asset.id/asset_code/name/model/unit/serial_number` |
+| `category`、`brand`、`manufacturer`、`organization` | 对应 `*_id` 加当前主数据行 `version`；停用历史仍可读，写入仍要求当前启用版本 |
+| `plannedInboundWarehouse`、`plannedInboundLocation` | `planned_inbound_*_id` 加当前仓库/位置版本；绝不从正式保管列反推 |
+| `acquisitionDate`、`warrantyExpiryDate` | `acquisition_date/warranty_expiry_date` |
+| `serviceProvider`、`serviceContact`、`servicePhone` | 前两项直接映射；电话经字段授权后从 `service_phone_ciphertext` 解密 |
+| `source`、`notes`、`extensionValues` | `source_text/notes/extension_values_json` |
+| `attachments` | 当前有效 `fams_asset_attachment` 行的 `id/version`；内容下载另行鉴权 |
+| `lifecycle`、`exception`、`cardStage`、`version` | 三个状态列与乐观锁版本 |
+| `createdBusinessDate`、`createdAt`、`parameterVersionId` | `created_business_date/created_at/parameter_version_id` |
+| `creator` | `creator_account_id` 与 `creator_username_snapshot`，不依赖账号当前名称 |
+| `usageMode` | `custody_type` 为 `PERSONAL/SHARED` 时同值；`STORAGE` 或无正式保管时省略 |
+| `currentCustody` | 六个正式保管列；引用版本从当前主数据行读取，按互斥组合生成一个分支 |
+| `openBusinessSummary` | 当前活动业务锁、未结单据与处理权的只读聚合；不在资产行冗余保存 |
+| `inboundBusinessDate`、`lastInventoryBusinessDate` | 两个 `DATE` 列直接输出，不做 UTC 换日 |
+
+<!-- ASSET_API_MAPPING_END -->
 
 索引：
 
 - `uk_asset_code(asset_code)`；取消卡仍保留，因此编码不能复用。
 - `uk_asset_serial(serial_number_normalized)`；MySQL 唯一索引允许多个 `NULL`，空字符串先规范化为 `NULL`。
 - `idx_asset_ledger(category_id,lifecycle_status,exception_status,id)`。
-- `idx_asset_custody(using_organization_id,user_employee_id,shared_custodian_employee_id,id)`。
-- `idx_asset_location(warehouse_id,location_id,id)`、`idx_asset_inbound_date(inbound_date,id)`、
-  `idx_asset_inventory(last_inventory_at,id)`。
+- `idx_asset_custody(using_organization_id,responsible_employee_id,department_responsible_employee_id,id)`。
+- `idx_asset_location(storage_warehouse_id,current_location_id,id)`、
+  `idx_asset_inbound_date(inbound_business_date,id)`、
+  `idx_asset_inventory(last_inventory_business_date,id)`。
 
-保管约束由状态迁移服务与事务内当前引用校验共同保证：`PERSONAL` 必须有使用组织、使用人和位置，
-且公用责任人为空；`SHARED` 必须有使用组织、公用责任人和固定位置，且使用人为空。资产卡普通编辑
-不得改变生命周期、异常状态、使用模式或保管责任，这些字段只由正式业务动作更新。
+资产卡普通编辑不得改变生命周期、异常状态、正式保管或责任列，这些字段只由正式业务动作更新。
+主数据 `version` 不重复存进资产当前行；响应需要版本时读取当前引用行。只有入库单等历史事实保存
+提交/决定/验收时的不可变版本快照。
 
 ### 5.2 资产附属表
 
@@ -173,14 +240,18 @@ erDiagram
 
 `fams_asset_business_lock` 保存持久业务互斥，而不是数据库长事务：
 
-| 列 | 规则 |
-|---|---|
-| `asset_id` | 被锁资产 |
-| `business_type` / `business_id` | 当前入库单或后续业务聚合 |
-| `lock_version` | 活动锁的乐观版本 |
-| `acquired_at` / `released_at` | UTC 时刻；超时或重启不能自动填写释放时间 |
-| `release_reason` | 完成、驳回、合法取消或受控修复原因 |
-| `active_guard` | `TINYINT GENERATED ALWAYS AS (CASE WHEN released_at IS NULL THEN 1 ELSE NULL END) STORED` |
+| 列 | MySQL 类型 | 空值、来源与约束 |
+|---|---|---|
+| `id` | `BIGINT NOT NULL AUTO_INCREMENT` | 锁事实主键 |
+| `asset_id` | `BIGINT NOT NULL` | FK 资产 |
+| `business_type` | `VARCHAR(40) NOT NULL` | 首批为 `INBOUND`，后续使用稳定业务类型代码 |
+| `business_id` | `BIGINT NOT NULL` | 入库单或后续业务聚合 ID |
+| `business_item_id` | `BIGINT NOT NULL` | 取得锁的具体明细 ID；首批 FK 入库明细 |
+| `lock_version` | `BIGINT NOT NULL DEFAULT 0` | 活动锁的乐观版本 |
+| `acquired_at` | `DATETIME(3) NOT NULL` | 取得锁的 UTC 时刻 |
+| `released_at` | `DATETIME(3) NULL` | 超时、重启或登出不能自动填写 |
+| `release_reason` | `VARCHAR(500) NULL` | 释放时必填：完成、驳回、合法取消或受控修复 |
+| `active_guard` | `TINYINT GENERATED ALWAYS AS (CASE WHEN released_at IS NULL THEN 1 ELSE NULL END) STORED` | 活动唯一哨兵 |
 
 唯一索引 `uk_asset_active_lock(asset_id, active_guard)` 利用 MySQL 允许多个 `NULL` 的规则保留历史，
 同时保证每项资产最多一条活动锁。取得锁、单据状态更新、待办和审计必须在同一事务；发现孤立锁时
@@ -190,14 +261,163 @@ erDiagram
 
 ### 6.1 表设计
 
-| 表 | 关键列 | 约束与索引 |
+#### 6.1.1 入库单头与冻结参数
+
+`fams_inbound_receipt`：
+
+| 列 | MySQL 类型 | 空值、来源与约束 |
 |---|---|---|
-| `fams_inbound_receipt` | `receipt_no`、`creator_account_id`、`receipt_status`、`business_date`、`operator_employee_id`、`remark`、`parameter_version_id`、`version` | 单号唯一；草稿仅创建库管可写；`idx_inbound_pool(status,updated_at,id)` |
-| `fams_inbound_receipt_item` | `receipt_id`、`asset_id`、`asset_version_snapshot`、`target_warehouse_id`、`warehouse_version_snapshot`、`target_location_id`、`location_version_snapshot`、`execution_status`、`version` | `uk_inbound_receipt_asset(receipt_id,asset_id)`；位置必须属于目标仓库 |
-| `fams_inbound_decision` | `receipt_id`、`decision_result`、`reason`、`decided_by_account_id`、`decided_role`、`receipt_version_before`、`decided_at` | `uk_inbound_effective_decision(receipt_id)`；一个入库单只能有一个有效管理员决定 |
-| `fams_inbound_approval_scope_item` | `decision_id`、`receipt_item_id`、`approved_asset_version`、`approved_warehouse_id`、`approved_location_id` | `uk_inbound_scope_item(decision_id,receipt_item_id)`；验收不得越过批准范围 |
-| `fams_inbound_processing_ownership` | `receipt_id`、`processor_account_id`、`ownership_version`、`acquired_at`、`released_at`、`release_reason`、`active_guard` | `active_guard` 使用与资产锁相同的生成列；`uk_inbound_active_owner(receipt_id,active_guard)` 保证整单唯一处理人 |
-| `fams_inbound_acceptance` | `receipt_item_id`、`ownership_id`、`observed_asset_code`、`accepted_by_account_id`、`accepted_at`、`asset_version_after`、`audit_event_id` | `uk_inbound_item_acceptance(receipt_item_id)`；每项最多一次有效验收 |
+| `id` | `BIGINT NOT NULL AUTO_INCREMENT` | signed 主键 |
+| `receipt_no` | `VARCHAR(128) NOT NULL` | 服务端永久编号；`uk_inbound_receipt_no`，永不复用 |
+| `creator_account_id` | `BIGINT NOT NULL` | FK `fams_system_account.id`；创建关系在全阶段保留 |
+| `creator_username_snapshot` | `VARCHAR(128) NOT NULL` | 创建时账号名快照，不随账号改名变化 |
+| `receipt_status` | `VARCHAR(40) NOT NULL` | `InboundReceiptStatus` 的七个稳定代码 |
+| `business_date` | `DATE NOT NULL` | 客户端业务日期，经企业日历规则校验但不做时区换日 |
+| `parameter_version_id` | `BIGINT NOT NULL` | FK 参数版本；建草稿后不改写 |
+| `timezone_snapshot` | `VARCHAR(64) NOT NULL` | 创建时参数时区快照 |
+| `admin_decision_deadline_workdays` | `TINYINT UNSIGNED NOT NULL` | `1..30`；创建时冻结 |
+| `warehouse_claim_deadline_workdays` | `TINYINT UNSIGNED NOT NULL` | `1..30`；创建时冻结 |
+| `warehouse_first_execution_deadline_workdays` | `TINYINT UNSIGNED NOT NULL` | `1..30`；创建时冻结 |
+| `submitted_at` | `DATETIME(3) NULL` | 首次成功提交 UTC 时刻；驳回/取消后仍保留 |
+| `admin_decision_due_at` | `DATETIME(3) NULL` | 提交成功时由冻结日历计算；草稿为 `NULL` |
+| `warehouse_claim_due_at` | `DATETIME(3) NULL` | 批准成功时计算；未批准为 `NULL` |
+| `warehouse_first_execution_due_at` | `DATETIME(3) NULL` | 认领成功时计算；未认领为 `NULL` |
+| `notes` | `VARCHAR(2000) NULL` | OpenAPI `notes` |
+| `cancelled_at` | `DATETIME(3) NULL` | 创建者取消成功的 UTC 时刻 |
+| `cancellation_reason` | `VARCHAR(500) NULL` | `CANCELLED` 时非空；其他状态为 `NULL` |
+| `completed_at` | `DATETIME(3) NULL` | 最后一项验收提交时写入；仅 `COMPLETED` 非空 |
+| `version` | `BIGINT NOT NULL DEFAULT 0` | 草稿更新、提交、决定、认领、逐项验收均递增 |
+| `created_at` / `updated_at` | `DATETIME(3) NOT NULL` | UTC 毫秒精度 |
+| `created_by` / `updated_by` | `BIGINT NOT NULL` | 实际操作账号 |
+
+`parameter_version_id/business_date/timezone_snapshot/三个工作日时限` 共同组成
+`InboundReceiptSnapshot`，无需另存可漂移 JSON。日期截止时刻落在独立 UTC 列，重启时不重算。
+
+#### 6.1.2 明细与目标快照
+
+`fams_inbound_receipt_item`：
+
+| 列 | MySQL 类型 | 空值、来源与约束 |
+|---|---|---|
+| `id` | `BIGINT NOT NULL AUTO_INCREMENT` | 明细主键 |
+| `receipt_id` | `BIGINT NOT NULL` | FK 单头；`ON DELETE RESTRICT` |
+| `asset_id` | `BIGINT NOT NULL` | FK 资产；`uk_inbound_receipt_asset(receipt_id,asset_id)` |
+| `asset_version_snapshot` | `BIGINT NOT NULL` | 草稿编辑时刷新，提交成功后冻结的资产版本 |
+| `asset_code_snapshot` | `VARCHAR(128) NOT NULL` | 服务端读取并冻结的资产编码 |
+| `asset_name_snapshot` | `VARCHAR(256) NOT NULL` | 服务端读取并冻结的资产名称 |
+| `target_warehouse_id` | `BIGINT NOT NULL` | FK 仓库；落库前已解析默认值/逐项覆盖 |
+| `warehouse_version_snapshot` | `BIGINT NOT NULL` | 草稿编辑时刷新，提交后冻结 |
+| `warehouse_code_snapshot` | `VARCHAR(64) NOT NULL` | 目标仓库不可变编码快照 |
+| `warehouse_name_snapshot` | `VARCHAR(128) NOT NULL` | 目标仓库不可变名称快照 |
+| `target_location_id` | `BIGINT NOT NULL` | FK 位置；必须属于目标仓库 |
+| `location_version_snapshot` | `BIGINT NOT NULL` | 草稿编辑时刷新，提交后冻结 |
+| `location_code_snapshot` | `VARCHAR(64) NOT NULL` | 目标位置不可变编码快照 |
+| `location_name_snapshot` | `VARCHAR(128) NOT NULL` | 目标位置不可变名称快照 |
+| `execution_status` | `VARCHAR(20) NOT NULL` | `PENDING/ACCEPTED`；每项验收成功时单向迁移 |
+| `version` | `BIGINT NOT NULL DEFAULT 0` | 草稿替换或验收时递增 |
+| `created_at` / `updated_at` | `DATETIME(3) NOT NULL` | UTC |
+
+解析默认目标后，每个持久明细始终拥有显式仓库和位置。资产、仓库、位置的 ID、版本、编码和名称在
+草稿修改时作为一个组合刷新；提交后不可变。后续主数据改名或停用不改写历史快照，验收仍另外重验
+批准范围和当前启用版本。
+
+#### 6.1.3 唯一决定与批准范围
+
+| 表/列 | MySQL 类型 | 空值、来源与约束 |
+|---|---|---|
+| `fams_inbound_decision.id` | `BIGINT NOT NULL AUTO_INCREMENT` | 决定主键 |
+| `receipt_id` | `BIGINT NOT NULL` | FK 单头；`uk_inbound_effective_decision(receipt_id)` |
+| `decision_result` | `VARCHAR(20) NOT NULL` | `APPROVED/REJECTED` |
+| `comment_text` | `VARCHAR(1000) NULL` | 驳回时至少 1 字符；批准备注可空 |
+| `decided_by_account_id` | `BIGINT NOT NULL` | 实际资产管理员账号 |
+| `decided_by_username_snapshot` | `VARCHAR(128) NOT NULL` | 决定时名称快照 |
+| `decided_role` | `VARCHAR(40) NOT NULL` | 固定 `ASSET_ADMIN`，记录实际使用角色 |
+| `receipt_version_before` | `BIGINT NOT NULL` | 赢得竞争前的单据版本，也是批准范围版本 |
+| `decided_at` | `DATETIME(3) NOT NULL` | 唯一决定提交的 UTC 时刻 |
+| `fams_inbound_approval_scope_item.id` | `BIGINT NOT NULL AUTO_INCREMENT` | 范围项主键 |
+| `decision_id` / `receipt_item_id` | `BIGINT NOT NULL` | FK；`uk_inbound_scope_item(decision_id,receipt_item_id)` |
+| `approved_asset_id` / `approved_asset_version` | `BIGINT NOT NULL` | 批准时资产身份与版本 |
+| `approved_warehouse_id` / `approved_warehouse_version` | `BIGINT NOT NULL` | 批准时目标仓库身份与版本 |
+| `approved_location_id` / `approved_location_version` | `BIGINT NOT NULL` | 批准时目标位置身份与版本 |
+
+决定和范围项均为插入后不可变事实。驳回也保存完整范围，以便竞争失败方和创建者读取实际结果；
+批准范围不能由认领或验收改写。
+
+#### 6.1.4 处理权与逐项验收
+
+`fams_inbound_processing_ownership`：
+
+| 列 | MySQL 类型 | 空值、来源与约束 |
+|---|---|---|
+| `id` | `BIGINT NOT NULL AUTO_INCREMENT` | 处理权主键 |
+| `receipt_id` | `BIGINT NOT NULL` | FK 单头 |
+| `processor_account_id` | `BIGINT NOT NULL` | 当前/历史处理库管账号 |
+| `processor_username_snapshot` | `VARCHAR(128) NOT NULL` | 认领时名称快照 |
+| `ownership_version` | `BIGINT NOT NULL DEFAULT 0` | 验收和受控转派的并发令牌 |
+| `acquired_at` | `DATETIME(3) NOT NULL` | 认领提交时刻 |
+| `archived_at` | `DATETIME(3) NULL` | 终态或受控转派时归档；不按超时自动填写 |
+| `archive_reason` | `VARCHAR(500) NULL` | 归档时必填 |
+| `active_guard` | `TINYINT GENERATED ALWAYS AS (CASE WHEN archived_at IS NULL THEN 1 ELSE NULL END) STORED` | `uk_inbound_active_owner(receipt_id,active_guard)` 保证整单一个当前处理人 |
+
+`fams_inbound_acceptance`：
+
+| 列 | MySQL 类型 | 空值、来源与约束 |
+|---|---|---|
+| `id` | `BIGINT NOT NULL AUTO_INCREMENT` | 验收主键 |
+| `receipt_item_id` | `BIGINT NOT NULL` | FK 明细；`uk_inbound_item_acceptance(receipt_item_id)` |
+| `asset_id` / `ownership_id` | `BIGINT NOT NULL` | FK 资产与实际处理权 |
+| `accepted_by_account_id` | `BIGINT NOT NULL` | 当前处理库管账号 |
+| `accepted_by_username_snapshot` | `VARCHAR(128) NOT NULL` | 验收时名称快照 |
+| `accepted_at` | `DATETIME(3) NOT NULL` | 事务提交的 UTC 时刻 |
+| `business_date` | `DATE NOT NULL` | 单据冻结业务日期 |
+| `receipt_version_before` | `BIGINT NOT NULL` | 本次验收前单据版本 |
+| `asset_version_before` / `asset_version_after` | `BIGINT NOT NULL` | 资产条件更新前后版本 |
+| `lock_version` | `BIGINT NOT NULL` | 被释放的活动业务锁版本 |
+| `observed_asset_code` | `VARCHAR(128) NOT NULL` | 现场输入；必须与资产永久编码一致 |
+| `storage_warehouse_id` / `storage_location_id` | `BIGINT NOT NULL` | 本次正式保管目标 |
+| `warehouse_version_at_acceptance` / `location_version_at_acceptance` | `BIGINT NOT NULL` | 验收时当前引用版本，供历史 `storageCustody` 输出 |
+| `notes` | `VARCHAR(1000) NULL` | 验收备注 |
+| `audit_event_id` | `BIGINT NOT NULL` | FK 同事务审计事件；唯一 |
+
+验收记录插入后不可变；当前资产保管由同一事务写入 `fams_asset`。最后一项成功时才写单头
+`completed_at` 并归档处理权，之前成功的验收事实不被后续失败事务回滚。
+
+<!-- INBOUND_API_MAPPING_BEGIN -->
+
+OpenAPI 入库读模型到事实来源的完整映射：
+
+| Schema / API 字段 | 事实来源 |
+|---|---|
+| `InboundReceipt`: `id`、`receiptNumber`、`status`、`businessDate`、`version`、`notes` | 单头 `id/receipt_no/receipt_status/business_date/version/notes` |
+| `createdBy`、`createdAt`、`submittedAt` | 创建账号 ID/名称快照及单头时刻列 |
+| `adminDecisionDueAt`、`warehouseClaimDueAt`、`warehouseFirstExecutionDueAt` | 三个持久 UTC 截止时刻；不在读取时重算 |
+| `parameterVersionId`、`snapshot`、`items` | 单头冻结参数列与按 `receipt_id` 稳定排序的明细 |
+| `decision`、`currentProcessor` | 唯一决定行与最新处理权行；终态处理权仍带归档时刻 |
+| `cancelledAt`、`cancellationReason`、`completedAt` | 单头取消/完成事实列 |
+| `InboundReceiptSnapshot`: `parameterVersionId`、`businessDate`、`timezone` | 单头参数 ID、业务日期与时区快照 |
+| `adminDecisionDeadlineWorkdays`、`warehouseClaimDeadlineWorkdays`、`warehouseFirstExecutionDeadlineWorkdays` | 单头三个冻结工作日数 |
+| `InboundReceiptItem`: `id`、`executionStatus`、`asset`、`targetWarehouse`、`targetLocation` | 明细主键、执行状态及三组 ID/版本快照 |
+| `assetSnapshot`、`warehouseSnapshot`、`locationSnapshot` | 明细的不可变编码/名称快照列 |
+| `businessLock`、`acceptance` | 以单据明细关联活动/历史锁和唯一验收行；不存在时省略 |
+| `InboundAssetSnapshot`: `assetCode`、`assetName` | `asset_code_snapshot/asset_name_snapshot` |
+| `InboundCatalogSnapshot`: `code`、`name` | 仓库或位置 `*_code_snapshot/*_name_snapshot` |
+| `InboundAssetBusinessLock`: `assetId`、`businessType`、`businessId`、`businessItemId`、`lockVersion`、`acquiredAt` | `fams_asset_business_lock` 的同名语义列；`businessType` 从稳定代码输出 |
+| `InboundDecision`: `id`、`result`、`decidedReceiptVersion`、`decidedBy`、`decidedAt`、`comment` | 决定行及决定人名称快照；`comment_text` 同时承接批准备注或驳回原因 |
+| `scope` | 决定版本加全部 `fams_inbound_approval_scope_item` 行 |
+| `InboundApprovalScope`: `receiptVersion`、`items` | `receipt_version_before` 与按明细 ID 排序的批准范围项 |
+| `InboundProcessingOwnership`: `processor`、`claimedAt`、`ownershipVersion`、`archivedAt` | 处理权账号/名称快照、取得时刻、版本与归档时刻 |
+| `InboundAcceptanceRecord`: `id`、`receiptItemId`、`assetId`、`acceptedBy`、`acceptedAt`、`businessDate` | 验收行及验收人名称快照 |
+| `receiptVersionBefore`、`assetVersionBefore`、`assetVersionAfter`、`lockVersion` | 验收行保存的四个竞争版本 |
+| `observedAssetCode`、`storageCustody`、`notes` | 现场编码、验收目标 ID/版本组成的 `STORAGE` 保管快照及备注 |
+| `InboundAcceptedAsset`: `id`、`assetCode`、`lifecycle`、`exception`、`cardStage`、`version`、`currentCustody`、`inboundBusinessDate` | 验收事务提交后的 `fams_asset` 当前行；只输出最小结果 |
+| `InboundAcceptanceResult`: `receipt`、`item`、`asset` | 同一提交结果中的最新单头、已验收明细与最小资产投影 |
+
+<!-- INBOUND_API_MAPPING_END -->
+
+关系和索引补充：`idx_inbound_pool(receipt_status,updated_at,id)` 支撑共享池；
+`idx_inbound_creator(creator_account_id,updated_at,id)` 支撑创建者全阶段恢复；
+`idx_inbound_item_asset(asset_id,receipt_id)` 支撑活动锁和重复引用检查。所有外键使用 `ON DELETE RESTRICT`，
+业务终态不级联删除单头、明细、决定、范围、处理权或验收事实。
 
 ### 6.2 状态迁移
 

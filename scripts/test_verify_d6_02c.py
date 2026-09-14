@@ -2505,6 +2505,66 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertIn("PERSONAL", schemas["UsageMode"]["enum"])
         self.assertIn("SHARED", schemas["UsageMode"]["enum"])
 
+    def test_data_dictionary_maps_asset_and_inbound_contract_fields(self) -> None:
+        document = self.load_contract()
+        schemas = document["components"]["schemas"]
+        design = (DOCS / "D6-02C-domain-data-design.md").read_text(encoding="utf-8")
+
+        self.assertIn("<!-- ASSET_API_MAPPING_BEGIN -->", design)
+        self.assertIn("<!-- ASSET_API_MAPPING_END -->", design)
+        asset_mapping = design.split("<!-- ASSET_API_MAPPING_BEGIN -->", 1)[1].split(
+            "<!-- ASSET_API_MAPPING_END -->", 1
+        )[0]
+        for field in schemas["Asset"]["properties"]:
+            with self.subTest(asset_field=field):
+                self.assertIn(f"`{field}`", asset_mapping)
+
+        self.assertIn("<!-- INBOUND_API_MAPPING_BEGIN -->", design)
+        self.assertIn("<!-- INBOUND_API_MAPPING_END -->", design)
+        inbound_mapping = design.split("<!-- INBOUND_API_MAPPING_BEGIN -->", 1)[1].split(
+            "<!-- INBOUND_API_MAPPING_END -->", 1
+        )[0]
+        for schema_name in (
+            "InboundReceipt",
+            "InboundReceiptSnapshot",
+            "InboundReceiptItem",
+            "InboundAssetReference",
+            "InboundTargetReference",
+            "InboundAssetSnapshot",
+            "InboundCatalogSnapshot",
+            "InboundAssetBusinessLock",
+            "InboundDecision",
+            "InboundApprovalScope",
+            "InboundApprovalScopeItem",
+            "InboundProcessingOwnership",
+            "InboundAcceptanceRecord",
+            "InboundAcceptedAsset",
+            "InboundAcceptanceResult",
+        ):
+            for field in schemas[schema_name]["properties"]:
+                with self.subTest(schema=schema_name, field=field):
+                    self.assertIn(f"`{field}`", inbound_mapping)
+
+        for declaration in (
+            "`planned_inbound_warehouse_id` | `BIGINT NULL`",
+            "`planned_inbound_location_id` | `BIGINT NULL`",
+            "`parameter_version_id` | `BIGINT NOT NULL`",
+            "`created_business_date` | `DATE NOT NULL`",
+            "`acquisition_date` | `DATE NULL`",
+            "`warranty_expiry_date` | `DATE NULL`",
+            "`service_phone_ciphertext` | `VARBINARY(512) NULL`",
+            "`warehouse_code_snapshot` | `VARCHAR(64) NOT NULL`",
+            "`location_name_snapshot` | `VARCHAR(128) NOT NULL`",
+            "`admin_decision_due_at` | `DATETIME(3) NULL`",
+            "`warehouse_claim_due_at` | `DATETIME(3) NULL`",
+            "`warehouse_first_execution_due_at` | `DATETIME(3) NULL`",
+            "`cancelled_at` | `DATETIME(3) NULL`",
+            "`cancellation_reason` | `VARCHAR(500) NULL`",
+        ):
+            self.assertIn(declaration, design)
+        self.assertIn("计划入库目标与正式保管列物理分离", design)
+        self.assertIn("提交后不可变", design)
+
     def test_asset_read_contract_exposes_scoped_ledger_and_id_time_shapes(self) -> None:
         document = self.load_contract()
         paths = document["paths"]
@@ -2946,7 +3006,7 @@ class DesignPackageContractTest(unittest.TestCase):
                 schemas[schema_name]["properties"]["organization"]["$ref"].rsplit("/", 1)[-1],
             )
 
-    def test_asset_read_scope_and_copy_accept_any_visible_non_cancelled_source(self) -> None:
+    def test_asset_read_scope_and_copy_preserve_submitted_enterprise_view(self) -> None:
         document = self.load_contract()
         operations = {
             operation["operationId"]: operation
@@ -2957,9 +3017,11 @@ class DesignPackageContractTest(unittest.TestCase):
         for operation_id in ("listAssets", "getAsset"):
             scope_text = json.dumps(operations[operation_id], sort_keys=True).lower()
             for phrase in (
-                "enterprise-wide",
-                "not narrowed",
-                "explicitly authorized audit scope",
+                "enterprise business view",
+                "pending_inbound",
+                "active",
+                "audit_read_only",
+                "scope",
                 "system_admin",
                 "no automatic",
             ):
@@ -2969,7 +3031,9 @@ class DesignPackageContractTest(unittest.TestCase):
         copy_text = json.dumps(copy, sort_keys=True).lower()
         for phrase in ("non-cancelled", "active", "business lock", "does not block", "new card", "source version"):
             self.assertIn(phrase, copy_text)
-        self.assertNotIn("source draft version", copy_text)
+        self.assertIn("draft source", copy_text)
+        self.assertIn("only its creator", copy_text)
+        self.assertIn("ASSET_NOT_FOUND", copy["x-error-codes"])
         self.assertNotIn("ASSET_NOT_CREATOR", copy["x-error-codes"])
         self.assertNotIn("ASSET_DRAFT_LOCKED", copy["x-error-codes"])
         self.assertIn("ASSET_SOURCE_CANCELLED", copy["x-error-codes"])
