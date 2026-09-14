@@ -2427,6 +2427,22 @@ components:
           type: string
         scope:
           $ref: '#/components/schemas/InboundApprovalScope'
+    InboundProcessingOwnership:
+      type: object
+      additionalProperties: false
+      required: [processor, claimedAt, ownershipVersion]
+      description: >-
+        Persistent whole-receipt warehouse write ownership. It is separate from asset
+        business locks and survives logout, timeout, device changes, and application restart.
+      properties:
+        processor:
+          $ref: '#/components/schemas/AssetCreatorReference'
+        claimedAt:
+          $ref: '#/components/schemas/Instant'
+        ownershipVersion:
+          type: integer
+          format: int64
+          minimum: 0
     InboundReceipt:
       type: object
       additionalProperties: false
@@ -2463,6 +2479,12 @@ components:
         decision:
           $ref: '#/components/schemas/InboundDecision'
           description: The one effective administrator decision; absent before a decision wins.
+        currentProcessor:
+          $ref: '#/components/schemas/InboundProcessingOwnership'
+          description: Unique whole-receipt warehouse owner; absent until an explicit claim wins.
+        warehouseFirstExecutionDueAt:
+          $ref: '#/components/schemas/Instant'
+          description: First-execution deadline computed at claim from the frozen calendar snapshot.
         version:
           type: integer
           format: int64
@@ -2859,6 +2881,64 @@ paths:
       responses:
         '200':
           description: Effective approval or rejection, including an idempotent replay.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InboundReceipt'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /inbound-receipts/{receiptId}/claim:
+    parameters:
+      - $ref: '#/components/parameters/InboundReceiptId'
+    post:
+      tags: [Inbound]
+      operationId: claimInboundReceipt
+      summary: Explicitly claim unique warehouse write ownership for the whole receipt.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [WAREHOUSE_OPERATOR]
+      x-version:
+        required: true
+        precondition: >-
+          If-Match-Version must equal the WAITING_WAREHOUSE_CLAIM receipt version and
+          current processing ownership must still be absent.
+      x-transaction:
+        boundary: >-
+          Atomically compare the receipt version and empty ownership, persist the one
+          current processor for the whole receipt, close the shared active claim todo,
+          compute the first-execution deadline, advance to WAREHOUSE_PROCESSING, and audit.
+      x-audit-event:
+        event: INBOUND_WAREHOUSE_CLAIMED
+      x-error-codes:
+        - INBOUND_NOT_FOUND
+        - INBOUND_NOT_APPROVED
+        - INBOUND_VERSION_CONFLICT
+        - INBOUND_ALREADY_CLAIMED
+        - INBOUND_PROCESSOR_INACTIVE
+        - INBOUND_IDEMPOTENCY_CONFLICT
+      x-invariants: >-
+        Claim is an explicit write; view does not claim or reserve the receipt. The
+        receipt creator must claim too, even when the creator is the first legal warehouse
+        operator. One successful action assigns the whole receipt, including cross-warehouse
+        items, to one current processor. Other warehouse operators remain read-only and a
+        losing request returns the actual processor, claim time, ownership version, and
+        read-only entry. Business locks unchanged and approved scope unchanged are mandatory;
+        claim grants only receipt execution ownership. Restart, logout, device change, and
+        timeout preserve ownership with no automatic release or reassignment. The same
+        idempotent request returns its original result without a second claim or deadline.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      responses:
+        '200':
+          description: Whole-receipt warehouse ownership, or the original idempotent result.
           content:
             application/json:
               schema:
