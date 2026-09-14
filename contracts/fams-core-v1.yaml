@@ -1241,6 +1241,31 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/Organization'
+    OrganizationActiveReference:
+      type: object
+      additionalProperties: false
+      required: [id, name, version]
+      description: Minimal active organization identity for business selectors.
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+          minLength: 1
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+    OrganizationActiveReferencePage:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OrganizationActiveReference'
     DisableOrganizationRequest:
       type: object
       required: [reason]
@@ -4319,6 +4344,34 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
+
+  /organizations/active-references:
+    get:
+      tags: [MasterData]
+      operationId: listActiveOrganizationReferences
+      summary: List active organizations for business selectors.
+      x-business-write: false
+      x-actor:
+        required: true
+        roles: [WAREHOUSE_OPERATOR, ASSET_ADMIN]
+      x-non-applicable: [version, idempotency, csrf]
+      x-data-scope: >-
+        Return only active organization id, name, and current version required by a
+        business selector. This endpoint does not expose organization configuration,
+        employee rosters, phone numbers, or other identity-sensitive fields. SYSTEM_ADMIN
+        receives no automatic business-selector permission without an explicit business role.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Minimal active organization selector page with no sensitive fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationActiveReferencePage'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
 
   /organizations/{organizationId}:
     parameters:

@@ -1,0 +1,16 @@
+{
+  "operationId": "listActiveOrganizationReferences",
+  "kind": "rejection",
+  "status": 403,
+  "scenario": "A system administrator without a business role attempts to use the organization selector.",
+  "responseSchema": "ErrorResponse",
+  "query": {"page": 1, "pageSize": 20},
+  "payload": {},
+  "response": {
+    "code": "ORGANIZATION_SELECTOR_PERMISSION_REQUIRED",
+    "message": "An explicit business role is required for this selector.",
+    "requestId": "00000000-0000-4000-8000-000000000091",
+    "fieldErrors": {}
+  },
+  "evidence": "Contract evidence only; runtime role enforcement is not implemented."
+}

@@ -158,17 +158,51 @@ class DesignPackageContractTest(unittest.TestCase):
             response_values,
         )
 
-    def test_identity_master_data_reads_and_writes_are_system_admin_only(self) -> None:
+    def test_identity_master_data_configuration_is_system_admin_only(self) -> None:
         document = self.load_contract()
         prefixes = ("/organizations", "/employees", "/system-accounts", "/role-configurations")
         for path, item in document["paths"].items():
             if not path.startswith(prefixes):
+                continue
+            if path == "/organizations/active-references":
                 continue
             for method, operation in item.items():
                 if method not in {"get", "post", "patch", "put", "delete"}:
                     continue
                 with self.subTest(method=method, path=path):
                     self.assertEqual(["SYSTEM_ADMIN"], operation.get("x-actor", {}).get("roles"))
+
+    def test_business_organization_selector_is_minimal_and_role_scoped(self) -> None:
+        document = self.load_contract()
+        paths = document["paths"]
+        self.assertIn("/organizations/active-references", paths)
+        if "/organizations/active-references" not in paths:
+            return
+
+        operation = paths["/organizations/active-references"]["get"]
+        self.assertEqual("listActiveOrganizationReferences", operation["operationId"])
+        self.assertEqual(
+            {"WAREHOUSE_OPERATOR", "ASSET_ADMIN"},
+            set(operation["x-actor"]["roles"]),
+        )
+        self.assertNotIn("SYSTEM_ADMIN", operation["x-actor"]["roles"])
+        response_ref = operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+        self.assertEqual("OrganizationActiveReferencePage", response_ref.rsplit("/", 1)[-1])
+        selector_text = json.dumps(operation, sort_keys=True).lower()
+        for phrase in ("active", "selector", "id", "name", "version", "sensitive"):
+            self.assertIn(phrase, selector_text)
+
+        schema = document["components"]["schemas"]["OrganizationActiveReference"]
+        self.assertEqual({"id", "name", "version"}, set(schema["required"]))
+        self.assertEqual({"id", "name", "version"}, set(schema["properties"]))
+        self.assertNotIn("phone", json.dumps(schema, sort_keys=True).lower())
+
+        examples = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted(EXAMPLES.glob("masterdata-organization-active-reference-*.json"))
+        ]
+        self.assertGreaterEqual(len(examples), 2)
+        self.assertEqual({"positive", "rejection"}, {value["kind"] for value in examples})
 
     def test_identity_inputs_split_status_mutations_and_reference_versions(self) -> None:
         document = self.load_contract()
