@@ -10,9 +10,10 @@
     "If-Match-Version": "3"
   },
   "payload": {"assetVersion": 2, "lockVersion": 0, "observedAssetCode": "FA-2026-000021"},
-  "error": {
+  "response": {
     "code": "INBOUND_ACCEPTANCE_VERSION_CONFLICT",
     "message": "A stale receipt, asset, or lock version cannot be accepted.",
+    "requestId": "00000000-0000-4000-8000-000000000005",
     "fieldErrors": {"receiptVersion": "current 4", "assetVersion": "current 3"}
   },
   "evidence": "Contract evidence only; every concurrent version must be current."

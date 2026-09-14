@@ -11,9 +11,10 @@
     "If-Match-Version": "0"
   },
   "payload": {"notes": "Attempt to edit another operator's draft."},
-  "error": {
+  "response": {
     "code": "INBOUND_NOT_CREATOR",
     "message": "Only the receipt creator may edit a draft.",
+    "requestId": "00000000-0000-4000-8000-000000000012",
     "fieldErrors": {"receiptId": "creator relation is required"}
   },
   "evidence": "Contract evidence only; another operator's draft is not editable."

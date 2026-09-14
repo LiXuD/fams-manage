@@ -17,9 +17,10 @@
       }
     ]
   },
-  "error": {
+  "response": {
     "code": "INBOUND_REFERENCE_VERSION_CONFLICT",
     "message": "An asset or target reference version is stale.",
+    "requestId": "00000000-0000-4000-8000-000000000013",
     "fieldErrors": {"items[0].asset.version": "stored version is 2"}
   },
   "evidence": "Contract evidence only; every asset and target reference is version checked."

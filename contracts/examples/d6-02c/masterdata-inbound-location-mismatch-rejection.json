@@ -17,9 +17,10 @@
       }
     ]
   },
-  "error": {
+  "response": {
     "code": "INBOUND_WAREHOUSE_LOCATION_MISMATCH",
     "message": "The target location must belong to the target warehouse.",
+    "requestId": "00000000-0000-4000-8000-000000000011",
     "fieldErrors": {"items[0].targetLocation": "location belongs to warehouse 5002"}
   },
   "evidence": "Contract evidence only; each final item target is checked for warehouse membership."

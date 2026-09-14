@@ -11,14 +11,14 @@
     "If-Match-Version": "7"
   },
   "payload": {"reason": "Printed label is damaged."},
-  "previousQrToken": "4PzJx6V7mN2qR8sT1wY5uI9oL3kD0fG6hC8bA7eZ2Q",
+  "previousQrToken": "4PzJx6V7mN2qR8sT1wY5uI9oL3kD0fG6hC8bA7eZ2QA",
   "response": {
     "tag": {
       "enterpriseName": "FAMS Demo Enterprise",
       "assetName": "Dell Latitude 7450",
       "assetCode": "FA-2026-000002",
-      "qrToken": "n8Qv2Lr5Xc7Zp1Tm4Hs6Kd9Fg3Wa0Yu8Ji5Be2Ro7S",
-      "qrCode": "https://fams.example.test/asset-access/n8Qv2Lr5Xc7Zp1Tm4Hs6Kd9Fg3Wa0Yu8Ji5Be2Ro7S"
+      "qrToken": "n8Qv2Lr5Xc7Zp1Tm4Hs6Kd9Fg3Wa0Yu8Ji5Be2Ro7SB",
+      "qrCode": "https://fams.example.test/asset-access/n8Qv2Lr5Xc7Zp1Tm4Hs6Kd9Fg3Wa0Yu8Ji5Be2Ro7SB"
     },
     "assetVersion": 8
   },

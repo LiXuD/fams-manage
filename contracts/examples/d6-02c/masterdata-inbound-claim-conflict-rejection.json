@@ -10,9 +10,10 @@
     "If-Match-Version": "3"
   },
   "payload": {},
-  "error": {
+  "response": {
     "code": "INBOUND_ALREADY_CLAIMED",
     "message": "Another warehouse operator already owns this whole receipt.",
+    "requestId": "00000000-0000-4000-8000-000000000007",
     "fieldErrors": {"receiptId": "read-only; ownership version is 0"}
   },
   "actualProcessor": {

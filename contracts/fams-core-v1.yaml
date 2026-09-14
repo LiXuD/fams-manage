@@ -4179,6 +4179,7 @@ paths:
         boundary: Rotate the session, invalidate the old session, update password state, and audit atomically.
       x-audit-event:
         event: AUTH_INITIAL_PASSWORD_CHANGED
+      x-error-codes: [AUTH_CURRENT_PASSWORD_INVALID, AUTH_NEW_PASSWORD_POLICY_VIOLATION, AUTH_INITIAL_PASSWORD_CHANGE_NOT_REQUIRED, AUTH_SESSION_INVALID, AUTH_IDEMPOTENCY_CONFLICT]
       x-required-error-statuses: [400, 401, 403, 409]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'

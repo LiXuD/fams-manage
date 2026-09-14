@@ -10,9 +10,10 @@
     "If-Match-Version": "1"
   },
   "payload": {},
-  "error": {
+  "response": {
     "code": "INBOUND_WAREHOUSE_LOCATION_MISMATCH",
     "message": "The target location no longer belongs to the target warehouse.",
+    "requestId": "00000000-0000-4000-8000-000000000016",
     "fieldErrors": {"items[0].targetLocation": "current warehouse is 5002"}
   },
   "evidence": "Contract evidence only; submission revalidates target versions and membership."

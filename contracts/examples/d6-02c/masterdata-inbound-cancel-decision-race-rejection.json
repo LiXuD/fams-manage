@@ -11,9 +11,10 @@
     "If-Match-Version": "2"
   },
   "payload": {"reason": "Cancel before approval."},
-  "error": {
+  "response": {
     "code": "INBOUND_DECISION_ALREADY_EFFECTIVE",
     "message": "The administrator decision won the receipt-version race.",
+    "requestId": "00000000-0000-4000-8000-000000000006",
     "fieldErrors": {"receiptId": "receipt is WAITING_WAREHOUSE_CLAIM at version 3"}
   },
   "effectiveDecision": {"result": "APPROVED", "decidedAt": "2026-09-14T03:05:00Z"},

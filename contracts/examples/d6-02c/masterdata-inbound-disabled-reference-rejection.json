@@ -19,9 +19,10 @@
       }
     ]
   },
-  "error": {
+  "response": {
     "code": "INBOUND_MASTER_DATA_DISABLED",
     "message": "Disabled or expired inbound references cannot be selected.",
+    "requestId": "00000000-0000-4000-8000-000000000009",
     "fieldErrors": {"items[0].targetWarehouse": "warehouse is DISABLED"}
   },
   "evidence": "Contract evidence only; disabled references are rejected in draft writes."

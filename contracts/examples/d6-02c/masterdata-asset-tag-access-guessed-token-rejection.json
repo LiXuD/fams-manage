@@ -3,7 +3,7 @@
   "kind": "rejection",
   "status": 404,
   "scenario": "guessed token",
-  "pathParameters": {"token": "zZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZz"},
+  "pathParameters": {"token": "zZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZz"},
   "payload": {},
   "response": {
     "code": "ASSET_ACCESS_NOT_FOUND",

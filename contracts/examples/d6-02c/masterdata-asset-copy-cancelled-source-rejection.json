@@ -15,9 +15,10 @@
     "businessLock": false
   },
   "payload": {"quantity": 1},
-  "error": {
+  "response": {
     "code": "ASSET_SOURCE_CANCELLED",
     "message": "A cancelled asset card cannot be used as a copy source.",
+    "requestId": "00000000-0000-4000-8000-000000000001",
     "fieldErrors": {"assetId": "source is cancelled"}
   },
   "evidence": "Contract evidence only; cancellation and copy runtime enforcement are not implemented in this design package."

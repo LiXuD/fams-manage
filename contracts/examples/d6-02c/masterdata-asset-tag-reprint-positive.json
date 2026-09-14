@@ -14,18 +14,17 @@
   "payload": {"reason": "Print a replacement copy for the same tag."},
   "before": {
     "assetCode": "FA-2026-000002",
-    "qrToken": "4PzJx6V7mN2qR8sT1wY5uI9oL3kD0fG6hC8bA7eZ2Q"
+    "qrToken": "4PzJx6V7mN2qR8sT1wY5uI9oL3kD0fG6hC8bA7eZ2QA"
   },
   "after": {
     "assetCode": "FA-2026-000002",
-    "qrToken": "4PzJx6V7mN2qR8sT1wY5uI9oL3kD0fG6hC8bA7eZ2Q"
+    "qrToken": "4PzJx6V7mN2qR8sT1wY5uI9oL3kD0fG6hC8bA7eZ2QA"
   },
   "idempotencyReplayReturnsSameResult": true,
   "response": {
     "jobId": "88001",
     "status": "COMPLETED",
-    "assetCode": "FA-2026-000002",
-    "location": "/api/v1/asset-tag-print-jobs/88001"
+    "assetCode": "FA-2026-000002"
   },
   "evidence": "Contract evidence only; repeated idempotent reprint is specified to return the same job/result."
 }

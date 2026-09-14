@@ -11,9 +11,10 @@
     "If-Match-Version": "1"
   },
   "payload": {},
-  "error": {
+  "response": {
     "code": "INBOUND_SUBMIT_ATOMIC_ROLLBACK",
     "message": "Submission failed and every attempted effect was rolled back.",
+    "requestId": "00000000-0000-4000-8000-000000000014",
     "fieldErrors": {"items[1].asset.id": "concurrent lock conflict"}
   },
   "persistedEffects": {
