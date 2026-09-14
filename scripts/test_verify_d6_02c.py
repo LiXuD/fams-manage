@@ -2441,6 +2441,104 @@ class DesignPackageContractTest(unittest.TestCase):
             .issubset(summary["properties"])
         )
 
+    def test_asset_saved_filters_are_personal_and_never_expand_current_scope(self) -> None:
+        document = self.load_contract()
+        paths = document["paths"]
+        schemas = document["components"]["schemas"]
+        operations = {
+            operation["operationId"]: operation
+            for item in paths.values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        required_operations = {
+            "listAssetSavedFilters",
+            "createAssetSavedFilter",
+            "updateAssetSavedFilter",
+            "deleteAssetSavedFilter",
+        }
+        missing = sorted(required_operations - set(operations))
+        self.assertFalse(missing, f"personal saved-filter contract remains RED: {missing}")
+        if missing:
+            return
+
+        self.assertIn("/asset-saved-filters", paths)
+        self.assertIn("/asset-saved-filters/{savedFilterId}", paths)
+        expected_roles = {"ASSET_ADMIN", "WAREHOUSE_OPERATOR", "AUDIT_READ_ONLY"}
+        for operation_id in required_operations:
+            with self.subTest(operation=operation_id):
+                operation = operations[operation_id]
+                self.assertEqual(expected_roles, set(operation["x-actor"]["roles"]))
+                self.assertNotIn("SYSTEM_ADMIN", operation["x-actor"]["roles"])
+                operation_text = json.dumps(operation, sort_keys=True).lower()
+                for phrase in ("personal", "owner", "current permission", "never expand"):
+                    self.assertIn(phrase, operation_text)
+
+        for operation_id in (
+            "createAssetSavedFilter",
+            "updateAssetSavedFilter",
+            "deleteAssetSavedFilter",
+        ):
+            with self.subTest(mutation=operation_id):
+                operation = operations[operation_id]
+                self.assertTrue(operation.get("x-business-write"))
+                self.assertTrue(operation.get("x-version"))
+                self.assertTrue(operation.get("x-transaction"))
+                self.assertTrue(operation.get("x-audit-event"))
+                refs = {
+                    parameter.get("$ref", "").rsplit("/", 1)[-1]
+                    for parameter in operation.get("parameters", [])
+                }
+                self.assertTrue({"IdempotencyKey", "CsrfToken"}.issubset(refs))
+                if operation_id != "createAssetSavedFilter":
+                    self.assertIn("IfMatchVersion", refs)
+
+        criteria = schemas["AssetFilterCriteria"]
+        expected_criteria = {
+            "assetCode",
+            "name",
+            "serialNumber",
+            "assetCategoryId",
+            "lifecycle",
+            "exception",
+            "usageMode",
+            "warehouseId",
+            "locationId",
+            "organizationId",
+            "usingOrganizationId",
+            "responsibleEmployeeId",
+            "departmentResponsibleEmployeeId",
+            "currentProcessorId",
+            "businessReference",
+            "inboundDateFrom",
+            "inboundDateTo",
+            "lastInventoryDateFrom",
+            "lastInventoryDateTo",
+            "borrowOverdue",
+            "longUninventoried",
+        }
+        self.assertEqual(expected_criteria, set(criteria["properties"]))
+        self.assertFalse(criteria.get("additionalProperties", True))
+        saved_filter = schemas["AssetSavedFilter"]
+        self.assertTrue(
+            {"id", "ownerAccountId", "name", "criteria", "version", "createdAt", "updatedAt"}
+            .issubset(saved_filter["required"])
+        )
+
+        examples = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted(EXAMPLES.glob("masterdata-asset-saved-filter-*.json"))
+        ]
+        self.assertGreaterEqual(len(examples), 5)
+        self.assertEqual({"positive", "rejection"}, {value["kind"] for value in examples})
+        self.assertTrue(required_operations.issubset({value["operationId"] for value in examples}))
+        self.assertTrue(all(value.get("evidence") for value in examples))
+        rejection_text = json.dumps(
+            [value for value in examples if value["kind"] == "rejection"], sort_keys=True
+        ).lower()
+        for phrase in ("other owner", "current permission"):
+            self.assertIn(phrase, rejection_text)
+
     def test_asset_detail_declares_nine_sections_and_reverse_timeline_navigation(self) -> None:
         document = self.load_contract()
         paths = document["paths"]

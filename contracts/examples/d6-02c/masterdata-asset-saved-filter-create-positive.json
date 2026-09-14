@@ -1,0 +1,25 @@
+{
+  "operationId": "createAssetSavedFilter",
+  "kind": "positive",
+  "status": 201,
+  "requestSchema": "AssetSavedFilterCreateRequest",
+  "responseSchema": "AssetSavedFilter",
+  "headers": {
+    "Idempotency-Key": "asset-saved-filter-create-0001",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "name": "长期未盘点",
+    "criteria": {"longUninventoried": true, "organizationId": "2001"}
+  },
+  "response": {
+    "id": "9502",
+    "ownerAccountId": "7001",
+    "name": "长期未盘点",
+    "criteria": {"longUninventoried": true, "organizationId": "2001"},
+    "version": 0,
+    "createdAt": "2026-09-14T05:20:00Z",
+    "updatedAt": "2026-09-14T05:20:00Z"
+  },
+  "evidence": "Contract evidence only; ownership comes from the session and saved criteria never expand current permission scope."
+}

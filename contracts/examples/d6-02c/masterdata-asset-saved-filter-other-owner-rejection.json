@@ -1,0 +1,21 @@
+{
+  "operationId": "updateAssetSavedFilter",
+  "kind": "rejection",
+  "scenario": "other owner",
+  "status": 404,
+  "requestSchema": "AssetSavedFilterUpdateRequest",
+  "pathParameters": {"savedFilterId": "9599"},
+  "headers": {
+    "Idempotency-Key": "asset-saved-filter-other-owner-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "2"
+  },
+  "payload": {"name": "Cannot take over another user's filter"},
+  "response": {
+    "code": "ASSET_SAVED_FILTER_NOT_FOUND",
+    "message": "Saved filter was not found.",
+    "requestId": "b05e2d36-61e2-4260-83ac-bcb1691ccf31",
+    "fieldErrors": {}
+  },
+  "evidence": "Contract evidence only; an other owner filter is hidden with the same result as a missing id."
+}

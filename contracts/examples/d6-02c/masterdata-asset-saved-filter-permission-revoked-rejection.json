@@ -1,0 +1,15 @@
+{
+  "operationId": "listAssetSavedFilters",
+  "kind": "rejection",
+  "scenario": "current permission revoked",
+  "status": 403,
+  "query": {"page": 1, "pageSize": 20},
+  "payload": {},
+  "response": {
+    "code": "ASSET_LEDGER_PERMISSION_REQUIRED",
+    "message": "Current asset ledger permission is required.",
+    "requestId": "98982a10-f4c2-45ca-a186-cad4625ad2d1",
+    "fieldErrors": {}
+  },
+  "evidence": "Contract evidence only; a saved filter never restores revoked current permission or exposes prior results."
+}
