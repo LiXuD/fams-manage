@@ -1,0 +1,77 @@
+{
+  "operationId": "decideInboundReceipt",
+  "kind": "positive",
+  "status": 200,
+  "actor": "asset.admin.31",
+  "pathParameters": {"receiptId": "7001"},
+  "headers": {
+    "Idempotency-Key": "inbound-decision-approve-0001",
+    "X-CSRF-Token": "csrf-inbound-decision-123456",
+    "If-Match-Version": "2"
+  },
+  "payload": {"decision": "APPROVED", "comment": "Scope and target are confirmed."},
+  "response": {
+    "id": "7001",
+    "receiptNumber": "IR-2026-000001",
+    "status": "WAITING_WAREHOUSE_CLAIM",
+    "businessDate": "2026-09-14",
+    "createdBy": {"id": "17", "username": "warehouse.operator.17"},
+    "createdAt": "2026-09-14T02:15:00Z",
+    "submittedAt": "2026-09-14T03:00:00Z",
+    "adminDecisionDueAt": "2026-09-16T15:59:59.999Z",
+    "warehouseClaimDueAt": "2026-09-15T15:59:59.999Z",
+    "version": 3,
+    "parameterVersionId": "9001",
+    "snapshot": {
+      "parameterVersionId": "9001",
+      "businessDate": "2026-09-14",
+      "timezone": "Asia/Shanghai",
+      "adminDecisionDeadlineWorkdays": 2,
+      "warehouseClaimDeadlineWorkdays": 1,
+      "warehouseFirstExecutionDeadlineWorkdays": 2
+    },
+    "decision": {
+      "id": "7201",
+      "result": "APPROVED",
+      "decidedReceiptVersion": 2,
+      "decidedBy": {"id": "31", "username": "asset.admin.31"},
+      "decidedAt": "2026-09-14T03:05:00Z",
+      "comment": "Scope and target are confirmed.",
+      "scope": {
+        "receiptVersion": 2,
+        "items": [
+          {
+            "receiptItemId": "7101",
+            "asset": {"id": "10021", "version": 2},
+            "targetWarehouse": {"id": "5001", "version": 4},
+            "targetLocation": {"id": "5101", "version": 6}
+          }
+        ]
+      }
+    },
+    "items": [
+      {
+        "id": "7101",
+        "asset": {"id": "10021", "version": 2},
+        "assetSnapshot": {"assetCode": "FA-2026-000021", "assetName": "Latitude 7450"},
+        "targetWarehouse": {"id": "5001", "version": 4},
+        "targetLocation": {"id": "5101", "version": 6},
+        "warehouseSnapshot": {"code": "WH-SH-01", "name": "Shanghai Main Warehouse"},
+        "locationSnapshot": {"code": "SH-F1-A01", "name": "Floor 1 A01"},
+        "businessLock": {
+          "assetId": "10021",
+          "businessType": "INBOUND",
+          "businessId": "7001",
+          "businessItemId": "7101",
+          "lockVersion": 0,
+          "acquiredAt": "2026-09-14T03:00:00Z"
+        }
+      }
+    ]
+  },
+  "assetAfter": {"cardStage": "PENDING_INBOUND", "businessLockRetained": true},
+  "viewingDoesNotReserveDecision": true,
+  "dualRoleAdministratorDoesNotAutoClaim": true,
+  "idempotencyReplayReturnsSameResult": true,
+  "evidence": "Contract evidence only; unique approval and shared warehouse todo are not runtime implemented."
+}
