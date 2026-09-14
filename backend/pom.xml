@@ -21,6 +21,7 @@
         <java.version>21</java.version>
         <maven.compiler.release>21</maven.compiler.release>
         <openapi-generator.version>7.25.0</openapi-generator.version>
+        <openapi.input-spec>${project.basedir}/../contracts/representative-probe.yaml</openapi.input-spec>
         <spring-boot.version>4.1.1</spring-boot.version>
         <mybatis-spring-boot-starter.version>4.1.0</mybatis-spring-boot-starter.version>
         <spring-session.version>4.1.1</spring-session.version>
@@ -85,7 +86,7 @@
                             <goal>validate</goal>
                         </goals>
                         <configuration>
-                            <inputSpec>${project.basedir}/../contracts/representative-probe.yaml</inputSpec>
+                            <inputSpec>${openapi.input-spec}</inputSpec>
                             <skipIfSpecIsUnchanged>false</skipIfSpecIsUnchanged>
                         </configuration>
                     </execution>
@@ -96,7 +97,7 @@
                             <goal>generate</goal>
                         </goals>
                         <configuration>
-                            <inputSpec>${project.basedir}/../contracts/representative-probe.yaml</inputSpec>
+                            <inputSpec>${openapi.input-spec}</inputSpec>
                             <generatorName>spring</generatorName>
                             <library>spring-boot</library>
                             <output>${project.build.directory}/generated-sources/openapi/java</output>
@@ -137,7 +138,7 @@
                             <goal>generate</goal>
                         </goals>
                         <configuration>
-                            <inputSpec>${project.basedir}/../contracts/representative-probe.yaml</inputSpec>
+                            <inputSpec>${openapi.input-spec}</inputSpec>
                             <generatorName>typescript-fetch</generatorName>
                             <output>${project.basedir}/../packages/api-types/target/generated-sources/openapi/typescript</output>
                             <templateDirectory>${project.basedir}/../packages/api-types/openapi-templates/typescript-fetch</templateDirectory>

@@ -88,6 +88,26 @@ class ContractEvidenceTest(unittest.TestCase):
 
 class GeneratedTreeTest(unittest.TestCase):
 
+    def test_transport_free_template_imports_referenced_models_as_types(self) -> None:
+        template = (
+            VERIFIER.ROOT
+            / "packages/api-types/openapi-templates/typescript-fetch/modelGeneric.mustache"
+        ).read_text(encoding="utf-8")
+        self.assertIn("{{#tsImports}}", template)
+        self.assertIn("import type { {{{classname}}} }", template)
+        self.assertNotIn("../runtime", template)
+
+        one_of_template = (
+            VERIFIER.ROOT
+            / "packages/api-types/openapi-templates/typescript-fetch/modelOneOf.mustache"
+        )
+        self.assertTrue(one_of_template.is_file())
+        one_of_text = one_of_template.read_text(encoding="utf-8")
+        self.assertIn("{{>modelOneOfInterfaces}}", one_of_text)
+        self.assertIn("import type", one_of_text)
+        self.assertNotIn("FromJSON", one_of_text)
+        self.assertNotIn("instanceOf", one_of_text)
+
     def test_manifest_detects_content_and_stale_file_drift(self) -> None:
         with tempfile.TemporaryDirectory(prefix="d6-02c-manifest-test-") as temporary:
             root = Path(temporary)
