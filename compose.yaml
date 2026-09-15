@@ -3,8 +3,8 @@ services:
     image: mysql:8.4.11@sha256:3466ba4a4828aa8d46fb7c3bc16b67b781c98413cf4ea0fac6feaa6e881faa26
     restart: "no"
     environment:
-      MYSQL_DATABASE: fams
-      MYSQL_USER: fams
+      MYSQL_DATABASE: "${FAMS_MYSQL_DATABASE:?required}"
+      MYSQL_USER: "${FAMS_MYSQL_USER:?required}"
       MYSQL_PASSWORD: "${FAMS_MYSQL_PASSWORD:?required}"
       MYSQL_ROOT_PASSWORD: "${FAMS_MYSQL_ROOT_PASSWORD:?required}"
       TZ: UTC

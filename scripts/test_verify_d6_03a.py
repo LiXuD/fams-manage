@@ -133,6 +133,8 @@ class ComposePolicyTest(unittest.TestCase):
                     "healthcheck": {"test": ["CMD-SHELL", "mysqladmin ping"]},
                     "volumes": ["mysql-data:/var/lib/mysql"],
                     "environment": {
+                        "MYSQL_DATABASE": "${FAMS_MYSQL_DATABASE:?required}",
+                        "MYSQL_USER": "${FAMS_MYSQL_USER:?required}",
                         "MYSQL_PASSWORD": "${FAMS_MYSQL_PASSWORD:?required}",
                         "MYSQL_ROOT_PASSWORD": "${FAMS_MYSQL_ROOT_PASSWORD:?required}",
                     },
@@ -161,6 +163,8 @@ class ComposePolicyTest(unittest.TestCase):
                 "mysql-port-not-loopback",
                 "mysql-healthcheck-missing",
                 "mysql-named-volume-missing",
+                "mysql-database-not-required-variable",
+                "mysql-user-not-required-variable",
                 "mysql-password-not-required-variable",
                 "mysql-root-password-not-required-variable",
             },

@@ -83,6 +83,8 @@ def compose_policy_violations(compose: dict[str, Any]) -> list[str]:
     if not isinstance(environment, dict):
         environment = {}
     required_variables = {
+        "MYSQL_DATABASE": "${FAMS_MYSQL_DATABASE:?required}",
+        "MYSQL_USER": "${FAMS_MYSQL_USER:?required}",
         "MYSQL_PASSWORD": "${FAMS_MYSQL_PASSWORD:?required}",
         "MYSQL_ROOT_PASSWORD": "${FAMS_MYSQL_ROOT_PASSWORD:?required}",
     }
