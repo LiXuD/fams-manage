@@ -401,6 +401,26 @@ class ObservabilityPolicyTest(unittest.TestCase):
         self.assertNotIn("accept", request.call_args_list[1].kwargs)
         self.assertEqual("text/plain", request.call_args_list[2].kwargs["accept"])
 
+    def test_application_process_uses_raw_rtk_proxy_for_startup_evidence(self) -> None:
+        verifier = load_verifier()
+        context = verifier.RuntimeContext(
+            project="test",
+            database="test",
+            username="test",
+            password="test",
+            root_password="test",
+            mysql_port=3306,
+            business_port=8080,
+            management_port=9091,
+        )
+
+        command = verifier.application_command(context, Path("backend.jar"))
+
+        self.assertEqual(["rtk", "proxy", "java"], command[:3])
+        self.assertIn("--server.address=127.0.0.1", command)
+        self.assertIn("--server.port=8080", command)
+        self.assertIn("--management.server.port=9091", command)
+
     def test_accepts_only_a_loopback_two_endpoint_management_profile(self) -> None:
         verifier = load_verifier()
         properties = {

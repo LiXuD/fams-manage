@@ -1098,6 +1098,21 @@ def find_application_jar() -> Path:
     return jars[0]
 
 
+def application_command(context: RuntimeContext, application_jar: Path) -> list[str]:
+    """Build the raw RTK command used to retain complete startup evidence."""
+
+    return [
+        "rtk",
+        "proxy",
+        "java",
+        "-jar",
+        str(application_jar),
+        "--server.address=127.0.0.1",
+        f"--server.port={context.business_port}",
+        f"--management.server.port={context.management_port}",
+    ]
+
+
 def start_application(context: RuntimeContext) -> AppProcess:
     environment = os.environ.copy()
     environment.update(
@@ -1114,15 +1129,7 @@ def start_application(context: RuntimeContext) -> AppProcess:
     log_handle = log_path.open("w", encoding="utf-8")
     try:
         process = subprocess.Popen(
-            [
-                "rtk",
-                "java",
-                "-jar",
-                str(find_application_jar()),
-                "--server.address=127.0.0.1",
-                f"--server.port={context.business_port}",
-                f"--management.server.port={context.management_port}",
-            ],
+            application_command(context, find_application_jar()),
             cwd=ROOT,
             env=environment,
             stdout=log_handle,
