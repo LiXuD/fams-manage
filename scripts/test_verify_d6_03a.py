@@ -109,6 +109,45 @@ class JavaTestOutputPolicyTest(unittest.TestCase):
         self.assertEqual(["java-test-summary-missing"], missing)
 
 
+class CurrentHeadSecretPolicyTest(unittest.TestCase):
+
+    def test_detects_private_keys_and_supported_real_token_shapes(self) -> None:
+        verifier = load_verifier()
+        entries = (
+            ("private.txt", "-----BEGIN " + "PRIVATE KEY-----"),
+            ("classic.txt", "token=ghp_" + "A" * 36),
+            ("fine-grained.txt", "token=github_pat_" + "A1_" * 12),
+            ("openai.txt", "token=sk-" + "a1_" * 12),
+            ("aws.txt", "token=AKIA" + "A1" * 8),
+            ("slack.txt", "token=xoxb-" + "a1" * 12),
+        )
+
+        result = verifier.current_head_secret_violations(entries)
+
+        self.assertEqual(
+            {
+                "private.txt:private-key",
+                "classic.txt:github-classic-token",
+                "fine-grained.txt:github-fine-grained-token",
+                "openai.txt:openai-token",
+                "aws.txt:aws-access-key",
+                "slack.txt:slack-token",
+            },
+            set(result),
+        )
+
+    def test_ignores_placeholders_password_examples_and_pattern_source(self) -> None:
+        verifier = load_verifier()
+        entries = (
+            ("compose.yaml", "MYSQL_PASSWORD=${FAMS_MYSQL_PASSWORD:?required}"),
+            ("wrong-password.json", '{"scenario":"wrong password"}'),
+            ("placeholder.txt", "github_pat_<placeholder> sk-<redacted>"),
+            ("regex.py", r"ghp_[A-Za-z0-9]{20,}"),
+        )
+
+        self.assertEqual([], verifier.current_head_secret_violations(entries))
+
+
 class TypeScriptNegativeFixtureTest(unittest.TestCase):
 
     def test_accepts_a_policy_driven_lint_rejection(self) -> None:

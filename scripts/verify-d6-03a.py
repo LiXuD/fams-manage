@@ -39,6 +39,7 @@ MINIMUM_JAVA_TESTS = 23
 MINIMUM_LINE_COVERAGE = 0.75
 MINIMUM_BRANCH_COVERAGE = 0.75
 BASE_COMMIT = "5676bd9823e27ef65988568acd940a7532ab82b7"
+D6_01A_REVIEWED_COMMIT = "338d49da5d734edb64729373f92ca92d7487bcf6"
 GENERATED_TARGETS = (
     ROOT / "backend/target",
     ROOT / "packages/api-types/target",
@@ -85,6 +86,34 @@ class AppProcess:
 
 BLOCKING_STEPS: list[tuple[str, int, str]] = []
 RUNTIME_SECRETS: list[str] = []
+CURRENT_HEAD_SECRET_PATTERNS = (
+    (
+        "private-key",
+        re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----"),
+    ),
+    (
+        "aws-access-key",
+        re.compile(r"(?i)(?<![A-Za-z0-9_])(?:AKIA|ASIA)[0-9A-Z]{16}(?![0-9A-Z])"),
+    ),
+    (
+        "github-classic-token",
+        re.compile(r"(?<![A-Za-z0-9_])ghp_[A-Za-z0-9]{20,}(?![A-Za-z0-9])"),
+    ),
+    (
+        "github-fine-grained-token",
+        re.compile(
+            r"(?<![A-Za-z0-9_])github_pat_[A-Za-z0-9_]{20,}(?![A-Za-z0-9_])"
+        ),
+    ),
+    (
+        "openai-token",
+        re.compile(r"(?<![A-Za-z0-9_])sk-[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])"),
+    ),
+    (
+        "slack-token",
+        re.compile(r"(?<![A-Za-z0-9_])xox[baprs]-[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])"),
+    ),
+)
 
 
 
@@ -112,6 +141,19 @@ def java_test_summary_violations(output: str, *, minimum_tests: int) -> list[str
     if tests < minimum_tests or failures or errors or skipped:
         return ["java-tests-not-fully-executed"]
     return []
+
+
+def current_head_secret_violations(
+    entries: Iterable[tuple[str, str]],
+) -> list[str]:
+    """Return precise token/private-key findings without flagging examples by name."""
+
+    violations: list[str] = []
+    for relative, content in entries:
+        for label, pattern in CURRENT_HEAD_SECRET_PATTERNS:
+            if pattern.search(content):
+                violations.append(f"{relative}:{label}")
+    return violations
 
 
 def typescript_negative_fixture_violations(
@@ -497,6 +539,36 @@ def verify_static_configuration() -> None:
     )
 
 
+def verify_current_head_secrets() -> None:
+    tracked_output = require_command(
+        "current tracked file list",
+        ["git", "ls-files", "-z"],
+        show=False,
+    )
+    entries: list[tuple[str, str]] = []
+    for relative in (item for item in tracked_output.split("\0") if item):
+        path = ROOT / relative
+        try:
+            if path.is_symlink():
+                content = os.readlink(path)
+            else:
+                content = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError as exc:
+            raise VerificationFailure(
+                f"unable to inspect tracked file for secrets: {relative}"
+            ) from exc
+        entries.append((relative, content))
+    violations = current_head_secret_violations(entries)
+    if violations:
+        raise VerificationFailure(
+            "current HEAD secret findings: " + ", ".join(violations)
+        )
+    record_policy_pass(
+        "current HEAD secret scan",
+        f"{len(entries)} tracked files; token and private-key findings=0",
+    )
+
+
 def install_locked_dependencies() -> None:
     require_command(
         "locked root dependencies",
@@ -511,7 +583,6 @@ def install_locked_dependencies() -> None:
 
 
 def verify_d6_01a_in_clean_clone() -> None:
-    head = require_command("current HEAD", ["git", "rev-parse", "HEAD"], show=False).strip()
     with tempfile.TemporaryDirectory(prefix="fams-d6-03a-baseline-") as temporary:
         clone = Path(temporary) / "fams"
         require_command(
@@ -521,7 +592,7 @@ def verify_d6_01a_in_clean_clone() -> None:
         )
         require_command(
             "D6-01A reviewed checkout",
-            ["git", "checkout", "-B", "main", head],
+            ["git", "checkout", "-B", "main", D6_01A_REVIEWED_COMMIT],
             cwd=clone,
         )
         require_command(
@@ -534,6 +605,10 @@ def verify_d6_01a_in_clean_clone() -> None:
             ["git", "config", "core.hooksPath", ".githooks"],
             cwd=clone,
         )
+        for relative in (".playwright-cli", "output", ".superpowers"):
+            fixture = clone / relative / "d6-03a-ignore-fixture"
+            fixture.parent.mkdir(parents=True, exist_ok=True)
+            fixture.write_text("task-owned ignore fixture\n", encoding="utf-8")
         require_command(
             "D6-01A clone tooling",
             ["npm", "ci", "--prefix", "tools/git", "--ignore-scripts"],
@@ -1201,6 +1276,7 @@ def main() -> None:
         assert_clean_start()
         verify_tool_versions()
         verify_static_configuration()
+        verify_current_head_secrets()
         install_locked_dependencies()
         verify_new_commit_messages()
         verify_retained_gates()
