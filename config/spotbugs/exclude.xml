@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- Generated from the authoritative OpenAPI contract and checked separately for drift. -->
+    <Match>
+        <Package name="~com\.fams\.contract\.(api|invoker|model)(\..*)?"/>
+    </Match>
+    <!-- Constructor injection intentionally retains this package-private Mapper collaborator. -->
+    <Match>
+        <Class name="com.fams.runtime.compatibility.RuntimeCompatibilityService"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+</FindBugsFilter>

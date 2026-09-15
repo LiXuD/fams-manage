@@ -26,6 +26,15 @@
         <mybatis-spring-boot-starter.version>4.1.0</mybatis-spring-boot-starter.version>
         <spring-session.version>4.1.1</spring-session.version>
         <mysql-connector.version>9.7.0</mysql-connector.version>
+        <archunit.version>1.4.2</archunit.version>
+        <checkstyle.version>14.1.0</checkstyle.version>
+        <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
+        <maven-dependency-plugin.version>3.11.0</maven-dependency-plugin.version>
+        <maven-enforcer-plugin.version>3.6.3</maven-enforcer-plugin.version>
+        <maven-surefire-plugin.version>3.5.6</maven-surefire-plugin.version>
+        <spotbugs-maven-plugin.version>4.10.4.1</spotbugs-maven-plugin.version>
+        <jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
+        <argLine></argLine>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
@@ -68,6 +77,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <version>${archunit.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -164,6 +179,147 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>${maven-dependency-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>resolve-mockito-test-agent</id>
+                        <phase>initialize</phase>
+                        <goals>
+                            <goal>properties</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven-surefire-plugin.version}</version>
+                <configuration>
+                    <argLine>@{argLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>quality</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-enforcer-plugin</artifactId>
+                        <version>${maven-enforcer-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>enforce-development-runtime-and-dependencies</id>
+                                <phase>validate</phase>
+                                <goals>
+                                    <goal>enforce</goal>
+                                </goals>
+                                <configuration>
+                                    <fail>true</fail>
+                                    <failFast>false</failFast>
+                                    <rules>
+                                        <requireJavaVersion>
+                                            <version>[21,22)</version>
+                                        </requireJavaVersion>
+                                        <requireMavenVersion>
+                                            <version>[3.9.16,3.10)</version>
+                                        </requireMavenVersion>
+                                        <dependencyConvergence/>
+                                        <requireReleaseDeps>
+                                            <failWhenParentIsSnapshot>false</failWhenParentIsSnapshot>
+                                        </requireReleaseDeps>
+                                    </rules>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-checkstyle-plugin</artifactId>
+                        <version>${maven-checkstyle-plugin.version}</version>
+                        <dependencies>
+                            <dependency>
+                                <groupId>com.puppycrawl.tools</groupId>
+                                <artifactId>checkstyle</artifactId>
+                                <version>${checkstyle.version}</version>
+                            </dependency>
+                        </dependencies>
+                        <executions>
+                            <execution>
+                                <id>check-java-conventions</id>
+                                <phase>validate</phase>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                                <configuration>
+                                    <configLocation>${maven.multiModuleProjectDirectory}/config/checkstyle/checkstyle.xml</configLocation>
+                                    <includeTestSourceDirectory>true</includeTestSourceDirectory>
+                                    <cacheFile>${project.build.directory}/checkstyle-cachefile</cacheFile>
+                                    <outputFile>${project.build.directory}/checkstyle-result.xml</outputFile>
+                                    <outputFileFormat>xml</outputFileFormat>
+                                    <failOnViolation>true</failOnViolation>
+                                    <failsOnError>true</failsOnError>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.jacoco</groupId>
+                        <artifactId>jacoco-maven-plugin</artifactId>
+                        <version>${jacoco-maven-plugin.version}</version>
+                        <configuration>
+                            <excludes>
+                                <exclude>com/fams/contract/api/**</exclude>
+                                <exclude>com/fams/contract/invoker/**</exclude>
+                                <exclude>com/fams/contract/model/**</exclude>
+                            </excludes>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>prepare-unit-coverage</id>
+                                <goals>
+                                    <goal>prepare-agent</goal>
+                                </goals>
+                            </execution>
+                            <execution>
+                                <id>report-unit-coverage</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>report</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>com.github.spotbugs</groupId>
+                        <artifactId>spotbugs-maven-plugin</artifactId>
+                        <version>${spotbugs-maven-plugin.version}</version>
+                        <configuration>
+                            <effort>Max</effort>
+                            <threshold>Medium</threshold>
+                            <failOnError>true</failOnError>
+                            <excludeFilterFile>${maven.multiModuleProjectDirectory}/config/spotbugs/exclude.xml</excludeFilterFile>
+                            <xmlOutput>true</xmlOutput>
+                            <xmlOutputDirectory>${project.build.directory}</xmlOutputDirectory>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>check-bytecode-defects</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

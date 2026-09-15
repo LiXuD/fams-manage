@@ -56,6 +56,39 @@ class BlockingStepTest(unittest.TestCase):
         self.assertFalse(missing)
 
 
+class JavaTestOutputPolicyTest(unittest.TestCase):
+
+    def test_accepts_test_output_without_dynamic_agent_loading(self) -> None:
+        verifier = load_verifier()
+
+        self.assertEqual(
+            [],
+            verifier.java_test_output_violations(
+                "Tests run: 15, Failures: 0, Errors: 0, Skipped: 3"
+            ),
+        )
+
+    def test_rejects_mockito_self_attach_and_dynamic_agent_warnings(self) -> None:
+        verifier = load_verifier()
+
+        result = verifier.java_test_output_violations(
+            "\n".join(
+                (
+                    "Mockito is currently self-attaching to enable the inline-mock-maker.",
+                    "WARNING: A Java agent has been loaded dynamically",
+                )
+            )
+        )
+
+        self.assertEqual(
+            {
+                "mockito-self-attachment-detected",
+                "dynamic-java-agent-loading-detected",
+            },
+            set(result),
+        )
+
+
 class ComposePolicyTest(unittest.TestCase):
 
     @staticmethod

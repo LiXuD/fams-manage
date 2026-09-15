@@ -15,6 +15,17 @@ MYSQL_IMAGE = (
 )
 
 
+def java_test_output_violations(output: str) -> list[str]:
+    """Reject Java test runs that rely on runtime agent attachment."""
+
+    violations: list[str] = []
+    if "Mockito is currently self-attaching" in output:
+        violations.append("mockito-self-attachment-detected")
+    if "A Java agent has been loaded dynamically" in output:
+        violations.append("dynamic-java-agent-loading-detected")
+    return violations
+
+
 def compose_policy_violations(compose: dict[str, Any]) -> list[str]:
     """Return actionable violations for the project-local Compose model."""
 
