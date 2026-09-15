@@ -4,7 +4,7 @@
 
 - **ID：** D6-03A 本地统一检查。
 - **目标：** 在 D6-02 已验证的契约、运行组合和首批设计包上，建立可重复的本地 Compose 环境与单一质量入口，使 G1 业务编码从第一笔提交起受到明确、可失败的静态、架构、覆盖率、依赖、密钥、契约漂移和指标暴露规则约束。
-- **状态：** `IN_PROGRESS`（2026-09-15）。
+- **状态：** `IN_REVIEW`（2026-09-15；等待用户本人非实施者规格/质量复核）。
 - **分支 / 基线：** `feat/D6-03A-local-quality-gate`；`5676bd9823e27ef65988568acd940a7532ab82b7`。
 - **前置条件：** D6-01A、D6-02A、D6-02B、D6-02C 均为 `DEV_VERIFIED`；D6-01B 不阻塞本地任务。
 - **规模：** M；只交付本地开发环境与质量门禁，不实现业务功能。
@@ -37,6 +37,17 @@
 
 - 新工作树首次运行 `scripts/verify-d6-02c.py` 时，D6-02A 保留门禁因 `tools/git/node_modules/.bin/commitlint` 不存在而退出 1；这是新工作树缺少锁定开发依赖，不是产品逻辑失败。
 - 执行根目录及 `tools/git` 的锁文件安装后，同一完整入口在固定 Java 21、Node 24.18.0、npm 11.16.0 环境退出 0：81 个 D6-02C 单元测试、102 个 operation / 162 个示例、Java 163 / TypeScript 159 个生成文件、D6-02A/B 保留门禁及差异检查全部通过，生成目录已清理。
+
+## 已完成实现与送审证据
+
+- `compose.yaml` 固定 MySQL 8.4.11 摘要、回环端口、健康检查、运行时必填凭据和命名卷；统一入口使用随机项目名/端口，验证首次与重复启动、应用重启、数据库同卷重启及精确清理。
+- Java `quality` profile 固定 Enforcer、Surefire 显式 Mockito agent、Checkstyle、SpotBugs、ArchUnit 和 JaCoCo；顶层模块循环、跨模块 Mapper 访问及 Controller 事务均有故意失败夹具。
+- TypeScript 根工作区固定 ESLint 10.10.0、`@eslint/js` 10.0.1、typescript-eslint 8.70.0，并覆盖当前共享类型和未来 PC/小程序源路径；临时负例必须同时被 `no-unused-vars`、`no-explicit-any` 拒绝。
+- 当前手写 Java 实测行覆盖 77/101（76.24%）、分支 6/8（75.00%），初始阻断阈值均为 75%；仅排除由权威 OpenAPI 生成并由确定性门禁另验的 Java 包。
+- Actuator/Micrometer 只在 `127.0.0.1` 独立管理端口暴露 health/prometheus；真实 HTTP 证明业务端口 metrics 404、管理 health UP 且无详情、Prometheus 有 JVM 指标，`lsof` 证明回环监听。
+- 实现候选 `a6b4a56` 的首轮完整入口退出 0：D6-01A 与 D6-02A/B/C 保留门禁、23 个 Java 测试 0 skipped、Checkstyle/SpotBugs 0、覆盖率、TS lint/typecheck/负例、高危 npm audit 0 finding、指标、应用/数据库重启和清理全部通过，共 77 项阻断观察。
+- `c72db1c` 又将 28 个验证器单元测试纳入统一阻断入口；详细版本、范围、排除、修复轮次和边界见 [D6-03A 本地统一质量门禁证据](D6-03A-local-quality-gate.md)。送审 HEAD 仍须完整复跑。
+- 用户已明确由本人审阅复核；本任务状态只进入 `IN_REVIEW`，不自授 `DEV_VERIFIED`。
 
 ## 数据、回滚与恢复边界
 
