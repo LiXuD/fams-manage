@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 MODULE_PATH = Path(__file__).with_name("verify-d6-03a.py")
@@ -374,6 +375,31 @@ class CoveragePolicyTest(unittest.TestCase):
 
 
 class ObservabilityPolicyTest(unittest.TestCase):
+
+    def test_runtime_metrics_requests_use_the_prometheus_text_media_type(self) -> None:
+        verifier = load_verifier()
+        context = verifier.RuntimeContext(
+            project="test",
+            database="test",
+            username="test",
+            password="test",
+            root_password="test",
+            mysql_port=3306,
+            business_port=8080,
+            management_port=9091,
+        )
+        responses = (
+            (404, ""),
+            (200, '{"status":"UP"}'),
+            (200, "jvm_memory_used_bytes 1.0\n"),
+        )
+        with patch.object(verifier, "http_request", side_effect=responses) as request:
+            with patch.object(verifier, "verify_loopback_listener"):
+                verifier.verify_observability_http(context)
+
+        self.assertEqual("text/plain", request.call_args_list[0].kwargs["accept"])
+        self.assertNotIn("accept", request.call_args_list[1].kwargs)
+        self.assertEqual("text/plain", request.call_args_list[2].kwargs["accept"])
 
     def test_accepts_only_a_loopback_two_endpoint_management_profile(self) -> None:
         verifier = load_verifier()

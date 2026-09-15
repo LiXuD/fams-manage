@@ -1169,10 +1169,11 @@ def http_request(
     *,
     method: str = "GET",
     body: dict[str, object] | None = None,
+    accept: str = "application/json",
     timeout: float = 8,
 ) -> tuple[int, str]:
     payload: bytes | None = None
-    headers = {"Accept": "application/json"}
+    headers = {"Accept": accept}
     if body is not None:
         payload = json.dumps(body, separators=(",", ":")).encode("utf-8")
         headers["Content-Type"] = "application/json"
@@ -1244,6 +1245,7 @@ def verify_observability_http(context: RuntimeContext) -> None:
     business_status, _ = http_request(
         context.business_port,
         "/actuator/prometheus",
+        accept="text/plain",
     )
     health_status, health_body = http_request(
         context.management_port,
@@ -1252,6 +1254,7 @@ def verify_observability_http(context: RuntimeContext) -> None:
     metrics_status, metrics_body = http_request(
         context.management_port,
         "/actuator/prometheus",
+        accept="text/plain",
     )
     violations = observability_policy_violations(
         business_metrics_status=business_status,
