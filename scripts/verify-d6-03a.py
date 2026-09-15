@@ -172,6 +172,38 @@ def retained_python_toolchain_violations(
     return violations
 
 
+def environment_with_executable_directory(
+    environment: dict[str, str],
+    executable: str,
+) -> dict[str, str]:
+    """Prepend one resolved tool directory without mutating the caller's mapping."""
+
+    result = environment.copy()
+    directory = str(Path(executable).parent)
+    current_path = result.get("PATH", "")
+    result["PATH"] = directory + (os.pathsep + current_path if current_path else "")
+    return result
+
+
+def create_python_shim_environment(
+    environment: dict[str, str],
+    executable: str,
+    shim_directory: Path,
+) -> dict[str, str]:
+    """Expose only Python aliases so nested gates retain the selected Node runtime."""
+
+    shim_directory.mkdir(parents=True, exist_ok=True)
+    for name in ("python3", "python3.12"):
+        shim = shim_directory / name
+        if shim.exists() or shim.is_symlink():
+            raise VerificationFailure(f"Python shim already exists: {name}")
+        shim.symlink_to(executable)
+    return environment_with_executable_directory(
+        environment,
+        str(shim_directory / "python3.12"),
+    )
+
+
 def typescript_negative_fixture_violations(
     returncode: int,
     output: str,
@@ -693,11 +725,21 @@ def verify_new_commit_messages() -> None:
 def verify_retained_gates() -> None:
     verify_d6_01a_in_clean_clone()
     clear_generated_outputs()
-    require_command(
-        "D6-02C retained complete gate",
-        ["python3.12", "scripts/verify-d6-02c.py"],
-        timeout=2400,
-    )
+    python_executable = shutil.which("python3.12")
+    if python_executable is None:
+        raise VerificationFailure("Python 3.12 is unavailable for the retained D6-02C gate")
+    with tempfile.TemporaryDirectory(prefix="fams-d6-03a-python-") as temporary:
+        environment = create_python_shim_environment(
+            os.environ.copy(),
+            python_executable,
+            Path(temporary),
+        )
+        require_command(
+            "D6-02C retained complete gate",
+            ["python3.12", "scripts/verify-d6-02c.py"],
+            env=environment,
+            timeout=2400,
+        )
     remaining = [target for target in GENERATED_TARGETS if target.exists()]
     if remaining:
         raise VerificationFailure("D6-02C retained gate did not clean generated output")

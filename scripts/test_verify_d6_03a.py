@@ -6,6 +6,7 @@ from __future__ import annotations
 import importlib.util
 import copy
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -169,6 +170,51 @@ class RetainedPythonToolchainTest(unittest.TestCase):
             ["retained-pyyaml-version-drift"],
             verifier.retained_python_toolchain_violations("3.12.4", "6.0.3"),
         )
+
+    def test_places_the_reviewed_python_directory_first_for_nested_gates(self) -> None:
+        verifier = load_verifier()
+        original = {"PATH": "/opt/homebrew/bin:/usr/bin", "KEEP": "value"}
+
+        result = verifier.environment_with_executable_directory(
+            original,
+            "/usr/local/bin/python3.12",
+        )
+
+        self.assertEqual(
+            "/usr/local/bin:/opt/homebrew/bin:/usr/bin",
+            result["PATH"],
+        )
+        self.assertEqual("value", result["KEEP"])
+        self.assertEqual("/opt/homebrew/bin:/usr/bin", original["PATH"])
+
+    def test_isolates_python_shims_without_promoting_other_tool_binaries(self) -> None:
+        verifier = load_verifier()
+        original = {
+            "PATH": "/nvm/node-v24/bin:/usr/local/bin:/usr/bin",
+            "KEEP": "value",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            shim_directory = Path(directory)
+
+            result = verifier.create_python_shim_environment(
+                original,
+                sys.executable,
+                shim_directory,
+            )
+
+            self.assertEqual(
+                f"{shim_directory}:/nvm/node-v24/bin:/usr/local/bin:/usr/bin",
+                result["PATH"],
+            )
+            self.assertEqual(
+                Path(sys.executable),
+                (shim_directory / "python3").readlink(),
+            )
+            self.assertEqual(
+                Path(sys.executable),
+                (shim_directory / "python3.12").readlink(),
+            )
+        self.assertEqual("/nvm/node-v24/bin:/usr/local/bin:/usr/bin", original["PATH"])
 
 
 class TypeScriptNegativeFixtureTest(unittest.TestCase):
