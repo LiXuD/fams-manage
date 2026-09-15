@@ -26,6 +26,23 @@ def java_test_output_violations(output: str) -> list[str]:
     return violations
 
 
+def typescript_negative_fixture_violations(
+    returncode: int,
+    output: str,
+) -> list[str]:
+    """Require the temporary TypeScript fixture to fail for both intended rules."""
+
+    if returncode == 0:
+        return ["typescript-negative-fixture-accepted"]
+    required_rule_ids = (
+        "@typescript-eslint/no-unused-vars",
+        "@typescript-eslint/no-explicit-any",
+    )
+    if not all(rule_id in output for rule_id in required_rule_ids):
+        return ["typescript-negative-fixture-not-policy-driven"]
+    return []
+
+
 def compose_policy_violations(compose: dict[str, Any]) -> list[str]:
     """Return actionable violations for the project-local Compose model."""
 

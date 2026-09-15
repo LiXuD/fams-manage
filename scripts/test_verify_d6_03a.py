@@ -89,6 +89,35 @@ class JavaTestOutputPolicyTest(unittest.TestCase):
         )
 
 
+class TypeScriptNegativeFixtureTest(unittest.TestCase):
+
+    def test_accepts_a_policy_driven_lint_rejection(self) -> None:
+        verifier = load_verifier()
+
+        result = verifier.typescript_negative_fixture_violations(
+            1,
+            "@typescript-eslint/no-unused-vars\n"
+            "@typescript-eslint/no-explicit-any\n",
+        )
+
+        self.assertEqual([], result)
+
+    def test_rejects_an_accepted_fixture_or_an_infrastructure_failure(self) -> None:
+        verifier = load_verifier()
+
+        accepted = verifier.typescript_negative_fixture_violations(0, "")
+        infrastructure_error = verifier.typescript_negative_fixture_violations(
+            2,
+            "ConfigError: structuredClone is not defined",
+        )
+
+        self.assertEqual(["typescript-negative-fixture-accepted"], accepted)
+        self.assertEqual(
+            ["typescript-negative-fixture-not-policy-driven"],
+            infrastructure_error,
+        )
+
+
 class ComposePolicyTest(unittest.TestCase):
 
     @staticmethod
