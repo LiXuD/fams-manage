@@ -88,6 +88,26 @@ class JavaTestOutputPolicyTest(unittest.TestCase):
             set(result),
         )
 
+    def test_requires_an_unskipped_successful_aggregate_test_summary(self) -> None:
+        verifier = load_verifier()
+
+        accepted = verifier.java_test_summary_violations(
+            "Tests run: 23, Failures: 0, Errors: 0, Skipped: 0",
+            minimum_tests=23,
+        )
+        skipped = verifier.java_test_summary_violations(
+            "Tests run: 23, Failures: 0, Errors: 0, Skipped: 3",
+            minimum_tests=23,
+        )
+        missing = verifier.java_test_summary_violations(
+            "BUILD SUCCESS",
+            minimum_tests=23,
+        )
+
+        self.assertEqual([], accepted)
+        self.assertEqual(["java-tests-not-fully-executed"], skipped)
+        self.assertEqual(["java-test-summary-missing"], missing)
+
 
 class TypeScriptNegativeFixtureTest(unittest.TestCase):
 
@@ -146,6 +166,19 @@ class ComposePolicyTest(unittest.TestCase):
     def test_accepts_pinned_mysql_with_loopback_port_healthcheck_and_named_volume(self) -> None:
         verifier = load_verifier()
         self.assertEqual([], verifier.compose_policy_violations(self.valid_compose()))
+
+    def test_accepts_the_named_volume_shape_normalized_by_compose(self) -> None:
+        verifier = load_verifier()
+        compose = self.valid_compose()
+        compose["services"]["mysql"]["volumes"] = [
+            {
+                "source": "mysql-data",
+                "target": "/var/lib/mysql",
+                "type": "volume",
+            }
+        ]
+
+        self.assertEqual([], verifier.compose_policy_violations(compose))
 
     def test_rejects_unpinned_image_public_port_and_missing_safety_controls(self) -> None:
         verifier = load_verifier()
@@ -218,6 +251,42 @@ class CoveragePolicyTest(unittest.TestCase):
 
 
 class ObservabilityPolicyTest(unittest.TestCase):
+
+    def test_accepts_only_a_loopback_two_endpoint_management_profile(self) -> None:
+        verifier = load_verifier()
+        properties = {
+            "management.server.address": "127.0.0.1",
+            "management.server.port": "${FAMS_MANAGEMENT_PORT:39091}",
+            "management.endpoints.web.exposure.include": "health,prometheus",
+            "management.endpoint.health.show-details": "never",
+            "spring.jmx.enabled": "false",
+        }
+
+        self.assertEqual(
+            [],
+            verifier.observability_profile_violations(properties),
+        )
+
+    def test_rejects_public_or_overexposed_management_configuration(self) -> None:
+        verifier = load_verifier()
+        properties = {
+            "management.server.address": "0.0.0.0",
+            "management.server.port": "8080",
+            "management.endpoints.web.exposure.include": "*",
+            "management.endpoint.health.show-details": "always",
+            "spring.jmx.enabled": "true",
+        }
+
+        self.assertEqual(
+            {
+                "management-address-not-loopback",
+                "management-port-not-dedicated-variable",
+                "management-endpoints-overexposed",
+                "management-health-details-exposed",
+                "jmx-management-enabled",
+            },
+            set(verifier.observability_profile_violations(properties)),
+        )
 
     def test_accepts_management_health_and_metrics_hidden_from_business_port(self) -> None:
         verifier = load_verifier()
