@@ -204,6 +204,18 @@ def create_python_shim_environment(
     )
 
 
+def typescript_lint_output_violations(output: str) -> list[str]:
+    """Reject actual ESLint warning summaries without matching CLI option names."""
+
+    warning_counts = [
+        int(count)
+        for count in re.findall(r"\b(\d+)\s+warnings?\b", output, re.IGNORECASE)
+    ]
+    if any(count > 0 for count in warning_counts):
+        return ["typescript-lint-warnings-reported"]
+    return []
+
+
 def typescript_negative_fixture_violations(
     returncode: int,
     output: str,
@@ -1001,8 +1013,11 @@ def verify_java_quality(context: RuntimeContext) -> None:
 
 def verify_typescript_quality() -> None:
     lint_output = require_command("TypeScript lint", ["npm", "run", "lint"], timeout=300)
-    if "warning" in lint_output.lower() and "0 warnings" not in lint_output.lower():
-        raise VerificationFailure("TypeScript lint emitted warnings")
+    lint_violations = typescript_lint_output_violations(lint_output)
+    if lint_violations:
+        raise VerificationFailure(
+            "TypeScript lint violations: " + ", ".join(lint_violations)
+        )
     require_command("TypeScript compile", ["npm", "run", "typecheck"], timeout=300)
 
     fixture = (

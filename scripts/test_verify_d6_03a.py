@@ -219,6 +219,21 @@ class RetainedPythonToolchainTest(unittest.TestCase):
 
 class TypeScriptNegativeFixtureTest(unittest.TestCase):
 
+    def test_lint_output_ignores_the_max_warnings_flag_and_accepts_zero(self) -> None:
+        verifier = load_verifier()
+        output = "eslint src --max-warnings=0\n0 problems (0 errors, 0 warnings)\n"
+
+        self.assertEqual([], verifier.typescript_lint_output_violations(output))
+
+    def test_lint_output_rejects_a_reported_warning_count(self) -> None:
+        verifier = load_verifier()
+        output = "1 problem (0 errors, 1 warning)\n"
+
+        self.assertEqual(
+            ["typescript-lint-warnings-reported"],
+            verifier.typescript_lint_output_violations(output),
+        )
+
     def test_accepts_a_policy_driven_lint_rejection(self) -> None:
         verifier = load_verifier()
 
