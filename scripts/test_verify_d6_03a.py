@@ -29,6 +29,22 @@ def load_verifier():
 
 class BlockingStepTest(unittest.TestCase):
 
+    def test_verifier_unit_suite_is_a_blocking_step(self) -> None:
+        verifier = load_verifier()
+        with patch.object(verifier, "require_command", return_value="") as command:
+            verifier.verify_self_tests()
+
+        command.assert_called_once_with(
+            "D6-03A verifier unit tests",
+            [
+                sys.executable,
+                "-m",
+                "unittest",
+                "scripts.test_verify_d6_03a",
+            ],
+            timeout=300,
+        )
+
     def test_accepts_only_when_every_blocking_step_executed_successfully(self) -> None:
         verifier = load_verifier()
 

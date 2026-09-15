@@ -652,6 +652,19 @@ def verify_current_head_secrets() -> None:
     )
 
 
+def verify_self_tests() -> None:
+    require_command(
+        "D6-03A verifier unit tests",
+        [
+            sys.executable,
+            "-m",
+            "unittest",
+            "scripts.test_verify_d6_03a",
+        ],
+        timeout=300,
+    )
+
+
 def install_locked_dependencies() -> None:
     require_command(
         "locked root dependencies",
@@ -1380,6 +1393,7 @@ def main() -> None:
     failure: BaseException | None = None
     try:
         assert_clean_start()
+        verify_self_tests()
         verify_tool_versions()
         verify_static_configuration()
         verify_current_head_secrets()
