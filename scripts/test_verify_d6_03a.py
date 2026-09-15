@@ -148,6 +148,29 @@ class CurrentHeadSecretPolicyTest(unittest.TestCase):
         self.assertEqual([], verifier.current_head_secret_violations(entries))
 
 
+class RetainedPythonToolchainTest(unittest.TestCase):
+
+    def test_accepts_python_3_12_with_the_frozen_pyyaml(self) -> None:
+        verifier = load_verifier()
+
+        self.assertEqual(
+            [],
+            verifier.retained_python_toolchain_violations("3.12.4", "6.0.2"),
+        )
+
+    def test_rejects_a_different_python_minor_or_pyyaml_version(self) -> None:
+        verifier = load_verifier()
+
+        self.assertEqual(
+            ["retained-python-version-drift"],
+            verifier.retained_python_toolchain_violations("3.13.1", "6.0.2"),
+        )
+        self.assertEqual(
+            ["retained-pyyaml-version-drift"],
+            verifier.retained_python_toolchain_violations("3.12.4", "6.0.3"),
+        )
+
+
 class TypeScriptNegativeFixtureTest(unittest.TestCase):
 
     def test_accepts_a_policy_driven_lint_rejection(self) -> None:

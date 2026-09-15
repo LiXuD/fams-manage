@@ -35,6 +35,8 @@ JAVA_VERSION = "21.0.7"
 NODE_VERSION = "v24.18.0"
 NPM_VERSION = "11.16.0"
 MAVEN_VERSION = "3.9.16"
+PYTHON_MINOR_VERSION = "3.12"
+PY_YAML_VERSION = "6.0.2"
 MINIMUM_JAVA_TESTS = 23
 MINIMUM_LINE_COVERAGE = 0.75
 MINIMUM_BRANCH_COVERAGE = 0.75
@@ -153,6 +155,20 @@ def current_head_secret_violations(
         for label, pattern in CURRENT_HEAD_SECRET_PATTERNS:
             if pattern.search(content):
                 violations.append(f"{relative}:{label}")
+    return violations
+
+
+def retained_python_toolchain_violations(
+    python_version: str,
+    pyyaml_version: str,
+) -> list[str]:
+    """Require the Python minor and PyYAML version reviewed by D6-02C."""
+
+    violations: list[str] = []
+    if not python_version.startswith(PYTHON_MINOR_VERSION + "."):
+        violations.append("retained-python-version-drift")
+    if pyyaml_version != PY_YAML_VERSION:
+        violations.append("retained-pyyaml-version-drift")
     return violations
 
 
@@ -461,6 +477,28 @@ def verify_tool_versions() -> None:
     maven_output = require_command("Maven version", ["./mvnw", "--version"], show=False)
     if f"Apache Maven {MAVEN_VERSION}" not in maven_output or JAVA_VERSION not in maven_output:
         raise VerificationFailure("Maven or its Java runtime drifted from the frozen combination")
+    python_output = require_command(
+        "retained Python toolchain",
+        [
+            "python3.12",
+            "-c",
+            "import sys,yaml; "
+            "print(f'{sys.version_info.major}.{sys.version_info.minor}."
+            "{sys.version_info.micro}|{yaml.__version__}')",
+        ],
+        show=False,
+    ).strip()
+    python_version, separator, pyyaml_version = python_output.partition("|")
+    if not separator:
+        raise VerificationFailure("retained Python toolchain metadata was not parseable")
+    python_violations = retained_python_toolchain_violations(
+        python_version,
+        pyyaml_version,
+    )
+    if python_violations:
+        raise VerificationFailure(
+            "retained Python toolchain violations: " + ", ".join(python_violations)
+        )
     docker_output = require_command(
         "Docker engine",
         [
@@ -487,7 +525,8 @@ def verify_tool_versions() -> None:
     record_policy_pass(
         "frozen toolchain",
         f"Java={JAVA_VERSION}, Node={NODE_VERSION}, npm={NPM_VERSION}, "
-        f"Maven={MAVEN_VERSION}, {redact(compose_output)}",
+        f"Maven={MAVEN_VERSION}, Python={python_version}, PyYAML={pyyaml_version}, "
+        f"{redact(compose_output)}",
     )
 
 
@@ -656,7 +695,7 @@ def verify_retained_gates() -> None:
     clear_generated_outputs()
     require_command(
         "D6-02C retained complete gate",
-        ["python3", "scripts/verify-d6-02c.py"],
+        ["python3.12", "scripts/verify-d6-02c.py"],
         timeout=2400,
     )
     remaining = [target for target in GENERATED_TARGETS if target.exists()]
