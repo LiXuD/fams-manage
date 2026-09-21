@@ -474,6 +474,30 @@ class AuthHttpTest {
                 + "\"fieldPermissions\":[\"EMPLOYEE_PHONE\",\"BULK_EXPORT\"],"
                 + "\"reason\":\"Assign reviewed operating scope\"}";
 
+        HttpResponse<String> unconfigured = request(
+                "GET", "/api/v1/system-accounts/2/authorization/ASSET_ADMIN",
+                null, administratorCookie, Map.of());
+        assertEquals(200, unconfigured.statusCode(), unconfigured.body());
+        assertEquals(0L, JSON.readTree(unconfigured.body()).path("version").asLong());
+        assertEquals("REVOKED", JSON.readTree(unconfigured.body()).path("status").asText());
+
+        Map<String, String> invalidHeaders = Map.of(
+                "Idempotency-Key", "authorization-invalid-0001",
+                "X-CSRF-Token", administratorCsrf,
+                "If-Match-Version", "0");
+        assertEquals(409, request(
+                "PATCH", "/api/v1/system-accounts/2/authorization/WAREHOUSE_OPERATOR",
+                replaceBody, administratorCookie, invalidHeaders).statusCode());
+        assertEquals(409, request(
+                "PATCH", "/api/v1/system-accounts/2/authorization/ASSET_ADMIN",
+                replaceBody.replace("[{\"id\":\"1\",\"version\":0}]", "[]"),
+                administratorCookie, invalidHeaders).statusCode());
+        assertEquals(409, request(
+                "PATCH", "/api/v1/system-accounts/2/authorization/ASSET_ADMIN",
+                replaceBody.replace("{\"scopeType\":\"SPECIFIED_WAREHOUSES\"",
+                        "{\"scopeType\":\"SPECIFIED_ORGANIZATIONS\""),
+                administratorCookie, invalidHeaders).statusCode());
+
         HttpResponse<String> staleReference = request(
                 "PATCH",
                 "/api/v1/system-accounts/2/authorization/ASSET_ADMIN",
@@ -602,6 +626,104 @@ class AuthHttpTest {
                 "SELECT COUNT(*) FROM fams_account_authorization WHERE account_id = 2 "
                         + "AND role_code = 'ASSET_ADMIN' AND superseded_at IS NULL",
                 Integer.class));
+        assertEquals(409, request(
+                "POST", "/api/v1/system-accounts/2/authorization/ASSET_ADMIN/revoke",
+                "{\"reason\":\"Already revoked\"}", administratorCookie,
+                Map.of("Idempotency-Key", "authorization-revoke-again-0001",
+                        "X-CSRF-Token", administratorCsrf, "If-Match-Version", "2"))
+                .statusCode());
+    }
+
+    @Test
+    void administrationRejectsInvalidRelationsStatesAndPasswordsWithoutPartialWrites() throws Exception {
+        Instant now = Instant.parse("2026-09-21T02:00:00Z");
+        Timestamp timestamp = Timestamp.from(now);
+        jdbcTemplate.update(
+                "INSERT INTO fams_employee "
+                        + "(id, employee_no, employee_no_normalized, name, organization_id, status, version, "
+                        + "created_at, updated_at) VALUES (2, 'E002', 'E002', 'Bob', 1, 'ACTIVE', 3, ?, ?)",
+                timestamp,
+                timestamp);
+        HttpResponse<String> login = login();
+        String cookie = cookiePair(login.headers().firstValue("Set-Cookie").orElseThrow());
+        String csrf = JSON.readTree(login.body()).path("csrfToken").asText();
+        Map<String, String> createHeaders = Map.of(
+                "Idempotency-Key", "admin-negative-create-0001",
+                "X-CSRF-Token", csrf);
+        String createBody = "{\"username\":\"bob\",\"employee\":{\"id\":\"2\",\"version\":3},"
+                + "\"initialPassword\":\"initial-password-value-2026\"}";
+
+        assertEquals(404, request("GET", "/api/v1/system-accounts/999", null, cookie, Map.of())
+                .statusCode());
+        assertEquals(200, request("GET", "/api/v1/role-configurations", null, cookie, Map.of())
+                .statusCode());
+        assertEquals(404, request(
+                "POST", "/api/v1/system-accounts",
+                createBody.replace("\"id\":\"2\"", "\"id\":\"999\""),
+                cookie, createHeaders).statusCode());
+        assertEquals(409, request(
+                "POST", "/api/v1/system-accounts",
+                createBody.replace("\"version\":3", "\"version\":2"),
+                cookie, createHeaders).statusCode());
+        assertEquals(400, request(
+                "POST", "/api/v1/system-accounts",
+                createBody.replace("initial-password-value-2026", "short"),
+                cookie, createHeaders).statusCode());
+        assertEquals(0, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM fams_system_account WHERE employee_id = 2", Integer.class));
+
+        HttpResponse<String> created = request(
+                "POST", "/api/v1/system-accounts", createBody, cookie, createHeaders);
+        assertEquals(201, created.statusCode(), created.body());
+        String accountId = JSON.readTree(created.body()).path("id").asText();
+        assertEquals(409, request(
+                "POST", "/api/v1/system-accounts",
+                createBody.replace("initial-password-value-2026", "another-password-value-2026"),
+                cookie, createHeaders).statusCode());
+        assertEquals(409, request(
+                "POST", "/api/v1/system-accounts", createBody, cookie,
+                Map.of("Idempotency-Key", "admin-negative-create-0002", "X-CSRF-Token", csrf))
+                .statusCode());
+
+        String statusPath = "/api/v1/system-accounts/" + accountId + "/status";
+        assertEquals(409, request(
+                "POST", statusPath, "{\"action\":\"ENABLE\",\"reason\":\"Already enabled\"}",
+                cookie, Map.of("Idempotency-Key", "admin-enable-noop-0001",
+                        "X-CSRF-Token", csrf, "If-Match-Version", "0")).statusCode());
+        assertEquals(409, request(
+                "POST", statusPath, "{\"action\":\"UNLOCK\",\"reason\":\"Not locked\"}",
+                cookie, Map.of("Idempotency-Key", "admin-unlock-noop-0001",
+                        "X-CSRF-Token", csrf, "If-Match-Version", "0")).statusCode());
+        jdbcTemplate.update("UPDATE fams_system_account SET status = 'LOCKED' WHERE id = ?",
+                Long.parseLong(accountId));
+        HttpResponse<String> unlocked = request(
+                "POST", statusPath, "{\"action\":\"UNLOCK\",\"reason\":\"Identity checked\"}",
+                cookie, Map.of("Idempotency-Key", "admin-unlock-valid-0001",
+                        "X-CSRF-Token", csrf, "If-Match-Version", "0"));
+        assertEquals(200, unlocked.statusCode(), unlocked.body());
+        assertEquals("ENABLED", JSON.readTree(unlocked.body()).path("status").asText());
+
+        String rolePath = "/api/v1/system-accounts/" + accountId + "/roles";
+        String roleBody = "{\"role\":\"ASSET_ADMIN\",\"reason\":\"Review assignment\"}";
+        Map<String, String> roleHeaders = Map.of(
+                "Idempotency-Key", "admin-role-valid-0001",
+                "X-CSRF-Token", csrf,
+                "If-Match-Version", "1");
+        assertEquals(200, request("POST", rolePath, roleBody, cookie, roleHeaders).statusCode());
+        assertEquals(409, request(
+                "POST", rolePath, roleBody, cookie,
+                Map.of("Idempotency-Key", "admin-role-duplicate-0001",
+                        "X-CSRF-Token", csrf, "If-Match-Version", "2")).statusCode());
+        assertEquals(409, request(
+                "POST", rolePath + "/revoke",
+                "{\"role\":\"WAREHOUSE_OPERATOR\",\"reason\":\"Not assigned\"}",
+                cookie, Map.of("Idempotency-Key", "admin-role-missing-0001",
+                        "X-CSRF-Token", csrf, "If-Match-Version", "2")).statusCode());
+        assertEquals(400, request(
+                "POST", "/api/v1/system-accounts/" + accountId + "/initial-password-reset",
+                "{\"newInitialPassword\":\"short\",\"reason\":\"Too short\"}",
+                cookie, Map.of("Idempotency-Key", "admin-weak-reset-0001",
+                        "X-CSRF-Token", csrf, "If-Match-Version", "2")).statusCode());
     }
 
     @Test
