@@ -1785,6 +1785,31 @@ class DesignPackageContractTest(unittest.TestCase):
         self.assertIn("session", revoke_text)
         self.assertNotIn("delete", " ".join(paths))
 
+    def test_account_administration_operations_have_a_bounded_generated_interface(self) -> None:
+        document = self.load_contract()
+        self.assertIn("AccountAdmin", {tag["name"] for tag in document["tags"]})
+        operations = {
+            operation["operationId"]: operation
+            for item in document["paths"].values()
+            for operation in item.values()
+            if isinstance(operation, dict) and "operationId" in operation
+        }
+        for operation_id in (
+            "listSystemAccounts",
+            "createSystemAccount",
+            "getSystemAccount",
+            "changeSystemAccountStatus",
+            "resetInitialPassword",
+            "listRoleConfigurations",
+            "getRoleConfiguration",
+            "grantSystemAccountRole",
+            "revokeSystemAccountRole",
+            "getSystemAccountAuthorization",
+            "replaceSystemAccountAuthorization",
+            "revokeSystemAccountAuthorization",
+        ):
+            self.assertEqual(["AccountAdmin"], operations[operation_id]["tags"])
+
     def test_contract_declares_the_four_first_slice_domains(self) -> None:
         document = self.load_contract()
         self.assertEqual("3.0.4", document.get("openapi"))

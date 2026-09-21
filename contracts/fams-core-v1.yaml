@@ -3,7 +3,7 @@ info:
   title: FAMS core first-slice contract
   version: 1.0.0
   description: >-
-    Public wire foundation, authentication, and identity/account MasterData
+    Public wire foundation, authentication, identity/account administration, and MasterData
     boundaries for the first FAMS design package. Asset, inbound, and later
     product paths are added in bounded contract increments.
 servers:
@@ -15,7 +15,9 @@ tags:
   - name: Auth
     description: System-account authentication and session boundaries.
   - name: MasterData
-    description: Organization, employee, and system-account configuration boundaries.
+    description: Organization, employee, and catalog configuration boundaries.
+  - name: AccountAdmin
+    description: System-account, fixed-role, and controlled-authorization configuration boundaries.
   - name: Assets
     description: Asset-card and ledger read boundaries; business mutations remain scoped to warehouse operators.
   - name: Inbound
@@ -4975,7 +4977,7 @@ paths:
 
   /system-accounts:
     get:
-      tags: [MasterData]
+      tags: [AccountAdmin]
       operationId: listSystemAccounts
       summary: List system accounts with status and password-change flags.
       x-actor:
@@ -4994,7 +4996,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
     post:
-      tags: [MasterData]
+      tags: [AccountAdmin]
       operationId: createSystemAccount
       summary: Create an ENABLED system account requiring an initial password change.
       x-default-status: ENABLED
@@ -5036,7 +5038,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/SystemAccountId'
     get:
-      tags: [MasterData]
+      tags: [AccountAdmin]
       operationId: getSystemAccount
       summary: Read a system-account lifecycle snapshot.
       x-actor:
@@ -5057,7 +5059,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/SystemAccountId'
     post:
-      tags: [MasterData]
+      tags: [AccountAdmin]
       operationId: changeSystemAccountStatus
       summary: Enable, disable, or unlock a system account.
       x-business-write: true
@@ -5102,7 +5104,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/SystemAccountId'
     post:
-      tags: [MasterData]
+      tags: [AccountAdmin]
       operationId: resetInitialPassword
       summary: Reset an account to the mandatory initial-password flow.
       x-business-write: true
@@ -5144,7 +5146,7 @@ paths:
 
   /role-configurations:
     get:
-      tags: [MasterData]
+      tags: [AccountAdmin]
       operationId: listRoleConfigurations
       summary: List the fixed V1 role-permission baseline and scope.
       x-actor:
@@ -5167,7 +5169,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/RoleName'
     get:
-      tags: [MasterData]
+      tags: [AccountAdmin]
       operationId: getRoleConfiguration
       summary: Read one fixed V1 role-permission baseline and scope.
       x-actor:
@@ -5188,7 +5190,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/SystemAccountId'
     post:
-      tags: [MasterData]
+      tags: [AccountAdmin]
       operationId: grantSystemAccountRole
       summary: Grant a configured role to a system account.
       x-business-write: true
@@ -5232,7 +5234,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/SystemAccountId'
     post:
-      tags: [MasterData]
+      tags: [AccountAdmin]
       operationId: revokeSystemAccountRole
       summary: Revoke a role immediately without unsafe permission downgrade.
       x-business-write: true
@@ -5279,7 +5281,7 @@ paths:
       - $ref: '#/components/parameters/SystemAccountId'
       - $ref: '#/components/parameters/RoleName'
     get:
-      tags: [MasterData]
+      tags: [AccountAdmin]
       operationId: getSystemAccountAuthorization
       summary: Read current controlled scopes and sensitive-field permissions for one account role.
       x-actor:
@@ -5300,7 +5302,7 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
     patch:
-      tags: [MasterData]
+      tags: [AccountAdmin]
       operationId: replaceSystemAccountAuthorization
       summary: Atomically replace controlled scopes and sensitive-field permissions for one account role.
       x-business-write: true
@@ -5366,7 +5368,7 @@ paths:
       - $ref: '#/components/parameters/SystemAccountId'
       - $ref: '#/components/parameters/RoleName'
     post:
-      tags: [MasterData]
+      tags: [AccountAdmin]
       operationId: revokeSystemAccountAuthorization
       summary: Revoke all configurable scopes and sensitive-field permissions for one account role.
       x-business-write: true
