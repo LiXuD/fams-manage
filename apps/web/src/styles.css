@@ -1,0 +1,101 @@
+:root {
+  color: #18263d;
+  background: #f7f9fc;
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --white: #ffffff;
+  --canvas: #f7f9fc;
+  --border: #e3e8f0;
+  --muted: #53657d;
+  --text: #18263d;
+  --blue: #2457d6;
+  --blue-hover: #1d49b8;
+  --danger: #b42318;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--canvas); }
+button, input { font: inherit; }
+button:focus-visible, input:focus-visible { outline: 3px solid rgba(36, 87, 214, 0.22); outline-offset: 2px; }
+
+.app-chrome { min-height: 100vh; }
+.topbar {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+}
+.brand, .topbar-actions { display: flex; align-items: center; gap: 12px; }
+.brand { font-size: 16px; font-weight: 600; }
+.brand-mark {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--blue);
+  color: white;
+  font-weight: 700;
+}
+.account-label { color: var(--muted); font-size: 13px; }
+.workspace { display: grid; grid-template-columns: 190px minmax(0, 1fr); min-height: calc(100vh - 64px); }
+.workspace-anonymous { grid-template-columns: 1fr; }
+.sidebar { display: flex; flex-direction: column; gap: 4px; padding: 20px 16px; background: var(--white); border-right: 1px solid var(--border); }
+.nav-item { color: #33445d; text-decoration: none; padding: 10px 12px; border-radius: 6px; font-size: 14px; }
+.nav-item:hover, .nav-item-active { color: var(--blue); background: #eaf0ff; }
+.nav-note { padding: 10px 12px; color: var(--muted); font-size: 13px; }
+.workspace-content { min-width: 0; padding: 30px; }
+.breadcrumb { color: var(--muted); font-size: 13px; }
+.auth-stage { display: grid; place-items: start center; padding-top: 56px; }
+.auth-form { width: min(420px, 100%); }
+.auth-form h1 { margin: 0 0 8px; font-size: 28px; line-height: 1.25; letter-spacing: -0.02em; }
+.auth-intro, .auth-note { color: var(--muted); }
+.auth-intro { margin: 0 0 28px; font-size: 14px; }
+.auth-note { margin: 14px 0 6px; font-size: 12px; line-height: 1.7; }
+.auth-form label { display: block; margin: 18px 0 8px; font-size: 14px; font-weight: 600; }
+.auth-form input {
+  width: 100%;
+  height: 44px;
+  padding: 0 13px;
+  color: var(--text);
+  background: var(--white);
+  border: 1px solid #9aa8ba;
+  border-radius: 7px;
+}
+.auth-form input:hover { border-color: #53657d; }
+.primary-button, .secondary-button, .text-button {
+  min-height: 36px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+.primary-button { margin-top: 20px; padding: 0 20px; border: 1px solid var(--blue); color: #fff; background: var(--blue); }
+.primary-button:hover { background: var(--blue-hover); }
+.primary-button:disabled { cursor: not-allowed; opacity: 0.55; }
+.secondary-button { padding: 0 12px; color: #33445d; background: #fff; border: 1px solid var(--border); }
+.text-button { padding: 0 6px; color: var(--blue); background: transparent; border: 0; }
+.form-links { display: flex; gap: 8px; }
+.form-error { margin: 12px 0 0; color: var(--danger); font-size: 13px; }
+.permission-summary { max-width: 920px; margin-top: 28px; padding: 28px; background: var(--white); border: 1px solid var(--border); border-radius: 10px; }
+.permission-summary h1 { margin: 0 0 8px; font-size: 24px; }
+.permission-summary p { margin: 0; color: var(--muted); }
+.permission-summary dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 28px 0; }
+.permission-summary dl div { padding: 16px 0; border-block: 1px solid var(--border); }
+.permission-summary dt { color: var(--muted); font-size: 12px; }
+.permission-summary dd { margin: 6px 0 0; font-weight: 700; }
+.permission-list { margin: 0; padding-left: 20px; color: #33445d; }
+
+@media (max-width: 900px) {
+  .topbar { padding: 0 16px; }
+  .topbar-actions .secondary-button, .account-label { display: none; }
+  .workspace { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .workspace-content { padding: 20px; }
+  .auth-stage { padding-top: 32px; }
+  .permission-summary dl { grid-template-columns: 1fr; }
+}

@@ -1,0 +1,42 @@
+<script setup lang="ts">
+import { computed } from "vue";
+import { useRouter } from "vue-router";
+import { useSessionStore } from "@/auth/sessionStore";
+
+const router = useRouter();
+const session = useSessionStore();
+
+const displayRole = computed(() => session.user?.roles[0] ?? "未登录");
+
+async function handleLogout(): Promise<void> {
+  try {
+    await session.signOut();
+    await router.replace({ name: "login" });
+  } catch {
+    // Keep the current page and show the server-safe error until logout succeeds.
+  }
+}
+</script>
+
+<template>
+  <div class="app-chrome">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">F</span><span>示例企业 · 固定资产</span></div>
+      <div v-if="session.isAuthenticated" class="topbar-actions">
+        <span class="account-label">{{ session.user?.username }} · {{ displayRole }}</span>
+        <button type="button" class="text-button" :disabled="session.isBusy" @click="handleLogout">退出</button>
+      </div>
+    </header>
+    <div class="workspace" :class="{ 'workspace-anonymous': !session.isAuthenticated }">
+      <nav v-if="session.isAuthenticated" class="sidebar" aria-label="主导航">
+        <router-link to="/" class="nav-item nav-item-active">工作台</router-link>
+        <span v-if="session.hasPermission('ACCOUNT_ADMIN')" class="nav-note">账号与角色 · 后续开放</span>
+        <span v-if="session.hasPermission('ASSET_LEDGER_READ')" class="nav-note">资产台账 · 后续开放</span>
+      </nav>
+      <main class="workspace-content">
+        <p v-if="session.isAuthenticated && session.error" class="form-error" role="alert">{{ session.error.message }}</p>
+        <slot />
+      </main>
+    </div>
+  </div>
+</template>
