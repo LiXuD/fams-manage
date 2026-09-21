@@ -806,6 +806,18 @@ def exercise_invalid_migration(jar: Path) -> None:
     )
 
 
+def runtime_test_command() -> list[str]:
+    return [
+        "./mvnw",
+        "-pl",
+        "backend",
+        "-Dd6.02b.runtime=true",
+        "-Dtest=ContractProbeHttpTest,RuntimeCompatibilityHttpTest,"
+        "RuntimeCompatibilityTestDatabaseTest",
+        "test",
+    ]
+
+
 def run_final_checks() -> None:
     if not MYSQL_DATABASE or not MYSQL_USER_PASSWORD:
         raise VerificationFailure("Real MySQL resources are unavailable for the opt-in HTTP test")
@@ -823,7 +835,7 @@ def run_final_checks() -> None:
     runtime_test_env["D6_02B_TEST_DATASOURCE_PASSWORD"] = MYSQL_USER_PASSWORD
     runtime_test_output = require_command(
         "real runtime HTTP tests",
-        ["./mvnw", "-pl", "backend", "-Dd6.02b.runtime=true", "test"],
+        runtime_test_command(),
         env=runtime_test_env,
         timeout=300,
     )

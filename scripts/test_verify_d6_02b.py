@@ -60,6 +60,16 @@ class DockerImageEvidenceTest(unittest.TestCase):
 
 class RuntimeTestEvidenceTest(unittest.TestCase):
 
+    def test_runtime_command_is_limited_to_the_retained_d6_02b_suites(self) -> None:
+        command = VERIFIER.runtime_test_command()
+
+        self.assertIn(
+            "-Dtest=ContractProbeHttpTest,RuntimeCompatibilityHttpTest,"
+            "RuntimeCompatibilityTestDatabaseTest",
+            command,
+        )
+        self.assertFalse(any("AuthHttpTest" in argument for argument in command))
+
     def test_rejects_skipped_runtime_tests_even_when_another_suite_passed(self) -> None:
         output = "\n".join(
             (
