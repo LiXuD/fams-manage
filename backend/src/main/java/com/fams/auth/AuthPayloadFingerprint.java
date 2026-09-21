@@ -20,11 +20,19 @@ final class AuthPayloadFingerprint {
     }
 
     String initialPasswordChange(String currentPassword, String newPassword) {
-        String canonicalPayload = lengthPrefixed(currentPassword) + lengthPrefixed(newPassword);
+        return fingerprint(currentPassword, newPassword);
+    }
+
+    String fingerprint(String... values) {
+        StringBuilder canonicalPayload = new StringBuilder();
+        for (String value : values) {
+            canonicalPayload.append(lengthPrefixed(value));
+        }
         try {
             Mac mac = Mac.getInstance(HMAC_ALGORITHM);
             mac.init(key);
-            return HexFormat.of().formatHex(mac.doFinal(canonicalPayload.getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of().formatHex(mac.doFinal(
+                    canonicalPayload.toString().getBytes(StandardCharsets.UTF_8)));
         } catch (GeneralSecurityException exception) {
             throw new IllegalStateException("HMAC-SHA256 is unavailable.", exception);
         }

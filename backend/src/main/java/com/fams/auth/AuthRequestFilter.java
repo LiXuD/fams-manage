@@ -65,9 +65,12 @@ final class AuthRequestFilter extends OncePerRequestFilter {
             }
             filterChain.doFilter(request, response);
         } catch (AuthOperationException exception) {
-            SecurityEventType eventType = exception.status() == 403
-                    ? SecurityEventType.CSRF_REJECTED
-                    : SecurityEventType.SESSION_REJECTED;
+            SecurityEventType eventType = switch (exception.code()) {
+                case "AUTH_CSRF_INVALID" -> SecurityEventType.CSRF_REJECTED;
+                case "AUTH_FORBIDDEN" -> SecurityEventType.AUTHORIZATION_REJECTED;
+                case "AUTH_SESSION_INVALID" -> SecurityEventType.SESSION_REJECTED;
+                default -> SecurityEventType.OPERATION_REJECTED;
+            };
             Object currentAccount = request.getAttribute(AuthRequestContext.ACCOUNT_ATTRIBUTE);
             Long accountId = currentAccount instanceof AuthAccount account ? account.id() : null;
             authService.audit(accountId, eventType, requestId, exception.code());

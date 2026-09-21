@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import com.fams.product.contract.model.ErrorResponse;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.context.annotation.Profile;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -20,10 +21,25 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 final class AuthErrorHandler {
 
+    private final AuthApplicationService authService;
+
+    AuthErrorHandler(AuthApplicationService authService) {
+        this.authService = authService;
+    }
+
     @ExceptionHandler(AuthOperationException.class)
     ResponseEntity<ErrorResponse> handleAuthOperation(
             AuthOperationException exception,
             HttpServletRequest request) {
+        if ("AUTH_FORBIDDEN".equals(exception.code())) {
+            Object currentAccount = request.getAttribute(AuthRequestContext.ACCOUNT_ATTRIBUTE);
+            Long accountId = currentAccount instanceof AuthAccount account ? account.id() : null;
+            authService.audit(
+                    accountId,
+                    SecurityEventType.AUTHORIZATION_REJECTED,
+                    AuthRequestContext.requestId(request),
+                    exception.code());
+        }
         return ResponseEntity.status(exception.status()).body(error(
                 exception.code(),
                 exception.getMessage(),
@@ -63,6 +79,17 @@ final class AuthErrorHandler {
                 "Request validation failed.",
                 AuthRequestContext.requestId(request),
                 fieldErrors));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    ResponseEntity<ErrorResponse> handleWriteConflict(
+            DataIntegrityViolationException exception,
+            HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error(
+                "AUTH_WRITE_CONFLICT",
+                "The account or authorization write conflicted with current state.",
+                AuthRequestContext.requestId(request),
+                Map.of()));
     }
 
     @ExceptionHandler(Exception.class)

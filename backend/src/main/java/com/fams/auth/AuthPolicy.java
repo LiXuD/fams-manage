@@ -34,7 +34,7 @@ final class AuthPolicy {
                 authorizationVersion);
     }
 
-    private static Collection<String> permissionsFor(Role role) {
+    static Collection<String> permissionsFor(Role role) {
         List<String> permissions = new ArrayList<>();
         permissions.add("AUTH_SESSION_READ");
         switch (role) {

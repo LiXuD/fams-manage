@@ -13,6 +13,8 @@ import com.fams.product.contract.model.ChangePasswordRequest;
 import com.fams.product.contract.model.CurrentUser;
 import com.fams.product.contract.model.DataScopeGrant;
 import com.fams.product.contract.model.DataScopeType;
+import com.fams.product.contract.model.OrganizationReference;
+import com.fams.product.contract.model.CatalogReference;
 import com.fams.product.contract.model.LoginRequest;
 import com.fams.product.contract.model.Role;
 import com.fams.product.contract.model.SensitiveFieldPermission;
@@ -111,10 +113,22 @@ class AuthController implements AuthApi {
     private com.fams.product.contract.model.PermissionSnapshot toPermissionSnapshot(
             PermissionSnapshot snapshot) {
         List<DataScopeGrant> scopes = snapshot.dataScopes().stream()
-                .map(scope -> new DataScopeGrant(
-                        DataScopeType.valueOf(scope.name()),
-                        Set.of(),
-                        Set.of()))
+                .map(scope -> {
+                    Set<OrganizationReference> organizations = snapshot.scopeGrants().stream()
+                            .filter(grant -> grant.scopeType() == scope)
+                            .flatMap(grant -> grant.organizations().stream())
+                            .map(reference -> new OrganizationReference(
+                                    Long.toString(reference.id()), reference.version()))
+                            .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+                    Set<CatalogReference> warehouses = snapshot.scopeGrants().stream()
+                            .filter(grant -> grant.scopeType() == scope)
+                            .flatMap(grant -> grant.warehouses().stream())
+                            .map(reference -> new CatalogReference(
+                                    Long.toString(reference.id()), reference.version()))
+                            .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+                    return new DataScopeGrant(
+                            DataScopeType.valueOf(scope.name()), organizations, warehouses);
+                })
                 .toList();
         Set<SensitiveFieldPermission> fieldPermissions = snapshot.fieldPermissions().stream()
                 .map(SensitiveFieldPermission::valueOf)

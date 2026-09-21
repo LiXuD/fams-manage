@@ -82,6 +82,7 @@ class AuthHttpTest {
         jdbcTemplate.update("DELETE FROM fams_account_role");
         jdbcTemplate.update("DELETE FROM fams_system_account");
         jdbcTemplate.update("DELETE FROM fams_employee");
+        jdbcTemplate.update("DELETE FROM fams_warehouse");
         jdbcTemplate.update("DELETE FROM fams_organization");
 
         Instant now = Instant.parse("2026-09-21T02:00:00Z");
@@ -232,6 +233,375 @@ class AuthHttpTest {
         assertFalse(eventDetails.contains(INITIAL_PASSWORD));
         assertFalse(eventDetails.contains(csrf));
         assertFalse(eventDetails.contains(oldCookie));
+    }
+
+    @Test
+    void systemAdministratorManagesAccountsRolesAndLifecycleWithOptimisticWrites() throws Exception {
+        Instant now = Instant.parse("2026-09-21T02:00:00Z");
+        Timestamp timestamp = Timestamp.from(now);
+        jdbcTemplate.update(
+                "INSERT INTO fams_employee "
+                        + "(id, employee_no, employee_no_normalized, name, organization_id, status, version, "
+                        + "created_at, updated_at) VALUES (2, 'E002', 'E002', 'Bob', 1, 'ACTIVE', 0, ?, ?)",
+                timestamp,
+                timestamp);
+
+        HttpResponse<String> login = login();
+        String cookie = cookiePair(login.headers().firstValue("Set-Cookie").orElseThrow());
+        String csrf = JSON.readTree(login.body()).path("csrfToken").asText();
+        HttpResponse<String> systemAdministratorRole = request(
+                "GET", "/api/v1/role-configurations/SYSTEM_ADMIN", null, cookie, Map.of());
+        assertEquals(200, systemAdministratorRole.statusCode(), systemAdministratorRole.body());
+        JsonNode systemAdministratorRoleBody = JSON.readTree(systemAdministratorRole.body());
+        assertFalse(systemAdministratorRoleBody.path("systemAdminBusinessPermissions").asBoolean());
+        assertFalse(systemAdministratorRoleBody.path("permissions").toString().contains("ASSET_LEDGER_READ"));
+        String createBody = "{\"username\":\"bob\",\"employee\":{\"id\":\"2\",\"version\":0},"
+                + "\"initialPassword\":\"initial-password-value-2026\"}";
+
+        HttpResponse<String> created = request(
+                "POST",
+                "/api/v1/system-accounts",
+                createBody,
+                cookie,
+                Map.of(
+                        "Idempotency-Key", "account-create-0001",
+                        "X-CSRF-Token", csrf));
+        assertEquals(201, created.statusCode(), created.body());
+        JsonNode createdBody = JSON.readTree(created.body());
+        String accountId = createdBody.path("id").asText();
+        assertEquals("bob", createdBody.path("username").asText());
+        assertEquals(0L, createdBody.path("version").asLong());
+        assertTrue(createdBody.path("requiresInitialPasswordChange").asBoolean());
+
+        HttpResponse<String> replay = request(
+                "POST",
+                "/api/v1/system-accounts",
+                createBody,
+                cookie,
+                Map.of(
+                        "Idempotency-Key", "account-create-0001",
+                        "X-CSRF-Token", csrf));
+        assertEquals(201, replay.statusCode(), replay.body());
+        assertEquals(accountId, JSON.readTree(replay.body()).path("id").asText());
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM fams_system_account WHERE username_normalized = 'BOB'",
+                Integer.class));
+
+        HttpResponse<String> list = request(
+                "GET", "/api/v1/system-accounts?page=1&pageSize=20", null, cookie, Map.of());
+        assertEquals(200, list.statusCode(), list.body());
+        assertEquals(2, JSON.readTree(list.body()).path("total").asInt());
+
+        HttpResponse<String> granted = request(
+                "POST",
+                "/api/v1/system-accounts/" + accountId + "/roles",
+                "{\"role\":\"ASSET_ADMIN\",\"reason\":\"Assign asset administrator\"}",
+                cookie,
+                Map.of(
+                        "Idempotency-Key", "account-role-grant-0001",
+                        "X-CSRF-Token", csrf,
+                        "If-Match-Version", "0"));
+        assertEquals(200, granted.statusCode(), granted.body());
+        assertEquals(1L, JSON.readTree(granted.body()).path("version").asLong());
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM fams_account_role WHERE account_id = ? AND role_code = 'ASSET_ADMIN'",
+                Integer.class,
+                Long.parseLong(accountId)));
+
+        HttpResponse<String> targetLogin = request(
+                "POST",
+                "/api/v1/auth/login",
+                "{\"username\":\"bob\",\"password\":\"initial-password-value-2026\"}",
+                null,
+                Map.of());
+        assertEquals(200, targetLogin.statusCode(), targetLogin.body());
+        String targetCookie = cookiePair(targetLogin.headers().firstValue("Set-Cookie").orElseThrow());
+
+        HttpResponse<String> revoked = request(
+                "POST",
+                "/api/v1/system-accounts/" + accountId + "/roles/revoke",
+                "{\"role\":\"ASSET_ADMIN\",\"reason\":\"Remove temporary assignment\"}",
+                cookie,
+                Map.of(
+                        "Idempotency-Key", "account-role-revoke-0001",
+                        "X-CSRF-Token", csrf,
+                        "If-Match-Version", "1"));
+        assertEquals(200, revoked.statusCode(), revoked.body());
+        assertEquals(2L, JSON.readTree(revoked.body()).path("version").asLong());
+        assertEquals(401, request(
+                "GET", "/api/v1/auth/me", null, targetCookie, Map.of()).statusCode());
+
+        HttpResponse<String> targetLoginAfterRevoke = request(
+                "POST",
+                "/api/v1/auth/login",
+                "{\"username\":\"bob\",\"password\":\"initial-password-value-2026\"}",
+                null,
+                Map.of());
+        String targetCookieAfterRevoke = cookiePair(
+                targetLoginAfterRevoke.headers().firstValue("Set-Cookie").orElseThrow());
+
+        HttpResponse<String> reset = request(
+                "POST",
+                "/api/v1/system-accounts/" + accountId + "/initial-password-reset",
+                "{\"newInitialPassword\":\"replacement-password-2026\","
+                        + "\"reason\":\"User requested reset\"}",
+                cookie,
+                Map.of(
+                        "Idempotency-Key", "account-password-reset-0001",
+                        "X-CSRF-Token", csrf,
+                        "If-Match-Version", "2"));
+        assertEquals(200, reset.statusCode(), reset.body());
+        assertEquals(3L, JSON.readTree(reset.body()).path("version").asLong());
+        assertEquals(401, request(
+                "GET", "/api/v1/auth/me", null, targetCookieAfterRevoke, Map.of()).statusCode());
+
+        HttpResponse<String> disabled = request(
+                "POST",
+                "/api/v1/system-accounts/" + accountId + "/status",
+                "{\"action\":\"DISABLE\",\"reason\":\"Employment ended\"}",
+                cookie,
+                Map.of(
+                        "Idempotency-Key", "account-disable-0001",
+                        "X-CSRF-Token", csrf,
+                        "If-Match-Version", "3"));
+        assertEquals(200, disabled.statusCode(), disabled.body());
+        assertEquals("DISABLED", JSON.readTree(disabled.body()).path("status").asText());
+        assertEquals(4L, JSON.readTree(disabled.body()).path("version").asLong());
+
+        HttpResponse<String> stale = request(
+                "POST",
+                "/api/v1/system-accounts/" + accountId + "/status",
+                "{\"action\":\"ENABLE\",\"reason\":\"Stale administrator screen\"}",
+                cookie,
+                Map.of(
+                        "Idempotency-Key", "account-enable-stale-0001",
+                        "X-CSRF-Token", csrf,
+                        "If-Match-Version", "3"));
+        assertEquals(409, stale.statusCode(), stale.body());
+        assertEquals("AUTH_VERSION_CONFLICT", JSON.readTree(stale.body()).path("code").asText());
+    }
+
+    @Test
+    void businessRoleCannotUseSystemAccountAdministration() throws Exception {
+        Instant now = Instant.parse("2026-09-21T02:00:00Z");
+        Timestamp timestamp = Timestamp.from(now);
+        String businessPassword = "business-role-password-2026";
+        jdbcTemplate.update(
+                "INSERT INTO fams_employee "
+                        + "(id, employee_no, employee_no_normalized, name, organization_id, status, version, "
+                        + "created_at, updated_at) VALUES (2, 'E002', 'E002', 'Bob', 1, 'ACTIVE', 0, ?, ?)",
+                timestamp,
+                timestamp);
+        jdbcTemplate.update(
+                "INSERT INTO fams_system_account "
+                        + "(id, employee_id, username, username_normalized, password_hash, status, "
+                        + "initial_password_required, failed_attempts, auth_epoch, authorization_version, "
+                        + "version, created_at, updated_at) "
+                        + "VALUES (2, 2, 'bob', 'BOB', ?, 'ENABLED', FALSE, 0, 0, 0, 0, ?, ?)",
+                new BCryptPasswordEncoder(4).encode(businessPassword),
+                timestamp,
+                timestamp);
+        jdbcTemplate.update(
+                "INSERT INTO fams_account_role (account_id, role_code, granted_at) "
+                        + "VALUES (2, 'ASSET_ADMIN', ?)",
+                timestamp);
+
+        HttpResponse<String> login = request(
+                "POST",
+                "/api/v1/auth/login",
+                "{\"username\":\"bob\",\"password\":\"" + businessPassword + "\"}",
+                null,
+                Map.of());
+        assertEquals(200, login.statusCode(), login.body());
+        String cookie = cookiePair(login.headers().firstValue("Set-Cookie").orElseThrow());
+
+        HttpResponse<String> forbidden = request(
+                "GET", "/api/v1/system-accounts", null, cookie, Map.of());
+        assertEquals(403, forbidden.statusCode(), forbidden.body());
+        assertEquals("AUTH_FORBIDDEN", JSON.readTree(forbidden.body()).path("code").asText());
+        assertEquals("AUTHORIZATION_REJECTED", jdbcTemplate.queryForObject(
+                "SELECT event_type FROM fams_security_event WHERE account_id = 2 ORDER BY id DESC LIMIT 1",
+                String.class));
+    }
+
+    @Test
+    void authorizationReplacementCreatesImmutableGenerationsAndInvalidatesTargetSessions() throws Exception {
+        Instant now = Instant.parse("2026-09-21T02:00:00Z");
+        Timestamp timestamp = Timestamp.from(now);
+        String businessPassword = "business-role-password-2026";
+        jdbcTemplate.update(
+                "INSERT INTO fams_employee "
+                        + "(id, employee_no, employee_no_normalized, name, organization_id, status, version, "
+                        + "created_at, updated_at) VALUES (2, 'E002', 'E002', 'Bob', 1, 'ACTIVE', 0, ?, ?)",
+                timestamp,
+                timestamp);
+        jdbcTemplate.update(
+                "INSERT INTO fams_system_account "
+                        + "(id, employee_id, username, username_normalized, password_hash, status, "
+                        + "initial_password_required, failed_attempts, auth_epoch, authorization_version, "
+                        + "version, created_at, updated_at) "
+                        + "VALUES (2, 2, 'bob', 'BOB', ?, 'ENABLED', FALSE, 0, 0, 0, 0, ?, ?)",
+                new BCryptPasswordEncoder(4).encode(businessPassword),
+                timestamp,
+                timestamp);
+        jdbcTemplate.update(
+                "INSERT INTO fams_account_role (account_id, role_code, granted_at) "
+                        + "VALUES (2, 'ASSET_ADMIN', ?)",
+                timestamp);
+        jdbcTemplate.update(
+                "INSERT INTO fams_warehouse "
+                        + "(id, code, code_normalized, name, status, version, created_at, updated_at) "
+                        + "VALUES (10, 'WH-01', 'WH-01', 'Main warehouse', 'ACTIVE', 3, ?, ?)",
+                timestamp,
+                timestamp);
+
+        HttpResponse<String> administratorLogin = login();
+        String administratorCookie = cookiePair(
+                administratorLogin.headers().firstValue("Set-Cookie").orElseThrow());
+        String administratorCsrf = JSON.readTree(administratorLogin.body()).path("csrfToken").asText();
+        HttpResponse<String> targetLogin = request(
+                "POST",
+                "/api/v1/auth/login",
+                "{\"username\":\"bob\",\"password\":\"" + businessPassword + "\"}",
+                null,
+                Map.of());
+        String targetCookie = cookiePair(targetLogin.headers().firstValue("Set-Cookie").orElseThrow());
+        String replaceBody = "{\"dataScopes\":["
+                + "{\"scopeType\":\"SPECIFIED_ORGANIZATIONS\","
+                + "\"organizations\":[{\"id\":\"1\",\"version\":0}],\"warehouses\":[]},"
+                + "{\"scopeType\":\"SPECIFIED_WAREHOUSES\",\"organizations\":[],"
+                + "\"warehouses\":[{\"id\":\"10\",\"version\":3}]}],"
+                + "\"fieldPermissions\":[\"EMPLOYEE_PHONE\",\"BULK_EXPORT\"],"
+                + "\"reason\":\"Assign reviewed operating scope\"}";
+
+        HttpResponse<String> staleReference = request(
+                "PATCH",
+                "/api/v1/system-accounts/2/authorization/ASSET_ADMIN",
+                replaceBody.replace("\"version\":3", "\"version\":2"),
+                administratorCookie,
+                Map.of(
+                        "Idempotency-Key", "authorization-stale-ref-0001",
+                        "X-CSRF-Token", administratorCsrf,
+                        "If-Match-Version", "0"));
+        assertEquals(409, staleReference.statusCode(), staleReference.body());
+        assertEquals(0, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM fams_account_authorization WHERE account_id = 2",
+                Integer.class));
+
+        HttpResponse<String> systemAdminEscalation = request(
+                "PATCH",
+                "/api/v1/system-accounts/1/authorization/SYSTEM_ADMIN",
+                replaceBody,
+                administratorCookie,
+                Map.of(
+                        "Idempotency-Key", "authorization-admin-scope-0001",
+                        "X-CSRF-Token", administratorCsrf,
+                        "If-Match-Version", "0"));
+        assertEquals(409, systemAdminEscalation.statusCode(), systemAdminEscalation.body());
+
+        HttpResponse<String> replaced = request(
+                "PATCH",
+                "/api/v1/system-accounts/2/authorization/ASSET_ADMIN",
+                replaceBody,
+                administratorCookie,
+                Map.of(
+                        "Idempotency-Key", "authorization-replace-0001",
+                        "X-CSRF-Token", administratorCsrf,
+                        "If-Match-Version", "0"));
+        assertEquals(200, replaced.statusCode(), replaced.body());
+        JsonNode replacedBody = JSON.readTree(replaced.body());
+        assertEquals("ACTIVE", replacedBody.path("status").asText());
+        assertEquals(1L, replacedBody.path("version").asLong());
+        assertEquals(2, replacedBody.path("dataScopes").size());
+        assertTrue(replacedBody.path("fieldPermissions").toString().contains("EMPLOYEE_PHONE"));
+        assertEquals(401, request(
+                "GET", "/api/v1/auth/permissions", null, targetCookie, Map.of()).statusCode());
+
+        HttpResponse<String> replay = request(
+                "PATCH",
+                "/api/v1/system-accounts/2/authorization/ASSET_ADMIN",
+                replaceBody,
+                administratorCookie,
+                Map.of(
+                        "Idempotency-Key", "authorization-replace-0001",
+                        "X-CSRF-Token", administratorCsrf,
+                        "If-Match-Version", "0"));
+        assertEquals(200, replay.statusCode(), replay.body());
+        assertEquals(replacedBody.path("id").asText(), JSON.readTree(replay.body()).path("id").asText());
+
+        HttpResponse<String> keyConflict = request(
+                "PATCH",
+                "/api/v1/system-accounts/2/authorization/ASSET_ADMIN",
+                replaceBody.replace("BULK_EXPORT", "REPAIR_COST"),
+                administratorCookie,
+                Map.of(
+                        "Idempotency-Key", "authorization-replace-0001",
+                        "X-CSRF-Token", administratorCsrf,
+                        "If-Match-Version", "0"));
+        assertEquals(409, keyConflict.statusCode(), keyConflict.body());
+        assertEquals(
+                "AUTH_IDEMPOTENCY_CONFLICT",
+                JSON.readTree(keyConflict.body()).path("code").asText());
+
+        HttpResponse<String> current = request(
+                "GET",
+                "/api/v1/system-accounts/2/authorization/ASSET_ADMIN",
+                null,
+                administratorCookie,
+                Map.of());
+        assertEquals(200, current.statusCode(), current.body());
+        assertEquals(1L, JSON.readTree(current.body()).path("version").asLong());
+
+        HttpResponse<String> refreshedTargetLogin = request(
+                "POST",
+                "/api/v1/auth/login",
+                "{\"username\":\"bob\",\"password\":\"" + businessPassword + "\"}",
+                null,
+                Map.of());
+        String refreshedTargetCookie = cookiePair(
+                refreshedTargetLogin.headers().firstValue("Set-Cookie").orElseThrow());
+        HttpResponse<String> permissions = request(
+                "GET", "/api/v1/auth/permissions", null, refreshedTargetCookie, Map.of());
+        assertEquals(200, permissions.statusCode(), permissions.body());
+        JsonNode permissionBody = JSON.readTree(permissions.body());
+        assertTrue(permissionBody.path("dataScopes").toString().contains("SPECIFIED_ORGANIZATIONS"));
+        assertTrue(permissionBody.path("dataScopes").toString().contains("SPECIFIED_WAREHOUSES"));
+        assertTrue(permissionBody.path("dataScopes").toString().contains("\"id\":\"1\""));
+        assertTrue(permissionBody.path("dataScopes").toString().contains("\"id\":\"10\""));
+        assertTrue(permissionBody.path("fieldPermissions").toString().contains("BULK_EXPORT"));
+
+        jdbcTemplate.update("UPDATE fams_warehouse SET version = 4 WHERE id = 10");
+        HttpResponse<String> staleWarehousePermission = request(
+                "GET", "/api/v1/auth/permissions", null, refreshedTargetCookie, Map.of());
+        assertEquals(200, staleWarehousePermission.statusCode(), staleWarehousePermission.body());
+        assertFalse(JSON.readTree(staleWarehousePermission.body()).path("dataScopes")
+                .toString().contains("\"id\":\"10\""));
+
+        HttpResponse<String> revoked = request(
+                "POST",
+                "/api/v1/system-accounts/2/authorization/ASSET_ADMIN/revoke",
+                "{\"reason\":\"Temporary scope expired\"}",
+                administratorCookie,
+                Map.of(
+                        "Idempotency-Key", "authorization-revoke-0001",
+                        "X-CSRF-Token", administratorCsrf,
+                        "If-Match-Version", "1"));
+        assertEquals(200, revoked.statusCode(), revoked.body());
+        JsonNode revokedBody = JSON.readTree(revoked.body());
+        assertEquals("REVOKED", revokedBody.path("status").asText());
+        assertEquals(2L, revokedBody.path("version").asLong());
+        assertEquals(0, revokedBody.path("dataScopes").size());
+        assertEquals(0, revokedBody.path("fieldPermissions").size());
+        assertEquals(401, request(
+                "GET", "/api/v1/auth/permissions", null, refreshedTargetCookie, Map.of()).statusCode());
+        assertEquals(2, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM fams_account_authorization WHERE account_id = 2 "
+                        + "AND role_code = 'ASSET_ADMIN'",
+                Integer.class));
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM fams_account_authorization WHERE account_id = 2 "
+                        + "AND role_code = 'ASSET_ADMIN' AND superseded_at IS NULL",
+                Integer.class));
     }
 
     @Test

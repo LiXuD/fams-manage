@@ -20,6 +20,23 @@ CREATE TABLE fams_organization (
     CONSTRAINT ck_fams_organization_version CHECK (version >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE fams_warehouse (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    code VARCHAR(64) NOT NULL,
+    code_normalized VARCHAR(64) NOT NULL,
+    name VARCHAR(128) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    version BIGINT NOT NULL DEFAULT 0,
+    created_at DATETIME(3) NOT NULL,
+    updated_at DATETIME(3) NOT NULL,
+    created_by BIGINT NULL,
+    updated_by BIGINT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_fams_warehouse_code (code_normalized),
+    CONSTRAINT ck_fams_warehouse_status CHECK (status IN ('ACTIVE', 'DISABLED')),
+    CONSTRAINT ck_fams_warehouse_version CHECK (version >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE fams_employee (
     id BIGINT NOT NULL AUTO_INCREMENT,
     employee_no VARCHAR(64) NOT NULL,
@@ -140,6 +157,8 @@ CREATE TABLE fams_account_scope_warehouse (
     PRIMARY KEY (data_scope_id, warehouse_id),
     CONSTRAINT fk_fams_scope_warehouse_scope FOREIGN KEY (data_scope_id)
         REFERENCES fams_account_data_scope(id) ON DELETE CASCADE,
+    CONSTRAINT fk_fams_scope_warehouse_warehouse FOREIGN KEY (warehouse_id)
+        REFERENCES fams_warehouse(id),
     CONSTRAINT ck_fams_scope_warehouse_version CHECK (warehouse_version_at_grant >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 

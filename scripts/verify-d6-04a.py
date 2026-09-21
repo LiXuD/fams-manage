@@ -147,12 +147,12 @@ def main() -> int:
             "-Dtest=AuthHttpTest,AuthSessionRestartTest",
             "test",
         ], env=environment, timeout=360)
-        assert_suite("TEST-com.fams.auth.AuthHttpTest.xml", 3)
+        assert_suite("TEST-com.fams.auth.AuthHttpTest.xml", 6)
         assert_suite("TEST-com.fams.auth.AuthSessionRestartTest.xml", 1)
         run_rtk(["./mvnw", "-pl", "backend", "test"], env=environment, timeout=300)
         print(
             "D6-04A PASSED: Java 21.0.7; MySQL 8.4 migration; "
-            "3 real HTTP tests; 1 restart test; normal Java regression suite."
+            "6 real HTTP tests; 1 restart test; normal Java regression suite."
         )
         return 0
     except (OSError, subprocess.TimeoutExpired, VerificationFailure) as exception:

@@ -55,4 +55,40 @@ final class AuthOperationException extends RuntimeException {
                 "The idempotency key was already used for another request.",
                 409);
     }
+
+    static AuthOperationException forbidden() {
+        return new AuthOperationException(
+                "AUTH_FORBIDDEN",
+                "The current account is not authorized for this operation.",
+                403);
+    }
+
+    static AuthOperationException accountNotFound() {
+        return new AuthOperationException(
+                "AUTH_ACCOUNT_NOT_FOUND",
+                "The system account does not exist.",
+                404);
+    }
+
+    static AuthOperationException employeeNotFound() {
+        return new AuthOperationException(
+                "AUTH_EMPLOYEE_NOT_FOUND",
+                "The employee does not exist.",
+                404);
+    }
+
+    static AuthOperationException relationConflict(String message) {
+        return new AuthOperationException("AUTH_RELATION_CONFLICT", message, 409);
+    }
+
+    static AuthOperationException versionConflict() {
+        return new AuthOperationException(
+                "AUTH_VERSION_CONFLICT",
+                "The supplied version is no longer current.",
+                409);
+    }
+
+    static AuthOperationException stateConflict(String message) {
+        return new AuthOperationException("AUTH_STATE_CONFLICT", message, 409);
+    }
 }

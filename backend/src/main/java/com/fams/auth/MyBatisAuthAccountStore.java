@@ -2,6 +2,8 @@ package com.fams.auth;
 
 import java.time.Instant;
 import java.util.EnumSet;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -14,9 +16,11 @@ import org.springframework.stereotype.Repository;
 class MyBatisAuthAccountStore implements AuthAccountStore {
 
     private final AuthAccountMapper mapper;
+    private final AccountAdminMapper adminMapper;
 
-    MyBatisAuthAccountStore(AuthAccountMapper mapper) {
+    MyBatisAuthAccountStore(AuthAccountMapper mapper, AccountAdminMapper adminMapper) {
         this.mapper = mapper;
+        this.adminMapper = adminMapper;
     }
 
     @Override
@@ -54,11 +58,41 @@ class MyBatisAuthAccountStore implements AuthAccountStore {
     @Override
     public PermissionSnapshot loadPermissions(long accountId) {
         AuthAccount account = findRequired(accountId);
-        return AuthPolicy.snapshot(
+        PermissionSnapshot baseline = AuthPolicy.snapshot(
                 Long.toString(accountId),
                 account.roles(),
                 account.authorizationVersion(),
                 account.authEpoch());
+        LinkedHashSet<DataScope> scopes = new LinkedHashSet<>(baseline.dataScopes());
+        LinkedHashSet<String> fields = new LinkedHashSet<>(baseline.fieldPermissions());
+        List<AuthorizedDataScope> grants = new ArrayList<>();
+        for (AuthorizationAdminRow authorization : adminMapper.findActiveAuthorizations(accountId)) {
+            if (authorization.role() == Role.SYSTEM_ADMIN) {
+                continue;
+            }
+            for (AuthorizationScopeRow scope : adminMapper.findScopes(authorization.id())) {
+                List<VersionedReferenceRow> organizations = adminMapper.findOrganizationReferences(scope.id());
+                List<VersionedReferenceRow> warehouses = adminMapper.findWarehouseReferences(scope.id());
+                boolean currentOrganizations = organizations.stream()
+                        .allMatch(reference -> adminMapper.countCurrentOrganization(
+                                reference.id(), reference.version()) == 1);
+                boolean currentWarehouses = warehouses.stream()
+                        .allMatch(reference -> adminMapper.countCurrentWarehouse(
+                                reference.id(), reference.version()) == 1);
+                if (currentOrganizations && currentWarehouses) {
+                    scopes.add(scope.scopeType());
+                    grants.add(new AuthorizedDataScope(scope.scopeType(), organizations, warehouses));
+                }
+            }
+            fields.addAll(adminMapper.findFieldPermissions(authorization.id()));
+        }
+        return new PermissionSnapshot(
+                baseline.userId(),
+                baseline.permissions(),
+                List.copyOf(scopes),
+                List.copyOf(fields),
+                baseline.authorizationVersion(),
+                grants);
     }
 
     @Override
