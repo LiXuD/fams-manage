@@ -1,0 +1,11 @@
+package com.fams.auth;
+
+enum SecurityEventType {
+    LOGIN_SUCCEEDED,
+    LOGIN_FAILED,
+    INITIAL_PASSWORD_CHANGED,
+    INITIAL_PASSWORD_CHANGE_REJECTED,
+    SESSION_REJECTED,
+    CSRF_REJECTED,
+    LOGOUT
+}
