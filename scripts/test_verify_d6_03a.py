@@ -390,6 +390,60 @@ class CoveragePolicyTest(unittest.TestCase):
         )
 
 
+class AuthenticationRuntimeIntegrationTest(unittest.TestCase):
+
+    @staticmethod
+    def context(verifier):
+        return verifier.RuntimeContext(
+            project="fams-d6-03a-0123456789abcdef",
+            database="fams-d6-02b-db-0123456789abcdef",
+            username="d6_02b_runtime",
+            password="runtime-password-with-at-least-32-characters",
+            root_password="root-password-with-at-least-32-characters",
+            mysql_port=3307,
+            business_port=8080,
+            management_port=9091,
+        )
+
+    def test_quality_runtime_environment_includes_isolated_authentication_database(self) -> None:
+        verifier = load_verifier()
+        context = self.context(verifier)
+
+        environment = verifier.runtime_environment(context)
+
+        self.assertEqual(
+            "jdbc:mysql://127.0.0.1:3307/fams-d6-04-db-0123456789abcdef"
+            "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",
+            environment["D6_04_TEST_DATASOURCE_URL"],
+        )
+        self.assertEqual("d6_04_runtime", environment["D6_04_TEST_DATASOURCE_USERNAME"])
+        self.assertEqual(context.password, environment["D6_04_TEST_DATASOURCE_PASSWORD"])
+
+    def test_provisions_authentication_schema_and_least_privilege_account(self) -> None:
+        verifier = load_verifier()
+        context = self.context(verifier)
+
+        with patch.object(verifier, "require_command", return_value="") as command:
+            verifier.provision_auth_database(context)
+
+        args = command.call_args.args[1]
+        self.assertIn("fams-d6-04-db-0123456789abcdef", args[-1])
+        self.assertIn("d6_04_runtime", args[-1])
+        self.assertIn("GRANT ALL PRIVILEGES", args[-1])
+        self.assertNotIn(context.root_password, args[-1])
+
+    def test_quality_command_enables_authentication_runtime_suite(self) -> None:
+        verifier = load_verifier()
+        context = self.context(verifier)
+        output = "Tests run: 50, Failures: 0, Errors: 0, Skipped: 0"
+
+        with patch.object(verifier, "require_command", return_value=output) as command:
+            with patch.object(verifier, "verify_java_reports"):
+                verifier.verify_java_quality(context)
+
+        self.assertIn("-Dd6.04.runtime=true", command.call_args.args[1])
+
+
 class ObservabilityPolicyTest(unittest.TestCase):
 
     def test_runtime_metrics_requests_use_the_prometheus_text_media_type(self) -> None:

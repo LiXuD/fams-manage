@@ -4,6 +4,9 @@
     <Match>
         <Package name="~com\.fams\.contract\.(api|invoker|model)(\..*)?"/>
     </Match>
+    <Match>
+        <Package name="~com\.fams\.product\.contract\.(api|invoker|model)(\..*)?"/>
+    </Match>
     <!-- Constructor injection intentionally retains this package-private Mapper collaborator. -->
     <Match>
         <Class name="com.fams.runtime.compatibility.RuntimeCompatibilityService"/>

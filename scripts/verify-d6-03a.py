@@ -37,7 +37,7 @@ NPM_VERSION = "11.16.0"
 MAVEN_VERSION = "3.9.16"
 PYTHON_MINOR_VERSION = "3.12"
 PY_YAML_VERSION = "6.0.2"
-MINIMUM_JAVA_TESTS = 23
+MINIMUM_JAVA_TESTS = 50
 MINIMUM_LINE_COVERAGE = 0.75
 MINIMUM_BRANCH_COVERAGE = 0.75
 BASE_COMMIT = "5676bd9823e27ef65988568acd940a7532ab82b7"
@@ -56,6 +56,8 @@ SUREFIRE_REPORTS = ROOT / "backend/target/surefire-reports"
 REQUIRED_TEST_REPORTS = {
     "TEST-com.fams.architecture.FamsArchitectureRulesTest.xml",
     "TEST-com.fams.architecture.FamsArchitectureTest.xml",
+    "TEST-com.fams.auth.AuthHttpTest.xml",
+    "TEST-com.fams.auth.AuthSessionRestartTest.xml",
     "TEST-com.fams.contract.ContractProbeHttpTest.xml",
     "TEST-com.fams.observability.LocalObservabilityHttpTest.xml",
     "TEST-com.fams.runtime.RuntimeCompatibilityHttpTest.xml",
@@ -881,6 +883,7 @@ def start_compose(context: RuntimeContext) -> None:
         env=environment,
         timeout=180,
     )
+    provision_auth_database(context)
     verify_mysql_image()
 
 
@@ -917,6 +920,48 @@ def jdbc_url(context: RuntimeContext) -> str:
     )
 
 
+def auth_database(context: RuntimeContext) -> str:
+    match = re.fullmatch(r"fams-d6-02b-db-([0-9a-f]{16})", context.database)
+    if match is None:
+        raise VerificationFailure("runtime database name cannot derive an authentication schema")
+    return f"fams-d6-04-db-{match.group(1)}"
+
+
+def auth_jdbc_url(context: RuntimeContext) -> str:
+    return (
+        f"jdbc:mysql://127.0.0.1:{context.mysql_port}/{auth_database(context)}"
+        "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+    )
+
+
+def provision_auth_database(context: RuntimeContext) -> None:
+    database = auth_database(context)
+    sql = (
+        f"CREATE DATABASE IF NOT EXISTS `{database}` "
+        "CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; "
+        f"CREATE USER IF NOT EXISTS 'd6_04_runtime'@'%' IDENTIFIED BY '{context.password}'; "
+        f"ALTER USER 'd6_04_runtime'@'%' IDENTIFIED BY '{context.password}'; "
+        f"GRANT ALL PRIVILEGES ON `{database}`.* TO 'd6_04_runtime'@'%';"
+    )
+    require_command(
+        "D6-04 authentication database provisioning",
+        compose_command(
+            context,
+            "exec",
+            "-T",
+            "-e",
+            f"MYSQL_PWD={context.root_password}",
+            "mysql",
+            "mysql",
+            "-uroot",
+            "--execute",
+            sql,
+        ),
+        env=compose_environment(context),
+        show=False,
+    )
+
+
 def runtime_environment(context: RuntimeContext) -> dict[str, str]:
     environment = os.environ.copy()
     environment.update(
@@ -924,6 +969,9 @@ def runtime_environment(context: RuntimeContext) -> dict[str, str]:
             "D6_02B_TEST_DATASOURCE_URL": jdbc_url(context),
             "D6_02B_TEST_DATASOURCE_USERNAME": context.username,
             "D6_02B_TEST_DATASOURCE_PASSWORD": context.password,
+            "D6_04_TEST_DATASOURCE_URL": auth_jdbc_url(context),
+            "D6_04_TEST_DATASOURCE_USERNAME": "d6_04_runtime",
+            "D6_04_TEST_DATASOURCE_PASSWORD": context.password,
         }
     )
     return environment
@@ -1009,6 +1057,7 @@ def verify_java_quality(context: RuntimeContext) -> None:
             "backend",
             "-Pquality",
             "-Dd6.02b.runtime=true",
+            "-Dd6.04.runtime=true",
             "clean",
             "verify",
         ],
