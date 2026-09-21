@@ -443,6 +443,19 @@ class AuthenticationRuntimeIntegrationTest(unittest.TestCase):
 
         self.assertIn("-Dd6.04.runtime=true", command.call_args.args[1])
 
+    def test_required_report_floor_counts_the_new_runtime_suites(self) -> None:
+        verifier = load_verifier()
+
+        self.assertEqual(27, verifier.MINIMUM_JAVA_TESTS)
+        self.assertIn(
+            "TEST-com.fams.auth.AuthHttpTest.xml",
+            verifier.REQUIRED_TEST_REPORTS,
+        )
+        self.assertIn(
+            "TEST-com.fams.auth.AuthSessionRestartTest.xml",
+            verifier.REQUIRED_TEST_REPORTS,
+        )
+
 
 class ObservabilityPolicyTest(unittest.TestCase):
 
