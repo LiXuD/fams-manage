@@ -63,12 +63,12 @@
 | 命令 | 结果 | 能证明 | 不能证明 |
 |---|---|---|---|
 | `rtk mvn -f backend/pom.xml test` | 退出 0；34 项运行、0 失败、0 错误、3 skipped；其中 D6-04 auth 11/11 通过 | 局部 Java 领域规则和既有默认测试通过 | 3 项既有 `RuntimeCompatibilityHttpTest` 因缺少 `d6.02b.runtime` 跳过；不证明真实 MySQL、HTTP、Session 或 Cookie |
-| `rtk proxy env PATH=/Users/lixd/.nvm/versions/node/v24.18.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin npm run test:web` | 退出 0；8/8 测试通过 | 局部 API/store/登录表单行为通过 | 不证明类型检查、构建、真实后端或浏览器链路 |
+| Node 24.18.0 环境执行 `rtk npm run test:web` | 退出 0；8/8 测试通过 | 局部 API/store/登录表单行为通过 | 不证明类型检查、构建、真实后端或浏览器链路 |
 | 同一固定 Node `PATH` 下运行 `npm run build:web` | 退出 2 | 暴露当前 TypeScript/配置阻断 | 不能把单元测试绿灯升级为可构建客户端 |
 
 ## 恢复与续接
 
-1. 进入 `/Users/lixd/IdeaProjects/Git/CodexProject/fams/.worktrees/d6-04-pc-login-permissions`，确认分支为 `feat/D6-04-pc-login-permissions`，不要 reset、checkout 或清理现有未提交草稿。
+1. 进入当前 D6-04 工作树根目录，确认分支为 `feat/D6-04-pc-login-permissions`，不要 reset、checkout 或清理现有未提交草稿。
 2. 以 `423fd8a` 作为最后一个已提交任务起点；先审阅工作树差异，再按功能边界拆分提交，禁止把后端、PC 和交接文档压成一个大提交。
 3. 先完成 D6-04A：补齐应用服务、控制器、持久化、Spring Security/Session/Cookie/CSRF 和安全事件，并在真实 MySQL 上验证迁移、登录、初始改密、轮换、注销、失效和重启。
 4. 再完成 D6-04B：实现账号/角色/范围/字段授权配置及授权版本更新，用拒绝用例证明系统管理员没有隐含资产业务权限、撤权后旧会话失效。
