@@ -1,10 +1,10 @@
 # D6-04 PC 登录与权限独立复核单
 
-> 状态：`AWAITING_USER_REVIEW` · 复核人：用户本人（2026-09-22 用户消息“由我本人进行复核”）
+> 状态：`USER_PASS_PENDING_REVIEWED_HEAD_GATE` · 复核人：用户本人（2026-09-22 指定并回复“复核项目全部pass”）
 > 实现候选：`50bcf5f2289876422af34df35e30966d883c075c`
 > 实现比较基线：`5f4bc8ae842dbd2ee3f2c7f6ea8a2ae3d0071513`
-> 复核对象：请在开始审阅时记录含本复核单的 `rtk git rev-parse HEAD` 完整 SHA；后续改动需要重新确认审阅范围。
-> 本文件只准备问题与证据，不预填用户结论，不把送审前门禁算作 reviewed HEAD 复跑。
+> 固定送审对象：`42112c09419bdeb3250cf7a8a4d2b8f9c692cb5d`（用户回复所链接复核单所在提交）；实现文件未变。
+> 用户结论已记录，但 reviewed HEAD 的完整门禁尚未复跑，不据此预先关闭 D6-04D。
 
 ## 1. 决策与边界
 
@@ -29,11 +29,11 @@ rtk git diff 5f4bc8ae842dbd2ee3f2c7f6ea8a2ae3d0071513..50bcf5f2289876422af34df35
 
 | 领域 | 请核对的关键问题 | 主要入口 | 用户结论 |
 |---|---|---|---|
-| 需求与契约 | P01、首次改密、当前身份和权限、注销、账号/角色/范围/字段授权是否遵守 PRD 与 OpenAPI；是否把系统管理员错误地扩成资产业务管理员；是否加入未批准的审批或业务范围 | [任务卡](D6-04-task-card.md)、[PRD](../superpowers/specs/2026-09-03-fixed-asset-product-design.md)、[OpenAPI](../../contracts/fams-core-v1.yaml)、`AuthController`、`AccountAdminController` | `待填写` |
-| 认证与权限 | 安全 Cookie、会话轮换、首次改密、注销、停用、重置密码、角色/授权变化后的旧会话拒绝是否在服务端逐请求生效；CSRF 对写请求是否强制；匿名、越权、错误密码是否稳定拒绝且不泄密 | `AuthRequestFilter`、`AuthSessionManager`、`AuthSessionValidator`、`AuthPolicy`、`AuthApplicationService`、`AuthHttpTest` | `待填写` |
-| 账号配置与并发 | 固定角色不可动态扩权；一般数据范围与敏感字段授权是否独立；版本化引用失效、乐观版本 409、幂等重放/冲突和授权代际是否正确；数据库约束与事务是否与代码一致 | `AccountAdminService`、`AccountAdminMapper`、`AuthAccountMapper`、`V1__create_authentication.sql`、`AuthHttpTest` | `待填写` |
-| 迁移、恢复与审计 | 迁移是否仅作用于任务自有产品库；已有库如果执行过旧 V1，是否明确要求另建增量迁移而非重放；应用/数据库重启后 Session 与数据是否恢复；安全事件是否避免密码、完整 Cookie/CSRF；测试资源是否精确清理 | [任务卡迁移边界](D6-04-task-card.md)、`V1__create_authentication.sql`、`AuthSessionRestartTest`、`run-d6-04-browser-runtime.py`、`verify-d6-03a.py` | `待填写` |
-| PC 与质量 | 浏览器仅用真实表单、Cookie 通道和服务端权限快照，无 token 注入或本地持久化绕权；改密错误只显示一次；14 项 Web 测试、构建/lint/typecheck 与完整门禁是否覆盖关键正反路径 | `apps/web/src/auth/`、`apps/web/src/router.ts`、`apps/web/src/views/`、`apps/web/src/components/`、[任务卡证据](D6-04-task-card.md) | `待填写` |
+| 需求与契约 | P01、首次改密、当前身份和权限、注销、账号/角色/范围/字段授权是否遵守 PRD 与 OpenAPI；是否把系统管理员错误地扩成资产业务管理员；是否加入未批准的审批或业务范围 | [任务卡](D6-04-task-card.md)、[PRD](../superpowers/specs/2026-09-03-fixed-asset-product-design.md)、[OpenAPI](../../contracts/fams-core-v1.yaml)、`AuthController`、`AccountAdminController` | `PASS`（用户总体回复） |
+| 认证与权限 | 安全 Cookie、会话轮换、首次改密、注销、停用、重置密码、角色/授权变化后的旧会话拒绝是否在服务端逐请求生效；CSRF 对写请求是否强制；匿名、越权、错误密码是否稳定拒绝且不泄密 | `AuthRequestFilter`、`AuthSessionManager`、`AuthSessionValidator`、`AuthPolicy`、`AuthApplicationService`、`AuthHttpTest` | `PASS`（用户总体回复） |
+| 账号配置与并发 | 固定角色不可动态扩权；一般数据范围与敏感字段授权是否独立；版本化引用失效、乐观版本 409、幂等重放/冲突和授权代际是否正确；数据库约束与事务是否与代码一致 | `AccountAdminService`、`AccountAdminMapper`、`AuthAccountMapper`、`V1__create_authentication.sql`、`AuthHttpTest` | `PASS`（用户总体回复） |
+| 迁移、恢复与审计 | 迁移是否仅作用于任务自有产品库；已有库如果执行过旧 V1，是否明确要求另建增量迁移而非重放；应用/数据库重启后 Session 与数据是否恢复；安全事件是否避免密码、完整 Cookie/CSRF；测试资源是否精确清理 | [任务卡迁移边界](D6-04-task-card.md)、`V1__create_authentication.sql`、`AuthSessionRestartTest`、`run-d6-04-browser-runtime.py`、`verify-d6-03a.py` | `PASS`（用户总体回复） |
+| PC 与质量 | 浏览器仅用真实表单、Cookie 通道和服务端权限快照，无 token 注入或本地持久化绕权；改密错误只显示一次；14 项 Web 测试、构建/lint/typecheck 与完整门禁是否覆盖关键正反路径 | `apps/web/src/auth/`、`apps/web/src/router.ts`、`apps/web/src/views/`、`apps/web/src/components/`、[任务卡证据](D6-04-task-card.md) | `PASS`（用户总体回复） |
 
 ## 3. 已有证据与不得外推的边界
 
@@ -60,3 +60,9 @@ PC 与质量：PASS / NEEDS_FIX / QUESTION
 ```
 
 收到结论后，实施者先逐条核对问题并修复或说明不采纳依据，再请用户确认受影响领域。只有用户明确签署 `PASS`、问题关闭，且控制器对最终 reviewed HEAD 再次完整运行门禁后，才可将 D6-04D 与父任务记为 `DEV_VERIFIED`。
+
+## 5. 用户签署与待办
+
+用户在引用本复核单的会话消息中明确回复：“复核项目全部pass，继续下一步任务”。本单五个领域和总评据此记录为 `PASS`；用户没有逐项列出阅读文件、复跑命令或另附问题清单，因此此处只记录“无已报告问题”，不代填不存在的原始审查过程。送审对象为上一轮明确告知的 `42112c09419bdeb3250cf7a8a4d2b8f9c692cb5d`；这次签署不覆盖后续源码修改。
+
+当前剩余门槛：在包含本签署记录的干净固定 SHA 上完整复跑 D6-03A 统一门禁，确认退出码、阻断观察、零跳过、质量与清理，再更新 D6-04D/父任务状态。该技术复核不升级远端 CI、QA 或生产结论。
