@@ -51,6 +51,8 @@ def wait_for(check: Callable[[], bool], label: str, seconds: int = 75) -> None:
 
 
 def main() -> int:
+    if checked(["rtk", "node", "--version"]).stdout.strip() != "v24.18.0":
+        raise RuntimeError("Run with the frozen Node 24.18.0 on PATH")
     if not JAR.is_file():
         raise RuntimeError("Build the backend jar first with Java 21")
     suffix = secrets.token_hex(8)
@@ -127,12 +129,10 @@ def main() -> int:
             )
             checked(["rtk", "docker", "exec", "-i", name, "mysql", "-uroot",
                      f"-p{root_password}", database], input=sql)
-            web_environment = os.environ.copy()
-            web_environment["PATH"] = f"/Users/lixd/.nvm/versions/node/v24.18.0/bin:{web_environment.get('PATH', '')}"
             web_log = open(Path(temporary) / "web.log", "wb")
             web = subprocess.Popen(
                 ["rtk", "npm", "run", "dev", "--workspace", "@fams/web"],
-                cwd=ROOT, env=web_environment, stdout=web_log, stderr=subprocess.STDOUT)
+                cwd=ROOT, env=os.environ.copy(), stdout=web_log, stderr=subprocess.STDOUT)
             processes.append(web)
             wait_for(lambda: ready("http://127.0.0.1:5173/login", web), "web")
             print("READY http://127.0.0.1:5173/login; account alice; test password is AuthHttpTest.INITIAL_PASSWORD", flush=True)
