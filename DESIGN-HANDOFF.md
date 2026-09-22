@@ -1,7 +1,7 @@
 # FAMS 项目阶段与交接入口
 
 > 唯一现役进度入口 · 更新于 2026-09-22
-> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-01A、D6-02A、D6-02B、D6-02C、D6-03A、D6-04A/B/C 为 `DEV_VERIFIED`。D6-04 父任务仍为 `IN_PROGRESS`：D6-04D 的本地真实浏览器链路（含双用户角色撤销失效）和固定 SHA 完整门禁已补证，现为 `IN_REVIEW`；用户本人已指定复核，结论和 reviewed HEAD 复跑待完成。D6-01B 与 D6-03B 继续等待远端权限。
+> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-01A、D6-02A、D6-02B、D6-02C、D6-03A、D6-04A/B/C/D 及 D6-04 父任务均为本地 `DEV_VERIFIED`：用户本人五域及总评 PASS，签署记录 HEAD `8943dc3` 完整门禁 127 项通过。下一本地任务为 D6-05 基础资料；D6-01B 与 D6-03B 继续等待远端权限。
 
 ## 1. 八步开发流程与当前进度
 
@@ -12,7 +12,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.1](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-04A/B/C 已 `DEV_VERIFIED`，D6-04D 待独立复核，详见[任务卡](docs/development/D6-04-task-card.md)；D6-01B/03B 待外部权限 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.1](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-04 本地 `DEV_VERIFIED`，下一步 D6-05，详见[任务卡](docs/development/D6-04-task-card.md)；D6-01B/03B 待外部权限 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
@@ -36,11 +36,11 @@
 
 1. 先读本文和 [PRD V1.5](docs/superpowers/specs/2026-09-03-fixed-asset-product-design.md)。
 2. 阅读[第六阶段开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)：技术架构、接口契约、Git/CI、D6-01～D6-27 台账、外部依赖及持续维护规则均在其中。Git 提交强制格式见计划 §四.4。
-3. 本轮修订已获用户确认；D6-01A、D6-02A、D6-02B、D6-02C、D6-03A、D6-04A/B/C 状态为 `DEV_VERIFIED`。C 的固定 SHA `f5aef5e` 已通过 117 项统一门禁；D 的实现候选 `50bcf5f` 通过 121 项本地门禁并送 `IN_REVIEW`。隔离 MySQL 的浏览器链路详见 [D6-04 任务卡](docs/development/D6-04-task-card.md)。父任务仍为 `IN_PROGRESS`。D6-01B 与 D6-03B 仍等待 GitHub 私有仓库与权限。
+3. 本轮修订已获用户确认；D6-01A、D6-02A、D6-02B、D6-02C、D6-03A、D6-04A/B/C/D 及 D6-04 父任务状态为本地 `DEV_VERIFIED`。用户本人对 D6-04 五域及总评 PASS，含签署记录的 reviewed HEAD `8943dc3` 完整门禁 127 项通过；隔离 MySQL 的浏览器链路详见 [D6-04 任务卡](docs/development/D6-04-task-card.md)。D6-01B 与 D6-03B 仍等待 GitHub 私有仓库与权限。
 4. 每次任务开始、受阻、送审、验证和验收时同步维护计划台账及执行记录；本文只维护项目阶段和下一步，不复制第二套任务状态。D6-02B 的版本冻结结论与 D6-02C 的关键设计复核均已关闭；后续关键任务仍须按计划独立复核。
 5. 只有 PRD 变更或开发发现设计缺口时，才重新打开第5步对应条目；无需恢复已取消的大规模用户测试方案。
-6. D6-04A/B/C 已提交并完成本地验证；固定 SHA `f5aef5e` 的 D6-03A 统一入口 117 项阻断观察通过。后续 `c087c43` 修复改密页重复错误提示并使 Web 14/14 测试、构建、lint/typecheck 通过；`50bcf5f` 的双用户运行夹具完成真实浏览器角色撤销失效补证，同 SHA 的干净隔离检出统一门禁 121 项通过。D6-04D 独立复核未完成；不得据此声明父任务、远端 CI、QA 或生产完成。
-7. 续接工作树为 `.worktrees/d6-04-pc-login-permissions`，分支为 `feat/D6-04-pc-login-permissions`。以 `50bcf5f` 为当前本地实现候选；D6-04D 已送 `IN_REVIEW`，下一步由用户本人按[复核单](docs/development/D6-04-independent-review.md)审阅，签署后对 reviewed HEAD 统一门禁复跑。
+6. D6-04A/B/C/D 均已提交并完成本地验证；C 的 Web 14/14 测试、构建、lint/typecheck，D 的双用户角色撤销失效浏览器链路、用户本人五域及总评 PASS，与 reviewed HEAD `8943dc3` 的 127 项统一门禁共同构成父任务本地 `DEV_VERIFIED` 证据。不得据此声明远端 CI、QA、正式安全专项或生产完成。
+7. D6-04 工作树为 `.worktrees/d6-04-pc-login-permissions`，分支 `feat/D6-04-pc-login-permissions`。下一步按计划进入 D6-05 基础资料，先建立任务卡并锁定契约、数据、权限和停用依赖验证条件；D6-04 的[复核单](docs/development/D6-04-independent-review.md)与[任务卡](docs/development/D6-04-task-card.md)保留为关闭证据。
 
 ## 4. 文档责任
 
@@ -60,9 +60,9 @@
 | 事实面 | 状态 | 说明 |
 |---|---|---|
 | 设计文档 | `changed-and-verified` | 一期功能覆盖验证已完成并同步 |
-| 开发计划 | `in-progress` | V1.1 修订已确认；D6-04A/B/C 已 `DEV_VERIFIED`；D6-04D 为 `IN_REVIEW`；D6-01B/03B 远端能力尚未完成 |
+| 开发计划 | `in-progress` | V1.1 修订已确认；D6-04A/B/C/D 和父任务均本地 `DEV_VERIFIED`；下一步 D6-05；D6-01B/03B 远端能力尚未完成 |
 | 规则 | `changed-and-verified` | AGENTS 已指向当前阶段 |
 | 产品代码 | `in-progress` | D6-04A/B/C 认证、账号授权和 PC 登录外壳已提交并本地验证；其余一期业务未实现 |
-| 产品运行态 | `local-browser-verified-pending-review` | D6-04A/B 后端证据及 C/D 的真实浏览器登录、Cookie/CSRF、改密、刷新、注销、停用与角色撤销即时失效已验证；独立复核仍缺，远端 CI、QA、生产未验证 |
+| 产品运行态 | `local-browser-dev-verified` | D6-04 的真实浏览器登录、Cookie/CSRF、改密、刷新、注销、停用与角色撤销即时失效、用户复核和 reviewed HEAD 门禁已验证；远端 CI、QA、生产未验证 |
 | 记忆 | `out-of-scope` | 本次未修改机器生成记忆 |
-| 工作区 | `handoff-recorded` | D6-04 位于 `.worktrees/d6-04-pc-login-permissions`，分支 `feat/D6-04-pc-login-permissions`；当前本地实现候选 `50bcf5f` 的统一门禁 121 项通过，D6-04D 待复核，详见任务卡 |
+| 工作区 | `handoff-recorded` | D6-04 位于 `.worktrees/d6-04-pc-login-permissions`，分支 `feat/D6-04-pc-login-permissions`；含用户签署记录的 reviewed HEAD `8943dc3` 统一门禁 127 项通过，下一步 D6-05，详见任务卡 |
