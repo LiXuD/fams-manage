@@ -136,7 +136,7 @@ def main() -> int:
             processes.append(web)
             wait_for(lambda: ready("http://127.0.0.1:5173/login", web), "web")
             print("READY http://127.0.0.1:5173/login; account alice; test password is AuthHttpTest.INITIAL_PASSWORD", flush=True)
-            print("Commands: disable (fixture account), counts (audit/session), stop.", flush=True)
+            print("Commands: employee (second actor), disable, counts, stop.", flush=True)
             for command in sys.stdin:
                 action = command.strip()
                 if action == "stop":
@@ -148,6 +148,14 @@ def main() -> int:
                         "auth_epoch=auth_epoch+1, version=version+1, updated_at=NOW(3) "
                         "WHERE id=1 AND status='ENABLED';"))
                     print("Fixture account disabled in task-owned MySQL.", flush=True)
+                elif action == "employee":
+                    checked(["rtk", "docker", "exec", "-i", name, "mysql", "-uroot",
+                             f"-p{root_password}", database], input=(
+                        "INSERT INTO fams_employee "
+                        "(id,employee_no,employee_no_normalized,name,organization_id,"
+                        "status,version,created_at,updated_at) VALUES "
+                        "(2,'E002','E002','Bob',1,'ACTIVE',0,NOW(3),NOW(3));"))
+                    print("Second fixture employee created in task-owned MySQL.", flush=True)
                 elif action == "counts":
                     result = checked(["rtk", "docker", "exec", "-i", name, "mysql", "-uroot",
                                       f"-p{root_password}", "--batch", "--skip-column-names", database],
