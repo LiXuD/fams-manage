@@ -1,7 +1,7 @@
 # FAMS 项目阶段与交接入口
 
-> 唯一现役进度入口 · 更新于 2026-09-22
-> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-01A、D6-02A、D6-02B、D6-02C、D6-03A、D6-04A/B/C/D 及 D6-04 父任务均为本地 `DEV_VERIFIED`：用户本人五域及总评 PASS，签署记录 HEAD `8943dc3` 完整门禁 127 项通过。下一本地任务为 D6-05 基础资料；D6-01B 与 D6-03B 继续等待远端权限。
+> 唯一现役进度入口 · 更新于 2026-09-23
+> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04 本地 `DEV_VERIFIED`；D6-05 基础资料已按组织人员与模板导入、目录仓位、编号参数三个纵切片启动。D6-01B 与 D6-03B 继续等待远端权限。
 
 ## 1. 八步开发流程与当前进度
 
@@ -12,7 +12,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.1](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-04 本地 `DEV_VERIFIED`，下一步 D6-05，详见[任务卡](docs/development/D6-04-task-card.md)；D6-01B/03B 待外部权限 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.1](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-05 `IN_PROGRESS`，详见[任务卡](docs/development/D6-05-task-card.md)；D6-01B/03B 待外部权限 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
