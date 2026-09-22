@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useSessionStore } from "@/auth/sessionStore";
 
 const router = useRouter();
+const route = useRoute();
 const session = useSessionStore();
 
 const displayRole = computed(() => session.user?.roles[0] ?? "未登录");
@@ -34,7 +35,7 @@ async function handleLogout(): Promise<void> {
         <span v-if="session.hasPermission('ASSET_LEDGER_READ')" class="nav-note">资产台账 · 后续开放</span>
       </nav>
       <main class="workspace-content">
-        <p v-if="session.isAuthenticated && session.error" class="form-error" role="alert">{{ session.error.message }}</p>
+        <p v-if="session.isAuthenticated && session.error && route.name !== 'password-change'" class="form-error" role="alert">{{ session.error.message }}</p>
         <slot />
       </main>
     </div>
