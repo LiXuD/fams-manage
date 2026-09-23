@@ -65,6 +65,7 @@ class NumberingRuleService {
         if (replay.isPresent()) {
             return replay.orElseThrow();
         }
+        lockConfiguration();
         String code = required(request.getCode(), 64, "Rule code");
         if (mapper.findByCode(normalize(code)) != null) {
             throw codeConflict();
@@ -97,6 +98,7 @@ class NumberingRuleService {
         if (replay.isPresent()) {
             return replay.orElseThrow();
         }
+        lockConfiguration();
         NumberingRuleRow current = requireVersion(requireForUpdate(id), expectedVersion);
         NumberingTarget target = request.getTarget() == null
                 ? NumberingTarget.valueOf(current.target()) : request.getTarget();
@@ -136,6 +138,7 @@ class NumberingRuleService {
         if (replay.isPresent()) {
             return replay.orElseThrow();
         }
+        lockConfiguration();
         required(reason, 500, "Reason");
         NumberingRuleRow current = requireVersion(requireForUpdate(id), expectedVersion);
         String status = enabled ? "ACTIVE" : "DISABLED";
@@ -185,6 +188,12 @@ class NumberingRuleService {
         }
         return new NumberingConfig(target.name(), mode.name(), fixedPrefix,
                 datePart.name(), sequenceLength);
+    }
+
+    private void lockConfiguration() {
+        if (mapper.lockConfiguration() == null) {
+            throw MasterDataOperationException.writeConflict("The numbering configuration is unavailable.");
+        }
     }
 
     private void validateCategoryPrefixes() {

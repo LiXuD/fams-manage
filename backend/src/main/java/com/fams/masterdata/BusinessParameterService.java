@@ -117,7 +117,7 @@ class BusinessParameterService {
     }
 
     private BusinessParameterVersionCreateRequest parse(JsonNode raw) {
-        if (raw == null || !raw.isObject() || raw.has("effectiveAt")
+        if (raw == null || !raw.isObject() || raw.size() != 1 || raw.has("effectiveAt")
                 || !raw.has("snapshot") || !raw.path("snapshot").isObject()) {
             throw MasterDataOperationException.invalid("A complete immediate snapshot is required.");
         }
@@ -130,6 +130,9 @@ class BusinessParameterService {
                 throw MasterDataOperationException.invalid("The complete snapshot is required.");
             }
         }
+        if (snapshot.size() != 9) {
+            throw MasterDataOperationException.invalid("Unexpected snapshot fields are not allowed.");
+        }
         JsonNode thresholds = snapshot.path("notificationEscalationThresholds");
         if (!thresholds.isObject()) {
             throw MasterDataOperationException.invalid("The notification thresholds are required.");
@@ -140,6 +143,9 @@ class BusinessParameterService {
             if (!thresholds.hasNonNull(field)) {
                 throw MasterDataOperationException.invalid("The complete notification thresholds are required.");
             }
+        }
+        if (thresholds.size() != 4) {
+            throw MasterDataOperationException.invalid("Unexpected notification fields are not allowed.");
         }
         try {
             return objectMapper.treeToValue(raw, BusinessParameterVersionCreateRequest.class);

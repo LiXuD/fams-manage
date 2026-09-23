@@ -13,6 +13,13 @@ import org.apache.ibatis.annotations.Update;
 @Mapper
 interface NumberingRuleMapper {
 
+    // One persistent row serializes category mutations with rule activation and validation.
+    @Select("SELECT current_version FROM fams_business_parameter_state WHERE singleton_id = 1 FOR UPDATE")
+    Long lockConfiguration();
+
+    @Select("SELECT COUNT(*) FROM fams_asset_category WHERE status = 'ACTIVE' AND id != #{id} AND numbering_prefix = #{prefix}")
+    int countActivePrefixOtherThan(@Param("id") long id, @Param("prefix") String prefix);
+
     @Select("SELECT id, code, target, mode, fixed_prefix, date_part, sequence_length, status, version FROM fams_numbering_rule WHERE id = #{id}")
     NumberingRuleRow find(@Param("id") long id);
 

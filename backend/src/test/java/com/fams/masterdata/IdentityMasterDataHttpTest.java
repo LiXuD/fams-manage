@@ -1,6 +1,7 @@
 package com.fams.masterdata;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.URI;
@@ -9,7 +10,17 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
+import com.fams.product.contract.model.NumberingTarget;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,6 +61,9 @@ class IdentityMasterDataHttpTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private NumberAllocationService numberAllocations;
 
     @DynamicPropertySource
     static void configureTaskDatabase(DynamicPropertyRegistry registry) {
@@ -785,21 +799,141 @@ class IdentityMasterDataHttpTest {
                 admin, writeHeaders("93555555-5555-4555-8555-555555555555", admin));
         assertEquals(201, accepted.statusCode(), accepted.body());
         String ruleId = JSON.readTree(accepted.body()).path("id").asText();
+        HttpResponse<String> clearedPrefix = request("PATCH", "/api/v1/asset-categories/"
+                + categoryId, "{\"numberingPrefix\":\"\"}", admin,
+                versionedHeaders("93555555-5555-4555-8555-666666666666", admin, 1));
+        assertEquals(409, clearedPrefix.statusCode(), clearedPrefix.body());
+        assertEquals("NUMBERING_CATEGORY_PREFIX_MISSING",
+                JSON.readTree(clearedPrefix.body()).path("code").asText());
         HttpResponse<String> secondCategory = request("POST", "/api/v1/asset-categories",
                 "{\"code\":\"DESKTOP\",\"name\":\"Desktop\","
                         + "\"numberingPrefix\":\"lt\"}", admin,
                 writeHeaders("93666666-6666-4666-8666-666666666666", admin));
-        assertEquals(201, secondCategory.statusCode());
+        assertEquals(409, secondCategory.statusCode());
+        assertEquals("NUMBERING_CATEGORY_PREFIX_CONFLICT",
+                JSON.readTree(secondCategory.body()).path("code").asText());
+        HttpResponse<String> missingAfterActivation = request("POST", "/api/v1/asset-categories",
+                "{\"code\":\"TABLET\",\"name\":\"Tablet\"}", admin,
+                writeHeaders("93666666-6666-4666-8666-777777777777", admin));
+        assertEquals(409, missingAfterActivation.statusCode());
+        assertEquals("NUMBERING_CATEGORY_PREFIX_MISSING",
+                JSON.readTree(missingAfterActivation.body()).path("code").asText());
         HttpResponse<String> disable = request("POST", "/api/v1/numbering-rules/" + ruleId
                 + "/disable", "{\"reason\":\"Pause\"}", admin,
                 versionedHeaders("93777777-7777-4777-8777-777777777777", admin, 0));
         assertEquals(200, disable.statusCode());
+        assertEquals(201, request("POST", "/api/v1/asset-categories",
+                "{\"code\":\"DESKTOP\",\"name\":\"Desktop\","
+                        + "\"numberingPrefix\":\"lt\"}", admin,
+                writeHeaders("93666666-6666-4666-8666-888888888888", admin)).statusCode());
         HttpResponse<String> conflict = request("POST", "/api/v1/numbering-rules/" + ruleId
                 + "/enable", "{\"reason\":\"Resume\"}", admin,
                 versionedHeaders("93888888-8888-4888-8888-888888888888", admin, 1));
         assertEquals(409, conflict.statusCode());
         assertEquals("NUMBERING_CATEGORY_PREFIX_CONFLICT",
                 JSON.readTree(conflict.body()).path("code").asText());
+    }
+
+    @Test
+    void numberReservationsRemainUniqueAcrossConcurrentAndVoidedBatches() throws Exception {
+        assertEquals("NUMBERING_RULE_UNAVAILABLE", assertThrows(
+                MasterDataOperationException.class,
+                () -> numberAllocations.reserve(NumberingTarget.ASSET, null, 1)).code());
+        Session admin = login("admin");
+        HttpResponse<String> created = request("POST", "/api/v1/numbering-rules",
+                "{\"code\":\"ASSET-RESERVE\",\"target\":\"ASSET\","
+                        + "\"mode\":\"ENTERPRISE\",\"fixedPrefix\":\"FA\","
+                        + "\"datePart\":\"YYYYMMDD\",\"sequenceLength\":4}",
+                admin, writeHeaders("93999999-9999-4999-8999-999999999999", admin));
+        assertEquals(201, created.statusCode(), created.body());
+        List<NumberReservation> first = numberAllocations.reserve(NumberingTarget.ASSET, null, 3);
+        String today = LocalDate.now(ZoneId.of("Asia/Shanghai"))
+                .format(DateTimeFormatter.BASIC_ISO_DATE);
+        assertEquals(List.of("ASSET-E-PFA-DYYYYMMDD" + today + "-0001",
+                "ASSET-E-PFA-DYYYYMMDD" + today + "-0002",
+                "ASSET-E-PFA-DYYYYMMDD" + today + "-0003"),
+                first.stream().map(NumberReservation::number).toList());
+        numberAllocations.markUsed(first.get(0).id());
+        numberAllocations.voidReservation(first.get(1).id());
+        assertThrows(MasterDataOperationException.class,
+                () -> numberAllocations.markUsed(first.get(1).id()));
+        try (var pool = Executors.newFixedThreadPool(8)) {
+            List<Future<List<NumberReservation>>> futures = new ArrayList<>();
+            for (int index = 0; index < 8; index++) {
+                futures.add(pool.submit(() -> numberAllocations.reserve(NumberingTarget.ASSET,
+                        null, 1)));
+            }
+            var numbers = new HashSet<String>();
+            for (Future<List<NumberReservation>> future : futures) {
+                numbers.add(future.get().getFirst().number());
+            }
+            assertEquals(8, numbers.size());
+            assertTrue(numbers.stream().noneMatch(first.stream().map(NumberReservation::number)
+                    .toList()::contains));
+        }
+        assertEquals(11L, jdbcTemplate.queryForObject(
+                "SELECT last_allocated_value FROM fams_number_sequence", Long.class));
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM fams_number_allocation WHERE state = 'VOID'", Integer.class));
+    }
+
+    @Test
+    void categoryAndBusinessNumberReservationsRequireValidActiveRules() throws Exception {
+        assertEquals(400, assertThrows(MasterDataOperationException.class,
+                () -> numberAllocations.reserve(null, null, 1)).status());
+        assertEquals(400, assertThrows(MasterDataOperationException.class,
+                () -> numberAllocations.reserve(NumberingTarget.ASSET, null, 0)).status());
+        assertEquals(400, assertThrows(MasterDataOperationException.class,
+                () -> numberAllocations.reserve(NumberingTarget.ASSET, null, 1001)).status());
+        Session admin = login("admin");
+        HttpResponse<String> category = request("POST", "/api/v1/asset-categories",
+                "{\"code\":\"LAPTOP\",\"name\":\"Laptop\","
+                        + "\"numberingPrefix\":\"LT\"}", admin,
+                writeHeaders("93aaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", admin));
+        assertEquals(201, category.statusCode(), category.body());
+        long categoryId = JSON.readTree(category.body()).path("id").asLong();
+        HttpResponse<String> rule = request("POST", "/api/v1/numbering-rules",
+                "{\"code\":\"CATEGORY-ALLOCATE\",\"target\":\"ASSET\","
+                        + "\"mode\":\"CATEGORY_PREFIX\",\"datePart\":\"NONE\","
+                        + "\"sequenceLength\":1}", admin,
+                writeHeaders("93bbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", admin));
+        assertEquals(201, rule.statusCode(), rule.body());
+        String ruleId = JSON.readTree(rule.body()).path("id").asText();
+        assertEquals("NUMBERING_CATEGORY_PREFIX_MISSING", assertThrows(
+                MasterDataOperationException.class,
+                () -> numberAllocations.reserve(NumberingTarget.ASSET, null, 1)).code());
+        assertEquals("NUMBERING_CATEGORY_PREFIX_MISSING", assertThrows(
+                MasterDataOperationException.class,
+                () -> numberAllocations.reserve(NumberingTarget.ASSET, 999999L, 1)).code());
+        List<NumberReservation> segment = numberAllocations.reserve(
+                NumberingTarget.ASSET, categoryId, 9);
+        assertEquals("ASSET-C-PLT-N-1", segment.getFirst().number());
+        assertEquals("ASSET-C-PLT-N-9", segment.getLast().number());
+        assertEquals("NUMBERING_SEQUENCE_EXHAUSTED", assertThrows(
+                MasterDataOperationException.class,
+                () -> numberAllocations.reserve(NumberingTarget.ASSET, categoryId, 1)).code());
+        HttpResponse<String> changed = request("PATCH", "/api/v1/numbering-rules/" + ruleId,
+                "{\"datePart\":\"YYYY\"}", admin,
+                versionedHeaders("93cccccc-cccc-4ccc-8ccc-cccccccccccc", admin, 0));
+        assertEquals(200, changed.statusCode(), changed.body());
+        String year = Integer.toString(LocalDate.now(ZoneId.of("Asia/Shanghai")).getYear());
+        assertEquals("ASSET-C-PLT-DYYYY" + year + "-1",
+                numberAllocations.reserve(NumberingTarget.ASSET, categoryId, 1).getFirst().number());
+        HttpResponse<String> disabled = request("POST", "/api/v1/numbering-rules/" + ruleId
+                + "/disable", "{\"reason\":\"Stop numbering\"}", admin,
+                versionedHeaders("93dddddd-dddd-4ddd-8ddd-dddddddddddd", admin, 1));
+        assertEquals(200, disabled.statusCode(), disabled.body());
+        assertEquals("NUMBERING_RULE_UNAVAILABLE", assertThrows(
+                MasterDataOperationException.class,
+                () -> numberAllocations.reserve(NumberingTarget.ASSET, categoryId, 1)).code());
+        HttpResponse<String> inbound = request("POST", "/api/v1/numbering-rules",
+                "{\"code\":\"INBOUND-ALLOCATE\",\"target\":\"INBOUND_RECEIPT\","
+                        + "\"mode\":\"ENTERPRISE\",\"datePart\":\"YYYYMM\","
+                        + "\"sequenceLength\":2}", admin,
+                writeHeaders("93eeeeee-eeee-4eee-8eee-eeeeeeeeeeee", admin));
+        assertEquals(201, inbound.statusCode(), inbound.body());
+        assertTrue(numberAllocations.reserve(NumberingTarget.INBOUND_RECEIPT, null, 1)
+                .getFirst().number().startsWith("INBOUND_RECEIPT-"));
     }
 
     @Test
@@ -886,6 +1020,10 @@ class IdentityMasterDataHttpTest {
         String[] invalidSnapshots = {
                 "{}",
                 "{\"snapshot\":{}}",
+                body.replace("{\"snapshot\":", "{\"unexpected\":true,\"snapshot\":"),
+                body.replace("\"timezone\":", "\"unexpected\":true,\"timezone\":"),
+                body.replace("\"administratorUnreadHours\":",
+                        "\"unexpected\":true,\"administratorUnreadHours\":"),
                 body.replace("\"workWeek\":[\"MONDAY\",\"TUESDAY\",\"WEDNESDAY\","
                         + "\"THURSDAY\",\"FRIDAY\"]", "\"workWeek\":[]"),
                 body.replace("\"holidays\":[]", "\"holidays\":null"),

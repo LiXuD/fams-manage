@@ -29,14 +29,17 @@ class AssetCategoryService {
 
     private static final Duration IDEMPOTENCY_RETENTION = Duration.ofHours(24);
     private final AssetCategoryMapper mapper;
+    private final NumberingRuleMapper numberingRules;
     private final IdentityMasterDataMapper records;
     private final MasterDataFingerprint fingerprint;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
-    AssetCategoryService(AssetCategoryMapper mapper, IdentityMasterDataMapper records,
+    AssetCategoryService(AssetCategoryMapper mapper, NumberingRuleMapper numberingRules,
+            IdentityMasterDataMapper records,
             MasterDataFingerprint fingerprint, ObjectMapper objectMapper, Clock authClock) {
         this.mapper = mapper;
+        this.numberingRules = numberingRules;
         this.records = records;
         this.fingerprint = fingerprint;
         this.objectMapper = objectMapper;
@@ -67,15 +70,18 @@ class AssetCategoryService {
         if (replay.isPresent()) {
             return replay.orElseThrow();
         }
+        lockNumberingConfiguration();
         String code = required(request.getCode(), 64, "Category code");
         String name = required(request.getName(), 128, "Category name");
         assertCodeAvailable(code, null);
         Long parentId = validateParent(request.getParentCategory(), null);
         Instant now = clock.instant();
+        String prefix = optional(request.getNumberingPrefix(), 32, "Numbering prefix");
+        validateActivePrefix(prefix, null);
         NewAssetCategoryRow row = new NewAssetCategoryRow(code, normalizeCode(code), name,
                 parentId, optional(request.getDescription(), 500, "Description"),
                 optional(request.getSuggestedUnit(), 32, "Suggested unit"),
-                optional(request.getNumberingPrefix(), 32, "Numbering prefix"),
+                prefix,
                 objectMapper.writeValueAsString(request.getExtensionFieldTemplate()), actorId, now);
         requireOne(mapper.insert(row));
         AssetCategory result = get(row.getId());
@@ -94,6 +100,7 @@ class AssetCategoryService {
         if (replay.isPresent()) {
             return replay.orElseThrow();
         }
+        lockNumberingConfiguration();
         AssetCategoryRow current = requireVersion(requireForUpdate(id), expectedVersion);
         String code = request.getCode() == null ? current.code()
                 : required(request.getCode(), 64, "Category code");
@@ -105,6 +112,9 @@ class AssetCategoryService {
                 : optional(request.getSuggestedUnit(), 32, "Suggested unit");
         String numberingPrefix = request.getNumberingPrefix() == null ? current.numberingPrefix()
                 : optional(request.getNumberingPrefix(), 32, "Numbering prefix");
+        if ("ACTIVE".equals(current.status())) {
+            validateActivePrefix(numberingPrefix, id);
+        }
         String template = templatePresent
                 ? objectMapper.writeValueAsString(request.getExtensionFieldTemplate())
                 : current.extensionTemplateJson();
@@ -129,6 +139,7 @@ class AssetCategoryService {
         if (replay.isPresent()) {
             return replay.orElseThrow();
         }
+        lockNumberingConfiguration();
         required(reason, 500, "Reason");
         AssetCategoryRow current = requireVersion(requireForUpdate(id), expectedVersion);
         String status = enabled ? "ACTIVE" : "DISABLED";
@@ -139,6 +150,7 @@ class AssetCategoryService {
         }
         if (enabled) {
             assertActiveAncestors(current.parentId(), id);
+            validateActivePrefix(current.numberingPrefix(), id);
         }
         Instant now = clock.instant();
         requireOne(mapper.changeStatus(id, expectedVersion, status, actorId, now));
@@ -176,6 +188,28 @@ class AssetCategoryService {
         }
         assertNoCycle(parentId, childId);
         return parentId;
+    }
+
+    private void lockNumberingConfiguration() {
+        if (numberingRules.lockConfiguration() == null) {
+            throw MasterDataOperationException.writeConflict("The numbering configuration is unavailable.");
+        }
+    }
+
+    private void validateActivePrefix(String prefix, Long categoryId) {
+        NumberingRuleRow active = numberingRules.findActiveTarget("ASSET");
+        if (active == null || !"CATEGORY_PREFIX".equals(active.mode())) {
+            return;
+        }
+        if (prefix == null || !prefix.matches("[A-Za-z0-9_-]{1,32}")) {
+            throw new MasterDataOperationException("NUMBERING_CATEGORY_PREFIX_MISSING",
+                    "Every active category requires a legal numbering prefix.", 409);
+        }
+        if (numberingRules.countActivePrefixOtherThan(
+                categoryId == null ? -1L : categoryId, prefix) > 0) {
+            throw new MasterDataOperationException("NUMBERING_CATEGORY_PREFIX_CONFLICT",
+                    "Active category numbering prefixes are ambiguous.", 409);
+        }
     }
 
     private void assertNoCycle(long parentId, Long childId) {
