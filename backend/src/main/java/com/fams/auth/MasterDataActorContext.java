@@ -1,0 +1,25 @@
+package com.fams.auth;
+
+import jakarta.servlet.http.HttpServletRequest;
+
+import org.springframework.context.annotation.Profile;
+import org.springframework.stereotype.Component;
+
+@Profile("fams-product")
+@Component
+public final class MasterDataActorContext {
+
+    private final HttpServletRequest request;
+
+    MasterDataActorContext(HttpServletRequest request) {
+        this.request = request;
+    }
+
+    public long requireSystemAdministrator() {
+        AuthAccount account = AuthRequestContext.account(request);
+        if (!account.roles().contains(Role.SYSTEM_ADMIN)) {
+            throw AuthOperationException.forbidden();
+        }
+        return account.id();
+    }
+}
