@@ -2,7 +2,7 @@
 
 > 版本：V1.1 · 创建/更新：2026-09-23
 > 文档状态：修订计划已确认并保存；确认依据为用户本轮“确认修订计划”。  
-> 执行状态：`IN_PROGRESS`。D6-01A、D6-02A、D6-02B、D6-02C、D6-03A、D6-04A/B/C/D 与 D6-04 父任务为本地 `DEV_VERIFIED`；D6-05A 用户本人五域及总评 `PASS`、含签署记录的固定 HEAD 双门禁通过，本地 `DEV_VERIFIED`；D6-05B/C 均 `IN_PROGRESS`；D6-01B 与 D6-03B 远端能力尚未完成。
+> 执行状态：`IN_PROGRESS`。D6-01A、D6-02A/B/C、D6-03A、D6-04A/B/C/D 与 D6-04 父任务为本地 `DEV_VERIFIED`；D6-05A 用户本人复核 `PASS` 且双门禁通过，本地 `DEV_VERIFIED`；D6-05B `IN_PROGRESS`、C `IN_REVIEW`；D6-01B 与 D6-03B 远端能力尚未完成。
 > 项目阶段唯一入口：[DESIGN-HANDOFF.md](../../../DESIGN-HANDOFF.md)。  
 > 维护责任：AI 在每次任务变更和交接时更新；计划、范围及里程碑验收由用户确认。
 
@@ -432,7 +432,7 @@ Agent-Limitation: 真机弱网联调尚未完成，本任务不得标记已验�
 | G0 | D6-02 契约与脚手架 | XL | D6-01A；内部 A → B → C | R-01/R-02 | 固定版本、生成类型、双端构建、健康和错误契约验证 | IN_PROGRESS | D6-02A/B/C `DEV_VERIFIED`；本地业务入口已满足，远端 G0 项仍开放 |
 | G0 | D6-03 环境与 CI | L | D6-02A/B；远端部分另依赖 D6-01B | R-04/R-05 | Compose、迁移、统一检查入口、PR 全部新增提交格式与 required-ci；干净环境重复启动 | IN_PROGRESS | D6-03A `DEV_VERIFIED`；D6-03B 待远端权限 |
 | G1 身份与资产底座 | D6-04 PC 登录与权限 | L | D6-02C、D6-03A | R-02/R-05/R-06 | 账号登录、初始密码、停用、角色/数据范围；真实登录后权限正确 | DEV_VERIFIED | A/B/C/D 本地闭环；用户本人五域及总评 PASS，含签署记录的 reviewed HEAD `8943dc3` 统一门禁退出 0、127 项阻断观察；见 `docs/development/D6-04-task-card.md` |
-| G1 | D6-05 基础资料 | M | D6-04 | R-02 | 组织人员、分类、仓库位置、编号字典；停用和依赖校验 | IN_PROGRESS | D6-05A 用户本人五域及总评 PASS，签署记录 `5c4dfa0` 的 D6-05A 与统一门禁退出 0，本地 `DEV_VERIFIED`；B `IN_PROGRESS`、C 未开始；见 `docs/development/D6-05-task-card.md` |
+| G1 | D6-05 基础资料 | M | D6-04 | R-02 | 组织人员、分类、仓库位置、编号字典；停用和依赖校验 | IN_PROGRESS | A 本地 `DEV_VERIFIED`；B 因下游引用表缺失与独立复核保持 `IN_PROGRESS`；C 固定 `beea5bd` 统一门禁通过、待独立复核，`IN_REVIEW`；见 `docs/development/D6-05-task-card.md` |
 | G1 | D6-06 建卡、台账和标签 | L | D6-05 | R-02/R-03 | 单个/复制建卡、查询、详情、标签；禁止直接改保管状态 | NOT_STARTED | 尚未执行 |
 | G1 | D6-07 审批与执行底座 | L | D6-06 | R-05/R-07/R-08 | 用入库完成一次审批、唯一库管领取、验收入库、审计及站内待办 | NOT_STARTED | 尚未执行 |
 | G1 | D6-08 导入与期初底座 | XL | D6-07 | R-03/R-07/R-08 | 错误定位、后台任务、在库/在用期初发布、受控批次回滚 | NOT_STARTED | 尚未执行 |
@@ -632,11 +632,11 @@ Agent-Limitation: 真机弱网联调尚未完成，本任务不得标记已验�
 ### 2. 当前检查点
 
 - 已完成：V1.0 保存与 commit 规范；三位专家两轮意见核对；用户“确认修订计划”；V1.1 修订及根交接入口/规则同步；D6-01A 本地基线验证及本轮默认忽略标题修复/复核。
-- 进行中：D6-01 父任务（D6-01B 远端子任务仍未开始）、G0 与 D6-05；D6-05A 本地 `DEV_VERIFIED`，B/C `IN_PROGRESS`；D6-02A/B/C、D6-03A、D6-04A/B/C/D 及 D6-04 父任务为本地 `DEV_VERIFIED`。D6-03B 受远端权限约束；D6-06～D6-27 尚未开始。
+- 进行中：D6-01 父任务（D6-01B 远端子任务仍未开始）、G0 与 D6-05；D6-05A 本地 `DEV_VERIFIED`，B `IN_PROGRESS`、C `IN_REVIEW`；D6-02A/B/C、D6-03A、D6-04A/B/C/D 及 D6-04 父任务为本地 `DEV_VERIFIED`。D6-03B 受远端权限约束；D6-06～D6-27 尚未开始。
 - 当前外部条件：小程序、短信、域名和部署环境未准备；详见 §五.3。
-- 下一步：完成 D6-05C 编号规则与业务参数，并在下游业务表出现后补齐 D6-05B 的仓库/位置引用拒绝验证和独立复核；D6-01B、D6-03B 待 GitHub 私有仓库与权限具备后单独核验。
-- 当前提交/PR：D6-01A～D6-03A 提交见各任务卡；D6-04A `d4eddec`，B `f63a640`/`7feafde`/`383768a`，C `f41632c`/`c087c43`，D 本地运行夹具 `4af9077`/`f5aef5e`/`50bcf5f`，用户签署与 reviewed HEAD `8943dc3`；D6-05A 契约 `abd80ea`、实现 `91d6421`、用例 `8cac2a0`、门禁修复 `eb2139d`/`588bb05`、送审 `099082e`、文档扫描修复 `60632e2`；无远端 PR，远端尚未配置。
-- 开发/QA 验证：D6-04A/B/C/D 的固定 SHA、真实浏览器和 reviewed HEAD 门禁证据见任务卡。D6-05A 用户本人五域及总评 PASS；签署记录 `5c4dfa0` 的任务 MySQL 8.4 真实 HTTP 7 项与统一门禁 153 项阻断观察均退出 0，质量、恢复和清理通过。远端 CI、QA 和生产仍未验证。
+- 下一步：用户本人按 `docs/development/D6-05C-independent-review.md` 复核 C 的编号分配、参数版本和固定提交证据；问题闭合后重跑最终门禁。在下游资产/开放业务表出现后补齐 B 的仓库/位置引用拒绝验证和独立复核；D6-01B、D6-03B 待远端权限具备后单独核验。
+- 当前提交/PR：D6-01A～D6-03A 提交见各任务卡；D6-04A `d4eddec`，B `f63a640`/`7feafde`/`383768a`，C `f41632c`/`c087c43`，D 本地运行夹具 `4af9077`/`f5aef5e`/`50bcf5f`，用户签署与 reviewed HEAD `8943dc3`；D6-05A 提交见任务卡，B 固定门禁 HEAD `0a13638`，C 参数 `4d0dcd7`、分配 `beea5bd`；无远端 PR，远端尚未配置。
+- 开发/QA 验证：D6-04A/B/C/D 的固定 SHA、真实浏览器和 reviewed HEAD 门禁证据见任务卡。D6-05A 用户本人五域及总评 PASS，签署记录 `5c4dfa0` 的 7 项任务库用例与 153 项统一门禁通过；B 固定 `0a13638` 的 167 项统一门禁通过但引用验证与复核未完成；C 固定 `beea5bd` 的 22 项真实 MySQL 集成用例、81 项 Java 测试及 177 项统一门禁通过，独立复核未完成。远端 CI、QA 和生产仍未验证。
 
 ### 3. 执行记录
 
@@ -652,6 +652,8 @@ Agent-Limitation: 真机弱网联调尚未完成，本任务不得标记已验�
 | 2026-09-23 | D6-05B 固定提交统一门禁 | B 保持 `IN_PROGRESS`；HEAD `0a13638` 本地开发门禁通过 | 干净 HEAD `0a13638` 执行 `scripts/verify-d6-03a.py` 退出 0：167 项阻断观察；Java 质量、TypeScript、依赖、应用/MySQL 重启恢复、Compose 精确清理、工作树前后检查均通过。缺失的下游引用拒绝用例和独立复核不包含在本次通过结论内 | 记录 B 残余边界；在不提升 B 状态的前提下推进独立的 D6-05C，待业务表接入后补齐 B 引用验证 |
 | 2026-09-23 | D6-05C 启动与迁移 | C `NOT_STARTED → IN_PROGRESS`；B 继续 `IN_PROGRESS` | 新增 Flyway V3 的编号规则/序列/分配记录和不可变参数版本/状态表；任务自有新建 MySQL 上既有 16 项 HTTP 用例退出 0。仅为迁移兼容性证据；C 的接口、并发分配、参数切换与统一门禁尚未完成 | 按编号规则与分配、业务参数两段实施并逐段验证，不提前关闭 C 或父任务 |
 | 2026-09-23 | D6-05C 编号规则管理 | C 保持 `IN_PROGRESS`；规则 CRUD 与活动目标唯一约束已实现 | 任务自有 MySQL HTTP 18/18 退出 0；Java `-Pquality verify` 退出 0：77 项测试、行 2617/2934、分支 738/984（75.00%）、Checkstyle/SpotBugs 0。已覆盖角色、幂等、版本、非法模式和分类前缀缺失/冲突；内部号段分配、并发、活动规则下的分类变更约束及参数接口尚未完成 | 继续不可回收号段分配与参数版本，完成 C 后跑固定提交统一门禁并独立复核 |
+| 2026-09-23 | D6-05C 参数版本与分配实现 | C 保持 `IN_PROGRESS`；参数 `4d0dcd7`、分配与分类约束 `beea5bd` | 任务自有 MySQL 22 项集成用例（HTTP 与内部调用）退出 0；Java `-Pquality verify` 退出 0：81 项测试无失败/跳过，行 2872/3211、分支 874/1155（75.67%）、Checkstyle/SpotBugs 0。覆盖版本切换、权限/日历/期限拒绝、并发分配、已提交废号不回收、序列耗尽及活动分类前缀约束；后续资产与入库服务尚未接入分配器 | 在固定干净提交跑统一门禁并送独立复核，不将局部测试扩展为 QA 或生产结论 |
+| 2026-09-23 | D6-05C 固定提交统一门禁 | C `IN_PROGRESS → IN_REVIEW`；父任务仍 `IN_PROGRESS` | 干净 HEAD `beea5bd` 的 `scripts/verify-d6-03a.py` 退出 0：177 项阻断观察；契约生成、Java/TypeScript、依赖、应用和 MySQL 重启恢复、Compose 精确清理、工作树前后检查均通过。C 尚缺用户本人独立复核；B 仍缺下游引用表上的拒绝验证与复核 | 按 `docs/development/D6-05C-independent-review.md` 复核 C；修复问题并在最终提交重跑门禁后再判断 `DEV_VERIFIED` |
 | 2026-09-23 | D6-05B 启动 | B `NOT_STARTED → IN_PROGRESS`；D6-05A 保持本地 `DEV_VERIFIED`，父任务保持 `IN_PROGRESS` | 按现役 OpenAPI 五组接口和既有数据设计实施；Flyway 新增向前迁移，不改 V1。真实 MySQL、活动引用、权限、幂等、审计与统一门禁尚未形成 B 的通过证据 | 先完成迁移与分类/厂商等独立主数据，随后仓库/位置关联，再完成 B 专项与统一门禁 |
 | 2026-09-23 | D6-05A 签署后双门禁 | D6-05A `IN_REVIEW → DEV_VERIFIED`（仅本地）；D6-05 父任务保持 `IN_PROGRESS` | 用户本人五域及总评 PASS；含签署记录的固定 HEAD `5c4dfa0`，`scripts/verify-d6-05a.py` 真实 MySQL HTTP 7/7 退出 0，`scripts/verify-d6-03a.py` 153 项阻断观察退出 0，质量、TypeScript、依赖、应用/数据库恢复、精确 Compose 清理和干净工作树检查通过。用户未另附逐项审阅档案；远端 CI、QA、生产未验证 | 进入 D6-05B，按任务卡完成分类、品牌、厂商、仓库与位置；B/C 完成前父任务不得关闭 |
 | 2026-09-23 | D6-05A 用户独立复核回复 | 用户本人回复“复核完毕,任务项全部pass”；按复核单五域及总评记 `PASS`，无已报告问题；D6-05A 暂保持 `IN_REVIEW` | 最近明确送审的 HEAD 为 `c5549f3`；用户未另附实际 reviewed HEAD、逐项审阅命令或原始记录，不补造。含签署记录的提交尚需重跑 D6-05A 和统一门禁；远端 CI、QA、生产未验证 | 固定签署记录并复跑双门禁；通过后决定 D6-05A 本地 `DEV_VERIFIED`，再开始 B |
