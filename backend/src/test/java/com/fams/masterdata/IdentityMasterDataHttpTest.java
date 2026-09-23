@@ -68,6 +68,7 @@ class IdentityMasterDataHttpTest {
         jdbcTemplate.update("DELETE FROM fams_manufacturer");
         jdbcTemplate.update("UPDATE fams_location SET parent_id = NULL");
         jdbcTemplate.update("DELETE FROM fams_location");
+        jdbcTemplate.update("DELETE FROM fams_warehouse");
         jdbcTemplate.update("UPDATE fams_asset_category SET parent_id = NULL");
         jdbcTemplate.update("DELETE FROM fams_asset_category");
         jdbcTemplate.update("DELETE FROM fams_account_role");
@@ -441,6 +442,85 @@ class IdentityMasterDataHttpTest {
                 assetAdmin, Map.of()).statusCode());
         assertEquals(404, request("GET", "/api/v1/asset-categories/999", null,
                 admin, Map.of()).statusCode());
+    }
+
+    @Test
+    void warehouseWritesEnforcePermissionsVersionsAndActiveSelectors() throws Exception {
+        Session admin = login("admin");
+        Session user = login("user");
+        String createBody = "{\"code\":\"MAIN\",\"name\":\"Main warehouse\","
+                + "\"description\":\"Ground floor\"}";
+        String key = "8d111111-1111-4111-8111-111111111111";
+        assertEquals(403, request("POST", "/api/v1/warehouses", createBody, user,
+                writeHeaders(key, user)).statusCode());
+        HttpResponse<String> created = request("POST", "/api/v1/warehouses", createBody,
+                admin, writeHeaders(key, admin));
+        assertEquals(201, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        assertEquals(created.body(), request("POST", "/api/v1/warehouses", createBody,
+                admin, writeHeaders(key, admin)).body());
+        assertEquals(409, request("POST", "/api/v1/warehouses",
+                "{\"code\":\"OTHER\",\"name\":\"Other\"}", admin,
+                writeHeaders(key, admin)).statusCode());
+        assertEquals(400, request("POST", "/api/v1/warehouses",
+                "{\"code\":\" \",\"name\":\"Blank\"}", admin,
+                writeHeaders("8d222222-2222-4222-8222-222222222222", admin)).statusCode());
+        assertEquals(409, request("PATCH", "/api/v1/warehouses/" + id,
+                "{\"name\":\"Changed\"}", admin,
+                versionedHeaders("8d333333-3333-4333-8333-333333333333", admin, 9)).statusCode());
+        HttpResponse<String> updated = request("PATCH", "/api/v1/warehouses/" + id,
+                "{\"name\":\"Main depot\"}", admin,
+                versionedHeaders("8d444444-4444-4444-8444-444444444444", admin, 0));
+        assertEquals(200, updated.statusCode(), updated.body());
+        assertEquals("Ground floor", JSON.readTree(updated.body()).path("description").asText());
+        HttpResponse<String> disabled = request("POST", "/api/v1/warehouses/" + id + "/disable",
+                "{\"reason\":\"Closed\"}", admin,
+                versionedHeaders("8d555555-5555-4555-8555-555555555555", admin, 1));
+        assertEquals(200, disabled.statusCode(), disabled.body());
+        assertEquals(409, request("POST", "/api/v1/warehouses/" + id + "/disable",
+                "{\"reason\":\"Still closed\"}", admin,
+                versionedHeaders("8d515151-5151-4515-8515-515151515151", admin, 2)).statusCode());
+        assertEquals(409, request("POST", "/api/v1/warehouses",
+                "{\"code\":\"main\",\"name\":\"Reused\"}", admin,
+                writeHeaders("8d666666-6666-4666-8666-666666666666", admin)).statusCode());
+        Timestamp now = Timestamp.from(Instant.parse("2026-09-23T01:00:00Z"));
+        jdbcTemplate.update("INSERT INTO fams_account_role (account_id, role_code, granted_at) "
+                + "VALUES (2, 'WAREHOUSE_OPERATOR', ?)", now);
+        Session operator = login("user");
+        assertEquals(0, JSON.readTree(request("GET", "/api/v1/warehouses/active-references",
+                null, operator, Map.of()).body()).path("total").asInt());
+        HttpResponse<String> enabled = request("POST", "/api/v1/warehouses/" + id + "/enable",
+                "{\"reason\":\"Reopen\"}", admin,
+                versionedHeaders("8d777777-7777-4777-8777-777777777777", admin, 2));
+        assertEquals(200, enabled.statusCode(), enabled.body());
+        assertEquals(1, JSON.readTree(request("GET", "/api/v1/warehouses/active-references",
+                null, operator, Map.of()).body()).path("total").asInt());
+        assertEquals(403, request("GET", "/api/v1/warehouses", null,
+                operator, Map.of()).statusCode());
+    }
+
+    @Test
+    void warehouseDisableRejectsAnActiveWarehouseLocation() throws Exception {
+        Session admin = login("admin");
+        HttpResponse<String> created = request("POST", "/api/v1/warehouses",
+                "{\"code\":\"DEPENDENT\",\"name\":\"Dependent warehouse\"}", admin,
+                writeHeaders("8e111111-1111-4111-8111-111111111111", admin));
+        assertEquals(201, created.statusCode(), created.body());
+        String warehouseId = JSON.readTree(created.body()).path("id").asText();
+        Timestamp now = Timestamp.from(Instant.parse("2026-09-23T01:00:00Z"));
+        jdbcTemplate.update("INSERT INTO fams_location "
+                + "(code, code_normalized, name, location_type, warehouse_id, status, version, "
+                + "created_at, updated_at) VALUES ('BIN-1', 'BIN-1', 'Bin 1', 'BIN', ?, 'ACTIVE', 0, ?, ?)",
+                Long.parseLong(warehouseId), now, now);
+        HttpResponse<String> rejected = request("POST", "/api/v1/warehouses/"
+                + warehouseId + "/disable", "{\"reason\":\"Close\"}", admin,
+                versionedHeaders("8e222222-2222-4222-8222-222222222222", admin, 0));
+        assertEquals(409, rejected.statusCode(), rejected.body());
+        assertEquals("WAREHOUSE_HAS_OPEN_BUSINESS_REFERENCES",
+                JSON.readTree(rejected.body()).path("code").asText());
+        assertEquals("ACTIVE", jdbcTemplate.queryForObject(
+                "SELECT status FROM fams_warehouse WHERE id = ?", String.class,
+                Long.parseLong(warehouseId)));
     }
 
     @Test
