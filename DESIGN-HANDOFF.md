@@ -1,7 +1,7 @@
 # FAMS 项目阶段与交接入口
 
 > 唯一现役进度入口 · 更新于 2026-09-23
-> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04 本地 `DEV_VERIFIED`；D6-05A 实现及固定 HEAD `588bb05` 本地统一门禁已通过，状态为 `IN_REVIEW`，等待用户指定的独立复核。D6-05B/C 未开始；D6-01B 与 D6-03B 继续等待远端权限。
+> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04 本地 `DEV_VERIFIED`；D6-05A 实现及固定 HEAD `60632e2` 本地统一门禁已通过，状态为 `IN_REVIEW`，等待用户指定的独立复核。D6-05B/C 未开始；D6-01B 与 D6-03B 继续等待远端权限。
 
 ## 1. 八步开发流程与当前进度
 
@@ -40,7 +40,7 @@
 4. 每次任务开始、受阻、送审、验证和验收时同步维护计划台账及执行记录；本文只维护项目阶段和下一步，不复制第二套任务状态。D6-02B 的版本冻结结论与 D6-02C 的关键设计复核均已关闭；后续关键任务仍须按计划独立复核。
 5. 只有 PRD 变更或开发发现设计缺口时，才重新打开第5步对应条目；无需恢复已取消的大规模用户测试方案。
 6. D6-04A/B/C/D 均已提交并完成本地验证；C 的 Web 14/14 测试、构建、lint/typecheck，D 的双用户角色撤销失效浏览器链路、用户本人五域及总评 PASS，与 reviewed HEAD `8943dc3` 的 127 项统一门禁共同构成父任务本地 `DEV_VERIFIED` 证据。不得据此声明远端 CI、QA、正式安全专项或生产完成。
-7. D6-05 工作树为 `/Users/lixd/.codex/worktrees/d6-05-master-data/fams`，分支 `codex/d6-05-master-data`，任务启动提交 `f55808f`。D6-05A 的契约、实现和验证已分功能提交；固定 HEAD `588bb05` 的 7 项真实 MySQL HTTP 及 143 项本地统一门禁均通过。先完成计划要求的独立复核及问题闭合，再依次进入 D6-05B/C；证据、提交和复核重点见[任务卡](docs/development/D6-05-task-card.md)。
+7. D6-05 工作树为 `/Users/lixd/.codex/worktrees/d6-05-master-data/fams`，分支 `codex/d6-05-master-data`，任务启动提交 `f55808f`。D6-05A 的契约、实现和验证已分功能提交；7 项真实 MySQL HTTP 通过，固定 HEAD `60632e2` 的 147 项本地统一门禁通过。先完成计划要求的独立复核及问题闭合，再依次进入 D6-05B/C；证据、提交和复核重点见[任务卡](docs/development/D6-05-task-card.md)。
 
 ## 4. 文档责任
 
@@ -63,6 +63,6 @@
 | 开发计划 | `in-progress` | V1.1 修订已确认；D6-04A/B/C/D 和父任务均本地 `DEV_VERIFIED`；D6-05A `IN_REVIEW`，B/C 未开始；D6-01B/03B 远端能力尚未完成 |
 | 规则 | `changed-and-verified` | AGENTS 已指向当前阶段 |
 | 产品代码 | `in-progress` | D6-04A/B/C 认证、账号授权和 PC 登录外壳已提交并本地验证；D6-05A 组织、员工与模板导入已提交且待独立复核，D6-05B/C 未开始 |
-| 产品运行态 | `local-dev-partial` | D6-04 真实浏览器链路已验证；D6-05A 任务 MySQL 8.4 的 7 项真实 HTTP 与固定 HEAD `588bb05` 的 143 项统一门禁退出 0；独立复核、远端 CI、QA、生产未验证 |
+| 产品运行态 | `local-dev-partial` | D6-04 真实浏览器链路已验证；D6-05A 任务 MySQL 8.4 的 7 项真实 HTTP 与固定 HEAD `60632e2` 的 147 项统一门禁退出 0；独立复核、远端 CI、QA、生产未验证 |
 | 记忆 | `out-of-scope` | 本次未修改机器生成记忆 |
-| 工作区 | `handoff-recorded` | D6-05 位于 `/Users/lixd/.codex/worktrees/d6-05-master-data/fams`，分支 `codex/d6-05-master-data`；实现与验证提交至 `588bb05`，复核入口与证据见任务卡 |
+| 工作区 | `handoff-recorded` | D6-05 位于 `/Users/lixd/.codex/worktrees/d6-05-master-data/fams`，分支 `codex/d6-05-master-data`；实现、验证及送审文档已提交，复核入口与证据见任务卡 |
