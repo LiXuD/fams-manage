@@ -1,9 +1,9 @@
 # D6-05A 组织、员工与标准模板导入独立复核单
 
-> 状态：`AWAITING_REVIEW`；复核人：用户本人（2026-09-23 指定，尚未给出逐域结论）。
+> 状态：`PASS`（用户本人于 2026-09-23 回复“复核完毕,任务项全部pass”）。
 > 实现及送审候选：`e77796b46a97235019bfdd66ee4d13bd0f438cef`。
 > 比较基线：`4017bfd6dd6486c1df2805f57b3715f1e9dc5b76`。
-> 本单只记录复核安排、入口及已有开发证据，不预填用户结论。
+> 复核时最近已明确送审的 HEAD：`c5549f3c88fd1582b119b4834b4e6d18f9c2d01f`；用户回复未另附 HEAD、逐项审阅命令或原始记录，此处不补造。
 
 ## 1. 复核决策与范围
 
@@ -26,11 +26,11 @@ rtk git diff 4017bfd6dd6486c1df2805f57b3715f1e9dc5b76..e77796b46a97235019bfdd66e
 
 | 领域 | 需要核对 | 主要入口 | 用户结论 |
 |---|---|---|---|
-| 需求与契约 | 组织、员工、模板导入的请求/响应、十进制字符串 ID、版本和错误语义是否符合 PRD 与 OpenAPI；导入缺行是否绝不隐式删除或停用 | `contracts/fams-core-v1.yaml`、`docs/development/D6-02C-traceability.csv`、`IdentityMasterDataController`、`IdentityImportParser` | `QUESTION`（待复核） |
-| 权限与会话 | 写入是否要求有效会话、CSRF、`SYSTEM_ADMIN` 和幂等键；非管理员及旧会话是否稳定拒绝；员工停用是否在同一事务停用关联账号并递增 `auth_epoch` | `MasterDataActorContext`、`IdentityMasterDataService`、`IdentityMasterDataMapper`、`IdentityMasterDataHttpTest` | `QUESTION`（待复核） |
-| 组织与员工一致性 | 组织树循环、活动子组织/员工/授权范围依赖、版本冲突和重复键是否按契约拒绝；员工手机号密文、检索摘要与密钥配置是否避免明文持久化或错误外泄 | `IdentityMasterDataService`、`IdentityMasterDataMapper`、`MasterDataPhoneCodec`、`MasterDataErrorHandler` | `QUESTION`（待复核） |
-| CSV 原子性 | `CREATE`、`UPDATE`、`DISABLE` 的定位、版本与顺序是否明确；任一行失败时整批写入和审计/幂等结果是否回滚；解析器是否拒绝非标准模板和畸形行 | `IdentityImportParser`、`IdentityMasterDataService`、`IdentityImportParserTest`、`IdentityMasterDataHttpTest` | `QUESTION`（待复核） |
-| 数据、恢复与质量 | 既有 V1 表结构与 Mapper 是否匹配；任务库迁移和应用/数据库重启证据是否足够支撑本地结论；测试资源是否精确清理，是否遗漏关键拒绝路径 | `backend/src/main/resources/db/migration/d6_04/V1__create_authentication.sql`、`scripts/verify-d6-05a.py`、`scripts/verify-d6-03a.py`、[任务卡证据](D6-05-task-card.md) | `QUESTION`（待复核） |
+| 需求与契约 | 组织、员工、模板导入的请求/响应、十进制字符串 ID、版本和错误语义是否符合 PRD 与 OpenAPI；导入缺行是否绝不隐式删除或停用 | `contracts/fams-core-v1.yaml`、`docs/development/D6-02C-traceability.csv`、`IdentityMasterDataController`、`IdentityImportParser` | `PASS`（用户总体回复） |
+| 权限与会话 | 写入是否要求有效会话、CSRF、`SYSTEM_ADMIN` 和幂等键；非管理员及旧会话是否稳定拒绝；员工停用是否在同一事务停用关联账号并递增 `auth_epoch` | `MasterDataActorContext`、`IdentityMasterDataService`、`IdentityMasterDataMapper`、`IdentityMasterDataHttpTest` | `PASS`（用户总体回复） |
+| 组织与员工一致性 | 组织树循环、活动子组织/员工/授权范围依赖、版本冲突和重复键是否按契约拒绝；员工手机号密文、检索摘要与密钥配置是否避免明文持久化或错误外泄 | `IdentityMasterDataService`、`IdentityMasterDataMapper`、`MasterDataPhoneCodec`、`MasterDataErrorHandler` | `PASS`（用户总体回复） |
+| CSV 原子性 | `CREATE`、`UPDATE`、`DISABLE` 的定位、版本与顺序是否明确；任一行失败时整批写入和审计/幂等结果是否回滚；解析器是否拒绝非标准模板和畸形行 | `IdentityImportParser`、`IdentityMasterDataService`、`IdentityImportParserTest`、`IdentityMasterDataHttpTest` | `PASS`（用户总体回复） |
+| 数据、恢复与质量 | 既有 V1 表结构与 Mapper 是否匹配；任务库迁移和应用/数据库重启证据是否足够支撑本地结论；测试资源是否精确清理，是否遗漏关键拒绝路径 | `backend/src/main/resources/db/migration/d6_04/V1__create_authentication.sql`、`scripts/verify-d6-05a.py`、`scripts/verify-d6-03a.py`、[任务卡证据](D6-05-task-card.md) | `PASS`（用户总体回复） |
 
 ## 3. 已有证据与限制
 
@@ -56,3 +56,7 @@ CSV 原子性：PASS / NEEDS_FIX / QUESTION
 ```
 
 收到结论后逐条处理问题，并在最终 reviewed HEAD 重跑 D6-05A 与统一门禁。只有用户明确给出逐域及总评 `PASS`、问题闭合且最终门禁通过，才将 D6-05A 记为 `DEV_VERIFIED` 并开始 D6-05B。
+
+## 5. 用户结论与证据边界
+
+用户本人在本复核单送审后回复“复核完毕,任务项全部pass”。据此记录五域及总评 `PASS`，无已报告问题。用户未单列逐域阅读文件、测试命令或实际 reviewed HEAD；最近已明确送审并验证的是 `c5549f3c88fd1582b119b4834b4e6d18f9c2d01f`，本单按该对象记录回复关联，不声称取得了未提供的原始审阅档案。签署后完整门禁结果以任务卡和计划执行记录为准。
