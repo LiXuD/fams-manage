@@ -1,7 +1,7 @@
 # FAMS 项目阶段与交接入口
 
 > 唯一现役进度入口 · 更新于 2026-09-23
-> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04 和 D6-05A 本地 `DEV_VERIFIED`；D6-05B/C 未开始，下一步实施 B。D6-01B 与 D6-03B 继续等待远端权限。
+> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04 和 D6-05A 本地 `DEV_VERIFIED`；D6-05B 已开始，C 未开始。D6-01B 与 D6-03B 继续等待远端权限。
 
 ## 1. 八步开发流程与当前进度
 
@@ -40,7 +40,7 @@
 4. 每次任务开始、受阻、送审、验证和验收时同步维护计划台账及执行记录；本文只维护项目阶段和下一步，不复制第二套任务状态。D6-02B 的版本冻结结论与 D6-02C 的关键设计复核均已关闭；后续关键任务仍须按计划独立复核。
 5. 只有 PRD 变更或开发发现设计缺口时，才重新打开第5步对应条目；无需恢复已取消的大规模用户测试方案。
 6. D6-04A/B/C/D 均已提交并完成本地验证；C 的 Web 14/14 测试、构建、lint/typecheck，D 的双用户角色撤销失效浏览器链路、用户本人五域及总评 PASS，与 reviewed HEAD `8943dc3` 的 127 项统一门禁共同构成父任务本地 `DEV_VERIFIED` 证据。不得据此声明远端 CI、QA、正式安全专项或生产完成。
-7. D6-05 工作树为 `/Users/lixd/.codex/worktrees/d6-05-master-data/fams`，分支 `codex/d6-05-master-data`，任务启动提交 `f55808f`。D6-05A 用户本人按[独立复核单](docs/development/D6-05A-independent-review.md)给出五域及总评 PASS；含签署记录的 `5c4dfa0` 上 7 项真实 MySQL HTTP 与 153 项本地统一门禁通过，A 本地 `DEV_VERIFIED`。下一步实施 B，范围和证据见[任务卡](docs/development/D6-05-task-card.md)。
+7. D6-05 工作树为 `/Users/lixd/.codex/worktrees/d6-05-master-data/fams`，分支 `codex/d6-05-master-data`，任务启动提交 `f55808f`。D6-05A 用户本人按[独立复核单](docs/development/D6-05A-independent-review.md)给出五域及总评 PASS；含签署记录的 `5c4dfa0` 上 7 项真实 MySQL HTTP 与 153 项本地统一门禁通过，A 本地 `DEV_VERIFIED`。B 已进入实施，范围和证据见[任务卡](docs/development/D6-05-task-card.md)。
 
 ## 4. 文档责任
 
