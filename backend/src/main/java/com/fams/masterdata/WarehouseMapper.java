@@ -16,6 +16,9 @@ interface WarehouseMapper {
     @Select("SELECT id, code, name, description, status, version FROM fams_warehouse WHERE id = #{id}")
     WarehouseRow find(@Param("id") long id);
 
+    @Select("SELECT id, code, name, description, status, version FROM fams_warehouse WHERE id = #{id} FOR UPDATE")
+    WarehouseRow findForUpdate(@Param("id") long id);
+
     @Select("SELECT id, code, name, description, status, version FROM fams_warehouse WHERE code_normalized = #{code}")
     WarehouseRow findByCode(@Param("code") String normalizedCode);
 

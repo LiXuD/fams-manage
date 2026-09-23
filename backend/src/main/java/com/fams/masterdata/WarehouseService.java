@@ -105,7 +105,7 @@ class WarehouseService {
         if (replay.isPresent()) {
             return replay.orElseThrow();
         }
-        WarehouseRow current = requireVersion(require(id), expectedVersion);
+        WarehouseRow current = requireVersion(requireForUpdate(id), expectedVersion);
         String code = request.getCode() == null ? current.code()
                 : required(request.getCode(), 64, "Warehouse code");
         String name = request.getName() == null ? current.name()
@@ -138,7 +138,7 @@ class WarehouseService {
             return replay.orElseThrow();
         }
         required(reason, 500, "Reason");
-        WarehouseRow current = requireVersion(require(id), expectedVersion);
+        WarehouseRow current = requireVersion(requireForUpdate(id), expectedVersion);
         String status = enabled ? "ACTIVE" : "DISABLED";
         if (status.equals(current.status())) {
             throw new MasterDataOperationException(
@@ -159,6 +159,14 @@ class WarehouseService {
 
     private WarehouseRow require(long id) {
         WarehouseRow row = mapper.find(id);
+        if (row == null) {
+            throw MasterDataOperationException.notFound("The warehouse");
+        }
+        return row;
+    }
+
+    private WarehouseRow requireForUpdate(long id) {
+        WarehouseRow row = mapper.findForUpdate(id);
         if (row == null) {
             throw MasterDataOperationException.notFound("The warehouse");
         }

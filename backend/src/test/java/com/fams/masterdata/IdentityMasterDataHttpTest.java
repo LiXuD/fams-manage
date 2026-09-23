@@ -524,6 +524,159 @@ class IdentityMasterDataHttpTest {
     }
 
     @Test
+    void locationTreeRejectsCrossWarehouseCyclesAndEnabledChildren() throws Exception {
+        Session admin = login("admin");
+        HttpResponse<String> firstWarehouse = request("POST", "/api/v1/warehouses",
+                "{\"code\":\"W1\",\"name\":\"Warehouse One\"}", admin,
+                writeHeaders("90111111-1111-4111-8111-111111111111", admin));
+        HttpResponse<String> secondWarehouse = request("POST", "/api/v1/warehouses",
+                "{\"code\":\"W2\",\"name\":\"Warehouse Two\"}", admin,
+                writeHeaders("90222222-2222-4222-8222-222222222222", admin));
+        assertEquals(201, firstWarehouse.statusCode());
+        assertEquals(201, secondWarehouse.statusCode());
+        String warehouseId = JSON.readTree(firstWarehouse.body()).path("id").asText();
+        String otherWarehouseId = JSON.readTree(secondWarehouse.body()).path("id").asText();
+        String warehouseRef = "{\"id\":\"" + warehouseId + "\",\"version\":0}";
+        HttpResponse<String> root = request("POST", "/api/v1/locations",
+                "{\"code\":\"ROOT-BIN\",\"name\":\"Root bin\",\"type\":\"AREA\","
+                        + "\"warehouse\":" + warehouseRef + "}", admin,
+                writeHeaders("90333333-3333-4333-8333-333333333333", admin));
+        assertEquals(201, root.statusCode(), root.body());
+        String rootId = JSON.readTree(root.body()).path("id").asText();
+        String parentRef = "{\"id\":\"" + rootId + "\",\"version\":0}";
+        HttpResponse<String> child = request("POST", "/api/v1/locations",
+                "{\"code\":\"CHILD-BIN\",\"name\":\"Child bin\",\"type\":\"BIN\","
+                        + "\"parentLocation\":" + parentRef + ",\"warehouse\":" + warehouseRef + "}",
+                admin, writeHeaders("90444444-4444-4444-8444-444444444444", admin));
+        assertEquals(201, child.statusCode(), child.body());
+        String childId = JSON.readTree(child.body()).path("id").asText();
+        HttpResponse<String> parentWarehouseMove = request("PATCH", "/api/v1/locations/" + rootId,
+                "{\"warehouse\":{\"id\":\"" + otherWarehouseId + "\",\"version\":0}}",
+                admin, versionedHeaders("90454545-4545-4454-8454-454545454545", admin, 0));
+        assertEquals(409, parentWarehouseMove.statusCode(), parentWarehouseMove.body());
+        assertEquals("LOCATION_WAREHOUSE_MISMATCH",
+                JSON.readTree(parentWarehouseMove.body()).path("code").asText());
+        HttpResponse<String> mismatch = request("POST", "/api/v1/locations",
+                "{\"code\":\"CROSS\",\"name\":\"Cross\",\"type\":\"BIN\","
+                        + "\"parentLocation\":" + parentRef + ","
+                        + "\"warehouse\":{\"id\":\"" + otherWarehouseId + "\",\"version\":0}}",
+                admin, writeHeaders("90555555-5555-4555-8555-555555555555", admin));
+        assertEquals(409, mismatch.statusCode(), mismatch.body());
+        assertEquals("LOCATION_WAREHOUSE_MISMATCH", JSON.readTree(mismatch.body()).path("code").asText());
+        HttpResponse<String> cycle = request("PATCH", "/api/v1/locations/" + rootId,
+                "{\"parentLocation\":{\"id\":\"" + childId + "\",\"version\":0}}",
+                admin, versionedHeaders("90666666-6666-4666-8666-666666666666", admin, 0));
+        assertEquals(409, cycle.statusCode(), cycle.body());
+        assertEquals("LOCATION_CYCLE", JSON.readTree(cycle.body()).path("code").asText());
+        HttpResponse<String> parentDisable = request("POST", "/api/v1/locations/" + rootId
+                + "/disable", "{\"reason\":\"Close\"}", admin,
+                versionedHeaders("90777777-7777-4777-8777-777777777777", admin, 0));
+        assertEquals(409, parentDisable.statusCode());
+        assertEquals("LOCATION_HAS_ENABLED_CHILDREN",
+                JSON.readTree(parentDisable.body()).path("code").asText());
+        HttpResponse<String> childDisable = request("POST", "/api/v1/locations/" + childId
+                + "/disable", "{\"reason\":\"Close\"}", admin,
+                versionedHeaders("90888888-8888-4888-8888-888888888888", admin, 0));
+        assertEquals(200, childDisable.statusCode(), childDisable.body());
+        HttpResponse<String> rootDisable = request("POST", "/api/v1/locations/" + rootId
+                + "/disable", "{\"reason\":\"Close\"}", admin,
+                versionedHeaders("90999999-9999-4999-8999-999999999999", admin, 0));
+        assertEquals(200, rootDisable.statusCode(), rootDisable.body());
+        HttpResponse<String> childEnable = request("POST", "/api/v1/locations/" + childId
+                + "/enable", "{\"reason\":\"Reopen\"}", admin,
+                versionedHeaders("90aaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", admin, 1));
+        assertEquals(409, childEnable.statusCode());
+        assertEquals("LOCATION_PARENT_DISABLED", JSON.readTree(childEnable.body()).path("code").asText());
+        HttpResponse<String> rootEnable = request("POST", "/api/v1/locations/" + rootId
+                + "/enable", "{\"reason\":\"Reopen\"}", admin,
+                versionedHeaders("90bbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", admin, 1));
+        assertEquals(200, rootEnable.statusCode(), rootEnable.body());
+        HttpResponse<String> enabledChild = request("POST", "/api/v1/locations/" + childId
+                + "/enable", "{\"reason\":\"Reopen\"}", admin,
+                versionedHeaders("90cccccc-cccc-4ccc-8ccc-cccccccccccc", admin, 1));
+        assertEquals(200, enabledChild.statusCode(), enabledChild.body());
+        HttpResponse<String> staleParent = request("POST", "/api/v1/locations",
+                "{\"code\":\"STALE-PARENT\",\"name\":\"Stale\",\"type\":\"BIN\","
+                        + "\"parentLocation\":{\"id\":\"" + rootId + "\",\"version\":0},"
+                        + "\"warehouse\":" + warehouseRef + "}", admin,
+                writeHeaders("90dddddd-dddd-4ddd-8ddd-dddddddddddd", admin));
+        assertEquals(409, staleParent.statusCode());
+        assertEquals("LOCATION_PARENT_VERSION_CONFLICT",
+                JSON.readTree(staleParent.body()).path("code").asText());
+        HttpResponse<String> warehouseDisable = request("POST", "/api/v1/warehouses/"
+                + warehouseId + "/disable", "{\"reason\":\"Close\"}", admin,
+                versionedHeaders("90eeeeee-eeee-4eee-8eee-eeeeeeeeeeee", admin, 0));
+        assertEquals(409, warehouseDisable.statusCode());
+        assertEquals("WAREHOUSE_HAS_OPEN_BUSINESS_REFERENCES",
+                JSON.readTree(warehouseDisable.body()).path("code").asText());
+    }
+
+    @Test
+    void locationsSupportOfficeSelectorsAndVersionedWarehouseReferences() throws Exception {
+        Session admin = login("admin");
+        Session user = login("user");
+        String officeBody = "{\"code\":\"OFFICE\",\"name\":\"Office\",\"type\":\"ROOM\"}";
+        String key = "91111111-1111-4111-8111-111111111111";
+        assertEquals(403, request("POST", "/api/v1/locations", officeBody, user,
+                writeHeaders(key, user)).statusCode());
+        HttpResponse<String> office = request("POST", "/api/v1/locations", officeBody,
+                admin, writeHeaders(key, admin));
+        assertEquals(201, office.statusCode(), office.body());
+        String officeId = JSON.readTree(office.body()).path("id").asText();
+        assertEquals(office.body(), request("POST", "/api/v1/locations", officeBody,
+                admin, writeHeaders(key, admin)).body());
+        assertEquals(409, request("POST", "/api/v1/locations",
+                "{\"code\":\"OTHER\",\"name\":\"Other\",\"type\":\"ROOM\"}",
+                admin, writeHeaders(key, admin)).statusCode());
+        assertEquals(409, request("POST", "/api/v1/locations",
+                "{\"code\":\"office\",\"name\":\"Duplicate\",\"type\":\"ROOM\"}",
+                admin, writeHeaders("91222222-2222-4222-8222-222222222222", admin)).statusCode());
+        assertEquals(400, request("POST", "/api/v1/locations",
+                "{\"code\":\" \",\"name\":\"Blank\",\"type\":\"ROOM\"}",
+                admin, writeHeaders("91333333-3333-4333-8333-333333333333", admin)).statusCode());
+        assertEquals(409, request("PATCH", "/api/v1/locations/" + officeId,
+                "{\"name\":\"Updated\"}", admin,
+                versionedHeaders("91444444-4444-4444-8444-444444444444", admin, 9)).statusCode());
+        HttpResponse<String> updated = request("PATCH", "/api/v1/locations/" + officeId,
+                "{\"name\":\"Main office\",\"description\":\"North\"}", admin,
+                versionedHeaders("91555555-5555-4555-8555-555555555555", admin, 0));
+        assertEquals(200, updated.statusCode(), updated.body());
+        assertEquals("North", JSON.readTree(updated.body()).path("description").asText());
+        Timestamp now = Timestamp.from(Instant.parse("2026-09-23T01:00:00Z"));
+        jdbcTemplate.update("INSERT INTO fams_account_role (account_id, role_code, granted_at) "
+                + "VALUES (2, 'ASSET_ADMIN', ?)", now);
+        Session assetAdmin = login("user");
+        JsonNode references = JSON.readTree(request("GET", "/api/v1/locations/active-references",
+                null, assetAdmin, Map.of()).body());
+        assertEquals(1, references.path("total").asInt());
+        assertTrue(references.path("items").get(0).path("warehouse").isMissingNode());
+        assertEquals(403, request("GET", "/api/v1/locations", null,
+                assetAdmin, Map.of()).statusCode());
+        assertEquals(404, request("GET", "/api/v1/locations/999", null,
+                admin, Map.of()).statusCode());
+
+        HttpResponse<String> warehouse = request("POST", "/api/v1/warehouses",
+                "{\"code\":\"STORAGE\",\"name\":\"Storage\"}", admin,
+                writeHeaders("91666666-6666-4666-8666-666666666666", admin));
+        assertEquals(201, warehouse.statusCode(), warehouse.body());
+        String warehouseId = JSON.readTree(warehouse.body()).path("id").asText();
+        HttpResponse<String> staleWarehouse = request("POST", "/api/v1/locations",
+                "{\"code\":\"STALE-WH\",\"name\":\"Stale\",\"type\":\"BIN\","
+                        + "\"warehouse\":{\"id\":\"" + warehouseId + "\",\"version\":9}}",
+                admin, writeHeaders("91777777-7777-4777-8777-777777777777", admin));
+        assertEquals(409, staleWarehouse.statusCode());
+        assertEquals("LOCATION_WAREHOUSE_VERSION_CONFLICT",
+                JSON.readTree(staleWarehouse.body()).path("code").asText());
+        HttpResponse<String> warehouseBound = request("POST", "/api/v1/locations",
+                "{\"code\":\"BIN-A\",\"name\":\"Bin A\",\"type\":\"BIN\","
+                        + "\"warehouse\":{\"id\":\"" + warehouseId + "\",\"version\":0}}",
+                admin, writeHeaders("91888888-8888-4888-8888-888888888888", admin));
+        assertEquals(201, warehouseBound.statusCode(), warehouseBound.body());
+        assertEquals(2, JSON.readTree(request("GET", "/api/v1/locations/active-references",
+                null, assetAdmin, Map.of()).body()).path("total").asInt());
+    }
+
+    @Test
     void disablingEmployeeDisablesAccountAndInvalidatesExistingSession() throws Exception {
         Session admin = login("admin");
         Session user = login("user");

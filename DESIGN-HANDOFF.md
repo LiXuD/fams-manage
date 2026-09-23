@@ -1,7 +1,7 @@
 # FAMS 项目阶段与交接入口
 
 > 唯一现役进度入口 · 更新于 2026-09-23
-> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04 和 D6-05A 本地 `DEV_VERIFIED`；D6-05B 已开始，C 未开始。D6-01B 与 D6-03B 继续等待远端权限。
+> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04 和 D6-05A 本地 `DEV_VERIFIED`；D6-05B 五组接口已实现但仍为 `IN_PROGRESS`，C 未开始。D6-01B 与 D6-03B 继续等待远端权限。
 
 ## 1. 八步开发流程与当前进度
 
@@ -40,7 +40,7 @@
 4. 每次任务开始、受阻、送审、验证和验收时同步维护计划台账及执行记录；本文只维护项目阶段和下一步，不复制第二套任务状态。D6-02B 的版本冻结结论与 D6-02C 的关键设计复核均已关闭；后续关键任务仍须按计划独立复核。
 5. 只有 PRD 变更或开发发现设计缺口时，才重新打开第5步对应条目；无需恢复已取消的大规模用户测试方案。
 6. D6-04A/B/C/D 均已提交并完成本地验证；C 的 Web 14/14 测试、构建、lint/typecheck，D 的双用户角色撤销失效浏览器链路、用户本人五域及总评 PASS，与 reviewed HEAD `8943dc3` 的 127 项统一门禁共同构成父任务本地 `DEV_VERIFIED` 证据。不得据此声明远端 CI、QA、正式安全专项或生产完成。
-7. D6-05 工作树为 `/Users/lixd/.codex/worktrees/d6-05-master-data/fams`，分支 `codex/d6-05-master-data`，任务启动提交 `f55808f`。D6-05A 用户本人按[独立复核单](docs/development/D6-05A-independent-review.md)给出五域及总评 PASS；含签署记录的 `5c4dfa0` 上 7 项真实 MySQL HTTP 与 153 项本地统一门禁通过，A 本地 `DEV_VERIFIED`。B 已进入实施，范围和证据见[任务卡](docs/development/D6-05-task-card.md)。
+7. D6-05 工作树为 `/Users/lixd/.codex/worktrees/d6-05-master-data/fams`，分支 `codex/d6-05-master-data`。D6-05A 用户本人按[独立复核单](docs/development/D6-05A-independent-review.md)给出五域及总评 PASS；含签署记录的 `5c4dfa0` 上 7 项真实 MySQL HTTP 与 153 项本地统一门禁通过，A 本地 `DEV_VERIFIED`。B 的分类、品牌、厂商、仓库和位置五组管理接口已落地并通过任务库局部门禁；接下来固定提交复跑统一门禁，补齐资产/入库/开放单据落地后的仓库与位置停用引用校验，再送独立复核。详细范围和证据见[任务卡](docs/development/D6-05-task-card.md)。
 
 ## 4. 文档责任
 
@@ -60,9 +60,9 @@
 | 事实面 | 状态 | 说明 |
 |---|---|---|
 | 设计文档 | `changed-and-verified` | 一期功能覆盖验证已完成并同步 |
-| 开发计划 | `in-progress` | V1.1 修订已确认；D6-04A/B/C/D 和父任务、D6-05A 均本地 `DEV_VERIFIED`；D6-05B/C 未开始；D6-01B/03B 远端能力尚未完成 |
+| 开发计划 | `in-progress` | V1.1 修订已确认；D6-04A/B/C/D 和父任务、D6-05A 均本地 `DEV_VERIFIED`；D6-05B `IN_PROGRESS`，C 未开始；D6-01B/03B 远端能力尚未完成 |
 | 规则 | `changed-and-verified` | AGENTS 已指向当前阶段 |
-| 产品代码 | `in-progress` | D6-04A/B/C 认证、账号授权和 PC 登录外壳已提交并本地验证；D6-05A 组织、员工与模板导入已提交、本地双门禁和用户复核通过；D6-05B/C 未开始 |
-| 产品运行态 | `local-dev-partial` | D6-04 真实浏览器链路已验证；D6-05A 签署记录 HEAD `5c4dfa0` 的任务 MySQL 8.4 HTTP 7/7 与统一门禁 153 项退出 0；远端 CI、QA、生产未验证 |
+| 产品代码 | `in-progress` | D6-04A/B/C 认证、账号授权和 PC 登录外壳已提交并本地验证；D6-05A 组织、员工与模板导入已提交、本地双门禁和用户复核通过；D6-05B 五组管理接口已落地，引用停用规则仍需下游业务表验证；C 未开始 |
+| 产品运行态 | `local-dev-partial` | D6-04 真实浏览器链路已验证；D6-05A 签署记录 HEAD `5c4dfa0` 的任务 MySQL 8.4 HTTP 7/7 与统一门禁 153 项退出 0；D6-05B 局部任务 MySQL HTTP 16/16 与 Java 质量门禁通过，固定提交统一门禁待复跑；远端 CI、QA、生产未验证 |
 | 记忆 | `out-of-scope` | 本次未修改机器生成记忆 |
 | 工作区 | `handoff-recorded` | D6-05 位于 `/Users/lixd/.codex/worktrees/d6-05-master-data/fams`，分支 `codex/d6-05-master-data`；实现、验证及送审文档已提交，复核入口与证据见任务卡 |
