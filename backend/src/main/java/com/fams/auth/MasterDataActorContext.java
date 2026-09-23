@@ -22,4 +22,13 @@ public final class MasterDataActorContext {
         }
         return account.id();
     }
+
+    public long requireCatalogSelector() {
+        AuthAccount account = AuthRequestContext.account(request);
+        if (!account.roles().contains(Role.WAREHOUSE_OPERATOR)
+                && !account.roles().contains(Role.ASSET_ADMIN)) {
+            throw AuthOperationException.forbidden();
+        }
+        return account.id();
+    }
 }

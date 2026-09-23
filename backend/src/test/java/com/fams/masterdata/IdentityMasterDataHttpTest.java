@@ -64,6 +64,12 @@ class IdentityMasterDataHttpTest {
         jdbcTemplate.update("DELETE FROM SPRING_SESSION");
         jdbcTemplate.update("DELETE FROM fams_security_event");
         jdbcTemplate.update("DELETE FROM fams_idempotency_record");
+        jdbcTemplate.update("DELETE FROM fams_brand");
+        jdbcTemplate.update("DELETE FROM fams_manufacturer");
+        jdbcTemplate.update("UPDATE fams_location SET parent_id = NULL");
+        jdbcTemplate.update("DELETE FROM fams_location");
+        jdbcTemplate.update("UPDATE fams_asset_category SET parent_id = NULL");
+        jdbcTemplate.update("DELETE FROM fams_asset_category");
         jdbcTemplate.update("DELETE FROM fams_account_role");
         jdbcTemplate.update("DELETE FROM fams_system_account");
         jdbcTemplate.update("DELETE FROM fams_employee");
@@ -144,6 +150,84 @@ class IdentityMasterDataHttpTest {
         assertEquals(403, importResponse.statusCode());
         assertEquals(0, jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM fams_organization WHERE code_normalized = 'OPS'", Integer.class));
+    }
+
+    @Test
+    void manufacturerWritesEnforceRolesVersionsIdempotencyAndActiveSelectors() throws Exception {
+        Session admin = login("admin");
+        Session user = login("user");
+        String key = "88111111-1111-4111-8111-111111111111";
+        HttpResponse<String> denied = request("POST", "/api/v1/manufacturers",
+                "{\"code\":\"ACME\",\"name\":\"Acme\"}", user, writeHeaders(key, user));
+        assertEquals(403, denied.statusCode());
+
+        HttpResponse<String> created = request("POST", "/api/v1/manufacturers",
+                "{\"code\":\"ACME\",\"name\":\"Acme\",\"description\":\"Maker\"}",
+                admin, writeHeaders(key, admin));
+        assertEquals(201, created.statusCode(), created.body());
+        JsonNode createdBody = JSON.readTree(created.body());
+        String id = createdBody.path("id").asText();
+        assertEquals("ACME", createdBody.path("code").asText());
+        assertEquals(created.body(), request("POST", "/api/v1/manufacturers",
+                "{\"code\":\"ACME\",\"name\":\"Acme\",\"description\":\"Maker\"}", admin,
+                writeHeaders(key, admin)).body());
+        HttpResponse<String> keyConflict = request("POST", "/api/v1/manufacturers",
+                "{\"code\":\"OTHER\",\"name\":\"Other\"}", admin, writeHeaders(key, admin));
+        assertEquals(409, keyConflict.statusCode());
+        assertEquals(400, request("POST", "/api/v1/manufacturers",
+                "{\"code\":\" \",\"name\":\"Invalid\"}", admin,
+                writeHeaders("88666666-6666-4666-8666-666666666666", admin)).statusCode());
+        assertEquals(400, request("POST", "/api/v1/manufacturers",
+                "{\"code\":\"LONG\",\"name\":\"Long\",\"description\":\""
+                        + "x".repeat(501) + "\"}", admin,
+                writeHeaders("88777777-7777-4777-8777-777777777777", admin)).statusCode());
+
+        HttpResponse<String> stale = request("PATCH", "/api/v1/manufacturers/" + id,
+                "{\"name\":\"Updated\"}", admin,
+                versionedHeaders("88222222-2222-4222-8222-222222222222", admin, 3));
+        assertEquals(409, stale.statusCode());
+        HttpResponse<String> updated = request("PATCH", "/api/v1/manufacturers/" + id,
+                "{\"name\":\"Updated\"}", admin,
+                versionedHeaders("88333333-3333-4333-8333-333333333333", admin, 0));
+        assertEquals(200, updated.statusCode());
+        assertEquals(1, JSON.readTree(updated.body()).path("version").asLong());
+        HttpResponse<String> renamed = request("PATCH", "/api/v1/manufacturers/" + id,
+                "{\"code\":\"ACME-NEW\",\"description\":\"Updated maker\"}", admin,
+                versionedHeaders("88888888-8888-4888-8888-888888888888", admin, 1));
+        assertEquals(200, renamed.statusCode());
+        assertEquals("ACME-NEW", JSON.readTree(renamed.body()).path("code").asText());
+
+        HttpResponse<String> disabled = request("POST", "/api/v1/manufacturers/" + id + "/disable",
+                "{\"reason\":\"Inactive\"}", admin,
+                versionedHeaders("88444444-4444-4444-8444-444444444444", admin, 2));
+        assertEquals(200, disabled.statusCode());
+        assertEquals("DISABLED", JSON.readTree(disabled.body()).path("status").asText());
+        HttpResponse<String> alreadyDisabled = request("POST", "/api/v1/manufacturers/" + id + "/disable",
+                "{\"reason\":\"Still inactive\"}", admin,
+                versionedHeaders("88999999-9999-4999-8999-999999999999", admin, 3));
+        assertEquals(409, alreadyDisabled.statusCode());
+        HttpResponse<String> duplicate = request("POST", "/api/v1/manufacturers",
+                "{\"code\":\"acme-new\",\"name\":\"Duplicate\"}", admin,
+                writeHeaders("88555555-5555-4555-8555-555555555555", admin));
+        assertEquals(409, duplicate.statusCode());
+        assertEquals("MANUFACTURER_CODE_CONFLICT", JSON.readTree(duplicate.body()).path("code").asText());
+
+        Timestamp now = Timestamp.from(Instant.parse("2026-09-23T01:00:00Z"));
+        jdbcTemplate.update("INSERT INTO fams_account_role (account_id, role_code, granted_at) "
+                + "VALUES (2, 'WAREHOUSE_OPERATOR', ?)", now);
+        Session warehouseOperator = login("user");
+        HttpResponse<String> references = request("GET", "/api/v1/manufacturers/active-references",
+                null, warehouseOperator, Map.of());
+        assertEquals(200, references.statusCode());
+        assertEquals(0, JSON.readTree(references.body()).path("total").asInt());
+        HttpResponse<String> enabled = request("POST", "/api/v1/manufacturers/" + id + "/enable",
+                "{\"reason\":\"Reactivated\"}", admin,
+                versionedHeaders("88101010-1010-4010-8010-101010101010", admin, 3));
+        assertEquals(200, enabled.statusCode());
+        assertEquals(1, JSON.readTree(request("GET", "/api/v1/manufacturers/active-references",
+                null, warehouseOperator, Map.of()).body()).path("total").asInt());
+        assertEquals(403, request("GET", "/api/v1/manufacturers", null,
+                warehouseOperator, Map.of()).statusCode());
     }
 
     @Test

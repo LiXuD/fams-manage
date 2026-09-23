@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @Profile("fams-product")
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@RestControllerAdvice(assignableTypes = IdentityMasterDataController.class)
+@RestControllerAdvice(basePackages = "com.fams.masterdata")
 final class MasterDataErrorHandler {
 
     @ExceptionHandler(MasterDataOperationException.class)

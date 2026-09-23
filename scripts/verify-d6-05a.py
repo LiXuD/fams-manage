@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run D6-05A identity master-data HTTP tests against task-owned MySQL 8.4."""
+"""Run D6-05 identity and catalog HTTP tests against task-owned MySQL 8.4."""
 
 from __future__ import annotations
 
@@ -104,9 +104,9 @@ def main() -> int:
         report = ROOT / "backend/target/surefire-reports/TEST-com.fams.masterdata.IdentityMasterDataHttpTest.xml"
         suite = ET.parse(report).getroot()
         counts = tuple(int(suite.attrib.get(name, "-1")) for name in ("tests", "failures", "errors", "skipped"))
-        if counts != (7, 0, 0, 0):
+        if counts != (8, 0, 0, 0):
             raise VerificationFailure(f"runtime suite is incomplete: {counts}")
-        print("D6-05A PASSED: 7 real MySQL HTTP cases, including permission rejection and disable linkage.")
+        print("D6-05 PASSED: 8 real MySQL HTTP cases, including identity and manufacturer administration.")
         return 0
     except (OSError, subprocess.TimeoutExpired, VerificationFailure) as exception:
         print(f"D6-05A FAILED: {exception}", file=sys.stderr)
