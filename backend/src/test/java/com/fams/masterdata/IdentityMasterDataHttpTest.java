@@ -231,6 +231,121 @@ class IdentityMasterDataHttpTest {
     }
 
     @Test
+    void brandReferencesTrackManufacturerStatusWithoutRewritingHistory() throws Exception {
+        Session admin = login("admin");
+        HttpResponse<String> manufacturer = request("POST", "/api/v1/manufacturers",
+                "{\"code\":\"MAKER\",\"name\":\"Maker\"}", admin,
+                writeHeaders("89111111-1111-4111-8111-111111111111", admin));
+        assertEquals(201, manufacturer.statusCode());
+        String manufacturerId = JSON.readTree(manufacturer.body()).path("id").asText();
+
+        String brandRequest = "{\"code\":\"BRAND\",\"name\":\"Brand\","
+                + "\"defaultManufacturer\":{\"id\":\"" + manufacturerId + "\",\"version\":0}}";
+        HttpResponse<String> brand = request("POST", "/api/v1/brands", brandRequest, admin,
+                writeHeaders("89222222-2222-4222-8222-222222222222", admin));
+        assertEquals(201, brand.statusCode(), brand.body());
+        String brandId = JSON.readTree(brand.body()).path("id").asText();
+        assertEquals(manufacturerId,
+                JSON.readTree(brand.body()).path("defaultManufacturer").path("id").asText());
+
+        HttpResponse<String> staleManufacturer = request("POST", "/api/v1/brands",
+                "{\"code\":\"STALE\",\"name\":\"Stale\","
+                        + "\"defaultManufacturer\":{\"id\":\"" + manufacturerId + "\",\"version\":9}}",
+                admin, writeHeaders("89333333-3333-4333-8333-333333333333", admin));
+        assertEquals(409, staleManufacturer.statusCode());
+        assertEquals("BRAND_DEFAULT_MANUFACTURER_VERSION_CONFLICT",
+                JSON.readTree(staleManufacturer.body()).path("code").asText());
+
+        HttpResponse<String> disabledManufacturer = request("POST",
+                "/api/v1/manufacturers/" + manufacturerId + "/disable",
+                "{\"reason\":\"Inactive maker\"}", admin,
+                versionedHeaders("89444444-4444-4444-8444-444444444444", admin, 0));
+        assertEquals(200, disabledManufacturer.statusCode());
+        HttpResponse<String> rejectedDefault = request("POST", "/api/v1/brands",
+                "{\"code\":\"NEW\",\"name\":\"New\","
+                        + "\"defaultManufacturer\":{\"id\":\"" + manufacturerId + "\",\"version\":1}}",
+                admin, writeHeaders("89555555-5555-4555-8555-555555555555", admin));
+        assertEquals(409, rejectedDefault.statusCode());
+        assertEquals("BRAND_DEFAULT_MANUFACTURER_DISABLED",
+                JSON.readTree(rejectedDefault.body()).path("code").asText());
+
+        Timestamp now = Timestamp.from(Instant.parse("2026-09-23T01:00:00Z"));
+        jdbcTemplate.update("INSERT INTO fams_account_role (account_id, role_code, granted_at) "
+                + "VALUES (2, 'ASSET_ADMIN', ?)", now);
+        Session assetAdmin = login("user");
+        JsonNode references = JSON.readTree(request("GET", "/api/v1/brands/active-references",
+                null, assetAdmin, Map.of()).body());
+        assertEquals(1, references.path("total").asInt());
+        assertTrue(references.path("items").get(0).path("defaultManufacturerId").isMissingNode());
+        JsonNode historical = JSON.readTree(request("GET", "/api/v1/brands/" + brandId,
+                null, admin, Map.of()).body());
+        assertEquals(manufacturerId, historical.path("defaultManufacturer").path("id").asText());
+    }
+
+    @Test
+    void brandWritesEnforcePermissionsVersionsIdempotencyAndStatus() throws Exception {
+        Session admin = login("admin");
+        Session user = login("user");
+        String key = "8a111111-1111-4111-8111-111111111111";
+        String createBody = "{\"code\":\"BRAND-X\",\"name\":\"Brand X\"}";
+        assertEquals(403, request("POST", "/api/v1/brands", createBody, user,
+                writeHeaders(key, user)).statusCode());
+        HttpResponse<String> created = request("POST", "/api/v1/brands", createBody, admin,
+                writeHeaders(key, admin));
+        assertEquals(201, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        assertEquals(created.body(), request("POST", "/api/v1/brands", createBody, admin,
+                writeHeaders(key, admin)).body());
+        assertEquals(409, request("POST", "/api/v1/brands",
+                "{\"code\":\"OTHER\",\"name\":\"Other\"}", admin,
+                writeHeaders(key, admin)).statusCode());
+        assertEquals(409, request("POST", "/api/v1/brands",
+                "{\"code\":\"brand-x\",\"name\":\"Duplicate\"}", admin,
+                writeHeaders("8a222222-2222-4222-8222-222222222222", admin)).statusCode());
+        assertEquals(400, request("POST", "/api/v1/brands",
+                "{\"code\":\" \",\"name\":\"Blank\"}", admin,
+                writeHeaders("8a333333-3333-4333-8333-333333333333", admin)).statusCode());
+        assertEquals(400, request("POST", "/api/v1/brands",
+                "{\"code\":\"LONG\",\"name\":\"Long\",\"description\":\""
+                        + "x".repeat(501) + "\"}", admin,
+                writeHeaders("8a444444-4444-4444-8444-444444444444", admin)).statusCode());
+
+        assertEquals(409, request("PATCH", "/api/v1/brands/" + id,
+                "{\"name\":\"Changed\"}", admin,
+                versionedHeaders("8a555555-5555-4555-8555-555555555555", admin, 9)).statusCode());
+        HttpResponse<String> updated = request("PATCH", "/api/v1/brands/" + id,
+                "{\"name\":\"Changed\",\"description\":\"Details\"}", admin,
+                versionedHeaders("8a666666-6666-4666-8666-666666666666", admin, 0));
+        assertEquals(200, updated.statusCode(), updated.body());
+        assertEquals(1, JSON.readTree(updated.body()).path("version").asLong());
+        assertEquals("Details", JSON.readTree(updated.body()).path("description").asText());
+        HttpResponse<String> disabled = request("POST", "/api/v1/brands/" + id + "/disable",
+                "{\"reason\":\"Retired\"}", admin,
+                versionedHeaders("8a777777-7777-4777-8777-777777777777", admin, 1));
+        assertEquals(200, disabled.statusCode(), disabled.body());
+        assertEquals("DISABLED", JSON.readTree(disabled.body()).path("status").asText());
+        assertEquals(409, request("POST", "/api/v1/brands/" + id + "/disable",
+                "{\"reason\":\"Still retired\"}", admin,
+                versionedHeaders("8a888888-8888-4888-8888-888888888888", admin, 2)).statusCode());
+        Timestamp now = Timestamp.from(Instant.parse("2026-09-23T01:00:00Z"));
+        jdbcTemplate.update("INSERT INTO fams_account_role (account_id, role_code, granted_at) "
+                + "VALUES (2, 'WAREHOUSE_OPERATOR', ?)", now);
+        Session warehouseOperator = login("user");
+        assertEquals(0, JSON.readTree(request("GET", "/api/v1/brands/active-references",
+                null, warehouseOperator, Map.of()).body()).path("total").asInt());
+        HttpResponse<String> enabled = request("POST", "/api/v1/brands/" + id + "/enable",
+                "{\"reason\":\"Available again\"}", admin,
+                versionedHeaders("8a999999-9999-4999-8999-999999999999", admin, 2));
+        assertEquals(200, enabled.statusCode(), enabled.body());
+        assertEquals(1, JSON.readTree(request("GET", "/api/v1/brands/active-references",
+                null, warehouseOperator, Map.of()).body()).path("total").asInt());
+        assertEquals(403, request("GET", "/api/v1/brands", null,
+                warehouseOperator, Map.of()).statusCode());
+        assertEquals(0, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM fams_brand WHERE code_normalized = 'OTHER'", Integer.class));
+    }
+
+    @Test
     void disablingEmployeeDisablesAccountAndInvalidatesExistingSession() throws Exception {
         Session admin = login("admin");
         Session user = login("user");
