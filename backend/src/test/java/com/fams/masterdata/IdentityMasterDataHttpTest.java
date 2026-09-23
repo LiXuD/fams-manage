@@ -803,6 +803,143 @@ class IdentityMasterDataHttpTest {
     }
 
     @Test
+    void businessParameterVersionsAreImmutableAndSwitchAtomically() throws Exception {
+        Session admin = login("admin");
+        Session user = login("user");
+        String firstBody = "{\"snapshot\":" + parameterSnapshot() + "}";
+        String key = "94111111-1111-4111-8111-111111111111";
+        assertEquals(403, request("POST", "/api/v1/business-parameters", firstBody,
+                user, versionedHeaders(key, user, 0)).statusCode());
+        assertEquals(404, request("GET", "/api/v1/business-parameters/current",
+                null, admin, Map.of()).statusCode());
+        HttpResponse<String> first = request("POST", "/api/v1/business-parameters", firstBody,
+                admin, versionedHeaders(key, admin, 0));
+        assertEquals(201, first.statusCode(), first.body());
+        JsonNode firstJson = JSON.readTree(first.body());
+        String firstId = firstJson.path("id").asText();
+        assertEquals(1, firstJson.path("version").asLong());
+        assertEquals("ACTIVE", firstJson.path("status").asText());
+        assertEquals("admin", firstJson.path("actor").path("username").asText());
+        assertEquals(first.body(), request("POST", "/api/v1/business-parameters", firstBody,
+                admin, versionedHeaders(key, admin, 0)).body());
+        HttpResponse<String> replayConflict = request("POST", "/api/v1/business-parameters",
+                firstBody.replace("Asia/Shanghai", "Asia/Tokyo"),
+                admin, versionedHeaders(key, admin, 0));
+        assertEquals(409, replayConflict.statusCode());
+        assertEquals(404, request("GET", "/api/v1/business-parameters/999999",
+                null, admin, Map.of()).statusCode());
+        assertEquals(404, request("GET", "/api/v1/business-parameters/not-an-id",
+                null, admin, Map.of()).statusCode());
+        HttpResponse<String> stale = request("POST", "/api/v1/business-parameters", firstBody,
+                admin, versionedHeaders("94222222-2222-4222-8222-222222222222", admin, 0));
+        assertEquals(409, stale.statusCode());
+        assertEquals("BUSINESS_PARAMETER_VERSION_CONFLICT",
+                JSON.readTree(stale.body()).path("code").asText());
+        String secondBody = firstBody.replace("Asia/Shanghai", "Asia/Tokyo");
+        HttpResponse<String> second = request("POST", "/api/v1/business-parameters", secondBody,
+                admin, versionedHeaders("94333333-3333-4333-8333-333333333333", admin, 1));
+        assertEquals(201, second.statusCode(), second.body());
+        assertEquals(2, JSON.readTree(second.body()).path("version").asLong());
+        assertEquals("Asia/Tokyo", JSON.readTree(request("GET", "/api/v1/business-parameters/current",
+                null, admin, Map.of()).body()).path("snapshot").path("timezone").asText());
+        JsonNode historical = JSON.readTree(request("GET", "/api/v1/business-parameters/" + firstId,
+                null, admin, Map.of()).body());
+        assertEquals("SUPERSEDED", historical.path("status").asText());
+        assertEquals("Asia/Shanghai", historical.path("snapshot").path("timezone").asText());
+        assertEquals(2, JSON.readTree(request("GET", "/api/v1/business-parameters",
+                null, admin, Map.of()).body()).path("total").asInt());
+        assertEquals(403, request("GET", "/api/v1/business-parameters",
+                null, user, Map.of()).statusCode());
+    }
+
+    @Test
+    void businessParametersRejectInvalidCalendarsDurationsAndScheduling() throws Exception {
+        Session admin = login("admin");
+        String body = "{\"snapshot\":" + parameterSnapshot() + "}";
+        HttpResponse<String> badZone = request("POST", "/api/v1/business-parameters",
+                body.replace("Asia/Shanghai", "Mars/Phobos"), admin,
+                versionedHeaders("95111111-1111-4111-8111-111111111111", admin, 0));
+        assertEquals(400, badZone.statusCode(), badZone.body());
+        assertEquals("BUSINESS_PARAMETER_TIMEZONE_INVALID",
+                JSON.readTree(badZone.body()).path("code").asText());
+        HttpResponse<String> duplicate = request("POST", "/api/v1/business-parameters",
+                body.replace("\"holidays\":[]", "\"holidays\":[\"2026-10-01\",\"2026-10-01\"]"),
+                admin, versionedHeaders("95222222-2222-4222-8222-222222222222", admin, 0));
+        assertEquals(400, duplicate.statusCode(), duplicate.body());
+        assertEquals("BUSINESS_PARAMETER_DATE_DUPLICATE",
+                JSON.readTree(duplicate.body()).path("code").asText());
+        HttpResponse<String> overlap = request("POST", "/api/v1/business-parameters",
+                body.replace("\"holidays\":[]", "\"holidays\":[\"2026-10-01\"]")
+                        .replace("\"adjustedWorkdays\":[]",
+                                "\"adjustedWorkdays\":[\"2026-10-01\"]"), admin,
+                versionedHeaders("95333333-3333-4333-8333-333333333333", admin, 0));
+        assertEquals(400, overlap.statusCode(), overlap.body());
+        assertEquals("BUSINESS_PARAMETER_DATE_CONFLICT",
+                JSON.readTree(overlap.body()).path("code").asText());
+        HttpResponse<String> badDuration = request("POST", "/api/v1/business-parameters",
+                body.replace("\"adminDecisionDeadlineWorkdays\":2",
+                        "\"adminDecisionDeadlineWorkdays\":0"), admin,
+                versionedHeaders("95444444-4444-4444-8444-444444444444", admin, 0));
+        assertEquals(400, badDuration.statusCode(), badDuration.body());
+        assertEquals("BUSINESS_PARAMETER_DURATION_INVALID",
+                JSON.readTree(badDuration.body()).path("code").asText());
+        String[] invalidSnapshots = {
+                "{}",
+                "{\"snapshot\":{}}",
+                body.replace("\"workWeek\":[\"MONDAY\",\"TUESDAY\",\"WEDNESDAY\","
+                        + "\"THURSDAY\",\"FRIDAY\"]", "\"workWeek\":[]"),
+                body.replace("\"holidays\":[]", "\"holidays\":null"),
+                body.replace("\"adjustedWorkdays\":[]",
+                        "\"adjustedWorkdays\":[\"2026-10-02\",\"2026-10-02\"]"),
+                body.replace("\"notificationEscalationThresholds\":{",
+                        "\"notificationEscalationThresholds\":null,\"discarded\":{")
+        };
+        for (int index = 0; index < invalidSnapshots.length; index++) {
+            HttpResponse<String> invalid = request("POST", "/api/v1/business-parameters",
+                    invalidSnapshots[index], admin,
+                    versionedHeaders("95666666-6666-4666-8666-66666666666" + index, admin, 0));
+            assertEquals(400, invalid.statusCode(), invalid.body());
+        }
+        String[] durationFields = {
+                "warehouseClaimDeadlineWorkdays", "warehouseFirstExecutionDeadlineWorkdays",
+                "handoverAcceptanceDeadlineNaturalDays", "administratorUnreadHours",
+                "onDutyWarehouseOperatorUnreadHours", "firstExecutionOverdueNaturalDays",
+                "receiptDueUnreadHours"
+        };
+        for (int index = 0; index < durationFields.length; index++) {
+            String field = durationFields[index];
+            String invalidBody = body.replaceAll("(\\\"" + field + "\\\":)\\d+", "$10");
+            HttpResponse<String> invalid = request("POST", "/api/v1/business-parameters",
+                    invalidBody, admin,
+                    versionedHeaders("95777777-7777-4777-8777-77777777777" + index, admin, 0));
+            assertEquals(400, invalid.statusCode(), field + ": " + invalid.body());
+            assertEquals("BUSINESS_PARAMETER_DURATION_INVALID",
+                    JSON.readTree(invalid.body()).path("code").asText());
+        }
+        HttpResponse<String> scheduled = request("POST", "/api/v1/business-parameters",
+                body.replace("{\"snapshot\":", "{\"effectiveAt\":\"2026-10-01T00:00:00Z\","
+                        + "\"snapshot\":"), admin,
+                versionedHeaders("95555555-5555-4555-8555-555555555555", admin, 0));
+        assertEquals(400, scheduled.statusCode(), scheduled.body());
+        assertEquals(0, jdbcTemplate.queryForObject(
+                "SELECT current_version FROM fams_business_parameter_state WHERE singleton_id = 1",
+                Integer.class));
+    }
+
+    private String parameterSnapshot() {
+        return """
+                {"timezone":"Asia/Shanghai","workWeek":["MONDAY","TUESDAY","WEDNESDAY",
+                "THURSDAY","FRIDAY"],"holidays":[],"adjustedWorkdays":[],
+                "adminDecisionDeadlineWorkdays":2,"warehouseClaimDeadlineWorkdays":1,
+                "warehouseFirstExecutionDeadlineWorkdays":2,
+                "handoverAcceptanceDeadlineNaturalDays":3,
+                "notificationEscalationThresholds":{"administratorUnreadHours":4,
+                "onDutyWarehouseOperatorUnreadHours":4,
+                "firstExecutionOverdueNaturalDays":1,"receiptDueUnreadHours":24}}
+                """.replace("\n", "").replace(" ", "");
+    }
+
+    @Test
     void disablingEmployeeDisablesAccountAndInvalidatesExistingSession() throws Exception {
         Session admin = login("admin");
         Session user = login("user");
