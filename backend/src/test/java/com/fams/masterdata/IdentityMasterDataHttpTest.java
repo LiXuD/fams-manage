@@ -64,6 +64,12 @@ class IdentityMasterDataHttpTest {
         jdbcTemplate.update("DELETE FROM SPRING_SESSION");
         jdbcTemplate.update("DELETE FROM fams_security_event");
         jdbcTemplate.update("DELETE FROM fams_idempotency_record");
+        jdbcTemplate.update("DELETE FROM fams_number_allocation");
+        jdbcTemplate.update("DELETE FROM fams_number_sequence");
+        jdbcTemplate.update("DELETE FROM fams_numbering_rule");
+        jdbcTemplate.update("UPDATE fams_business_parameter_state "
+                + "SET current_version = 0, current_version_id = NULL WHERE singleton_id = 1");
+        jdbcTemplate.update("DELETE FROM fams_business_parameter_version");
         jdbcTemplate.update("DELETE FROM fams_brand");
         jdbcTemplate.update("DELETE FROM fams_manufacturer");
         jdbcTemplate.update("UPDATE fams_location SET parent_id = NULL");
@@ -674,6 +680,126 @@ class IdentityMasterDataHttpTest {
         assertEquals(201, warehouseBound.statusCode(), warehouseBound.body());
         assertEquals(2, JSON.readTree(request("GET", "/api/v1/locations/active-references",
                 null, assetAdmin, Map.of()).body()).path("total").asInt());
+    }
+
+    @Test
+    void numberingRulesRejectTargetOverlapAndIllegalModes() throws Exception {
+        Session admin = login("admin");
+        Session user = login("user");
+        String enterprise = "{\"code\":\"ASSET-DEFAULT\",\"target\":\"ASSET\","
+                + "\"mode\":\"ENTERPRISE\",\"fixedPrefix\":\"FA\","
+                + "\"datePart\":\"YYYY\",\"sequenceLength\":6}";
+        String key = "92111111-1111-4111-8111-111111111111";
+        assertEquals(403, request("POST", "/api/v1/numbering-rules", enterprise,
+                user, writeHeaders(key, user)).statusCode());
+        HttpResponse<String> created = request("POST", "/api/v1/numbering-rules", enterprise,
+                admin, writeHeaders(key, admin));
+        assertEquals(201, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        assertEquals(created.body(), request("POST", "/api/v1/numbering-rules", enterprise,
+                admin, writeHeaders(key, admin)).body());
+        assertEquals(409, request("POST", "/api/v1/numbering-rules",
+                "{\"code\":\"OTHER\",\"target\":\"ASSET\","
+                        + "\"mode\":\"ENTERPRISE\",\"datePart\":\"NONE\","
+                        + "\"sequenceLength\":4}", admin,
+                writeHeaders("92222222-2222-4222-8222-222222222222", admin)).statusCode());
+        assertEquals(400, request("POST", "/api/v1/numbering-rules",
+                "{\"code\":\"BAD-MODE\",\"target\":\"INBOUND_RECEIPT\","
+                        + "\"mode\":\"CATEGORY_PREFIX\",\"datePart\":\"NONE\","
+                        + "\"sequenceLength\":4}", admin,
+                writeHeaders("92333333-3333-4333-8333-333333333333", admin)).statusCode());
+        HttpResponse<String> stale = request("PATCH", "/api/v1/numbering-rules/" + id,
+                "{\"sequenceLength\":8}", admin,
+                versionedHeaders("92444444-4444-4444-8444-444444444444", admin, 9));
+        assertEquals(409, stale.statusCode());
+        HttpResponse<String> updated = request("PATCH", "/api/v1/numbering-rules/" + id,
+                "{\"sequenceLength\":8}", admin,
+                versionedHeaders("92555555-5555-4555-8555-555555555555", admin, 0));
+        assertEquals(200, updated.statusCode(), updated.body());
+        assertEquals(8, JSON.readTree(updated.body()).path("sequenceLength").asInt());
+        HttpResponse<String> disabled = request("POST", "/api/v1/numbering-rules/" + id
+                + "/disable", "{\"reason\":\"Switch rule\"}", admin,
+                versionedHeaders("92666666-6666-4666-8666-666666666666", admin, 1));
+        assertEquals(200, disabled.statusCode(), disabled.body());
+        assertEquals(409, request("POST", "/api/v1/numbering-rules",
+                enterprise.replace("ASSET-DEFAULT", "asset-default"), admin,
+                writeHeaders("92777777-7777-4777-8777-777777777777", admin)).statusCode());
+        HttpResponse<String> replacement = request("POST", "/api/v1/numbering-rules",
+                "{\"code\":\"ASSET-NEW\",\"target\":\"ASSET\","
+                        + "\"mode\":\"ENTERPRISE\",\"datePart\":\"YYYYMM\","
+                        + "\"sequenceLength\":5}", admin,
+                writeHeaders("92888888-8888-4888-8888-888888888888", admin));
+        assertEquals(201, replacement.statusCode(), replacement.body());
+        String replacementId = JSON.readTree(replacement.body()).path("id").asText();
+        HttpResponse<String> blockedEnable = request("POST", "/api/v1/numbering-rules/" + id
+                + "/enable", "{\"reason\":\"Restore\"}", admin,
+                versionedHeaders("92999999-9999-4999-8999-999999999999", admin, 2));
+        assertEquals(409, blockedEnable.statusCode());
+        assertEquals("NUMBERING_RULE_TARGET_CONFLICT",
+                JSON.readTree(blockedEnable.body()).path("code").asText());
+        HttpResponse<String> replacementDisabled = request("POST", "/api/v1/numbering-rules/"
+                + replacementId + "/disable", "{\"reason\":\"Yield target\"}", admin,
+                versionedHeaders("92aaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", admin, 0));
+        assertEquals(200, replacementDisabled.statusCode(), replacementDisabled.body());
+        HttpResponse<String> restored = request("POST", "/api/v1/numbering-rules/" + id
+                + "/enable", "{\"reason\":\"Restore\"}", admin,
+                versionedHeaders("92bbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", admin, 2));
+        assertEquals(200, restored.statusCode(), restored.body());
+        assertEquals(409, request("POST", "/api/v1/numbering-rules/" + id + "/enable",
+                "{\"reason\":\"Again\"}", admin,
+                versionedHeaders("92cccccc-cccc-4ccc-8ccc-cccccccccccc", admin, 3)).statusCode());
+        assertEquals(400, request("POST", "/api/v1/numbering-rules",
+                "{\"code\":\"BAD-PREFIX\",\"target\":\"INBOUND_RECEIPT\","
+                        + "\"mode\":\"ENTERPRISE\",\"fixedPrefix\":\"bad space\","
+                        + "\"datePart\":\"NONE\",\"sequenceLength\":4}", admin,
+                writeHeaders("92dddddd-dddd-4ddd-8ddd-dddddddddddd", admin)).statusCode());
+    }
+
+    @Test
+    void categoryPrefixRulesRequireCompleteUnambiguousCategoryPrefixes() throws Exception {
+        Session admin = login("admin");
+        HttpResponse<String> category = request("POST", "/api/v1/asset-categories",
+                "{\"code\":\"LAPTOP\",\"name\":\"Laptop\"}", admin,
+                writeHeaders("93111111-1111-4111-8111-111111111111", admin));
+        assertEquals(201, category.statusCode());
+        String categoryId = JSON.readTree(category.body()).path("id").asText();
+        String rule = "{\"code\":\"ASSET-CATEGORY\",\"target\":\"ASSET\","
+                + "\"mode\":\"CATEGORY_PREFIX\",\"datePart\":\"YYYYMMDD\","
+                + "\"sequenceLength\":5}";
+        HttpResponse<String> missing = request("POST", "/api/v1/numbering-rules", rule,
+                admin, writeHeaders("93222222-2222-4222-8222-222222222222", admin));
+        assertEquals(409, missing.statusCode(), missing.body());
+        assertEquals("NUMBERING_CATEGORY_PREFIX_MISSING",
+                JSON.readTree(missing.body()).path("code").asText());
+        HttpResponse<String> fixedNotAllowed = request("POST", "/api/v1/numbering-rules",
+                rule.replace("\"datePart\"", "\"fixedPrefix\":\"FA\",\"datePart\""),
+                admin, writeHeaders("93333333-3333-4333-8333-333333333333", admin));
+        assertEquals(400, fixedNotAllowed.statusCode());
+        assertEquals("NUMBERING_RULE_FIXED_PREFIX_NOT_ALLOWED",
+                JSON.readTree(fixedNotAllowed.body()).path("code").asText());
+        HttpResponse<String> categoryUpdated = request("PATCH", "/api/v1/asset-categories/"
+                + categoryId, "{\"numberingPrefix\":\"LT\"}", admin,
+                versionedHeaders("93444444-4444-4444-8444-444444444444", admin, 0));
+        assertEquals(200, categoryUpdated.statusCode(), categoryUpdated.body());
+        HttpResponse<String> accepted = request("POST", "/api/v1/numbering-rules", rule,
+                admin, writeHeaders("93555555-5555-4555-8555-555555555555", admin));
+        assertEquals(201, accepted.statusCode(), accepted.body());
+        String ruleId = JSON.readTree(accepted.body()).path("id").asText();
+        HttpResponse<String> secondCategory = request("POST", "/api/v1/asset-categories",
+                "{\"code\":\"DESKTOP\",\"name\":\"Desktop\","
+                        + "\"numberingPrefix\":\"lt\"}", admin,
+                writeHeaders("93666666-6666-4666-8666-666666666666", admin));
+        assertEquals(201, secondCategory.statusCode());
+        HttpResponse<String> disable = request("POST", "/api/v1/numbering-rules/" + ruleId
+                + "/disable", "{\"reason\":\"Pause\"}", admin,
+                versionedHeaders("93777777-7777-4777-8777-777777777777", admin, 0));
+        assertEquals(200, disable.statusCode());
+        HttpResponse<String> conflict = request("POST", "/api/v1/numbering-rules/" + ruleId
+                + "/enable", "{\"reason\":\"Resume\"}", admin,
+                versionedHeaders("93888888-8888-4888-8888-888888888888", admin, 1));
+        assertEquals(409, conflict.statusCode());
+        assertEquals("NUMBERING_CATEGORY_PREFIX_CONFLICT",
+                JSON.readTree(conflict.body()).path("code").asText());
     }
 
     @Test

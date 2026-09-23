@@ -104,9 +104,9 @@ def main() -> int:
         report = ROOT / "backend/target/surefire-reports/TEST-com.fams.masterdata.IdentityMasterDataHttpTest.xml"
         suite = ET.parse(report).getroot()
         counts = tuple(int(suite.attrib.get(name, "-1")) for name in ("tests", "failures", "errors", "skipped"))
-        if counts != (16, 0, 0, 0):
+        if counts != (18, 0, 0, 0):
             raise VerificationFailure(f"runtime suite is incomplete: {counts}")
-        print("D6-05 PASSED: 16 real MySQL HTTP cases, including identity and catalog administration.")
+        print("D6-05 PASSED: 18 real MySQL HTTP cases, including identity and master data administration.")
         return 0
     except (OSError, subprocess.TimeoutExpired, VerificationFailure) as exception:
         print(f"D6-05A FAILED: {exception}", file=sys.stderr)
