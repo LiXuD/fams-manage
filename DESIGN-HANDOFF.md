@@ -1,7 +1,7 @@
 # FAMS 项目阶段与交接入口
 
 > 唯一现役进度入口 · 更新于 2026-09-23
-> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04 本地 `DEV_VERIFIED`；D6-05 基础资料已按组织人员与模板导入、目录仓位、编号参数三个纵切片启动。D6-01B 与 D6-03B 继续等待远端权限。
+> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04 本地 `DEV_VERIFIED`；D6-05A 正在实现，真实 MySQL HTTP 最近为 4/5 通过，组织依赖冲突仍错误返回 500。D6-01B 与 D6-03B 继续等待远端权限。
 
 ## 1. 八步开发流程与当前进度
 
@@ -40,7 +40,7 @@
 4. 每次任务开始、受阻、送审、验证和验收时同步维护计划台账及执行记录；本文只维护项目阶段和下一步，不复制第二套任务状态。D6-02B 的版本冻结结论与 D6-02C 的关键设计复核均已关闭；后续关键任务仍须按计划独立复核。
 5. 只有 PRD 变更或开发发现设计缺口时，才重新打开第5步对应条目；无需恢复已取消的大规模用户测试方案。
 6. D6-04A/B/C/D 均已提交并完成本地验证；C 的 Web 14/14 测试、构建、lint/typecheck，D 的双用户角色撤销失效浏览器链路、用户本人五域及总评 PASS，与 reviewed HEAD `8943dc3` 的 127 项统一门禁共同构成父任务本地 `DEV_VERIFIED` 证据。不得据此声明远端 CI、QA、正式安全专项或生产完成。
-7. D6-04 工作树为 `.worktrees/d6-04-pc-login-permissions`，分支 `feat/D6-04-pc-login-permissions`。下一步按计划进入 D6-05 基础资料，先建立任务卡并锁定契约、数据、权限和停用依赖验证条件；D6-04 的[复核单](docs/development/D6-04-independent-review.md)与[任务卡](docs/development/D6-04-task-card.md)保留为关闭证据。
+7. D6-05 工作树为 `/Users/lixd/.codex/worktrees/d6-05-master-data/fams`，分支 `codex/d6-05-master-data`，任务启动提交为 `f55808f`。D6-05A 的实现草稿尚未提交；先修复组织依赖冲突 500/409 映射并补齐模板导入契约，再重跑 5 项真实 MySQL HTTP 验证和统一门禁。完整文件清单、测试结果与恢复顺序见[任务卡](docs/development/D6-05-task-card.md)。
 
 ## 4. 文档责任
 
@@ -60,9 +60,9 @@
 | 事实面 | 状态 | 说明 |
 |---|---|---|
 | 设计文档 | `changed-and-verified` | 一期功能覆盖验证已完成并同步 |
-| 开发计划 | `in-progress` | V1.1 修订已确认；D6-04A/B/C/D 和父任务均本地 `DEV_VERIFIED`；下一步 D6-05；D6-01B/03B 远端能力尚未完成 |
+| 开发计划 | `in-progress` | V1.1 修订已确认；D6-04A/B/C/D 和父任务均本地 `DEV_VERIFIED`；D6-05A 正在实现，B/C 未开始；D6-01B/03B 远端能力尚未完成 |
 | 规则 | `changed-and-verified` | AGENTS 已指向当前阶段 |
-| 产品代码 | `in-progress` | D6-04A/B/C 认证、账号授权和 PC 登录外壳已提交并本地验证；其余一期业务未实现 |
-| 产品运行态 | `local-browser-dev-verified` | D6-04 的真实浏览器登录、Cookie/CSRF、改密、刷新、注销、停用与角色撤销即时失效、用户复核和 reviewed HEAD 门禁已验证；远端 CI、QA、生产未验证 |
+| 产品代码 | `in-progress` | D6-04A/B/C 认证、账号授权和 PC 登录外壳已提交并本地验证；D6-05A 组织、员工与模板导入为未提交草稿，D6-05B/C 未开始 |
+| 产品运行态 | `local-dev-partial` | D6-04 真实浏览器链路已验证；D6-05A 最近一次任务 MySQL 8.4 真实 HTTP 为 4/5 通过，依赖冲突预期 409 实际 500，统一门禁未运行；远端 CI、QA、生产未验证 |
 | 记忆 | `out-of-scope` | 本次未修改机器生成记忆 |
-| 工作区 | `handoff-recorded` | D6-04 位于 `.worktrees/d6-04-pc-login-permissions`，分支 `feat/D6-04-pc-login-permissions`；含用户签署记录的 reviewed HEAD `8943dc3` 统一门禁 127 项通过，下一步 D6-05，详见任务卡 |
+| 工作区 | `handoff-recorded` | D6-05 位于 `/Users/lixd/.codex/worktrees/d6-05-master-data/fams`，分支 `codex/d6-05-master-data`；任务启动提交 `f55808f`，实现草稿未提交且已记录文件清单、失败证据和恢复顺序 |
