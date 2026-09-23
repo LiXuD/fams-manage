@@ -1,0 +1,17 @@
+{
+  "operationId": "importIdentity",
+  "kind": "positive",
+  "status": 200,
+  "headers": {
+    "Content-Type": "text/csv",
+    "Idempotency-Key": "identity-import-example-0001",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": "recordType,action,code,displayName,parentCode,organizationCode,phone,expectedVersion\nORGANIZATION,CREATE,OPS,Operations,ROOT,,,\nEMPLOYEE,CREATE,E200,Template User,,OPS,13900139000,\n",
+  "response": {
+    "processedRows": 2,
+    "createdRows": 2,
+    "updatedRows": 0,
+    "disabledRows": 0
+  }
+}

@@ -1239,6 +1239,15 @@ components:
         parentOrganization:
           $ref: '#/components/schemas/OrganizationReference'
           description: Omit for a root organization; otherwise id and version are both required.
+    IdentityImportResult:
+      type: object
+      additionalProperties: false
+      required: [processedRows, createdRows, updatedRows, disabledRows]
+      properties:
+        processedRows: { type: integer, format: int32, minimum: 0 }
+        createdRows: { type: integer, format: int32, minimum: 0 }
+        updatedRows: { type: integer, format: int32, minimum: 0 }
+        disabledRows: { type: integer, format: int32, minimum: 0 }
     OrganizationUpdateRequest:
       type: object
       additionalProperties: false
@@ -4414,6 +4423,68 @@ paths:
                 type: string
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+
+  /identity-imports/template:
+    get:
+      tags: [MasterData]
+      operationId: getIdentityImportTemplate
+      summary: Download the exact UTF-8 CSV header for organization and employee imports.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      responses:
+        '200':
+          description: CSV header with one trailing newline.
+          content:
+            text/csv:
+              schema:
+                type: string
+                example: "recordType,action,code,displayName,parentCode,organizationCode,phone,expectedVersion\n"
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /identity-imports:
+    post:
+      tags: [MasterData]
+      operationId: importIdentity
+      summary: Apply a bounded organization and employee CSV template atomically.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: UPDATE and DISABLE rows carry expectedVersion; CREATE rows validate active parent or organization at write time.
+      x-transaction:
+        boundary: Validate the complete CSV, apply all rows, update linked accounts and auth epochs for employee disables, and record audit and idempotency atomically; any failed row rolls back the whole import.
+      x-audit-event:
+        event: IDENTITY_TEMPLATE_IMPORTED
+      x-error-codes: [MASTER_DATA_INVALID, MASTER_DATA_DEPENDENCY_CONFLICT, MASTER_DATA_VERSION_CONFLICT, MASTER_DATA_WRITE_CONFLICT, MASTER_DATA_IDEMPOTENCY_CONFLICT]
+      x-required-error-statuses: [400, 401, 403, 409]
+      x-invariants: >-
+        UTF-8 text/csv uses the exact header recordType,action,code,displayName,parentCode,organizationCode,phone,expectedVersion.
+        recordType is ORGANIZATION or EMPLOYEE and action is CREATE, UPDATE, or DISABLE.
+        Missing rows do not delete or disable records. This endpoint does not import assets or run a background job.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          text/csv:
+            schema:
+              type: string
+      responses:
+        '200':
+          description: Committed row counts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdentityImportResult'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
 
   /organizations:
     get:
