@@ -346,6 +346,104 @@ class IdentityMasterDataHttpTest {
     }
 
     @Test
+    void categoryTreeRejectsCyclesDisabledAncestorsAndStaleReferences() throws Exception {
+        Session admin = login("admin");
+        String rootRequest = "{\"code\":\"EQUIPMENT\",\"name\":\"Equipment\","
+                + "\"suggestedUnit\":\"piece\",\"numberingPrefix\":\"EQ\","
+                + "\"extensionFieldTemplate\":[]}";
+        HttpResponse<String> root = request("POST", "/api/v1/asset-categories", rootRequest,
+                admin, writeHeaders("8b111111-1111-4111-8111-111111111111", admin));
+        assertEquals(201, root.statusCode(), root.body());
+        String rootId = JSON.readTree(root.body()).path("id").asText();
+        HttpResponse<String> child = request("POST", "/api/v1/asset-categories",
+                "{\"code\":\"LAPTOP\",\"name\":\"Laptop\","
+                        + "\"parentCategory\":{\"id\":\"" + rootId + "\",\"version\":0}}",
+                admin, writeHeaders("8b222222-2222-4222-8222-222222222222", admin));
+        assertEquals(201, child.statusCode(), child.body());
+        String childId = JSON.readTree(child.body()).path("id").asText();
+        HttpResponse<String> cycle = request("PATCH", "/api/v1/asset-categories/" + rootId,
+                "{\"parentCategory\":{\"id\":\"" + childId + "\",\"version\":0}}",
+                admin, versionedHeaders("8b333333-3333-4333-8333-333333333333", admin, 0));
+        assertEquals(409, cycle.statusCode(), cycle.body());
+        assertEquals("ASSET_CATEGORY_CYCLE", JSON.readTree(cycle.body()).path("code").asText());
+        HttpResponse<String> staleParent = request("PATCH", "/api/v1/asset-categories/" + childId,
+                "{\"parentCategory\":{\"id\":\"" + rootId + "\",\"version\":9}}",
+                admin, versionedHeaders("8b444444-4444-4444-8444-444444444444", admin, 0));
+        assertEquals(409, staleParent.statusCode());
+        assertEquals("ASSET_CATEGORY_PARENT_VERSION_CONFLICT",
+                JSON.readTree(staleParent.body()).path("code").asText());
+        HttpResponse<String> disabled = request("POST", "/api/v1/asset-categories/" + rootId
+                + "/disable", "{\"reason\":\"Retired\"}", admin,
+                versionedHeaders("8b555555-5555-4555-8555-555555555555", admin, 0));
+        assertEquals(200, disabled.statusCode(), disabled.body());
+        HttpResponse<String> childDisabled = request("POST", "/api/v1/asset-categories/" + childId
+                + "/disable", "{\"reason\":\"Retired\"}", admin,
+                versionedHeaders("8b666666-6666-4666-8666-666666666666", admin, 0));
+        assertEquals(200, childDisabled.statusCode(), childDisabled.body());
+        HttpResponse<String> enableChild = request("POST", "/api/v1/asset-categories/" + childId
+                + "/enable", "{\"reason\":\"Reopen\"}", admin,
+                versionedHeaders("8b777777-7777-4777-8777-777777777777", admin, 1));
+        assertEquals(409, enableChild.statusCode());
+        assertEquals("ASSET_CATEGORY_PARENT_DISABLED",
+                JSON.readTree(enableChild.body()).path("code").asText());
+        HttpResponse<String> duplicate = request("POST", "/api/v1/asset-categories",
+                "{\"code\":\"equipment\",\"name\":\"Duplicate\"}", admin,
+                writeHeaders("8b888888-8888-4888-8888-888888888888", admin));
+        assertEquals(409, duplicate.statusCode());
+        assertEquals("ASSET_CATEGORY_CODE_CONFLICT",
+                JSON.readTree(duplicate.body()).path("code").asText());
+        assertEquals("DISABLED", JSON.readTree(request("GET", "/api/v1/asset-categories/"
+                + rootId, null, admin, Map.of()).body()).path("status").asText());
+    }
+
+    @Test
+    void categoryWritesPreserveTemplatesAndEnforceRolesAndVersions() throws Exception {
+        Session admin = login("admin");
+        Session user = login("user");
+        String createBody = "{\"code\":\"FURNITURE\",\"name\":\"Furniture\","
+                + "\"description\":\"Fixtures\",\"extensionFieldTemplate\":[]}";
+        String key = "8c111111-1111-4111-8111-111111111111";
+        assertEquals(403, request("POST", "/api/v1/asset-categories", createBody, user,
+                writeHeaders(key, user)).statusCode());
+        HttpResponse<String> created = request("POST", "/api/v1/asset-categories", createBody,
+                admin, writeHeaders(key, admin));
+        assertEquals(201, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        assertEquals(created.body(), request("POST", "/api/v1/asset-categories", createBody,
+                admin, writeHeaders(key, admin)).body());
+        assertEquals(409, request("POST", "/api/v1/asset-categories",
+                "{\"code\":\"OTHER\",\"name\":\"Other\"}", admin,
+                writeHeaders(key, admin)).statusCode());
+        assertEquals(400, request("POST", "/api/v1/asset-categories",
+                "{\"code\":\" \",\"name\":\"Blank\"}", admin,
+                writeHeaders("8c222222-2222-4222-8222-222222222222", admin)).statusCode());
+        assertEquals(409, request("PATCH", "/api/v1/asset-categories/" + id,
+                "{\"name\":\"Updated\"}", admin,
+                versionedHeaders("8c333333-3333-4333-8333-333333333333", admin, 9)).statusCode());
+        HttpResponse<String> updated = request("PATCH", "/api/v1/asset-categories/" + id,
+                "{\"name\":\"Updated\",\"suggestedUnit\":\"set\","
+                        + "\"numberingPrefix\":\"FU\",\"extensionFieldTemplate\":[]}", admin,
+                versionedHeaders("8c444444-4444-4444-8444-444444444444", admin, 0));
+        assertEquals(200, updated.statusCode(), updated.body());
+        assertEquals(1, JSON.readTree(updated.body()).path("version").asLong());
+        assertEquals("Fixtures", JSON.readTree(updated.body()).path("description").asText());
+        assertEquals("FU", JSON.readTree(updated.body()).path("numberingPrefix").asText());
+        assertEquals(0, JSON.readTree(updated.body()).path("extensionFieldTemplate").size());
+        Timestamp now = Timestamp.from(Instant.parse("2026-09-23T01:00:00Z"));
+        jdbcTemplate.update("INSERT INTO fams_account_role (account_id, role_code, granted_at) "
+                + "VALUES (2, 'ASSET_ADMIN', ?)", now);
+        Session assetAdmin = login("user");
+        JsonNode references = JSON.readTree(request("GET", "/api/v1/asset-categories/active-references",
+                null, assetAdmin, Map.of()).body());
+        assertEquals(1, references.path("total").asInt());
+        assertEquals("FU", references.path("items").get(0).path("numberingPrefix").asText());
+        assertEquals(403, request("GET", "/api/v1/asset-categories", null,
+                assetAdmin, Map.of()).statusCode());
+        assertEquals(404, request("GET", "/api/v1/asset-categories/999", null,
+                admin, Map.of()).statusCode());
+    }
+
+    @Test
     void disablingEmployeeDisablesAccountAndInvalidatesExistingSession() throws Exception {
         Session admin = login("admin");
         Session user = login("user");
