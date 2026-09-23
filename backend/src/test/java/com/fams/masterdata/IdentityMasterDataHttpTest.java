@@ -246,6 +246,103 @@ class IdentityMasterDataHttpTest {
                 "SELECT COUNT(*) FROM fams_organization WHERE code_normalized = 'ROLLBACK'", Integer.class));
     }
 
+    @Test
+    void organizationWritesRejectDuplicatesCyclesAndReusedIdempotencyKeys() throws Exception {
+        Session admin = login("admin");
+        String create = "{\"code\":\"OPS\",\"name\":\"Operations\","
+                + "\"parentOrganization\":{\"id\":\"1\",\"version\":0}}";
+        Map<String, String> firstHeaders = writeHeaders("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", admin);
+        HttpResponse<String> first = request("POST", "/api/v1/organizations", create, admin, firstHeaders);
+        assertEquals(201, first.statusCode());
+        String opsId = JSON.readTree(first.body()).path("id").asText();
+        HttpResponse<String> replay = request("POST", "/api/v1/organizations", create, admin, firstHeaders);
+        assertEquals(201, replay.statusCode());
+        assertEquals(opsId, JSON.readTree(replay.body()).path("id").asText());
+        HttpResponse<String> changedPayload = request(
+                "POST", "/api/v1/organizations",
+                "{\"code\":\"DIFFERENT\",\"name\":\"Different\"}", admin, firstHeaders);
+        assertEquals(409, changedPayload.statusCode());
+        assertEquals("MASTER_DATA_IDEMPOTENCY_CONFLICT",
+                JSON.readTree(changedPayload.body()).path("code").asText());
+        HttpResponse<String> duplicate = request(
+                "POST", "/api/v1/organizations", create, admin,
+                writeHeaders("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", admin));
+        assertEquals(409, duplicate.statusCode());
+
+        HttpResponse<String> child = request(
+                "POST", "/api/v1/organizations",
+                "{\"code\":\"TEAM\",\"name\":\"Team\","
+                        + "\"parentOrganization\":{\"id\":\"" + opsId + "\",\"version\":0}}",
+                admin, writeHeaders("cccccccc-cccc-4ccc-8ccc-cccccccccccc", admin));
+        assertEquals(201, child.statusCode());
+        String childId = JSON.readTree(child.body()).path("id").asText();
+        HttpResponse<String> cycle = request(
+                "PATCH", "/api/v1/organizations/" + opsId,
+                "{\"parentOrganization\":{\"id\":\"" + childId + "\",\"version\":0}}",
+                admin, versionedHeaders("dddddddd-dddd-4ddd-8ddd-dddddddddddd", admin, 0));
+        assertEquals(409, cycle.statusCode());
+        assertEquals("MASTER_DATA_DEPENDENCY_CONFLICT", JSON.readTree(cycle.body()).path("code").asText());
+
+        HttpResponse<String> renamed = request(
+                "PATCH", "/api/v1/organizations/" + opsId,
+                "{\"name\":\"Operations East\"}", admin,
+                versionedHeaders("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", admin, 0));
+        assertEquals(200, renamed.statusCode());
+        assertEquals(1, JSON.readTree(renamed.body()).path("version").asInt());
+        assertEquals("Operations East", JSON.readTree(renamed.body()).path("name").asText());
+    }
+
+    @Test
+    void employeeUpdatePreservesPhoneAndStatusTransitionsKeepAccountDisabled() throws Exception {
+        Session admin = login("admin");
+        HttpResponse<String> created = request(
+                "POST", "/api/v1/employees",
+                "{\"employeeNo\":\"E300\",\"displayName\":\"Initial\","
+                        + "\"organization\":{\"id\":\"1\",\"version\":0},"
+                        + "\"phone\":\"13800138000\"}",
+                admin, writeHeaders("12121212-1212-4212-8212-121212121212", admin));
+        assertEquals(201, created.statusCode());
+        String employeeId = JSON.readTree(created.body()).path("id").asText();
+        byte[] before = jdbcTemplate.queryForObject(
+                "SELECT mobile_ciphertext FROM fams_employee WHERE id = ?", byte[].class,
+                Long.parseLong(employeeId));
+        HttpResponse<String> updated = request(
+                "PATCH", "/api/v1/employees/" + employeeId,
+                "{\"displayName\":\"Updated\"}", admin,
+                versionedHeaders("13131313-1313-4313-8313-131313131313", admin, 0));
+        assertEquals(200, updated.statusCode());
+        assertEquals("Updated", JSON.readTree(updated.body()).path("displayName").asText());
+        byte[] after = jdbcTemplate.queryForObject(
+                "SELECT mobile_ciphertext FROM fams_employee WHERE id = ?", byte[].class,
+                Long.parseLong(employeeId));
+        assertTrue(java.util.Arrays.equals(before, after));
+
+        HttpResponse<String> stale = request(
+                "PATCH", "/api/v1/employees/" + employeeId,
+                "{\"displayName\":\"Stale\"}", admin,
+                versionedHeaders("14141414-1414-4414-8414-141414141414", admin, 0));
+        assertEquals(409, stale.statusCode());
+        HttpResponse<String> disabled = request(
+                "POST", "/api/v1/employees/" + employeeId + "/disable",
+                "{\"reason\":\"Left\"}", admin,
+                versionedHeaders("15151515-1515-4515-8515-151515151515", admin, 1));
+        assertEquals(200, disabled.statusCode());
+        HttpResponse<String> repeatedDisable = request(
+                "POST", "/api/v1/employees/" + employeeId + "/disable",
+                "{\"reason\":\"Still left\"}", admin,
+                versionedHeaders("16161616-1616-4616-8616-161616161616", admin, 2));
+        assertEquals(409, repeatedDisable.statusCode());
+        HttpResponse<String> enabled = request(
+                "POST", "/api/v1/employees/" + employeeId + "/enable",
+                "{\"reason\":\"Returned\"}", admin,
+                versionedHeaders("17171717-1717-4717-8717-171717171717", admin, 2));
+        assertEquals(200, enabled.statusCode());
+        assertEquals("ACTIVE", JSON.readTree(enabled.body()).path("status").asText());
+        assertEquals(0, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM fams_system_account WHERE employee_id = ? AND status = 'ENABLED'",
+                Integer.class, Long.parseLong(employeeId)));
+    }
+
     private void insertEmployee(long id, String number, String name, Timestamp now) {
         jdbcTemplate.update(
                 "INSERT INTO fams_employee "

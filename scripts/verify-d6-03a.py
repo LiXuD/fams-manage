@@ -62,6 +62,7 @@ REQUIRED_TEST_REPORTS = {
     "TEST-com.fams.observability.LocalObservabilityHttpTest.xml",
     "TEST-com.fams.runtime.RuntimeCompatibilityHttpTest.xml",
     "TEST-com.fams.runtime.RuntimeCompatibilityTestDatabaseTest.xml",
+    "TEST-com.fams.masterdata.IdentityMasterDataHttpTest.xml",
 }
 
 
@@ -972,6 +973,9 @@ def runtime_environment(context: RuntimeContext) -> dict[str, str]:
             "D6_04_TEST_DATASOURCE_URL": auth_jdbc_url(context),
             "D6_04_TEST_DATASOURCE_USERNAME": "d6_04_runtime",
             "D6_04_TEST_DATASOURCE_PASSWORD": context.password,
+            "D6_05_TEST_DATASOURCE_URL": auth_jdbc_url(context),
+            "D6_05_TEST_DATASOURCE_USERNAME": "d6_04_runtime",
+            "D6_05_TEST_DATASOURCE_PASSWORD": context.password,
         }
     )
     return environment
@@ -1058,6 +1062,7 @@ def verify_java_quality(context: RuntimeContext) -> None:
             "-Pquality",
             "-Dd6.02b.runtime=true",
             "-Dd6.04.runtime=true",
+            "-Dd6.05.identity.runtime=true",
             "clean",
             "verify",
         ],

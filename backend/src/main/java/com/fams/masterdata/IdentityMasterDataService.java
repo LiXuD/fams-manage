@@ -9,6 +9,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -108,7 +109,7 @@ class IdentityMasterDataService {
         }
         Long parentId = request.getParentOrganization() == null
                 ? null
-                : validateActiveOrganization(request.getParentOrganization()).id();
+                : Objects.requireNonNull(validateActiveOrganization(request.getParentOrganization())).id();
         Organization result = createOrganizationInternal(
                 actorId, request.getCode(), request.getName(), parentId, requestId);
         record(actorId, operation, idempotencyKey, digest, 201, result, "ORGANIZATION", result.getId());
@@ -130,10 +131,12 @@ class IdentityMasterDataService {
         if (replay.isPresent()) {
             return replay.orElseThrow();
         }
-        OrganizationRow current = requireVersion(requireOrganization(id), expectedVersion);
+        OrganizationRow current = Objects.requireNonNull(
+                requireVersion(requireOrganization(id), expectedVersion));
         Long parentId = current.parentId();
         if (request.getParentOrganization() != null) {
-            OrganizationRow parent = validateActiveOrganization(request.getParentOrganization());
+            OrganizationRow parent = Objects.requireNonNull(
+                    validateActiveOrganization(request.getParentOrganization()));
             if (parent.id() == id || mapper.countOrganizationCycle(id, parent.id()) != 0) {
                 throw MasterDataOperationException.dependencyConflict("The organization hierarchy would contain a cycle.");
             }
@@ -209,10 +212,10 @@ class IdentityMasterDataService {
         if (replay.isPresent()) {
             return replay.orElseThrow();
         }
-        EmployeeRow current = requireVersion(requireEmployee(id), expectedVersion);
+        EmployeeRow current = Objects.requireNonNull(requireVersion(requireEmployee(id), expectedVersion));
         long organizationId = current.organizationId();
         if (request.getOrganization() != null) {
-            organizationId = validateActiveOrganization(request.getOrganization()).id();
+            organizationId = Objects.requireNonNull(validateActiveOrganization(request.getOrganization())).id();
         }
         Employee result = updateEmployeeInternal(
                 actorId,

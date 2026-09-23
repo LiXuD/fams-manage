@@ -58,6 +58,10 @@ final class NewOrganizationRow {
         return id;
     }
 
+    void setId(Long id) {
+        this.id = id;
+    }
+
     String getCode() {
         return code;
     }
@@ -116,6 +120,10 @@ final class NewEmployeeRow {
 
     Long getId() {
         return id;
+    }
+
+    void setId(Long id) {
+        this.id = id;
     }
 
     String getEmployeeNo() {
