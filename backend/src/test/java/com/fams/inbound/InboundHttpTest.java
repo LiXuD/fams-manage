@@ -101,6 +101,12 @@ class InboundHttpTest {
                 + "/items/" + itemId + "/accept",
                 "{\"assetVersion\":1,\"lockVersion\":0,\"observedAssetCode\":\"WRONG\"}",
                 other, headers(other, 9, 3L)));
+        assertStatus(409, call("POST", "/api/v1/inbound-receipts/" + receiptId
+                + "/items/" + itemId + "/accept",
+                "{\"assetVersion\":1,\"lockVersion\":0,\"observedAssetCode\":\"WRONG\"}",
+                creator, headers(creator, 11, 3L)));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_inbound_acceptance"));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE released_at IS NULL"));
         String acceptBody = "{\"assetVersion\":1,\"lockVersion\":0,\"observedAssetCode\":\""
                 + asset.path("assetCode").asText() + "\"}";
         JsonNode accepted = JSON.readTree(assertStatus(200, call("POST", "/api/v1/inbound-receipts/"
@@ -114,6 +120,30 @@ class InboundHttpTest {
         assertEquals(1, count("SELECT COUNT(*) FROM fams_inbound_acceptance"));
         assertEquals(0, count("SELECT COUNT(*) FROM fams_todo WHERE closed_at IS NULL"));
         assertTrue(count("SELECT COUNT(*) FROM fams_audit_event") >= 5);
+
+        JsonNode second = JSON.readTree(assertStatus(201, call("POST", "/api/v1/assets",
+                assetBody.replace("Desk", "Chair"), creator, headers(creator, 12, null))).body());
+        String secondBody = """
+                {"businessDate":"2026-09-24","items":[{"asset":{"id":"%s","version":0},
+                 "targetWarehouse":{"id":"1","version":0},
+                 "targetLocation":{"id":"1","version":0}}]}
+                """.formatted(second.path("id").asText());
+        JsonNode rejected = JSON.readTree(assertStatus(201, call("POST",
+                "/api/v1/inbound-receipts", secondBody, creator,
+                headers(creator, 13, null))).body());
+        String rejectedId = rejected.path("id").asText();
+        assertStatus(200, call("POST", "/api/v1/inbound-receipts/" + rejectedId + "/submit",
+                null, creator, headers(creator, 14, 0L)));
+        JsonNode rejection = JSON.readTree(assertStatus(200, call("POST",
+                "/api/v1/inbound-receipts/" + rejectedId + "/decision",
+                "{\"decision\":\"REJECTED\",\"reason\":\"Wrong delivery\"}", admin,
+                headers(admin, 15, 1L))).body());
+        assertEquals("REJECTED", rejection.path("status").asText());
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE released_at IS NULL"));
+        assertEquals("DRAFT", JSON.readTree(assertStatus(200, call("GET", "/api/v1/assets/"
+                + second.path("id").asText(), null, creator, Map.of())).body())
+                .path("cardStage").asText());
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_todo WHERE closed_at IS NULL"));
     }
 
     private int count(String sql) { return jdbc.queryForObject(sql, Integer.class); }
