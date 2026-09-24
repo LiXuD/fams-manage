@@ -32,7 +32,7 @@ async function handleLogout(): Promise<void> {
       <nav v-if="session.isAuthenticated" class="sidebar" aria-label="主导航">
         <router-link to="/" class="nav-item nav-item-active">工作台</router-link>
         <span v-if="session.hasPermission('ACCOUNT_ADMIN')" class="nav-note">账号与角色 · 后续开放</span>
-        <span v-if="session.hasPermission('ASSET_LEDGER_READ')" class="nav-note">资产台账 · 后续开放</span>
+        <router-link v-if="session.hasPermission('ASSET_LEDGER_READ')" to="/assets" class="nav-item">资产台账</router-link>
       </nav>
       <main class="workspace-content">
         <p v-if="session.isAuthenticated && session.error && route.name !== 'password-change'" class="form-error" role="alert">{{ session.error.message }}</p>
