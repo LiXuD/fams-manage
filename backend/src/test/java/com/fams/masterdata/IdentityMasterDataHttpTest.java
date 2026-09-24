@@ -643,6 +643,33 @@ class IdentityMasterDataHttpTest {
         assertEquals(200, request("POST", "/api/v1/locations/" + locationId
                 + "/disable", "{\"reason\":\"Close\"}", admin,
                 versionedHeaders("96888888-8888-4888-8888-888888888888", admin, 0)).statusCode());
+
+        // A disabled historical location must not hide a current asset from warehouse disable.
+        jdbcTemplate.update("UPDATE fams_asset SET card_stage = 'ACTIVE', custody_type = 'STORAGE', "
+                + "storage_warehouse_id = ?, current_location_id = ? WHERE id = ?",
+                warehouseId, locationId, assetId);
+        HttpResponse<String> currentAssetRejected = request("POST", "/api/v1/warehouses/" + warehouseId
+                + "/disable", "{\"reason\":\"Close\"}", admin,
+                versionedHeaders("96999999-9999-4999-8999-999999999999", admin, 0));
+        assertEquals(409, currentAssetRejected.statusCode(), currentAssetRejected.body());
+        assertEquals("WAREHOUSE_HAS_ACTIVE_ASSETS",
+                JSON.readTree(currentAssetRejected.body()).path("code").asText());
+
+        jdbcTemplate.update("UPDATE fams_asset SET card_stage = 'DRAFT', custody_type = NULL, "
+                + "storage_warehouse_id = NULL, current_location_id = NULL WHERE id = ?", assetId);
+        jdbcTemplate.update("UPDATE fams_inbound_receipt SET receipt_status = 'DRAFT' WHERE id = ?", receiptId);
+        HttpResponse<String> openInboundRejected = request("POST", "/api/v1/warehouses/" + warehouseId
+                + "/disable", "{\"reason\":\"Close\"}", admin,
+                versionedHeaders("96aaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", admin, 0));
+        assertEquals(409, openInboundRejected.statusCode(), openInboundRejected.body());
+        assertEquals("WAREHOUSE_HAS_OPEN_INBOUND_REFERENCES",
+                JSON.readTree(openInboundRejected.body()).path("code").asText());
+
+        jdbcTemplate.update("UPDATE fams_inbound_receipt SET receipt_status = 'CANCELLED' "
+                + "WHERE id = ?", receiptId);
+        assertEquals(200, request("POST", "/api/v1/warehouses/" + warehouseId
+                + "/disable", "{\"reason\":\"Close\"}", admin,
+                versionedHeaders("96bbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", admin, 0)).statusCode());
     }
 
     private long seedParameterVersion() {
