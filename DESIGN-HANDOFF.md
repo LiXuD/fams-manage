@@ -12,7 +12,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.1](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-05 `IN_PROGRESS`，详见[任务卡](docs/development/D6-05-task-card.md)；D6-01B/03B 待外部权限 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-05 `IN_PROGRESS`，D6-06A/07A 基础建表已获授权先行；详见[任务卡](docs/development/D6-05-task-card.md)；D6-01B/03B 待外部权限 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
@@ -40,7 +40,7 @@
 4. 每次任务开始、受阻、送审、验证和验收时同步维护计划台账及执行记录；本文只维护项目阶段和下一步，不复制第二套任务状态。D6-02B 的版本冻结结论与 D6-02C 的关键设计复核均已关闭；后续关键任务仍须按计划独立复核。
 5. 只有 PRD 变更或开发发现设计缺口时，才重新打开第5步对应条目；无需恢复已取消的大规模用户测试方案。
 6. D6-04A/B/C/D 均已提交并完成本地验证；C 的 Web 14/14 测试、构建、lint/typecheck，D 的双用户角色撤销失效浏览器链路、用户本人五域及总评 PASS，与 reviewed HEAD `8943dc3` 的 127 项统一门禁共同构成父任务本地 `DEV_VERIFIED` 证据。不得据此声明远端 CI、QA、正式安全专项或生产完成。
-7. D6-05 工作树为 `/Users/lixd/.codex/worktrees/d6-05-master-data/fams`，分支 `codex/d6-05-master-data`。A 用户本人按[独立复核单](docs/development/D6-05A-independent-review.md)给出五域及总评 PASS，含签署记录的 `5c4dfa0` 双门禁通过，本地 `DEV_VERIFIED`。C 用户本人按 [C 独立复核单](docs/development/D6-05C-independent-review.md)给出五域及总评 PASS，签署记录 `48ec5d5` 的 22 项真实 MySQL 集成用例和 183 项统一门禁通过，本地 `DEV_VERIFIED`。B 五组管理接口已落地，固定 `0a13638` 统一门禁 167 项通过；尚需下游引用拒绝验证和独立复核。D6-06 依赖 D6-05，而 B 的引用验证又需要后续业务表；此执行顺序待裁定，见任务卡和计划。父任务仍 `IN_PROGRESS`。
+7. D6-05 工作树为 `/Users/lixd/.codex/worktrees/d6-05-master-data/fams`，分支 `codex/d6-05-master-data`。A 用户本人按[独立复核单](docs/development/D6-05A-independent-review.md)给出五域及总评 PASS，含签署记录的 `5c4dfa0` 双门禁通过，本地 `DEV_VERIFIED`。C 用户本人按 [C 独立复核单](docs/development/D6-05C-independent-review.md)给出五域及总评 PASS，签署记录 `48ec5d5` 的 22 项真实 MySQL 集成用例和 183 项统一门禁通过，本地 `DEV_VERIFIED`。B 五组管理接口已落地，固定 `0a13638` 统一门禁 167 项通过；用户已授权 D6-06A/07A 真实建表提前执行，以补 B 的下游引用拒绝验证。当前迁移与拒绝用例仍在验证，B 独立复核未完成，父任务保持 `IN_PROGRESS`。
 
 ## 4. 文档责任
 
@@ -51,7 +51,7 @@
 | 流程和页面映射 | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | D0.4 设计证据 | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 第5步验证结果 | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md) |
-| 第6步计划、Git/CI 规范、任务进度与执行记录 | [开发计划 V1.1](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md) |
+| 第6步计划、Git/CI 规范、任务进度与执行记录 | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md) |
 
 `FIXED_ASSET_SYSTEM_DESIGN.md` 是早期系统设计参考，不能替代 PRD V1.5。旧评审、D0.3验证和D0.4执行台账只作为历史证据。
 
