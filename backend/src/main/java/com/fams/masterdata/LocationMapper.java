@@ -60,8 +60,34 @@ interface LocationMapper {
             """)
     long countActive();
 
-    @Select("SELECT COUNT(*) FROM fams_location WHERE parent_id = #{id} AND status = 'ACTIVE'")
-    long countActiveChildren(@Param("id") long id);
+    @Select("SELECT id FROM fams_location WHERE parent_id = #{id} AND status = 'ACTIVE' LIMIT 1 FOR UPDATE")
+    Long findActiveChildIdForUpdate(@Param("id") long id);
+
+    @Select("""
+            SELECT id FROM fams_asset
+             WHERE card_stage = 'ACTIVE' AND current_location_id = #{id}
+             LIMIT 1 FOR UPDATE
+            """)
+    Long findActiveAssetReferenceIdForUpdate(@Param("id") long id);
+
+    @Select("""
+            SELECT id FROM fams_asset
+             WHERE card_stage IN ('DRAFT', 'PENDING_INBOUND')
+               AND planned_inbound_location_id = #{id}
+             LIMIT 1 FOR UPDATE
+            """)
+    Long findPlannedAssetReferenceIdForUpdate(@Param("id") long id);
+
+    @Select("""
+            SELECT i.id FROM fams_inbound_receipt_item i
+              JOIN fams_inbound_receipt r ON r.id = i.receipt_id
+             WHERE i.target_location_id = #{id}
+               AND r.receipt_status IN ('DRAFT', 'PENDING_ADMIN_DECISION',
+                   'WAITING_WAREHOUSE_CLAIM', 'WAREHOUSE_PROCESSING')
+               AND i.execution_status = 'PENDING'
+             LIMIT 1 FOR UPDATE
+            """)
+    Long findOpenInboundReferenceIdForUpdate(@Param("id") long id);
 
     @Select("SELECT COUNT(*) FROM fams_location WHERE parent_id = #{id}")
     long countChildren(@Param("id") long id);

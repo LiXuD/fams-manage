@@ -145,9 +145,21 @@ class WarehouseService {
                     enabled ? "WAREHOUSE_ALREADY_ENABLED" : "WAREHOUSE_ALREADY_DISABLED",
                     "The warehouse already has the requested status.", 409);
         }
-        if (!enabled && mapper.countActiveLocations(id) != 0) {
+        if (!enabled && mapper.findActiveLocationIdForUpdate(id) != null) {
             throw new MasterDataOperationException("WAREHOUSE_HAS_OPEN_BUSINESS_REFERENCES",
                     "Active locations still reference this warehouse.", 409);
+        }
+        if (!enabled && mapper.findActiveAssetReferenceIdForUpdate(id) != null) {
+            throw new MasterDataOperationException("WAREHOUSE_HAS_ACTIVE_ASSETS",
+                    "Active assets reference this warehouse.", 409);
+        }
+        if (!enabled && mapper.findPlannedAssetReferenceIdForUpdate(id) != null) {
+            throw new MasterDataOperationException("WAREHOUSE_HAS_OPEN_BUSINESS_REFERENCES",
+                    "Pending asset targets reference this warehouse.", 409);
+        }
+        if (!enabled && mapper.findOpenInboundReferenceIdForUpdate(id) != null) {
+            throw new MasterDataOperationException("WAREHOUSE_HAS_OPEN_INBOUND_REFERENCES",
+                    "Open inbound items reference this warehouse.", 409);
         }
         Instant now = clock.instant();
         requireOne(mapper.changeStatus(id, expectedVersion, status, actorId, now));

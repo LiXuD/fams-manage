@@ -22,8 +22,34 @@ interface WarehouseMapper {
     @Select("SELECT id, code, name, description, status, version FROM fams_warehouse WHERE code_normalized = #{code}")
     WarehouseRow findByCode(@Param("code") String normalizedCode);
 
-    @Select("SELECT COUNT(*) FROM fams_location WHERE warehouse_id = #{id} AND status = 'ACTIVE'")
-    long countActiveLocations(@Param("id") long id);
+    @Select("SELECT id FROM fams_location WHERE warehouse_id = #{id} AND status = 'ACTIVE' LIMIT 1 FOR UPDATE")
+    Long findActiveLocationIdForUpdate(@Param("id") long id);
+
+    @Select("""
+            SELECT id FROM fams_asset
+             WHERE card_stage = 'ACTIVE' AND storage_warehouse_id = #{id}
+             LIMIT 1 FOR UPDATE
+            """)
+    Long findActiveAssetReferenceIdForUpdate(@Param("id") long id);
+
+    @Select("""
+            SELECT id FROM fams_asset
+             WHERE card_stage IN ('DRAFT', 'PENDING_INBOUND')
+               AND planned_inbound_warehouse_id = #{id}
+             LIMIT 1 FOR UPDATE
+            """)
+    Long findPlannedAssetReferenceIdForUpdate(@Param("id") long id);
+
+    @Select("""
+            SELECT i.id FROM fams_inbound_receipt_item i
+              JOIN fams_inbound_receipt r ON r.id = i.receipt_id
+             WHERE i.target_warehouse_id = #{id}
+               AND r.receipt_status IN ('DRAFT', 'PENDING_ADMIN_DECISION',
+                   'WAITING_WAREHOUSE_CLAIM', 'WAREHOUSE_PROCESSING')
+               AND i.execution_status = 'PENDING'
+             LIMIT 1 FOR UPDATE
+            """)
+    Long findOpenInboundReferenceIdForUpdate(@Param("id") long id);
 
     @Select("SELECT COUNT(*) FROM fams_warehouse")
     long count();

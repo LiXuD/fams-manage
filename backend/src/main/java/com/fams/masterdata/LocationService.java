@@ -147,9 +147,18 @@ class LocationService {
         if (enabled) {
             assertActiveParentChain(current.parentId(), id);
             assertWarehouseActive(current.warehouseId());
-        } else if (mapper.countActiveChildren(id) != 0) {
+        } else if (mapper.findActiveChildIdForUpdate(id) != null) {
             throw new MasterDataOperationException("LOCATION_HAS_ENABLED_CHILDREN",
                     "Enabled child locations must be disabled or moved first.", 409);
+        } else if (mapper.findActiveAssetReferenceIdForUpdate(id) != null) {
+            throw new MasterDataOperationException("LOCATION_HAS_CURRENT_ASSETS",
+                    "Active assets reference this location.", 409);
+        } else if (mapper.findPlannedAssetReferenceIdForUpdate(id) != null) {
+            throw new MasterDataOperationException("LOCATION_HAS_OPEN_REFERENCES",
+                    "Pending asset targets reference this location.", 409);
+        } else if (mapper.findOpenInboundReferenceIdForUpdate(id) != null) {
+            throw new MasterDataOperationException("LOCATION_HAS_OPEN_REFERENCES",
+                    "Open inbound items reference this location.", 409);
         }
         Instant now = clock.instant();
         requireOne(mapper.changeStatus(id, expectedVersion, status, actorId, now));

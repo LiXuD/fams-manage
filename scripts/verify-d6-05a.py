@@ -30,9 +30,11 @@ def run(args: list[str], *, env: dict[str, str] | None = None, check: bool = Tru
     )
     if check and completed.returncode != 0:
         tail = "\n".join((completed.stdout + completed.stderr).splitlines()[-30:])
+        command = " ".join(args)
         for secret in SECRETS:
             tail = tail.replace(secret, "<redacted>")
-        raise VerificationFailure(f"{' '.join(args)} failed ({completed.returncode}):\n{tail}")
+            command = command.replace(secret, "<redacted>")
+        raise VerificationFailure(f"{command} failed ({completed.returncode}):\n{tail}")
     return completed
 
 
@@ -85,6 +87,55 @@ def cleanup() -> None:
         raise VerificationFailure(f"task-owned container remains: {CONTAINER}")
 
 
+def verify_v3_to_v5_sql_upgrade(database: str, password: str) -> None:
+    """Apply the immutable V1-V3 files before V4/V5 in a second task-owned schema."""
+    if not CONTAINER:
+        raise VerificationFailure("task-owned MySQL container is missing")
+    mysql = ["docker", "exec", "-i", CONTAINER, "mysql", "-h127.0.0.1",
+             "-ud6_05_runtime", f"-p{password}"]
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        ready = run(mysql + ["-D", database, "-N", "-e", "SELECT 1"], check=False)
+        if ready.returncode == 0 and ready.stdout.strip() == "1":
+            break
+        time.sleep(1)
+    else:
+        raise VerificationFailure("task-owned MySQL did not accept authenticated upgrade queries")
+    migration_dir = ROOT / "backend/src/main/resources/db/migration/d6_04"
+    migrations = (
+        "V1__create_authentication.sql",
+        "V2__create_catalog_master_data.sql",
+        "V3__create_numbering_and_business_parameters.sql",
+        "V4__create_asset_fact.sql",
+        "V5__create_inbound_targets.sql",
+    )
+    for migration in migrations:
+        sql = (migration_dir / migration).read_text(encoding="utf-8")
+        completed = subprocess.run(
+            ["rtk", *mysql, database], input=sql,
+            cwd=ROOT, capture_output=True, text=True, timeout=60, check=False,
+        )
+        if completed.returncode:
+            output = (completed.stdout + completed.stderr).replace(password, "<redacted>")
+            raise VerificationFailure(f"V3-to-V5 SQL upgrade failed at {migration}: {output[-1000:]}")
+        if migration == "V3__create_numbering_and_business_parameters.sql":
+            run(mysql + ["-D", database, "-e",
+                         "INSERT INTO fams_warehouse "
+                         "(code, code_normalized, name, status, version, created_at, updated_at) "
+                         "VALUES ('EXISTING', 'EXISTING', 'Existing warehouse', 'ACTIVE', 0, "
+                         "'2026-09-23 01:00:00', '2026-09-23 01:00:00')"])
+    tables = run(mysql + ["-N", "-D", database, "-e",
+                          "SELECT COUNT(*) FROM information_schema.tables "
+                          "WHERE table_schema = DATABASE() AND table_name IN "
+                          "('fams_asset','fams_inbound_receipt','fams_inbound_receipt_item')"])
+    if tables.stdout.strip() != "3":
+        raise VerificationFailure("V3-to-V5 SQL upgrade did not create all three domain tables")
+    preserved = run(mysql + ["-N", "-D", database, "-e",
+                             "SELECT COUNT(*) FROM fams_warehouse WHERE code = 'EXISTING'"])
+    if preserved.stdout.strip() != "1":
+        raise VerificationFailure("V3-to-V5 SQL upgrade did not preserve the existing warehouse")
+
+
 def main() -> int:
     try:
         environment = java_environment()
@@ -104,9 +155,12 @@ def main() -> int:
         report = ROOT / "backend/target/surefire-reports/TEST-com.fams.masterdata.IdentityMasterDataHttpTest.xml"
         suite = ET.parse(report).getroot()
         counts = tuple(int(suite.attrib.get(name, "-1")) for name in ("tests", "failures", "errors", "skipped"))
-        if counts != (22, 0, 0, 0):
+        if counts != (24, 0, 0, 0):
             raise VerificationFailure(f"runtime suite is incomplete: {counts}")
-        print("D6-05 PASSED: 22 real MySQL integration cases covering HTTP and internal allocation.")
+        cleanup()
+        upgrade_database, upgrade_password, _ = start_mysql()
+        verify_v3_to_v5_sql_upgrade(upgrade_database, upgrade_password)
+        print("D6-05 PASSED: 24 real MySQL integration cases; V1-V3 SQL to V5 preserved existing data.")
         return 0
     except (OSError, subprocess.TimeoutExpired, VerificationFailure) as exception:
         print(f"D6-05A FAILED: {exception}", file=sys.stderr)

@@ -81,6 +81,9 @@ class IdentityMasterDataHttpTest {
         jdbcTemplate.update("DELETE FROM fams_number_allocation");
         jdbcTemplate.update("DELETE FROM fams_number_sequence");
         jdbcTemplate.update("DELETE FROM fams_numbering_rule");
+        jdbcTemplate.update("DELETE FROM fams_inbound_receipt_item");
+        jdbcTemplate.update("DELETE FROM fams_inbound_receipt");
+        jdbcTemplate.update("DELETE FROM fams_asset");
         jdbcTemplate.update("UPDATE fams_business_parameter_state "
                 + "SET current_version = 0, current_version_id = NULL WHERE singleton_id = 1");
         jdbcTemplate.update("DELETE FROM fams_business_parameter_version");
@@ -541,6 +544,128 @@ class IdentityMasterDataHttpTest {
         assertEquals("ACTIVE", jdbcTemplate.queryForObject(
                 "SELECT status FROM fams_warehouse WHERE id = ?", String.class,
                 Long.parseLong(warehouseId)));
+    }
+
+    @Test
+    void warehouseDisableRejectsPlannedAssetWithoutAChildLocation() throws Exception {
+        Session admin = login("admin");
+        HttpResponse<String> warehouse = request("POST", "/api/v1/warehouses",
+                "{\"code\":\"W-ASSET\",\"name\":\"Asset target\"}", admin,
+                writeHeaders("96111111-1111-4111-8111-111111111111", admin));
+        assertEquals(201, warehouse.statusCode(), warehouse.body());
+        long warehouseId = JSON.readTree(warehouse.body()).path("id").asLong();
+        long parameterId = seedParameterVersion();
+        seedAsset(parameterId, warehouseId, null);
+
+        HttpResponse<String> rejected = request("POST", "/api/v1/warehouses/" + warehouseId
+                + "/disable", "{\"reason\":\"Close\"}", admin,
+                versionedHeaders("96222222-2222-4222-8222-222222222222", admin, 0));
+        assertEquals(409, rejected.statusCode(), rejected.body());
+        assertEquals("WAREHOUSE_HAS_OPEN_BUSINESS_REFERENCES",
+                JSON.readTree(rejected.body()).path("code").asText());
+        assertEquals("ACTIVE", jdbcTemplate.queryForObject(
+                "SELECT status FROM fams_warehouse WHERE id = ?", String.class, warehouseId));
+
+        jdbcTemplate.update("UPDATE fams_asset SET card_stage = 'CANCELLED', "
+                + "planned_inbound_warehouse_id = NULL WHERE asset_code = 'REF-ASSET'");
+        assertEquals(200, request("POST", "/api/v1/warehouses/" + warehouseId
+                + "/disable", "{\"reason\":\"Close\"}", admin,
+                versionedHeaders("96333333-3333-4333-8333-333333333333", admin, 0)).statusCode());
+    }
+
+    @Test
+    void locationDisableRejectsPlannedAssetAndOpenInboundTarget() throws Exception {
+        Session admin = login("admin");
+        HttpResponse<String> warehouse = request("POST", "/api/v1/warehouses",
+                "{\"code\":\"W-REF\",\"name\":\"Reference warehouse\"}", admin,
+                writeHeaders("96444444-4444-4444-8444-444444444444", admin));
+        assertEquals(201, warehouse.statusCode(), warehouse.body());
+        long warehouseId = JSON.readTree(warehouse.body()).path("id").asLong();
+        HttpResponse<String> location = request("POST", "/api/v1/locations",
+                "{\"code\":\"L-REF\",\"name\":\"Reference location\","
+                        + "\"type\":\"BIN\",\"warehouse\":{\"id\":\""
+                        + warehouseId + "\",\"version\":0}}", admin,
+                writeHeaders("96555555-5555-4555-8555-555555555555", admin));
+        assertEquals(201, location.statusCode(), location.body());
+        long locationId = JSON.readTree(location.body()).path("id").asLong();
+        long parameterId = seedParameterVersion();
+        long assetId = seedAsset(parameterId, warehouseId, locationId);
+
+        HttpResponse<String> assetRejected = request("POST", "/api/v1/locations/" + locationId
+                + "/disable", "{\"reason\":\"Close\"}", admin,
+                versionedHeaders("96666666-6666-4666-8666-666666666666", admin, 0));
+        assertEquals(409, assetRejected.statusCode(), assetRejected.body());
+        assertEquals("LOCATION_HAS_OPEN_REFERENCES",
+                JSON.readTree(assetRejected.body()).path("code").asText());
+
+        jdbcTemplate.update("UPDATE fams_asset SET card_stage = 'ACTIVE', "
+                + "planned_inbound_warehouse_id = NULL, planned_inbound_location_id = NULL, "
+                + "custody_type = 'STORAGE', storage_warehouse_id = ?, current_location_id = ? "
+                + "WHERE id = ?", warehouseId, locationId, assetId);
+        HttpResponse<String> custodyRejected = request("POST", "/api/v1/locations/" + locationId
+                + "/disable", "{\"reason\":\"Close\"}", admin,
+                versionedHeaders("96676767-6767-4767-8767-676767676767", admin, 0));
+        assertEquals(409, custodyRejected.statusCode(), custodyRejected.body());
+        assertEquals("LOCATION_HAS_CURRENT_ASSETS",
+                JSON.readTree(custodyRejected.body()).path("code").asText());
+
+        jdbcTemplate.update("UPDATE fams_asset SET card_stage = 'DRAFT', custody_type = NULL, "
+                + "storage_warehouse_id = NULL, current_location_id = NULL WHERE id = ?", assetId);
+        Timestamp now = Timestamp.from(Instant.parse("2026-09-23T01:00:00Z"));
+        jdbcTemplate.update("INSERT INTO fams_inbound_receipt "
+                + "(receipt_no, creator_account_id, creator_username_snapshot, receipt_status, "
+                + "business_date, parameter_version_id, timezone_snapshot, "
+                + "admin_decision_deadline_workdays, warehouse_claim_deadline_workdays, "
+                + "warehouse_first_execution_deadline_workdays, version, created_at, updated_at, "
+                + "created_by, updated_by) VALUES ('R-REF', 1, 'admin', 'DRAFT', ?, ?, "
+                + "'Asia/Shanghai', 2, 2, 2, 0, ?, ?, 1, 1)",
+                LocalDate.parse("2026-09-23"), parameterId, now, now);
+        long receiptId = jdbcTemplate.queryForObject(
+                "SELECT id FROM fams_inbound_receipt WHERE receipt_no = 'R-REF'", Long.class);
+        jdbcTemplate.update("INSERT INTO fams_inbound_receipt_item "
+                + "(receipt_id, asset_id, asset_version_snapshot, asset_code_snapshot, "
+                + "asset_name_snapshot, target_warehouse_id, warehouse_version_snapshot, "
+                + "warehouse_code_snapshot, warehouse_name_snapshot, target_location_id, "
+                + "location_version_snapshot, location_code_snapshot, location_name_snapshot, "
+                + "execution_status, version, created_at, updated_at) VALUES "
+                + "(?, ?, 0, 'REF-ASSET', 'Reference asset', ?, 0, 'W-REF', "
+                + "'Reference warehouse', ?, 0, 'L-REF', 'Reference location', 'PENDING', 0, ?, ?)",
+                receiptId, assetId, warehouseId, locationId, now, now);
+
+        HttpResponse<String> inboundRejected = request("POST", "/api/v1/locations/" + locationId
+                + "/disable", "{\"reason\":\"Close\"}", admin,
+                versionedHeaders("96777777-7777-4777-8777-777777777777", admin, 0));
+        assertEquals(409, inboundRejected.statusCode(), inboundRejected.body());
+        assertEquals("LOCATION_HAS_OPEN_REFERENCES",
+                JSON.readTree(inboundRejected.body()).path("code").asText());
+        jdbcTemplate.update("UPDATE fams_inbound_receipt SET receipt_status = 'CANCELLED' "
+                + "WHERE id = ?", receiptId);
+        assertEquals(200, request("POST", "/api/v1/locations/" + locationId
+                + "/disable", "{\"reason\":\"Close\"}", admin,
+                versionedHeaders("96888888-8888-4888-8888-888888888888", admin, 0)).statusCode());
+    }
+
+    private long seedParameterVersion() {
+        Timestamp now = Timestamp.from(Instant.parse("2026-09-23T01:00:00Z"));
+        jdbcTemplate.update("INSERT INTO fams_business_parameter_version "
+                + "(version, status, effective_at, actor_account_id, actor_username, snapshot_json, created_at) "
+                + "VALUES (1, 'ACTIVE', ?, 1, 'admin', '{}', ?)", now, now);
+        return jdbcTemplate.queryForObject(
+                "SELECT id FROM fams_business_parameter_version WHERE version = 1", Long.class);
+    }
+
+    private long seedAsset(long parameterId, long warehouseId, Long locationId) {
+        Timestamp now = Timestamp.from(Instant.parse("2026-09-23T01:00:00Z"));
+        jdbcTemplate.update("INSERT INTO fams_asset "
+                + "(asset_code, name, planned_inbound_warehouse_id, planned_inbound_location_id, "
+                + "lifecycle_status, exception_status, card_stage, created_business_date, "
+                + "parameter_version_id, creator_account_id, creator_username_snapshot, "
+                + "version, created_at, updated_at, created_by, updated_by) VALUES "
+                + "('REF-ASSET', 'Reference asset', ?, ?, 'WAITING_INBOUND', 'NORMAL', 'DRAFT', "
+                + "?, ?, 1, 'admin', 0, ?, ?, 1, 1)",
+                warehouseId, locationId, LocalDate.parse("2026-09-23"), parameterId, now, now);
+        return jdbcTemplate.queryForObject(
+                "SELECT id FROM fams_asset WHERE asset_code = 'REF-ASSET'", Long.class);
     }
 
     @Test
