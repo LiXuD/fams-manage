@@ -1,7 +1,7 @@
 # FAMS 项目阶段与交接入口
 
 > 唯一现役进度入口 · 更新于 2026-09-24
-> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04、D6-05A/C 本地 `DEV_VERIFIED`；D6-05B 与父任务 `IN_PROGRESS`。D6-01B 与 D6-03B 继续等待远端权限。
+> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04、D6-05A/C 本地 `DEV_VERIFIED`；D6-05B 与 D6-06A/07A 基础建表 `IN_REVIEW`，D6-05/06/07 父任务仍 `IN_PROGRESS`。D6-01B 与 D6-03B 继续等待远端权限。
 
 ## 1. 八步开发流程与当前进度
 
@@ -40,7 +40,7 @@
 4. 每次任务开始、受阻、送审、验证和验收时同步维护计划台账及执行记录；本文只维护项目阶段和下一步，不复制第二套任务状态。D6-02B 的版本冻结结论与 D6-02C 的关键设计复核均已关闭；后续关键任务仍须按计划独立复核。
 5. 只有 PRD 变更或开发发现设计缺口时，才重新打开第5步对应条目；无需恢复已取消的大规模用户测试方案。
 6. D6-04A/B/C/D 均已提交并完成本地验证；C 的 Web 14/14 测试、构建、lint/typecheck，D 的双用户角色撤销失效浏览器链路、用户本人五域及总评 PASS，与 reviewed HEAD `8943dc3` 的 127 项统一门禁共同构成父任务本地 `DEV_VERIFIED` 证据。不得据此声明远端 CI、QA、正式安全专项或生产完成。
-7. D6-05 工作树为 `/Users/lixd/.codex/worktrees/d6-05-master-data/fams`，分支 `codex/d6-05-master-data`。A 用户本人按[独立复核单](docs/development/D6-05A-independent-review.md)给出五域及总评 PASS，含签署记录的 `5c4dfa0` 双门禁通过，本地 `DEV_VERIFIED`。C 用户本人按 [C 独立复核单](docs/development/D6-05C-independent-review.md)给出五域及总评 PASS，签署记录 `48ec5d5` 的 22 项真实 MySQL 集成用例和 183 项统一门禁通过，本地 `DEV_VERIFIED`。B 五组管理接口已落地，固定 `0a13638` 统一门禁 167 项通过；用户已授权 D6-06A/07A 真实建表提前执行，以补 B 的下游引用拒绝验证。当前迁移与拒绝用例仍在验证，B 独立复核未完成，父任务保持 `IN_PROGRESS`。
+7. D6-05 工作树为 `/Users/lixd/.codex/worktrees/d6-05-master-data/fams`，分支 `codex/d6-05-master-data`。A/C 用户本人已复核 PASS，签署后双门禁通过，均本地 `DEV_VERIFIED`。用户授权 D6-06A/07A 真实建表提前执行；V4/V5、B 跨表引用拒绝和 Flyway V3→V5 任务库用例已实现。固定实现候选 `0828dc8` 的任务库 24 项真实 MySQL 用例加 1 项 Flyway 历史升级用例退出 0，统一门禁 199 项阻断观察通过；详见 [B 独立复核单](docs/development/D6-05B-independent-review.md) 与 [D6-05 任务卡](docs/development/D6-05-task-card.md)。下一步由用户本人独立复核 B 和两项基础建表；收到实际结论后固定签署记录并重跑双门禁。B 及建表子任务待审，D6-05/06/07 父任务均未关闭。
 
 ## 4. 文档责任
 
@@ -60,9 +60,9 @@
 | 事实面 | 状态 | 说明 |
 |---|---|---|
 | 设计文档 | `changed-and-verified` | 一期功能覆盖验证已完成并同步 |
-| 开发计划 | `in-progress` | V1.1 修订已确认；D6-04A/B/C/D 和父任务、D6-05A/C 均本地 `DEV_VERIFIED`；D6-05B 与父任务 `IN_PROGRESS`；D6-01B/03B 远端能力尚未完成 |
+| 开发计划 | `in-progress` | V1.2 顺序调整已获用户授权；D6-04 与 D6-05A/C 本地 `DEV_VERIFIED`；D6-05B、D6-06A/07A `IN_REVIEW`，父任务仍 `IN_PROGRESS`；D6-01B/03B 远端能力尚未完成 |
 | 规则 | `changed-and-verified` | AGENTS 已指向当前阶段 |
-| 产品代码 | `in-progress` | D6-04 认证、账号授权和 PC 登录外壳已本地验证；D6-05A/C 已由用户复核并通过本地双门禁；B 五组管理接口已落地，引用停用规则仍需下游业务表验证 |
-| 产品运行态 | `local-dev-partial` | D6-04 真实浏览器链路已验证；D6-05A `5c4dfa0` 的任务库 7/7 与统一门禁 153 项通过；B `0a13638` 的任务库 16/16 与统一门禁 167 项通过；C 签署记录 `48ec5d5` 的任务库 22/22 与统一门禁 183 项通过；远端 CI、QA、生产未验证 |
+| 产品代码 | `in-progress` | D6-04 认证、账号授权和 PC 登录外壳已本地验证；D6-05A/C 已由用户复核并通过本地双门禁；B 五组管理接口及真实资产/入库引用拒绝已落地待审；V4/V5 仅为 D6-06/07 基础表 |
+| 产品运行态 | `local-dev-partial` | D6-04 真实浏览器链路已验证；D6-05A/C 签署后双门禁通过；B 实现候选 `0828dc8` 的任务库 24 项、Flyway 历史升级 1 项和统一门禁 199 项通过；远端 CI、QA、生产未验证 |
 | 记忆 | `out-of-scope` | 本次未修改机器生成记忆 |
 | 工作区 | `handoff-recorded` | D6-05 位于 `/Users/lixd/.codex/worktrees/d6-05-master-data/fams`，分支 `codex/d6-05-master-data`；实现、验证及送审文档已提交，复核入口与证据见任务卡 |
