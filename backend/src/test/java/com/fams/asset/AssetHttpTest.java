@@ -101,6 +101,9 @@ class AssetHttpTest {
                 "{\"quantity\":2}", warehouse,
                 writeHeaders(warehouse, "33333333-3333-4333-8333-333333333333", 0L));
         assertEquals(201, copied.statusCode(), copied.body());
+        assertEquals(copied.body(), request("POST", "/api/v1/assets/" + id + "/copy",
+                "{\"quantity\":2}", warehouse,
+                writeHeaders(warehouse, "33333333-3333-4333-8333-333333333333", 0L)).body());
         JsonNode copies = JSON.readTree(copied.body()).path("assets");
         assertEquals(2, copies.size());
         assertNotEquals(asset.path("assetCode").asText(), copies.get(0).path("assetCode").asText());
@@ -143,6 +146,9 @@ class AssetHttpTest {
                 "{}", warehouse, writeHeaders(warehouse,
                         "39333333-3333-4333-8333-333333333333", 0L));
         assertEquals(202, print.statusCode(), print.body());
+        assertEquals(print.body(), request("POST", "/api/v1/assets/" + publishedId
+                + "/tag/reprint", "{}", warehouse, writeHeaders(warehouse,
+                "39333333-3333-4333-8333-333333333333", 0L)).body());
         String jobId = JSON.readTree(print.body()).path("jobId").asText();
         JsonNode printSnapshot = JSON.readTree(request("GET", "/api/v1/asset-tag-print-jobs/"
                 + jobId, null, warehouse, Map.of()).body());
@@ -153,6 +159,9 @@ class AssetHttpTest {
                 "{\"reason\":\"Damaged\"}", warehouse,
                 writeHeaders(warehouse, "3a333333-3333-4333-8333-333333333333", 0L));
         assertEquals(200, rotated.statusCode(), rotated.body());
+        assertEquals(rotated.body(), request("POST", "/api/v1/assets/" + publishedId
+                + "/tag/replace", "{\"reason\":\"Damaged\"}", warehouse,
+                writeHeaders(warehouse, "3a333333-3333-4333-8333-333333333333", 0L)).body());
         assertEquals(1, JSON.readTree(rotated.body()).path("assetVersion").asInt());
         String replacementToken = JSON.readTree(rotated.body()).path("tag").path("qrToken").asText();
         assertNotEquals(publishedToken, replacementToken);
@@ -179,11 +188,205 @@ class AssetHttpTest {
         assertTrue(jdbc.queryForObject("SELECT COUNT(*) FROM fams_security_event "
                 + "WHERE event_type LIKE 'ASSET_%' AND request_id IS NOT NULL",
                 Integer.class) >= 6);
+
+        exerciseReferenceAndBatchPaths(warehouse, id, publishedId);
+    }
+
+    private void exerciseReferenceAndBatchPaths(Session warehouse, String cancelledId,
+            String publishedId) throws Exception {
+        String richBody = """
+                {"name":"Desk","category":{"id":"1","version":0},
+                 "organization":{"id":"1","version":0},
+                 "plannedInboundWarehouse":{"id":"1","version":0},
+                 "plannedInboundLocation":{"id":"1","version":0},
+                 "brand":{"id":"1","version":0},
+                 "manufacturer":{"id":"1","version":0},
+                 "model":"M-1","unit":"piece","serialNumber":"s-001",
+                 "serviceProvider":"Vendor","serviceContact":"Desk",
+                 "servicePhone":"12345678901","source":"Purchase",
+                 "extensionValues":{"color":"black"}}
+                """;
+        HttpResponse<String> richCreated = request("POST", "/api/v1/assets", richBody,
+                warehouse, writeHeaders(warehouse, "6a333333-3333-4333-8333-333333333333", null));
+        assertEquals(201, richCreated.statusCode(), richCreated.body());
+        JsonNode rich = JSON.readTree(richCreated.body());
+        String richId = rich.path("id").asText();
+        assertEquals("1", rich.path("category").path("id").asText());
+        assertEquals("s-001", rich.path("serialNumber").asText());
+        assertEquals(1, JSON.readTree(request("GET", "/api/v1/assets?serialNumber=S-001",
+                null, warehouse, Map.of()).body()).path("total").asInt());
+        assertEquals(1, JSON.readTree(request("GET", "/api/v1/assets?assetCategoryId=1",
+                null, warehouse, Map.of()).body()).path("total").asInt());
+        assertEquals(400, request("GET", "/api/v1/assets?inboundDateFrom=bad", null,
+                warehouse, Map.of()).statusCode());
+        assertEquals(400, request("GET", "/api/v1/assets?unknown=value", null,
+                warehouse, Map.of()).statusCode());
+        assertEquals(400, request("GET", "/api/v1/assets?lifecycle=INVALID", null,
+                warehouse, Map.of()).statusCode());
+        assertEquals(409, request("POST", "/api/v1/assets", richBody.replace("\"version\":0",
+                "\"version\":99"), warehouse,
+                writeHeaders(warehouse, "6b333333-3333-4333-8333-333333333333", null)).statusCode());
+        assertEquals(400, request("POST", "/api/v1/assets",
+                richBody.replace("\"color\":\"black\"", "\"color\":123"),
+                warehouse, writeHeaders(warehouse,
+                        "6c333333-3333-4333-8333-333333333333", null)).statusCode());
+        assertEquals(400, request("POST", "/api/v1/assets", "{\"name\":\" \"}",
+                warehouse, writeHeaders(warehouse,
+                        "6d333333-3333-4333-8333-333333333333", null)).statusCode());
+        assertEquals(409, request("POST", "/api/v1/assets/" + cancelledId + "/copy",
+                "{\"quantity\":1}", warehouse,
+                writeHeaders(warehouse, "6e333333-3333-4333-8333-333333333333", 2L)).statusCode());
+        assertEquals(400, request("POST", "/api/v1/assets/" + richId + "/copy",
+                "{\"quantity\":0}", warehouse,
+                writeHeaders(warehouse, "6f333333-3333-4333-8333-333333333333", 0L)).statusCode());
+        assertEquals(400, request("PATCH", "/api/v1/assets/" + richId,
+                "{\"attachments\":[{\"id\":\"1\"}]}", warehouse,
+                writeHeaders(warehouse, "70333333-3333-4333-8333-333333333333", 0L)).statusCode());
+        String correction = """
+                {"name":"Desk v2","category":{"id":"1","version":0},
+                 "organization":{"id":"1","version":0},
+                 "plannedInboundWarehouse":{"id":"1","version":0},
+                 "plannedInboundLocation":{"id":"1","version":0},
+                 "brand":{"id":"1","version":0},
+                 "manufacturer":{"id":"1","version":0},
+                 "model":"M-2","unit":"set","serialNumber":"s-002",
+                 "acquisitionDate":"2026-09-01","warrantyExpiryDate":"2027-09-01",
+                 "serviceProvider":"Provider 2","serviceContact":"Contact 2",
+                 "servicePhone":"10987654321","source":"Donation","notes":"Verified",
+                 "extensionValues":{"color":"white"}}
+                """;
+        HttpResponse<String> updated = request("PATCH", "/api/v1/assets/" + richId,
+                correction, warehouse,
+                writeHeaders(warehouse, "70333333-3333-4333-8333-333333333334", 0L));
+        assertEquals(200, updated.statusCode(), updated.body());
+        assertEquals(1, JSON.readTree(updated.body()).path("version").asInt());
+        assertEquals("s-002", JSON.readTree(updated.body()).path("serialNumber").asText());
+        assertEquals(409, request("PATCH", "/api/v1/assets/" + richId,
+                correction, warehouse,
+                writeHeaders(warehouse, "70333333-3333-4333-8333-333333333335", 0L)).statusCode());
+        assertEquals(200, request("GET", "/api/v1/assets/" + richId + "/timeline",
+                null, warehouse, Map.of()).statusCode());
+
+        HttpResponse<String> saved = request("POST", "/api/v1/asset-saved-filters",
+                "{\"name\":\"Recent\",\"criteria\":{\"serialNumber\":\"S-001\"}}",
+                warehouse, writeHeaders(warehouse,
+                        "71333333-3333-4333-8333-333333333333", null));
+        assertEquals(201, saved.statusCode(), saved.body());
+        assertEquals(saved.body(), request("POST", "/api/v1/asset-saved-filters",
+                "{\"name\":\"Recent\",\"criteria\":{\"serialNumber\":\"S-001\"}}",
+                warehouse, writeHeaders(warehouse,
+                        "71333333-3333-4333-8333-333333333333", null)).body());
+        assertEquals(409, request("POST", "/api/v1/asset-saved-filters",
+                "{\"name\":\"Other\",\"criteria\":{\"serialNumber\":\"S-001\"}}",
+                warehouse, writeHeaders(warehouse,
+                        "71333333-3333-4333-8333-333333333333", null)).statusCode());
+        String savedId = JSON.readTree(saved.body()).path("id").asText();
+        HttpResponse<String> renamed = request("PATCH", "/api/v1/asset-saved-filters/" + savedId,
+                "{\"name\":\"Renamed\"}", warehouse,
+                writeHeaders(warehouse, "72333333-3333-4333-8333-333333333333", 0L));
+        assertEquals(200, renamed.statusCode(), renamed.body());
+        assertEquals(1, JSON.readTree(renamed.body()).path("version").asInt());
+        assertEquals(409, request("PATCH", "/api/v1/asset-saved-filters/" + savedId,
+                "{\"name\":\"Stale\"}", warehouse,
+                writeHeaders(warehouse, "73333333-3333-4333-8333-333333333333", 0L)).statusCode());
+        assertEquals(204, request("DELETE", "/api/v1/asset-saved-filters/" + savedId,
+                null, warehouse, writeHeaders(warehouse,
+                        "74333333-3333-4333-8333-333333333333", 1L)).statusCode());
+        assertEquals(404, request("DELETE", "/api/v1/asset-saved-filters/" + savedId,
+                null, warehouse, writeHeaders(warehouse,
+                        "74333333-3333-4333-8333-333333333334", 1L)).statusCode());
+        assertEquals(204, request("DELETE", "/api/v1/asset-saved-filters/" + savedId,
+                null, warehouse, writeHeaders(warehouse,
+                        "74333333-3333-4333-8333-333333333333", 1L)).statusCode());
+
+        jdbc.update("UPDATE fams_asset SET card_stage = 'ACTIVE' WHERE id = ?",
+                Long.parseLong(richId));
+        String batchBody = "{\"assets\":[{\"assetId\":\"" + publishedId
+                + "\",\"version\":1},{\"assetId\":\"" + richId + "\",\"version\":1}]}";
+        HttpResponse<String> batch = request("POST", "/api/v1/asset-tag-print-jobs",
+                batchBody, warehouse, writeHeaders(warehouse,
+                        "75333333-3333-4333-8333-333333333333", null));
+        assertEquals(202, batch.statusCode(), batch.body());
+        assertEquals(2, JSON.readTree(batch.body()).path("items").size());
+        assertEquals(200, request("GET", "/api/v1/asset-tag-print-jobs/"
+                + JSON.readTree(batch.body()).path("jobId").asText(), null,
+                warehouse, Map.of()).statusCode());
+        assertEquals(400, request("POST", "/api/v1/asset-tag-print-jobs",
+                "{\"assets\":[]}", warehouse,
+                writeHeaders(warehouse, "76333333-3333-4333-8333-333333333333", null)).statusCode());
+        assertEquals(400, request("POST", "/api/v1/asset-tag-print-jobs",
+                "{\"assets\":[{\"assetId\":\"" + richId + "\",\"version\":1},"
+                + "{\"assetId\":\"" + richId + "\",\"version\":1}]}", warehouse,
+                writeHeaders(warehouse, "77333333-3333-4333-8333-333333333333", null)).statusCode());
+        assertEquals(409, request("POST", "/api/v1/asset-tag-print-jobs",
+                "{\"assets\":[{\"assetId\":\"" + richId + "\",\"version\":0}]}", warehouse,
+                writeHeaders(warehouse, "78333333-3333-4333-8333-333333333333", null)).statusCode());
+
+        assertEquals(409, request("PATCH", "/api/v1/assets/" + richId,
+                "{\"category\":{\"id\":\"1\",\"version\":0}}", warehouse,
+                writeHeaders(warehouse, "79333333-3333-4333-8333-333333333333", 1L)).statusCode());
+        assertEquals(409, request("POST", "/api/v1/assets/" + richId + "/cancel",
+                "{\"reason\":\"No longer needed\"}", warehouse,
+                writeHeaders(warehouse, "7a333333-3333-4333-8333-333333333333", 1L)).statusCode());
+        assertEquals(409, request("POST", "/api/v1/assets/" + richId + "/tag/replace",
+                "{\"reason\":\"Broken\"}", warehouse,
+                writeHeaders(warehouse, "7b333333-3333-4333-8333-333333333333", 0L)).statusCode());
+        assertEquals(409, request("POST", "/api/v1/assets/" + cancelledId + "/tag/replace",
+                "{\"reason\":\"Broken\"}", warehouse,
+                writeHeaders(warehouse, "7c333333-3333-4333-8333-333333333333", 2L)).statusCode());
+        jdbc.update("UPDATE fams_asset SET custody_type='STORAGE',storage_warehouse_id=1,"
+                + "current_location_id=1 WHERE id=?", Long.parseLong(richId));
+        assertEquals("STORAGE", JSON.readTree(request("GET", "/api/v1/assets/" + richId,
+                null, warehouse, Map.of()).body()).path("currentCustody")
+                .path("custodyType").asText());
+        jdbc.update("UPDATE fams_asset SET custody_type='PERSONAL',storage_warehouse_id=NULL,"
+                + "using_organization_id=1,responsible_employee_id=1 WHERE id=?",
+                Long.parseLong(richId));
+        assertEquals("PERSONAL", JSON.readTree(request("GET", "/api/v1/assets/" + richId,
+                null, warehouse, Map.of()).body()).path("currentCustody")
+                .path("custodyType").asText());
+        jdbc.update("UPDATE fams_asset SET custody_type='SHARED',responsible_employee_id=NULL,"
+                + "department_responsible_employee_id=1 WHERE id=?", Long.parseLong(richId));
+        assertEquals("SHARED", JSON.readTree(request("GET", "/api/v1/assets/" + richId,
+                null, warehouse, Map.of()).body()).path("currentCustody")
+                .path("custodyType").asText());
+        assertEquals(1, JSON.readTree(request("GET", "/api/v1/assets?usageMode=SHARED",
+                null, warehouse, Map.of()).body()).path("total").asInt());
+        jdbc.update("UPDATE fams_asset SET card_stage='PENDING_INBOUND',custody_type=NULL,"
+                + "storage_warehouse_id=NULL,current_location_id=NULL,"
+                + "using_organization_id=NULL,responsible_employee_id=NULL,"
+                + "department_responsible_employee_id=NULL WHERE id=?",
+                Long.parseLong(richId));
+        assertEquals(409, request("PATCH", "/api/v1/assets/" + richId,
+                "{\"notes\":\"Changed\"}", warehouse,
+                writeHeaders(warehouse, "7d333333-3333-4333-8333-333333333333", 1L)).statusCode());
+        jdbc.update("UPDATE fams_asset SET card_stage='ACTIVE' WHERE id=?", Long.parseLong(richId));
+        assertEquals(200, request("PATCH", "/api/v1/assets/" + richId,
+                "{\"notes\":\"Active correction\"}", warehouse,
+                writeHeaders(warehouse, "7e333333-3333-4333-8333-333333333333", 1L)).statusCode());
+
+        HttpResponse<String> locked = request("POST", "/api/v1/assets",
+                "{\"name\":\"Locked draft\"}", warehouse,
+                writeHeaders(warehouse, "7f333333-3333-4333-8333-333333333333", null));
+        assertEquals(201, locked.statusCode(), locked.body());
+        long lockedId = JSON.readTree(locked.body()).path("id").asLong();
+        jdbc.update("INSERT INTO fams_asset_business_lock "
+                + "(asset_id,business_type,business_id,business_item_id,acquired_at) "
+                + "VALUES (?,?,?,?,?)", lockedId, "INBOUND", 1, 1,
+                Timestamp.from(Instant.parse("2026-09-24T01:00:00Z")));
+        assertEquals(409, request("POST", "/api/v1/assets/" + lockedId + "/cancel",
+                "{\"reason\":\"Duplicate\"}", warehouse,
+                writeHeaders(warehouse, "80333333-3333-4333-8333-333333333333", 0L)).statusCode());
     }
 
     private void seed() {
         Timestamp now = Timestamp.from(Instant.parse("2026-09-24T01:00:00Z"));
         jdbc.update("INSERT INTO fams_organization (id,code,code_normalized,name,status,version,created_at,updated_at) VALUES (1,'ROOT','ROOT','Root','ACTIVE',0,?,?)", now, now);
+        jdbc.update("INSERT INTO fams_asset_category (id,code,code_normalized,name,extension_template_json,status,version,created_at,updated_at) VALUES (1,'DESK','DESK','Desk','[{\"key\":\"color\",\"type\":\"TEXT\"}]','ACTIVE',0,?,?)", now, now);
+        jdbc.update("INSERT INTO fams_manufacturer (id,code,code_normalized,name,status,version,created_at,updated_at) VALUES (1,'VENDOR','VENDOR','Vendor','ACTIVE',0,?,?)", now, now);
+        jdbc.update("INSERT INTO fams_brand (id,code,code_normalized,name,status,version,created_at,updated_at) VALUES (1,'BRAND','BRAND','Brand','ACTIVE',0,?,?)", now, now);
+        jdbc.update("INSERT INTO fams_warehouse (id,code,code_normalized,name,status,version,created_at,updated_at) VALUES (1,'WH','WH','Warehouse','ACTIVE',0,?,?)", now, now);
+        jdbc.update("INSERT INTO fams_location (id,code,code_normalized,name,location_type,warehouse_id,status,version,created_at,updated_at) VALUES (1,'BIN','BIN','Bin','BIN',1,'ACTIVE',0,?,?)", now, now);
         for (int id = 1; id <= 3; id++) {
             String username = id == 1 ? "warehouse" : id == 2 ? "other" : "admin";
             jdbc.update("INSERT INTO fams_employee (id,employee_no,employee_no_normalized,name,organization_id,status,version,created_at,updated_at) VALUES (?,?,?,?,1,'ACTIVE',0,?,?)",
