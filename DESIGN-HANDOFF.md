@@ -1,7 +1,7 @@
 # FAMS 项目阶段与交接入口
 
 > 唯一现役进度入口 · 更新于 2026-09-24
-> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04、D6-05 与 D6-06A/07A 基础建表本地 `DEV_VERIFIED`；D6-06 已送独立复核，D6-07 仍在进行中。D6-01B 与 D6-03B 继续等待远端权限。
+> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04、D6-05、D6-06 与 D6-07A 基础建表本地 `DEV_VERIFIED`；D6-07 仍在进行中。D6-01B 与 D6-03B 继续等待远端权限。
 
 ## 1. 八步开发流程与当前进度
 
@@ -12,7 +12,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-06 本地实现与门禁通过，待独立复核；随后推进 D6-07；D6-01B/03B 待外部权限 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-06 用户复核和签署后双门禁通过，仅本地 `DEV_VERIFIED`；下一步 D6-07；D6-01B/03B 待外部权限 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
@@ -40,7 +40,7 @@
 4. 每次任务开始、受阻、送审、验证和验收时同步维护计划台账及执行记录；本文只维护项目阶段和下一步，不复制第二套任务状态。D6-02B 的版本冻结结论与 D6-02C 的关键设计复核均已关闭；后续关键任务仍须按计划独立复核。
 5. 只有 PRD 变更或开发发现设计缺口时，才重新打开第5步对应条目；无需恢复已取消的大规模用户测试方案。
 6. D6-04A/B/C/D 均已提交并完成本地验证；C 的 Web 14/14 测试、构建、lint/typecheck，D 的双用户角色撤销失效浏览器链路、用户本人五域及总评 PASS，与 reviewed HEAD `8943dc3` 的 127 项统一门禁共同构成父任务本地 `DEV_VERIFIED` 证据。不得据此声明远端 CI、QA、正式安全专项或生产完成。
-7. D6-05A/B/C 与父任务、D6-06A/07A 基础建表均已本地 `DEV_VERIFIED`。D6-06 当前分支 `codex/d6-06-asset-ledger`，候选 `8c06b94` 的真实 MySQL 任务库、Flyway 历史升级与 213 项统一门禁通过；见 [D6-06 任务卡](docs/development/D6-06-task-card.md)。D6-06 状态为 `IN_REVIEW`，下一步取得独立复核结论并做签署后固定提交双门禁；D6-07 继续按依赖推进。
+7. D6-05A/B/C 与父任务、D6-06/06A 和 D6-07A 基础建表均已本地 `DEV_VERIFIED`。D6-06 分支 `codex/d6-06-asset-ledger` 上用户复核“全部复核PASS”，签署记录固定 HEAD `84b66f0` 的真实 MySQL 任务库与统一门禁 217 项通过；见 [D6-06 任务卡](docs/development/D6-06-task-card.md)。下一步按依赖推进 D6-07；远端 CI、QA 与生产尚未验证。
 
 ## 4. 文档责任
 
@@ -60,9 +60,9 @@
 | 事实面 | 状态 | 说明 |
 |---|---|---|
 | 设计文档 | `changed-and-verified` | 一期功能覆盖验证已完成并同步 |
-| 开发计划 | `in-progress` | V1.2 顺序调整已获用户授权；D6-04、D6-05 与 D6-06A/07A 本地 `DEV_VERIFIED`；D6-06 `IN_REVIEW`、D6-07 `IN_PROGRESS`；D6-01B/03B 远端能力尚未完成 |
+| 开发计划 | `in-progress` | V1.2 顺序调整已获用户授权；D6-04、D6-05、D6-06 与 D6-07A 本地 `DEV_VERIFIED`；D6-07 `IN_PROGRESS`；D6-01B/03B 远端能力尚未完成 |
 | 规则 | `changed-and-verified` | AGENTS 已指向当前阶段 |
-| 产品代码 | `in-progress` | D6-04 认证与 PC 登录、D6-05 主数据已本地验证；D6-06 建卡/台账/标签服务与 PC 页面已送审；D6-07 审批与执行尚未实现 |
-| 产品运行态 | `local-dev-partial` | D6-06 候选 `8c06b94` 的真实 MySQL HTTP、V3→V6 历史升级和统一门禁 213 项通过；独立复核、远端 CI、QA、共享/生产升级及生产未验证 |
+| 产品代码 | `in-progress` | D6-04 认证与 PC 登录、D6-05 主数据、D6-06 建卡/台账/标签服务与 PC 页面已本地开发验证；D6-07 审批与执行尚未实现 |
+| 产品运行态 | `local-dev-partial` | D6-06 用户复核 PASS；签署后 HEAD `84b66f0` 的真实 MySQL HTTP 与统一门禁 217 项通过；远端 CI、QA、共享/生产升级及生产未验证 |
 | 记忆 | `out-of-scope` | 本次未修改机器生成记忆 |
-| 工作区 | `handoff-recorded` | D6-06 在隔离分支 `codex/d6-06-asset-ledger`；实现候选已提交，送审与验证边界见任务卡 |
+| 工作区 | `handoff-recorded` | D6-06 在隔离分支 `codex/d6-06-asset-ledger`；实现与签署后双门禁证据已提交，验证边界见任务卡 |
