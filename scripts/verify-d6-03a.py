@@ -1072,23 +1072,32 @@ def verify_java_reports() -> None:
 
 
 def verify_java_quality(context: RuntimeContext) -> None:
-    output = require_command(
-        "Java blocking quality",
-        [
-            "./mvnw",
-            "-pl",
-            "backend",
-            "-Pquality",
-            "-Dd6.02b.runtime=true",
-            "-Dd6.04.runtime=true",
-            "-Dd6.05.identity.runtime=true",
-            "-Dd6.06.asset.runtime=true",
-            "clean",
-            "verify",
-        ],
-        env=runtime_environment(context),
-        timeout=900,
-    )
+    try:
+        output = require_command(
+            "Java blocking quality",
+            [
+                "./mvnw",
+                "-pl",
+                "backend",
+                "-Pquality",
+                "-Dd6.02b.runtime=true",
+                "-Dd6.04.runtime=true",
+                "-Dd6.05.identity.runtime=true",
+                "-Dd6.06.asset.runtime=true",
+                "clean",
+                "verify",
+            ],
+            env=runtime_environment(context),
+            timeout=900,
+        )
+    except VerificationFailure:
+        if JACOCO_REPORT.is_file():
+            report = ElementTree.parse(JACOCO_REPORT).getroot()
+            for counter_type in ("LINE", "BRANCH"):
+                covered, missed, ratio = parse_counter_ratio(report, counter_type)
+                print(f"[Java coverage diagnostic] {counter_type}: "
+                      f"{covered}/{covered + missed} ({ratio:.2%})")
+        raise
     violations = java_test_output_violations(output)
     violations.extend(
         java_test_summary_violations(output, minimum_tests=MINIMUM_JAVA_TESTS)
