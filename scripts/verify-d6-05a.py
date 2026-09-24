@@ -119,9 +119,9 @@ def main() -> int:
         })
         run([
             "./mvnw", "-pl", "backend", "-Dd6.05.upgrade.runtime=true",
-            "-Dtest=FlywayUpgradeTest", "test",
+            "-Dtest=FlywayUpgradeRuntimeCase", "test",
         ], env=environment)
-        upgrade_report = ROOT / "backend/target/surefire-reports/TEST-com.fams.masterdata.FlywayUpgradeTest.xml"
+        upgrade_report = ROOT / "backend/target/surefire-reports/TEST-com.fams.masterdata.FlywayUpgradeRuntimeCase.xml"
         upgrade_suite = ET.parse(upgrade_report).getroot()
         upgrade_counts = tuple(int(upgrade_suite.attrib.get(name, "-1"))
                                for name in ("tests", "failures", "errors", "skipped"))

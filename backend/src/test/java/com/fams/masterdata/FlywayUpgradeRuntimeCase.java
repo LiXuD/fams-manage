@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 @EnabledIfSystemProperty(named = "d6.05.upgrade.runtime", matches = "true")
-class FlywayUpgradeTest {
+class FlywayUpgradeRuntimeCase {
 
     @Test
     void existingV3HistoryAndDataUpgradeToV5() throws Exception {
