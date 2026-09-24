@@ -127,7 +127,7 @@ def main() -> int:
                                for name in ("tests", "failures", "errors", "skipped"))
         if upgrade_counts != (1, 0, 0, 0):
             raise VerificationFailure(f"Flyway upgrade suite is incomplete: {upgrade_counts}")
-        print("D6-05 PASSED: 24 real MySQL integration cases; Flyway V3-to-V5 upgrade preserved data.")
+        print("D6-05 PASSED: 24 real MySQL integration cases; Flyway V3-to-V6 upgrade preserved data.")
         return 0
     except (OSError, subprocess.TimeoutExpired, VerificationFailure) as exception:
         print(f"D6-05A FAILED: {exception}", file=sys.stderr)

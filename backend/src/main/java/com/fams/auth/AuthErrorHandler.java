@@ -9,6 +9,8 @@ import jakarta.servlet.http.HttpServletRequest;
 
 import com.fams.product.contract.model.ErrorResponse;
 import jakarta.validation.ConstraintViolationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @Profile("fams-product")
 @RestControllerAdvice
 final class AuthErrorHandler {
+    private static final Logger LOG = LoggerFactory.getLogger(AuthErrorHandler.class);
 
     private final AuthApplicationService authService;
 
@@ -96,6 +99,7 @@ final class AuthErrorHandler {
     ResponseEntity<ErrorResponse> handleUnexpected(
             Exception exception,
             HttpServletRequest request) {
+        LOG.error("Request failed: requestId={}", AuthRequestContext.requestId(request), exception);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error(
                 "INTERNAL_ERROR",
                 "The request could not be completed.",
