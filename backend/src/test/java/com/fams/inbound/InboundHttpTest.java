@@ -246,8 +246,69 @@ class InboundHttpTest {
                 + "status=PENDING_ADMIN_DECISION", null, admin, Map.of())).body())
                 .path("items").get(0).path("items").size());
         assertTrue(count("SELECT COUNT(*) FROM fams_audit_event") >= 5);
+        exerciseMultiExecution(many, creator, other, admin);
 
 
+    }
+
+    private void exerciseMultiExecution(JsonNode initial, Session creator,
+            Session other, Session admin) throws Exception {
+        String id = initial.path("id").asText();
+        String path = "/api/v1/inbound-receipts/" + id;
+        assertStatus(404, call("GET", "/api/v1/inbound-receipts/999999", null,
+                creator, Map.of()));
+        assertStatus(409, call("PATCH", path, "{\"notes\":\"late\"}",
+                creator, headers(creator, 40, 1L)));
+        assertStatus(400, call("POST", path + "/decision",
+                "{\"decision\":\"REJECTED\"}", admin, headers(admin, 41, 1L)));
+        assertStatus(400, call("POST", path + "/decision",
+                "{\"decision\":\"UNKNOWN\"}", admin, headers(admin, 42, 1L)));
+        assertStatus(409, call("POST", path + "/decision",
+                "{\"decision\":\"APPROVED\"}", admin, headers(admin, 43, 0L)));
+        assertStatus(409, call("POST", path + "/claim", null, other, headers(other, 44, 1L)));
+        assertStatus(400, call("POST", path + "/cancel",
+                "{\"reason\":\" \"}", creator, headers(creator, 45, 1L)));
+        assertStatus(409, call("POST", path + "/cancel",
+                "{\"reason\":\"No\"}", other, headers(other, 46, 1L)));
+
+        JsonNode approved = JSON.readTree(assertStatus(200, call("POST", path + "/decision",
+                "{\"decision\":\"APPROVED\"}", admin, headers(admin, 47, 1L))).body());
+        assertEquals(2, approved.path("items").size());
+        assertStatus(409, call("POST", path + "/cancel",
+                "{\"reason\":\"Too late\"}", creator, headers(creator, 48, 2L)));
+        assertStatus(409, call("POST", path + "/claim", null, other, headers(other, 49, 1L)));
+        JsonNode claimed = JSON.readTree(assertStatus(200, call("POST", path + "/claim",
+                null, other, headers(other, 50, 2L))).body());
+        assertEquals("other", claimed.path("currentProcessor").path("processor")
+                .path("username").asText());
+        assertStatus(409, call("POST", path + "/claim", null, creator,
+                headers(creator, 51, 3L)));
+        JsonNode first = claimed.path("items").get(0);
+        JsonNode second = claimed.path("items").get(1);
+        String firstPath = path + "/items/" + first.path("id").asText() + "/accept";
+        String firstCode = first.path("assetSnapshot").path("assetCode").asText();
+        String valid = "{\"assetVersion\":1,\"lockVersion\":0,\"observedAssetCode\":\""
+                + firstCode + "\"}";
+        assertStatus(409, call("POST", firstPath, valid, creator, headers(creator, 52, 3L)));
+        assertStatus(409, call("POST", firstPath,
+                valid.replace("\"lockVersion\":0", "\"lockVersion\":99"),
+                other, headers(other, 53, 3L)));
+        assertStatus(409, call("POST", firstPath,
+                valid.replace("\"assetVersion\":1", "\"assetVersion\":0"),
+                other, headers(other, 54, 3L)));
+        JsonNode partly = JSON.readTree(assertStatus(200, call("POST", firstPath,
+                valid, other, headers(other, 55, 3L))).body());
+        assertEquals("WAREHOUSE_PROCESSING", partly.path("receipt").path("status").asText());
+        assertEquals("ACCEPTED", partly.path("item").path("executionStatus").asText());
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE released_at IS NULL"));
+        assertStatus(409, call("POST", firstPath, valid, other, headers(other, 56, 4L)));
+        String secondCode = second.path("assetSnapshot").path("assetCode").asText();
+        String secondValid = valid.replace(firstCode, secondCode);
+        JsonNode completed = JSON.readTree(assertStatus(200, call("POST", path + "/items/"
+                + second.path("id").asText() + "/accept", secondValid,
+                other, headers(other, 57, 4L))).body());
+        assertEquals("COMPLETED", completed.path("receipt").path("status").asText());
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_todo WHERE closed_at IS NULL"));
     }
 
     private int count(String sql) { return jdbc.queryForObject(sql, Integer.class); }
