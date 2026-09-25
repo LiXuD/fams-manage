@@ -76,6 +76,22 @@ class InboundHttpTest {
         assertEquals("DRAFT", receipt.path("status").asText());
         assertEquals(created.body(), call("POST", "/api/v1/inbound-receipts", draftBody,
                 creator, headers(creator, 2, null)).body());
+        assertStatus(409, call("POST", "/api/v1/inbound-receipts",
+                draftBody.replace("2026-09-24", "2026-09-25"),
+                creator, headers(creator, 2, null)));
+        assertEquals(1, JSON.readTree(assertStatus(200, call("GET", "/api/v1/inbound-receipts",
+                null, creator, Map.of())).body()).path("total").asInt());
+        assertEquals(0, JSON.readTree(assertStatus(200, call("GET", "/api/v1/inbound-receipts",
+                null, admin, Map.of())).body()).path("total").asInt());
+        assertStatus(400, call("GET", "/api/v1/inbound-receipts?status=UNKNOWN",
+                null, creator, Map.of()));
+        assertStatus(409, call("POST", "/api/v1/inbound-receipts",
+                draftBody.replace("}]}", "},{\"asset\":{\"id\":\"" + assetId
+                        + "\",\"version\":0}}]}"), creator, headers(creator, 30, null)));
+        assertStatus(409, call("POST", "/api/v1/inbound-receipts",
+                draftBody.replace("\"asset\":{\"id\":\"" + assetId + "\",\"version\":0}",
+                        "\"asset\":{\"id\":\"" + assetId + "\",\"version\":99}"),
+                creator, headers(creator, 31, null)));
         assertStatus(404, call("GET", "/api/v1/inbound-receipts/" + receiptId,
                 null, other, Map.of()));
         assertStatus(403, call("POST", "/api/v1/inbound-receipts/" + receiptId + "/decision",
@@ -84,6 +100,9 @@ class InboundHttpTest {
         receipt = JSON.readTree(assertStatus(200, call("POST", "/api/v1/inbound-receipts/"
                 + receiptId + "/submit", null, creator, headers(creator, 4, 0L))).body());
         assertEquals("PENDING_ADMIN_DECISION", receipt.path("status").asText());
+        assertEquals("PENDING_ADMIN_DECISION", JSON.readTree(assertStatus(200, call("POST",
+                "/api/v1/inbound-receipts/" + receiptId + "/submit", null,
+                creator, headers(creator, 4, 0L))).body()).path("status").asText());
         assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE released_at IS NULL"));
         assertStatus(409, call("POST", "/api/v1/inbound-receipts/" + receiptId + "/claim",
                 null, other, headers(other, 5, 1L)));
@@ -91,12 +110,21 @@ class InboundHttpTest {
                 + receiptId + "/decision", "{\"decision\":\"APPROVED\"}", admin,
                 headers(admin, 6, 1L))).body());
         assertEquals("WAITING_WAREHOUSE_CLAIM", receipt.path("status").asText());
+        assertEquals("WAITING_WAREHOUSE_CLAIM", JSON.readTree(assertStatus(200, call("POST",
+                "/api/v1/inbound-receipts/" + receiptId + "/decision",
+                "{\"decision\":\"APPROVED\"}", admin, headers(admin, 6, 1L))).body())
+                .path("status").asText());
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_inbound_decision"));
         assertStatus(409, call("POST", "/api/v1/inbound-receipts/" + receiptId + "/decision",
                 "{\"decision\":\"REJECTED\",\"reason\":\"No\"}", admin,
                 headers(admin, 7, 1L)));
         receipt = JSON.readTree(assertStatus(200, call("POST", "/api/v1/inbound-receipts/"
                 + receiptId + "/claim", null, creator, headers(creator, 8, 2L))).body());
         assertEquals("WAREHOUSE_PROCESSING", receipt.path("status").asText());
+        assertEquals("WAREHOUSE_PROCESSING", JSON.readTree(assertStatus(200, call("POST",
+                "/api/v1/inbound-receipts/" + receiptId + "/claim", null,
+                creator, headers(creator, 8, 2L))).body()).path("status").asText());
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_inbound_processing_ownership"));
         assertStatus(409, call("POST", "/api/v1/inbound-receipts/" + receiptId
                 + "/items/" + itemId + "/accept",
                 "{\"assetVersion\":1,\"lockVersion\":0,\"observedAssetCode\":\"WRONG\"}",
@@ -113,13 +141,16 @@ class InboundHttpTest {
                 + receiptId + "/items/" + itemId + "/accept", acceptBody,
                 creator, headers(creator, 10, 3L))).body());
         assertEquals("COMPLETED", accepted.path("receipt").path("status").asText());
+        assertEquals("COMPLETED", JSON.readTree(assertStatus(200, call("POST",
+                "/api/v1/inbound-receipts/" + receiptId + "/items/" + itemId + "/accept",
+                acceptBody, creator, headers(creator, 10, 3L))).body())
+                .path("receipt").path("status").asText());
         assertEquals("IN_STOCK", accepted.path("asset").path("lifecycle").asText());
         assertEquals("STORAGE", accepted.path("asset").path("currentCustody")
                 .path("custodyType").asText());
         assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE released_at IS NULL"));
         assertEquals(1, count("SELECT COUNT(*) FROM fams_inbound_acceptance"));
         assertEquals(0, count("SELECT COUNT(*) FROM fams_todo WHERE closed_at IS NULL"));
-        assertTrue(count("SELECT COUNT(*) FROM fams_audit_event") >= 5);
 
         JsonNode second = JSON.readTree(assertStatus(201, call("POST", "/api/v1/assets",
                 assetBody.replace("Desk", "Chair"), creator, headers(creator, 12, null))).body());
@@ -144,6 +175,79 @@ class InboundHttpTest {
                 + second.path("id").asText(), null, creator, Map.of())).body())
                 .path("cardStage").asText());
         assertEquals(0, count("SELECT COUNT(*) FROM fams_todo WHERE closed_at IS NULL"));
+
+        JsonNode thirdAsset = JSON.readTree(assertStatus(201, call("POST", "/api/v1/assets",
+                assetBody.replace("Desk", "Monitor"), creator, headers(creator, 16, null))).body());
+        String thirdBody = """
+                {"businessDate":"2026-09-24","items":[{"asset":{"id":"%s","version":0},
+                 "targetWarehouse":{"id":"1","version":0},
+                 "targetLocation":{"id":"1","version":0}}]}
+                """.formatted(thirdAsset.path("id").asText());
+        JsonNode third = JSON.readTree(assertStatus(201, call("POST", "/api/v1/inbound-receipts",
+                thirdBody, creator, headers(creator, 17, null))).body());
+        String thirdId = third.path("id").asText();
+        JsonNode updated = JSON.readTree(assertStatus(200, call("PATCH",
+                "/api/v1/inbound-receipts/" + thirdId,
+                "{\"notes\":\"Counted\",\"businessDate\":\"2026-09-25\"}",
+                creator, headers(creator, 18, 0L))).body());
+        assertEquals(1, updated.path("version").asInt());
+        assertEquals("2026-09-25", updated.path("snapshot").path("businessDate").asText());
+        assertStatus(409, call("PATCH", "/api/v1/inbound-receipts/" + thirdId,
+                "{\"notes\":\"Stale\"}", creator, headers(creator, 19, 0L)));
+        JsonNode cancelled = JSON.readTree(assertStatus(200, call("POST",
+                "/api/v1/inbound-receipts/" + thirdId + "/cancel",
+                "{\"reason\":\"Duplicate order\"}", creator, headers(creator, 20, 1L))).body());
+        assertEquals("CANCELLED", cancelled.path("status").asText());
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE released_at IS NULL"));
+
+        JsonNode fourthAsset = JSON.readTree(assertStatus(201, call("POST", "/api/v1/assets",
+                assetBody.replace("Desk", "Printer"), creator, headers(creator, 21, null))).body());
+        String fourthBody = secondBody.replace("\"asset\":{\"id\":\""
+                + second.path("id").asText() + "\"", "\"asset\":{\"id\":\""
+                + fourthAsset.path("id").asText() + "\"");
+        JsonNode fourth = JSON.readTree(assertStatus(201, call("POST", "/api/v1/inbound-receipts",
+                fourthBody, creator, headers(creator, 22, null))).body());
+        String fourthId = fourth.path("id").asText();
+        assertStatus(200, call("POST", "/api/v1/inbound-receipts/" + fourthId + "/submit",
+                null, creator, headers(creator, 23, 0L)));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE released_at IS NULL"));
+        assertEquals("CANCELLED", JSON.readTree(assertStatus(200, call("POST",
+                "/api/v1/inbound-receipts/" + fourthId + "/cancel",
+                "{\"reason\":\"Delivery cancelled\"}", creator,
+                headers(creator, 24, 1L))).body()).path("status").asText());
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE released_at IS NULL"));
+        assertEquals("DRAFT", JSON.readTree(assertStatus(200, call("GET", "/api/v1/assets/"
+                + fourthAsset.path("id").asText(), null, creator, Map.of())).body())
+                .path("cardStage").asText());
+
+        JsonNode fifth = JSON.readTree(assertStatus(201, call("POST", "/api/v1/assets",
+                assetBody.replace("Desk", "Mouse"), creator, headers(creator, 25, null))).body());
+        JsonNode sixth = JSON.readTree(assertStatus(201, call("POST", "/api/v1/assets",
+                assetBody.replace("Desk", "Keyboard"), creator, headers(creator, 26, null))).body());
+        String manyBody = """
+                {"businessDate":"2026-09-24","defaultTargetWarehouse":{"id":"1","version":0},
+                 "defaultTargetLocation":{"id":"1","version":0},"items":[
+                 {"asset":{"id":"%s","version":0}},{"asset":{"id":"%s","version":0}}]}
+                """.formatted(fifth.path("id").asText(), sixth.path("id").asText());
+        JsonNode many = JSON.readTree(assertStatus(201, call("POST", "/api/v1/inbound-receipts",
+                manyBody, creator, headers(creator, 27, null))).body());
+        jdbc.update("UPDATE fams_location SET status='DISABLED' WHERE id=1");
+        assertStatus(409, call("POST", "/api/v1/inbound-receipts/" + many.path("id").asText()
+                + "/submit", null, creator, headers(creator, 28, 0L)));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE released_at IS NULL"));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_asset WHERE card_stage='PENDING_INBOUND'"));
+        jdbc.update("UPDATE fams_location SET status='ACTIVE' WHERE id=1");
+        assertEquals("PENDING_ADMIN_DECISION", JSON.readTree(assertStatus(200, call("POST",
+                "/api/v1/inbound-receipts/" + many.path("id").asText() + "/submit",
+                null, creator, headers(creator, 28, 0L))).body()).path("status").asText());
+        assertEquals(2, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE released_at IS NULL"));
+        assertEquals(2, count("SELECT COUNT(*) FROM fams_asset WHERE card_stage='PENDING_INBOUND'"));
+        assertEquals(2, JSON.readTree(assertStatus(200, call("GET", "/api/v1/inbound-receipts?"
+                + "status=PENDING_ADMIN_DECISION", null, admin, Map.of())).body())
+                .path("items").get(0).path("items").size());
+        assertTrue(count("SELECT COUNT(*) FROM fams_audit_event") >= 5);
+
+
     }
 
     private int count(String sql) { return jdbc.queryForObject(sql, Integer.class); }
