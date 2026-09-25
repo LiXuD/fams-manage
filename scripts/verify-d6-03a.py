@@ -947,18 +947,33 @@ def asset_jdbc_url(context: RuntimeContext) -> str:
     )
 
 
+def inbound_database(context: RuntimeContext) -> str:
+    return auth_database(context).replace("d6-04", "d6-07")
+
+
+def inbound_jdbc_url(context: RuntimeContext) -> str:
+    return (
+        f"jdbc:mysql://127.0.0.1:{context.mysql_port}/{inbound_database(context)}"
+        "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+    )
+
+
 def provision_auth_database(context: RuntimeContext) -> None:
     database = auth_database(context)
     asset_schema = asset_database(context)
+    inbound_schema = inbound_database(context)
     sql = (
         f"CREATE DATABASE IF NOT EXISTS `{database}` "
         "CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; "
         f"CREATE DATABASE IF NOT EXISTS `{asset_schema}` "
         "CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; "
+        f"CREATE DATABASE IF NOT EXISTS `{inbound_schema}` "
+        "CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; "
         f"CREATE USER IF NOT EXISTS 'd6_04_runtime'@'%' IDENTIFIED BY '{context.password}'; "
         f"ALTER USER 'd6_04_runtime'@'%' IDENTIFIED BY '{context.password}'; "
         f"GRANT ALL PRIVILEGES ON `{database}`.* TO 'd6_04_runtime'@'%';"
         f"GRANT ALL PRIVILEGES ON `{asset_schema}`.* TO 'd6_04_runtime'@'%';"
+        f"GRANT ALL PRIVILEGES ON `{inbound_schema}`.* TO 'd6_04_runtime'@'%';"
     )
     require_command(
         "D6-04 authentication database provisioning",
@@ -995,6 +1010,9 @@ def runtime_environment(context: RuntimeContext) -> dict[str, str]:
             "D6_06_TEST_DATASOURCE_URL": asset_jdbc_url(context),
             "D6_06_TEST_DATASOURCE_USERNAME": "d6_04_runtime",
             "D6_06_TEST_DATASOURCE_PASSWORD": context.password,
+            "D6_07_TEST_DATASOURCE_URL": inbound_jdbc_url(context),
+            "D6_07_TEST_DATASOURCE_USERNAME": "d6_04_runtime",
+            "D6_07_TEST_DATASOURCE_PASSWORD": context.password,
         }
     )
     return environment
@@ -1084,6 +1102,7 @@ def verify_java_quality(context: RuntimeContext) -> None:
                 "-Dd6.04.runtime=true",
                 "-Dd6.05.identity.runtime=true",
                 "-Dd6.06.asset.runtime=true",
+                "-Dd6.07.inbound.runtime=true",
                 "clean",
                 "verify",
             ],
