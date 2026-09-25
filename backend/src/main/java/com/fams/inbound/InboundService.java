@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import com.fams.auth.InboundActorContext.Actor;
@@ -58,7 +59,8 @@ class InboundService {
         args.add(status);
         args.add(number);
         args.add(number);
-        long total = db.queryForObject("SELECT COUNT(*)" + sql, Long.class, args.toArray());
+        long total = Objects.requireNonNull(db.queryForObject(
+                "SELECT COUNT(*)" + sql, Long.class, args.toArray()));
         List<Object> paged = new ArrayList<>(args);
         paged.add(size);
         paged.add((page - 1) * size);
@@ -347,8 +349,10 @@ class InboundService {
                 number(line, "target_warehouse_id"), number(line, "target_location_id"),
                 number(targets, "warehouse_version"), number(targets, "location_version"),
                 optional(body.get("notes"), 1000), auditId);
-        boolean complete = db.queryForObject("SELECT COUNT(*) FROM fams_inbound_receipt_item "
-                + "WHERE receipt_id=? AND execution_status='PENDING'", Long.class, receiptId) == 0;
+        long pending = Objects.requireNonNull(db.queryForObject(
+                "SELECT COUNT(*) FROM fams_inbound_receipt_item "
+                + "WHERE receipt_id=? AND execution_status='PENDING'", Long.class, receiptId));
+        boolean complete = pending == 0;
         if (complete) {
             transition(receiptId, version, "COMPLETED", now, actor, "completed_at=?", now);
             db.update("UPDATE fams_inbound_processing_ownership SET archived_at=?,"
@@ -718,7 +722,9 @@ class InboundService {
         return rows.isEmpty() ? null : rows.getFirst();
     }
 
-    private long lastId() { return db.queryForObject("SELECT LAST_INSERT_ID()", Long.class); }
+    private long lastId() {
+        return Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
+    }
     private Instant now() { return clock.instant().truncatedTo(ChronoUnit.MILLIS); }
 
     private Instant due(Instant now, long parameterVersionId, String timezone, long workdays) {

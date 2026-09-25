@@ -11,6 +11,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -247,6 +248,8 @@ class InboundHttpTest {
                 .path("items").get(0).path("items").size());
         assertTrue(count("SELECT COUNT(*) FROM fams_audit_event") >= 5);
         exerciseMultiExecution(many, creator, other, admin);
+        exerciseDraftValidation(thirdBody, thirdAsset, asset, creator, other, admin);
+        exerciseConcurrentClaim(assetBody, creator, other, admin);
 
 
     }
@@ -309,6 +312,100 @@ class InboundHttpTest {
                 other, headers(other, 57, 4L))).body());
         assertEquals("COMPLETED", completed.path("receipt").path("status").asText());
         assertEquals(0, count("SELECT COUNT(*) FROM fams_todo WHERE closed_at IS NULL"));
+    }
+
+    private void exerciseDraftValidation(String validBody, JsonNode draftAsset,
+            JsonNode completedAsset, Session creator, Session other, Session admin) throws Exception {
+        assertStatus(400, call("POST", "/api/v1/inbound-receipts",
+                "{\"businessDate\":\"2026-09-24\",\"items\":[]}",
+                creator, headers(creator, 60, null)));
+        assertStatus(400, call("POST", "/api/v1/inbound-receipts",
+                validBody.replace("2026-09-24", "bad-date"),
+                creator, headers(creator, 61, null)));
+        assertStatus(409, call("POST", "/api/v1/inbound-receipts",
+                validBody.replace("\"asset\":{\"id\":\""
+                        + draftAsset.path("id").asText() + "\"",
+                        "\"asset\":{\"id\":\"99999\""),
+                creator, headers(creator, 62, null)));
+        assertStatus(409, call("POST", "/api/v1/inbound-receipts", validBody,
+                other, headers(other, 63, null)));
+        assertStatus(409, call("POST", "/api/v1/inbound-receipts",
+                validBody.replace("\"asset\":{\"id\":\""
+                        + draftAsset.path("id").asText() + "\"",
+                        "\"asset\":{\"id\":\""
+                                + completedAsset.path("id").asText() + "\""),
+                creator, headers(creator, 64, null)));
+
+        Timestamp now = Timestamp.from(Instant.now());
+        jdbc.update("INSERT INTO fams_warehouse (id,code,code_normalized,name,status,version,"
+                + "created_at,updated_at) VALUES (2,'WH2','WH2','Other','ACTIVE',0,?,?)",
+                now, now);
+        jdbc.update("INSERT INTO fams_location (id,code,code_normalized,name,location_type,"
+                + "warehouse_id,status,version,created_at,updated_at) "
+                + "VALUES (2,'BIN2','BIN2','Other bin','BIN',2,'ACTIVE',0,?,?)", now, now);
+        String crossWarehouse = validBody.replace("\"targetLocation\":{\"id\":\"1\"",
+                "\"targetLocation\":{\"id\":\"2\"");
+        assertStatus(409, call("POST", "/api/v1/inbound-receipts", crossWarehouse,
+                creator, headers(creator, 65, null)));
+        jdbc.update("UPDATE fams_location SET status='DISABLED' WHERE id=1");
+        assertStatus(409, call("POST", "/api/v1/inbound-receipts", validBody,
+                creator, headers(creator, 66, null)));
+        jdbc.update("UPDATE fams_location SET status='ACTIVE' WHERE id=1");
+
+        JsonNode draft = JSON.readTree(assertStatus(201, call("POST", "/api/v1/inbound-receipts",
+                validBody, creator, headers(creator, 67, null))).body());
+        String path = "/api/v1/inbound-receipts/" + draft.path("id").asText();
+        assertStatus(404, call("GET", path, null, admin, Map.of()));
+        assertStatus(400, call("PATCH", path, "{}", creator, headers(creator, 68, 0L)));
+        JsonNode replaced = JSON.readTree(assertStatus(200, call("PATCH", path,
+                "{\"items\":[{\"asset\":{\"id\":\""
+                        + draftAsset.path("id").asText() + "\",\"version\":0},"
+                        + "\"targetWarehouse\":{\"id\":\"1\",\"version\":0},"
+                        + "\"targetLocation\":{\"id\":\"1\",\"version\":0}}]}",
+                creator, headers(creator, 69, 0L))).body());
+        assertEquals(1, replaced.path("version").asInt());
+        jdbc.update("UPDATE fams_organization SET status='DISABLED' WHERE id=1");
+        assertStatus(409, call("POST", path + "/submit", null, creator,
+                headers(creator, 70, 1L)));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE released_at IS NULL"));
+        jdbc.update("UPDATE fams_organization SET status='ACTIVE' WHERE id=1");
+        assertStatus(200, call("POST", path + "/cancel",
+                "{\"reason\":\"Validation checked\"}", creator, headers(creator, 71, 1L)));
+    }
+
+    private void exerciseConcurrentClaim(String assetBody, Session creator,
+            Session other, Session admin) throws Exception {
+        JsonNode asset = JSON.readTree(assertStatus(201, call("POST", "/api/v1/assets",
+                assetBody.replace("Desk", "Scanner"), creator, headers(creator, 80, null))).body());
+        String body = """
+                {"businessDate":"2026-09-24","items":[{"asset":{"id":"%s","version":0},
+                 "targetWarehouse":{"id":"1","version":0},
+                 "targetLocation":{"id":"1","version":0}}]}
+                """.formatted(asset.path("id").asText());
+        JsonNode receipt = JSON.readTree(assertStatus(201, call("POST",
+                "/api/v1/inbound-receipts", body, creator,
+                headers(creator, 81, null))).body());
+        String path = "/api/v1/inbound-receipts/" + receipt.path("id").asText();
+        assertStatus(200, call("POST", path + "/submit", null, creator,
+                headers(creator, 82, 0L)));
+        assertStatus(200, call("POST", path + "/decision",
+                "{\"decision\":\"APPROVED\"}", admin, headers(admin, 83, 1L)));
+        CompletableFuture<Integer> first = CompletableFuture.supplyAsync(
+                () -> concurrentClaim(path, creator, 84));
+        CompletableFuture<Integer> second = CompletableFuture.supplyAsync(
+                () -> concurrentClaim(path, other, 85));
+        int firstStatus = first.get();
+        int secondStatus = second.get();
+        assertTrue((firstStatus == 200 && secondStatus == 409)
+                || (firstStatus == 409 && secondStatus == 200));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_inbound_processing_ownership "
+                + "WHERE receipt_id=" + receipt.path("id").asText() + " AND archived_at IS NULL"));
+    }
+
+    private int concurrentClaim(String path, Session session, int serial) {
+        try { return call("POST", path + "/claim", null, session,
+                headers(session, serial, 2L)).statusCode(); }
+        catch (Exception error) { throw new IllegalStateException(error); }
     }
 
     private int count(String sql) { return jdbc.queryForObject(sql, Integer.class); }
