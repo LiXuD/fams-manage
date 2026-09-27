@@ -11,7 +11,9 @@ import org.springframework.stereotype.Component;
 @Component
 @Profile("fams-product")
 public final class AttachmentReaderContext {
-    public record Reader(long id, Set<Role> roles, long authEpoch, long authorizationVersion, Instant expiresAt) { }
+    public record Reader(long id, Set<Role> roles, long authEpoch, long authorizationVersion, Instant expiresAt) {
+        public Reader { roles = Set.copyOf(roles); }
+    }
     private final HttpServletRequest request;
     private final AuthAccountStore accounts;
     private final JdbcTemplate db;

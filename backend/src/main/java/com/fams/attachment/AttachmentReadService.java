@@ -19,7 +19,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Profile("fams-product")
 @ConditionalOnProperty(name = "fams.attachments.quarantine-root")
 public class AttachmentReadService {
-    public record Content(String filename, String mime, byte[] bytes) { }
+    public record Content(String filename, String mime, byte[] bytes) {
+        public Content { bytes = bytes.clone(); }
+        @Override public byte[] bytes() { return bytes.clone(); }
+    }
     private final JdbcTemplate db;
     private final AttachmentReaderContext actors;
     private final AttachmentBusinessPort business;

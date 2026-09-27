@@ -49,7 +49,9 @@ public final class AttachmentReconciliationService {
             var candidates = files.filter(path -> candidate(path, cutoff)).iterator();
             while (candidates.hasNext() && removed < limit) {
                 Path path = candidates.next();
-                UUID id = UUID.fromString(path.getFileName().toString());
+                Path filename = path.getFileName();
+                if (filename == null) { continue; }
+                UUID id = UUID.fromString(filename.toString());
                 boolean deleted = Boolean.TRUE.equals(transaction.execute(status -> {
                     guard.lock(id);
                     // Current locking read sees a registration committed while the guard was awaited.
@@ -66,7 +68,9 @@ public final class AttachmentReconciliationService {
         return removed;
     }
     private boolean candidate(Path path, Instant cutoff) {
-        String name = path.getFileName().toString();
+        Path filename = path.getFileName();
+        if (filename == null) { return false; }
+        String name = filename.toString();
         try {
             if (!UUID.fromString(name).toString().equals(name)) { return false; }
             var attributes = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
