@@ -76,6 +76,35 @@ class AttachmentIntakeTest {
     }
 
     @Test
+    void unexpectedScannerFailureReturnsUnavailableMetadata() throws Exception {
+        LocalAttachmentStorage storage = new LocalAttachmentStorage(directory);
+        var result = new AttachmentIntake(storage, content -> {
+            throw new IllegalStateException("Scanner unavailable");
+        }).receive("photo.png", "image/png", new ByteArrayInputStream(PNG));
+        assertEquals(MalwareScanner.Result.UNAVAILABLE, result.scanResult());
+        try (InputStream bytes = storage.open(result.file().id())) {
+            assertArrayEquals(PNG, bytes.readAllBytes());
+        }
+    }
+
+    @Test
+    void validationFailureKeepsOriginalErrorWhenCleanupFails() throws Exception {
+        LocalAttachmentStorage delegate = new LocalAttachmentStorage(directory);
+        AttachmentStorage failingCleanup = new AttachmentStorage() {
+            @Override public StoredFile quarantine(InputStream source) throws IOException {
+                return delegate.quarantine(source);
+            }
+            @Override public InputStream open(java.util.UUID id) throws IOException { return delegate.open(id); }
+            @Override public void delete(java.util.UUID id) throws IOException { throw new IOException("Delete failed"); }
+        };
+        var intake = new AttachmentIntake(failingCleanup, content -> MalwareScanner.Result.CLEAN);
+        var failure = assertThrows(IllegalArgumentException.class,
+                () -> intake.receive("script.png", "image/png", new ByteArrayInputStream("<script>".getBytes())));
+        assertEquals(1, failure.getSuppressed().length);
+        assertEquals("Delete failed", failure.getSuppressed()[0].getMessage());
+    }
+
+    @Test
     void extensionMimeContentAndPerFileLimitsMustAgree() {
         assertEquals(AttachmentFormat.JPG, AttachmentFormat.validate("photo.JPEG", "image/jpeg",
                 new byte[]{(byte) 0xff, (byte) 0xd8, (byte) 0xff}, 10L * 1024 * 1024));

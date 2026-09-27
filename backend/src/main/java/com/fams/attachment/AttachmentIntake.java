@@ -22,12 +22,13 @@ public final class AttachmentIntake {
         try (InputStream header = storage.open(file.id())) {
             format = AttachmentFormat.validate(filename, mime, header.readNBytes(32), file.size());
         } catch (IOException | IllegalArgumentException error) {
-            storage.delete(file.id());
+            try { storage.delete(file.id()); }
+            catch (IOException cleanupError) { error.addSuppressed(cleanupError); }
             throw error;
         }
         MalwareScanner.Result result;
         try (InputStream content = storage.open(file.id())) { result = scanner.scan(content); }
-        catch (IOException error) { result = MalwareScanner.Result.UNAVAILABLE; }
+        catch (IOException | RuntimeException error) { result = MalwareScanner.Result.UNAVAILABLE; }
         return new QuarantinedAttachment(file, format,
                 result == null ? MalwareScanner.Result.UNAVAILABLE : result);
     }
