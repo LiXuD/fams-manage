@@ -9,6 +9,10 @@ export interface Attachment {
   scanStatus: "CLEAN" | "INFECTED" | "UNAVAILABLE";
   businessVersion: number;
   createdAt?: string;
+  revisionNumber?: number;
+  previousObjectId?: string | null;
+  nextObjectId?: string | null;
+  correctionReason?: string | null;
 }
 
 const messages: Record<string, string> = {
@@ -51,6 +55,19 @@ export async function uploadAttachment(receiptId: string, version: number, file:
   const body = new FormData();
   body.append("file", file);
   const response = await fetch(`/api/v1/inbound-receipts/${encodeURIComponent(receiptId)}/attachments`, {
+    method: "POST", credentials: "include", body,
+    headers: { ...csrfHeaders(), "Idempotency-Key": key, "If-Match-Version": String(version) },
+  });
+  if (!response.ok) throw await failure(response);
+  return await response.json() as Attachment;
+}
+
+export async function correctAttachment(receiptId: string, version: number, previousObjectId: string,
+  reason: string, file: File, key: string): Promise<Attachment> {
+  const body = new FormData();
+  body.append("file", file);
+  body.append("reason", reason);
+  const response = await fetch(`/api/v1/inbound-receipts/${encodeURIComponent(receiptId)}/attachments/${encodeURIComponent(previousObjectId)}/corrections`, {
     method: "POST", credentials: "include", body,
     headers: { ...csrfHeaders(), "Idempotency-Key": key, "If-Match-Version": String(version) },
   });

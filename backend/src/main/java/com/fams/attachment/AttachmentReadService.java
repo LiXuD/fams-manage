@@ -36,10 +36,14 @@ public class AttachmentReadService {
     public List<Map<String, Object>> list(long receiptId) {
         var actor = actors.requireReaderLocked();
         business.requireReaderLocked(actor.id(), actor.roles(), receiptId);
-        return db.queryForList("SELECT object_id objectId,original_filename filename,content_type contentType,"
-                + "size_bytes sizeBytes,scan_status scanStatus,business_version businessVersion,created_at createdAt "
-                + "FROM fams_attachment WHERE business_type='INBOUND' AND business_id=? AND deleted_at IS NULL "
-                + "ORDER BY created_at,object_id FOR UPDATE", receiptId);
+        return db.queryForList("SELECT a.object_id objectId,a.original_filename filename,a.content_type contentType,"
+                + "a.size_bytes sizeBytes,a.scan_status scanStatus,a.business_version businessVersion,a.created_at createdAt,"
+                + "COALESCE(r.revision_number,1) revisionNumber,r.previous_object_id previousObjectId,"
+                + "r.correction_reason correctionReason,n.object_id nextObjectId FROM fams_attachment a "
+                + "LEFT JOIN fams_attachment_revision r ON r.object_id=a.object_id "
+                + "LEFT JOIN fams_attachment_revision n ON n.previous_object_id=a.object_id "
+                + "WHERE a.business_type='INBOUND' AND a.business_id=? AND a.deleted_at IS NULL "
+                + "ORDER BY a.created_at,a.object_id FOR UPDATE", receiptId);
     }
 
     @Transactional

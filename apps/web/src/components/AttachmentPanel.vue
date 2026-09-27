@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { listAttachments, uploadAttachment, downloadAttachment, type Attachment } from "@/attachment/api";
+import { listAttachments, uploadAttachment, correctAttachment, downloadAttachment, type Attachment } from "@/attachment/api";
 import type { InboundReceipt } from "@/inbound/api";
 
 const props = defineProps<{ receipt: InboundReceipt; disabled?: boolean }>();
@@ -14,7 +14,17 @@ const noticeGood = ref(false);
 const busy = ref(false);
 const loading = ref(false);
 const fileInput = ref<HTMLInputElement | null>(null);
-const pending = ref<{ receiptId: string; version: number; file: File; key: string } | null>(null);
+const correction = ref<Attachment | null>(null);
+const correctionReason = ref("");
+const pending = ref<{ receiptId: string; version: number; file: File; key: string;
+  previousObjectId?: string; reason?: string } | null>(null);
+
+function chooseCorrection(item: Attachment | null): void {
+  if (busy.value || props.disabled) return;
+  correction.value = item; correctionReason.value = ""; pending.value = null;
+  error.value = ""; notice.value = "";
+  if (fileInput.value) fileInput.value.value = "";
+}
 let generation = 0;
 const writable = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR")
   && ((props.receipt.status === "DRAFT" && props.receipt.createdBy.id === session.user.id)
@@ -45,18 +55,28 @@ function selectFile(event: Event): void {
     if (fileInput.value) fileInput.value.value = "";
     return;
   }
-  pending.value = { receiptId: props.receipt.id, version: props.receipt.version, file, key: crypto.randomUUID() };
+  pending.value = { receiptId: props.receipt.id, version: props.receipt.version, file, key: crypto.randomUUID(),
+    previousObjectId: correction.value?.objectId };
 }
 
 async function upload(): Promise<void> {
   const request = pending.value;
   if (!request || !writable.value || busy.value || props.disabled) return;
+  if (request.previousObjectId && !request.reason) {
+    if (!correctionReason.value.trim() || correctionReason.value.length > 500) {
+      error.value = "请填写纠错原因（最多 500 字）。"; return;
+    }
+    request.reason = correctionReason.value.trim();
+  }
   busy.value = true; emit("busy", true); error.value = "";
   try {
-    const result = await uploadAttachment(request.receiptId, request.version, request.file, request.key);
+    const result = request.previousObjectId
+      ? await correctAttachment(request.receiptId, request.version, request.previousObjectId,
+        request.reason!, request.file, request.key)
+      : await uploadAttachment(request.receiptId, request.version, request.file, request.key);
     if (props.receipt.id !== request.receiptId) return;
     emit("uploaded", result.businessVersion);
-    pending.value = null;
+    pending.value = null; correction.value = null; correctionReason.value = "";
     if (fileInput.value) fileInput.value.value = "";
     noticeGood.value = result.scanStatus === "CLEAN";
     notice.value = noticeGood.value ? "附件已上传，可授权下载。" : "附件已隔离，尚不可下载。";
@@ -77,7 +97,7 @@ async function download(item: Attachment): Promise<void> {
 }
 
 watch(() => props.receipt.id, () => {
-  pending.value = null; items.value = []; error.value = ""; notice.value = "";
+  pending.value = null; correction.value = null; correctionReason.value = ""; items.value = []; error.value = ""; notice.value = "";
   if (fileInput.value) fileInput.value.value = "";
   void refresh();
 }, { immediate: true });
@@ -91,10 +111,15 @@ watch(() => props.receipt.id, () => {
     <p v-if="error" class="form-error" role="alert">{{ error }}</p>
     <p v-if="notice" :class="noticeGood ? 'asset-notice' : 'attachment-notice'" role="status">{{ notice }}</p>
     <form v-if="writable" class="asset-actions" @submit.prevent="upload">
+      <p v-if="correction">纠错：{{ correction.filename }} · 原件将保留</p>
+      <label v-if="correction">纠错原因<input v-model="correctionReason" maxlength="500"
+        :disabled="busy || disabled || !!pending?.reason" /></label>
+      <button v-if="correction" class="text-button" type="button" :disabled="busy || disabled"
+        @click="chooseCorrection(null)">取消纠错</button>
       <label>选择附件<input ref="fileInput" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf"
         :disabled="busy || disabled" @change="selectFile" /></label>
       <button class="secondary-button" type="submit" :disabled="!pending || busy || disabled">
-        {{ busy ? '上传中…' : '上传附件 / 重试' }}
+        {{ busy ? '上传中…' : correction ? '提交纠错 / 重试' : '上传附件 / 重试' }}
       </button>
     </form>
     <p v-else>当前单据只读，可查看已登记附件。</p>
@@ -103,10 +128,13 @@ watch(() => props.receipt.id, () => {
       <thead><tr><th>文件</th><th>大小</th><th>扫描状态</th><th>操作</th></tr></thead>
       <tbody>
         <tr v-for="item in items" :key="item.objectId">
-          <td>{{ item.filename }}</td><td>{{ (item.sizeBytes / 1024).toFixed(1) }} KB</td>
+          <td>{{ item.filename }} <span>· 第 {{ item.revisionNumber ?? 1 }} 版{{ item.nextObjectId ? ' · 已有新版' : '' }}</span>
+            <p v-if="item.correctionReason">纠错原因：{{ item.correctionReason }}</p></td><td>{{ (item.sizeBytes / 1024).toFixed(1) }} KB</td>
           <td>{{ scanText[item.scanStatus] }}</td>
           <td><button class="text-button" type="button"
-            :disabled="busy || disabled || item.scanStatus !== 'CLEAN'" @click="download(item)">下载</button></td>
+            :disabled="busy || disabled || item.scanStatus !== 'CLEAN'" @click="download(item)">下载</button>
+            <button v-if="writable && !item.nextObjectId" class="text-button" type="button"
+              :disabled="busy || disabled" @click="chooseCorrection(item)">追加纠错版本</button></td>
         </tr>
         <tr v-if="!loading && !items.length"><td colspan="4">暂无附件</td></tr>
       </tbody>

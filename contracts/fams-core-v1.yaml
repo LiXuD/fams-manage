@@ -3114,6 +3114,10 @@ paths:
                         scanStatus: { type: string, enum: [CLEAN, INFECTED, UNAVAILABLE] }
                         businessVersion: { type: integer, format: int64 }
                         createdAt: { type: string, format: date-time }
+                        revisionNumber: { type: integer, minimum: 1 }
+                        previousObjectId: { type: string, format: uuid, nullable: true }
+                        nextObjectId: { type: string, format: uuid, nullable: true }
+                        correctionReason: { type: string, nullable: true }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
