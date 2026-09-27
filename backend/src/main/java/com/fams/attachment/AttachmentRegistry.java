@@ -32,6 +32,31 @@ public class AttachmentRegistry {
                 attachment.scanResult().name());
     }
 
+    /** Caller authorizes the current business version; correction never updates the original record. */
+    @Transactional
+    public void registerCorrection(String businessType, long businessId, long businessVersion, long uploaderId,
+            String filename, AttachmentIntake.QuarantinedAttachment attachment, UUID previousObjectId, String reason) {
+        if (previousObjectId == null || reason == null || reason.isBlank() || reason.length() > 500) {
+            throw new IllegalArgumentException("Correction requires an original attachment and a reason");
+        }
+        db.update("INSERT INTO fams_attachment_scope (business_type,business_id) VALUES (?,?) "
+                + "ON DUPLICATE KEY UPDATE business_id=VALUES(business_id)", businessType, businessId);
+        var original = db.queryForList("SELECT object_id FROM fams_attachment WHERE object_id=? "
+                + "AND business_type=? AND business_id=? AND deleted_at IS NULL FOR UPDATE",
+                previousObjectId.toString(), businessType, businessId);
+        if (original.isEmpty()) { throw new IllegalArgumentException("Original attachment does not belong to this business"); }
+        if (!db.queryForList("SELECT object_id FROM fams_attachment_revision WHERE previous_object_id=? FOR UPDATE",
+                previousObjectId.toString()).isEmpty()) {
+            throw new IllegalArgumentException("Correct the latest attachment version");
+        }
+        var previous = db.queryForList("SELECT revision_number FROM fams_attachment_revision WHERE object_id=? FOR UPDATE",
+                previousObjectId.toString());
+        int revision = previous.isEmpty() ? 2 : ((Number) previous.getFirst().get("revision_number")).intValue() + 1;
+        register(businessType, businessId, businessVersion, uploaderId, filename, attachment);
+        db.update("INSERT INTO fams_attachment_revision (object_id,previous_object_id,revision_number,correction_reason) "
+                + "VALUES (?,?,?,?)", attachment.file().id().toString(), previousObjectId.toString(), revision, reason.trim());
+    }
+
     @Transactional
     public void register(String businessType, long businessId, long businessVersion, long uploaderId,
             String filename, AttachmentIntake.QuarantinedAttachment attachment) {

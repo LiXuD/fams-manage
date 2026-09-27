@@ -88,6 +88,42 @@ class AttachmentRegistryTest {
         committed.countDown();
         org.junit.jupiter.api.Assertions.assertFalse(staleReader.get());
         assertEquals(9, count(4));
+
+        var original = evidence();
+        registry.register("INBOUND", 5, 0, 1, "original.png", original);
+        var secondVersion = evidence();
+        registry.registerCorrection("INBOUND", 5, 1, 1, "corrected.png", secondVersion,
+                original.file().id(), "Incorrect document");
+        var thirdVersion = evidence();
+        registry.registerCorrection("INBOUND", 5, 2, 1, "corrected-again.png", thirdVersion,
+                secondVersion.file().id(), "Add missing page");
+        assertEquals(3, count(5));
+        assertEquals("original.png", db.queryForObject("SELECT original_filename FROM fams_attachment WHERE object_id=?",
+                String.class, original.file().id().toString()));
+        assertEquals(0L, db.queryForObject("SELECT business_version FROM fams_attachment WHERE object_id=?",
+                Long.class, original.file().id().toString()));
+        assertEquals(3, db.queryForObject("SELECT revision_number FROM fams_attachment_revision WHERE object_id=?",
+                Integer.class, thirdVersion.file().id().toString()));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> registry.registerCorrection("INBOUND", 6, 0, 1, "wrong.png", evidence(),
+                        thirdVersion.file().id(), "Wrong scope"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> registry.registerCorrection("INBOUND", 5, 3, 1, "fork.png", evidence(),
+                        original.file().id(), "Fork"));
+        assertEquals(0, count(6));
+        assertEquals(3, count(5));
+        for (int i = 0; i < 6; i++) { register(5, AttachmentFormat.PNG, 1); }
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> registry.registerCorrection("INBOUND", 5, 3, 1, "over-quota.png", evidence(),
+                        thirdVersion.file().id(), "Quota must include retained originals"));
+        assertEquals(9, count(5));
+        assertEquals(2, db.queryForObject("SELECT COUNT(*) FROM fams_attachment_revision", Integer.class));
+    }
+
+    private AttachmentIntake.QuarantinedAttachment evidence() {
+        return new AttachmentIntake.QuarantinedAttachment(
+                new AttachmentStorage.StoredFile(UUID.randomUUID(), 1, "a".repeat(64)),
+                AttachmentFormat.PNG, MalwareScanner.Result.CLEAN);
     }
 
     private void register(long businessId, AttachmentFormat format, long bytes) {
