@@ -106,6 +106,9 @@ class AttachmentHttpTest {
             assertStatus(401, pending.get(30, TimeUnit.SECONDS));
             assertCounts(1);
             assertStatus(403, access(login("attachment-creator"), "GET", lastGrant));
+            scanner.entered = null;
+            scanner.release = null;
+            exerciseCorrections(login("attachment-creator"), JSON.readTree(one.body()).path("objectId").asText());
         } finally {
             scanner.barrier = null;
             if (scanner.release != null) { scanner.release.countDown(); }
@@ -154,6 +157,58 @@ class AttachmentHttpTest {
             try (var files = Files.list(ROOT)) { for (Path file : files.toList()) { Files.delete(file); } }
             Files.delete(ROOT);
         }
+    }
+
+    private void exerciseCorrections(Session session, String original) throws Exception {
+        scanner.barrier = new CyclicBarrier(2);
+        java.util.function.Supplier<HttpResponse<String>> send = () -> {
+            try { return correction(session, original, "correction-http-key", 1, "Missing page"); }
+            catch (Exception error) { throw new IllegalStateException(error); }
+        };
+        var first = CompletableFuture.supplyAsync(send);
+        var second = CompletableFuture.supplyAsync(send);
+        var result = JSON.readTree(assertStatus(201, first.get(30, TimeUnit.SECONDS)).body());
+        assertEquals(result, JSON.readTree(assertStatus(201, second.get(30, TimeUnit.SECONDS)).body()));
+        scanner.barrier = null;
+        String corrected = result.path("objectId").asText();
+        assertEquals(2, result.path("businessVersion").asLong());
+        assertEquals(result, JSON.readTree(assertStatus(201,
+                correction(session, original, "correction-http-key", 1, "Missing page")).body()));
+        assertStatus(409, correction(session, original, "correction-http-key", 1, "Different reason"));
+        assertStatus(409, upload(session, "correction-http-key", 1, "%PDF-1.8", true));
+        assertStatus(409, correction(session, corrected, "stale-correction-key", 1, "Old version"));
+        assertStatus(400, correction(session, original, "fork-correction-key", 2, "Old original"));
+        assertStatus(400, correction(session, java.util.UUID.randomUUID().toString(),
+                "unknown-correction-key", 2, "Unknown original"));
+        db.execute("CREATE TRIGGER correction_fail_audit BEFORE INSERT ON fams_audit_event "
+                + "FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Injected correction audit failure'");
+        try { assertStatus(500, correction(session, corrected, "rollback-correction-key", 2, "Rollback")); }
+        finally { db.execute("DROP TRIGGER correction_fail_audit"); }
+        assertEquals(2, db.queryForObject("SELECT COUNT(*) FROM fams_attachment WHERE business_id=101", Integer.class));
+        assertEquals(2, db.queryForObject("SELECT COUNT(*) FROM fams_attachment_upload_key WHERE uploader_account_id=101", Integer.class));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_attachment_revision r JOIN fams_attachment a "
+                + "ON a.object_id=r.object_id WHERE a.business_id=101", Integer.class));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_audit_event WHERE resource_id=101 "
+                + "AND action='ATTACHMENT_CORRECTED'", Integer.class));
+        assertEquals(2, db.queryForObject("SELECT version FROM fams_inbound_receipt WHERE id=101", Integer.class));
+        assertEquals("%PDF-1.7", Files.readString(ROOT.resolve(original)));
+        assertEquals("%PDF-1.8", Files.readString(ROOT.resolve(corrected)));
+        try (var files = Files.list(ROOT)) { assertEquals(2, files.count()); }
+        db.update("UPDATE fams_inbound_receipt SET receipt_status='PENDING_ADMIN_DECISION',submitted_at=NOW(3) WHERE id=101");
+        assertStatus(409, correction(session, corrected, "frozen-correction-key", 2, "Frozen"));
+    }
+
+    private HttpResponse<String> correction(Session session, String previous, String key, long version, String reason)
+            throws Exception {
+        String boundary = "fams-correction-boundary";
+        String body = "--" + boundary + "\r\nContent-Disposition: form-data; name=\"reason\"\r\n\r\n" + reason
+                + "\r\n--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"doc.pdf\""
+                + "\r\nContent-Type: application/pdf\r\n\r\n%PDF-1.8\r\n--" + boundary + "--\r\n";
+        var request = HttpRequest.newBuilder(uri("/api/v1/inbound-receipts/101/attachments/" + previous + "/corrections"))
+                .header("Cookie", session.cookie()).header("X-CSRF-Token", session.csrf())
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header("Idempotency-Key", key).header("If-Match-Version", Long.toString(version));
+        return http.send(request.POST(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private String pdfWithEmbeddedFile(String content) {

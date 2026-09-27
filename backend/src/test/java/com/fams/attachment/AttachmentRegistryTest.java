@@ -117,7 +117,8 @@ class AttachmentRegistryTest {
                 () -> registry.registerCorrection("INBOUND", 5, 3, 1, "over-quota.png", evidence(),
                         thirdVersion.file().id(), "Quota must include retained originals"));
         assertEquals(9, count(5));
-        assertEquals(2, db.queryForObject("SELECT COUNT(*) FROM fams_attachment_revision", Integer.class));
+        assertEquals(2, db.queryForObject("SELECT COUNT(*) FROM fams_attachment_revision r JOIN fams_attachment a "
+                + "ON a.object_id=r.object_id WHERE a.business_id=5", Integer.class));
     }
 
     private AttachmentIntake.QuarantinedAttachment evidence() {

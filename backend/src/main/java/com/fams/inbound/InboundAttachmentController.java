@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -38,4 +39,20 @@ public final class InboundAttachmentController {
                     "businessVersion", version + 1));
         }
     }
+
+    @PostMapping(value = "/api/v1/inbound-receipts/{receiptId}/attachments/{objectId}/corrections",
+            consumes = "multipart/form-data")
+    ResponseEntity<Map<String, Object>> correct(@PathVariable long receiptId, @PathVariable java.util.UUID objectId,
+            @RequestHeader("Idempotency-Key") String key, @RequestHeader("If-Match-Version") long version,
+            @RequestParam("reason") String reason, @RequestPart("file") MultipartFile file) throws IOException {
+        try (var source = file.getInputStream()) {
+            var result = uploads.correctIdempotent(keys, key, receiptId, version, objectId, reason,
+                    file.getOriginalFilename(), file.getContentType(), source);
+            return ResponseEntity.status(201).body(Map.of("objectId", result.file().id().toString(),
+                    "filename", file.getOriginalFilename(), "contentType", result.format().mime(),
+                    "sizeBytes", result.file().size(), "scanStatus", result.scanResult().name(),
+                    "businessVersion", version + 1));
+        }
+    }
+
 }
