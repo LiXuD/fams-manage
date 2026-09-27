@@ -3035,6 +3035,8 @@ paths:
     post:
       tags: [Attachment]
       operationId: issueAttachmentDownloadGrant
+      x-business-write: false
+      x-exception-rationale: Stateless short-lived grant issuance after current authorization; no business data or version is mutated.
       summary: Issue a sixty-second address for a CLEAN attachment after current business authorization.
       description: The grant binds the object, account and current authorization version; session authentication remains required.
       parameters:
@@ -3124,6 +3126,8 @@ paths:
     post:
       tags: [Inbound]
       operationId: uploadInboundAttachment
+      x-error-codes: [INBOUND_ATTACHMENT_READ_ONLY, INBOUND_VERSION_CONFLICT]
+      x-required-error-statuses: [400, 401, 403, 404, 409, 413, 503]
       summary: Append quarantined evidence to a writable inbound receipt.
       x-business-write: true
       x-audit-event:
@@ -3189,6 +3193,8 @@ paths:
     post:
       tags: [Inbound]
       operationId: correctInboundAttachment
+      x-error-codes: [INBOUND_ATTACHMENT_READ_ONLY, INBOUND_VERSION_CONFLICT]
+      x-required-error-statuses: [400, 401, 403, 404, 409, 413, 503]
       summary: Append an immutable correction version to a writable inbound attachment.
       x-business-write: true
       x-audit-event:

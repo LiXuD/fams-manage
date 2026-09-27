@@ -149,7 +149,7 @@ def assert_write_contracts(document: dict[str, Any]) -> None:
         if method not in {"post", "put", "patch", "delete"}:
             continue
         if not operation.get("x-business-write", False):
-            if operation_id not in {"login", "logout"}:
+            if operation_id not in {"login", "logout", "issueAttachmentDownloadGrant"}:
                 raise VerificationFailure(
                     f"unclassified non-business mutation: {method.upper()} {path}"
                 )
