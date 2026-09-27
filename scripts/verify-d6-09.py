@@ -55,12 +55,15 @@ def main() -> None:
     env["D6_09_TEST_DATASOURCE_USERNAME"] = "fams_d6_09"
     env["D6_09_TEST_DATASOURCE_PASSWORD"] = PASSWORD
     real_clamd = env.get("D6_09_REAL_CLAMD") == "true"
-    selected_tests = "AttachmentHttpTest" if real_clamd else "AttachmentRegistryTest,AttachmentHttpTest"
+    cleanup_only = env.get("D6_09_CLEANUP_ONLY") == "true"
+    selected_tests = "AttachmentCleanupTest" if cleanup_only else (
+        "AttachmentHttpTest" if real_clamd else "AttachmentRegistryTest,AttachmentHttpTest")
     options = ["-Dd6.09.clamd.http=true", "-Dd6.09.scanner-fixture=false"] if real_clamd else []
     run("./mvnw", "-pl", "backend", "-Dd6.09.attachment.runtime=true",
         "-Dtest=" + selected_tests, *options, "test", env=env)
-    print("D6-09 real MySQL and Clamd HTTP paths passed" if real_clamd
-          else "D6-09 real MySQL attachment quota and HTTP paths passed")
+    print("D6-09 real MySQL attachment cleanup paths passed" if cleanup_only else (
+        "D6-09 real MySQL and Clamd HTTP paths passed" if real_clamd
+        else "D6-09 real MySQL attachment quota and HTTP paths passed"))
 
 
 if __name__ == "__main__":
