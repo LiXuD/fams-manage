@@ -10,6 +10,7 @@ import java.net.http.HttpResponse;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -57,6 +58,17 @@ class InboundHttpTest {
         Session creator = login("creator");
         Session other = login("other");
         Session admin = login("admin");
+        for (Session selector : List.of(creator, admin)) {
+            JsonNode organizations = JSON.readTree(assertStatus(200, call("GET",
+                    "/api/v1/organizations/active-references", null, selector, Map.of())).body());
+            assertEquals("1", organizations.path("items").get(0).path("id").asText());
+        }
+        assertStatus(403, call("GET", "/api/v1/organizations/active-references",
+                null, login("employee"), Map.of()));
+        assertStatus(404, call("GET", "/api/v1/inbound-receipts/99999",
+                null, creator, Map.of()));
+        assertStatus(404, call("POST", "/api/v1/inbound-receipts/99999/submit",
+                null, creator, headers(creator, 91, 0L)));
         String assetBody = """
                 {"name":"Desk","category":{"id":"1","version":0},
                  "organization":{"id":"1","version":0},"model":"M1","unit":"piece"}
@@ -95,6 +107,8 @@ class InboundHttpTest {
                 creator, headers(creator, 31, null)));
         assertStatus(404, call("GET", "/api/v1/inbound-receipts/" + receiptId,
                 null, other, Map.of()));
+        assertStatus(409, call("PATCH", "/api/v1/inbound-receipts/" + receiptId,
+                "{}", other, headers(other, 90, 0L)));
         assertStatus(403, call("POST", "/api/v1/inbound-receipts/" + receiptId + "/decision",
                 "{\"decision\":\"APPROVED\"}", creator, headers(creator, 3, 0L)));
 
@@ -422,8 +436,8 @@ class InboundHttpTest {
         jdbc.update("INSERT INTO fams_location (id,code,code_normalized,name,location_type,"
                 + "warehouse_id,status,version,created_at,updated_at) "
                 + "VALUES (1,'BIN','BIN','Bin','BIN',1,'ACTIVE',0,?,?)", now, now);
-        for (int id = 1; id <= 3; id++) {
-            String name = id == 1 ? "creator" : id == 2 ? "other" : "admin";
+        for (int id = 1; id <= 4; id++) {
+            String name = id == 1 ? "creator" : id == 2 ? "other" : id == 3 ? "admin" : "employee";
             jdbc.update("INSERT INTO fams_employee (id,employee_no,employee_no_normalized,name,"
                     + "organization_id,status,version,created_at,updated_at) "
                     + "VALUES (?,?,?,?,1,'ACTIVE',0,?,?)", id, "E" + id, "E" + id, name, now, now);
@@ -433,7 +447,8 @@ class InboundHttpTest {
                     + "VALUES (?,?,?,?,?,'ENABLED',FALSE,0,0,0,0,?,?)", id, id, name,
                     name.toUpperCase(), new BCryptPasswordEncoder(4).encode(PASSWORD), now, now);
             jdbc.update("INSERT INTO fams_account_role (account_id,role_code,granted_at) "
-                    + "VALUES (?,?,?)", id, id == 3 ? "ASSET_ADMIN" : "WAREHOUSE_OPERATOR", now);
+                    + "VALUES (?,?,?)", id, id == 3 ? "ASSET_ADMIN"
+                            : id == 4 ? "EMPLOYEE" : "WAREHOUSE_OPERATOR", now);
         }
         jdbc.update("INSERT INTO fams_numbering_rule (code,code_normalized,target,mode,"
                 + "fixed_prefix,date_part,sequence_length,status,version,created_at,updated_at) "
