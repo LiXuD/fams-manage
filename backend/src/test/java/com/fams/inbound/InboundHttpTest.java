@@ -266,6 +266,7 @@ class InboundHttpTest {
         exerciseDraftValidation(thirdBody, thirdAsset, asset, creator, other, admin);
         exerciseConcurrentClaim(assetBody, creator, other, admin);
         exerciseConcurrentReplay(assetBody, creator);
+        exerciseConcurrentDecision(assetBody, creator, admin);
 
 
     }
@@ -387,6 +388,59 @@ class InboundHttpTest {
         jdbc.update("UPDATE fams_organization SET status='ACTIVE' WHERE id=1");
         assertStatus(200, call("POST", path + "/cancel",
                 "{\"reason\":\"Validation checked\"}", creator, headers(creator, 71, 1L)));
+    }
+
+    private void exerciseConcurrentDecision(String assetBody, Session creator,
+            Session admin) throws Exception {
+        jdbc.update("UPDATE fams_account_role SET role_code='ASSET_ADMIN' WHERE account_id=2");
+        jdbc.update("UPDATE fams_system_account SET authorization_version=authorization_version+1 "
+                + "WHERE id=2");
+        Session secondAdmin = login("other");
+        JsonNode asset = JSON.readTree(assertStatus(201, call("POST", "/api/v1/assets",
+                assetBody.replace("Desk", "Decision desk"), creator, headers(creator, 110, null))).body());
+        String body = """
+                {"businessDate":"2026-09-24","items":[{"asset":{"id":"%s","version":0},
+                 "targetWarehouse":{"id":"1","version":0},
+                 "targetLocation":{"id":"1","version":0}}]}
+                """.formatted(asset.path("id").asText());
+        JsonNode receipt = JSON.readTree(assertStatus(201, call("POST", "/api/v1/inbound-receipts",
+                body, creator, headers(creator, 111, null))).body());
+        String receiptId = receipt.path("id").asText();
+        String path = "/api/v1/inbound-receipts/" + receiptId;
+        assertStatus(200, call("POST", path + "/submit", null, creator, headers(creator, 112, 0L)));
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        CompletableFuture<HttpResponse<String>> approval = CompletableFuture.supplyAsync(
+                () -> competingDecision(ready, start, path, admin, 113, "{\"decision\":\"APPROVED\"}"));
+        CompletableFuture<HttpResponse<String>> rejection = CompletableFuture.supplyAsync(
+                () -> competingDecision(ready, start, path, secondAdmin, 114,
+                        "{\"decision\":\"REJECTED\",\"reason\":\"Not required\"}"));
+        ready.await();
+        start.countDown();
+        HttpResponse<String> approved = approval.get();
+        HttpResponse<String> rejected = rejection.get();
+        assertTrue((approved.statusCode() == 200 && rejected.statusCode() == 409)
+                || (approved.statusCode() == 409 && rejected.statusCode() == 200));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_inbound_decision WHERE receipt_id=" + receiptId));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE resource_id=" + receiptId
+                + " AND action='INBOUND_ADMIN_DECIDED'"));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_idempotency_record "
+                + "WHERE operation_id='decideInboundReceipt' AND resource_id=" + receiptId));
+        JsonNode current = JSON.readTree(assertStatus(200, call("GET", path, null, admin, Map.of())).body());
+        assertEquals(approved.statusCode() == 200 ? "WAITING_WAREHOUSE_CLAIM" : "REJECTED",
+                current.path("status").asText());
+        assertEquals(approved.statusCode() == 200 ? 1 : 0,
+                count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id="
+                        + asset.path("id").asText() + " AND released_at IS NULL"));
+    }
+
+    private HttpResponse<String> competingDecision(CountDownLatch ready, CountDownLatch start, String path,
+            Session session, int serial, String body) {
+        ready.countDown();
+        try {
+            start.await();
+            return call("POST", path + "/decision", body, session, headers(session, serial, 1L));
+        } catch (Exception error) { throw new IllegalStateException(error); }
     }
 
     private void exerciseConcurrentReplay(String assetBody, Session creator) throws Exception {

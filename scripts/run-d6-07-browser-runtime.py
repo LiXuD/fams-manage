@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import secrets
+import signal
 import socket
 import subprocess
 import sys
@@ -14,6 +15,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Callable
+
+from d6_07_recovery import verify_recovery
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -105,7 +108,8 @@ def main() -> int:
             backend = subprocess.Popen(
                 ["rtk", "java", "-jar", str(JAR), "--spring.profiles.active=fams-product",
                  "--server.address=127.0.0.1", "--server.port=8080"],
-                cwd=ROOT, env=environment, stdout=backend_log, stderr=subprocess.STDOUT)
+                cwd=ROOT, env=environment, stdout=backend_log, stderr=subprocess.STDOUT,
+                start_new_session=True)
             processes.append(backend)
             wait_for(lambda: ready("http://127.0.0.1:8080/api/v1/auth/me", backend), "backend")
 
@@ -151,11 +155,30 @@ def main() -> int:
             processes.append(web)
             wait_for(lambda: ready("http://127.0.0.1:5173/login", web), "web")
             print("READY http://127.0.0.1:5173/login; accounts warehouse and admin; test password is AuthHttpTest.INITIAL_PASSWORD", flush=True)
-            print("Commands: counts, stop.", flush=True)
+            def restart_backend() -> None:
+                nonlocal backend
+                os.killpg(backend.pid, signal.SIGKILL)
+                backend.wait(timeout=10)
+                processes.remove(backend)
+                backend = subprocess.Popen(
+                    ["rtk", "java", "-jar", str(JAR), "--spring.profiles.active=fams-product",
+                     "--server.address=127.0.0.1", "--server.port=8080"],
+                    cwd=ROOT, env=environment, stdout=backend_log, stderr=subprocess.STDOUT,
+                    start_new_session=True)
+                processes.append(backend)
+                wait_for(lambda: ready("http://127.0.0.1:8080/api/v1/auth/me", backend), "backend restart")
+
+            def query(sql: str) -> str:
+                return checked(["rtk", "docker", "exec", "-i", name, "mysql", "-uroot",
+                    f"-p{root_password}", "--batch", "--skip-column-names", database], input=sql).stdout
+
+            print("Commands: recover (hard restart assertions), counts, stop.", flush=True)
             for command in sys.stdin:
                 action = command.strip()
                 if action == "stop":
                     break
+                if action == "recover":
+                    verify_recovery(INITIAL_PASSWORD, restart_backend, query)
                 if action == "counts":
                     result = checked(["rtk", "docker", "exec", "-i", name, "mysql", "-uroot",
                                       f"-p{root_password}", "--batch", "--skip-column-names", database],
@@ -173,7 +196,10 @@ def main() -> int:
                             log = log.replace(secret, "<redacted>")
                     print(f"{label} exit log:\n" + "\n".join(log.splitlines()[-15:]), file=sys.stderr)
             for process in reversed(processes):
-                process.terminate()
+                if process is backend and process.poll() is None:
+                    os.killpg(process.pid, signal.SIGTERM)
+                else:
+                    process.terminate()
                 try:
                     process.wait(timeout=10)
                 except subprocess.TimeoutExpired:
