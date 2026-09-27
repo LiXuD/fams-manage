@@ -66,7 +66,7 @@ class IdentityMasterDataController {
     ResponseEntity<OrganizationActiveReferencePage> listActiveOrganizations(
             @RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "50") @Min(1) @Max(200) int pageSize) {
-        actorContext.requireSystemAdministrator();
+        actorContext.requireCatalogSelector();
         return ResponseEntity.ok(service.listActiveOrganizations(page, pageSize));
     }
 

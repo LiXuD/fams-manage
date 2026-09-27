@@ -5,12 +5,13 @@ import { useSessionStore } from "@/auth/sessionStore";
 import { activeReferences, getAsset, listAssets, type AssetCard, type AssetReference } from "@/asset/api";
 import {
   acceptItem, cancelReceipt, claimReceipt, createReceipt, decideReceipt, getReceipt,
-  listReceipts, submitReceipt, type InboundItem, type InboundReceipt,
+  listReceipts, submitReceipt, updateReceipt, type InboundItem, type InboundReceipt,
 } from "@/inbound/api";
 
 const session = useSessionStore();
 const receipts = ref<InboundReceipt[]>([]);
 const selected = ref<InboundReceipt | null>(null);
+const editing = ref<InboundReceipt | null>(null);
 const assets = ref<AssetCard[]>([]);
 const warehouses = ref<AssetReference[]>([]);
 const locations = ref<AssetReference[]>([]);
@@ -56,12 +57,26 @@ async function create(): Promise<void> {
     error.value = "请选择资产、仓库和位置"; return;
   }
   await execute(async () => {
-    selected.value = await createReceipt({ businessDate: businessDate.value,
+    const payload = { businessDate: businessDate.value,
       items: chosen.map((asset) => ({ asset: { id: asset!.id, version: asset!.version },
         targetWarehouse: { id: warehouse.id, version: warehouse.version },
-        targetLocation: { id: location.id, version: location.version } })) });
-    notice.value = `入库草稿 ${selected.value.receiptNumber} 已建立`;
+        targetLocation: { id: location.id, version: location.version } })) };
+    selected.value = editing.value
+      ? await updateReceipt(editing.value, payload) : await createReceipt(payload);
+    notice.value = `入库草稿 ${selected.value.receiptNumber} 已保存`;
+    editing.value = null;
+    assetIds.value = [];
   });
+}
+
+function editDraft(): void {
+  if (!selected.value) return;
+  editing.value = selected.value;
+  businessDate.value = selected.value.businessDate;
+  assetIds.value = selected.value.items.map((item) => item.asset.id);
+  warehouseId.value = selected.value.items[0]?.targetWarehouse.id ?? "";
+  locationId.value = selected.value.items[0]?.targetLocation.id ?? "";
+  notice.value = "修改下方草稿内容后保存；所选资产使用同一目标仓库和位置";
 }
 
 async function act(action: "submit" | "cancel" | "approve" | "reject" | "claim"): Promise<void> {
@@ -112,7 +127,7 @@ onMounted(load);
     <p v-if="error" class="form-error" role="alert">{{ error }}</p>
     <p v-if="notice" class="asset-notice" role="status">{{ notice }}</p>
     <section v-if="warehouseRole" class="asset-panel asset-form" aria-label="建立入库单">
-      <h2>建立入库单</h2>
+      <h2>{{ editing ? `修订草稿 ${editing.receiptNumber}` : '建立入库单' }}</h2>
       <form @submit.prevent="create">
         <label>业务日期<input v-model="businessDate" type="date" required /></label>
         <label>待入库资产（可多选）<select v-model="assetIds" multiple required>
@@ -122,9 +137,10 @@ onMounted(load);
           <option v-for="item in warehouses" :key="item.id" :value="item.id">{{ item.name ?? item.code }}</option>
         </select></label>
         <label>目标位置<select v-model="locationId" required><option value="">请选择</option>
-          <option v-for="item in locations.filter((value) => value.warehouseId === warehouseId)" :key="item.id" :value="item.id">{{ item.name ?? item.code }}</option>
+          <option v-for="item in locations.filter((value) => value.warehouse?.id === warehouseId)" :key="item.id" :value="item.id">{{ item.name ?? item.code }}</option>
         </select></label>
-        <button class="primary-button" type="submit" :disabled="busy">保存草稿</button>
+        <button class="primary-button" type="submit" :disabled="busy">{{ editing ? '保存修订' : '保存草稿' }}</button>
+        <button v-if="editing" class="secondary-button" type="button" :disabled="busy" @click="editing = null; assetIds = []">退出修订</button>
       </form>
     </section>
     <section class="asset-panel" aria-label="入库单列表">
@@ -143,6 +159,7 @@ onMounted(load);
       <p v-if="selected.currentProcessor">当前处理人：{{ selected.currentProcessor.processor.username }}</p>
       <p v-if="selected.decision">管理员决定：{{ selected.decision.result }}</p>
       <div class="asset-actions">
+        <button v-if="warehouseRole && selected.status === 'DRAFT' && selected.createdBy.id === session.user?.id" class="secondary-button" type="button" :disabled="busy" @click="editDraft">修订草稿</button>
         <button v-if="warehouseRole && selected.status === 'DRAFT'" class="primary-button" type="button" :disabled="busy" @click="act('submit')">提交审批</button>
         <button v-if="warehouseRole && ['DRAFT', 'PENDING_ADMIN_DECISION'].includes(selected.status)" class="secondary-button" type="button" :disabled="busy" @click="act('cancel')">取消</button>
         <button v-if="adminRole && selected.status === 'PENDING_ADMIN_DECISION'" class="primary-button" type="button" :disabled="busy" @click="act('approve')">批准</button>

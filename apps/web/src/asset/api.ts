@@ -1,6 +1,6 @@
 import { useSessionStore } from "@/auth/sessionStore";
 
-export interface AssetReference { id: string; version: number; code?: string; name?: string; warehouseId?: string }
+export interface AssetReference { id: string; version: number; code?: string; name?: string; warehouse?: { id: string; version: number } }
 export interface AssetCard {
   id: string;
   assetCode: string;

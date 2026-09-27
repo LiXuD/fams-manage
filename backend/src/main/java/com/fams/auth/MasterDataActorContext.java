@@ -25,7 +25,8 @@ public final class MasterDataActorContext {
 
     public long requireCatalogSelector() {
         AuthAccount account = AuthRequestContext.account(request);
-        if (!account.roles().contains(Role.WAREHOUSE_OPERATOR)
+        if (!account.roles().contains(Role.SYSTEM_ADMIN)
+                && !account.roles().contains(Role.WAREHOUSE_OPERATOR)
                 && !account.roles().contains(Role.ASSET_ADMIN)) {
             throw AuthOperationException.forbidden();
         }

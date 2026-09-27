@@ -16,6 +16,7 @@ export interface InboundReceipt {
   status: string;
   businessDate: string;
   version: number;
+  createdBy: { id: string; username: string };
   items: InboundItem[];
   currentProcessor?: { processor: { id: string; username: string } };
   decision?: { result: string; comment?: string };
@@ -51,6 +52,9 @@ export function getReceipt(id: string): Promise<InboundReceipt> {
 }
 export function createReceipt(payload: unknown): Promise<InboundReceipt> {
   return request<InboundReceipt>("/inbound-receipts", "POST", payload);
+}
+export function updateReceipt(value: InboundReceipt, payload: unknown): Promise<InboundReceipt> {
+  return request<InboundReceipt>(`/inbound-receipts/${value.id}`, "PATCH", payload, value.version);
 }
 export function submitReceipt(value: InboundReceipt): Promise<InboundReceipt> {
   return request<InboundReceipt>(`/inbound-receipts/${value.id}/submit`, "POST", undefined, value.version);
