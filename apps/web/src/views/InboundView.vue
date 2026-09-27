@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
+import AttachmentPanel from "@/components/AttachmentPanel.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { activeReferences, getAsset, listAssets, type AssetCard, type AssetReference } from "@/asset/api";
 import {
@@ -150,7 +151,7 @@ onMounted(load);
         <tbody><tr v-for="value in receipts" :key="value.id">
           <td>{{ value.receiptNumber }}</td><td>{{ value.businessDate }}</td>
           <td>{{ value.status }}</td><td>{{ value.items.length }}</td>
-          <td><button class="text-button" type="button" @click="open(value.id)">详情</button></td>
+          <td><button class="text-button" type="button" :disabled="busy" @click="open(value.id)">详情</button></td>
         </tr><tr v-if="!receipts.length"><td colspan="5">暂无入库单</td></tr></tbody>
       </table></div>
     </section>
@@ -174,6 +175,8 @@ onMounted(load);
           <td><button v-if="warehouseRole && selected.status === 'WAREHOUSE_PROCESSING' && item.executionStatus === 'PENDING' && selected.currentProcessor?.processor.id === session.user?.id" class="text-button" type="button" :disabled="busy" @click="accept(item)">验收入库</button></td>
         </tr></tbody>
       </table></div>
+      <AttachmentPanel :key="selected.id" :receipt="selected" :disabled="busy"
+        @busy="busy = $event" @uploaded="selected.version = $event" />
     </section>
   </AppChrome>
 </template>
