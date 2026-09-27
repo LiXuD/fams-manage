@@ -25,6 +25,7 @@ public final class AttachmentUploadService {
             business.requireWritable(actor.id(), businessId, version, true);
             registry.register(business.businessType(), businessId, version, actor.id(), filename, attachment);
             business.registered(actor.id(), businessId, version);
+            registry.auditUpload(actor.id(), actor.requestId(), business.businessType(), businessId, version, attachment);
             return attachment;
         });
     }
@@ -36,7 +37,8 @@ public final class AttachmentUploadService {
             throw new IllegalArgumentException("Invalid attachment upload request");
         }
         var actor = actors.requireWarehouse();
-        if (!keys.exists(actor.id(), key)) { business.requireWritable(actor.id(), businessId, version, false); }
+        // Version comparison belongs after locked replay lookup; an upload may have just advanced it.
+        if (!keys.exists(actor.id(), key)) { business.requireUploadAccess(actor.id(), businessId); }
         try {
             return writer.write(filename, mime, source, attachment -> {
                 actors.revalidateLocked(actor);
@@ -44,6 +46,7 @@ public final class AttachmentUploadService {
                 business.requireWritable(actor.id(), businessId, version, true);
                 registry.register(business.businessType(), businessId, version, actor.id(), filename, attachment);
                 business.registered(actor.id(), businessId, version);
+                registry.auditUpload(actor.id(), actor.requestId(), business.businessType(), businessId, version, attachment);
                 keys.save(actor.id(), key, version, attachment.file().id());
                 return attachment;
             });

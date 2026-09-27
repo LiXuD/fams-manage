@@ -3034,6 +3034,8 @@ paths:
       operationId: uploadInboundAttachment
       summary: Append quarantined evidence to a writable inbound receipt.
       x-business-write: true
+      x-audit-event:
+        event: ATTACHMENT_UPLOADED
       x-actor:
         required: true
         roles: [WAREHOUSE_OPERATOR]

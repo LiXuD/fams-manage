@@ -13,6 +13,10 @@ public final class InboundAttachmentPort implements AttachmentBusinessPort {
     public InboundAttachmentPort(JdbcTemplate db) { this.db = db; }
     @Override public String businessType() { return "INBOUND"; }
 
+    @Override public void requireUploadAccess(long actorId, long businessId) {
+        requireWritable(actorId, businessId, -1, false);
+    }
+
     @Override
     public void requireWritable(long actorId, long businessId, long expectedVersion, boolean lock) {
         var receipts = db.queryForList("SELECT creator_account_id,receipt_status,version FROM fams_inbound_receipt "
@@ -29,7 +33,7 @@ public final class InboundAttachmentPort implements AttachmentBusinessPort {
                     && ((Number) owners.getFirst().get("processor_account_id")).longValue() == actorId;
         }
         if (!writable) { throw InboundFailure.conflict("INBOUND_ATTACHMENT_READ_ONLY"); }
-        if (((Number) receipt.get("version")).longValue() != expectedVersion) {
+        if (expectedVersion >= 0 && ((Number) receipt.get("version")).longValue() != expectedVersion) {
             throw InboundFailure.conflict("INBOUND_VERSION_CONFLICT");
         }
     }

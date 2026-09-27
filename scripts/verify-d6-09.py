@@ -37,7 +37,8 @@ def main() -> None:
     run("docker", "run", "-d", "--name", CONTAINER,
         "-e", "MYSQL_ROOT_PASSWORD=" + ROOT_PASSWORD,
         "-e", "MYSQL_DATABASE=fams_d6_09", "-e", "MYSQL_USER=fams_d6_09",
-        "-e", "MYSQL_PASSWORD=" + PASSWORD, "-p", "127.0.0.1::3306", IMAGE)
+        "-e", "MYSQL_PASSWORD=" + PASSWORD, "-p", "127.0.0.1::3306", IMAGE,
+        "--log-bin-trust-function-creators=1")
     for _ in range(60):
         ping = subprocess.run(["rtk", "docker", "exec", CONTAINER, "mysqladmin",
                                "ping", "-uroot", "-p" + ROOT_PASSWORD, "--silent"],
@@ -54,8 +55,8 @@ def main() -> None:
     env["D6_09_TEST_DATASOURCE_USERNAME"] = "fams_d6_09"
     env["D6_09_TEST_DATASOURCE_PASSWORD"] = PASSWORD
     run("./mvnw", "-pl", "backend", "-Dd6.09.attachment.runtime=true",
-        "-Dtest=AttachmentRegistryTest", "test", env=env)
-    print("D6-09 real MySQL attachment quota path passed")
+        "-Dtest=AttachmentRegistryTest,AttachmentHttpTest", "test", env=env)
+    print("D6-09 real MySQL attachment quota and HTTP paths passed")
 
 
 if __name__ == "__main__":

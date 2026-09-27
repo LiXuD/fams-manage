@@ -2,6 +2,7 @@ package com.fams.auth;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.UUID;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.context.annotation.Profile;
@@ -12,7 +13,11 @@ import org.springframework.stereotype.Component;
 @Component
 @Profile("fams-product")
 public final class AttachmentActorContext {
-    public record Actor(long id, long authEpoch, long authorizationVersion, Instant expiresAt) { }
+    public record Actor(long id, long authEpoch, long authorizationVersion, Instant expiresAt, UUID requestId) {
+        public Actor(long id, long authEpoch, long authorizationVersion, Instant expiresAt) {
+            this(id, authEpoch, authorizationVersion, expiresAt, UUID.randomUUID());
+        }
+    }
     private final HttpServletRequest request;
     private final AuthAccountStore accounts;
     private final JdbcTemplate db;
@@ -26,7 +31,8 @@ public final class AttachmentActorContext {
         var account = AuthRequestContext.account(request);
         if (!account.roles().contains(Role.WAREHOUSE_OPERATOR)) { throw AuthOperationException.forbidden(); }
         var session = AuthRequestContext.session(request);
-        return new Actor(account.id(), session.authEpoch(), session.authorizationVersion(), session.absoluteExpiresAt());
+        return new Actor(account.id(), session.authEpoch(), session.authorizationVersion(),
+                session.absoluteExpiresAt(), AuthRequestContext.requestId(request));
     }
 
     public void revalidateLocked(Actor actor) {

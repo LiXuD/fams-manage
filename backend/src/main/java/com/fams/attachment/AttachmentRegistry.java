@@ -3,11 +3,13 @@ package com.fams.attachment;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.UUID;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 /** Internal persistence boundary; business authorization must precede registration. No public route exists here. */
 @Service
@@ -17,6 +19,18 @@ public class AttachmentRegistry {
     private final Clock clock;
 
     public AttachmentRegistry(JdbcTemplate db, Clock clock) { this.db = db; this.clock = clock; }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void auditUpload(long actorId, UUID requestId, String businessType, long businessId,
+            long version, AttachmentIntake.QuarantinedAttachment attachment) {
+        db.update("INSERT INTO fams_audit_event (request_id,actor_account_id,actor_role,action,resource_type,"
+                + "resource_id,before_version,after_version,occurred_at,detail_json) "
+                + "VALUES (?,?,'WAREHOUSE_OPERATOR','ATTACHMENT_UPLOADED',?,?,?,?,?,"
+                + "JSON_OBJECT('objectId',?,'contentSha256',?,'sizeBytes',?,'scanStatus',?))",
+                requestId.toString(), actorId, businessType, businessId, version, version + 1, Instant.now(clock),
+                attachment.file().id().toString(), attachment.file().sha256(), attachment.file().size(),
+                attachment.scanResult().name());
+    }
 
     @Transactional
     public void register(String businessType, long businessId, long businessVersion, long uploaderId,
