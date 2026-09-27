@@ -105,6 +105,8 @@
 - 后续产品检查定位到 attachment→inbound→attachment 循环：读服务与配置引用入库具体实现。改为现有 AttachmentBusinessPort 声明读授权契约，由入库实现提供当前权限与锁检查，附件不再依赖入库类。`FamsArchitectureTest` 3 项通过；真实 HTTP 回归正在运行，候选质量检查尚未全部通过。
 - 端口修复后真实 MySQL 配额/HTTP 回归退出 0。质量入口增加独立 D6-09 数据库、运行测试属性及 3 份必需报告；真实 Clamd 方法由既有专用入口执行，不在该模式选择或计入通过。验证器自身 32 项测试通过。
 - 新增 `scripts/verify-product-development.py`，直接复用产品 Java 质量、TypeScript、依赖及真实运行恢复检查，跳过历史提交范围、旧治理克隆和嵌套历史门禁审计；失败用例在生成报告清理前输出。完整历史门禁入口仍保留，产品入口结果单独报告。
+- 产品入口已实际启用附件配额、HTTP、清理测试，均无失败；本轮阻断为分支覆盖 1633/2189（74.60%），行覆盖 4822/5244（91.95%）。测试选择 `*` 还带入专用 RuntimeCase，已恢复常规 Test/Tests/TestCase 命名范围；真实 Clamd 与升级继续按专用入口分别验证，不计跳过通过。
+- 新增上传/纠错请求边界 24 项：非法幂等键、业务 ID/版本、文件名/MIME、原件和纠错原因在任何文件读取、权限调用或元数据登记前拒绝；定向测试与 Checkstyle 通过，验证器自身 32 项通过。整体覆盖及产品入口仍待重跑。
 
 - `rtk env D6_09_UPGRADE_ONLY=true python3 scripts/verify-d6-09.py` 退出 0，执行新增 `AttachmentUpgradeRuntimeCase`，使用本轮独有真实 MySQL。
 - 先迁移到 V7 并写入已有仓库（版本 3），再应用 V8～V12 共 5 次迁移；原名称和版本保留，7 张附件相关表存在。重复迁移执行数为 0，Flyway 校验通过，容器清理。

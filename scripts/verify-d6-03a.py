@@ -1116,7 +1116,7 @@ def verify_java_quality(context: RuntimeContext) -> None:
                 "-Dd6.07.inbound.runtime=true",
                 "-Dd6.09.attachment.runtime=true",
                 # Real Clamd has its own owned-daemon gate; do not count it as a skipped pass here.
-                "-Dtest=*,!AttachmentHttpTest#realClamdAllowsCleanDownloadAndQuarantinesEicarAndDaemonOutage",
+                "-Dtest=*Test,*Tests,Test*,*TestCase,!AttachmentHttpTest#realClamdAllowsCleanDownloadAndQuarantinesEicarAndDaemonOutage",
                 "clean",
                 "verify",
             ],
