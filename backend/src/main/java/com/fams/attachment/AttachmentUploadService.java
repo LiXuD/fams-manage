@@ -28,4 +28,25 @@ public final class AttachmentUploadService {
             return attachment;
         });
     }
+
+    public AttachmentIntake.QuarantinedAttachment uploadIdempotent(AttachmentUploadKeys keys, String key,
+            long businessId, long version, String filename, String mime, InputStream source) throws IOException {
+        if (key == null || !key.matches("[\\x21-\\x7e]{16,128}") || version < 0 || businessId <= 0
+                || filename == null || filename.isBlank() || filename.length() > 255 || mime == null) {
+            throw new IllegalArgumentException("Invalid attachment upload request");
+        }
+        var actor = actors.requireWarehouse();
+        if (!keys.exists(actor.id(), key)) { business.requireWritable(actor.id(), businessId, version, false); }
+        try {
+            return writer.write(filename, mime, source, attachment -> {
+                actors.revalidateLocked(actor);
+                keys.replay(actor.id(), key, business.businessType(), businessId, version, filename, mime, attachment);
+                business.requireWritable(actor.id(), businessId, version, true);
+                registry.register(business.businessType(), businessId, version, actor.id(), filename, attachment);
+                business.registered(actor.id(), businessId, version);
+                keys.save(actor.id(), key, version, attachment.file().id());
+                return attachment;
+            });
+        } catch (AttachmentUploadKeys.Replay replay) { return replay.attachment(); }
+    }
 }

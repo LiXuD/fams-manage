@@ -3026,6 +3026,65 @@ components:
               items:
                 $ref: '#/components/schemas/InboundReceipt'
 paths:
+  /inbound-receipts/{receiptId}/attachments:
+    parameters:
+      - $ref: '#/components/parameters/InboundReceiptId'
+    post:
+      tags: [Inbound]
+      operationId: uploadInboundAttachment
+      summary: Append quarantined evidence to a writable inbound receipt.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [WAREHOUSE_OPERATOR]
+      x-version:
+        required: true
+        precondition: Current receipt version; replay uses the original request version.
+      x-transaction:
+        boundary: Register metadata, reserve quotas, advance receipt version and record replay atomically.
+      x-invariants: >-
+        Only a draft creator or current exclusive warehouse processor may append evidence.
+        Revalidate current account authorization after scanning and before registration.
+        Submitted and completed evidence is immutable. An uploader's same key and payload
+        returns the original attachment and original scan result; different payload conflicts.
+        No download grant is returned. Only CLEAN attachments can later obtain download grants.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201':
+          description: Registered quarantined attachment, or the original idempotent result.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [objectId, filename, contentType, sizeBytes, scanStatus, businessVersion]
+                properties:
+                  objectId: { type: string, format: uuid }
+                  filename: { type: string }
+                  contentType: { type: string }
+                  sizeBytes: { type: integer, format: int64 }
+                  scanStatus: { type: string, enum: [CLEAN, INFECTED, UNAVAILABLE] }
+                  businessVersion: { type: integer, format: int64 }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413':
+          description: Multipart request exceeds the upload limit.
+        '503':
+          description: Quarantine storage could not accept the upload.
   /inbound-receipts:
     get:
       tags: [Inbound]
