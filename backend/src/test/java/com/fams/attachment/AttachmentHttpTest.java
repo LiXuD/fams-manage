@@ -17,9 +17,11 @@ import java.util.concurrent.TimeUnit;
 import com.fams.attachment.MalwareScanner.Result;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -48,7 +50,7 @@ class AttachmentHttpTest {
     private String lastGrant;
     @Value("${local.server.port}") int port;
     @Autowired JdbcTemplate db;
-    @Autowired ControlledScanner scanner;
+    @Autowired(required = false) ControlledScanner scanner;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry properties) {
@@ -56,9 +58,13 @@ class AttachmentHttpTest {
         properties.add("spring.datasource.username", () -> System.getenv("D6_09_TEST_DATASOURCE_USERNAME"));
         properties.add("spring.datasource.password", () -> System.getenv("D6_09_TEST_DATASOURCE_PASSWORD"));
         properties.add("fams.attachments.quarantine-root", () -> ROOT.toString());
+        if (System.getenv("D6_09_CLAMD_PORT") != null) {
+            properties.add("fams.attachments.clamd-port", () -> System.getenv("D6_09_CLAMD_PORT"));
+        }
     }
 
     @Test
+    @DisabledIfSystemProperty(named = "d6.09.clamd.http", matches = "true")
     void uploadsReplayAtomicallyAndRejectRevocationAndAuditFailure() throws Exception {
         try {
             seed();
@@ -106,6 +112,70 @@ class AttachmentHttpTest {
             try (var files = Files.list(ROOT)) { for (Path file : files.toList()) { Files.delete(file); } }
             Files.delete(ROOT);
         }
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "d6.09.clamd.http", matches = "true")
+    void realClamdAllowsCleanDownloadAndQuarantinesEicarAndDaemonOutage() throws Exception {
+        try {
+            seed();
+            var session = login("attachment-creator");
+            String clean = "%PDF-1.7\nHarmless attachment test document";
+            var uploaded = JSON.readTree(assertStatus(201,
+                    upload(session, "real-clamd-clean-key", 0, clean, true)).body());
+            assertEquals("CLEAN", uploaded.path("scanStatus").asText());
+            String path = "/api/v1/attachments/" + uploaded.path("objectId").asText();
+            String url = JSON.readTree(assertStatus(200, access(session, "POST", path + "/download-grant"))
+                    .body()).path("url").asText();
+            assertEquals(clean, assertStatus(200, access(session, "GET", url)).body());
+            // EICAR is an inert, standard antivirus test string, not a real malware sample.
+            String eicar = "X5O!P%@AP[4\\PZX54(P^)7CC)7}$" + "EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*";
+            var realScanner = new ClamdScanner("127.0.0.1", Integer.parseInt(System.getenv("D6_09_CLAMD_PORT")), 10000);
+            assertEquals(Result.INFECTED, realScanner.scan(new java.io.ByteArrayInputStream(
+                    eicar.getBytes(java.nio.charset.StandardCharsets.US_ASCII))));
+            var infected = JSON.readTree(assertStatus(201, upload(session, "real-clamd-eicar-key", 1,
+                    pdfWithEmbeddedFile(eicar), true)).body());
+            assertEquals("INFECTED", infected.path("scanStatus").asText());
+            assertStatus(409, access(session, "POST", "/api/v1/attachments/"
+                    + infected.path("objectId").asText() + "/download-grant"));
+            String owned = System.getenv("D6_09_CLAMD_CONTAINER");
+            assertTrue(owned != null && owned.matches("fams-d6-09-clamd-[0-9a-f]{16}"));
+            var stopped = new ProcessBuilder("rtk", "docker", "stop", owned)
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD).redirectError(ProcessBuilder.Redirect.DISCARD).start();
+            assertTrue(stopped.waitFor(30, TimeUnit.SECONDS));
+            assertEquals(0, stopped.exitValue());
+            var unavailable = JSON.readTree(assertStatus(201, upload(session, "real-clamd-outage-key", 2,
+                    clean, true)).body());
+            assertEquals("UNAVAILABLE", unavailable.path("scanStatus").asText());
+            assertStatus(409, access(session, "POST", "/api/v1/attachments/"
+                    + unavailable.path("objectId").asText() + "/download-grant"));
+            assertCounts(3);
+        } finally {
+            try (var files = Files.list(ROOT)) { for (Path file : files.toList()) { Files.delete(file); } }
+            Files.delete(ROOT);
+        }
+    }
+
+    private String pdfWithEmbeddedFile(String content) {
+        String[] objects = {
+            "<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles << /Names [(eicar.txt) 4 0 R] >> >> >>",
+            "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << >> >>",
+            "<< /Type /Filespec /F (eicar.txt) /EF << /F 5 0 R >> >>",
+            "<< /Type /EmbeddedFile /Subtype /text#2Fplain /Length " + content.length()
+                    + " >>\nstream\n" + content + "\nendstream"
+        };
+        var document = new StringBuilder("%PDF-1.7\n");
+        var offsets = new java.util.ArrayList<Integer>();
+        for (int index = 0; index < objects.length; index++) {
+            offsets.add(document.length());
+            document.append(index + 1).append(" 0 obj\n").append(objects[index]).append("\nendobj\n");
+        }
+        int xref = document.length();
+        document.append("xref\n0 6\n0000000000 65535 f \n");
+        for (int offset : offsets) { document.append("%010d 00000 n \n".formatted(offset)); }
+        return document.append("trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n").append(xref)
+                .append("\n%%EOF\n").toString();
     }
 
     private void exerciseDownloads(Session session, String objectId) throws Exception {
@@ -249,6 +319,7 @@ class AttachmentHttpTest {
         }
     }
     @TestConfiguration
+    @ConditionalOnProperty(name = "d6.09.scanner-fixture", havingValue = "true", matchIfMissing = true)
     static class ScannerConfiguration {
         @Bean @Primary ControlledScanner controlledScanner() { return new ControlledScanner(); }
     }
