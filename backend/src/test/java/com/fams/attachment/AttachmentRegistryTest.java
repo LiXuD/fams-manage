@@ -50,11 +50,14 @@ class AttachmentRegistryTest {
                 register(1, AttachmentFormat.PNG, 1);
                 return true;
             } catch (IllegalArgumentException error) { return false; }
-            catch (InterruptedException error) { Thread.currentThread().interrupt(); throw new IllegalStateException(error); }
+            catch (InterruptedException error) { Thread.currentThread().interrupt();
+            throw new IllegalStateException(error);
+            }
         };
         var first = CompletableFuture.supplyAsync(attempt);
         var second = CompletableFuture.supplyAsync(attempt);
-        ready.await(); start.countDown();
+        ready.await();
+        start.countDown();
         assertTrue(first.get() != second.get());
         assertEquals(9, count(1));
         for (int i = 0; i < 5; i++) { register(2, AttachmentFormat.PDF, 1); }
@@ -77,7 +80,9 @@ class AttachmentRegistryTest {
                     snapshotRead.countDown();
                     try { committed.await(); }
                     catch (InterruptedException error) {
-                        Thread.currentThread().interrupt(); throw new IllegalStateException(error); }
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException(error);
+                        }
                     register(4, AttachmentFormat.PNG, 1);
                 });
                 return true;

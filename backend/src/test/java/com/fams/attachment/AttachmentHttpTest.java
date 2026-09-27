@@ -352,7 +352,8 @@ class AttachmentHttpTest {
     }
     private URI uri(String path) { return URI.create("http://localhost:" + port + path); }
     private HttpResponse<String> assertStatus(int status, HttpResponse<String> response) {
-        assertEquals(status, response.statusCode(), response.body()); return response;
+        assertEquals(status, response.statusCode(), response.body());
+        return response;
     }
     private static Path temporaryRoot() {
         try { return Files.createTempDirectory("fams-attachment-http-"); }
@@ -368,7 +369,9 @@ class AttachmentHttpTest {
             try {
                 content.readAllBytes();
                 if (barrier != null) { barrier.await(10, TimeUnit.SECONDS); }
-                if (entered != null) { entered.countDown(); release.await(10, TimeUnit.SECONDS); }
+                if (entered != null) { entered.countDown();
+                release.await(10, TimeUnit.SECONDS);
+                }
                 return Result.CLEAN;
             } catch (Exception error) { return Result.UNAVAILABLE; }
         }

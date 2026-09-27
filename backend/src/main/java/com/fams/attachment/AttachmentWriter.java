@@ -46,7 +46,9 @@ public final class AttachmentWriter {
                     beforeRegistration.accept(attachment.file().id());
                     return registration.apply(attachment);
                 }
-                catch (RuntimeException error) { rejected[0] = true; throw error; }
+                catch (RuntimeException error) { rejected[0] = true;
+                throw error;
+                }
             });
         } catch (TransactionSystemException uncertain) {
             // A lost commit acknowledgement can mean metadata committed; retain the bytes for reconciliation.

@@ -28,7 +28,10 @@ public class AttachmentReadService {
     private final AttachmentGrantSigner grants;
     public AttachmentReadService(JdbcTemplate db, AttachmentReaderContext actors, InboundAttachmentPort business,
             AttachmentStorage storage, Clock clock, @Value("${fams.security.idempotency-hmac-key}") String secret) {
-        this.db = db; this.actors = actors; this.business = business; this.storage = storage;
+        this.db = db;
+        this.actors = actors;
+        this.business = business;
+        this.storage = storage;
         this.grants = new AttachmentGrantSigner(secret, clock);
     }
 

@@ -33,7 +33,10 @@ public final class AttachmentReconciliationService {
             JdbcTemplate db, AttachmentStorage storage, AttachmentObjectGuard guard, Clock clock,
             PlatformTransactionManager transactions) {
         this.root = Path.of(root).toAbsolutePath().normalize();
-        this.db = db; this.storage = storage; this.guard = guard; this.clock = clock;
+        this.db = db;
+        this.storage = storage;
+        this.guard = guard;
+        this.clock = clock;
         this.transaction = new TransactionTemplate(transactions);
     }
     public int removeOrphans(int limit) {
@@ -52,7 +55,9 @@ public final class AttachmentReconciliationService {
                     // Current locking read sees a registration committed while the guard was awaited.
                     if (!db.queryForList("SELECT object_id FROM fams_attachment WHERE object_id=? FOR UPDATE",
                             id.toString()).isEmpty() || !candidate(path, cutoff)) { return false; }
-                    try { storage.delete(id); return true; }
+                    try { storage.delete(id);
+                    return true;
+                    }
                     catch (IOException error) { return false; } // File remains eligible on the next scheduled pass.
                 }));
                 if (deleted) { removed++; }

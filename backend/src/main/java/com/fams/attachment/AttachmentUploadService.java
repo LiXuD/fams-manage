@@ -13,7 +13,10 @@ public final class AttachmentUploadService {
 
     public AttachmentUploadService(AttachmentWriter writer, AttachmentRegistry registry,
             AttachmentActorContext actors, AttachmentBusinessPort business) {
-        this.writer = writer; this.registry = registry; this.actors = actors; this.business = business;
+        this.writer = writer;
+        this.registry = registry;
+        this.actors = actors;
+        this.business = business;
     }
 
     public AttachmentIntake.QuarantinedAttachment upload(long businessId, long version, String filename,

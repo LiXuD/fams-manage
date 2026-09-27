@@ -13,7 +13,9 @@ public enum AttachmentFormat {
     private final String mime;
     private final long maxBytes;
 
-    AttachmentFormat(String mime, long maxBytes) { this.mime = mime; this.maxBytes = maxBytes; }
+    AttachmentFormat(String mime, long maxBytes) { this.mime = mime;
+    this.maxBytes = maxBytes;
+    }
     public String mime() { return mime; }
     public boolean image() { return this != PDF; }
 

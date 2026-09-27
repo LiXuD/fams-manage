@@ -151,7 +151,9 @@ class AttachmentCleanupTest {
             }
             var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
             assertThrows(java.io.UncheckedIOException.class,
-                    () -> tx.execute(status -> { guard.requireStored(orphan.id()); return null; }));
+                    () -> tx.execute(status -> { guard.requireStored(orphan.id());
+                    return null;
+                    }));
 
             // Registration holding the object guard wins over a concurrent orphan candidate.
             var registering = storage.quarantine(new ByteArrayInputStream("%PDF-1.7 registering".getBytes()));
@@ -163,9 +165,13 @@ class AttachmentCleanupTest {
                         new java.util.concurrent.atomic.AtomicReference<>();
                 tx.execute(status -> {
                     guard.requireStored(registering.id());
-                    pending.set(workers.submit(() -> { entered.countDown(); return recon.removeOrphans(100); }));
+                    pending.set(workers.submit(() -> { entered.countDown();
+                    return recon.removeOrphans(100);
+                    }));
                     try { assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS)); }
-                    catch (InterruptedException error) { Thread.currentThread().interrupt(); throw new IllegalStateException(error); }
+                    catch (InterruptedException error) { Thread.currentThread().interrupt();
+                    throw new IllegalStateException(error);
+                    }
                     registry.register("INBOUND", 201, 0, 200, "registered.pdf",
                             new AttachmentIntake.QuarantinedAttachment(registering, AttachmentFormat.PDF,
                                     MalwareScanner.Result.UNAVAILABLE));

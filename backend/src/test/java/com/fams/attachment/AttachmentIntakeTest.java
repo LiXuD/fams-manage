@@ -41,7 +41,8 @@ class AttachmentIntakeTest {
     void disguisedContentIsRemovedWithoutScanning() throws Exception {
         AtomicBoolean scanned = new AtomicBoolean();
         AttachmentIntake intake = new AttachmentIntake(new LocalAttachmentStorage(directory), content -> {
-            scanned.set(true); return MalwareScanner.Result.CLEAN;
+            scanned.set(true);
+            return MalwareScanner.Result.CLEAN;
         });
         assertThrows(IllegalArgumentException.class,
                 () -> intake.receive("script.png", "image/png", new ByteArrayInputStream("<script>".getBytes())));

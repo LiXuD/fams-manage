@@ -24,7 +24,10 @@ public final class AttachmentActorContext {
     private final Clock clock;
 
     AttachmentActorContext(HttpServletRequest request, AuthAccountStore accounts, JdbcTemplate db, Clock clock) {
-        this.request = request; this.accounts = accounts; this.db = db; this.clock = clock;
+        this.request = request;
+        this.accounts = accounts;
+        this.db = db;
+        this.clock = clock;
     }
 
     public Actor requireWarehouse() {

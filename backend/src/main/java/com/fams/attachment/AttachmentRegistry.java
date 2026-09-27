@@ -18,7 +18,9 @@ public class AttachmentRegistry {
     private final JdbcTemplate db;
     private final Clock clock;
 
-    public AttachmentRegistry(JdbcTemplate db, Clock clock) { this.db = db; this.clock = clock; }
+    public AttachmentRegistry(JdbcTemplate db, Clock clock) { this.db = db;
+    this.clock = clock;
+    }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void auditUpload(long actorId, UUID requestId, String businessType, long businessId,

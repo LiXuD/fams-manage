@@ -24,7 +24,9 @@ public final class AttachmentCleanupService {
     private final TransactionTemplate transaction;
     public AttachmentCleanupService(JdbcTemplate db, AttachmentStorage storage, Clock clock,
             PlatformTransactionManager transactions) {
-        this.db = db; this.storage = storage; this.clock = clock;
+        this.db = db;
+        this.storage = storage;
+        this.clock = clock;
         this.transaction = new TransactionTemplate(transactions);
     }
 

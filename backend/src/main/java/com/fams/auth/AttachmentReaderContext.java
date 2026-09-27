@@ -17,7 +17,10 @@ public final class AttachmentReaderContext {
     private final JdbcTemplate db;
     private final Clock clock;
     AttachmentReaderContext(HttpServletRequest request, AuthAccountStore accounts, JdbcTemplate db, Clock clock) {
-        this.request = request; this.accounts = accounts; this.db = db; this.clock = clock;
+        this.request = request;
+        this.accounts = accounts;
+        this.db = db;
+        this.clock = clock;
     }
     public Reader requireReaderLocked() {
         var account = AuthRequestContext.account(request);

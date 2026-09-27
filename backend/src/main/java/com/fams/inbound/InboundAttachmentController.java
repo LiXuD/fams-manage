@@ -22,7 +22,8 @@ public final class InboundAttachmentController {
     private final AttachmentUploadService uploads;
     private final AttachmentUploadKeys keys;
     public InboundAttachmentController(AttachmentUploadService uploads, AttachmentUploadKeys keys) {
-        this.uploads = uploads; this.keys = keys;
+        this.uploads = uploads;
+        this.keys = keys;
     }
 
     @PostMapping(value = "/api/v1/inbound-receipts/{receiptId}/attachments", consumes = "multipart/form-data")

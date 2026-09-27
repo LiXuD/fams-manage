@@ -70,7 +70,8 @@ class AttachmentUploadServiceTest {
         when(business.businessType()).thenReturn("INBOUND");
         var storage = new LocalAttachmentStorage(directory);
         var intake = new AttachmentIntake(storage, content -> {
-            scans.incrementAndGet(); return MalwareScanner.Result.CLEAN;
+            scans.incrementAndGet();
+            return MalwareScanner.Result.CLEAN;
         });
         var transactions = mock(PlatformTransactionManager.class);
         when(transactions.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
