@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -264,6 +265,7 @@ class InboundHttpTest {
         exerciseMultiExecution(many, creator, other, admin);
         exerciseDraftValidation(thirdBody, thirdAsset, asset, creator, other, admin);
         exerciseConcurrentClaim(assetBody, creator, other, admin);
+        exerciseConcurrentReplay(assetBody, creator);
 
 
     }
@@ -385,6 +387,48 @@ class InboundHttpTest {
         jdbc.update("UPDATE fams_organization SET status='ACTIVE' WHERE id=1");
         assertStatus(200, call("POST", path + "/cancel",
                 "{\"reason\":\"Validation checked\"}", creator, headers(creator, 71, 1L)));
+    }
+
+    private void exerciseConcurrentReplay(String assetBody, Session creator) throws Exception {
+        JsonNode asset = JSON.readTree(assertStatus(201, call("POST", "/api/v1/assets",
+                assetBody.replace("Desk", "Replay desk"), creator, headers(creator, 100, null))).body());
+        String body = """
+                {"businessDate":"2026-09-24","items":[{"asset":{"id":"%s","version":0},
+                 "targetWarehouse":{"id":"1","version":0},
+                 "targetLocation":{"id":"1","version":0}}]}
+                """.formatted(asset.path("id").asText());
+        int before = count("SELECT COUNT(*) FROM fams_inbound_receipt");
+        List<HttpResponse<String>> created = race("POST", "/api/v1/inbound-receipts",
+                body, creator, 101, null);
+        JsonNode first = JSON.readTree(assertStatus(201, created.get(0)).body());
+        assertEquals(first, JSON.readTree(assertStatus(201, created.get(1)).body()));
+        assertEquals(before + 1, count("SELECT COUNT(*) FROM fams_inbound_receipt"));
+        String path = "/api/v1/inbound-receipts/" + first.path("id").asText();
+        List<HttpResponse<String>> submitted = race("POST", path + "/submit", null, creator, 102, 0L);
+        assertEquals(JSON.readTree(assertStatus(200, submitted.get(0)).body()),
+                JSON.readTree(assertStatus(200, submitted.get(1)).body()));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id="
+                + asset.path("id").asText() + " AND released_at IS NULL"));
+        assertStatus(409, call("POST", "/api/v1/inbound-receipts",
+                body.replace("2026-09-24", "2026-09-25"), creator, headers(creator, 101, null)));
+    }
+
+    private List<HttpResponse<String>> race(String method, String path, String body,
+            Session session, int serial, Long version) throws Exception {
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        java.util.function.Supplier<HttpResponse<String>> request = () -> {
+            ready.countDown();
+            try {
+                start.await();
+                return call(method, path, body, session, headers(session, serial, version));
+            } catch (Exception error) { throw new IllegalStateException(error); }
+        };
+        CompletableFuture<HttpResponse<String>> first = CompletableFuture.supplyAsync(request);
+        CompletableFuture<HttpResponse<String>> second = CompletableFuture.supplyAsync(request);
+        ready.await();
+        start.countDown();
+        return List.of(first.get(), second.get());
     }
 
     private void exerciseConcurrentClaim(String assetBody, Session creator,

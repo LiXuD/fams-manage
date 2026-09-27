@@ -654,9 +654,12 @@ class InboundService {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> replay(Actor actor, String operation, String key, String digest) {
+        // Serialize this actor's inbound mutations through commit, including absent replay keys.
+        db.queryForObject("SELECT id FROM fams_system_account WHERE id=? FOR UPDATE",
+                Long.class, actor.id());
         Map<String, Object> prior = one("SELECT payload_sha256,response_body_json "
                 + "FROM fams_idempotency_record WHERE actor_account_id=? AND operation_id=? "
-                + "AND idempotency_key=?", actor.id(), operation, key);
+                + "AND idempotency_key=? FOR UPDATE", actor.id(), operation, key);
         if (prior == null) { return null; }
         if (!digest.equals(text(prior, "payload_sha256"))) {
             throw InboundFailure.conflict("INBOUND_IDEMPOTENCY_CONFLICT"); }
