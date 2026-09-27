@@ -123,6 +123,57 @@ class AttachmentCleanupTest {
             assertTrue(Files.exists(ROOT.resolve(rolledBack.toString())));
             assertEquals(1, restarted.expireDrafts(100));
             assertEquals(1, restarted.deletePending(100));
+
+            // Old bytes with committed metadata survive reconciliation, including quarantined states.
+            for (UUID preserved : java.util.List.of(fresh, submitted, completed, previouslySubmitted, raced)) {
+                Files.setLastModifiedTime(ROOT.resolve(preserved.toString()),
+                        java.nio.file.attribute.FileTime.from(CLOCK.instant().minus(Duration.ofDays(2))));
+            }
+            var orphan = storage.quarantine(new ByteArrayInputStream("%PDF-1.7 orphan".getBytes()));
+            Files.setLastModifiedTime(ROOT.resolve(orphan.id().toString()),
+                    java.nio.file.attribute.FileTime.from(CLOCK.instant().minus(Duration.ofHours(24))));
+            var recent = storage.quarantine(new ByteArrayInputStream("%PDF-1.7 recent".getBytes()));
+            Files.setLastModifiedTime(ROOT.resolve(recent.id().toString()),
+                    java.nio.file.attribute.FileTime.from(CLOCK.instant().minus(Duration.ofHours(23))));
+            Path unrelated = ROOT.resolve("maintenance-note");
+            Files.writeString(unrelated, "keep");
+            Files.setLastModifiedTime(unrelated,
+                    java.nio.file.attribute.FileTime.from(CLOCK.instant().minus(Duration.ofDays(2))));
+            var guard = new AttachmentObjectGuard(db, storage);
+            var recon = new AttachmentReconciliationService(ROOT.toString(), db, storage, guard, CLOCK, transactions);
+            assertEquals(1, recon.removeOrphans(100));
+            assertEquals(0, recon.removeOrphans(100));
+            assertFalse(Files.exists(ROOT.resolve(orphan.id().toString())));
+            assertTrue(Files.exists(ROOT.resolve(recent.id().toString())));
+            assertTrue(Files.exists(unrelated));
+            for (UUID preserved : java.util.List.of(fresh, submitted, completed, previouslySubmitted, raced)) {
+                assertTrue(Files.exists(ROOT.resolve(preserved.toString())));
+            }
+            var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
+            assertThrows(java.io.UncheckedIOException.class,
+                    () -> tx.execute(status -> { guard.requireStored(orphan.id()); return null; }));
+
+            // Registration holding the object guard wins over a concurrent orphan candidate.
+            var registering = storage.quarantine(new ByteArrayInputStream("%PDF-1.7 registering".getBytes()));
+            Files.setLastModifiedTime(ROOT.resolve(registering.id().toString()),
+                    java.nio.file.attribute.FileTime.from(CLOCK.instant().minus(Duration.ofDays(2))));
+            try (var workers = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+                var entered = new java.util.concurrent.CountDownLatch(1);
+                java.util.concurrent.atomic.AtomicReference<java.util.concurrent.Future<Integer>> pending =
+                        new java.util.concurrent.atomic.AtomicReference<>();
+                tx.execute(status -> {
+                    guard.requireStored(registering.id());
+                    pending.set(workers.submit(() -> { entered.countDown(); return recon.removeOrphans(100); }));
+                    try { assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS)); }
+                    catch (InterruptedException error) { Thread.currentThread().interrupt(); throw new IllegalStateException(error); }
+                    registry.register("INBOUND", 201, 0, 200, "registered.pdf",
+                            new AttachmentIntake.QuarantinedAttachment(registering, AttachmentFormat.PDF,
+                                    MalwareScanner.Result.UNAVAILABLE));
+                    return null;
+                });
+                assertEquals(0, pending.get().get(10, java.util.concurrent.TimeUnit.SECONDS));
+                assertTrue(Files.exists(ROOT.resolve(registering.id().toString())));
+            }
         } finally {
             try (var files = Files.list(ROOT)) { for (Path file : files.toList()) { Files.delete(file); } }
             Files.delete(ROOT);

@@ -15,8 +15,11 @@ import org.springframework.scheduling.annotation.Scheduled;
 public class AttachmentCleanupScheduler {
     private final AttachmentCleanupService cleanup;
 
-    public AttachmentCleanupScheduler(AttachmentCleanupService cleanup) {
+    private final AttachmentReconciliationService reconciliation;
+
+    public AttachmentCleanupScheduler(AttachmentCleanupService cleanup, AttachmentReconciliationService reconciliation) {
         this.cleanup = cleanup;
+        this.reconciliation = reconciliation;
     }
 
     @Scheduled(fixedDelayString = "${fams.attachments.cleanup-delay-ms:300000}",
@@ -24,5 +27,6 @@ public class AttachmentCleanupScheduler {
     public void clean() {
         cleanup.expireDrafts(100);
         cleanup.deletePending(100);
+        reconciliation.removeOrphans(100);
     }
 }

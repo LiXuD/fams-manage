@@ -16,9 +16,16 @@ public final class AttachmentWriter {
     private final AttachmentStorage storage;
     private final AttachmentIntake intake;
     private final TransactionTemplate transaction;
+    private final java.util.function.Consumer<java.util.UUID> beforeRegistration;
 
     public AttachmentWriter(AttachmentStorage storage, AttachmentIntake intake,
             PlatformTransactionManager transactionManager) {
+        this(storage, intake, transactionManager, id -> { });
+    }
+
+    public AttachmentWriter(AttachmentStorage storage, AttachmentIntake intake,
+            PlatformTransactionManager transactionManager, java.util.function.Consumer<java.util.UUID> beforeRegistration) {
+        this.beforeRegistration = Objects.requireNonNull(beforeRegistration);
         this.storage = Objects.requireNonNull(storage);
         this.intake = Objects.requireNonNull(intake);
         this.transaction = new TransactionTemplate(Objects.requireNonNull(transactionManager));
@@ -35,7 +42,10 @@ public final class AttachmentWriter {
         boolean[] rejected = {false};
         try {
             return transaction.execute(status -> {
-                try { return registration.apply(attachment); }
+                try {
+                    beforeRegistration.accept(attachment.file().id());
+                    return registration.apply(attachment);
+                }
                 catch (RuntimeException error) { rejected[0] = true; throw error; }
             });
         } catch (TransactionSystemException uncertain) {

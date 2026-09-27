@@ -30,7 +30,9 @@ public class AttachmentProductConfiguration {
     }
 
     @Bean AttachmentWriter attachmentWriter(AttachmentStorage storage, AttachmentIntake intake,
-            PlatformTransactionManager transactions) { return new AttachmentWriter(storage, intake, transactions); }
+            PlatformTransactionManager transactions, AttachmentObjectGuard guard) {
+        return new AttachmentWriter(storage, intake, transactions, guard::requireStored);
+    }
 
     @Bean AttachmentUploadService attachmentUploadService(AttachmentWriter writer, AttachmentRegistry registry,
             AttachmentActorContext actors, InboundAttachmentPort inbound) {
