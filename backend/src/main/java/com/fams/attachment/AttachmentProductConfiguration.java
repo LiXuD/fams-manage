@@ -3,7 +3,6 @@ package com.fams.attachment;
 import java.io.IOException;
 import java.nio.file.Path;
 import com.fams.auth.AttachmentActorContext;
-import com.fams.inbound.InboundAttachmentPort;
 import jakarta.servlet.MultipartConfigElement;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -35,7 +34,7 @@ public class AttachmentProductConfiguration {
     }
 
     @Bean AttachmentUploadService attachmentUploadService(AttachmentWriter writer, AttachmentRegistry registry,
-            AttachmentActorContext actors, InboundAttachmentPort inbound) {
+            AttachmentActorContext actors, AttachmentBusinessPort inbound) {
         return new AttachmentUploadService(writer, registry, actors, inbound);
     }
 

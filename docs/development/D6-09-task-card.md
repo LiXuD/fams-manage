@@ -102,6 +102,7 @@
 
 - 候选统一门禁执行到 D6-02C 契约检查，发现下载授权 POST 缺少非业务写例外分类，以及上传/纠错缺少错误扩展声明，已补齐；随后同步契约测试的明确例外名单。此前失败发生在产品质量阶段之前，不计统一门禁通过。
 - 契约定向 82 项通过后，直接执行产品质量/类型/恢复检查，避免重跑历史提交和治理基线。真实 MySQL 启动与清理通过；Java 质量阶段发现 37 项 Checkstyle 格式错误（一行多语句、测试通配导入），按报告修正后 `./mvnw -q -pl backend -Pquality validate` 退出 0。完整 Java 质量、类型和恢复阶段尚未通过，不计候选完成。
+- 后续产品检查定位到 attachment→inbound→attachment 循环：读服务与配置引用入库具体实现。改为现有 AttachmentBusinessPort 声明读授权契约，由入库实现提供当前权限与锁检查，附件不再依赖入库类。`FamsArchitectureTest` 3 项通过；真实 HTTP 回归正在运行，候选质量检查尚未全部通过。
 
 - `rtk env D6_09_UPGRADE_ONLY=true python3 scripts/verify-d6-09.py` 退出 0，执行新增 `AttachmentUpgradeRuntimeCase`，使用本轮独有真实 MySQL。
 - 先迁移到 V7 并写入已有仓库（版本 3），再应用 V8～V12 共 5 次迁移；原名称和版本保留，7 张附件相关表存在。重复迁移执行数为 0，Flyway 校验通过，容器清理。

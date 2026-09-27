@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import com.fams.auth.AttachmentReaderContext;
-import com.fams.inbound.InboundAttachmentPort;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
@@ -23,10 +22,10 @@ public class AttachmentReadService {
     public record Content(String filename, String mime, byte[] bytes) { }
     private final JdbcTemplate db;
     private final AttachmentReaderContext actors;
-    private final InboundAttachmentPort business;
+    private final AttachmentBusinessPort business;
     private final AttachmentStorage storage;
     private final AttachmentGrantSigner grants;
-    public AttachmentReadService(JdbcTemplate db, AttachmentReaderContext actors, InboundAttachmentPort business,
+    public AttachmentReadService(JdbcTemplate db, AttachmentReaderContext actors, AttachmentBusinessPort business,
             AttachmentStorage storage, Clock clock, @Value("${fams.security.idempotency-hmac-key}") String secret) {
         this.db = db;
         this.actors = actors;
