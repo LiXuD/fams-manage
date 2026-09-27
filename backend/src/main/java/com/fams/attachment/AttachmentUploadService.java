@@ -52,4 +52,33 @@ public final class AttachmentUploadService {
             });
         } catch (AttachmentUploadKeys.Replay replay) { return replay.attachment(); }
     }
+
+    public AttachmentIntake.QuarantinedAttachment correctIdempotent(AttachmentUploadKeys keys, String key,
+            long businessId, long version, java.util.UUID previousObjectId, String reason,
+            String filename, String mime, InputStream source) throws IOException {
+        if (key == null || !key.matches("[\\x21-\\x7e]{16,128}") || version < 0 || businessId <= 0
+                || filename == null || filename.isBlank() || filename.length() > 255 || mime == null
+                || previousObjectId == null || reason == null || reason.isBlank() || reason.length() > 500) {
+            throw new IllegalArgumentException("Invalid attachment correction request");
+        }
+        String correctionReason = reason.trim();
+        var actor = actors.requireWarehouse();
+        if (!keys.exists(actor.id(), key)) { business.requireUploadAccess(actor.id(), businessId); }
+        try {
+            return writer.write(filename, mime, source, attachment -> {
+                actors.revalidateLocked(actor);
+                keys.replay(actor.id(), key, business.businessType(), businessId, version, filename, mime,
+                        attachment, previousObjectId, correctionReason);
+                business.requireWritable(actor.id(), businessId, version, true);
+                registry.registerCorrection(business.businessType(), businessId, version, actor.id(), filename,
+                        attachment, previousObjectId, correctionReason);
+                business.registered(actor.id(), businessId, version);
+                registry.auditCorrection(actor.id(), actor.requestId(), business.businessType(), businessId,
+                        version, attachment, previousObjectId, correctionReason);
+                keys.save(actor.id(), key, version, attachment.file().id());
+                return attachment;
+            });
+        } catch (AttachmentUploadKeys.Replay replay) { return replay.attachment(); }
+    }
+
 }

@@ -24,12 +24,23 @@ public final class AttachmentUploadKeys {
 
     public void replay(long actorId, String key, String businessType, long businessId, long version,
             String filename, String mime, AttachmentIntake.QuarantinedAttachment incoming) {
-        var rows = db.queryForList("SELECT a.*,k.expected_business_version FROM fams_attachment_upload_key k "
+        replay(actorId, key, businessType, businessId, version, filename, mime, incoming, null, null);
+    }
+
+    public void replay(long actorId, String key, String businessType, long businessId, long version,
+            String filename, String mime, AttachmentIntake.QuarantinedAttachment incoming,
+            UUID previousObjectId, String correctionReason) {
+        var rows = db.queryForList("SELECT a.*,k.expected_business_version,r.previous_object_id,r.correction_reason "
+                + "FROM fams_attachment_upload_key k "
                 + "JOIN fams_attachment a ON a.object_id=k.object_id "
+                + "LEFT JOIN fams_attachment_revision r ON r.object_id=a.object_id "
                 + "WHERE k.uploader_account_id=? AND k.idempotency_key=? FOR UPDATE", actorId, key);
         if (rows.isEmpty()) { return; }
         var row = rows.getFirst();
-        if (!businessType.equals(row.get("business_type"))
+        if (!java.util.Objects.equals(previousObjectId == null ? null : previousObjectId.toString(),
+                    row.get("previous_object_id"))
+                || !java.util.Objects.equals(correctionReason, row.get("correction_reason"))
+                || !businessType.equals(row.get("business_type"))
                 || businessId != ((Number) row.get("business_id")).longValue()
                 || version != ((Number) row.get("expected_business_version")).longValue()
                 || !filename.equals(row.get("original_filename")) || !mime.equals(row.get("content_type"))

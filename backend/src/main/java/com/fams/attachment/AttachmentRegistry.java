@@ -32,6 +32,18 @@ public class AttachmentRegistry {
                 attachment.scanResult().name());
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void auditCorrection(long actorId, UUID requestId, String businessType, long businessId,
+            long version, AttachmentIntake.QuarantinedAttachment attachment, UUID previousObjectId, String reason) {
+        db.update("INSERT INTO fams_audit_event (request_id,actor_account_id,actor_role,action,resource_type,"
+                + "resource_id,before_version,after_version,occurred_at,detail_json) "
+                + "VALUES (?,?,'WAREHOUSE_OPERATOR','ATTACHMENT_CORRECTED',?,?,?,?,?,"
+                + "JSON_OBJECT('objectId',?,'previousObjectId',?,'reason',?,'contentSha256',?,'scanStatus',?))",
+                requestId.toString(), actorId, businessType, businessId, version, version + 1, Instant.now(clock),
+                attachment.file().id().toString(), previousObjectId.toString(), reason,
+                attachment.file().sha256(), attachment.scanResult().name());
+    }
+
     /** Caller authorizes the current business version; correction never updates the original record. */
     @Transactional
     public void registerCorrection(String businessType, long businessId, long businessVersion, long uploaderId,
