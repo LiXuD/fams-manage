@@ -3026,9 +3026,97 @@ components:
               items:
                 $ref: '#/components/schemas/InboundReceipt'
 paths:
+  /attachments/{objectId}/download-grant:
+    parameters:
+      - name: objectId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Attachment]
+      operationId: issueAttachmentDownloadGrant
+      summary: Issue a sixty-second address for a CLEAN attachment after current business authorization.
+      description: The grant binds the object, account and current authorization version; session authentication remains required.
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: Short-lived same-origin download address.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url, expiresAtEpochSecond]
+                properties:
+                  url: { type: string }
+                  expiresAtEpochSecond: { type: integer, format: int64 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /attachments/{objectId}/content:
+    parameters:
+      - name: objectId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Attachment]
+      operationId: readAttachmentContent
+      summary: Recheck current permissions and scan state before reading immutable attachment bytes.
+      parameters:
+        - name: grant
+          in: query
+          required: true
+          schema: { type: string, maxLength: 256 }
+      responses:
+        '200':
+          description: Attachment content with no-store, nosniff and an encoded attachment filename.
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { description: Attachment storage is unavailable. }
   /inbound-receipts/{receiptId}/attachments:
     parameters:
       - $ref: '#/components/parameters/InboundReceiptId'
+    get:
+      tags: [Attachment]
+      operationId: listInboundAttachments
+      summary: List active attachment metadata within current inbound read permissions.
+      responses:
+        '200':
+          description: Attachment metadata; no file paths or download grants.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        objectId: { type: string, format: uuid }
+                        filename: { type: string }
+                        contentType: { type: string }
+                        sizeBytes: { type: integer, format: int64 }
+                        scanStatus: { type: string, enum: [CLEAN, INFECTED, UNAVAILABLE] }
+                        businessVersion: { type: integer, format: int64 }
+                        createdAt: { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
     post:
       tags: [Inbound]
       operationId: uploadInboundAttachment

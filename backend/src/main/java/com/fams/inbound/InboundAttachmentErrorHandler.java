@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.UUID;
 import com.fams.attachment.AttachmentUploadConflict;
+import com.fams.attachment.AttachmentAccessFailure;
 import com.fams.product.contract.model.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.context.annotation.Profile;
@@ -15,8 +16,17 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @Profile("fams-product")
 @Order(-1)
-@RestControllerAdvice(assignableTypes = InboundAttachmentController.class)
+@RestControllerAdvice(assignableTypes = {InboundAttachmentController.class, InboundAttachmentReadController.class})
 final class InboundAttachmentErrorHandler {
+    @ExceptionHandler({org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
+            org.springframework.web.bind.MissingServletRequestParameterException.class})
+    ResponseEntity<ErrorResponse> badParameters(Exception error, HttpServletRequest request) {
+        return response(400, "INVALID_ATTACHMENT_REQUEST", "Attachment request parameters are invalid", request);
+    }
+    @ExceptionHandler(AttachmentAccessFailure.class)
+    ResponseEntity<ErrorResponse> access(AttachmentAccessFailure error, HttpServletRequest request) {
+        return response(error.status(), error.code(), error.getMessage(), request);
+    }
     @ExceptionHandler(AttachmentUploadConflict.class)
     ResponseEntity<ErrorResponse> conflict(AttachmentUploadConflict error, HttpServletRequest request) {
         return response(409, "ATTACHMENT_IDEMPOTENCY_CONFLICT", error.getMessage(), request);

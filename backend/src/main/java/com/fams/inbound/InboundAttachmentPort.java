@@ -1,6 +1,7 @@
 package com.fams.inbound;
 
 import com.fams.attachment.AttachmentBusinessPort;
+import com.fams.auth.Role;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -12,6 +13,20 @@ public final class InboundAttachmentPort implements AttachmentBusinessPort {
     private final JdbcTemplate db;
     public InboundAttachmentPort(JdbcTemplate db) { this.db = db; }
     @Override public String businessType() { return "INBOUND"; }
+
+    public void requireReaderLocked(long actorId, java.util.Set<Role> roles, long businessId) {
+        var rows = db.queryForList("SELECT creator_account_id,receipt_status,submitted_at FROM fams_inbound_receipt "
+                + "WHERE id=? FOR UPDATE", businessId);
+        if (rows.isEmpty()) { throw InboundFailure.missing(); }
+        var receipt = rows.getFirst();
+        boolean readable = roles.contains(Role.ASSET_ADMIN) && receipt.get("submitted_at") != null;
+        if (roles.contains(Role.WAREHOUSE_OPERATOR)) {
+            readable = readable || ((Number) receipt.get("creator_account_id")).longValue() == actorId
+                    || java.util.Set.of("WAITING_WAREHOUSE_CLAIM", "WAREHOUSE_PROCESSING", "COMPLETED")
+                        .contains(receipt.get("receipt_status"));
+        }
+        if (!readable) { throw InboundFailure.missing(); }
+    }
 
     @Override public void requireUploadAccess(long actorId, long businessId) {
         requireWritable(actorId, businessId, -1, false);

@@ -45,6 +45,7 @@ class AttachmentHttpTest {
     private static final String PASSWORD = "correct-horse-battery-staple";
     private static final Path ROOT = temporaryRoot();
     private final HttpClient http = HttpClient.newHttpClient();
+    private String lastGrant;
     @Value("${local.server.port}") int port;
     @Autowired JdbcTemplate db;
     @Autowired ControlledScanner scanner;
@@ -76,6 +77,7 @@ class AttachmentHttpTest {
             assertEquals(1, JSON.readTree(one.body()).path("businessVersion").asLong());
             assertEquals("CLEAN", JSON.readTree(one.body()).path("scanStatus").asText());
             assertCounts(1);
+            exerciseDownloads(session, JSON.readTree(one.body()).path("objectId").asText());
             assertEquals(JSON.readTree(one.body()), JSON.readTree(assertStatus(201,
                     upload(session, "concurrent-upload-key", 0, "%PDF-1.7", true)).body()));
             assertStatus(409, upload(session, "concurrent-upload-key", 0, "%PDF-1.8", true));
@@ -97,12 +99,60 @@ class AttachmentHttpTest {
             scanner.release.countDown();
             assertStatus(401, pending.get(30, TimeUnit.SECONDS));
             assertCounts(1);
+            assertStatus(403, access(login("attachment-creator"), "GET", lastGrant));
         } finally {
             scanner.barrier = null;
             if (scanner.release != null) { scanner.release.countDown(); }
             try (var files = Files.list(ROOT)) { for (Path file : files.toList()) { Files.delete(file); } }
             Files.delete(ROOT);
         }
+    }
+
+    private void exerciseDownloads(Session session, String objectId) throws Exception {
+        String path = "/api/v1/attachments/" + objectId;
+        assertEquals(1, JSON.readTree(assertStatus(200, access(session, "GET",
+                "/api/v1/inbound-receipts/101/attachments")).body()).path("items").size());
+        assertStatus(404, access(login("attachment-other"), "GET", "/api/v1/inbound-receipts/101/attachments"));
+        assertStatus(403, access(login("attachment-system"), "POST", path + "/download-grant"));
+        var issued = JSON.readTree(assertStatus(200, access(session, "POST", path + "/download-grant")).body());
+        String url = issued.path("url").asText();
+        lastGrant = url;
+        var content = assertStatus(200, access(session, "GET", url));
+        assertEquals("%PDF-1.7", content.body());
+        assertEquals("nosniff", content.headers().firstValue("X-Content-Type-Options").orElseThrow());
+        assertTrue(content.headers().firstValue("Cache-Control").orElseThrow().contains("no-store"));
+        assertStatus(403, access(login("attachment-other"), "GET", url));
+        assertStatus(403, access(session, "GET", url + "tampered"));
+        Path file = ROOT.resolve(objectId);
+        Files.setPosixFilePermissions(file, java.util.Set.of(
+                java.nio.file.attribute.PosixFilePermission.OWNER_READ,
+                java.nio.file.attribute.PosixFilePermission.OWNER_WRITE));
+        Files.writeString(file, "%PDF-1.8");
+        assertStatus(409, access(session, "GET", url));
+        Files.writeString(file, "%PDF-1.7");
+        Files.setPosixFilePermissions(file, java.util.Set.of(java.nio.file.attribute.PosixFilePermission.OWNER_READ));
+        db.update("UPDATE fams_attachment SET scan_status='UNAVAILABLE' WHERE object_id=?", objectId);
+        assertStatus(409, access(session, "POST", path + "/download-grant"));
+        assertStatus(409, access(session, "GET", url));
+        db.update("UPDATE fams_attachment SET scan_status='CLEAN' WHERE object_id=?", objectId);
+        db.update("UPDATE fams_inbound_receipt SET creator_account_id=102 WHERE id=101");
+        assertStatus(404, access(session, "GET", url));
+        db.update("UPDATE fams_inbound_receipt SET creator_account_id=101 WHERE id=101");
+        assertStatus(404, access(login("attachment-admin"), "POST", path + "/download-grant"));
+        db.update("UPDATE fams_inbound_receipt SET receipt_status='PENDING_ADMIN_DECISION',submitted_at=NOW(3) WHERE id=101");
+        for (String name : java.util.List.of("attachment-admin", "attachment-dual")) {
+            var admin = login(name);
+            var adminGrant = JSON.readTree(assertStatus(200, access(admin, "POST", path + "/download-grant")).body());
+            assertStatus(200, access(admin, "GET", adminGrant.path("url").asText()));
+        }
+        db.update("UPDATE fams_inbound_receipt SET receipt_status='DRAFT',submitted_at=NULL WHERE id=101");
+    }
+
+    private HttpResponse<String> access(Session session, String method, String path) throws Exception {
+        var request = HttpRequest.newBuilder(uri(path)).header("Cookie", session.cookie());
+        if ("POST".equals(method)) { request.header("X-CSRF-Token", session.csrf()); }
+        return http.send(request.method(method, HttpRequest.BodyPublishers.noBody()).build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     private void assertCounts(int expected) throws Exception {
@@ -119,8 +169,9 @@ class AttachmentHttpTest {
     private void seed() {
         db.update("INSERT INTO fams_organization (id,code,code_normalized,name,status,version,created_at,updated_at) "
                 + "VALUES (101,'ATT','ATT','Attachments','ACTIVE',0,NOW(3),NOW(3))");
-        for (int id = 101; id <= 103; id++) {
-            String name = id == 101 ? "attachment-creator" : id == 102 ? "attachment-other" : "attachment-system";
+        for (int id = 101; id <= 105; id++) {
+            String name = id == 101 ? "attachment-creator" : id == 102 ? "attachment-other"
+                    : id == 103 ? "attachment-system" : id == 104 ? "attachment-admin" : "attachment-dual";
             db.update("INSERT INTO fams_employee (id,employee_no,employee_no_normalized,name,organization_id,"
                     + "status,version,created_at,updated_at) VALUES (?,?,?,?,101,'ACTIVE',0,NOW(3),NOW(3))",
                     id, "ATT" + id, "ATT" + id, name);
@@ -129,7 +180,11 @@ class AttachmentHttpTest {
                     + "version,created_at,updated_at) VALUES (?,?,?,?,?,'ENABLED',FALSE,0,0,0,0,NOW(3),NOW(3))",
                     id, id, name, name.toUpperCase(), new BCryptPasswordEncoder(4).encode(PASSWORD));
             db.update("INSERT INTO fams_account_role (account_id,role_code,granted_at) VALUES (?,?,NOW(3))",
-                    id, id == 103 ? "SYSTEM_ADMIN" : "WAREHOUSE_OPERATOR");
+                    id, id == 103 ? "SYSTEM_ADMIN" : id >= 104 ? "ASSET_ADMIN" : "WAREHOUSE_OPERATOR");
+            if (id == 105) {
+                db.update("INSERT INTO fams_account_role (account_id,role_code,granted_at) "
+                        + "VALUES (105,'WAREHOUSE_OPERATOR',NOW(3))");
+            }
         }
         db.update("INSERT INTO fams_business_parameter_version (id,version,status,effective_at,actor_account_id,"
                 + "actor_username,snapshot_json,created_at) VALUES (101,101,'SUPERSEDED',NOW(3),101,"
