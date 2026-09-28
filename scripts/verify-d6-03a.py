@@ -966,6 +966,7 @@ def provision_auth_database(context: RuntimeContext) -> None:
     asset_schema = asset_database(context)
     inbound_schema = inbound_database(context)
     attachment_schema = auth_database(context).replace("d6-04", "d6-09")
+    job_schema = auth_database(context).replace("d6-04", "d6-08")
     sql = (
         f"CREATE DATABASE IF NOT EXISTS `{database}` "
         "CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; "
@@ -975,6 +976,8 @@ def provision_auth_database(context: RuntimeContext) -> None:
         "CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; "
         f"CREATE DATABASE IF NOT EXISTS `{attachment_schema}` "
         "CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; "
+        f"CREATE DATABASE IF NOT EXISTS `{job_schema}` "
+        "CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; "
         "SET GLOBAL log_bin_trust_function_creators=1; "
         f"CREATE USER IF NOT EXISTS 'd6_04_runtime'@'%' IDENTIFIED BY '{context.password}'; "
         f"ALTER USER 'd6_04_runtime'@'%' IDENTIFIED BY '{context.password}'; "
@@ -982,6 +985,7 @@ def provision_auth_database(context: RuntimeContext) -> None:
         f"GRANT ALL PRIVILEGES ON `{asset_schema}`.* TO 'd6_04_runtime'@'%';"
         f"GRANT ALL PRIVILEGES ON `{inbound_schema}`.* TO 'd6_04_runtime'@'%';"
         f"GRANT ALL PRIVILEGES ON `{attachment_schema}`.* TO 'd6_04_runtime'@'%';"
+        f"GRANT ALL PRIVILEGES ON `{job_schema}`.* TO 'd6_04_runtime'@'%';"
     )
     require_command(
         "D6-04 authentication database provisioning",
@@ -1024,6 +1028,9 @@ def runtime_environment(context: RuntimeContext) -> dict[str, str]:
             "D6_09_TEST_DATASOURCE_URL": auth_jdbc_url(context).replace("d6-04", "d6-09"),
             "D6_09_TEST_DATASOURCE_USERNAME": "d6_04_runtime",
             "D6_09_TEST_DATASOURCE_PASSWORD": context.password,
+            "D6_08_TEST_DATASOURCE_URL": auth_jdbc_url(context).replace("d6-04", "d6-08"),
+            "D6_08_TEST_DATASOURCE_USERNAME": "d6_04_runtime",
+            "D6_08_TEST_DATASOURCE_PASSWORD": context.password,
         }
     )
     return environment
@@ -1115,8 +1122,9 @@ def verify_java_quality(context: RuntimeContext) -> None:
                 "-Dd6.06.asset.runtime=true",
                 "-Dd6.07.inbound.runtime=true",
                 "-Dd6.09.attachment.runtime=true",
+                "-Dd6.08.job.runtime=true",
                 # Real Clamd has its own owned-daemon gate; do not count it as a skipped pass here.
-                "-Dtest=*Test,*Tests,Test*,*TestCase,!AttachmentHttpTest#realClamdAllowsCleanDownloadAndQuarantinesEicarAndDaemonOutage",
+                "-Dtest=*Test,*Tests,Test*,*TestCase,DurableJobRuntimeCase#mysqlSubmissionClaimFencingBackoffAndBusinessRollback,!AttachmentHttpTest#realClamdAllowsCleanDownloadAndQuarantinesEicarAndDaemonOutage",
                 "clean",
                 "verify",
             ],
