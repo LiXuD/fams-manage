@@ -83,6 +83,7 @@ class DurableJobRuntimeCase {
             jobs.fail(firstLease, "STALE", false);
             return null;
         }));
+        assertThrows(IllegalStateException.class, () -> tx.execute(status -> jobs.renew(firstLease, LEASE)));
         assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM d6_08_business_probe", Integer.class));
         assertThrows(IllegalStateException.class, () -> tx.execute(status -> {
             jobs.complete(secondLease, "failed", () -> {
@@ -102,6 +103,13 @@ class DurableJobRuntimeCase {
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM d6_08_business_probe", Integer.class));
         assertEquals("SUCCEEDED", db.queryForObject("SELECT job_status FROM fams_durable_job", String.class));
         assertFalse(tx.execute(status -> jobs.claim("ASSET_IMPORT", "worker-D", LEASE)).isPresent());
+        tx.execute(status -> jobs.submit("ASSET_IMPORT", "terminal-batch", 1,
+                "terminal-request-0001", HASH));
+        var terminal = tx.execute(status -> jobs.claim("ASSET_IMPORT", "worker-D", LEASE).orElseThrow());
+        tx.executeWithoutResult(status -> jobs.fail(terminal, "REJECTED", false));
+        assertEquals("FAILED", db.queryForObject("SELECT job_status FROM fams_durable_job "
+                + "WHERE id=?", String.class, terminal.id().toString()));
+        assertTrue(tx.execute(status -> jobs.claim("ASSET_IMPORT", "worker-E", LEASE)).isEmpty());
         assertEquals(0, flyway.migrate().migrationsExecuted);
     }
 
