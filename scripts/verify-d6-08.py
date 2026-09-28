@@ -6,8 +6,10 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import secrets
+import signal
 import subprocess
 import sys
+import tempfile
 import time
 
 
@@ -54,11 +56,32 @@ def main() -> None:
         "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC")
     env["D6_08_TEST_DATASOURCE_USERNAME"] = "fams_d6_08"
     env["D6_08_TEST_DATASOURCE_PASSWORD"] = PASSWORD
-    for method in ("mysqlSubmissionClaimFencingBackoffAndBusinessRollback",
-                   "processOneClaimsAndExitsWithoutFinishing",
-                   "processTwoReclaimsAfterPreviousJvmExited"):
-        run("./mvnw", "-pl", "backend", "-Dd6.08.job.runtime=true",
-            f"-Dtest=DurableJobRuntimeCase#{method}", "test", env=env)
+    run("./mvnw", "-pl", "backend", "-Dd6.08.job.runtime=true",
+        "-Dtest=DurableJobRuntimeCase#mysqlSubmissionClaimFencingBackoffAndBusinessRollback",
+        "test", env=env)
+    with tempfile.TemporaryDirectory(prefix="fams-d6-08-") as temporary:
+        marker = Path(temporary) / "claimed"
+        env["D6_08_PHASE1_MARKER"] = str(marker)
+        process = subprocess.Popen(["rtk", "./mvnw", "-pl", "backend", "-Dd6.08.job.runtime=true",
+                                    "-Dtest=DurableJobRuntimeCase#processOneClaimsBeforeForcedStop", "test"],
+                                   cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                   text=True, start_new_session=True)
+        try:
+            for _ in range(900):
+                if marker.is_file():
+                    break
+                if process.poll() is not None:
+                    raise RuntimeError("claiming JVM exited before recording its committed lease")
+                time.sleep(0.2)
+            else:
+                raise RuntimeError("claiming JVM did not commit a lease in time")
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+            process.communicate(timeout=15)
+    env.pop("D6_08_PHASE1_MARKER")
+    run("./mvnw", "-pl", "backend", "-Dd6.08.job.runtime=true",
+        "-Dtest=DurableJobRuntimeCase#processTwoReclaimsAfterPreviousJvmExited", "test", env=env)
     print("D6-08 real MySQL durable job paths passed")
 
 

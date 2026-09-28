@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -114,7 +116,7 @@ class DurableJobRuntimeCase {
     }
 
     @Test
-    void processOneClaimsAndExitsWithoutFinishing() {
+    void processOneClaimsBeforeForcedStop() throws Exception {
         var db = database();
         var jobs = new DurableJobService(db, new AdjustableClock());
         var tx = transaction(db);
@@ -123,6 +125,8 @@ class DurableJobRuntimeCase {
         var claim = tx.execute(status -> jobs.claim("ASSET_IMPORT", "process-one", LEASE).orElseThrow());
         assertEquals(ticket.id(), claim.id());
         assertEquals(1, claim.generation());
+        Files.writeString(Path.of(System.getenv("D6_08_PHASE1_MARKER")), "claimed");
+        TimeUnit.MINUTES.sleep(5);
     }
 
     @Test
