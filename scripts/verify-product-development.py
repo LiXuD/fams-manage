@@ -28,6 +28,7 @@ if __name__ == "__main__":
                     if result.tag in {"failure", "error"}:
                         print(report.name, case.attrib.get("name"),
                               gate["redact"](result.attrib.get("message", "")[:4000]))
+                        print(gate["redact"]((result.text or "")[:1800]))
         try:
             if application is not None:
                 gate["stop_application"](application)
