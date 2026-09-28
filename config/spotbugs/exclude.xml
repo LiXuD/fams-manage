@@ -109,4 +109,11 @@
         <Method name="&lt;init&gt;"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+    <!-- Spring owns this injected JdbcTemplate; no caller-owned business result is retained. -->
+    <Match>
+        <Class name="com.fams.job.DurableJobService"/>
+        <Field name="db"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
 </FindBugsFilter>
