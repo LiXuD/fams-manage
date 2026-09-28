@@ -29,6 +29,7 @@
         <mysql-connector.version>9.7.0</mysql-connector.version>
         <archunit.version>1.4.2</archunit.version>
         <poi.version>5.5.1</poi.version>
+        <commons-io.version>2.21.0</commons-io.version>
         <checkstyle.version>14.1.0</checkstyle.version>
         <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
         <maven-dependency-plugin.version>3.11.0</maven-dependency-plugin.version>
@@ -39,6 +40,16 @@
         <argLine></argLine>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>commons-io</groupId>
+                <artifactId>commons-io</artifactId>
+                <version>${commons-io.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <dependency>

@@ -24,7 +24,7 @@ public final class AssetImportWorkbook {
     private static final int MAX_COLUMNS = 64;
     private static final int MAX_CELL_LENGTH = 4_096;
     private static final List<String> TEMPLATE_COLUMNS = List.of("资产编码", "名称", "分类编码", "所属组织编码",
-            "型号", "单位", "仓库编码", "位置编码", "使用模式", "使用人编号");
+            "型号", "单位", "序列号", "资产状态", "仓库编码", "位置编码", "使用组织编码", "使用人编号");
 
     public record CellError(int sheetRow, String column, String original, String reason) { }
     public record DataRow(int sheetRow, Map<String, String> values) { }
@@ -72,6 +72,7 @@ public final class AssetImportWorkbook {
             help.createRow(1).createCell(0).setCellValue("分类、组织、仓库、位置和人员优先填写唯一编码。");
             help.createRow(2).createCell(0).setCellValue("示例：A-001 / 办公桌 / CAT-01 / ORG-01 / M1 / 台。");
             help.createRow(3).createCell(0).setCellValue("单文件最多 20,000 行、20 MB；公式单元格不能导入。");
+            help.createRow(4).createCell(0).setCellValue("资产状态：在库、在用个人或在用公用；预检将逐行报告错误。");
             workbook.write(output);
             return output.toByteArray();
         } catch (IOException failure) {
