@@ -4,6 +4,8 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -113,8 +115,11 @@ public class DurableJobService {
         if (rows.isEmpty()) { throw new IllegalStateException("JOB_LEASE_LOST"); }
         var row = rows.getFirst();
         if (!"RUNNING".equals(row.get("job_status")) || !claim.owner().equals(row.get("lease_owner"))
+                || !claim.kind().equals(row.get("job_kind"))
+                || !claim.businessReference().equals(row.get("business_reference"))
+                || claim.actorId() != ((Number) row.get("actor_account_id")).longValue()
                 || claim.generation() != ((Number) row.get("execution_generation")).longValue()
-                || !((Timestamp) row.get("lease_until")).toInstant().isAfter(clock.instant())) {
+                || !((LocalDateTime) row.get("lease_until")).toInstant(ZoneOffset.UTC).isAfter(clock.instant())) {
             throw new IllegalStateException("JOB_LEASE_LOST");
         }
         return row;
