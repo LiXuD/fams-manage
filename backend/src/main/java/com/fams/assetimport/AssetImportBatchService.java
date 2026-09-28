@@ -118,6 +118,11 @@ public class AssetImportBatchService {
         if (!Set.of("UPLOADED", "PREVIEWED").contains(batch.get("batch_status"))) {
             throw new IllegalStateException("ASSET_IMPORT_LOCKED");
         }
+        var reviews = db.queryForList("SELECT review_status FROM fams_asset_import_review "
+                + "WHERE batch_id=?", batchId.toString());
+        if (!reviews.isEmpty() && !"REJECTED".equals(reviews.getFirst().get("review_status"))) {
+            throw new IllegalStateException("ASSET_IMPORT_REVIEW_LOCKED");
+        }
         if (((Number) batch.get("preview_version")).longValue() != expectedVersion) {
             throw new IllegalStateException("ASSET_IMPORT_VERSION_CONFLICT");
         }
@@ -176,7 +181,8 @@ public class AssetImportBatchService {
         var batches = db.queryForList("SELECT batch_status,source_xlsx FROM fams_asset_import_batch "
                 + "WHERE id=? AND actor_account_id=?", batchId.toString(), actorId);
         if (batches.isEmpty()) { throw new IllegalStateException("ASSET_IMPORT_NOT_FOUND"); }
-        if (!"PREVIEWED".equals(batches.getFirst().get("batch_status"))) {
+        if (!Set.of("PREVIEWED", "QUEUED", "PUBLISHING", "PUBLISHED", "FAILED")
+                .contains(batches.getFirst().get("batch_status"))) {
             throw new IllegalStateException("ASSET_IMPORT_LOCKED");
         }
         List<String> headers = AssetImportWorkbook.parse((byte[]) batches.getFirst().get("source_xlsx")).columns();

@@ -96,6 +96,57 @@ class AssetImportHttpRuntimeCase {
                 null, viewer, null, null).statusCode());
         assertEquals(2, db.queryForObject("SELECT COUNT(*) FROM fams_asset_import_row "
                 + "WHERE batch_id=?", Integer.class, id));
+        byte[] windowRequest = ("{\"assignedOperatorId\":\"1\",\"reason\":\"initial load\","
+                + "\"expiresAt\":\"" + Instant.now().plusSeconds(3600) + "\"}")
+                .getBytes(StandardCharsets.UTF_8);
+        assertEquals(403, request("POST", "/asset-initialization-windows", windowRequest,
+                warehouse, "application/json", null).statusCode());
+        db.update("INSERT INTO fams_account_role (account_id,role_code,granted_at) "
+                + "VALUES (1,'SYSTEM_ADMIN',NOW())");
+        var administrator = login("worker");
+        var opened = request("POST", "/asset-initialization-windows", windowRequest,
+                administrator, "application/json", null);
+        assertEquals(201, opened.statusCode(), body(opened));
+        long windowId = JSON.readTree(body(opened)).get("id").asLong();
+        assertEquals(409, request("POST", "/asset-initialization-windows", windowRequest,
+                administrator, "application/json", null).statusCode());
+        var review = request("POST", "/asset-import-batches/" + id + "/review", null,
+                warehouse, null, null, 1L);
+        assertEquals(200, review.statusCode(), body(review));
+        assertEquals("PENDING", JSON.readTree(body(review)).get("status").asText());
+        assertEquals(409, request("POST", "/asset-import-batches/" + id + "/preview",
+                "{}".getBytes(StandardCharsets.UTF_8), warehouse, "application/json", null, 1L)
+                .statusCode());
+        byte[] decision = "{\"approved\":true,\"reason\":\"verified sample\"}"
+                .getBytes(StandardCharsets.UTF_8);
+        assertEquals(403, request("POST", "/asset-import-batches/" + id + "/decision",
+                decision, viewer, "application/json", null).statusCode());
+        Timestamp now = Timestamp.from(Instant.now());
+        db.update("INSERT INTO fams_employee (id,employee_no,employee_no_normalized,name,organization_id,"
+                + "status,created_at,updated_at) VALUES (3,'E3','E3','Administrator',1,'ACTIVE',?,?)", now, now);
+        db.update("INSERT INTO fams_system_account (id,employee_id,username,username_normalized,password_hash,"
+                + "status,initial_password_required,created_at,updated_at) "
+                + "VALUES (3,3,'administrator','ADMINISTRATOR',?,'ENABLED',FALSE,?,?)",
+                new BCryptPasswordEncoder(4).encode(PASSWORD), now, now);
+        db.update("INSERT INTO fams_account_role (account_id,role_code,granted_at) "
+                + "VALUES (3,'ASSET_ADMIN',?)", now);
+        var assetAdmin = login("administrator");
+        var approved = request("POST", "/asset-import-batches/" + id + "/decision",
+                decision, assetAdmin, "application/json", null);
+        assertEquals(200, approved.statusCode(), body(approved));
+        assertEquals("APPROVED", JSON.readTree(body(approved)).get("status").asText());
+        assertEquals("QUEUED", JSON.readTree(body(request("GET", "/asset-import-batches/" + id,
+                null, warehouse, null, null))).get("status").asText());
+        assertEquals(200, request("GET", "/asset-import-batches/" + id + "/preflight-report",
+                null, warehouse, null, null).statusCode());
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_durable_job "
+                + "WHERE job_kind='ASSET_IMPORT' AND business_reference=?", Integer.class, id));
+        assertEquals(409, request("POST", "/asset-import-batches/" + id + "/decision",
+                decision, assetAdmin, "application/json", null).statusCode());
+        assertEquals(200, request("POST", "/asset-initialization-windows/" + windowId + "/close",
+                null, administrator, null, null).statusCode());
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_initialization_window "
+                + "WHERE id=? AND window_status='CLOSED'", Integer.class, windowId));
     }
 
     private void seedAccounts() {

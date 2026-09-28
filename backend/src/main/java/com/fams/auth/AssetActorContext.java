@@ -40,6 +40,21 @@ public final class AssetActorContext {
                 Role.WAREHOUSE_OPERATOR.name(), AuthRequestContext.requestId(request).toString());
     }
 
+    public Actor requireAssetAdmin() {
+        return requireRole(Role.ASSET_ADMIN);
+    }
+
+    public Actor requireSystemAdmin() {
+        return requireRole(Role.SYSTEM_ADMIN);
+    }
+
+    private Actor requireRole(Role role) {
+        AuthAccount account = AuthRequestContext.account(request);
+        if (!account.roles().contains(role)) { throw AuthOperationException.forbidden(); }
+        return new Actor(account.id(), account.username(), false, false,
+                role.name(), AuthRequestContext.requestId(request).toString());
+    }
+
     public record Actor(long id, String username, boolean warehouseOperator,
             boolean auditOnly, String role, String requestId) { }
 }

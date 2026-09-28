@@ -1250,6 +1250,23 @@ components:
         createdRows: { type: integer, format: int32, minimum: 0 }
         updatedRows: { type: integer, format: int32, minimum: 0 }
         disabledRows: { type: integer, format: int32, minimum: 0 }
+    AssetInitializationWindowOpenRequest:
+      type: object
+      additionalProperties: false
+      required: [assignedOperatorId, reason, expiresAt]
+      properties:
+        assignedOperatorId: { type: string, pattern: '^[1-9][0-9]*$' }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+        expiresAt: { type: string, format: date-time }
+    AssetInitializationWindow:
+      type: object
+      additionalProperties: false
+      required: [id, status, assignedOperatorId, expiresAt]
+      properties:
+        id: { type: string, pattern: '^[1-9][0-9]*$' }
+        status: { type: string, enum: [OPEN, CLOSED] }
+        assignedOperatorId: { type: string, pattern: '^[1-9][0-9]*$' }
+        expiresAt: { type: string, format: date-time }
     AssetImportTicket:
       type: object
       additionalProperties: false
@@ -1265,6 +1282,24 @@ components:
           nullable: true
           additionalProperties: { type: string }
           description: Saved mapping from the last preflight; null before the first preflight.
+    AssetImportDecisionRequest:
+      type: object
+      additionalProperties: false
+      required: [approved, reason]
+      properties:
+        approved: { type: boolean }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    AssetImportReview:
+      type: object
+      additionalProperties: false
+      required: [batchId, status, previewVersion, processorAccountId]
+      properties:
+        batchId: { type: string, format: uuid }
+        status: { type: string, enum: [PENDING, APPROVED, REJECTED] }
+        previewVersion: { type: integer, format: int64, minimum: 1 }
+        processorAccountId: { type: string, pattern: '^[1-9][0-9]*$' }
+        decidedBy: { type: string, nullable: true, pattern: '^[1-9][0-9]*$' }
+        jobId: { type: string, format: uuid, nullable: true }
     AssetImportMappingRequest:
       type: object
       additionalProperties: false
@@ -3151,6 +3186,53 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /asset-initialization-windows:
+    post:
+      tags: [AssetImport]
+      operationId: openAssetInitializationWindow
+      summary: System administrator opens a time-bounded initialization window for one operator.
+      x-actor: { required: true, roles: [SYSTEM_ADMIN] }
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AssetInitializationWindowOpenRequest' }
+      responses:
+        '201':
+          description: Open window.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetInitializationWindow' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /asset-initialization-windows/{windowId}/close:
+    parameters:
+      - name: windowId
+        in: path
+        required: true
+        schema: { type: integer, format: int64, minimum: 1 }
+    post:
+      tags: [AssetImport]
+      operationId: closeAssetInitializationWindow
+      summary: System administrator closes an open initialization window.
+      x-actor: { required: true, roles: [SYSTEM_ADMIN] }
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: Closed window.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetInitializationWindow' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
   /asset-import-batches:
     post:
       tags: [AssetImport]
@@ -3322,6 +3404,60 @@ paths:
           content:
             text/csv:
               schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /asset-import-batches/{batchId}/review:
+    parameters:
+      - name: batchId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [AssetImport]
+      operationId: requestAssetImportReview
+      summary: Assigned warehouse operator requests administrator review of a saved preflight.
+      x-actor: { required: true, roles: [WAREHOUSE_OPERATOR] }
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      responses:
+        '200':
+          description: Pending review.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetImportReview' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /asset-import-batches/{batchId}/decision:
+    parameters:
+      - name: batchId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [AssetImport]
+      operationId: decideAssetImportReview
+      summary: Asset administrator decides a pending initialization batch review.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AssetImportDecisionRequest' }
+      responses:
+        '200':
+          description: Decision and durable job reference when approved.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetImportReview' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
