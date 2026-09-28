@@ -88,6 +88,12 @@ class AssetImportHttpRuntimeCase {
         assertEquals(200, errors.statusCode(), body(errors));
         assertEquals("DUPLICATE_ASSET_CODE", JSON.readTree(body(errors)).get("items").get(0)
                 .get("errors").get(0).get("reason").asText());
+        var report = request("GET", "/asset-import-batches/" + id + "/preflight-report",
+                null, warehouse, null, null);
+        assertEquals(200, report.statusCode(), body(report));
+        assertTrue(body(report).contains("DUPLICATE_ASSET_CODE"));
+        assertEquals(403, request("GET", "/asset-import-batches/" + id + "/preflight-report",
+                null, viewer, null, null).statusCode());
         assertEquals(2, db.queryForObject("SELECT COUNT(*) FROM fams_asset_import_row "
                 + "WHERE batch_id=?", Integer.class, id));
     }

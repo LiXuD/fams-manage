@@ -3,7 +3,8 @@ import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import {
-  downloadImportTemplate, getImport, importColumns, importRows, previewImport, uploadImport,
+  downloadImportTemplate, downloadPreflightReport, getImport, importColumns, importRows,
+  previewImport, uploadImport,
   type ImportRow, type ImportTicket,
 } from "@/assetimport/api";
 
@@ -110,6 +111,13 @@ async function template(): Promise<void> {
   catch (cause) { error.value = cause instanceof Error ? cause.message : "模板下载失败"; }
 }
 
+async function report(): Promise<void> {
+  if (!ticket.value) return;
+  error.value = "";
+  try { await downloadPreflightReport(ticket.value.id); }
+  catch (cause) { error.value = cause instanceof Error ? cause.message : "预检结果下载失败"; }
+}
+
 onMounted(async () => {
   const id = typeof route.query.batch === "string" ? route.query.batch : "";
   if (!id) return;
@@ -150,6 +158,7 @@ onMounted(async () => {
     <section v-if="ticket?.status === 'PREVIEWED'" class="asset-panel" aria-label="预检结果">
       <h2>3. 预检结果</h2>
       <p>正确 {{ readyRows }} 行 · 错误 {{ errorRows }} 行。当前仅保存预检结果，尚未发布资产。</p>
+      <button class="secondary-button" type="button" @click="report">下载预检结果 CSV</button>
       <div class="asset-filters">
         <button class="secondary-button" type="button" @click="selectRows('ERROR')">错误行</button>
         <button class="secondary-button" type="button" @click="selectRows('READY')">正确行</button>

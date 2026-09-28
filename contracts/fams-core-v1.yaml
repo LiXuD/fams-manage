@@ -3304,6 +3304,28 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  /asset-import-batches/{batchId}/preflight-report:
+    parameters:
+      - name: batchId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [AssetImport]
+      operationId: downloadAssetImportPreflightReport
+      summary: Download caller-owned preflight results with original values and cell errors.
+      x-actor: { required: true, roles: [WAREHOUSE_OPERATOR] }
+      responses:
+        '200':
+          description: UTF-8 CSV; publication results are a later operation.
+          content:
+            text/csv:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /attachments/{objectId}/content:
     parameters:
       - name: objectId

@@ -95,3 +95,17 @@ export async function importRows(id: string, status: "READY" | "ERROR",
   return jsonResult<ImportRowPage>(await fetch(
     `/api/v1/asset-import-batches/${encodeURIComponent(id)}/rows?${query}`, { credentials: "include" }));
 }
+
+export async function downloadPreflightReport(id: string): Promise<void> {
+  const response = await fetch(
+    `/api/v1/asset-import-batches/${encodeURIComponent(id)}/preflight-report`,
+    { credentials: "include" });
+  if (!response.ok) throw await failure(response);
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `fams-asset-preflight-${id}.csv`;
+  document.body.append(link);
+  try { link.click(); }
+  finally { link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000); }
+}

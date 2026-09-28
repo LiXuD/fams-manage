@@ -3,6 +3,7 @@ package com.fams.assetimport;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -165,6 +166,54 @@ public class AssetImportBatchService {
                         jsonOrNull(result.getString("errors_json"))),
                 append(parameters, pageSize, (page - 1) * pageSize));
         return new RowPage(total, items);
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] preflightReport(long actorId, UUID batchId) {
+        if (actorId < 1 || batchId == null) {
+            throw new IllegalArgumentException("ASSET_IMPORT_REQUEST_INVALID");
+        }
+        var batches = db.queryForList("SELECT batch_status,source_xlsx FROM fams_asset_import_batch "
+                + "WHERE id=? AND actor_account_id=?", batchId.toString(), actorId);
+        if (batches.isEmpty()) { throw new IllegalStateException("ASSET_IMPORT_NOT_FOUND"); }
+        if (!"PREVIEWED".equals(batches.getFirst().get("batch_status"))) {
+            throw new IllegalStateException("ASSET_IMPORT_LOCKED");
+        }
+        List<String> headers = AssetImportWorkbook.parse((byte[]) batches.getFirst().get("source_xlsx")).columns();
+        StringBuilder csv = new StringBuilder("\uFEFF");
+        csv.append("Excel 行,预检状态");
+        for (String header : headers) { csv.append(',').append(csvCell(header)); }
+        csv.append(",错误列,原值,原因\r\n");
+        db.query("SELECT sheet_row,row_status,source_json,errors_json FROM fams_asset_import_row "
+                + "WHERE batch_id=? ORDER BY sheet_row", result -> {
+                    JsonNode source = json.readTree(result.getString("source_json"));
+                    JsonNode errors = jsonOrNull(result.getString("errors_json"));
+                    csv.append(result.getInt("sheet_row")).append(',')
+                            .append("READY".equals(result.getString("row_status")) ? "正确" : "错误");
+                    for (String header : headers) {
+                        csv.append(',').append(csvCell(source.path(header).asText("")));
+                    }
+                    if (errors == null || errors.isEmpty()) {
+                        csv.append(",,,\r\n");
+                    } else {
+                        for (int index = 0; index < errors.size(); index++) {
+                            JsonNode error = errors.get(index);
+                            if (index > 0) {
+                                csv.append(result.getInt("sheet_row")).append(",错误");
+                                for (int column = 0; column < headers.size(); column++) { csv.append(','); }
+                            }
+                            csv.append(',').append(csvCell(error.path("column").asText("")))
+                                    .append(',').append(csvCell(error.path("original").asText("")))
+                                    .append(',').append(csvCell(error.path("reason").asText("")))
+                                    .append("\r\n");
+                        }
+                    }
+                }, batchId.toString());
+        return csv.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    private String csvCell(String value) {
+        return "\"" + AssetImportWorkbook.safeExportCell(value).replace("\"", "\"\"") + "\"";
     }
 
     private Set<String> identifiers(AssetImportWorkbook.Parsed parsed, String column) {
