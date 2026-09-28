@@ -35,7 +35,7 @@ class DurableJobRuntimeCase {
                 System.getenv("D6_08_TEST_DATASOURCE_USERNAME"),
                 System.getenv("D6_08_TEST_DATASOURCE_PASSWORD"));
         var flyway = Flyway.configure().dataSource(datasource).locations("classpath:db/migration/d6_04").load();
-        assertEquals(13, flyway.migrate().migrationsExecuted);
+        assertEquals(14, flyway.migrate().migrationsExecuted);
         var db = new JdbcTemplate(datasource);
         db.update("INSERT INTO fams_organization (id,code,code_normalized,name,status,created_at,updated_at) "
                 + "VALUES (1,'ROOT','ROOT','Root','ACTIVE',NOW(),NOW())");

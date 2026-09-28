@@ -31,9 +31,9 @@ public final class AssetImportPreflight {
 
     private AssetImportPreflight() { }
 
-    public static Result check(AssetImportWorkbook.Parsed parsed, Map<String, String> selectedColumns,
-            Catalog catalog) {
-        if (parsed == null || catalog == null || selectedColumns == null
+    public static Map<String, String> columns(AssetImportWorkbook.Parsed parsed,
+            Map<String, String> selectedColumns) {
+        if (parsed == null || selectedColumns == null
                 || !DEFAULT_COLUMNS.keySet().containsAll(selectedColumns.keySet())) {
             throw new IllegalArgumentException("ASSET_IMPORT_MAPPING_INVALID");
         }
@@ -46,6 +46,13 @@ public final class AssetImportPreflight {
                 || new HashSet<>(mapping.values()).size() != mapping.size()) {
             throw new IllegalArgumentException("ASSET_IMPORT_MAPPING_INVALID");
         }
+        return Map.copyOf(mapping);
+    }
+
+    public static Result check(AssetImportWorkbook.Parsed parsed, Map<String, String> selectedColumns,
+            Catalog catalog) {
+        if (catalog == null) { throw new IllegalArgumentException("ASSET_IMPORT_CATALOG_MISSING"); }
+        Map<String, String> mapping = columns(parsed, selectedColumns);
         List<ReadyRow> ready = new ArrayList<>();
         List<AssetImportWorkbook.CellError> errors = new ArrayList<>(parsed.errors());
         Set<Integer> invalidRows = new HashSet<>();
