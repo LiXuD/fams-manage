@@ -59,6 +59,10 @@ def main() -> None:
     run("./mvnw", "-pl", "backend", "-Dd6.08.job.runtime=true",
         "-Dtest=DurableJobRuntimeCase#mysqlSubmissionClaimFencingBackoffAndBusinessRollback",
         "test", env=env)
+    run("./mvnw", "-pl", "backend", "-Dd6.08.import.runtime=true",
+        "-Dtest=AssetImportBatchRuntimeCase", "test", env=env)
+    run("./mvnw", "-pl", "backend", "-Dd6.08.import.http.runtime=true",
+        "-Dtest=AssetImportHttpRuntimeCase", "test", env=env)
     with tempfile.TemporaryDirectory(prefix="fams-d6-08-") as temporary:
         marker = Path(temporary) / "claimed"
         env["D6_08_PHASE1_MARKER"] = str(marker)
@@ -82,7 +86,7 @@ def main() -> None:
     env.pop("D6_08_PHASE1_MARKER")
     run("./mvnw", "-pl", "backend", "-Dd6.08.job.runtime=true",
         "-Dtest=DurableJobRuntimeCase#processTwoReclaimsAfterPreviousJvmExited", "test", env=env)
-    print("D6-08 real MySQL durable job paths passed")
+    print("D6-08 real MySQL durable job and import preflight paths passed")
 
 
 if __name__ == "__main__":

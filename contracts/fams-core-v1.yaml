@@ -20,6 +20,8 @@ tags:
     description: System-account, fixed-role, and controlled-authorization configuration boundaries.
   - name: Assets
     description: Asset-card and ledger read boundaries; business mutations remain scoped to warehouse operators.
+  - name: AssetImport
+    description: Warehouse-operator asset import upload and row preflight boundaries.
   - name: Inbound
     description: Inbound receipt draft and lifecycle boundaries; approval and warehouse execution are later slices.
 components:
@@ -1248,6 +1250,70 @@ components:
         createdRows: { type: integer, format: int32, minimum: 0 }
         updatedRows: { type: integer, format: int32, minimum: 0 }
         disabledRows: { type: integer, format: int32, minimum: 0 }
+    AssetImportTicket:
+      type: object
+      additionalProperties: false
+      required: [id, status, previewVersion]
+      properties:
+        id: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [UPLOADED, PREVIEWED, QUEUED, PUBLISHING, PUBLISHED, FAILED]
+        previewVersion: { type: integer, format: int64, minimum: 0 }
+    AssetImportMappingRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        mapping:
+          type: object
+          additionalProperties: { type: string }
+          description: Canonical field name to uploaded column header; omitted fields use matching template headers.
+    AssetImportCellError:
+      type: object
+      additionalProperties: false
+      required: [sheetRow, column, original, reason]
+      properties:
+        sheetRow: { type: integer, format: int32, minimum: 2 }
+        column: { type: string }
+        original: { type: string }
+        reason: { type: string }
+    AssetImportPreview:
+      type: object
+      additionalProperties: false
+      required: [id, version, totalRows, readyRows, errorRows, errors, moreErrors]
+      properties:
+        id: { type: string, format: uuid }
+        version: { type: integer, format: int64, minimum: 1 }
+        totalRows: { type: integer, format: int32, minimum: 0 }
+        readyRows: { type: integer, format: int32, minimum: 0 }
+        errorRows: { type: integer, format: int32, minimum: 0 }
+        errors:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/AssetImportCellError' }
+        moreErrors: { type: boolean }
+    AssetImportPreviewRow:
+      type: object
+      additionalProperties: false
+      required: [sheetRow, status, source]
+      properties:
+        sheetRow: { type: integer, format: int32, minimum: 2 }
+        status: { type: string, enum: [READY, ERROR] }
+        source: { type: object, additionalProperties: { type: string } }
+        resolved: { type: object, nullable: true }
+        errors:
+          type: array
+          nullable: true
+          items: { $ref: '#/components/schemas/AssetImportCellError' }
+    AssetImportRowPage:
+      type: object
+      additionalProperties: false
+      required: [total, items]
+      properties:
+        total: { type: integer, format: int32, minimum: 0 }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AssetImportPreviewRow' }
     OrganizationUpdateRequest:
       type: object
       additionalProperties: false
@@ -3056,6 +3122,154 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+
+  /asset-import-batches/template:
+    get:
+      tags: [AssetImport]
+      operationId: getAssetImportTemplate
+      summary: Download the visible XLSX asset import template and instructions.
+      x-actor: { required: true, roles: [WAREHOUSE_OPERATOR] }
+      responses:
+        '200':
+          description: XLSX workbook with asset columns and a visible instruction sheet.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /asset-import-batches:
+    post:
+      tags: [AssetImport]
+      operationId: uploadAssetImportBatch
+      summary: Persist one immutable XLSX import source under an idempotency key.
+      x-business-write: true
+      x-actor: { required: true, roles: [WAREHOUSE_OPERATOR] }
+      x-non-applicable: [version]
+      x-exception-rationale: A new upload has no existing aggregate version; the actor and request key deduplicate its immutable source.
+      x-transaction:
+        boundary: Persist the immutable source, upload identity, and batch event together; replay returns the same batch.
+      x-audit-event: { event: ASSET_IMPORT_UPLOADED }
+      x-error-codes: [ASSET_IMPORT_FILE_LIMIT, ASSET_IMPORT_INVALID_XLSX, ASSET_IMPORT_UPLOAD_CONFLICT]
+      x-required-error-statuses: [400, 401, 403, 409, 413]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201':
+          description: Created batch or matching replay.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetImportTicket' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413':
+          description: XLSX exceeds the 20 MB upload boundary.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /asset-import-batches/{batchId}:
+    parameters:
+      - name: batchId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [AssetImport]
+      operationId: getAssetImportBatch
+      summary: Read the caller's current import batch and preview version.
+      x-actor: { required: true, roles: [WAREHOUSE_OPERATOR] }
+      responses:
+        '200':
+          description: Owned batch status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetImportTicket' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /asset-import-batches/{batchId}/preview:
+    parameters:
+      - name: batchId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [AssetImport]
+      operationId: previewAssetImportBatch
+      summary: Replace an unconfirmed row preflight using the selected column mapping.
+      x-business-write: true
+      x-actor: { required: true, roles: [WAREHOUSE_OPERATOR] }
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the current previewVersion; competing mappings cannot silently overwrite a preview.
+      x-non-applicable: [idempotency]
+      x-exception-rationale: Preview is replaceable by the same actor and protected by expected previewVersion; a lost response is recovered through GET.
+      x-transaction:
+        boundary: Lock the owned batch, replace all row results, increment previewVersion, and append one batch event atomically.
+      x-audit-event: { event: ASSET_IMPORT_PREVIEWED }
+      x-error-codes: [ASSET_IMPORT_MAPPING_INVALID, ASSET_IMPORT_VERSION_CONFLICT, ASSET_IMPORT_LOCKED]
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AssetImportMappingRequest' }
+      responses:
+        '200':
+          description: Ready and error row counts with the first 100 cell errors.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetImportPreview' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /asset-import-batches/{batchId}/rows:
+    parameters:
+      - name: batchId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [AssetImport]
+      operationId: listAssetImportRows
+      summary: Page through preflight rows, optionally selecting ready or error rows.
+      x-actor: { required: true, roles: [WAREHOUSE_OPERATOR] }
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [READY, ERROR] }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Caller-owned row page.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetImportRowPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /attachments/{objectId}/content:
     parameters:
       - name: objectId
