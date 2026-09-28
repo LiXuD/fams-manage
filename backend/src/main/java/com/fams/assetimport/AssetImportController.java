@@ -77,6 +77,11 @@ class AssetImportController {
         return ResponseEntity.ok(batches.get(actors.requireWarehouseOperator().id(), batchId));
     }
 
+    @GetMapping("/{batchId}/columns")
+    ResponseEntity<AssetImportBatchService.ColumnList> columns(@PathVariable UUID batchId) {
+        return ResponseEntity.ok(batches.columns(actors.requireWarehouseOperator().id(), batchId));
+    }
+
     @GetMapping("/{batchId}/rows")
     ResponseEntity<AssetImportBatchService.RowPage> rows(@PathVariable UUID batchId,
             @RequestParam(required = false) String status,

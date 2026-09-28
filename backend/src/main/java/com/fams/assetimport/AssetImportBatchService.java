@@ -24,12 +24,13 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 @Profile("fams-product")
 public class AssetImportBatchService {
-    public record Ticket(UUID id, String status, long previewVersion) { }
+    public record Ticket(UUID id, String status, long previewVersion, JsonNode mapping) { }
     public record Preview(UUID id, long version, int totalRows, int readyRows, int errorRows,
                           List<AssetImportWorkbook.CellError> errors, boolean moreErrors) { }
     public record PreviewRow(int sheetRow, String status, JsonNode source,
                              JsonNode resolved, JsonNode errors) { }
     public record RowPage(int total, List<PreviewRow> items) { }
+    public record ColumnList(List<String> columns) { }
 
     private static final int ROW_BATCH = 500;
     private final JdbcTemplate db;
@@ -56,7 +57,7 @@ public class AssetImportBatchService {
         if (db.queryForList("SELECT id FROM fams_system_account WHERE id=? FOR UPDATE", actorId).isEmpty()) {
             throw new IllegalArgumentException("ASSET_IMPORT_REQUEST_INVALID");
         }
-        var existing = db.queryForList("SELECT id,batch_status,preview_version,source_sha256 "
+        var existing = db.queryForList("SELECT id,batch_status,preview_version,source_sha256,mapping_json "
                 + "FROM fams_asset_import_batch WHERE actor_account_id=? AND upload_key=? FOR UPDATE",
                 actorId, uploadKey);
         if (!existing.isEmpty()) {
@@ -65,7 +66,7 @@ public class AssetImportBatchService {
                 throw new IllegalStateException("ASSET_IMPORT_UPLOAD_CONFLICT");
             }
             return new Ticket(UUID.fromString((String) row.get("id")), (String) row.get("batch_status"),
-                    ((Number) row.get("preview_version")).longValue());
+                    ((Number) row.get("preview_version")).longValue(), jsonOrNull((String) row.get("mapping_json")));
         }
         UUID id = UUID.randomUUID();
         var now = Timestamp.from(clock.instant());
@@ -75,7 +76,7 @@ public class AssetImportBatchService {
         db.update("INSERT INTO fams_asset_import_event (batch_id,actor_account_id,action,detail_json,occurred_at) "
                 + "VALUES (?,?,'ASSET_IMPORT_UPLOADED',?,?)", id.toString(), actorId,
                 toJson(Map.of("sourceBytes", xlsx.length)), now);
-        return new Ticket(id, "UPLOADED", 0);
+        return new Ticket(id, "UPLOADED", 0, null);
     }
 
     @Transactional(readOnly = true)
@@ -83,12 +84,23 @@ public class AssetImportBatchService {
         if (actorId < 1 || batchId == null) {
             throw new IllegalArgumentException("ASSET_IMPORT_REQUEST_INVALID");
         }
-        var rows = db.queryForList("SELECT batch_status,preview_version FROM fams_asset_import_batch "
+        var rows = db.queryForList("SELECT batch_status,preview_version,mapping_json FROM fams_asset_import_batch "
                 + "WHERE id=? AND actor_account_id=?", batchId.toString(), actorId);
         if (rows.isEmpty()) { throw new IllegalStateException("ASSET_IMPORT_NOT_FOUND"); }
         var row = rows.getFirst();
         return new Ticket(batchId, (String) row.get("batch_status"),
-                ((Number) row.get("preview_version")).longValue());
+                ((Number) row.get("preview_version")).longValue(), jsonOrNull((String) row.get("mapping_json")));
+    }
+
+    @Transactional(readOnly = true)
+    public ColumnList columns(long actorId, UUID batchId) {
+        if (actorId < 1 || batchId == null) {
+            throw new IllegalArgumentException("ASSET_IMPORT_REQUEST_INVALID");
+        }
+        var rows = db.queryForList("SELECT source_xlsx FROM fams_asset_import_batch "
+                + "WHERE id=? AND actor_account_id=?", batchId.toString(), actorId);
+        if (rows.isEmpty()) { throw new IllegalStateException("ASSET_IMPORT_NOT_FOUND"); }
+        return new ColumnList(AssetImportWorkbook.parse((byte[]) rows.getFirst().get("source_xlsx")).columns());
     }
 
     @Transactional

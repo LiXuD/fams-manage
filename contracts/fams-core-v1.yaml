@@ -1260,6 +1260,11 @@ components:
           type: string
           enum: [UPLOADED, PREVIEWED, QUEUED, PUBLISHING, PUBLISHED, FAILED]
         previewVersion: { type: integer, format: int64, minimum: 0 }
+        mapping:
+          type: object
+          nullable: true
+          additionalProperties: { type: string }
+          description: Saved mapping from the last preflight; null before the first preflight.
     AssetImportMappingRequest:
       type: object
       additionalProperties: false
@@ -1314,6 +1319,14 @@ components:
         items:
           type: array
           items: { $ref: '#/components/schemas/AssetImportPreviewRow' }
+    AssetImportColumnList:
+      type: object
+      additionalProperties: false
+      required: [columns]
+      properties:
+        columns:
+          type: array
+          items: { type: string }
     OrganizationUpdateRequest:
       type: object
       additionalProperties: false
@@ -3242,6 +3255,27 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+
+  /asset-import-batches/{batchId}/columns:
+    parameters:
+      - name: batchId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [AssetImport]
+      operationId: getAssetImportColumns
+      summary: Read the uploaded XLSX header for interactive field mapping.
+      x-actor: { required: true, roles: [WAREHOUSE_OPERATOR] }
+      responses:
+        '200':
+          description: Caller-owned visible uploaded columns.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetImportColumnList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /asset-import-batches/{batchId}/rows:
     parameters:

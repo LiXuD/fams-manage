@@ -1,7 +1,7 @@
 # FAMS 项目阶段与交接入口
 
 > 唯一现役进度入口 · 更新于 2026-09-28
-> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04、D6-05、D6-06、D6-07 与 D6-09A 本地 `DEV_VERIFIED`；D6-08A 持久任务底座已通过定向 MySQL 和候选门禁，等待独立复核。D6-01B 与 D6-03B 继续等待远端权限。
+> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04、D6-05、D6-06、D6-07 与 D6-09A 本地 `DEV_VERIFIED`；D6-08A 候选等待独立复核，D6-08B 正在实现导入预检。D6-01B 与 D6-03B 继续等待远端权限。
 
 ## 1. 八步开发流程与当前进度
 
@@ -12,7 +12,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；当前推进 D6-08A，D6-01B/03B 待外部权限 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；当前推进 D6-08B，D6-01B/03B 待外部权限 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
@@ -40,7 +40,7 @@
 4. 每次任务开始、受阻、送审、验证和验收时同步维护计划台账及执行记录；本文只维护项目阶段和下一步，不复制第二套任务状态。D6-02B 的版本冻结结论与 D6-02C 的关键设计复核均已关闭；后续关键任务仍须按计划独立复核。
 5. 只有 PRD 变更或开发发现设计缺口时，才重新打开第5步对应条目；无需恢复已取消的大规模用户测试方案。
 6. D6-04A/B/C/D 均已提交并完成本地验证；C 的 Web 14/14 测试、构建、lint/typecheck，D 的双用户角色撤销失效浏览器链路、用户本人五域及总评 PASS，与 reviewed HEAD `8943dc3` 的 127 项统一门禁共同构成父任务本地 `DEV_VERIFIED` 证据。不得据此声明远端 CI、QA、正式安全专项或生产完成。
-7. D6-05A/B/C 与父任务、D6-06/06A、D6-07/07A 和 D6-09A 均已本地 `DEV_VERIFIED`。D6-08A 正在开发；远端 CI、QA 与生产尚未验证。
+7. D6-05A/B/C 与父任务、D6-06/06A、D6-07/07A 和 D6-09A 均已本地 `DEV_VERIFIED`。D6-08A 待独立复核，D6-08B 正在开发；远端 CI、QA 与生产尚未验证。
 
 ## 4. 文档责任
 
@@ -69,4 +69,4 @@
 
 ## 2026-09-27 最新续接
 
-用户本人对 D6-07、D6-09A 复核全部 PASS，两项本地 DEV_VERIFIED。D6-08A 的 V13、持久服务、进程 SIGKILL 恢复和候选门禁已完成，当前 `IN_REVIEW`；D6-08B 已完成 Excel 读取、预检、V14 批次和真实 HTTP 首片，下一步 PC 入口、确认任务/结果与候选门禁。D6-09B 及真实外部资源仍待准备。不重复既有历史治理/SHA 检查。
+用户本人对 D6-07、D6-09A 复核全部 PASS，两项本地 DEV_VERIFIED。D6-08A 的 V13、持久服务、进程 SIGKILL 恢复和候选门禁已完成，当前 `IN_REVIEW`；D6-08B 已完成 Excel 读取、预检、V14 批次、真实 HTTP 首片和 PC 入口，下一步确认任务/结果与候选门禁。D6-09B 及真实外部资源仍待准备。不重复既有历史治理/SHA 检查。

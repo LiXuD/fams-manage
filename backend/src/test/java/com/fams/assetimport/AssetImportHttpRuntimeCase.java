@@ -69,11 +69,17 @@ class AssetImportHttpRuntimeCase {
                 null, null).statusCode());
         assertEquals(200, request("GET", "/asset-import-batches/" + id, null, warehouse,
                 null, null).statusCode());
+        var columns = request("GET", "/asset-import-batches/" + id + "/columns", null,
+                warehouse, null, null);
+        assertEquals(200, columns.statusCode(), body(columns));
+        assertEquals("资产编码", JSON.readTree(body(columns)).get("columns").get(0).asText());
         var preview = request("POST", "/asset-import-batches/" + id + "/preview",
                 "{}".getBytes(StandardCharsets.UTF_8), warehouse, "application/json", null, 0L);
         assertEquals(200, preview.statusCode(), body(preview));
         assertEquals(1, JSON.readTree(body(preview)).get("readyRows").asInt());
         assertEquals(1, JSON.readTree(body(preview)).get("errorRows").asInt());
+        var reopened = request("GET", "/asset-import-batches/" + id, null, warehouse, null, null);
+        assertEquals("资产编码", JSON.readTree(body(reopened)).get("mapping").get("assetCode").asText());
         assertEquals(409, request("POST", "/asset-import-batches/" + id + "/preview",
                 "{}".getBytes(StandardCharsets.UTF_8), warehouse, "application/json", null, 0L)
                 .statusCode());

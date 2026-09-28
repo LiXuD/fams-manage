@@ -4,6 +4,7 @@ import HomeView from "@/views/HomeView.vue";
 import LoginView from "@/views/LoginView.vue";
 import PasswordChangeView from "@/views/PasswordChangeView.vue";
 import AssetLedgerView from "@/views/AssetLedgerView.vue";
+import AssetImportView from "@/views/AssetImportView.vue";
 import InboundView from "@/views/InboundView.vue";
 
 export const router = createRouter({
@@ -13,6 +14,7 @@ export const router = createRouter({
     { path: "/login", name: "login", component: LoginView },
     { path: "/password/change", name: "password-change", component: PasswordChangeView, meta: { requiresAuth: true } },
     { path: "/assets", name: "assets", component: AssetLedgerView, meta: { requiresAuth: true } },
+    { path: "/asset-imports", name: "asset-import", component: AssetImportView, meta: { requiresAuth: true } },
     { path: "/inbound", name: "inbound", component: InboundView, meta: { requiresAuth: true } },
   ],
 });
