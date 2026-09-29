@@ -115,6 +115,10 @@ class AssetImportHttpRuntimeCase {
                 administrator, "application/json", null);
         assertEquals(201, opened.statusCode(), body(opened));
         long windowId = JSON.readTree(body(opened)).get("id").asLong();
+        assertEquals(200, request("GET", "/asset-initialization-windows/current", null,
+                administrator, null, null).statusCode());
+        assertTrue(body(request("GET", "/asset-initialization-windows/operators", null,
+                administrator, null, null)).contains("worker"));
         assertEquals(409, request("POST", "/asset-initialization-windows", windowRequest,
                 administrator, "application/json", null).statusCode());
         var review = request("POST", "/asset-import-batches/" + id + "/review", null,
@@ -124,7 +128,9 @@ class AssetImportHttpRuntimeCase {
         assertEquals(409, request("POST", "/asset-import-batches/" + id + "/preview",
                 "{}".getBytes(StandardCharsets.UTF_8), warehouse, "application/json", null, 1L)
                 .statusCode());
-        byte[] decision = "{\"approved\":true,\"reason\":\"verified sample\"}"
+        byte[] decision = ("{\"approved\":true,\"reason\":\"verified sample\","
+                + "\"confirmedReadyRows\":1,\"confirmedErrorRows\":1,"
+                + "\"sampleVerified\":true}")
                 .getBytes(StandardCharsets.UTF_8);
         assertEquals(403, request("POST", "/asset-import-batches/" + id + "/decision",
                 decision, viewer, "application/json", null).statusCode());
@@ -138,6 +144,14 @@ class AssetImportHttpRuntimeCase {
         db.update("INSERT INTO fams_account_role (account_id,role_code,granted_at) "
                 + "VALUES (3,'ASSET_ADMIN',?)", now);
         var assetAdmin = login("administrator");
+        assertTrue(body(request("GET", "/asset-import-batches/reviews/pending", null,
+                assetAdmin, null, null)).contains(id));
+        assertEquals(200, request("GET", "/asset-import-batches/" + id + "/review-rows?status=ERROR",
+                null, assetAdmin, null, null).statusCode());
+        byte[] unverifiedDecision = "{\"approved\":true,\"reason\":\"unchecked\"}"
+                .getBytes(StandardCharsets.UTF_8);
+        assertEquals(400, request("POST", "/asset-import-batches/" + id + "/decision",
+                unverifiedDecision, assetAdmin, "application/json", null).statusCode());
         var approved = request("POST", "/asset-import-batches/" + id + "/decision",
                 decision, assetAdmin, "application/json", null);
         assertEquals(200, approved.statusCode(), body(approved));
@@ -182,8 +196,11 @@ class AssetImportHttpRuntimeCase {
         assertEquals(2, JSON.readTree(body(usagePreview)).get("readyRows").asInt());
         assertEquals(200, request("POST", "/asset-import-batches/" + usageId + "/review", null,
                 warehouse, null, null, 1L).statusCode());
+        byte[] usageDecision = ("{\"approved\":true,\"reason\":\"verified usage sample\","
+                + "\"confirmedReadyRows\":2,\"confirmedErrorRows\":0,"
+                + "\"sampleVerified\":true}").getBytes(StandardCharsets.UTF_8);
         assertEquals(200, request("POST", "/asset-import-batches/" + usageId + "/decision",
-                decision, assetAdmin, "application/json", null).statusCode());
+                usageDecision, assetAdmin, "application/json", null).statusCode());
         worker.poll();
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_asset "
                 + "WHERE asset_code='HTTP-P-1' AND lifecycle_status='IN_USE' "
@@ -196,6 +213,8 @@ class AssetImportHttpRuntimeCase {
         var rollbackRequest = request("POST", "/asset-import-batches/" + id + "/rollback",
                 rollbackReason, warehouse, "application/json", null);
         assertEquals(200, rollbackRequest.statusCode(), body(rollbackRequest));
+        assertTrue(body(request("GET", "/asset-import-batches/rollbacks/pending", null,
+                assetAdmin, null, null)).contains(id));
         assertEquals(403, request("POST", "/asset-import-batches/" + id + "/rollback-decision",
                 decision, viewer, "application/json", null).statusCode());
         assertEquals(200, request("POST", "/asset-import-batches/" + id + "/rollback-decision",

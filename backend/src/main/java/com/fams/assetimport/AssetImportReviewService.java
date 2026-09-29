@@ -5,7 +5,9 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -19,6 +21,8 @@ import tools.jackson.databind.ObjectMapper;
 public class AssetImportReviewService {
     public record Review(UUID batchId, String status, long previewVersion,
                          String processorAccountId, String decidedBy, UUID jobId) { }
+    public record Pending(UUID batchId, long previewVersion, int readyRows, int errorRows,
+                          String operatorUsername, java.time.Instant requestedAt) { }
 
     private final JdbcTemplate db;
     private final DurableJobService jobs;
@@ -30,6 +34,63 @@ public class AssetImportReviewService {
         this.jobs = jobs;
         this.json = json;
         this.clock = clock;
+    }
+
+    @Transactional(readOnly = true)
+    public Review getOwned(long operatorId, UUID batchId) {
+        var rows = db.queryForList("SELECT r.review_status,r.preview_version,r.processor_account_id,"
+                + "r.decided_by,b.job_id FROM fams_asset_import_review r "
+                + "JOIN fams_asset_import_batch b ON b.id=r.batch_id "
+                + "WHERE r.batch_id=? AND b.actor_account_id=?", batchId.toString(), operatorId);
+        if (rows.isEmpty()) { throw new IllegalStateException("ASSET_IMPORT_REVIEW_NOT_FOUND"); }
+        var row = rows.getFirst();
+        return new Review(batchId, (String) row.get("review_status"),
+                ((Number) row.get("preview_version")).longValue(),
+                row.get("processor_account_id").toString(),
+                row.get("decided_by") == null ? null : row.get("decided_by").toString(),
+                row.get("job_id") == null ? null : UUID.fromString((String) row.get("job_id")));
+    }
+
+    @Transactional(readOnly = true)
+    public List<Pending> pending(int page) {
+        if (page < 1 || page > 1_000_000) {
+            throw new IllegalArgumentException("ASSET_IMPORT_REQUEST_INVALID");
+        }
+        return db.query("SELECT r.batch_id,r.preview_version,r.requested_at,b.ready_rows,"
+                + "b.error_rows,a.username FROM fams_asset_import_review r "
+                + "JOIN fams_asset_import_batch b ON b.id=r.batch_id "
+                + "JOIN fams_system_account a ON a.id=r.processor_account_id "
+                + "WHERE r.review_status='PENDING' ORDER BY r.requested_at,r.batch_id LIMIT 50 OFFSET ?",
+                (result, index) -> new Pending(UUID.fromString(result.getString("batch_id")),
+                        result.getLong("preview_version"), result.getInt("ready_rows"),
+                        result.getInt("error_rows"), result.getString("username"),
+                        result.getTimestamp("requested_at").toInstant()), (page - 1) * 50);
+    }
+
+    @Transactional(readOnly = true)
+    public AssetImportBatchService.RowPage rowsForAdmin(UUID batchId, String status, int page) {
+        if (batchId == null || status == null || page < 1 || page > 1_000_000
+                || !Set.of("READY", "ERROR").contains(status)) {
+            throw new IllegalArgumentException("ASSET_IMPORT_REQUEST_INVALID");
+        }
+        Integer pending = db.queryForObject("SELECT COUNT(*) FROM fams_asset_import_review "
+                + "WHERE batch_id=? AND review_status='PENDING'", Integer.class, batchId.toString());
+        if (pending == null || pending == 0) {
+            throw new IllegalStateException("ASSET_IMPORT_REVIEW_NOT_FOUND");
+        }
+        int total = db.queryForObject("SELECT COUNT(*) FROM fams_asset_import_row "
+                + "WHERE batch_id=? AND row_status=?", Integer.class, batchId.toString(), status);
+        var items = db.query("SELECT sheet_row,row_status,source_json,resolved_json,errors_json "
+                + "FROM fams_asset_import_row WHERE batch_id=? AND row_status=? "
+                + "ORDER BY sheet_row LIMIT 50 OFFSET ?", (result, index) ->
+                        new AssetImportBatchService.PreviewRow(result.getInt("sheet_row"),
+                                result.getString("row_status"), json.readTree(result.getString("source_json")),
+                                result.getString("resolved_json") == null ? null
+                                        : json.readTree(result.getString("resolved_json")),
+                                result.getString("errors_json") == null ? null
+                                        : json.readTree(result.getString("errors_json"))),
+                batchId.toString(), status, (page - 1) * 50);
+        return new AssetImportBatchService.RowPage(total, items);
     }
 
     @Transactional
@@ -83,12 +144,14 @@ public class AssetImportReviewService {
     }
 
     @Transactional
-    public Review decide(long administratorId, UUID batchId, boolean approve, String reason) {
+    public Review decide(long administratorId, UUID batchId, boolean approve, String reason,
+            Integer confirmedReadyRows, Integer confirmedErrorRows, boolean sampleVerified) {
         if (administratorId < 1 || batchId == null || reason == null || reason.isBlank()
                 || reason.strip().length() > 500) {
             throw new IllegalArgumentException("ASSET_IMPORT_DECISION_INVALID");
         }
-        var batches = db.queryForList("SELECT batch_status,preview_version,source_sha256 FROM "
+        var batches = db.queryForList("SELECT batch_status,preview_version,source_sha256,"
+                + "ready_rows,error_rows FROM "
                 + "fams_asset_import_batch WHERE id=? FOR UPDATE", batchId.toString());
         if (batches.isEmpty()) { throw new IllegalStateException("ASSET_IMPORT_NOT_FOUND"); }
         var reviews = db.queryForList("SELECT r.review_status,r.preview_version,r.processor_account_id,"
@@ -110,6 +173,11 @@ public class AssetImportReviewService {
                 || !((LocalDateTime) review.get("expires_at"))
                         .toInstant(ZoneOffset.UTC).isAfter(clock.instant()))) {
             throw new IllegalStateException("ASSET_IMPORT_WINDOW_CLOSED");
+        }
+        if (approve && (!sampleVerified || confirmedReadyRows == null || confirmedErrorRows == null
+                || confirmedReadyRows != ((Number) batches.getFirst().get("ready_rows")).intValue()
+                || confirmedErrorRows != ((Number) batches.getFirst().get("error_rows")).intValue())) {
+            throw new IllegalArgumentException("ASSET_IMPORT_DECISION_INVALID");
         }
         UUID jobId = null;
         if (approve) {

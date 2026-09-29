@@ -1267,6 +1267,13 @@ components:
         status: { type: string, enum: [OPEN, CLOSED] }
         assignedOperatorId: { type: string, pattern: '^[1-9][0-9]*$' }
         expiresAt: { type: string, format: date-time }
+    AssetInitializationEligibleOperator:
+      type: object
+      additionalProperties: false
+      required: [id, username]
+      properties:
+        id: { type: string, pattern: '^[1-9][0-9]*$' }
+        username: { type: string }
     AssetImportTicket:
       type: object
       additionalProperties: false
@@ -1289,6 +1296,9 @@ components:
       properties:
         approved: { type: boolean }
         reason: { type: string, minLength: 1, maxLength: 500 }
+        confirmedReadyRows: { type: integer, format: int32, minimum: 0 }
+        confirmedErrorRows: { type: integer, format: int32, minimum: 0 }
+        sampleVerified: { type: boolean }
     AssetImportReview:
       type: object
       additionalProperties: false
@@ -1300,6 +1310,17 @@ components:
         processorAccountId: { type: string, pattern: '^[1-9][0-9]*$' }
         decidedBy: { type: string, nullable: true, pattern: '^[1-9][0-9]*$' }
         jobId: { type: string, format: uuid, nullable: true }
+    AssetImportPendingReview:
+      type: object
+      additionalProperties: false
+      required: [batchId, previewVersion, readyRows, errorRows, operatorUsername, requestedAt]
+      properties:
+        batchId: { type: string, format: uuid }
+        previewVersion: { type: integer, format: int64, minimum: 1 }
+        readyRows: { type: integer, format: int32, minimum: 0 }
+        errorRows: { type: integer, format: int32, minimum: 0 }
+        operatorUsername: { type: string }
+        requestedAt: { type: string, format: date-time }
     AssetImportRollbackReasonRequest:
       type: object
       additionalProperties: false
@@ -1315,6 +1336,17 @@ components:
         status: { type: string, enum: [PENDING, APPROVED, REJECTED, QUEUED, COMPLETED, FAILED] }
         version: { type: integer, format: int64, minimum: 1 }
         jobId: { type: string, format: uuid, nullable: true }
+    AssetImportPendingRollback:
+      type: object
+      additionalProperties: false
+      required: [batchId, version, assetCount, operatorUsername, reason, requestedAt]
+      properties:
+        batchId: { type: string, format: uuid }
+        version: { type: integer, format: int64, minimum: 1 }
+        assetCount: { type: integer, format: int32, minimum: 1 }
+        operatorUsername: { type: string }
+        reason: { type: string }
+        requestedAt: { type: string, format: date-time }
     AssetImportMappingRequest:
       type: object
       additionalProperties: false
@@ -3225,6 +3257,37 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /asset-initialization-windows/operators:
+    get:
+      tags: [AssetImport]
+      operationId: listAssetInitializationOperators
+      summary: List enabled warehouse operators eligible for a bounded window.
+      x-actor: { required: true, roles: [SYSTEM_ADMIN] }
+      responses:
+        '200':
+          description: Eligible operators.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AssetInitializationEligibleOperator' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /asset-initialization-windows/current:
+    get:
+      tags: [AssetImport]
+      operationId: getCurrentAssetInitializationWindow
+      summary: Read the currently open and unexpired initialization window.
+      x-actor: { required: true, roles: [SYSTEM_ADMIN] }
+      responses:
+        '200':
+          description: Current window.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetInitializationWindow' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /asset-initialization-windows/{windowId}/close:
     parameters:
       - name: windowId
@@ -3445,6 +3508,24 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /asset-import-batches/reviews/pending:
+    get:
+      tags: [AssetImport]
+      operationId: listPendingAssetImportReviews
+      summary: Shared administrator pool for pending batch reviews.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Up to 50 pending reviews.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AssetImportPendingReview' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /asset-import-batches/{batchId}/review:
     parameters:
       - name: batchId
@@ -3470,6 +3551,46 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+    get:
+      tags: [AssetImport]
+      operationId: getOwnAssetImportReview
+      summary: Original operator reads the current administrator review state.
+      x-actor: { required: true, roles: [WAREHOUSE_OPERATOR] }
+      responses:
+        '200':
+          description: Current review.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetImportReview' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /asset-import-batches/{batchId}/review-rows:
+    parameters:
+      - name: batchId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [AssetImport]
+      operationId: listAssetImportReviewRows
+      summary: Asset administrator inspects ready or error rows of a pending batch.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [READY, ERROR], default: ERROR }
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Fifty rows from the selected preflight group.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetImportRowPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /asset-import-batches/{batchId}/decision:
     parameters:
       - name: batchId
@@ -3528,6 +3649,38 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+    get:
+      tags: [AssetImport]
+      operationId: getOwnAssetImportRollback
+      summary: Original operator reads the current rollback state.
+      x-actor: { required: true, roles: [WAREHOUSE_OPERATOR] }
+      responses:
+        '200':
+          description: Current rollback.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetImportRollback' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /asset-import-batches/rollbacks/pending:
+    get:
+      tags: [AssetImport]
+      operationId: listPendingAssetImportRollbacks
+      summary: Shared administrator pool for pending rollback requests.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Up to 50 pending rollback requests.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AssetImportPendingRollback' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /asset-import-batches/{batchId}/rollback-decision:
     parameters:
       - name: batchId

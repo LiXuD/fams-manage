@@ -5,8 +5,9 @@ import AppChrome from "@/components/AppChrome.vue";
 import {
   downloadImportResult, downloadImportTemplate, downloadPreflightReport,
   getImport, importColumns, importRows,
-  previewImport, uploadImport,
-  type ImportRow, type ImportTicket,
+  ownImportReview, ownImportRollback, previewImport, queueImportRollback,
+  requestImportReview, requestImportRollback, uploadImport,
+  type ImportReview, type ImportRollback, type ImportRow, type ImportTicket,
 } from "@/assetimport/api";
 
 const route = useRoute();
@@ -33,6 +34,9 @@ const errorRows = ref(0);
 const error = ref("");
 const notice = ref("");
 const busy = ref(false);
+const review = ref<ImportReview | null>(null);
+const rollback = ref<ImportRollback | null>(null);
+const rollbackReason = ref("");
 
 function selectedFile(event: Event): void {
   file.value = (event.target as HTMLInputElement).files?.[0] ?? null;
@@ -42,6 +46,14 @@ function selectedFile(event: Event): void {
 
 async function loadBatch(id: string): Promise<void> {
   ticket.value = await getImport(id);
+  review.value = await ownImportReview(id).catch((cause: unknown) => {
+    if (cause instanceof Error && "code" in cause && cause.code === "ASSET_IMPORT_REVIEW_NOT_FOUND") return null;
+    throw cause;
+  });
+  rollback.value = await ownImportRollback(id).catch((cause: unknown) => {
+    if (cause instanceof Error && "code" in cause && cause.code === "ASSET_IMPORT_ROLLBACK_NOT_FOUND") return null;
+    throw cause;
+  });
   columns.value = await importColumns(id);
   mapping.value = Object.fromEntries(fields.map((field) =>
     [field.key, ticket.value?.mapping?.[field.key] ??
@@ -57,6 +69,43 @@ async function loadBatch(id: string): Promise<void> {
     total.value = errors.total > 0 ? errors.total : ready.total;
     page.value = 1;
   }
+}
+
+async function refresh(): Promise<void> {
+  if (!ticket.value) return;
+  error.value = "";
+  try { await loadBatch(ticket.value.id); }
+  catch (cause) { error.value = cause instanceof Error ? cause.message : "刷新失败"; }
+}
+
+async function submitReview(): Promise<void> {
+  if (!ticket.value) return;
+  busy.value = true; error.value = "";
+  try {
+    review.value = await requestImportReview(ticket.value.id, ticket.value.previewVersion);
+    notice.value = "已提交资产管理员核验。";
+  } catch (cause) { error.value = cause instanceof Error ? cause.message : "提交核验失败"; }
+  finally { busy.value = false; }
+}
+
+async function submitRollback(): Promise<void> {
+  if (!ticket.value) return;
+  busy.value = true; error.value = "";
+  try {
+    rollback.value = await requestImportRollback(ticket.value.id, rollbackReason.value.trim());
+    notice.value = "整批撤销申请已提交资产管理员。";
+  } catch (cause) { error.value = cause instanceof Error ? cause.message : "申请撤销失败"; }
+  finally { busy.value = false; }
+}
+
+async function executeRollback(): Promise<void> {
+  if (!ticket.value) return;
+  busy.value = true; error.value = "";
+  try {
+    rollback.value = await queueImportRollback(ticket.value.id);
+    notice.value = "整批撤销已排队，请稍后刷新状态。";
+  } catch (cause) { error.value = cause instanceof Error ? cause.message : "执行撤销失败"; }
+  finally { busy.value = false; }
 }
 
 async function upload(): Promise<void> {
@@ -162,7 +211,8 @@ onMounted(async () => {
         </label>
       </div>
       <button class="primary-button" type="button"
-        :disabled="busy || !['UPLOADED', 'PREVIEWED'].includes(ticket.status)" @click="preview">运行预检</button>
+        :disabled="busy || !!review && review.status !== 'REJECTED' || !['UPLOADED', 'PREVIEWED'].includes(ticket.status)"
+        @click="preview">运行预检</button>
     </section>
     <section v-if="ticket && ticket.status !== 'UPLOADED'" class="asset-panel" aria-label="预检结果">
       <h2>3. 预检结果</h2>
@@ -176,6 +226,22 @@ onMounted(async () => {
       <button v-if="['PUBLISHED', 'ROLLED_BACK'].includes(ticket.status)"
         class="secondary-button" type="button"
         @click="resultReport">下载导入结果 CSV</button>
+      <button class="secondary-button" type="button" :disabled="busy" @click="refresh">刷新状态</button>
+      <div v-if="ticket.status === 'PREVIEWED'" class="asset-filters">
+        <p v-if="review">核验状态：{{ review.status }}。{{ review.status === 'REJECTED' ? '可修正后重新预检。' : '' }}</p>
+        <button v-if="readyRows > 0 && (!review || review.status === 'REJECTED')"
+          class="primary-button" type="button" :disabled="busy" @click="submitReview">提交管理员核验</button>
+      </div>
+      <div v-if="ticket.status === 'PUBLISHED'" class="asset-filters">
+        <p v-if="rollback">整批撤销：{{ rollback.status }}。</p>
+        <template v-if="!rollback || rollback.status === 'REJECTED'">
+          <label>撤销原因 <input v-model="rollbackReason" maxlength="500" /></label>
+          <button class="secondary-button" type="button" :disabled="busy || !rollbackReason.trim()"
+            @click="submitRollback">申请整批撤销</button>
+        </template>
+        <button v-if="rollback?.status === 'APPROVED'" class="primary-button" type="button"
+          :disabled="busy" @click="executeRollback">执行已批准的撤销</button>
+      </div>
       <div class="asset-filters">
         <button class="secondary-button" type="button" @click="selectRows('ERROR')">错误行</button>
         <button class="secondary-button" type="button" @click="selectRows('READY')">正确行</button>

@@ -17,6 +17,26 @@ export interface ImportRow {
   errors?: ImportCellError[];
 }
 export interface ImportRowPage { total: number; items: ImportRow[] }
+export interface ImportReview {
+  batchId: string; status: "PENDING" | "APPROVED" | "REJECTED";
+  previewVersion: number; processorAccountId: string; decidedBy?: string | null; jobId?: string | null
+}
+export interface PendingImportReview {
+  batchId: string; previewVersion: number; readyRows: number; errorRows: number;
+  operatorUsername: string; requestedAt: string
+}
+export interface ImportRollback {
+  batchId: string; status: "PENDING" | "APPROVED" | "REJECTED" | "QUEUED" | "COMPLETED" | "FAILED";
+  version: number; jobId?: string | null
+}
+export interface PendingImportRollback {
+  batchId: string; version: number; assetCount: number;
+  operatorUsername: string; reason: string; requestedAt: string
+}
+export interface InitializationWindow {
+  id: string; status: "OPEN" | "CLOSED"; assignedOperatorId: string; expiresAt: string
+}
+export interface EligibleOperator { id: string; username: string }
 
 const messages: Record<string, string> = {
   AUTH_SESSION_INVALID: "会话已失效，请重新登录。",
@@ -30,6 +50,11 @@ const messages: Record<string, string> = {
   ASSET_IMPORT_MAPPING_INVALID: "字段映射无效，请检查列名。",
   ASSET_IMPORT_VERSION_CONFLICT: "预检版本已变化，请刷新批次后重试。",
   ASSET_IMPORT_NOT_FOUND: "批次不存在或当前账号不可访问。",
+  ASSET_IMPORT_REVIEW_NOT_FOUND: "尚未提交管理员核验。",
+  ASSET_IMPORT_ROLLBACK_NOT_FOUND: "尚未申请整批撤销。",
+  ASSET_IMPORT_WINDOW_NOT_FOUND: "当前没有开放的期初窗口。",
+  ASSET_IMPORT_WINDOW_CLOSED: "期初窗口已关闭或过期。",
+  ASSET_IMPORT_DECISION_INVALID: "请核对正确行、错误行数量并确认抽样核验。",
 };
 
 async function failure(response: Response): Promise<AuthApiError> {
@@ -123,4 +148,73 @@ export async function downloadImportResult(id: string): Promise<void> {
   document.body.append(link);
   try { link.click(); }
   finally { link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000); }
+}
+
+const batchPath = (id: string): string => `/api/v1/asset-import-batches/${encodeURIComponent(id)}`;
+
+async function postJson<T>(path: string, body: unknown, extraHeaders = {}): Promise<T> {
+  return jsonResult<T>(await fetch(path, { method: "POST", credentials: "include",
+    headers: { ...csrfHeaders(), "Content-Type": "application/json", ...extraHeaders },
+    body: JSON.stringify(body) }));
+}
+
+export async function requestImportReview(id: string, version: number): Promise<ImportReview> {
+  return jsonResult<ImportReview>(await fetch(`${batchPath(id)}/review`, {
+    method: "POST", credentials: "include",
+    headers: { ...csrfHeaders(), "If-Match-Version": String(version) },
+  }));
+}
+export async function ownImportReview(id: string): Promise<ImportReview> {
+  return jsonResult<ImportReview>(await fetch(`${batchPath(id)}/review`, { credentials: "include" }));
+}
+export async function pendingImportReviews(page = 1): Promise<PendingImportReview[]> {
+  return jsonResult<PendingImportReview[]>(await fetch(
+    `/api/v1/asset-import-batches/reviews/pending?page=${page}`, { credentials: "include" }));
+}
+export async function reviewImportRows(id: string, status: "READY" | "ERROR", page: number): Promise<ImportRowPage> {
+  return jsonResult<ImportRowPage>(await fetch(
+    `${batchPath(id)}/review-rows?status=${status}&page=${page}`, { credentials: "include" }));
+}
+export async function decideImportReview(id: string, approved: boolean, reason: string,
+  readyRows: number, errorRows: number, sampleVerified: boolean): Promise<ImportReview> {
+  return postJson<ImportReview>(`${batchPath(id)}/decision`, {
+    approved, reason, confirmedReadyRows: readyRows, confirmedErrorRows: errorRows, sampleVerified,
+  });
+}
+export async function requestImportRollback(id: string, reason: string): Promise<ImportRollback> {
+  return postJson<ImportRollback>(`${batchPath(id)}/rollback`, { reason });
+}
+export async function ownImportRollback(id: string): Promise<ImportRollback> {
+  return jsonResult<ImportRollback>(await fetch(`${batchPath(id)}/rollback`, { credentials: "include" }));
+}
+export async function pendingImportRollbacks(page = 1): Promise<PendingImportRollback[]> {
+  return jsonResult<PendingImportRollback[]>(await fetch(
+    `/api/v1/asset-import-batches/rollbacks/pending?page=${page}`, { credentials: "include" }));
+}
+export async function decideImportRollback(id: string, approved: boolean, reason: string): Promise<ImportRollback> {
+  return postJson<ImportRollback>(`${batchPath(id)}/rollback-decision`, { approved, reason });
+}
+export async function queueImportRollback(id: string): Promise<ImportRollback> {
+  return jsonResult<ImportRollback>(await fetch(`${batchPath(id)}/rollback-execute`, {
+    method: "POST", credentials: "include", headers: csrfHeaders(),
+  }));
+}
+export async function eligibleImportOperators(): Promise<EligibleOperator[]> {
+  return jsonResult<EligibleOperator[]>(await fetch("/api/v1/asset-initialization-windows/operators",
+    { credentials: "include" }));
+}
+export async function currentImportWindow(): Promise<InitializationWindow> {
+  return jsonResult<InitializationWindow>(await fetch("/api/v1/asset-initialization-windows/current",
+    { credentials: "include" }));
+}
+export async function openImportWindow(operatorId: string, reason: string, expiresAt: string): Promise<InitializationWindow> {
+  return postJson<InitializationWindow>("/api/v1/asset-initialization-windows", {
+    assignedOperatorId: operatorId, reason, expiresAt,
+  });
+}
+export async function closeImportWindow(id: string): Promise<InitializationWindow> {
+  return jsonResult<InitializationWindow>(await fetch(
+    `/api/v1/asset-initialization-windows/${encodeURIComponent(id)}/close`, {
+      method: "POST", credentials: "include", headers: csrfHeaders(),
+    }));
 }

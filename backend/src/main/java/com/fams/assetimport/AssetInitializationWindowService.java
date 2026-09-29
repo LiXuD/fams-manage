@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Profile("fams-product")
 public class AssetInitializationWindowService {
     public record Window(String id, String status, String assignedOperatorId, Instant expiresAt) { }
+    public record EligibleOperator(String id, String username) { }
 
     private final JdbcTemplate db;
     private final Clock clock;
@@ -23,6 +25,29 @@ public class AssetInitializationWindowService {
     public AssetInitializationWindowService(JdbcTemplate db, Clock clock) {
         this.db = db;
         this.clock = clock;
+    }
+
+    @Transactional(readOnly = true)
+    public List<EligibleOperator> operators() {
+        return db.query("SELECT a.id,a.username FROM fams_system_account a "
+                + "JOIN fams_account_role r ON r.account_id=a.id "
+                + "WHERE a.status='ENABLED' AND r.role_code='WAREHOUSE_OPERATOR' "
+                + "ORDER BY a.username,a.id", (result, index) -> new EligibleOperator(
+                        Long.toString(result.getLong("id")), result.getString("username")));
+    }
+
+    @Transactional(readOnly = true)
+    public Window current() {
+        var rows = db.queryForList("SELECT id,assigned_operator_id,expires_at FROM "
+                + "fams_initialization_window WHERE window_status='OPEN'");
+        if (rows.isEmpty()) { throw new IllegalStateException("ASSET_IMPORT_WINDOW_NOT_FOUND"); }
+        var row = rows.getFirst();
+        Instant expiry = ((LocalDateTime) row.get("expires_at")).toInstant(ZoneOffset.UTC);
+        if (!expiry.isAfter(clock.instant())) {
+            throw new IllegalStateException("ASSET_IMPORT_WINDOW_NOT_FOUND");
+        }
+        return new Window(row.get("id").toString(), "OPEN",
+                row.get("assigned_operator_id").toString(), expiry);
     }
 
     @Transactional

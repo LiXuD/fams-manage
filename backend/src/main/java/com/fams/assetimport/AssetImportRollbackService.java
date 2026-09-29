@@ -22,6 +22,8 @@ import tools.jackson.databind.ObjectMapper;
 @Profile("fams-product")
 public class AssetImportRollbackService {
     public record Rollback(UUID batchId, String status, long version, UUID jobId) { }
+    public record Pending(UUID batchId, long version, int assetCount, String operatorUsername,
+                          String reason, Instant requestedAt) { }
 
     private final JdbcTemplate db;
     private final AssetInitialPublicationPort assets;
@@ -36,6 +38,35 @@ public class AssetImportRollbackService {
         this.jobs = jobs;
         this.json = json;
         this.clock = clock;
+    }
+
+    @Transactional(readOnly = true)
+    public Rollback getOwned(long operatorId, UUID batchId) {
+        var rows = db.queryForList("SELECT r.rollback_status,r.version,r.job_id FROM "
+                + "fams_asset_import_rollback r JOIN fams_asset_import_batch b ON b.id=r.batch_id "
+                + "WHERE r.batch_id=? AND b.actor_account_id=?", batchId.toString(), operatorId);
+        if (rows.isEmpty()) { throw new IllegalStateException("ASSET_IMPORT_ROLLBACK_NOT_FOUND"); }
+        var row = rows.getFirst();
+        return new Rollback(batchId, (String) row.get("rollback_status"),
+                ((Number) row.get("version")).longValue(), row.get("job_id") == null ? null
+                        : UUID.fromString((String) row.get("job_id")));
+    }
+
+    @Transactional(readOnly = true)
+    public List<Pending> pending(int page) {
+        if (page < 1 || page > 1_000_000) {
+            throw new IllegalArgumentException("ASSET_IMPORT_REQUEST_INVALID");
+        }
+        return db.query("SELECT r.batch_id,r.version,r.request_reason,r.requested_at,a.username,"
+                + "(SELECT COUNT(*) FROM fams_asset_import_publication p "
+                + "WHERE p.batch_id=r.batch_id) AS asset_count "
+                + "FROM fams_asset_import_rollback r "
+                + "JOIN fams_system_account a ON a.id=r.processor_account_id "
+                + "WHERE r.rollback_status='PENDING' ORDER BY r.requested_at,r.batch_id LIMIT 50 OFFSET ?",
+                (result, index) -> new Pending(UUID.fromString(result.getString("batch_id")),
+                        result.getLong("version"), result.getInt("asset_count"),
+                        result.getString("username"), result.getString("request_reason"),
+                        result.getTimestamp("requested_at").toInstant()), (page - 1) * 50);
     }
 
     @Transactional

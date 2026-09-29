@@ -24,7 +24,9 @@ class AssetImportErrorHandler {
     ResponseEntity<ErrorResponse> conflict(IllegalStateException failure, HttpServletRequest request) {
         String code = failure.getMessage();
         if ("ASSET_IMPORT_NOT_FOUND".equals(code)
-                || "ASSET_IMPORT_WINDOW_NOT_FOUND".equals(code)) {
+                || "ASSET_IMPORT_WINDOW_NOT_FOUND".equals(code)
+                || "ASSET_IMPORT_REVIEW_NOT_FOUND".equals(code)
+                || "ASSET_IMPORT_ROLLBACK_NOT_FOUND".equals(code)) {
             return response(404, code, request);
         }
         if ("ASSET_IMPORT_UPLOAD_CONFLICT".equals(code) || "ASSET_IMPORT_LOCKED".equals(code)

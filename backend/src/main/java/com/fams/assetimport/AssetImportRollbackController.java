@@ -1,13 +1,16 @@
 package com.fams.assetimport;
 
 import com.fams.auth.AssetActorContext;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Profile("fams-product")
@@ -23,6 +26,18 @@ class AssetImportRollbackController {
     AssetImportRollbackController(AssetImportRollbackService rollbacks, AssetActorContext actors) {
         this.rollbacks = rollbacks;
         this.actors = actors;
+    }
+
+    @GetMapping("/rollbacks/pending")
+    ResponseEntity<List<AssetImportRollbackService.Pending>> pending(
+            @RequestParam(defaultValue = "1") int page) {
+        actors.requireAssetAdmin();
+        return ResponseEntity.ok(rollbacks.pending(page));
+    }
+
+    @GetMapping("/{batchId}/rollback")
+    ResponseEntity<AssetImportRollbackService.Rollback> get(@PathVariable UUID batchId) {
+        return ResponseEntity.ok(rollbacks.getOwned(actors.requireWarehouseOperator().id(), batchId));
     }
 
     @PostMapping("/{batchId}/rollback")

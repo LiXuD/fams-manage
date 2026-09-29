@@ -2,10 +2,12 @@ package com.fams.assetimport;
 
 import com.fams.auth.AssetActorContext;
 import java.time.Instant;
+import java.util.List;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,6 +25,18 @@ class AssetInitializationWindowController {
     AssetInitializationWindowController(AssetInitializationWindowService windows, AssetActorContext actors) {
         this.windows = windows;
         this.actors = actors;
+    }
+
+    @GetMapping("/operators")
+    ResponseEntity<List<AssetInitializationWindowService.EligibleOperator>> operators() {
+        actors.requireSystemAdmin();
+        return ResponseEntity.ok(windows.operators());
+    }
+
+    @GetMapping("/current")
+    ResponseEntity<AssetInitializationWindowService.Window> current() {
+        actors.requireSystemAdmin();
+        return ResponseEntity.ok(windows.current());
     }
 
     @PostMapping
