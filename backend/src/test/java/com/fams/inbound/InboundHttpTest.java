@@ -509,7 +509,8 @@ class InboundHttpTest {
         int firstStatus = first.get();
         int secondStatus = second.get();
         assertTrue((firstStatus == 200 && secondStatus == 409)
-                || (firstStatus == 409 && secondStatus == 200));
+                || (firstStatus == 409 && secondStatus == 200),
+                "concurrent claim statuses: " + firstStatus + ", " + secondStatus);
         assertEquals(1, count("SELECT COUNT(*) FROM fams_inbound_processing_ownership "
                 + "WHERE receipt_id=" + receipt.path("id").asText() + " AND archived_at IS NULL"));
     }
