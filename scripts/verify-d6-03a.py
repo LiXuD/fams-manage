@@ -1150,6 +1150,14 @@ def verify_java_quality(context: RuntimeContext) -> None:
                 covered, missed, ratio = parse_counter_ratio(report, counter_type)
                 print(f"[Java coverage diagnostic] {counter_type}: "
                       f"{covered}/{covered + missed} ({ratio:.2%})")
+            missing_branches = []
+            for java_class in report.findall("./package/class"):
+                branch = java_class.find("./counter[@type='BRANCH']")
+                if branch is not None:
+                    missing_branches.append((int(branch.attrib["missed"]),
+                                             java_class.attrib["name"]))
+            for missed, name in sorted(missing_branches, reverse=True)[:12]:
+                print(f"[Java branch diagnostic] {name}: missed={missed}")
         raise
     violations = java_test_output_violations(output)
     violations.extend(
