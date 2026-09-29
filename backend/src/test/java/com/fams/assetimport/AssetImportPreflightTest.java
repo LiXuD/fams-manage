@@ -65,6 +65,17 @@ class AssetImportPreflightTest {
         assertTrue(result.errors().isEmpty());
     }
 
+    @Test
+    void overlongAssetFieldStaysInErrorRowsBeforePublication() {
+        Map<String, String> values = new HashMap<>(row(2, "A-4", "CAT-1", "LOC-1", "在库").values());
+        values.put("单位", "x".repeat(33));
+        var result = AssetImportPreflight.check(parsed(new AssetImportWorkbook.DataRow(
+                2, Map.copyOf(values))), Map.of(), catalog());
+        assertTrue(result.ready().isEmpty());
+        assertEquals("FIELD_TOO_LONG", result.errors().getFirst().reason());
+        assertEquals("资产", result.errors().getFirst().sheet());
+    }
+
     private AssetImportPreflight.Catalog catalog() {
         return new AssetImportPreflight.Catalog(
                 List.of(ref(1, "CAT-1", "办公", "ACTIVE", null),

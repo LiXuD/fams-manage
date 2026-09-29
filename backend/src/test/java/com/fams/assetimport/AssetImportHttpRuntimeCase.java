@@ -3,6 +3,7 @@ package com.fams.assetimport;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fams.job.DurableJobService;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.net.URI;
@@ -29,6 +30,7 @@ import tools.jackson.databind.ObjectMapper;
 @SpringBootTest(classes = AssetImportHttpRuntimeCase.TestApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"spring.profiles.active=fams-product",
+                "fams.asset-import.worker.enabled=false",
                 "fams.security.idempotency-hmac-key=test-idempotency-hmac-key-0123456789abcdef",
                 "fams.security.employee-phone-key=test-phone-key-0123456789abcdef-extra"})
 @EnabledIfSystemProperty(named = "d6.08.import.http.runtime", matches = "true")
@@ -39,6 +41,8 @@ class AssetImportHttpRuntimeCase {
 
     @Value("${local.server.port}") int port;
     @Autowired JdbcTemplate db;
+    @Autowired DurableJobService jobs;
+    @Autowired AssetImportPublicationService publication;
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
@@ -88,6 +92,8 @@ class AssetImportHttpRuntimeCase {
         assertEquals(200, errors.statusCode(), body(errors));
         assertEquals("DUPLICATE_ASSET_CODE", JSON.readTree(body(errors)).get("items").get(0)
                 .get("errors").get(0).get("reason").asText());
+        assertEquals("资产", JSON.readTree(body(errors)).get("items").get(0)
+                .get("errors").get(0).get("sheet").asText());
         var report = request("GET", "/asset-import-batches/" + id + "/preflight-report",
                 null, warehouse, null, null);
         assertEquals(200, report.statusCode(), body(report));
@@ -143,6 +149,47 @@ class AssetImportHttpRuntimeCase {
                 + "WHERE job_kind='ASSET_IMPORT' AND business_reference=?", Integer.class, id));
         assertEquals(409, request("POST", "/asset-import-batches/" + id + "/decision",
                 decision, assetAdmin, "application/json", null).statusCode());
+        seedBusinessParameters();
+        var worker = new AssetImportWorker(jobs, publication);
+        worker.poll();
+        assertEquals("PUBLISHED", JSON.readTree(body(request("GET", "/asset-import-batches/" + id,
+                null, warehouse, null, null))).get("status").asText());
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_asset_import_publication "
+                + "WHERE batch_id=?", Integer.class, id));
+        var finalReport = request("GET", "/asset-import-batches/" + id + "/result",
+                null, warehouse, null, null);
+        assertEquals(200, finalReport.statusCode(), body(finalReport));
+        assertTrue(body(finalReport).contains("HTTP-A-1"));
+        assertTrue(body(finalReport).contains("DUPLICATE_ASSET_CODE"));
+        assertEquals(403, request("GET", "/asset-import-batches/" + id + "/result",
+                null, viewer, null, null).statusCode());
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_asset a "
+                + "JOIN fams_asset_import_publication p ON p.asset_id=a.id "
+                + "WHERE p.batch_id=? AND a.lifecycle_status='IN_STOCK' AND a.card_stage='ACTIVE' "
+                + "AND a.custody_type='STORAGE'", Integer.class, id));
+        worker.poll();
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_asset_import_publication "
+                + "WHERE batch_id=?", Integer.class, id));
+        byte[] usageFile = usageWorkbook(template.body());
+        var usageUpload = request("POST", "/asset-import-batches", multipart(usageFile), warehouse,
+                "multipart/form-data; boundary=fams-test-boundary", "http-import-usage-0002");
+        assertEquals(201, usageUpload.statusCode(), body(usageUpload));
+        String usageId = JSON.readTree(body(usageUpload)).get("id").asText();
+        var usagePreview = request("POST", "/asset-import-batches/" + usageId + "/preview",
+                "{}".getBytes(StandardCharsets.UTF_8), warehouse, "application/json", null, 0L);
+        assertEquals(200, usagePreview.statusCode(), body(usagePreview));
+        assertEquals(2, JSON.readTree(body(usagePreview)).get("readyRows").asInt());
+        assertEquals(200, request("POST", "/asset-import-batches/" + usageId + "/review", null,
+                warehouse, null, null, 1L).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + usageId + "/decision",
+                decision, assetAdmin, "application/json", null).statusCode());
+        worker.poll();
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_asset "
+                + "WHERE asset_code='HTTP-P-1' AND lifecycle_status='IN_USE' "
+                + "AND custody_type='PERSONAL' AND responsible_employee_id=2", Integer.class));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_asset "
+                + "WHERE asset_code='HTTP-S-1' AND lifecycle_status='IN_USE' "
+                + "AND custody_type='SHARED' AND department_responsible_employee_id=3", Integer.class));
         assertEquals(200, request("POST", "/asset-initialization-windows/" + windowId + "/close",
                 null, administrator, null, null).statusCode());
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_initialization_window "
@@ -165,6 +212,25 @@ class AssetImportHttpRuntimeCase {
                 + "VALUES (2,'EMPLOYEE',?)", now);
     }
 
+    private void seedBusinessParameters() {
+        String snapshot = """
+                {"timezone":"Asia/Shanghai","workWeek":["MONDAY","TUESDAY","WEDNESDAY",
+                "THURSDAY","FRIDAY"],"holidays":[],"adjustedWorkdays":[],
+                "adminDecisionDeadlineWorkdays":2,"warehouseClaimDeadlineWorkdays":1,
+                "warehouseFirstExecutionDeadlineWorkdays":2,
+                "handoverAcceptanceDeadlineNaturalDays":3,
+                "notificationEscalationThresholds":{"administratorUnreadHours":4,
+                "onDutyWarehouseOperatorUnreadHours":4,"firstExecutionOverdueNaturalDays":1,
+                "receiptDueUnreadHours":24}}
+                """;
+        Timestamp now = Timestamp.from(Instant.now());
+        db.update("INSERT INTO fams_business_parameter_version (id,version,status,effective_at,"
+                + "actor_account_id,actor_username,snapshot_json,created_at) "
+                + "VALUES (1,1,'ACTIVE',?,3,'administrator',?,?)", now, snapshot, now);
+        db.update("UPDATE fams_business_parameter_state SET current_version=1,current_version_id=1 "
+                + "WHERE singleton_id=1");
+    }
+
     private byte[] workbook(byte[] template) throws Exception {
         try (var input = new ByteArrayInputStream(template); var book = new XSSFWorkbook(input);
                 var output = new ByteArrayOutputStream()) {
@@ -180,6 +246,28 @@ class AssetImportHttpRuntimeCase {
                 row.createCell(7).setCellValue("在库");
                 row.createCell(8).setCellValue("WH-1");
                 row.createCell(9).setCellValue("LOC-1");
+            }
+            book.write(output);
+            return output.toByteArray();
+        }
+    }
+
+    private byte[] usageWorkbook(byte[] template) throws Exception {
+        try (var input = new ByteArrayInputStream(template); var book = new XSSFWorkbook(input);
+                var output = new ByteArrayOutputStream()) {
+            var sheet = book.getSheet("资产");
+            for (int index = 1; index <= 2; index++) {
+                var row = sheet.createRow(index);
+                row.createCell(0).setCellValue(index == 1 ? "HTTP-P-1" : "HTTP-S-1");
+                row.createCell(1).setCellValue("Assigned asset " + index);
+                row.createCell(2).setCellValue("CAT-1");
+                row.createCell(3).setCellValue("ROOT");
+                row.createCell(4).setCellValue("M1");
+                row.createCell(5).setCellValue("piece");
+                row.createCell(7).setCellValue(index == 1 ? "在用个人" : "在用公用");
+                row.createCell(9).setCellValue("LOC-1");
+                row.createCell(10).setCellValue("ROOT");
+                row.createCell(11).setCellValue(index == 1 ? "E2" : "E3");
             }
             book.write(output);
             return output.toByteArray();

@@ -175,38 +175,52 @@ public class AssetImportBatchService {
 
     @Transactional(readOnly = true)
     public byte[] preflightReport(long actorId, UUID batchId) {
+        return report(actorId, batchId, false);
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] finalReport(long actorId, UUID batchId) {
+        return report(actorId, batchId, true);
+    }
+
+    private byte[] report(long actorId, UUID batchId, boolean publishedOnly) {
         if (actorId < 1 || batchId == null) {
             throw new IllegalArgumentException("ASSET_IMPORT_REQUEST_INVALID");
         }
         var batches = db.queryForList("SELECT batch_status,source_xlsx FROM fams_asset_import_batch "
                 + "WHERE id=? AND actor_account_id=?", batchId.toString(), actorId);
         if (batches.isEmpty()) { throw new IllegalStateException("ASSET_IMPORT_NOT_FOUND"); }
-        if (!Set.of("PREVIEWED", "QUEUED", "PUBLISHING", "PUBLISHED", "FAILED")
-                .contains(batches.getFirst().get("batch_status"))) {
+        String status = (String) batches.getFirst().get("batch_status");
+        if (publishedOnly ? !"PUBLISHED".equals(status)
+                : !Set.of("PREVIEWED", "QUEUED", "PUBLISHING", "PUBLISHED", "FAILED")
+                        .contains(status)) {
             throw new IllegalStateException("ASSET_IMPORT_LOCKED");
         }
         List<String> headers = AssetImportWorkbook.parse((byte[]) batches.getFirst().get("source_xlsx")).columns();
         StringBuilder csv = new StringBuilder("\uFEFF");
-        csv.append("Excel 行,预检状态");
+        csv.append("工作表,Excel 行,预检状态");
         for (String header : headers) { csv.append(',').append(csvCell(header)); }
-        csv.append(",错误列,原值,原因\r\n");
-        db.query("SELECT sheet_row,row_status,source_json,errors_json FROM fams_asset_import_row "
-                + "WHERE batch_id=? ORDER BY sheet_row", result -> {
+        csv.append(",成功资产编码,错误列,原值,原因\r\n");
+        db.query("SELECT r.sheet_row,r.row_status,r.source_json,r.errors_json,p.asset_code "
+                + "FROM fams_asset_import_row r LEFT JOIN fams_asset_import_publication p "
+                + "ON p.batch_id=r.batch_id AND p.sheet_row=r.sheet_row "
+                + "WHERE r.batch_id=? ORDER BY r.sheet_row", result -> {
                     JsonNode source = json.readTree(result.getString("source_json"));
                     JsonNode errors = jsonOrNull(result.getString("errors_json"));
-                    csv.append(result.getInt("sheet_row")).append(',')
+                    csv.append("资产,").append(result.getInt("sheet_row")).append(',')
                             .append("READY".equals(result.getString("row_status")) ? "正确" : "错误");
                     for (String header : headers) {
                         csv.append(',').append(csvCell(source.path(header).asText("")));
                     }
+                    csv.append(',').append(csvCell(result.getString("asset_code")));
                     if (errors == null || errors.isEmpty()) {
                         csv.append(",,,\r\n");
                     } else {
                         for (int index = 0; index < errors.size(); index++) {
                             JsonNode error = errors.get(index);
                             if (index > 0) {
-                                csv.append(result.getInt("sheet_row")).append(",错误");
-                                for (int column = 0; column < headers.size(); column++) { csv.append(','); }
+                                csv.append("资产,").append(result.getInt("sheet_row")).append(",错误");
+                                for (int column = 0; column <= headers.size(); column++) { csv.append(','); }
                             }
                             csv.append(',').append(csvCell(error.path("column").asText("")))
                                     .append(',').append(csvCell(error.path("original").asText("")))

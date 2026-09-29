@@ -26,7 +26,11 @@ public final class AssetImportWorkbook {
     private static final List<String> TEMPLATE_COLUMNS = List.of("资产编码", "名称", "分类编码", "所属组织编码",
             "型号", "单位", "序列号", "资产状态", "仓库编码", "位置编码", "使用组织编码", "使用人编号");
 
-    public record CellError(int sheetRow, String column, String original, String reason) { }
+    public record CellError(String sheet, int sheetRow, String column, String original, String reason) {
+        public CellError(int sheetRow, String column, String original, String reason) {
+            this("资产", sheetRow, column, original, reason);
+        }
+    }
     public record DataRow(int sheetRow, Map<String, String> values) { }
     public record Parsed(List<String> columns, List<DataRow> rows, List<CellError> errors) { }
 

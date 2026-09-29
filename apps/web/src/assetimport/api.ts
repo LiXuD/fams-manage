@@ -4,7 +4,9 @@ import { useSessionStore } from "@/auth/sessionStore";
 export interface ImportTicket {
   id: string; status: string; previewVersion: number; mapping?: Record<string, string> | null
 }
-export interface ImportCellError { sheetRow: number; column: string; original: string; reason: string }
+export interface ImportCellError {
+  sheet: string; sheetRow: number; column: string; original: string; reason: string
+}
 export interface ImportPreview {
   id: string; version: number; totalRows: number; readyRows: number; errorRows: number;
   errors: ImportCellError[]; moreErrors: boolean;
@@ -105,6 +107,19 @@ export async function downloadPreflightReport(id: string): Promise<void> {
   const link = document.createElement("a");
   link.href = url;
   link.download = `fams-asset-preflight-${id}.csv`;
+  document.body.append(link);
+  try { link.click(); }
+  finally { link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000); }
+}
+
+export async function downloadImportResult(id: string): Promise<void> {
+  const response = await fetch(`/api/v1/asset-import-batches/${encodeURIComponent(id)}/result`,
+    { credentials: "include" });
+  if (!response.ok) throw await failure(response);
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `fams-asset-result-${id}.csv`;
   document.body.append(link);
   try { link.click(); }
   finally { link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000); }

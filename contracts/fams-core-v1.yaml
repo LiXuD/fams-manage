@@ -1311,8 +1311,9 @@ components:
     AssetImportCellError:
       type: object
       additionalProperties: false
-      required: [sheetRow, column, original, reason]
+      required: [sheet, sheetRow, column, original, reason]
       properties:
+        sheet: { type: string, enum: ['资产'] }
         sheetRow: { type: integer, format: int32, minimum: 2 }
         column: { type: string }
         original: { type: string }
@@ -3401,6 +3402,27 @@ paths:
       responses:
         '200':
           description: UTF-8 CSV; publication results are a later operation.
+          content:
+            text/csv:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /asset-import-batches/{batchId}/result:
+    parameters:
+      - name: batchId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [AssetImport]
+      operationId: downloadAssetImportResult
+      summary: Download published asset codes and preflight errors by original row.
+      x-actor: { required: true, roles: [WAREHOUSE_OPERATOR] }
+      responses:
+        '200':
+          description: UTF-8 CSV for a published batch.
           content:
             text/csv:
               schema: { type: string, format: binary }

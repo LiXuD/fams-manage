@@ -3,7 +3,8 @@ import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import {
-  downloadImportTemplate, downloadPreflightReport, getImport, importColumns, importRows,
+  downloadImportResult, downloadImportTemplate, downloadPreflightReport,
+  getImport, importColumns, importRows,
   previewImport, uploadImport,
   type ImportRow, type ImportTicket,
 } from "@/assetimport/api";
@@ -45,7 +46,7 @@ async function loadBatch(id: string): Promise<void> {
   mapping.value = Object.fromEntries(fields.map((field) =>
     [field.key, ticket.value?.mapping?.[field.key] ??
       (columns.value.includes(field.label) ? field.label : "")]));
-  if (ticket.value.status === "PREVIEWED") {
+  if (ticket.value.status !== "UPLOADED") {
     const [ready, errors] = await Promise.all([
       importRows(id, "READY", 1), importRows(id, "ERROR", 1),
     ]);
@@ -118,6 +119,13 @@ async function report(): Promise<void> {
   catch (cause) { error.value = cause instanceof Error ? cause.message : "预检结果下载失败"; }
 }
 
+async function resultReport(): Promise<void> {
+  if (!ticket.value) return;
+  error.value = "";
+  try { await downloadImportResult(ticket.value.id); }
+  catch (cause) { error.value = cause instanceof Error ? cause.message : "导入结果下载失败"; }
+}
+
 onMounted(async () => {
   const id = typeof route.query.batch === "string" ? route.query.batch : "";
   if (!id) return;
@@ -153,12 +161,19 @@ onMounted(async () => {
           </select>
         </label>
       </div>
-      <button class="primary-button" type="button" :disabled="busy" @click="preview">运行预检</button>
+      <button class="primary-button" type="button"
+        :disabled="busy || !['UPLOADED', 'PREVIEWED'].includes(ticket.status)" @click="preview">运行预检</button>
     </section>
-    <section v-if="ticket?.status === 'PREVIEWED'" class="asset-panel" aria-label="预检结果">
+    <section v-if="ticket && ticket.status !== 'UPLOADED'" class="asset-panel" aria-label="预检结果">
       <h2>3. 预检结果</h2>
-      <p>正确 {{ readyRows }} 行 · 错误 {{ errorRows }} 行。当前仅保存预检结果，尚未发布资产。</p>
+      <p>正确 {{ readyRows }} 行 · 错误 {{ errorRows }} 行。
+        {{ ticket.status === 'PUBLISHED' ? '资产已发布。'
+          : ticket.status === 'QUEUED' ? '管理员已批准，后台发布排队中。'
+            : ticket.status === 'FAILED' ? '后台发布失败，请联系管理员处理。'
+              : '当前仅保存预检结果，尚未发布资产。' }}</p>
       <button class="secondary-button" type="button" @click="report">下载预检结果 CSV</button>
+      <button v-if="ticket.status === 'PUBLISHED'" class="secondary-button" type="button"
+        @click="resultReport">下载导入结果 CSV</button>
       <div class="asset-filters">
         <button class="secondary-button" type="button" @click="selectRows('ERROR')">错误行</button>
         <button class="secondary-button" type="button" @click="selectRows('READY')">正确行</button>
@@ -172,7 +187,7 @@ onMounted(async () => {
             <td>{{ row.source[mapping.assetCode] ?? '—' }}</td>
             <td>{{ row.status === 'READY' ? '可导入' : '需修正' }}</td>
             <td><div v-for="item in row.errors ?? []" :key="item.column + item.reason">
-              {{ item.column }}：{{ item.original || '（空）' }} · {{ item.reason }}
+              {{ item.sheet }} / {{ item.column }}：{{ item.original || '（空）' }} · {{ item.reason }}
             </div></td>
           </tr>
           <tr v-if="rows.length === 0"><td colspan="5">当前没有{{ rowFilter === 'ERROR' ? '错误' : '正确' }}行</td></tr>

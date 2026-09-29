@@ -91,6 +91,15 @@ class AssetImportController {
                 .body(report);
     }
 
+    @GetMapping(value = "/{batchId}/result", produces = "text/csv")
+    ResponseEntity<byte[]> finalReport(@PathVariable UUID batchId) {
+        byte[] report = batches.finalReport(actors.requireWarehouseOperator().id(), batchId);
+        return ResponseEntity.ok().contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"fams-asset-result-" + batchId + ".csv\"")
+                .body(report);
+    }
+
     @GetMapping("/{batchId}/rows")
     ResponseEntity<AssetImportBatchService.RowPage> rows(@PathVariable UUID batchId,
             @RequestParam(required = false) String status,

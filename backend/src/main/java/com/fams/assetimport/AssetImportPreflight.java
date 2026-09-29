@@ -70,6 +70,11 @@ public final class AssetImportPreflight {
             String name = required(row, mapping, "name", errors);
             String model = required(row, mapping, "model", errors);
             String unit = required(row, mapping, "unit", errors);
+            limit(row, mapping, "assetCode", code, 128, errors);
+            limit(row, mapping, "name", name, 256, errors);
+            limit(row, mapping, "model", model, 128, errors);
+            limit(row, mapping, "unit", unit, 32, errors);
+            limit(row, mapping, "serialNumber", serial, 128, errors);
             Long category = reference(row, mapping, "category", catalog.categories(), null, errors);
             Long organization = reference(row, mapping, "organization", catalog.organizations(), null, errors);
             String state = required(row, mapping, "state", errors);
@@ -134,6 +139,13 @@ public final class AssetImportPreflight {
         String result = value(row, mapping, field);
         if (result.isBlank()) { errors.add(error(row, mapping, field, result, "REQUIRED")); }
         return result;
+    }
+
+    private static void limit(AssetImportWorkbook.DataRow row, Map<String, String> mapping,
+            String field, String value, int maximum, List<AssetImportWorkbook.CellError> errors) {
+        if (value.length() > maximum) {
+            errors.add(error(row, mapping, field, value, "FIELD_TOO_LONG"));
+        }
     }
 
     private static String value(AssetImportWorkbook.DataRow row, Map<String, String> mapping, String field) {

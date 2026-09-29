@@ -51,6 +51,27 @@ interface AssetMapper {
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insert(Map<String, Object> values);
 
+    @Insert("""
+            INSERT INTO fams_asset
+              (asset_code,name,category_id,model,unit,owning_organization_id,
+               serial_number,serial_number_normalized,lifecycle_status,exception_status,
+               card_stage,custody_type,storage_warehouse_id,current_location_id,
+               using_organization_id,responsible_employee_id,department_responsible_employee_id,
+               created_business_date,inbound_business_date,parameter_version_id,
+               creator_account_id,creator_username_snapshot,source_text,version,
+               created_at,updated_at,created_by,updated_by)
+            VALUES
+              (#{code},#{name},#{categoryId},#{model},#{unit},#{organizationId},
+               #{serial},#{serialNormalized},#{lifecycle},'NORMAL',
+               'ACTIVE',#{custody},#{warehouseId},#{locationId},
+               #{usingOrganizationId},#{employeeId},#{departmentEmployeeId},
+               #{businessDate},#{businessDate},#{parameterId},
+               #{actorId},#{username},'INITIAL_IMPORT',0,
+               #{now},#{now},#{actorId},#{actorId})
+            """)
+    @Options(useGeneratedKeys = true, keyProperty = "id")
+    int insertInitial(Map<String, Object> values);
+
     @Update("""
             UPDATE fams_asset SET name = #{name}, category_id = #{categoryId},
               model = #{model}, unit = #{unit}, owning_organization_id = #{organizationId},
