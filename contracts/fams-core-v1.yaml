@@ -1275,7 +1275,7 @@ components:
         id: { type: string, format: uuid }
         status:
           type: string
-          enum: [UPLOADED, PREVIEWED, QUEUED, PUBLISHING, PUBLISHED, FAILED]
+          enum: [UPLOADED, PREVIEWED, QUEUED, PUBLISHING, PUBLISHED, FAILED, ROLLED_BACK]
         previewVersion: { type: integer, format: int64, minimum: 0 }
         mapping:
           type: object
@@ -1299,6 +1299,21 @@ components:
         previewVersion: { type: integer, format: int64, minimum: 1 }
         processorAccountId: { type: string, pattern: '^[1-9][0-9]*$' }
         decidedBy: { type: string, nullable: true, pattern: '^[1-9][0-9]*$' }
+        jobId: { type: string, format: uuid, nullable: true }
+    AssetImportRollbackReasonRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    AssetImportRollback:
+      type: object
+      additionalProperties: false
+      required: [batchId, status, version]
+      properties:
+        batchId: { type: string, format: uuid }
+        status: { type: string, enum: [PENDING, APPROVED, REJECTED, QUEUED, COMPLETED, FAILED] }
+        version: { type: integer, format: int64, minimum: 1 }
         jobId: { type: string, format: uuid, nullable: true }
     AssetImportMappingRequest:
       type: object
@@ -3480,6 +3495,87 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/AssetImportReview' }
         '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /asset-import-batches/{batchId}/rollback:
+    parameters:
+      - name: batchId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [AssetImport]
+      operationId: requestAssetImportRollback
+      summary: Original warehouse operator requests rollback of an untouched published batch.
+      x-actor: { required: true, roles: [WAREHOUSE_OPERATOR] }
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AssetImportRollbackReasonRequest' }
+      responses:
+        '200':
+          description: Pending rollback decision.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetImportRollback' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /asset-import-batches/{batchId}/rollback-decision:
+    parameters:
+      - name: batchId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [AssetImport]
+      operationId: decideAssetImportRollback
+      summary: Asset administrator approves or rejects the rollback request.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AssetImportDecisionRequest' }
+      responses:
+        '200':
+          description: Rollback decision.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetImportRollback' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /asset-import-batches/{batchId}/rollback-execute:
+    parameters:
+      - name: batchId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [AssetImport]
+      operationId: executeAssetImportRollback
+      summary: Original warehouse operator queues the approved rollback for durable execution.
+      x-actor: { required: true, roles: [WAREHOUSE_OPERATOR] }
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: Queued rollback.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetImportRollback' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }

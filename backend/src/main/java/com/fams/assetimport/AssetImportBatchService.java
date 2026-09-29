@@ -191,8 +191,8 @@ public class AssetImportBatchService {
                 + "WHERE id=? AND actor_account_id=?", batchId.toString(), actorId);
         if (batches.isEmpty()) { throw new IllegalStateException("ASSET_IMPORT_NOT_FOUND"); }
         String status = (String) batches.getFirst().get("batch_status");
-        if (publishedOnly ? !"PUBLISHED".equals(status)
-                : !Set.of("PREVIEWED", "QUEUED", "PUBLISHING", "PUBLISHED", "FAILED")
+        if (publishedOnly ? !Set.of("PUBLISHED", "ROLLED_BACK").contains(status)
+                : !Set.of("PREVIEWED", "QUEUED", "PUBLISHING", "PUBLISHED", "FAILED", "ROLLED_BACK")
                         .contains(status)) {
             throw new IllegalStateException("ASSET_IMPORT_LOCKED");
         }

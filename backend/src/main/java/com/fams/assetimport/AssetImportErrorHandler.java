@@ -32,7 +32,10 @@ class AssetImportErrorHandler {
                 || "ASSET_IMPORT_WINDOW_OPEN".equals(code)
                 || "ASSET_IMPORT_WINDOW_CLOSED".equals(code)
                 || "ASSET_IMPORT_NOT_READY".equals(code)
-                || "ASSET_IMPORT_REVIEW_LOCKED".equals(code)) {
+                || "ASSET_IMPORT_REVIEW_LOCKED".equals(code)
+                || "ASSET_IMPORT_ROLLBACK_NOT_PUBLISHED".equals(code)
+                || "ASSET_IMPORT_ROLLBACK_LOCKED".equals(code)
+                || "ASSET_IMPORT_ROLLBACK_DOWNSTREAM".equals(code)) {
             return response(409, code, request);
         }
         return response(500, "ASSET_IMPORT_INTERNAL", request);

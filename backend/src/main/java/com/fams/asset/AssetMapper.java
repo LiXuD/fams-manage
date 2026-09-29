@@ -99,6 +99,17 @@ interface AssetMapper {
             @Param("reason") String reason, @Param("actorId") long actorId,
             @Param("now") Instant now);
 
+    @Update("""
+            UPDATE fams_asset SET card_stage='CANCELLED',custody_type=NULL,
+              storage_warehouse_id=NULL,current_location_id=NULL,using_organization_id=NULL,
+              responsible_employee_id=NULL,department_responsible_employee_id=NULL,
+              cancelled_at=#{now},cancellation_reason=#{reason},version=version+1,
+              updated_at=#{now},updated_by=#{actorId}
+             WHERE id=#{id} AND version=0 AND card_stage='ACTIVE'
+            """)
+    int cancelInitial(@Param("id") long id, @Param("reason") String reason,
+            @Param("actorId") long actorId, @Param("now") Instant now);
+
     @Select("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id = #{id} AND released_at IS NULL")
     int activeLock(@Param("id") long assetId);
 
@@ -173,6 +184,9 @@ interface AssetMapper {
     int archiveTag(@Param("assetId") long assetId, @Param("hash") String hash,
             @Param("validFrom") Instant validFrom, @Param("now") Instant now,
             @Param("reason") String reason);
+
+    @org.apache.ibatis.annotations.Delete("DELETE FROM fams_asset_tag WHERE asset_id=#{id}")
+    int deleteTag(@Param("id") long assetId);
 
     @Update("UPDATE fams_asset SET version = version + 1, updated_at = #{now}, updated_by = #{actorId} WHERE id = #{id} AND version = #{version}")
     int touch(@Param("id") long assetId, @Param("version") long version,

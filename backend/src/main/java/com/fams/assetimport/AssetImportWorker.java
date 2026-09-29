@@ -21,25 +21,45 @@ public class AssetImportWorker {
     private final String owner = "asset-import-" + UUID.randomUUID();
     private final DurableJobService jobs;
     private final AssetImportPublicationService publication;
+    private final AssetImportRollbackService rollbacks;
 
-    public AssetImportWorker(DurableJobService jobs, AssetImportPublicationService publication) {
+    public AssetImportWorker(DurableJobService jobs, AssetImportPublicationService publication,
+            AssetImportRollbackService rollbacks) {
         this.jobs = jobs;
         this.publication = publication;
+        this.rollbacks = rollbacks;
     }
 
     @Scheduled(fixedDelayString = "${fams.asset-import.worker.delay-ms:5000}",
             initialDelayString = "${fams.asset-import.worker.initial-delay-ms:5000}")
     public void poll() {
-        var claimed = jobs.claim("ASSET_IMPORT", owner, Duration.ofMinutes(45));
-        if (claimed.isEmpty()) { return; }
-        var claim = claimed.get();
+        jobs.claim("ASSET_IMPORT", owner, Duration.ofMinutes(45)).ifPresent(this::publish);
+        jobs.claim("ASSET_IMPORT_ROLLBACK", owner, Duration.ofMinutes(45)).ifPresent(this::rollback);
+    }
+
+    private void publish(DurableJobService.Claim claim) {
         try {
             jobs.complete(claim, claim.businessReference(), () -> publication.publish(claim));
         } catch (RuntimeException failure) {
+            LOG.warn("Asset import job {} failed", claim.id(), failure);
             try {
                 publication.recordFailure(claim, failure);
             } catch (RuntimeException recordingFailure) {
                 LOG.warn("Asset import job {} could not record its failure; lease recovery remains available",
+                        claim.id(), recordingFailure);
+            }
+        }
+    }
+
+    private void rollback(DurableJobService.Claim claim) {
+        try {
+            jobs.complete(claim, claim.businessReference(), () -> rollbacks.rollback(claim));
+        } catch (RuntimeException failure) {
+            LOG.warn("Asset import rollback job {} failed", claim.id(), failure);
+            try {
+                rollbacks.recordFailure(claim, failure);
+            } catch (RuntimeException recordingFailure) {
+                LOG.warn("Asset import rollback job {} could not record its failure",
                         claim.id(), recordingFailure);
             }
         }

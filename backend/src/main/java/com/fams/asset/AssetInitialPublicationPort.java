@@ -3,6 +3,8 @@ package com.fams.asset;
 import com.fams.masterdata.AssetMasterDataPort;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -92,5 +94,26 @@ public class AssetInitialPublicationPort {
                 "batchId", context.batchId().toString(), "sheetRow", context.sheetRow(),
                 "source", "INITIAL_IMPORT")), context.actorId());
         return new Created(id, code);
+    }
+
+    @Transactional
+    public void cancel(long assetId, UUID batchId, long actorId, String reason, Instant now) {
+        Map<String, Object> asset = mapper.lock(assetId);
+        if (asset == null || !"ACTIVE".equals(asset.get("card_stage"))
+                || !"INITIAL_IMPORT".equals(asset.get("source_text"))
+                || ((Number) asset.get("version")).longValue() != 0) {
+            throw new IllegalStateException("ASSET_IMPORT_ROLLBACK_DOWNSTREAM");
+        }
+        Map<String, Object> tag = mapper.tag(assetId);
+        if (tag == null) { throw new IllegalStateException("ASSET_IMPORT_ROLLBACK_DOWNSTREAM"); }
+        mapper.archiveTag(assetId, (String) tag.get("token_hash"),
+                ((LocalDateTime) tag.get("issued_at")).toInstant(ZoneOffset.UTC), now,
+                "INITIAL_IMPORT_ROLLBACK");
+        mapper.deleteTag(assetId);
+        if (mapper.cancelInitial(assetId, reason, actorId, now) != 1) {
+            throw new IllegalStateException("ASSET_IMPORT_ROLLBACK_DOWNSTREAM");
+        }
+        mapper.event(assetId, "ASSET_INITIAL_ROLLED_BACK", now,
+                json.writeValueAsString(Map.of("batchId", batchId.toString(), "reason", reason)), actorId);
     }
 }

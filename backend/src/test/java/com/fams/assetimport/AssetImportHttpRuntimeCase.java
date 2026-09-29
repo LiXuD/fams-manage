@@ -43,6 +43,7 @@ class AssetImportHttpRuntimeCase {
     @Autowired JdbcTemplate db;
     @Autowired DurableJobService jobs;
     @Autowired AssetImportPublicationService publication;
+    @Autowired AssetImportRollbackService rollbacks;
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
@@ -150,7 +151,7 @@ class AssetImportHttpRuntimeCase {
         assertEquals(409, request("POST", "/asset-import-batches/" + id + "/decision",
                 decision, assetAdmin, "application/json", null).statusCode());
         seedBusinessParameters();
-        var worker = new AssetImportWorker(jobs, publication);
+        var worker = new AssetImportWorker(jobs, publication, rollbacks);
         worker.poll();
         assertEquals("PUBLISHED", JSON.readTree(body(request("GET", "/asset-import-batches/" + id,
                 null, warehouse, null, null))).get("status").asText());
@@ -190,6 +191,36 @@ class AssetImportHttpRuntimeCase {
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_asset "
                 + "WHERE asset_code='HTTP-S-1' AND lifecycle_status='IN_USE' "
                 + "AND custody_type='SHARED' AND department_responsible_employee_id=3", Integer.class));
+        byte[] rollbackReason = "{\"reason\":\"duplicate initial loading\"}"
+                .getBytes(StandardCharsets.UTF_8);
+        var rollbackRequest = request("POST", "/asset-import-batches/" + id + "/rollback",
+                rollbackReason, warehouse, "application/json", null);
+        assertEquals(200, rollbackRequest.statusCode(), body(rollbackRequest));
+        assertEquals(403, request("POST", "/asset-import-batches/" + id + "/rollback-decision",
+                decision, viewer, "application/json", null).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + id + "/rollback-decision",
+                decision, assetAdmin, "application/json", null).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + id + "/rollback-execute",
+                null, warehouse, null, null).statusCode());
+        worker.poll();
+        assertEquals("ROLLED_BACK", JSON.readTree(body(request("GET", "/asset-import-batches/" + id,
+                null, warehouse, null, null))).get("status").asText());
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_asset a "
+                + "JOIN fams_asset_import_publication p ON p.asset_id=a.id "
+                + "WHERE p.batch_id=? AND a.card_stage='CANCELLED' AND a.custody_type IS NULL "
+                + "AND p.retired_at IS NOT NULL", Integer.class, id));
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_asset_tag t "
+                + "JOIN fams_asset_import_publication p ON p.asset_id=t.asset_id "
+                + "WHERE p.batch_id=?", Integer.class, id));
+        assertEquals(200, request("GET", "/asset-import-batches/" + id + "/result",
+                null, warehouse, null, null).statusCode());
+        Long usageAsset = db.queryForObject("SELECT asset_id FROM fams_asset_import_publication "
+                + "WHERE batch_id=? ORDER BY sheet_row LIMIT 1", Long.class, usageId);
+        db.update("INSERT INTO fams_asset_timeline_event (asset_id,event_type,business_type,business_id,"
+                + "occurred_at,summary_json,actor_account_id) VALUES (?,'TEST_DOWNSTREAM','ASSET',?,NOW(),"
+                + "'{}',1)", usageAsset, usageAsset);
+        assertEquals(409, request("POST", "/asset-import-batches/" + usageId + "/rollback",
+                rollbackReason, warehouse, "application/json", null).statusCode());
         assertEquals(200, request("POST", "/asset-initialization-windows/" + windowId + "/close",
                 null, administrator, null, null).statusCode());
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_initialization_window "

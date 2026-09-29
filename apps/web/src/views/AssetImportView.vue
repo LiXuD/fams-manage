@@ -168,11 +168,13 @@ onMounted(async () => {
       <h2>3. 预检结果</h2>
       <p>正确 {{ readyRows }} 行 · 错误 {{ errorRows }} 行。
         {{ ticket.status === 'PUBLISHED' ? '资产已发布。'
+          : ticket.status === 'ROLLED_BACK' ? '批次已撤销，资产编码永久保留为废号。'
           : ticket.status === 'QUEUED' ? '管理员已批准，后台发布排队中。'
             : ticket.status === 'FAILED' ? '后台发布失败，请联系管理员处理。'
               : '当前仅保存预检结果，尚未发布资产。' }}</p>
       <button class="secondary-button" type="button" @click="report">下载预检结果 CSV</button>
-      <button v-if="ticket.status === 'PUBLISHED'" class="secondary-button" type="button"
+      <button v-if="['PUBLISHED', 'ROLLED_BACK'].includes(ticket.status)"
+        class="secondary-button" type="button"
         @click="resultReport">下载导入结果 CSV</button>
       <div class="asset-filters">
         <button class="secondary-button" type="button" @click="selectRows('ERROR')">错误行</button>
