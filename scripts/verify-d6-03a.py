@@ -1109,6 +1109,20 @@ def verify_java_reports() -> None:
 
 def verify_java_quality(context: RuntimeContext) -> None:
     try:
+        environment = runtime_environment(context)
+        require_command("Java clean", ["./mvnw", "-pl", "backend", "clean"],
+                        env=environment, timeout=300)
+        for label, flag, selected in (
+            ("durable job coverage", "-Dd6.08.job.runtime=true",
+             "DurableJobRuntimeCase#mysqlSubmissionClaimFencingBackoffAndBusinessRollback"),
+            ("asset import batch coverage", "-Dd6.08.import.runtime=true",
+             "AssetImportBatchRuntimeCase"),
+            ("asset import HTTP coverage", "-Dd6.08.import.http.runtime=true",
+             "AssetImportHttpRuntimeCase#warehouseUploadPreviewAndErrorRowsUseRealSessionAndMysql"),
+        ):
+            require_command(label, ["./mvnw", "-pl", "backend", "-Pquality", flag,
+                                    f"-Dtest={selected}", "test"],
+                            env=environment, timeout=420)
         output = require_command(
             "Java blocking quality",
             [
@@ -1122,13 +1136,11 @@ def verify_java_quality(context: RuntimeContext) -> None:
                 "-Dd6.06.asset.runtime=true",
                 "-Dd6.07.inbound.runtime=true",
                 "-Dd6.09.attachment.runtime=true",
-                "-Dd6.08.job.runtime=true",
                 # Real Clamd has its own owned-daemon gate; do not count it as a skipped pass here.
-                "-Dtest=*Test,*Tests,Test*,*TestCase,DurableJobRuntimeCase#mysqlSubmissionClaimFencingBackoffAndBusinessRollback,!AttachmentHttpTest#realClamdAllowsCleanDownloadAndQuarantinesEicarAndDaemonOutage",
-                "clean",
+                "-Dtest=*Test,*Tests,Test*,*TestCase,!AttachmentHttpTest#realClamdAllowsCleanDownloadAndQuarantinesEicarAndDaemonOutage",
                 "verify",
             ],
-            env=runtime_environment(context),
+            env=environment,
             timeout=900,
         )
     except VerificationFailure:
