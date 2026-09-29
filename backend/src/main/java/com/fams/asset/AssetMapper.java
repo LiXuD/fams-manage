@@ -9,6 +9,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.SelectProvider;
 import org.apache.ibatis.annotations.Update;
 
 @Mapper
@@ -27,6 +28,10 @@ interface AssetMapper {
     @org.apache.ibatis.annotations.SelectProvider(type = AssetSearchSql.class, method = "count")
     long count(@Param("actorId") long actorId,
             @Param("filters") Map<String, Object> filters);
+
+    @SelectProvider(type = AssetReferenceBatchSql.class, method = "select")
+    List<Map<String, Object>> referenceViews(@Param("kind") String kind,
+            @Param("ids") List<Long> ids);
 
     @Insert("""
             INSERT INTO fams_asset

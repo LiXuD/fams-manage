@@ -57,10 +57,11 @@ def main() -> None:
     env["D6_08_TEST_DATASOURCE_USERNAME"] = "fams_d6_08"
     env["D6_08_TEST_DATASOURCE_PASSWORD"] = PASSWORD
     if "--capacity" in sys.argv:
+        env["D6_08_TEST_DATASOURCE_URL"] += "&rewriteBatchedStatements=true"
         output = run("./mvnw", "-pl", "backend", "-Dd6.08.capacity.runtime=true",
                      "-Dtest=AssetImportCapacityRuntimeCase", "test", env=env)
         metrics = [line.strip() for line in output.splitlines() if "D6_08_CAPACITY " in line]
-        if len(metrics) != 2:
+        if len(metrics) != 3:
             raise RuntimeError("capacity measurement or boundary output was not produced")
         print("\n".join(metrics))
         return

@@ -9,9 +9,11 @@ import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import com.fams.auth.AssetActorContext.Actor;
 import com.fams.masterdata.AssetMasterDataPort;
@@ -76,8 +78,10 @@ class AssetService {
         }
         int offset = Math.toIntExact((long) (page - 1) * pageSize);
         Map<String, Object> filters = filters(query);
-        List<Asset> items = mapper.list(actor.id(), filters, pageSize, offset)
-                .stream().map(this::toAsset).toList();
+        List<Map<String, Object>> rows = mapper.list(actor.id(), filters, pageSize, offset);
+        Map<String, Map<Long, Map<String, Object>>> references = listReferences(rows);
+        List<Asset> items = rows.stream().map(row -> toAsset(row, (id, kind) ->
+                id == null ? null : references.getOrDefault(kind, Map.of()).get(id))).toList();
         return new PageAsset(page, pageSize,
                 mapper.count(actor.id(), filters), items);
     }
@@ -640,8 +644,43 @@ class AssetService {
             case "location" -> mapper.locationView(id);
             case "brand" -> mapper.brandView(id);
             case "manufacturer" -> mapper.manufacturerView(id);
+            case "employee" -> mapper.employee(id);
             default -> throw new IllegalArgumentException("Unknown reference kind");
         };
+    }
+
+    private Map<String, Map<Long, Map<String, Object>>> listReferences(List<Map<String, Object>> rows) {
+        Map<String, Set<Long>> ids = new HashMap<>();
+        for (var row : rows) {
+            collectReference(ids, "category", row, "category_id");
+            collectReference(ids, "organization", row, "owning_organization_id",
+                    "using_organization_id");
+            collectReference(ids, "warehouse", row, "planned_inbound_warehouse_id",
+                    "storage_warehouse_id");
+            collectReference(ids, "location", row, "planned_inbound_location_id",
+                    "current_location_id");
+            collectReference(ids, "brand", row, "brand_id");
+            collectReference(ids, "manufacturer", row, "manufacturer_id");
+            collectReference(ids, "employee", row, "responsible_employee_id",
+                    "department_responsible_employee_id");
+        }
+        Map<String, Map<Long, Map<String, Object>>> result = new HashMap<>();
+        for (var entry : ids.entrySet()) {
+            Map<Long, Map<String, Object>> byId = new HashMap<>();
+            for (var value : mapper.referenceViews(entry.getKey(), List.copyOf(entry.getValue()))) {
+                byId.put(number(value, "id"), value);
+            }
+            result.put(entry.getKey(), byId);
+        }
+        return result;
+    }
+
+    private void collectReference(Map<String, Set<Long>> ids, String kind,
+            Map<String, Object> row, String... columns) {
+        for (String column : columns) {
+            Long id = numberOrNull(row, column);
+            if (id != null) { ids.computeIfAbsent(kind, ignored -> new HashSet<>()).add(id); }
+        }
     }
 
     private void assertReference(Map<String, Object> row, Long expectedVersion) {
@@ -664,6 +703,15 @@ class AssetService {
     }
 
     private Asset toAsset(Map<String, Object> row) {
+        return toAsset(row, this::refViewRow);
+    }
+
+    @FunctionalInterface
+    private interface ReferenceLookup {
+        Map<String, Object> get(Long id, String kind);
+    }
+
+    private Asset toAsset(Map<String, Object> row, ReferenceLookup references) {
         Asset result = new Asset(Long.toString(number(row, "id")), text(row, "asset_code"),
                 text(row, "name"), AssetLifecycle.valueOf(text(row, "lifecycle_status")),
                 AssetException.valueOf(text(row, "exception_status")),
@@ -672,17 +720,17 @@ class AssetService {
                 Long.toString(number(row, "parameter_version_id")));
         Long category = numberOrNull(row, "category_id");
         Long org = numberOrNull(row, "owning_organization_id");
-        result.setCategory(reference(category, refViewRow(category, "category")));
+        result.setCategory(reference(category, references.get(category, "category")));
         if (org != null) { result.setOrganization(new OrganizationReference(org.toString(),
-                number(refViewRow(org, "organization"), "version"))); }
+                number(references.get(org, "organization"), "version"))); }
         result.setPlannedInboundWarehouse(reference(numberOrNull(row, "planned_inbound_warehouse_id"),
-                refViewRow(numberOrNull(row, "planned_inbound_warehouse_id"), "warehouse")));
+                references.get(numberOrNull(row, "planned_inbound_warehouse_id"), "warehouse")));
         result.setPlannedInboundLocation(reference(numberOrNull(row, "planned_inbound_location_id"),
-                refViewRow(numberOrNull(row, "planned_inbound_location_id"), "location")));
+                references.get(numberOrNull(row, "planned_inbound_location_id"), "location")));
         result.setBrand(reference(numberOrNull(row, "brand_id"),
-                refViewRow(numberOrNull(row, "brand_id"), "brand")));
+                references.get(numberOrNull(row, "brand_id"), "brand")));
         result.setManufacturer(reference(numberOrNull(row, "manufacturer_id"),
-                refViewRow(numberOrNull(row, "manufacturer_id"), "manufacturer")));
+                references.get(numberOrNull(row, "manufacturer_id"), "manufacturer")));
         result.setModel(text(row, "model"));
         result.setUnit(text(row, "unit"));
         result.setSerialNumber(text(row, "serial_number"));
@@ -701,38 +749,38 @@ class AssetService {
             Long storage = numberOrNull(row, "storage_warehouse_id");
             result.setCurrentCustody(new AssetCustodySummaryOneOf(
                     AssetCustodySummaryOneOf.CustodyTypeEnum.STORAGE,
-                    reference(storage, refViewRow(storage, "warehouse")),
-                    reference(currentLocation, refViewRow(currentLocation, "location"))));
+                    reference(storage, references.get(storage, "warehouse")),
+                    reference(currentLocation, references.get(currentLocation, "location"))));
         } else if ("PERSONAL".equals(custody)) {
             Long using = numberOrNull(row, "using_organization_id");
             Long employee = numberOrNull(row, "responsible_employee_id");
             result.setUsageMode(UsageMode.PERSONAL);
             result.setCurrentCustody(new AssetCustodySummaryOneOf1(
                     AssetCustodySummaryOneOf1.CustodyTypeEnum.PERSONAL,
-                    organizationReference(using), employeeReference(employee),
-                    reference(currentLocation, refViewRow(currentLocation, "location"))));
+                    organizationReference(using, references), employeeReference(employee, references),
+                    reference(currentLocation, references.get(currentLocation, "location"))));
         } else if ("SHARED".equals(custody)) {
             Long using = numberOrNull(row, "using_organization_id");
             Long employee = numberOrNull(row, "department_responsible_employee_id");
             result.setUsageMode(UsageMode.SHARED);
             result.setCurrentCustody(new AssetCustodySummaryOneOf2(
                     AssetCustodySummaryOneOf2.CustodyTypeEnum.SHARED,
-                    organizationReference(using), employeeReference(employee),
-                    reference(currentLocation, refViewRow(currentLocation, "location"))));
+                    organizationReference(using, references), employeeReference(employee, references),
+                    reference(currentLocation, references.get(currentLocation, "location"))));
         }
         result.setInboundBusinessDate(date(row, "inbound_business_date"));
         result.setLastInventoryBusinessDate(date(row, "last_inventory_business_date"));
         return result;
     }
 
-    private OrganizationReference organizationReference(Long id) {
+    private OrganizationReference organizationReference(Long id, ReferenceLookup references) {
         return id == null ? null : new OrganizationReference(id.toString(),
-                number(refViewRow(id, "organization"), "version"));
+                number(references.get(id, "organization"), "version"));
     }
 
-    private EmployeeReference employeeReference(Long id) {
+    private EmployeeReference employeeReference(Long id, ReferenceLookup references) {
         return id == null ? null : new EmployeeReference(id.toString(),
-                number(mapper.employee(id), "version"));
+                number(references.get(id, "employee"), "version"));
     }
 
     @SuppressWarnings("unchecked")

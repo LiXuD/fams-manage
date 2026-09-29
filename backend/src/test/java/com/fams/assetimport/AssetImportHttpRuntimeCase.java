@@ -169,6 +169,10 @@ class AssetImportHttpRuntimeCase {
         worker.poll();
         assertEquals("PUBLISHED", JSON.readTree(body(request("GET", "/asset-import-batches/" + id,
                 null, warehouse, null, null))).get("status").asText());
+        var ledgerPage = request("GET", "/assets?page=1&pageSize=50", null,
+                warehouse, null, null);
+        assertEquals(200, ledgerPage.statusCode(), body(ledgerPage));
+        assertTrue(body(ledgerPage).contains("HTTP-A-1"));
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_asset_import_publication "
                 + "WHERE batch_id=?", Integer.class, id));
         var finalReport = request("GET", "/asset-import-batches/" + id + "/result",
