@@ -240,6 +240,24 @@ class AssetImportHttpRuntimeCase {
                 + "'{}',1)", usageAsset, usageAsset);
         assertEquals(409, request("POST", "/asset-import-batches/" + usageId + "/rollback",
                 rollbackReason, warehouse, "application/json", null).statusCode());
+        var revokedUpload = request("POST", "/asset-import-batches",
+                multipart(workbook(template.body(), "HTTP-REVOKED-1")), warehouse,
+                "multipart/form-data; boundary=fams-test-boundary", "http-import-revoked-0003");
+        assertEquals(201, revokedUpload.statusCode(), body(revokedUpload));
+        String revokedId = JSON.readTree(body(revokedUpload)).get("id").asText();
+        assertEquals(200, request("POST", "/asset-import-batches/" + revokedId + "/preview",
+                "{}".getBytes(StandardCharsets.UTF_8), warehouse, "application/json", null, 0L)
+                .statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + revokedId + "/review",
+                null, warehouse, null, null, 1L).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + revokedId + "/decision",
+                decision, assetAdmin, "application/json", null).statusCode());
+        db.update("DELETE FROM fams_account_role WHERE account_id=1 AND role_code='WAREHOUSE_OPERATOR'");
+        worker.poll();
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_asset_import_publication "
+                + "WHERE batch_id=?", Integer.class, revokedId));
+        assertEquals("FAILED", db.queryForObject("SELECT batch_status FROM fams_asset_import_batch "
+                + "WHERE id=?", String.class, revokedId));
         assertEquals(200, request("POST", "/asset-initialization-windows/" + windowId + "/close",
                 null, administrator, null, null).statusCode());
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_initialization_window "
@@ -282,12 +300,16 @@ class AssetImportHttpRuntimeCase {
     }
 
     private byte[] workbook(byte[] template) throws Exception {
+        return workbook(template, "HTTP-A-1");
+    }
+
+    private byte[] workbook(byte[] template, String code) throws Exception {
         try (var input = new ByteArrayInputStream(template); var book = new XSSFWorkbook(input);
                 var output = new ByteArrayOutputStream()) {
             var sheet = book.getSheet("资产");
             for (int index = 1; index <= 2; index++) {
                 var row = sheet.createRow(index);
-                row.createCell(0).setCellValue("HTTP-A-1");
+                row.createCell(0).setCellValue(code);
                 row.createCell(1).setCellValue("Desk " + index);
                 row.createCell(2).setCellValue("CAT-1");
                 row.createCell(3).setCellValue("ROOT");
