@@ -11,8 +11,12 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.concurrent.TimeUnit;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -165,8 +169,42 @@ class AssetImportHttpRuntimeCase {
         assertEquals(409, request("POST", "/asset-import-batches/" + id + "/decision",
                 decision, assetAdmin, "application/json", null).statusCode());
         seedBusinessParameters();
+        String restartMarker = System.getenv("D6_08_IMPORT_PHASE1_MARKER");
+        if (restartMarker != null) {
+            var claim = jobs.claim("ASSET_IMPORT", "import-process-one", Duration.ofSeconds(3))
+                    .orElseThrow();
+            assertEquals(id, claim.businessReference());
+            assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_asset_import_publication "
+                    + "WHERE batch_id=?", Integer.class, id));
+            Files.writeString(Path.of(restartMarker), id);
+            TimeUnit.MINUTES.sleep(5);
+        }
         var worker = new AssetImportWorker(jobs, publication, rollbacks);
+        if (System.getenv("D6_08_INJECT_PUBLICATION_FAILURE") != null) {
+            db.execute("CREATE TRIGGER d6_08_fail_publication BEFORE INSERT "
+                    + "ON fams_asset_import_publication FOR EACH ROW "
+                    + "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='D6_08_INJECTED'");
+            long failedStarted = System.nanoTime();
+            worker.poll();
+            long failedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - failedStarted);
+            assertEquals("FAILED", db.queryForObject("SELECT batch_status FROM fams_asset_import_batch "
+                    + "WHERE id=?", String.class, id));
+            assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_asset_import_publication "
+                    + "WHERE batch_id=?", Integer.class, id));
+            assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_asset "
+                    + "WHERE asset_code='HTTP-A-1'", Integer.class));
+            assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_asset_tag t "
+                    + "JOIN fams_asset a ON a.id=t.asset_id WHERE a.asset_code='HTTP-A-1'", Integer.class));
+            worker.poll();
+            assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_asset_import_publication "
+                    + "WHERE batch_id=?", Integer.class, id));
+            System.out.println("D6_08_PUBLICATION_FAILURE failed_ms=" + failedMs
+                    + " asset=0 tag=0 publication=0 duplicate=0");
+            return;
+        }
+        long publishedStarted = System.nanoTime();
         worker.poll();
+        long publishedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - publishedStarted);
         assertEquals("PUBLISHED", JSON.readTree(body(request("GET", "/asset-import-batches/" + id,
                 null, warehouse, null, null))).get("status").asText());
         var ledgerPage = request("GET", "/assets?page=1&pageSize=50", null,
@@ -257,15 +295,43 @@ class AssetImportHttpRuntimeCase {
         assertEquals(200, request("POST", "/asset-import-batches/" + revokedId + "/decision",
                 decision, assetAdmin, "application/json", null).statusCode());
         db.update("DELETE FROM fams_account_role WHERE account_id=1 AND role_code='WAREHOUSE_OPERATOR'");
+        long revokedStarted = System.nanoTime();
         worker.poll();
+        long revokedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - revokedStarted);
         assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_asset_import_publication "
                 + "WHERE batch_id=?", Integer.class, revokedId));
         assertEquals("FAILED", db.queryForObject("SELECT batch_status FROM fams_asset_import_batch "
                 + "WHERE id=?", String.class, revokedId));
+        System.out.println("D6_08_PUBLICATION published_ms=" + publishedMs + " revoked_ms=" + revokedMs
+                + " published_rows=1 revoked_rows=0");
         assertEquals(200, request("POST", "/asset-initialization-windows/" + windowId + "/close",
                 null, administrator, null, null).statusCode());
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_initialization_window "
                 + "WHERE id=? AND window_status='CLOSED'", Integer.class, windowId));
+    }
+
+    @Test
+    void processTwoPublishesClaimedImportAfterPreviousJvmExited() throws Exception {
+        String id = Files.readString(Path.of(required("D6_08_IMPORT_PHASE2_MARKER"))).trim();
+        assertEquals("RUNNING", db.queryForObject("SELECT job_status FROM fams_durable_job "
+                + "WHERE job_kind='ASSET_IMPORT' AND business_reference=?", String.class, id));
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_asset_import_publication "
+                + "WHERE batch_id=?", Integer.class, id));
+        long started = System.nanoTime();
+        var worker = new AssetImportWorker(jobs, publication, rollbacks);
+        worker.poll();
+        long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+        assertEquals("PUBLISHED", db.queryForObject("SELECT batch_status FROM fams_asset_import_batch "
+                + "WHERE id=?", String.class, id));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_asset_import_publication "
+                + "WHERE batch_id=?", Integer.class, id));
+        assertEquals(2, db.queryForObject("SELECT execution_generation FROM fams_durable_job "
+                + "WHERE job_kind='ASSET_IMPORT' AND business_reference=?", Integer.class, id));
+        worker.poll();
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_asset_import_publication "
+                + "WHERE batch_id=?", Integer.class, id));
+        System.out.println("D6_08_IMPORT_RESTART recovered_ms=" + elapsedMs
+                + " generation=2 published=1 duplicate=0");
     }
 
     private void seedAccounts() {

@@ -65,13 +65,71 @@ def main() -> None:
             raise RuntimeError("capacity measurement or boundary output was not produced")
         print("\n".join(metrics))
         return
+    if "--restart-import" in sys.argv or "--failure-import" in sys.argv:
+        run("./mvnw", "-pl", "backend", "-Dd6.08.job.runtime=true",
+            "-Dtest=DurableJobRuntimeCase#mysqlSubmissionClaimFencingBackoffAndBusinessRollback",
+            "test", env=env)
+        run("./mvnw", "-pl", "backend", "-Dd6.08.import.runtime=true",
+            "-Dtest=AssetImportBatchRuntimeCase", "test", env=env)
+    if "--failure-import" in sys.argv:
+        env["D6_08_INJECT_PUBLICATION_FAILURE"] = "1"
+        output = run("./mvnw", "-pl", "backend", "-Dd6.08.import.http.runtime=true",
+                     "-Dtest=AssetImportHttpRuntimeCase#warehouseUploadPreviewAndErrorRowsUseRealSessionAndMysql",
+                     "test", env=env)
+        metrics = [line.strip() for line in output.splitlines()
+                   if "D6_08_PUBLICATION_FAILURE " in line]
+        if len(metrics) != 1:
+            raise RuntimeError("publication failure measurement was not produced")
+        print(metrics[0])
+        return
+        with tempfile.TemporaryDirectory(prefix="fams-d6-08-import-restart-") as temporary:
+            marker = Path(temporary) / "claimed-import"
+            env["D6_08_IMPORT_PHASE1_MARKER"] = str(marker)
+            process = subprocess.Popen(
+                ["rtk", "./mvnw", "-pl", "backend", "-Dd6.08.import.http.runtime=true",
+                 "-Dtest=AssetImportHttpRuntimeCase#warehouseUploadPreviewAndErrorRowsUseRealSessionAndMysql",
+                 "test"], cwd=ROOT, env=env, stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, text=True, start_new_session=True)
+            try:
+                for _ in range(450):
+                    if marker.is_file():
+                        break
+                    if process.poll() is not None:
+                        output = process.communicate(timeout=15)[0]
+                        raise RuntimeError("import JVM exited before lease marker:\n"
+                                           + "\n".join(output.splitlines()[-30:]))
+                    time.sleep(0.2)
+                else:
+                    raise RuntimeError("import JVM did not claim the publication job")
+            finally:
+                if process.poll() is None:
+                    os.killpg(process.pid, signal.SIGKILL)
+                process.communicate(timeout=15)
+            env.pop("D6_08_IMPORT_PHASE1_MARKER")
+            env["D6_08_IMPORT_PHASE2_MARKER"] = str(marker)
+            time.sleep(4)
+            output = run("./mvnw", "-pl", "backend", "-Dd6.08.import.http.runtime=true",
+                         "-Dtest=AssetImportHttpRuntimeCase#processTwoPublishesClaimedImportAfterPreviousJvmExited",
+                         "test", env=env)
+            metrics = [line.strip() for line in output.splitlines()
+                       if "D6_08_IMPORT_RESTART " in line]
+            if len(metrics) != 1:
+                raise RuntimeError("import restart measurement was not produced")
+            print(metrics[0])
+        return
     run("./mvnw", "-pl", "backend", "-Dd6.08.job.runtime=true",
         "-Dtest=DurableJobRuntimeCase#mysqlSubmissionClaimFencingBackoffAndBusinessRollback",
         "test", env=env)
     run("./mvnw", "-pl", "backend", "-Dd6.08.import.runtime=true",
         "-Dtest=AssetImportBatchRuntimeCase", "test", env=env)
-    run("./mvnw", "-pl", "backend", "-Dd6.08.import.http.runtime=true",
-        "-Dtest=AssetImportHttpRuntimeCase", "test", env=env)
+    http_output = run("./mvnw", "-pl", "backend", "-Dd6.08.import.http.runtime=true",
+                      "-Dtest=AssetImportHttpRuntimeCase#warehouseUploadPreviewAndErrorRowsUseRealSessionAndMysql",
+                      "test", env=env)
+    publication_metrics = [line.strip() for line in http_output.splitlines()
+                           if "D6_08_PUBLICATION " in line]
+    if len(publication_metrics) != 1:
+        raise RuntimeError("publication transaction measurement was not produced")
+    print(publication_metrics[0])
     with tempfile.TemporaryDirectory(prefix="fams-d6-08-") as temporary:
         marker = Path(temporary) / "claimed"
         env["D6_08_PHASE1_MARKER"] = str(marker)
