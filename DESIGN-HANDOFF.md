@@ -1,6 +1,6 @@
 # FAMS 项目阶段与交接入口
 
-> 唯一现役进度入口 · 更新于 2026-09-28
+> 唯一现役进度入口 · 更新于 2026-09-30
 > 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04～D6-07、D6-08A 与 D6-09A 本地 `DEV_VERIFIED`；D6-08B/C/D 正在开发。D6-01B 与 D6-03B 继续等待远端权限。
 
 ## 1. 八步开发流程与当前进度
@@ -12,7 +12,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；当前推进 D6-08B，D6-01B/03B 待外部权限 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-08B/C/D 候选开发继续，D6-01B/03B 待外部权限 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
@@ -65,8 +65,10 @@
 | 产品代码 | `in-progress` | D6-04～D6-07、D6-08A 及 D6-09A 已本地开发验证并复核；D6-08B/C/D 正在实现与验证 |
 | 产品运行态 | `local-dev-partial` | D6-06 用户复核 PASS；签署后 HEAD `84b66f0` 的真实 MySQL HTTP 与统一门禁 217 项通过；远端 CI、QA、共享/生产升级及生产未验证 |
 | 记忆 | `out-of-scope` | 本次未修改机器生成记忆 |
-| 工作区 | `handoff-recorded` | D6-06 在隔离分支 `codex/d6-06-asset-ledger`；实现与签署后双门禁证据已提交，验证边界见任务卡 |
+| 工作区 | `handoff-recorded` | 当前开发位于隔离工作树 `/Users/lixd/.codex/worktrees/d6-09-attachments/fams`、分支 `codex/d6-08-durable-jobs`；`main` 仍在独立旧检出且有非本任务改动，本分支未合并或推送（仓库无远端） |
 
-## 2026-09-27 最新续接
+## 2026-09-30 最新续接
 
-用户本人对 D6-07、D6-08A、D6-09A 复核全部 PASS，三项本地 DEV_VERIFIED。D6-08B 已完成 Excel 读取、预检、V14 批次、真实 HTTP 首片、PC 入口及预检结果下载。D6-08C 已接通期初窗口、核验批准、在库/在用原子发布、最终 CSV、受控整批回滚和三角色 PC 操作入口；排队后撤权、本地三角色浏览器链路、业务专属 SIGKILL 后重领发布及写入中失败整体回滚通过。D6-08D 一万行预检、容量边界、十万资产规模/查询计划及发布/失败事务首轮冒烟通过，列表引用 N+1 已修复；下一步稳定候选门禁、B/C/D 送审复核。D6-09B 及真实外部资源仍待准备。不重复既有历史治理/SHA 检查。
+用户本人对 D6-07、D6-08A、D6-09A 复核全部 PASS，三项本地 `DEV_VERIFIED`。D6-08B 的 Excel 模板/映射、预检、V14 批次、真实 HTTP、PC 入口及结果下载已实现；D6-08C 的期初窗口、核验批准、在库/在用原子发布、最终 CSV、受控整批回滚和三角色 PC 操作已实现。独有 MySQL 中撤权、`SIGKILL` 后新 JVM 重领、写入中异常整体回滚及本地浏览器链路通过。D6-08D 的一万行预检、容量边界、十万资产查询与单轮事务计时已记录，列表引用 N+1 已修复。
+
+本分支最新功能测试提交为 `4c2e757`。其导入核验驳回/重提、回滚驳回/重请，以及预检人员范围、重复标识和非法状态定向用例通过；Java 质量 `validate` 退出 0。最近一次完整产品门禁在此前提交 `b11502f` 上退出 1：Java 行覆盖 91.18%、分支覆盖 71.72%，未达到既定 75% 分支门槛；新增用例尚未重跑完整门禁，因此 D6-08B/C/D 保持 `IN_PROGRESS`，不可写为 `DEV_VERIFIED` 或正式 QA 通过。下一步仅补关键业务分支并在候选稳定后跑一次门禁，达到门槛再送独立复核；D6-09B 与微信/短信/HTTPS 等真实外部资源另待准备。不重复历史治理与 SHA 审计。
