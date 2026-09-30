@@ -129,6 +129,8 @@ class AssetImportHttpRuntimeCase {
                 warehouse, null, null, 1L);
         assertEquals(200, review.statusCode(), body(review));
         assertEquals("PENDING", JSON.readTree(body(review)).get("status").asText());
+        assertEquals(200, request("POST", "/asset-import-batches/" + id + "/review", null,
+                warehouse, null, null, 1L).statusCode());
         assertEquals(409, request("POST", "/asset-import-batches/" + id + "/preview",
                 "{}".getBytes(StandardCharsets.UTF_8), warehouse, "application/json", null, 1L)
                 .statusCode());
@@ -150,12 +152,23 @@ class AssetImportHttpRuntimeCase {
         var assetAdmin = login("administrator");
         assertTrue(body(request("GET", "/asset-import-batches/reviews/pending", null,
                 assetAdmin, null, null)).contains(id));
+        byte[] rejection = "{\"approved\":false,\"reason\":\"recount needed\"}"
+                .getBytes(StandardCharsets.UTF_8);
+        assertEquals(200, request("POST", "/asset-import-batches/" + id + "/decision",
+                rejection, assetAdmin, "application/json", null).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + id + "/review", null,
+                warehouse, null, null, 1L).statusCode());
         assertEquals(200, request("GET", "/asset-import-batches/" + id + "/review-rows?status=ERROR",
                 null, assetAdmin, null, null).statusCode());
         byte[] unverifiedDecision = "{\"approved\":true,\"reason\":\"unchecked\"}"
                 .getBytes(StandardCharsets.UTF_8);
         assertEquals(400, request("POST", "/asset-import-batches/" + id + "/decision",
                 unverifiedDecision, assetAdmin, "application/json", null).statusCode());
+        byte[] wrongCounts = "{\"approved\":true,\"reason\":\"wrong count\","
+                .concat("\"confirmedReadyRows\":2,\"confirmedErrorRows\":1,\"sampleVerified\":true}")
+                .getBytes(StandardCharsets.UTF_8);
+        assertEquals(400, request("POST", "/asset-import-batches/" + id + "/decision",
+                wrongCounts, assetAdmin, "application/json", null).statusCode());
         var approved = request("POST", "/asset-import-batches/" + id + "/decision",
                 decision, assetAdmin, "application/json", null);
         assertEquals(200, approved.statusCode(), body(approved));
@@ -255,8 +268,14 @@ class AssetImportHttpRuntimeCase {
         var rollbackRequest = request("POST", "/asset-import-batches/" + id + "/rollback",
                 rollbackReason, warehouse, "application/json", null);
         assertEquals(200, rollbackRequest.statusCode(), body(rollbackRequest));
+        assertEquals(200, request("POST", "/asset-import-batches/" + id + "/rollback",
+                rollbackReason, warehouse, "application/json", null).statusCode());
         assertTrue(body(request("GET", "/asset-import-batches/rollbacks/pending", null,
                 assetAdmin, null, null)).contains(id));
+        assertEquals(200, request("POST", "/asset-import-batches/" + id + "/rollback-decision",
+                rejection, assetAdmin, "application/json", null).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + id + "/rollback",
+                rollbackReason, warehouse, "application/json", null).statusCode());
         assertEquals(403, request("POST", "/asset-import-batches/" + id + "/rollback-decision",
                 decision, viewer, "application/json", null).statusCode());
         assertEquals(200, request("POST", "/asset-import-batches/" + id + "/rollback-decision",

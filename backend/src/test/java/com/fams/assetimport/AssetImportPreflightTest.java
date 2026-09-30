@@ -76,6 +76,62 @@ class AssetImportPreflightTest {
         assertEquals("资产", result.errors().getFirst().sheet());
     }
 
+    @Test
+    void personalAndSharedUsageResolveOnlyAnEmployeeInTheUsingOrganization() {
+        var personal = row(2, "P-1", "CAT-1", "LOC-1", "在用个人");
+        var shared = row(3, "S-1", "CAT-1", "LOC-1", "在用公用");
+        Map<String, String> first = new HashMap<>(personal.values());
+        Map<String, String> second = new HashMap<>(shared.values());
+        first.put("使用组织编码", "ORG-1");
+        first.put("使用人编号", "E-1");
+        second.put("使用组织编码", "ORG-1");
+        second.put("使用人编号", "E-2");
+        var base = catalog();
+        var scoped = new AssetImportPreflight.Catalog(base.categories(), base.organizations(),
+                base.warehouses(), base.locations(), List.of(ref(1, "E-1", "张三", "ACTIVE", 1L),
+                        ref(2, "E-2", "李四", "ACTIVE", 2L)), Set.of(), Set.of());
+        var result = AssetImportPreflight.check(new AssetImportWorkbook.Parsed(COLUMNS,
+                List.of(new AssetImportWorkbook.DataRow(2, Map.copyOf(first)),
+                        new AssetImportWorkbook.DataRow(3, Map.copyOf(second))), List.of()),
+                Map.of(), scoped);
+        assertEquals(1, result.ready().size());
+        assertEquals("P-1", result.ready().getFirst().assetCode());
+        assertEquals("REFERENCE_INACTIVE_OR_OUT_OF_SCOPE", result.errors().getFirst().reason());
+    }
+
+    @Test
+    void existingIdentifiersAndAmbiguousCategoryNameStayInErrorRows() {
+        Map<String, String> values = new HashMap<>(row(2, "existing", "办公", "LOC-1", "在库").values());
+        values.put("序列号", "SER-1");
+        var base = catalog();
+        var ambiguous = new AssetImportPreflight.Catalog(
+                List.of(ref(1, "CAT-1", "办公", "ACTIVE", null),
+                        ref(2, "CAT-2", "办公", "ACTIVE", null)),
+                base.organizations(), base.warehouses(), base.locations(), base.employees(),
+                Set.of("EXISTING"), Set.of("ser-1"));
+        var result = AssetImportPreflight.check(parsed(new AssetImportWorkbook.DataRow(2,
+                Map.copyOf(values))), Map.of(), ambiguous);
+        assertTrue(result.ready().isEmpty());
+        assertTrue(result.errors().stream().anyMatch(e -> "REFERENCE_NAME_AMBIGUOUS".equals(e.reason())));
+        assertTrue(result.errors().stream().anyMatch(e -> "DUPLICATE_ASSET_CODE".equals(e.reason())));
+        assertTrue(result.errors().stream().anyMatch(e -> "DUPLICATE_SERIAL_NUMBER".equals(e.reason())));
+    }
+
+    @Test
+    void invalidStateAndMappingAreRejectedBeforePublication() {
+        var invalid = row(2, "A-5", "UNKNOWN", "LOC-1", "已报废");
+        var result = AssetImportPreflight.check(parsed(invalid), Map.of(), catalog());
+        assertTrue(result.ready().isEmpty());
+        assertTrue(result.errors().stream().anyMatch(e -> "REFERENCE_NOT_FOUND".equals(e.reason())));
+        assertTrue(result.errors().stream().anyMatch(e -> "UNSUPPORTED_INITIAL_STATE".equals(e.reason())));
+        assertThrows(IllegalArgumentException.class, () -> AssetImportPreflight.columns(
+                parsed(invalid), Map.of("unknownField", "名称")));
+        assertThrows(IllegalArgumentException.class, () -> AssetImportPreflight.columns(
+                parsed(invalid), Map.of("assetCode", "名称")));
+        assertThrows(IllegalArgumentException.class, () -> AssetImportPreflight.check(
+                parsed(invalid), Map.of(), null));
+    }
+
     private AssetImportPreflight.Catalog catalog() {
         return new AssetImportPreflight.Catalog(
                 List.of(ref(1, "CAT-1", "办公", "ACTIVE", null),
