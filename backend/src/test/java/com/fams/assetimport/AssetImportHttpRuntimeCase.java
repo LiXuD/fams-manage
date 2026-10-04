@@ -113,6 +113,9 @@ class AssetImportHttpRuntimeCase {
                 null, viewer, null, null).statusCode());
         assertEquals(2, db.queryForObject("SELECT COUNT(*) FROM fams_asset_import_row "
                 + "WHERE batch_id=?", Integer.class, id));
+        UUID previewedBatch = UUID.fromString(id);
+        assertThrows(IllegalStateException.class, () -> reviews.request(1, previewedBatch, 2));
+        assertThrows(IllegalStateException.class, () -> reviews.request(1, previewedBatch, 1));
         byte[] windowRequest = ("{\"assignedOperatorId\":\"1\",\"reason\":\"initial load\","
                 + "\"expiresAt\":\"" + Instant.now().plusSeconds(3600) + "\"}")
                 .getBytes(StandardCharsets.UTF_8);
