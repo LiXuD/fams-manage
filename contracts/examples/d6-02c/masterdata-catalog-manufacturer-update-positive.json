@@ -1,0 +1,23 @@
+{
+  "operationId": "updateManufacturer",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "ManufacturerUpdateRequest",
+  "responseSchema": "Manufacturer",
+  "headers": {
+    "Idempotency-Key": "manufacturer-update-example-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "0"
+  },
+  "payload": {
+    "description": "Contract manufacturing partner with verified purchasing record."
+  },
+  "response": {
+    "id": "8201",
+    "code": "FOXCONN",
+    "name": "Foxconn",
+    "status": "ACTIVE",
+    "version": 1,
+    "description": "Contract manufacturing partner with verified purchasing record."
+  }
+}

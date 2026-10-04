@@ -1,0 +1,27 @@
+{
+  "operationId": "createInboundReceipt",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "InboundReceiptCreateRequest",
+  "actor": "warehouse.operator.17",
+  "headers": {
+    "Idempotency-Key": "inbound-create-stale-asset-0001",
+    "X-CSRF-Token": "csrf-inbound-create-123456"
+  },
+  "payload": {
+    "items": [
+      {
+        "asset": {"id": "10021", "version": 1},
+        "targetWarehouse": {"id": "5001", "version": 4},
+        "targetLocation": {"id": "5101", "version": 6}
+      }
+    ]
+  },
+  "response": {
+    "code": "INBOUND_REFERENCE_VERSION_CONFLICT",
+    "message": "An asset or target reference version is stale.",
+    "requestId": "00000000-0000-4000-8000-000000000013",
+    "fieldErrors": {"items[0].asset.version": "stored version is 2"}
+  },
+  "evidence": "Contract evidence only; every asset and target reference is version checked."
+}

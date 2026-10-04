@@ -1,0 +1,30 @@
+{
+  "operationId": "createNumberingRule",
+  "kind": "positive",
+  "status": 201,
+  "requestSchema": "NumberingRuleCreateRequest",
+  "responseSchema": "NumberingRule",
+  "headers": {
+    "Idempotency-Key": "numbering-rule-create-example-0002",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "code": "RECEIPT-ENTERPRISE",
+    "target": "INBOUND_RECEIPT",
+    "mode": "ENTERPRISE",
+    "fixedPrefix": "IR",
+    "datePart": "YYYYMM",
+    "sequenceLength": 5
+  },
+  "response": {
+    "id": "8602",
+    "code": "RECEIPT-ENTERPRISE",
+    "target": "INBOUND_RECEIPT",
+    "mode": "ENTERPRISE",
+    "fixedPrefix": "IR",
+    "datePart": "YYYYMM",
+    "sequenceLength": 5,
+    "status": "ACTIVE",
+    "version": 0
+  }
+}

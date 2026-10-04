@@ -1,0 +1,20 @@
+{
+  "operationId": "createAsset",
+  "kind": "rejection",
+  "status": 409,
+  "scenario": "The next permanent assetCode allocation conflicts with an existing code.",
+  "requestSchema": "AssetCreateRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "asset-create-code-conflict-0001",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {"name": "Code allocation conflict draft"},
+  "response": {
+    "code": "ASSET_CODE_ALLOCATION_CONFLICT",
+    "message": "The permanent asset code could not be allocated without reuse.",
+    "requestId": "00000000-0000-4000-8000-000000000040",
+    "fieldErrors": {"assetCode": "permanent code conflict"}
+  },
+  "evidence": "Contract evidence only; runtime allocation is not implemented in this design package."
+}

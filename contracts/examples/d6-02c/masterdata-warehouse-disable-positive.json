@@ -1,0 +1,23 @@
+{
+  "operationId": "disableWarehouse",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "CatalogStatusChangeRequest",
+  "responseSchema": "Warehouse",
+  "headers": {
+    "Idempotency-Key": "warehouse-disable-example-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "1"
+  },
+  "payload": {
+    "reason": "Warehouse retired after all assets and open references were cleared."
+  },
+  "response": {
+    "id": "8401",
+    "code": "SH-01",
+    "name": "Shanghai Main Warehouse",
+    "status": "DISABLED",
+    "version": 2,
+    "description": "Historical warehouse record remains readable."
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "operationId": "enableAssetCategory",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "CatalogStatusChangeRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "category-enable-example-0002",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "6"
+  },
+  "payload": {
+    "reason": "Attempt to enable a child while its ancestor is disabled."
+  },
+  "response": {
+    "code": "ASSET_CATEGORY_PARENT_DISABLED",
+    "message": "Every category ancestor must be active before enabling this category.",
+    "requestId": "00000000-0000-4000-8000-000000000006",
+    "fieldErrors": {"parentCategory": "ancestor is disabled"}
+  }
+}

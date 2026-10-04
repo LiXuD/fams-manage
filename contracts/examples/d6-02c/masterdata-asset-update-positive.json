@@ -1,0 +1,33 @@
+{
+  "operationId": "updateAsset",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "AssetUpdateRequest",
+  "responseSchema": "Asset",
+  "pathParameters": {"assetId": "10002"},
+  "headers": {
+    "Idempotency-Key": "asset-update-descriptive-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "4"
+  },
+  "scenario": "An ACTIVE asset receives a descriptive correction while a separate business lock exists.",
+  "payload": {
+    "notes": "Service contact confirmed during audit.",
+    "serviceContact": "Li Wei (confirmed)"
+  },
+  "response": {
+    "id": "10002",
+    "assetCode": "FA-2026-000002",
+    "name": "Dell Latitude 7450",
+    "lifecycle": "IN_STOCK",
+    "exception": "NORMAL",
+    "cardStage": "ACTIVE",
+    "version": 5,
+    "createdBusinessDate": "2026-09-14",
+    "createdAt": "2026-09-14T04:05:00Z",
+    "parameterVersionId": "9101",
+    "notes": "Service contact confirmed during audit.",
+    "serviceContact": "Li Wei (confirmed)"
+  },
+  "evidence": "Contract evidence only; runtime descriptive correction is not implemented in this design package."
+}

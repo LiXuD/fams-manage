@@ -1,0 +1,118 @@
+openapi: 3.0.4
+info:
+  title: FAMS contract generation probe
+  version: 0.1.0
+  description: >-
+    A deliberately small wire contract used to prove deterministic generation,
+    Java/TypeScript compilation, and real HTTP serialization boundaries.
+servers:
+  - url: /
+paths:
+  /api/v1/contract-probe:
+    post:
+      tags:
+        - ContractProbe
+      operationId: echoContractProbe
+      summary: Echo the representative wire model after normalizing its instant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContractProbe'
+      responses:
+        '200':
+          description: The accepted representative wire model.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractProbe'
+        '400':
+          description: The request did not satisfy the wire contract.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    ContractProbe:
+      type: object
+      required:
+        - assetId
+        - businessDate
+        - occurredAt
+        - status
+        - quantity
+        - amount
+        - serials
+      properties:
+        assetId:
+          type: string
+          description: Decimal string; never coerce a JSON number into a string.
+          pattern: '^[0-9]+$'
+          example: '9007199254740993'
+        businessDate:
+          type: string
+          format: date
+          description: Business date with no timezone conversion.
+          example: '2026-09-13'
+        occurredAt:
+          type: string
+          format: date-time
+          description: Offset event time; the probe emits UTC Z on output.
+          example: '2026-09-13T08:15:00+08:00'
+        status:
+          type: string
+          description: Stable English wire enum.
+          enum:
+            - IN_SERVICE
+            - RETIRED
+          example: IN_SERVICE
+        quantity:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Integer field whose zero value is meaningful.
+          example: 0
+        amount:
+          type: string
+          description: Decimal text; scale/trailing zeros are wire-significant.
+          pattern: '^[0-9]+\.[0-9]{2}$'
+          example: '100.00'
+        serials:
+          type: array
+          description: Ordered values must round-trip in their submitted order.
+          minItems: 1
+          items:
+            type: string
+          example:
+            - 'SN-SECOND'
+            - 'SN-FIRST'
+        note:
+          type: string
+          nullable: true
+          description: Optional nullable text; missing/null are emitted as null, empty remains empty.
+          example: null
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+        - requestId
+        - fieldErrors
+      properties:
+        code:
+          type: string
+          example: CONTRACT_PROBE_INVALID
+        message:
+          type: string
+          example: Request validation failed.
+        requestId:
+          type: string
+          example: 8f0a5f9e-1bf5-4d98-bf53-a0f16f9e37c9
+        fieldErrors:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            assetId: must match "^[0-9]+$"

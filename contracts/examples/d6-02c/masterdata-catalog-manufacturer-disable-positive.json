@@ -1,0 +1,29 @@
+{
+  "operationId": "disableManufacturer",
+  "kind": "positive",
+  "status": 200,
+  "scenario": "An enabled brand keeps its historical manufacturer relation; history is not rewritten.",
+  "relatedHistory": {
+    "brandId": "8301",
+    "brandStatus": "ACTIVE",
+    "historicalDefaultManufacturerId": "8201"
+  },
+  "requestSchema": "CatalogStatusChangeRequest",
+  "responseSchema": "Manufacturer",
+  "headers": {
+    "Idempotency-Key": "manufacturer-disable-example-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "1"
+  },
+  "payload": {
+    "reason": "Manufacturer retired; historical brand and asset references remain readable."
+  },
+  "response": {
+    "id": "8201",
+    "code": "FOXCONN",
+    "name": "Foxconn",
+    "status": "DISABLED",
+    "version": 2,
+    "description": "Historical manufacturer relation remains readable."
+  }
+}

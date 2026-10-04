@@ -1,0 +1,25 @@
+{
+  "operationId": "copyAsset",
+  "kind": "rejection",
+  "status": 404,
+  "scenario": "A warehouse operator attempts to copy another operator's unsubmitted DRAFT card.",
+  "requestSchema": "AssetCopyRequest",
+  "responseSchema": "ErrorResponse",
+  "pathParameters": {"assetId": "10041"},
+  "headers": {
+    "Idempotency-Key": "asset-copy-other-draft-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "0"
+  },
+  "payload": {
+    "quantity": 1,
+    "reason": "Attempted copy of a restricted draft."
+  },
+  "response": {
+    "code": "ASSET_NOT_FOUND",
+    "message": "Asset was not found.",
+    "requestId": "00000000-0000-4000-8000-000000000093",
+    "fieldErrors": {}
+  },
+  "evidence": "Contract evidence only; runtime stage-and-creator authorization is not implemented."
+}

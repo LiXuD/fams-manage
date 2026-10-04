@@ -1,0 +1,62 @@
+{
+  "operationId": "updateInboundReceipt",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "InboundReceiptUpdateRequest",
+  "actor": "warehouse.operator.17",
+  "pathParameters": {"receiptId": "7001"},
+  "headers": {
+    "Idempotency-Key": "inbound-update-receipt-0001",
+    "X-CSRF-Token": "csrf-inbound-update-123456",
+    "If-Match-Version": "0"
+  },
+  "before": {
+    "businessDate": "2026-09-14",
+    "snapshot": {
+      "parameterVersionId": "9001",
+      "businessDate": "2026-09-14"
+    }
+  },
+  "payload": {
+    "businessDate": "2026-09-15",
+    "items": [
+      {
+        "asset": {"id": "10021", "version": 2},
+        "targetWarehouse": {"id": "5001", "version": 4},
+        "targetLocation": {"id": "5103", "version": 1}
+      }
+    ],
+    "notes": "Corrected the target location while the receipt remains a draft."
+  },
+  "response": {
+    "id": "7001",
+    "receiptNumber": "IR-2026-000001",
+    "status": "DRAFT",
+    "businessDate": "2026-09-15",
+    "createdBy": {"id": "17", "username": "warehouse.operator.17"},
+    "createdAt": "2026-09-14T02:15:00Z",
+    "version": 1,
+    "parameterVersionId": "9001",
+    "snapshot": {
+      "parameterVersionId": "9001",
+      "businessDate": "2026-09-15",
+      "timezone": "Asia/Shanghai",
+      "adminDecisionDeadlineWorkdays": 2,
+      "warehouseClaimDeadlineWorkdays": 1,
+      "warehouseFirstExecutionDeadlineWorkdays": 2
+    },
+    "items": [
+      {
+        "id": "7101",
+        "executionStatus": "PENDING",
+        "asset": {"id": "10021", "version": 2},
+        "assetSnapshot": {"assetCode": "FA-2026-000021", "assetName": "Latitude 7450"},
+        "targetWarehouse": {"id": "5001", "version": 4},
+        "targetLocation": {"id": "5103", "version": 1},
+        "warehouseSnapshot": {"code": "WH-SH-01", "name": "Shanghai Main Warehouse"},
+        "locationSnapshot": {"code": "SH-F1-A03", "name": "Floor 1 A03"}
+      }
+    ]
+  },
+  "evidence": "Contract evidence only; DRAFT businessDate and snapshot change together, then freeze on submit."
+}

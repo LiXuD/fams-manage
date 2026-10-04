@@ -1,0 +1,38 @@
+{
+  "operationId": "createBusinessParameterVersion",
+  "kind": "rejection",
+  "status": 400,
+  "scenario": "The message escalation threshold must be positive.",
+  "requestSchema": "BusinessParameterVersionCreateRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "business-parameter-create-0005",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "1"
+  },
+  "payload": {
+    "snapshot": {
+      "timezone": "Asia/Shanghai",
+      "workWeek": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"],
+      "holidays": [],
+      "adjustedWorkdays": [],
+      "adminDecisionDeadlineWorkdays": 2,
+      "warehouseClaimDeadlineWorkdays": 1,
+      "warehouseFirstExecutionDeadlineWorkdays": 2,
+      "handoverAcceptanceDeadlineNaturalDays": 3,
+      "notificationEscalationThresholds": {
+        "administratorUnreadHours": 0,
+        "onDutyWarehouseOperatorUnreadHours": 4,
+        "firstExecutionOverdueNaturalDays": 1,
+        "receiptDueUnreadHours": 24
+      }
+    }
+  },
+  "evidence": "Contract evidence only; no runtime implementation is claimed.",
+  "response": {
+    "code": "BUSINESS_PARAMETER_DURATION_INVALID",
+    "message": "All business-parameter durations must be positive.",
+    "requestId": "00000000-0000-4000-8000-000000000033",
+    "fieldErrors": {"administratorUnreadHours": "must be greater than zero"}
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "operationId": "updateNumberingRule",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "NumberingRuleUpdateRequest",
+  "responseSchema": "NumberingRule",
+  "headers": {
+    "Idempotency-Key": "numbering-rule-update-example-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "0"
+  },
+  "payload": {
+    "datePart": "YYYYMMDD",
+    "sequenceLength": 7
+  },
+  "response": {
+    "id": "8601",
+    "code": "ASSET-ENTERPRISE",
+    "target": "ASSET",
+    "mode": "ENTERPRISE",
+    "fixedPrefix": "FA",
+    "datePart": "YYYYMMDD",
+    "sequenceLength": 7,
+    "status": "ACTIVE",
+    "version": 1
+  }
+}

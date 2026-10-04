@@ -1,0 +1,30 @@
+{
+  "operationId": "reprintAssetTag",
+  "kind": "positive",
+  "status": 202,
+  "requestSchema": "AssetTagReprintRequest",
+  "pathParameters": {"assetId": "10002"},
+  "actor": "warehouse.operator",
+  "headers": {
+    "Idempotency-Key": "asset-tag-reprint-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "7",
+    "Location": "/api/v1/asset-tag-print-jobs/88001"
+  },
+  "payload": {"reason": "Print a replacement copy for the same tag."},
+  "before": {
+    "assetCode": "FA-2026-000002",
+    "qrToken": "4PzJx6V7mN2qR8sT1wY5uI9oL3kD0fG6hC8bA7eZ2QA"
+  },
+  "after": {
+    "assetCode": "FA-2026-000002",
+    "qrToken": "4PzJx6V7mN2qR8sT1wY5uI9oL3kD0fG6hC8bA7eZ2QA"
+  },
+  "idempotencyReplayReturnsSameResult": true,
+  "response": {
+    "jobId": "88001",
+    "status": "COMPLETED",
+    "assetCode": "FA-2026-000002"
+  },
+  "evidence": "Contract evidence only; repeated idempotent reprint is specified to return the same job/result."
+}

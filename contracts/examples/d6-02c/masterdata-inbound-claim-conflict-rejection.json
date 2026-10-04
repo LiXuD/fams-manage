@@ -1,0 +1,26 @@
+{
+  "operationId": "claimInboundReceipt",
+  "kind": "rejection",
+  "status": 409,
+  "actor": "warehouse.operator.99",
+  "pathParameters": {"receiptId": "7001"},
+  "headers": {
+    "Idempotency-Key": "inbound-claim-conflict-0001",
+    "X-CSRF-Token": "csrf-inbound-claim-123456",
+    "If-Match-Version": "3"
+  },
+  "payload": {},
+  "response": {
+    "code": "INBOUND_ALREADY_CLAIMED",
+    "message": "Another warehouse operator already owns this whole receipt.",
+    "requestId": "00000000-0000-4000-8000-000000000007",
+    "fieldErrors": {"receiptId": "read-only; ownership version is 0"}
+  },
+  "actualProcessor": {
+    "processor": {"id": "17", "username": "warehouse.operator.17"},
+    "claimedAt": "2026-09-14T03:10:00Z",
+    "ownershipVersion": 0
+  },
+  "writeApplied": false,
+  "evidence": "Contract evidence only; the losing operator remains read-only."
+}

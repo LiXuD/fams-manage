@@ -1,0 +1,21 @@
+{
+  "operationId": "createAssetCategory",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "AssetCategoryCreateRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "category-create-example-0002",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "code": "LAPTOP",
+    "name": "Duplicate laptop code"
+  },
+  "response": {
+    "code": "ASSET_CATEGORY_CODE_CONFLICT",
+    "message": "Asset category code is already registered and cannot be reused.",
+    "requestId": "00000000-0000-4000-8000-000000000001",
+    "fieldErrors": {"code": "already used"}
+  }
+}

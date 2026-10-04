@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- Generated from the authoritative OpenAPI contract and checked separately for drift. -->
+    <Match>
+        <Package name="~com\.fams\.contract\.(api|invoker|model)(\..*)?"/>
+    </Match>
+    <Match>
+        <Package name="~com\.fams\.product\.contract\.(api|invoker|model)(\..*)?"/>
+    </Match>
+    <!-- Constructor injection intentionally retains this package-private Mapper collaborator. -->
+    <Match>
+        <Class name="com.fams.runtime.compatibility.RuntimeCompatibilityService"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- Shared injected collaborators retain identity; no caller-owned result data is excluded. -->
+    <Match>
+        <Class name="com.fams.attachment.AttachmentCleanupScheduler"/>
+        <Field name="cleanup"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.attachment.AttachmentCleanupScheduler"/>
+        <Field name="reconciliation"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.attachment.AttachmentCleanupService"/>
+        <Field name="db"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.attachment.AttachmentCleanupService"/>
+        <Field name="storage"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.attachment.AttachmentIntake"/>
+        <Field name="storage"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.attachment.AttachmentObjectGuard"/>
+        <Field name="db"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.attachment.AttachmentObjectGuard"/>
+        <Field name="storage"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.attachment.AttachmentReadService"/>
+        <Field name="db"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.attachment.AttachmentReadService"/>
+        <Field name="storage"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.attachment.AttachmentReconciliationService"/>
+        <Field name="db"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.attachment.AttachmentReconciliationService"/>
+        <Field name="storage"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.attachment.AttachmentRegistry"/>
+        <Field name="db"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.attachment.AttachmentUploadKeys"/>
+        <Field name="db"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.attachment.AttachmentUploadService"/>
+        <Field name="writer"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.attachment.AttachmentWriter"/>
+        <Field name="storage"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.inbound.InboundAttachmentPort"/>
+        <Field name="db"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- Spring owns this injected JdbcTemplate; no caller-owned business result is retained. -->
+    <Match>
+        <Class name="com.fams.job.DurableJobService"/>
+        <Field name="db"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.assetimport.AssetImportCatalogRepository"/>
+        <Field name="db"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- These collaborators are injected and owned by Spring; result collections remain checked. -->
+    <Match>
+        <Class name="~com\.fams\.assetimport\.(AssetImportBatchService|AssetImportPublicationService|AssetImportReviewService|AssetImportRollbackService|AssetInitializationWindowService)"/>
+        <Field name="~(db|json)"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+</FindBugsFilter>

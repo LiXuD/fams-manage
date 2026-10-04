@@ -1,0 +1,22 @@
+{
+  "operationId": "getMyPermissions",
+  "kind": "positive",
+  "status": 200,
+  "scenario": "An auditor reads the current effective typed permission snapshot.",
+  "responseSchema": "PermissionSnapshot",
+  "payload": {},
+  "response": {
+    "userId": "701",
+    "permissions": ["ASSET_LEDGER_READ", "SYSTEM_OPERATION_LOG_READ"],
+    "dataScopes": [
+      {
+        "scopeType": "SPECIFIED_ORGANIZATIONS",
+        "organizations": [{"id": "2001", "version": 4}],
+        "warehouses": []
+      }
+    ],
+    "fieldPermissions": ["SYSTEM_OPERATION_LOG"],
+    "authorizationVersion": 9
+  },
+  "evidence": "Contract evidence only; runtime effective-permission projection is not implemented."
+}

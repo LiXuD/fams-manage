@@ -1,0 +1,20 @@
+{
+  "operationId": "createAsset",
+  "kind": "rejection",
+  "status": 409,
+  "scenario": "A non-empty serial number is already used by another asset.",
+  "requestSchema": "AssetCreateRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "asset-create-serial-conflict-0001",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {"name": "Duplicate serial draft", "serialNumber": "DL7450-2026-0001"},
+  "response": {
+    "code": "ASSET_SERIAL_NUMBER_CONFLICT",
+    "message": "Serial number is already assigned within the enterprise.",
+    "requestId": "00000000-0000-4000-8000-000000000041",
+    "fieldErrors": {"serialNumber": "serial number already exists"}
+  },
+  "evidence": "Contract evidence only; runtime serial uniqueness is not implemented in this design package."
+}

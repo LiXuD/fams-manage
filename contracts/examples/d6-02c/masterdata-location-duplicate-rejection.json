@@ -1,0 +1,23 @@
+{
+  "operationId": "createLocation",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "LocationCreateRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "location-create-example-0002",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "code": "SH01-B1-A01",
+    "name": "Duplicate location code",
+    "type": "BIN",
+    "warehouse": {"id": "8401", "version": 3}
+  },
+  "response": {
+    "code": "LOCATION_CODE_CONFLICT",
+    "message": "Location code is already registered and cannot be reused.",
+    "requestId": "00000000-0000-4000-8000-000000000010",
+    "fieldErrors": {"code": "already used"}
+  }
+}

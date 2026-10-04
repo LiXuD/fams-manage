@@ -1,0 +1,27 @@
+{
+  "operationId": "changeSystemAccountStatus",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "SystemAccountStatusChangeRequest",
+  "responseSchema": "SystemAccount",
+  "headers": {
+    "Idempotency-Key": "account-status-example-1",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "0"
+  },
+  "payload": {
+    "action": "UNLOCK",
+    "reason": "Verified the employee identity and cleared the failed-login lock."
+  },
+  "response": {
+    "id": "7001",
+    "username": "warehouse.operator",
+    "employeeId": "3001",
+    "status": "ENABLED",
+    "version": 1,
+    "requiresInitialPasswordChange": true,
+    "failedLoginCount": 0,
+    "createdAt": "2026-09-14T10:00:00Z",
+    "updatedAt": "2026-09-14T10:05:00Z"
+  }
+}

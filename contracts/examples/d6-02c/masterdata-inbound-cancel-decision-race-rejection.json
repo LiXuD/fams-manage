@@ -1,0 +1,22 @@
+{
+  "operationId": "cancelInboundReceipt",
+  "kind": "rejection",
+  "status": 409,
+  "scenario": "administrator decision won the version race",
+  "actor": "warehouse.operator.17",
+  "pathParameters": {"receiptId": "7001"},
+  "headers": {
+    "Idempotency-Key": "inbound-cancel-decision-race-0001",
+    "X-CSRF-Token": "csrf-inbound-cancel-123456",
+    "If-Match-Version": "2"
+  },
+  "payload": {"reason": "Cancel before approval."},
+  "response": {
+    "code": "INBOUND_DECISION_ALREADY_EFFECTIVE",
+    "message": "The administrator decision won the receipt-version race.",
+    "requestId": "00000000-0000-4000-8000-000000000006",
+    "fieldErrors": {"receiptId": "receipt is WAITING_WAREHOUSE_CLAIM at version 3"}
+  },
+  "effectiveDecision": {"result": "APPROVED", "decidedAt": "2026-09-14T03:05:00Z"},
+  "evidence": "Contract evidence only; the losing cancellation creates no second terminal action."
+}

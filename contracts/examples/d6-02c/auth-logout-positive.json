@@ -1,0 +1,12 @@
+{
+  "operationId": "logout",
+  "kind": "positive",
+  "status": 204,
+  "requestSchema": null,
+  "responseSchema": null,
+  "headers": {
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {},
+  "response": null
+}

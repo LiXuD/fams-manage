@@ -1,0 +1,16 @@
+{
+  "operationId": "getAsset",
+  "kind": "rejection",
+  "status": 404,
+  "scenario": "A warehouse operator attempts to read another operator's unsubmitted DRAFT card.",
+  "responseSchema": "ErrorResponse",
+  "pathParameters": {"assetId": "10041"},
+  "payload": {},
+  "response": {
+    "code": "ASSET_NOT_FOUND",
+    "message": "Asset was not found.",
+    "requestId": "00000000-0000-4000-8000-000000000092",
+    "fieldErrors": {}
+  },
+  "evidence": "Contract evidence only; runtime creator-only draft visibility is not implemented."
+}

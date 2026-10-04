@@ -1,0 +1,58 @@
+{
+  "operationId": "replaceSystemAccountAuthorization",
+  "kind": "positive",
+  "status": 200,
+  "scenario": "A system administrator replaces one auditor's organization scope and log permission.",
+  "requestSchema": "SystemAccountAuthorizationReplaceRequest",
+  "responseSchema": "SystemAccountAuthorization",
+  "pathParameters": {"systemAccountId": "701", "role": "AUDIT_READ_ONLY"},
+  "headers": {
+    "Idempotency-Key": "account-authorization-replace-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "1"
+  },
+  "before": {
+    "id": "800",
+    "systemAccountId": "701",
+    "role": "AUDIT_READ_ONLY",
+    "status": "ACTIVE",
+    "dataScopes": [
+      {
+        "scopeType": "SPECIFIED_ORGANIZATIONS",
+        "organizations": [{"id": "2002", "version": 1}],
+        "warehouses": []
+      }
+    ],
+    "fieldPermissions": [],
+    "version": 1,
+    "updatedAt": "2026-09-13T06:00:00Z"
+  },
+  "payload": {
+    "dataScopes": [
+      {
+        "scopeType": "SPECIFIED_ORGANIZATIONS",
+        "organizations": [{"id": "2001", "version": 4}],
+        "warehouses": []
+      }
+    ],
+    "fieldPermissions": ["SYSTEM_OPERATION_LOG"],
+    "reason": "Limit audit access to the head-office organization."
+  },
+  "response": {
+    "id": "801",
+    "systemAccountId": "701",
+    "role": "AUDIT_READ_ONLY",
+    "status": "ACTIVE",
+    "dataScopes": [
+      {
+        "scopeType": "SPECIFIED_ORGANIZATIONS",
+        "organizations": [{"id": "2001", "version": 4}],
+        "warehouses": []
+      }
+    ],
+    "fieldPermissions": ["SYSTEM_OPERATION_LOG"],
+    "version": 2,
+    "updatedAt": "2026-09-14T06:00:00Z"
+  },
+  "evidence": "Contract evidence only; replacement creates generation id 801 and retains id 800 as history."
+}

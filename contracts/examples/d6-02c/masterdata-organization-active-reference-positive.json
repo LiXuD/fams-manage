@@ -1,0 +1,22 @@
+{
+  "operationId": "listActiveOrganizationReferences",
+  "kind": "positive",
+  "status": 200,
+  "scenario": "A warehouse operator selects an active owning organization while creating an asset card.",
+  "responseSchema": "OrganizationActiveReferencePage",
+  "query": {"page": 1, "pageSize": 20},
+  "payload": {},
+  "response": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 1,
+    "items": [
+      {
+        "id": "2001",
+        "name": "Head Office",
+        "version": 4
+      }
+    ]
+  },
+  "evidence": "Contract evidence only; runtime selector authorization and active-reference filtering are not implemented."
+}

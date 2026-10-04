@@ -1,0 +1,23 @@
+{
+  "operationId": "createEmployee",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "EmployeeCreateRequest",
+  "responseSchema": "ErrorResponse",
+  "expectedErrorCode": "EMPLOYEE_NO_CONFLICT",
+  "headers": {
+    "Idempotency-Key": "employee-create-identity-0002",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "employeeNo": "E-1001",
+    "displayName": "Duplicate Employee",
+    "organization": {"id": "2001", "version": 0}
+  },
+  "response": {
+    "code": "EMPLOYEE_NO_CONFLICT",
+    "message": "Employee number is already in use.",
+    "requestId": "4e3ecac4-bd08-4e84-8c4c-1c2f9a211004",
+    "fieldErrors": {"employeeNo": "must be unique"}
+  }
+}

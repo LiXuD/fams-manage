@@ -1,0 +1,25 @@
+{
+  "operationId": "updateLocation",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "LocationUpdateRequest",
+  "responseSchema": "Location",
+  "headers": {
+    "Idempotency-Key": "location-update-example-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "0"
+  },
+  "payload": {
+    "name": "Shanghai bin A01 - audited"
+  },
+  "response": {
+    "id": "8503",
+    "code": "SH01-B1-A01",
+    "name": "Shanghai bin A01 - audited",
+    "type": "BIN",
+    "status": "ACTIVE",
+    "version": 1,
+    "parentLocation": {"id": "8502", "version": 1},
+    "warehouse": {"id": "8401", "version": 3}
+  }
+}

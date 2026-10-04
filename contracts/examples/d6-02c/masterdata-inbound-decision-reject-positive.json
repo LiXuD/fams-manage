@@ -1,0 +1,67 @@
+{
+  "operationId": "decideInboundReceipt",
+  "kind": "positive",
+  "status": 200,
+  "actor": "asset.admin.32",
+  "pathParameters": {"receiptId": "7002"},
+  "headers": {
+    "Idempotency-Key": "inbound-decision-reject-0001",
+    "X-CSRF-Token": "csrf-inbound-decision-123456",
+    "If-Match-Version": "2"
+  },
+  "payload": {"decision": "REJECTED", "reason": "Serial-number evidence is incomplete."},
+  "response": {
+    "id": "7002",
+    "receiptNumber": "IR-2026-000002",
+    "status": "REJECTED",
+    "businessDate": "2026-09-14",
+    "createdBy": {"id": "18", "username": "warehouse.operator.18"},
+    "createdAt": "2026-09-14T02:25:00Z",
+    "submittedAt": "2026-09-14T03:01:00Z",
+    "adminDecisionDueAt": "2026-09-16T15:59:59.999Z",
+    "version": 3,
+    "parameterVersionId": "9001",
+    "snapshot": {
+      "parameterVersionId": "9001",
+      "businessDate": "2026-09-14",
+      "timezone": "Asia/Shanghai",
+      "adminDecisionDeadlineWorkdays": 2,
+      "warehouseClaimDeadlineWorkdays": 1,
+      "warehouseFirstExecutionDeadlineWorkdays": 2
+    },
+    "decision": {
+      "id": "7202",
+      "result": "REJECTED",
+      "decidedReceiptVersion": 2,
+      "decidedBy": {"id": "32", "username": "asset.admin.32"},
+      "decidedAt": "2026-09-14T03:06:00Z",
+      "comment": "Serial-number evidence is incomplete.",
+      "scope": {
+        "receiptVersion": 2,
+        "items": [
+          {
+            "receiptItemId": "7111",
+            "asset": {"id": "10031", "version": 1},
+            "targetWarehouse": {"id": "5001", "version": 4},
+            "targetLocation": {"id": "5101", "version": 6}
+          }
+        ]
+      }
+    },
+    "items": [
+      {
+        "id": "7111",
+        "executionStatus": "PENDING",
+        "asset": {"id": "10031", "version": 1},
+        "assetSnapshot": {"assetCode": "FA-2026-000031", "assetName": "ThinkPad T14"},
+        "targetWarehouse": {"id": "5001", "version": 4},
+        "targetLocation": {"id": "5101", "version": 6},
+        "warehouseSnapshot": {"code": "WH-SH-01", "name": "Shanghai Main Warehouse"},
+        "locationSnapshot": {"code": "SH-F1-A01", "name": "Floor 1 A01"}
+      }
+    ]
+  },
+  "assetAfter": {"cardStage": "DRAFT", "businessLockRetained": false},
+  "warehouseTodoCreated": false,
+  "evidence": "Contract evidence only; rejection lock release and draft restoration are not runtime implemented."
+}

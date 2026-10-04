@@ -1,0 +1,11 @@
+package com.fams.auth;
+
+public enum Role {
+    EMPLOYEE,
+    DEPARTMENT_ASSET_MANAGER,
+    ASSET_ADMIN,
+    WAREHOUSE_OPERATOR,
+    TECH_ASSISTANT,
+    AUDIT_READ_ONLY,
+    SYSTEM_ADMIN
+}

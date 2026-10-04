@@ -1,0 +1,20 @@
+{
+  "operationId": "submitInboundReceipt",
+  "kind": "rejection",
+  "status": 409,
+  "actor": "warehouse.operator.17",
+  "pathParameters": {"receiptId": "7001"},
+  "headers": {
+    "Idempotency-Key": "inbound-submit-location-mismatch-0001",
+    "X-CSRF-Token": "csrf-inbound-submit-123456",
+    "If-Match-Version": "1"
+  },
+  "payload": {},
+  "response": {
+    "code": "INBOUND_WAREHOUSE_LOCATION_MISMATCH",
+    "message": "The target location no longer belongs to the target warehouse.",
+    "requestId": "00000000-0000-4000-8000-000000000016",
+    "fieldErrors": {"items[0].targetLocation": "current warehouse is 5002"}
+  },
+  "evidence": "Contract evidence only; submission revalidates target versions and membership."
+}

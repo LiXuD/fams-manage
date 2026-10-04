@@ -1,0 +1,52 @@
+{
+  "operationId": "replaceSystemAccountAuthorization",
+  "kind": "positive",
+  "status": 200,
+  "scenario": "A system administrator regrants values used by an earlier generation after revocation.",
+  "requestSchema": "SystemAccountAuthorizationReplaceRequest",
+  "responseSchema": "SystemAccountAuthorization",
+  "pathParameters": {"systemAccountId": "701", "role": "AUDIT_READ_ONLY"},
+  "headers": {
+    "Idempotency-Key": "account-authorization-regrant-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "3"
+  },
+  "before": {
+    "id": "802",
+    "systemAccountId": "701",
+    "role": "AUDIT_READ_ONLY",
+    "status": "REVOKED",
+    "dataScopes": [],
+    "fieldPermissions": [],
+    "version": 3,
+    "updatedAt": "2026-09-14T07:00:00Z"
+  },
+  "payload": {
+    "dataScopes": [
+      {
+        "scopeType": "SPECIFIED_ORGANIZATIONS",
+        "organizations": [{"id": "2001", "version": 4}],
+        "warehouses": []
+      }
+    ],
+    "fieldPermissions": ["SYSTEM_OPERATION_LOG"],
+    "reason": "Restore the bounded audit assignment."
+  },
+  "response": {
+    "id": "803",
+    "systemAccountId": "701",
+    "role": "AUDIT_READ_ONLY",
+    "status": "ACTIVE",
+    "dataScopes": [
+      {
+        "scopeType": "SPECIFIED_ORGANIZATIONS",
+        "organizations": [{"id": "2001", "version": 4}],
+        "warehouses": []
+      }
+    ],
+    "fieldPermissions": ["SYSTEM_OPERATION_LOG"],
+    "version": 4,
+    "updatedAt": "2026-09-14T08:00:00Z"
+  },
+  "evidence": "Contract evidence only; regrant uses new generation id 803 while earlier ids remain history."
+}

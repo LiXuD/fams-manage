@@ -1,0 +1,22 @@
+{
+  "operationId": "createAssetCategory",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "AssetCategoryCreateRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "category-create-example-0003",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "code": "MONITOR",
+    "name": "Monitor",
+    "parentCategory": {"id": "8101", "version": 6}
+  },
+  "response": {
+    "code": "ASSET_CATEGORY_PARENT_DISABLED",
+    "message": "A disabled category cannot be selected as a new parent.",
+    "requestId": "00000000-0000-4000-8000-000000000005",
+    "fieldErrors": {"parentCategory": "parent is disabled"}
+  }
+}

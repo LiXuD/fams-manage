@@ -1,0 +1,21 @@
+{
+  "operationId": "listActiveManufacturerReferences",
+  "kind": "positive",
+  "status": 200,
+  "responseSchema": "ManufacturerActiveReferencePage",
+  "headers": {},
+  "payload": {"page": 1, "pageSize": 20},
+  "response": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 1,
+    "items": [
+      {
+        "id": "8201",
+        "code": "FOXCONN",
+        "name": "Foxconn",
+        "version": 3
+      }
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+package com.fams.auth;
+
+public enum DataScope {
+    SELF,
+    OWN_ORGANIZATION,
+    OWN_ORGANIZATION_AND_DESCENDANTS,
+    SPECIFIED_ORGANIZATIONS,
+    SPECIFIED_WAREHOUSES,
+    ENTERPRISE
+}

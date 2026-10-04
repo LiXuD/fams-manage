@@ -1,0 +1,24 @@
+{
+  "operationId": "createOrganization",
+  "kind": "positive",
+  "status": 201,
+  "requestSchema": "OrganizationCreateRequest",
+  "responseSchema": "Organization",
+  "headers": {
+    "Idempotency-Key": "org-create-identity-0001",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "code": "HQ",
+    "name": "Headquarters"
+  },
+  "response": {
+    "id": "2001",
+    "code": "HQ",
+    "name": "Headquarters",
+    "status": "ACTIVE",
+    "version": 0,
+    "createdAt": "2026-09-14T08:00:00Z",
+    "updatedAt": "2026-09-14T08:00:00Z"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "operationId": "submitInboundReceipt",
+  "kind": "rejection",
+  "status": 409,
+  "scenario": "second asset lock acquisition fails",
+  "actor": "warehouse.operator.17",
+  "pathParameters": {"receiptId": "7001"},
+  "headers": {
+    "Idempotency-Key": "inbound-submit-atomic-rollback-0001",
+    "X-CSRF-Token": "csrf-inbound-submit-123456",
+    "If-Match-Version": "1"
+  },
+  "payload": {},
+  "response": {
+    "code": "INBOUND_SUBMIT_ATOMIC_ROLLBACK",
+    "message": "Submission failed and every attempted effect was rolled back.",
+    "requestId": "00000000-0000-4000-8000-000000000014",
+    "fieldErrors": {"items[1].asset.id": "concurrent lock conflict"}
+  },
+  "persistedEffects": {
+    "receiptAdvanced": false,
+    "assetStagesChanged": false,
+    "assetLocksCreated": false,
+    "approvalTodoCreated": false,
+    "auditSuccessRecorded": false
+  },
+  "evidence": "Contract evidence only; rollback is a required implementation outcome, not runtime proof."
+}

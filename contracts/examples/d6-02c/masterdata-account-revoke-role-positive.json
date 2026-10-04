@@ -1,0 +1,29 @@
+{
+  "operationId": "revokeSystemAccountRole",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "SystemAccountRoleRequest",
+  "responseSchema": "SystemAccount",
+  "headers": {
+    "Idempotency-Key": "account-role-revoke-example-1",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "3"
+  },
+  "payload": {
+    "role": "AUDIT_READ_ONLY",
+    "reason": "Audit assignment ended; history remains available."
+  },
+  "response": {
+    "id": "7001",
+    "username": "warehouse.operator",
+    "employeeId": "3001",
+    "status": "ENABLED",
+    "configurationWarnings": [
+      "No configured handler remains; pending work and administrator alert were retained."
+    ],
+    "version": 4,
+    "requiresInitialPasswordChange": false,
+    "createdAt": "2026-09-14T10:00:00Z",
+    "updatedAt": "2026-09-14T10:25:00Z"
+  }
+}

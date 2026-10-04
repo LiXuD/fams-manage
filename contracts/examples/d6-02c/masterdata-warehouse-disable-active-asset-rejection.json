@@ -1,0 +1,21 @@
+{
+  "operationId": "disableWarehouse",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "CatalogStatusChangeRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "warehouse-disable-example-0002",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "3"
+  },
+  "payload": {
+    "reason": "Attempt to retire warehouse while an asset remains in current custody."
+  },
+  "response": {
+    "code": "WAREHOUSE_HAS_ACTIVE_ASSETS",
+    "message": "Warehouse cannot be disabled while current active assets remain.",
+    "requestId": "00000000-0000-4000-8000-000000000008",
+    "fieldErrors": {"warehouseId": "active assets remain"}
+  }
+}

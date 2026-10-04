@@ -1,0 +1,26 @@
+{
+  "operationId": "createSystemAccount",
+  "kind": "positive",
+  "status": 201,
+  "requestSchema": "SystemAccountCreateRequest",
+  "responseSchema": "SystemAccount",
+  "headers": {
+    "Idempotency-Key": "account-create-example-1",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "username": "warehouse.operator",
+    "employee": {"id": "3001", "version": 0},
+    "initialPassword": "temporary password 123"
+  },
+  "response": {
+    "id": "7001",
+    "username": "warehouse.operator",
+    "employeeId": "3001",
+    "status": "ENABLED",
+    "version": 0,
+    "requiresInitialPasswordChange": true,
+    "createdAt": "2026-09-14T10:00:00Z",
+    "updatedAt": "2026-09-14T10:00:00Z"
+  }
+}

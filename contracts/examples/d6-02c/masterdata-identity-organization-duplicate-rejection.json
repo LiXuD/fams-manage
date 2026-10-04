@@ -1,0 +1,22 @@
+{
+  "operationId": "createOrganization",
+  "kind": "rejection",
+  "status": 409,
+  "requestSchema": "OrganizationCreateRequest",
+  "responseSchema": "ErrorResponse",
+  "expectedErrorCode": "ORGANIZATION_CODE_CONFLICT",
+  "headers": {
+    "Idempotency-Key": "org-create-identity-0002",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "code": "HQ",
+    "name": "Duplicate Headquarters"
+  },
+  "response": {
+    "code": "ORGANIZATION_CODE_CONFLICT",
+    "message": "Organization code is already in use.",
+    "requestId": "4e3ecac4-bd08-4e84-8c4c-1c2f9a211001",
+    "fieldErrors": {"code": "must be unique"}
+  }
+}

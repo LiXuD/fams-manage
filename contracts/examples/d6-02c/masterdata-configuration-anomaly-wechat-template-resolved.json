@@ -1,0 +1,28 @@
+{
+  "operationId": "getConfigurationAnomaly",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": null,
+  "responseSchema": "ConfigurationAnomaly",
+  "pathParameters": {"anomalyId": "9304"},
+  "payload": {},
+  "evidence": "Contract evidence only; no runtime implementation is claimed.",
+  "response": {
+    "id": "9304",
+    "type": "WECHAT_TEMPLATE_MISSING",
+    "status": "RESOLVED",
+    "detectedAt": "2026-09-13T08:00:00Z",
+    "resolvedAt": "2026-09-14T03:13:00Z",
+    "dedupKey": "WECHAT_TEMPLATE_MISSING:inbound",
+    "relatedTodos": [
+      {
+        "id": "9404",
+        "kind": "INBOUND_RECEIPT_NOTIFY",
+        "parameterVersionId": "9101",
+        "deadline": "2026-09-13T12:00:00Z",
+        "status": "PENDING"
+      }
+    ]
+  },
+  "evidence": "System facts resolved the channel anomaly automatically; the original todo, request, parameter version, and deadline history remain retained and were not approved, claimed, or reset."
+}

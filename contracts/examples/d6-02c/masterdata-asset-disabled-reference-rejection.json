@@ -1,0 +1,23 @@
+{
+  "operationId": "createAsset",
+  "kind": "rejection",
+  "status": 409,
+  "scenario": "The selected category reference is disabled at commit time.",
+  "requestSchema": "AssetCreateRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "asset-create-disabled-reference-0001",
+    "X-CSRF-Token": "csrf-token-example-123456"
+  },
+  "payload": {
+    "name": "Disabled category draft",
+    "category": {"id": "4101", "version": 3}
+  },
+  "response": {
+    "code": "ASSET_MASTER_DATA_DISABLED",
+    "message": "A selected master-data reference is disabled and cannot be used for a new card.",
+    "requestId": "00000000-0000-4000-8000-000000000042",
+    "fieldErrors": {"category": "reference is disabled"}
+  },
+  "evidence": "Contract evidence only; runtime master-data validation is not implemented in this design package."
+}

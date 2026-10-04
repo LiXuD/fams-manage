@@ -1,0 +1,25 @@
+{
+  "operationId": "updateAssetCategory",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "AssetCategoryUpdateRequest",
+  "responseSchema": "AssetCategory",
+  "headers": {
+    "Idempotency-Key": "category-update-example-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "0"
+  },
+  "payload": {
+    "parentCategory": {"id": "8000", "version": 2},
+    "description": "Portable computers with managed lifecycle fields."
+  },
+  "response": {
+    "id": "8101",
+    "code": "LAPTOP",
+    "name": "Laptop",
+    "parentCategory": {"id": "8000", "version": 2},
+    "status": "ACTIVE",
+    "version": 1,
+    "description": "Portable computers with managed lifecycle fields."
+  }
+}

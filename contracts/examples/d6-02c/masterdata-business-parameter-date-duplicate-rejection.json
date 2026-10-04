@@ -1,0 +1,38 @@
+{
+  "operationId": "createBusinessParameterVersion",
+  "kind": "rejection",
+  "status": 400,
+  "scenario": "A holiday date is duplicated in the submitted snapshot.",
+  "requestSchema": "BusinessParameterVersionCreateRequest",
+  "responseSchema": "ErrorResponse",
+  "headers": {
+    "Idempotency-Key": "business-parameter-create-0004",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "1"
+  },
+  "payload": {
+    "snapshot": {
+      "timezone": "Asia/Shanghai",
+      "workWeek": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"],
+      "holidays": ["2026-10-01", "2026-10-01"],
+      "adjustedWorkdays": [],
+      "adminDecisionDeadlineWorkdays": 2,
+      "warehouseClaimDeadlineWorkdays": 1,
+      "warehouseFirstExecutionDeadlineWorkdays": 2,
+      "handoverAcceptanceDeadlineNaturalDays": 3,
+      "notificationEscalationThresholds": {
+        "administratorUnreadHours": 4,
+        "onDutyWarehouseOperatorUnreadHours": 4,
+        "firstExecutionOverdueNaturalDays": 1,
+        "receiptDueUnreadHours": 24
+      }
+    }
+  },
+  "evidence": "Contract evidence only; no runtime implementation is claimed.",
+  "response": {
+    "code": "BUSINESS_PARAMETER_DATE_DUPLICATE",
+    "message": "Holiday and adjusted-workday dates must be unique.",
+    "requestId": "00000000-0000-4000-8000-000000000032",
+    "fieldErrors": {"holidays": "duplicate BusinessDate"}
+  }
+}

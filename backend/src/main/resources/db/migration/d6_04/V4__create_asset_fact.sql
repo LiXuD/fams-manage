@@ -1,0 +1,95 @@
+CREATE TABLE fams_asset (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    asset_code VARCHAR(128) NOT NULL,
+    name VARCHAR(256) NOT NULL,
+    category_id BIGINT NULL,
+    model VARCHAR(128) NULL,
+    unit VARCHAR(32) NULL,
+    owning_organization_id BIGINT NULL,
+    planned_inbound_warehouse_id BIGINT NULL,
+    planned_inbound_location_id BIGINT NULL,
+    brand_id BIGINT NULL,
+    manufacturer_id BIGINT NULL,
+    serial_number VARCHAR(128) NULL,
+    serial_number_normalized VARCHAR(128) NULL,
+    acquisition_date DATE NULL,
+    warranty_expiry_date DATE NULL,
+    service_provider VARCHAR(256) NULL,
+    service_contact VARCHAR(128) NULL,
+    service_phone_ciphertext VARBINARY(512) NULL,
+    source_text VARCHAR(128) NULL,
+    notes VARCHAR(2000) NULL,
+    extension_values_json JSON NULL,
+    lifecycle_status VARCHAR(40) NOT NULL,
+    exception_status VARCHAR(40) NOT NULL,
+    card_stage VARCHAR(40) NOT NULL,
+    custody_type VARCHAR(20) NULL,
+    storage_warehouse_id BIGINT NULL,
+    current_location_id BIGINT NULL,
+    using_organization_id BIGINT NULL,
+    responsible_employee_id BIGINT NULL,
+    department_responsible_employee_id BIGINT NULL,
+    created_business_date DATE NOT NULL,
+    inbound_business_date DATE NULL,
+    last_inventory_business_date DATE NULL,
+    parameter_version_id BIGINT NOT NULL,
+    creator_account_id BIGINT NOT NULL,
+    creator_username_snapshot VARCHAR(128) NOT NULL,
+    source_asset_id BIGINT NULL,
+    cancelled_at DATETIME(3) NULL,
+    cancellation_reason VARCHAR(500) NULL,
+    version BIGINT NOT NULL DEFAULT 0,
+    created_at DATETIME(3) NOT NULL,
+    updated_at DATETIME(3) NOT NULL,
+    created_by BIGINT NOT NULL,
+    updated_by BIGINT NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_asset_code (asset_code),
+    UNIQUE KEY uk_asset_serial (serial_number_normalized),
+    KEY idx_asset_ledger (category_id, lifecycle_status, exception_status, id),
+    KEY idx_asset_custody (using_organization_id, responsible_employee_id,
+                           department_responsible_employee_id, id),
+    KEY idx_asset_location (storage_warehouse_id, current_location_id, id),
+    KEY idx_asset_planned_warehouse (planned_inbound_warehouse_id, card_stage, id),
+    KEY idx_asset_planned_location (planned_inbound_location_id, card_stage, id),
+    KEY idx_asset_current_location (current_location_id, card_stage, id),
+    KEY idx_asset_inbound_date (inbound_business_date, id),
+    KEY idx_asset_inventory (last_inventory_business_date, id),
+    CONSTRAINT fk_asset_category FOREIGN KEY (category_id) REFERENCES fams_asset_category(id),
+    CONSTRAINT fk_asset_owning_organization FOREIGN KEY (owning_organization_id) REFERENCES fams_organization(id),
+    CONSTRAINT fk_asset_planned_warehouse FOREIGN KEY (planned_inbound_warehouse_id) REFERENCES fams_warehouse(id),
+    CONSTRAINT fk_asset_planned_location FOREIGN KEY (planned_inbound_location_id) REFERENCES fams_location(id),
+    CONSTRAINT fk_asset_brand FOREIGN KEY (brand_id) REFERENCES fams_brand(id),
+    CONSTRAINT fk_asset_manufacturer FOREIGN KEY (manufacturer_id) REFERENCES fams_manufacturer(id),
+    CONSTRAINT fk_asset_storage_warehouse FOREIGN KEY (storage_warehouse_id) REFERENCES fams_warehouse(id),
+    CONSTRAINT fk_asset_current_location FOREIGN KEY (current_location_id) REFERENCES fams_location(id),
+    CONSTRAINT fk_asset_using_organization FOREIGN KEY (using_organization_id) REFERENCES fams_organization(id),
+    CONSTRAINT fk_asset_responsible_employee FOREIGN KEY (responsible_employee_id) REFERENCES fams_employee(id),
+    CONSTRAINT fk_asset_department_employee FOREIGN KEY (department_responsible_employee_id) REFERENCES fams_employee(id),
+    CONSTRAINT fk_asset_parameter FOREIGN KEY (parameter_version_id) REFERENCES fams_business_parameter_version(id),
+    CONSTRAINT fk_asset_creator FOREIGN KEY (creator_account_id) REFERENCES fams_system_account(id),
+    CONSTRAINT fk_asset_source FOREIGN KEY (source_asset_id) REFERENCES fams_asset(id),
+    CONSTRAINT ck_asset_lifecycle CHECK (lifecycle_status IN (
+        'WAITING_INBOUND', 'IN_STOCK', 'IN_USE', 'BORROWED', 'UNDER_REPAIR',
+        'FACTORY_REPAIR', 'PENDING_SCRAP', 'SCRAPPED')),
+    CONSTRAINT ck_asset_exception CHECK (exception_status IN ('NORMAL', 'SEARCHING', 'LOST')),
+    CONSTRAINT ck_asset_stage CHECK (card_stage IN ('DRAFT', 'PENDING_INBOUND', 'ACTIVE', 'CANCELLED')),
+    CONSTRAINT ck_asset_version CHECK (version >= 0),
+    CONSTRAINT ck_asset_planned_target CHECK (
+        planned_inbound_location_id IS NULL OR planned_inbound_warehouse_id IS NOT NULL),
+    CONSTRAINT ck_asset_custody CHECK (
+        (custody_type IS NULL AND storage_warehouse_id IS NULL AND current_location_id IS NULL
+         AND using_organization_id IS NULL AND responsible_employee_id IS NULL
+         AND department_responsible_employee_id IS NULL)
+        OR (custody_type = 'STORAGE' AND storage_warehouse_id IS NOT NULL
+            AND current_location_id IS NOT NULL AND using_organization_id IS NULL
+            AND responsible_employee_id IS NULL AND department_responsible_employee_id IS NULL)
+        OR (custody_type = 'PERSONAL' AND storage_warehouse_id IS NULL
+            AND current_location_id IS NOT NULL AND using_organization_id IS NOT NULL
+            AND responsible_employee_id IS NOT NULL AND department_responsible_employee_id IS NULL)
+        OR (custody_type = 'SHARED' AND storage_warehouse_id IS NULL
+            AND current_location_id IS NOT NULL AND using_organization_id IS NOT NULL
+            AND responsible_employee_id IS NULL AND department_responsible_employee_id IS NOT NULL)),
+    CONSTRAINT ck_asset_pre_inbound_custody CHECK (
+        card_stage NOT IN ('DRAFT', 'PENDING_INBOUND', 'CANCELLED') OR custody_type IS NULL)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

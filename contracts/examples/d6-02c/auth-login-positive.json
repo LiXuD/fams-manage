@@ -1,0 +1,27 @@
+{
+  "operationId": "login",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "LoginRequest",
+  "responseSchema": "SessionResponse",
+  "headers": {
+    "Set-Cookie": "FAMS_SESSION=new-session; Secure; HttpOnly; SameSite=Lax; Path=/api"
+  },
+  "payload": {
+    "username": "asset.admin",
+    "password": "correct horse battery staple"
+  },
+  "response": {
+    "csrfToken": "csrf-token-example-123456",
+    "idleExpiresAt": "2026-09-13T16:15:00Z",
+    "absoluteExpiresAt": "2026-09-14T08:15:00Z",
+    "requiresInitialPasswordChange": false,
+    "user": {
+      "id": "1001",
+      "username": "asset.admin",
+      "status": "ENABLED",
+      "roles": ["ASSET_ADMIN"],
+      "requiresInitialPasswordChange": false
+    }
+  }
+}

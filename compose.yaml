@@ -1,0 +1,29 @@
+services:
+  mysql:
+    image: mysql:8.4.11@sha256:3466ba4a4828aa8d46fb7c3bc16b67b781c98413cf4ea0fac6feaa6e881faa26
+    restart: "no"
+    environment:
+      MYSQL_DATABASE: "${FAMS_MYSQL_DATABASE:?required}"
+      MYSQL_USER: "${FAMS_MYSQL_USER:?required}"
+      MYSQL_PASSWORD: "${FAMS_MYSQL_PASSWORD:?required}"
+      MYSQL_ROOT_PASSWORD: "${FAMS_MYSQL_ROOT_PASSWORD:?required}"
+      TZ: UTC
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+00:00
+    ports:
+      - "127.0.0.1:${FAMS_MYSQL_PORT:-33306}:3306"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping -h 127.0.0.1 -uroot --password="$${MYSQL_ROOT_PASSWORD}" --silent
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+volumes:
+  mysql-data:

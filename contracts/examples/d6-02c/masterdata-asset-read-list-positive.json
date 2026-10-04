@@ -1,0 +1,62 @@
+{
+  "operationId": "listAssets",
+  "kind": "positive",
+  "status": 200,
+  "responseSchema": "PageAsset",
+  "query": {
+    "usageMode": "PERSONAL",
+    "usingOrganizationId": "2002",
+    "responsibleEmployeeId": "3002",
+    "currentProcessorId": "7003",
+    "businessReference": "BOR-2026-000031",
+    "inboundDateFrom": "2026-09-01",
+    "inboundDateTo": "2026-09-14",
+    "lastInventoryDateFrom": "2026-08-01",
+    "lastInventoryDateTo": "2026-09-14",
+    "borrowOverdue": true,
+    "longUninventoried": false,
+    "page": 1,
+    "pageSize": 20
+  },
+  "payload": {},
+  "response": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 1,
+    "items": [
+      {
+        "id": "10021",
+        "assetCode": "FA-2026-000021",
+        "name": "Field Notebook",
+        "category": {"id": "4101", "version": 2},
+        "model": "Latitude 7450",
+        "organization": {"id": "2001", "version": 4},
+        "usageMode": "PERSONAL",
+        "lifecycle": "BORROWED",
+        "exception": "NORMAL",
+        "cardStage": "ACTIVE",
+        "currentCustody": {
+          "custodyType": "PERSONAL",
+          "usingOrganization": {"id": "2002", "version": 3},
+          "responsibleEmployee": {"id": "3002", "version": 7},
+          "location": {"id": "6003", "version": 2}
+        },
+        "openBusinessSummary": {
+          "unsettledBusinessCount": 1,
+          "overdueBusinessCount": 1,
+          "currentBusinessId": "9301",
+          "currentBusinessNumber": "BOR-2026-000031",
+          "currentBusinessType": "BORROW",
+          "currentProcessor": {"id": "7003", "username": "employee.borrower"}
+        },
+        "inboundBusinessDate": "2026-09-03",
+        "lastInventoryBusinessDate": "2026-08-20",
+        "version": 8,
+        "createdBusinessDate": "2026-09-01",
+        "createdAt": "2026-09-01T02:30:00Z",
+        "parameterVersionId": "9101"
+      }
+    ]
+  },
+  "evidence": "Contract evidence only; filters are intersected with current permissions and no runtime query is implemented in this design package."
+}

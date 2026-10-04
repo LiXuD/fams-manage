@@ -1,0 +1,28 @@
+{
+  "operationId": "updateEmployee",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "EmployeeUpdateRequest",
+  "responseSchema": "Employee",
+  "headers": {
+    "Idempotency-Key": "employee-update-identity-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "0"
+  },
+  "payload": {
+    "displayName": "Lin Mei",
+    "organization": {"id": "2002", "version": 4},
+    "phone": "13800000000"
+  },
+  "response": {
+    "id": "3001",
+    "employeeNo": "E-1001",
+    "displayName": "Lin Mei",
+    "organization": {"id": "2002", "version": 4},
+    "phone": "13800000000",
+    "status": "ACTIVE",
+    "version": 1,
+    "createdAt": "2026-09-14T08:30:00Z",
+    "updatedAt": "2026-09-14T09:00:00Z"
+  }
+}

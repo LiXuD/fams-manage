@@ -1,0 +1,20 @@
+{
+  "name": "@fams/development-workspace",
+  "private": true,
+  "packageManager": "npm@11.16.0",
+  "scripts": {
+    "lint": "rtk eslint \"packages/api-types/src/**/*.ts\" \"apps/web/src/**/*.{ts,tsx}\" \"apps/miniprogram/**/*.ts\" --no-error-on-unmatched-pattern --max-warnings=0",
+    "typecheck": "rtk npm run typecheck --workspaces --if-present",
+    "test:web": "rtk npm run test --workspace @fams/web",
+    "build:web": "rtk npm run build --workspace @fams/web"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.10.0",
+    "typescript-eslint": "8.70.0"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "operationId": "getSystemAccountAuthorization",
+  "kind": "positive",
+  "status": 200,
+  "scenario": "A system administrator reviews one auditor's current bounded authorization.",
+  "responseSchema": "SystemAccountAuthorization",
+  "pathParameters": {"systemAccountId": "701", "role": "AUDIT_READ_ONLY"},
+  "payload": {},
+  "response": {
+    "id": "801",
+    "systemAccountId": "701",
+    "role": "AUDIT_READ_ONLY",
+    "status": "ACTIVE",
+    "dataScopes": [
+      {
+        "scopeType": "SPECIFIED_ORGANIZATIONS",
+        "organizations": [{"id": "2001", "version": 4}],
+        "warehouses": []
+      }
+    ],
+    "fieldPermissions": ["SYSTEM_OPERATION_LOG"],
+    "version": 2,
+    "updatedAt": "2026-09-14T06:00:00Z"
+  },
+  "evidence": "Contract evidence only; runtime grant persistence and evaluation are not implemented."
+}

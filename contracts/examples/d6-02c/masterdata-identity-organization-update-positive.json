@@ -1,0 +1,25 @@
+{
+  "operationId": "updateOrganization",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": "OrganizationUpdateRequest",
+  "responseSchema": "Organization",
+  "headers": {
+    "Idempotency-Key": "org-update-identity-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "0"
+  },
+  "payload": {
+    "code": "HQ",
+    "name": "Headquarters and Operations"
+  },
+  "response": {
+    "id": "2001",
+    "code": "HQ",
+    "name": "Headquarters and Operations",
+    "status": "ACTIVE",
+    "version": 1,
+    "createdAt": "2026-09-14T08:00:00Z",
+    "updatedAt": "2026-09-14T08:10:00Z"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "operationId": "getConfigurationAnomaly",
+  "kind": "positive",
+  "status": 200,
+  "requestSchema": null,
+  "responseSchema": "ConfigurationAnomaly",
+  "pathParameters": {"anomalyId": "9301"},
+  "payload": {},
+  "evidence": "Contract evidence only; no runtime implementation is claimed.",
+  "response": {
+    "id": "9301",
+    "type": "NO_ASSET_ADMIN",
+    "status": "OPEN",
+    "detectedAt": "2026-09-14T03:10:00Z",
+    "dedupKey": "NO_ASSET_ADMIN:enterprise",
+    "relatedTodos": [
+      {
+        "id": "9401",
+        "kind": "ASSET_INTAKE_REVIEW",
+        "parameterVersionId": "9101",
+        "deadline": "2026-09-15T03:10:00Z",
+        "status": "PENDING"
+      }
+    ]
+  }
+}

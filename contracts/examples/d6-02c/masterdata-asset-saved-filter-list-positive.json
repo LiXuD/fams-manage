@@ -1,0 +1,25 @@
+{
+  "operationId": "listAssetSavedFilters",
+  "kind": "positive",
+  "status": 200,
+  "responseSchema": "PageAssetSavedFilter",
+  "query": {"page": 1, "pageSize": 20},
+  "payload": {},
+  "response": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 1,
+    "items": [
+      {
+        "id": "9501",
+        "ownerAccountId": "7001",
+        "name": "逾期借用",
+        "criteria": {"borrowOverdue": true},
+        "version": 2,
+        "createdAt": "2026-09-14T05:00:00Z",
+        "updatedAt": "2026-09-14T05:10:00Z"
+      }
+    ]
+  },
+  "evidence": "Contract evidence only; only the current account's personal filters are returned and each later execution rechecks current permission."
+}
