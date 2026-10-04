@@ -132,6 +132,68 @@ class AssetImportPreflightTest {
                 parsed(invalid), Map.of(), null));
     }
 
+    @Test
+    void missingRequiredFieldsAndBlankStateCannotBecomeReadyRows() {
+        Map<String, String> values = new HashMap<>(row(2, "A-6", "CAT-1", "LOC-1", "在库").values());
+        values.put("名称", " ");
+        values.put("型号", "");
+        values.put("单位", "");
+        values.put("分类编码", "");
+        values.put("所属组织编码", "");
+        values.put("资产状态", "");
+        var result = AssetImportPreflight.check(parsed(new AssetImportWorkbook.DataRow(
+                2, Map.copyOf(values))), Map.of(), catalog());
+        assertTrue(result.ready().isEmpty());
+        assertEquals(6, result.errors().stream().filter(e -> "REQUIRED".equals(e.reason())).count());
+    }
+
+    @Test
+    void duplicateSerialAndWrongWarehouseLocationRejectOnlyAffectedRows() {
+        Map<String, String> first = new HashMap<>(row(2, "A-7", "CAT-1", "LOC-1", "在库").values());
+        Map<String, String> second = new HashMap<>(row(3, "A-8", "CAT-1", "LOC-2", "在库").values());
+        first.put("序列号", "serial-7");
+        second.put("序列号", "SERIAL-7");
+        var result = AssetImportPreflight.check(new AssetImportWorkbook.Parsed(COLUMNS,
+                List.of(new AssetImportWorkbook.DataRow(2, Map.copyOf(first)),
+                        new AssetImportWorkbook.DataRow(3, Map.copyOf(second))), List.of()),
+                Map.of(), catalog());
+        assertEquals(1, result.ready().size());
+        assertTrue(result.errors().stream().anyMatch(e -> e.sheetRow() == 3
+                && "DUPLICATE_SERIAL_NUMBER".equals(e.reason())));
+        assertTrue(result.errors().stream().anyMatch(e -> e.sheetRow() == 3
+                && "REFERENCE_INACTIVE_OR_OUT_OF_SCOPE".equals(e.reason())));
+    }
+
+    @Test
+    void workbookCellErrorKeepsOtherwiseValidRowOutOfPublication() {
+        var cellError = new AssetImportWorkbook.CellError(2, "备注", "=SUM(1)", "FORMULA_NOT_ALLOWED");
+        var source = row(2, "A-9", "CAT-1", "LOC-1", "在库");
+        var result = AssetImportPreflight.check(new AssetImportWorkbook.Parsed(COLUMNS,
+                List.of(source), List.of(cellError)), Map.of(), catalog());
+        assertTrue(result.ready().isEmpty());
+        assertEquals(List.of(cellError), result.errors());
+    }
+
+    @Test
+    void ambiguousScopedLocationAndInactiveWarehouseAreRejected() {
+        var base = catalog();
+        var scoped = new AssetImportPreflight.Catalog(base.categories(), base.organizations(),
+                List.of(ref(1, "WH-1", "总仓", "DISABLED", null)),
+                List.of(ref(4, "LOC-1", "同名库位", "ACTIVE", 1L),
+                        ref(5, "LOC-2", "同名库位", "ACTIVE", 1L)),
+                base.employees(), Set.of(), Set.of());
+        var inactive = AssetImportPreflight.check(parsed(row(2, "A-10", "CAT-1", "LOC-1", "在库")),
+                Map.of(), scoped);
+        assertTrue(inactive.ready().isEmpty());
+        assertTrue(inactive.errors().stream().anyMatch(e -> "REFERENCE_INACTIVE_OR_OUT_OF_SCOPE"
+                .equals(e.reason())));
+        var ambiguous = AssetImportPreflight.check(parsed(row(3, "A-11", "CAT-1", "同名库位", "在库")),
+                Map.of(), new AssetImportPreflight.Catalog(base.categories(), base.organizations(),
+                        base.warehouses(), scoped.locations(), base.employees(), Set.of(), Set.of()));
+        assertTrue(ambiguous.ready().isEmpty());
+        assertEquals("REFERENCE_NAME_AMBIGUOUS", ambiguous.errors().getFirst().reason());
+    }
+
     private AssetImportPreflight.Catalog catalog() {
         return new AssetImportPreflight.Catalog(
                 List.of(ref(1, "CAT-1", "办公", "ACTIVE", null),
