@@ -1,7 +1,7 @@
 # FAMS 项目阶段与交接入口
 
-> 唯一现役进度入口 · 更新于 2026-09-30
-> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04～D6-07、D6-08A 与 D6-09A 本地 `DEV_VERIFIED`；D6-08B/C/D 正在开发。D6-01B 与 D6-03B 继续等待远端权限。
+> 唯一现役进度入口 · 更新于 2026-10-04
+> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04～D6-07、D6-08A 与 D6-09A 本地 `DEV_VERIFIED`；D6-08B/C/D 候选门禁通过，状态 `IN_REVIEW`，等待独立复核。D6-01B 与 D6-03B 继续等待远端权限。
 
 ## 1. 八步开发流程与当前进度
 
@@ -12,7 +12,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-08B/C/D 候选开发继续，D6-01B/03B 待外部权限 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-08B/C/D 待独立复核，D6-01B/03B 待外部权限 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
@@ -40,7 +40,7 @@
 4. 每次任务开始、受阻、送审、验证和验收时同步维护计划台账及执行记录；本文只维护项目阶段和下一步，不复制第二套任务状态。D6-02B 的版本冻结结论与 D6-02C 的关键设计复核均已关闭；后续关键任务仍须按计划独立复核。
 5. 只有 PRD 变更或开发发现设计缺口时，才重新打开第5步对应条目；无需恢复已取消的大规模用户测试方案。
 6. D6-04A/B/C/D 均已提交并完成本地验证；C 的 Web 14/14 测试、构建、lint/typecheck，D 的双用户角色撤销失效浏览器链路、用户本人五域及总评 PASS，与 reviewed HEAD `8943dc3` 的 127 项统一门禁共同构成父任务本地 `DEV_VERIFIED` 证据。不得据此声明远端 CI、QA、正式安全专项或生产完成。
-7. D6-05A/B/C 与父任务、D6-06/06A、D6-07/07A、D6-08A 和 D6-09A 均已本地 `DEV_VERIFIED`。D6-08B/C/D 正在开发；远端 CI、QA 与生产尚未验证。
+7. D6-05A/B/C 与父任务、D6-06/06A、D6-07/07A、D6-08A 和 D6-09A 均已本地 `DEV_VERIFIED`。D6-08B/C/D 已送独立复核；远端 CI、QA 与生产尚未验证。
 
 ## 4. 文档责任
 
@@ -60,15 +60,19 @@
 | 事实面 | 状态 | 说明 |
 |---|---|---|
 | 设计文档 | `changed-and-verified` | 一期功能覆盖验证已完成并同步 |
-| 开发计划 | `in-progress` | V1.2 顺序调整已获用户授权；D6-04～D6-07、D6-08A 与 D6-09A 本地 `DEV_VERIFIED`；D6-08B/C/D 进行中；D6-01B/03B 远端能力尚未完成 |
+| 开发计划 | `in-progress` | V1.2 顺序调整已获用户授权；D6-04～D6-07、D6-08A 与 D6-09A 本地 `DEV_VERIFIED`；D6-08B/C/D 待独立复核；D6-01B/03B 远端能力尚未完成 |
 | 规则 | `changed-and-verified` | AGENTS 已指向当前阶段 |
-| 产品代码 | `in-progress` | D6-04～D6-07、D6-08A 及 D6-09A 已本地开发验证并复核；D6-08B/C/D 正在实现与验证 |
-| 产品运行态 | `local-dev-partial` | D6-06 用户复核 PASS；签署后 HEAD `84b66f0` 的真实 MySQL HTTP 与统一门禁 217 项通过；远端 CI、QA、共享/生产升级及生产未验证 |
+| 产品代码 | `in-progress` | D6-04～D6-07、D6-08A 及 D6-09A 已本地开发验证并复核；D6-08B/C/D 候选代码完成本地门禁、待独立复核 |
+| 产品运行态 | `local-dev-partial` | D6-08 候选 `6d94db8` 独有 MySQL/HTTP 与完整本地门禁通过；B/C/D 仍待独立复核，远端 CI、QA、共享/生产升级及生产未验证 |
 | 记忆 | `out-of-scope` | 本次未修改机器生成记忆 |
 | 工作区 | `handoff-recorded` | 当前开发位于隔离工作树 `/Users/lixd/.codex/worktrees/d6-09-attachments/fams`、分支 `codex/d6-08-durable-jobs`；`main` 仍在独立旧检出且有非本任务改动，本分支未合并或推送（仓库无远端） |
 
-## 2026-09-30 最新续接
+## 2026-09-30 续接记录
 
 用户本人对 D6-07、D6-08A、D6-09A 复核全部 PASS，三项本地 `DEV_VERIFIED`。D6-08B 的 Excel 模板/映射、预检、V14 批次、真实 HTTP、PC 入口及结果下载已实现；D6-08C 的期初窗口、核验批准、在库/在用原子发布、最终 CSV、受控整批回滚和三角色 PC 操作已实现。独有 MySQL 中撤权、`SIGKILL` 后新 JVM 重领、写入中异常整体回滚及本地浏览器链路通过。D6-08D 的一万行预检、容量边界、十万资产查询与单轮事务计时已记录，列表引用 N+1 已修复。
 
 本分支最新功能测试提交为 `4c2e757`。其导入核验驳回/重提、回滚驳回/重请，以及预检人员范围、重复标识和非法状态定向用例通过；Java 质量 `validate` 退出 0。最近一次完整产品门禁在此前提交 `b11502f` 上退出 1：Java 行覆盖 91.18%、分支覆盖 71.72%，未达到既定 75% 分支门槛；新增用例尚未重跑完整门禁，因此 D6-08B/C/D 保持 `IN_PROGRESS`，不可写为 `DEV_VERIFIED` 或正式 QA 通过。下一步仅补关键业务分支并在候选稳定后跑一次门禁，达到门槛再送独立复核；D6-09B 与微信/短信/HTTPS 等真实外部资源另待准备。不重复历史治理与 SHA 审计。
+
+## 2026-10-04 最新续接
+
+代码候选 `6d94db8` 在隔离工作树以 Java 21、Node 24 和独有 MySQL 8.4.11 运行完整 `scripts/verify-product-development.py`，退出 0；Java 必需测试 59 项、Checkstyle/SpotBugs 0、行覆盖 91.99%、分支覆盖 75.03%，Web lint/typecheck、依赖审计及应用/数据库重启恢复通过。原始输出见 [D6-08 门禁记录](docs/development/evidence/D6-08-product-gate-6d94db8.txt)。D6-08B/C/D 已由 `IN_PROGRESS` 转 `IN_REVIEW`，父任务仍 `IN_PROGRESS`；下一步由非实施者按 [D6-08 任务卡](docs/development/D6-08-task-card.md)复核权限、事务、恢复及测量边界，记录逐项结论。未经复核不得写本地 `DEV_VERIFIED`。远端 CI、第七阶段 QA、共享/生产迁移和上线均未完成；本分支未合并或推送。
