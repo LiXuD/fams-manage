@@ -502,22 +502,25 @@ class InboundHttpTest {
                 headers(creator, 82, 0L)));
         assertStatus(200, call("POST", path + "/decision",
                 "{\"decision\":\"APPROVED\"}", admin, headers(admin, 83, 1L)));
-        CompletableFuture<Integer> first = CompletableFuture.supplyAsync(
+        CompletableFuture<HttpResponse<String>> first = CompletableFuture.supplyAsync(
                 () -> concurrentClaim(path, creator, 84));
-        CompletableFuture<Integer> second = CompletableFuture.supplyAsync(
+        CompletableFuture<HttpResponse<String>> second = CompletableFuture.supplyAsync(
                 () -> concurrentClaim(path, other, 85));
-        int firstStatus = first.get();
-        int secondStatus = second.get();
+        HttpResponse<String> firstResponse = first.get();
+        HttpResponse<String> secondResponse = second.get();
+        int firstStatus = firstResponse.statusCode();
+        int secondStatus = secondResponse.statusCode();
         assertTrue((firstStatus == 200 && secondStatus == 409)
                 || (firstStatus == 409 && secondStatus == 200),
-                "concurrent claim statuses: " + firstStatus + ", " + secondStatus);
+                "concurrent claim statuses: " + firstStatus + ", " + secondStatus
+                        + "; bodies: " + firstResponse.body() + ", " + secondResponse.body());
         assertEquals(1, count("SELECT COUNT(*) FROM fams_inbound_processing_ownership "
                 + "WHERE receipt_id=" + receipt.path("id").asText() + " AND archived_at IS NULL"));
     }
 
-    private int concurrentClaim(String path, Session session, int serial) {
+    private HttpResponse<String> concurrentClaim(String path, Session session, int serial) {
         try { return call("POST", path + "/claim", null, session,
-                headers(session, serial, 2L)).statusCode(); }
+                headers(session, serial, 2L)); }
         catch (Exception error) { throw new IllegalStateException(error); }
     }
 

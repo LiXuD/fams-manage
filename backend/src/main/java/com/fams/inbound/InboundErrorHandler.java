@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import com.fams.product.contract.model.ErrorResponse;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -24,6 +25,13 @@ class InboundErrorHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<ErrorResponse> integrity(DataIntegrityViolationException error,
+            HttpServletRequest request) {
+        return ResponseEntity.status(409).body(new ErrorResponse(
+                "INBOUND_WRITE_CONFLICT", "Inbound data changed", requestId(request), Map.of()));
+    }
+
+    @ExceptionHandler(CannotAcquireLockException.class)
+    ResponseEntity<ErrorResponse> lockConflict(CannotAcquireLockException error,
             HttpServletRequest request) {
         return ResponseEntity.status(409).body(new ErrorResponse(
                 "INBOUND_WRITE_CONFLICT", "Inbound data changed", requestId(request), Map.of()));
