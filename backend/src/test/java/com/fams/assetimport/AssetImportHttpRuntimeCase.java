@@ -1,6 +1,7 @@
 package com.fams.assetimport;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fams.job.DurableJobService;
@@ -16,6 +17,8 @@ import java.nio.file.Path;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
@@ -46,6 +49,8 @@ class AssetImportHttpRuntimeCase {
     @Value("${local.server.port}") int port;
     @Autowired JdbcTemplate db;
     @Autowired DurableJobService jobs;
+    @Autowired AssetImportBatchService batches;
+    @Autowired AssetImportReviewService reviews;
     @Autowired AssetImportPublicationService publication;
     @Autowired AssetImportRollbackService rollbacks;
 
@@ -59,6 +64,7 @@ class AssetImportHttpRuntimeCase {
     @Test
     void warehouseUploadPreviewAndErrorRowsUseRealSessionAndMysql() throws Exception {
         seedAccounts();
+        assertInvalidImportRequestBoundaries();
         var warehouse = login("worker");
         var viewer = login("viewer");
         assertEquals(403, request("GET", "/asset-import-batches/template", null, viewer,
@@ -327,6 +333,67 @@ class AssetImportHttpRuntimeCase {
                 null, administrator, null, null).statusCode());
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_initialization_window "
                 + "WHERE id=? AND window_status='CLOSED'", Integer.class, windowId));
+    }
+
+    private void assertInvalidImportRequestBoundaries() {
+        UUID unknown = UUID.randomUUID();
+        byte[] empty = new byte[0];
+        assertThrows(IllegalArgumentException.class, () -> batches.upload(0, "valid-upload-key-01", empty));
+        assertThrows(IllegalArgumentException.class, () -> batches.upload(1, null, empty));
+        assertThrows(IllegalArgumentException.class, () -> batches.upload(1, "short", empty));
+        assertThrows(IllegalArgumentException.class, () -> batches.upload(1, "x".repeat(129), empty));
+        assertThrows(IllegalArgumentException.class, () -> batches.upload(1, "invalid key with space", empty));
+        assertThrows(IllegalArgumentException.class, () -> batches.get(0, unknown));
+        assertThrows(IllegalArgumentException.class, () -> batches.get(1, null));
+        assertThrows(IllegalStateException.class, () -> batches.get(1, unknown));
+        assertThrows(IllegalArgumentException.class, () -> batches.columns(0, unknown));
+        assertThrows(IllegalArgumentException.class, () -> batches.columns(1, null));
+        assertThrows(IllegalStateException.class, () -> batches.columns(1, unknown));
+        assertThrows(IllegalArgumentException.class, () -> batches.preview(0, unknown, 0, Map.of()));
+        assertThrows(IllegalArgumentException.class, () -> batches.preview(1, null, 0, Map.of()));
+        assertThrows(IllegalArgumentException.class, () -> batches.preview(1, unknown, -1, Map.of()));
+        assertThrows(IllegalStateException.class, () -> batches.preview(1, unknown, 0, Map.of()));
+        assertThrows(IllegalArgumentException.class, () -> batches.rows(0, unknown, null, 1, 50));
+        assertThrows(IllegalArgumentException.class, () -> batches.rows(1, null, null, 1, 50));
+        assertThrows(IllegalArgumentException.class, () -> batches.rows(1, unknown, null, 0, 50));
+        assertThrows(IllegalArgumentException.class, () -> batches.rows(1, unknown, null, 1, 0));
+        assertThrows(IllegalArgumentException.class, () -> batches.rows(1, unknown, null, 1, 201));
+        assertThrows(IllegalArgumentException.class,
+                () -> batches.rows(1, unknown, null, Integer.MAX_VALUE, 200));
+        assertThrows(IllegalArgumentException.class, () -> batches.rows(1, unknown, "INVALID", 1, 50));
+        assertThrows(IllegalStateException.class, () -> batches.rows(1, unknown, null, 1, 50));
+        assertThrows(IllegalArgumentException.class, () -> reviews.pending(0));
+        assertThrows(IllegalArgumentException.class, () -> reviews.pending(1_000_001));
+        assertThrows(IllegalArgumentException.class, () -> reviews.rowsForAdmin(null, "READY", 1));
+        assertThrows(IllegalArgumentException.class, () -> reviews.rowsForAdmin(unknown, null, 1));
+        assertThrows(IllegalArgumentException.class, () -> reviews.rowsForAdmin(unknown, "READY", 0));
+        assertThrows(IllegalArgumentException.class,
+                () -> reviews.rowsForAdmin(unknown, "READY", 1_000_001));
+        assertThrows(IllegalArgumentException.class,
+                () -> reviews.rowsForAdmin(unknown, "INVALID", 1));
+        assertThrows(IllegalStateException.class, () -> reviews.rowsForAdmin(unknown, "READY", 1));
+        assertThrows(IllegalArgumentException.class, () -> reviews.request(0, unknown, 1));
+        assertThrows(IllegalArgumentException.class, () -> reviews.request(1, null, 1));
+        assertThrows(IllegalArgumentException.class, () -> reviews.request(1, unknown, 0));
+        assertThrows(IllegalStateException.class, () -> reviews.request(1, unknown, 1));
+        assertThrows(IllegalArgumentException.class,
+                () -> reviews.decide(0, unknown, true, "reason", 1, 0, true));
+        assertThrows(IllegalArgumentException.class,
+                () -> reviews.decide(1, null, true, "reason", 1, 0, true));
+        assertThrows(IllegalArgumentException.class,
+                () -> reviews.decide(1, unknown, true, null, 1, 0, true));
+        assertThrows(IllegalArgumentException.class,
+                () -> reviews.decide(1, unknown, true, " ", 1, 0, true));
+        assertThrows(IllegalArgumentException.class,
+                () -> reviews.decide(1, unknown, true, "x".repeat(501), 1, 0, true));
+        assertThrows(IllegalStateException.class,
+                () -> reviews.decide(1, unknown, true, "reason", 1, 0, true));
+        assertThrows(IllegalArgumentException.class, () -> rollbacks.pending(0));
+        assertThrows(IllegalArgumentException.class, () -> rollbacks.pending(1_000_001));
+        assertThrows(IllegalArgumentException.class, () -> rollbacks.request(1, unknown, null));
+        assertThrows(IllegalArgumentException.class, () -> rollbacks.request(1, unknown, " "));
+        assertThrows(IllegalArgumentException.class, () -> rollbacks.request(1, unknown, "x".repeat(501)));
+        assertThrows(IllegalStateException.class, () -> rollbacks.request(1, unknown, "reason"));
     }
 
     @Test
