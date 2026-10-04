@@ -175,6 +175,15 @@ class AssetImportHttpRuntimeCase {
                 .getBytes(StandardCharsets.UTF_8);
         assertEquals(400, request("POST", "/asset-import-batches/" + id + "/decision",
                 wrongCounts, assetAdmin, "application/json", null).statusCode());
+        UUID reviewedBatch = UUID.fromString(id);
+        assertThrows(IllegalStateException.class,
+                () -> reviews.decide(1, reviewedBatch, true, "self review", 1, 1, true));
+        assertThrows(IllegalArgumentException.class,
+                () -> reviews.decide(3, reviewedBatch, true, "missing ready", null, 1, true));
+        assertThrows(IllegalArgumentException.class,
+                () -> reviews.decide(3, reviewedBatch, true, "missing errors", 1, null, true));
+        assertThrows(IllegalArgumentException.class,
+                () -> reviews.decide(3, reviewedBatch, true, "wrong errors", 1, 2, true));
         var approved = request("POST", "/asset-import-batches/" + id + "/decision",
                 decision, assetAdmin, "application/json", null);
         assertEquals(200, approved.statusCode(), body(approved));
@@ -388,12 +397,19 @@ class AssetImportHttpRuntimeCase {
                 () -> reviews.decide(1, unknown, true, "x".repeat(501), 1, 0, true));
         assertThrows(IllegalStateException.class,
                 () -> reviews.decide(1, unknown, true, "reason", 1, 0, true));
+        assertThrows(IllegalStateException.class, () -> reviews.getOwned(1, unknown));
         assertThrows(IllegalArgumentException.class, () -> rollbacks.pending(0));
         assertThrows(IllegalArgumentException.class, () -> rollbacks.pending(1_000_001));
+        assertThrows(IllegalStateException.class, () -> rollbacks.getOwned(1, unknown));
         assertThrows(IllegalArgumentException.class, () -> rollbacks.request(1, unknown, null));
         assertThrows(IllegalArgumentException.class, () -> rollbacks.request(1, unknown, " "));
         assertThrows(IllegalArgumentException.class, () -> rollbacks.request(1, unknown, "x".repeat(501)));
         assertThrows(IllegalStateException.class, () -> rollbacks.request(1, unknown, "reason"));
+        assertThrows(IllegalArgumentException.class,
+                () -> rollbacks.decide(3, unknown, true, null));
+        assertThrows(IllegalStateException.class,
+                () -> rollbacks.decide(3, unknown, true, "reason"));
+        assertThrows(IllegalStateException.class, () -> rollbacks.queue(1, unknown));
     }
 
     @Test
