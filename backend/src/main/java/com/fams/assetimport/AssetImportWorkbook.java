@@ -31,8 +31,16 @@ public final class AssetImportWorkbook {
             this("资产", sheetRow, column, original, reason);
         }
     }
-    public record DataRow(int sheetRow, Map<String, String> values) { }
-    public record Parsed(List<String> columns, List<DataRow> rows, List<CellError> errors) { }
+    public record DataRow(int sheetRow, Map<String, String> values) {
+        public DataRow { values = Map.copyOf(values); }
+    }
+    public record Parsed(List<String> columns, List<DataRow> rows, List<CellError> errors) {
+        public Parsed {
+            columns = List.copyOf(columns);
+            rows = List.copyOf(rows);
+            errors = List.copyOf(errors);
+        }
+    }
 
     private AssetImportWorkbook() { }
 

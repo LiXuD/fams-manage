@@ -122,4 +122,11 @@
         <Method name="&lt;init&gt;"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+    <!-- These collaborators are injected and owned by Spring; result collections remain checked. -->
+    <Match>
+        <Class name="~com\.fams\.assetimport\.(AssetImportBatchService|AssetImportPublicationService|AssetImportReviewService|AssetImportRollbackService|AssetInitializationWindowService)"/>
+        <Field name="~(db|json)"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
 </FindBugsFilter>

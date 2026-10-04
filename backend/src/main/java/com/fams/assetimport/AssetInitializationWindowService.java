@@ -79,7 +79,8 @@ public class AssetInitializationWindowService {
         db.update("INSERT INTO fams_initialization_window (window_status,assigned_operator_id,"
                 + "reason,opened_by,opened_at,expires_at) VALUES ('OPEN',?,?,?,?,?)",
                 operatorId, reason.strip(), administratorId, Timestamp.from(now), Timestamp.from(expiresAt));
-        Long id = db.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+        Long id = java.util.Objects.requireNonNull(db.queryForObject(
+                "SELECT LAST_INSERT_ID()", Long.class));
         return new Window(id.toString(), "OPEN", Long.toString(operatorId), expiresAt);
     }
 

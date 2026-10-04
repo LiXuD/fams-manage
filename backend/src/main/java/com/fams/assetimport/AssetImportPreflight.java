@@ -14,12 +14,27 @@ public final class AssetImportPreflight {
     public record Catalog(List<Reference> categories, List<Reference> organizations,
                           List<Reference> warehouses, List<Reference> locations,
                           List<Reference> employees, Set<String> existingAssetCodes,
-                          Set<String> existingSerialNumbers) { }
+                          Set<String> existingSerialNumbers) {
+        public Catalog {
+            categories = List.copyOf(categories);
+            organizations = List.copyOf(organizations);
+            warehouses = List.copyOf(warehouses);
+            locations = List.copyOf(locations);
+            employees = List.copyOf(employees);
+            existingAssetCodes = Set.copyOf(existingAssetCodes);
+            existingSerialNumbers = Set.copyOf(existingSerialNumbers);
+        }
+    }
     public record ReadyRow(int sheetRow, String assetCode, String name, long categoryId,
                            long organizationId, String model, String unit, String serialNumber,
                            String state, Long warehouseId, Long locationId, Long usingOrganizationId,
                            Long employeeId) { }
-    public record Result(List<ReadyRow> ready, List<AssetImportWorkbook.CellError> errors) { }
+    public record Result(List<ReadyRow> ready, List<AssetImportWorkbook.CellError> errors) {
+        public Result {
+            ready = List.copyOf(ready);
+            errors = List.copyOf(errors);
+        }
+    }
 
     private static final Map<String, String> DEFAULT_COLUMNS = Map.ofEntries(
             Map.entry("assetCode", "资产编码"), Map.entry("name", "名称"),

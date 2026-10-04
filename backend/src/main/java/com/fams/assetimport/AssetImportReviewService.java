@@ -78,8 +78,9 @@ public class AssetImportReviewService {
         if (pending == null || pending == 0) {
             throw new IllegalStateException("ASSET_IMPORT_REVIEW_NOT_FOUND");
         }
-        int total = db.queryForObject("SELECT COUNT(*) FROM fams_asset_import_row "
-                + "WHERE batch_id=? AND row_status=?", Integer.class, batchId.toString(), status);
+        int total = java.util.Objects.requireNonNull(db.queryForObject(
+                "SELECT COUNT(*) FROM fams_asset_import_row WHERE batch_id=? AND row_status=?",
+                Integer.class, batchId.toString(), status));
         var items = db.query("SELECT sheet_row,row_status,source_json,resolved_json,errors_json "
                 + "FROM fams_asset_import_row WHERE batch_id=? AND row_status=? "
                 + "ORDER BY sheet_row LIMIT 50 OFFSET ?", (result, index) ->

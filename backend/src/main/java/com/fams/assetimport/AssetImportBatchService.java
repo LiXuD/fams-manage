@@ -27,11 +27,17 @@ import tools.jackson.databind.ObjectMapper;
 public class AssetImportBatchService {
     public record Ticket(UUID id, String status, long previewVersion, JsonNode mapping) { }
     public record Preview(UUID id, long version, int totalRows, int readyRows, int errorRows,
-                          List<AssetImportWorkbook.CellError> errors, boolean moreErrors) { }
+                          List<AssetImportWorkbook.CellError> errors, boolean moreErrors) {
+        public Preview { errors = List.copyOf(errors); }
+    }
     public record PreviewRow(int sheetRow, String status, JsonNode source,
                              JsonNode resolved, JsonNode errors) { }
-    public record RowPage(int total, List<PreviewRow> items) { }
-    public record ColumnList(List<String> columns) { }
+    public record RowPage(int total, List<PreviewRow> items) {
+        public RowPage { items = List.copyOf(items); }
+    }
+    public record ColumnList(List<String> columns) {
+        public ColumnList { columns = List.copyOf(columns); }
+    }
 
     private static final int ROW_BATCH = 500;
     private final JdbcTemplate db;
@@ -160,8 +166,9 @@ public class AssetImportBatchService {
         String filter = status == null ? "" : " AND row_status=?";
         Object[] parameters = status == null ? new Object[] {batchId.toString()}
                 : new Object[] {batchId.toString(), status};
-        int total = db.queryForObject("SELECT COUNT(*) FROM fams_asset_import_row WHERE batch_id=?"
-                + filter, Integer.class, parameters);
+        int total = java.util.Objects.requireNonNull(db.queryForObject(
+                "SELECT COUNT(*) FROM fams_asset_import_row WHERE batch_id=?"
+                        + filter, Integer.class, parameters));
         List<PreviewRow> items = db.query("SELECT sheet_row,row_status,source_json,resolved_json,errors_json "
                 + "FROM fams_asset_import_row WHERE batch_id=?" + filter
                 + " ORDER BY sheet_row LIMIT ? OFFSET ?", (result, index) -> new PreviewRow(
