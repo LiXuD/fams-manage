@@ -1,0 +1,2041 @@
+{
+  "version": 1,
+  "created_at": "2026-09-15T07:14:25Z",
+  "updated_at": "2026-09-22T07:59:52Z",
+  "files": {
+    ".claude/skills/gitnexus/gitnexus-cli/SKILL.md": {
+      "role": "index",
+      "sha256": "58f9f765306b285c661b86777e2097b3efb43dabe9e19d42f795e88faf9081a2",
+      "size": 4632,
+      "normalized_sha256": "58f9f765306b285c661b86777e2097b3efb43dabe9e19d42f795e88faf9081a2"
+    },
+    ".claude/skills/gitnexus/gitnexus-debugging/SKILL.md": {
+      "role": "index",
+      "sha256": "d8090c85e2c8faffd4767fc2dcc52aeb3f3dab3dc7218bc96b29dacf53635d64",
+      "size": 3668,
+      "normalized_sha256": "d8090c85e2c8faffd4767fc2dcc52aeb3f3dab3dc7218bc96b29dacf53635d64"
+    },
+    ".claude/skills/gitnexus/gitnexus-exploring/SKILL.md": {
+      "role": "index",
+      "sha256": "21b18eee1f679efff654bf45f9dc32a495c81c014d210ac7e778c58a2a204dbd",
+      "size": 2978,
+      "normalized_sha256": "21b18eee1f679efff654bf45f9dc32a495c81c014d210ac7e778c58a2a204dbd"
+    },
+    ".claude/skills/gitnexus/gitnexus-guide/SKILL.md": {
+      "role": "index",
+      "sha256": "746d057790de5b034d19d603dfa77eb9b596407918025481b4b29214efee2581",
+      "size": 10265,
+      "normalized_sha256": "746d057790de5b034d19d603dfa77eb9b596407918025481b4b29214efee2581"
+    },
+    ".claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md": {
+      "role": "index",
+      "sha256": "09e529505da155532059a3656557811f99bafff0f05c8f9e6e47bb96edc340d3",
+      "size": 2848,
+      "normalized_sha256": "09e529505da155532059a3656557811f99bafff0f05c8f9e6e47bb96edc340d3"
+    },
+    ".claude/skills/gitnexus/gitnexus-refactoring/SKILL.md": {
+      "role": "index",
+      "sha256": "544841cf90c9ebe92a2f3018b034593c2bfd8617f968412d3599a22725e3c73e",
+      "size": 3912,
+      "normalized_sha256": "544841cf90c9ebe92a2f3018b034593c2bfd8617f968412d3599a22725e3c73e"
+    },
+    ".gitattributes": {
+      "role": "index",
+      "sha256": "21fa16a2122e2b0360b47502c577428b645437e08e9e87ffba661f84853cb476",
+      "size": 291,
+      "normalized_sha256": "21fa16a2122e2b0360b47502c577428b645437e08e9e87ffba661f84853cb476"
+    },
+    ".githooks/commit-msg": {
+      "role": "index",
+      "sha256": "85c5a2eb3003e4130cceb8c011930a9a8eaf4cd814fe0442a2bbad2c0462bd74",
+      "size": 126,
+      "normalized_sha256": "85c5a2eb3003e4130cceb8c011930a9a8eaf4cd814fe0442a2bbad2c0462bd74"
+    },
+    ".gitignore": {
+      "sha256": "9ae1a6ae15da01ed3e5a46ca671a3fb7b6c1e33763bcfb376c95d5a294e41ad9",
+      "size": 1430,
+      "normalized_sha256": "9ae1a6ae15da01ed3e5a46ca671a3fb7b6c1e33763bcfb376c95d5a294e41ad9"
+    },
+    ".java-version": {
+      "role": "index",
+      "sha256": "9a9f96e5ca2d4e448dde8945ae82a0b9b2d1fe5377fe3d52c5c2c23458529679",
+      "size": 5,
+      "normalized_sha256": "9a9f96e5ca2d4e448dde8945ae82a0b9b2d1fe5377fe3d52c5c2c23458529679"
+    },
+    "AGENTS.md": {
+      "role": "index",
+      "sha256": "00f0ccf33b13ccb658b3622c26169f9a67c80b4be0d789c236abb86890fe025b",
+      "size": 18620,
+      "normalized_sha256": "00f0ccf33b13ccb658b3622c26169f9a67c80b4be0d789c236abb86890fe025b"
+    },
+    "CLAUDE.md": {
+      "role": "index",
+      "sha256": "36e72a29e0250c7e530eb06be47731ad435678767f95a5f0cc5d370011ed8efc",
+      "size": 2883,
+      "normalized_sha256": "36e72a29e0250c7e530eb06be47731ad435678767f95a5f0cc5d370011ed8efc"
+    },
+    "DESIGN-HANDOFF.md": {
+      "role": "index",
+      "sha256": "9d9981bcf583b1ab50bb9b48f9829d14b705d6175a64b963b2c21223f5a7d533",
+      "size": 6329,
+      "normalized_sha256": "9d9981bcf583b1ab50bb9b48f9829d14b705d6175a64b963b2c21223f5a7d533"
+    },
+    "FIXED_ASSET_SYSTEM_DESIGN.md": {
+      "role": "index",
+      "sha256": "308d05e36809846d4d98c3db48dbf9de66c5938371ebc4e0c5a7a8833c21abc9",
+      "size": 23379,
+      "normalized_sha256": "308d05e36809846d4d98c3db48dbf9de66c5938371ebc4e0c5a7a8833c21abc9"
+    },
+    "aoci.code.txt": {
+      "sha256": "c904762f2a06bcadf3266c94a21d3f1613d1ca1cd5a6b6660c743f4a4e2b80d4",
+      "size": 126122,
+      "normalized_sha256": "c904762f2a06bcadf3266c94a21d3f1613d1ca1cd5a6b6660c743f4a4e2b80d4"
+    },
+    "aoci.meta.txt": {
+      "role": "index",
+      "sha256": "60ffea0527ae0e1e2b5bf822c119cd3141118cdd33479dec063ee5f9c2114126",
+      "size": 1900,
+      "normalized_sha256": "60ffea0527ae0e1e2b5bf822c119cd3141118cdd33479dec063ee5f9c2114126"
+    },
+    "aoci.txt": {
+      "role": "index",
+      "sha256": "10baaf54cb0a6c8f93c698c9b99f3d6d8f14cf24b58df14900cf5fa98ab64fdb",
+      "size": 293,
+      "normalized_sha256": "10baaf54cb0a6c8f93c698c9b99f3d6d8f14cf24b58df14900cf5fa98ab64fdb"
+    },
+    "docs/development/D6-01A-task-card.md": {
+      "role": "index",
+      "sha256": "d07ef5e8fd0a9e56e4a2829c38166cc2d9ff7fa98b63646242568054b296d568",
+      "size": 4350,
+      "normalized_sha256": "d07ef5e8fd0a9e56e4a2829c38166cc2d9ff7fa98b63646242568054b296d568"
+    },
+    "docs/development/file-classification-manifest.md": {
+      "role": "index",
+      "sha256": "010a2f1ed6959096b8d5578a0a886fd7e58838161aa7f50e3a6917a46e5ab450",
+      "size": 5485,
+      "normalized_sha256": "010a2f1ed6959096b8d5578a0a886fd7e58838161aa7f50e3a6917a46e5ab450"
+    },
+    "docs/development/traceability-matrix.csv": {
+      "role": "index",
+      "sha256": "4bed518010f45ba5e7d85a995b1be566d61016a392484347b3ee32f4760f642d",
+      "size": 11180,
+      "normalized_sha256": "4bed518010f45ba5e7d85a995b1be566d61016a392484347b3ee32f4760f642d"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/DEVELOPMENT.md": {
+      "role": "index",
+      "sha256": "5d6416369e74f53116d5955b84a0609f65c27888b81a4316bd1b1429f2ebcd36",
+      "size": 5374,
+      "normalized_sha256": "5d6416369e74f53116d5955b84a0609f65c27888b81a4316bd1b1429f2ebcd36"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/GOAL-AUDIT.md": {
+      "role": "index",
+      "sha256": "ed64d16bb3c119ec338b687f7673f644d422e841e37404514b48d5e50207e31a",
+      "size": 2424,
+      "normalized_sha256": "ed64d16bb3c119ec338b687f7673f644d422e841e37404514b48d5e50207e31a"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md": {
+      "role": "index",
+      "sha256": "383e9a720783ad42fb345470fd2ec8c8f2bfa959ac6f149075faaa0ce9533c30",
+      "size": 15713,
+      "normalized_sha256": "383e9a720783ad42fb345470fd2ec8c8f2bfa959ac6f149075faaa0ce9533c30"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/LOCAL-DELIVERY-PLAN.md": {
+      "role": "index",
+      "sha256": "e23ffa91ee2b4601c4d442ed29c87d3442f07f59af61acd79be1842b099bcd32",
+      "size": 2067,
+      "normalized_sha256": "e23ffa91ee2b4601c4d442ed29c87d3442f07f59af61acd79be1842b099bcd32"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/MCP-RESUME.md": {
+      "role": "index",
+      "sha256": "465d57f41d91fed5f57b7045b15fea5c821666606bb468fbb9d1202bbe05444e",
+      "size": 3694,
+      "normalized_sha256": "465d57f41d91fed5f57b7045b15fea5c821666606bb468fbb9d1202bbe05444e"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/NATIVE-FIGMA-VERIFICATION.md": {
+      "role": "index",
+      "sha256": "dc6a789a3f9cffe2a134b9a42eadd38b5331f9cb99e5f6c1584ee38309e1fb31",
+      "size": 5664,
+      "normalized_sha256": "dc6a789a3f9cffe2a134b9a42eadd38b5331f9cb99e5f6c1584ee38309e1fb31"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/README.md": {
+      "role": "index",
+      "sha256": "e4d4620b4671ca5837712dbea107f514b8d2742ebf1d57033528a65b741f3a8a",
+      "size": 6532,
+      "normalized_sha256": "e4d4620b4671ca5837712dbea107f514b8d2742ebf1d57033528a65b741f3a8a"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/REVIEW-ADJUDICATION-D0.4.md": {
+      "role": "index",
+      "sha256": "da989e07e6f386fec8e5e90474d124c03dbc908b47c0e6a41a019f498f3c010a",
+      "size": 27688,
+      "normalized_sha256": "da989e07e6f386fec8e5e90474d124c03dbc908b47c0e6a41a019f498f3c010a"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/SPECIFICATION.md": {
+      "role": "index",
+      "sha256": "148fdddf33b58db42019c79620cf9920878644e32cc89e6e6b7cd503ea30efbf",
+      "size": 10294,
+      "normalized_sha256": "148fdddf33b58db42019c79620cf9920878644e32cc89e6e6b7cd503ea30efbf"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/VERIFICATION.md": {
+      "role": "index",
+      "sha256": "dce30e0b4ba281b8a7ac85d96449fc4dd1ed8bc8d6daa91e8c59bcfb1f2f4040",
+      "size": 6540,
+      "normalized_sha256": "dce30e0b4ba281b8a7ac85d96449fc4dd1ed8bc8d6daa91e8c59bcfb1f2f4040"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/archive/2026-09-07-before-local-GOAL-AUDIT.md": {
+      "role": "index",
+      "sha256": "d2c265ae9fe36863d2c2d949f234f9bfd196eaa79b7ccd1f9fe109c66b0dc8bd",
+      "size": 2676,
+      "normalized_sha256": "d2c265ae9fe36863d2c2d949f234f9bfd196eaa79b7ccd1f9fe109c66b0dc8bd"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/archive/2026-09-07-before-local-README.md": {
+      "role": "index",
+      "sha256": "866e3a34448fe80cc1de57ac54e05a2e251e7f73dd382649fc988bfd01887d32",
+      "size": 4056,
+      "normalized_sha256": "866e3a34448fe80cc1de57ac54e05a2e251e7f73dd382649fc988bfd01887d32"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/archive/2026-09-07-before-local-VERIFICATION.md": {
+      "role": "index",
+      "sha256": "df18baeb5764fd2db9756e1a501d4026d56c6cdadb10be60a3b3a54d193cff54",
+      "size": 4463,
+      "normalized_sha256": "df18baeb5764fd2db9756e1a501d4026d56c6cdadb10be60a3b3a54d193cff54"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/component-library.html": {
+      "role": "index",
+      "sha256": "3f342e7d470248b535492109cfed87d236e1755a478a36b40c35734684dc84ec",
+      "size": 2369,
+      "normalized_sha256": "3f342e7d470248b535492109cfed87d236e1755a478a36b40c35734684dc84ec"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/d04-responsive.css": {
+      "role": "index",
+      "sha256": "cbebb05f22e82cb12da376f585ed3d22d16dd9dd94a3e725466d78d7bcf817e2",
+      "size": 369,
+      "normalized_sha256": "cbebb05f22e82cb12da376f585ed3d22d16dd9dd94a3e725466d78d7bcf817e2"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/d04-scan-caption.css": {
+      "role": "index",
+      "sha256": "824874915955ef743c8724485636512f25c5bae1590f05777b7193ac8d9df767",
+      "size": 127,
+      "normalized_sha256": "824874915955ef743c8724485636512f25c5bae1590f05777b7193ac8d9df767"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/d04-states.css": {
+      "role": "index",
+      "sha256": "d1c8938db3b2c30f79fd8f0dd86d0221a4805837d97530e5c87d22c72f491a3e",
+      "size": 7335,
+      "normalized_sha256": "d1c8938db3b2c30f79fd8f0dd86d0221a4805837d97530e5c87d22c72f491a3e"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/d04-states.html": {
+      "role": "index",
+      "sha256": "3718efe2da27cc44347bd9404a510bc1dd99a98e18dd40416aedbce881996b32",
+      "size": 2557,
+      "normalized_sha256": "3718efe2da27cc44347bd9404a510bc1dd99a98e18dd40416aedbce881996b32"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/d04-states.js": {
+      "role": "index",
+      "sha256": "e553606632bda3dfd94b8cda4d5bae3897fd606e6ec0a63d2e18bb81d79b93e0",
+      "size": 13040,
+      "normalized_sha256": "e553606632bda3dfd94b8cda4d5bae3897fd606e6ec0a63d2e18bb81d79b93e0"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/d04-work/acceptance-boundary-2026-09-11.json": {
+      "role": "index",
+      "sha256": "00659aa32e88648841232a708d2dd525eb314b8dcea0f08fefdae416644b9029",
+      "size": 3075,
+      "normalized_sha256": "00659aa32e88648841232a708d2dd525eb314b8dcea0f08fefdae416644b9029"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/d04-work/browser-verification-2026-09-11.json": {
+      "role": "index",
+      "sha256": "79e1b1a157b8425e9cf9a8fc3f37898a511c8c2b6c542dd6b45b77668b2a7a35",
+      "size": 2079,
+      "normalized_sha256": "79e1b1a157b8425e9cf9a8fc3f37898a511c8c2b6c542dd6b45b77668b2a7a35"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/d04-work/change-inventory.json": {
+      "role": "index",
+      "sha256": "50bba1f8a97258c9ae818afca3d36bd08432e3db605f40804cb1da3e1b560210",
+      "size": 4862,
+      "normalized_sha256": "50bba1f8a97258c9ae818afca3d36bd08432e3db605f40804cb1da3e1b560210"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/d04-work/handoff-verification.json": {
+      "role": "index",
+      "sha256": "961dff562b6d69873ff7f8145de2d5acf09e9d3f7ccad9d2f4f6672ac3b0a2dd",
+      "size": 485,
+      "normalized_sha256": "961dff562b6d69873ff7f8145de2d5acf09e9d3f7ccad9d2f4f6672ac3b0a2dd"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/d04-work/local-implementation-brief.md": {
+      "role": "index",
+      "sha256": "24a761bd1b147e8b2fcf5d800037685e0f2a582fb995fcdb38ec39496b5c37f6",
+      "size": 16608,
+      "normalized_sha256": "24a761bd1b147e8b2fcf5d800037685e0f2a582fb995fcdb38ec39496b5c37f6"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/d04-work/local-implementation-report.md": {
+      "role": "index",
+      "sha256": "545e6bceeb4d531c620a5782aedc7daa6375f31f9619525361fdf2c91addafa3",
+      "size": 8692,
+      "normalized_sha256": "545e6bceeb4d531c620a5782aedc7daa6375f31f9619525361fdf2c91addafa3"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/d04-work/p23-responsive-evidence.json": {
+      "role": "index",
+      "sha256": "a71a739e4152f14b48820a03f4f2d31b23bc276ad015f08bcfcc4f5dfac5978b",
+      "size": 838,
+      "normalized_sha256": "a71a739e4152f14b48820a03f4f2d31b23bc276ad015f08bcfcc4f5dfac5978b"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/d04-work/progress.md": {
+      "role": "index",
+      "sha256": "322ecde9fd14a5d0a833d2034819da6a4f1385c99a562129b082a984e243236b",
+      "size": 4029,
+      "normalized_sha256": "322ecde9fd14a5d0a833d2034819da6a4f1385c99a562129b082a984e243236b"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/d04-work/visual-comparison-evidence.json": {
+      "role": "index",
+      "sha256": "45ddefb6e594eea716328a91a4ef55920686a722c7d597f79167f2bfd09f62b1",
+      "size": 8598,
+      "normalized_sha256": "45ddefb6e594eea716328a91a4ef55920686a722c7d597f79167f2bfd09f62b1"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/enhancement/fams-ui-enhancement.html": {
+      "role": "index",
+      "sha256": "1dc146d2a4f2f30ae9a3fdc6446787bb1927d6d8b9dfedc27e014bce7f7487ef",
+      "size": 32769,
+      "normalized_sha256": "1dc146d2a4f2f30ae9a3fdc6446787bb1927d6d8b9dfedc27e014bce7f7487ef"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/enhancement/fams-ui-enhancement.md": {
+      "role": "index",
+      "sha256": "473aaa7fdcc57d41879f5221336e52981e96db9065d704e09b1c9ab136515d58",
+      "size": 6502,
+      "normalized_sha256": "473aaa7fdcc57d41879f5221336e52981e96db9065d704e09b1c9ab136515d58"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-local-mcp-state.json": {
+      "role": "index",
+      "sha256": "59b4792ce9a8f9b65f246b1260d43867a590b7856019069e84b16c3afe40900f",
+      "size": 1507,
+      "normalized_sha256": "59b4792ce9a8f9b65f246b1260d43867a590b7856019069e84b16c3afe40900f"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13642-0.svg": {
+      "role": "index",
+      "sha256": "b58ece1a4cd682a84dbaaeb325aa3df900c1b1f42cf7eff423ab161a327b21bc",
+      "size": 674,
+      "normalized_sha256": "b58ece1a4cd682a84dbaaeb325aa3df900c1b1f42cf7eff423ab161a327b21bc"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13647-0.svg": {
+      "role": "index",
+      "sha256": "3ebce9ce51c7aee404a8f588c3816d0549d3e8ddaacfd42c7b28e806d90226f8",
+      "size": 674,
+      "normalized_sha256": "3ebce9ce51c7aee404a8f588c3816d0549d3e8ddaacfd42c7b28e806d90226f8"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13652-0.svg": {
+      "role": "index",
+      "sha256": "dbde80e7d1fc7c7ee9345ed9c966cd7b74deca321124af8c64c0d5fc2e9e10fd",
+      "size": 650,
+      "normalized_sha256": "dbde80e7d1fc7c7ee9345ed9c966cd7b74deca321124af8c64c0d5fc2e9e10fd"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13656-0.svg": {
+      "role": "index",
+      "sha256": "cec84a5673e028d0641d4827bc0461f158ca66f90649511d336d8bfe8a253527",
+      "size": 650,
+      "normalized_sha256": "cec84a5673e028d0641d4827bc0461f158ca66f90649511d336d8bfe8a253527"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13660-0.svg": {
+      "role": "index",
+      "sha256": "9019674cb98224195e555d82135432705cf5995e6972c63a3ddc0ac5bd0ac5f0",
+      "size": 658,
+      "normalized_sha256": "9019674cb98224195e555d82135432705cf5995e6972c63a3ddc0ac5bd0ac5f0"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13664-0.svg": {
+      "role": "index",
+      "sha256": "2f2df0891de621b52b565038cceea7e947086751e5d2e5d1f0ae2b0965b7ee68",
+      "size": 658,
+      "normalized_sha256": "2f2df0891de621b52b565038cceea7e947086751e5d2e5d1f0ae2b0965b7ee68"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13668-0.svg": {
+      "role": "index",
+      "sha256": "f16acbf6b49b42860347c2f5f2543b777b505a9490ec03178467a70a4b61e3cc",
+      "size": 559,
+      "normalized_sha256": "f16acbf6b49b42860347c2f5f2543b777b505a9490ec03178467a70a4b61e3cc"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13672-0.svg": {
+      "role": "index",
+      "sha256": "59ce67fc018c6f928145d9ccee914ca9ecbb89f5af5b4bc3623e9a88e946a099",
+      "size": 559,
+      "normalized_sha256": "59ce67fc018c6f928145d9ccee914ca9ecbb89f5af5b4bc3623e9a88e946a099"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13676-0.svg": {
+      "role": "index",
+      "sha256": "9ad27e2b059e9e834ca3afef20ca51b181768897f160d1364e739510490fe5ed",
+      "size": 660,
+      "normalized_sha256": "9ad27e2b059e9e834ca3afef20ca51b181768897f160d1364e739510490fe5ed"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13680-0.svg": {
+      "role": "index",
+      "sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa",
+      "size": 641,
+      "normalized_sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13683-0.svg": {
+      "role": "index",
+      "sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4",
+      "size": 542,
+      "normalized_sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13686-0.svg": {
+      "role": "index",
+      "sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49",
+      "size": 634,
+      "normalized_sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13689-0.svg": {
+      "role": "index",
+      "sha256": "9ad27e2b059e9e834ca3afef20ca51b181768897f160d1364e739510490fe5ed",
+      "size": 660,
+      "normalized_sha256": "9ad27e2b059e9e834ca3afef20ca51b181768897f160d1364e739510490fe5ed"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13693-0.svg": {
+      "role": "index",
+      "sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa",
+      "size": 641,
+      "normalized_sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13696-0.svg": {
+      "role": "index",
+      "sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4",
+      "size": 542,
+      "normalized_sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13699-0.svg": {
+      "role": "index",
+      "sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49",
+      "size": 634,
+      "normalized_sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13702-0.svg": {
+      "role": "index",
+      "sha256": "4cb623d37c393a60e2dd66259876345fcc99b41c8c83400a4aa7f06ccdba952b",
+      "size": 660,
+      "normalized_sha256": "4cb623d37c393a60e2dd66259876345fcc99b41c8c83400a4aa7f06ccdba952b"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13706-0.svg": {
+      "role": "index",
+      "sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa",
+      "size": 641,
+      "normalized_sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13709-0.svg": {
+      "role": "index",
+      "sha256": "abb3e9a7647acde5a10c667e81bbad23e54e19dbb6fc8cb73e8e8e6c658c790f",
+      "size": 542,
+      "normalized_sha256": "abb3e9a7647acde5a10c667e81bbad23e54e19dbb6fc8cb73e8e8e6c658c790f"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13712-0.svg": {
+      "role": "index",
+      "sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49",
+      "size": 634,
+      "normalized_sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13715-0.svg": {
+      "role": "index",
+      "sha256": "9ad27e2b059e9e834ca3afef20ca51b181768897f160d1364e739510490fe5ed",
+      "size": 660,
+      "normalized_sha256": "9ad27e2b059e9e834ca3afef20ca51b181768897f160d1364e739510490fe5ed"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13719-0.svg": {
+      "role": "index",
+      "sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa",
+      "size": 641,
+      "normalized_sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13722-0.svg": {
+      "role": "index",
+      "sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4",
+      "size": 542,
+      "normalized_sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13725-0.svg": {
+      "role": "index",
+      "sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49",
+      "size": 634,
+      "normalized_sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13728-0.svg": {
+      "role": "index",
+      "sha256": "9ad27e2b059e9e834ca3afef20ca51b181768897f160d1364e739510490fe5ed",
+      "size": 660,
+      "normalized_sha256": "9ad27e2b059e9e834ca3afef20ca51b181768897f160d1364e739510490fe5ed"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13732-0.svg": {
+      "role": "index",
+      "sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa",
+      "size": 641,
+      "normalized_sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13735-0.svg": {
+      "role": "index",
+      "sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4",
+      "size": 542,
+      "normalized_sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13738-0.svg": {
+      "role": "index",
+      "sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49",
+      "size": 634,
+      "normalized_sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13741-0.svg": {
+      "role": "index",
+      "sha256": "9ad27e2b059e9e834ca3afef20ca51b181768897f160d1364e739510490fe5ed",
+      "size": 660,
+      "normalized_sha256": "9ad27e2b059e9e834ca3afef20ca51b181768897f160d1364e739510490fe5ed"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13745-0.svg": {
+      "role": "index",
+      "sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa",
+      "size": 641,
+      "normalized_sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13748-0.svg": {
+      "role": "index",
+      "sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4",
+      "size": 542,
+      "normalized_sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13751-0.svg": {
+      "role": "index",
+      "sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49",
+      "size": 634,
+      "normalized_sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13754-0.svg": {
+      "role": "index",
+      "sha256": "9ad27e2b059e9e834ca3afef20ca51b181768897f160d1364e739510490fe5ed",
+      "size": 660,
+      "normalized_sha256": "9ad27e2b059e9e834ca3afef20ca51b181768897f160d1364e739510490fe5ed"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13758-0.svg": {
+      "role": "index",
+      "sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa",
+      "size": 641,
+      "normalized_sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13761-0.svg": {
+      "role": "index",
+      "sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4",
+      "size": 542,
+      "normalized_sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13764-0.svg": {
+      "role": "index",
+      "sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49",
+      "size": 634,
+      "normalized_sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13767-0.svg": {
+      "role": "index",
+      "sha256": "4cb623d37c393a60e2dd66259876345fcc99b41c8c83400a4aa7f06ccdba952b",
+      "size": 660,
+      "normalized_sha256": "4cb623d37c393a60e2dd66259876345fcc99b41c8c83400a4aa7f06ccdba952b"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13771-0.svg": {
+      "role": "index",
+      "sha256": "24dd4de3a26231bdc42c9b5efa56244efa284f8959f2cfa498bbf2ef437a6cfc",
+      "size": 641,
+      "normalized_sha256": "24dd4de3a26231bdc42c9b5efa56244efa284f8959f2cfa498bbf2ef437a6cfc"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13774-0.svg": {
+      "role": "index",
+      "sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4",
+      "size": 542,
+      "normalized_sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13777-0.svg": {
+      "role": "index",
+      "sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49",
+      "size": 634,
+      "normalized_sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13780-0.svg": {
+      "role": "index",
+      "sha256": "9ad27e2b059e9e834ca3afef20ca51b181768897f160d1364e739510490fe5ed",
+      "size": 660,
+      "normalized_sha256": "9ad27e2b059e9e834ca3afef20ca51b181768897f160d1364e739510490fe5ed"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13784-0.svg": {
+      "role": "index",
+      "sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa",
+      "size": 641,
+      "normalized_sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13787-0.svg": {
+      "role": "index",
+      "sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4",
+      "size": 542,
+      "normalized_sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13790-0.svg": {
+      "role": "index",
+      "sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49",
+      "size": 634,
+      "normalized_sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13793-0.svg": {
+      "role": "index",
+      "sha256": "9ad27e2b059e9e834ca3afef20ca51b181768897f160d1364e739510490fe5ed",
+      "size": 660,
+      "normalized_sha256": "9ad27e2b059e9e834ca3afef20ca51b181768897f160d1364e739510490fe5ed"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13797-0.svg": {
+      "role": "index",
+      "sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa",
+      "size": 641,
+      "normalized_sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13800-0.svg": {
+      "role": "index",
+      "sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4",
+      "size": 542,
+      "normalized_sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13803-0.svg": {
+      "role": "index",
+      "sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49",
+      "size": 634,
+      "normalized_sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13806-0.svg": {
+      "role": "index",
+      "sha256": "9ad27e2b059e9e834ca3afef20ca51b181768897f160d1364e739510490fe5ed",
+      "size": 660,
+      "normalized_sha256": "9ad27e2b059e9e834ca3afef20ca51b181768897f160d1364e739510490fe5ed"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13810-0.svg": {
+      "role": "index",
+      "sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa",
+      "size": 641,
+      "normalized_sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13813-0.svg": {
+      "role": "index",
+      "sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4",
+      "size": 542,
+      "normalized_sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13816-0.svg": {
+      "role": "index",
+      "sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49",
+      "size": 634,
+      "normalized_sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13819-0.svg": {
+      "role": "index",
+      "sha256": "9ad27e2b059e9e834ca3afef20ca51b181768897f160d1364e739510490fe5ed",
+      "size": 660,
+      "normalized_sha256": "9ad27e2b059e9e834ca3afef20ca51b181768897f160d1364e739510490fe5ed"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13823-0.svg": {
+      "role": "index",
+      "sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa",
+      "size": 641,
+      "normalized_sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13826-0.svg": {
+      "role": "index",
+      "sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4",
+      "size": 542,
+      "normalized_sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13829-0.svg": {
+      "role": "index",
+      "sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49",
+      "size": 634,
+      "normalized_sha256": "10ddc1aa9b9699fc4dca5893655439c46906e0fe21293edd189b7b7ff946cc49"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13832-0.svg": {
+      "role": "index",
+      "sha256": "4cb623d37c393a60e2dd66259876345fcc99b41c8c83400a4aa7f06ccdba952b",
+      "size": 660,
+      "normalized_sha256": "4cb623d37c393a60e2dd66259876345fcc99b41c8c83400a4aa7f06ccdba952b"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13836-0.svg": {
+      "role": "index",
+      "sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa",
+      "size": 641,
+      "normalized_sha256": "22f3f4005ecd0ac19861bbdbc19fbc1630961c439259bdac23d5a6e82724b1fa"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13839-0.svg": {
+      "role": "index",
+      "sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4",
+      "size": 542,
+      "normalized_sha256": "764b3c6b370ceef17794af91af63662347ad71b8b8b843690d42c0c726b13ec4"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13842-0.svg": {
+      "role": "index",
+      "sha256": "c15ff4aca9f39628e30248b96d17b2a7601b87c059a56f54637300784da9587f",
+      "size": 634,
+      "normalized_sha256": "c15ff4aca9f39628e30248b96d17b2a7601b87c059a56f54637300784da9587f"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/after-core-components.json": {
+      "role": "index",
+      "sha256": "40d1eaf9081d3992423bccaaa0860c68f63404944a440f7e77fda9431bdb43a8",
+      "size": 7308,
+      "normalized_sha256": "40d1eaf9081d3992423bccaaa0860c68f63404944a440f7e77fda9431bdb43a8"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/before-core.json": {
+      "role": "index",
+      "sha256": "5301eb69d5519e99ac5cc67920053f47e9e40e8260e49d2020eace077858f9cb",
+      "size": 51387,
+      "normalized_sha256": "5301eb69d5519e99ac5cc67920053f47e9e40e8260e49d2020eace077858f9cb"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/component-map.json": {
+      "role": "index",
+      "sha256": "ff60b21d87e01ae7f5f966bc0bbdd24eb723ce3a5962665fd145ff6c993f4a4f",
+      "size": 3517,
+      "normalized_sha256": "ff60b21d87e01ae7f5f966bc0bbdd24eb723ce3a5962665fd145ff6c993f4a4f"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/components-page-info.json": {
+      "role": "index",
+      "sha256": "6864ec6c81677c0aebb5a5f4957399a8af5d9913cd73de6176b8ed16033eeb0f",
+      "size": 487256,
+      "normalized_sha256": "6864ec6c81677c0aebb5a5f4957399a8af5d9913cd73de6176b8ed16033eeb0f"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/composition-28-6430.json": {
+      "role": "index",
+      "sha256": "5c8f76a393e9052e2b4dbc77537ee0fa75997229ce0aa4043cb6e553e249c139",
+      "size": 11558,
+      "normalized_sha256": "5c8f76a393e9052e2b4dbc77537ee0fa75997229ce0aa4043cb6e553e249c139"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/composition-28-6449.json": {
+      "role": "index",
+      "sha256": "ddbd56337794eebf31bd275c2d59fedf60d7289314a270111732aa78b06b9081",
+      "size": 8277,
+      "normalized_sha256": "ddbd56337794eebf31bd275c2d59fedf60d7289314a270111732aa78b06b9081"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/composition-28-6464.json": {
+      "role": "index",
+      "sha256": "b42861f2b585664379779a0b5b806b704a87ec03b35cc05b2d89d56eb2de8601",
+      "size": 10296,
+      "normalized_sha256": "b42861f2b585664379779a0b5b806b704a87ec03b35cc05b2d89d56eb2de8601"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/composition-28-6481.json": {
+      "role": "index",
+      "sha256": "c791cb7d7bc26609246fbac75df9eb15aecb96c415af03afe530ac93b088cb06",
+      "size": 16851,
+      "normalized_sha256": "c791cb7d7bc26609246fbac75df9eb15aecb96c415af03afe530ac93b088cb06"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/composition-28-6507.json": {
+      "role": "index",
+      "sha256": "175f1d2918ce6f2408f8fc82c5c6e6aba66eab5a66b1a0a1f6ab04ba69212e8b",
+      "size": 3624,
+      "normalized_sha256": "175f1d2918ce6f2408f8fc82c5c6e6aba66eab5a66b1a0a1f6ab04ba69212e8b"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/composition-28-6514.json": {
+      "role": "index",
+      "sha256": "e1a8521f9ef611f58c6a5c100b17ec1877f13a72a1cc8a5b6f580a94e907cd12",
+      "size": 3682,
+      "normalized_sha256": "e1a8521f9ef611f58c6a5c100b17ec1877f13a72a1cc8a5b6f580a94e907cd12"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/composition-28-6521.json": {
+      "role": "index",
+      "sha256": "012ec58b8e2742bd08766209ec79bd8e928ffcfeabcf7c1503b500e859345b09",
+      "size": 21877,
+      "normalized_sha256": "012ec58b8e2742bd08766209ec79bd8e928ffcfeabcf7c1503b500e859345b09"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/composition-28-6555.json": {
+      "role": "index",
+      "sha256": "accdf56c40c3d9470b25a4e9f6bcdd9d193d66f4012c54c36acfef5ed0132d43",
+      "size": 5420,
+      "normalized_sha256": "accdf56c40c3d9470b25a4e9f6bcdd9d193d66f4012c54c36acfef5ed0132d43"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/composition-28-6566.json": {
+      "role": "index",
+      "sha256": "88c2ffd2f871b84182a101bae068adeb71c28b3190e1d90c289a249521755959",
+      "size": 6214,
+      "normalized_sha256": "88c2ffd2f871b84182a101bae068adeb71c28b3190e1d90c289a249521755959"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/composition-28-6577.json": {
+      "role": "index",
+      "sha256": "6ea0b512547211ebe487088bf0a699093103eb100cb4b2aabfa466577c22614b",
+      "size": 6458,
+      "normalized_sha256": "6ea0b512547211ebe487088bf0a699093103eb100cb4b2aabfa466577c22614b"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/composition-affordances.json": {
+      "role": "index",
+      "sha256": "1d4b0545c4ae7024e38541b0713ea4a8f94972d6af0dfe0209cc05c6091d9aaa",
+      "size": 70544,
+      "normalized_sha256": "1d4b0545c4ae7024e38541b0713ea4a8f94972d6af0dfe0209cc05c6091d9aaa"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/composition-layout.json": {
+      "role": "index",
+      "sha256": "14fc7f0f9d6f60cf4fc2b506687260d2e25f276cbf6bfce84413a0df3555a66d",
+      "size": 167170,
+      "normalized_sha256": "14fc7f0f9d6f60cf4fc2b506687260d2e25f276cbf6bfce84413a0df3555a66d"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/composition-map.json": {
+      "role": "index",
+      "sha256": "19de7f90575841c5649678a4741fc6c5b186ecbc8d8905c16a4efdaa7399bee3",
+      "size": 2698,
+      "normalized_sha256": "19de7f90575841c5649678a4741fc6c5b186ecbc8d8905c16a4efdaa7399bee3"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/composition-refinement.json": {
+      "role": "index",
+      "sha256": "5e19769f6a8a56ffcd3aebbde3042f63aad917b80c31e7b229640d2ab0bdc1cd",
+      "size": 34437,
+      "normalized_sha256": "5e19769f6a8a56ffcd3aebbde3042f63aad917b80c31e7b229640d2ab0bdc1cd"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/connection.json": {
+      "role": "index",
+      "sha256": "ee2eb5c0db24153334bc2247d333f333e854dede492a0157a86a4ba03d5da82c",
+      "size": 5527,
+      "normalized_sha256": "ee2eb5c0db24153334bc2247d333f333e854dede492a0157a86a4ba03d5da82c"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/container-refinement.json": {
+      "role": "index",
+      "sha256": "6e1f7fda91803865295dd76a424854e6da2f94c65b280de75c5aecea5f818d95",
+      "size": 114896,
+      "normalized_sha256": "6e1f7fda91803865295dd76a424854e6da2f94c65b280de75c5aecea5f818d95"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/core-components.json": {
+      "role": "index",
+      "sha256": "8d3e129f498f083566f6c6fd271e7db581005d1e7a8a7f22a39fbac37441cd20",
+      "size": 67869,
+      "normalized_sha256": "8d3e129f498f083566f6c6fd271e7db581005d1e7a8a7f22a39fbac37441cd20"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/core-verified-nodes.json": {
+      "role": "index",
+      "sha256": "254c5f9b1f0db40d02ecfd2c053f6a84864219baad5e3ac8a53de4d7735467cc",
+      "size": 105365,
+      "normalized_sha256": "254c5f9b1f0db40d02ecfd2c053f6a84864219baad5e3ac8a53de4d7735467cc"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-foundation-before.json": {
+      "role": "index",
+      "sha256": "aaaecb70cda0a1208c51c3ef77ef637dbfb94e94b3837325b1f029a0c9d0ae95",
+      "size": 39533,
+      "normalized_sha256": "aaaecb70cda0a1208c51c3ef77ef637dbfb94e94b3837325b1f029a0c9d0ae95"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-index.html": {
+      "role": "index",
+      "sha256": "290621aba2b625e2d873e19155608a844a8d3e5371a10d648badefd9d73bfdf4",
+      "size": 20115,
+      "normalized_sha256": "290621aba2b625e2d873e19155608a844a8d3e5371a10d648badefd9d73bfdf4"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-metric-tnum-verification.json": {
+      "role": "index",
+      "sha256": "c6f15dcfc9a271fd53547f99ae11ad60e02762e07002e1c0033245d6ce778832",
+      "size": 888,
+      "normalized_sha256": "c6f15dcfc9a271fd53547f99ae11ad60e02762e07002e1c0033245d6ce778832"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-native-direct-mcp-verification.json": {
+      "role": "index",
+      "sha256": "def213acb6e3ebcfea46fde2c186bd497ae6ba266201359af725e190ee4b5f78",
+      "size": 3073,
+      "normalized_sha256": "def213acb6e3ebcfea46fde2c186bd497ae6ba266201359af725e190ee4b5f78"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-native-direct-sync-evidence.json": {
+      "role": "index",
+      "sha256": "ea8af4e9a81aff29e481cc75b97fc1c42ab118dd54280c29b5a88979897bc9dc",
+      "size": 10105,
+      "normalized_sha256": "ea8af4e9a81aff29e481cc75b97fc1c42ab118dd54280c29b5a88979897bc9dc"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-native-ellipsis-frame-repair.json": {
+      "role": "index",
+      "sha256": "79421b9beb5000763bedc53739f0a179cbf0aac8b2f7f13ddd6d09a21dd2b551",
+      "size": 5343,
+      "normalized_sha256": "79421b9beb5000763bedc53739f0a179cbf0aac8b2f7f13ddd6d09a21dd2b551"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-native-ellipsis-repair.json": {
+      "role": "index",
+      "sha256": "b0f864bb0fe0f958a99e4eb265ec952e3ba1accf349d328de357a617a93bc20f",
+      "size": 3288,
+      "normalized_sha256": "b0f864bb0fe0f958a99e4eb265ec952e3ba1accf349d328de357a617a93bc20f"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-native-live-pre-ellipsis-frame-repair.json": {
+      "role": "index",
+      "sha256": "66ceb44fed2e5f96890804a5036d69e21970dd8c007de0dfc25cf549ffdddc42",
+      "size": 13779,
+      "normalized_sha256": "66ceb44fed2e5f96890804a5036d69e21970dd8c007de0dfc25cf549ffdddc42"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-native-live-pre-ellipsis-repair.json": {
+      "role": "index",
+      "sha256": "01c05cf98b5ef67926d7df66f357369614742def63f333b96eca1a7d365b8d0e",
+      "size": 10464,
+      "normalized_sha256": "01c05cf98b5ef67926d7df66f357369614742def63f333b96eca1a7d365b8d0e"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-native-live-verification.json": {
+      "role": "index",
+      "sha256": "b7e6b8d6f1695f06e786bbc8c37c070cab6cdf5905891419d5cea15517d62d8a",
+      "size": 22643,
+      "normalized_sha256": "b7e6b8d6f1695f06e786bbc8c37c070cab6cdf5905891419d5cea15517d62d8a"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-native-pre-sync-summary.json": {
+      "role": "index",
+      "sha256": "fd301f38b11fdfc7bed668afc2424730c1a77707bee8325c65308dfd72b4a41d",
+      "size": 1395,
+      "normalized_sha256": "fd301f38b11fdfc7bed668afc2424730c1a77707bee8325c65308dfd72b4a41d"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-native-svg-import.json": {
+      "role": "index",
+      "sha256": "6a0fd0ebe7127642cf03d9d23c401b48fbda596fc0d76389bbe8265ebaaa0e40",
+      "size": 4496,
+      "normalized_sha256": "6a0fd0ebe7127642cf03d9d23c401b48fbda596fc0d76389bbe8265ebaaa0e40"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-native-svg-nav-wiring.json": {
+      "role": "index",
+      "sha256": "0ff9f25beced7a294d1f6bc2eaa97811a7929932818955bbac0acd7ce5dfd87a",
+      "size": 72426,
+      "normalized_sha256": "0ff9f25beced7a294d1f6bc2eaa97811a7929932818955bbac0acd7ce5dfd87a"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-numeric-probe.json": {
+      "role": "index",
+      "sha256": "6e9c496203d906636e15b219b87ff8f3e3a91e2feb9ab55e320b96d4bf38a700",
+      "size": 6333,
+      "normalized_sha256": "6e9c496203d906636e15b219b87ff8f3e3a91e2feb9ab55e320b96d4bf38a700"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-numeric-widths.json": {
+      "role": "index",
+      "sha256": "50a057d757f65aea865a8e9d45fec469f99e156ba8af42479c4638970f6e56ba",
+      "size": 2407,
+      "normalized_sha256": "50a057d757f65aea865a8e9d45fec469f99e156ba8af42479c4638970f6e56ba"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-pre-body-sync-backup.json": {
+      "role": "index",
+      "sha256": "71bcdf2a425d51d0d952c7e68d12b5bb2dcbd25121d875197280c7c523231375",
+      "size": 14374,
+      "normalized_sha256": "71bcdf2a425d51d0d952c7e68d12b5bb2dcbd25121d875197280c7c523231375"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-M01.json": {
+      "role": "index",
+      "sha256": "1c9fac6936fd020df9c6ad62965076b675ba22ec269dcecdef274dfcea097891",
+      "size": 33181,
+      "normalized_sha256": "1c9fac6936fd020df9c6ad62965076b675ba22ec269dcecdef274dfcea097891"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-M02.json": {
+      "role": "index",
+      "sha256": "72d7fbf1c1a0ce82dc7cc2618e5678a9d428737534bdf5d34da1098700b42968",
+      "size": 69259,
+      "normalized_sha256": "72d7fbf1c1a0ce82dc7cc2618e5678a9d428737534bdf5d34da1098700b42968"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-M03.json": {
+      "role": "index",
+      "sha256": "b023bc39177a9fdae48206311d982bf5414f99b7182599c6ac81fddaa8090962",
+      "size": 57297,
+      "normalized_sha256": "b023bc39177a9fdae48206311d982bf5414f99b7182599c6ac81fddaa8090962"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-M04.json": {
+      "role": "index",
+      "sha256": "720be28f908105888802a8c144f302be429a88ec43373ec4ed8922637449975e",
+      "size": 99446,
+      "normalized_sha256": "720be28f908105888802a8c144f302be429a88ec43373ec4ed8922637449975e"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-M05.json": {
+      "role": "index",
+      "sha256": "a08f9d11dacefbdd0e103ac23137c6ee5b2902c5b3d815f40712b06677f1e532",
+      "size": 62211,
+      "normalized_sha256": "a08f9d11dacefbdd0e103ac23137c6ee5b2902c5b3d815f40712b06677f1e532"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-M06.json": {
+      "role": "index",
+      "sha256": "1c03192bdea3351a06ad16e00ca8e1c25316e02a79bc8b2045d5effcacf9e9cd",
+      "size": 57467,
+      "normalized_sha256": "1c03192bdea3351a06ad16e00ca8e1c25316e02a79bc8b2045d5effcacf9e9cd"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-M07.json": {
+      "role": "index",
+      "sha256": "2dd75c94dd8c917b8b0728faa0374babe90af87955df4abba37f1f7caf3d0b9d",
+      "size": 74949,
+      "normalized_sha256": "2dd75c94dd8c917b8b0728faa0374babe90af87955df4abba37f1f7caf3d0b9d"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-M08.json": {
+      "role": "index",
+      "sha256": "a4fcaa82bf46bb0fe0dfdbf35e9581c074db48f78ecf7437eaa309c55f394353",
+      "size": 62441,
+      "normalized_sha256": "a4fcaa82bf46bb0fe0dfdbf35e9581c074db48f78ecf7437eaa309c55f394353"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-M09.json": {
+      "role": "index",
+      "sha256": "b31e75569f61878301d457d9f1bdb626e882336f410685fe76290b6d3189b7be",
+      "size": 50823,
+      "normalized_sha256": "b31e75569f61878301d457d9f1bdb626e882336f410685fe76290b6d3189b7be"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-M10.json": {
+      "role": "index",
+      "sha256": "aa16e66a311a2b3c1cd0f1d1a991748da4c26c5d52b22dd1688001834d408fce",
+      "size": 66529,
+      "normalized_sha256": "aa16e66a311a2b3c1cd0f1d1a991748da4c26c5d52b22dd1688001834d408fce"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-M11.json": {
+      "role": "index",
+      "sha256": "11bc5ca5fb747d020dda424afbb0e80384731479ac95e0c18b3a8a1725315cfb",
+      "size": 63892,
+      "normalized_sha256": "11bc5ca5fb747d020dda424afbb0e80384731479ac95e0c18b3a8a1725315cfb"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-M12.json": {
+      "role": "index",
+      "sha256": "98ce987bec8ed0dd7bc90c95b05033a71c3ea130dc9b3de145e661c840e584f2",
+      "size": 57922,
+      "normalized_sha256": "98ce987bec8ed0dd7bc90c95b05033a71c3ea130dc9b3de145e661c840e584f2"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-M13.json": {
+      "role": "index",
+      "sha256": "42ba857c45340a11cf83b130f959091ce413e20310d750da6476f14fd966f531",
+      "size": 44241,
+      "normalized_sha256": "42ba857c45340a11cf83b130f959091ce413e20310d750da6476f14fd966f531"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-M14.json": {
+      "role": "index",
+      "sha256": "f03a4023b4efd695733c673be3f7fcc9402c4755b47dbb03c9973c177451111f",
+      "size": 52361,
+      "normalized_sha256": "f03a4023b4efd695733c673be3f7fcc9402c4755b47dbb03c9973c177451111f"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P01.json": {
+      "role": "index",
+      "sha256": "28bc072d490716cd1612d07e36a2841036c73a14deb0f1a43e2e7d541da214ca",
+      "size": 46456,
+      "normalized_sha256": "28bc072d490716cd1612d07e36a2841036c73a14deb0f1a43e2e7d541da214ca"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P02.json": {
+      "role": "index",
+      "sha256": "346c1a62b93c83320b1bbba5df4ff1ed1a460cc8feb558b876281b05f7ece81f",
+      "size": 157425,
+      "normalized_sha256": "346c1a62b93c83320b1bbba5df4ff1ed1a460cc8feb558b876281b05f7ece81f"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P03.json": {
+      "role": "index",
+      "sha256": "b23b25fdfc62f5552ab9c06f10bf2242934d9c842ff8d4da1c38a2f4b46168df",
+      "size": 165570,
+      "normalized_sha256": "b23b25fdfc62f5552ab9c06f10bf2242934d9c842ff8d4da1c38a2f4b46168df"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P04.json": {
+      "role": "index",
+      "sha256": "f4611fe638eabbe6c2272e3aabd7422d1fff055565fa994f72a30f653f099a0b",
+      "size": 109361,
+      "normalized_sha256": "f4611fe638eabbe6c2272e3aabd7422d1fff055565fa994f72a30f653f099a0b"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P05.json": {
+      "role": "index",
+      "sha256": "51ba01bde0c3713e9f9d2956692c2750b0d3d0170f1250e829e7f56ab057a7b1",
+      "size": 93281,
+      "normalized_sha256": "51ba01bde0c3713e9f9d2956692c2750b0d3d0170f1250e829e7f56ab057a7b1"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P06.json": {
+      "role": "index",
+      "sha256": "f426399774e51e2343fcf85fda8e18bef81432bb280b6a3ac3efffd5a7d2cf77",
+      "size": 162609,
+      "normalized_sha256": "f426399774e51e2343fcf85fda8e18bef81432bb280b6a3ac3efffd5a7d2cf77"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P07.json": {
+      "role": "index",
+      "sha256": "0d1b14a0b7c86d92c0dd1dfa4c8d30caf4fb53c5d69dd0d12e08b39c58265916",
+      "size": 131253,
+      "normalized_sha256": "0d1b14a0b7c86d92c0dd1dfa4c8d30caf4fb53c5d69dd0d12e08b39c58265916"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P08.json": {
+      "role": "index",
+      "sha256": "eabdf96706dd36cef7a1e055ea5355bbcd203dac39c1192fe6d6e7e4c793f49d",
+      "size": 71280,
+      "normalized_sha256": "eabdf96706dd36cef7a1e055ea5355bbcd203dac39c1192fe6d6e7e4c793f49d"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P09.json": {
+      "role": "index",
+      "sha256": "e7b232d3dfec78b6122d094f6dae378beb3e78018258cf97f1e06244716bfd95",
+      "size": 145830,
+      "normalized_sha256": "e7b232d3dfec78b6122d094f6dae378beb3e78018258cf97f1e06244716bfd95"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P10.json": {
+      "role": "index",
+      "sha256": "a8a7d46777cc3e69354806a1bd8d3fe887b4faf36fd25ae128f81ad3b2e23691",
+      "size": 93341,
+      "normalized_sha256": "a8a7d46777cc3e69354806a1bd8d3fe887b4faf36fd25ae128f81ad3b2e23691"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P11.json": {
+      "role": "index",
+      "sha256": "b230fad3249327b93c5c5be9dd8870fe2fa0e9dbdff4f6aecde5318460a5df4b",
+      "size": 159969,
+      "normalized_sha256": "b230fad3249327b93c5c5be9dd8870fe2fa0e9dbdff4f6aecde5318460a5df4b"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P12.json": {
+      "role": "index",
+      "sha256": "f86dc63958b212500b540deea4bfa046a8c2e7d95d039a3f2c053ac05fef3a05",
+      "size": 135574,
+      "normalized_sha256": "f86dc63958b212500b540deea4bfa046a8c2e7d95d039a3f2c053ac05fef3a05"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P13.json": {
+      "role": "index",
+      "sha256": "171c0e7789af2b963c77aa337f69061e097d8df64fb56079f2bce88edacabde3",
+      "size": 106053,
+      "normalized_sha256": "171c0e7789af2b963c77aa337f69061e097d8df64fb56079f2bce88edacabde3"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P14.json": {
+      "role": "index",
+      "sha256": "4d4402fdf5365950734d32635f35df72a96814d8bba8dc4a0e7e8de322113c24",
+      "size": 145915,
+      "normalized_sha256": "4d4402fdf5365950734d32635f35df72a96814d8bba8dc4a0e7e8de322113c24"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P15.json": {
+      "role": "index",
+      "sha256": "f55adbaea1fa040762d16d9f390eb9e96c608f7fc6fe32429607e2136bf504ca",
+      "size": 129124,
+      "normalized_sha256": "f55adbaea1fa040762d16d9f390eb9e96c608f7fc6fe32429607e2136bf504ca"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P16.json": {
+      "role": "index",
+      "sha256": "0719cfcea0336b6ac67c2b61faf2c0c0e49f1387fea5077299b5db49b37539c6",
+      "size": 145218,
+      "normalized_sha256": "0719cfcea0336b6ac67c2b61faf2c0c0e49f1387fea5077299b5db49b37539c6"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P17.json": {
+      "role": "index",
+      "sha256": "2332e63aefe4147c8c0156574654cae22be7cf10f30190077c3a9fb6903db322",
+      "size": 135585,
+      "normalized_sha256": "2332e63aefe4147c8c0156574654cae22be7cf10f30190077c3a9fb6903db322"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P18.json": {
+      "role": "index",
+      "sha256": "a5c4f4ffeef76403919caad4f4c543a1173bf0b275f28f6f6c43bd9479d9adad",
+      "size": 57748,
+      "normalized_sha256": "a5c4f4ffeef76403919caad4f4c543a1173bf0b275f28f6f6c43bd9479d9adad"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P19.json": {
+      "role": "index",
+      "sha256": "466574130ba762445dfb421c694a020c4d5d2e36da92d896a9bdcf7d72311dca",
+      "size": 85266,
+      "normalized_sha256": "466574130ba762445dfb421c694a020c4d5d2e36da92d896a9bdcf7d72311dca"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P20.json": {
+      "role": "index",
+      "sha256": "f370aef774bf255edfec94050a266bfccfa11776c6c1cbeb3c4a8e254dec7cf6",
+      "size": 109312,
+      "normalized_sha256": "f370aef774bf255edfec94050a266bfccfa11776c6c1cbeb3c4a8e254dec7cf6"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P21.json": {
+      "role": "index",
+      "sha256": "46f2267a7cec2c39a2bef77e57bd5044418f65d7dc1f8b9240ecb02c52975a34",
+      "size": 106301,
+      "normalized_sha256": "46f2267a7cec2c39a2bef77e57bd5044418f65d7dc1f8b9240ecb02c52975a34"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P22.json": {
+      "role": "index",
+      "sha256": "175fd8c5b013a7112999f7e5d72ce231ca10eb5139bbd0a849e0bcd480cfb716",
+      "size": 124170,
+      "normalized_sha256": "175fd8c5b013a7112999f7e5d72ce231ca10eb5139bbd0a849e0bcd480cfb716"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P23.json": {
+      "role": "index",
+      "sha256": "8b943b88616d79ae6b4410923ce1306c03f9ade3ba7b607bbd6ddc83e6843ec4",
+      "size": 173497,
+      "normalized_sha256": "8b943b88616d79ae6b4410923ce1306c03f9ade3ba7b607bbd6ddc83e6843ec4"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P24.json": {
+      "role": "index",
+      "sha256": "6d964c8b7bcaa09778a98364e2b0e75fcbddcc54191937fe1f04f16a392fc06a",
+      "size": 148205,
+      "normalized_sha256": "6d964c8b7bcaa09778a98364e2b0e75fcbddcc54191937fe1f04f16a392fc06a"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P25.json": {
+      "role": "index",
+      "sha256": "1205f89337e27c2df6ffa5eff1f1fddcbdf16c22739da515e618b86481185754",
+      "size": 130719,
+      "normalized_sha256": "1205f89337e27c2df6ffa5eff1f1fddcbdf16c22739da515e618b86481185754"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-screen-P26.json": {
+      "role": "index",
+      "sha256": "92bc8fc7d50a58f422f8d94e82d9d2fd70d76b4515536563a8588ab1e0922078",
+      "size": 103576,
+      "normalized_sha256": "92bc8fc7d50a58f422f8d94e82d9d2fd70d76b4515536563a8588ab1e0922078"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-seeds.json": {
+      "role": "index",
+      "sha256": "eb68ddfdc730ec659586eda0cb7d2ec3826c34b77abff89177da5c064b0c256a",
+      "size": 298,
+      "normalized_sha256": "eb68ddfdc730ec659586eda0cb7d2ec3826c34b77abff89177da5c064b0c256a"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/final-compositions/index.html": {
+      "role": "index",
+      "sha256": "8001c5861ce77f6c42e97d8554aeb7f267e93368371d3dd233a5781cdbb08914",
+      "size": 2682,
+      "normalized_sha256": "8001c5861ce77f6c42e97d8554aeb7f267e93368371d3dd233a5781cdbb08914"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/font-test.json": {
+      "role": "index",
+      "sha256": "d4d5a106894229a68e116053590fa7867857fc57cc858b90c49e34308dbfdc04",
+      "size": 183,
+      "normalized_sha256": "d4d5a106894229a68e116053590fa7867857fc57cc858b90c49e34308dbfdc04"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/gallery-verification.json": {
+      "role": "index",
+      "sha256": "9126b9196bada748610f1b6a617b4b8f8b77865bc25d41c8b069a5f0e687b83e",
+      "size": 590,
+      "normalized_sha256": "9126b9196bada748610f1b6a617b4b8f8b77865bc25d41c8b069a5f0e687b83e"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/index.html": {
+      "role": "index",
+      "sha256": "7f9503de967a69a41feb9dafade8abeb3caf7575ccc15cfbfd6971d4794b61b5",
+      "size": 18749,
+      "normalized_sha256": "7f9503de967a69a41feb9dafade8abeb3caf7575ccc15cfbfd6971d4794b61b5"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/live-verification.json": {
+      "role": "index",
+      "sha256": "34ee45f17965368fa757ec98484a1da845b5dfe45ab6a17be00c7f7804ebfd0a",
+      "size": 218,
+      "normalized_sha256": "34ee45f17965368fa757ec98484a1da845b5dfe45ab6a17be00c7f7804ebfd0a"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/native-audit.json": {
+      "role": "index",
+      "sha256": "2801df60c27d866ce09c3e57e50f983c806638663f399fa670d976f891acbac6",
+      "size": 11081,
+      "normalized_sha256": "2801df60c27d866ce09c3e57e50f983c806638663f399fa670d976f891acbac6"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/native-components-page.json": {
+      "role": "index",
+      "sha256": "25b94b65683a5f3de4686ee0ded32041547602609c39f60589eb79dd77fb9fad",
+      "size": 608596,
+      "normalized_sha256": "25b94b65683a5f3de4686ee0ded32041547602609c39f60589eb79dd77fb9fad"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/native-components-verified.json": {
+      "role": "index",
+      "sha256": "aabf1e85bd8b3b2f29b7828afe8ecad85ace018d5f5e4cf8f1737d63fa9d0f2b",
+      "size": 11575,
+      "normalized_sha256": "aabf1e85bd8b3b2f29b7828afe8ecad85ace018d5f5e4cf8f1737d63fa9d0f2b"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/native-sets-verified.json": {
+      "role": "index",
+      "sha256": "b8785a58cdbc043b90125d30118791b85836393390982236a5627e4c51a9ea9c",
+      "size": 448318,
+      "normalized_sha256": "b8785a58cdbc043b90125d30118791b85836393390982236a5627e4c51a9ea9c"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-M01.json": {
+      "role": "index",
+      "sha256": "1c9fac6936fd020df9c6ad62965076b675ba22ec269dcecdef274dfcea097891",
+      "size": 33181,
+      "normalized_sha256": "1c9fac6936fd020df9c6ad62965076b675ba22ec269dcecdef274dfcea097891"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-M02.json": {
+      "role": "index",
+      "sha256": "72d7fbf1c1a0ce82dc7cc2618e5678a9d428737534bdf5d34da1098700b42968",
+      "size": 69259,
+      "normalized_sha256": "72d7fbf1c1a0ce82dc7cc2618e5678a9d428737534bdf5d34da1098700b42968"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-M03.json": {
+      "role": "index",
+      "sha256": "b023bc39177a9fdae48206311d982bf5414f99b7182599c6ac81fddaa8090962",
+      "size": 57297,
+      "normalized_sha256": "b023bc39177a9fdae48206311d982bf5414f99b7182599c6ac81fddaa8090962"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-M04.json": {
+      "role": "index",
+      "sha256": "720be28f908105888802a8c144f302be429a88ec43373ec4ed8922637449975e",
+      "size": 99446,
+      "normalized_sha256": "720be28f908105888802a8c144f302be429a88ec43373ec4ed8922637449975e"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-M05.json": {
+      "role": "index",
+      "sha256": "a08f9d11dacefbdd0e103ac23137c6ee5b2902c5b3d815f40712b06677f1e532",
+      "size": 62211,
+      "normalized_sha256": "a08f9d11dacefbdd0e103ac23137c6ee5b2902c5b3d815f40712b06677f1e532"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-M06.json": {
+      "role": "index",
+      "sha256": "1c03192bdea3351a06ad16e00ca8e1c25316e02a79bc8b2045d5effcacf9e9cd",
+      "size": 57467,
+      "normalized_sha256": "1c03192bdea3351a06ad16e00ca8e1c25316e02a79bc8b2045d5effcacf9e9cd"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-M07.json": {
+      "role": "index",
+      "sha256": "2dd75c94dd8c917b8b0728faa0374babe90af87955df4abba37f1f7caf3d0b9d",
+      "size": 74949,
+      "normalized_sha256": "2dd75c94dd8c917b8b0728faa0374babe90af87955df4abba37f1f7caf3d0b9d"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-M08.json": {
+      "role": "index",
+      "sha256": "a4fcaa82bf46bb0fe0dfdbf35e9581c074db48f78ecf7437eaa309c55f394353",
+      "size": 62441,
+      "normalized_sha256": "a4fcaa82bf46bb0fe0dfdbf35e9581c074db48f78ecf7437eaa309c55f394353"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-M09.json": {
+      "role": "index",
+      "sha256": "b31e75569f61878301d457d9f1bdb626e882336f410685fe76290b6d3189b7be",
+      "size": 50823,
+      "normalized_sha256": "b31e75569f61878301d457d9f1bdb626e882336f410685fe76290b6d3189b7be"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-M10.json": {
+      "role": "index",
+      "sha256": "aa16e66a311a2b3c1cd0f1d1a991748da4c26c5d52b22dd1688001834d408fce",
+      "size": 66529,
+      "normalized_sha256": "aa16e66a311a2b3c1cd0f1d1a991748da4c26c5d52b22dd1688001834d408fce"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-M11.json": {
+      "role": "index",
+      "sha256": "11bc5ca5fb747d020dda424afbb0e80384731479ac95e0c18b3a8a1725315cfb",
+      "size": 63892,
+      "normalized_sha256": "11bc5ca5fb747d020dda424afbb0e80384731479ac95e0c18b3a8a1725315cfb"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-M12.json": {
+      "role": "index",
+      "sha256": "98ce987bec8ed0dd7bc90c95b05033a71c3ea130dc9b3de145e661c840e584f2",
+      "size": 57922,
+      "normalized_sha256": "98ce987bec8ed0dd7bc90c95b05033a71c3ea130dc9b3de145e661c840e584f2"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-M13.json": {
+      "role": "index",
+      "sha256": "42ba857c45340a11cf83b130f959091ce413e20310d750da6476f14fd966f531",
+      "size": 44241,
+      "normalized_sha256": "42ba857c45340a11cf83b130f959091ce413e20310d750da6476f14fd966f531"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-M14.json": {
+      "role": "index",
+      "sha256": "f03a4023b4efd695733c673be3f7fcc9402c4755b47dbb03c9973c177451111f",
+      "size": 52361,
+      "normalized_sha256": "f03a4023b4efd695733c673be3f7fcc9402c4755b47dbb03c9973c177451111f"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P01.json": {
+      "role": "index",
+      "sha256": "28bc072d490716cd1612d07e36a2841036c73a14deb0f1a43e2e7d541da214ca",
+      "size": 46456,
+      "normalized_sha256": "28bc072d490716cd1612d07e36a2841036c73a14deb0f1a43e2e7d541da214ca"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P02.json": {
+      "role": "index",
+      "sha256": "346c1a62b93c83320b1bbba5df4ff1ed1a460cc8feb558b876281b05f7ece81f",
+      "size": 157425,
+      "normalized_sha256": "346c1a62b93c83320b1bbba5df4ff1ed1a460cc8feb558b876281b05f7ece81f"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P03.json": {
+      "role": "index",
+      "sha256": "b23b25fdfc62f5552ab9c06f10bf2242934d9c842ff8d4da1c38a2f4b46168df",
+      "size": 165570,
+      "normalized_sha256": "b23b25fdfc62f5552ab9c06f10bf2242934d9c842ff8d4da1c38a2f4b46168df"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P04.json": {
+      "role": "index",
+      "sha256": "f4611fe638eabbe6c2272e3aabd7422d1fff055565fa994f72a30f653f099a0b",
+      "size": 109361,
+      "normalized_sha256": "f4611fe638eabbe6c2272e3aabd7422d1fff055565fa994f72a30f653f099a0b"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P05.json": {
+      "role": "index",
+      "sha256": "51ba01bde0c3713e9f9d2956692c2750b0d3d0170f1250e829e7f56ab057a7b1",
+      "size": 93281,
+      "normalized_sha256": "51ba01bde0c3713e9f9d2956692c2750b0d3d0170f1250e829e7f56ab057a7b1"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P06.json": {
+      "role": "index",
+      "sha256": "f426399774e51e2343fcf85fda8e18bef81432bb280b6a3ac3efffd5a7d2cf77",
+      "size": 162609,
+      "normalized_sha256": "f426399774e51e2343fcf85fda8e18bef81432bb280b6a3ac3efffd5a7d2cf77"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P07.json": {
+      "role": "index",
+      "sha256": "0d1b14a0b7c86d92c0dd1dfa4c8d30caf4fb53c5d69dd0d12e08b39c58265916",
+      "size": 131253,
+      "normalized_sha256": "0d1b14a0b7c86d92c0dd1dfa4c8d30caf4fb53c5d69dd0d12e08b39c58265916"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P08.json": {
+      "role": "index",
+      "sha256": "eabdf96706dd36cef7a1e055ea5355bbcd203dac39c1192fe6d6e7e4c793f49d",
+      "size": 71280,
+      "normalized_sha256": "eabdf96706dd36cef7a1e055ea5355bbcd203dac39c1192fe6d6e7e4c793f49d"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P09.json": {
+      "role": "index",
+      "sha256": "e7b232d3dfec78b6122d094f6dae378beb3e78018258cf97f1e06244716bfd95",
+      "size": 145830,
+      "normalized_sha256": "e7b232d3dfec78b6122d094f6dae378beb3e78018258cf97f1e06244716bfd95"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P10.json": {
+      "role": "index",
+      "sha256": "a8a7d46777cc3e69354806a1bd8d3fe887b4faf36fd25ae128f81ad3b2e23691",
+      "size": 93341,
+      "normalized_sha256": "a8a7d46777cc3e69354806a1bd8d3fe887b4faf36fd25ae128f81ad3b2e23691"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P11.json": {
+      "role": "index",
+      "sha256": "b230fad3249327b93c5c5be9dd8870fe2fa0e9dbdff4f6aecde5318460a5df4b",
+      "size": 159969,
+      "normalized_sha256": "b230fad3249327b93c5c5be9dd8870fe2fa0e9dbdff4f6aecde5318460a5df4b"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P12.json": {
+      "role": "index",
+      "sha256": "f86dc63958b212500b540deea4bfa046a8c2e7d95d039a3f2c053ac05fef3a05",
+      "size": 135574,
+      "normalized_sha256": "f86dc63958b212500b540deea4bfa046a8c2e7d95d039a3f2c053ac05fef3a05"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P13.json": {
+      "role": "index",
+      "sha256": "171c0e7789af2b963c77aa337f69061e097d8df64fb56079f2bce88edacabde3",
+      "size": 106053,
+      "normalized_sha256": "171c0e7789af2b963c77aa337f69061e097d8df64fb56079f2bce88edacabde3"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P14.json": {
+      "role": "index",
+      "sha256": "4d4402fdf5365950734d32635f35df72a96814d8bba8dc4a0e7e8de322113c24",
+      "size": 145915,
+      "normalized_sha256": "4d4402fdf5365950734d32635f35df72a96814d8bba8dc4a0e7e8de322113c24"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P15.json": {
+      "role": "index",
+      "sha256": "f55adbaea1fa040762d16d9f390eb9e96c608f7fc6fe32429607e2136bf504ca",
+      "size": 129124,
+      "normalized_sha256": "f55adbaea1fa040762d16d9f390eb9e96c608f7fc6fe32429607e2136bf504ca"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P16.json": {
+      "role": "index",
+      "sha256": "0719cfcea0336b6ac67c2b61faf2c0c0e49f1387fea5077299b5db49b37539c6",
+      "size": 145218,
+      "normalized_sha256": "0719cfcea0336b6ac67c2b61faf2c0c0e49f1387fea5077299b5db49b37539c6"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P17.json": {
+      "role": "index",
+      "sha256": "2332e63aefe4147c8c0156574654cae22be7cf10f30190077c3a9fb6903db322",
+      "size": 135585,
+      "normalized_sha256": "2332e63aefe4147c8c0156574654cae22be7cf10f30190077c3a9fb6903db322"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P18.json": {
+      "role": "index",
+      "sha256": "a5c4f4ffeef76403919caad4f4c543a1173bf0b275f28f6f6c43bd9479d9adad",
+      "size": 57748,
+      "normalized_sha256": "a5c4f4ffeef76403919caad4f4c543a1173bf0b275f28f6f6c43bd9479d9adad"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P19.json": {
+      "role": "index",
+      "sha256": "466574130ba762445dfb421c694a020c4d5d2e36da92d896a9bdcf7d72311dca",
+      "size": 85266,
+      "normalized_sha256": "466574130ba762445dfb421c694a020c4d5d2e36da92d896a9bdcf7d72311dca"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P20.json": {
+      "role": "index",
+      "sha256": "f370aef774bf255edfec94050a266bfccfa11776c6c1cbeb3c4a8e254dec7cf6",
+      "size": 109312,
+      "normalized_sha256": "f370aef774bf255edfec94050a266bfccfa11776c6c1cbeb3c4a8e254dec7cf6"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P21.json": {
+      "role": "index",
+      "sha256": "46f2267a7cec2c39a2bef77e57bd5044418f65d7dc1f8b9240ecb02c52975a34",
+      "size": 106301,
+      "normalized_sha256": "46f2267a7cec2c39a2bef77e57bd5044418f65d7dc1f8b9240ecb02c52975a34"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P22.json": {
+      "role": "index",
+      "sha256": "175fd8c5b013a7112999f7e5d72ce231ca10eb5139bbd0a849e0bcd480cfb716",
+      "size": 124170,
+      "normalized_sha256": "175fd8c5b013a7112999f7e5d72ce231ca10eb5139bbd0a849e0bcd480cfb716"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P23.json": {
+      "role": "index",
+      "sha256": "8b943b88616d79ae6b4410923ce1306c03f9ade3ba7b607bbd6ddc83e6843ec4",
+      "size": 173497,
+      "normalized_sha256": "8b943b88616d79ae6b4410923ce1306c03f9ade3ba7b607bbd6ddc83e6843ec4"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P24.json": {
+      "role": "index",
+      "sha256": "6d964c8b7bcaa09778a98364e2b0e75fcbddcc54191937fe1f04f16a392fc06a",
+      "size": 148205,
+      "normalized_sha256": "6d964c8b7bcaa09778a98364e2b0e75fcbddcc54191937fe1f04f16a392fc06a"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P25.json": {
+      "role": "index",
+      "sha256": "1205f89337e27c2df6ffa5eff1f1fddcbdf16c22739da515e618b86481185754",
+      "size": 130719,
+      "normalized_sha256": "1205f89337e27c2df6ffa5eff1f1fddcbdf16c22739da515e618b86481185754"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screen-P26.json": {
+      "role": "index",
+      "sha256": "92bc8fc7d50a58f422f8d94e82d9d2fd70d76b4515536563a8588ab1e0922078",
+      "size": 103576,
+      "normalized_sha256": "92bc8fc7d50a58f422f8d94e82d9d2fd70d76b4515536563a8588ab1e0922078"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/screens-map.json": {
+      "role": "index",
+      "sha256": "303a1f692fb2d6796a974c0ba605bafb302a75d3cf7637ee9590e57eb1db76ce",
+      "size": 12814,
+      "normalized_sha256": "303a1f692fb2d6796a974c0ba605bafb302a75d3cf7637ee9590e57eb1db76ce"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/svg-icons/home-active.svg": {
+      "role": "index",
+      "sha256": "444ca2092f5fb9569c25c7e64e6f186dc6d78ecf16912ad9e61be31b75956cec",
+      "size": 314,
+      "normalized_sha256": "444ca2092f5fb9569c25c7e64e6f186dc6d78ecf16912ad9e61be31b75956cec"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/svg-icons/home-neutral.svg": {
+      "role": "index",
+      "sha256": "f5010159ebd816cd4b8aa25e1bbe3f91af52c8592f075529c18931a9f02bd1a1",
+      "size": 314,
+      "normalized_sha256": "f5010159ebd816cd4b8aa25e1bbe3f91af52c8592f075529c18931a9f02bd1a1"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/svg-icons/message-active.svg": {
+      "role": "index",
+      "sha256": "855c2774e99b64f7ad3515b1822da17407be29e87166cae0856cc1f3f5e5669b",
+      "size": 326,
+      "normalized_sha256": "855c2774e99b64f7ad3515b1822da17407be29e87166cae0856cc1f3f5e5669b"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/svg-icons/message-neutral.svg": {
+      "role": "index",
+      "sha256": "9f18e13efd497e76a900e2fcf2130cb85d08bbfccc70d61f911b2608583a08c0",
+      "size": 326,
+      "normalized_sha256": "9f18e13efd497e76a900e2fcf2130cb85d08bbfccc70d61f911b2608583a08c0"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/svg-icons/mine-active.svg": {
+      "role": "index",
+      "sha256": "b7d21b84c0349da7f014d6134bd32cde8b2228abbd762ec372c76c71aa88cac7",
+      "size": 267,
+      "normalized_sha256": "b7d21b84c0349da7f014d6134bd32cde8b2228abbd762ec372c76c71aa88cac7"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/svg-icons/mine-neutral.svg": {
+      "role": "index",
+      "sha256": "25eb7a4d7daeb393d209c796c87e8c623b5f789597d28a0d05d4adf320472326",
+      "size": 267,
+      "normalized_sha256": "25eb7a4d7daeb393d209c796c87e8c623b5f789597d28a0d05d4adf320472326"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/svg-icons/scan-active.svg": {
+      "role": "index",
+      "sha256": "080ea5ec55ce59dd443d4b7c0677ca86500eba66d18fa4a86848c38531a63c44",
+      "size": 334,
+      "normalized_sha256": "080ea5ec55ce59dd443d4b7c0677ca86500eba66d18fa4a86848c38531a63c44"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/svg-icons/scan-neutral.svg": {
+      "role": "index",
+      "sha256": "5d2aefd5bab9230b4d0025f8f0b0acc44f338d994b025e4c60851b0fe5e5b7fb",
+      "size": 334,
+      "normalized_sha256": "5d2aefd5bab9230b4d0025f8f0b0acc44f338d994b025e4c60851b0fe5e5b7fb"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-reference/framelink-source.txt": {
+      "role": "index",
+      "sha256": "c0724b7c9ba9878ce8b6dbaec13cea6b17d814dcc7f43b49164a2d2a379ed4eb",
+      "size": 29505,
+      "normalized_sha256": "c0724b7c9ba9878ce8b6dbaec13cea6b17d814dcc7f43b49164a2d2a379ed4eb"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-reference/index.html": {
+      "role": "index",
+      "sha256": "db8853fe18bc6738f0a400de7352a9cde5a8f0984654ae5d5adfc02cf66aa3bf",
+      "size": 5118,
+      "normalized_sha256": "db8853fe18bc6738f0a400de7352a9cde5a8f0984654ae5d5adfc02cf66aa3bf"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-reference/source-map.json": {
+      "role": "index",
+      "sha256": "f0a78dadac8d3913abc65925cce3ee696190bf99fc5ea1af3231f3342f64ed67",
+      "size": 2439,
+      "normalized_sha256": "f0a78dadac8d3913abc65925cce3ee696190bf99fc5ea1af3231f3342f64ed67"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/figma-state.json": {
+      "role": "index",
+      "sha256": "3d1b2c3656a433865116f9eebce31db9672d733088b9061570dff61338f98705",
+      "size": 7529,
+      "normalized_sha256": "3d1b2c3656a433865116f9eebce31db9672d733088b9061570dff61338f98705"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/index.html": {
+      "role": "index",
+      "sha256": "5dad5e482888cc91d3a82ba5eaf5b358a6e6edbb9977700c6277784178b74fa7",
+      "size": 16697,
+      "normalized_sha256": "5dad5e482888cc91d3a82ba5eaf5b358a6e6edbb9977700c6277784178b74fa7"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/inventory.js": {
+      "role": "index",
+      "sha256": "a9cbc37d7b379bb61fac6fb97bb75b8eecbc7d57205a5d5f762374c98d74c1fe",
+      "size": 3025,
+      "normalized_sha256": "a9cbc37d7b379bb61fac6fb97bb75b8eecbc7d57205a5d5f762374c98d74c1fe"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/library/catalog.css": {
+      "role": "index",
+      "sha256": "37e247a8b6e19d97a9ca6a2207da66c01828ba4a79fb8b8777aca2a74914ccd6",
+      "size": 4774,
+      "normalized_sha256": "37e247a8b6e19d97a9ca6a2207da66c01828ba4a79fb8b8777aca2a74914ccd6"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/library/catalog.js": {
+      "role": "index",
+      "sha256": "08c4c8f26b0adbb145c6a4c1dbc1cefd7165396dd63854128e26dcf56dad617e",
+      "size": 9060,
+      "normalized_sha256": "08c4c8f26b0adbb145c6a4c1dbc1cefd7165396dd63854128e26dcf56dad617e"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/library/components.css": {
+      "role": "index",
+      "sha256": "85c52ff9e58be39dc925bfd3add0a3fc3cb44a29b03b1dac289a4431c711aa7d",
+      "size": 11662,
+      "normalized_sha256": "85c52ff9e58be39dc925bfd3add0a3fc3cb44a29b03b1dac289a4431c711aa7d"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/library/components.js": {
+      "role": "index",
+      "sha256": "30a2de5b86cd5dad33de05d3294d76d2a67b95be147d23a04be459cd30c3d36c",
+      "size": 10800,
+      "normalized_sha256": "30a2de5b86cd5dad33de05d3294d76d2a67b95be147d23a04be459cd30c3d36c"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/library/data.js": {
+      "role": "index",
+      "sha256": "966ec8d9095495e6bb1fc34aa4003031187551799dc9b235a7787592a746ba3b",
+      "size": 5701,
+      "normalized_sha256": "966ec8d9095495e6bb1fc34aa4003031187551799dc9b235a7787592a746ba3b"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/library/manifest.json": {
+      "role": "index",
+      "sha256": "7876edad44dd9724cb34cab35e4a24ee173b9ac0688cf6db685e1b5f52b36257",
+      "size": 5678,
+      "normalized_sha256": "7876edad44dd9724cb34cab35e4a24ee173b9ac0688cf6db685e1b5f52b36257"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/page-inventory.json": {
+      "role": "index",
+      "sha256": "49fea42b7e1a059a7a6c6fb8ec7150be7d9a6d6843d71de27ebe68830fe32394",
+      "size": 16585,
+      "normalized_sha256": "49fea42b7e1a059a7a6c6fb8ec7150be7d9a6d6843d71de27ebe68830fe32394"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/prototype.html": {
+      "role": "index",
+      "sha256": "d21f29100d76e58f8a1a18062992dceb4e06b0288f8e9a0b0435073393378015",
+      "size": 99677,
+      "normalized_sha256": "d21f29100d76e58f8a1a18062992dceb4e06b0288f8e9a0b0435073393378015"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/screens.html": {
+      "role": "index",
+      "sha256": "f8e4819be2923ca536b8d05ab209d3c44a3c12394b9cb9547ab4f41fbffdb8b2",
+      "size": 8963,
+      "normalized_sha256": "f8e4819be2923ca536b8d05ab209d3c44a3c12394b9cb9547ab4f41fbffdb8b2"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/audit-native-delivery.mjs": {
+      "role": "index",
+      "sha256": "63c7b3a3634cb1f3154c70d1e4b6b1d94d47a9fc3d1904c219ecbcec324bde47",
+      "size": 8766,
+      "normalized_sha256": "63c7b3a3634cb1f3154c70d1e4b6b1d94d47a9fc3d1904c219ecbcec324bde47"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/audit_static.py": {
+      "role": "index",
+      "sha256": "470a4c06bfba0341fb5e1e7e4e9f6726f859c2dbf484d43b929b255496abd90d",
+      "size": 2531,
+      "normalized_sha256": "470a4c06bfba0341fb5e1e7e4e9f6726f859c2dbf484d43b929b255496abd90d"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/build-d04-native-gallery.mjs": {
+      "role": "index",
+      "sha256": "ef8c4c9298d39fd7acac3142cfe83bcc51c53ce7a27fec1b3fa799f2f0f0cd1a",
+      "size": 4374,
+      "normalized_sha256": "ef8c4c9298d39fd7acac3142cfe83bcc51c53ce7a27fec1b3fa799f2f0f0cd1a"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/build_local.py": {
+      "role": "index",
+      "sha256": "dd61657752b7911025287779c88370565ebc011fccd0ffc892adaebd322eb13d",
+      "size": 6735,
+      "normalized_sha256": "dd61657752b7911025287779c88370565ebc011fccd0ffc892adaebd322eb13d"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/capture-d04-layout.mjs": {
+      "role": "index",
+      "sha256": "740a6535b1adcb840bc5f49aa29f4ce739d1e47c8e957b1533d5ca9ca7164e12",
+      "size": 1099,
+      "normalized_sha256": "740a6535b1adcb840bc5f49aa29f4ce739d1e47c8e957b1533d5ca9ca7164e12"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/capture-d04-table-candidates.js": {
+      "role": "index",
+      "sha256": "33dc0058b9f75efb21d7bec168518a39b713e14195170c935c8f7056514bcdf7",
+      "size": 869,
+      "normalized_sha256": "33dc0058b9f75efb21d7bec168518a39b713e14195170c935c8f7056514bcdf7"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/capture-figma-layout.js": {
+      "role": "index",
+      "sha256": "3ffe326f65893dd8c00c988191224a445f3a63ad95a03e886407ca3792b602c2",
+      "size": 5185,
+      "normalized_sha256": "3ffe326f65893dd8c00c988191224a445f3a63ad95a03e886407ca3792b602c2"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/capture-native-compositions.js": {
+      "role": "index",
+      "sha256": "67077af38aea93b7e980659426711167f7f4acfaeb8c9ee68b310f081bbceef4",
+      "size": 5315,
+      "normalized_sha256": "67077af38aea93b7e980659426711167f7f4acfaeb8c9ee68b310f081bbceef4"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/complete-composition-affordances.mjs": {
+      "role": "index",
+      "sha256": "afd6ec5b6866a187ef4c484ce28a31fe9e842076cd63cc04640ed0cdf5e7a6da",
+      "size": 4861,
+      "normalized_sha256": "afd6ec5b6866a187ef4c484ce28a31fe9e842076cd63cc04640ed0cdf5e7a6da"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/complete-core-components.mjs": {
+      "role": "index",
+      "sha256": "8bdb98957a8f5b8b3e6e0e7943f45f043145608f9279f272661a9aeff5693d78",
+      "size": 3869,
+      "normalized_sha256": "8bdb98957a8f5b8b3e6e0e7943f45f043145608f9279f272661a9aeff5693d78"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/complete-native-library.mjs": {
+      "role": "index",
+      "sha256": "f3ccd80e57ac7145f504ff97613bcbb34625afbea0b34390ad1419fbe1920267",
+      "size": 3619,
+      "normalized_sha256": "f3ccd80e57ac7145f504ff97613bcbb34625afbea0b34390ad1419fbe1920267"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/complete-native-screens.mjs": {
+      "role": "index",
+      "sha256": "718f0adbd3b322ae21ebc6e16ef18c78e451972fcf458bd524b9fe40ae888c33",
+      "size": 1372,
+      "normalized_sha256": "718f0adbd3b322ae21ebc6e16ef18c78e451972fcf458bd524b9fe40ae888c33"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/createComponentWithVariants.js": {
+      "role": "index",
+      "sha256": "3a97251335e4bb5dd833acdd86c1a158d1e4ad2b6780587f1bc453d88aa53d31",
+      "size": 4679,
+      "normalized_sha256": "3a97251335e4bb5dd833acdd86c1a158d1e4ad2b6780587f1bc453d88aa53d31"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/createVariableCollection.js": {
+      "role": "index",
+      "sha256": "7fed413cd2d09acdb80e9a92e20a9afd581aeba4d4754d605862926df8b146d0",
+      "size": 1408,
+      "normalized_sha256": "7fed413cd2d09acdb80e9a92e20a9afd581aeba4d4754d605862926df8b146d0"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/final-native-exports.mjs": {
+      "role": "index",
+      "sha256": "c7475de25728ed371f67808ecebbc9befc4a9f0d11399aca43f50ad4cfcd21be",
+      "size": 1859,
+      "normalized_sha256": "c7475de25728ed371f67808ecebbc9befc4a9f0d11399aca43f50ad4cfcd21be"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/finish-native-delivery.mjs": {
+      "role": "index",
+      "sha256": "4c9d9fa8411a1110ec300a7bfacca54f6bba42b488a1c314e93a8ff3d974b4a9",
+      "size": 4319,
+      "normalized_sha256": "4c9d9fa8411a1110ec300a7bfacca54f6bba42b488a1c314e93a8ff3d974b4a9"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/helpers.js": {
+      "role": "index",
+      "sha256": "458a6f6df0d2fcfa79dfcfb1384ff990ce0446e78ab086bdefa8d0d3ab8c24e9",
+      "size": 3368,
+      "normalized_sha256": "458a6f6df0d2fcfa79dfcfb1384ff990ce0446e78ab086bdefa8d0d3ab8c24e9"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/import-d04-svg-icons.mjs": {
+      "role": "index",
+      "sha256": "6ea82b7a7d58272445e5abafc8e1031fab15f508113984730416990677d54409",
+      "size": 6146,
+      "normalized_sha256": "6ea82b7a7d58272445e5abafc8e1031fab15f508113984730416990677d54409"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/inspect-native.mjs": {
+      "role": "index",
+      "sha256": "5ffc814fe3bd16d9bda0392f801c3d5b7547b46ff1ad8a8ca1f14f648380a767",
+      "size": 862,
+      "normalized_sha256": "5ffc814fe3bd16d9bda0392f801c3d5b7547b46ff1ad8a8ca1f14f648380a767"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/local-figma-client.mjs": {
+      "role": "index",
+      "sha256": "403d5d7f632e8ed8f3174ae91684961894049e476ed42ac0eca91b8947cb8649",
+      "size": 3637,
+      "normalized_sha256": "403d5d7f632e8ed8f3174ae91684961894049e476ed42ac0eca91b8947cb8649"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/native-renderer.mjs": {
+      "role": "index",
+      "sha256": "501854c06e1d21c1b6f632bac3dcb4099545c3af08e44379f1ef4fe3d3270805",
+      "size": 5981,
+      "normalized_sha256": "501854c06e1d21c1b6f632bac3dcb4099545c3af08e44379f1ef4fe3d3270805"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/refine-native-compositions.mjs": {
+      "role": "index",
+      "sha256": "32df42d629df9a1eb264efa6cf05082886acf4d47892dfab1875043d96405a96",
+      "size": 1276,
+      "normalized_sha256": "32df42d629df9a1eb264efa6cf05082886acf4d47892dfab1875043d96405a96"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/refine-native-containers.mjs": {
+      "role": "index",
+      "sha256": "d7f9e81bfdda98f12de918468bec57d31310dfd690b7745294dee835c1e6c5ff",
+      "size": 2884,
+      "normalized_sha256": "d7f9e81bfdda98f12de918468bec57d31310dfd690b7745294dee835c1e6c5ff"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/repair-d04-mobile-header-ellipsis-frame.mjs": {
+      "role": "index",
+      "sha256": "f9430380d89a422b4aca207a4300d4fef3c904c017d1366c3c2c5322a7e06890",
+      "size": 3293,
+      "normalized_sha256": "f9430380d89a422b4aca207a4300d4fef3c904c017d1366c3c2c5322a7e06890"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/repair-d04-mobile-header-ellipsis.mjs": {
+      "role": "index",
+      "sha256": "31f755c8ac46a7041e0f668eda62eac04d0327086cfd9ed3ea2805b12b095787",
+      "size": 2748,
+      "normalized_sha256": "31f755c8ac46a7041e0f668eda62eac04d0327086cfd9ed3ea2805b12b095787"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/reset-native-pilot.mjs": {
+      "role": "index",
+      "sha256": "53bd1367091eec721d1441ceadfb045657592e28d6d8e21b0a1a5dd1c6a86d1e",
+      "size": 580,
+      "normalized_sha256": "53bd1367091eec721d1441ceadfb045657592e28d6d8e21b0a1a5dd1c6a86d1e"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/sync-d04-pages.mjs": {
+      "role": "index",
+      "sha256": "0bd54b9c4b5ca8074fb2829e2483cc0d846a90ea2225ad3f5a924c2eb1d0b478",
+      "size": 3092,
+      "normalized_sha256": "0bd54b9c4b5ca8074fb2829e2483cc0d846a90ea2225ad3f5a924c2eb1d0b478"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/verify-browser.js": {
+      "role": "index",
+      "sha256": "97bba78b4b7dc4f8bec31f72dfd901af1e6ee42c582c59ace90c5b72382c20e9",
+      "size": 1746,
+      "normalized_sha256": "97bba78b4b7dc4f8bec31f72dfd901af1e6ee42c582c59ace90c5b72382c20e9"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/verify-d04-domains.js": {
+      "role": "index",
+      "sha256": "6ad59085431622202702c45bb8d6f2050063b65546afcbccece4472a1809def9",
+      "size": 493,
+      "normalized_sha256": "6ad59085431622202702c45bb8d6f2050063b65546afcbccece4472a1809def9"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/verify-d04-native-live.mjs": {
+      "role": "index",
+      "sha256": "c583707ad1289844d2ee420404e364892e110cd1b294f04f05e3d283c6644320",
+      "size": 8795,
+      "normalized_sha256": "c583707ad1289844d2ee420404e364892e110cd1b294f04f05e3d283c6644320"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/verify-d04.js": {
+      "role": "index",
+      "sha256": "7f64eac78cbc9927d2866c4c4e5385d4da0f83d1f285c3438b054e91644a96af",
+      "size": 2445,
+      "normalized_sha256": "7f64eac78cbc9927d2866c4c4e5385d4da0f83d1f285c3438b054e91644a96af"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/verify-framelink.js": {
+      "role": "index",
+      "sha256": "8b32aa7e97e0136b7c876a889d3bf1d306b48525e5e4411657762c0500653f7a",
+      "size": 2091,
+      "normalized_sha256": "8b32aa7e97e0136b7c876a889d3bf1d306b48525e5e4411657762c0500653f7a"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/verify-local.js": {
+      "role": "index",
+      "sha256": "1f6f727c710f7783f38b23442c64f201f201b64591f0e70cca835f0bd97fcd34",
+      "size": 6830,
+      "normalized_sha256": "1f6f727c710f7783f38b23442c64f201f201b64591f0e70cca835f0bd97fcd34"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/verify-native-gallery.js": {
+      "role": "index",
+      "sha256": "2d3db2581bc190c8b61af306dd5c54bb0da8d21640f676c299c5ea2aeed37f7f",
+      "size": 1490,
+      "normalized_sha256": "2d3db2581bc190c8b61af306dd5c54bb0da8d21640f676c299c5ea2aeed37f7f"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/verify-native-live.mjs": {
+      "role": "index",
+      "sha256": "6597eec510b573c3971e9d4f3de5e881087b3631089c6ea6446df0fd38154633",
+      "size": 2071,
+      "normalized_sha256": "6597eec510b573c3971e9d4f3de5e881087b3631089c6ea6446df0fd38154633"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/verify-p23-responsive.js": {
+      "role": "index",
+      "sha256": "b908dcc805089e8dbec1aefa3bf201341b866ad6550ab4e3c171d69e0a614d4f",
+      "size": 1982,
+      "normalized_sha256": "b908dcc805089e8dbec1aefa3bf201341b866ad6550ab4e3c171d69e0a614d4f"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/scripts/wire-d04-svg-nav-icons.mjs": {
+      "role": "index",
+      "sha256": "7e3560a76fbef5b780ea926d5ce6820218e2f6286f1d9a161bfa3785c07e9b11",
+      "size": 9113,
+      "normalized_sha256": "7e3560a76fbef5b780ea926d5ce6820218e2f6286f1d9a161bfa3785c07e9b11"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/source-baseline.json": {
+      "role": "index",
+      "sha256": "0c3104f1623c763ec7f8d7d10bf78fd2c26e4e4aa93b165f69c312365e14628f",
+      "size": 261,
+      "normalized_sha256": "0c3104f1623c763ec7f8d7d10bf78fd2c26e4e4aa93b165f69c312365e14628f"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/styles.css": {
+      "role": "index",
+      "sha256": "abff7a282fddfc45a7541fe7f69bacea6f617eb0c2b19ac32a0471ecae271c65",
+      "size": 617,
+      "normalized_sha256": "abff7a282fddfc45a7541fe7f69bacea6f617eb0c2b19ac32a0471ecae271c65"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/styles.json": {
+      "role": "index",
+      "sha256": "df2e39ebf403e6155573bd9a990658653e78ad6dc2710e886c02d85c33334e84",
+      "size": 1423,
+      "normalized_sha256": "df2e39ebf403e6155573bd9a990658653e78ad6dc2710e886c02d85c33334e84"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/tokens.css": {
+      "role": "index",
+      "sha256": "a3ecdecb8aa515e57d21ff7ae62e753ae515a42590a5f520555534377e8ab3cb",
+      "size": 2093,
+      "normalized_sha256": "a3ecdecb8aa515e57d21ff7ae62e753ae515a42590a5f520555534377e8ab3cb"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/tokens.json": {
+      "role": "index",
+      "sha256": "9025339e5b5c815fe3cc3bb756a1d166687218febe76a71189f7b66298423d7a",
+      "size": 5310,
+      "normalized_sha256": "9025339e5b5c815fe3cc3bb756a1d166687218febe76a71189f7b66298423d7a"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/visual.css": {
+      "role": "index",
+      "sha256": "a372696f9dd4b95524046157e9dc2e66f60b6ed3f8957de6d7ed2529114da5a6",
+      "size": 19228,
+      "normalized_sha256": "a372696f9dd4b95524046157e9dc2e66f60b6ed3f8957de6d7ed2529114da5a6"
+    },
+    "docs/superpowers/designs/2026-09-06-fams-ui/visual.js": {
+      "role": "index",
+      "sha256": "fbab605dcf040fbfa4dcc5d92256cefc3b43524c819bdcef4017887c852aac78",
+      "size": 11041,
+      "normalized_sha256": "fbab605dcf040fbfa4dcc5d92256cefc3b43524c819bdcef4017887c852aac78"
+    },
+    "docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md": {
+      "role": "index",
+      "sha256": "061a41140eddf5308e6543390796843c2c73e06a926802168e49eace63758f2e",
+      "size": 64914,
+      "normalized_sha256": "061a41140eddf5308e6543390796843c2c73e06a926802168e49eace63758f2e"
+    },
+    "docs/superpowers/prototypes/2026-09-06-fixed-asset/README.md": {
+      "role": "index",
+      "sha256": "aa1e54815c1673582e5e5ff397422e1810a66d68fcbfcc6dcdc4cd524f090234",
+      "size": 3176,
+      "normalized_sha256": "aa1e54815c1673582e5e5ff397422e1810a66d68fcbfcc6dcdc4cd524f090234"
+    },
+    "docs/superpowers/prototypes/2026-09-06-fixed-asset/REVIEW-D0.1-ADJUDICATION.md": {
+      "role": "index",
+      "sha256": "5ec244a5e73b33805b9154b9005c66aca4156f13ed6394d564e951c82935ffa6",
+      "size": 8004,
+      "normalized_sha256": "5ec244a5e73b33805b9154b9005c66aca4156f13ed6394d564e951c82935ffa6"
+    },
+    "docs/superpowers/prototypes/2026-09-06-fixed-asset/REVIEW-D0.1.md": {
+      "role": "index",
+      "sha256": "1f5c2597522c05a4cfc612983dcea83b5e54a66dfb34c382832b1bcbbbb0dfda",
+      "size": 10369,
+      "normalized_sha256": "1f5c2597522c05a4cfc612983dcea83b5e54a66dfb34c382832b1bcbbbb0dfda"
+    },
+    "docs/superpowers/prototypes/2026-09-06-fixed-asset/REVIEW-D0.2-RERUN.md": {
+      "role": "index",
+      "sha256": "759c8a5521119423e1acdb611992649692b72f72b69ac7c1fc195d0df43d3736",
+      "size": 5745,
+      "normalized_sha256": "759c8a5521119423e1acdb611992649692b72f72b69ac7c1fc195d0df43d3736"
+    },
+    "docs/superpowers/prototypes/2026-09-06-fixed-asset/index.html": {
+      "role": "index",
+      "sha256": "61e88a51033fac847d0582492ef2c473785fd66047f640d31e4d47e748b41a11",
+      "size": 99517,
+      "normalized_sha256": "61e88a51033fac847d0582492ef2c473785fd66047f640d31e4d47e748b41a11"
+    },
+    "docs/superpowers/specs/2026-09-03-fixed-asset-product-design.md": {
+      "role": "index",
+      "sha256": "89de084d056a7b9ee1fc02cca2b6ced2ca1bb57f2e953beea4a4ef4fa55f562c",
+      "size": 167060,
+      "normalized_sha256": "89de084d056a7b9ee1fc02cca2b6ced2ca1bb57f2e953beea4a4ef4fa55f562c"
+    },
+    "docs/superpowers/specs/2026-09-05-external-prd-review-adjudication.md": {
+      "role": "index",
+      "sha256": "d70bb4c64afff9ebaec58d3ec55be182906b954799420a565d11b0424392ef74",
+      "size": 17855,
+      "normalized_sha256": "d70bb4c64afff9ebaec58d3ec55be182906b954799420a565d11b0424392ef74"
+    },
+    "docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md": {
+      "role": "index",
+      "sha256": "e1e65cc0ca9f7c0075d00378cd6043d2a491bb6a5874d50b2905751ceb60e00b",
+      "size": 41999,
+      "normalized_sha256": "e1e65cc0ca9f7c0075d00378cd6043d2a491bb6a5874d50b2905751ceb60e00b"
+    },
+    "docs/superpowers/specs/2026-09-06-r10-r13-review-adjudication.md": {
+      "role": "index",
+      "sha256": "a1a0af120e4baf3268dfb59120ca4d8872da90b93ea1e2527db13045fc632a1f",
+      "size": 5350,
+      "normalized_sha256": "a1a0af120e4baf3268dfb59120ca4d8872da90b93ea1e2527db13045fc632a1f"
+    },
+    "docs/superpowers/specs/2026-09-06-v1.3-rereview-adjudication.md": {
+      "role": "index",
+      "sha256": "33b09951d9f0ba906668dbd72c4ec300a9e62fd04a5116e441636c35c2cb2575",
+      "size": 13213,
+      "normalized_sha256": "33b09951d9f0ba906668dbd72c4ec300a9e62fd04a5116e441636c35c2cb2575"
+    },
+    "docs/superpowers/specs/2026-09-11-fams-feasibility-test-plan.md": {
+      "role": "index",
+      "sha256": "100cf73f28833a046f803bb069c40b9a2679f0e4aca477983f8b944fd2ca2d60",
+      "size": 628,
+      "normalized_sha256": "100cf73f28833a046f803bb069c40b9a2679f0e4aca477983f8b944fd2ca2d60"
+    },
+    "docs/superpowers/specs/2026-09-11-fams-feasibility-traceability.csv": {
+      "role": "index",
+      "sha256": "88f99bb7cf7997678dec7ee9bbe88c7deea9a41df121c2f706ede2ed6426e662",
+      "size": 233,
+      "normalized_sha256": "88f99bb7cf7997678dec7ee9bbe88c7deea9a41df121c2f706ede2ed6426e662"
+    },
+    "docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md": {
+      "role": "index",
+      "sha256": "e2bf4fd208439129316b413a1fbdc08d975e89cec1934f8a6ba82ff01b4989d4",
+      "size": 4783,
+      "normalized_sha256": "e2bf4fd208439129316b413a1fbdc08d975e89cec1934f8a6ba82ff01b4989d4"
+    },
+    "docs/superpowers/specs/2026-09-11-fams-usability-test-matrix.csv": {
+      "role": "index",
+      "sha256": "833731ddffca05cf297869e036bf4d29fab47a7668c1488a6335208fc4fd6a6d",
+      "size": 1459,
+      "normalized_sha256": "833731ddffca05cf297869e036bf4d29fab47a7668c1488a6335208fc4fd6a6d"
+    },
+    "scripts/verify-d6-01a.py": {
+      "role": "index",
+      "sha256": "ea0f6a73e2dd9f28691b83cf752223a012be8ef8f79f63b41a0d7ca4453b2d35",
+      "size": 9098,
+      "normalized_sha256": "ea0f6a73e2dd9f28691b83cf752223a012be8ef8f79f63b41a0d7ca4453b2d35"
+    },
+    "tools/git/commitlint.config.cjs": {
+      "role": "index",
+      "sha256": "290fae470bcc520ee65f13d2e8bf4b0b3336459bd720abdca1f870694df3931e",
+      "size": 772,
+      "normalized_sha256": "290fae470bcc520ee65f13d2e8bf4b0b3336459bd720abdca1f870694df3931e"
+    },
+    "tools/git/package-lock.json": {
+      "role": "index",
+      "sha256": "4fc6852b98377fd30f69f38d185ef67f874534babd221a2b4601a1c46a7d8125",
+      "size": 57295,
+      "normalized_sha256": "4fc6852b98377fd30f69f38d185ef67f874534babd221a2b4601a1c46a7d8125"
+    },
+    "tools/git/package.json": {
+      "role": "index",
+      "sha256": "b271b4b70475fcae00a9d3d7dfdc77ab5e2499d3813d945498ae5cbbade7a01b",
+      "size": 261,
+      "normalized_sha256": "b271b4b70475fcae00a9d3d7dfdc77ab5e2499d3813d945498ae5cbbade7a01b"
+    },
+    "tools/git/test_commit_message_validator.py": {
+      "role": "observe",
+      "sha256": "f5666e71765cefe31726ad8ae0f188a7af3eade2c7971813efce968b565d2bef",
+      "size": 4658,
+      "normalized_sha256": "f5666e71765cefe31726ad8ae0f188a7af3eade2c7971813efce968b565d2bef"
+    },
+    "tools/git/validate-commit-msg.py": {
+      "role": "index",
+      "sha256": "1ca58ff7ea42503dd78900eba9da9600243e596347294ec2165b702fd50ce284",
+      "size": 4075,
+      "normalized_sha256": "1ca58ff7ea42503dd78900eba9da9600243e596347294ec2165b702fd50ce284"
+    }
+  },
+  "managed_scope": {
+    "version": "managed-scope-baseline/v1",
+    "policy_identity": "d75871307f421ab6262276d0ceae9f210874ce433d023058e4fccd64c637a4d7",
+    "observe_change_policy": "review_required",
+    "budget_policy_identity": "15e9b37a6c57e9bf03c9df3d0d049eb5b9a7f5540f9d34960408114e2538a32d",
+    "budget_policy": {
+      "version": "cognition-budget-policy/v1",
+      "mode": "enforce",
+      "whole_index": {
+        "target_tokens": 200000,
+        "warning_tokens": 300000,
+        "max_tokens": 400000
+      },
+      "r": [
+        {
+          "min_c": 1,
+          "max_c": 4,
+          "target_tokens": 25,
+          "max_tokens": 50
+        },
+        {
+          "min_c": 5,
+          "max_c": 7,
+          "target_tokens": 45,
+          "max_tokens": 90
+        },
+        {
+          "min_c": 8,
+          "max_c": 8,
+          "target_tokens": 70,
+          "max_tokens": 140
+        },
+        {
+          "min_c": 9,
+          "max_c": 9,
+          "target_tokens": 90,
+          "max_tokens": 180
+        }
+      ],
+      "s": [
+        {
+          "min_c": 1,
+          "max_c": 4,
+          "target_tokens": 20,
+          "max_tokens": 40
+        },
+        {
+          "min_c": 5,
+          "max_c": 7,
+          "target_tokens": 40,
+          "max_tokens": 80
+        },
+        {
+          "min_c": 8,
+          "max_c": 8,
+          "target_tokens": 70,
+          "max_tokens": 140
+        },
+        {
+          "min_c": 9,
+          "max_c": 9,
+          "target_tokens": 100,
+          "max_tokens": 200
+        }
+      ]
+    },
+    "apply_authorization_mode": "auto"
+  }
+}

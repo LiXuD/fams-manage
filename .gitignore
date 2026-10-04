@@ -44,3 +44,8 @@ docs/superpowers/designs/2026-09-06-fams-ui/figma-native/*verification-output.tx
 **/*.png
 !docs/superpowers/designs/2026-09-06-fams-ui/screens/*.png
 !docs/superpowers/designs/2026-09-06-fams-ui/figma-native/d04-live-*.png
+
+# Local IDE and machine-bound agent integration
+/.idea/
+.codex/config.toml
+.codex/config.toml.backup.*
