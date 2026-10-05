@@ -25,6 +25,16 @@
 - `MiniSessionUpgradeRuntimeCase`：真实既有 V16→V17 仅执行一次新增迁移，组织名称/版本保留，重复迁移 0，Flyway validate 通过。仅独有临时数据库。
 - `MiniAuthControllerTest` 3/3：没有生产适配时拒绝签发，以及非法身份和空交换拒绝通过。小程序客户端 Node 24 端口测试 10/10，双端 lint/typecheck、门禁验证器 32/32、新增契约边界 2/2 通过。Java Checkstyle 与 SpotBugs 定向检查无发现。
 - 历史契约审计当前 82 项中存在 9 个子用例失败及 1 个总验证错误；已用 `df8cb6d` 的契约复现相同 9 个失败点（期初/导入端点缺声明以及旧审计不支持既有例外）。这不是本次小程序路径新增失败，不修改旧产品行为来消除历史审计；后续须单独收口契约治理。现役产品门禁不包含该历史审计，结果须分列。
-- 定向原始记录暂存 `/tmp/fams-d6-10a-http.log`、`/tmp/fams-d6-10a-upgrade.log`、`/tmp/fams-d6-10a-historical-contract.log`，候选门禁完成后归档可复查证据。Compose 容器、网络、卷清理已通过。
+- 定向原始记录：[HTTP](evidence/D6-10A-http.txt)、[V16 升级](evidence/D6-10A-upgrade.txt)、[历史契约审计](evidence/D6-10A-historical-contract.txt)。Compose 容器、网络、卷清理已通过。
 
 D6-10A 保持 IN_PROGRESS：本次只是会话及传输切片；短信验证与绑定动作、客户端运行页面、真实资源与独立复核未完成。没有把数据库夹具写作绑定 API 的产品证据，服务重建也不称为真实 JVM 重启联调。
+
+## 2026-10-05 固定候选完整门禁
+
+功能候选 `a502744` 在隔离工作树 `/Users/lixd/.codex/worktrees/d6-10a-gate/fams` 以 Java 21、Node 24.18.0 与独有 MySQL 执行 `scripts/verify-product-development.py`，退出 **0**。必需 Java 报告 66 项、Checkstyle/SpotBugs 0；行覆盖 92.04%，分支覆盖 75.29%。双端 lint/typecheck、客户端传输 10/10、依赖审计 0 漏洞、管理端口隔离、应用与数据库重启恢复及最终清理通过。[完整原始输出](evidence/D6-10A-product-gate-a502744.txt)。重启恢复属于现役兼容探针检查，不证明真实微信绑定或小程序端到端联调。
+
+首轮因执行环境 PATH 缺少 `/usr/sbin`，`lsof` 检查退出 127；修正 PATH 后重跑同一候选，没有改代码、降低门槛或跳过检查。[首轮失败输出](evidence/D6-10A-product-gate-a502744-path-failure.txt)。
+
+AOCI 读取截断通过拆开调用并提高 Host 输出预算修复；保持 `overview_delivery.chunk_tokens=8000`，8/8 块、520 条完整交付，Host 确认成功、无截断；严格校验 3/10 为 partial，正式索引治理未对齐，不声称可靠完整认知。GitNexus 增量刷新遇到 FTS 不一致，`analyze --force --index-only` 全量重建成功。
+
+仅会话与传输切片实现并通过候选本地门禁。D6-10A、父任务仍 IN_PROGRESS；绑定动作、短信验证、M01/M14 页面、独立复核及 D6-10B 真实资源仍未完成。`main` 未合并，仓库无远端、未推送。

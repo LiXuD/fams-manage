@@ -1,0 +1,32 @@
+[Compose policy model] exit=0
+[Compose static policy] pinned MySQL, loopback port, required task variables, healthcheck, named volume
+[Compose first startup] exit=0
+  Volume fams-d6-03a-1778921784e41093_mysql-data Created
+  Volume fams-d6-03a-1778921784e41093_mysql-data Created
+  Network fams-d6-03a-1778921784e41093_default Created
+  Network fams-d6-03a-1778921784e41093_default Created
+  Container fams-d6-03a-1778921784e41093-mysql-1 Creating
+  Container fams-d6-03a-1778921784e41093-mysql-1 Created
+  Container fams-d6-03a-1778921784e41093-mysql-1 Starting
+  Container fams-d6-03a-1778921784e41093-mysql-1 Started
+  Container fams-d6-03a-1778921784e41093-mysql-1 Waiting
+  Container fams-d6-03a-1778921784e41093-mysql-1 Healthy
+[Compose repeated startup] exit=0
+  Container fams-d6-03a-1778921784e41093-mysql-1 Running
+  Container fams-d6-03a-1778921784e41093-mysql-1 Waiting
+  Container fams-d6-03a-1778921784e41093-mysql-1 Healthy
+[D6-04 authentication database provisioning] exit=0
+[pinned MySQL image metadata] exit=0
+[D6-10A V16 upgrade] exit=0
+  17:54:01.301 [main] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 17 migrations (execution time 00:00.010s)
+  17:54:01.309 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema `fams-d6-04-db-1778921784e41093`: 16
+  17:54:01.313 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Migrating schema `fams-d6-04-db-1778921784e41093` to version "17 - create mini sessions"
+  17:54:01.353 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Successfully applied 1 migration to schema `fams-d6-04-db-1778921784e41093`, now at version v17 (execution time 00:00.029s)
+  17:54:01.363 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:mysql://127.0.0.1:63518/fams-d6-04-db-1778921784e41093?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC (MySQL 8.4)
+  17:54:01.383 [main] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 17 migrations (execution time 00:00.008s)
+  17:54:01.391 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Current version of schema `fams-d6-04-db-1778921784e41093`: 17
+  17:54:01.392 [main] INFO org.flywaydb.core.internal.command.DbMigrate -- Schema `fams-d6-04-db-1778921784e41093` is up to date. No migration necessary.
+  17:54:01.400 [main] INFO org.flywaydb.core.FlywayExecutor -- Database: jdbc:mysql://127.0.0.1:63518/fams-d6-04-db-1778921784e41093?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC (MySQL 8.4)
+  17:54:01.422 [main] INFO org.flywaydb.core.internal.command.DbValidate -- Successfully validated 17 migrations (execution time 00:00.009s)
+[Compose cleanup] exit=0
+[Compose cleanup] task container, network, and named volume removed

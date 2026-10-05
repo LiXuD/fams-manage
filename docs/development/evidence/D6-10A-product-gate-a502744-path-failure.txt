@@ -1,0 +1,159 @@
+[clean worktree preflight] exit=0
+[generated output tracking preflight] exit=0
+[Compose policy model] exit=0
+[Compose static policy] pinned MySQL, loopback port, required task variables, healthcheck, named volume
+[Compose first startup] exit=0
+  Volume fams-d6-03a-58079be44442cbdb_mysql-data Created
+  Volume fams-d6-03a-58079be44442cbdb_mysql-data Created
+  Network fams-d6-03a-58079be44442cbdb_default Created
+  Network fams-d6-03a-58079be44442cbdb_default Created
+  Container fams-d6-03a-58079be44442cbdb-mysql-1 Creating
+  Container fams-d6-03a-58079be44442cbdb-mysql-1 Created
+  Container fams-d6-03a-58079be44442cbdb-mysql-1 Starting
+  Container fams-d6-03a-58079be44442cbdb-mysql-1 Started
+  Container fams-d6-03a-58079be44442cbdb-mysql-1 Waiting
+  Container fams-d6-03a-58079be44442cbdb-mysql-1 Healthy
+[Compose repeated startup] exit=0
+  Container fams-d6-03a-58079be44442cbdb-mysql-1 Running
+  Container fams-d6-03a-58079be44442cbdb-mysql-1 Waiting
+  Container fams-d6-03a-58079be44442cbdb-mysql-1 Healthy
+[D6-04 authentication database provisioning] exit=0
+[pinned MySQL image metadata] exit=0
+[Java clean] exit=0
+  [INFO]   from pom.xml
+  [INFO] --------------------------------[ jar ]---------------------------------
+  [INFO]
+  [INFO] --- clean:3.5.0:clean (default-clean) @ contract-generation-probe ---
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  0.244 s
+  [INFO] Finished at: 2026-10-05T18:45:40+08:00
+  [INFO] ------------------------------------------------------------------------
+[mini session V16 upgrade] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  16.208 s
+  [INFO] Finished at: 2026-10-05T18:45:57+08:00
+  [INFO] ------------------------------------------------------------------------
+[durable job coverage] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  11.816 s
+  [INFO] Finished at: 2026-10-05T18:46:10+08:00
+  [INFO] ------------------------------------------------------------------------
+[asset import batch coverage] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  8.747 s
+  [INFO] Finished at: 2026-10-05T18:46:19+08:00
+  [INFO] ------------------------------------------------------------------------
+[asset import HTTP coverage] exit=0
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  16.539 s
+  [INFO] Finished at: 2026-10-05T18:46:37+08:00
+  [INFO] ------------------------------------------------------------------------
+  Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+[Java blocking quality] exit=0
+  [INFO] BugInstance size is 0
+  [INFO] Error size is 0
+  [INFO] No errors/warnings found
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  01:11 min
+  [INFO] Finished at: 2026-10-05T18:47:49+08:00
+  [INFO] ------------------------------------------------------------------------
+  Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+[Java quality reports] tests=66, Checkstyle=0, SpotBugs=0, lines=6000/6519 (92.04%), branches=2230/2962 (75.29%)
+[TypeScript lint] exit=0
+  > lint
+  > rtk eslint "packages/api-types/src/**/*.ts" "apps/web/src/**/*.{ts,tsx}" "apps/miniprogram/**/*.ts" --no-error-on-unmatched-pattern --max-warnings=0
+[TypeScript compile] exit=0
+  > typecheck
+  > rtk npm run typecheck --workspaces --if-present
+  > rtk tsc --noEmit -p tsconfig.json
+  TypeScript: No errors found
+  > rtk vue-tsc --noEmit
+  > rtk tsc --noEmit -p tsconfig.json
+  TypeScript: No errors found
+[Mini session transport tests] exit=0
+  ✔ old request rejection and old logout cannot clear a newer login (0.175834ms)
+  ✔ logout clears local identity even when server confirmation is lost (0.157083ms)
+  ℹ tests 10
+  ℹ suites 0
+  ℹ pass 10
+  ℹ fail 0
+  ℹ cancelled 0
+  ℹ skipped 0
+  ℹ todo 0
+  ℹ duration_ms 72.142667
+[TypeScript negative fixture] no-unused-vars and no-explicit-any rejected the temporary source
+[TypeScript post-fixture lint] exit=0
+  > lint
+  > rtk eslint "packages/api-types/src/**/*.ts" "apps/web/src/**/*.{ts,tsx}" "apps/miniprogram/**/*.ts" --no-error-on-unmatched-pattern --max-warnings=0
+[npm dependency tree] exit=0
+  │ ├── jsdom@30.1.0
+  │ ├── pinia@4.0.3
+  │ ├── qrcode@1.5.4
+  │ ├── vite@8.3.0
+  │ ├── vitest@5.0.1
+  │ ├── vue-router@5.3.1
+  │ ├── vue-tsc@3.2.6
+  │ └── vue@3.5.43
+  ├── eslint@10.10.0
+  └── typescript-eslint@8.70.0
+[npm high-severity audit] exit=0
+  found 0 vulnerabilities
+[Maven runtime dependency tree] exit=0
+  [INFO]    +- commons-io:commons-io:jar:2.21.0:compile
+  [INFO]    +- com.github.virtuald:curvesapi:jar:1.08:compile
+  [INFO]    +- org.apache.logging.log4j:log4j-api:jar:2.25.5:compile
+  [INFO]    \- org.apache.commons:commons-collections4:jar:4.5.0:compile
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  0.655 s
+  [INFO] Finished at: 2026-10-05T18:47:57+08:00
+  [INFO] ------------------------------------------------------------------------
+[dependency integrity] locked npm tree, high-severity audit, Enforcer, and runtime dependency markers passed
+[management listener] exit=127
+  [rtk: No such file or directory (os error 2)]
+[Compose cleanup] exit=0
+[Compose cleanup] task container, network, and named volume removed
+[git diff check] exit=0
+[clean worktree postflight] exit=0
+Traceback (most recent call last):
+  File "/Users/lixd/.codex/worktrees/d6-10a-gate/fams/scripts/verify-product-development.py", line 20, in <module>
+    application = gate["verify_runtime_recovery"](context)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lixd/.codex/worktrees/d6-10a-gate/fams/scripts/verify-d6-03a.py", line 1491, in verify_runtime_recovery
+    verify_observability_http(context)
+  File "/Users/lixd/.codex/worktrees/d6-10a-gate/fams/scripts/verify-d6-03a.py", line 1439, in verify_observability_http
+    verify_loopback_listener(context)
+  File "/Users/lixd/.codex/worktrees/d6-10a-gate/fams/scripts/verify-d6-03a.py", line 1399, in verify_loopback_listener
+    output = require_command(
+             ^^^^^^^^^^^^^^^^
+  File "/Users/lixd/.codex/worktrees/d6-10a-gate/fams/scripts/verify-d6-03a.py", line 461, in require_command
+    raise VerificationFailure(f"{label} failed with exit {result.returncode}")
+<run_path>.VerificationFailure: management listener failed with exit 127
