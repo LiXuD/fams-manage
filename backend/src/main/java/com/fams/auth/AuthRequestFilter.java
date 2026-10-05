@@ -26,14 +26,17 @@ final class AuthRequestFilter extends OncePerRequestFilter {
     private final AuthApplicationService authService;
     private final AuthSessionManager sessionManager;
     private final ObjectMapper objectMapper;
+    private final MiniSessionService miniSessions;
 
     AuthRequestFilter(
             AuthApplicationService authService,
             AuthSessionManager sessionManager,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            MiniSessionService miniSessions) {
         this.authService = authService;
         this.sessionManager = sessionManager;
         this.objectMapper = objectMapper;
+        this.miniSessions = miniSessions;
     }
 
     @Override
@@ -48,12 +51,28 @@ final class AuthRequestFilter extends OncePerRequestFilter {
         }
 
         UUID requestId = AuthRequestContext.requestId(request);
-        if (LOGIN_PATH.equals(path)) {
+        if (LOGIN_PATH.equals(path) || "/api/v1/mini/auth/login".equals(path)) {
             filterChain.doFilter(request, response);
             return;
         }
 
         try {
+            if (path.startsWith("/api/v1/mini/")) {
+                // A Cookie cannot substitute for the explicit mini credential.
+                if (request.getHeaders(MiniAuthController.HEADER).asIterator().hasNext()) {
+                    var headers = request.getHeaders(MiniAuthController.HEADER);
+                    headers.nextElement();
+                    if (headers.hasMoreElements()) {
+                        throw AuthOperationException.sessionInvalid();
+                    }
+                }
+                MiniSessionService.Current current = miniSessions.requireCurrent(
+                        request.getHeader(MiniAuthController.HEADER));
+                request.setAttribute(MiniAuthController.CURRENT, current);
+                request.setAttribute(AuthRequestContext.ACCOUNT_ATTRIBUTE, current.account());
+                filterChain.doFilter(request, response);
+                return;
+            }
             AuthSession authSession = sessionManager.requireCurrent(
                     request,
                     authService::requireCurrentAccount);

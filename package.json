@@ -6,7 +6,8 @@
     "lint": "rtk eslint \"packages/api-types/src/**/*.ts\" \"apps/web/src/**/*.{ts,tsx}\" \"apps/miniprogram/**/*.ts\" --no-error-on-unmatched-pattern --max-warnings=0",
     "typecheck": "rtk npm run typecheck --workspaces --if-present",
     "test:web": "rtk npm run test --workspace @fams/web",
-    "build:web": "rtk npm run build --workspace @fams/web"
+    "build:web": "rtk npm run build --workspace @fams/web",
+    "test:mini": "rtk npm run test --workspace @fams/miniprogram"
   },
   "workspaces": [
     "apps/*",

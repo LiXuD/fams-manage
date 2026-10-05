@@ -1,6 +1,6 @@
 # FAMS 项目阶段与交接入口
 
-> 唯一现役进度入口 · 更新于 2026-10-04
+> 唯一现役进度入口 · 更新于 2026-10-05
 > 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04～D6-08（含 A/B/C/D）与 D6-09A 本地 `DEV_VERIFIED`；用户本人本轮复核全部 PASS，已以 `b007a5f` 为基准整合到 `main`。D6-01B 与 D6-03B 继续等待远端权限。
 
 ## 1. 八步开发流程与当前进度
@@ -12,7 +12,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-08 本地验证及复核关闭；下一步落实 D6-09B 外部资源或按计划推进 D6-10；D6-01B/03B 待外部权限 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-08 本地验证及复核关闭；D6-10A 会话与传输切片进行中，下一步补短信绑定动作和 M01/M14 页面；D6-09B/10B 等待真实资源，D6-01B/03B 待外部权限 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
@@ -82,3 +82,7 @@
 用户本人本轮明确“复核全部 pass”，确认送审交接 `b007a5f`、代码候选 `6d94db8` 的 D6-08B/C/D 复核通过。A/B/C/D 及 D6-08 父任务记为本地 `DEV_VERIFIED`。全部已有分支历史和工作树成果以该候选为基准整合到根目录 `main`；后续接手先读 [主线整合记录](docs/development/2026-10-04-main-integration.md)，再按现役计划推进 D6-09B 外部资源或 D6-10。第六阶段继续 `IN_PROGRESS`；远端 CI、正式 QA 和生产仍未验证。
 
 根目录 `main` 整合候选 `3b901ff` 的完整产品门禁退出 0，指标与原送审候选一致；[原始输出](docs/development/evidence/main-product-gate-3b901ff.txt)。所有 12 个分支 HEAD 已纳入主线，11 个工作树清洁检查通过。AOCI 收尾仍受治理停点阻断，当前正式索引尚未对齐新增产品对象，详见整合记录。
+
+## 2026-10-05 开发续接
+
+从 main `df8cb6d` 开始 D6-10A 会话切片，当前功能分支 `codex/d6-10a-session`。下一步补短信验证码、绑定/换绑/解绑、号码更正失效和 M01/M14 页面；真实外部资源与独立复核另待满足。详细状态和证据仅在现役计划及 [D6-10 任务卡](docs/development/D6-10-task-card.md)维护。开始时已有 `.aoci/baseline.json` 和 `aoci.code.txt` 未提交变化，保留且不混入功能提交。

@@ -57,6 +57,8 @@ REQUIRED_TEST_REPORTS = {
     "TEST-com.fams.architecture.FamsArchitectureRulesTest.xml",
     "TEST-com.fams.architecture.FamsArchitectureTest.xml",
     "TEST-com.fams.auth.AuthHttpTest.xml",
+    "TEST-com.fams.auth.MiniSessionHttpTest.xml",
+    "TEST-com.fams.auth.MiniSessionUpgradeRuntimeCase.xml",
     "TEST-com.fams.auth.AuthSessionRestartTest.xml",
     "TEST-com.fams.contract.ContractProbeHttpTest.xml",
     "TEST-com.fams.observability.LocalObservabilityHttpTest.xml",
@@ -1113,6 +1115,8 @@ def verify_java_quality(context: RuntimeContext) -> None:
         require_command("Java clean", ["./mvnw", "-pl", "backend", "clean"],
                         env=environment, timeout=300)
         for label, flag, selected in (
+            ("mini session V16 upgrade", "-Dd6.10.upgrade.runtime=true",
+             "MiniSessionUpgradeRuntimeCase"),
             ("durable job coverage", "-Dd6.08.job.runtime=true",
              "DurableJobRuntimeCase#mysqlSubmissionClaimFencingBackoffAndBusinessRollback"),
             ("asset import batch coverage", "-Dd6.08.import.runtime=true",
@@ -1176,6 +1180,7 @@ def verify_typescript_quality() -> None:
             "TypeScript lint violations: " + ", ".join(lint_violations)
         )
     require_command("TypeScript compile", ["npm", "run", "typecheck"], timeout=300)
+    require_command("Mini session transport tests", ["npm", "run", "test:mini"], timeout=300)
 
     fixture = (
         ROOT

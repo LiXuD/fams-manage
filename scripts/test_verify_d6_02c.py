@@ -2571,7 +2571,7 @@ class DesignPackageContractTest(unittest.TestCase):
                     continue
                 with self.subTest(method=method, path=path):
                     if not operation.get("x-business-write", False):
-                        self.assertIn(operation["operationId"], {"login", "logout", "issueAttachmentDownloadGrant"})
+                        self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "issueAttachmentDownloadGrant"})
                         self.assertTrue(operation.get("x-exception-rationale"))
                         continue
                     self.assertTrue(operation.get("x-actor"), "missing actor boundary")

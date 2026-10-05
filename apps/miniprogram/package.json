@@ -1,0 +1,11 @@
+{
+  "name": "@fams/miniprogram",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": { "node": "24.18.0", "npm": "11.16.0" },
+  "scripts": {
+    "typecheck": "rtk tsc --noEmit -p tsconfig.json",
+    "test": "rtk proxy node --test test/*.test.mjs"
+  }
+}
