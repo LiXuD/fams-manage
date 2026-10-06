@@ -352,6 +352,10 @@ class IdentityMasterDataService {
             UUID requestId) {
         validateText(employeeNo, name);
         assertEmployeeNumberAvailable(employeeNo, current.id());
+        if (phone != null && !phone.isBlank()) {
+            throw new MasterDataOperationException("EMPLOYEE_PHONE_CORRECTION_REQUIRED",
+                    "Registered phone changes require verified phone correction.", 409);
+        }
         Instant now = clock.instant();
         requireVersionUpdate(mapper.updateEmployee(
                 current.id(), current.version(), employeeNo.strip(), normalizeCode(employeeNo), name.strip(),

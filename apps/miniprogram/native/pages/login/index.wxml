@@ -1,0 +1,26 @@
+<view class="page">
+  <view class="title">企业资产</view>
+  <view class="subtitle">{{action === 'REBIND' ? '换绑需要重新核验企业身份' : '微信登录 · 企业身份绑定'}}</view>
+  <view wx:if="{{error}}" class="error" role="alert">{{error}}</view>
+  <view class="card">
+    <button wx:if="{{action === 'BIND'}}" class="primary" bindtap="onLogin" disabled="{{!ready || busy}}" loading="{{busy}}">微信登录</button>
+    <view class="hint">已有绑定可直接登录。首次使用或换绑，请核验企业工号及预登记手机号。</view>
+    <button bindtap="onChooseRebind" disabled="{{busy}}">{{action === 'BIND' ? '更换微信绑定' : '返回首次绑定'}}</button>
+  </view>
+  <view class="card">
+    <label class="label" for="employee">企业工号</label>
+    <input id="employee" value="{{employeeNo}}" bindinput="onEmployee" maxlength="64" disabled="{{busy}}" placeholder="请输入企业工号" />
+    <label class="label" for="phone">预登记手机号</label>
+    <input id="phone" type="number" value="{{phone}}" bindinput="onPhone" maxlength="11" disabled="{{busy}}" placeholder="请输入企业预登记手机号" />
+    <button bindtap="onSend" disabled="{{!ready || busy || retrySeconds > 0}}">{{retrySeconds > 0 ? retrySeconds + ' 秒后可重发' : '发送短信验证码'}}</button>
+    <view wx:if="{{sent}}">
+      <view class="hint">验证码已发送，有效期 5 分钟。</view>
+      <label class="label" for="otp">短信验证码</label>
+      <input id="otp" type="number" value="{{otp}}" bindinput="onOtp" maxlength="6" disabled="{{busy}}" placeholder="请输入 6 位验证码" />
+      <button class="primary" bindtap="onVerify" disabled="{{busy}}" loading="{{busy}}">{{action === 'REBIND' ? '验证并换绑' : '验证并绑定'}}</button>
+    </view>
+    <view class="hint">每人及每设备每天最多发送 10 次；连续 5 次验证错误将暂停绑定 30 分钟。换绑后旧设备会话失效。</view>
+  </view>
+  <view class="hint">手机号有误请联系企业管理员核实更正。</view>
+  <view wx:if="{{support}}" class="hint">{{support}}</view>
+</view>

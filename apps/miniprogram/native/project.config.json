@@ -1,0 +1,7 @@
+{
+  "description": "FAMS D6-10A 登录及账号页面；AppID 由企业在微信开发者工具中配置。",
+  "compileType": "miniprogram",
+  "miniprogramRoot": "./",
+  "setting": { "urlCheck": true, "es6": true, "minified": true },
+  "projectname": "fams-miniprogram"
+}

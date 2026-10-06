@@ -58,6 +58,7 @@ REQUIRED_TEST_REPORTS = {
     "TEST-com.fams.architecture.FamsArchitectureTest.xml",
     "TEST-com.fams.auth.AuthHttpTest.xml",
     "TEST-com.fams.auth.MiniSessionHttpTest.xml",
+    "TEST-com.fams.auth.MiniBindingHttpTest.xml",
     "TEST-com.fams.auth.MiniSessionUpgradeRuntimeCase.xml",
     "TEST-com.fams.auth.AuthSessionRestartTest.xml",
     "TEST-com.fams.contract.ContractProbeHttpTest.xml",
@@ -1181,6 +1182,7 @@ def verify_typescript_quality() -> None:
         )
     require_command("TypeScript compile", ["npm", "run", "typecheck"], timeout=300)
     require_command("Mini session transport tests", ["npm", "run", "test:mini"], timeout=300)
+    require_command("Native mini package", ["npm", "run", "build", "--workspace", "@fams/miniprogram"], timeout=300)
 
     fixture = (
         ROOT

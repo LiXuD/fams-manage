@@ -96,7 +96,8 @@ export class MiniSessionClient {
         return "BOUND";
     }
 
-    async request(method: string, path: string, data?: unknown): Promise<unknown> {
+    async request(method: string, path: string, data?: unknown,
+        mutation?: { key: string; version: number }): Promise<unknown> {
         const pathname = path.split("?")[0];
         if (!path.startsWith("/api/v1/mini/") || /[\\%#\s]/.test(path)
             || /(^|\/)\.\.?(\/|$)/.test(pathname) || pathname.includes("//")
@@ -106,8 +107,17 @@ export class MiniSessionClient {
         const session = this.current;
         if (!session) throw new MiniRequestError(401, "AUTH_SESSION_INVALID");
         const generation = this.generation;
+        const header: Record<string, string> = { "X-FAMS-Mini-Session": session.sessionToken };
+        if (mutation) {
+            if (mutation.key.length < 16 || mutation.key.length > 128
+                || !Number.isSafeInteger(mutation.version) || mutation.version < 0) {
+                throw new Error("Invalid mutation identity");
+            }
+            header["Idempotency-Key"] = mutation.key;
+            header["If-Match-Version"] = String(mutation.version);
+        }
         const response = await this.runtime.request({
-            url: this.origin + path, method, header: { "X-FAMS-Mini-Session": session.sessionToken }, data,
+            url: this.origin + path, method, header, data,
         });
         this.assertGeneration(generation);
         if (response.statusCode === 401) this.clear();

@@ -137,6 +137,12 @@ class MiniSessionHttpTest {
 
     @Test
     void unboundAndUnavailableExchangeCannotIssueCredentials() throws Exception {
+        var unavailableSms = request("POST", "/api/v1/mini/auth/binding-challenges",
+                "{\"code\":\"bound\",\"employeeNo\":\"MINITEST\",\"phone\":\"13800138000\","
+                        + "\"deviceId\":\"00000000-0000-4000-8000-000000000001\",\"action\":\"BIND\"}", null);
+        assertEquals(503, unavailableSms.statusCode());
+        assertEquals("MINI_SMS_UNAVAILABLE", JSON.readTree(unavailableSms.body()).path("code").asText());
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM fams_mini_binding_challenge", Integer.class));
         var response = request("POST", "/api/v1/mini/auth/login", "{\"code\":\"unbound\"}", null);
         assertEquals(200, response.statusCode());
         assertTrue(response.headers().firstValue("Cache-Control").orElseThrow().contains("no-store"));

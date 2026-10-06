@@ -6,6 +6,7 @@
   "engines": { "node": "24.18.0", "npm": "11.16.0" },
   "scripts": {
     "typecheck": "rtk tsc --noEmit -p tsconfig.json",
+    "build": "rtk proxy node build.mjs",
     "test": "rtk proxy node --test test/*.test.mjs"
   }
 }

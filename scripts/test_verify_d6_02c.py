@@ -2571,7 +2571,7 @@ class DesignPackageContractTest(unittest.TestCase):
                     continue
                 with self.subTest(method=method, path=path):
                     if not operation.get("x-business-write", False):
-                        self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "issueAttachmentDownloadGrant"})
+                        self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
                         self.assertTrue(operation.get("x-exception-rationale"))
                         continue
                     self.assertTrue(operation.get("x-actor"), "missing actor boundary")
@@ -2592,7 +2592,12 @@ class DesignPackageContractTest(unittest.TestCase):
                     self.assertTrue(
                         "Idempotency-Key" in parameter_names or "IdempotencyKey" in parameter_refs
                     )
-                    self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
+                    if operation["operationId"] in {"miniVerifyBinding", "miniUnbind"}:
+                        self.assertTrue(path.startswith("/mini/auth/"))
+                        self.assertIn("csrf", operation.get("x-non-applicable", []))
+                        self.assertIn("IfMatchVersion", parameter_refs)
+                    else:
+                        self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 
     def test_identifier_time_money_and_state_shapes_are_explicit(self) -> None:
         document = self.load_contract()

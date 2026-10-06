@@ -1,0 +1,13 @@
+page { background: #f3f6fa; color: #172b46; font-size: 32rpx; line-height: 1.5; }
+.page { padding: 40rpx 32rpx; }
+.title { font-size: 48rpx; font-weight: 600; margin-bottom: 16rpx; }
+.subtitle { color: #536780; margin-bottom: 32rpx; }
+.card { background: #fff; border-radius: 16rpx; padding: 32rpx; margin-bottom: 24rpx; }
+.label { display: block; font-weight: 500; margin-bottom: 12rpx; }
+input { min-height: 88rpx; border: 1rpx solid #c9d4e1; border-radius: 8rpx; padding: 0 24rpx; margin-bottom: 28rpx; background: #fff; }
+button { min-height: 88rpx; font-size: 32rpx; margin-top: 24rpx; border-radius: 8rpx; color: #174278; background: #e9f1fb; }
+button.primary { background: #165db8; color: #fff; }
+button.danger { color: #a52626; background: #fff1f1; }
+.hint { color: #536780; font-size: 28rpx; margin-top: 16rpx; white-space: pre-wrap; overflow-wrap: anywhere; }
+.error { padding: 24rpx; border-radius: 8rpx; background: #fff1f1; color: #a52626; margin-bottom: 24rpx; }
+.value { font-size: 36rpx; margin: 12rpx 0; overflow-wrap: anywhere; }

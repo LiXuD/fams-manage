@@ -13,9 +13,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.ServletRequestBindingException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -84,9 +86,9 @@ final class AuthErrorHandler {
                 fieldErrors));
     }
 
-    @ExceptionHandler(DataIntegrityViolationException.class)
+    @ExceptionHandler({DataIntegrityViolationException.class, CannotAcquireLockException.class})
     ResponseEntity<ErrorResponse> handleWriteConflict(
-            DataIntegrityViolationException exception,
+            RuntimeException exception,
             HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error(
                 "AUTH_WRITE_CONFLICT",
@@ -105,6 +107,15 @@ final class AuthErrorHandler {
                 "The request could not be completed.",
                 AuthRequestContext.requestId(request),
                 Map.of()));
+    }
+
+    @ExceptionHandler(ServletRequestBindingException.class)
+    ResponseEntity<ErrorResponse> handleMissingHeader(
+            ServletRequestBindingException exception,
+            HttpServletRequest request) {
+        return ResponseEntity.badRequest().body(error(
+                "INVALID_REQUEST", "Required request headers are missing or invalid.",
+                AuthRequestContext.requestId(request), Map.of()));
     }
 
     private ErrorResponse error(

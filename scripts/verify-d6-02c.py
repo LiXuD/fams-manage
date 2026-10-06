@@ -149,7 +149,7 @@ def assert_write_contracts(document: dict[str, Any]) -> None:
         if method not in {"post", "put", "patch", "delete"}:
             continue
         if not operation.get("x-business-write", False):
-            if operation_id not in {"login", "logout", "miniLogin", "miniLogout", "issueAttachmentDownloadGrant"}:
+            if operation_id not in {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"}:
                 raise VerificationFailure(
                     f"unclassified non-business mutation: {method.upper()} {path}"
                 )
@@ -167,7 +167,12 @@ def assert_write_contracts(document: dict[str, Any]) -> None:
             if not operation.get(extension):
                 raise VerificationFailure(f"{operation_id} is missing {extension}")
         refs = parameter_ref_names(operation)
-        if not {"IdempotencyKey", "CsrfToken"}.issubset(refs):
+        required_refs = {"IdempotencyKey", "CsrfToken"}
+        if operation_id in {"miniVerifyBinding", "miniUnbind"}:
+            if not path.startswith("/mini/auth/") or "csrf" not in operation.get("x-non-applicable", []):
+                raise VerificationFailure(f"invalid mini CSRF exception: {operation_id}")
+            required_refs = {"IdempotencyKey", "IfMatchVersion"}
+        if not required_refs.issubset(refs):
             raise VerificationFailure(f"{operation_id} is missing idempotency or CSRF")
         for status in operation["x-required-error-statuses"]:
             if str(status) not in operation.get("responses", {}):

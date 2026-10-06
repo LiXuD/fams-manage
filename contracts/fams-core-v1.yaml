@@ -14,6 +14,8 @@ security:
 tags:
   - name: Auth
     description: System-account authentication and session boundaries.
+  - name: MiniIdentitySupport
+  - name: MiniBinding
   - name: MiniAuth
     description: Mini-program opaque header sessions; verified binding issuance is a later slice.
   - name: MasterData
@@ -420,6 +422,69 @@ components:
           type: integer
           format: int64
           minimum: 0
+    MiniPhoneCorrectionRequest:
+      type: object
+      additionalProperties: false
+      required: [phone, verificationMethod, reason]
+      properties:
+        phone: { type: string, pattern: '^1[3-9][0-9]{9}$' }
+        verificationMethod: { type: string, minLength: 1, maxLength: 128 }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    MiniPhoneCorrectionResult:
+      type: object
+      additionalProperties: false
+      required: [employeeId, version]
+      properties:
+        employeeId: { $ref: '#/components/schemas/Id' }
+        version: { type: integer, format: int64, minimum: 0 }
+    MiniBindingChallengeRequest:
+      type: object
+      additionalProperties: false
+      required: [code, employeeNo, phone, deviceId, action]
+      properties:
+        code: { type: string, minLength: 1, maxLength: 256 }
+        employeeNo: { type: string, minLength: 1, maxLength: 64 }
+        phone: { type: string, pattern: '^1[3-9][0-9]{9}$' }
+        deviceId: { type: string, format: uuid }
+        action: { type: string, enum: [BIND, REBIND] }
+    MiniBindingChallenge:
+      type: object
+      additionalProperties: false
+      required: [challengeToken, expiresAt, resendAfterSeconds]
+      properties:
+        challengeToken: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
+        expiresAt: { type: string, format: date-time }
+        resendAfterSeconds: { type: integer, minimum: 60 }
+    MiniBindingVerifyRequest:
+      type: object
+      additionalProperties: false
+      required: [code, challengeToken, deviceId, otp]
+      properties:
+        code: { type: string, minLength: 1, maxLength: 256 }
+        challengeToken: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
+        deviceId: { type: string, format: uuid }
+        otp: { type: string, pattern: '^[0-9]{6}$' }
+    MiniBindingResult:
+      type: object
+      additionalProperties: false
+      required: [accountId, bindingId, bindingVersion]
+      properties:
+        accountId: { $ref: '#/components/schemas/Id' }
+        bindingId: { $ref: '#/components/schemas/Id' }
+        bindingVersion: { type: integer, format: int64, minimum: 0 }
+    MiniUnbindRequest:
+      type: object
+      additionalProperties: false
+      required: [reason, verificationMethod]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 500 }
+        verificationMethod: { type: string, minLength: 1, maxLength: 128 }
+    MiniBindingSupport:
+      type: object
+      additionalProperties: false
+      required: [supportText]
+      properties:
+        supportText: { type: string, maxLength: 500 }
     MiniLoginRequest:
       type: object
       additionalProperties: false
@@ -1567,6 +1632,7 @@ components:
           type: string
           maxLength: 32
           x-sensitive: true
+          description: Retained for compatibility; nonblank values are rejected with EMPLOYEE_PHONE_CORRECTION_REQUIRED. Use verified phone-correction instead.
     Employee:
       type: object
       required: [id, employeeNo, displayName, organization, status, version, createdAt, updatedAt]
@@ -5812,7 +5878,7 @@ paths:
         boundary: Insert employee relation and audit event atomically.
       x-audit-event:
         event: EMPLOYEE_CREATED
-      x-error-codes: [EMPLOYEE_NO_CONFLICT, EMPLOYEE_ORGANIZATION_NOT_FOUND]
+      x-error-codes: [EMPLOYEE_NO_CONFLICT, EMPLOYEE_ORGANIZATION_NOT_FOUND, EMPLOYEE_PHONE_CORRECTION_REQUIRED]
       x-required-error-statuses: [400, 401, 403, 409]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -7894,3 +7960,177 @@ paths:
       responses:
         '204': { description: Session revoked. Cache-Control no-store. }
         '401': { $ref: '#/components/responses/Unauthorized' }
+  /mini/auth/support:
+    get:
+      tags: [MiniBinding]
+      operationId: miniBindingSupport
+      summary: Read the preconfigured internal support text without business login.
+      security: []
+      responses:
+        '200':
+          description: Support text only; no employee information or registered phone.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MiniBindingSupport' }
+  /mini/auth/binding-challenges:
+    post:
+      tags: [MiniBinding]
+      operationId: miniIssueBindingChallenge
+      summary: Verify employee/registered phone and send a five minute SMS challenge.
+      security: []
+      x-business-write: false
+      x-exception-rationale: Security challenge reserves persistent employee/device counters; it changes no binding. Server-exchanged WeChat code and SMS proof replace Cookie CSRF.
+      x-non-applicable: [version, idempotency, csrf]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MiniBindingChallengeRequest' }
+      responses:
+        '200':
+          description: Sent challenge metadata only. No OTP or phone returned; no-store.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MiniBindingChallenge' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { description: 'Employee/device quota, cooldown or binding lock reached.' }
+        '503': { description: Real WeChat or SMS adapter unavailable; no binding performed. }
+  /mini/auth/binding:
+    post:
+      tags: [MiniBinding]
+      operationId: miniVerifyBinding
+      summary: Consume the SMS challenge and create or replace one active binding.
+      security: []
+      x-business-write: true
+      x-actor: Server-exchanged WeChat identity and same employee/device SMS challenge.
+      x-version: If-Match-Version must be zero for the immutable challenge; current employee version is rechecked.
+      x-transaction: Account, employee, challenge and binding locks; binding change, challenge receipt, session invalidation and audit atomically commit.
+      x-audit-event: MINI_BINDING_CREATED or MINI_BINDING_REPLACED
+      x-error-codes: [MINI_BINDING_PROOF_INVALID, MINI_BINDING_CONFLICT, MINI_BINDING_RATE_LIMITED]
+      x-required-error-statuses: [400, 409, 429, 503]
+      x-non-applicable: [csrf]
+      x-exception-rationale: No Cookie credential accepted. Server-exchanged WeChat identity, device and one-time SMS proof bind this request.
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/IfMatchVersion' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MiniBindingVerifyRequest' }
+      responses:
+        '200':
+          description: Binding receipt; client must separately wx.login for a session. Same challenge/key replays while binding remains current.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MiniBindingResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { description: 'Employee/device quota, cooldown or binding lock reached.' }
+        '503': { description: Real WeChat or SMS adapter unavailable; no binding performed. }
+  /mini/auth/unbind:
+    post:
+      tags: [MiniBinding]
+      operationId: miniUnbind
+      summary: Revoke the current binding, all mini sessions and unfinished challenges.
+      security: [ { miniSession: [] } ]
+      x-business-write: true
+      x-actor: Current mini session account and binding.
+      x-version: Current binding version must match If-Match-Version.
+      x-transaction: Reauthorize actor, lock binding, revoke sessions/challenges and retain idempotency receipt plus audit.
+      x-audit-event: MINI_BINDING_REVOKED
+      x-error-codes: [AUTH_FORBIDDEN, AUTH_VERSION_CONFLICT, AUTH_IDEMPOTENCY_CONFLICT]
+      x-required-error-statuses: [400, 401, 403, 409]
+      x-non-applicable: [csrf]
+      x-exception-rationale: Requires opaque mini header only; never authenticates with a Cookie.
+      parameters:
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/IfMatchVersion' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MiniUnbindRequest' }
+      responses:
+        '204': { description: Binding revoked; reason and verification method audited. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { description: 'Employee/device quota, cooldown or binding lock reached.' }
+        '503': { description: Real WeChat or SMS adapter unavailable; no binding performed. }
+  /system-accounts/{systemAccountId}/mini-binding/unbind:
+    post:
+      tags: [MiniBinding]
+      operationId: adminMiniUnbind
+      summary: Revoke the current binding, all mini sessions and unfinished challenges.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      x-business-write: true
+      x-actor: Current SYSTEM_ADMIN rechecked inside the write transaction.
+      x-version: Current binding version must match If-Match-Version.
+      x-transaction: Reauthorize actor, lock binding, revoke sessions/challenges and retain idempotency receipt plus audit.
+      x-audit-event: MINI_BINDING_REVOKED
+      x-error-codes: [AUTH_FORBIDDEN, AUTH_VERSION_CONFLICT, AUTH_IDEMPOTENCY_CONFLICT]
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - name: systemAccountId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Id' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/IfMatchVersion' }
+        - { $ref: '#/components/parameters/CsrfToken' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MiniUnbindRequest' }
+      responses:
+        '204': { description: Binding revoked; reason and verification method audited. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { description: 'Employee/device quota, cooldown or binding lock reached.' }
+        '503': { description: Real WeChat or SMS adapter unavailable; no binding performed. }
+  /employees/{employeeId}/phone-correction:
+    post:
+      tags: [MiniIdentitySupport]
+      operationId: correctMiniEmployeePhone
+      summary: Correct the registered phone after audited identity verification; invalidate old SMS challenges.
+      security: [ { sessionCookie: [], csrfHeader: [] } ]
+      x-business-write: true
+      x-actor: Current SYSTEM_ADMIN, reauthorized with account lock.
+      x-version: Current employee If-Match-Version is required.
+      x-transaction: Employee phone and version, challenge invalidation, encrypted before/after audit and idempotency receipt commit together. Binding is retained.
+      x-audit-event: MINI_PHONE_CORRECTED
+      x-error-codes: [AUTH_FORBIDDEN, AUTH_VERSION_CONFLICT, AUTH_IDEMPOTENCY_CONFLICT]
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Id' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+        - { $ref: '#/components/parameters/CsrfToken' }
+        - { $ref: '#/components/parameters/IfMatchVersion' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MiniPhoneCorrectionRequest' }
+      responses:
+        '200':
+          description: Employee version only; registered phone and encrypted audit values never returned.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MiniPhoneCorrectionResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }

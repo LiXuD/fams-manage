@@ -51,7 +51,10 @@ final class AuthRequestFilter extends OncePerRequestFilter {
         }
 
         UUID requestId = AuthRequestContext.requestId(request);
-        if (LOGIN_PATH.equals(path) || "/api/v1/mini/auth/login".equals(path)) {
+        if (LOGIN_PATH.equals(path) || "/api/v1/mini/auth/login".equals(path)
+                || "/api/v1/mini/auth/support".equals(path)
+                || "/api/v1/mini/auth/binding-challenges".equals(path)
+                || "/api/v1/mini/auth/binding".equals(path)) {
             filterChain.doFilter(request, response);
             return;
         }

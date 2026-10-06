@@ -1,0 +1,14 @@
+<view class="page">
+  <view class="title">我的账号</view>
+  <view wx:if="{{error}}" class="error" role="alert">{{error}}</view>
+  <view class="card">
+    <view class="label">企业账号</view>
+    <view class="value">{{accountId}}</view>
+    <view class="hint">已绑定当前微信。账号权限及登录有效期由企业实时管理。</view>
+  </view>
+  <view class="card">
+    <button bindtap="onLogout" disabled="{{busy}}">退出登录</button>
+    <button class="danger" bindtap="onUnbind" disabled="{{busy}}">解除微信绑定</button>
+    <view class="hint">退出登录会清除本设备身份资料。解除绑定后，再次使用需重新短信验证；换设备可从登录页完成换绑。</view>
+  </view>
+</view>
