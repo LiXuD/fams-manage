@@ -2,6 +2,7 @@ package com.fams.auth;
 
 import java.time.ZoneOffset;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 
 import com.fams.product.contract.api.MiniBindingApi;
@@ -20,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @Profile("fams-product")
-final class MiniBindingController implements MiniBindingApi {
+class MiniBindingController implements MiniBindingApi {
     private final MiniBindingService bindings;
     private final ObjectProvider<MiniWechatIdentityPort> wechat;
     private final ObjectProvider<MiniSmsPort> sms;
@@ -34,10 +35,14 @@ final class MiniBindingController implements MiniBindingApi {
         this.wechat = wechat;
         this.sms = sms;
         this.request = request;
+        this.supportText = supportText;
+    }
+
+    @PostConstruct
+    void validateConfiguration() {
         if (supportText.length() > 500) {
             throw new IllegalArgumentException("Binding support text is too long");
         }
-        this.supportText = supportText;
     }
 
     @Override
