@@ -1,0 +1,484 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] -----------------< com.fams:contract-generation-probe >-----------------
+[INFO] Building FAMS contract generation probe 0.1.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- openapi-generator:7.25.0:validate (validate-contract) @ contract-generation-probe ---
+[INFO] Validating spec (<workspace>/backend/../contracts/representative-probe.yaml)
+[INFO] Spec has no recommendation(s).
+[INFO] Spec has no errors.
+[INFO] No validation issues detected.
+[INFO] 
+[INFO] --- openapi-generator:7.25.0:validate (validate-product-contract) @ contract-generation-probe ---
+[INFO] Validating spec (<workspace>/backend/../contracts/fams-core-v1.yaml)
+[WARNING] Unused model: Money
+[WARNING] Based on rule: ValidationRule{severity=WARNING, description='Unused schema', failureMessage='A schema was determined to be unused.'}
+[WARNING] No details available.
+[WARNING] ----------
+[WARNING] Unused model: AuditEvent
+[WARNING] Based on rule: ValidationRule{severity=WARNING, description='Unused schema', failureMessage='A schema was determined to be unused.'}
+[WARNING] No details available.
+[WARNING] ----------
+[WARNING] Spec has 2 recommendation(s).
+[INFO] Spec has no errors.
+[INFO] 
+[INFO] --- enforcer:3.6.3:enforce (enforce-development-runtime-and-dependencies) @ contract-generation-probe ---
+[INFO] Rule 0: org.apache.maven.enforcer.rules.version.RequireJavaVersion passed
+[INFO] Rule 1: org.apache.maven.enforcer.rules.version.RequireMavenVersion passed
+[INFO] Rule 2: org.apache.maven.enforcer.rules.dependency.DependencyConvergence passed
+[INFO] Rule 3: org.apache.maven.enforcer.rules.dependency.RequireReleaseDeps passed
+[INFO] 
+[INFO] --- checkstyle:3.6.0:check (check-java-conventions) @ contract-generation-probe ---
+[INFO] You have 0 Checkstyle violations.
+[INFO] 
+[INFO] --- dependency:3.11.0:properties (resolve-mockito-test-agent) @ contract-generation-probe ---
+[INFO] 
+[INFO] --- jacoco:0.8.15:prepare-agent (prepare-unit-coverage) @ contract-generation-probe ---
+[INFO] argLine set to -javaagent:<home>/.m2/repository/org/jacoco/org.jacoco.agent/0.8.15/org.jacoco.agent-0.8.15-runtime.jar=destfile=<workspace>/backend/target/jacoco.exec,excludes=com/fams/contract/api/**:com/fams/contract/invoker/**:com/fams/contract/model/**:com/fams/product/contract/api/**:com/fams/product/contract/invoker/**:com/fams/product/contract/model/**
+[INFO] 
+[INFO] --- openapi-generator:7.25.0:generate (generate-java-contract) @ contract-generation-probe ---
+[INFO] Generating with dryRun=false
+[INFO] No .openapi-generator-ignore file found.
+[INFO] OpenAPI Generator: spring (server)
+[INFO] Generator 'spring' is considered stable.
+[INFO] ----------------------------------
+[INFO] Set base package to invoker package (com.fams.contract.invoker)
+[INFO] Environment variable JAVA_POST_PROCESS_FILE not defined so the Java code may not be properly formatted. To define it, try 'export JAVA_POST_PROCESS_FILE="/usr/local/bin/clang-format -i"' (Linux/Mac)
+[INFO] NOTE: To enable file post-processing, 'enablePostProcessFile' must be set to `true` (--enable-post-process-file for CLI).
+[INFO] Defaulting includeHttpRequestContext to 'false' for blocking
+[INFO] Processing operation echoContractProbe
+[INFO] 'host' (OAS 2.0) or 'servers' (OAS 3.0) not defined in the spec. Default to [http://localhost] for server URL [http://localhost/]
+[INFO] writing file <workspace>/backend/target/generated-sources/openapi/java/src/main/java/com/fams/contract/model/ContractProbe.java
+[INFO] writing file <workspace>/backend/target/generated-sources/openapi/java/src/main/java/com/fams/contract/model/ErrorResponse.java
+[INFO] writing file <workspace>/backend/target/generated-sources/openapi/java/src/main/java/com/fams/contract/api/ContractProbeApi.java
+[INFO] Skipping generation of Webhooks.
+[INFO] Skipping generation of supporting files.
+############################################################################################
+# Thanks for using OpenAPI Generator.                                                      #
+# We appreciate your support! Please consider donating to help us maintain this project.   #
+# https://opencollective.com/openapi_generator/donate                                      #
+############################################################################################
+[INFO] 
+[INFO] --- openapi-generator:7.25.0:generate (generate-product-java-contract) @ contract-generation-probe ---
+[INFO] Generating with dryRun=false
+[INFO] No .openapi-generator-ignore file found.
+[INFO] OpenAPI Generator: spring (server)
+[INFO] Generator 'spring' is considered stable.
+[INFO] ----------------------------------
+[INFO] Set base package to invoker package (com.fams.product.contract.invoker)
+[INFO] Environment variable JAVA_POST_PROCESS_FILE not defined so the Java code may not be properly formatted. To define it, try 'export JAVA_POST_PROCESS_FILE="/usr/local/bin/clang-format -i"' (Linux/Mac)
+[INFO] NOTE: To enable file post-processing, 'enablePostProcessFile' must be set to `true` (--enable-post-process-file for CLI).
+[INFO] Defaulting includeHttpRequestContext to 'false' for blocking
+[WARNING] Failed to get the schema name: null
+[INFO] Inline schema created as issueAttachmentDownloadGrant_200_response. To have complete control of the model name, set the `title` field or use the modelNameMapping option (e.g. --model-name-mappings issueAttachmentDownloadGrant_200_response=NewModel,ModelA=NewModelA in CLI) or inlineSchemaNameMapping option (--inline-schema-name-mappings issueAttachmentDownloadGrant_200_response=NewModel,ModelA=NewModelA in CLI).
+[INFO] Inline schema created as uploadAssetImportBatch_request. To have complete control of the model name, set the `title` field or use the modelNameMapping option (e.g. --model-name-mappings uploadAssetImportBatch_request=NewModel,ModelA=NewModelA in CLI) or inlineSchemaNameMapping option (--inline-schema-name-mappings uploadAssetImportBatch_request=NewModel,ModelA=NewModelA in CLI).
+[INFO] Inline schema created as listInboundAttachments_200_response_items_inner. To have complete control of the model name, set the `title` field or use the modelNameMapping option (e.g. --model-name-mappings listInboundAttachments_200_response_items_inner=NewModel,ModelA=NewModelA in CLI) or inlineSchemaNameMapping option (--inline-schema-name-mappings listInboundAttachments_200_response_items_inner=NewModel,ModelA=NewModelA in CLI).
+[INFO] Inline schema created as listInboundAttachments_200_response. To have complete control of the model name, set the `title` field or use the modelNameMapping option (e.g. --model-name-mappings listInboundAttachments_200_response=NewModel,ModelA=NewModelA in CLI) or inlineSchemaNameMapping option (--inline-schema-name-mappings listInboundAttachments_200_response=NewModel,ModelA=NewModelA in CLI).
+[INFO] Inline schema created as uploadInboundAttachment_201_response. To have complete control of the model name, set the `title` field or use the modelNameMapping option (e.g. --model-name-mappings uploadInboundAttachment_201_response=NewModel,ModelA=NewModelA in CLI) or inlineSchemaNameMapping option (--inline-schema-name-mappings uploadInboundAttachment_201_response=NewModel,ModelA=NewModelA in CLI).
+[INFO] Inline schema created as correctInboundAttachment_request. To have complete control of the model name, set the `title` field or use the modelNameMapping option (e.g. --model-name-mappings correctInboundAttachment_request=NewModel,ModelA=NewModelA in CLI) or inlineSchemaNameMapping option (--inline-schema-name-mappings correctInboundAttachment_request=NewModel,ModelA=NewModelA in CLI).
+[INFO] Inline schema created as AssetCustodySummary_oneOf. To have complete control of the model name, set the `title` field or use the modelNameMapping option (e.g. --model-name-mappings AssetCustodySummary_oneOf=NewModel,ModelA=NewModelA in CLI) or inlineSchemaNameMapping option (--inline-schema-name-mappings AssetCustodySummary_oneOf=NewModel,ModelA=NewModelA in CLI).
+[INFO] Inline schema created as AssetCustodySummary_oneOf_1. To have complete control of the model name, set the `title` field or use the modelNameMapping option (e.g. --model-name-mappings AssetCustodySummary_oneOf_1=NewModel,ModelA=NewModelA in CLI) or inlineSchemaNameMapping option (--inline-schema-name-mappings AssetCustodySummary_oneOf_1=NewModel,ModelA=NewModelA in CLI).
+[INFO] Inline schema created as AssetCustodySummary_oneOf_2. To have complete control of the model name, set the `title` field or use the modelNameMapping option (e.g. --model-name-mappings AssetCustodySummary_oneOf_2=NewModel,ModelA=NewModelA in CLI) or inlineSchemaNameMapping option (--inline-schema-name-mappings AssetCustodySummary_oneOf_2=NewModel,ModelA=NewModelA in CLI).
+[INFO] Processing operation issueAttachmentDownloadGrant
+[INFO] Processing operation getAssetImportTemplate
+[INFO] Processing operation openAssetInitializationWindow
+[INFO] Processing operation listAssetInitializationOperators
+[INFO] Processing operation getCurrentAssetInitializationWindow
+[INFO] Processing operation closeAssetInitializationWindow
+[INFO] Processing operation uploadAssetImportBatch
+[INFO] Processing operation getAssetImportBatch
+[INFO] Processing operation previewAssetImportBatch
+[INFO] Processing operation getAssetImportColumns
+[INFO] Processing operation listAssetImportRows
+[INFO] Processing operation downloadAssetImportPreflightReport
+[INFO] Processing operation downloadAssetImportResult
+[INFO] Processing operation listPendingAssetImportReviews
+[INFO] Processing operation getOwnAssetImportReview
+[INFO] Processing operation requestAssetImportReview
+[INFO] Processing operation listAssetImportReviewRows
+[INFO] Processing operation decideAssetImportReview
+[INFO] Processing operation getOwnAssetImportRollback
+[INFO] Processing operation requestAssetImportRollback
+[INFO] Processing operation listPendingAssetImportRollbacks
+[INFO] Processing operation decideAssetImportRollback
+[INFO] Processing operation executeAssetImportRollback
+[INFO] Processing operation readAttachmentContent
+[INFO] Processing operation listInboundAttachments
+[INFO] Processing operation uploadInboundAttachment
+[INFO] Processing operation correctInboundAttachment
+[INFO] Processing operation listInboundReceipts
+[INFO] Processing operation createInboundReceipt
+[INFO] Processing operation getInboundReceipt
+[INFO] Processing operation updateInboundReceipt
+[INFO] Processing operation submitInboundReceipt
+[INFO] Processing operation cancelInboundReceipt
+[INFO] Processing operation decideInboundReceipt
+[INFO] Processing operation claimInboundReceipt
+[INFO] Processing operation acceptInboundReceiptItem
+[INFO] Processing operation listAssetSavedFilters
+[INFO] Processing operation createAssetSavedFilter
+[INFO] Processing operation deleteAssetSavedFilter
+[INFO] Processing operation updateAssetSavedFilter
+[INFO] Processing operation listAssets
+[INFO] Processing operation createAsset
+[INFO] Processing operation getAsset
+[INFO] Processing operation updateAsset
+[INFO] Processing operation listAssetTimeline
+[INFO] Processing operation copyAsset
+[INFO] Processing operation cancelAssetCard
+[INFO] Processing operation getAssetTag
+[INFO] Processing operation reprintAssetTag
+[INFO] Processing operation batchPrintAssetTags
+[INFO] Processing operation getAssetTagPrintJob
+[INFO] Processing operation replaceAssetTag
+[INFO] Processing operation resolveAssetAccessToken
+[INFO] Processing operation login
+[INFO] Processing operation changeInitialPassword
+[INFO] Processing operation getCurrentUser
+[INFO] Processing operation getMyPermissions
+[INFO] Processing operation logout
+[INFO] Processing operation getIdentityImportTemplate
+[INFO] Processing operation importIdentity
+[INFO] Processing operation listOrganizations
+[INFO] Processing operation createOrganization
+[INFO] Processing operation listActiveOrganizationReferences
+[INFO] Processing operation getOrganization
+[INFO] Processing operation updateOrganization
+[INFO] Processing operation listBusinessParameterVersions
+[INFO] Processing operation createBusinessParameterVersion
+[INFO] Processing operation getCurrentBusinessParameterVersion
+[INFO] Processing operation getBusinessParameterVersion
+[INFO] Processing operation listConfigurationAnomalies
+[INFO] Processing operation getConfigurationAnomaly
+[INFO] Processing operation disableOrganization
+[INFO] Processing operation listEmployees
+[INFO] Processing operation createEmployee
+[INFO] Processing operation getEmployee
+[INFO] Processing operation updateEmployee
+[INFO] Processing operation disableEmployee
+[INFO] Processing operation enableEmployee
+[INFO] Processing operation listSystemAccounts
+[INFO] Processing operation createSystemAccount
+[INFO] Processing operation getSystemAccount
+[INFO] Processing operation changeSystemAccountStatus
+[INFO] Processing operation resetInitialPassword
+[INFO] Processing operation listRoleConfigurations
+[INFO] Processing operation getRoleConfiguration
+[INFO] Processing operation grantSystemAccountRole
+[INFO] Processing operation revokeSystemAccountRole
+[INFO] Processing operation getSystemAccountAuthorization
+[INFO] Processing operation replaceSystemAccountAuthorization
+[INFO] Processing operation revokeSystemAccountAuthorization
+[INFO] Processing operation listAssetCategories
+[INFO] Processing operation createAssetCategory
+[INFO] Processing operation listActiveAssetCategoryReferences
+[INFO] Processing operation getAssetCategory
+[INFO] Processing operation updateAssetCategory
+[INFO] Processing operation disableAssetCategory
+[INFO] Processing operation enableAssetCategory
+[INFO] Processing operation listBrands
+[INFO] Processing operation createBrand
+[INFO] Processing operation listActiveBrandReferences
+[INFO] Processing operation getBrand
+[INFO] Processing operation updateBrand
+[INFO] Processing operation disableBrand
+[INFO] Processing operation enableBrand
+[INFO] Processing operation listManufacturers
+[INFO] Processing operation createManufacturer
+[INFO] Processing operation listActiveManufacturerReferences
+[INFO] Processing operation getManufacturer
+[INFO] Processing operation updateManufacturer
+[INFO] Processing operation disableManufacturer
+[INFO] Processing operation enableManufacturer
+[INFO] Processing operation listWarehouses
+[INFO] Processing operation createWarehouse
+[INFO] Processing operation listActiveWarehouseReferences
+[INFO] Processing operation getWarehouse
+[INFO] Processing operation updateWarehouse
+[INFO] Processing operation disableWarehouse
+[INFO] Processing operation enableWarehouse
+[INFO] Processing operation listLocations
+[INFO] Processing operation createLocation
+[INFO] Processing operation listActiveLocationReferences
+[INFO] Processing operation getLocation
+[INFO] Processing operation updateLocation
+[INFO] Processing operation disableLocation
+[INFO] Processing operation enableLocation
+[INFO] Processing operation listNumberingRules
+[INFO] Processing operation createNumberingRule
+[INFO] Processing operation getNumberingRule
+[INFO] Processing operation updateNumberingRule
+[INFO] Processing operation disableNumberingRule
+[INFO] Processing operation enableNumberingRule
+[INFO] Processing operation miniLogin
+[INFO] Processing operation miniCurrentSession
+[INFO] Processing operation miniLogout
+[INFO] Processing operation miniBindingSupport
+[INFO] Processing operation miniIssueBindingChallenge
+[INFO] Processing operation miniVerifyBinding
+[INFO] Processing operation miniUnbind
+[INFO] Processing operation adminMiniUnbind
+[INFO] Processing operation correctMiniEmployeePhone
+[INFO] 'host' (OAS 2.0) or 'servers' (OAS 3.0) not defined in the spec. Default to [http://localhost] for server URL [http://localhost/api/v1]
+[INFO] Model uploadAssetImportBatch_request not generated since it's marked as unused (due to form parameters) and `skipFormModel` (global property) set to true (default)
+[INFO] Model correctInboundAttachment_request not generated since it's marked as unused (due to form parameters) and `skipFormModel` (global property) set to true (default)
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/Asset.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetBusinessSummary.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetCancelRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetCardStage.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetCategory.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetCategoryActiveReference.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetCategoryActiveReferencePage.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetCategoryCreateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetCategoryUpdateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetCopyRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetCopyResult.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetCreateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetCreatorReference.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetCustodySummary.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetCustodySummaryOneOf.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetCustodySummaryOneOf1.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetCustodySummaryOneOf2.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetException.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetFilterCriteria.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetImportCellError.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetImportColumnList.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetImportDecisionRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetImportMappingRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetImportPendingReview.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetImportPendingRollback.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetImportPreview.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetImportPreviewRow.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetImportReview.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetImportRollback.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetImportRollbackReasonRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetImportRowPage.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetImportTicket.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetInitializationEligibleOperator.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetInitializationWindow.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetInitializationWindowOpenRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetLifecycle.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetQrAccessResult.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetSavedFilter.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetSavedFilterCreateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetSavedFilterUpdateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetTag.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetTagBatchPrintItem.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetTagBatchPrintJob.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetTagBatchPrintRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetTagPrintJob.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetTagPrintJobResult.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetTagPrintJobStatus.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetTagPrintSelection.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetTagReplaceRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetTagReplacementResult.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetTagReprintRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetTimelineEvent.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AssetUpdateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AttachmentReference.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/AuditEvent.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/Brand.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/BrandActiveReference.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/BrandActiveReferencePage.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/BrandCreateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/BrandUpdateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/BusinessParameterSnapshot.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/BusinessParameterVersion.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/BusinessParameterVersionActor.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/BusinessParameterVersionCreateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/BusinessParameterVersionStatus.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/CatalogReference.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/CatalogStatusChangeRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/ChangePasswordRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/ConfigurationAnomaly.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/ConfigurationAnomalyStatus.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/ConfigurationAnomalyType.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/CurrentUser.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/DataScopeGrant.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/DataScopeType.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/DisableEmployeeRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/DisableOrganizationRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/Employee.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/EmployeeCreateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/EmployeeReference.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/EmployeeUpdateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/EnableEmployeeRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/ErrorResponse.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/ExtensionFieldTemplate.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/IdentityImportResult.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundAcceptanceRecord.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundAcceptanceRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundAcceptanceResult.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundAcceptedAsset.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundApprovalScope.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundApprovalScopeItem.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundApproveRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundAssetBusinessLock.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundAssetReference.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundAssetSnapshot.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundCatalogSnapshot.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundDecision.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundDecisionRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundDecisionResult.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundProcessingOwnership.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundReceipt.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundReceiptCancelRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundReceiptCreateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundReceiptItem.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundReceiptItemExecutionStatus.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundReceiptItemInput.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundReceiptSnapshot.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundReceiptStatus.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundReceiptUpdateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundRejectRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InboundTargetReference.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/InitialPasswordResetRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/IssueAttachmentDownloadGrant200Response.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/ListInboundAttachments200Response.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/ListInboundAttachments200ResponseItemsInner.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/Location.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/LocationActiveReference.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/LocationActiveReferencePage.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/LocationCreateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/LocationType.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/LocationUpdateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/LoginRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/Manufacturer.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/ManufacturerActiveReference.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/ManufacturerActiveReferencePage.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/ManufacturerCreateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/ManufacturerUpdateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/MiniBindingChallenge.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/MiniBindingChallengeRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/MiniBindingResult.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/MiniBindingSupport.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/MiniBindingVerifyRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/MiniLoginRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/MiniPhoneCorrectionRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/MiniPhoneCorrectionResult.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/MiniSessionGrant.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/MiniSessionView.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/MiniUnbindRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/NotificationEscalationThresholds.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/NumberingDatePart.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/NumberingMode.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/NumberingRule.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/NumberingRuleCreateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/NumberingRuleUpdateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/NumberingTarget.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/Organization.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/OrganizationActiveReference.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/OrganizationActiveReferencePage.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/OrganizationCreateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/OrganizationReference.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/OrganizationUpdateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/PageAsset.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/PageAssetCategory.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/PageAssetSavedFilter.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/PageAssetTimelineEvent.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/PageBrand.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/PageBusinessParameterVersion.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/PageConfigurationAnomaly.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/PageEmployee.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/PageInboundReceipt.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/PageLocation.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/PageManufacturer.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/PageMeta.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/PageNumberingRule.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/PageOrganization.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/PageSystemAccount.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/PageWarehouse.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/PermissionSnapshot.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/ReferenceStatus.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/Role.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/RoleConfiguration.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/RoleConfigurationPage.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/SensitiveFieldPermission.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/SessionResponse.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/SystemAccount.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/SystemAccountAuthorization.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/SystemAccountAuthorizationReplaceRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/SystemAccountAuthorizationRevokeRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/SystemAccountAuthorizationStatus.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/SystemAccountCreateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/SystemAccountRoleRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/SystemAccountStatus.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/SystemAccountStatusChangeRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/TodoReference.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/UploadInboundAttachment201Response.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/UsageMode.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/Warehouse.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/WarehouseActiveReference.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/WarehouseActiveReferencePage.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/WarehouseCreateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/model/WarehouseUpdateRequest.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/api/AccountAdminApi.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/api/AssetImportApi.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/api/AssetsApi.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/api/AttachmentApi.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/api/AuthApi.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/api/InboundApi.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/api/MasterDataApi.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/api/MiniAuthApi.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/api/MiniBindingApi.java
+[INFO] writing file <workspace>/backend/target/generated-sources/fams-product/java/src/main/java/com/fams/product/contract/api/MiniIdentitySupportApi.java
+[INFO] Skipping generation of Webhooks.
+[INFO] Skipping generation of supporting files.
+############################################################################################
+# Thanks for using OpenAPI Generator.                                                      #
+# We appreciate your support! Please consider donating to help us maintain this project.   #
+# https://opencollective.com/openapi_generator/donate                                      #
+############################################################################################
+[INFO] 
+[INFO] --- openapi-generator:7.25.0:generate (generate-typescript-contract) @ contract-generation-probe ---
+[INFO] Generating with dryRun=false
+[INFO] No .openapi-generator-ignore file found.
+[INFO] OpenAPI Generator: typescript-fetch (client)
+[INFO] Generator 'typescript-fetch' is considered stable.
+[INFO] Hint: Environment variable 'TS_POST_PROCESS_FILE' (optional) not defined. E.g. to format the source code, please try 'export TS_POST_PROCESS_FILE="/usr/local/bin/prettier --write"' (Linux/Mac)
+[INFO] Note: To enable file post-processing, 'enablePostProcessFile' must be set to `true` (--enable-post-process-file for CLI).
+[INFO] writing file <workspace>/backend/../packages/api-types/target/generated-sources/openapi/typescript/models/ContractProbe.ts
+[INFO] Skipped <workspace>/backend/../packages/api-types/target/generated-sources/openapi/typescript/docs/ContractProbe.md (Skipped by modelDocs options supplied by user.)
+[INFO] writing file <workspace>/backend/../packages/api-types/target/generated-sources/openapi/typescript/models/ErrorResponse.ts
+[INFO] Skipped <workspace>/backend/../packages/api-types/target/generated-sources/openapi/typescript/docs/ErrorResponse.md (Skipped by modelDocs options supplied by user.)
+[INFO] Skipping generation of APIs.
+[INFO] Skipping generation of Webhooks.
+[INFO] Skipping generation of supporting files.
+############################################################################################
+# Thanks for using OpenAPI Generator.                                                      #
+# We appreciate your support! Please consider donating to help us maintain this project.   #
+# https://opencollective.com/openapi_generator/donate                                      #
+############################################################################################
+[INFO] 
+[INFO] --- resources:3.5.0:resources (default-resources) @ contract-generation-probe ---
+[INFO] Copying 5 resources from src/main/resources to target/classes
+[INFO] Copying 21 resources from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ contract-generation-probe ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 371 source files with javac [debug parameters release 21] to target/classes
+[INFO] <workspace>/backend/src/main/java/com/fams/asset/AssetService.java: 某些输入文件使用或覆盖了已过时的 API。
+[INFO] <workspace>/backend/src/main/java/com/fams/asset/AssetService.java: 有关详细信息, 请使用 -Xlint:deprecation 重新编译。
+[INFO] 
+[INFO] >>> spotbugs:4.10.4.1:check (default-cli) > :spotbugs @ contract-generation-probe >>>
+[INFO] 
+[INFO] --- spotbugs:4.10.4.1:spotbugs (spotbugs) @ contract-generation-probe ---
+[INFO] Done SpotBugs Analysis....
+[INFO] Skipping com.github.spotbugs:spotbugs-maven-plugin:4.10.4.1:spotbugs report goal
+[INFO] 
+[INFO] <<< spotbugs:4.10.4.1:check (default-cli) < :spotbugs @ contract-generation-probe <<<
+[INFO] 
+[INFO] 
+[INFO] --- spotbugs:4.10.4.1:check (default-cli) @ contract-generation-probe ---
+[INFO] BugInstance size is 0
+[INFO] Error size is 0
+[INFO] No errors/warnings found
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  15.419 s
+[INFO] Finished at: 2026-10-06T14:55:30+08:00
+[INFO] ------------------------------------------------------------------------
+SPOTBUGS_EXIT=0

@@ -1,11 +1,15 @@
 # D6-10 微信登录绑定任务卡
 
-状态：`IN_PROGRESS` · 2026-10-05 · 分支 `codex/d6-10a-session` · 基线 `df8cb6d`。
+状态：D6-10A `IN_REVIEW`，父任务 `IN_PROGRESS` · 2026-10-06 · 分支 `codex/d6-10a-session` · 基线 `df8cb6d`。
 
 实施负责人：当前 AI 会话。独立复核人：待用户指定，本轮自审不能替代独立复核。
 
 依据：PRD V1.5 §11.1、AC-15/AC-39、开发计划 §三.5、A-10-01/02；页面 M01/M14，视觉基线 D0.4。
 前置 D6-04、D6-05、D6-09A 已本地 DEV_VERIFIED。D6-09B、微信 AppID/服务端资源、短信和 HTTPS 尚未具备真实验证证据。
+
+当前已实现持久会话、短信挑战与限流、绑定/换绑/解绑、受审计号码更正，以及 M01/M14 原生页面。固定候选 `d903199` 完整产品门禁已通过，等待独立复核；D6-10B 真实通道与真机验证尚未开始。
+
+## 2026-10-05 初始切片与约束（历史记录）
 
 本次先交付 D6-10A 的持久会话与客户端请求传输切片：V17 保存绑定历史及会话摘要，服务端身份交换端口，绑定状态读取、30 分钟闲置/8 小时绝对期限、当前账号/绑定/权限重验和登出。没有生产身份交换适配时返回 503；测试端口只存在测试源码。
 
@@ -50,3 +54,26 @@ M01/M14 为原生 app.json、Page、WXML/WXSS 和 CommonJS 构建包，调用 wx
 真实独有 MySQL + HTTP 定向：MiniBindingHttpTest 13、MiniSessionHttpTest 6、AuthHttpTest 7、IdentityMasterDataHttpTest 24，共 **50/50**，零失败/错误/跳过，清理退出 0。包含同键并发、会话失效后的事务拒绝、号码恢复后旧验证码拒绝、管理员/CSRF/版本/审计以及普通 PATCH/CSV 绕过拒绝。页面处理器实际访问 Spring HTTP 并核对数据库解绑与会话撤销；微信身份与短信捕获、loopback 传输仍为显式替身，不称作真实 WXML 渲染、微信、短信、HTTPS 或真机通过。
 
 客户端 18/18、lint/typecheck、原生构建及门禁验证器 32/32 通过。V16→V17→V18 升级与完整产品候选门禁将验证固定提交。D6-10A 保持 IN_PROGRESS，未独立复核；父任务 IN_PROGRESS，D6-10B NOT_STARTED。
+
+## 独立复核清单（未执行）
+
+非实施者须由用户指定并记录身份、固定候选和逐项结论；本轮自审与门禁均不替代该复核。
+
+1. 未配置微信交换或短信适配时返回 503；未知员工、非登记号码、停用员工、其他微信身份或设备均不能完成绑定。支持入口匿名可读且不泄漏完整登记号码。
+2. 5 分钟有效期、60 秒冷却、每人/设备每日 10 次和连续 5 次错误锁定 30 分钟持久化；同键并发只产生一次绑定，异载荷/旧版本拒绝；短信失败不激活挑战。
+3. 换绑撤销全部旧会话；用户/管理员解绑受当前凭证及角色限制，管理员不能建立绑定；在过滤器验证后撤权，写事务仍拒绝，A-10-01/02 不能由旧会话或旧绑定恢复权限。
+4. 登记号码更正要求核验方式、原因和操作者，保存加密前后值，使旧挑战失效并保留已有绑定；普通人员 PATCH/CSV UPDATE 不能绕过审计。版本冲突及事务失败不留下半成品。
+5. M01/M14 与实际 Page 处理器、wx 适配、构建产物一致；网络失败重试保留请求身份，退出/解绑/失效清理身份缓存，手机号和验证码不持久保存。现有运行测试使用微信/SMS/loopback 替身，WXML 渲染、真实微信、短信、HTTPS 和真机必须由 D6-10B 补证。
+6. V16→V17→V18 升级保留旧数据、重复执行不重迁移；按冻结 Java 21.0.7、Node 24.18.0 执行候选门禁。运行资产清理后可恢复工作树；未修改历史迁移、未降低覆盖门槛。
+
+## 2026-10-06 最终候选送审
+
+功能提交 `5e339d5` 完成绑定与页面；`b6ac2e3` 显式传递 Node 运行路径并将 source-map-js 1.2.1 更新为 1.2.2；`f3352cd` 区分主数据适配类与认证端口名；`d903199` 将配置校验移到 Spring PostConstruct，使构造安全检查和 CGLIB 代理同时成立。没有增加静态检查排除规则、降低覆盖门槛或跳过页面联测。
+
+固定代码候选 **`d903199`** 在隔离工作树以 Java 21.0.7、Node 24.18.0 和独有 MySQL 8.4.11 执行完整 `scripts/verify-product-development.py`，最终退出 **0**。必需 Java 报告 **79** 项，Checkstyle/SpotBugs 0；行覆盖 **6334/6874（92.14%）**、分支覆盖 **2377/3152（75.41%）**。双端 lint/typecheck、客户端 **18/18**、原生小程序包构建、依赖审计 0 漏洞、管理面隔离、应用及数据库重启恢复与最终清理全部通过。[完整候选日志](evidence/D6-10A-product-gate-d903199.txt)、[50 项真实 HTTP/MySQL 定向日志](evidence/D6-10A-binding-http.txt)、[最终 SpotBugs 定向检查](evidence/D6-10A-spotbugs-fixed.txt)。重启恢复仍是兼容探针检查，不能据此声称真实微信绑定或真机链路恢复已验证。
+
+失败记录保留：[首次 Node 加载失败](evidence/D6-10A-product-gate-5e339d5-node-failure.txt)、[隔离工作树 PATH 失败](evidence/D6-10A-product-gate-b6ac2e3-path-failure.txt)、[静态检查失败](evidence/D6-10A-product-gate-b6ac2e3-quality-failure.txt)、[final 控制器启动失败](evidence/D6-10A-product-gate-f3352cd-startup-failure.txt)及[完整异常节选](evidence/D6-10A-controller-startup-diagnostic.txt)。隔离工作树 shell 会优先命中系统 Node 16；启动门禁必须把冻结 Node 24.18.0 的真实 bin 目录前置，再核对日志 `SELECTED_NODE=v24.18.0`。只设置 JAVA_HOME 不足以固定 Node。
+
+AOCI 本轮 8/8 块、520 条完整交付且 Host 已确认，无须修改 `overview_delivery.chunk_tokens=8000`；严格 Challenge 1/10 为 partial，正式治理未对齐，保留既有未提交认知资产并不宣称完整可靠认知。GitNexus 刷新成功；重命名预览把同名认证接口也列入，已逐项剔除，认证端口和服务注入保持原名。
+
+**D6-10A：IN_REVIEW；D6-10：IN_PROGRESS；D6-10B：NOT_STARTED。** 非实施者复核仍未执行，按上方清单记录身份与逐项结论后才可授予 A 本地 DEV_VERIFIED。AppID、微信交换、短信、HTTPS、附件外部资源及真机证据另由 D6-09B/10B 准备。未合并 main、未推送；仓库无远端。历史契约审计的既有失败仍单列，未以本次产品门禁掩盖。

@@ -12,7 +12,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-10A 绑定逻辑和 M01/M14 已实现，正在固定候选验证；D6-09B/10B 等待真实资源，D6-01B/03B 待外部权限 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-10A 绑定逻辑和 M01/M14 候选门禁通过，待独立复核；D6-09B/10B 等待真实资源，D6-01B/03B 待外部权限 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
@@ -85,4 +85,4 @@
 
 ## 2026-10-05 开发续接
 
-从 main `df8cb6d` 开始 D6-10A，当前功能分支 `codex/d6-10a-session`。短信验证码、绑定/换绑/解绑、受审计号码更正及 M01/M14 原生页面已实现，下一步完成固定候选门禁与独立复核；真实外部资源由 D6-10B 承担。详细状态和证据仅在现役计划及 [D6-10 任务卡](docs/development/D6-10-task-card.md)维护。开始时已有 `.aoci/baseline.json` 和 `aoci.code.txt` 未提交变化，保留且不混入功能提交。
+从 main `df8cb6d` 开始 D6-10A，当前功能分支 `codex/d6-10a-session`。短信验证码、绑定/换绑/解绑、受审计号码更正及 M01/M14 原生页面已实现，固定候选 `d903199` 完整产品门禁退出 0，下一步独立复核；真实外部资源由 D6-10B 承担。详细状态和证据仅在现役计划及 [D6-10 任务卡](docs/development/D6-10-task-card.md)维护。开始时已有 `.aoci/baseline.json` 和 `aoci.code.txt` 未提交变化，保留且不混入功能提交。
