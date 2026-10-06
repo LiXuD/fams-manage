@@ -333,7 +333,8 @@ class MiniBindingHttpTest {
         try {
             Path script = Path.of(System.getProperty("user.dir")).getParent()
                     .resolve("apps/miniprogram/test/runtime-binding-http.mjs");
-            var builder = new ProcessBuilder("rtk", "proxy", "node", script.toString());
+            String node = System.getenv("FAMS_TEST_NODE_EXECUTABLE");
+            var builder = new ProcessBuilder("rtk", "proxy", node == null ? "node" : node, script.toString());
             builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
             builder.environment().put("FAMS_TEST_SMS_FILE", smsFile.toString());
             process = builder.redirectErrorStream(true).redirectOutput(output.toFile()).start();

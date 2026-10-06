@@ -1013,6 +1013,10 @@ def runtime_environment(context: RuntimeContext) -> dict[str, str]:
     environment = os.environ.copy()
     environment.update(
         {
+            "FAMS_TEST_NODE_EXECUTABLE": require_command(
+                "resolved Node runtime", ["proxy", "node", "-p", "process.execPath"],
+                show=False,
+            ).strip(),
             "D6_02B_TEST_DATASOURCE_URL": jdbc_url(context),
             "D6_02B_TEST_DATASOURCE_USERNAME": context.username,
             "D6_02B_TEST_DATASOURCE_PASSWORD": context.password,
