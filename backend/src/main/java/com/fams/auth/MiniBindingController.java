@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @Profile("fams-product")
-class MiniBindingController implements MiniBindingApi {
+final class MiniBindingController implements MiniBindingApi {
     private final MiniBindingService bindings;
     private final ObjectProvider<MiniWechatIdentityPort> wechat;
     private final ObjectProvider<MiniSmsPort> sms;

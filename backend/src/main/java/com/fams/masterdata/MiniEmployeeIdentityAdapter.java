@@ -13,11 +13,11 @@ import org.springframework.stereotype.Component;
 /** Authentication receives a versioned identity result, never the registered phone value. */
 @Component
 @Profile("fams-product")
-public class MiniEmployeeIdentityPort implements com.fams.auth.MiniEmployeeIdentityPort {
+public class MiniEmployeeIdentityAdapter implements com.fams.auth.MiniEmployeeIdentityPort {
     private final JdbcTemplate jdbc;
     private final MasterDataPhoneCodec codec;
 
-    MiniEmployeeIdentityPort(JdbcTemplate jdbc, MasterDataPhoneCodec codec) {
+    MiniEmployeeIdentityAdapter(JdbcTemplate jdbc, MasterDataPhoneCodec codec) {
         this.jdbc = jdbc;
         this.codec = codec;
     }
