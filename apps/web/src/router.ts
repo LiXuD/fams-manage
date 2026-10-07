@@ -8,6 +8,7 @@ import AssetImportView from "@/views/AssetImportView.vue";
 import AssetImportReviewView from "@/views/AssetImportReviewView.vue";
 import AssetInitializationView from "@/views/AssetInitializationView.vue";
 import InboundView from "@/views/InboundView.vue";
+import RequisitionView from "@/views/RequisitionView.vue";
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -20,6 +21,7 @@ export const router = createRouter({
     { path: "/asset-import-reviews", name: "asset-import-review", component: AssetImportReviewView, meta: { requiresAuth: true } },
     { path: "/asset-initialization", name: "asset-initialization", component: AssetInitializationView, meta: { requiresAuth: true } },
     { path: "/inbound", name: "inbound", component: InboundView, meta: { requiresAuth: true } },
+    { path: "/requisitions", name: "requisitions", component: RequisitionView, meta: { requiresAuth: true } },
   ],
 });
 

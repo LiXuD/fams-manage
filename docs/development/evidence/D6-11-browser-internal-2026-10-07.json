@@ -1,0 +1,106 @@
+{
+  "task": "D6-11",
+  "date": "2026-10-07",
+  "tier": "local internal development verification",
+  "candidate_binding": "D6-11 working tree before final identity/followup/list protections; final fixed candidate gate recorded separately",
+  "environment": {
+    "browser": "Codex in-app browser",
+    "web": "Vue localhost:5173",
+    "backend": "Spring Boot Java 21 localhost:8080",
+    "database": "task-owned pinned MySQL 8.4.11",
+    "fixture_roles": [
+      "EMPLOYEE",
+      "ASSET_ADMIN",
+      "WAREHOUSE_OPERATOR"
+    ]
+  },
+  "journey": [
+    {
+      "operation": "employee saves quantity draft and submits",
+      "result": "PENDING_ADMIN_DECISION"
+    },
+    {
+      "operation": "asset administrator logs in and approves",
+      "result": "WAITING_WAREHOUSE_CLAIM"
+    },
+    {
+      "operation": "warehouse operator logs in, claims whole request and allocates two assets",
+      "result": "two exclusive active REQUISITION locks"
+    },
+    {
+      "operation": "warehouse records one STOCK_SHORTAGE",
+      "result": "WAITING_HANDOVER",
+      "quantities": [
+        3,
+        0,
+        2,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "operation": "backend JVM SIGKILL and restart with same database and keys",
+      "result": "session, processing owner, two locks and quantities retained"
+    },
+    {
+      "operation": "employee logs in, requests discrepancy review and linked followup",
+      "result": "one source link and ordinary draft of quantity 1"
+    },
+    {
+      "operation": "employee revises followup purpose and submits",
+      "result": "PENDING_ADMIN_DECISION; original quantity and locks unchanged"
+    }
+  ],
+  "persistence": {
+    "original_request": "REQ-052d1c50-7205-4db8-abec-202b0a201136",
+    "original_status": "WAITING_HANDOVER",
+    "original_version": 6,
+    "original_quantities": [
+      3,
+      0,
+      2,
+      0,
+      1,
+      0
+    ],
+    "followup_request": "REQ-69f0a881-384b-44b7-b475-9470e57bb077",
+    "followup_status": "PENDING_ADMIN_DECISION",
+    "followup_version": 2,
+    "followup_quantities": [
+      1,
+      1,
+      0,
+      0,
+      0,
+      0
+    ],
+    "active_asset_locks": 2,
+    "source_links": 1,
+    "successful_migrations": 20,
+    "audit_counts": {
+      "Created": 1,
+      "Submitted": 2,
+      "Approved": 1,
+      "Claimed": 1,
+      "Allocated": 2,
+      "Unfulfilled": 1,
+      "Disputed": 1,
+      "FollowupCreated": 1,
+      "Revised": 1
+    }
+  },
+  "browser_console_warnings_errors": [],
+  "boundaries": {
+    "real_PC_browser_service_database": true,
+    "actual_SMS_or_WeChat": false,
+    "real_mini_device": false,
+    "mini_handler_public_HTTP_MySQL": "separate RequisitionHttpTest; explicit provider exchange and loopback transport substitutes",
+    "physical_delivery_or_receipt": "D6-12"
+  },
+  "cleanup": {
+    "owned_backend_and_web_processes": "stopped",
+    "owned_mysql_container": "removed",
+    "temporary_directory": "removed"
+  }
+}
