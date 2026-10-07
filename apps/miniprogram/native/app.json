@@ -1,6 +1,18 @@
 {
-  "pages": ["pages/login/index", "pages/mine/index", "pages/request-center/index", "pages/requests/index", "pages/department-requests/index"],
-  "window": { "navigationBarTitleText": "企业资产", "navigationBarBackgroundColor": "#ffffff", "navigationBarTextStyle": "black", "backgroundColor": "#f3f6fa" },
+  "pages": [
+    "pages/login/index",
+    "pages/mine/index",
+    "pages/request-center/index",
+    "pages/requests/index",
+    "pages/department-requests/index",
+    "pages/receipts/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "企业资产",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f3f6fa"
+  },
   "style": "v2",
   "sitemapLocation": "sitemap.json"
 }

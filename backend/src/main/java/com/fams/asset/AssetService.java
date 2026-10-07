@@ -768,6 +768,10 @@ class AssetService {
                     organizationReference(using, references), employeeReference(employee, references),
                     reference(currentLocation, references.get(currentLocation, "location"))));
         }
+        if (row.get("physical_destination_json") != null) {
+            result.setPhysicalDestination(json.readValue(row.get("physical_destination_json").toString(),
+                    com.fams.product.contract.model.AssetPhysicalDestination.class));
+        }
         result.setInboundBusinessDate(date(row, "inbound_business_date"));
         result.setLastInventoryBusinessDate(date(row, "last_inventory_business_date"));
         return result;

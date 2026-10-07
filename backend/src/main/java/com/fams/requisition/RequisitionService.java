@@ -1133,12 +1133,15 @@ class RequisitionService {
             return result + " OR r.submitted_at IS NOT NULL";
         }
         if (current.has(Role.WAREHOUSE_OPERATOR)) {
+            args.add(current.id());
             return result
                     + " OR r.request_status IN"
                     + " ('WAITING_WAREHOUSE_CLAIM','WAREHOUSE_PROCESSING','WAITING_HANDOVER','PARTIALLY_COMPLETED','COMPLETED','UNFULFILLABLE')"
                     + " OR (r.request_status='PENDING_ADMIN_DECISION' AND EXISTS (SELECT 1 FROM"
                     + " fams_requisition_change_proposal p WHERE p.request_id=r.id AND"
-                    + " p.proposal_status='PENDING'))";
+                    + " p.proposal_status='PENDING')) OR (r.request_status='CANCELLED' AND EXISTS"
+                    + " (SELECT 1 FROM fams_requisition_ownership o WHERE o.request_id=r.id AND"
+                    + " o.processor_account_id=?))";
         }
         args.add(current.employeeId());
         args.add(current.employeeId());
@@ -1260,6 +1263,23 @@ class RequisitionService {
                                 Objects.requireNonNull(
                                         one("SELECT * FROM fams_requisition WHERE id=?", id))));
         value.put("demands", cleanRows(demands(id)));
+        value.put(
+                "handovers",
+                cleanRows(
+                        db.queryForList(
+                                "SELECT h.* FROM fams_requisition_handover h JOIN"
+                                    + " fams_requisition_allocation a ON a.id=h.allocation_id WHERE"
+                                    + " a.request_id=? ORDER BY a.id",
+                                id)));
+        value.put(
+                "handoverEvents",
+                cleanRows(
+                        db.queryForList(
+                                "SELECT e.* FROM fams_requisition_handover_event e JOIN"
+                                    + " fams_requisition_allocation a ON a.id=e.allocation_id WHERE"
+                                    + " a.request_id=? ORDER BY e.id",
+                                id)));
+
         value.put(
                 "decisions",
                 cleanRows(

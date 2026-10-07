@@ -5,7 +5,7 @@ import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { requisitionMessage, requisitionRequest } from "@/requisition/api";
 import type { Requisition, RequisitionCatalog, RequisitionChoice, RequisitionDemand, RequisitionDemandInput,
-  RequisitionInventory, RequisitionPage, RequisitionSummary } from "../../../../packages/api-types/src/requisition";
+  RequisitionAllocation, RequisitionInventory, RequisitionPage, RequisitionSummary } from "../../../../packages/api-types/src/requisition";
 
 const route = useRoute(); const router = useRouter(); const session = useSessionStore();
 const rows = ref<RequisitionSummary[]>([]); const selected = ref<Requisition | null>(null);
@@ -13,6 +13,7 @@ const busy = ref(false); const error = ref(""); const notice = ref(""); const pa
 const status = ref(""); const formVisible = ref(false); const editing = ref<"new" | "revise" | "change">("new");
 const form = ref<RequisitionDemandInput[]>([]); const catalogs = ref<Record<string, RequisitionChoice[]>>({});
 const canShared = ref(false); const selfEmployee = ref(""); const selfOrg = ref("");
+const observedCode = ref(""); const destination = ref(""); const evidence = ref(""); const returned = ref(false);
 const reason = ref(""); const shortageReason = ref("STOCK_SHORTAGE"); const shortageQuantity = ref(1);
 const inventory = ref<RequisitionInventory | null>(null); const inventoryDemand = ref<RequisitionDemand | null>(null);
 const inventoryPage = ref(1); const replacementId = ref("");
@@ -106,6 +107,13 @@ async function findInventory(demand: RequisitionDemand, nextPage = 1) {
     inventoryDemand.value = demand; inventoryPage.value = nextPage;
   } catch (e) { error.value = requisitionMessage(e); } finally { busy.value = false; }
 }
+async function handover(allocation: RequisitionAllocation, action: "deliver" | "cancel" | "recovery" | "recover") {
+  const body = { allocationVersion: allocation.version, lockVersion: allocation.lockVersion,
+    assetVersion: allocation.assetSnapshotJson.version ?? 0, observedAssetCode: observedCode.value,
+    ...(action === "deliver" ? { destination: destination.value, evidence: evidence.value }
+      : { reason: reason.value, inspectionEvidence: evidence.value, physicalReturned: returned.value }) };
+  await mutate(`/${selected.value!.id}/allocations/${allocation.id}/${action}`, body);
+}
 onMounted(async () => {
   busy.value = true;
   try {
@@ -185,7 +193,24 @@ onMounted(async () => {
       <p v-for="record in selected.unfulfillable" :key="record.id">无法满足 {{ record.quantity }} 件：{{ reasonLabels[record.reasonCode] }} {{ record.reasonDescription }}；当时可用 {{ record.inventoryQuerySummaryJson.availableCount }} 件，查询于 {{ record.inventoryQuerySummaryJson.queriedAt }}</p>
       <p v-for="allocation in selected.allocations" :key="allocation.id">{{ allocation.assetSnapshotJson.assetCode }} · {{ allocation.assetSnapshotJson.name }} · {{ allocation.allocationStatus === 'WAITING_DELIVERY' ? '待交出' : allocation.allocationStatus === 'CANCELLED' ? '已取消分配（保留历史）' : allocation.allocationStatus }}
         <button v-if="canExecute && allocation.allocationStatus === 'WAITING_DELIVERY'" :disabled="busy || retryable || !reason.trim()" @click="replacementId = allocation.id; findInventory(selected!.demands.find(d => d.id === allocation.demandId)!)">更换未交出资产</button></p>
-      <p>分配仅形成待交出事实；实物交出与接收将在后续交接功能办理。</p>
+      <fieldset v-if="canExecute" :disabled="busy || retryable"><legend>实物交出与收回凭据</legend>
+        <label>核对实物编码<input v-model="observedCode" maxlength="128" /></label>
+        <label>临时去向<input v-model="destination" maxlength="1000" /></label>
+        <label>交付 / 收回验收依据<textarea v-model="evidence" maxlength="1000" /></label>
+        <label><input v-model="returned" type="checkbox" />已实际收回并验收，资产可继续在原仓位保管</label>
+      </fieldset>
+      <div v-for="a in selected.allocations" :key="'handover-' + a.id" class="req-actions">
+        <span>{{ a.assetSnapshotJson.assetCode }}</span>
+        <template v-if="canExecute && a.allocationStatus === 'WAITING_DELIVERY'">
+          <button :disabled="busy || retryable || !observedCode.trim() || !destination.trim() || !evidence.trim()" @click="handover(a, 'deliver')">记录实物交出</button>
+          <button :disabled="busy || retryable || !reason.trim()" @click="handover(a, 'cancel')">取消未交出分配</button>
+        </template>
+        <button v-if="canExecute && a.allocationStatus === 'DELIVERED_WAITING_RECEIPT'" :disabled="busy || retryable || !reason.trim()" @click="handover(a, 'recovery')">登记待收回取消</button>
+        <button v-if="canExecute && a.allocationStatus === 'RECOVERY_PENDING_CANCEL'" :disabled="busy || retryable || !returned || !observedCode.trim() || !evidence.trim() || !reason.trim()" @click="handover(a, 'recover')">确认收回验收并取消</button>
+      </div>
+      <p v-for="h in selected.handovers" :key="h.allocationId">交出 {{ h.deliveredAt }} · 截止 {{ h.receiptDeadlineAt }} · 实物去向 {{ h.destinationText }}</p>
+      <p v-for="e in selected.handoverEvents" :key="e.id">{{ e.eventType }} · {{ e.evidenceText }} · {{ e.occurredAt }}</p>
+      <p>交出后仍保留正式在库事实和锁；接收人从小程序“待接收”核对实物，成功后更新正式责任。</p>
     </section>
     <section v-if="inventory && inventoryDemand"><h3>可用库存 · {{ inventory.total }} 件</h3><p>仅列出在库、正常、正式卡且无业务锁的同类资产；提交时再次核对。</p>
       <div v-for="asset in inventory.items" :key="asset.id" class="req-actions"><span>{{ asset.assetCode }} · {{ asset.name }} · {{ asset.model }}</span>

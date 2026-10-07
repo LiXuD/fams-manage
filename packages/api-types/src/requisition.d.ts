@@ -16,11 +16,14 @@ export interface RequisitionDemand {
 }
 export interface RequisitionAllocation {
     id: string; demandId: string; assetId: string; allocationStatus: string; version: number; lockVersion: number;
-    assetSnapshotJson: { assetCode: string; name: string }; predecessorAllocationId?: string;
+    assetSnapshotJson: { assetCode: string; name: string; version: number }; predecessorAllocationId?: string;
 }
 export interface Requisition {
     id: string; requestNo: string; creatorAccountId: string; creatorUsernameSnapshot: string;
     requestStatus: string; requestVersion: number; version: number; sourceRequestId?: string; sourceDemandId?: string;
+    handovers?: Array<{ allocationId: string; deliveredAt: string; receiptDeadlineAt: string; destinationText: string;
+        temporaryEmployeeId: string; deliveryEvidence: string }>;
+    handoverEvents?: Array<{ id: string; allocationId: string; eventType: string; evidenceText: string; occurredAt: string }>;
     demands: RequisitionDemand[]; allocations: RequisitionAllocation[];
     decisions: Array<{ id: string; decisionResult: string; requestVersion: number; commentText?: string }>;
     unfulfillable: Array<{ id: string; demandId: string; quantity: number; reasonCode: string;
@@ -39,3 +42,11 @@ export interface RequisitionInventory {
     items: Array<RequisitionReference & { assetCode: string; name: string; model?: string }>;
     total: number; page: number; pageSize: number;
 }
+
+export interface PendingReceipt { id: string; requestId: string; requestNo: string; version: number;
+    assetSnapshotJson: { assetCode: string; name: string; model?: string }; deliveredAt: string;
+    receiptDeadlineAt: string; destinationText: string }
+export interface ReceiptDetail { requestId: string; requestNo: string; requestVersion: number;
+    allocationId: string; allocationStatus: string; allocationVersion: number;
+    asset: { assetCode: string; name: string; model?: string };
+    handover: { deliveredAt: string; receiptDeadlineAt: string; destinationText: string } }

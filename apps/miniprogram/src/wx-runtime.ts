@@ -4,6 +4,7 @@ import { type WechatLogin } from "./binding.ts";
 export interface WxApi {
     request(input: { url: string; method: string; header: Record<string, string>; data?: unknown; timeout: number;
         success(reply: { statusCode: number; data: unknown }): void; fail(error: unknown): void }): void;
+    scanCode?(input: { onlyFromCamera: boolean; success(reply: { result: string }): void; fail(error: unknown): void }): void;
     login(input: { timeout: number; success(result: { code: string }): void; fail(error: unknown): void }): void;
     getStorageSync(key: string): unknown;
     setStorageSync(key: string, value: unknown): void;

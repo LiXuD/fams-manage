@@ -36,6 +36,18 @@ const locations = ref<AssetReference[]>([]);
 
 const canWrite = session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false;
 
+function custodyLabel(asset: AssetCard): string {
+  const custody = asset.currentCustody;
+  if (!custody) return "尚未入库";
+  const referenceId = (value: unknown): string => {
+    if (typeof value !== "object" || value === null || !("id" in value)) return "—";
+    return String(value.id);
+  };
+  if (custody.custodyType === "STORAGE") return `在库 · 仓库 ${referenceId(custody.warehouse)}`;
+  if (custody.custodyType === "SHARED") return `部门公用 · 责任人 ${referenceId(custody.departmentResponsibleEmployee)}`;
+  return `个人保管 · 责任人 ${referenceId(custody.responsibleEmployee)}`;
+}
+
 function selectedReference(items: AssetReference[], id: string): AssetReference | undefined {
   return items.find((item) => item.id === id);
 }
@@ -172,14 +184,14 @@ onMounted(load);
         <button class="secondary-button" type="submit">查询</button>
       </form>
       <div class="asset-table-wrap"><table class="asset-table">
-        <thead><tr><th>资产编码</th><th>名称</th><th>型号</th><th>生命周期</th><th>建卡阶段</th><th>操作</th></tr></thead>
+        <thead><tr><th>资产编码</th><th>名称</th><th>型号</th><th>生命周期</th><th>建卡阶段</th><th>正式保管</th><th>实物去向</th><th>操作</th></tr></thead>
         <tbody>
           <tr v-for="asset in rows" :key="asset.id">
             <td>{{ asset.assetCode }}</td><td>{{ asset.name }}</td><td>{{ asset.model ?? "—" }}</td>
             <td>{{ asset.lifecycle }}</td><td>{{ asset.cardStage }}</td>
-            <td><button class="text-button" type="button" @click="openCard(asset.id)">详情</button></td>
+            <td>{{ custodyLabel(asset) }}</td><td>{{ asset.physicalDestination?.destination ?? "—" }}</td><td><button class="text-button" type="button" @click="openCard(asset.id)">详情</button></td>
           </tr>
-          <tr v-if="rows.length === 0"><td colspan="6">暂无符合条件的资产</td></tr>
+          <tr v-if="rows.length === 0"><td colspan="8">暂无符合条件的资产</td></tr>
         </tbody>
       </table></div>
       <div class="asset-pagination"><span>共 {{ total }} 项 · 第 {{ page }} 页</span>
@@ -204,7 +216,8 @@ onMounted(load);
 
     <section v-if="selected" class="asset-panel" aria-labelledby="detail-title">
       <div class="asset-heading"><div><h2 id="detail-title">{{ selected.name }}</h2><p>{{ selected.assetCode }} · {{ selected.cardStage }} · 版本 {{ selected.version }}</p></div><button class="secondary-button" type="button" @click="selected = null">关闭</button></div>
-      <dl class="asset-facts"><div><dt>分类</dt><dd>{{ selected.category?.id ?? "—" }}</dd></div><div><dt>型号</dt><dd>{{ selected.model ?? "—" }}</dd></div><div><dt>所属组织</dt><dd>{{ selected.organization?.id ?? "—" }}</dd></div><div><dt>当前保管</dt><dd>{{ selected.currentCustody ? "已正式保管" : "尚未入库" }}</dd></div></dl>
+      <p v-if="selected.physicalDestination">实物去向：{{ selected.physicalDestination.destination }} · {{ selected.physicalDestination.status }}；正式保管仍以上方资产事实为准。</p>
+      <dl class="asset-facts"><div><dt>分类</dt><dd>{{ selected.category?.id ?? "—" }}</dd></div><div><dt>型号</dt><dd>{{ selected.model ?? "—" }}</dd></div><div><dt>所属组织</dt><dd>{{ selected.organization?.id ?? "—" }}</dd></div><div><dt>当前保管</dt><dd>{{ custodyLabel(selected) }}</dd></div></dl>
       <div class="asset-actions">
         <button v-if="canWrite" class="secondary-button" :disabled="busy" type="button" @click="copyCurrent">复制建卡</button>
         <button v-if="canWrite && selected.cardStage !== 'PENDING_INBOUND' && selected.cardStage !== 'CANCELLED'" class="secondary-button" :disabled="busy" type="button" @click="correctNotes">修正备注</button>

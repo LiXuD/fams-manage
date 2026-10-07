@@ -9,6 +9,7 @@ export interface MiniServices {
     createKey(): string;
     navigate(url: string): void;
     confirm(title: string, content: string): Promise<boolean>;
+    scan?(): Promise<string>;
 }
 
 function message(error: unknown): string {

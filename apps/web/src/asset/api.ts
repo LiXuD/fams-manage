@@ -16,6 +16,7 @@ export interface AssetCard {
   plannedInboundWarehouse?: AssetReference | null;
   plannedInboundLocation?: AssetReference | null;
   currentCustody?: Record<string, unknown> | null;
+  physicalDestination?: { destination: string; status: string; temporaryEmployeeId: string; deliveredAt: string; receiptDeadlineAt: string } | null;
 }
 
 export interface Page<T> { page: number; pageSize: number; total: number; items: T[] }

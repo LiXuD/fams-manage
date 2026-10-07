@@ -17,3 +17,5 @@
     <view class="hint">退出登录会清除本设备身份资料。解除绑定后，再次使用需重新短信验证；换设备可从登录页完成换绑。</view>
   </view>
 </view>
+
+<navigator url="/pages/receipts/index">待接收与实物核对</navigator>

@@ -14,7 +14,7 @@ import org.apache.ibatis.annotations.Update;
 
 @Mapper
 interface AssetMapper {
-    @Select("SELECT * FROM fams_asset WHERE id = #{id}")
+    @Select("SELECT a.*, " + AssetPhysicalSql.PROJECTION + " FROM fams_asset a WHERE a.id = #{id}")
     Map<String, Object> find(@Param("id") long id);
 
     @Select("SELECT * FROM fams_asset WHERE id = #{id} FOR UPDATE")

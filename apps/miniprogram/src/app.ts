@@ -13,6 +13,10 @@ App({
             services = { sessions, wechat: runtime,
                 binding: new MiniBindingClient(API_ORIGIN, runtime, sessions, runtime, deviceId(wx), createUuid),
                 createKey: createUuid,
+                scan: () => new Promise((resolve, reject) => {
+                    if (!wx.scanCode) { reject(new Error("Scanner unavailable")); return; }
+                    wx.scanCode({ onlyFromCamera: true, success: result => resolve(result.result), fail: reject });
+                }),
                 navigate: url => wx.redirectTo({ url }),
                 confirm: (title, content) => new Promise(resolve => wx.showModal({ title, content,
                     success: result => resolve(result.confirm) })),

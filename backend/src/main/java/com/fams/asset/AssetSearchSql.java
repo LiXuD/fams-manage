@@ -30,7 +30,7 @@ public final class AssetSearchSql {
     private AssetSearchSql() { }
 
     public static String list() {
-        return where("SELECT a.* ") + " ORDER BY a.id DESC LIMIT #{limit} OFFSET #{offset}</script>";
+        return where("SELECT a.*, " + AssetPhysicalSql.PROJECTION + " ") + " ORDER BY a.id DESC LIMIT #{limit} OFFSET #{offset}</script>";
     }
 
     public static String count() {
