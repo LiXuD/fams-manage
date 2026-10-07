@@ -28,7 +28,8 @@ class MiniSessionUpgradeRuntimeCase {
                 """, now, now);
         assertEquals(1, Flyway.configure().dataSource(source).locations("classpath:db/migration/d6_04")
                 .target("17").load().migrate().migrationsExecuted);
-        Flyway current = Flyway.configure().dataSource(source).locations("classpath:db/migration/d6_04").load();
+        Flyway current = Flyway.configure().dataSource(source).locations("classpath:db/migration/d6_04")
+                .target("18").load();
         assertEquals(1, current.migrate().migrationsExecuted);
         assertEquals(0, current.migrate().migrationsExecuted);
         current.validate();
