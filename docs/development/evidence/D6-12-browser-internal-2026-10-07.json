@@ -1,0 +1,55 @@
+{
+  "date": "2026-10-07",
+  "scope": "internal development acceptance; disposable loopback browser, Spring HTTP and MySQL",
+  "initial_implementation": "04e033a9b529c4a263844ced4058f80cd3b5d4fb",
+  "final_candidate": "959fd3cf7d94d81def68ce932389efcdb0fb4feb",
+  "actors": ["employee account 3", "asset administrator account 2", "warehouse operator account 1"],
+  "request": {"id": 1, "request_no": "REQ-0fb9b463-2012-415f-ae51-04d353034b76", "requested_quantity": 2},
+  "browser_actions": [
+    "Employee creates and submits a quantity request; administrator approves its fixed version",
+    "Warehouse operator claims the whole request and allocates assets 10 and 11",
+    "Operator physically delivers asset 10 to the test office and records inspection evidence",
+    "Asset ledger shows both formal storage and temporary physical destination",
+    "Operator registers recovery; backend is killed and restarted with the same database",
+    "Authenticated session, assignment, locks and recovery history survive reload",
+    "Final candidate backend is restarted; detail times now include UTC Z",
+    "Recovery remains disabled with code and inspection filled until actual-return checkbox is checked",
+    "Operator confirms physical recovery and inspection of asset 10, then cancels unhanded allocation 11",
+    "Cancelled request remains readable by its former assigned operator; ledger shows storage and no current temporary destination"
+  ],
+  "after_delivery": {
+    "request_status": "WAITING_HANDOVER", "request_version": 6,
+    "quantities": [2, 0, 2, 0, 0, 0], "active_asset_locks": 2,
+    "allocation_states": {"DELIVERED_WAITING_RECEIPT": 1, "WAITING_DELIVERY": 1},
+    "handover_events": {"DELIVERED": 1}, "asset_10": "IN_STOCK/STORAGE"
+  },
+  "after_recovery_registered_and_restart": {
+    "request_status": "WAITING_HANDOVER", "request_version": 7,
+    "quantities": [2, 0, 2, 0, 0, 0], "active_asset_locks": 2,
+    "handover_events": {"DELIVERED": 1, "RECOVERY_REQUESTED": 1}
+  },
+  "after_physical_recovery": {
+    "request_status": "WAITING_HANDOVER", "request_version": 8,
+    "quantities": [2, 0, 1, 0, 0, 1], "active_asset_locks": 1,
+    "allocation_states": {"CANCELLED": 1, "WAITING_DELIVERY": 1},
+    "handover_events": {"DELIVERED": 1, "RECOVERY_REQUESTED": 1, "RECOVERED": 1}
+  },
+  "final_database": {
+    "request_status": "CANCELLED", "request_version": 9,
+    "quantities": [2, 0, 0, 0, 0, 2],
+    "quantity_order": ["requested", "pending_allocation", "pending_handover", "completed", "unfulfillable", "cancelled"],
+    "active_asset_locks": 0, "followup_rows": 0, "successful_migrations": 21,
+    "allocation_states": {"CANCELLED": 2},
+    "handover_events": {"DELIVERED": 1, "RECOVERY_REQUESTED": 1, "RECOVERED": 1, "CANCELLED": 1},
+    "assets_10_to_13": "IN_STOCK/STORAGE", "unconsumed_receipt_grants": 0
+  },
+  "console_warnings_or_errors": 0,
+  "screenshots": ["output/d6-12-browser/cancelled-959fd3c.jpg", "output/d6-12-browser/stock-restored-959fd3c.jpg"],
+  "cleanup": "Owned backend, web server, MySQL container and its inspected anonymous volume removed",
+  "limits": [
+    "Browser stack contains only synthetic accounts and disposable assets",
+    "Receiver page handlers separately reach actual HTTP/MySQL through an explicit loopback WeChat test adapter",
+    "No real SMS provider, external WeChat, external HTTPS or real device acceptance",
+    "No remote CI, formal QA or shared/production migration evidence"
+  ]
+}
