@@ -12,7 +12,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-10A 用户复核全部 PASS；D6-11 全功能开发完成、固定候选 92c1662 门禁通过，统一待独立复核；真实短信/真机联调留到全部功能开发后，D6-01B/03B 待外部权限 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-10A 用户复核全部 PASS；D6-11 固定候选 92c1662 经用户本人全部复核 PASS、本地 DEV_VERIFIED；正在推进 D6-12 交出与接收；真实短信/真机联调留到全部功能开发后，D6-01B/03B 待外部权限 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
@@ -90,3 +90,5 @@
 2026-10-07：从 D6-10A 已复核提交 `00c795c` 进入 `codex/d6-11-requisition`，先执行 D6-11A 事实与迁移。子任务与证据以开发计划和 [D6-11 任务卡](docs/development/D6-11-task-card.md)为准；下一步接 D6-11B 申请审批和 D6-11C 分配再申请。真实短信/真机仍待全部功能开发后联调。
 
 2026-10-07：D6-11 全功能提交 `92c1662` 已完成申请审批、PC/小程序页面、独占分配、无法满足、关联再申请与范围变更。固定候选门禁及当前提交真实浏览器/硬重启链路通过，父任务及 A/B/C/D 为 `IN_REVIEW`；详见现役开发计划与 [D6-11 任务卡](docs/development/D6-11-task-card.md)。下一步统一独立复核后进入 D6-12；真实短信/真机仍按用户安排后置。
+
+2026-10-07：用户本人确认 D6-11 全部复核 PASS，固定候选 `92c1662`、送审交接 `701da4d` 的父任务与 A/B/C/D 关闭为本地 `DEV_VERIFIED`。按计划继续 D6-12；功能与证据以现役计划及任务卡为准，真实短信/真机仍后置。
