@@ -12,7 +12,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-10A 及 D6-11 已获用户复核 PASS；D6-12A 内部全功能候选 959fd3c 完整门禁通过并送审；下一步复核 D6-12A 后接 D6-13，真实短信/真机留到全部功能开发后；D6-01B/03B 待外部权限 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-10A 及 D6-11 已获用户复核 PASS；D6-12A 候选 959fd3c 已获用户全部复核 PASS；正在推进 D6-13 借用与归还，真实短信/真机留到全部功能开发后；D6-01B/03B 待外部权限 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
@@ -97,3 +97,5 @@
 固定候选 `959fd3c` 完整门禁退出 0，内部功能为 `IN_REVIEW`。真实浏览器和 MySQL 持久效果、
 原生处理器重试、并发、事务回滚与硬重启恢复详见 [D6-12 任务卡](docs/development/D6-12-task-card.md)。
 D6-12B 真机验收仍按用户安排后置，父任务保持外部 `BLOCKED`；下一内部功能项为 D6-13。
+
+2026-10-07：用户本人确认 D6-12A 全部复核 PASS，关闭为本地 DEV_VERIFIED；B 真实移动验收仍后置，父任务保留外部 BLOCKED。继续 D6-13 借用与归还及后续内部功能，详细状态见现役计划和 D6-13 任务卡。
