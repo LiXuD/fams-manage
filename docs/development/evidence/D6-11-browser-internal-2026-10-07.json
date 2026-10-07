@@ -102,5 +102,56 @@
     "owned_backend_and_web_processes": "stopped",
     "owned_mysql_container": "removed",
     "temporary_directory": "removed"
+  },
+  "final_candidate_replay": {
+    "commit": "92c1662",
+    "roles": [
+      "EMPLOYEE",
+      "ASSET_ADMIN",
+      "WAREHOUSE_OPERATOR"
+    ],
+    "original_request": "REQ-6197c51e-17d0-46ed-955f-c691f7d70f74",
+    "original_version": 6,
+    "original_quantities": [
+      3,
+      0,
+      2,
+      0,
+      1,
+      0
+    ],
+    "followup_request": "REQ-d915957a-534c-4ec9-96d8-cc82467ac80f",
+    "followup_version": 2,
+    "followup_quantities": [
+      1,
+      1,
+      0,
+      0,
+      0,
+      0
+    ],
+    "original_status": "WAITING_HANDOVER",
+    "followup_status": "PENDING_ADMIN_DECISION",
+    "hard_JVM_restart": "session, owner, locks and quantity restored; verified through page reload",
+    "summary_list_and_detail": "actual page opens details from summary-only list",
+    "review_and_followup": "page sends dispute, creates one linked draft, revises purpose and submits",
+    "console_warnings_errors": [],
+    "screenshot": "output/d6-11-linked-followup-92c1662.jpg",
+    "persistence_counts": "validated in owned runtime counts; cleanup recorded after stop",
+    "active_asset_locks": 2,
+    "source_links": 1,
+    "successful_migrations": 20,
+    "owned_runtime_cleanup": "exit 0; owned processes and MySQL removed",
+    "audit_counts": {
+      "Created": 1,
+      "Submitted": 2,
+      "Approved": 1,
+      "Claimed": 1,
+      "Allocated": 2,
+      "Unfulfilled": 1,
+      "Disputed": 1,
+      "FollowupCreated": 1,
+      "Revised": 1
+    }
   }
 }
