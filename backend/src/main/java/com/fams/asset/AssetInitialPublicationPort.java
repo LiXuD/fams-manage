@@ -21,7 +21,14 @@ public class AssetInitialPublicationPort {
     public record InitialAsset(String code, String name, long categoryId, long organizationId,
                                String model, String unit, String serial, String state,
                                Long warehouseId, Long locationId, Long usingOrganizationId,
-                               Long employeeId) { }
+                               Long employeeId, LocalDate borrowedDate, LocalDate expectedReturnDate) {
+        public InitialAsset(String code, String name, long categoryId, long organizationId,
+                String model, String unit, String serial, String state, Long warehouseId,
+                Long locationId, Long usingOrganizationId, Long employeeId) {
+            this(code, name, categoryId, organizationId, model, unit, serial, state, warehouseId,
+                    locationId, usingOrganizationId, employeeId, null, null);
+        }
+    }
     public record Context(UUID batchId, int sheetRow, long actorId, String username,
                           long parameterId, LocalDate businessDate, Instant now) { }
     public record Created(long id, String code) { }
@@ -30,13 +37,15 @@ public class AssetInitialPublicationPort {
     private final AssetMasterDataPort masterData;
     private final AssetSecretCodec codec;
     private final ObjectMapper json;
+    private final com.fams.loan.LoanInitialPort loans;
 
     AssetInitialPublicationPort(AssetMapper mapper, AssetMasterDataPort masterData,
-            AssetSecretCodec codec, ObjectMapper json) {
+            AssetSecretCodec codec, ObjectMapper json, com.fams.loan.LoanInitialPort loans) {
         this.mapper = mapper;
         this.masterData = masterData;
         this.codec = codec;
         this.json = json;
+        this.loans = loans;
     }
 
     @Transactional
@@ -57,7 +66,7 @@ public class AssetInitialPublicationPort {
         }
         String custody = switch (asset.state()) {
             case "在库" -> "STORAGE";
-            case "在用个人" -> "PERSONAL";
+            case "在用个人", "借出" -> "PERSONAL";
             case "在用公用" -> "SHARED";
             default -> throw new IllegalArgumentException("ASSET_IMPORT_ROW_INVALID");
         };
@@ -72,7 +81,8 @@ public class AssetInitialPublicationPort {
                 ? null : asset.serial().strip());
         values.put("serialNormalized", values.get("serial") == null ? null
                 : ((String) values.get("serial")).toUpperCase(Locale.ROOT));
-        values.put("lifecycle", "STORAGE".equals(custody) ? "IN_STOCK" : "IN_USE");
+        values.put("lifecycle", "STORAGE".equals(custody) ? "IN_STOCK"
+                : "借出".equals(asset.state()) ? "BORROWED" : "IN_USE");
         values.put("custody", custody);
         values.put("warehouseId", "STORAGE".equals(custody) ? asset.warehouseId() : null);
         values.put("locationId", asset.locationId());
@@ -93,10 +103,19 @@ public class AssetInitialPublicationPort {
         mapper.event(id, "ASSET_INITIAL_IMPORTED", context.now(), json.writeValueAsString(Map.of(
                 "batchId", context.batchId().toString(), "sheetRow", context.sheetRow(),
                 "source", "INITIAL_IMPORT")), context.actorId());
+        if ("借出".equals(asset.state())) {
+            loans.open(id, asset.employeeId(), asset.usingOrganizationId(), context.batchId(),
+                    context.sheetRow(), asset.borrowedDate(), asset.expectedReturnDate(),
+                    context.businessDate(), context.parameterId(), context.now());
+        }
         return new Created(id, code);
     }
 
     @Transactional
+    public void assertReversible(long assetId, UUID batchId) {
+        loans.assertReversible(assetId, batchId);
+    }
+
     public void cancel(long assetId, UUID batchId, long actorId, String reason, Instant now) {
         Map<String, Object> asset = mapper.lock(assetId);
         if (asset == null || !"ACTIVE".equals(asset.get("card_stage"))
@@ -106,6 +125,7 @@ public class AssetInitialPublicationPort {
         }
         Map<String, Object> tag = mapper.tag(assetId);
         if (tag == null) { throw new IllegalStateException("ASSET_IMPORT_ROLLBACK_DOWNSTREAM"); }
+        loans.cancel(assetId, batchId, now);
         mapper.archiveTag(assetId, (String) tag.get("token_hash"),
                 ((LocalDateTime) tag.get("issued_at")).toInstant(ZoneOffset.UTC), now,
                 "INITIAL_IMPORT_ROLLBACK");

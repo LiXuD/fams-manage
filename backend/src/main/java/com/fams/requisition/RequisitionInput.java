@@ -28,9 +28,17 @@ public final class RequisitionInput {
             @Valid @NotNull Reference location,
             @Min(1) int quantity) {}
 
-    public record Draft(@Valid @NotNull @Size(min = 1, max = 50) List<Demand> demands) {
+    public record Draft(
+            @Valid @NotNull @Size(min = 1, max = 50) List<Demand> demands,
+            String requestType,
+            LocalDate expectedReturnDate) {
         public Draft {
             demands = demands == null ? null : List.copyOf(demands);
+            requestType = requestType == null ? "REQUISITION" : requestType;
+        }
+
+        public Draft(List<Demand> demands) {
+            this(demands, "REQUISITION", null);
         }
     }
 

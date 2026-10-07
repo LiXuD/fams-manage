@@ -1,0 +1,41 @@
+<view class="page">
+  <view class="title">我的资产与归还</view>
+  <view wx:if="{{error}}" class="error" role="alert">{{error}}</view>
+  <view wx:if="{{notice}}" class="hint">{{notice}}</view>
+  <button bindtap="onRefresh" disabled="{{busy}}">刷新</button>
+  <button wx:if="{{retryable}}" bindtap="onRetry" disabled="{{busy}}">重试上次操作</button>
+  <view wx:for="{{loans}}" wx:key="id" class="card">
+    <view>{{item.assetCode}} · {{item.name}}</view><view>预计归还 {{item.expectedReturnDate}}</view>
+    <view>{{item.relationStatus === 'OPEN' ? '借用中' : item.relationStatus === 'RETURNED' ? '已归还' : '已撤销'}} {{item.overdue ? '· 已逾期' : ''}}</view>
+    <button data-id="{{item.id}}" bindtap="onSelect" disabled="{{busy || retryable}}">查看 / 延期 / 归还</button>
+  </view>
+  <view wx:if="{{!loans.length}}" class="hint">当前范围没有借用记录。</view>
+  <view wx:if="{{selected}}" class="card">
+    <view>{{selected.assetCode}} · {{selected.name}}</view>
+    <view>借出日 {{selected.borrowedDate}}</view><view>原归还日 {{selected.originalReturnDate}}</view><view>当前归还日 {{selected.expectedReturnDate}}</view>
+    <view wx:if="{{selected.lostLiability}}">已确认遗失，保留责任追踪。</view>
+    <view wx:for="{{selected.reminders}}" wx:key="id">提醒 {{item.reminderBusinessDate}} · {{item.reminderType}}
+      <view wx:if="{{item.overdueFrom}}">逾期起始 {{item.overdueFrom}}</view></view>
+    <view wx:for="{{selected.extensions}}" wx:key="id">延期至 {{item.requestedDueDate}} · {{item.extensionStatus}}
+      <view wx:if="{{item.overdueFrom}}">历史逾期 {{item.overdueFrom}} 至 {{item.overdueThrough}}</view>
+    </view>
+    <view wx:if="{{selected.relationStatus === 'OPEN'}}">
+      <picker mode="date" value="{{dueDate}}" bindchange="onDueDate" disabled="{{busy || retryable}}"><view class="input">新的归还日期：{{dueDate || '请选择'}}</view></picker>
+      <textarea value="{{reason}}" bindinput="onReason" maxlength="1000" placeholder="填写延期或归还原因" disabled="{{busy || retryable}}" />
+      <button bindtap="onExtend" disabled="{{busy || retryable}}">提请延期</button><button bindtap="onReturn" disabled="{{busy || retryable}}">申请归还</button>
+    </view>
+  </view>
+  <view class="title">可退库资产</view>
+  <view wx:for="{{assets}}" wx:key="id" class="card"><view>{{item.assetCode}} · {{item.name}}</view>
+    <button data-id="{{item.id}}" bindtap="onSelectAsset" disabled="{{busy || retryable}}">选择退库资产</button></view>
+  <view wx:if="{{selectedAsset}}" class="card"><view>{{selectedAsset.assetCode}} · {{selectedAsset.name}}</view>
+    <textarea value="{{reason}}" bindinput="onReason" maxlength="1000" placeholder="填写退库原因" disabled="{{busy || retryable}}" />
+    <button bindtap="onReturn" disabled="{{busy || retryable}}">提请退库</button></view>
+  <view class="title">退还进度</view>
+  <view wx:for="{{returns}}" wx:key="id" class="card"><view>退还 {{item.id}} · {{item.returnStatus}}</view><view>{{item.reason}}</view>
+    <view wx:if="{{item.inspectionResult}}">验收 {{item.inspectionResult}} · {{item.inspectionReason}}</view>
+  </view>
+  <button bindtap="onPrevious" disabled="{{busy || retryable || page <= 1}}">上一页</button><view>第 {{page}} 页</view>
+  <button bindtap="onNext" disabled="{{busy || retryable || page * 20 >= total}}">下一页</button>
+  <navigator url="/pages/mine/index" open-type="redirect">返回我的</navigator>
+</view>

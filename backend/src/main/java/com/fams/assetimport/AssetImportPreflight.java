@@ -28,7 +28,8 @@ public final class AssetImportPreflight {
     public record ReadyRow(int sheetRow, String assetCode, String name, long categoryId,
                            long organizationId, String model, String unit, String serialNumber,
                            String state, Long warehouseId, Long locationId, Long usingOrganizationId,
-                           Long employeeId) { }
+                           Long employeeId, java.time.LocalDate borrowedDate,
+                           java.time.LocalDate expectedReturnDate) { }
     public record Result(List<ReadyRow> ready, List<AssetImportWorkbook.CellError> errors) {
         public Result {
             ready = List.copyOf(ready);
@@ -42,7 +43,8 @@ public final class AssetImportPreflight {
             Map.entry("model", "型号"), Map.entry("unit", "单位"),
             Map.entry("serialNumber", "序列号"), Map.entry("state", "资产状态"),
             Map.entry("warehouse", "仓库编码"), Map.entry("location", "位置编码"),
-            Map.entry("usingOrganization", "使用组织编码"), Map.entry("employee", "使用人编号"));
+            Map.entry("usingOrganization", "使用组织编码"), Map.entry("employee", "使用人编号"),
+            Map.entry("borrowedDate", "借出日期"), Map.entry("expectedReturnDate", "预计归还日"));
 
     private AssetImportPreflight() { }
 
@@ -105,20 +107,32 @@ public final class AssetImportPreflight {
             Long location = null;
             Long usingOrganization = null;
             Long employee = null;
+            java.time.LocalDate borrowedDate = null;
+            java.time.LocalDate expectedReturnDate = null;
             if ("在库".equals(state)) {
                 warehouse = reference(row, mapping, "warehouse", catalog.warehouses(), null, errors);
                 location = reference(row, mapping, "location", catalog.locations(), warehouse, errors);
-            } else if ("在用个人".equals(state) || "在用公用".equals(state)) {
+            } else if ("在用个人".equals(state) || "在用公用".equals(state) || "借出".equals(state)) {
                 usingOrganization = reference(row, mapping, "usingOrganization",
                         catalog.organizations(), null, errors);
                 employee = reference(row, mapping, "employee", catalog.employees(), usingOrganization, errors);
                 location = reference(row, mapping, "location", catalog.locations(), null, errors);
+                if ("借出".equals(state)) {
+                    borrowedDate = date(row, mapping, "borrowedDate", errors);
+                    expectedReturnDate = date(row, mapping, "expectedReturnDate", errors);
+                    if (borrowedDate != null && expectedReturnDate != null
+                            && !expectedReturnDate.isAfter(borrowedDate)) {
+                        errors.add(error(row, mapping, "expectedReturnDate",
+                                expectedReturnDate.toString(), "BORROW_DATE_ORDER_INVALID"));
+                    }
+                }
             } else if (!state.isBlank()) {
                 errors.add(error(row, mapping, "state", state, "UNSUPPORTED_INITIAL_STATE"));
             }
             if (errors.size() == before && !invalidRows.contains(row.sheetRow())) {
                 ready.add(new ReadyRow(row.sheetRow(), code, name, category, organization, model, unit,
-                        serial, state, warehouse, location, usingOrganization, employee));
+                        serial, state, warehouse, location, usingOrganization, employee,
+                        borrowedDate, expectedReturnDate));
             }
         }
         return new Result(List.copyOf(ready), List.copyOf(errors));
@@ -147,6 +161,18 @@ public final class AssetImportPreflight {
             return null;
         }
         return byName.getFirst().id();
+    }
+
+    private static java.time.LocalDate date(AssetImportWorkbook.DataRow row,
+            Map<String, String> mapping, String field, List<AssetImportWorkbook.CellError> errors) {
+        String text = required(row, mapping, field, errors);
+        if (text.isEmpty()) { return null; }
+        try {
+            return java.time.LocalDate.parse(text);
+        } catch (java.time.format.DateTimeParseException invalid) {
+            errors.add(error(row, mapping, field, text, "DATE_INVALID"));
+            return null;
+        }
     }
 
     private static String required(AssetImportWorkbook.DataRow row, Map<String, String> mapping,

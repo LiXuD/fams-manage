@@ -101,15 +101,30 @@ public class AssetHandoverPort {
             long actor,
             long request,
             Instant time) {
+        assign(id, expectedVersion, custody, organization, employee, location, actor, request, time,
+                "IN_USE", "REQUISITION_RECEIVED");
+    }
+
+    public void borrow(
+            long id, long expectedVersion, long organization, long employee, long location,
+            long actor, long request, Instant time) {
+        assign(id, expectedVersion, "PERSONAL", organization, employee, location, actor, request,
+                time, "BORROWED", "BORROW_RECEIVED");
+    }
+
+    private void assign(
+            long id, long expectedVersion, String custody, long organization, long employee,
+            long location, long actor, long request, Instant time, String lifecycle, String event) {
         stock(id, expectedVersion);
         if (!"PERSONAL".equals(custody) && !"SHARED".equals(custody)) {
             throw new IllegalArgumentException("ASSET_CUSTODY_INVALID");
         }
         if (db.update(
-                        "UPDATE fams_asset SET lifecycle_status='IN_USE',custody_type=?,"
+                        "UPDATE fams_asset SET lifecycle_status=?,custody_type=?,"
                             + "storage_warehouse_id=NULL,current_location_id=?,using_organization_id=?,"
                             + "responsible_employee_id=?,department_responsible_employee_id=?,version=version+1,updated_by=?,updated_at=?"
                             + " WHERE id=? AND version=?",
+                        lifecycle,
                         custody,
                         location,
                         organization,
@@ -124,7 +139,7 @@ public class AssetHandoverPort {
         }
         mapper.event(
                 id,
-                "REQUISITION_RECEIVED",
+                event,
                 time,
                 json.writeValueAsString(
                         Map.of(

@@ -12,6 +12,7 @@ const rows = ref<RequisitionSummary[]>([]); const selected = ref<Requisition | n
 const busy = ref(false); const error = ref(""); const notice = ref(""); const page = ref(1); const total = ref(0);
 const status = ref(""); const formVisible = ref(false); const editing = ref<"new" | "revise" | "change">("new");
 const form = ref<RequisitionDemandInput[]>([]); const catalogs = ref<Record<string, RequisitionChoice[]>>({});
+const requestType = ref<"REQUISITION" | "BORROW">("REQUISITION"); const expectedReturnDate = ref("");
 const canShared = ref(false); const selfEmployee = ref(""); const selfOrg = ref("");
 const observedCode = ref(""); const destination = ref(""); const evidence = ref(""); const returned = ref(false);
 const reason = ref(""); const shortageReason = ref("STOCK_SHORTAGE"); const shortageQuantity = ref(1);
@@ -89,6 +90,8 @@ function setReference(d: RequisitionDemandInput, field: "category" | "organizati
 }
 function edit(mode: "new" | "revise" | "change") {
   if (retryable.value) return; editing.value = mode; formVisible.value = true;
+  requestType.value = mode === "new" ? "REQUISITION" : selected.value?.requestType ?? "REQUISITION";
+  expectedReturnDate.value = mode === "new" ? "" : selected.value?.expectedReturnDate ?? "";
   form.value = mode === "new" ? [newDemand()] : selected.value!.demands.map(d => ({
     category: { id: d.categoryId, version: d.categoryVersionSnapshot }, specification: d.specification,
     preferredBrand: d.preferredBrand ?? "", preferredModel: d.preferredModel ?? "", purpose: d.purpose,
@@ -100,7 +103,8 @@ function edit(mode: "new" | "revise" | "change") {
 }
 async function save() {
   const path = editing.value === "new" ? "" : "/" + selected.value!.id + (editing.value === "change" ? "/changes" : "");
-  await mutate(path, { demands: form.value.map(d => ({ ...d })) }, editing.value === "revise" ? "PATCH" : "POST");
+  await mutate(path, { demands: form.value.map(d => ({ ...d })), requestType: requestType.value,
+    expectedReturnDate: requestType.value === "BORROW" ? expectedReturnDate.value : null }, editing.value === "revise" ? "PATCH" : "POST");
 }
 async function retry() { if (pending) await mutate(pending.path); }
 async function findInventory(demand: RequisitionDemand, nextPage = 1) {
@@ -133,7 +137,7 @@ onMounted(async () => {
 
 <template>
   <AppChrome><section class="panel requisition-page">
-    <div class="page-heading"><div><h1>领用申请与分配</h1><p>按数量申请，由一名管理员确认后分配实物。</p></div>
+    <div class="page-heading"><div><h1>领用与借用申请</h1><p>按数量申请，由一名管理员确认后分配实物。</p></div>
       <button :disabled="busy || retryable" @click="edit('new')">新建申请</button></div>
     <p v-if="error" class="form-error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p>
     <div class="req-actions"><button :disabled="busy" @click="refresh">刷新结果</button>
@@ -148,12 +152,17 @@ onMounted(async () => {
       <button :disabled="busy || page * 20 >= total" @click="page++; refresh()">下一页</button></div>
     <form v-if="formVisible" @submit.prevent="save">
       <h2>{{ editing === 'new' ? '新建数量申请' : editing === 'change' ? '提请批准范围变更' : '修改草稿' }}</h2>
+      <label>申请类型<select v-model="requestType" :disabled="busy || retryable || editing === 'change'"
+        @change="requestType === 'BORROW' && form.forEach(d => d.custodyType = 'PERSONAL')">
+        <option value="REQUISITION">领用</option><option value="BORROW">借用</option></select></label>
+      <label v-if="requestType === 'BORROW'">预计归还日<input v-model="expectedReturnDate" type="date" required
+        :disabled="busy || retryable || editing === 'change'"></label>
       <fieldset v-for="(d, index) in form" :key="index" :disabled="busy || retryable" class="req-demand-form"><legend>需求 {{ index + 1 }}</legend>
         <label>分类<select :value="d.category.id" @change="setReference(d, 'category', $event)"><option v-for="c in catalogs.category" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
         <label>规格<input v-model="d.specification" required maxlength="1000"></label><label>数量<input v-model.number="d.quantity" type="number" min="1" max="10000" required></label>
         <label>用途<input v-model="d.purpose" required maxlength="1000"></label><label>期望日期<input v-model="d.expectedDate" type="date" required></label>
         <label>偏好品牌<input v-model="d.preferredBrand" maxlength="128"></label><label>偏好型号<input v-model="d.preferredModel" maxlength="128"></label>
-        <label>使用方式<select v-model="d.custodyType"><option value="PERSONAL">个人使用</option><option v-if="canShared" value="SHARED">部门公用</option></select></label>
+        <label>使用方式<select v-model="d.custodyType"><option value="PERSONAL">个人使用</option><option v-if="canShared && requestType !== 'BORROW'" value="SHARED">部门公用</option></select></label>
         <label>使用组织<select :value="d.organization.id" @change="setReference(d, 'organization', $event)"><option v-for="c in catalogs.organization" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
         <label>{{ d.custodyType === 'PERSONAL' ? '实际使用人' : '部门责任人' }}<select :value="d.employee.id" @change="setReference(d, 'employee', $event)">
           <option v-for="c in catalogs.employee?.filter(c => c.organizationId === d.organization.id)" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>

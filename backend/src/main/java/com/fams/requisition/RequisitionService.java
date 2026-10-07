@@ -161,6 +161,7 @@ class RequisitionService {
             throw RequisitionFailure.conflict("REQUISITION_APPROVED_SCOPE_IMMUTABLE");
         }
         var resolved = resolve(current, input);
+        borrowDate(input, text(header, "parameter_snapshot_json"));
         checkSource(header, input);
         // Only pre-execution rows can be revised;
         // Previous decisions keep their immutable JSON snapshot.
@@ -168,8 +169,10 @@ class RequisitionService {
         insertDemands(id, resolved);
         db.update(
                 "UPDATE fams_requisition SET"
-                    + " request_version=request_version+1,request_status='DRAFT',version=version+1,updated_at=?"
+                    + " request_version=request_version+1,request_status='DRAFT',version=version+1,request_type=?,expected_return_date=?,updated_at=?"
                     + " WHERE id=?",
+                input.requestType(),
+                input.expectedReturnDate(),
                 now(),
                 id);
         audit(actor, current, "REQUISITION_REVISED", id, version, version + 1, Map.of());
@@ -190,7 +193,8 @@ class RequisitionService {
         if (!"DRAFT".equals(text(header, "request_status"))) {
             throw RequisitionFailure.conflict("REQUISITION_STATE_CONFLICT");
         }
-        Draft input = draftFromRows(demands(id));
+        Draft input = draftFromRows(header, demands(id));
+        borrowDate(input, text(header, "parameter_snapshot_json"));
         resolve(current, input);
         checkSource(header, input);
         changeStatus(id, "PENDING_ADMIN_DECISION");
@@ -230,6 +234,7 @@ class RequisitionService {
         }
         var demandRows = demands(id);
         if ("APPROVED".equals(input.result())) {
+            borrowDate(draftFromRows(header, demandRows), text(header, "parameter_snapshot_json"));
             revalidateTargets(demandRows);
         }
         long audit =
@@ -317,6 +322,11 @@ class RequisitionService {
     }
 
     private void validateChange(long id, Draft input) {
+        var header = header(id);
+        if (!input.requestType().equals(text(header, "request_type"))
+                || !Objects.equals(input.expectedReturnDate(), date(header, "expected_return_date"))) {
+            throw RequisitionFailure.conflict("LOAN_DATE_REQUIRES_EXTENSION");
+        }
         var rows = demands(id);
         if (rows.size() != input.demands().size()) {
             throw RequisitionFailure.invalid("REQUISITION_CHANGE_LINE_COUNT");
@@ -846,7 +856,9 @@ class RequisitionService {
                         List.of(
                                 inputFromRow(
                                         refreshed,
-                                        (int) number(source, "unfulfillable_quantity"))));
+                                        (int) number(source, "unfulfillable_quantity"))),
+                        text(header, "request_type"),
+                        date(header, "expected_return_date"));
         long next = createDraft(current, copied, id, demandId, encode(reasons));
         db.update(
                 "INSERT INTO fams_requisition_followup"
@@ -885,16 +897,19 @@ class RequisitionService {
         if (parameters == null) {
             throw RequisitionFailure.conflict("REQUISITION_PARAMETERS_UNAVAILABLE");
         }
+        borrowDate(input, text(parameters, "snapshot_json"));
         db.update(
                 "INSERT INTO fams_requisition"
                     + " (request_no,creator_account_id,creator_username_snapshot,request_status,"
-                    + "parameter_version_id,parameter_snapshot_json,source_request_id,source_demand_id,source_reason_snapshot_json,created_at,updated_at)"
-                    + " VALUES (?,?,?,'DRAFT',?,?,?,?,?,?,?)",
+                    + "parameter_version_id,parameter_snapshot_json,request_type,expected_return_date,source_request_id,source_demand_id,source_reason_snapshot_json,created_at,updated_at)"
+                    + " VALUES (?,?,?,'DRAFT',?,?,?,?,?,?,?,?,?)",
                 "REQ-" + UUID.randomUUID(),
                 current.id(),
                 current.username(),
                 number(parameters, "id"),
                 text(parameters, "snapshot_json"),
+                input.requestType(),
+                input.expectedReturnDate(),
                 sourceId,
                 sourceDemand,
                 reasons,
@@ -912,6 +927,11 @@ class RequisitionService {
                 || input.demands().size() > 50) {
             throw RequisitionFailure.invalid("REQUISITION_DEMAND_INVALID");
         }
+        if (!List.of("REQUISITION", "BORROW").contains(input.requestType())
+                || "REQUISITION".equals(input.requestType()) && input.expectedReturnDate() != null
+                || "BORROW".equals(input.requestType()) && input.expectedReturnDate() == null) {
+            throw RequisitionFailure.invalid("LOAN_RETURN_DATE_INVALID");
+        }
         List<Map<String, Object>> result = new ArrayList<>();
         for (Demand d : input.demands()) {
             if (d.quantity() < 1
@@ -919,7 +939,8 @@ class RequisitionService {
                     || blank(d.specification())
                     || blank(d.purpose())
                     || d.expectedDate() == null
-                    || !List.of("PERSONAL", "SHARED").contains(d.custodyType())) {
+                    || !List.of("PERSONAL", "SHARED").contains(d.custodyType())
+                    || "BORROW".equals(input.requestType()) && !"PERSONAL".equals(d.custodyType())) {
                 throw RequisitionFailure.invalid("REQUISITION_DEMAND_INVALID");
             }
             var category = reference("category", d.category());
@@ -1009,11 +1030,27 @@ class RequisitionService {
         }
     }
 
-    private Draft draftFromRows(List<Map<String, Object>> rows) {
+    private Draft draftFromRows(Map<String, Object> header, List<Map<String, Object>> rows) {
         return new Draft(
                 rows.stream()
                         .map(d -> inputFromRow(d, (int) number(d, "requested_quantity")))
-                        .toList());
+                        .toList(),
+                text(header, "request_type"),
+                date(header, "expected_return_date"));
+    }
+
+    private java.time.LocalDate date(Map<String, Object> row, String field) {
+        return row.get(field) == null ? null : java.time.LocalDate.parse(row.get(field).toString());
+    }
+
+    private void borrowDate(Draft input, String snapshot) {
+        if ("BORROW".equals(input.requestType())) {
+            var zone = java.time.ZoneId.of(json.readTree(snapshot).get("timezone").asText());
+            if (input.expectedReturnDate() == null
+                    || !input.expectedReturnDate().isAfter(clock.instant().atZone(zone).toLocalDate())) {
+                throw RequisitionFailure.invalid("LOAN_RETURN_DATE_INVALID");
+            }
+        }
     }
 
     private Demand inputFromRow(Map<String, Object> d, int quantity) {

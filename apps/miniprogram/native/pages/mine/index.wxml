@@ -9,6 +9,7 @@
   <view class="card">
     <navigator url="/pages/request-center/index" open-type="redirect">申请中心</navigator>
     <navigator url="/pages/requests/index" open-type="redirect">我的申请与进度</navigator>
+    <navigator url="/pages/loans/index" open-type="redirect">我的借用、延期与归还</navigator>
     <navigator url="/pages/department-requests/index" open-type="redirect">部门资产与代办（按当前权限）</navigator>
   </view>
   <view class="card">

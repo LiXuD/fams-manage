@@ -19,6 +19,7 @@ const fields = [
   { key: "serialNumber", label: "序列号" }, { key: "state", label: "资产状态" },
   { key: "warehouse", label: "仓库编码" }, { key: "location", label: "位置编码" },
   { key: "usingOrganization", label: "使用组织编码" }, { key: "employee", label: "使用人编号" },
+  { key: "borrowedDate", label: "借出日期" }, { key: "expectedReturnDate", label: "预计归还日" },
 ];
 const file = ref<File | null>(null);
 const uploadKey = ref(crypto.randomUUID());

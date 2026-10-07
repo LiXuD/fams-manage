@@ -97,7 +97,8 @@ public class AssetImportPublicationService {
         for (var row : checked.ready()) {
             var input = new AssetInitialPublicationPort.InitialAsset(row.assetCode(), row.name(),
                     row.categoryId(), row.organizationId(), row.model(), row.unit(), row.serialNumber(),
-                    row.state(), row.warehouseId(), row.locationId(), row.usingOrganizationId(), row.employeeId());
+                    row.state(), row.warehouseId(), row.locationId(), row.usingOrganizationId(), row.employeeId(),
+                    row.borrowedDate(), row.expectedReturnDate());
             var context = new AssetInitialPublicationPort.Context(batchId, row.sheetRow(), claim.actorId(),
                     username, parameterId, businessDate, now);
             var created = assets.create(input, context);

@@ -215,7 +215,9 @@ public class AssetImportRollbackService {
                     || !"ACTIVE".equals(row.get("card_stage"))) {
                 throw new IllegalStateException("ASSET_IMPORT_ROLLBACK_DOWNSTREAM");
             }
-            ids.add(((Number) row.get("id")).longValue());
+            long assetId = ((Number) row.get("id")).longValue();
+            assets.assertReversible(assetId, batchId);
+            ids.add(assetId);
         }
         for (int offset = 0; offset < ids.size(); offset += 500) {
             List<Long> part = ids.subList(offset, Math.min(ids.size(), offset + 500));

@@ -266,11 +266,11 @@ class AssetImportHttpRuntimeCase {
         var usagePreview = request("POST", "/asset-import-batches/" + usageId + "/preview",
                 "{}".getBytes(StandardCharsets.UTF_8), warehouse, "application/json", null, 0L);
         assertEquals(200, usagePreview.statusCode(), body(usagePreview));
-        assertEquals(2, JSON.readTree(body(usagePreview)).get("readyRows").asInt());
+        assertEquals(3, JSON.readTree(body(usagePreview)).get("readyRows").asInt());
         assertEquals(200, request("POST", "/asset-import-batches/" + usageId + "/review", null,
                 warehouse, null, null, 1L).statusCode());
         byte[] usageDecision = ("{\"approved\":true,\"reason\":\"verified usage sample\","
-                + "\"confirmedReadyRows\":2,\"confirmedErrorRows\":0,"
+                + "\"confirmedReadyRows\":3,\"confirmedErrorRows\":0,"
                 + "\"sampleVerified\":true}").getBytes(StandardCharsets.UTF_8);
         assertEquals(200, request("POST", "/asset-import-batches/" + usageId + "/decision",
                 usageDecision, assetAdmin, "application/json", null).statusCode());
@@ -281,8 +281,32 @@ class AssetImportHttpRuntimeCase {
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_asset "
                 + "WHERE asset_code='HTTP-S-1' AND lifecycle_status='IN_USE' "
                 + "AND custody_type='SHARED' AND department_responsible_employee_id=3", Integer.class));
+        var initialLoan = db.queryForMap("SELECT l.* FROM fams_loan l JOIN fams_asset a ON a.id=l.asset_id"
+                + " WHERE a.asset_code='HTTP-B-1'");
+        assertEquals("INITIAL_IMPORT", initialLoan.get("source_type"));
+        assertEquals(usageId, initialLoan.get("initial_batch_id"));
+        assertEquals("2020-02-01", initialLoan.get("expected_return_date").toString());
+        assertEquals("OPEN", initialLoan.get("relation_status"));
+        assertEquals(null, initialLoan.get("source_request_id"));
+        verifyBorrowRollback(template.body(), warehouse, assetAdmin, worker);
         byte[] rollbackReason = "{\"reason\":\"duplicate initial loading\"}"
                 .getBytes(StandardCharsets.UTF_8);
+        var extension = request("POST", "/loans/" + initialLoan.get("id") + "/extensions",
+                "{\"expectedReturnDate\":\"2099-01-01\",\"reason\":\"retain initial borrowing\"}"
+                        .getBytes(StandardCharsets.UTF_8), assetAdmin, "application/json",
+                "initial-borrow-extension-0001", 0L);
+        assertEquals(200, extension.statusCode(), body(extension));
+        String extensionId = JSON.readTree(body(extension)).get("id").asText();
+        var extensionDecision = request("POST", "/loans/extensions/" + extensionId + "/decision",
+                "{\"approved\":true,\"reason\":\"confirmed extension\"}".getBytes(StandardCharsets.UTF_8),
+                assetAdmin, "application/json", "initial-borrow-decision-0001", 0L);
+        assertEquals(200, extensionDecision.statusCode(), body(extensionDecision));
+        assertEquals(0L, db.queryForObject("SELECT version FROM fams_asset WHERE id=?", Long.class,
+                initialLoan.get("asset_id")));
+        assertEquals(1L, db.queryForObject("SELECT version FROM fams_loan WHERE id=?", Long.class,
+                initialLoan.get("id")));
+        assertEquals(409, request("POST", "/asset-import-batches/" + usageId + "/rollback",
+                rollbackReason, warehouse, "application/json", null).statusCode());
         var rollbackRequest = request("POST", "/asset-import-batches/" + id + "/rollback",
                 rollbackReason, warehouse, "application/json", null);
         assertEquals(200, rollbackRequest.statusCode(), body(rollbackRequest));
@@ -503,22 +527,59 @@ class AssetImportHttpRuntimeCase {
         try (var input = new ByteArrayInputStream(template); var book = new XSSFWorkbook(input);
                 var output = new ByteArrayOutputStream()) {
             var sheet = book.getSheet("资产");
-            for (int index = 1; index <= 2; index++) {
+            for (int index = 1; index <= 3; index++) {
                 var row = sheet.createRow(index);
-                row.createCell(0).setCellValue(index == 1 ? "HTTP-P-1" : "HTTP-S-1");
+                row.createCell(0).setCellValue(index == 1 ? "HTTP-P-1" : index == 2 ? "HTTP-S-1" : "HTTP-B-1");
                 row.createCell(1).setCellValue("Assigned asset " + index);
                 row.createCell(2).setCellValue("CAT-1");
                 row.createCell(3).setCellValue("ROOT");
                 row.createCell(4).setCellValue("M1");
                 row.createCell(5).setCellValue("piece");
-                row.createCell(7).setCellValue(index == 1 ? "在用个人" : "在用公用");
+                row.createCell(7).setCellValue(index == 1 ? "在用个人" : index == 2 ? "在用公用" : "借出");
                 row.createCell(9).setCellValue("LOC-1");
                 row.createCell(10).setCellValue("ROOT");
-                row.createCell(11).setCellValue(index == 1 ? "E2" : "E3");
+                row.createCell(11).setCellValue(index == 2 ? "E3" : "E2");
+                if (index == 3) {
+                    row.createCell(12).setCellValue("2020-01-01");
+                    row.createCell(13).setCellValue("2020-02-01");
+                }
             }
             book.write(output);
             return output.toByteArray();
         }
+    }
+
+    private void verifyBorrowRollback(byte[] template, Session warehouse, Session administrator,
+            AssetImportWorker worker) throws Exception {
+        byte[] file;
+        try (var book = new XSSFWorkbook(new ByteArrayInputStream(usageWorkbook(template)));
+                var output = new ByteArrayOutputStream()) {
+            var sheet = book.getSheet("资产");
+            sheet.removeRow(sheet.getRow(1));
+            sheet.removeRow(sheet.getRow(2));
+            sheet.getRow(3).getCell(0).setCellValue("HTTP-B-UNDO");
+            book.write(output);
+            file = output.toByteArray();
+        }
+        var upload = request("POST", "/asset-import-batches", multipart(file), warehouse,
+                "multipart/form-data; boundary=fams-test-boundary", "http-borrow-undo-key-0001");
+        assertEquals(201, upload.statusCode(), body(upload));
+        String id = JSON.readTree(body(upload)).path("id").asText();
+        assertEquals(200, request("POST", "/asset-import-batches/" + id + "/preview", "{}".getBytes(StandardCharsets.UTF_8),
+                warehouse, "application/json", null, 0L).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + id + "/review", null, warehouse, null, null, 1L).statusCode());
+        byte[] decision = "{\"approved\":true,\"reason\":\"checked borrowed opening\",\"confirmedReadyRows\":1,\"confirmedErrorRows\":0,\"sampleVerified\":true}"
+                .getBytes(StandardCharsets.UTF_8);
+        assertEquals(200, request("POST", "/asset-import-batches/" + id + "/decision", decision, administrator, "application/json", null).statusCode());
+        worker.poll();
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_loan WHERE initial_batch_id=? AND relation_status='OPEN'", Integer.class, id));
+        assertEquals(200, request("POST", "/asset-import-batches/" + id + "/rollback", "{\"reason\":\"correct opening\"}"
+                .getBytes(StandardCharsets.UTF_8), warehouse, "application/json", null).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + id + "/rollback-decision", decision, administrator, "application/json", null).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + id + "/rollback-execute", null, warehouse, null, null).statusCode());
+        worker.poll();
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_loan WHERE initial_batch_id=? AND relation_status='VOID'", Integer.class, id));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_asset WHERE asset_code='HTTP-B-UNDO' AND card_stage='CANCELLED'", Integer.class));
     }
 
     private byte[] multipart(byte[] file) throws Exception {

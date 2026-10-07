@@ -4,7 +4,7 @@ var reasons = {STOCK_SHORTAGE:'库存不足',SPECIFICATION_MISMATCH:'规格不�
 module.exports = {status:function(value){return names[value] || value;},reason:function(value){return reasons[value] || value;}};
 </wxs>
 <view class="page">
-  <view class="title">领用申请与进度</view>
+  <view class="title">领用与借用申请</view>
   <view class="subtitle">按数量申请，不需选择资产编码。批准后由库管分配实物。</view>
   <view wx:if="{{error}}" class="error">{{error}}</view><view wx:if="{{notice}}" class="hint">{{notice}}</view>
   <button bindtap="onNew" disabled="{{busy || retryable}}">新建申请</button>
@@ -17,6 +17,10 @@ module.exports = {status:function(value){return names[value] || value;},reason:f
   <button wx:if="{{page > 1}}" bindtap="onPrevious" disabled="{{busy || retryable}}">上一页申请</button>
   <button wx:if="{{page * 20 < total}}" bindtap="onNext" disabled="{{busy || retryable}}">下一页申请</button>
   <view wx:if="{{showForm}}">
+    <button bindtap="onRequestType" disabled="{{busy || retryable || mode === 'change'}}">申请类型：{{requestType === 'BORROW' ? '借用' : '领用'}}</button>
+    <view wx:if="{{requestType === 'BORROW'}}" class="card"><view class="label">预计归还日</view>
+      <picker mode="date" value="{{expectedReturnDate}}" bindchange="onReturnDate" disabled="{{busy || retryable || mode === 'change'}}">
+        <view class="value">{{expectedReturnDate || '请选择预计归还日'}}</view></picker></view>
     <view class="title">{{mode === 'new' ? '新建申请' : mode === 'change' ? '提请范围变更' : '修改草稿'}}</view>
     <view wx:for="{{form}}" wx:for-item="d" wx:for-index="i" wx:key="index" class="card">
       <view class="label">需求 {{i + 1}} · 分类</view>

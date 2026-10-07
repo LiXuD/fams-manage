@@ -15,6 +15,31 @@ class AssetImportPreflightTest {
             "型号", "单位", "序列号", "资产状态", "仓库编码", "位置编码", "使用组织编码", "使用人编号");
 
     @Test
+    void historicalBorrowingRequiresDatesAndPreservesOverdueOpeningFact() {
+        var columns = new java.util.ArrayList<>(COLUMNS);
+        columns.add("借出日期");
+        columns.add("预计归还日");
+        var values = new HashMap<>(row(2, "B-1", "CAT-1", "LOC-1", "借出").values());
+        values.put("使用组织编码", "ORG-1");
+        values.put("使用人编号", "E-1");
+        values.put("借出日期", "2020-01-01");
+        values.put("预计归还日", "2020-02-01");
+        var parsed = new AssetImportWorkbook.Parsed(columns,
+                List.of(new AssetImportWorkbook.DataRow(2, values)), List.of());
+        var result = AssetImportPreflight.check(parsed, Map.of(), catalog());
+        assertTrue(result.errors().isEmpty(), result.errors().toString());
+        assertEquals(java.time.LocalDate.of(2020, 1, 1), result.ready().getFirst().borrowedDate());
+        assertEquals(java.time.LocalDate.of(2020, 2, 1), result.ready().getFirst().expectedReturnDate());
+        for (String invalid : List.of("", "bad-date", "2019-12-31")) {
+            values.put("预计归还日", invalid);
+            var rejected = AssetImportPreflight.check(new AssetImportWorkbook.Parsed(columns,
+                    List.of(new AssetImportWorkbook.DataRow(2, values)), List.of()), Map.of(), catalog());
+            assertTrue(rejected.ready().isEmpty());
+            assertTrue(rejected.errors().stream().anyMatch(e -> e.column().equals("预计归还日")));
+        }
+    }
+
+    @Test
     void codeWinsOverNameAndLocationNameIsScopedToWarehouse() {
         var catalog = catalog();
         var result = AssetImportPreflight.check(parsed(row(2, "A-1", "CAT-1", "库位",

@@ -40,6 +40,7 @@ class RequisitionHandoverService {
     private final RequisitionMasterDataPort references;
     private final AssetHandoverPort assets;
     private final RequisitionService requisitions;
+    private final com.fams.loan.LoanReceiptPort loans;
     private final SecureRandom random = new SecureRandom();
 
     RequisitionHandoverService(
@@ -49,7 +50,8 @@ class RequisitionHandoverService {
             RequisitionActorContext actors,
             RequisitionMasterDataPort references,
             AssetHandoverPort assets,
-            RequisitionService requisitions) {
+            RequisitionService requisitions,
+            com.fams.loan.LoanReceiptPort loans) {
         this.db = db;
         this.json = json;
         this.clock = clock;
@@ -57,6 +59,7 @@ class RequisitionHandoverService {
         this.references = references;
         this.assets = assets;
         this.requisitions = requisitions;
+        this.loans = loans;
     }
 
     Map<String, Object> pending(Actor actor, int page, int size) {
@@ -356,7 +359,21 @@ class RequisitionHandoverService {
             throw RequisitionFailure.invalid("HANDOVER_REFUSAL_REASON_REQUIRED");
         }
         if (!refuse) {
-            assets.receive(
+            if ("BORROW".equals(header.get("request_type"))) {
+                var parameters = header.get("parameter_snapshot_json").toString();
+                var zone = ZoneId.of(json.readTree(parameters).get("timezone").asText());
+                var businessDate = clock.instant().atZone(zone).toLocalDate();
+                var dueDate = java.time.LocalDate.parse(header.get("expected_return_date").toString());
+                if (!dueDate.isAfter(businessDate)) {
+                    throw RequisitionFailure.conflict("LOAN_RETURN_DATE_EXPIRED");
+                }
+                assets.borrow(n(item, "asset_id"), n(item, "asset_version_snapshot"),
+                        n(demand, "target_organization_id"), target(demand),
+                        n(demand, "target_location_id"), current.id(), request, clock.instant());
+                loans.open(n(item, "asset_id"), target(demand), n(demand, "target_organization_id"),
+                        request, allocation, businessDate, dueDate, parameters, clock.instant());
+            } else {
+                assets.receive(
                     n(item, "asset_id"),
                     n(item, "asset_version_snapshot"),
                     demand.get("custody_type").toString(),
@@ -366,6 +383,7 @@ class RequisitionHandoverService {
                     current.id(),
                     request,
                     clock.instant());
+            }
             db.update(
                     "UPDATE fams_requisition_demand SET"
                         + " pending_handover_quantity=pending_handover_quantity-1,completed_quantity=completed_quantity+1,version=version+1"
@@ -422,6 +440,9 @@ class RequisitionHandoverService {
         }
         result.put("requestId", Long.toString(request));
         result.put("requestNo", header.get("request_no"));
+        result.put("requestType", header.get("request_type"));
+        result.put("expectedReturnDate", header.get("expected_return_date") == null ? null
+                : header.get("expected_return_date").toString());
         result.put("requestVersion", n(header, "version"));
         result.put("allocationId", Long.toString(allocation));
         result.put("allocationStatus", item.get("allocation_status"));

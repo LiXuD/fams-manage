@@ -5,7 +5,8 @@
     "pages/request-center/index",
     "pages/requests/index",
     "pages/department-requests/index",
-    "pages/receipts/index"
+    "pages/receipts/index",
+    "pages/loans/index"
   ],
   "window": {
     "navigationBarTitleText": "企业资产",

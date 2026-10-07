@@ -19,6 +19,7 @@ export interface RequisitionAllocation {
     assetSnapshotJson: { assetCode: string; name: string; version: number }; predecessorAllocationId?: string;
 }
 export interface Requisition {
+    requestType?: "REQUISITION" | "BORROW"; expectedReturnDate?: string | null;
     id: string; requestNo: string; creatorAccountId: string; creatorUsernameSnapshot: string;
     requestStatus: string; requestVersion: number; version: number; sourceRequestId?: string; sourceDemandId?: string;
     handovers?: Array<{ allocationId: string; deliveredAt: string; receiptDeadlineAt: string; destinationText: string;
@@ -47,6 +48,7 @@ export interface PendingReceipt { id: string; requestId: string; requestNo: stri
     assetSnapshotJson: { assetCode: string; name: string; model?: string }; deliveredAt: string;
     receiptDeadlineAt: string; destinationText: string }
 export interface ReceiptDetail { requestId: string; requestNo: string; requestVersion: number;
+    requestType?: "REQUISITION" | "BORROW"; expectedReturnDate?: string | null;
     allocationId: string; allocationStatus: string; allocationVersion: number;
     asset: { assetCode: string; name: string; model?: string };
     handover: { deliveredAt: string; receiptDeadlineAt: string; destinationText: string } }

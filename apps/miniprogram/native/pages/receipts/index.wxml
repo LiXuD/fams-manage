@@ -15,6 +15,7 @@
     <view>{{selected.asset.assetCode}} · {{selected.asset.name}} · {{selected.asset.model}}</view>
     <view>交出：{{selected.handover.deliveredAt}} · 接收截止：{{selected.handover.receiptDeadlineAt}}</view>
     <view>去向：{{selected.handover.destinationText}}</view>
+    <view wx:if="{{selected.requestType === 'BORROW'}}">借用 · 预计归还日：{{selected.expectedReturnDate}}</view>
     <button disabled="{{busy || retryable}}" bindtap="onScan">扫描实物标签</button>
     <input disabled="{{busy || retryable}}" value="{{observedCode}}" maxlength="128" bindinput="onCode" placeholder="标签损坏时填写实际资产编码" />
     <checkbox-group bindchange="onCheck"><label><checkbox value="checked" checked="{{checked}}" disabled="{{busy || retryable}}" />我已核对收到的实物和编码</label></checkbox-group>

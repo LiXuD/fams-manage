@@ -12,6 +12,7 @@ interface Data {
     page: number; total: number; showForm: boolean; retryable: boolean; mode: "new" | "revise" | "change";
     categories: RequisitionChoice[]; organizations: RequisitionChoice[]; employees: RequisitionChoice[];
     locations: RequisitionChoice[]; canApplyShared: boolean; form: FormRow[]; reason: string;
+    requestType: "REQUISITION" | "BORROW"; expectedReturnDate: string;
 }
 interface Context { data: Data; setData(value: Partial<Data>): void }
 interface Event { detail: { value: string }; currentTarget: { dataset: { index?: number; field?: string; id?: string } } }
@@ -84,12 +85,14 @@ export function createRequisitionPage(getServices: () => MiniServices, initially
                 employeeIndex: Math.max(0, employeeChoices.findIndex(c => c.id === employeeId)),
                 locationIndex: Math.max(0, page.data.locations.findIndex(c => c.id === d.targetLocationId)) };
         });
-        page.setData({ mode, form, showForm: true, error: "" });
+        page.setData({ mode, form, showForm: true, error: "",
+            requestType: mode === "new" ? "REQUISITION" : page.data.selected?.requestType ?? "REQUISITION",
+            expectedReturnDate: mode === "new" ? "" : page.data.selected?.expectedReturnDate ?? "" });
     };
     return {
         data: { accountId: "", busy: false, error: "", notice: "", rows: [], selected: null, page: 1, total: 0,
             showForm: false, retryable: false, mode: "new", categories: [], organizations: [], employees: [], locations: [],
-            canApplyShared: false, form: [], reason: "" } as Data,
+            canApplyShared: false, form: [], reason: "", requestType: "REQUISITION", expectedReturnDate: "" } as Data,
         async onShow(this: Context) {
             live = true; const current = ++generation;
             try {
@@ -158,12 +161,21 @@ export function createRequisitionPage(getServices: () => MiniServices, initially
             this.setData({ form: this.data.form.map((row, i) => i === index ? changed : row) });
         },
         onCustody(this: Context, event: Event) {
-            if (this.data.busy || pending || !this.data.canApplyShared) return;
+            if (this.data.busy || pending || !this.data.canApplyShared || this.data.requestType === "BORROW") return;
             const index = Number(event.currentTarget.dataset.index);
             this.setData({ form: this.data.form.map((row, i) => i === index
                 ? { ...row, custodyType: row.custodyType === "PERSONAL" ? "SHARED" : "PERSONAL" } : row) });
         },
         onReason(this: Context, event: Event) { if (!this.data.busy && !pending) this.setData({ reason: event.detail.value }); },
+        onRequestType(this: Context) {
+            if (this.data.busy || pending || this.data.mode === "change") return;
+            const requestType = this.data.requestType === "BORROW" ? "REQUISITION" : "BORROW";
+            this.setData({ requestType, form: this.data.form.map(d => requestType === "BORROW"
+                ? { ...d, custodyType: "PERSONAL" } : d) });
+        },
+        onReturnDate(this: Context, event: Event) {
+            if (!this.data.busy && !pending && this.data.mode !== "change") this.setData({ expectedReturnDate: event.detail.value });
+        },
         async onSave(this: Context) {
             const demands: RequisitionDemandInput[] = this.data.form.map(row => ({
                 category: row.category, specification: row.specification, preferredBrand: row.preferredBrand,
@@ -176,7 +188,12 @@ export function createRequisitionPage(getServices: () => MiniServices, initially
                 this.setData({ error: "请填写需求规格、用途、数量、日期和接收目标。" }); return;
             }
             const suffix = this.data.mode === "new" ? "" : "/" + this.data.selected!.id + (this.data.mode === "change" ? "/changes" : "");
-            await mutate(this, suffix, { demands }, this.data.mode === "revise" ? "PATCH" : "POST");
+            if (this.data.requestType === "BORROW" && !this.data.expectedReturnDate) {
+                this.setData({ error: "请选择预计归还日。" }); return;
+            }
+            await mutate(this, suffix, { demands, requestType: this.data.requestType,
+                expectedReturnDate: this.data.requestType === "BORROW" ? this.data.expectedReturnDate : null },
+                this.data.mode === "revise" ? "PATCH" : "POST");
         },
         async onOpen(this: Context, event: Event) {
             if (!services || this.data.busy || pending) return; const current = generation; this.setData({ busy: true, error: "" });
