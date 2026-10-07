@@ -1515,6 +1515,8 @@ class RequisitionService {
                     Object cleaned = raw;
                     if (raw instanceof Timestamp time) {
                         cleaned = time.toInstant().toString();
+                    } else if (raw instanceof java.time.LocalDateTime time) {
+                        cleaned = time.toInstant(java.time.ZoneOffset.UTC).toString();
                     } else if (raw instanceof java.sql.Date date) {
                         cleaned = date.toLocalDate().toString();
                     } else if (raw instanceof Number

@@ -30,6 +30,9 @@ const labels: Record<string, string> = { DRAFT: "草稿", PENDING_ADMIN_DECISION
   PARTIALLY_COMPLETED: "部分完成", COMPLETED: "已完成", UNFULFILLABLE: "无法满足", CANCELLED: "已取消" };
 const reasonLabels: Record<string, string> = { STOCK_SHORTAGE: "库存不足", SPECIFICATION_MISMATCH: "规格不匹配",
   TEMPORARILY_UNAVAILABLE: "暂不可用", OTHER: "其他" };
+const handoverLabels: Record<string, string> = { WAITING_DELIVERY: "待交出", DELIVERED_WAITING_RECEIPT: "已交出待接收",
+  RECOVERY_PENDING_CANCEL: "待收回取消", RECEIVED: "已接收", REFUSED: "接收人反馈不符", CANCELLED: "已取消",
+  DELIVERED: "已交出", RECOVERY_REQUESTED: "已登记收回", RECOVERED: "已收回验收" };
 
 async function load() {
   const result = await requisitionRequest<RequisitionPage>(`?page=${page.value}&pageSize=20${status.value ? "&status=" + status.value : ""}`);
@@ -191,7 +194,7 @@ onMounted(async () => {
       </section>
       <p v-for="decision in selected.decisions" :key="decision.id">版本 {{ decision.requestVersion }}：{{ decision.decisionResult === 'APPROVED' ? '批准' : '驳回' }} {{ decision.commentText }}</p>
       <p v-for="record in selected.unfulfillable" :key="record.id">无法满足 {{ record.quantity }} 件：{{ reasonLabels[record.reasonCode] }} {{ record.reasonDescription }}；当时可用 {{ record.inventoryQuerySummaryJson.availableCount }} 件，查询于 {{ record.inventoryQuerySummaryJson.queriedAt }}</p>
-      <p v-for="allocation in selected.allocations" :key="allocation.id">{{ allocation.assetSnapshotJson.assetCode }} · {{ allocation.assetSnapshotJson.name }} · {{ allocation.allocationStatus === 'WAITING_DELIVERY' ? '待交出' : allocation.allocationStatus === 'CANCELLED' ? '已取消分配（保留历史）' : allocation.allocationStatus }}
+      <p v-for="allocation in selected.allocations" :key="allocation.id">{{ allocation.assetSnapshotJson.assetCode }} · {{ allocation.assetSnapshotJson.name }} · {{ handoverLabels[allocation.allocationStatus] ?? allocation.allocationStatus }}
         <button v-if="canExecute && allocation.allocationStatus === 'WAITING_DELIVERY'" :disabled="busy || retryable || !reason.trim()" @click="replacementId = allocation.id; findInventory(selected!.demands.find(d => d.id === allocation.demandId)!)">更换未交出资产</button></p>
       <fieldset v-if="canExecute" :disabled="busy || retryable"><legend>实物交出与收回凭据</legend>
         <label>核对实物编码<input v-model="observedCode" maxlength="128" /></label>
@@ -209,7 +212,7 @@ onMounted(async () => {
         <button v-if="canExecute && a.allocationStatus === 'RECOVERY_PENDING_CANCEL'" :disabled="busy || retryable || !returned || !observedCode.trim() || !evidence.trim() || !reason.trim()" @click="handover(a, 'recover')">确认收回验收并取消</button>
       </div>
       <p v-for="h in selected.handovers" :key="h.allocationId">交出 {{ h.deliveredAt }} · 截止 {{ h.receiptDeadlineAt }} · 实物去向 {{ h.destinationText }}</p>
-      <p v-for="e in selected.handoverEvents" :key="e.id">{{ e.eventType }} · {{ e.evidenceText }} · {{ e.occurredAt }}</p>
+      <p v-for="e in selected.handoverEvents" :key="e.id">{{ handoverLabels[e.eventType] ?? e.eventType }} · {{ e.evidenceText }} · {{ e.occurredAt }}</p>
       <p>交出后仍保留正式在库事实和锁；接收人从小程序“待接收”核对实物，成功后更新正式责任。</p>
     </section>
     <section v-if="inventory && inventoryDemand"><h3>可用库存 · {{ inventory.total }} 件</h3><p>仅列出在库、正常、正式卡且无业务锁的同类资产；提交时再次核对。</p>

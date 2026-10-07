@@ -403,6 +403,8 @@ class HandoverHttpTest {
         assertEquals(200, first.statusCode(), first.body());
         assertEquals(first.body(), call(warehouse, "POST", endpoint, body, key, before).body());
         value = JSON.readTree(first.body());
+        Instant.parse(value.path("handovers").get(0).path("deliveredAt").asText());
+        Instant.parse(value.path("handovers").get(0).path("receiptDeadlineAt").asText());
         assertEquals(
                 "IN_STOCK",
                 jdbc.queryForObject(
