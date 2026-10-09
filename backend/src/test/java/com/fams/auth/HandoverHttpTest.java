@@ -581,7 +581,7 @@ class HandoverHttpTest {
         var response = loanCall(employee, "POST", "/" + loan + "/extensions", body, key(), 0L);
         assertEquals(200, response.statusCode(), response.body());
         long extension = JSON.readTree(response.body()).path("id").asLong();
-        jdbc.update("UPDATE fams_loan SET expected_return_date='2099-11-30' WHERE id=?", loan);
+        jdbc.update("UPDATE fams_loan SET expected_return_date='2100-01-01' WHERE id=?", loan);
         String suffix = "/extensions/" + extension + "/decision";
         String approve = "{\"approved\":true,\"reason\":\"核验\"}";
         assertEquals(409, loanCall(admin, "POST", suffix, approve, key(), 0L).statusCode());
