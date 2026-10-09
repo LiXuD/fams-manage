@@ -44,7 +44,8 @@ class LoanService {
     Map<String, Object> list(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         String scope = scope(current);
-        long total = db.queryForObject("SELECT COUNT(*) FROM fams_loan l WHERE " + scope, Long.class);
+        long total = java.util.Objects.requireNonNull(
+                db.queryForObject("SELECT COUNT(*) FROM fams_loan l WHERE " + scope, Long.class), "LOAN_COUNT_MISSING");
         var rows = db.queryForList("SELECT l.*,a.asset_code,a.name,a.lifecycle_status,a.exception_status,a.version AS current_asset_version"
                 + " FROM fams_loan l JOIN fams_asset a ON a.id=l.asset_id WHERE " + scope
                 + " ORDER BY l.id DESC LIMIT ? OFFSET ?", size, (page - 1) * size);
@@ -81,7 +82,8 @@ class LoanService {
         String predicate = current.has(Role.ASSET_ADMIN) ? "1=1" : "proposed_by=" + current.id();
         var rows = db.queryForList("SELECT * FROM fams_loan_extension WHERE " + predicate
                 + " ORDER BY id DESC LIMIT ? OFFSET ?", size, (page - 1) * size);
-        long total = db.queryForObject("SELECT COUNT(*) FROM fams_loan_extension WHERE " + predicate, Long.class);
+        long total = java.util.Objects.requireNonNull(
+                db.queryForObject("SELECT COUNT(*) FROM fams_loan_extension WHERE " + predicate, Long.class), "LOAN_COUNT_MISSING");
         return Map.of("items", rows.stream().map(this::clean).toList(), "total", total,
                 "page", page, "pageSize", size);
     }
@@ -118,7 +120,7 @@ class LoanService {
                 + "requested_due_date,reason,proposed_by,created_at) VALUES (?,?,?,?,?,?,?,?)",
                 beforeReceipt ? null : id, beforeReceipt ? id : null, version, old,
                 input.expectedReturnDate(), input.reason(), current.id(), now());
-        long extension = db.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+        long extension = java.util.Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class), "LOAN_ID_MISSING");
         db.update("INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at)"
                 + " VALUES ('ASSET_ADMIN','LOAN_EXTENSION',?,'APPROVAL','OPEN',?)", extension, now());
         audit(actor, current, "LOAN_EXTENSION_PROPOSED", extension, null, 0L,
@@ -227,8 +229,9 @@ class LoanService {
                 + " AND operation_id=? AND idempotency_key=? FOR UPDATE", current.id(), "loan:" + action, key);
         if (rows.isEmpty()) { return null; }
         var row = rows.getFirst();
-        Timestamp expiry = db.queryForObject("SELECT expires_at FROM fams_idempotency_record WHERE id=?",
-                Timestamp.class, row.get("id"));
+        Timestamp expiry = java.util.Objects.requireNonNull(
+                db.queryForObject("SELECT expires_at FROM fams_idempotency_record WHERE id=?",
+                        Timestamp.class, row.get("id")), "LOAN_REPLAY_EXPIRY_MISSING");
         if (!expiry.toInstant().isAfter(clock.instant())) {
             db.update("DELETE FROM fams_idempotency_record WHERE id=?", row.get("id"));
             return null;

@@ -18,6 +18,9 @@ def main() -> int:
     checked = runtime.checked
 
     def loan_checked(args: list[str], **kwargs: object):
+        if args[:3] == ["rtk", "docker", "run"]:
+            # Remove this disposable container's anonymous database volume on exit.
+            args = args[:3] + ["--rm"] + args[3:]
         sql = kwargs.get("input")
         if isinstance(sql, str) and sql.startswith("INSERT INTO fams_organization"):
             sql += (

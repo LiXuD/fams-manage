@@ -46,7 +46,8 @@ class AssetReturnService {
                 + (current.has(Role.DEPARTMENT_ASSET_MANAGER) ? " OR using_organization_id=" + current.organizationId() : "");
         var items = db.queryForList("SELECT * FROM fams_asset_return WHERE " + scope
                 + " ORDER BY id DESC LIMIT ? OFFSET ?", size, (page - 1) * size);
-        long total = db.queryForObject("SELECT COUNT(*) FROM fams_asset_return WHERE " + scope, Long.class);
+        long total = java.util.Objects.requireNonNull(
+                db.queryForObject("SELECT COUNT(*) FROM fams_asset_return WHERE " + scope, Long.class), "RETURN_COUNT_MISSING");
         return Map.of("items", items.stream().map(this::view).toList(), "total", total, "page", page, "pageSize", size);
     }
 
@@ -74,7 +75,7 @@ class AssetReturnService {
                 + " AND NOT EXISTS (SELECT 1 FROM fams_asset_business_lock b WHERE b.asset_id=a.id AND b.released_at IS NULL)";
         var rows = db.queryForList("SELECT a.id,a.asset_code,a.name,a.version,a.lifecycle_status" + from
                 + " ORDER BY a.id DESC LIMIT ? OFFSET ?", size, (page - 1) * size);
-        long total = db.queryForObject("SELECT COUNT(*)" + from, Long.class);
+        long total = java.util.Objects.requireNonNull(db.queryForObject("SELECT COUNT(*)" + from, Long.class), "RETURN_COUNT_MISSING");
         return Map.of("items", rows.stream().map(this::view).toList(), "total", total, "page", page, "pageSize", size);
     }
 
@@ -317,7 +318,7 @@ class AssetReturnService {
         return rows.getFirst();
     }
     private long number(Map<String, Object> row, String key) { return ((Number) row.get(key)).longValue(); }
-    private long lastId() { return db.queryForObject("SELECT LAST_INSERT_ID()", Long.class); }
+    private long lastId() { return java.util.Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class), "RETURN_ID_MISSING"); }
     private Timestamp now() { return Timestamp.from(clock.instant()); }
     private String digest(String prefix, Object input) {
         try {

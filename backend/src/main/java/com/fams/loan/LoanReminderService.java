@@ -56,8 +56,8 @@ public class LoanReminderService {
                 + " VALUES (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE id=id", id, due, today, type, due.isBefore(today) ? due.plusDays(1) : null, now);
         var accounts = db.queryForList("SELECT id FROM fams_system_account WHERE employee_id=? AND status='ENABLED'", Long.class,
                 loan.get("borrower_employee_id"));
-        boolean disabled = db.queryForObject("SELECT status FROM fams_employee WHERE id=?", String.class,
-                loan.get("borrower_employee_id")).equals("DISABLED");
+        boolean disabled = "DISABLED".equals(db.queryForObject("SELECT status FROM fams_employee WHERE id=?", String.class,
+                loan.get("borrower_employee_id")));
         Long assignee = disabled || accounts.isEmpty() || "LOST_LIABILITY".equals(type) ? null : accounts.getFirst();
         db.update("INSERT INTO fams_todo (pool_type,assignee_account_id,business_type,business_id,todo_type,todo_status,opened_at)"
                 + " VALUES (?,?,'LOAN',?,?,'OPEN',?) ON DUPLICATE KEY UPDATE pool_type=VALUES(pool_type),"
