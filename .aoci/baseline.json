@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-15T07:14:25Z",
-  "updated_at": "2026-10-09T02:27:54Z",
+  "updated_at": "2026-10-09T02:29:15Z",
   "files": {
     ".claude/skills/gitnexus/gitnexus-cli/SKILL.md": {
       "role": "index",
@@ -68,14 +68,14 @@
       "normalized_sha256": "488e1b3f2e641779d4636abf9390845f901e64607261bc3c0b0bfe4fe96e6706"
     },
     "AGENTS.md": {
-      "sha256": "aaf28bcaeb24a27d6dd312387a84ffcbe7f88b1baf9e2d77a4ae21cffe77c8dc",
+      "sha256": "8c352e6fac8b8f400b32236b2e6792479490f6e9972046c39143515c40ed1a32",
       "size": 21668,
-      "normalized_sha256": "aaf28bcaeb24a27d6dd312387a84ffcbe7f88b1baf9e2d77a4ae21cffe77c8dc"
+      "normalized_sha256": "8c352e6fac8b8f400b32236b2e6792479490f6e9972046c39143515c40ed1a32"
     },
     "CLAUDE.md": {
-      "sha256": "d05c3c2a41f5e6141c99e22672bd0ce29f5a744a7ee4fefadf8ae1cfb8540397",
+      "sha256": "85d74f7c7c7e5448a79fa9a3ce09560fd08f7ab424bb279ce04dc14a0492b46c",
       "size": 2886,
-      "normalized_sha256": "d05c3c2a41f5e6141c99e22672bd0ce29f5a744a7ee4fefadf8ae1cfb8540397"
+      "normalized_sha256": "85d74f7c7c7e5448a79fa9a3ce09560fd08f7ab424bb279ce04dc14a0492b46c"
     },
     "DESIGN-HANDOFF.md": {
       "sha256": "9b0f8600af7968249a5badce4d1042a87b5f7531db530dfe5286d679a860cbac",
