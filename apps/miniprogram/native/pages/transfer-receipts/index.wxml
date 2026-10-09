@@ -1,0 +1,25 @@
+<view class="page">
+  <view class="title">调拨接收与实物核对</view>
+  <view wx:if="{{error}}" class="error">{{error}}</view><view wx:if="{{notice}}">{{notice}}</view>
+  <button disabled="{{busy}}" bindtap="onRefresh">刷新结果</button>
+  <button wx:if="{{retryable}}" disabled="{{busy}}" bindtap="onRetry">重试上次操作</button>
+  <view wx:for="{{rows}}" wx:key="id" class="card">
+    <view>调拨 {{item.requestId}} · {{item.assetCode}} · {{item.name}}</view>
+    <view>交出：{{item.deliveredAt}} · 截止：{{item.receiptDeadlineAt}}</view><view>实物去向：{{item.destination}}</view>
+    <button disabled="{{busy || retryable}}" data-request="{{item.requestId}}" data-id="{{item.id}}" bindtap="onOpen">逐件核对实物</button>
+  </view>
+  <view wx:if="{{!rows.length && !busy}}">没有当前可接收的已交出资产。</view>
+  <button disabled="{{busy || retryable || page === 1}}" bindtap="onPrevious">上一页</button>
+  <view>{{page}} 页 · {{total}} 条</view><button disabled="{{busy || retryable || page * 20 >= total}}" bindtap="onNext">下一页</button>
+  <view wx:if="{{selected}}" class="card">
+    <view>{{selected.assetCode}} · {{selected.name}}</view>
+    <view>交出：{{selected.deliveredAt}} · 接收截止：{{selected.receiptDeadlineAt}}</view>
+    <view>去向：{{selected.destination}}</view>
+    <button disabled="{{busy || retryable}}" bindtap="onScan">扫描实物标签</button>
+    <input disabled="{{busy || retryable}}" value="{{observedCode}}" maxlength="128" bindinput="onCode" placeholder="标签损坏时填写实际资产编码" />
+    <checkbox-group bindchange="onCheck"><label><checkbox value="checked" checked="{{checked}}" disabled="{{busy || retryable}}" />我已核对收到的实物和编码</label></checkbox-group>
+    <button disabled="{{busy || retryable || !checked || !observedCode}}" bindtap="onReceive">确认实物接收</button>
+    <textarea disabled="{{busy || retryable}}" value="{{reason}}" maxlength="1000" bindinput="onReason" placeholder="实物不符或拒收原因" />
+    <button disabled="{{busy || retryable || !checked || !observedCode || !reason}}" bindtap="onRefuse">反馈不符 / 拒收</button>
+  </view>
+</view>
