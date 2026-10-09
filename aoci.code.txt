@@ -4,10 +4,10 @@
 .gitattributes[FC6T]: F:固定跨平台文本检出为LF以保持AOCI基线字节一致 | R:code:aoci.txt,code:aoci.meta.txt,code:aoci.code.txt | A:覆盖Git自动换行差异并让二进制继续自动识别 | S:改变行尾策略会造成全仓基线伪漂移
 .gitignore[FC7T]: F:排除机器配置、运行证据、依赖构建物与大型设计转储 | R:code:docs/development/file-classification-manifest.md | A:批准的两组设计PNG显式放行，产品输出与凭据仅留本地 | S:不得忽略正式AOCI卷与AGENTS，否则扫描会漏项
 .java-version[FV5T]: F:固定项目候选Java运行时为21.0 | R:code:docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md | A:供本地工具链与后续后端兼容性验证选择JDK | S:版本文件只是候选基线，不等于D6-02兼容性已验证
-AGENTS.md[SG9S]: F:规定开发权威入口、证据分层、提交格式与GitNexus及AOCI治理 | R:code:DESIGN-HANDOFF.md,code:docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md | A:按现役任务台账推进；编辑前影响分析、提交前变更检测，最终稳定后绑定证据维护认知 | S:本地DEV_VERIFIED不替代CI、QA或生产；压缩后完整重载，禁止旁路补答或程序创作语义
-DESIGN-HANDOFF.md[SW9S]: F:维护FAMS唯一现役阶段入口、事实面与后续开发方向 | R:code:docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md,code:docs/development/D6-13-task-card.md | A:第1至5步完成，第6步推进D6-13；D6-11及12A已获用户复核，外部短信和真机后置 | S:历史失败与送审记录不覆盖后续关闭事实；任务细节只维护计划台账，本地开发证据不等于QA或上线
+AGENTS.md[SG9S]: F:规定现役开发入口、证据分层、提交规范及图分析与认知维护合同 | R:code:DESIGN-HANDOFF.md,code:docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md | A:按父子台账推进，编辑前分析影响、提交前检测变化，最终稳定后绑定证据维护认知 | S:用户批准持续开发压缩后不自动重传Whole-Index，按当前源码和运行证据继续；该例外优先于仅因压缩要求重载的规则，但旧收据不证明完整认知可靠，CAS、冲突、审批和Recovery边界仍适用
+DESIGN-HANDOFF.md[SW9S]: F:维护唯一现役阶段入口、当前事实和开发续接方向 | R:code:docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md,code:docs/development/D6-13-task-card.md | A:第六阶段D6-13候选e99bca5已完成本地门禁、浏览器和恢复验证送审；用户独立复核后进入D6-14 | S:后续复核关闭事实优先于历史送审与失败记录；详细父子状态以计划台账为准，真实短信及真机后置不构成外部验收通过
 FIXED_ASSET_SYSTEM_DESIGN.md[SD6M]: F:记录基于旧EAM数据模型的固定资产领域与数据架构参考分析 | R:code:docs/superpowers/specs/2026-09-03-fixed-asset-product-design.md | A:从资产、采购、库存、折旧和维修拆分模块并建议以交易和事件表达生命周期 | S:这是早期参考而非当前需求权威；真实实现必须服从PRD V1.5，不能从旧217表或其弱约束直接恢复范围
-CLAUDE.md[SG8T]: F:定义Claude使用GitNexus的影响分析和变更检测约束 | R:code:AGENTS.md,code:.gitnexus/run.cjs | A:按查询和上下文定位依赖，编辑前upstream分析，提交前检测执行流 | S:图统计仅为时点事实，索引陈旧需重新分析，不能替代源码与运行证据
+CLAUDE.md[SG8T]: F:定义Claude使用GitNexus定位执行流及安全修改的要求 | R:code:AGENTS.md,code:.gitnexus/run.cjs | A:查询和上下文定位关系，编辑前upstream影响分析，高风险先警告，提交前检测受影响流程 | S:图统计是索引时点事实；陈旧图需重建，不能代替当前源码或持久运行验证
 compose.yaml[OV8T]: F:声明digest固定的MySQL本地运行容器和持久卷 | R:code:backend/src/main/resources/application-fams-product.properties | A:必填数据库账号口令，UTC与utf8mb4，loopback端口及健康检查，禁止自动重启 | S:命名卷保留数据；配置存在不证明服务运行，任务测试库另由验证器拥有
 eslint.config.mjs[FQ7T]: F:配置实际Web小程序及共享类型源码的JS与TS推荐lint规则 | R:code:package.json | A:仅匹配三个src范围，忽略依赖与backend生成target | S:生成契约另由哈希及编译检查；配置存在不表示执行通过
 mvnw[XV7M]: F:以POSIX only-script Wrapper解析下载缓存并执行指定Maven发行版 | R:code:.mvn/wrapper/maven-wrapper.properties | A:URL哈希分缓存，wget curl或Java下载，临时目录清理可选SHA256校验及归档解压，传递原参数 | S:URL哈希不证明下载完整性；发行版摘要校验仅配置后生效，Wrapper本身不冻结JDK
@@ -49,7 +49,7 @@ D6-10-task-card.md[SW9T]: F:记录小程序会话短信挑战绑定换绑解绑�
 D6-11-task-card.md[SW9S]: F:记录数量申请审批唯一库管分配范围变更及再申请全功能关闭 | R:code:docs/development/D6-11A-data-contract.md,code:docs/development/evidence/D6-11-product-gate-92c1662.txt | A:A至D真实约束HTTP三角色浏览器、原生请求回放与SIGKILL恢复，固定候选及用户全部复核PASS | S:历史A单独送审没有页面不代表最终功能；分配保留正式在库不等于接收，本地DEV_VERIFIED不含外部通道QA生产
 D6-11A-data-contract.md[SD9T]: F:定义数量申请批准快照独占处理分配无法满足及后续链事实约束 | R:code:backend/src/main/resources/db/migration/d6_04/V19__create_requisition_facts.sql,code:backend/src/main/java/com/fams/requisition/RequisitionService.java | A:请求内容版本与执行版本分离，五结果桶守恒，活动分配唯一，复合外键核对来源与处理权，历史分配可再使用 | S:锁外键只证明存在，权限资产身份及累计数量由服务重验；MySQL部分DDL失败不能直接repair认成功或删除共享事实
 D6-12-task-card.md[SW9T]: F:记录实物交出实际接收及收回验收取消的内部关闭与真机边界 | R:code:docs/development/evidence/D6-12-product-gate-959fd3c.txt,code:docs/development/evidence/D6-12-browser-internal-2026-10-07.json | A:正式保管与实物去向分离，五分钟单次凭证当前接收人重验，竞争回滚重试及硬重启经门禁用户PASS关闭A | S:拒收超时不释放责任锁；B真机按用户安排BLOCKED父任务未关闭，原生HTTP替身不证明真实微信扫码HTTPS
-D6-13-task-card.md[SW9T]: F:记录借用延期归还期初承接与提醒开发检查点和未完成验证 | R:code:backend/src/main/java/com/fams/loan/LoanService.java,code:backend/src/main/java/com/fams/loan/AssetReturnService.java | A:接收原子BORROWED关系，原日期历史逾期保留，正常损坏缺失三结果，V22至V25及两端局部测试已记录 | S:父任务A/B/C仍IN_PROGRESS；缺真实浏览器借用硬重启固定门禁独立复核，局部18/18及初始发布日志不能升级为DEV_VERIFIED
+D6-13-task-card.md[SW9T]: F:定义借用延期归还验收矩阵并记录固定候选送审证据 | R:code:docs/development/evidence/d6-13-browser-runtime.md,code:docs/development/evidence/d6-13-product-gate-e99bca5.txt | A:e99bca5完整门禁退出0、Java125、分支75.11%；23项HTTP/MySQL、原生重试、浏览器和硬重启通过，2230161补精确资源清理 | S:父任务及A/B/C为IN_REVIEW，用户独立复核未完成；合成期初浏览器夹具不证明导入发布；损坏缺失来源待后续承接，本地结果不等于CI、QA或真机
 2026-10-08-aoci-index-governance.md[SQ8T]: F:记录443对象及六规模校正的AOCI治理闭环验证和恢复边界 | R:code:DESIGN-HANDOFF.md,code:aoci.code.txt,code:AGENTS.md | A:Verify Check Guide对齐、Scope和Recovery清零，数据库未配置，后续功能回到D6-13 | S:基线绑定未提交业务工作树，恢复旧源码会Stale；Legacy score不支持Volumes，治理对齐不等于旧模型收据可靠
 
 ===/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/===
@@ -378,7 +378,7 @@ SKILL.md[SQ7T]: F:规定变更前用GitNexus impact、流程资源和detect_chan
 SKILL.md[SQ7S]: F:规定重命名、抽取、拆分和移动前后的GitNexus影响、调用流与变更检测 | R:code:CLAUDE.md,code:.claude/skills/gitnexus/gitnexus-guide/SKILL.md | A:优先用rename预览并按接口、实现、调用方、测试顺序更新后复核 | S:动态字符串和外部API需人工核查；跨域引用提高风险
 
 ===/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/plans/===
-2026-09-12-fams-stage6-development-plan.md[SW9L]: F:规定第六阶段架构技术关口D6-01至D6-27父子任务与唯一执行台账 | R:code:DESIGN-HANDOFF.md,code:docs/superpowers/specs/2026-09-03-fixed-asset-product-design.md | A:Java模块单体MySQL短事务契约先行PC Vue原生TS，当前D6-11关闭12A关闭13进行中；四项提交元数据及本地门禁独立复核 | S:旧阶段段落不能覆盖最新台账；短信真机用户后置不免除必需子项，父任务不得提前关闭；本地性能冒烟不是第7步QA或生产
+2026-09-12-fams-stage6-development-plan.md[SW9L]: F:规定第六阶段技术架构、开发关口和D6-01至27唯一父子执行台账 | R:code:DESIGN-HANDOFF.md,code:docs/superpowers/specs/2026-09-03-fixed-asset-product-design.md | A:Java模块单体、MySQL短事务、契约先行及PC与原生TS；D6-13及A/B/C以e99bca5送审，用户复核后进入D6-14；提交四项元数据必填 | S:最新台账优先于旧执行记录；必需子项受阻或独立复核未满足不得关闭父任务；用户后置短信真机不免外部证据，本地性能冒烟不等于第七阶段QA
 
 ===/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/prototypes/2026-09-06-fixed-asset/===
 README.md[SU6T]: F:说明D0.2固定资产原型的40页范围、依据和使用入口 | R:code:docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md,code:docs/superpowers/specs/2026-09-03-fixed-asset-product-design.md,code:docs/superpowers/prototypes/2026-09-06-fixed-asset/index.html | A:把PC26页、小程序14页、10组流程和53项验收映射定位到单文件草图 | S:原型仅表达信息架构与交互设计，不包含后端、登录、设备、权限或生产验收
@@ -421,6 +421,7 @@ verify-d6-08.py[XQ9S]: F:运行持久任务导入预检发布失败及容量和�
 verify-d6-09-clamd.py[XQ9T]: F:启动真实clamd及隔离MySQL附件HTTP病毒与停机路径验证 | R:code:scripts/verify-d6-09.py,code:backend/src/test/java/com/fams/attachment/AttachmentHttpTest.java | A:clamav1.4.6标签linuxamd64限4GB，随机loopback端口PING后开启真实扫描测试，最终按精确容器名清理 | S:镜像标签未digest冻结；cleanup未复查删除后资源，调用main的外层必须负责finally；不证明生产通道或浏览器
 verify-d6-09.py[XQ8T]: F:分模式运行隔离MySQL附件配额HTTP清理或V7至V12升级测试 | R:code:backend/src/test/java/com/fams/attachment/AttachmentHttpTest.java,code:backend/src/test/java/com/fams/attachment/AttachmentCleanupTest.java,code:backend/src/test/java/com/fams/attachment/AttachmentUpgradeRuntimeCase.java | A:upgrade优先cleanup，再真实clamd或默认扫描替身，显式runtime开关及随机容器loopback凭据 | S:仅判Maven退出未核对零跳过报告；默认模式不证明真实病毒扫描，finally删除未检查结果及匿名卷
 verify-product-development.py[XQ9T]: F:复用质量门禁执行当前产品JavaTS依赖管理隔离与恢复检查 | R:code:scripts/verify-d6-03a.py | A:干净树开始，隔离Compose，最后保留安全失败摘要并嵌套finally清理应用资源及工作树检查 | S:不重跑历史Git契约治理和全部工具预检；恢复仍为兼容探针，打印成功后清理失败依然非零，不等于远端CI或QA
+run-d6-13-browser-runtime.py[OR8T]: F:复用三角色隔离运行栈为借用延期归还浏览器验证提供夹具 | R:code:scripts/run-d6-12-browser-runtime.py | A:注入明确的期初逾期借用，追加持久状态查询；捕获实际MySQL挂载匿名卷身份，容器移除后仅清理该卷并验证不存在 | S:合成期初关系不证明导入发布；只清理本次实际挂载且身份可证的资源，容器残留则停止卷清理，不根据旧名称猜测删除其他任务资源
 
 ===/Users/lixd/IdeaProjects/Git/CodexProject/fams/tools/git/===
 commitlint.config.cjs[FQ7T]: F:固定本地commitlint允许的提交类型、必填scope/subject和通用摘要拒绝规则 | R:code:tools/git/validate-commit-msg.py,code:tools/git/package.json | A:扩展conventional配置并用插件拒绝update、fix issue等无信息摘要 | S:配置只覆盖标题语法；Agent四项尾部元数据由Python校验器负责，未安装依赖时钩子不通过
@@ -792,6 +793,7 @@ runtime-binding-http.mjs[TQ8T]: F:执行原生绑定账号处理器到真实HTTP
 runtime-receipt-http.mjs[TQ8T]: F:执行原生接收处理器到真实HTTP的丢失回执重试 | R:code:apps/miniprogram/src/receipt-pages.ts,code:apps/miniprogram/src/session.ts | A:当前会话获取详情凭证核对实物，提交成功后模拟丢响应，再用原身份回放 | S:需预置临时服务数据；持久化结论须结合外层数据库断言，微信与传输为替身
 runtime-requisition-http.mjs[TQ8T]: F:执行原生数量申请处理器到真实HTTP的创建提交恢复 | R:code:apps/miniprogram/src/requisition-pages.ts,code:apps/miniprogram/src/session.ts | A:真实请求提交草稿模拟丢回执并原键重试，随后提交管理员确认和刷新 | S:依赖外层临时服务及数据；不证明真实微信设备或HTTPS
 session.test.mjs[TQ8S]: F:验证小程序会话持久化路径防护清理和并发代际 | R:code:apps/miniprogram/src/session.ts | A:替身检查不透明令牌和大整数身份、401清理、网络保留、换绑、存储失败和迟到登出 | S:测试日期为固定输入，不证明服务器当前期限或真实登录
+runtime-loan-http.mjs[TB8T]: F:验证原生借用接收及M05延期归还在丢响应后原键重试 | R:code:apps/miniprogram/test/runtime-receipt-http.mjs,code:apps/miniprogram/src/loan-pages.ts | A:真实会话调用HTTP，提交成功后各丢一次响应，断言重试键和正文一致、待审批事实唯一、未批准日期不变及注销清理 | S:HTTPS外观映射到loopback且微信身份交换为内部测试适配；不证明真实微信、HTTPS或真机验收，MySQL唯一事实由调用方HTTP测试断言
 
 ===/Users/lixd/IdeaProjects/Git/CodexProject/fams/apps/web/src/loan/===
 api.ts[IB8T]: F:封装借用延期退还Cookie及不可变写入身份请求 | R:code:apps/web/src/auth/sessionStore.ts | A:调用方给出键版本载荷，写POST携CSRF，稳定错误码映射本地文案 | S:未知错误不展示原始服务详情
@@ -805,15 +807,15 @@ InitialBorrowingPort.java[IB9T]: F:定义期初发布及撤销共同事务中的
 
 ===/Users/lixd/IdeaProjects/Git/CodexProject/fams/backend/src/main/java/com/fams/loan/===
 AssetReturnController.java[EB8T]: F:提供PC和小程序资产退还申请审批领取验收入口 | R:code:backend/src/main/java/com/fams/loan/AssetReturnService.java,code:backend/src/main/java/com/fams/auth/RequisitionActorContext.java | A:分页目录与可退资产，写入带幂等键及单据资产锁版本和实物验收字段 | S:角色与状态由事务服务重验，端点共享不赋予mini额外权利
-AssetReturnService.java[AB9M]: F:事务编排资产退还审批整单领取与正常损坏缺失验收 | R:code:backend/src/main/java/com/fams/asset/AssetReturnPort.java,code:backend/src/main/java/com/fams/asset/AssetHandoverPort.java | A:账号重验、资产版本及业务锁，24小时幂等，正常入库关闭借用，异常建立后续锁与待办 | S:缺失保留借用责任且禁止入库目标；损坏与缺失后续记录不证明维修报失完整业务已实现
+AssetReturnService.java[AB9M]: F:事务编排退还审批、唯一库管领取及正常损坏缺失实物验收 | R:code:backend/src/main/java/com/fams/asset/AssetReturnPort.java,code:backend/src/main/java/com/fams/asset/AssetHandoverPort.java | A:重验身份、资产版本及锁，24小时幂等回放；正常入库关闭借用并清理责任，异常原子转交后续锁和待办，JDBC计数与新ID显式非空 | S:缺失不允许入库目标且保留OPEN借用责任；损坏关闭借用并转维修来源；来源记录和锁不等于后续维修或报失业务已经完成
 LoanController.java[EB8T]: F:提供借用关系查询及接收前后延期申请和管理员决定端点 | R:code:backend/src/main/java/com/fams/loan/LoanService.java | A:PC及mini共享路由，分页与键版本输入校验 | S:日期变更仅由服务端管理员决定，界面请求不直接延期
 LoanErrorHandler.java[EB7T]: F:把借用退还业务拒绝及数据库竞争映射安全HTTP响应 | R:code:backend/src/main/java/com/fams/loan/LoanFailure.java,code:backend/src/main/java/com/fams/asset/AssetHandoverPort.java | A:业务status和稳定码保留，完整性及锁竞争统一409，携requestId | S:不输出底层数据库异常
 LoanFailure.java[DB6T]: F:承载借用退还稳定拒绝码及HTTP状态 | R:code:backend/src/main/java/com/fams/loan/LoanErrorHandler.java | A:异常消息作为安全业务码 | S:-
 LoanInitialPort.java[AB9T]: F:开立可追溯初始借用事实并限制期初撤销 | R:code:backend/src/main/java/com/fams/business/InitialBorrowingPort.java | A:MANDATORY事务，来源INITIAL_IMPORT批次行号，借出不晚于业务日且归还日晚于借出，保留参数快照 | S:不伪造申请审批；只允许唯一同批OPEN且version0初始关系撤销
 LoanReceiptPort.java[AB9T]: F:在实际接收事务内建立批准来源绑定的借用关系 | R:code:backend/src/main/java/com/fams/requisition/RequisitionService.java | A:重锁分配及申请，核对BORROW、资产申请身份与当前归还日，保存原日期及参数 | S:MANDATORY事务与正式保管变更共同提交，不能信任客户端日期
 LoanReminderScheduler.java[OW7T]: F:每分钟按借用ID分批触发责任提醒刷新 | R:code:backend/src/main/java/com/fams/loan/LoanReminderService.java | A:游标每批200条遍历全部借用关系 | S:调度扫描不执行生命周期变更
-LoanReminderService.java[AW8T]: F:维护借用不可变每日提醒历史及当前权威待办 | R:code:backend/src/main/java/com/fams/loan/LoanReminderScheduler.java | A:锁借用及资产，按原参数时区计算到期前三一天当天和逾期，关闭过期待办；停用或丢失责任转管理员 | S:提醒不改变资产或借用生命周期；延期后历史日期不删除，丢失责任与逾期区分
-LoanService.java[AB9M]: F:事务治理借用查询及接收前后延期的一次管理员决定 | R:code:backend/src/main/java/com/fams/business/BorrowRequestDatePort.java,code:backend/src/main/java/com/fams/auth/RequisitionActorContext.java | A:当前授权和版本重验，24小时幂等，批准日必须未来且延长；保留原日期及历史逾期区间 | S:延期不改变资产保管；丢失责任禁止延期，未接收日期通过申请域端口变更
+LoanReminderService.java[AW8T]: F:维护每日不可变借用提醒履历和当前责任待办 | R:code:backend/src/main/java/com/fams/loan/LoanReminderScheduler.java | A:锁借用及资产，按参数快照时区计算前三天、前一天、当天和逾期；关闭旧待办，停用或丢失责任转管理员池，状态比较允许查询空值 | S:维修仍继续到期提醒；确认遗失切换责任追踪并区别逾期；延期不删除历史提醒日期，提醒刷新不改变借用或资产生命周期
+LoanService.java[AB9M]: F:提供授权范围借用查询和接收前后延期的一次管理员决定 | R:code:backend/src/main/java/com/fams/business/BorrowRequestDatePort.java,code:backend/src/main/java/com/fams/auth/RequisitionActorContext.java | A:当前身份与版本重验，24小时原键回放；批准时检查目标日期及未来期限，保留原日期和历史逾期区间，JDBC计数、新ID和回放期限显式非空 | S:延期不改变资产保管；LOST责任禁止延期；接收前通过共享接口调用申请域，不能重新建立loan与requisition双向依赖
 
 ===/Users/lixd/IdeaProjects/Git/CodexProject/fams/backend/src/main/java/com/fams/requisition/===
 HandoverErrorHandler.java[EB7T]: F:映射资产实物交接拒绝为申请交接安全HTTP错误 | R:code:backend/src/main/java/com/fams/asset/AssetHandoverPort.java | A:限定交接控制器，保留业务状态码并关联requestId | S:-
@@ -875,7 +877,7 @@ AuthSessionRestartTest.java[TQ8S]: F:验证真实应用上下文重启后的MySQ
 AuthSessionValidatorTest.java[TQ7T]: F:验证当前PC会话需账号启用且双代际匹配 | R:code:backend/src/main/java/com/fams/auth/AuthSessionValidator.java | A:覆盖停用旧认证代际旧授权版本及合法账号 | S:不覆盖Servlet或数据库会话运行
 AuthValueObjectTest.java[TQ7T]: F:验证认证账号角色及权限快照集合不可变 | R:code:backend/src/main/java/com/fams/auth/AuthAccount.java,code:backend/src/main/java/com/fams/auth/PermissionSnapshot.java | A:修改源集合不影响快照，返回集合拒绝追加 | S:-
 CsrfTokenValidatorTest.java[TQ7T]: F:验证CSRF令牌相同不同及缺失值判定 | R:code:backend/src/main/java/com/fams/auth/CsrfTokenValidator.java | A:精确相等接受，差一字符或任侧null拒绝 | S:断言功能结果，不证明比较耗时恒定
-HandoverHttpTest.java[TQ9L]: F:验证真实HTTP MySQL实物交接借用延期退还及失败恢复持久链 | R:code:backend/src/main/java/com/fams/requisition/RequisitionHandoverService.java,code:backend/src/main/java/com/fams/loan/LoanService.java,code:backend/src/main/java/com/fams/loan/AssetReturnService.java | A:交出保管分离，接收与收回竞争、凭证期限版本、丢回执回放、触发器全回滚；正常损坏缺失退还及历史责任提醒断言 | S:需显式开关任务库；微信和原生传输替身不证明真机，直接SQL制造逾期异常不证明完整维修报失链
+HandoverHttpTest.java[TB9L]: F:验证真实HTTP和MySQL交接借用延期退还的持久状态及失败边界 | R:code:backend/src/main/java/com/fams/loan/LoanService.java,code:backend/src/main/java/com/fams/loan/AssetReturnService.java,code:apps/miniprogram/test/runtime-loan-http.mjs | A:23用例涵盖交出保管分离、接收竞争、期限和版本、原键回放、触发器回滚、延期历史、三类退还、代办及原生丢响应后唯一事实 | S:显式运行开关和任务库必需，清理仅自有编号范围；SQL夹具必须满足真实CHECK；微信loopback适配不证明真机，直接SQL异常不证明完整维修报失链
 HandoverUpgradeRuntimeCase.java[TQ8T]: F:验证V20升V21保留既有组织并安装交接关系约束 | R:code:backend/src/main/resources/db/migration/d6_04/V21__create_requisition_handover.sql | A:真实Flyway一次迁移重复零执行validate，核对9外键及21历史记录 | S:需显式开关隔离库，不证明交接业务运行
 LoanUpgradeRuntimeCase.java[TQ8T]: F:验证V21升V25保留组织并建立借用退还提醒结构 | R:code:backend/src/main/resources/db/migration/d6_04/V22__create_borrowing_relationships.sql,code:backend/src/main/resources/db/migration/d6_04/V25__create_loan_reminder_history.sql | A:4项迁移重复零执行validate，保留version9并核对5表25历史 | S:需显式开关任务库，结构验证不等于功能验收
 MiniAuthControllerTest.java[TQ8T]: F:验证缺失或失败微信交换适配不能创建小程序会话 | R:code:backend/src/main/java/com/fams/auth/MiniAuthController.java,code:backend/src/main/java/com/fams/auth/MiniWechatIdentityPort.java | A:缺适配及null结果503，空码400，两可信身份字段边界，session零交互 | S:控制器替身测试不证明真实微信交换
@@ -1116,6 +1118,8 @@ D6-11A-product-gate-8143676.txt[TQ8S]: F:保存D6-11A申请数据约束候选本
 D6-12-browser-internal-2026-10-07.json[TQ9T]: F:保存实物交出待收回验收取消的真实浏览器内部闭环 | R:code:docs/development/D6-12-task-card.md | A:959fd3c三角色复走，SIGKILL后同库恢复两交接，收回一件取消另一件，锁归零及四审计各一UTC输出核对 | S:浏览器勾选为模拟实物操作，不证明真实人货交接微信扫码短信HTTPS真机；仅自有隔离资源清理
 D6-12-product-gate-959fd3c.txt[TQ9M]: F:保存D6-12内部功能固定候选完整门禁成功日志 | R:code:scripts/verify-product-development.py,code:docs/development/D6-12-task-card.md | A:109必需Java静态0行92.57%分支75.50%，24原生测试及V20升V21，类型依赖管理隔离应用数据库恢复清理退出0 | S:仅本地开发门禁；未重跑历史治理，无真实微信HTTPS短信真机共享库升级或QA
 main-product-gate-3b901ff.txt[TQ8S]: F:保存主线整合历史候选完整产品门禁的成功输出 | R:code:docs/development/2026-10-04-main-integration.md | A:3b901ff的59必需Java行91.99%分支75.03%，类型依赖管理隔离恢复和清理退出0 | S:候选限定历史事实，不证明当前后续功能门禁远端CI或QA；历史治理未重跑
+d6-13-browser-runtime.md[SB8T]: F:保存三角色浏览器借用交出、延期归还及同库硬重启证据 | R:code:scripts/run-d6-13-browser-runtime.py,code:docs/development/D6-13-task-card.md | A:记录e99bca5复验日期历史、错误编码无写入、正常归还清责任与释放锁，两次恢复及2230161容器匿名卷清理结果 | S:日常浏览器场景止于交出待接收，接收另由原生HTTP测试证明；期初借用是合成夹具，不能升级为导入发布或真实微信真机验收
+d6-13-product-gate-e99bca5.txt[TQ8T]: F:保存e99bca5干净隔离候选完整开发门禁的退出和统计摘要 | R:code:scripts/verify-product-development.py,code:docs/development/D6-13-task-card.md | A:Java21和Node24运行退出0，Java125、Checkstyle与SpotBugs0、行92.38%和分支75.11%，迁移、两端、依赖及同卷恢复检查通过 | S:摘要绑定e99bca5和原始忽略目录日志；仅证明本地开发门禁，不能代表用户独立复核、远端CI、正式QA或设备验收
 
 ===/Users/lixd/IdeaProjects/Git/CodexProject/fams/packages/api-types/openapi-templates/typescript-fetch/===
 modelEnum.mustache[XV7T]: F:生成纯TypeScript字符串枚举或常量字面联合类型 | R:code:backend/pom.xml | A:按stringEnums选择enum，否则as const与索引类型，遍历允许值并保留生成标记 | S:仅类型和常量生成，不提供JSON转换器运行验证或请求客户端

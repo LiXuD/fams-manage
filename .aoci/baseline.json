@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-15T07:14:25Z",
-  "updated_at": "2026-10-08T07:49:27Z",
+  "updated_at": "2026-10-09T02:27:54Z",
   "files": {
     ".claude/skills/gitnexus/gitnexus-cli/SKILL.md": {
       "role": "index",
@@ -68,19 +68,19 @@
       "normalized_sha256": "488e1b3f2e641779d4636abf9390845f901e64607261bc3c0b0bfe4fe96e6706"
     },
     "AGENTS.md": {
-      "sha256": "d722f0ee525643b6ded889d7d5841e55d368f3934e3d518b4004eb81864f9d3e",
-      "size": 18842,
-      "normalized_sha256": "d722f0ee525643b6ded889d7d5841e55d368f3934e3d518b4004eb81864f9d3e"
+      "sha256": "aaf28bcaeb24a27d6dd312387a84ffcbe7f88b1baf9e2d77a4ae21cffe77c8dc",
+      "size": 21668,
+      "normalized_sha256": "aaf28bcaeb24a27d6dd312387a84ffcbe7f88b1baf9e2d77a4ae21cffe77c8dc"
     },
     "CLAUDE.md": {
-      "sha256": "c708c73f2a6ea227392b78228302b5441d669cdd7af3c66368622f6a52d839a0",
+      "sha256": "d05c3c2a41f5e6141c99e22672bd0ce29f5a744a7ee4fefadf8ae1cfb8540397",
       "size": 2886,
-      "normalized_sha256": "c708c73f2a6ea227392b78228302b5441d669cdd7af3c66368622f6a52d839a0"
+      "normalized_sha256": "d05c3c2a41f5e6141c99e22672bd0ce29f5a744a7ee4fefadf8ae1cfb8540397"
     },
     "DESIGN-HANDOFF.md": {
-      "sha256": "f2a93b3ae3654b8665744f06b01030af994400ae113eb1b280271588b4c4d55b",
-      "size": 12471,
-      "normalized_sha256": "f2a93b3ae3654b8665744f06b01030af994400ae113eb1b280271588b4c4d55b"
+      "sha256": "9b0f8600af7968249a5badce4d1042a87b5f7531db530dfe5286d679a860cbac",
+      "size": 12872,
+      "normalized_sha256": "9b0f8600af7968249a5badce4d1042a87b5f7531db530dfe5286d679a860cbac"
     },
     "FIXED_ASSET_SYSTEM_DESIGN.md": {
       "role": "index",
@@ -89,9 +89,9 @@
       "normalized_sha256": "308d05e36809846d4d98c3db48dbf9de66c5938371ebc4e0c5a7a8833c21abc9"
     },
     "aoci.code.txt": {
-      "sha256": "c238dc33b92c1f1a4e681af909f97d3f50d3f423ed97dc65fe7adeed867a74a8",
-      "size": 328819,
-      "normalized_sha256": "c238dc33b92c1f1a4e681af909f97d3f50d3f423ed97dc65fe7adeed867a74a8"
+      "sha256": "b3a71540e719e21b37f0a6c972f97b15d385f6ecfe31128bda0cc50084084a69",
+      "size": 331533,
+      "normalized_sha256": "b3a71540e719e21b37f0a6c972f97b15d385f6ecfe31128bda0cc50084084a69"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -319,6 +319,11 @@
       "sha256": "a05126e1ce691c5f47be3fceaeb87af81a2946afabe3ebb7351fa4bb5ea7b6da",
       "size": 3564,
       "normalized_sha256": "a05126e1ce691c5f47be3fceaeb87af81a2946afabe3ebb7351fa4bb5ea7b6da"
+    },
+    "apps/miniprogram/test/runtime-loan-http.mjs": {
+      "sha256": "6f07f329d39e1c195aeeea93f3b04ef7ecb3a59f1782aefc06d7021af14d726d",
+      "size": 3408,
+      "normalized_sha256": "6f07f329d39e1c195aeeea93f3b04ef7ecb3a59f1782aefc06d7021af14d726d"
     },
     "apps/miniprogram/test/runtime-receipt-http.mjs": {
       "sha256": "a3b99ace60934889cdd3c58143493f5c15e8078aaf6a1df87cf4e86a2665c3fa",
@@ -1154,9 +1159,9 @@
       "normalized_sha256": "93a1563725babac4c08271463cd86d72131a53a13bb9365de133927cc9ceb9e8"
     },
     "backend/src/main/java/com/fams/loan/AssetReturnService.java": {
-      "sha256": "c270af9ba9619906cb9b4c3c25d1f045b03808c91a06b3d602dbe13d4b94b96b",
-      "size": 21208,
-      "normalized_sha256": "c270af9ba9619906cb9b4c3c25d1f045b03808c91a06b3d602dbe13d4b94b96b"
+      "sha256": "cab1387e055e59497426a495e193c1288cc1a449498969fa27c21e17ee88524d",
+      "size": 21396,
+      "normalized_sha256": "cab1387e055e59497426a495e193c1288cc1a449498969fa27c21e17ee88524d"
     },
     "backend/src/main/java/com/fams/loan/LoanController.java": {
       "sha256": "c77e7d8cd045f83f440780f7966dbe37082b96c73f2b1cd7f0b617c987fcfa59",
@@ -1189,14 +1194,14 @@
       "normalized_sha256": "caa925bbac42398bf27ad0b91c2f07b9bd64e993a49668af59cacf7e5a08d7b5"
     },
     "backend/src/main/java/com/fams/loan/LoanReminderService.java": {
-      "sha256": "ec0d15f05f9e38cc13c85906418f3211d68b2b7f33f55723da67db9729ec3531",
+      "sha256": "235ef28d4270c0ab5012595174a3d079e7bd45d157c4872d765549332d4795b7",
       "size": 3780,
-      "normalized_sha256": "ec0d15f05f9e38cc13c85906418f3211d68b2b7f33f55723da67db9729ec3531"
+      "normalized_sha256": "235ef28d4270c0ab5012595174a3d079e7bd45d157c4872d765549332d4795b7"
     },
     "backend/src/main/java/com/fams/loan/LoanService.java": {
-      "sha256": "191324c01e6cdaba293841111569561d89a1df3cf097b164bb1135754c04c721",
-      "size": 16964,
-      "normalized_sha256": "191324c01e6cdaba293841111569561d89a1df3cf097b164bb1135754c04c721"
+      "sha256": "333208edfe9c36e69240a4d20a5c83a42be721556da059fb67e02fd97c37a99c",
+      "size": 17252,
+      "normalized_sha256": "333208edfe9c36e69240a4d20a5c83a42be721556da059fb67e02fd97c37a99c"
     },
     "backend/src/main/java/com/fams/masterdata/AssetCategoryController.java": {
       "sha256": "784006e89ab03e0e3838154b0e7f10a3e03d7fb1bb309afec6ace9a8b8171c67",
@@ -1849,9 +1854,9 @@
       "normalized_sha256": "532a48a31c3a7034caa8103ac9b1d72639e2e2850b9183ca3417a5cb41ccf470"
     },
     "backend/src/test/java/com/fams/auth/HandoverHttpTest.java": {
-      "sha256": "3eb73b8da8924f282cff21251539e5161528bb2b3d4f66ccd3a842895a29fa17",
-      "size": 80357,
-      "normalized_sha256": "3eb73b8da8924f282cff21251539e5161528bb2b3d4f66ccd3a842895a29fa17"
+      "sha256": "4a22e5105d9f5d89092fe18170a6958980dca5f0cbc990247062b96b4d0af070",
+      "size": 92421,
+      "normalized_sha256": "4a22e5105d9f5d89092fe18170a6958980dca5f0cbc990247062b96b4d0af070"
     },
     "backend/src/test/java/com/fams/auth/HandoverUpgradeRuntimeCase.java": {
       "sha256": "c7ff8eddb9351c32381fea6347adf04a650d25764985bb116e128cc741885903",
@@ -2970,9 +2975,9 @@
       "normalized_sha256": "d775b2e9fe630fd74434e7d38ad92c476063010b6c02773248959a69d961e015"
     },
     "docs/development/D6-13-task-card.md": {
-      "sha256": "a855580f14e5ed1b756bb91e4171939a52941e47c5da977c01efb2aef17b093e",
-      "size": 4787,
-      "normalized_sha256": "a855580f14e5ed1b756bb91e4171939a52941e47c5da977c01efb2aef17b093e"
+      "sha256": "562de146363974a07f7946340d8401254fae9c084874dab64a14670c112f2200",
+      "size": 7208,
+      "normalized_sha256": "562de146363974a07f7946340d8401254fae9c084874dab64a14670c112f2200"
     },
     "docs/development/evidence/D6-08-product-gate-6d94db8.txt": {
       "sha256": "03f0646488ab2f594fa2ea914c4e97b0f721fd944c01c00ea289a1e76225014d",
@@ -3068,6 +3073,16 @@
       "sha256": "7796e377b0db522b19db72b27bfbd5d366c5bedccf749c957c9286c0afc83aea",
       "size": 9707,
       "normalized_sha256": "7796e377b0db522b19db72b27bfbd5d366c5bedccf749c957c9286c0afc83aea"
+    },
+    "docs/development/evidence/d6-13-browser-runtime.md": {
+      "sha256": "9e0c7edfd69e5ee27dd53a5442fb43cc4ec78b5a5ecbba0e8f5fc117042ef77f",
+      "size": 3661,
+      "normalized_sha256": "9e0c7edfd69e5ee27dd53a5442fb43cc4ec78b5a5ecbba0e8f5fc117042ef77f"
+    },
+    "docs/development/evidence/d6-13-product-gate-e99bca5.txt": {
+      "sha256": "0ce489124928cb840c8420f98fc7dd1058a39f12da1dc4ccd56ba9c67e37640e",
+      "size": 2096,
+      "normalized_sha256": "0ce489124928cb840c8420f98fc7dd1058a39f12da1dc4ccd56ba9c67e37640e"
     },
     "docs/development/evidence/main-product-gate-3b901ff.txt": {
       "sha256": "0f1c23fea5841c2b9374d5dec6a3e4ca6f4432c1f09c94ec2ff48d8f7df7cda9",
@@ -4808,9 +4823,9 @@
       "normalized_sha256": "fbab605dcf040fbfa4dcc5d92256cefc3b43524c819bdcef4017887c852aac78"
     },
     "docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md": {
-      "sha256": "5c858f4dd211e6834f74dddc26e0c722c45faaa0c1e15926c6ce116c51f38125",
-      "size": 139269,
-      "normalized_sha256": "5c858f4dd211e6834f74dddc26e0c722c45faaa0c1e15926c6ce116c51f38125"
+      "sha256": "f31fe238364dd4d8ab57dfc2062a46fa690e0e5b62c60f48f45902f60d05212a",
+      "size": 140271,
+      "normalized_sha256": "f31fe238364dd4d8ab57dfc2062a46fa690e0e5b62c60f48f45902f60d05212a"
     },
     "docs/superpowers/prototypes/2026-09-06-fixed-asset/README.md": {
       "role": "index",
@@ -5010,6 +5025,11 @@
       "sha256": "4f0c65b25a4c7243f8281dc5dc444d87100751a0a78398f35d89414e3596f334",
       "size": 13611,
       "normalized_sha256": "4f0c65b25a4c7243f8281dc5dc444d87100751a0a78398f35d89414e3596f334"
+    },
+    "scripts/run-d6-13-browser-runtime.py": {
+      "sha256": "5dd589a5a7098221848dc707a13fb04a8625773921a4876db5b13b0fd55aa54f",
+      "size": 4987,
+      "normalized_sha256": "5dd589a5a7098221848dc707a13fb04a8625773921a4876db5b13b0fd55aa54f"
     },
     "scripts/test_mini_session_contract.py": {
       "role": "observe",
