@@ -1,6 +1,6 @@
 # FAMS 项目阶段与交接入口
 
-> 唯一现役进度入口 · 更新于 2026-10-07
+> 唯一现役进度入口 · 更新于 2026-10-09
 > 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04～D6-08（含 A/B/C/D）与 D6-09A 本地 `DEV_VERIFIED`；用户本人本轮复核全部 PASS，已以 `b007a5f` 为基准整合到 `main`。D6-01B 与 D6-03B 继续等待远端权限。
 
 ## 1. 八步开发流程与当前进度
@@ -12,7 +12,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-10A 及 D6-11 已获用户复核 PASS；D6-12A 候选 959fd3c 已获用户全部复核 PASS；正在推进 D6-13 借用与归还，真实短信/真机留到全部功能开发后；D6-01B/03B 待外部权限 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-10A 及 D6-11 已获用户复核 PASS；D6-12A 候选 959fd3c 已获用户全部复核 PASS；D6-13 候选 e99bca5 已获用户全部复核 PASS；正在推进 D6-14 调拨与人员交接，真实短信/真机留到全部功能开发后；D6-01B/03B 待外部权限 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
@@ -101,3 +101,5 @@ D6-12B 真机验收仍按用户安排后置，父任务保持外部 `BLOCKED`；
 2026-10-07：用户本人确认 D6-12A 全部复核 PASS，关闭为本地 DEV_VERIFIED；B 真实移动验收仍后置，父任务保留外部 BLOCKED。继续 D6-13 借用与归还及后续内部功能，详细状态见现役计划和 D6-13 任务卡。
 
 2026-10-09：D6-13 业务候选 e99bca5 完整门禁退出 0，真实内部两端链路、浏览器和硬重启验证完成，父任务与 A/B/C 为 IN_REVIEW。下一步为用户按 D6-13 任务卡独立复核，通过后进入 D6-14；外部短信/微信/真机继续后置。用户批准压缩后使用当前源码与运行证据继续，避免重复完整索引加载，已固化于 AGENTS.md。
+
+2026-10-09：用户本人确认 D6-13 全部复核通过，业务候选 e99bca5、送审材料 6931e89 的父任务及 A/B/C 本地 DEV_VERIFIED。进入 D6-14 调拨与人员交接；现役台账与任务卡维护细节，外部短信/微信/真机继续后置。
