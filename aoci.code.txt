@@ -4,10 +4,10 @@
 .gitattributes[FC6T]: F:固定跨平台文本检出为LF以保持AOCI基线字节一致 | R:code:aoci.txt,code:aoci.meta.txt,code:aoci.code.txt | A:覆盖Git自动换行差异并让二进制继续自动识别 | S:改变行尾策略会造成全仓基线伪漂移
 .gitignore[FC7T]: F:排除机器配置、运行证据、依赖构建物与大型设计转储 | R:code:docs/development/file-classification-manifest.md | A:批准的两组设计PNG显式放行，产品输出与凭据仅留本地 | S:不得忽略正式AOCI卷与AGENTS，否则扫描会漏项
 .java-version[FV5T]: F:固定项目候选Java运行时为21.0 | R:code:docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md | A:供本地工具链与后续后端兼容性验证选择JDK | S:版本文件只是候选基线，不等于D6-02兼容性已验证
-AGENTS.md[SG9S]: F:规定现役开发入口、证据分层、提交规范及图分析与认知维护合同 | R:code:DESIGN-HANDOFF.md,code:docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md | A:按父子台账推进；D6-14候选f983439送审后独立复核通过再进入D6-15 | S:用户批准持续开发压缩后不自动重传Whole-Index，按当前源码和运行证据继续；旧收据不证明完整认知可靠，CAS、冲突、审批和Recovery边界仍适用
-DESIGN-HANDOFF.md[SW9S]: F:维护唯一现役阶段入口与开发续接方向 | R:code:docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md,code:docs/development/D6-14-task-card.md | A:D6-13已用户复核关闭；D6-14候选f983439内部验证完成IN_REVIEW，通过独立复核后进入D6-15 | S:历史送审不覆盖后续关闭事实；详细父子状态以计划为准，外部短信和真机仍后置
+AGENTS.md[SG9S]: F:规定现役开发入口、证据分层、提交与图分析认知维护合同 | R:code:DESIGN-HANDOFF.md,code:docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md | A:D6-14已用户全部复核，本地DEV_VERIFIED；main整合已完成成果，origin绑定指定仓库，后续D6-15 | S:压缩后按用户批准不自动重传Whole-Index，旧收据不证明完整认知可靠；CAS、冲突、审批与Recovery仍适用；远端存在不代表CI或设置验收
+DESIGN-HANDOFF.md[SW9S]: F:维护唯一现役阶段入口和开发续接方向 | R:code:docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md,code:docs/development/2026-10-09-main-remote-integration.md | A:D6-14已用户全部复核关闭，已完成成果纳入main并绑定指定origin；下一内部项D6-15 | S:历史送审不覆盖后续关闭事实；详细父子状态以计划为准，公开远端的设置和CI尚待验收，外部短信与真机仍后置
 FIXED_ASSET_SYSTEM_DESIGN.md[SD6M]: F:记录基于旧EAM数据模型的固定资产领域与数据架构参考分析 | R:code:docs/superpowers/specs/2026-09-03-fixed-asset-product-design.md | A:从资产、采购、库存、折旧和维修拆分模块并建议以交易和事件表达生命周期 | S:这是早期参考而非当前需求权威；真实实现必须服从PRD V1.5，不能从旧217表或其弱约束直接恢复范围
-CLAUDE.md[SG8T]: F:规定GitNexus定位执行流和安全修改要求 | R:code:AGENTS.md,code:.gitnexus/run.cjs | A:编辑前upstream影响分析，高风险先警告，提交前检测受影响流程 | S:图统计只代表索引时点，不能替代当前源码和持久运行证据
+CLAUDE.md[SG8T]: F:规定GitNexus定位执行流及安全修改要求 | R:code:AGENTS.md,code:.gitnexus/run.cjs | A:编辑前上游影响分析，高风险先警告，提交前检测变化；索引重建后更新统计 | S:图统计为索引时点事实，不代替当前源码或持久运行证据
 compose.yaml[OV8T]: F:声明digest固定的MySQL本地运行容器和持久卷 | R:code:backend/src/main/resources/application-fams-product.properties | A:必填数据库账号口令，UTC与utf8mb4，loopback端口及健康检查，禁止自动重启 | S:命名卷保留数据；配置存在不证明服务运行，任务测试库另由验证器拥有
 eslint.config.mjs[FQ7T]: F:配置实际Web小程序及共享类型源码的JS与TS推荐lint规则 | R:code:package.json | A:仅匹配三个src范围，忽略依赖与backend生成target | S:生成契约另由哈希及编译检查；配置存在不表示执行通过
 mvnw[XV7M]: F:以POSIX only-script Wrapper解析下载缓存并执行指定Maven发行版 | R:code:.mvn/wrapper/maven-wrapper.properties | A:URL哈希分缓存，wget curl或Java下载，临时目录清理可选SHA256校验及归档解压，传递原参数 | S:URL哈希不证明下载完整性；发行版摘要校验仅配置后生效，Wrapper本身不冻结JDK
@@ -51,7 +51,8 @@ D6-11A-data-contract.md[SD9T]: F:定义数量申请批准快照独占处理分�
 D6-12-task-card.md[SW9T]: F:记录实物交出实际接收及收回验收取消的内部关闭与真机边界 | R:code:docs/development/evidence/D6-12-product-gate-959fd3c.txt,code:docs/development/evidence/D6-12-browser-internal-2026-10-07.json | A:正式保管与实物去向分离，五分钟单次凭证当前接收人重验，竞争回滚重试及硬重启经门禁用户PASS关闭A | S:拒收超时不释放责任锁；B真机按用户安排BLOCKED父任务未关闭，原生HTTP替身不证明真实微信扫码HTTPS
 D6-13-task-card.md[SW9T]: F:记录借用延期归还矩阵及固定候选验收关闭证据 | R:code:docs/development/evidence/d6-13-browser-runtime.md,code:docs/development/evidence/d6-13-product-gate-e99bca5.txt | A:e99bca5完整门禁、23项HTTP和恢复通过，用户2026-10-09复核父任务及A/B/C为本地DEV_VERIFIED | S:后续用户关闭记录覆盖历史IN_REVIEW；合成期初夹具不证明导入发布，内部验证不等于CI、QA或真机
 2026-10-08-aoci-index-governance.md[SQ8T]: F:记录443对象及六规模校正的AOCI治理闭环验证和恢复边界 | R:code:DESIGN-HANDOFF.md,code:aoci.code.txt,code:AGENTS.md | A:Verify Check Guide对齐、Scope和Recovery清零，数据库未配置，后续功能回到D6-13 | S:基线绑定未提交业务工作树，恢复旧源码会Stale；Legacy score不支持Volumes，治理对齐不等于旧模型收据可靠
-D6-14-task-card.md[SW9T]: F:定义调拨及人员交接A/B/C/D验收矩阵和候选送审边界 | R:code:docs/development/evidence/d6-14/README.md,code:docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md | A:f983439全门禁、实际浏览器和同库重启通过，父任务及必需子项IN_REVIEW，独立复核通过后进入D6-15 | S:交出不改责任，拒收取消需实物收回；真实短信微信HTTPS真机后置，内部验证不能关闭用户复核关口
+D6-14-task-card.md[SW9T]: F:定义调拨人员交接验收矩阵及用户复核关闭证据 | R:code:docs/development/evidence/d6-14/README.md,code:docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md | A:f983439全门禁与真实页面恢复通过，用户2026-10-09全部复核，父任务及A/B/C/D本地DEV_VERIFIED并进入后续D6-15 | S:后续用户关闭覆盖历史IN_REVIEW；实际责任只在收妥时变更，已交出取消须实物收回；不扩展为CI、QA或外部移动验收
+2026-10-09-main-remote-integration.md[SV8T]: F:记录已复核功能主线整合、远端绑定与恢复清单 | R:code:docs/development/D6-14-task-card.md,code:DESIGN-HANDOFF.md | A:12干净工作树、17分支均纳入a752157，main从df8cb6d快进；指定origin推送后核对引用一致 | S:保留旧分支及本机bundle，不force或推送旧功能分支；公开仓库与计划私有目标分记，远端CI和协作保护尚未验收
 
 ===/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/===
 DEVELOPMENT.md[SU6T]: F:说明D0.3静态原型的DOM、CSS组件、页面状态和本地验证方式 | R:code:docs/superpowers/designs/2026-09-06-fams-ui/SPECIFICATION.md,code:docs/superpowers/designs/2026-09-06-fams-ui/prototype/index.html | A:通过共享组件工厂和参数化页面模型生成PC与小程序原型，按页面优先级增量实现和审计 | S:原型交互不代表真实认证、服务、相机、并发或离线能力，D0.4交接才是当前设计完成边界
@@ -379,7 +380,7 @@ SKILL.md[SQ7T]: F:规定变更前用GitNexus impact、流程资源和detect_chan
 SKILL.md[SQ7S]: F:规定重命名、抽取、拆分和移动前后的GitNexus影响、调用流与变更检测 | R:code:CLAUDE.md,code:.claude/skills/gitnexus/gitnexus-guide/SKILL.md | A:优先用rename预览并按接口、实现、调用方、测试顺序更新后复核 | S:动态字符串和外部API需人工核查；跨域引用提高风险
 
 ===/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/plans/===
-2026-09-12-fams-stage6-development-plan.md[SW9L]: F:规定第六阶段架构、开发关口和D6-01至27唯一父子台账 | R:code:DESIGN-HANDOFF.md,code:docs/superpowers/specs/2026-09-03-fixed-asset-product-design.md | A:模块单体短事务、契约先行及两端开发；D6-13已复核，D6-14及A/B/C/D以f983439送审，后续D6-15；提交四项元数据必填 | S:最新台账优先于历史记录；必需子项受阻或独立复核未满足不得关闭父任务；短信真机后置不免外部证据，开发冒烟不等于第七阶段QA
+2026-09-12-fams-stage6-development-plan.md[SW9L]: F:规定第六阶段架构关口和D6-01至27唯一父子台账 | R:code:DESIGN-HANDOFF.md,code:docs/development/2026-10-09-main-remote-integration.md | A:D6-14父子已用户复核DEV_VERIFIED，main整合并绑定指定origin；D6-01B开始，D6-03B设置与CI待执行，后续内部D6-15 | S:最新台账优先历史记录；必需子项或独立复核未满足不得关闭父任务；公开远端不等于私有及保护目标满足，短信真机后置不免外部证据
 
 ===/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/prototypes/2026-09-06-fixed-asset/===
 README.md[SU6T]: F:说明D0.2固定资产原型的40页范围、依据和使用入口 | R:code:docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md,code:docs/superpowers/specs/2026-09-03-fixed-asset-product-design.md,code:docs/superpowers/prototypes/2026-09-06-fixed-asset/index.html | A:把PC26页、小程序14页、10组流程和53项验收映射定位到单文件草图 | S:原型仅表达信息架构与交互设计，不包含后端、登录、设备、权限或生产验收
@@ -1163,5 +1164,5 @@ TransferService.java[AB9L]: F:编排调拨审批、唯一执行、实际接收�
 TransferCalendarTest.java[TB7T]: F:验证调拨自然日接收期限跨夏令时切换 | R:code:backend/src/main/java/com/fams/transfer/TransferService.java | A:确定性断言纽约春秋三日、上海三日以及0和366天参数拒绝 | S:自然日可能为71或73小时，不能以固定72小时替代
 
 ===/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/development/evidence/d6-14/===
-README.md[SW8T]: F:绑定D6-14各候选开发门禁、浏览器和持久落账证据 | R:code:docs/development/evidence/d6-14/product-gate-f983439.txt,code:docs/development/D6-14-task-card.md | A:记录最终四角色流程、交出后原责任、实际接收唯一事实、两次硬重启及资源清理 | S:旧候选和失败结果保留身份，不能冒充最终候选；最终送审仍待独立复核，无CI、QA或外部移动验收
+README.md[SW8T]: F:绑定调拨各候选门禁、浏览器和正式落账证据 | R:code:docs/development/evidence/d6-14/product-gate-f983439.txt,code:docs/development/D6-14-task-card.md | A:记录最终四角色流程、责任延迟变更、唯一接收、两次硬重启与清理；用户后续全部复核关闭 | S:旧候选失败身份保留，不能冒充最终候选；送审IN_REVIEW为历史时点，用户复核只关闭本地开发，不证明CI、QA或真机
 product-gate-f983439.txt[SQ8M]: F:保存f983439固定候选完整开发门禁原始输出 | R:code:scripts/verify-product-development.py,code:docs/development/evidence/d6-14/README.md | A:退出0、Java137、静态零问题、行92.41%分支75.13%、小程序30及构建、依赖恢复清理和干净树检查 | S:日志中的兼容探针恢复不替代业务浏览器恢复；本地门禁不证明远端CI、正式QA或生产

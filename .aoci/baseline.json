@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-15T07:14:25Z",
-  "updated_at": "2026-10-09T07:37:02Z",
+  "updated_at": "2026-10-09T07:59:54Z",
   "files": {
     ".claude/skills/gitnexus/gitnexus-cli/SKILL.md": {
       "role": "index",
@@ -68,19 +68,19 @@
       "normalized_sha256": "488e1b3f2e641779d4636abf9390845f901e64607261bc3c0b0bfe4fe96e6706"
     },
     "AGENTS.md": {
-      "sha256": "54b0fad54a897ef1cd77178583f6f401f9ec4b65007d8f584b335c1651228f9f",
-      "size": 21863,
-      "normalized_sha256": "54b0fad54a897ef1cd77178583f6f401f9ec4b65007d8f584b335c1651228f9f"
+      "sha256": "4bcc51ea456e326a2a891506e3c3a17fd65da2c2328415f6291c6fba18cbb9d4",
+      "size": 22096,
+      "normalized_sha256": "4bcc51ea456e326a2a891506e3c3a17fd65da2c2328415f6291c6fba18cbb9d4"
     },
     "CLAUDE.md": {
-      "sha256": "4ffd4b952b12359000cacdfc6dcb72b4deb1414568e8223cb216170e0021fc60",
-      "size": 2886,
-      "normalized_sha256": "4ffd4b952b12359000cacdfc6dcb72b4deb1414568e8223cb216170e0021fc60"
+      "sha256": "384efcf4eb8506ff60009293c72e73418ff2ec6e7a1f6b712505b5be4447b57a",
+      "size": 2921,
+      "normalized_sha256": "384efcf4eb8506ff60009293c72e73418ff2ec6e7a1f6b712505b5be4447b57a"
     },
     "DESIGN-HANDOFF.md": {
-      "sha256": "2bbe0d428ecd21f71fad94be5a261fb3137e448d13552f10eda60daedc68be21",
-      "size": 13508,
-      "normalized_sha256": "2bbe0d428ecd21f71fad94be5a261fb3137e448d13552f10eda60daedc68be21"
+      "sha256": "0c5b59b9ad2dea7dc5aa74542e9851880dd7b2fda87b8842330c55b39b5093c6",
+      "size": 14039,
+      "normalized_sha256": "0c5b59b9ad2dea7dc5aa74542e9851880dd7b2fda87b8842330c55b39b5093c6"
     },
     "FIXED_ASSET_SYSTEM_DESIGN.md": {
       "role": "index",
@@ -89,9 +89,9 @@
       "normalized_sha256": "308d05e36809846d4d98c3db48dbf9de66c5938371ebc4e0c5a7a8833c21abc9"
     },
     "aoci.code.txt": {
-      "sha256": "03f0e78aeba7cfd4e3edcea38071459391a1e01d9849ce82c052d4fe0eb24010",
-      "size": 339193,
-      "normalized_sha256": "03f0e78aeba7cfd4e3edcea38071459391a1e01d9849ce82c052d4fe0eb24010"
+      "sha256": "d1d4df16659934ab710edbeae71c23daad1599b18a39d510bcc7c058375b74ad",
+      "size": 339749,
+      "normalized_sha256": "d1d4df16659934ab710edbeae71c23daad1599b18a39d510bcc7c058375b74ad"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -2924,6 +2924,11 @@
       "size": 2340,
       "normalized_sha256": "81d10fbfa84331d4f89650c7521667d5428ca2465fd87295513d7223b25bc7e0"
     },
+    "docs/development/2026-10-09-main-remote-integration.md": {
+      "sha256": "776493922e73046e26c982ea073a03c82f02036466e0e5c3b0a8e4d1d6105221",
+      "size": 4464,
+      "normalized_sha256": "776493922e73046e26c982ea073a03c82f02036466e0e5c3b0a8e4d1d6105221"
+    },
     "docs/development/D6-01A-task-card.md": {
       "role": "index",
       "sha256": "d07ef5e8fd0a9e56e4a2829c38166cc2d9ff7fa98b63646242568054b296d568",
@@ -3061,9 +3066,9 @@
       "normalized_sha256": "b75114adcd83ee1f37649c4681a1c5089778af7c0e33c422f15813a7abe50e80"
     },
     "docs/development/D6-14-task-card.md": {
-      "sha256": "0e28924c0c6a9aa0bc1d9ce7eb12606e308bdf66d2cf7c1790727196c4363f98",
-      "size": 4423,
-      "normalized_sha256": "0e28924c0c6a9aa0bc1d9ce7eb12606e308bdf66d2cf7c1790727196c4363f98"
+      "sha256": "c83ceeb2868b86b1dcc88acec77f5fd110d95738f15e187d8b1c0087e4be81f0",
+      "size": 4810,
+      "normalized_sha256": "c83ceeb2868b86b1dcc88acec77f5fd110d95738f15e187d8b1c0087e4be81f0"
     },
     "docs/development/evidence/D6-08-product-gate-6d94db8.txt": {
       "sha256": "03f0646488ab2f594fa2ea914c4e97b0f721fd944c01c00ea289a1e76225014d",
@@ -3171,9 +3176,9 @@
       "normalized_sha256": "0ce489124928cb840c8420f98fc7dd1058a39f12da1dc4ccd56ba9c67e37640e"
     },
     "docs/development/evidence/d6-14/README.md": {
-      "sha256": "afaaf0fc818b63e000739537076574287f26cae069d1171ca1e0e05f580237d3",
-      "size": 5634,
-      "normalized_sha256": "afaaf0fc818b63e000739537076574287f26cae069d1171ca1e0e05f580237d3"
+      "sha256": "1c2fae398e3c67ec14f9eaa280633f4c2ff5aeb15257c30ad701d4f9a792727c",
+      "size": 5861,
+      "normalized_sha256": "1c2fae398e3c67ec14f9eaa280633f4c2ff5aeb15257c30ad701d4f9a792727c"
     },
     "docs/development/evidence/d6-14/product-gate-f983439.txt": {
       "sha256": "3f703e123494460ab11d4146b7a6666cbb34603c1643a72ff24ce34a7785e856",
@@ -4919,9 +4924,9 @@
       "normalized_sha256": "fbab605dcf040fbfa4dcc5d92256cefc3b43524c819bdcef4017887c852aac78"
     },
     "docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md": {
-      "sha256": "97badbae89c20b125f1014c59d18701b06aae16f88ef4a4901ca29ba859f8be1",
-      "size": 143524,
-      "normalized_sha256": "97badbae89c20b125f1014c59d18701b06aae16f88ef4a4901ca29ba859f8be1"
+      "sha256": "a898385b6eb465a39c36e8c36b1e927e0dd9462fd44b0059fe153162ece49021",
+      "size": 144303,
+      "normalized_sha256": "a898385b6eb465a39c36e8c36b1e927e0dd9462fd44b0059fe153162ece49021"
     },
     "docs/superpowers/prototypes/2026-09-06-fixed-asset/README.md": {
       "role": "index",
