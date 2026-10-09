@@ -504,6 +504,123 @@ class HandoverHttpTest {
         return value;
     }
 
+    @Test
+    void loanScopeAndRejectedExtensionKeepDatesAndCustodyUnchanged() throws Exception {
+        receivedBorrow();
+        long loan = jdbc.queryForObject("SELECT id FROM fams_loan WHERE asset_id=?", Long.class, base + 50);
+        for (var actor : List.of(employee, department, admin, warehouse)) {
+            var response = loanCall(actor, "GET", "", null, null, null);
+            assertEquals(200, response.statusCode(), response.body());
+            assertEquals(1, JSON.readTree(response.body()).path("total").asInt());
+        }
+        var stranger = login(base + 15);
+        assertEquals(0, JSON.readTree(loanCall(stranger, "GET", "", null, null, null).body()).path("total").asInt());
+        String proposal = "{\"expectedReturnDate\":\"2100-12-31\",\"reason\":\"拒绝不得改日期\"}";
+        assertEquals(403, loanCall(department, "POST", "/" + loan + "/extensions", proposal, key(), 0L).statusCode());
+        assertEquals(409, loanCall(employee, "POST", "/" + loan + "/extensions", proposal, key(), 9L).statusCode());
+        assertEquals(400, loanCall(employee, "POST", "/" + loan + "/extensions",
+                proposal.replace("2100-12-31", "2099-12-31"), key(), 0L).statusCode());
+        String identity = key();
+        var created = loanCall(employee, "POST", "/" + loan + "/extensions", proposal, identity, 0L);
+        assertEquals(200, created.statusCode(), created.body());
+        assertEquals(created.body(), loanCall(employee, "POST", "/" + loan + "/extensions", proposal, identity, 0L).body());
+        assertEquals(409, loanCall(employee, "POST", "/" + loan + "/extensions",
+                proposal.replace("拒绝不得改日期", "changed"), identity, 0L).statusCode());
+        long extension = JSON.readTree(created.body()).path("id").asLong();
+        assertEquals(1, JSON.readTree(loanCall(employee, "GET", "/extensions", null, null, null).body()).path("total").asInt());
+        assertEquals(1, JSON.readTree(loanCall(admin, "GET", "/extensions", null, null, null).body()).path("total").asInt());
+        assertEquals(0, JSON.readTree(loanCall(stranger, "GET", "/extensions", null, null, null).body()).path("total").asInt());
+        String rejection = "{\"approved\":false,\"reason\":\"继续按原日期归还\"}";
+        String suffix = "/extensions/" + extension + "/decision";
+        assertEquals(200, loanCall(admin, "POST", suffix, rejection, key(), 0L).statusCode());
+        assertEquals(409, loanCall(admin, "POST", suffix, rejection, key(), 1L).statusCode());
+        assertEquals("2099-12-31", jdbc.queryForObject("SELECT expected_return_date FROM fams_loan WHERE id=?",
+                java.sql.Date.class, loan).toString());
+        assertEquals("BORROWED", jdbc.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=?", String.class, base + 50));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_todo WHERE business_type='LOAN_EXTENSION' AND business_id=? AND closed_at IS NULL", extension));
+    }
+
+    @Test
+    void closedLostAndChangedLoanTargetsRejectExtensionWithoutCreatingNewFacts() throws Exception {
+        receivedBorrow();
+        long loan = jdbc.queryForObject("SELECT id FROM fams_loan WHERE asset_id=?", Long.class, base + 50);
+        String body = "{\"expectedReturnDate\":\"2100-12-31\",\"reason\":\"边界核验\"}";
+        assertEquals(404, loanCall(employee, "GET", "/999999999", null, null, null).statusCode());
+        jdbc.update("UPDATE fams_loan SET relation_status='RETURNED' WHERE id=?", loan);
+        assertEquals(409, loanCall(employee, "POST", "/" + loan + "/extensions", body, key(), 0L).statusCode());
+        jdbc.update("UPDATE fams_loan SET relation_status='OPEN' WHERE id=?", loan);
+        jdbc.update("UPDATE fams_asset SET exception_status='LOST' WHERE id=?", base + 50);
+        assertEquals(409, loanCall(employee, "POST", "/" + loan + "/extensions", body, key(), 0L).statusCode());
+        jdbc.update("UPDATE fams_asset SET exception_status='NORMAL' WHERE id=?", base + 50);
+        var response = loanCall(employee, "POST", "/" + loan + "/extensions", body, key(), 0L);
+        assertEquals(200, response.statusCode(), response.body());
+        long extension = JSON.readTree(response.body()).path("id").asLong();
+        jdbc.update("UPDATE fams_loan SET expected_return_date='2099-11-30' WHERE id=?", loan);
+        String suffix = "/extensions/" + extension + "/decision";
+        String approve = "{\"approved\":true,\"reason\":\"核验\"}";
+        assertEquals(409, loanCall(admin, "POST", suffix, approve, key(), 0L).statusCode());
+        assertEquals("PENDING", jdbc.queryForObject("SELECT extension_status FROM fams_loan_extension WHERE id=?", String.class, extension));
+        jdbc.update("UPDATE fams_loan SET expected_return_date='2099-12-31' WHERE id=?", loan);
+        jdbc.update("UPDATE fams_loan_extension SET requested_due_date='2000-01-01' WHERE id=?", extension);
+        assertEquals(409, loanCall(admin, "POST", suffix, approve, key(), 0L).statusCode());
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='LOAN_EXTENSION' AND resource_id=? AND action='LOAN_EXTENSION_APPROVED'", extension));
+    }
+
+    @Test
+    void rejectedReturnReleasesLockAndReplayNeverChangesBorrowerResponsibility() throws Exception {
+        receivedBorrow();
+        String body = "{\"assetId\":\"" + (base + 50) + "\",\"assetVersion\":1,\"reason\":\"退还复核\"}";
+        assertEquals(403, returnCall(login(base + 15), "", body, key(), null).statusCode());
+        assertEquals(409, returnCall(employee, "", body.replace("\"assetVersion\":1", "\"assetVersion\":9"), key(), null).statusCode());
+        String identity = key();
+        var response = returnCall(employee, "", body, identity, null);
+        assertEquals(200, response.statusCode(), response.body());
+        assertEquals(response.body(), returnCall(employee, "", body, identity, null).body());
+        assertEquals(409, returnCall(employee, "", body.replace("退还复核", "changed"), identity, null).statusCode());
+        long id = JSON.readTree(response.body()).path("id").asLong();
+        String suffix = "/" + id;
+        assertEquals(403, returnCall(employee, suffix + "/claim", null, key(), 0L).statusCode());
+        assertEquals(409, returnCall(warehouse, suffix + "/claim", null, key(), 0L).statusCode());
+        assertEquals(403, returnCall(warehouse, suffix + "/inspect", returnInspection("NORMAL", "RQ-ASSET-" + base), key(), 0L).statusCode());
+        String reject = "{\"approved\":false,\"reason\":\"继续使用\"}", decisionKey = key();
+        var rejected = returnCall(admin, suffix + "/decision", reject, decisionKey, 0L);
+        assertEquals(200, rejected.statusCode(), rejected.body());
+        assertEquals(rejected.body(), returnCall(admin, suffix + "/decision", reject, decisionKey, 0L).body());
+        assertEquals(409, returnCall(admin, suffix + "/decision", reject, key(), 1L).statusCode());
+        assertEquals("OPEN", jdbc.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=?", String.class, base + 50));
+        assertEquals(base + 10, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+    }
+
+    @Test
+    void physicalReturnRejectsMissingTargetVersionsAndChangedWarehouseWithoutPartialReceipt() throws Exception {
+        receivedBorrow();
+        var value = approvedReturn(employee);
+        String suffix = "/" + value.path("id").asText() + "/inspect";
+        String body = returnInspection("NORMAL", "RQ-ASSET-" + base);
+        for (String field : List.of("warehouseId", "locationId", "warehouseVersion", "locationVersion", "observedCode")) {
+            var invalid = JSON.readTree(body).deepCopy();
+            ((tools.jackson.databind.node.ObjectNode) invalid).remove(field);
+            var response = returnCall(warehouse, suffix, JSON.writeValueAsString(invalid), key(), 2L);
+            assertEquals(400, response.statusCode(), field + ": " + response.body());
+        }
+        assertEquals(409, returnCall(warehouse, suffix, body.replace("\"lockVersion\":0", "\"lockVersion\":1"), key(), 2L).statusCode());
+        assertEquals(409, returnCall(warehouse, suffix, body.replace("\"assetVersion\":1", "\"assetVersion\":2"), key(), 2L).statusCode());
+        jdbc.update("UPDATE fams_warehouse SET status='DISABLED' WHERE id=?", base);
+        assertEquals(409, returnCall(warehouse, suffix, body, key(), 2L).statusCode());
+        jdbc.update("UPDATE fams_warehouse SET status='ACTIVE' WHERE id=?", base);
+        jdbc.update("UPDATE fams_location SET status='DISABLED' WHERE id=?", base);
+        assertEquals(409, returnCall(warehouse, suffix, body, key(), 2L).statusCode());
+        jdbc.update("UPDATE fams_location SET status='ACTIVE',location_type='ROOM' WHERE id=?", base);
+        assertEquals(409, returnCall(warehouse, suffix, body, key(), 2L).statusCode());
+        jdbc.update("UPDATE fams_location SET location_type='BIN',version=1 WHERE id=?", base);
+        assertEquals(409, returnCall(warehouse, suffix, body, key(), 2L).statusCode());
+        assertEquals("BORROWED", jdbc.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=?", String.class, base + 50));
+        assertEquals("WAREHOUSE_PROCESSING", jdbc.queryForObject("SELECT return_status FROM fams_asset_return WHERE id=?", String.class, value.path("id").asLong()));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_timeline_event WHERE asset_id=? AND event_type='RETURN_ACCEPTED'", base + 50));
+    }
+
     private JsonNode approvedReturn(Session proposer) throws Exception {
         String body = "{\"assetId\":\"" + (base + 50) + "\",\"assetVersion\":1,\"reason\":\"退还与代办原因\"}";
         var response = returnCall(proposer, "", body, key(), null);
