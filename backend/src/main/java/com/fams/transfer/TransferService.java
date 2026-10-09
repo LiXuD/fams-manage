@@ -453,22 +453,22 @@ class TransferService {
                 if (!receiptRequired(item)) {
                     throw new TransferFailure("TRANSFER_SITE_VERIFICATION_REQUIRED", 409);
                 }
-                long days =
-                        json.readTree(item.get("parameter_snapshot_json").toString())
-                                .path("handoverAcceptanceDeadlineNaturalDays")
-                                .asLong(3);
-                if (days < 1 || days > 365) {
-                    throw new TransferFailure("TRANSFER_PARAMETER_INVALID", 409);
-                }
+                var parameters = json.readTree(item.get("parameter_snapshot_json").toString());
+                long days = parameters.path("handoverAcceptanceDeadlineNaturalDays").asLong(3);
+                var deliveredAt = clock.instant();
+                var deadline =
+                        receiptDeadline(
+                                deliveredAt,
+                                parameters.path("timezone").asText("Asia/Shanghai"),
+                                days);
                 db.update(
                         "UPDATE fams_transfer_item SET"
                             + " item_status='DELIVERED',destination=?,delivery_evidence=?,delivered_at=?,receipt_deadline_at=?,version=version+1"
                             + " WHERE id=?",
                         input.destination(),
                         input.evidence(),
-                        now(),
-                        Timestamp.from(
-                                clock.instant().plusSeconds(Math.multiplyExact(days, 86400))),
+                        Timestamp.from(deliveredAt),
+                        Timestamp.from(deadline),
                         itemId);
             }
             case "verify" -> {
@@ -665,6 +665,13 @@ class TransferService {
                         input.reason() == null ? "" : input.reason()));
         aggregate(id);
         return finish(current, action, key, hash, wire(item(itemId)));
+    }
+
+    static Instant receiptDeadline(Instant delivery, String timezone, long days) {
+        if (days < 1 || days > 365) {
+            throw new TransferFailure("TRANSFER_PARAMETER_INVALID", 409);
+        }
+        return delivery.atZone(java.time.ZoneId.of(timezone)).plusDays(days).toInstant();
     }
 
     private void complete(Current current, Map<String, Object> item) {
