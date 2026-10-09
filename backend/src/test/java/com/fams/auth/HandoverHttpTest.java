@@ -505,6 +505,32 @@ class HandoverHttpTest {
     }
 
     @Test
+    void nativeBorrowReceiptAndM05HandlersPersistOneExtensionAndReturnAfterLostResponses() throws Exception {
+        var value = allocatedDraft(1, borrowDraft("2099-12-31"));
+        warehouseWrite(value, 0, "deliver", delivery(value, 0));
+        String code = "loan-native-" + base;
+        jdbc.update("INSERT INTO fams_mini_binding (account_id,identity_hash,created_at) VALUES (?,?,?)",
+                base + 10, miniSessions.identityHash(new MiniWechatIdentityPort.Identity("requisition-test-app", code)),
+                Timestamp.from(Instant.now()));
+        var script = java.nio.file.Path.of(System.getProperty("user.dir")).getParent()
+                .resolve("apps/miniprogram/test/runtime-loan-http.mjs");
+        String node = System.getenv("FAMS_TEST_NODE_EXECUTABLE");
+        var builder = new ProcessBuilder("rtk", "proxy", node == null ? "node" : node, script.toString());
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_WECHAT_CODE", code);
+        builder.redirectErrorStream(true);
+        var process = builder.start();
+        assertTrue(process.waitFor(45, TimeUnit.SECONDS));
+        String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        assertEquals(0, process.exitValue(), output);
+        assertEquals("BORROWED", jdbc.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=?", String.class, base + 50));
+        long loan = jdbc.queryForObject("SELECT id FROM fams_loan WHERE asset_id=? AND relation_status='OPEN'", Long.class, base + 50);
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_loan_extension WHERE loan_id=? AND extension_status='PENDING'", loan));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_return WHERE asset_id=? AND return_status='PENDING_APPROVAL'", base + 50));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND business_type='ASSET_RETURN' AND released_at IS NULL", base + 50));
+    }
+
+    @Test
     void loanScopeAndRejectedExtensionKeepDatesAndCustodyUnchanged() throws Exception {
         receivedBorrow();
         long loan = jdbc.queryForObject("SELECT id FROM fams_loan WHERE asset_id=?", Long.class, base + 50);
@@ -546,9 +572,9 @@ class HandoverHttpTest {
         long loan = jdbc.queryForObject("SELECT id FROM fams_loan WHERE asset_id=?", Long.class, base + 50);
         String body = "{\"expectedReturnDate\":\"2100-12-31\",\"reason\":\"边界核验\"}";
         assertEquals(404, loanCall(employee, "GET", "/999999999", null, null, null).statusCode());
-        jdbc.update("UPDATE fams_loan SET relation_status='RETURNED' WHERE id=?", loan);
+        jdbc.update("UPDATE fams_loan SET relation_status='RETURNED',closed_at=NOW(3) WHERE id=?", loan);
         assertEquals(409, loanCall(employee, "POST", "/" + loan + "/extensions", body, key(), 0L).statusCode());
-        jdbc.update("UPDATE fams_loan SET relation_status='OPEN' WHERE id=?", loan);
+        jdbc.update("UPDATE fams_loan SET relation_status='OPEN',closed_at=NULL WHERE id=?", loan);
         jdbc.update("UPDATE fams_asset SET exception_status='LOST' WHERE id=?", base + 50);
         assertEquals(409, loanCall(employee, "POST", "/" + loan + "/extensions", body, key(), 0L).statusCode());
         jdbc.update("UPDATE fams_asset SET exception_status='NORMAL' WHERE id=?", base + 50);
@@ -560,8 +586,9 @@ class HandoverHttpTest {
         String approve = "{\"approved\":true,\"reason\":\"核验\"}";
         assertEquals(409, loanCall(admin, "POST", suffix, approve, key(), 0L).statusCode());
         assertEquals("PENDING", jdbc.queryForObject("SELECT extension_status FROM fams_loan_extension WHERE id=?", String.class, extension));
-        jdbc.update("UPDATE fams_loan SET expected_return_date='2099-12-31' WHERE id=?", loan);
-        jdbc.update("UPDATE fams_loan_extension SET requested_due_date='2000-01-01' WHERE id=?", extension);
+        jdbc.update("UPDATE fams_loan SET borrowed_date='1999-01-01',original_return_date='2000-01-01',"
+                + "expected_return_date='2000-01-01' WHERE id=?", loan);
+        jdbc.update("UPDATE fams_loan_extension SET original_due_date='2000-01-01',requested_due_date='2001-01-01' WHERE id=?", extension);
         assertEquals(409, loanCall(admin, "POST", suffix, approve, key(), 0L).statusCode());
         assertEquals(0, count("SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='LOAN_EXTENSION' AND resource_id=? AND action='LOAN_EXTENSION_APPROVED'", extension));
     }
