@@ -1136,6 +1136,8 @@ def verify_java_quality(context: RuntimeContext) -> None:
              "HandoverUpgradeRuntimeCase"),
             ("loan V21 borrowing and return upgrade", "-Dd6.13.upgrade.runtime=true",
              "LoanUpgradeRuntimeCase"),
+            ("transfer V25 upgrade and repeat", "-Dd6.14.upgrade.runtime=true",
+             "TransferUpgradeRuntimeCase"),
             ("durable job coverage", "-Dd6.08.job.runtime=true",
              "DurableJobRuntimeCase#mysqlSubmissionClaimFencingBackoffAndBusinessRollback"),
             ("asset import batch coverage", "-Dd6.08.import.runtime=true",
