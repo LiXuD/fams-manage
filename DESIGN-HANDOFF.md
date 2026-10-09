@@ -1,7 +1,7 @@
 # FAMS 项目阶段与交接入口
 
 > 唯一现役进度入口 · 更新于 2026-10-09
-> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04～D6-08（含 A/B/C/D）与 D6-09A 本地 `DEV_VERIFIED`；用户本人本轮复核全部 PASS，已以 `b007a5f` 为基准整合到 `main`。D6-01B 与 D6-03B 继续等待远端权限。
+> 当前结论：第 1～5 步已完成；第 6 阶段正在进行。D6-04～D6-08（含 A/B/C/D）与 D6-09A 本地 `DEV_VERIFIED`；用户本人本轮复核全部 PASS，已以 `b007a5f` 为基准整合到 `main`。D6-14 已获用户全部复核 PASS；本轮已完成成果整合到 main，远端 origin 已提供，CI 与协作设置待验证。
 
 ## 1. 八步开发流程与当前进度
 
@@ -12,7 +12,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-10A 及 D6-11 已获用户复核 PASS；D6-12A 候选 959fd3c 已获用户全部复核 PASS；D6-13 候选 e99bca5 已获用户全部复核 PASS；D6-14 调拨与人员交接候选 f983439 内部验证完成、IN_REVIEW 待用户独立复核，真实短信/真机留到全部功能开发后；D6-01B/03B 待外部权限 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)；D6-10A 及 D6-11 已获用户复核 PASS；D6-12A 候选 959fd3c 已获用户全部复核 PASS；D6-13 候选 e99bca5 已获用户全部复核 PASS；D6-14 候选 f983439 已获用户全部复核 PASS，下一内部功能 D6-15，真实短信/真机留到全部功能开发后；D6-01B/03B 已有远端权限，设置与 CI 待验 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
@@ -65,7 +65,7 @@
 | 产品代码 | `in-progress` | D6-04～D6-08 及 D6-09A 已本地开发验证并复核；全部分支成果整合到 `main` |
 | 产品运行态 | `local-dev-partial` | D6-08 候选 `6d94db8` 独有 MySQL/HTTP 与完整本地门禁通过；B/C/D 经用户本人复核全部 PASS，远端 CI、QA、共享/生产升级及生产未验证 |
 | 记忆 | `out-of-scope` | 本次未修改机器生成记忆 |
-| 工作区 | `handoff-recorded` | 统一开发基线为根目录 `main`；整合来源 `b007a5f`，全部现有分支和工作树成果已核对纳入，旧工作树保留；无远端、未推送，详见 [整合记录](docs/development/2026-10-04-main-integration.md) |
+| 工作区 | `handoff-recorded` | 统一开发基线为根目录 `main`；本轮整合来源 `a752157`，全部现有分支及干净工作树成果已纳入，旧工作树保留；origin 已绑定用户指定仓库，推送与远端一致性由 [本轮整合记录](docs/development/2026-10-09-main-remote-integration.md)及实际远端引用确认 |
 
 ## 2026-09-30 续接记录
 
@@ -105,3 +105,5 @@ D6-12B 真机验收仍按用户安排后置，父任务保持外部 `BLOCKED`；
 2026-10-09：用户本人确认 D6-13 全部复核通过，业务候选 e99bca5、送审材料 6931e89 的父任务及 A/B/C 本地 DEV_VERIFIED。进入 D6-14 调拨与人员交接；现役台账与任务卡维护细节，外部短信/微信/真机继续后置。
 
 2026-10-09：D6-14 候选 f983439 完整开发门禁、真实浏览器与同库硬重启通过，父任务及 A/B/C/D 为 IN_REVIEW。下一步按 D6-14 任务卡独立复核，通过后进入 D6-15；详细证据和状态仅维护于计划与任务卡。
+
+2026-10-09：用户本人确认 D6-14 本次复核全部通过，父任务及 A/B/C/D 本地 DEV_VERIFIED；授权将已完成成果整合到 main 并绑定 origin `https://github.com/LiXuD/fams-manage.git` 推送。下一内部开发项 D6-15；远端当前公开，CI 和协作设置按 D6-01B/03B 继续配置验收，真实外部联调保持后置。
