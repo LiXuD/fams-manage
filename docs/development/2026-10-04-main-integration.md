@@ -29,7 +29,7 @@
 
 ## 本地资产与恢复
 
-整合前完整工作树/分支清单、根目录本地文件归档、AGENTS 原文、根目录补丁、D6-04 CSV 补丁与合并消息保存在 `/Users/lixd/.codex/integration-backups/fams-20261004/`。根目录 `.gitignore` 的 IDE 与机器配置排除、AOCI/GitNexus 规则、`.gitattributes` 与 `.java-version` 保留；机器运行日志不提交。根目录意外字符串 `7 -0` 不纳入有效忽略规则，其原文保存在归档。
+整合前完整工作树/分支清单、根目录本地文件归档、AGENTS 原文、根目录补丁、D6-04 CSV 补丁与合并消息保存在 `<local-agent-home>/integration-backups/fams-20261004/`。根目录 `.gitignore` 的 IDE 与机器配置排除、AOCI/GitNexus 规则、`.gitattributes` 与 `.java-version` 保留；机器运行日志不提交。根目录意外字符串 `7 -0` 不纳入有效忽略规则，其原文保存在归档。
 
 ## 验证与证据边界
 

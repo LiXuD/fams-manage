@@ -1,11 +1,12 @@
+[路径脱敏副本：本机绝对路径已归一化；原始字节仅本地归档，验证结果未改写。]
 ....................................................FFFFFFFFF..................E..........
 ======================================================================
 ERROR: test_current_contract_has_resolved_refs_and_schema_aligned_examples (test_verify_d6_02c_verifier.ContractEvidenceTest.test_current_contract_has_resolved_refs_and_schema_aligned_examples)
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c_verifier.py", line 76, in test_current_contract_has_resolved_refs_and_schema_aligned_examples
+  File "scripts/test_verify_d6_02c_verifier.py", line 76, in test_current_contract_has_resolved_refs_and_schema_aligned_examples
     VERIFIER.assert_write_contracts(document)
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/verify-d6-02c.py", line 153, in assert_write_contracts
+  File "scripts/verify-d6-02c.py", line 153, in assert_write_contracts
     raise VerificationFailure(
 verify_d6_02c.VerificationFailure: unclassified non-business mutation: POST /asset-initialization-windows
 
@@ -13,7 +14,7 @@ verify_d6_02c.VerificationFailure: unclassified non-business mutation: POST /ass
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/asset-initialization-windows')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "issueAttachmentDownloadGrant"})
 AssertionError: 'openAssetInitializationWindow' not found in {'issueAttachmentDownloadGrant', 'miniLogin', 'login', 'miniLogout', 'logout'}
 
@@ -21,7 +22,7 @@ AssertionError: 'openAssetInitializationWindow' not found in {'issueAttachmentDo
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/asset-initialization-windows/{windowId}/close')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "issueAttachmentDownloadGrant"})
 AssertionError: 'closeAssetInitializationWindow' not found in {'issueAttachmentDownloadGrant', 'miniLogin', 'login', 'miniLogout', 'logout'}
 
@@ -29,7 +30,7 @@ AssertionError: 'closeAssetInitializationWindow' not found in {'issueAttachmentD
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/asset-import-batches')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2578, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "scripts/test_verify_d6_02c.py", line 2578, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue(operation.get("x-version"), "missing version boundary")
 AssertionError: None is not true : missing version boundary
 
@@ -37,7 +38,7 @@ AssertionError: None is not true : missing version boundary
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/asset-import-batches/{batchId}/preview')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2592, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "scripts/test_verify_d6_02c.py", line 2592, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue(
 AssertionError: False is not true
 
@@ -45,7 +46,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/asset-import-batches/{batchId}/review')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "issueAttachmentDownloadGrant"})
 AssertionError: 'requestAssetImportReview' not found in {'issueAttachmentDownloadGrant', 'miniLogin', 'login', 'miniLogout', 'logout'}
 
@@ -53,7 +54,7 @@ AssertionError: 'requestAssetImportReview' not found in {'issueAttachmentDownloa
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/asset-import-batches/{batchId}/decision')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "issueAttachmentDownloadGrant"})
 AssertionError: 'decideAssetImportReview' not found in {'issueAttachmentDownloadGrant', 'miniLogin', 'login', 'miniLogout', 'logout'}
 
@@ -61,7 +62,7 @@ AssertionError: 'decideAssetImportReview' not found in {'issueAttachmentDownload
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/asset-import-batches/{batchId}/rollback')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "issueAttachmentDownloadGrant"})
 AssertionError: 'requestAssetImportRollback' not found in {'issueAttachmentDownloadGrant', 'miniLogin', 'login', 'miniLogout', 'logout'}
 
@@ -69,7 +70,7 @@ AssertionError: 'requestAssetImportRollback' not found in {'issueAttachmentDownl
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/asset-import-batches/{batchId}/rollback-decision')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "issueAttachmentDownloadGrant"})
 AssertionError: 'decideAssetImportRollback' not found in {'issueAttachmentDownloadGrant', 'miniLogin', 'login', 'miniLogout', 'logout'}
 
@@ -77,7 +78,7 @@ AssertionError: 'decideAssetImportRollback' not found in {'issueAttachmentDownlo
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/asset-import-batches/{batchId}/rollback-execute')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "issueAttachmentDownloadGrant"})
 AssertionError: 'executeAssetImportRollback' not found in {'issueAttachmentDownloadGrant', 'miniLogin', 'login', 'miniLogout', 'logout'}
 

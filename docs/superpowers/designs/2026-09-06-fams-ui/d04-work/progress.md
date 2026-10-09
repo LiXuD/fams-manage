@@ -33,7 +33,7 @@
 - 2026-09-11：在TalkToFigma `v7dkvp2o` 逐页读回40个D0.4根节点并重导40张PNG；正文为1,598 TEXT、219 INSTANCE、0图片填充，文字差异0、越界候选0。修复14页标题动作溢出；完成视觉与表格密度比选；接入52个移动导航槽并核验117 VECTOR、52份SVG导出。
 - 2026-09-11：浏览器复核P23 1024px和D0.4状态页1440/390/320，24个示例和10个候选画布均无横向溢出，焦点与扫码状态通过。
 
-项目没有Git仓库，历史恢复使用[整改前基线ZIP](../archive/2026-09-09-before-d04.zip)、[源码检查点](../archive/2026-09-10-d04-source-checkpoint.zip)与[SHA清单](change-inventory.json)。这些材料作为审计和恢复证据保留。
+项目没有Git仓库，历史恢复使用整改前基线ZIP（已移至仓库外，见[归档恢复说明](../archive/README.md)）、[源码检查点](../archive/2026-09-10-d04-source-checkpoint.zip)与[SHA清单](change-inventory.json)。这些材料作为审计和恢复证据保留。
 
 ## 当前下一步
 

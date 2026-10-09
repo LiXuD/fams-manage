@@ -11,7 +11,7 @@
 3. 需要核对或修改D0.4时再读本文、[整改终态台账](d04-work/progress.md)和[本地修改报告](d04-work/local-implementation-report.md)。
 4. [整改裁决](REVIEW-ADJUDICATION-D0.4.md)、[D0.3 原生验证](NATIVE-FIGMA-VERIFICATION.md)和[Figma工具记录](MCP-RESUME.md)均为历史依据，不负责当前阶段状态。
 
-工作目录：`/Users/lixd/IdeaProjects/Git/CodexProject/fams`。这是文档/原型工作区，没有 Git 仓库；不应虚构 commit、分支或推送记录。
+工作目录：`.`。这是文档/原型工作区，没有 Git 仓库；不应虚构 commit、分支或推送记录。
 
 D0.4 后续只在PRD变更或开发发现设计缺口时增量改稿；不从旧计划重新执行已完成的8个任务包，不重建整套文件，不增加业务能力或初始化Git。
 
@@ -110,7 +110,7 @@ rtk proxy python3 -m http.server 8785 --bind 127.0.0.1 --directory docs/superpow
 |D0.3 交付历史|NATIVE-FIGMA-VERIFICATION / VERIFICATION / GOAL-AUDIT 与原导出|保留版本边界，不能把旧“通过”改名为 D0.4 通过|
 |当前原生身份|`figma-native/d04-native-live-verification.json`、`d04-index.html`、`screens-map.json` 与 d04-seeds.json；`d04-screen-*.json` 是当前逐页读回|读回确认后维护；覆盖前备份；旧 D0.3 `screen-*.json` 与首次增量记录保留为历史证据|
 
-[整改前完整基线 ZIP](archive/2026-09-09-before-d04.zip)：7,720,804 字节；SHA256 `e35675690c9b6b68ffb801e5d032f18e6e1a401a0fe2b40639fb8b339122a8b2`。保留 D0.3 本地与原生证据，未包含历史日志/操作流水。
+整改前基线 `2026-09-09-before-d04.zip`：7,720,804 字节；SHA256 `e35675690c9b6b68ffb801e5d032f18e6e1a401a0fe2b40639fb8b339122a8b2`。2026-10-09 解包复核发现包含8个日志/布局转储，原“未包含历史日志/操作流水”结论更正；现已移至仓库外归档，见 [归档恢复说明](archive/README.md)。
 
 [本次 D0.4 源码检查点 ZIP](archive/2026-09-10-d04-source-checkpoint.zip)：仅包含8个已修改源码、3个新增状态文件、差异清单、整改裁决与字体校准证据，不是整个工作区或 Figma 文件备份。交接文档本身在工作目录中维护。
 
@@ -120,4 +120,4 @@ rtk proxy python3 -m http.server 8785 --bind 127.0.0.1 --directory docs/superpow
 
 ## 6. 可直接交给下一位执行者的说明
 
-> 在 `/Users/lixd/IdeaProjects/Git/CodexProject/fams` 继续项目。先读根目录 `DESIGN-HANDOFF.md`：第1～5步已完成，第6步开发尚未开始。第5步已按用户确认的轻量口径核对PRD V1.5全部一期功能，不恢复大规模用户测试。启动开发后以F01～F10、P01～P26、M01～M14和AC-01～AC-53作为范围；只有PRD变更或开发发现设计缺口时，才用本文的节点与恢复证据增量改稿。
+> 在 `.` 继续项目。先读根目录 `DESIGN-HANDOFF.md`：第1～5步已完成，第6步开发尚未开始。第5步已按用户确认的轻量口径核对PRD V1.5全部一期功能，不恢复大规模用户测试。启动开发后以F01～F10、P01～P26、M01～M14和AC-01～AC-53作为范围；只有PRD变更或开发发现设计缺口时，才用本文的节点与恢复证据增量改稿。

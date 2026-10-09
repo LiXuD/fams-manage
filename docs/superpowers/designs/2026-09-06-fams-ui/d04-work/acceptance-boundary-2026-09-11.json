@@ -15,7 +15,7 @@
       "preview": "127.0.0.1:8785 is listening and is the static workspace preview only"
     }
   },
-  "workspaceRoot": "/Users/lixd/IdeaProjects/Git/CodexProject/fams",
+  "workspaceRoot": ".",
   "scope": "D0.4 static design and prototype workspace",
   "inventoryProbe": {
     "method": "Read-only filename scan from the workspace root",

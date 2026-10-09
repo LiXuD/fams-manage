@@ -15,7 +15,7 @@
       "width": 1000,
       "height": 500
     },
-    "pngExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13639-0.png",
+    "pngExport": "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13639-0.png",
     "childCount": 18
   },
   "assets": [
@@ -28,7 +28,7 @@
       "width": 72,
       "height": 72,
       "vectorCount": 3,
-      "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13642-0.svg"
+      "svgExport": "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13642-0.svg"
     },
     {
       "asset": "home-neutral.svg",
@@ -39,7 +39,7 @@
       "width": 72,
       "height": 72,
       "vectorCount": 3,
-      "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13647-0.svg"
+      "svgExport": "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13647-0.svg"
     },
     {
       "asset": "message-active.svg",
@@ -50,7 +50,7 @@
       "width": 72,
       "height": 72,
       "vectorCount": 2,
-      "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13652-0.svg"
+      "svgExport": "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13652-0.svg"
     },
     {
       "asset": "message-neutral.svg",
@@ -61,7 +61,7 @@
       "width": 72,
       "height": 72,
       "vectorCount": 2,
-      "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13656-0.svg"
+      "svgExport": "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13656-0.svg"
     },
     {
       "asset": "scan-active.svg",
@@ -72,7 +72,7 @@
       "width": 72,
       "height": 72,
       "vectorCount": 2,
-      "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13660-0.svg"
+      "svgExport": "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13660-0.svg"
     },
     {
       "asset": "scan-neutral.svg",
@@ -83,7 +83,7 @@
       "width": 72,
       "height": 72,
       "vectorCount": 2,
-      "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13664-0.svg"
+      "svgExport": "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13664-0.svg"
     },
     {
       "asset": "mine-active.svg",
@@ -94,7 +94,7 @@
       "width": 72,
       "height": 72,
       "vectorCount": 2,
-      "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13668-0.svg"
+      "svgExport": "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13668-0.svg"
     },
     {
       "asset": "mine-neutral.svg",
@@ -105,7 +105,7 @@
       "width": 72,
       "height": 72,
       "vectorCount": 2,
-      "svgExport": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13672-0.svg"
+      "svgExport": "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/71-13672-0.svg"
     }
   ],
   "totals": {

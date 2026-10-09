@@ -18,5 +18,12 @@
     }
   ],
   "browserRetested": false,
-  "figmaLiveRetested": false
+  "figmaLiveRetested": false,
+  "archiveRelocation": {
+    "date": "2026-10-09",
+    "file": "2026-09-09-before-d04.zip",
+    "storage": "external_archive",
+    "recoveryGuide": "archive/README.md",
+    "reason": "Contains eight excluded operation logs and layout dumps; historical verification results above are preserved."
+  }
 }

@@ -35,9 +35,9 @@ D6-10A 保持 IN_PROGRESS：本次只是会话及传输切片；短信验证与�
 
 ## 2026-10-05 固定候选完整门禁
 
-功能候选 `a502744` 在隔离工作树 `/Users/lixd/.codex/worktrees/d6-10a-gate/fams` 以 Java 21、Node 24.18.0 与独有 MySQL 执行 `scripts/verify-product-development.py`，退出 **0**。必需 Java 报告 66 项、Checkstyle/SpotBugs 0；行覆盖 92.04%，分支覆盖 75.29%。双端 lint/typecheck、客户端传输 10/10、依赖审计 0 漏洞、管理端口隔离、应用与数据库重启恢复及最终清理通过。[完整原始输出](evidence/D6-10A-product-gate-a502744.txt)。重启恢复属于现役兼容探针检查，不证明真实微信绑定或小程序端到端联调。
+功能候选 `a502744` 在隔离工作树 `<local-agent-home>/worktrees/d6-10a-gate/fams` 以 Java 21、Node 24.18.0 与独有 MySQL 执行 `scripts/verify-product-development.py`，退出 **0**。必需 Java 报告 66 项、Checkstyle/SpotBugs 0；行覆盖 92.04%，分支覆盖 75.29%。双端 lint/typecheck、客户端传输 10/10、依赖审计 0 漏洞、管理端口隔离、应用与数据库重启恢复及最终清理通过。[完整原始输出](evidence/D6-10A-product-gate-a502744.txt)。重启恢复属于现役兼容探针检查，不证明真实微信绑定或小程序端到端联调。
 
-首轮因执行环境 PATH 缺少 `/usr/sbin`，`lsof` 检查退出 127；修正 PATH 后重跑同一候选，没有改代码、降低门槛或跳过检查。[首轮失败输出](evidence/D6-10A-product-gate-a502744-path-failure.txt)。
+首轮因执行环境 PATH 缺少 `/usr/sbin`，`lsof` 检查退出 127；修正 PATH 后重跑同一候选，没有改代码、降低门槛或跳过检查。首轮失败输出（失败日志已移出仓库，见本地归档）。
 
 AOCI 读取截断通过拆开调用并提高 Host 输出预算修复；保持 `overview_delivery.chunk_tokens=8000`，8/8 块、520 条完整交付，Host 确认成功、无截断；严格校验 3/10 为 partial，正式索引治理未对齐，不声称可靠完整认知。GitNexus 增量刷新遇到 FTS 不一致，`analyze --force --index-only` 全量重建成功。
 
@@ -72,7 +72,7 @@ M01/M14 为原生 app.json、Page、WXML/WXSS 和 CommonJS 构建包，调用 wx
 
 固定代码候选 **`d903199`** 在隔离工作树以 Java 21.0.7、Node 24.18.0 和独有 MySQL 8.4.11 执行完整 `scripts/verify-product-development.py`，最终退出 **0**。必需 Java 报告 **79** 项，Checkstyle/SpotBugs 0；行覆盖 **6334/6874（92.14%）**、分支覆盖 **2377/3152（75.41%）**。双端 lint/typecheck、客户端 **18/18**、原生小程序包构建、依赖审计 0 漏洞、管理面隔离、应用及数据库重启恢复与最终清理全部通过。[完整候选日志](evidence/D6-10A-product-gate-d903199.txt)、[50 项真实 HTTP/MySQL 定向日志](evidence/D6-10A-binding-http.txt)、[最终 SpotBugs 定向检查](evidence/D6-10A-spotbugs-fixed.txt)。重启恢复仍是兼容探针检查，不能据此声称真实微信绑定或真机链路恢复已验证。
 
-失败记录保留：[首次 Node 加载失败](evidence/D6-10A-product-gate-5e339d5-node-failure.txt)、[隔离工作树 PATH 失败](evidence/D6-10A-product-gate-b6ac2e3-path-failure.txt)、[静态检查失败](evidence/D6-10A-product-gate-b6ac2e3-quality-failure.txt)、[final 控制器启动失败](evidence/D6-10A-product-gate-f3352cd-startup-failure.txt)及[完整异常节选](evidence/D6-10A-controller-startup-diagnostic.txt)。隔离工作树 shell 会优先命中系统 Node 16；启动门禁必须把冻结 Node 24.18.0 的真实 bin 目录前置，再核对日志 `SELECTED_NODE=v24.18.0`。只设置 JAVA_HOME 不足以固定 Node。
+失败诊断摘要保留：首次 Node 加载失败（失败日志已移出仓库，见本地归档）、隔离工作树 PATH 失败（失败日志已移出仓库，见本地归档）、静态检查失败（失败日志已移出仓库，见本地归档）、final 控制器启动失败（失败日志已移出仓库，见本地归档）及完整异常节选（失败日志已移出仓库，见本地归档）。隔离工作树 shell 会优先命中系统 Node 16；启动门禁必须把冻结 Node 24.18.0 的真实 bin 目录前置，再核对日志 `SELECTED_NODE=v24.18.0`。只设置 JAVA_HOME 不足以固定 Node。
 
 AOCI 本轮 8/8 块、520 条完整交付且 Host 已确认，无须修改 `overview_delivery.chunk_tokens=8000`；严格 Challenge 1/10 为 partial，正式治理未对齐，保留既有未提交认知资产并不宣称完整可靠认知。GitNexus 刷新成功；重命名预览把同名认证接口也列入，已逐项剔除，认证端口和服务注入保持原名。
 
@@ -83,3 +83,5 @@ AOCI 本轮 8/8 块、520 条完整交付且 Host 已确认，无须修改 `over
 用户本人本轮明确“复核全部pass,真实短信,真机联调等待全部功能开发后在进行”。对固定代码候选 `d903199` 和送审交接 `9b969ee`，上方 1–6 项内部能力及其证据边界全部 PASS，D6-10A 从 IN_REVIEW 更新为本地 **DEV_VERIFIED**。
 
 真实短信和真机联调延期至全部功能开发完成后统一执行。D6-10B 保持 **NOT_STARTED**，D6-10 父任务保持 **IN_PROGRESS**；开发使用已明确标注的端口替身继续内部联调，真实通道和真机验收不因延期而免除。下一开发项为 D6-11 领用与分配。远端 CI、第七阶段 QA、生产验收及 AOCI 人工治理核验不由这次功能复核替代。
+
+2026-10-09 仓库清理：6 份失败/启动诊断原始输出已迁至仓库外归档；Node 版本、PATH、静态检查和控制器启动问题及修复结论仍按上文保留。有效门禁输出继续版本化；历史契约输出中的机器路径已脱敏。归档政策见 [文件分类清单](file-classification-manifest.md)。

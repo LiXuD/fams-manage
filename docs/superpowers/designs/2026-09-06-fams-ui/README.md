@@ -59,3 +59,11 @@ rtk proxy python3 -m http.server 8785 --bind 127.0.0.1 --directory docs/superpow
 `figma-state.json`、原 Figma API 辅助脚本和 `archive/` 保留历史记录。当前 Figma 节点以 `figma-native/component-map.json`、`screens-map.json`、`composition-map.json` 和 `figma-local-mcp-state.json` 为准。
 
 当前边界：8 个 SVG 已通过本地扩展提供的 `create_node_from_svg` 在独立 Figma 样本中验证，并已接入 M02–M14 中存在底部导航的全部52个正文导航槽；M01源页面没有底部导航。工作区是本地静态原型/设计文档，没有生产后端、真实账号权限、相机或真实设备验收环境；只读探测与关闭条件见[验收边界证据](d04-work/acceptance-boundary-2026-09-11.json)。
+
+## 本地设计工具配置
+
+原生 Figma 操作脚本使用外部安装的 TalkToFigma MCP 项目。运行前通过 `FAMS_FIGMA_MCP_ROOT` 指定该项目根目录（包含 `node_modules/@modelcontextprotocol/sdk` 和 `src/talk_to_figma_mcp/server.ts`），并确保 `bun` 在 PATH 中；也可用 `FAMS_BUN_EXECUTABLE` 指定其可执行文件。通过 `FAMS_FIGMA_CHANNEL` 指定本次连接的实际频道。未设置 MCP 根目录时明确报错，不回退到维护者本机路径。
+
+布局捕获脚本优先使用 `FAMS_PLAYWRIGHT_MODULE` 指定的已安装 Playwright 模块路径或 file URL；未设置时按 Node 模块规则查找 `playwright`。浏览器默认选择已安装的 Chrome，也可用 `FAMS_CHROME_EXECUTABLE` 指定可执行文件。这些配置只用于设计工具，不要求安装到产品依赖中。
+
+操作日志、布局转储及原始恢复包只留本地；归档政策见 [归档恢复说明](archive/README.md)。

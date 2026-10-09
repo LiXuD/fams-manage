@@ -62,3 +62,8 @@ docs/superpowers/designs/2026-09-06-fams-ui/figma-native/*verification-output.tx
 
 # Local Java version-manager selection; required JDK is enforced by Maven
 /.java-version
+
+# Repository audit: keep recovery bundles and failed diagnostics outside Git
+/docs/superpowers/designs/2026-09-06-fams-ui/archive/2026-09-09-before-d04.zip
+/docs/development/evidence/*-failure.txt
+/docs/development/evidence/*-diagnostic.txt

@@ -2,9 +2,12 @@
   "asOf": "2026-09-11",
   "scope": "Initial local handoff inventory plus the verified D0.4 SVG/native follow-up recorded below; baseline ZIP remains unchanged",
   "baseline": {
-    "path": "archive/2026-09-09-before-d04.zip",
+    "path": "external-archive/2026-09-09-before-d04.zip",
     "bytes": 7720804,
-    "sha256": "e35675690c9b6b68ffb801e5d032f18e6e1a401a0fe2b40639fb8b339122a8b2"
+    "sha256": "e35675690c9b6b68ffb801e5d032f18e6e1a401a0fe2b40639fb8b339122a8b2",
+    "storage": "external_archive",
+    "recoveryGuide": "archive/README.md",
+    "relocatedOn": "2026-10-09"
   },
   "changedSourceFiles": [
     {

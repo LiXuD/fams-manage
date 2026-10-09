@@ -1,12 +1,15 @@
-import {Client} from '/Users/lixd/IdeaProjects/Git/cursor-talk-to-figma-mcp/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js';
-import {StdioClientTransport} from '/Users/lixd/IdeaProjects/Git/cursor-talk-to-figma-mcp/node_modules/@modelcontextprotocol/sdk/dist/esm/client/stdio.js';
 import fs from 'node:fs';
 import path from 'node:path';
+import {pathToFileURL} from 'node:url';
 export const root=path.resolve('docs/superpowers/designs/2026-09-06-fams-ui');
 export const out=path.join(root,'figma-native');fs.mkdirSync(out,{recursive:true});
 const logPath=path.join(out,'operations.jsonl');
 export async function connect(){
- const transport=new StdioClientTransport({command:'/opt/homebrew/bin/bun',args:['/Users/lixd/IdeaProjects/Git/cursor-talk-to-figma-mcp/src/talk_to_figma_mcp/server.ts'],stderr:'pipe'});
+ const mcpRoot=process.env.FAMS_FIGMA_MCP_ROOT;
+ if(!mcpRoot)throw new Error('Set FAMS_FIGMA_MCP_ROOT to the installed TalkToFigma repository before connecting.');
+ const {Client}=await import(pathToFileURL(path.join(mcpRoot,'node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js')).href);
+ const {StdioClientTransport}=await import(pathToFileURL(path.join(mcpRoot,'node_modules/@modelcontextprotocol/sdk/dist/esm/client/stdio.js')).href);
+ const transport=new StdioClientTransport({command:process.env.FAMS_BUN_EXECUTABLE||'bun',args:[path.join(mcpRoot,'src/talk_to_figma_mcp/server.ts')],stderr:'pipe'});
  const client=new Client({name:'fams-design-delivery',version:'1.0.0'});
  const stderr=fs.createWriteStream(path.join(out,'mcp-client.log'),{flags:'a'});transport.stderr?.pipe(stderr);
  await client.connect(transport);

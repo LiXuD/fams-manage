@@ -3,70 +3,70 @@
     "nodeId": "28:6430",
     "title": "Checkbox · 原生选择控件",
     "exports": [
-      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/final-compositions/composition-0.png"
+      "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/final-compositions/composition-0.png"
     ]
   },
   "composition-1": {
     "nodeId": "28:6449",
     "title": "Radio · 原生选择控件",
     "exports": [
-      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/final-compositions/composition-1.png"
+      "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/final-compositions/composition-1.png"
     ]
   },
   "composition-2": {
     "nodeId": "28:6464",
     "title": "Steps · Complete / Current / Upcoming",
     "exports": [
-      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/final-compositions/composition-2.png"
+      "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/final-compositions/composition-2.png"
     ]
   },
   "composition-3": {
     "nodeId": "28:6481",
     "title": "Timeline · Complete / Current / Upcoming",
     "exports": [
-      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/final-compositions/composition-3.png"
+      "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/final-compositions/composition-3.png"
     ]
   },
   "composition-4": {
     "nodeId": "28:6507",
     "title": "Progress / Determinate",
     "exports": [
-      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/final-compositions/composition-4.png"
+      "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/final-compositions/composition-4.png"
     ]
   },
   "composition-5": {
     "nodeId": "28:6514",
     "title": "Progress / Indeterminate",
     "exports": [
-      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/final-compositions/composition-5.png"
+      "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/final-compositions/composition-5.png"
     ]
   },
   "composition-6": {
     "nodeId": "28:6521",
     "title": "部分履行 / 六数量守恒",
     "exports": [
-      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/final-compositions/composition-6.png"
+      "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/final-compositions/composition-6.png"
     ]
   },
   "composition-7": {
     "nodeId": "28:6555",
     "title": "筛选无结果 / 区别于无记录",
     "exports": [
-      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/final-compositions/composition-7.png"
+      "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/final-compositions/composition-7.png"
     ]
   },
   "打开接收确认": {
     "nodeId": "28:6566",
     "title": "打开接收确认",
     "exports": [
-      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/final-compositions/dialog-confirm.png"
+      "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/final-compositions/dialog-confirm.png"
     ]
   },
   "打开处置确认": {
     "nodeId": "28:6577",
     "title": "打开处置确认",
     "exports": [
-      "/Users/lixd/IdeaProjects/Git/CodexProject/fams/docs/superpowers/designs/2026-09-06-fams-ui/figma-native/final-compositions/dialog-danger.png"
+      "docs/superpowers/designs/2026-09-06-fams-ui/figma-native/final-compositions/dialog-danger.png"
     ]
   }
 }

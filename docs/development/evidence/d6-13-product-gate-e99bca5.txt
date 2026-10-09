@@ -1,8 +1,9 @@
+[路径脱敏副本：本机绝对路径已归一化；原始字节仅本地归档，验证结果未改写。]
 Candidate: e99bca51704907b687d10738391e28db700d4da7
 Date: 2026-10-09
 Tier: local product-development gate; independent review/CI/QA/device acceptance pending
 Command: Java 21 + Node 24.18.0, python3 scripts/verify-product-development.py
-Worktree: /Users/lixd/.codex/worktrees/d6-13-gate/fams
+Worktree: <local-agent-home>/worktrees/d6-13-gate/fams
 Original log: output/d6-13-gate-quality-fixed.log
 
 [clean worktree preflight] exit=0

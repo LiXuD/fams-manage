@@ -69,7 +69,7 @@
 
 ## 2026-09-30 续接要点
 
-- 当前实现位于隔离工作树 `/Users/lixd/.codex/worktrees/d6-09-attachments/fams`、分支 `codex/d6-08-durable-jobs`；本地仓库没有远端，`main` 是另一检出且有非本任务改动。沿用当前工作树，不把本分支进度误记到 `main`。
+- 当前实现位于隔离工作树 `<local-agent-home>/worktrees/d6-09-attachments/fams`、分支 `codex/d6-08-durable-jobs`；本地仓库没有远端，`main` 是另一检出且有非本任务改动。沿用当前工作树，不把本分支进度误记到 `main`。
 - 最新完整产品门禁在 `b11502f` 上退出 1，分支覆盖 71.72%（门槛 75%），行覆盖 91.18%；当时独有 MySQL 持久任务、导入批次、真实 HTTP 用例均通过。分支缺口以 `AssetService` 82、`InboundService` 65、`AssetImportReviewService` 54、`AssetImportRollbackService` 49、`AssetImportBatchService` 40 为主。`4c2e757` 新增有业务意义的拒绝/重试用例，定向通过，但完整门禁尚未在该提交重跑。
 - 接下来补少量关键拒绝/恢复路径，再在干净候选上用 Java 21、Node 24 运行一次 `scripts/verify-product-development.py`；不降 75% 门槛，也不重复历史治理/SHA 审计。通过后让非实施者复核 B/C 的权限、事务和恢复；D 的测量仍是开发冒烟，不等于第七阶段正式性能验收。
 

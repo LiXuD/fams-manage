@@ -106,7 +106,7 @@
 
 ### 工作树与未提交草稿
 
-- 工作树：`/Users/lixd/.codex/worktrees/d6-05-master-data/fams`。
+- 工作树：`<local-agent-home>/worktrees/d6-05-master-data/fams`。
 - 分支：`codex/d6-05-master-data`。
 - 已修改：`backend/src/main/resources/application-fams-product.properties`。
 - 未跟踪：`backend/src/main/java/com/fams/auth/MasterDataActorContext.java`、`backend/src/main/java/com/fams/masterdata/`、`backend/src/test/java/com/fams/masterdata/IdentityMasterDataHttpTest.java`、`scripts/verify-d6-05a.py`。

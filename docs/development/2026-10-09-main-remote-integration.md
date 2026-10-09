@@ -36,18 +36,18 @@
 
 | 路径 | HEAD | 未提交变化 |
 |---|---|---|
-| `/Users/lixd/IdeaProjects/Git/CodexProject/fams` | `a7521575bc3c` | 无 |
-| `/Users/lixd/.codex/worktrees/d6-04a-verify/fams` | `dbb1057026b9` | 无 |
-| `/Users/lixd/.codex/worktrees/d6-05-master-data/fams` | `351a7e9441fd` | 无 |
-| `/Users/lixd/.codex/worktrees/d6-06-asset-ledger/fams` | `2b50d83b6737` | 无 |
-| `/Users/lixd/.codex/worktrees/d6-07-inbound/fams` | `5314414e8787` | 无 |
-| `/Users/lixd/.codex/worktrees/d6-09-attachments/fams` | `b007a5fc8d91` | 无 |
-| `/Users/lixd/.codex/worktrees/d6-13-gate/fams` | `f9834399d587` | 无 |
-| `/Users/lixd/IdeaProjects/Git/CodexProject/fams/.worktrees/d6-02a-generation-pipeline` | `c9069f10a5a5` | 无 |
-| `/Users/lixd/IdeaProjects/Git/CodexProject/fams/.worktrees/d6-02b-runtime-compatibility` | `9a181cdd5924` | 无 |
-| `/Users/lixd/IdeaProjects/Git/CodexProject/fams/.worktrees/d6-02c-first-design-package` | `5676bd9823e2` | 无 |
-| `/Users/lixd/IdeaProjects/Git/CodexProject/fams/.worktrees/d6-03a-local-quality-gate` | `5f4bc8ae842d` | 无 |
-| `/Users/lixd/IdeaProjects/Git/CodexProject/fams/.worktrees/d6-04-pc-login-permissions` | `dbb1057026b9` | 无 |
+| `.` | `a7521575bc3c` | 无 |
+| `<local-agent-home>/worktrees/d6-04a-verify/fams` | `dbb1057026b9` | 无 |
+| `<local-agent-home>/worktrees/d6-05-master-data/fams` | `351a7e9441fd` | 无 |
+| `<local-agent-home>/worktrees/d6-06-asset-ledger/fams` | `2b50d83b6737` | 无 |
+| `<local-agent-home>/worktrees/d6-07-inbound/fams` | `5314414e8787` | 无 |
+| `<local-agent-home>/worktrees/d6-09-attachments/fams` | `b007a5fc8d91` | 无 |
+| `<local-agent-home>/worktrees/d6-13-gate/fams` | `f9834399d587` | 无 |
+| `.worktrees/d6-02a-generation-pipeline` | `c9069f10a5a5` | 无 |
+| `.worktrees/d6-02b-runtime-compatibility` | `9a181cdd5924` | 无 |
+| `.worktrees/d6-02c-first-design-package` | `5676bd9823e2` | 无 |
+| `.worktrees/d6-03a-local-quality-gate` | `5f4bc8ae842d` | 无 |
+| `.worktrees/d6-04-pc-login-permissions` | `dbb1057026b9` | 无 |
 
 ## 远端与验证边界
 
@@ -60,5 +60,5 @@
 
 ## 恢复材料
 
-- 整合前清单及全分支 bundle：`/Users/lixd/.codex/integration-backups/fams-20261009/`，仅本机保存。
+- 整合前清单及全分支 bundle：`<local-agent-home>/integration-backups/fams-20261009/`，仅本机保存。
 - 功能提交历史全部保留；原 main df8cb6d 与候选 a752157 可用于核对或创建恢复分支；不重写已推送历史。

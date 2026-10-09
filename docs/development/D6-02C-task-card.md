@@ -8,7 +8,7 @@
 - **分支 / 基线：** `feat/D6-02C-first-design-package`；`9a181cdd5924efbde8d5de83e05c2b9f92a70d86`。
 - **前置条件：** D6-02A、D6-02B 均为 `DEV_VERIFIED`；固定运行/契约工具组合不得在本任务内隐式升级。
 - **规模：** L；覆盖四个紧密关联的 G1 前置设计域，产物必须共同形成可生成、可追溯、可独立审查的一致设计包。
-- **实施负责人：** `luna-worker` 按 `/Users/lixd/.codex/agents/luna-worker.toml` 使用 `gpt-5.6-luna`、reasoning `max` 完成前段契约增量；该代理达到使用上限后，控制器继续完成剩余契约、设计文档、验证器、集成和交接，控制器模型无法核实。各提交 trailer 保留实际执行归属。
+- **实施负责人：** `luna-worker` 按 `<local-agent-home>/agents/luna-worker.toml` 使用 `gpt-5.6-luna`、reasoning `max` 完成前段契约增量；该代理达到使用上限后，控制器继续完成剩余契约、设计文档、验证器、集成和交接，控制器模型无法核实。各提交 trailer 保留实际执行归属。
 - **复核人：** 非实施者代理已对 reviewed implementation HEAD `d3b8d6c` 给出 Spec Compliance PASS、Task Quality PASS、CLEAN（Critical 0 / Important 0）；用户本人随后对同一对象给出权限、事务与并发、迁移、恢复及总评全部 PASS，问题清单为“无”。签署记录见 `D6-02C-critical-technical-review.md`；控制器已在记录提交 `31f3004` 上再次完整复跑并退出 0。
 
 ## 权威范围与追溯

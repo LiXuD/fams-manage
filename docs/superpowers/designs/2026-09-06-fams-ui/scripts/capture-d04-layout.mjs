@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { chromium } from '/Users/lixd/.npm/_npx/0b9ff77863cb6e9f/node_modules/playwright/index.mjs';
+const { chromium } = await import(process.env.FAMS_PLAYWRIGHT_MODULE || 'playwright');
 
 const root = path.resolve('docs/superpowers/designs/2026-09-06-fams-ui');
 const sourcePath = path.join(root, 'scripts/capture-figma-layout.js');
@@ -8,7 +8,9 @@ const outputPath = path.join(root, 'figma-native/d04-layout-spec.json');
 const capture = (0, eval)(fs.readFileSync(sourcePath, 'utf8'));
 const browser = await chromium.launch({
   headless: true,
-  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  ...(process.env.FAMS_CHROME_EXECUTABLE
+    ? { executablePath: process.env.FAMS_CHROME_EXECUTABLE }
+    : { channel: 'chrome' }),
   args: ['--no-sandbox']
 });
 try {
