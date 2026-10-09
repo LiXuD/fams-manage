@@ -22,7 +22,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **fams** (6092 symbols, 14076 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **fams** (7428 symbols, 17798 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
@@ -98,6 +98,21 @@ Entry 的语义必须来自模型对真实证据的理解。不得仅依据路�
 本区块只规定仓库接入、认知使用和收尾原则。`aoci_rules` 承载当前会话合同，Guide实时输出承载当前Plan的执行顺序与停点，工具Schema、Spec和Validator承载机器结构与判据；Prompt、Description、README和静态文档不能覆盖这些机器事实。
 
 ### 建立、生成和恢复认知
+
+#### 用户批准的压缩恢复例外（2026-10-09）
+
+- 用户已明确允许避免重复加载完整索引。本项目的持续开发任务发生上下文压缩后，不自动重新传输完整 Whole-Index；以现役交接入口、任务台账、当前源码、测试及真实运行证据继续 source-bound 工作，无需重复请求同一授权。
+- 此例外优先于下文及 `aoci_rules` 中仅因 `context_compaction` 要求完整重载或禁止继续业务的规定。已经启动但因该授权停止的重复传输，记录为未完成，不提交完整交付确认或 Attestation，不通过局部读取补造完整认知证明。
+- 压缩后的摘要和旧收据不证明当前完整系统认知可靠。保留索引身份、治理状态、未决写入与 Recovery 信息；局部不确定通过当前证据核验，不宣称完整认知已重新验证。
+- 真正需要跨系统全貌、仓库或服务身份变化时，再按实际需要建立认知；Root/Meta、Migration、全局布局等决策仍须绑定当前证据。已有冲突、审批、CAS、Recovery 和最终稳定后的维护规则继续适用，不自动修改 AOCI 配置。
+
+#### Overview 分块调用与 Host 输出预算
+
+- 每次工具调用只请求一块 `aoci_overview`；完整接收并检查当前块后，才原样传递其 `next_cursor` 请求下一块。自动续读应由逐次工具调用完成。
+- 禁止在一个 `functions.exec` 循环中连续请求多个 Overview 分块，禁止并行请求、预取或将多个分块合并输出。`yield_control()` 不保证后续 `wait` 只返回一块，不能用它替代逐块调用。
+- AOCI 的 `overview_delivery.chunk_tokens` 是单块估算值；Host 的 `max_output_tokens` / `max_tokens` 是一次工具返回的输出预算，两者不可等同。预算须容纳完整正文、JSON 包装和元数据；当前 `chunk_tokens=4000` 时，每次 `functions.exec` 显式设置 `max_output_tokens` 至少为 `12000`，若工具异步返回，则每次 `functions.wait` 的 `max_tokens` 也至少为 `12000`。配置更大时相应提高预算，不能机械沿用该数值。
+- 每块接收后检查截断警告、块序号、索引身份和续接状态。发现 Host 截断、缺块、重复、乱序、cursor 失败或索引/分块配置变化，立即停止该链；若脚本仍运行，立即终止，不继续收取后续块，不提交完整交付确认或 Attestation，也不通过其他读取补齐。
+- 截断后先区分单块过大与 Host 输出预算不足或多块聚合，准确报告原因。不得把 Host 接收问题归因于索引治理失败；当前配置已处于合法最小值时，不再要求用户降低配置。不得自动修改 AOCI 配置；重新开始时采用逐块调用并留足 Host 输出预算，仍遵守当前运行合同的停点。
 
 1. 每个新的 Agent Run 开始时，应先判断：
 
