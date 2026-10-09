@@ -60,7 +60,7 @@ async function mutate(path: string, version: number, body?: unknown) {
     const result = await loanRequest<{ id: string }>(pending.path, pending);
     const action = pending.path; pending = null; retryable.value = false; notice.value = "操作已保存。";
     if (action.includes("/receipts/")) { receipt.value = null; grant = null; }
-    else selected.value = await loanRequest<Transfer>("/transfers/" + result.id);
+    else { selected.value = await loanRequest<Transfer>("/transfers/" + result.id); await loadPeople(selected.value); }
     if (action === "/transfers") draftItems.value = [];
     await load();
   } catch (e) { error.value = loanMessage(e); retryable.value = pending !== null; }

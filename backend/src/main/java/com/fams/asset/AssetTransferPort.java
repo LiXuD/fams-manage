@@ -26,7 +26,11 @@ public class AssetTransferPort {
             Long employeeId,
             Long warehouseId,
             long locationId,
-            Map<String, Long> referenceVersions) {}
+            Map<String, Long> referenceVersions) {
+        public Target {
+            referenceVersions = referenceVersions == null ? null : Map.copyOf(referenceVersions);
+        }
+    }
 
     private final JdbcTemplate db;
     private final AssetMapper mapper;
@@ -89,6 +93,9 @@ public class AssetTransferPort {
                 throw new AssetHandoverPort.Failure("TRANSFER_TARGET_INVALID", 409);
             }
         } else {
+            if ("BIN".equals(location.get("location_type"))) {
+                throw new AssetHandoverPort.Failure("TRANSFER_TARGET_INVALID", 409);
+            }
             if (target.usingOrganizationId() == null
                     || target.employeeId() == null
                     || target.warehouseId() != null) {

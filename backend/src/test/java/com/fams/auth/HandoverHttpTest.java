@@ -2312,6 +2312,24 @@ class HandoverHttpTest {
                                 key(),
                                 null)
                         .statusCode());
+        jdbc.update(
+                "INSERT INTO fams_location"
+                    + " (id,code,code_normalized,name,location_type,warehouse_id,status,created_at,updated_at)"
+                    + " VALUES (?,?,?,'Storage bin','BIN',?,'ACTIVE',NOW(3),NOW(3))",
+                base + 1,
+                "TRANSFERBIN" + base,
+                "TRANSFERBIN" + base,
+                base);
+        assertEquals(
+                409,
+                transferCall(
+                                employee,
+                                "POST",
+                                "",
+                                transferDraft(false, false, base + 15, base + 1, base + 1, 0),
+                                key(),
+                                null)
+                        .statusCode());
         jdbc.update("UPDATE fams_employee SET status='DISABLED' WHERE id=?", base + 15);
         assertEquals(409, transferCall(employee, "POST", "", draft, key(), null).statusCode());
         assertEquals(
@@ -2321,10 +2339,9 @@ class HandoverHttpTest {
                 0,
                 count(
                         "SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND"
-                            + " released_at IS NULL",
+                                + " released_at IS NULL",
                         base + 50));
     }
-
     @Test
     void transferApprovalRejectionAndDraftCancelNeverRewriteCustodyAndReuseIsBoundToPayload()
             throws Exception {
