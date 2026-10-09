@@ -7,6 +7,7 @@ seed does not prove the import publication path (the HTTP runtime suite does).
 """
 
 import importlib.util
+import re
 from pathlib import Path
 
 
@@ -16,8 +17,11 @@ def main() -> int:
     runtime = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(runtime)
     checked = runtime.checked
+    owned_name = ""
+    owned_volume = ""
 
     def loan_checked(args: list[str], **kwargs: object):
+        nonlocal owned_name, owned_volume
         if args[:3] == ["rtk", "docker", "run"]:
             # Remove this disposable container's anonymous database volume on exit.
             args = args[:3] + ["--rm"] + args[3:]
@@ -50,10 +54,30 @@ def main() -> int:
                 "SELECT asset_code,lifecycle_status,custody_type,using_organization_id,responsible_employee_id,storage_warehouse_id FROM fams_asset ORDER BY id;"
                 "SELECT business_type,business_id FROM fams_asset_business_lock WHERE released_at IS NULL;"
             )
-        return checked(args, **kwargs)
+        result = checked(args, **kwargs)
+        if args[:3] == ["rtk", "docker", "run"]:
+            owned_name = args[args.index("--name") + 1]
+            owned_volume = checked(["rtk", "docker", "inspect", owned_name, "--format",
+                '{{range .Mounts}}{{if eq .Destination "/var/lib/mysql"}}{{.Name}}{{end}}{{end}}']).stdout.strip()
+            if not re.fullmatch(r"[a-f0-9]{64}", owned_volume):
+                raise RuntimeError("Owned MySQL anonymous volume identity is not provable")
+        return result
 
     runtime.checked = loan_checked
-    return runtime.main()
+    try:
+        return runtime.main()
+    finally:
+        if owned_volume:
+            remaining = checked(["rtk", "docker", "ps", "-a", "--filter", f"name=^{owned_name}$",
+                "--format", "{{.Names}}"])
+            if remaining.stdout.strip():
+                raise RuntimeError("Owned MySQL container remains; volume cleanup stopped")
+            args = ["rtk", "docker", "volume", "ls", "--filter", f"name=^{owned_volume}$", "--format", "{{.Name}}"]
+            if checked(args).stdout.strip():
+                checked(["rtk", "docker", "volume", "rm", owned_volume])
+            if checked(args).stdout.strip():
+                raise RuntimeError("Owned MySQL anonymous volume remains after cleanup")
+            print("Owned MySQL container and anonymous volume cleanup verified.", flush=True)
 
 
 if __name__ == "__main__":
