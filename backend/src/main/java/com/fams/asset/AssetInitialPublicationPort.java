@@ -37,10 +37,10 @@ public class AssetInitialPublicationPort {
     private final AssetMasterDataPort masterData;
     private final AssetSecretCodec codec;
     private final ObjectMapper json;
-    private final com.fams.loan.LoanInitialPort loans;
+    private final com.fams.business.InitialBorrowingPort loans;
 
     AssetInitialPublicationPort(AssetMapper mapper, AssetMasterDataPort masterData,
-            AssetSecretCodec codec, ObjectMapper json, com.fams.loan.LoanInitialPort loans) {
+            AssetSecretCodec codec, ObjectMapper json, com.fams.business.InitialBorrowingPort loans) {
         this.mapper = mapper;
         this.masterData = masterData;
         this.codec = codec;

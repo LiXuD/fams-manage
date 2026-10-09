@@ -4,7 +4,7 @@ import com.fams.auth.RequisitionActorContext;
 import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
-import com.fams.requisition.RequisitionBorrowDatePort;
+import com.fams.business.BorrowRequestDatePort;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -30,10 +30,10 @@ class LoanService {
     private final ObjectMapper json;
     private final Clock clock;
     private final RequisitionActorContext actors;
-    private final RequisitionBorrowDatePort requests;
+    private final BorrowRequestDatePort requests;
 
     LoanService(JdbcTemplate db, ObjectMapper json, Clock clock,
-            RequisitionActorContext actors, RequisitionBorrowDatePort requests) {
+            RequisitionActorContext actors, BorrowRequestDatePort requests) {
         this.db = db;
         this.json = json;
         this.clock = clock;

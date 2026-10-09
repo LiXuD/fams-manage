@@ -15,7 +15,7 @@ import java.util.UUID;
 @Component
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
-public class LoanInitialPort {
+public class LoanInitialPort implements com.fams.business.InitialBorrowingPort {
     private final JdbcTemplate db;
 
     LoanInitialPort(JdbcTemplate db) {

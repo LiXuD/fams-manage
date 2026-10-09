@@ -15,7 +15,7 @@ import java.util.Map;
 @Component
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
-public class RequisitionBorrowDatePort {
+public class RequisitionBorrowDatePort implements com.fams.business.BorrowRequestDatePort {
     private final JdbcTemplate db;
 
     RequisitionBorrowDatePort(JdbcTemplate db) { this.db = db; }
