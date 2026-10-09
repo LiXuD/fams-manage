@@ -1,0 +1,47 @@
+Candidate: e99bca51704907b687d10738391e28db700d4da7
+Date: 2026-10-09
+Tier: local product-development gate; independent review/CI/QA/device acceptance pending
+Command: Java 21 + Node 24.18.0, python3 scripts/verify-product-development.py
+Worktree: /Users/lixd/.codex/worktrees/d6-13-gate/fams
+Original log: output/d6-13-gate-quality-fixed.log
+
+[clean worktree preflight] exit=0
+[generated output tracking preflight] exit=0
+[Compose policy model] exit=0
+[Compose first startup] exit=0
+[Compose repeated startup] exit=0
+[D6-04 authentication database provisioning] exit=0
+[pinned MySQL image metadata] exit=0
+[resolved Node runtime] exit=0
+[Java clean] exit=0
+[mini session V16 upgrade] exit=0
+[requisition V18 upgrade and constraints] exit=0
+[requisition V19 change upgrade] exit=0
+[requisition V20 handover upgrade] exit=0
+[loan V21 borrowing and return upgrade] exit=0
+[durable job coverage] exit=0
+[asset import batch coverage] exit=0
+[asset import HTTP coverage] exit=0
+[Java blocking quality] exit=0
+[Java quality reports] tests=125, Checkstyle=0, SpotBugs=0, lines=8432/9128 (92.38%), branches=3166/4215 (75.11%)
+[TypeScript lint] exit=0
+[TypeScript compile] exit=0
+[Mini session transport tests] exit=0
+[Native mini package] exit=0
+[TypeScript post-fixture lint] exit=0
+[npm dependency tree] exit=0
+[npm high-severity audit] exit=0
+[Maven runtime dependency tree] exit=0
+[management listener] exit=0
+[restricted metrics HTTP] business=404, management health=UP, Prometheus JVM metrics present, loopback listener
+[application restart recovery] task probe remained readable after a clean application restart
+[database restart] exit=0
+[database restart health] exit=0
+[management listener] exit=0
+[restricted metrics HTTP] business=404, management health=UP, Prometheus JVM metrics present, loopback listener
+[database restart recovery] same-volume data and application health recovered after MySQL restart
+[Compose cleanup] exit=0
+[git diff check] exit=0
+[clean worktree postflight] exit=0
+Current product development checks passed; historical governance audits not rerun.
+PRODUCT_GATE_EXIT=0
