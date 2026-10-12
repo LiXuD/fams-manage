@@ -677,6 +677,104 @@ class HandoverHttpTest {
         assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_timeline_event WHERE asset_id=? AND event_type='RETURN_ACCEPTED'", base + 50));
     }
 
+    @Test
+    void returnReassignmentPreservesCustodyAndLockUntilSuccessorInspects() throws Exception {
+        receivedBorrow();
+        var value = approvedReturn(employee);
+        String id = value.path("id").asText(), suffix = "/" + id + "/reassignment";
+        var snapshot = returnReassignmentSnapshot(admin, id);
+        String body = returnReassignmentBody(snapshot, base + 12), identity = key();
+        assertEquals(403, returnCall(warehouse, suffix, body, key(), 2L).statusCode());
+        assertEquals(409, returnCall(admin, suffix, returnReassignmentBody(snapshot, base + 10), key(), 2L).statusCode());
+        assertEquals(400, returnCall(admin, suffix, body.replace("true", "false"), key(), 2L).statusCode());
+        var response = returnCall(admin, suffix, body, identity, 2L);
+        assertEquals(200, response.statusCode(), response.body());
+        assertEquals(response.body(), returnCall(admin, suffix, body, identity, 2L).body());
+        assertEquals(409, returnCall(admin, suffix, body.replace("值班交接", "changed"), identity, 2L).statusCode());
+        assertEquals(1, count("SELECT ownership_version FROM fams_asset_return WHERE id=?", id));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE action='RETURN_CONTROLLED_REASSIGNMENT' AND resource_id=?", id));
+        assertEquals("BORROWED", jdbc.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=?", String.class, base + 50));
+        assertEquals(base + 10, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        assertEquals("OPEN", jdbc.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=?", String.class, base + 50));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+        assertEquals(403, returnCall(warehouse, "/" + id + "/inspect", returnInspection("NORMAL", "RQ-ASSET-" + base), key(), 3L).statusCode());
+        response = returnCall(other, "/" + id + "/inspect", returnInspection("NORMAL", "RQ-ASSET-" + base), key(), 3L);
+        assertEquals(200, response.statusCode(), response.body());
+        assertEquals("RETURNED", jdbc.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=?", String.class, base + 50));
+        assertEquals("IN_STOCK", jdbc.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=?", String.class, base + 50));
+    }
+
+    @Test
+    void returnReassignmentRejectsDriftAndRollsBackThenTransfersDisabledOwner() throws Exception {
+        receivedBorrow();
+        var value = approvedReturn(employee);
+        String id = value.path("id").asText(), suffix = "/" + id + "/reassignment";
+        String body = returnReassignmentBody(returnReassignmentSnapshot(admin, id), base + 12);
+        jdbc.update("UPDATE fams_asset_business_lock SET lock_version=1 WHERE business_type='ASSET_RETURN' AND business_id=?", id);
+        assertEquals(409, returnCall(admin, suffix, body, key(), 2L).statusCode());
+        jdbc.update("UPDATE fams_asset_business_lock SET lock_version=0 WHERE business_type='ASSET_RETURN' AND business_id=?", id);
+        String trigger = "return_reassign_fault_" + base, identity = key();
+        jdbc.execute("CREATE TRIGGER " + trigger + " BEFORE INSERT ON fams_audit_event FOR EACH ROW BEGIN IF NEW.action='RETURN_CONTROLLED_REASSIGNMENT' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='owned rollback fixture'; END IF; END");
+        try {
+            assertTrue(returnCall(admin, suffix, body, identity, 2L).statusCode() >= 400);
+            assertEquals(0, count("SELECT ownership_version FROM fams_asset_return WHERE id=?", id));
+            assertEquals(base + 11, jdbc.queryForObject("SELECT processor_account_id FROM fams_asset_return WHERE id=?", Long.class, id));
+            assertEquals(2, count("SELECT version FROM fams_asset_return WHERE id=?", id));
+            assertEquals(0, count("SELECT COUNT(*) FROM fams_idempotency_record WHERE operation_id='reassignAssetReturn' AND idempotency_key=?", identity));
+        } finally { jdbc.execute("DROP TRIGGER " + trigger); }
+        jdbc.update("UPDATE fams_system_account SET status='DISABLED' WHERE id=?", base + 11);
+        assertEquals(200, returnCall(admin, suffix, body, identity, 2L).statusCode());
+    }
+
+    @Test
+    void returnReassignmentCurrentSnapshotAndTargetRulesAndCompetitionAreAtomic() throws Exception {
+        receivedBorrow();
+        var value = approvedReturn(employee);
+        String id = value.path("id").asText(), suffix = "/" + id + "/reassignment";
+        var snapshot = returnReassignmentSnapshot(admin, id);
+        String body = returnReassignmentBody(snapshot, base + 12);
+        assertEquals(409, returnCall(admin, suffix, returnReassignmentBody(snapshot, base + 11), key(), 2L).statusCode());
+        assertEquals(409, returnCall(admin, suffix, returnReassignmentBody(snapshot, 999999999), key(), 2L).statusCode());
+        jdbc.update("UPDATE fams_system_account SET initial_password_required=TRUE WHERE id=?", base + 12);
+        assertEquals(409, returnCall(admin, suffix, body, key(), 2L).statusCode());
+        jdbc.update("UPDATE fams_system_account SET initial_password_required=FALSE WHERE id=?", base + 12);
+        jdbc.update("UPDATE fams_employee SET status='DISABLED' WHERE id=?", base + 12);
+        assertEquals(409, returnCall(admin, suffix, body, key(), 2L).statusCode());
+        jdbc.update("UPDATE fams_employee SET status='ACTIVE' WHERE id=?", base + 12);
+        var wrong = JSON.readTree(body);
+        ((tools.jackson.databind.node.ObjectNode) wrong.path("items").get(0)).put("assetVersion", 99);
+        assertEquals(409, returnCall(admin, suffix, wrong.toString(), key(), 2L).statusCode());
+        ((tools.jackson.databind.node.ObjectNode) wrong.path("items").get(0)).put("id", "999999999");
+        assertEquals(409, returnCall(admin, suffix, wrong.toString(), key(), 2L).statusCode());
+        assertEquals(409, returnCall(admin, suffix, body, key(), 99L).statusCode());
+        var first = CompletableFuture.supplyAsync(() -> uncheckedReturnReassignment(suffix, body));
+        var second = CompletableFuture.supplyAsync(() -> uncheckedReturnReassignment(suffix, body));
+        assertEquals(List.of(200, 409), List.of(first.get(20, TimeUnit.SECONDS).statusCode(), second.get(20, TimeUnit.SECONDS).statusCode()).stream().sorted().toList());
+        assertEquals(1, count("SELECT ownership_version FROM fams_asset_return WHERE id=?", id));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE action='RETURN_CONTROLLED_REASSIGNMENT' AND resource_id=?", id));
+    }
+
+    private HttpResponse<String> uncheckedReturnReassignment(String suffix, String body) {
+        try { return returnCall(admin, suffix, body, key(), 2L); }
+        catch (Exception error) { throw new IllegalStateException(error); }
+    }
+
+    private JsonNode returnReassignmentSnapshot(Session actor, String id) throws Exception {
+        var reply = http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/asset-returns/" + id + "/reassignment"))
+                .header("Cookie", actor.cookie()).GET().build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, reply.statusCode(), reply.body());
+        return JSON.readTree(reply.body());
+    }
+
+    private String returnReassignmentBody(JsonNode snapshot, long target) {
+        var item = snapshot.path("items").get(0);
+        return JSON.writeValueAsString(java.util.Map.of("processorAccountId", Long.toString(target),
+                "ownershipVersion", snapshot.path("ownershipVersion").asLong(), "reason", "值班交接", "evidence", "核对实物及未同步结果",
+                "unsynchronizedResultsChecked", true, "items", List.of(java.util.Map.of("id", item.path("id").asText(),
+                "version", item.path("version").asLong(), "status", item.path("status").asText(),
+                "assetVersion", item.path("assetVersion").asLong(), "lockVersion", item.path("lockVersion").asLong()))));
+    }
+
     private JsonNode approvedReturn(Session proposer) throws Exception {
         String body = "{\"assetId\":\"" + (base + 50) + "\",\"assetVersion\":1,\"reason\":\"退还与代办原因\"}";
         var response = returnCall(proposer, "", body, key(), null);

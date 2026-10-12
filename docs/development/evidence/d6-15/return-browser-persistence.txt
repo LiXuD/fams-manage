@@ -1,0 +1,11 @@
+D6-15B3 owned browser/MySQL evidence 2026-10-12
+Draft after d51785c, full candidate gate pending.
+Runtime run-d6-15-return-browser-runtime.py: one owned MySQL8.4.11, real localhost web/backend. Seed only initial personal in-use asset10 belonging to employee3; all return actions through UI.
+UI: employee selected RQ-ASSET-10 and proposed return; admin approved; warehouse claimed; admin loaded snapshot and supplied successor, reason, physical/lock evidence and checked unsynchronized results; confirmed whole-return reassignment.
+Before: return1 WAREHOUSE_PROCESSING version2 processor1 ownershipVersion0; asset10 IN_USE PERSONAL employee3 Office2; active ASSET_RETURN1 lockVersion0.
+After: return1 WAREHOUSE_PROCESSING version3 processor4 ownershipVersion1; asset custody/location and active lock unchanged; RETURN_CONTROLLED_REASSIGNMENT audit1.
+SIGKILL/new JVM same DB: old warehouse UI has no inspection controls, successor target UI has physical inspection. Successor entered observed code, normal result, Warehouse/Bin and actual return explanation, submitted inspection.
+After: return1 COMPLETED version4 processor4 ownershipVersion1; asset10 IN_STOCK STORAGE employeeNULL Bin1; no active lock; RETURN_INSPECTED audit1 and reassignment audit1.
+Second SIGKILL/new JVM same DB: same persisted facts, successor page reloaded as completed with inspection result.
+Local ignored screenshots output/playwright/d6-15-return-reassigned.png, d6-15-return-old-owner-revoked.png, d6-15-return-successor-inspected.png.
+Owned container and anonymous volume cleanup verified. This browser case is personal in-use return; real HTTP tests separately cover borrowed asset and loan responsibility closure. External WeChat/SMS/device, remote CI, QA and production not accepted.

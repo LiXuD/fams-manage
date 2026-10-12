@@ -1141,6 +1141,8 @@ def verify_java_quality(context: RuntimeContext) -> None:
              "TransferUpgradeRuntimeCase"),
             ("transfer V27 ownership upgrade and repeat", "-Dd6.15.upgrade.runtime=true",
              "ReassignmentUpgradeRuntimeCase"),
+            ("return V28 ownership upgrade and repeat", "-Dd6.15.return.upgrade.runtime=true",
+             "ReturnReassignmentUpgradeRuntimeCase"),
             ("durable job coverage", "-Dd6.08.job.runtime=true",
              "DurableJobRuntimeCase#mysqlSubmissionClaimFencingBackoffAndBusinessRollback"),
             ("asset import batch coverage", "-Dd6.08.import.runtime=true",

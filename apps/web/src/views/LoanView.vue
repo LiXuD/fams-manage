@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import AssetReturnReassignment from "@/components/AssetReturnReassignment.vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { loanMessage, loanRequest } from "@/loan/api";
@@ -179,6 +180,8 @@ onMounted(async () => {
         <button :disabled="busy || retryable" @click="decide(selectedReturn.id, selectedReturn.version, false, true)">驳回退还</button></template>
       <button v-if="warehouse && selectedReturn.returnStatus === 'WAITING_WAREHOUSE_CLAIM'" :disabled="busy || retryable"
         @click="mutate(`/asset-returns/${selectedReturn.id}/claim`, selectedReturn.version)">领取整单验收</button>
+      <AssetReturnReassignment v-if="admin && selectedReturn.returnStatus === 'WAREHOUSE_PROCESSING'"
+        :id="selectedReturn.id" :version="selectedReturn.version" @saved="refresh" />
       <div v-if="canInspect">
         <label>验收结果 <select v-model="result" :disabled="busy || retryable"><option value="NORMAL">正常入库</option><option value="DAMAGED">损坏转报修</option><option value="MISSING">实物缺失转报失</option></select></label>
         <template v-if="result !== 'MISSING'">
