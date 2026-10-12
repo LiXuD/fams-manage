@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
+import TransferReassignment from "@/components/TransferReassignment.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { loanRequest, loanMessage } from "@/loan/api";
 import type { LoanMutation } from "@/loan/api";
@@ -169,6 +170,7 @@ onMounted(async () => {
     <div v-if="selected" class="panel"><h3>调拨 {{ selected.id }} · {{ labels[selected.requestStatus] }}</h3><p>{{ selected.reason }}</p>
       <p>{{ selected.totalQuantity }} 项；完成 {{ selected.completedQuantity }}，取消 {{ selected.cancelledQuantity }}，待处理 {{ selected.pendingQuantity }}。来源位置 {{ selected.sourceGroups }} 组，目标 {{ selected.targetGroups }} 组。</p>
       <p>整单由一名库管记录全部执行；如需多人负责，批准前建议按分组分别提交。</p>
+      <TransferReassignment v-if="admin && ['PROCESSING','WAITING_HANDOVER'].includes(selected.requestStatus)" :key="selected.id" :id="selected.id" :version="selected.version" @saved="refresh" />
       <button v-if="selected.creatorAccountId === session.user?.id && selected.requestStatus === 'DRAFT'" :disabled="busy || retryable" @click="mutate(`/transfers/${selected.id}/submit`, selected.version)">提交调拨</button>
       <button v-if="selected.creatorAccountId === session.user?.id && ['DRAFT', 'PENDING_APPROVAL'].includes(selected.requestStatus)" :disabled="busy || retryable" @click="mutate(`/transfers/${selected.id}/cancel`, selected.version)">取消申请</button>
       <template v-if="admin && selected.requestStatus === 'PENDING_APPROVAL'"><button :disabled="busy || retryable" @click="decide(true)">批准调拨</button><button :disabled="busy || retryable" @click="decide(false)">驳回调拨</button></template>
