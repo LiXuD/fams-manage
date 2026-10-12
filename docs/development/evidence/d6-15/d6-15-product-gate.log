@@ -1,0 +1,209 @@
+Traceback (most recent call last):
+  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/verify-product-development.py", line 19, in <module>
+[clean worktree preflight] exit=0
+[generated output tracking preflight] exit=0
+[Compose policy model] exit=0
+[Compose static policy] pinned MySQL, loopback port, required task variables, healthcheck, named volume
+[Compose first startup] exit=0
+  Volume fams-d6-03a-7274aafba56d1c9a_mysql-data Created
+  Volume fams-d6-03a-7274aafba56d1c9a_mysql-data Created
+  Network fams-d6-03a-7274aafba56d1c9a_default Created
+  Network fams-d6-03a-7274aafba56d1c9a_default Created
+  Container fams-d6-03a-7274aafba56d1c9a-mysql-1 Creating
+  Container fams-d6-03a-7274aafba56d1c9a-mysql-1 Created
+  Container fams-d6-03a-7274aafba56d1c9a-mysql-1 Starting
+  Container fams-d6-03a-7274aafba56d1c9a-mysql-1 Started
+  Container fams-d6-03a-7274aafba56d1c9a-mysql-1 Waiting
+  Container fams-d6-03a-7274aafba56d1c9a-mysql-1 Healthy
+[Compose repeated startup] exit=0
+  Container fams-d6-03a-7274aafba56d1c9a-mysql-1 Running
+  Container fams-d6-03a-7274aafba56d1c9a-mysql-1 Waiting
+  Container fams-d6-03a-7274aafba56d1c9a-mysql-1 Healthy
+[D6-04 authentication database provisioning] exit=0
+[pinned MySQL image metadata] exit=0
+[resolved Node runtime] exit=0
+[Java clean] exit=0
+  [INFO]   from pom.xml
+  [INFO] --------------------------------[ jar ]---------------------------------
+  [INFO]
+  [INFO] --- clean:3.5.0:clean (default-clean) @ contract-generation-probe ---
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  0.235 s
+  [INFO] Finished at: 2026-10-12T08:08:20+08:00
+  [INFO] ------------------------------------------------------------------------
+[mini session V16 upgrade] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  15.299 s
+  [INFO] Finished at: 2026-10-12T08:08:36+08:00
+  [INFO] ------------------------------------------------------------------------
+[requisition V18 upgrade and constraints] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  12.399 s
+  [INFO] Finished at: 2026-10-12T08:08:49+08:00
+  [INFO] ------------------------------------------------------------------------
+[requisition V19 change upgrade] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  9.968 s
+  [INFO] Finished at: 2026-10-12T08:09:00+08:00
+  [INFO] ------------------------------------------------------------------------
+[requisition V20 handover upgrade] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  10.046 s
+  [INFO] Finished at: 2026-10-12T08:09:11+08:00
+  [INFO] ------------------------------------------------------------------------
+[loan V21 borrowing and return upgrade] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  10.258 s
+  [INFO] Finished at: 2026-10-12T08:09:22+08:00
+  [INFO] ------------------------------------------------------------------------
+[transfer V25 upgrade and repeat] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  10.133 s
+  [INFO] Finished at: 2026-10-12T08:09:33+08:00
+  [INFO] ------------------------------------------------------------------------
+[transfer V27 ownership upgrade and repeat] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  10.037 s
+  [INFO] Finished at: 2026-10-12T08:09:44+08:00
+  [INFO] ------------------------------------------------------------------------
+[durable job coverage] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  12.144 s
+  [INFO] Finished at: 2026-10-12T08:09:57+08:00
+  [INFO] ------------------------------------------------------------------------
+[asset import batch coverage] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  10.651 s
+  [INFO] Finished at: 2026-10-12T08:10:09+08:00
+  [INFO] ------------------------------------------------------------------------
+[asset import HTTP coverage] exit=0
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  19.225 s
+  [INFO] Finished at: 2026-10-12T08:10:29+08:00
+  [INFO] ------------------------------------------------------------------------
+  Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+[Java blocking quality] exit=0
+  [INFO] BugInstance size is 0
+  [INFO] Error size is 0
+  [INFO] No errors/warnings found
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  01:49 min
+  [INFO] Finished at: 2026-10-12T08:12:19+08:00
+  [INFO] ------------------------------------------------------------------------
+  Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+[Java quality reports] tests=142, Checkstyle=0, SpotBugs=0, lines=9211/9965 (92.43%), branches=3401/4531 (75.06%)
+[TypeScript lint] exit=0
+  > lint
+  > rtk eslint "packages/api-types/src/**/*.ts" "apps/web/src/**/*.{ts,tsx}" "apps/miniprogram/**/*.ts" --no-error-on-unmatched-pattern --max-warnings=0
+[TypeScript compile] exit=0
+  > typecheck
+  > rtk npm run typecheck --workspaces --if-present
+  > rtk tsc --noEmit -p tsconfig.json
+  TypeScript: No errors found
+  > rtk vue-tsc --noEmit
+  > rtk tsc --noEmit -p tsconfig.json
+  TypeScript: No errors found
+[Mini session transport tests] exit=0
+  ✔ receipt needs physical check and refusal reason; scanner failure allows manual code (0.318958ms)
+  ✔ confirmation failure releases busy state and writes no receipt (0.194042ms)
+  ℹ tests 30
+  ℹ suites 0
+  ℹ pass 30
+  ℹ fail 0
+  ℹ cancelled 0
+  ℹ skipped 0
+  ℹ todo 0
+  ℹ duration_ms 108.457208
+[Native mini package] exit=0
+  > rtk proxy node build.mjs
+  TypeScript: No errors found
+  Native mini package built; API origin unconfigured (requires external HTTPS resource).
+[TypeScript negative fixture] no-unused-vars and no-explicit-any rejected the temporary source
+[TypeScript post-fixture lint] exit=0
+  > lint
+  > rtk eslint "packages/api-types/src/**/*.ts" "apps/web/src/**/*.{ts,tsx}" "apps/miniprogram/**/*.ts" --no-error-on-unmatched-pattern --max-warnings=0
+[npm dependency tree] exit=1
+  │ ├── vite@8.3.0
+  │ ├── vitest@5.0.1
+  │ ├── vue-router@5.3.1
+  │ ├── vue-tsc@3.2.6
+  │ └── vue@3.5.43
+  ├── eslint@10.10.0
+  └── typescript-eslint@8.70.0
+  npm error code ELSPROBLEMS
+  npm error missing: @fams/miniprogram@file:<workspace>/apps/miniprogram, required by @fams/development-workspace@
+  npm error A complete log of this run can be found in: <home>/.npm/_logs/2026-10-12T00_12_26_745Z-debug-0.log
+[Compose cleanup] exit=0
+[Compose cleanup] task container, network, and named volume removed
+[git diff check] exit=0
+[clean worktree postflight] exit=0
+    gate["verify_dependency_integrity"]()
+  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/verify-d6-03a.py", line 1244, in verify_dependency_integrity
+    npm_tree = require_command("npm dependency tree", ["npm", "ls", "--depth=0"])
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/verify-d6-03a.py", line 469, in require_command
+    raise VerificationFailure(f"{label} failed with exit {result.returncode}")
+<run_path>.VerificationFailure: npm dependency tree failed with exit 1

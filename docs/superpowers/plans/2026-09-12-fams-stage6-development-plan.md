@@ -466,7 +466,7 @@ Agent-Limitation: 真机弱网联调尚未完成，本任务不得标记已验�
 | D6-01B 远端仓库 | S | D6-01A、GitHub 权限 | 私有远端、访问控制及保护能力实查；明确缺口 | IN_PROGRESS | 2026-10-09 用户提供 origin 并授权推送，有管理及推送权限；当前公开仓库，远端协作、CI 与分支保护按本项继续配置验收，未宣称完成 |
 | D6-02A 生成流水线 | M | D6-01A | §三.1 代表模型生成/编译/实际 HTTP 契约断言全部通过，重复生成无差异 | DEV_VERIFIED | 2026-09-13 本地验证、任务级独立复核均通过；reviewed HEAD `8ca2c4a`，runtime 检测修正 `8cfca60` 后全量复跑通过；见 `docs/development/D6-02A-task-card.md`、`D6-02A-generation-pipeline.md` 及任务报告 |
 | D6-02B 运行兼容性 | M | D6-02A | 真实 MySQL、Flyway、会话、回滚、重启及双端构建通过；冻结候选组合 | DEV_VERIFIED | 固定摘要 MySQL 8.4.11、Flyway、MyBatis 事务、JDBC Session、应用/数据库重启、Java/共享 TS 构建本地门禁退出 0；独立复核问题已完成两轮修复并关闭，`ff8f166` 全量复跑通过，组合已冻结；见 `docs/development/D6-02B-task-card.md`、`D6-02B-runtime-compatibility.md` |
-| D6-15A 调拨受控转派 | L | D6-14 | 核验实物、锁和未同步结果后整单转派；处理权版本、旧处理人隔离、审计与幂等 | IN_PROGRESS | 后端与 PC 实现；隔离 MySQL 升级及调拨 HTTP 通过，前端、完整门禁及独立复核待完成 |
+| D6-15A 调拨受控转派 | L | D6-14 | 核验实物、锁和未同步结果后整单转派；处理权版本、旧处理人隔离、审计与幂等 | IN_REVIEW | 业务 8d542e1、完整门禁候选 f46fba6 退出 0；17 项升级/调拨 HTTP、PC 23、小程序 30、真实页面/重启/竞争通过；独立复核待完成 |
 | D6-15B 其他流程受控转派 | L | D6-15A | 入库、领用、归还等适用流程受控转派 | NOT_STARTED | 尚未执行 |
 | D6-15C 异常代确认与责任告知 | L | D6-15A | 凭证、一次管理员批准、当前处理人执行及结果责任告知 | NOT_STARTED | 尚未执行 |
 | D6-15D 批准目标变更 | L | D6-15A | 批准范围变更及物理阶段约束 | NOT_STARTED | 尚未执行 |
@@ -881,3 +881,5 @@ Agent-Limitation: 真机弱网联调尚未完成，本任务不得标记已验�
 | 2026-10-09 | D6-14 用户复核关闭与 main 远端整合 | 用户本人确认 f983439 / 2c6c9ac 全部复核通过，父任务及 A/B/C/D 本地 DEV_VERIFIED；12 工作树干净，17 分支均纳入 a752157，main 从 df8cb6d 快进；用户授权 origin 为 LiXuD/fams-manage | D6-14 任务卡及 2026-10-09-main-remote-integration.md；远端为公开空仓库，具备管理/推送权限 | 推送 main 并核验远端一致；D6-01B/03B 设置与 CI 另验，下一内部功能 D6-15，外部真机仍后置 |
 
 | 2026-10-12 | D6-15 启动 | 从 main 创建 codex/d6-15-exceptions，先实施调拨受控转派切片 D6-15A | V27 升级及全部 transfer HTTP 子集退出 0；output/d6-15-runtime.log | D6-15 父任务 IN_PROGRESS；异常代确认、责任告知、目标变更及其他流程转派待开发；独立复核未完成 |
+
+| 2026-10-12 | D6-15A 切片送审 | 调拨 PC/API 受控转派，业务候选 8d542e1；f46fba6 完整门禁退出 0，Java 142、静态检查零问题，行 92.45%/分支 75.06% | D6-15 任务卡及 evidence/d6-15；两次页面同库硬重启、200/409 竞争唯一成功、审计失败回滚通过 | A IN_REVIEW；父任务 IN_PROGRESS；B/C/D/E 尚未完成，远端 CI/QA/生产未验收 |
