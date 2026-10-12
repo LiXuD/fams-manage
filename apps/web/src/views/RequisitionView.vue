@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import RequisitionReassignment from "@/components/RequisitionReassignment.vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { requisitionMessage, requisitionRequest } from "@/requisition/api";
@@ -181,6 +182,8 @@ onMounted(async () => {
       </section>
       <p v-if="selected.sourceRequestId">来源申请 {{ selected.sourceRequestId }} / 需求 {{ selected.sourceDemandId }}</p>
       <p v-if="owner">当前处理库管账号：{{ owner }}</p>
+      <RequisitionReassignment v-if="admin && owner && ['WAREHOUSE_PROCESSING', 'WAITING_HANDOVER'].includes(selected.requestStatus)"
+        :id="selected.id" :version="selected.version" @saved="refresh" />
       <div class="req-actions">
         <template v-if="creator && ['DRAFT', 'REJECTED'].includes(selected.requestStatus)"><button :disabled="busy || retryable" @click="edit('revise')">修改草稿</button>
           <button v-if="selected.requestStatus === 'DRAFT'" :disabled="busy || retryable" @click="mutate('/' + selected.id + '/submit')">提交管理员确认</button></template>

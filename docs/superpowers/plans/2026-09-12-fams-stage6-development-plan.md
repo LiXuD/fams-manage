@@ -467,8 +467,9 @@ Agent-Limitation: 真机弱网联调尚未完成，本任务不得标记已验�
 | D6-02A 生成流水线 | M | D6-01A | §三.1 代表模型生成/编译/实际 HTTP 契约断言全部通过，重复生成无差异 | DEV_VERIFIED | 2026-09-13 本地验证、任务级独立复核均通过；reviewed HEAD `8ca2c4a`，runtime 检测修正 `8cfca60` 后全量复跑通过；见 `docs/development/D6-02A-task-card.md`、`D6-02A-generation-pipeline.md` 及任务报告 |
 | D6-02B 运行兼容性 | M | D6-02A | 真实 MySQL、Flyway、会话、回滚、重启及双端构建通过；冻结候选组合 | DEV_VERIFIED | 固定摘要 MySQL 8.4.11、Flyway、MyBatis 事务、JDBC Session、应用/数据库重启、Java/共享 TS 构建本地门禁退出 0；独立复核问题已完成两轮修复并关闭，`ff8f166` 全量复跑通过，组合已冻结；见 `docs/development/D6-02B-task-card.md`、`D6-02B-runtime-compatibility.md` |
 | D6-15A 调拨受控转派 | L | D6-14 | 核验实物、锁和未同步结果后整单转派；处理权版本、旧处理人隔离、审计与幂等 | DEV_VERIFIED | 用户本人 2026-10-12 本轮复核全部通过；业务 8d542e1、门禁 f46fba6、送审 HEAD 453a374；本地证据见任务卡 |
-| D6-15B 其他流程受控转派 | L | D6-15A | 入库、领用、归还等适用流程受控转派 | IN_PROGRESS | 2026-10-12 开始 B1 入库整单转派；领用、归还等后续切片未开始 |
+| D6-15B 其他流程受控转派 | L | D6-15A | 入库、领用、归还等适用流程受控转派 | IN_PROGRESS | B1 入库 IN_REVIEW；B2 领用/借用转派 IN_PROGRESS；归还等后续切片未开始 |
 | D6-15B1 入库受控转派 | L | D6-15A | 整单处理权、部分验收事实保留、剩余锁核对、PC/API、原子审计与重试 | IN_REVIEW | 4e46893 完整开发门禁退出 0；真实 HTTP/MySQL、Web 24/24、两次页面同库硬重启通过；独立复核待完成 |
+| D6-15B2 领用/借用申请受控转派 | L | D6-15A | 整单处理权、数量与分配事实保留、完整实物锁快照、PC/API、审计与重试 | IN_PROGRESS | 2026-10-12 编码及初始HTTP/MySQL2项、Web25/25、真实浏览器与两次同库硬重启通过；边界/竞争测试及完整门禁待验，独立复核待完成 |
 | D6-15C 异常代确认与责任告知 | L | D6-15A | 凭证、一次管理员批准、当前处理人执行及结果责任告知 | NOT_STARTED | 尚未执行 |
 | D6-15D 批准目标变更 | L | D6-15A | 批准范围变更及物理阶段约束 | NOT_STARTED | 尚未执行 |
 | D6-15E 联合验证与独立复核 | L | D6-15A/B/C/D | 契约、权限、并发、恢复、性能冒烟及独立复核 | NOT_STARTED | 子任务完成后执行；父任务不可提前关闭 |
@@ -888,3 +889,5 @@ Agent-Limitation: 真机弱网联调尚未完成，本任务不得标记已验�
 | 2026-10-12 | D6-15A 用户复核关闭，启动 B1 | 用户本人确认本轮复核全部通过；A 本地 DEV_VERIFIED，父任务仍 IN_PROGRESS | 业务 8d542e1、门禁 f46fba6、送审 HEAD 453a374 | 推进入库受控转派；B 其他流程及 C/D/E 尚未完成，远端 CI/QA/生产未验收 |
 
 | 2026-10-12 | D6-15B1 入库切片送审 | 4e46893 完整开发门禁退出 0；真实 HTTP/MySQL 入库回归、PC 24/24、部分验收后转派与两次同库硬重启通过 | D6-15 任务卡、evidence/d6-15/inbound-browser-persistence.txt 及入库门禁日志 | B1 IN_REVIEW；B 和父任务 IN_PROGRESS；其他流程、mini 页面、C/D/E 继续待开发；远端 CI/QA/生产未验收 |
+
+| 2026-10-12 | D6-15B2 领用/借用转派开发 | PC/API整单转派实现；真实页面从申请审批到部分分配、转派、接任交出，两次同库硬重启保持数量/锁/责任 | D6-15任务卡、requisition-browser-persistence.txt；初始HTTP2项和Web25/25通过 | B2 IN_PROGRESS，补边界竞争测试、固定候选全门禁与独立复核；其他功能继续待开发 |

@@ -27,6 +27,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -869,6 +870,126 @@ class RequisitionHttpTest {
                 "D6-11 filtered list development smoke milliseconds="
                         + (System.nanoTime() - started) / 1_000_000);
         assertEquals(1, get(employee, value.path("id").asText()).path("demands").size());
+    }
+
+    @Test
+    void controlledReassignmentPreservesQuantityLocksAndRevokesOldProcessor() throws Exception {
+        var request = action(warehouse, submitApprove(create(employee, draft(3, base + 10, base))), "/claim", null);
+        String demand = request.path("demands").get(0).path("id").asText();
+        request = allocate(request, warehouse, demand, base + 50, null);
+        String id = request.path("id").asText();
+        var snapshotReply = call(admin, "GET", "/" + id + "/reassignment", null, null, null);
+        assertEquals(200, snapshotReply.statusCode(), snapshotReply.body());
+        var snapshot = JSON.readTree(snapshotReply.body());
+        var payload = reassignment(snapshot, base + 12);
+        String path = "/" + id + "/reassignment";
+        long version = request.path("version").asLong();
+        assertEquals(403, call(warehouse, "POST", path, payload, key(), version).statusCode());
+        assertEquals(409, call(admin, "POST", path, reassignment(snapshot, base + 10), key(), version).statusCode());
+        String retryKey = key();
+        var first = call(admin, "POST", path, payload, retryKey, version);
+        assertEquals(200, first.statusCode(), first.body());
+        assertEquals(first.body(), call(admin, "POST", path, payload, retryKey, version).body());
+        assertEquals(409, call(admin, "POST", path, payload, key(), version).statusCode());
+        var after = JSON.readTree(first.body());
+        assertEquals(request.path("demands"), after.path("demands"));
+        assertEquals(request.path("allocations"), after.path("allocations"));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE business_type='REQUISITION' AND business_id=? AND released_at IS NULL", id));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE action='REQUISITION_CONTROLLED_REASSIGNMENT' AND resource_id=?", id));
+        assertEquals(1, count("SELECT ownership_version FROM fams_requisition_ownership WHERE request_id=? AND archived_at IS NULL", id));
+        assertEquals(409, call(warehouse, "POST", "/" + id + "/demands/" + demand + "/allocations", allocation(base + 51, null), key(), after.path("version").asLong()).statusCode());
+        after = allocate(after, other, demand, base + 51, null);
+        assertEquals(2, after.path("demands").get(0).path("pendingHandoverQuantity").asInt());
+    }
+
+    @Test
+    void reassignmentRejectsChangedSnapshotAndRollsBackLateAuditFailure() throws Exception {
+        var request = action(warehouse, submitApprove(create(employee, draft(1, base + 10, base))), "/claim", null);
+        String demand = request.path("demands").get(0).path("id").asText();
+        request = allocate(request, warehouse, demand, base + 50, null);
+        String id = request.path("id").asText(), path = "/" + id + "/reassignment";
+        var snapshot = JSON.readTree(call(admin, "GET", path, null, null, null).body());
+        long version = request.path("version").asLong();
+        String body = reassignment(snapshot, base + 12);
+        jdbc.update("UPDATE fams_asset_business_lock SET lock_version=lock_version+1 WHERE business_type='REQUISITION' AND business_id=? AND released_at IS NULL", id);
+        assertEquals(409, call(admin, "POST", path, body, key(), version).statusCode());
+        snapshot = JSON.readTree(call(admin, "GET", path, null, null, null).body());
+        body = reassignment(snapshot, base + 12);
+        String trigger = "rq_reassign_fail_" + base;
+        jdbc.execute("CREATE TRIGGER " + trigger + " BEFORE INSERT ON fams_audit_event FOR EACH ROW BEGIN IF NEW.action='REQUISITION_CONTROLLED_REASSIGNMENT' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='owned rollback fixture'; END IF; END");
+        String retryKey = key();
+        try {
+            assertTrue(call(admin, "POST", path, body, retryKey, version).statusCode() >= 400);
+            assertEquals(0, count("SELECT ownership_version FROM fams_requisition_ownership WHERE request_id=?", id));
+            assertEquals(base + 11, jdbc.queryForObject("SELECT processor_account_id FROM fams_requisition_ownership WHERE request_id=?", Long.class, id));
+            assertEquals(version, jdbc.queryForObject("SELECT version FROM fams_requisition WHERE id=?", Long.class, id));
+            assertEquals(0, count("SELECT COUNT(*) FROM fams_idempotency_record WHERE operation_id='reassignRequisition' AND idempotency_key=?", retryKey));
+        } finally { jdbc.execute("DROP TRIGGER " + trigger); }
+        jdbc.update("UPDATE fams_system_account SET status='DISABLED' WHERE id=?", base + 11);
+        assertEquals(200, call(admin, "POST", path, body, retryKey, version).statusCode());
+    }
+
+    @Test
+    void reassignmentRequiresCompleteCheckedSnapshotAndCurrentEligibleTarget() throws Exception {
+        var request = action(warehouse, submitApprove(create(employee, draft(2, base + 10, base))), "/claim", null);
+        String path = "/" + request.path("id").asText() + "/reassignment";
+        long version = request.path("version").asLong();
+        var snapshot = JSON.readTree(call(admin, "GET", path, null, null, null).body());
+        assertEquals(0, snapshot.path("items").size());
+        String body = reassignment(snapshot, base + 12);
+        assertEquals(403, call(employee, "GET", path, null, null, null).statusCode());
+        assertEquals(404, call(admin, "GET", "/999999999/reassignment", null, null, null).statusCode());
+        assertEquals(400, call(admin, "POST", path, body.replace("true", "false"), key(), version).statusCode());
+        assertEquals(409, call(admin, "POST", path, reassignment(snapshot, base + 11), key(), version).statusCode());
+        assertEquals(409, call(admin, "POST", path, reassignment(snapshot, 999999999), key(), version).statusCode());
+        jdbc.update("UPDATE fams_system_account SET initial_password_required=TRUE WHERE id=?", base + 12);
+        assertEquals(409, call(admin, "POST", path, body, key(), version).statusCode());
+        jdbc.update("UPDATE fams_system_account SET initial_password_required=FALSE WHERE id=?", base + 12);
+        jdbc.update("UPDATE fams_employee SET status='DISABLED' WHERE id=?", base + 12);
+        assertEquals(409, call(admin, "POST", path, body, key(), version).statusCode());
+        jdbc.update("UPDATE fams_employee SET status='ACTIVE' WHERE id=?", base + 12);
+        String retryKey = key();
+        var success = call(admin, "POST", path, body, retryKey, version);
+        assertEquals(200, success.statusCode(), success.body());
+        assertEquals(409, call(admin, "POST", path, body.replace("值班交接", "另一个原因"), retryKey, version).statusCode());
+        assertEquals(request.path("demands"), JSON.readTree(success.body()).path("demands"));
+    }
+
+    @Test
+    void reassignmentCompetitionAndIncompleteAllocationSnapshotCannotPartiallyTransfer() throws Exception {
+        var request = action(warehouse, submitApprove(create(employee, draft(3, base + 10, base))), "/claim", null);
+        String demand = request.path("demands").get(0).path("id").asText();
+        request = allocate(request, warehouse, demand, base + 50, null);
+        request = allocate(request, warehouse, demand, base + 51, null);
+        String id = request.path("id").asText(), path = "/" + id + "/reassignment";
+        long version = request.path("version").asLong();
+        var snapshot = JSON.readTree(call(admin, "GET", path, null, null, null).body());
+        var incomplete = JSON.readTree(snapshot.toString());
+        ((tools.jackson.databind.node.ArrayNode) incomplete.path("items")).remove(0);
+        assertEquals(409, call(admin, "POST", path, reassignment(incomplete, base + 12), key(), version).statusCode());
+        var duplicate = JSON.readTree(snapshot.toString());
+        ((tools.jackson.databind.node.ArrayNode) duplicate.path("items")).set(1, duplicate.path("items").get(0));
+        assertEquals(409, call(admin, "POST", path, reassignment(duplicate, base + 12), key(), version).statusCode());
+        String body = reassignment(snapshot, base + 12);
+        var a = CompletableFuture.supplyAsync(() -> unchecked(admin, path, body, version));
+        var b = CompletableFuture.supplyAsync(() -> unchecked(admin, path, body, version));
+        var replies = List.of(a.get(20, TimeUnit.SECONDS), b.get(20, TimeUnit.SECONDS));
+        assertEquals(List.of(200, 409), replies.stream().map(HttpResponse::statusCode).sorted().toList());
+        assertEquals(1, count("SELECT ownership_version FROM fams_requisition_ownership WHERE request_id=?", id));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE action='REQUISITION_CONTROLLED_REASSIGNMENT' AND resource_id=?", id));
+        assertEquals(2, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE business_type='REQUISITION' AND business_id=? AND released_at IS NULL", id));
+    }
+
+    private String reassignment(JsonNode snapshot, long processor) {
+        var items = new java.util.ArrayList<Map<String, Object>>();
+        for (var item : snapshot.path("items")) {
+            items.add(Map.of("id", item.path("id").asText(), "version", item.path("version").asLong(),
+                    "status", item.path("status").asText(), "assetVersion", item.path("assetVersion").asLong(),
+                    "lockVersion", item.path("lockVersion").asLong()));
+        }
+        return JSON.writeValueAsString(Map.of("processorAccountId", Long.toString(processor),
+                "ownershipVersion", snapshot.path("ownershipVersion").asLong(), "items", items,
+                "reason", "值班交接", "evidence", "现场逐件核验", "unsynchronizedResultsChecked", true));
     }
 
     private JsonNode create(Session session, String body) throws Exception {

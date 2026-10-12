@@ -1,0 +1,12 @@
+D6-15B2 PC browser + real owned MySQL evidence, 2026-10-12
+Implementation draft after 25e1973; final candidate/gate not yet recorded.
+Runtime: scripts/run-d6-15-requisition-browser-runtime.py, localhost:5173 -> localhost:8080 -> disposable MySQL 8.4.11.
+Real UI: employee created quantity3 personal requisition (Desk/Standard/Office), submitted; admin approved; warehouse claimed whole order and allocated RQ-ASSET-10; admin loaded current snapshot, chose Next warehouse, supplied reason/evidence and checked unsynchronized results, confirmed whole-order reassignment.
+Before: requisition1 WAITING_HANDOVER version4; owner1 ownershipVersion0; demand requested3 pendingAllocation2 pendingHandover1 completed0; allocation asset10 WAITING_DELIVERY version0; active REQUISITION lock version0; asset10 IN_STOCK/STORAGE/location1.
+After: requisition1 WAITING_HANDOVER version5; owner4 ownershipVersion1; same demand quantities/allocation phase/asset/lock; REQUISITION_CONTROLLED_REASSIGNMENT audit count1.
+First SIGKILL/new JVM same database: owner4 persisted. Original warehouse login: owner4 and no allocation/handover action controls; successor target login: allocation and delivery controls available.
+Successor UI supplied observed asset code, destination and evidence then recorded physical delivery.
+After delivery: requisition1 WAITING_HANDOVER version6; owner4 ownershipVersion1; demand3/2/1/0; allocation asset10 DELIVERED_WAITING_RECEIPT version1; asset10 remains IN_STOCK/STORAGE/location1; active lock version0; reassignment audit count1.
+Second SIGKILL/new JVM same database: all those values persisted; successor page reloaded successfully.
+Screenshots (local ignored output): output/playwright/d6-15-requisition-reassigned.png, d6-15-requisition-old-owner-revoked.png, d6-15-requisition-successor-delivered.png.
+Owned container and anonymous volume cleanup verified on stop. Initial fixture lacked Office; discarded and rebuilt before this run. Initial auth/me/permissions 401 at login are expected; favicon404 is unrelated. No external WeChat/SMS/device or QA/production acceptance claimed.
