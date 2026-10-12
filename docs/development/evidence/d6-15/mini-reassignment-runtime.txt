@@ -1,0 +1,11 @@
+2026-10-13 local internal proof
+scripts/verify-d6-15-mini-runtime.py exit=0; HandoverHttpTest#transferNativeReassignment* tests=1, failures=0, errors=0, skipped=0.
+Actual native page handlers -> MiniSessionClient -> Spring HTTP -> disposable MySQL 8.4.11.
+Administrator loads paged transfer list, selects delivered request, inspects complete ownership/item/lock snapshot, selects current valid successor, supplies reason/evidence/check, explicitly confirms.
+First committed reply deliberately lost; retry uses exactly same key, request version and payload.
+Database processor becomes successor, ownershipVersion=1; one CONTROLLED_REASSIGNMENT event.
+Delivered item stays DELIVERED; original responsible employee unchanged; one active original asset lock remains.
+Old processor receives 409 TRANSFER_NOT_PROCESSOR when attempting execution with current version.
+Owned container/volume removed; no shared or production database touched.
+Mini unit tests34/34; typecheck/build exit0. No real WeChat, HTTPS endpoint or device claim: identity exchange and loopback bridge are explicit test substitutes.
+Fixed candidate full gate and independent review pending.

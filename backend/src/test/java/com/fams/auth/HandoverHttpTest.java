@@ -2935,6 +2935,49 @@ class HandoverHttpTest {
                         row.path("id").asLong()));
     }
 
+    @Test
+    void transferNativeReassignmentHandlersReachHttpAndPreservePhysicalFacts() throws Exception {
+        personalTransferFixture();
+        var row = claimedTransfer(
+                transferDraft(false, false, base + 15, base + 1, base, 0), employee);
+        row = transferAction(warehouse, row, transferItemPath(row, "deliver"),
+                transferPhysical(row, null, false));
+        String code = "transfer-reassign-native-" + base;
+        jdbc.update("INSERT INTO fams_mini_binding (account_id,identity_hash,created_at) VALUES (?,?,?)",
+                base + 13, miniSessions.identityHash(
+                        new MiniWechatIdentityPort.Identity("requisition-test-app", code)),
+                Timestamp.from(Instant.now()));
+        var script = java.nio.file.Path.of(System.getProperty("user.dir")).getParent()
+                .resolve("apps/miniprogram/test/runtime-transfer-reassignment-http.mjs");
+        String node = System.getenv("FAMS_TEST_NODE_EXECUTABLE");
+        var builder = new ProcessBuilder("rtk", "proxy", node == null ? "node" : node, script.toString());
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_WECHAT_CODE", code);
+        builder.environment().put("FAMS_TEST_TRANSFER_ID", row.path("id").asText());
+        builder.environment().put("FAMS_TEST_SUCCESSOR_ID", Long.toString(base + 12));
+        builder.redirectErrorStream(true);
+        var process = builder.start();
+        assertTrue(process.waitFor(45, TimeUnit.SECONDS));
+        String output = new String(process.getInputStream().readAllBytes(),
+                java.nio.charset.StandardCharsets.UTF_8);
+        assertEquals(0, process.exitValue(), output);
+        assertEquals(base + 12, jdbc.queryForObject(
+                "SELECT processor_account_id FROM fams_transfer WHERE id=?", Long.class, row.path("id").asLong()));
+        assertEquals(base + 10, jdbc.queryForObject(
+                "SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_transfer_event WHERE request_id=?"
+                + " AND event_type='CONTROLLED_REASSIGNMENT'", row.path("id").asLong()));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=?"
+                + " AND released_at IS NULL", base + 50));
+        var changed = JSON.readTree(transferCall(admin, "GET", "/" + row.path("id").asText(),
+                null, null, null).body());
+        var rejected = transferCall(warehouse, "POST", "/" + changed.path("id").asText()
+                + transferItemPath(changed, "deliver"), transferPhysical(changed, null, false),
+                key(), changed.path("version").asLong());
+        assertEquals(409, rejected.statusCode(), rejected.body());
+        assertTrue(rejected.body().contains("TRANSFER_NOT_PROCESSOR"), rejected.body());
+    }
+
     private record Session(String cookie, String csrf) {}
 
     @SpringBootApplication(scanBasePackages = "com.fams")

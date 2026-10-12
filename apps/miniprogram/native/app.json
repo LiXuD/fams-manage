@@ -7,7 +7,8 @@
     "pages/department-requests/index",
     "pages/receipts/index",
     "pages/loans/index",
-    "pages/transfer-receipts/index"
+    "pages/transfer-receipts/index",
+    "pages/transfer-reassignment/index"
   ],
   "window": {
     "navigationBarTitleText": "企业资产",

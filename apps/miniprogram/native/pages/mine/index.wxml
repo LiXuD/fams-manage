@@ -22,3 +22,5 @@
 <navigator url="/pages/receipts/index">待接收与实物核对</navigator>
 
 <navigator url="/pages/transfer-receipts/index">调拨实物接收</navigator>
+
+<navigator url="/pages/transfer-reassignment/index">调拨受控转派（资产管理员）</navigator>

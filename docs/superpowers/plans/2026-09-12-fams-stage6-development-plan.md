@@ -467,10 +467,11 @@ Agent-Limitation: 真机弱网联调尚未完成，本任务不得标记已验�
 | D6-02A 生成流水线 | M | D6-01A | §三.1 代表模型生成/编译/实际 HTTP 契约断言全部通过，重复生成无差异 | DEV_VERIFIED | 2026-09-13 本地验证、任务级独立复核均通过；reviewed HEAD `8ca2c4a`，runtime 检测修正 `8cfca60` 后全量复跑通过；见 `docs/development/D6-02A-task-card.md`、`D6-02A-generation-pipeline.md` 及任务报告 |
 | D6-02B 运行兼容性 | M | D6-02A | 真实 MySQL、Flyway、会话、回滚、重启及双端构建通过；冻结候选组合 | DEV_VERIFIED | 固定摘要 MySQL 8.4.11、Flyway、MyBatis 事务、JDBC Session、应用/数据库重启、Java/共享 TS 构建本地门禁退出 0；独立复核问题已完成两轮修复并关闭，`ff8f166` 全量复跑通过，组合已冻结；见 `docs/development/D6-02B-task-card.md`、`D6-02B-runtime-compatibility.md` |
 | D6-15A 调拨受控转派 | L | D6-14 | 核验实物、锁和未同步结果后整单转派；处理权版本、旧处理人隔离、审计与幂等 | DEV_VERIFIED | 用户本人 2026-10-12 本轮复核全部通过；业务 8d542e1、门禁 f46fba6、送审 HEAD 453a374；本地证据见任务卡 |
-| D6-15B 其他流程受控转派 | L | D6-15A | 入库、领用、归还等适用流程受控转派 | IN_PROGRESS | B1 入库 IN_REVIEW；B2 领用/借用转派 IN_PROGRESS；归还等后续切片未开始 |
+| D6-15B 其他流程受控转派 | L | D6-15A | 入库、领用、归还等适用流程受控转派 | IN_PROGRESS | B1/B2/B3 PC转派 IN_REVIEW；小程序及后续适用流程继续开发 |
 | D6-15B1 入库受控转派 | L | D6-15A | 整单处理权、部分验收事实保留、剩余锁核对、PC/API、原子审计与重试 | IN_REVIEW | 4e46893 完整开发门禁退出 0；真实 HTTP/MySQL、Web 24/24、两次页面同库硬重启通过；独立复核待完成 |
 | D6-15B2 领用/借用申请受控转派 | L | D6-15A | 整单处理权、数量与分配事实保留、完整实物锁快照、PC/API、审计与重试 | IN_REVIEW | d51785c HTTP/MySQL4项、Web25/25、页面恢复通过；产品检查146项及覆盖达标，命令因索引计数差异postflight退出1，恢复后单独postflight退出0；独立复核待完成 |
-| D6-15B3 归还受控转派 | L | D6-15A | 归还单处理权版本、实物阶段和锁快照、原子审计幂等、PC/API | IN_PROGRESS | V28兼容升级1项、真实HTTP/MySQL3项、Web26/26、页面及两次同库硬重启通过；固定候选完整门禁和独立复核待完成 |
+| D6-15B3 归还受控转派 | L | D6-15A | 归还单处理权版本、实物阶段和锁快照、原子审计幂等、PC/API | IN_REVIEW | 47fbab5完整门禁退出0，Java149/行92.77%/分支75.23%；V28升级、HTTP3项、Web26/26、页面及两次硬重启通过，独立复核待完成 |
+| D6-15B4 小程序调拨受控转派 | M | D6-15A | 原生整单快照核对、接任选择、明确确认、原键重试和身份隔离 | IN_PROGRESS | 34项小程序测试、typecheck/build通过；真实原生处理器到HTTP/MySQL1/1通过，固定候选门禁及独立复核待完成，真机后置 |
 | D6-15C 异常代确认与责任告知 | L | D6-15A | 凭证、一次管理员批准、当前处理人执行及结果责任告知 | NOT_STARTED | 尚未执行 |
 | D6-15D 批准目标变更 | L | D6-15A | 批准范围变更及物理阶段约束 | NOT_STARTED | 尚未执行 |
 | D6-15E 联合验证与独立复核 | L | D6-15A/B/C/D | 契约、权限、并发、恢复、性能冒烟及独立复核 | NOT_STARTED | 子任务完成后执行；父任务不可提前关闭 |
@@ -896,3 +897,8 @@ Agent-Limitation: 真机弱网联调尚未完成，本任务不得标记已验�
 | 2026-10-12 | B2固定候选验证，启动B3 | d51785c产品检查通过，Java146、静态零问题、行92.58%分支75.20%；完整命令postflight因分析器改写索引计数退出1，精确恢复后独立postflight退出0 | evidence/d6-15/d6-15-requisition-product-gate.log及d6-15-requisition-postflight.log；B2 IN_REVIEW | B3归还转派IN_PROGRESS；独立复核、其他必需功能继续未完成 |
 
 | 2026-10-12 | B3归还转派功能验证 | V28追加处理权版本；历史行与元数据升级/重复/约束通过，HTTP3项、Web26/26、四角色页面及两次同库硬重启通过 | D6-15任务卡、return-browser-persistence.txt；本地升级和HTTP失败已定位修复并重跑 | B3保持IN_PROGRESS，执行固定候选完整门禁后送独立复核；父任务未关闭 |
+
+2026-10-12 D6-15B3送审：归还转派固定候选47fbab5完整开发门禁退出0；V28升级、
+真实HTTP并发/回滚、四角色浏览器与两次硬重启通过，B3 IN_REVIEW，独立复核待完成。
+证据 docs/development/evidence/d6-15/d6-15-return-product-gate.log；B及父任务保持IN_PROGRESS。
+继续小程序转派及C/D/E，不以局部切片关闭全部功能开发。
