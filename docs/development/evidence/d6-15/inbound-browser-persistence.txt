@@ -1,0 +1,38 @@
+D6-15B1 real browser / HTTP / MySQL evidence, 2026-10-12
+Local owned stack: scripts/run-d6-15-inbound-browser-runtime.py
+Playwright CLI session d615in, no route mocks or direct browser API writes.
+Fixture actors: warehouse(1), admin(2), target(4). Two complete draft assets 10/11.
+UI: create two-item receipt -> submit -> approve -> claim -> accept asset11 -> admin
+inspect both physical stages / locks -> reason / evidence / unsynchronized checks -> reassign
+-> SIGKILL same-DB restart -> old warehouse has no accept button -> target accepts asset10
+-> SIGKILL same-DB restart -> completed detail remains read-only.
+
+SQL before reassignment:
+receipt 1 WAREHOUSE_PROCESSING version4 deadline 2026-10-14 16:00:00.000
+ownership receipt1 processor1 version1 archivedNULL
+item1 ACCEPTED version1; item2 PENDING version0
+asset11 IN_STOCK ACTIVE warehouse1 location1
+asset10 WAITING_INBOUND PENDING_INBOUND custodyNULL
+one active INBOUND lock
+
+SQL after reassignment:
+receipt 1 WAREHOUSE_PROCESSING version5 deadline 2026-10-14 16:00:00.000
+ownership receipt1 processor4 version2 archivedNULL
+items, custody and active lock unchanged
+INBOUND_CONTROLLED_REASSIGNMENT count1
+
+SQL after completion and second hard restart (same result):
+receipt 1 COMPLETED version6 deadline 2026-10-14 16:00:00.000
+ownership receipt1 processor4 version3 archived 2026-10-12 06:13:26.190
+item1 ACCEPTED version1; item2 ACCEPTED version1
+INBOUND_ITEM_ACCEPTED count2; INBOUND_CONTROLLED_REASSIGNMENT count1
+assets10/11 IN_STOCK ACTIVE warehouse1 location1; no active asset business locks
+Owned MySQL container and anonymous volume cleanup verified; browser session closed.
+
+Local screenshots: output/playwright/d615-inbound-reassigned.png and d615-inbound-completed.png.
+Screenshots remain ignored local files. Existing attachment panel returned an error because
+this isolated stack has no attachment scanning/storage configuration; no attachment acceptance
+claim is made. Controlled reassignment evidence is stored in audit detail, tested separately.
+Initial fixture attempts lacked a unit / used invalid lifecycle; corrected before the successful
+flow, without relaxing product validations. HTTP suite additionally injects audit failure and
+asserts ownership, receipt and idempotency rollback before same-key retry.

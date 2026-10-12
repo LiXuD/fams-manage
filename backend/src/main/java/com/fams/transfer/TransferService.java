@@ -781,6 +781,110 @@ class TransferService {
         return assets.snapshot(number(item, "asset_id"), number(item, "asset_version"));
     }
 
+    Map<String, Object> reassignment(Actor actor, long id) {
+        var current = actors.revalidateLocked(actor);
+        role(current, Role.ASSET_ADMIN);
+        var row = request(id);
+        executable(row);
+        var checks = reassignmentItems(id);
+        var operators = db.queryForList(
+                "SELECT a.id,e.name FROM fams_system_account a JOIN fams_employee e ON"
+                    + " e.id=a.employee_id JOIN fams_organization o ON o.id=e.organization_id"
+                    + " JOIN fams_account_role r ON r.account_id=a.id WHERE"
+                    + " a.status='ENABLED' AND a.initial_password_required=FALSE AND"
+                    + " e.status='ACTIVE' AND o.status='ACTIVE' AND"
+                    + " r.role_code='WAREHOUSE_OPERATOR' AND a.id<>? ORDER BY a.id",
+                row.get("processor_account_id"));
+        return Map.of("id", Long.toString(id), "version", row.get("version"),
+                "ownershipVersion", row.get("ownership_version"),
+                "processorAccountId", row.get("processor_account_id").toString(),
+                "items", checks.stream().map(this::wire).toList(),
+                "operators", operators.stream().map(this::wire).toList());
+    }
+
+    Map<String, Object> reassign(Actor actor, long id, long version, String key,
+            TransferController.Reassignment input) {
+        var current = actors.revalidateLocked(actor);
+        role(current, Role.ASSET_ADMIN);
+        String hash = digest("reassign:" + id + ":" + version, input);
+        var previous = replay(current, "reassign", key, hash);
+        if (previous != null) { return previous; }
+        // Lock the target account before the business row, as ordinary execution does.
+        var accounts = db.queryForList(
+                "SELECT id,status,initial_password_required,employee_id FROM fams_system_account"
+                    + " WHERE id=? FOR UPDATE", input.processorAccountId());
+        if (accounts.isEmpty() || !"ENABLED".equals(accounts.getFirst().get("status"))
+                || Boolean.TRUE.equals(accounts.getFirst().get("initial_password_required"))) {
+            throw new TransferFailure("TRANSFER_PROCESSOR_INVALID", 409);
+        }
+        var eligible = db.queryForList(
+                "SELECT e.id FROM fams_employee e JOIN fams_organization o ON"
+                    + " o.id=e.organization_id JOIN fams_account_role r ON r.account_id=?"
+                    + " WHERE e.id=? AND e.status='ACTIVE' AND o.status='ACTIVE'"
+                    + " AND r.role_code='WAREHOUSE_OPERATOR' FOR UPDATE",
+                input.processorAccountId(), accounts.getFirst().get("employee_id"));
+        if (eligible.isEmpty()) { throw new TransferFailure("TRANSFER_PROCESSOR_INVALID", 409); }
+        var row = request(id);
+        version(row, version);
+        executable(row);
+        long oldProcessor = number(row, "processor_account_id");
+        if (oldProcessor == input.processorAccountId()
+                || number(row, "ownership_version") != input.ownershipVersion()) {
+            throw new TransferFailure("TRANSFER_OWNERSHIP_CHANGED", 409);
+        }
+        if (!Boolean.TRUE.equals(input.unsynchronizedResultsChecked())) {
+            throw new TransferFailure("TRANSFER_REASSIGNMENT_CHECK_REQUIRED", 400);
+        }
+        var checks = reassignmentItems(id);
+        if (input.items().size() != checks.size()
+                || input.items().stream().map(TransferController.ReassignmentItem::id)
+                    .distinct().count() != checks.size()) {
+            throw new TransferFailure("TRANSFER_REASSIGNMENT_SNAPSHOT_CHANGED", 409);
+        }
+        for (var check : checks) {
+            var submitted = input.items().stream()
+                    .filter(i -> i.id() == number(check, "id")).findFirst().orElseThrow(
+                            () -> new TransferFailure("TRANSFER_REASSIGNMENT_SNAPSHOT_CHANGED", 409));
+            if (submitted.version() != number(check, "version")
+                    || !submitted.status().equals(check.get("item_status"))
+                    || submitted.lockVersion() != number(check, "lock_version")) {
+                throw new TransferFailure("TRANSFER_REASSIGNMENT_SNAPSHOT_CHANGED", 409);
+            }
+        }
+        db.update("UPDATE fams_transfer SET processor_account_id=?,ownership_version=ownership_version+1,"
+                + "version=version+1,updated_at=? WHERE id=?", input.processorAccountId(), now(), id);
+        db.update("UPDATE fams_todo SET assignee_account_id=? WHERE business_type='TRANSFER'"
+                + " AND business_id=? AND pool_type='WAREHOUSE_OPERATOR' AND closed_at IS NULL",
+                input.processorAccountId(), id);
+        var detail = new LinkedHashMap<String, Object>();
+        detail.put("previousProcessorAccountId", Long.toString(oldProcessor));
+        detail.put("processorAccountId", Long.toString(input.processorAccountId()));
+        detail.put("ownershipVersionBefore", input.ownershipVersion());
+        detail.put("ownershipVersionAfter", input.ownershipVersion() + 1);
+        detail.put("reason", input.reason());
+        detail.put("evidence", input.evidence());
+        detail.put("unsynchronizedResultsChecked", true);
+        detail.put("items", checks.stream().map(this::wire).toList());
+        event(actor, current, id, null, "CONTROLLED_REASSIGNMENT", detail);
+        return finish(current, "reassign", key, hash, detail(request(id)));
+    }
+
+    private List<Map<String, Object>> reassignmentItems(long id) {
+        var activeItems = items(id).stream()
+                .filter(i -> !List.of("COMPLETED", "CANCELLED").contains(i.get("item_status")))
+                .toList();
+        for (var item : activeItems) {
+            var locks = db.queryForList("SELECT lock_version FROM fams_asset_business_lock WHERE"
+                    + " asset_id=? AND business_type='TRANSFER' AND business_id=? AND"
+                    + " business_item_id=? AND released_at IS NULL FOR UPDATE",
+                    item.get("asset_id"), id, item.get("id"));
+            if (locks.size() != 1) { throw new TransferFailure("TRANSFER_LOCK_CHANGED", 409); }
+            item.put("lock_version", locks.getFirst().get("lock_version"));
+        }
+        if (activeItems.isEmpty()) { throw new TransferFailure("TRANSFER_STATE_CHANGED", 409); }
+        return activeItems;
+    }
+
     private AssetTransferPort.Target target(Map<String, Object> item) {
         return json.readValue(
                 item.get("target_snapshot_json").toString(), AssetTransferPort.Target.class);

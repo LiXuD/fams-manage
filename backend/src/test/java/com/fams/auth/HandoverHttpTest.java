@@ -1873,6 +1873,114 @@ class HandoverHttpTest {
                 + "\",\"reason\":\"现场核对\"}";
     }
 
+    private String reassignmentBody(JsonNode snapshot, long target) {
+        var body = JSON.createObjectNode();
+        body.put("processorAccountId", Long.toString(target));
+        body.put("ownershipVersion", snapshot.path("ownershipVersion").asLong());
+        body.put("reason", "原库管长期缺席");
+        body.put("evidence", "逐项核对实物清单及双方交接记录");
+        body.put("unsynchronizedResultsChecked", true);
+        var items = body.putArray("items");
+        for (var item : snapshot.path("items")) {
+            var check = items.addObject();
+            check.put("id", item.path("id").asText());
+            check.put("version", item.path("version").asLong());
+            check.put("status", item.path("itemStatus").asText());
+            check.put("lockVersion", item.path("lockVersion").asLong());
+        }
+        return body.toString();
+    }
+
+    private JsonNode reassignmentSnapshot(JsonNode row) throws Exception {
+        var response = transferCall(admin, "GET", "/" + row.path("id").asText()
+                + "/reassignment", null, null, null);
+        assertEquals(200, response.statusCode(), response.body());
+        return JSON.readTree(response.body());
+    }
+
+    @Test
+    void transferReassignmentPreservesCustodyLocksAndApprovedTargetAndReplaysOnce() throws Exception {
+        personalTransferFixture();
+        var row = claimedTransfer(transferDraft(false, false, base + 15, base + 1, base, 0), employee);
+        var snapshot = reassignmentSnapshot(row);
+        String body = reassignmentBody(snapshot, base + 12), identity = key();
+        String path = "/" + row.path("id").asText() + "/reassignment";
+        long version = row.path("version").asLong();
+        var response = transferCall(admin, "POST", path, body, identity, version);
+        assertEquals(200, response.statusCode(), response.body());
+        var changed = JSON.readTree(response.body());
+        assertEquals(Long.toString(base + 12), changed.path("processorAccountId").asText());
+        assertEquals(1, changed.path("ownershipVersion").asLong());
+        assertEquals(row.path("approvedVersion"), changed.path("approvedVersion"));
+        assertEquals(row.path("items"), changed.path("items"));
+        assertEquals(base + 10, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_todo WHERE business_type='TRANSFER' AND business_id=? AND closed_at IS NULL AND assignee_account_id=?", row.path("id").asLong(), base + 12));
+        assertEquals(response.body(), transferCall(admin, "POST", path, body, identity, version).body());
+        assertEquals(409, transferCall(admin, "POST", path, body.replace("长期缺席", "已离职"), identity, version).statusCode());
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_transfer_event WHERE request_id=? AND event_type='CONTROLLED_REASSIGNMENT'", row.path("id").asLong()));
+        assertEquals(409, transferCall(warehouse, "POST", "/" + changed.path("id").asText() + transferItemPath(changed, "deliver"), transferPhysical(changed, null, false), key(), changed.path("version").asLong()).statusCode());
+        changed = transferAction(other, changed, transferItemPath(changed, "deliver"), transferPhysical(changed, null, false));
+        assertEquals("DELIVERED", changed.path("items").get(0).path("itemStatus").asText());
+    }
+
+    @Test
+    void transferReassignmentRejectsPermissionsInvalidTargetsAndStalePhysicalSnapshot() throws Exception {
+        personalTransferFixture();
+        var row = claimedTransfer(transferDraft(false, false, base + 15, base + 1, base, 0), employee);
+        var snapshot = reassignmentSnapshot(row);
+        String body = reassignmentBody(snapshot, base + 12);
+        String path = "/" + row.path("id").asText() + "/reassignment";
+        long version = row.path("version").asLong();
+        assertEquals(403, transferCall(warehouse, "POST", path, body, key(), version).statusCode());
+        assertEquals(403, transferCall(login(base + 16), "POST", path, body, key(), version).statusCode());
+        assertEquals(409, transferCall(admin, "POST", path, reassignmentBody(snapshot, base + 10), key(), version).statusCode());
+        assertEquals(409, transferCall(admin, "POST", path, reassignmentBody(snapshot, base + 11), key(), version).statusCode());
+        assertEquals(400, transferCall(admin, "POST", path, body.replace("Checked\":true", "Checked\":false"), key(), version).statusCode());
+        assertEquals(409, transferCall(admin, "POST", path, body, key(), version - 1).statusCode());
+        jdbc.update("UPDATE fams_asset_business_lock SET lock_version=lock_version+1 WHERE asset_id=? AND released_at IS NULL", base + 50);
+        assertEquals(409, transferCall(admin, "POST", path, body, key(), version).statusCode());
+        jdbc.update("UPDATE fams_system_account SET status='DISABLED' WHERE id=?", base + 12);
+        assertEquals(409, transferCall(admin, "POST", path, body, key(), version).statusCode());
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_transfer_event WHERE request_id=? AND event_type='CONTROLLED_REASSIGNMENT'", row.path("id").asLong()));
+        assertEquals(base + 11, jdbc.queryForObject("SELECT processor_account_id FROM fams_transfer WHERE id=?", Long.class, row.path("id").asLong()));
+    }
+
+    @Test
+    void transferReassignmentAfterDeliveryRetainsReceiptAndSurvivesOldProcessorDisable() throws Exception {
+        personalTransferFixture();
+        var row = claimedTransfer(transferDraft(false, false, base + 15, base + 1, base, 0), employee);
+        row = transferAction(warehouse, row, transferItemPath(row, "deliver"), transferPhysical(row, null, false));
+        jdbc.update("UPDATE fams_system_account SET status='DISABLED',auth_epoch=auth_epoch+1 WHERE id=?", base + 11);
+        var snapshot = reassignmentSnapshot(row);
+        var changed = transferAction(admin, row, "/reassignment", reassignmentBody(snapshot, base + 12));
+        assertEquals(row.path("items"), changed.path("items"));
+        String receiptBody = transferReceipt(login(base + 15), changed, "RQ-ASSET-" + base);
+        var response = transferCall(login(base + 15), "POST", "/receipts/" + changed.path("items").get(0).path("id").asText() + "/receive", receiptBody, key(), changed.path("version").asLong());
+        assertEquals(200, response.statusCode(), response.body());
+        assertEquals(base + 15, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        assertEquals(409, transferCall(admin, "GET", "/" + row.path("id").asText() + "/reassignment", null, null, null).statusCode());
+    }
+
+    @Test
+    void transferReassignmentAuditFailureRollsBackOwnerVersionTodoAndReplay() throws Exception {
+        personalTransferFixture();
+        var row = claimedTransfer(transferDraft(false, false, base + 15, base + 1, base, 0), employee);
+        var snapshot = reassignmentSnapshot(row);
+        String trigger = "d615_fail_" + base;
+        jdbc.execute("CREATE TRIGGER " + trigger + " BEFORE INSERT ON fams_audit_event FOR EACH ROW BEGIN IF NEW.action='CONTROLLED_REASSIGNMENT' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='owned test failure'; END IF; END");
+        String identity = key(), path = "/" + row.path("id").asText() + "/reassignment";
+        String body = reassignmentBody(snapshot, base + 12);
+        try {
+            assertTrue(transferCall(admin, "POST", path, body, identity, row.path("version").asLong()).statusCode() >= 400);
+            assertEquals(base + 11, jdbc.queryForObject("SELECT processor_account_id FROM fams_transfer WHERE id=?", Long.class, row.path("id").asLong()));
+            assertEquals(0, count("SELECT ownership_version FROM fams_transfer WHERE id=?", row.path("id").asLong()));
+            assertEquals(0, count("SELECT COUNT(*) FROM fams_transfer_event WHERE request_id=? AND event_type='CONTROLLED_REASSIGNMENT'", row.path("id").asLong()));
+            assertEquals(0, count("SELECT COUNT(*) FROM fams_idempotency_record WHERE actor_account_id=? AND idempotency_key=?", base + 13, identity));
+        } finally { jdbc.execute("DROP TRIGGER " + trigger); }
+        assertEquals(200, transferCall(admin, "POST", path, body, identity, row.path("version").asLong()).statusCode());
+    }
+
     @Test
     void transferActualTargetReceiptUpdatesAllFieldsOnceWithoutEarlyCustodyOrOtherWarehouseWrites()
             throws Exception {

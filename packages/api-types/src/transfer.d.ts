@@ -8,7 +8,7 @@ export interface TransferItem { id: string; requestId: string; assetId: string; 
   receiptRequired: boolean | number; sourceSnapshot: Record<string, unknown>; targetSnapshot: TransferTarget;
   destination?: string; deliveryEvidence?: string; receiptDeadlineAt?: string; afterSnapshot?: Record<string, unknown> }
 export interface Transfer { id: string; creatorAccountId: string; reason: string; requestStatus: string; version: number;
-  processorAccountId: string | null; totalQuantity: number; completedQuantity: number; cancelledQuantity: number;
+  ownershipVersion: number; processorAccountId: string | null; totalQuantity: number; completedQuantity: number; cancelledQuantity: number;
   pendingQuantity: number; sourceGroups: number; targetGroups: number; items: TransferItem[];
   events: { id: string; eventType: string; occurredAt: string; detail: unknown }[] }
 export interface TransferReceipt { id: string; requestId: string; assetCode: string; name: string; itemStatus: string;
