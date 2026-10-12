@@ -324,11 +324,71 @@ class InboundHttpTest {
         assertStatus(409, call("POST", firstPath, valid, other, headers(other, 56, 4L)));
         String secondCode = second.path("assetSnapshot").path("assetCode").asText();
         String secondValid = valid.replace(firstCode, secondCode);
+        exerciseReassignment(path, creator, other, admin);
+        assertStatus(409, call("POST", path + "/items/" + second.path("id").asText()
+                + "/accept", secondValid, other, headers(other, 157, 5L)));
         JsonNode completed = JSON.readTree(assertStatus(200, call("POST", path + "/items/"
                 + second.path("id").asText() + "/accept", secondValid,
-                other, headers(other, 57, 4L))).body());
+                creator, headers(creator, 57, 5L))).body());
         assertEquals("COMPLETED", completed.path("receipt").path("status").asText());
         assertEquals(0, count("SELECT COUNT(*) FROM fams_todo WHERE closed_at IS NULL"));
+    }
+
+    private void exerciseReassignment(String path, Session creator, Session other,
+            Session admin) throws Exception {
+        String endpoint = path + "/reassignment";
+        assertStatus(403, call("GET", endpoint, null, other, Map.of()));
+        JsonNode snapshot = JSON.readTree(assertStatus(200, call("GET", endpoint,
+                null, admin, Map.of())).body());
+        assertEquals(2, snapshot.path("items").size());
+        assertEquals(-1, snapshot.path("items").get(0).path("lockVersion").asInt());
+        String body = JSON.writeValueAsString(Map.of("processorAccountId", 1,
+                "ownershipVersion", snapshot.path("ownershipVersion").asLong(),
+                "reason", "Old processor unavailable", "evidence", "One accepted; remaining asset verified",
+                "unsynchronizedResultsChecked", true, "items", snapshot.path("items")));
+        assertStatus(403, call("POST", endpoint, body, creator, headers(creator, 140, 4L)));
+        assertStatus(400, call("POST", endpoint, body.replace(":true", ":false"), admin, headers(admin, 141, 4L)));
+        assertStatus(409, call("POST", endpoint, body, admin, headers(admin, 142, 3L)));
+        assertStatus(409, call("POST", endpoint, body.replace("\"processorAccountId\":1", "\"processorAccountId\":4"),
+                admin, headers(admin, 143, 4L)));
+        assertStatus(409, call("POST", endpoint, body.replace("\"ownershipVersion\":1", "\"ownershipVersion\":99"),
+                admin, headers(admin, 144, 4L)));
+        assertStatus(409, call("POST", endpoint, body.replace("\"lockVersion\":0", "\"lockVersion\":99"),
+                admin, headers(admin, 145, 4L)));
+        jdbc.update("UPDATE fams_system_account SET status='DISABLED' WHERE id=1");
+        assertStatus(409, call("POST", endpoint, body, admin, headers(admin, 146, 4L)));
+        jdbc.update("UPDATE fams_system_account SET status='ENABLED' WHERE id=1");
+        String id = path.substring(path.lastIndexOf('/') + 1);
+        String before = jdbc.queryForObject("SELECT CAST(JSON_OBJECT('due',warehouse_first_execution_due_at,"
+                + "'scope',parameter_version_id) AS CHAR) FROM fams_inbound_receipt WHERE id=" + id, String.class);
+        jdbc.execute("CREATE TRIGGER d615_inbound_audit_failure BEFORE INSERT ON fams_audit_event FOR EACH ROW "
+                + "BEGIN IF NEW.action='INBOUND_CONTROLLED_REASSIGNMENT' THEN SIGNAL SQLSTATE '45000' "
+                + "SET MESSAGE_TEXT='injected audit failure'; END IF; END");
+        try { assertStatus(500, call("POST", endpoint, body, admin, headers(admin, 147, 4L))); }
+        finally { jdbc.execute("DROP TRIGGER d615_inbound_audit_failure"); }
+        assertEquals(2, count("SELECT processor_account_id FROM fams_inbound_processing_ownership WHERE receipt_id=" + id));
+        assertEquals(4, count("SELECT version FROM fams_inbound_receipt WHERE id=" + id));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_idempotency_record WHERE operation_id='reassignInboundReceipt'"));
+        jdbc.update("UPDATE fams_system_account SET status='DISABLED' WHERE id=2");
+        var responses = race("POST", endpoint, body, admin, 147, 4L);
+        assertEquals(JSON.readTree(assertStatus(200, responses.get(0)).body()),
+                JSON.readTree(assertStatus(200, responses.get(1)).body()));
+        jdbc.update("UPDATE fams_system_account SET status='ENABLED' WHERE id=2");
+        JsonNode result = JSON.readTree(responses.get(0).body());
+        assertEquals("1", result.path("currentProcessor").path("processor").path("id").asText());
+        assertEquals(2, result.path("currentProcessor").path("ownershipVersion").asInt());
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE action='INBOUND_CONTROLLED_REASSIGNMENT'"));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_inbound_acceptance WHERE receipt_item_id IN "
+                + "(SELECT id FROM fams_inbound_receipt_item WHERE receipt_id=" + id + ")"));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE business_type='INBOUND' "
+                + "AND business_id=" + id + " AND released_at IS NULL"));
+        assertEquals(1, count("SELECT assignee_account_id FROM fams_todo WHERE business_type='INBOUND' "
+                + "AND business_id=" + id + " AND closed_at IS NULL"));
+        assertEquals(before, jdbc.queryForObject("SELECT CAST(JSON_OBJECT('due',warehouse_first_execution_due_at,"
+                + "'scope',parameter_version_id) AS CHAR) FROM fams_inbound_receipt WHERE id=" + id, String.class));
+        assertStatus(409, call("POST", endpoint, body, admin, headers(admin, 148, 4L)));
+        assertStatus(409, call("POST", endpoint, body.replace("Old processor", "Changed processor"),
+                admin, headers(admin, 147, 4L)));
     }
 
     private void exerciseDraftValidation(String validBody, JsonNode draftAsset,
