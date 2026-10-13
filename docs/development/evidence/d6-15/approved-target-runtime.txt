@@ -6,7 +6,7 @@ Upgrade: ProxyConfirmationUpgradeRuntimeCase 1/1 PASS, no skips.
 Actual V29 column metadata read before V30; old column definitions and historical
 return full row preserved. V30 applied once, repeat 0, Flyway validation passed.
 New override columns nullable; new target-change table initially empty.
-HTTP: HandoverHttpTest#approvedItemTargetChange* 6/6 PASS, no skips.
+HTTP: approved target cases 7/7 plus existing shared receiving/recovery race 1/1 PASS, no skips.
 - Approval keeps original demand and delivery row unchanged, asset IN_STOCK and lock active.
 - Original recipient grant/receipt rejected; new recipient receipt commits custody and releases lock.
 - Disabled original recipient can be corrected; new reference drift rejects approval atomically.
@@ -26,3 +26,10 @@ removed and all three resource kinds verified absent; unrelated runtime retained
 Shared target checks require a current enabled DEPARTMENT_ASSET_MANAGER account.
 Ordinary receipt and proxy receipt recheck that role after approval; persisted role
 revocation blocks both paths while custody and the asset lock remain unchanged.
+
+Multi-role actor proposal audit records WAREHOUSE_OPERATOR, administrator decision
+records ASSET_ADMIN. Before-delivery approval retains stock, WAITING_DELIVERY and lock.
+The existing shared race fixture now grants the target its required department-manager
+role and reauthenticates before the flow; its original 200/409 exclusivity remains asserted.
+Candidate b64ad2a gate exited 1 on this formerly invalid fixture; cleanup/postflight passed.
+A replacement fixed candidate full gate is still required.

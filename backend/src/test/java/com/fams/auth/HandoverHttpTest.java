@@ -1360,6 +1360,8 @@ class HandoverHttpTest {
 
     @Test
     void receivingAndRecoveryRaceAllowsOnlyOneOutcomeAndSharedTargetIsExact() throws Exception {
+        jdbc.update("INSERT INTO fams_account_role (account_id,role_code,granted_at) VALUES (?,'DEPARTMENT_ASSET_MANAGER',NOW(3))", base + 10);
+        employee = login(base + 10);
         var draft = create(department, draft(1, base + 10, base).replace("PERSONAL", "SHARED"));
         var submitted = action(department, draft, "/submit", null);
         var value = action(admin, submitted, "/decision", "{\"result\":\"APPROVED\"}");
@@ -3787,6 +3789,25 @@ class HandoverHttpTest {
                 + "&itemId=" + value.path("allocations").get(0).path("id").asText(), null, null, null);
         assertEquals(409, proxy.statusCode(), proxy.body());
         assertEquals("HANDOVER_SHARED_RECEIVER_INVALID", JSON.readTree(proxy.body()).path("code").asText());
+        assertEquals("IN_STOCK", jdbc.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=?", String.class, base + 50));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+    }
+
+    @Test
+    void approvedItemTargetChangeAuditUsesActingWarehouseRoleForMultiRoleAccount() throws Exception {
+        var value = allocated(1);
+        jdbc.update("INSERT INTO fams_account_role (account_id,role_code,granted_at) VALUES (?,'ASSET_ADMIN',NOW(3))", base + 11);
+        warehouse = login(base + 11);
+        String endpoint = "/context?businessId=" + value.path("id").asText() + "&itemId=" + value.path("allocations").get(0).path("id").asText();
+        var snapshot = JSON.readTree(targetCall(warehouse, "GET", endpoint, null, null, null).body());
+        var created = targetCall(warehouse, "POST", "", targetProposal(snapshot, base + 14), key(), snapshot.path("version").asLong());
+        assertEquals(200, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        assertEquals("WAREHOUSE_OPERATOR", jdbc.queryForObject("SELECT actor_role FROM fams_audit_event WHERE resource_type='ITEM_TARGET_CHANGE' AND resource_id=? AND action='TARGET_CHANGE_PROPOSED'", String.class, id));
+        assertEquals("WAITING_DELIVERY", jdbc.queryForObject("SELECT allocation_status FROM fams_requisition_allocation WHERE id=?", String.class, value.path("allocations").get(0).path("id").asText()));
+        String decision = "{\"result\":\"APPROVED\",\"reason\":\"Before delivery target checked\"}";
+        assertEquals(200, targetCall(admin, "POST", "/" + id + "/decision", decision, key(), 0L).statusCode());
+        assertEquals("ASSET_ADMIN", jdbc.queryForObject("SELECT actor_role FROM fams_audit_event WHERE resource_type='ITEM_TARGET_CHANGE' AND resource_id=? AND action='TARGET_CHANGE_APPROVED'", String.class, id));
         assertEquals("IN_STOCK", jdbc.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=?", String.class, base + 50));
         assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
     }

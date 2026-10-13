@@ -179,7 +179,7 @@ class ItemTargetChangeService {
     private void audit(Actor actor, Current current, long id, String action, long before, long after) {
         db.update("INSERT INTO fams_audit_event (request_id,actor_account_id,actor_role,action,resource_type,resource_id,"
                 + "before_version,after_version,occurred_at,detail_json) VALUES (?,?,?,?,'ITEM_TARGET_CHANGE',?,?,?,?,?)",
-                actor.requestId().toString(), current.id(), current.has(Role.ASSET_ADMIN) ? "ASSET_ADMIN" : "WAREHOUSE_OPERATOR",
+                actor.requestId().toString(), current.id(), "TARGET_CHANGE_PROPOSED".equals(action) ? "WAREHOUSE_OPERATOR" : "ASSET_ADMIN",
                 action, id, before, after, now(), "{}");
     }
 }

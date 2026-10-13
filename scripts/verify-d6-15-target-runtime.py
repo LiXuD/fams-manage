@@ -43,7 +43,7 @@ def main():
                 D6_04_TEST_DATASOURCE_URL=f"jdbc:mysql://127.0.0.1:{port}/{database}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",
                 D6_04_TEST_DATASOURCE_USERNAME="d6_04_runtime", D6_04_TEST_DATASOURCE_PASSWORD=password)
             for flag, selection in [("d6.15.proxy.upgrade.runtime", "ProxyConfirmationUpgradeRuntimeCase"),
-                                    ("d6.12.handover.runtime", "HandoverHttpTest#approvedItemTargetChange*")]:
+                                    ("d6.12.handover.runtime", "HandoverHttpTest#approvedItemTargetChange*+receivingAndRecoveryRaceAllowsOnlyOneOutcomeAndSharedTargetIsExact")]:
                 run(["./mvnw", "-pl", "backend", "-Pquality", "-D" + flag + "=true", "-Dd6.15.proxy.runtime=true", "-Dtest=" + selection, "test"], timeout=600)
                 report = ROOT / "backend/target/surefire-reports" / ("TEST-com.fams.auth." + selection.split("#")[0] + ".xml")
                 suite = ElementTree.parse(report).getroot()
