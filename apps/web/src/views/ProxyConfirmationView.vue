@@ -151,7 +151,7 @@ onMounted(async () => {
       <ul><li v-for="attachment in attachments" :key="attachment.objectId">{{ attachment.filename }} · {{ attachment.scanStatus }}
         <button :disabled="busy || attachment.scanStatus !== 'CLEAN'" @click="download(attachment)">下载凭证</button></li></ul>
       <fieldset v-if="warehouse && selected.confirmationStatus === 'DRAFT'" :disabled="locked">
-        <label>签收凭证<input type="file" accept="application/pdf,image/jpeg,image/png" @change="file = ($event.target as HTMLInputElement).files?.[0] ?? null"></label>
+        <label>签收凭证<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" @change="file = ($event.target as HTMLInputElement).files?.[0] ?? null"></label>
         <button :disabled="!file" @click="upload">上传凭证</button>
         <button :disabled="!attachments.some(a => a.scanStatus === 'CLEAN')" @click="send(`/proxy-confirmations/${selected.id}/submit`)">冻结凭证并提交批准</button>
       </fieldset>

@@ -63,6 +63,14 @@ test("same identity can return from a native file picker without losing its sele
     await page.onShow(); assert.equal(page.data.fileName, "returned.pdf");
     await page.onUpload(); await page.onRetry(); assert.equal(uploads[0].filePath, "/chosen/returned.pdf");
 });
+test("image picker enforces 10MB while permitting a PDF of the same size", async () => {
+    const { page, services, uploads } = fixture(); await fill(page); await page.onCreate(); await page.onRetry();
+    services.chooseEvidence = async () => ({ path: "/proof.webp", name: "proof.WEBP", size: 11 * 1024 * 1024 });
+    await page.onPickFile(); assert.match(page.data.error, /图片不超过10MB/); assert.equal(page.data.fileName, "");
+    await page.onUpload(); assert.equal(uploads.length, 0);
+    services.chooseEvidence = async () => ({ path: "/proof.pdf", name: "proof.pdf", size: 11 * 1024 * 1024 });
+    await page.onPickFile(); assert.equal(page.data.fileName, "proof.pdf"); assert.equal(page.data.error, "");
+});
 test("same identity hide/show keeps original mutation while late result stays hidden", async () => {
     const { page, services, writes } = fixture(); await fill(page);
     const original = services.sessions.request; let finish, first = true;

@@ -52,7 +52,7 @@ module.exports = {status:function(value){return names[value] || '状态已变更
     <view wx:for="{{attachments}}" wx:key="objectId"><view>{{item.filename}} · {{item.scanStatus === 'CLEAN' ? '扫描通过' : '暂不可下载'}}</view>
       <button data-id="{{item.objectId}}" bindtap="onDownload" disabled="{{busy || retryable || item.scanStatus !== 'CLEAN'}}">下载并查看凭证</button></view>
     <view wx:if="{{canExecute && selected.confirmationStatus === 'DRAFT' && selected.creatorAccountId === accountId}}">
-      <button bindtap="onPickFile" disabled="{{busy || retryable}}">选择真实签收凭证（PDF / 图片，20MB内）</button><view>{{fileName}}</view>
+      <button bindtap="onPickFile" disabled="{{busy || retryable}}">选择真实签收凭证（PDF 20MB / 图片10MB，支持WEBP）</button><view>{{fileName}}</view>
       <button bindtap="onUpload" disabled="{{busy || retryable || !fileName}}">上传凭证</button>
       <button bindtap="onSubmit" disabled="{{busy || retryable || !attachments.length}}">冻结凭证并提交批准</button>
     </view>

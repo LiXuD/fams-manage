@@ -41,7 +41,7 @@ export function proxyMessage(error: unknown): string {
         if (error.status === 401) return "登录已失效，请重新登录。";
         if (error.status === 403 || error.status === 404) return "当前账号无办理权限或记录不可见。";
         if (error.status === 409) return "处理权、目标、实物或凭证已变更，请刷新重新核对，不能继续使用旧许可。";
-        if (error.status === 400 || error.status === 413) return "请核对填写内容与凭证，单文件不得超过20MB。";
+        if (error.status === 400 || error.status === 413) return "请核对内容与凭证：图片不超过10MB，PDF不超过20MB。";
     }
     return "结果尚未确认，请保留本页并使用原请求重试，或刷新查询后再办理。";
 }
@@ -229,7 +229,8 @@ export function createProxyConfirmationPage(getServices: () => MiniServices) {
             try {
                 const chosen = await services.chooseEvidence();
                 if (selection !== pickerEpoch || owner !== identity || proposal !== this.data.selected?.id) return;
-                if (!chosen.path || chosen.size <= 0 || chosen.size > 20 * 1024 * 1024) throw new MiniRequestError(413, "ATTACHMENT_SIZE_INVALID");
+                const limit = /\.(png|jpe?g|webp)$/i.test(chosen.name) ? 10 : 20;
+                if (!chosen.path || chosen.size <= 0 || chosen.size > limit * 1024 * 1024) throw new MiniRequestError(413, "ATTACHMENT_SIZE_INVALID");
                 file = chosen; fileOwner = owner; fileProposal = proposal;
                 if (live) this.setData({ fileName: chosen.name });
             } catch (error) { if (live && current === generation) failed(this, error); }

@@ -236,3 +236,7 @@ Checkstyle/SpotBugs0，行92.97%、分支75.69%，应用/数据库恢复、资�
 干净postflight通过。C3转IN_REVIEW，独立复核和真实微信/HTTPS/真机仍待完成。
 C1/C2/C3均已送审，C父项及D6-15父任务继续IN_PROGRESS；下一开发项D批准目标变更。
 证据mini-proxy-product-gate-e54820a.txt。
+
+2026-10-13 C3凭证边界修复：PC/小程序支持WEBP选择及图片预览；图片10MB、PDF20MB
+分别校验。新增超限WEBP拒绝和同尺寸PDF允许用例，小程序46/46及构建、Web类型检查通过。
+此后续修复不计入此前e54820a固定候选完整门禁，随下一候选联合回归。
