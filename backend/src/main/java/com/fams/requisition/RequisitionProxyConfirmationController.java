@@ -66,8 +66,9 @@ class RequisitionProxyConfirmationController {
 
     @GetMapping("/context")
     Map<String, Object> context(
+            @RequestParam(defaultValue = "REQUISITION") String businessType,
             @RequestParam @Min(1) long businessId, @RequestParam @Min(1) long itemId) {
-        return service.context(actors.capture(), businessId, itemId);
+        return service.context(actors.capture(), businessType, businessId, itemId);
     }
 
     @GetMapping

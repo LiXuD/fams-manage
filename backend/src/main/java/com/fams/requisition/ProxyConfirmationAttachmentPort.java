@@ -2,6 +2,8 @@ package com.fams.requisition;
 
 import com.fams.attachment.AttachmentBusinessPort;
 import com.fams.auth.Role;
+import com.fams.proxy.ProxyReceiptPort;
+import java.util.List;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -19,8 +21,18 @@ public class ProxyConfirmationAttachmentPort implements AttachmentBusinessPort {
 
     private final JdbcTemplate db;
 
-    public ProxyConfirmationAttachmentPort(JdbcTemplate db) {
+    private final Map<String, ProxyReceiptPort> businesses;
+
+    public ProxyConfirmationAttachmentPort(JdbcTemplate db, List<ProxyReceiptPort> businesses) {
         this.db = db;
+        this.businesses = businesses.stream().collect(java.util.stream.Collectors.toUnmodifiableMap(
+                ProxyReceiptPort::businessType, value -> value));
+    }
+
+    private ProxyReceiptPort business(Map<String, Object> row) {
+        var port = businesses.get(row.get("business_type").toString());
+        if (port == null) { throw RequisitionFailure.unavailable(); }
+        return port;
     }
 
     @Override
@@ -32,28 +44,20 @@ public class ProxyConfirmationAttachmentPort implements AttachmentBusinessPort {
         var rows =
                 db.queryForList(
                         "SELECT * FROM fams_proxy_confirmation WHERE id=? AND"
-                            + " business_type='REQUISITION'",
+                            + " business_type IN ('REQUISITION','TRANSFER')",
                         id);
         if (rows.isEmpty()) {
             throw RequisitionFailure.unavailable();
         }
         long request = ((Number) rows.getFirst().get("business_id")).longValue();
-        db.queryForList(
-                "SELECT id FROM fams_requisition WHERE id=?" + (lock ? " FOR UPDATE" : ""),
-                request);
+        if (lock) { business(rows.getFirst()).lockHeader(request); }
         return db.queryForMap(
                 "SELECT * FROM fams_proxy_confirmation WHERE id=?" + (lock ? " FOR UPDATE" : ""),
                 id);
     }
 
-    private boolean processor(long actor, long request, boolean lock) {
-        return !db.queryForList(
-                        "SELECT request_id FROM fams_requisition_ownership WHERE request_id=? AND"
-                            + " processor_account_id=? AND archived_at IS NULL"
-                                + (lock ? " FOR UPDATE" : ""),
-                        request,
-                        actor)
-                .isEmpty();
+    private boolean processor(long actor, Map<String, Object> row, boolean lock) {
+        return business(row).currentProcessor(actor, ((Number) row.get("business_id")).longValue(), lock);
     }
 
     @Override
@@ -64,7 +68,7 @@ public class ProxyConfirmationAttachmentPort implements AttachmentBusinessPort {
         }
         if (roles.contains(Role.WAREHOUSE_OPERATOR)
                 && (((Number) row.get("creator_account_id")).longValue() == actor
-                        || processor(actor, ((Number) row.get("business_id")).longValue(), true))) {
+                        || processor(actor, row, true))) {
             return;
         }
         throw RequisitionFailure.unavailable();
@@ -80,7 +84,7 @@ public class ProxyConfirmationAttachmentPort implements AttachmentBusinessPort {
         var row = row(id, lock);
         if (!"DRAFT".equals(row.get("confirmation_status"))
                 || ((Number) row.get("creator_account_id")).longValue() != actor
-                || !processor(actor, ((Number) row.get("business_id")).longValue(), lock)) {
+                || !processor(actor, row, lock)) {
             throw RequisitionFailure.conflict("PROXY_RECEIPT_EVIDENCE_FROZEN");
         }
         if (version >= 0 && ((Number) row.get("version")).longValue() != version) {

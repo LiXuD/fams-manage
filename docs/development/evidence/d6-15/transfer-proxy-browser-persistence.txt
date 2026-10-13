@@ -1,0 +1,34 @@
+APPROVED BEFORE EXECUTION
+business_type	confirmation_status	version
+TRANSFER	APPROVED	3
+lifecycle_status	responsible_employee_id	using_organization_id	current_location_id
+IN_USE	3	1	3
+notices
+0
+scan_status
+CLEAN
+
+AFTER EXECUTION, RECIPIENT REVIEW REQUEST AND SECOND HARD RESTART
+business_type	confirmation_status	version
+TRANSFER	EXECUTED	4
+lifecycle_status	responsible_employee_id	using_organization_id	current_location_id
+IN_USE	4	2	2
+request_status
+COMPLETED
+item_status
+COMPLETED
+recipient_employee_id	notices	read_count
+4	1	1
+active_locks
+0
+event_type	COUNT(*)
+TRANSFER_DRAFT_CREATED	1
+TRANSFER_SUBMIT	1
+TRANSFER_APPROVED	1
+TRANSFER_CLAIM	1
+TRANSFER_DELIVER	1
+TRANSFER_PROXY_RECEIVED	1
+todo_type	COUNT(*)
+PROXY_RECEIPT_REVIEW	1
+action	COUNT(*)
+RESULT_NOTICE_OBJECTION	1

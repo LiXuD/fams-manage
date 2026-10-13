@@ -44,6 +44,10 @@ if __name__ == "__main__":
         os.environ["FAMS_ATTACHMENTS_CLAMD_PORT"] = str(port)
         with tempfile.TemporaryDirectory(prefix="fams-d6-15-proxy-evidence-") as quarantine:
             os.environ["FAMS_ATTACHMENTS_QUARANTINE_ROOT"] = quarantine
-            runpy.run_path(str(root / "run-d6-15-requisition-browser-runtime.py"), run_name="__main__")
+            business = os.environ.get("FAMS_PROXY_BROWSER_BUSINESS", "REQUISITION")
+            if business not in {"REQUISITION", "TRANSFER"}:
+                raise ValueError("Unsupported proxy browser business")
+            runner = "run-d6-15-browser-runtime.py" if business == "TRANSFER" else "run-d6-15-requisition-browser-runtime.py"
+            runpy.run_path(str(root / runner), run_name="__main__")
     finally:
         clamd.cleanup(clamd.CONTAINER)

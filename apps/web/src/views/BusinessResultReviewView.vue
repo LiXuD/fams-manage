@@ -3,7 +3,7 @@ import { onMounted, ref } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { loanMessage, loanRequest } from "@/loan/api";
 
-interface Review { noticeId: string; executionId: string; businessId: string;
+interface Review { noticeId: string; executionId: string; businessId: string; businessType: string;
   recipient: string; reason: string; createdAt: string }
 const rows = ref<Review[]>([]); const busy = ref(false); const error = ref("");
 const page = ref(1); const total = ref(0);
@@ -27,7 +27,7 @@ onMounted(() => refresh());
       <h2>通知 {{ review.noticeId }} · {{ review.recipient }}</h2>
       <p>{{ review.reason }} · {{ review.createdAt }}</p>
       <router-link :to="{ path: '/proxy-confirmations', query: { id: review.executionId } }">查看代确认与签收凭证</router-link>
-      <router-link :to="{ path: '/requisitions', query: { id: review.businessId } }">查看业务单据</router-link>
+      <router-link :to="{ path: review.businessType === 'TRANSFER' ? '/transfers' : '/requisitions', query: { id: review.businessId } }">查看业务单据</router-link>
     </article>
     <p v-if="!rows.length">暂无待核查请求。</p>
     <button :disabled="busy || page <= 1" @click="refresh(-1)">上一页</button>

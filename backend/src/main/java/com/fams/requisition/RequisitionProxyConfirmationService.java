@@ -5,6 +5,7 @@ import com.fams.auth.RequisitionActorContext;
 import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
+import com.fams.proxy.ProxyReceiptPort;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Profile;
@@ -42,7 +43,7 @@ class RequisitionProxyConfirmationService {
 
     private final RequisitionActorContext actors;
 
-    private final RequisitionHandoverService handovers;
+    private final Map<String, ProxyReceiptPort> businesses;
 
     private final ObjectMapper json;
 
@@ -53,20 +54,21 @@ class RequisitionProxyConfirmationService {
     RequisitionProxyConfirmationService(
             JdbcTemplate db,
             RequisitionActorContext actors,
-            RequisitionHandoverService handovers,
+            List<ProxyReceiptPort> businesses,
             ObjectMapper json,
             Clock clock,
             ObjectProvider<AttachmentStorage> storage) {
         this.db = db;
         this.actors = actors;
-        this.handovers = handovers;
+        this.businesses = businesses.stream().collect(java.util.stream.Collectors.toUnmodifiableMap(
+                ProxyReceiptPort::businessType, value -> value));
         this.json = json;
         this.clock = clock;
         this.storage = storage;
     }
 
-    Map<String, Object> context(Actor actor, long request, long item) {
-        return handovers.proxySnapshot(actor, request, item, true);
+    Map<String, Object> context(Actor actor, String businessType, long request, long item) {
+        return business(businessType).snapshot(actor, request, item, true);
     }
 
     Map<String, Object> list(Actor actor, int page, int size) {
@@ -76,15 +78,17 @@ class RequisitionProxyConfirmationService {
         }
         String predicate =
                 current.has(Role.ASSET_ADMIN)
-                        ? "business_type='REQUISITION' AND (confirmation_status<>'DRAFT' OR creator_account_id="
+                        ? "business_type IN ('REQUISITION','TRANSFER') AND (confirmation_status<>'DRAFT' OR creator_account_id="
                                 + current.id() + ")"
-                        : "business_type='REQUISITION' AND (creator_account_id="
+                        : "business_type IN ('REQUISITION','TRANSFER') AND (creator_account_id="
                                 + current.id()
-                                + " OR EXISTS (SELECT 1 FROM fams_requisition_ownership o WHERE"
+                                + " OR (business_type='REQUISITION' AND EXISTS (SELECT 1 FROM fams_requisition_ownership o WHERE"
                                 + " o.request_id=fams_proxy_confirmation.business_id AND"
                                 + " o.archived_at IS NULL AND o.processor_account_id="
                                 + current.id()
-                                + "))";
+                                + ")) OR (business_type='TRANSFER' AND EXISTS (SELECT 1 FROM fams_transfer t"
+                                + " WHERE t.id=fams_proxy_confirmation.business_id AND t.processor_account_id="
+                                + current.id() + ")))";
         long total =
                 Objects.requireNonNull(
                         db.queryForObject(
@@ -118,12 +122,13 @@ class RequisitionProxyConfirmationService {
     Map<String, Object> create(
             Actor actor, String key, RequisitionProxyConfirmationController.Draft input) {
         var current = role(actor, Role.WAREHOUSE_OPERATOR);
-        processor(current, input.businessId());
+        String businessType = String.valueOf(input.snapshot().getOrDefault("businessType", "REQUISITION"));
+        processor(current, businessType, input.businessId());
         var prior = replay(current, "createProxyConfirmation", key, input);
         if (prior != null) {
             return prior;
         }
-        var snapshot = handovers.proxySnapshot(actor, input.businessId(), input.itemId(), true);
+        var snapshot = business(businessType).snapshot(actor, input.businessId(), input.itemId(), true);
         same(snapshot, input.snapshot());
         if (!Boolean.TRUE.equals(input.targetOrAuthorizedProxyReceived())
                 || input.actualReceivedAt().isAfter(clock.instant())
@@ -152,7 +157,8 @@ class RequisitionProxyConfirmationService {
         }
         if (input.previousConfirmationId() != null) {
             var previous = row(input.previousConfirmationId(), false);
-            if (number(previous, "business_id") != input.businessId()
+            if (!businessType.equals(previous.get("business_type"))
+                    || number(previous, "business_id") != input.businessId()
                     || number(previous, "item_id") != input.itemId()) {
                 throw conflict("PROXY_RECEIPT_PREVIOUS_MISMATCH");
             }
@@ -161,7 +167,8 @@ class RequisitionProxyConfirmationService {
         db.update(
                 "INSERT INTO fams_proxy_confirmation"
                     + " (business_type,business_id,item_id,business_snapshot_json,evidence_metadata_json,previous_confirmation_id,observed_asset_code,actual_signer,actual_received_at,cannot_confirm_reason,contact_record,delegated_receipt,delegation_relationship,delegation_basis,evidence_kind,collection_method,manual_reason,creator_account_id,created_at,updated_at)"
-                    + " VALUES ('REQUISITION',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                businessType,
                 input.businessId(),
                 input.itemId(),
                 json.writeValueAsString(snapshot),
@@ -195,7 +202,8 @@ class RequisitionProxyConfirmationService {
 
     Map<String, Object> submit(Actor actor, long id, long version, String key) {
         var current = role(actor, Role.WAREHOUSE_OPERATOR);
-        processor(current, number(row(id, false), "business_id"));
+        var hint = row(id, false);
+        processor(current, hint.get("business_type").toString(), number(hint, "business_id"));
         var payload = Map.of("id", id, "version", version);
         var prior = replay(current, "submitProxyConfirmation", key, payload);
         if (prior != null) {
@@ -269,7 +277,8 @@ class RequisitionProxyConfirmationService {
 
     Map<String, Object> execute(Actor actor, long id, long version, String key) {
         var current = role(actor, Role.WAREHOUSE_OPERATOR);
-        processor(current, number(row(id, false), "business_id"));
+        var hint = row(id, false);
+        processor(current, hint.get("business_type").toString(), number(hint, "business_id"));
         var payload = Map.of("id", id, "version", version);
         var prior = replay(current, "executeProxyConfirmation", key, payload);
         if (prior != null) {
@@ -281,7 +290,7 @@ class RequisitionProxyConfirmationService {
         @SuppressWarnings("unchecked")
         var snapshot = json.readValue(row.get("business_snapshot_json").toString(), Map.class);
         var result =
-                handovers.proxyReceipt(
+                business(row.get("business_type").toString()).execute(
                         actor,
                         number(row, "business_id"),
                         number(row, "item_id"),
@@ -299,6 +308,7 @@ class RequisitionProxyConfirmationService {
                 id);
         var detail = new LinkedHashMap<String, Object>();
         detail.put("result", result);
+        detail.put("businessSnapshot", snapshot);
         detail.put("actualSigner", row.get("actual_signer"));
         detail.put("submittedBy", row.get("creator_account_id").toString());
         detail.put("approvedBy", row.get("approver_account_id").toString());
@@ -316,9 +326,10 @@ class RequisitionProxyConfirmationService {
         db.update(
                 "INSERT INTO fams_business_result_notice"
                     + " (execution_type,execution_id,recipient_employee_id,business_type,business_id,item_id,content_json,created_at)"
-                    + " VALUES ('PROXY_CONFIRMATION',?,?,'REQUISITION',?,?,?,?)",
+                    + " VALUES ('PROXY_CONFIRMATION',?,?,?,?,?,?,?)",
                 id,
                 Long.parseLong(result.get("targetEmployeeId").toString()),
+                row.get("business_type"),
                 number(row, "business_id"),
                 number(row, "item_id"),
                 json.writeValueAsString(detail),
@@ -326,21 +337,20 @@ class RequisitionProxyConfirmationService {
         return finish(current, "executeProxyConfirmation", key, payload, id, wire(row(id, false)));
     }
 
-    private void processor(Current current, long request) {
-        if (db.queryForList("SELECT id FROM fams_requisition WHERE id=? FOR UPDATE", request).isEmpty()) {
-            throw RequisitionFailure.unavailable();
-        }
-        var owners = db.queryForList("SELECT processor_account_id FROM fams_requisition_ownership"
-                + " WHERE request_id=? ORDER BY id DESC LIMIT 1 FOR UPDATE", request);
-        if (owners.isEmpty() || number(owners.getFirst(), "processor_account_id") != current.id()) {
-            throw conflict("PROXY_RECEIPT_NOT_PROCESSOR");
-        }
+    private ProxyReceiptPort business(String type) {
+        var port = businesses.get(type);
+        if (port == null) { throw invalid("PROXY_RECEIPT_BUSINESS_TYPE_INVALID"); }
+        return port;
+    }
+
+    private void processor(Current current, String type, long request) {
+        business(type).requireProcessor(current.id(), request);
     }
 
     private Map<String, Object> lockedCurrent(Actor actor, long id, boolean executing) {
         var hint = row(id, false);
         var snapshot =
-                handovers.proxySnapshot(
+                business(hint.get("business_type").toString()).snapshot(
                         actor, number(hint, "business_id"), number(hint, "item_id"), executing);
         var row = row(id, true);
         same(snapshot, json.readTree(row.get("business_snapshot_json").toString()));
@@ -406,7 +416,7 @@ class RequisitionProxyConfirmationService {
         var rows =
                 db.queryForList(
                         "SELECT * FROM fams_proxy_confirmation WHERE id=? AND"
-                            + " business_type='REQUISITION'"
+                            + " business_type IN ('REQUISITION','TRANSFER')"
                                 + (lock ? " FOR UPDATE" : ""),
                         id);
         if (rows.isEmpty()) {
@@ -422,13 +432,8 @@ class RequisitionProxyConfirmationService {
             return;
         }
         if (current.has(Role.WAREHOUSE_OPERATOR)
-                && !db.queryForList(
-                                "SELECT request_id FROM fams_requisition_ownership WHERE"
-                                    + " request_id=? AND processor_account_id=? AND archived_at IS"
-                                    + " NULL",
-                                row.get("business_id"),
-                                current.id())
-                        .isEmpty()) {
+                && business(row.get("business_type").toString()).currentProcessor(
+                        current.id(), number(row, "business_id"), false)) {
             return;
         }
         throw RequisitionFailure.unavailable();

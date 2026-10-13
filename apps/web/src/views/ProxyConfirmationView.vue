@@ -95,7 +95,7 @@ onMounted(async () => {
     await list();
     if (route.query.id && /^\d+$/.test(String(route.query.id))) await detail(String(route.query.id));
     else if (warehouse.value && route.query.businessId && route.query.itemId) {
-      snapshot.value = await loanRequest<Record<string, unknown>>(`/proxy-confirmations/context?businessId=${encodeURIComponent(String(route.query.businessId))}&itemId=${encodeURIComponent(String(route.query.itemId))}`);
+      snapshot.value = await loanRequest<Record<string, unknown>>(`/proxy-confirmations/context?businessType=${encodeURIComponent(String(route.query.businessType ?? "REQUISITION"))}&businessId=${encodeURIComponent(String(route.query.businessId))}&itemId=${encodeURIComponent(String(route.query.itemId))}`);
       form.value.actualSignerEmployeeId = String(snapshot.value.targetEmployeeId);
       form.value.observedAssetCode = String(snapshot.value.assetCode);
     }
@@ -105,7 +105,7 @@ onMounted(async () => {
 
 <template>
   <AppChrome>
-    <h1>领用与借用异常代确认</h1>
+    <h1>异常代确认</h1>
     <p>仅用于已经实际交付、原接收人无法操作确认的资产。管理员批准后，当前库管还需明确执行。</p>
     <p v-if="error" role="alert" class="form-error">{{ error }}</p>
     <button :disabled="busy" @click="refresh">刷新当前记录</button>
@@ -140,14 +140,14 @@ onMounted(async () => {
     <button :disabled="locked || page * 20 >= total" @click="paginate(1)">下一页</button>
     <section v-if="selected">
       <h2>代确认 {{ selected.id }} · {{ labels[selected.confirmationStatus] }}</h2>
-      <p>单据 {{ selected.businessId }} / 分配项 {{ selected.itemId }} · 实物 {{ selected.businessSnapshotJson.assetCode }} · 责任人员 {{ selected.businessSnapshotJson.targetEmployeeId }}</p>
+      <p>{{ selected.businessType === 'TRANSFER' ? '调拨' : '领用/借用' }}单据 {{ selected.businessId }} / 明细 {{ selected.itemId }} · 实物 {{ selected.businessSnapshotJson.assetCode }} · 责任人员 {{ selected.businessSnapshotJson.targetEmployeeId }}</p>
       <p>实际签收人：{{ selected.actualSigner }} · 时间：{{ selected.actualReceivedAt }}</p>
       <p>无法确认原因：{{ selected.cannotConfirmReason }}；联系记录：{{ selected.contactRecord }}</p>
       <p v-if="selected.delegatedReceipt">代理关系：{{ selected.delegationRelationship }}；授权依据：{{ selected.delegationBasis }}</p>
       <p>凭证 {{ selected.evidenceKind }} · 采集 {{ selected.collectionMethod }} {{ selected.manualReason }}</p>
       <p>提交账号 {{ selected.creatorAccountId }} · 批准账号 {{ selected.approverAccountId ?? '待批准' }} · 执行账号 {{ selected.executorAccountId ?? '待执行' }}</p>
       <p v-if="selected.decisionReason">决定说明：{{ selected.decisionReason }}</p>
-      <router-link :to="{ path: '/requisitions', query: { id: selected.businessId } }">查看业务单据与核查入口</router-link>
+      <router-link :to="{ path: selected.businessType === 'TRANSFER' ? '/transfers' : '/requisitions', query: { id: selected.businessId } }">查看业务单据与核查入口</router-link>
       <ul><li v-for="attachment in attachments" :key="attachment.objectId">{{ attachment.filename }} · {{ attachment.scanStatus }}
         <button :disabled="busy || attachment.scanStatus !== 'CLEAN'" @click="download(attachment)">下载凭证</button></li></ul>
       <fieldset v-if="warehouse && selected.confirmationStatus === 'DRAFT'" :disabled="locked">

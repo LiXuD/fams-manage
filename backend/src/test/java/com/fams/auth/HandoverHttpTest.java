@@ -3230,6 +3230,133 @@ class HandoverHttpTest {
                         base + 50));
     }
 
+    @Test
+    @EnabledIfSystemProperty(named = "d6.15.proxy.runtime", matches = "true")
+    void proxyConfirmationTransferCommitsOriginalTargetOnlyAfterExecutionAndRollsBackLateFailure() throws Exception {
+        personalTransferFixture();
+        var row = claimedTransfer(transferDraft(false, false, base + 15, base + 1, base, 0), employee);
+        row = transferAction(warehouse, row, transferItemPath(row, "deliver"), transferPhysical(row, null, false));
+        var context = transferProxyContext(warehouse, row);
+        assertEquals(200, context.statusCode(), context.body());
+        var snapshot = JSON.readTree(context.body());
+        assertEquals("TRANSFER", snapshot.path("businessType").asText());
+        var created = proxyCall(warehouse, "POST", "", proxyDraft(snapshot), key(), null);
+        assertEquals(200, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        assertEquals(201, proxyUpload(id, 0).statusCode());
+        var submitted = proxyCall(warehouse, "POST", "/" + id + "/submit", null, key(), 1L);
+        assertEquals(200, submitted.statusCode(), submitted.body());
+        var approved = proxyCall(admin, "POST", "/" + id + "/decision", proxyDecision(true), key(), 2L);
+        assertEquals(200, approved.statusCode(), approved.body());
+        assertEquals(base + 10, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_business_result_notice WHERE execution_id=?", id));
+        jdbc.update("UPDATE fams_employee SET status='DISABLED' WHERE id=?", base + 15);
+        assertEquals(409, proxyCall(warehouse, "POST", "/" + id + "/execute", null, key(), 3L).statusCode());
+        jdbc.update("UPDATE fams_employee SET status='ACTIVE' WHERE id=?", base + 15);
+        jdbc.update("UPDATE fams_asset_business_lock SET lock_version=lock_version+1 WHERE asset_id=? AND released_at IS NULL", base + 50);
+        var stale = proxyCall(warehouse, "POST", "/" + id + "/execute", null, key(), 3L);
+        assertEquals(409, stale.statusCode(), stale.body());
+        assertEquals("PROXY_RECEIPT_SCOPE_CHANGED", JSON.readTree(stale.body()).path("code").asText());
+        jdbc.update("UPDATE fams_asset_business_lock SET lock_version=lock_version-1 WHERE asset_id=? AND released_at IS NULL", base + 50);
+        String trigger = "d615_transfer_notice_" + base, identity = key();
+        jdbc.execute("CREATE TRIGGER " + trigger + " BEFORE INSERT ON fams_business_result_notice FOR EACH ROW BEGIN IF NEW.execution_id=" + id
+                + " THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='owned transfer notice failure'; END IF; END");
+        try {
+            assertEquals(500, proxyCall(warehouse, "POST", "/" + id + "/execute", null, identity, 3L).statusCode());
+            assertEquals(base + 10, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+            assertEquals("DELIVERED", jdbc.queryForObject("SELECT item_status FROM fams_transfer_item WHERE id=?", String.class, snapshot.path("itemId").asText()));
+            assertEquals("APPROVED", jdbc.queryForObject("SELECT confirmation_status FROM fams_proxy_confirmation WHERE id=?", String.class, id));
+            assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+            assertEquals(0, count("SELECT COUNT(*) FROM fams_transfer_event WHERE request_id=? AND event_type='TRANSFER_PROXY_RECEIVED'", snapshot.path("businessId").asText()));
+        } finally { jdbc.execute("DROP TRIGGER " + trigger); }
+        var executed = proxyCall(warehouse, "POST", "/" + id + "/execute", null, identity, 3L);
+        assertEquals(200, executed.statusCode(), executed.body());
+        assertEquals(JSON.readTree(executed.body()), JSON.readTree(proxyCall(warehouse, "POST", "/" + id + "/execute", null, identity, 3L).body()));
+        assertEquals(base + 15, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        assertEquals(base + 1, jdbc.queryForObject("SELECT using_organization_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        assertEquals("COMPLETED", jdbc.queryForObject("SELECT request_status FROM fams_transfer WHERE id=?", String.class, snapshot.path("businessId").asText()));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_transfer_event WHERE request_id=? AND event_type='TRANSFER_PROXY_RECEIVED'", snapshot.path("businessId").asText()));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_business_result_notice WHERE execution_id=? AND business_type='TRANSFER' AND recipient_employee_id=?", id, base + 15));
+        var target = login(base + 15);
+        var notice = JSON.readTree(noticeCall(target, "GET", "").body()).path("items").get(0);
+        assertEquals("TRANSFER", notice.path("businessType").asText());
+        assertEquals(200, noticeObjection(target, notice.path("id").asText(), "Please verify transfer proof", key()).statusCode());
+        var review = JSON.readTree(noticeCall(admin, "GET", "/review-requests").body()).path("items").get(0);
+        assertEquals("TRANSFER", review.path("businessType").asText());
+        assertEquals(id, review.path("executionId").asText());
+        assertEquals(0, JSON.readTree(noticeCall(employee, "GET", "").body()).path("total").asInt());
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "d6.15.proxy.runtime", matches = "true")
+    void proxyConfirmationTransferReassignmentRevokesReplayAndInvalidatesOldApprovalSnapshot() throws Exception {
+        personalTransferFixture();
+        var row = claimedTransfer(transferDraft(false, false, base + 15, base + 1, base, 0), employee);
+        assertEquals(409, transferProxyContext(warehouse, row).statusCode());
+        row = transferAction(warehouse, row, transferItemPath(row, "deliver"), transferPhysical(row, null, false));
+        assertEquals(409, transferProxyContext(other, row).statusCode());
+        var snapshot = JSON.readTree(transferProxyContext(warehouse, row).body());
+        String body = proxyDraft(snapshot), createKey = key(), submitKey = key();
+        var created = proxyCall(warehouse, "POST", "", body, createKey, null);
+        assertEquals(200, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        assertEquals(201, proxyUpload(id, 0).statusCode());
+        assertEquals(200, proxyCall(warehouse, "POST", "/" + id + "/submit", null, submitKey, 1L).statusCode());
+        assertEquals(200, proxyCall(admin, "POST", "/" + id + "/decision", proxyDecision(true), key(), 2L).statusCode());
+        var check = reassignmentSnapshot(row);
+        row = transferAction(admin, row, "/reassignment", reassignmentBody(check, base + 12));
+        for (var response : java.util.List.of(proxyCall(warehouse, "POST", "", body, createKey, null),
+                proxyCall(warehouse, "POST", "/" + id + "/submit", null, submitKey, 1L),
+                proxyCall(warehouse, "POST", "/" + id + "/execute", null, key(), 3L))) {
+            assertEquals(409, response.statusCode(), response.body());
+            assertEquals("TRANSFER_NOT_PROCESSOR", JSON.readTree(response.body()).path("code").asText());
+        }
+        assertEquals(200, proxyCall(other, "GET", "/" + id, null, null, null).statusCode());
+        var stale = proxyCall(other, "POST", "/" + id + "/execute", null, key(), 3L);
+        assertEquals(409, stale.statusCode(), stale.body());
+        assertEquals("PROXY_RECEIPT_SCOPE_CHANGED", JSON.readTree(stale.body()).path("code").asText());
+        assertEquals(200, transferProxyContext(other, row).statusCode());
+        assertEquals(base + 10, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_business_result_notice WHERE execution_id=?", id));
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "d6.15.proxy.runtime", matches = "true")
+    void proxyConfirmationTransferCannotOverrideRecipientRefusalOrRecovery() throws Exception {
+        personalTransferFixture();
+        var row = claimedTransfer(transferDraft(false, false, base + 15, base + 1, base, 0), employee);
+        row = transferAction(warehouse, row, transferItemPath(row, "deliver"), transferPhysical(row, null, false));
+        var snapshot = JSON.readTree(transferProxyContext(warehouse, row).body());
+        var created = proxyCall(warehouse, "POST", "", proxyDraft(snapshot), key(), null);
+        assertEquals(200, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        assertEquals(201, proxyUpload(id, 0).statusCode());
+        assertEquals(200, proxyCall(warehouse, "POST", "/" + id + "/submit", null, key(), 1L).statusCode());
+        assertEquals(200, proxyCall(admin, "POST", "/" + id + "/decision", proxyDecision(true), key(), 2L).statusCode());
+        var target = login(base + 15);
+        var refused = transferCall(target, "POST", "/receipts/" + snapshot.path("itemId").asText() + "/refuse",
+                transferReceipt(target, row, "wrong"), key(), row.path("version").asLong());
+        assertEquals(200, refused.statusCode(), refused.body());
+        row = JSON.readTree(transferCall(employee, "GET", "/" + row.path("id").asText(), null, null, null).body());
+        assertEquals("REFUSED", row.path("items").get(0).path("itemStatus").asText());
+        assertEquals(409, transferProxyContext(warehouse, row).statusCode());
+        assertEquals(409, proxyCall(warehouse, "POST", "/" + id + "/execute", null, key(), 3L).statusCode());
+        row = transferAction(warehouse, row, transferItemPath(row, "recovery"), transferPhysical(row, null, false));
+        assertEquals("RECOVERY_PENDING", row.path("items").get(0).path("itemStatus").asText());
+        assertEquals(409, transferProxyContext(warehouse, row).statusCode());
+        assertEquals(409, proxyCall(warehouse, "POST", "/" + id + "/execute", null, key(), 3L).statusCode());
+        assertEquals(base + 10, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_business_result_notice WHERE execution_id=?", id));
+    }
+
+    private HttpResponse<String> transferProxyContext(Session session, JsonNode row) throws Exception {
+        return proxyCall(session, "GET", "/context?businessType=TRANSFER&businessId=" + row.path("id").asText()
+                + "&itemId=" + row.path("items").get(0).path("id").asText(), null, null, null);
+    }
+
     private JsonNode proxyContext(JsonNode value) throws Exception {
         var response =
                 proxyCall(

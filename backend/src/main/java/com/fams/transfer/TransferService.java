@@ -667,6 +667,73 @@ class TransferService {
         return finish(current, action, key, hash, wire(item(itemId)));
     }
 
+    Map<String, Object> proxySnapshot(Actor actor, long id, long itemId, boolean executing) {
+        var current = actors.revalidateLocked(actor);
+        var request = request(id);
+        if (executing) {
+            role(current, Role.WAREHOUSE_OPERATOR);
+            processor(current, request);
+        } else {
+            role(current, Role.ASSET_ADMIN);
+        }
+        executable(request);
+        var item = item(itemId);
+        if (number(item, "request_id") != id) {
+            throw new TransferFailure("TRANSFER_ITEM_NOT_FOUND", 404);
+        }
+        itemState(item, "DELIVERED");
+        if (!receiptRequired(item) || item.get("receiver_employee_id") == null) {
+            throw new TransferFailure("TRANSFER_PROXY_RECEIPT_NOT_REQUIRED", 409);
+        }
+        var source = source(item);
+        lock(item);
+        var target = assets.validateTarget(source, target(item));
+        var lock = one("SELECT lock_version FROM fams_asset_business_lock WHERE asset_id=?"
+                + " AND business_type='TRANSFER' AND business_id=? AND business_item_id=?"
+                + " AND released_at IS NULL FOR UPDATE", item.get("asset_id"), id, itemId);
+        var result = new LinkedHashMap<String, Object>();
+        result.put("businessType", "TRANSFER");
+        result.put("businessId", Long.toString(id));
+        result.put("itemId", Long.toString(itemId));
+        result.put("requestNo", "TRANSFER-" + id);
+        result.put("version", number(request, "version"));
+        result.put("approvedVersion", number(request, "approved_version"));
+        result.put("itemVersion", number(item, "version"));
+        result.put("assetId", item.get("asset_id").toString());
+        result.put("assetVersion", number(item, "asset_version"));
+        result.put("assetCode", source.get("asset_code"));
+        result.put("targetEmployeeId", item.get("receiver_employee_id").toString());
+        result.put("custodyType", target.get("custody_type"));
+        result.put("processorAccountId", request.get("processor_account_id").toString());
+        result.put("ownershipVersion", number(request, "ownership_version"));
+        result.put("lockVersion", number(lock, "lock_version"));
+        result.put("sourceSnapshot", json.readTree(item.get("source_snapshot_json").toString()));
+        result.put("targetSnapshot", json.readTree(item.get("target_snapshot_json").toString()));
+        result.put("parameterSnapshot", json.readTree(item.get("parameter_snapshot_json").toString()));
+        return result;
+    }
+
+    Map<String, Object> proxyReceipt(Actor actor, long id, long itemId,
+            Map<String, Object> expected, String observedCode, long confirmation) {
+        var snapshot = proxySnapshot(actor, id, itemId, true);
+        if (!json.readTree(json.writeValueAsString(snapshot)).equals(
+                json.readTree(json.writeValueAsString(expected)))) {
+            throw new TransferFailure("PROXY_RECEIPT_SCOPE_CHANGED", 409);
+        }
+        var current = actors.revalidateLocked(actor);
+        var item = item(itemId);
+        String observed = handover.observedCode(number(item, "asset_id"), observedCode);
+        complete(current, item);
+        db.update("UPDATE fams_transfer_receipt_grant SET consumed_at=?"
+                + " WHERE item_id=? AND consumed_at IS NULL", now(), itemId);
+        event(actor, current, id, itemId, "TRANSFER_PROXY_RECEIVED",
+                Map.of("confirmationId", Long.toString(confirmation), "observedCode", observed));
+        aggregate(id);
+        return Map.of("confirmationId", Long.toString(confirmation), "requestId", Long.toString(id),
+                "itemId", Long.toString(itemId), "result", "RECEIVED", "assetCode", observed,
+                "targetEmployeeId", item.get("receiver_employee_id").toString());
+    }
+
     static Instant receiptDeadline(Instant delivery, String timezone, long days) {
         if (days < 1 || days > 365) {
             throw new TransferFailure("TRANSFER_PARAMETER_INVALID", 409);

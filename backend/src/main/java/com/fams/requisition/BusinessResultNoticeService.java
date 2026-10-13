@@ -76,14 +76,15 @@ class BusinessResultNoticeService {
                 + " AND a.id=(SELECT MAX(x.id) FROM fams_audit_event x"
                 + " WHERE x.resource_type='BUSINESS_RESULT_NOTICE' AND x.resource_id=n.id"
                 + " AND x.action='RESULT_NOTICE_OBJECTION')"
-                + " WHERE n.execution_type='PROXY_CONFIRMATION' AND n.business_type='REQUISITION'";
-        var rows = db.queryForList("SELECT n.id,n.execution_id,n.business_id,r.name AS recipient,"
+                + " WHERE n.execution_type='PROXY_CONFIRMATION' AND n.business_type IN ('REQUISITION','TRANSFER')";
+        var rows = db.queryForList("SELECT n.id,n.execution_id,n.business_id,n.business_type,r.name AS recipient,"
                 + "a.detail_json,a.occurred_at" + from + " ORDER BY a.id DESC LIMIT ? OFFSET ?",
                 pageSize, (page - 1) * pageSize);
         var items = rows.stream().map(row -> Map.of(
                 "noticeId", row.get("id").toString(),
                 "executionId", row.get("execution_id").toString(),
                 "businessId", row.get("business_id").toString(),
+                "businessType", row.get("business_type"),
                 "recipient", row.get("recipient"),
                 "reason", json.readTree(row.get("detail_json").toString()).path("reason").asText(),
                 "createdAt", row.get("occurred_at").toString())).toList();

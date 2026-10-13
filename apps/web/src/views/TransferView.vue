@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import TransferReassignment from "@/components/TransferReassignment.vue";
 import { useSessionStore } from "@/auth/sessionStore";
@@ -8,6 +9,7 @@ import type { LoanMutation } from "@/loan/api";
 import type { Transfer, TransferAsset, TransferChoice, TransferItem, TransferTarget, TransferReceipt } from "../../../../packages/api-types/src/transfer";
 
 const session = useSessionStore();
+const route = useRoute();
 const rows = ref<Transfer[]>([]), assets = ref<TransferAsset[]>([]), selected = ref<Transfer | null>(null);
 const organizations = ref<TransferChoice[]>([]), employees = ref<TransferChoice[]>([]), warehouses = ref<TransferChoice[]>([]), locations = ref<TransferChoice[]>([]);
 const receipts = ref<TransferReceipt[]>([]), receipt = ref<TransferReceipt | null>(null);
@@ -141,7 +143,13 @@ async function personnel() {
 }
 onMounted(async () => {
   busy.value = true;
-  try { await load(); [organizations.value, warehouses.value, locations.value] = await Promise.all([catalog("organization"), catalog("warehouse"), catalog("location")]); }
+  try {
+    await load(); [organizations.value, warehouses.value, locations.value] = await Promise.all([catalog("organization"), catalog("warehouse"), catalog("location")]);
+    if (route.query.id && /^\d+$/.test(String(route.query.id))) {
+      selected.value = await loanRequest<Transfer>(`/transfers/${encodeURIComponent(String(route.query.id))}`);
+      await loadPeople(selected.value);
+    }
+  }
   catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
 });
 </script>
@@ -186,6 +194,7 @@ onMounted(async () => {
         <p>目标：{{ custodyName(item.targetSnapshot.custodyType) }} / {{ organization(item.targetSnapshot.usingOrganizationId) }} / {{ personName(item.targetSnapshot.employeeId) }} / {{ place(item.targetSnapshot.locationId) }}</p>
         <p v-if="item.destination">实际去向 {{ item.destination }} · {{ item.deliveryEvidence }}</p>
         <template v-if="operator && selected.processorAccountId === session.user?.id">
+          <router-link v-if="item.itemStatus === 'DELIVERED' && item.receiptRequired" :to="{ path: '/proxy-confirmations', query: { businessType: 'TRANSFER', businessId: selected.id, itemId: item.id } }">申请异常代确认</router-link>
           <template v-if="item.itemStatus === 'READY'"><button :disabled="busy || retryable" @click="physical(item, item.receiptRequired ? 'deliver' : 'verify')">{{ item.receiptRequired ? '记录交出，等待目标人接收' : '记录现场收妥并完成' }}</button><button :disabled="busy || retryable" @click="physical(item, 'cancel')">未交出取消</button></template>
           <button v-if="['DELIVERED','REFUSED'].includes(item.itemStatus)" :disabled="busy || retryable" @click="physical(item, 'recovery')">开始实物收回</button><button v-if="item.itemStatus === 'RECOVERY_PENDING'" :disabled="busy || retryable" @click="physical(item, 'recover')">确认实物收回后取消</button>
         </template><p v-if="item.itemStatus === 'COMPLETED'">正式目标已更新，原责任和交接证据保留。</p>

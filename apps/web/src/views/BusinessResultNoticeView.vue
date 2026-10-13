@@ -4,7 +4,9 @@ import AppChrome from "@/components/AppChrome.vue";
 import { loanMessage, loanRequest, type LoanMutation } from "@/loan/api";
 
 interface Notice { id: number; businessType: string; businessId: number; itemId: number;
-  content: { result: { assetCode: string }; actualSigner: string }; createdAt: string; read: boolean; reviewRequested: boolean }
+  content: { result: { assetCode: string }; actualSigner: string; submittedBy: string; approvedBy: string; executedBy: string;
+    metadata: { cannotConfirmReason: string; contactRecord: string; actualReceivedAt: string };
+    businessSnapshot?: { targetEmployeeId: string; processorAccountId: string } }; createdAt: string; read: boolean; reviewRequested: boolean }
 interface Page { items: Notice[]; total: number; unread: number }
 const rows = ref<Notice[]>([]); const page = ref(1); const total = ref(0);
 const unread = ref(0); const busy = ref(false); const error = ref("");
@@ -56,7 +58,15 @@ onMounted(() => refresh());
       <h2>代确认执行结果 · {{ notice.read ? '已读' : '未读' }}</h2>
       <p>资产 {{ notice.content.result.assetCode }} · 单据 {{ notice.businessId }} · {{ notice.createdAt }}</p>
       <p>签收已完成，责任归属仍为原目标责任人员。</p>
-      <router-link :to="{ path: '/requisitions', query: { id: notice.businessId } }">查看业务单据并核查</router-link>
+      <router-link v-if="notice.businessType !== 'TRANSFER'" :to="{ path: '/requisitions', query: { id: notice.businessId } }">查看业务单据并核查</router-link>
+      <details v-if="notice.businessType === 'TRANSFER'">
+        <summary>查看本次调拨签收结果与核查依据</summary>
+        <p>原调拨 {{ notice.businessId }} / 明细 {{ notice.itemId }} · 资产 {{ notice.content.result.assetCode }}</p>
+        <p>实际签收人 {{ notice.content.actualSigner }} · {{ notice.content.metadata?.actualReceivedAt }}</p>
+        <p>原目标责任人员 {{ notice.content.businessSnapshot?.targetEmployeeId }}</p>
+        <p>代确认原因 {{ notice.content.metadata?.cannotConfirmReason }}；联系记录 {{ notice.content.metadata?.contactRecord }}</p>
+        <p>提交账号 {{ notice.content.submittedBy }} · 批准账号 {{ notice.content.approvedBy }} · 执行账号 {{ notice.content.executedBy }}</p>
+      </details>
       <button v-if="!notice.read" :disabled="busy" @click="read(notice.id)">标记已读</button>
       <p v-if="notice.reviewRequested">已登记管理员核查，资产责任保持。</p>
       <form v-else @submit.prevent="object(notice.id)">
