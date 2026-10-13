@@ -1,6 +1,6 @@
 # D6-15D2 调拨批准目标更正
 
-状态：IN_PROGRESS。PC/API实现、定向运行和浏览器证据已完成；固定候选完整门禁及独立复核待完成。
+状态：IN_REVIEW。PC/API实现、定向运行和浏览器证据及候选d60543e完整门禁已完成，独立复核待完成。
 
 共享目标变更协调器只维护申请、决定、待办、审计和幂等记录，通过公开领域端口验证并更新调拨明细。领用原API及历史幂等指纹保留，两个业务的创建操作命名空间隔离。
 
@@ -12,4 +12,6 @@
 
 证据： [审批后](evidence/d6-15/transfer-target-before-receipt.txt)、[签收后](evidence/d6-15/transfer-target-after-receipt.txt)、[定向运行](evidence/d6-15/transfer-target-runtime.txt)。审批后SQL导出使用默认字符集，中文显示问号；签收后UTF-8导出准确保留中文物理事实，业务数据未被更改。
 
-当前不代表独立复核、远端CI、正式QA、真机或生产验收。D3小程序和D4联合验证未完成，父任务不关闭。AOCI旧未应用批次源绑定已失效，需最终稳定时重新领取；既有截图curation问题仍未解决，不宣称治理对齐。
+当前不代表独立复核、远端CI、正式QA、真机或生产验收。D3小程序和D4联合验证未完成，父任务不关闭。AOCI已重新领取并原子应用50条文本，文本候选剩余0；既有截图curation问题仍未解决，不宣称治理对齐。
+
+固定候选d60543e完整产品门禁退出0：Java181，Checkstyle/SpotBugs0，行93.05%、分支75.81%，Web30及小程序46、双端构建、依赖完整性、应用和数据库恢复、任务资源清理与干净postflight通过。证据[完整门禁](evidence/d6-15/transfer-target-product-gate-d60543e.txt)。
