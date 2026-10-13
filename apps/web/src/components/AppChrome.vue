@@ -45,6 +45,7 @@ async function handleLogout(): Promise<void> {
         <router-link v-if="session.user?.roles.some((role) => ['EMPLOYEE', 'DEPARTMENT_ASSET_MANAGER', 'WAREHOUSE_OPERATOR', 'ASSET_ADMIN'].includes(role))" to="/transfers" class="nav-item">调拨与人员交接</router-link>
         <router-link v-if="session.user?.roles.some(role => ['WAREHOUSE_OPERATOR', 'ASSET_ADMIN'].includes(role))" to="/proxy-confirmations" class="nav-item">异常代确认</router-link>
         <router-link v-if="session.user?.roles.some(role => ['WAREHOUSE_OPERATOR', 'ASSET_ADMIN'].includes(role))" to="/requisition-target-changes" class="nav-item">批准目标变更</router-link>
+        <router-link v-if="session.user?.roles.some(role => ['WAREHOUSE_OPERATOR', 'ASSET_ADMIN'].includes(role))" to="/transfer-target-changes" class="nav-item">调拨目标变更</router-link>
         <router-link v-if="session.user?.roles.includes('ASSET_ADMIN')" to="/business-result-reviews" class="nav-item">代确认结果核查</router-link>
         <router-link to="/business-result-notices" class="nav-item">业务结果通知</router-link>
       </nav>

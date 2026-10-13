@@ -136,4 +136,11 @@
         <Method name="&lt;init&gt;"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+    <!-- Spring owns these injected collaborators; business snapshots remain checked. -->
+    <Match>
+        <Class name="com.fams.targetchange.TargetChangeWorkflow"/>
+        <Field name="~(db|json)"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
 </FindBugsFilter>

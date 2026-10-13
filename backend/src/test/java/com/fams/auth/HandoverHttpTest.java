@@ -58,6 +58,7 @@ class HandoverHttpTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired MiniSessionService miniSessions;
     private long base;
+    private Long extraTargetEmployee;
     private Session employee;
     private Session warehouse;
     private Session other;
@@ -405,6 +406,7 @@ class HandoverHttpTest {
         jdbc.update(
                 "DELETE FROM fams_system_account WHERE id BETWEEN ? AND ?", base + 10, base + 17);
         jdbc.update("DELETE FROM fams_employee WHERE id BETWEEN ? AND ?", base + 10, base + 17);
+        if (extraTargetEmployee != null) { jdbc.update("DELETE FROM fams_employee WHERE id=?", extraTargetEmployee); }
         jdbc.update("DELETE FROM fams_location WHERE id IN (?,?)", base, base+1);
         jdbc.update("DELETE FROM fams_warehouse WHERE id IN (?,?)", base, base+1);
         jdbc.update("DELETE FROM fams_asset_category WHERE id=?", base);
@@ -3836,6 +3838,272 @@ class HandoverHttpTest {
         assertEquals(0L, jdbc.queryForObject("SELECT CAST(JSON_EXTRACT(target_snapshot_json,'$.employee.version') AS UNSIGNED) FROM fams_requisition_handover WHERE allocation_id=?", Long.class, allocation));
         assertEquals(404, call(employee, "POST", path(value, 0, "grant"), null, key(), null).statusCode());
         assertEquals(200, call(department, "POST", path(value, 0, "grant"), null, key(), null).statusCode());
+    }
+
+    @Test
+    void approvedTransferTargetChangeRetainsPhysicalFactsAndRequiresOnlyNewRecipient() throws Exception {
+        personalTransferFixture();
+        var row = claimedTransfer(transferDraft(false, false, base + 15, base + 1, base, 0), employee);
+        row = transferAction(warehouse, row, transferItemPath(row, "deliver"), transferPhysical(row, null, false));
+        String item = row.path("items").get(0).path("id").asText();
+        var originalRecipient = login(base + 15);
+        String originalReceipt = transferReceipt(originalRecipient, row, "RQ-ASSET-" + base);
+        var beforeAsset = jdbc.queryForMap("SELECT * FROM fams_asset WHERE id=?", base + 50);
+        var physical = jdbc.queryForMap("SELECT destination,delivery_evidence,delivered_at,receipt_deadline_at,source_snapshot_json,parameter_snapshot_json FROM fams_transfer_item WHERE id=?", item);
+        var snapshot = transferTargetContext(warehouse, row, 0);
+        String body = genericTargetProposal(snapshot, transferNewTarget(base + 12, base));
+        String identity = key();
+        var created = genericTargetCall(warehouse, "TRANSFER", "POST", "", body, identity, snapshot.path("version").asLong());
+        assertEquals(200, created.statusCode(), created.body());
+        var change = JSON.readTree(created.body());
+        assertEquals(change, JSON.readTree(genericTargetCall(warehouse, "TRANSFER", "POST", "", body, identity, snapshot.path("version").asLong()).body()));
+        String decision = "{\"result\":\"APPROVED\",\"reason\":\"Physical asset, destination and new target verified\"}";
+        assertEquals(404, targetCall(admin, "POST", "/" + change.path("id").asText() + "/decision", decision, key(), 0L).statusCode());
+        assertEquals(403, genericTargetCall(warehouse, "TRANSFER", "POST", "/" + change.path("id").asText() + "/decision", decision, key(), 0L).statusCode());
+        String approvalKey = key();
+        var approved = genericTargetCall(admin, "TRANSFER", "POST", "/" + change.path("id").asText() + "/decision", decision, approvalKey, 0L);
+        assertEquals(200, approved.statusCode(), approved.body());
+        assertEquals(JSON.readTree(approved.body()), JSON.readTree(genericTargetCall(admin, "TRANSFER", "POST", "/" + change.path("id").asText() + "/decision", decision, approvalKey, 0L).body()));
+        assertEquals(beforeAsset, jdbc.queryForMap("SELECT * FROM fams_asset WHERE id=?", base + 50));
+        assertEquals(physical, jdbc.queryForMap("SELECT destination,delivery_evidence,delivered_at,receipt_deadline_at,source_snapshot_json,parameter_snapshot_json FROM fams_transfer_item WHERE id=?", item));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+        assertEquals(404, transferCall(originalRecipient, "POST", "/receipts/" + item + "/grant", null, key(), null).statusCode());
+        assertEquals(404, transferCall(originalRecipient, "POST", "/receipts/" + item + "/receive", originalReceipt, key(), row.path("version").asLong()).statusCode());
+        assertEquals(0, JSON.readTree(transferCall(originalRecipient, "GET", "/receipts/pending", null, null, null).body()).path("total").asInt());
+        assertEquals(item, JSON.readTree(transferCall(other, "GET", "/receipts/pending", null, null, null).body()).path("items").get(0).path("id").asText());
+        row = JSON.readTree(transferCall(warehouse, "GET", "/" + row.path("id").asText(), null, null, null).body());
+        String receive = transferReceipt(other, row, "RQ-ASSET-" + base);
+        var received = transferCall(other, "POST", "/receipts/" + item + "/receive", receive, key(), row.path("version").asLong());
+        assertEquals(200, received.statusCode(), received.body());
+        assertEquals(base + 12, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_transfer_event WHERE item_id=? AND event_type='TRANSFER_TARGET_CHANGED'", item));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_transfer_event WHERE item_id=? AND event_type='TRANSFER_RECEIVE'", item));
+        assertEquals(Long.toString(base + 15), jdbc.queryForObject("SELECT JSON_UNQUOTE(JSON_EXTRACT(source_snapshot_json,'$.target.employeeId')) FROM fams_item_target_change WHERE id=?", String.class, change.path("id").asText()));
+    }
+
+    @Test
+    void approvedTransferTargetChangeReferenceDriftAndLateFailureRollbackThenReplay() throws Exception {
+        personalTransferFixture();
+        var row = claimedTransfer(transferDraft(false, false, base + 15, base + 1, base, 0), employee);
+        row = transferAction(warehouse, row, transferItemPath(row, "deliver"), transferPhysical(row, null, false));
+        String item = row.path("items").get(0).path("id").asText();
+        var originalRecipient = login(base + 15);
+        transferReceipt(originalRecipient, row, "RQ-ASSET-" + base);
+        var snapshot = transferTargetContext(warehouse, row, 0);
+        jdbc.update("UPDATE fams_asset SET version=version+1 WHERE id=?", base + 50);
+        var drift = genericTargetCall(warehouse, "TRANSFER", "GET", "/context?businessId=" + row.path("id").asText() + "&itemId=" + item, null, null, null);
+        assertEquals(409, drift.statusCode(), drift.body());
+        assertEquals("TRANSFER_SOURCE_CHANGED", JSON.readTree(drift.body()).path("code").asText());
+        jdbc.update("UPDATE fams_asset SET version=version-1 WHERE id=?", base + 50);
+        var created = genericTargetCall(warehouse, "TRANSFER", "POST", "", genericTargetProposal(snapshot, transferNewTarget(base + 12, base)), key(), snapshot.path("version").asLong());
+        assertEquals(200, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        String decision = "{\"result\":\"APPROVED\",\"reason\":\"Current new target verified\"}";
+        jdbc.update("UPDATE fams_employee SET version=version+1 WHERE id=?", base + 12);
+        assertEquals(409, genericTargetCall(admin, "TRANSFER", "POST", "/" + id + "/decision", decision, key(), 0L).statusCode());
+        jdbc.update("UPDATE fams_employee SET version=version-1 WHERE id=?", base + 12);
+        var before = jdbc.queryForMap("SELECT * FROM fams_transfer_item WHERE id=?", item);
+        String trigger = "d615_target_transfer_fault_" + base;
+        jdbc.execute("CREATE TRIGGER " + trigger + " BEFORE INSERT ON fams_transfer_event FOR EACH ROW BEGIN IF NEW.event_type='TRANSFER_TARGET_CHANGED' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='owned target change fault'; END IF; END");
+        String identity = key();
+        try {
+            assertEquals(500, genericTargetCall(admin, "TRANSFER", "POST", "/" + id + "/decision", decision, identity, 0L).statusCode());
+            assertEquals(before, jdbc.queryForMap("SELECT * FROM fams_transfer_item WHERE id=?", item));
+            assertEquals("PENDING", jdbc.queryForObject("SELECT change_status FROM fams_item_target_change WHERE id=?", String.class, id));
+            assertEquals(1, count("SELECT COUNT(*) FROM fams_transfer_receipt_grant WHERE item_id=? AND consumed_at IS NULL", item));
+            assertEquals(0, count("SELECT COUNT(*) FROM fams_idempotency_record WHERE idempotency_key=?", identity));
+        } finally { jdbc.execute("DROP TRIGGER " + trigger); }
+        assertEquals(200, genericTargetCall(admin, "TRANSFER", "POST", "/" + id + "/decision", decision, identity, 0L).statusCode());
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_transfer_event WHERE item_id=? AND event_type='TRANSFER_TARGET_CHANGED'", item));
+        assertEquals(base + 10, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+    }
+
+    @Test
+    void approvedTransferTargetChangeReassignmentRevokesReplayAndCompletedStaleProposalCanBeRejected() throws Exception {
+        personalTransferFixture();
+        var row = claimedTransfer(transferDraft(false, false, base + 15, base + 1, base, 0), employee);
+        var snapshot = transferTargetContext(warehouse, row, 0);
+        String body = genericTargetProposal(snapshot, transferNewTarget(base + 12, base)), identity = key();
+        var created = genericTargetCall(warehouse, "TRANSFER", "POST", "", body, identity, snapshot.path("version").asLong());
+        assertEquals(200, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        var ownership = reassignmentSnapshot(row);
+        var reassigned = transferCall(admin, "POST", "/" + row.path("id").asText() + "/reassignment", reassignmentBody(ownership, base + 12), key(), row.path("version").asLong());
+        assertEquals(200, reassigned.statusCode(), reassigned.body());
+        row = JSON.readTree(reassigned.body());
+        assertEquals(409, genericTargetCall(warehouse, "TRANSFER", "POST", "", body, identity, snapshot.path("version").asLong()).statusCode());
+        String approve = "{\"result\":\"APPROVED\",\"reason\":\"Checked\"}", reject = "{\"result\":\"REJECTED\",\"reason\":\"Scope changed; reapply\"}";
+        assertEquals(409, genericTargetCall(admin, "TRANSFER", "POST", "/" + id + "/decision", approve, key(), 0L).statusCode());
+        assertEquals(200, genericTargetCall(admin, "TRANSFER", "POST", "/" + id + "/decision", reject, key(), 0L).statusCode());
+        snapshot = transferTargetContext(other, row, 0);
+        created = genericTargetCall(other, "TRANSFER", "POST", "", genericTargetProposal(snapshot, transferNewTarget(base + 13, base)), key(), snapshot.path("version").asLong());
+        assertEquals(200, created.statusCode(), created.body());
+        id = JSON.readTree(created.body()).path("id").asText();
+        row = transferAction(other, row, transferItemPath(row, "deliver"), transferPhysical(row, null, false));
+        var originalRecipient = login(base + 15);
+        String receive = transferReceipt(originalRecipient, row, "RQ-ASSET-" + base);
+        assertEquals(200, transferCall(originalRecipient, "POST", "/receipts/" + row.path("items").get(0).path("id").asText() + "/receive", receive, key(), row.path("version").asLong()).statusCode());
+        assertEquals(409, genericTargetCall(admin, "TRANSFER", "POST", "/" + id + "/decision", approve, key(), 0L).statusCode());
+        assertEquals(200, genericTargetCall(admin, "TRANSFER", "POST", "/" + id + "/decision", reject, key(), 0L).statusCode());
+        assertEquals(base + 15, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+    }
+
+    @Test
+    void approvedTransferTargetChangeRefusalRequiresNewReceiptAndRecoveryCannotBeOverridden() throws Exception {
+        personalTransferFixture();
+        var row = claimedTransfer(transferDraft(false, false, base + 15, base + 1, base, 0), employee);
+        row = transferAction(warehouse, row, transferItemPath(row, "deliver"), transferPhysical(row, null, false));
+        String item = row.path("items").get(0).path("id").asText();
+        var originalRecipient = login(base + 15);
+        String refusal = transferReceipt(originalRecipient, row, "RQ-ASSET-" + base);
+        assertEquals(200, transferCall(originalRecipient, "POST", "/receipts/" + item + "/refuse", refusal, key(), row.path("version").asLong()).statusCode());
+        row = JSON.readTree(transferCall(warehouse, "GET", "/" + row.path("id").asText(), null, null, null).body());
+        var physical = jdbc.queryForMap("SELECT destination,delivered_at,receipt_deadline_at FROM fams_transfer_item WHERE id=?", item);
+        var snapshot = transferTargetContext(warehouse, row, 0);
+        var created = genericTargetCall(warehouse, "TRANSFER", "POST", "", genericTargetProposal(snapshot, transferNewTarget(base + 12, base)), key(), snapshot.path("version").asLong());
+        assertEquals(200, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        String approve = "{\"result\":\"APPROVED\",\"reason\":\"Correct physical asset and new recipient verified\"}";
+        assertEquals(200, genericTargetCall(admin, "TRANSFER", "POST", "/" + id + "/decision", approve, key(), 0L).statusCode());
+        assertEquals("DELIVERED", jdbc.queryForObject("SELECT item_status FROM fams_transfer_item WHERE id=?", String.class, item));
+        assertEquals(physical, jdbc.queryForMap("SELECT destination,delivered_at,receipt_deadline_at FROM fams_transfer_item WHERE id=?", item));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_transfer_event WHERE item_id=? AND event_type='TRANSFER_REFUSE'", item));
+        row = JSON.readTree(transferCall(warehouse, "GET", "/" + row.path("id").asText(), null, null, null).body());
+        snapshot = transferTargetContext(warehouse, row, 0);
+        created = genericTargetCall(warehouse, "TRANSFER", "POST", "", genericTargetProposal(snapshot, transferNewTarget(base + 13, base)), key(), snapshot.path("version").asLong());
+        assertEquals(200, created.statusCode(), created.body());
+        id = JSON.readTree(created.body()).path("id").asText();
+        row = transferAction(warehouse, row, transferItemPath(row, "recovery"), transferPhysical(row, null, false));
+        assertEquals(409, genericTargetCall(warehouse, "TRANSFER", "GET", "/context?businessId=" + row.path("id").asText() + "&itemId=" + item, null, null, null).statusCode());
+        assertEquals(409, genericTargetCall(admin, "TRANSFER", "POST", "/" + id + "/decision", approve, key(), 0L).statusCode());
+        assertEquals(200, genericTargetCall(admin, "TRANSFER", "POST", "/" + id + "/decision", "{\"result\":\"REJECTED\",\"reason\":\"Physical recovery in progress\"}", key(), 0L).statusCode());
+        assertEquals(base + 10, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+    }
+
+    @Test
+    void approvedTransferTargetChangeLeavesCompletedSiblingImmutable() throws Exception {
+        personalTransferFixture();
+        jdbc.update("UPDATE fams_asset SET lifecycle_status='IN_USE',custody_type='PERSONAL',storage_warehouse_id=NULL,owning_organization_id=?,using_organization_id=?,responsible_employee_id=? WHERE id=?", base, base, base + 10, base + 51);
+        var draft = (tools.jackson.databind.node.ObjectNode) JSON.readTree(transferDraft(false, false, base + 15, base + 1, base, 0));
+        var items = (tools.jackson.databind.node.ArrayNode) draft.get("items");
+        var second = items.get(0).deepCopy();
+        ((tools.jackson.databind.node.ObjectNode) second).put("assetId", Long.toString(base + 51));
+        items.add(second);
+        var row = claimedTransfer(draft.toString(), employee);
+        row = transferAction(warehouse, row, transferItemPath(row, "deliver"), transferPhysical(row, null, false));
+        var originalRecipient = login(base + 15);
+        String receive = transferReceipt(originalRecipient, row, "RQ-ASSET-" + base);
+        assertEquals(200, transferCall(originalRecipient, "POST", "/receipts/" + row.path("items").get(0).path("id").asText() + "/receive", receive, key(), row.path("version").asLong()).statusCode());
+        row = JSON.readTree(transferCall(warehouse, "GET", "/" + row.path("id").asText(), null, null, null).body());
+        String firstItem = row.path("items").get(0).path("id").asText();
+        var completed = jdbc.queryForMap("SELECT * FROM fams_transfer_item WHERE id=?", firstItem);
+        var completedAsset = jdbc.queryForMap("SELECT * FROM fams_asset WHERE id=?", base + 50);
+        assertEquals(409, genericTargetCall(warehouse, "TRANSFER", "GET", "/context?businessId=" + row.path("id").asText() + "&itemId=" + firstItem, null, null, null).statusCode());
+        var snapshot = transferTargetContext(warehouse, row, 1);
+        var created = genericTargetCall(warehouse, "TRANSFER", "POST", "", genericTargetProposal(snapshot, transferNewTarget(base + 12, base)), key(), snapshot.path("version").asLong());
+        assertEquals(200, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        assertEquals(200, genericTargetCall(admin, "TRANSFER", "POST", "/" + id + "/decision", "{\"result\":\"APPROVED\",\"reason\":\"Only unfinished sibling changed\"}", key(), 0L).statusCode());
+        assertEquals(completed, jdbc.queryForMap("SELECT * FROM fams_transfer_item WHERE id=?", firstItem));
+        assertEquals(completedAsset, jdbc.queryForMap("SELECT * FROM fams_asset WHERE id=?", base + 50));
+        assertEquals("READY", jdbc.queryForObject("SELECT item_status FROM fams_transfer_item WHERE id=?", String.class, row.path("items").get(1).path("id").asText()));
+        assertEquals(base + 10, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 51));
+    }
+
+    @Test
+    void approvedTransferTargetChangeStockApprovalCannotReplaceDestinationReceipt() throws Exception {
+        jdbc.update("UPDATE fams_location SET location_type='BIN' WHERE id=?", base);
+        jdbc.update("INSERT INTO fams_warehouse (id,code,code_normalized,name,status,created_at,updated_at) VALUES (?,?,?,'Target warehouse','ACTIVE',NOW(3),NOW(3))", base + 1, "TCWH" + base, "TCWH" + base);
+        jdbc.update("INSERT INTO fams_location (id,code,code_normalized,name,location_type,warehouse_id,status,created_at,updated_at) VALUES (?,?,?,'Target bin','BIN',?,'ACTIVE',NOW(3),NOW(3))", base + 1, "TCBIN" + base, "TCBIN" + base, base + 1);
+        var row = claimedTransfer(transferDraft(true, false, 0, 0, base + 1, base + 1), warehouse);
+        var snapshot = transferTargetContext(warehouse, row, 0);
+        var target = (tools.jackson.databind.node.ObjectNode) JSON.readTree(transferDraft(true, false, 0, 0, base + 1, base + 1)).path("items").get(0).path("target");
+        target.put("owningOrganizationId", Long.toString(base + 1));
+        var created = genericTargetCall(warehouse, "TRANSFER", "POST", "", genericTargetProposal(snapshot, target), key(), snapshot.path("version").asLong());
+        assertEquals(200, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        assertEquals(200, genericTargetCall(admin, "TRANSFER", "POST", "/" + id + "/decision", "{\"result\":\"APPROVED\",\"reason\":\"Storage target reapproved\"}", key(), 0L).statusCode());
+        assertEquals(base, jdbc.queryForObject("SELECT storage_warehouse_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        row = JSON.readTree(transferCall(warehouse, "GET", "/" + row.path("id").asText(), null, null, null).body());
+        assertEquals(400, transferCall(warehouse, "POST", "/" + row.path("id").asText() + transferItemPath(row, "verify"), transferPhysical(row, null, false), key(), row.path("version").asLong()).statusCode());
+        row = transferAction(warehouse, row, transferItemPath(row, "verify"), transferPhysical(row, "Destination inspector", false));
+        assertEquals(base + 1, jdbc.queryForObject("SELECT storage_warehouse_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        assertEquals(base + 1, jdbc.queryForObject("SELECT owning_organization_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        assertEquals("COMPLETED", row.path("requestStatus").asText());
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+    }
+
+    @Test
+    void approvedTransferTargetChangePreservesLargeRecipientIdentifierExactly() throws Exception {
+        long large = 9007199254740993L + base;
+        jdbc.update("INSERT INTO fams_employee (id,employee_no,employee_no_normalized,name,organization_id,status,created_at,updated_at) VALUES (?,?,?,'Large target',?,'ACTIVE',NOW(3),NOW(3))", large, "LARGETC" + base, "LARGETC" + base, base);
+        extraTargetEmployee = large;
+        jdbc.update("UPDATE fams_system_account SET employee_id=? WHERE id=?", large, base + 12);
+        other = login(base + 12);
+        personalTransferFixture();
+        var row = claimedTransfer(transferDraft(false, false, base + 15, base + 1, base, 0), employee);
+        row = transferAction(warehouse, row, transferItemPath(row, "deliver"), transferPhysical(row, null, false));
+        var snapshot = transferTargetContext(warehouse, row, 0);
+        var created = genericTargetCall(warehouse, "TRANSFER", "POST", "", genericTargetProposal(snapshot, transferNewTarget(large, base)), key(), snapshot.path("version").asLong());
+        assertEquals(200, created.statusCode(), created.body());
+        assertEquals(Long.toString(large), JSON.readTree(created.body()).path("proposed_target_json").path("employeeId").asText());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        assertEquals(200, genericTargetCall(admin, "TRANSFER", "POST", "/" + id + "/decision", "{\"result\":\"APPROVED\",\"reason\":\"Exact recipient identity verified\"}", key(), 0L).statusCode());
+        row = JSON.readTree(transferCall(warehouse, "GET", "/" + row.path("id").asText(), null, null, null).body());
+        assertEquals(Long.toString(large), row.path("items").get(0).path("targetSnapshot").path("employeeId").asText());
+        String receive = transferReceipt(other, row, "RQ-ASSET-" + base);
+        assertEquals(200, transferCall(other, "POST", "/receipts/" + row.path("items").get(0).path("id").asText() + "/receive", receive, key(), row.path("version").asLong()).statusCode());
+        assertEquals(large, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+    }
+
+    @Test
+    void approvedTransferTargetChangeFacadeKeepsLegacyFingerprintAndDomainNamespacesSeparate() throws Exception {
+        var value = allocated(1);
+        var reply = targetCall(warehouse, "GET", "/context?businessId=" + value.path("id").asText() + "&itemId=" + value.path("allocations").get(0).path("id").asText(), null, null, null);
+        var snapshot = JSON.readTree(reply.body());
+        String body = targetProposal(snapshot, base + 14), identity = key();
+        var created = targetCall(warehouse, "POST", "", body, identity, snapshot.path("version").asLong());
+        assertEquals(200, created.statusCode(), created.body());
+        Object legacy = JSON.readValue(body, Class.forName("com.fams.requisition.ItemTargetChangeInput$Proposal"));
+        String legacyHash = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(JSON.writeValueAsString(java.util.Map.of("version", snapshot.path("version").asLong(), "input", legacy)).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        assertEquals(legacyHash, jdbc.queryForObject("SELECT payload_sha256 FROM fams_idempotency_record WHERE actor_account_id=? AND operation_id='targetChange:propose' AND idempotency_key=?", String.class, base + 11, identity));
+        assertEquals(JSON.readTree(created.body()), JSON.readTree(genericTargetCall(warehouse, "REQUISITION", "POST", "", body, identity, snapshot.path("version").asLong()).body()));
+        jdbc.update("UPDATE fams_asset SET lifecycle_status='IN_USE',custody_type='PERSONAL',storage_warehouse_id=NULL,owning_organization_id=?,using_organization_id=?,responsible_employee_id=? WHERE id=?", base, base, base + 10, base + 51);
+        var draft = (tools.jackson.databind.node.ObjectNode) JSON.readTree(transferDraft(false, false, base + 15, base + 1, base, 0));
+        ((tools.jackson.databind.node.ObjectNode) draft.path("items").get(0)).put("assetId", Long.toString(base + 51));
+        var row = claimedTransfer(draft.toString(), employee);
+        snapshot = transferTargetContext(warehouse, row, 0);
+        var transfer = genericTargetCall(warehouse, "TRANSFER", "POST", "", genericTargetProposal(snapshot, transferNewTarget(base + 12, base)), identity, snapshot.path("version").asLong());
+        assertEquals(200, transfer.statusCode(), transfer.body());
+        assertEquals("TRANSFER", JSON.readTree(transfer.body()).path("business_type").asText());
+        assertTrue(!JSON.readTree(created.body()).path("id").asText().equals(JSON.readTree(transfer.body()).path("id").asText()));
+        assertEquals(2, count("SELECT COUNT(*) FROM fams_idempotency_record WHERE actor_account_id=? AND idempotency_key=?", base + 11, identity));
+    }
+
+    private JsonNode transferNewTarget(long employee, long organization) {
+        return JSON.readTree(transferDraft(false, false, employee, organization, base, 0)).path("items").get(0).path("target");
+    }
+    private JsonNode transferTargetContext(Session actor, JsonNode row, int index) throws Exception {
+        var response = genericTargetCall(actor, "TRANSFER", "GET", "/context?businessId=" + row.path("id").asText()
+                + "&itemId=" + row.path("items").get(index).path("id").asText(), null, null, null);
+        assertEquals(200, response.statusCode(), response.body());
+        return JSON.readTree(response.body());
+    }
+    private String genericTargetProposal(JsonNode snapshot, JsonNode target) {
+        return JSON.writeValueAsString(java.util.Map.of("businessId", snapshot.path("businessId").asText(), "itemId", snapshot.path("itemId").asText(),
+                "snapshot", snapshot, "target", target, "reason", "Approved scope correction", "observedAssetCode", snapshot.path("assetCode").asText(),
+                "physicalVerification", "Correct physical asset and unchanged delivery destination verified", "physicalChecked", true));
+    }
+    private HttpResponse<String> genericTargetCall(Session actor, String type, String method, String suffix, String body, String identity, Long version) throws Exception {
+        String query = suffix.contains("?") ? "&" : "?";
+        var builder = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/item-target-changes" + suffix + query + "businessType=" + type)).header("Cookie", actor.cookie());
+        if (identity != null) { builder.header("X-CSRF-Token", actor.csrf()).header("Idempotency-Key", identity); }
+        if (version != null) { builder.header("If-Match-Version", version.toString()); }
+        if (body != null) { builder.header("Content-Type", "application/json"); }
+        return http.send(builder.method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private String targetProposal(JsonNode snapshot, long employeeId) {

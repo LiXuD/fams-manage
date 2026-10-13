@@ -1,0 +1,15 @@
+id	item_status	receiver_employee_id	receipt_required	destination	delivery_evidence	completed_at
+1	DELIVERED	3	1	?????D2	????D2????	NULL
+id	change_status	original_target	new_target
+1	APPROVED	4	3
+responsible_employee_id	current_location_id
+3	3
+active_locks
+1
+event_type	COUNT(*)
+TRANSFER_DRAFT_CREATED	1
+TRANSFER_SUBMIT	1
+TRANSFER_APPROVED	1
+TRANSFER_CLAIM	1
+TRANSFER_DELIVER	1
+TRANSFER_TARGET_CHANGED	1

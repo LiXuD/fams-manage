@@ -17,10 +17,12 @@ import BusinessResultNoticeView from "@/views/BusinessResultNoticeView.vue";
 import BusinessResultReviewView from "@/views/BusinessResultReviewView.vue";
 
 import ItemTargetChangeView from "@/views/ItemTargetChangeView.vue";
+import TransferTargetChangeView from "@/views/TransferTargetChangeView.vue";
 
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
+    { path: "/transfer-target-changes", name: "transfer-target-changes", component: TransferTargetChangeView, meta: { requiresAuth: true } },
     { path: "/requisition-target-changes", name: "requisition-target-changes", component: ItemTargetChangeView, meta: { requiresAuth: true } },
     { path: "/business-result-reviews", name: "business-result-reviews", component: BusinessResultReviewView, meta: { requiresAuth: true } },
     { path: "/proxy-confirmations", name: "proxy-confirmations", component: ProxyConfirmationView, meta: { requiresAuth: true } },

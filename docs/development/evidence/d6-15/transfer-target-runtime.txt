@@ -1,0 +1,3 @@
+ProxyConfirmationUpgradeRuntimeCase PASS tests=1
+HandoverHttpTest#approvedItemTargetChange*+approvedTransferTargetChange*+receivingAndRecoveryRaceAllowsOnlyOneOutcomeAndSharedTargetIsExact PASS tests=17
+Owned runtime removed; evidence: /Users/lixd/IdeaProjects/Git/CodexProject/fams/output/d6-15-target-runtime.log

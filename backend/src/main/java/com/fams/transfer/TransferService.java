@@ -667,6 +667,96 @@ class TransferService {
         return finish(current, action, key, hash, wire(item(itemId)));
     }
 
+    Map<String, Object> targetChangeContext(Actor actor, long id, long itemId) {
+        var current = actors.revalidateLocked(actor);
+        var request = request(id);
+        if (!current.has(Role.ASSET_ADMIN)) {
+            role(current, Role.WAREHOUSE_OPERATOR);
+            processor(current, request);
+        }
+        executable(request);
+        var item = item(itemId);
+        targetChangeStage(id, item);
+        var source = source(item);
+        lock(item);
+        if (request.get("processor_account_id") == null) { throw new TransferFailure("TRANSFER_NOT_PROCESSOR", 409); }
+        var lock = one("SELECT lock_version FROM fams_asset_business_lock WHERE asset_id=?"
+                + " AND business_type='TRANSFER' AND business_id=? AND business_item_id=?"
+                + " AND released_at IS NULL FOR UPDATE", item.get("asset_id"), id, itemId);
+        var physical = new LinkedHashMap<String, Object>();
+        for (String field : List.of("destination", "delivery_evidence", "delivered_at", "receipt_deadline_at")) {
+            physical.put(field, item.get(field));
+        }
+        var result = new LinkedHashMap<String, Object>();
+        result.put("businessType", "TRANSFER");
+        result.put("businessId", Long.toString(id));
+        result.put("itemId", Long.toString(itemId));
+        result.put("version", number(request, "version"));
+        result.put("approvedVersion", number(request, "approved_version"));
+        result.put("itemVersion", number(item, "version"));
+        result.put("itemStatus", item.get("item_status"));
+        result.put("assetId", item.get("asset_id").toString());
+        result.put("assetVersion", number(item, "asset_version"));
+        result.put("assetCode", source.get("asset_code"));
+        result.put("processorAccountId", request.get("processor_account_id").toString());
+        result.put("ownershipVersion", number(request, "ownership_version"));
+        result.put("lockVersion", number(lock, "lock_version"));
+        result.put("target", targetChangeTarget(target(item)));
+        result.put("source", wire(source));
+        result.put("physical", wire(physical));
+        return result;
+    }
+
+    void validateChangedTarget(long id, long itemId, AssetTransferPort.Target target) {
+        executable(request(id));
+        var item = item(itemId);
+        targetChangeStage(id, item);
+        var source = source(item);
+        lock(item);
+        assets.validateTarget(source, target);
+    }
+
+    void applyChangedTarget(Actor actor, long id, long itemId, AssetTransferPort.Target target,
+            String observedCode, long proposal) {
+        var current = actors.revalidateLocked(actor);
+        role(current, Role.ASSET_ADMIN);
+        targetChangeContext(actor, id, itemId);
+        validateChangedTarget(id, itemId, target);
+        var item = item(itemId);
+        var source = source(item);
+        var normalized = assets.validateTarget(source, target);
+        handover.observedCode(number(item, "asset_id"), observedCode);
+        boolean receipt = !"READY".equals(item.get("item_status")) || receiptRequired(source, normalized);
+        db.update("UPDATE fams_transfer_item SET target_snapshot_json=?,receiver_employee_id=?,receipt_required=?,"
+                + "item_status=?,version=version+1 WHERE id=?", json.writeValueAsString(targetChangeTarget(target)),
+                receipt ? target.employeeId() : null, receipt,
+                "REFUSED".equals(item.get("item_status")) ? "DELIVERED" : item.get("item_status"), itemId);
+        db.update("UPDATE fams_transfer_receipt_grant SET consumed_at=? WHERE item_id=? AND consumed_at IS NULL", now(), itemId);
+        event(actor, current, id, itemId, "TRANSFER_TARGET_CHANGED", Map.of("proposalId", Long.toString(proposal),
+                "beforeTarget", json.readTree(item.get("target_snapshot_json").toString()),
+                "target", targetChangeTarget(target), "physicalDestination", Objects.toString(item.get("destination"), "")));
+        aggregate(id);
+    }
+
+    private void targetChangeStage(long id, Map<String, Object> item) {
+        if (number(item, "request_id") != id) { throw new TransferFailure("TRANSFER_ITEM_NOT_FOUND", 404); }
+        if (!List.of("READY", "DELIVERED", "REFUSED").contains(item.get("item_status"))) {
+            throw new TransferFailure("TARGET_CHANGE_PHYSICAL_STAGE_INVALID", 409);
+        }
+    }
+
+    static Map<String, Object> targetChangeTarget(AssetTransferPort.Target target) {
+        var result = new LinkedHashMap<String, Object>();
+        result.put("owningOrganizationId", target.owningOrganizationId() == null ? null : target.owningOrganizationId().toString());
+        result.put("custodyType", target.custodyType());
+        result.put("usingOrganizationId", target.usingOrganizationId() == null ? null : target.usingOrganizationId().toString());
+        result.put("employeeId", target.employeeId() == null ? null : target.employeeId().toString());
+        result.put("warehouseId", target.warehouseId() == null ? null : target.warehouseId().toString());
+        result.put("locationId", Long.toString(target.locationId()));
+        result.put("referenceVersions", target.referenceVersions());
+        return result;
+    }
+
     Map<String, Object> proxySnapshot(Actor actor, long id, long itemId, boolean executing) {
         var current = actors.revalidateLocked(actor);
         var request = request(id);
