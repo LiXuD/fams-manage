@@ -1,0 +1,3 @@
+[git diff check] exit=0
+[clean worktree postflight] exit=0
+Postflight rerun passed after reverting only analyzer-generated AGENTS counts; no product sources changed.

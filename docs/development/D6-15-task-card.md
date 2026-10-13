@@ -127,3 +127,7 @@ HandoverHttpTest类精确影响LOW、0调用者、0流程。
 2026-10-13：原生处理器→真实HTTP/MySQL验证1/1退出0，含清单选择、转派、丢失响应
 原键重试、唯一事件、责任/锁/交出阶段保持及旧处理人409精确拒绝，独有资源清理通过。
 证据 evidence/d6-15/mini-reassignment-runtime.txt；固定候选门禁和独立复核待完成。
+
+2026-10-13：B4固定候选a08a8ae完整开发门禁退出0，含原生真实HTTP检查、质量、
+应用/数据库重启、资源清理和干净postflight。日志 evidence/d6-15/d6-15-mini-product-gate.log。
+B4转IN_REVIEW，独立复核待完成；外部微信/真机后置，父任务仍IN_PROGRESS。
