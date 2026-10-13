@@ -14,10 +14,12 @@ import TransferView from "@/views/TransferView.vue";
 
 import ProxyConfirmationView from "@/views/ProxyConfirmationView.vue";
 import BusinessResultNoticeView from "@/views/BusinessResultNoticeView.vue";
+import BusinessResultReviewView from "@/views/BusinessResultReviewView.vue";
 
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
+    { path: "/business-result-reviews", name: "business-result-reviews", component: BusinessResultReviewView, meta: { requiresAuth: true } },
     { path: "/proxy-confirmations", name: "proxy-confirmations", component: ProxyConfirmationView, meta: { requiresAuth: true } },
     { path: "/business-result-notices", name: "business-result-notices", component: BusinessResultNoticeView, meta: { requiresAuth: true } },
     { path: "/", name: "home", component: HomeView, meta: { requiresAuth: true } },

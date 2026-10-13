@@ -3101,6 +3101,38 @@ class HandoverHttpTest {
         assertEquals(200, noticeCall(employee, "POST", "/" + noticeId + "/read").statusCode());
         assertEquals(200, noticeCall(employee, "POST", "/" + noticeId + "/read").statusCode());
         assertEquals(0, JSON.readTree(noticeCall(employee, "GET", "").body()).path("unread").asInt());
+        String objectionKey = key();
+        String objectionTrigger = "owned_proxy_objection_" + base;
+        jdbc.execute("CREATE TRIGGER " + objectionTrigger + " BEFORE INSERT ON fams_audit_event FOR EACH ROW BEGIN "
+                + "IF NEW.resource_type='BUSINESS_RESULT_NOTICE' AND NEW.resource_id=" + noticeId
+                + " AND NEW.action='RESULT_NOTICE_OBJECTION' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='owned objection failure'; END IF; END");
+        try {
+            assertEquals(500, noticeObjection(employee, noticeId, "Please check the signed delivery record", objectionKey).statusCode());
+            assertEquals(0, count("SELECT COUNT(*) FROM fams_todo WHERE business_type='REQUISITION'"
+                    + " AND business_id=? AND todo_type='PROXY_RECEIPT_REVIEW'", snapshot.path("businessId").asText()));
+            assertEquals(0, count("SELECT COUNT(*) FROM fams_idempotency_record WHERE actor_account_id=?"
+                    + " AND operation_id='requestBusinessResultReview' AND idempotency_key=?", base + 10, objectionKey));
+        } finally {
+            jdbc.execute("DROP TRIGGER " + objectionTrigger);
+        }
+        assertEquals(404, noticeObjection(other, noticeId, "Not the recipient", key()).statusCode());
+        var objection = noticeObjection(employee, noticeId, "Please check the signed delivery record", objectionKey);
+        assertEquals(200, objection.statusCode(), objection.body());
+        assertEquals(JSON.readTree(objection.body()), JSON.readTree(noticeObjection(employee, noticeId,
+                "Please check the signed delivery record", objectionKey).body()));
+        assertEquals(409, noticeObjection(employee, noticeId, "Changed report under same key", objectionKey).statusCode());
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_todo WHERE business_type='REQUISITION'"
+                + " AND business_id=? AND todo_type='PROXY_RECEIPT_REVIEW' AND closed_at IS NULL", snapshot.path("businessId").asText()));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='BUSINESS_RESULT_NOTICE'"
+                + " AND resource_id=? AND action='RESULT_NOTICE_OBJECTION'", noticeId));
+        assertTrue(JSON.readTree(noticeCall(employee, "GET", "").body()).path("items").get(0).path("reviewRequested").asBoolean());
+        assertEquals(403, noticeCall(employee, "GET", "/review-requests").statusCode());
+        var reviewQueue = noticeCall(admin, "GET", "/review-requests");
+        assertEquals(200, reviewQueue.statusCode(), reviewQueue.body());
+        var review = JSON.readTree(reviewQueue.body()).path("items").get(0);
+        assertEquals(noticeId, review.path("noticeId").asText());
+        assertEquals("Please check the signed delivery record", review.path("reason").asText());
+        assertEquals(id, review.path("executionId").asText());
         assertEquals("IN_USE", jdbc.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=?",
                 String.class, base + 50));
     }
@@ -3274,11 +3306,97 @@ class HandoverHttpTest {
         assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE business_id=? AND business_type='REQUISITION' AND released_at IS NULL", request));
     }
 
+    @Test
+    @EnabledIfSystemProperty(named = "d6.15.proxy.runtime", matches = "true")
+    void proxyConfirmationValidatesManualDelegationProofAndRejectsWithoutChangingCustody() throws Exception {
+        var value = allocated(1);
+        value = warehouseWrite(value, 0, "deliver", delivery(value, 0));
+        var snapshot = proxyContext(value);
+        assertProxyDraftRejected(snapshot, b -> b.put("targetOrAuthorizedProxyReceived", false), 400, "PROXY_RECEIPT_EVIDENCE_REQUIRED");
+        assertProxyDraftRejected(snapshot, b -> b.put("actualReceivedAt", java.time.Instant.now().plusSeconds(60).toString()), 400, "PROXY_RECEIPT_EVIDENCE_REQUIRED");
+        assertProxyDraftRejected(snapshot, b -> b.put("evidenceKind", "UNKNOWN"), 400, "PROXY_RECEIPT_EVIDENCE_REQUIRED");
+        assertProxyDraftRejected(snapshot, b -> b.put("collectionMethod", "UNKNOWN"), 400, "PROXY_RECEIPT_EVIDENCE_REQUIRED");
+        assertProxyDraftRejected(snapshot, b -> b.put("collectionMethod", "MANUAL_RECORD").put("manualReason", ""), 400, "PROXY_RECEIPT_EVIDENCE_REQUIRED");
+        assertProxyDraftRejected(snapshot, b -> b.put("delegatedReceipt", true), 400, "PROXY_RECEIPT_DELEGATION_REQUIRED");
+        assertProxyDraftRejected(snapshot, b -> b.put("delegatedReceipt", true).put("evidenceKind", "AUTHORIZED_PROXY").put("delegationRelationship", ""), 400, "PROXY_RECEIPT_DELEGATION_REQUIRED");
+        assertProxyDraftRejected(snapshot, b -> b.put("delegatedReceipt", true).put("evidenceKind", "AUTHORIZED_PROXY").put("delegationRelationship", "Family").put("delegationBasis", ""), 400, "PROXY_RECEIPT_DELEGATION_REQUIRED");
+        assertProxyDraftRejected(snapshot, b -> b.putNull("actualSignerEmployeeId"), 400, "PROXY_RECEIPT_SIGNER_MISMATCH");
+        assertProxyDraftRejected(snapshot, b -> b.put("actualSignerEmployeeId", base + 12), 400, "PROXY_RECEIPT_SIGNER_MISMATCH");
+        assertProxyDraftRejected(snapshot, b -> b.put("observedAssetCode", "wrong"), 409, "PROXY_RECEIPT_ASSET_MISMATCH");
+        assertProxyDraftRejected(snapshot, b -> b.put("previousConfirmationId", Long.MAX_VALUE), 404, "REQUISITION_UNAVAILABLE");
+        var body = (tools.jackson.databind.node.ObjectNode) JSON.readTree(proxyDraft(snapshot));
+        body.put("delegatedReceipt", true).put("actualSigner", "Authorized family signer")
+                .put("evidenceKind", "AUTHORIZED_PROXY").put("delegationRelationship", "Family")
+                .put("delegationBasis", "Signed authorization linked to receipt")
+                .put("collectionMethod", "MANUAL_RECORD").put("manualReason", "Code label unreadable to scanner; physically matched");
+        String identity = key();
+        var created = proxyCall(warehouse, "POST", "", body.toString(), identity, null);
+        assertEquals(200, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        assertEquals(JSON.readTree(created.body()), JSON.readTree(proxyCall(warehouse, "POST", "", body.toString(), identity, null).body()));
+        body.put("contactRecord", "Changed payload");
+        assertEquals(409, proxyCall(warehouse, "POST", "", body.toString(), identity, null).statusCode());
+        assertEquals(404, proxyCall(admin, "GET", "/" + id, null, null, null).statusCode());
+        assertEquals(404, proxyCall(other, "GET", "/" + id, null, null, null).statusCode());
+        assertEquals(403, proxyCall(employee, "GET", "", null, null, null).statusCode());
+        assertEquals(1, JSON.readTree(proxyCall(warehouse, "GET", "", null, null, null).body()).path("total").asInt());
+        assertEquals(0, JSON.readTree(proxyCall(admin, "GET", "", null, null, null).body()).path("total").asInt());
+        var uploaded = proxyUpload(id, 0);
+        assertEquals(201, uploaded.statusCode(), uploaded.body());
+        String object = JSON.readTree(uploaded.body()).path("objectId").asText();
+        jdbc.update("UPDATE fams_attachment SET scan_status='UNAVAILABLE' WHERE object_id=?", object);
+        assertEquals(409, proxyCall(warehouse, "POST", "/" + id + "/submit", null, key(), 1L).statusCode());
+        jdbc.update("UPDATE fams_attachment SET scan_status='CLEAN',size_bytes=size_bytes+1 WHERE object_id=?", object);
+        assertEquals(409, proxyCall(warehouse, "POST", "/" + id + "/submit", null, key(), 1L).statusCode());
+        jdbc.update("UPDATE fams_attachment SET size_bytes=size_bytes-1 WHERE object_id=?", object);
+        var proofPath = proxyRoot.resolve(object);
+        byte[] proof = java.nio.file.Files.readAllBytes(proofPath);
+        java.nio.file.Files.delete(proofPath);
+        assertEquals(409, proxyCall(warehouse, "POST", "/" + id + "/submit", null, key(), 1L).statusCode());
+        java.nio.file.Files.write(proofPath, proof);
+        String submitKey = key();
+        var submitted = proxyCall(warehouse, "POST", "/" + id + "/submit", null, submitKey, 1L);
+        assertEquals(200, submitted.statusCode(), submitted.body());
+        assertEquals(JSON.readTree(submitted.body()), JSON.readTree(proxyCall(warehouse, "POST", "/" + id + "/submit", null, submitKey, 1L).body()));
+        for (String checks : java.util.List.of(proxyDecision(true).replace("physicalEvidenceChecked\":true", "physicalEvidenceChecked\":false"), proxyDecision(true).replace("noDisputeChecked\":true", "noDisputeChecked\":false"))) {
+            assertEquals(400, proxyCall(admin, "POST", "/" + id + "/decision", checks, key(), 2L).statusCode());
+        }
+        String decisionKey = key();
+        var rejected = proxyCall(admin, "POST", "/" + id + "/decision", proxyDecision(false), decisionKey, 2L);
+        assertEquals(200, rejected.statusCode(), rejected.body());
+        assertEquals(JSON.readTree(rejected.body()), JSON.readTree(proxyCall(admin, "POST", "/" + id + "/decision", proxyDecision(false), decisionKey, 2L).body()));
+        assertEquals(409, proxyCall(warehouse, "POST", "/" + id + "/execute", null, key(), 3L).statusCode());
+        body = (tools.jackson.databind.node.ObjectNode) JSON.readTree(proxyDraft(snapshot));
+        body.put("previousConfirmationId", id);
+        assertEquals(200, proxyCall(warehouse, "POST", "", body.toString(), key(), null).statusCode());
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_business_result_notice WHERE business_id=?", snapshot.path("businessId").asText()));
+        assertEquals("IN_STOCK", jdbc.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=?", String.class, base + 50));
+    }
+
+    private void assertProxyDraftRejected(JsonNode snapshot,
+            java.util.function.Consumer<tools.jackson.databind.node.ObjectNode> edit, int status, String code) throws Exception {
+        var body = (tools.jackson.databind.node.ObjectNode) JSON.readTree(proxyDraft(snapshot));
+        edit.accept(body);
+        var response = proxyCall(warehouse, "POST", "", body.toString(), key(), null);
+        assertEquals(status, response.statusCode(), response.body());
+        assertEquals(code, JSON.readTree(response.body()).path("code").asText());
+    }
+
     private String proxyDecision(boolean approved) {
         return "{\"approved\":"
                 + approved
                 + ",\"reason\":\"Signed physical delivery and target"
                 + " checked\",\"physicalEvidenceChecked\":true,\"noDisputeChecked\":true}";
+    }
+
+    private HttpResponse<String> noticeObjection(Session session, String id, String reason, String identity)
+            throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+                + "/api/v1/business-result-notices/" + id + "/objection"))
+                .header("Cookie", session.cookie()).header("X-CSRF-Token", session.csrf())
+                .header("Idempotency-Key", identity).header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(java.util.Map.of("reason", reason))))
+                .build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> noticeCall(Session session, String method, String path)

@@ -1,0 +1,203 @@
+Traceback (most recent call last):
+  File "<REPO>/scripts/verify-product-development.py", line 17, in <module>
+[clean worktree preflight] exit=0
+[generated output tracking preflight] exit=0
+[Compose policy model] exit=0
+[Compose static policy] pinned MySQL, loopback port, required task variables, healthcheck, named volume
+[Compose first startup] exit=0
+  Volume fams-d6-03a-43064c0647a29ae6_mysql-data Created
+  Volume fams-d6-03a-43064c0647a29ae6_mysql-data Created
+  Network fams-d6-03a-43064c0647a29ae6_default Created
+  Network fams-d6-03a-43064c0647a29ae6_default Created
+  Container fams-d6-03a-43064c0647a29ae6-mysql-1 Creating
+  Container fams-d6-03a-43064c0647a29ae6-mysql-1 Created
+  Container fams-d6-03a-43064c0647a29ae6-mysql-1 Starting
+  Container fams-d6-03a-43064c0647a29ae6-mysql-1 Started
+  Container fams-d6-03a-43064c0647a29ae6-mysql-1 Waiting
+  Container fams-d6-03a-43064c0647a29ae6-mysql-1 Healthy
+[Compose repeated startup] exit=0
+  Container fams-d6-03a-43064c0647a29ae6-mysql-1 Running
+  Container fams-d6-03a-43064c0647a29ae6-mysql-1 Waiting
+  Container fams-d6-03a-43064c0647a29ae6-mysql-1 Healthy
+[D6-04 authentication database provisioning] exit=0
+[pinned MySQL image metadata] exit=0
+[resolved Node runtime] exit=0
+[Java clean] exit=0
+  [INFO]   from pom.xml
+  [INFO] --------------------------------[ jar ]---------------------------------
+  [INFO]
+  [INFO] --- clean:3.5.0:clean (default-clean) @ contract-generation-probe ---
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  0.230 s
+  [INFO] Finished at: 2026-10-13T08:46:40+08:00
+  [INFO] ------------------------------------------------------------------------
+[mini session V16 upgrade] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  15.299 s
+  [INFO] Finished at: 2026-10-13T08:46:57+08:00
+  [INFO] ------------------------------------------------------------------------
+[requisition V18 upgrade and constraints] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  13.306 s
+  [INFO] Finished at: 2026-10-13T08:47:11+08:00
+  [INFO] ------------------------------------------------------------------------
+[requisition V19 change upgrade] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  10.606 s
+  [INFO] Finished at: 2026-10-13T08:47:22+08:00
+  [INFO] ------------------------------------------------------------------------
+[requisition V20 handover upgrade] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  10.808 s
+  [INFO] Finished at: 2026-10-13T08:47:34+08:00
+  [INFO] ------------------------------------------------------------------------
+[loan V21 borrowing and return upgrade] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  11.289 s
+  [INFO] Finished at: 2026-10-13T08:47:46+08:00
+  [INFO] ------------------------------------------------------------------------
+[transfer V25 upgrade and repeat] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  10.629 s
+  [INFO] Finished at: 2026-10-13T08:47:57+08:00
+  [INFO] ------------------------------------------------------------------------
+[transfer V27 ownership upgrade and repeat] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  10.575 s
+  [INFO] Finished at: 2026-10-13T08:48:09+08:00
+  [INFO] ------------------------------------------------------------------------
+[return V28 ownership upgrade and repeat] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  10.535 s
+  [INFO] Finished at: 2026-10-13T08:48:20+08:00
+  [INFO] ------------------------------------------------------------------------
+[proxy confirmation V29 upgrade and repeat] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  10.596 s
+  [INFO] Finished at: 2026-10-13T08:48:32+08:00
+  [INFO] ------------------------------------------------------------------------
+[durable job coverage] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  13.515 s
+  [INFO] Finished at: 2026-10-13T08:48:46+08:00
+  [INFO] ------------------------------------------------------------------------
+[asset import batch coverage] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  11.528 s
+  [INFO] Finished at: 2026-10-13T08:48:59+08:00
+  [INFO] ------------------------------------------------------------------------
+[asset import HTTP coverage] exit=0
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  19.981 s
+  [INFO] Finished at: 2026-10-13T08:49:20+08:00
+  [INFO] ------------------------------------------------------------------------
+  Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+[Java blocking quality] exit=1
+  [INFO] Finished at: 2026-10-13T08:51:13+08:00
+  [INFO] ------------------------------------------------------------------------
+  [ERROR] Failed to execute goal org.jacoco:jacoco-maven-plugin:0.8.15:check (check-initial-coverage) on project contract-generation-probe: Coverage checks have not been met. See log for details. -> [Help 1]
+  [ERROR]
+  [ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+  [ERROR] Re-run Maven using the -X switch to enable full debug logging.
+  [ERROR]
+  [ERROR] For more information about the errors and possible solutions, please read the following articles:
+  [ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException
+  Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+[Java coverage diagnostic] LINE: 9983/10793 (92.50%)
+[Java coverage diagnostic] BRANCH: 3628/4869 (74.51%)
+[Java branch diagnostic] com/fams/requisition/RequisitionService: missed=99
+[Java branch diagnostic] com/fams/asset/AssetService: missed=82
+[Java branch diagnostic] com/fams/inbound/InboundService: missed=65
+[Java branch diagnostic] com/fams/requisition/RequisitionProxyConfirmationService: missed=62
+[Java branch diagnostic] com/fams/transfer/TransferService: missed=57
+[Java branch diagnostic] com/fams/masterdata/IdentityMasterDataService: missed=41
+[Java branch diagnostic] com/fams/requisition/RequisitionHandoverService: missed=40
+[Java branch diagnostic] com/fams/loan/AssetReturnService: missed=40
+[Java branch diagnostic] com/fams/assetimport/AssetImportRollbackService: missed=34
+[Java branch diagnostic] com/fams/masterdata/AssetCategoryService: missed=32
+[Java branch diagnostic] com/fams/masterdata/LocationService: missed=31
+[Java branch diagnostic] com/fams/auth/MiniBindingService: missed=27
+[Compose cleanup] exit=0
+[Compose cleanup] task container, network, and named volume removed
+[git diff check] exit=0
+[clean worktree postflight] exit=0
+    gate["verify_java_quality"](context)
+  File "<REPO>/scripts/verify-d6-03a.py", line 1159, in verify_java_quality
+    output = require_command(
+             ^^^^^^^^^^^^^^^^
+  File "<REPO>/scripts/verify-d6-03a.py", line 470, in require_command
+    raise VerificationFailure(f"{label} failed with exit {result.returncode}")
+<run_path>.VerificationFailure: Java blocking quality failed with exit 1

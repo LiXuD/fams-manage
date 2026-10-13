@@ -129,4 +129,11 @@
         <Method name="&lt;init&gt;"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+    <!-- Spring owns the shared database collaborator, matching the inbound attachment adapter. -->
+    <Match>
+        <Class name="com.fams.requisition.ProxyConfirmationAttachmentPort"/>
+        <Field name="db"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
 </FindBugsFilter>

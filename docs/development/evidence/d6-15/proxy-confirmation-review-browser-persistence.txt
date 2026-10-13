@@ -1,0 +1,24 @@
+APPROVED BEFORE EXECUTION
+confirmation_status	version
+APPROVED	3
+lifecycle_status	responsible_employee_id
+IN_STOCK	NULL
+notices
+0
+
+AFTER EXECUTION, RECIPIENT OBJECTION AND SECOND HARD RESTART
+confirmation_status	version
+EXECUTED	4
+lifecycle_status	responsible_employee_id	current_location_id
+IN_USE	3	2
+recipient_employee_id	notices	read_count
+3	1	1
+active_locks
+0
+event_type	COUNT(*)
+DELIVERED	1
+PROXY_RECEIVED	1
+todo_type	COUNT(*)
+PROXY_RECEIPT_REVIEW	1
+action	COUNT(*)
+RESULT_NOTICE_OBJECTION	1
