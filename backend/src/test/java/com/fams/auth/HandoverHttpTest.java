@@ -3746,6 +3746,22 @@ class HandoverHttpTest {
         assertEquals("2099-12-31", jdbc.queryForObject("SELECT expected_return_date FROM fams_loan WHERE asset_id=?", java.sql.Date.class, base + 50).toString());
     }
 
+    @Test
+    void approvedItemTargetChangeAssetDriftReturnsConflictAndNeverCreatesProposal() throws Exception {
+        var value = allocated(1);
+        value = warehouseWrite(value, 0, "deliver", delivery(value, 0));
+        String endpoint = "/context?businessId=" + value.path("id").asText() + "&itemId=" + value.path("allocations").get(0).path("id").asText();
+        var snapshot = JSON.readTree(targetCall(warehouse, "GET", endpoint, null, null, null).body());
+        jdbc.update("UPDATE fams_asset SET version=version+1 WHERE id=?", base + 50);
+        var context = targetCall(warehouse, "GET", endpoint, null, null, null);
+        assertEquals(409, context.statusCode(), context.body());
+        assertEquals("ASSET_HANDOVER_CHANGED", JSON.readTree(context.body()).path("code").asText());
+        var proposal = targetCall(warehouse, "POST", "", targetProposal(snapshot, base + 14), key(), snapshot.path("version").asLong());
+        assertEquals(409, proposal.statusCode(), proposal.body());
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_item_target_change WHERE business_id=?", value.path("id").asLong()));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+    }
+
     private String targetProposal(JsonNode snapshot, long employeeId) {
         return JSON.writeValueAsString(java.util.Map.of("businessId",snapshot.path("businessId").asText(),
                 "itemId",snapshot.path("itemId").asText(),"snapshot",snapshot,"target",java.util.Map.of(

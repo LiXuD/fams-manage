@@ -6,7 +6,7 @@ Upgrade: ProxyConfirmationUpgradeRuntimeCase 1/1 PASS, no skips.
 Actual V29 column metadata read before V30; old column definitions and historical
 return full row preserved. V30 applied once, repeat 0, Flyway validation passed.
 New override columns nullable; new target-change table initially empty.
-HTTP: HandoverHttpTest#approvedItemTargetChange* 4/4 PASS, no skips.
+HTTP: HandoverHttpTest#approvedItemTargetChange* 5/5 PASS, no skips.
 - Approval keeps original demand and delivery row unchanged, asset IN_STOCK and lock active.
 - Original recipient grant/receipt rejected; new recipient receipt commits custody and releases lock.
 - Disabled original recipient can be corrected; new reference drift rejects approval atomically.
@@ -16,3 +16,9 @@ HTTP: HandoverHttpTest#approvedItemTargetChange* 4/4 PASS, no skips.
 - Borrow receipt opens only new borrower relationship and keeps original expected return date.
 Owned runtime container and anonymous volume removed; runner exited 0.
 These are internal development checks, not remote CI, formal QA or production acceptance.
+
+Follow-up: asset source-version drift maps to ASSET_HANDOVER_CHANGED/409 at both
+context and proposal endpoints, with no proposal and the original active lock retained.
+Candidate 9d28896 full gate was interrupted (exit 130) after this error-mapping gap
+was identified; it is not a passing gate. Owned Compose resources were explicitly
+removed and all three resource kinds verified absent; unrelated runtime retained.
