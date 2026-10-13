@@ -118,6 +118,7 @@ class RequisitionProxyConfirmationService {
     Map<String, Object> create(
             Actor actor, String key, RequisitionProxyConfirmationController.Draft input) {
         var current = role(actor, Role.WAREHOUSE_OPERATOR);
+        processor(current, input.businessId());
         var prior = replay(current, "createProxyConfirmation", key, input);
         if (prior != null) {
             return prior;
@@ -194,6 +195,7 @@ class RequisitionProxyConfirmationService {
 
     Map<String, Object> submit(Actor actor, long id, long version, String key) {
         var current = role(actor, Role.WAREHOUSE_OPERATOR);
+        processor(current, number(row(id, false), "business_id"));
         var payload = Map.of("id", id, "version", version);
         var prior = replay(current, "submitProxyConfirmation", key, payload);
         if (prior != null) {
@@ -267,6 +269,7 @@ class RequisitionProxyConfirmationService {
 
     Map<String, Object> execute(Actor actor, long id, long version, String key) {
         var current = role(actor, Role.WAREHOUSE_OPERATOR);
+        processor(current, number(row(id, false), "business_id"));
         var payload = Map.of("id", id, "version", version);
         var prior = replay(current, "executeProxyConfirmation", key, payload);
         if (prior != null) {
@@ -321,6 +324,17 @@ class RequisitionProxyConfirmationService {
                 json.writeValueAsString(detail),
                 now());
         return finish(current, "executeProxyConfirmation", key, payload, id, wire(row(id, false)));
+    }
+
+    private void processor(Current current, long request) {
+        if (db.queryForList("SELECT id FROM fams_requisition WHERE id=? FOR UPDATE", request).isEmpty()) {
+            throw RequisitionFailure.unavailable();
+        }
+        var owners = db.queryForList("SELECT processor_account_id FROM fams_requisition_ownership"
+                + " WHERE request_id=? ORDER BY id DESC LIMIT 1 FOR UPDATE", request);
+        if (owners.isEmpty() || number(owners.getFirst(), "processor_account_id") != current.id()) {
+            throw conflict("PROXY_RECEIPT_NOT_PROCESSOR");
+        }
     }
 
     private Map<String, Object> lockedCurrent(Actor actor, long id, boolean executing) {

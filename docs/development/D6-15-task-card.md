@@ -150,3 +150,9 @@ IN_USE责任人员3、事件1、通知1、锁0，其他人员通知为空，已�
 完整固定候选门禁和独立复核待完成，C1保持IN_PROGRESS；C2/C3及D/E继续，不关闭父任务。
 旧契约检查器的既有/api/v1/requisitions分类报错在HEAD基线复现；新增路径写契约
 与全文件引用/唯一operationId静态检查通过，此事实不等于整套契约门禁通过。
+
+2026-10-13 C1固定候选f1a6f8f完整门禁退出1：新结果通知Controller直接@Transactional
+违反既有架构规则；已移入BusinessResultNoticeService，未放宽规则。另补创建/提交/执行
+回放前现任处理权复核；新增真实HTTP整单转派后的旧键重试3处拒绝、唯一通知及
+未完成资产锁保持用例。V29升级1/1和HTTP3/3通过，最终固定候选门禁待重跑，
+状态仍IN_PROGRESS。原失败证据proxy-confirmation-first-gate-failure.txt保留。

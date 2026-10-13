@@ -3232,6 +3232,48 @@ class HandoverHttpTest {
         return JSON.writeValueAsString(body);
     }
 
+    @Test
+    @EnabledIfSystemProperty(named = "d6.15.proxy.runtime", matches = "true")
+    void proxyConfirmationReassignmentRevokesOriginalWarehouseReplayPermission() throws Exception {
+        var value = allocated(2);
+        value = warehouseWrite(value, 0, "deliver", delivery(value, 0));
+        var snapshot = proxyContext(value);
+        String draftBody = proxyDraft(snapshot);
+        String createKey = key();
+        var created = proxyCall(warehouse, "POST", "", draftBody, createKey, null);
+        assertEquals(200, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        assertEquals(201, proxyUpload(id, 0).statusCode());
+        String submitKey = key();
+        assertEquals(200, proxyCall(warehouse, "POST", "/" + id + "/submit", null, submitKey, 1L).statusCode());
+        assertEquals(200, proxyCall(admin, "POST", "/" + id + "/decision", proxyDecision(true), key(), 2L).statusCode());
+        String executeKey = key();
+        assertEquals(200, proxyCall(warehouse, "POST", "/" + id + "/execute", null, executeKey, 3L).statusCode());
+        String request = snapshot.path("businessId").asText();
+        var inspected = call(admin, "GET", "/" + request + "/reassignment", null, null, null);
+        assertEquals(200, inspected.statusCode(), inspected.body());
+        var transfer = JSON.readTree(inspected.body());
+        var body = JSON.createObjectNode();
+        body.put("processorAccountId", Long.toString(base + 12));
+        body.put("ownershipVersion", transfer.path("ownershipVersion").asLong());
+        body.put("reason", "Original warehouse unavailable");
+        body.put("evidence", "Checked completed receipt and remaining physical item");
+        body.put("unsynchronizedResultsChecked", true);
+        body.set("items", transfer.path("items"));
+        var reassigned = call(admin, "POST", "/" + request + "/reassignment", body.toString(), key(), transfer.path("version").asLong());
+        assertEquals(200, reassigned.statusCode(), reassigned.body());
+        for (var response : java.util.List.of(
+                proxyCall(warehouse, "POST", "", draftBody, createKey, null),
+                proxyCall(warehouse, "POST", "/" + id + "/submit", null, submitKey, 1L),
+                proxyCall(warehouse, "POST", "/" + id + "/execute", null, executeKey, 3L))) {
+            assertEquals(409, response.statusCode(), response.body());
+            assertEquals("PROXY_RECEIPT_NOT_PROCESSOR", JSON.readTree(response.body()).path("code").asText());
+        }
+        assertEquals(200, proxyCall(other, "GET", "/" + id, null, null, null).statusCode());
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_business_result_notice WHERE execution_id=?", id));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE business_id=? AND business_type='REQUISITION' AND released_at IS NULL", request));
+    }
+
     private String proxyDecision(boolean approved) {
         return "{\"approved\":"
                 + approved
