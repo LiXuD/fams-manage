@@ -16,7 +16,7 @@ import java.util.UUID;
 
 @Profile("fams-product")
 @Order(-1)
-@RestControllerAdvice(assignableTypes = RequisitionHandoverController.class)
+@RestControllerAdvice(assignableTypes = {RequisitionHandoverController.class, RequisitionProxyConfirmationController.class})
 class HandoverErrorHandler {
     @ExceptionHandler(AssetHandoverPort.Failure.class)
     ResponseEntity<ErrorResponse> failure(

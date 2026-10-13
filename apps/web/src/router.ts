@@ -12,9 +12,14 @@ import RequisitionView from "@/views/RequisitionView.vue";
 import LoanView from "@/views/LoanView.vue";
 import TransferView from "@/views/TransferView.vue";
 
+import ProxyConfirmationView from "@/views/ProxyConfirmationView.vue";
+import BusinessResultNoticeView from "@/views/BusinessResultNoticeView.vue";
+
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
+    { path: "/proxy-confirmations", name: "proxy-confirmations", component: ProxyConfirmationView, meta: { requiresAuth: true } },
+    { path: "/business-result-notices", name: "business-result-notices", component: BusinessResultNoticeView, meta: { requiresAuth: true } },
     { path: "/", name: "home", component: HomeView, meta: { requiresAuth: true } },
     { path: "/login", name: "login", component: LoginView },
     { path: "/password/change", name: "password-change", component: PasswordChangeView, meta: { requiresAuth: true } },

@@ -207,6 +207,7 @@ onMounted(async () => {
       <p v-for="decision in selected.decisions" :key="decision.id">版本 {{ decision.requestVersion }}：{{ decision.decisionResult === 'APPROVED' ? '批准' : '驳回' }} {{ decision.commentText }}</p>
       <p v-for="record in selected.unfulfillable" :key="record.id">无法满足 {{ record.quantity }} 件：{{ reasonLabels[record.reasonCode] }} {{ record.reasonDescription }}；当时可用 {{ record.inventoryQuerySummaryJson.availableCount }} 件，查询于 {{ record.inventoryQuerySummaryJson.queriedAt }}</p>
       <p v-for="allocation in selected.allocations" :key="allocation.id">{{ allocation.assetSnapshotJson.assetCode }} · {{ allocation.assetSnapshotJson.name }} · {{ handoverLabels[allocation.allocationStatus] ?? allocation.allocationStatus }}
+        <router-link v-if="canExecute && allocation.allocationStatus === 'DELIVERED_WAITING_RECEIPT'" :to="{ path: '/proxy-confirmations', query: { businessId: selected.id, itemId: allocation.id } }">申请异常代确认</router-link>
         <button v-if="canExecute && allocation.allocationStatus === 'WAITING_DELIVERY'" :disabled="busy || retryable || !reason.trim()" @click="replacementId = allocation.id; findInventory(selected!.demands.find(d => d.id === allocation.demandId)!)">更换未交出资产</button></p>
       <fieldset v-if="canExecute" :disabled="busy || retryable"><legend>实物交出与收回凭据</legend>
         <label>核对实物编码<input v-model="observedCode" maxlength="128" /></label>

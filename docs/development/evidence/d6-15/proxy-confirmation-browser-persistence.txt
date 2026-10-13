@@ -1,0 +1,28 @@
+BEFORE EXECUTION
+confirmation_status	version	creator_account_id	approver_account_id	executor_account_id
+SUBMITTED	2	1	NULL	NULL
+lifecycle_status	responsible_employee_id
+IN_STOCK	NULL
+notices
+0
+scan_status
+CLEAN
+APPROVED BEFORE EXECUTION
+confirmation_status	version	creator_account_id	approver_account_id	executor_account_id
+APPROVED	3	1	2	NULL
+lifecycle_status	responsible_employee_id
+IN_STOCK	NULL
+notices
+0
+AFTER EXECUTION, NOTICE READ AND SECOND HARD RESTART
+confirmation_status	version	creator_account_id	approver_account_id	executor_account_id
+EXECUTED	4	1	2	1
+lifecycle_status	responsible_employee_id	current_location_id
+IN_USE	3	2
+recipient_employee_id	notices	read_count
+3	1	1
+active_locks
+0
+event_type	COUNT(*)
+DELIVERED	1
+PROXY_RECEIVED	1

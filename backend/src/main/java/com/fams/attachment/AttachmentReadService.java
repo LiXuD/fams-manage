@@ -25,30 +25,39 @@ public class AttachmentReadService {
     }
     private final JdbcTemplate db;
     private final AttachmentReaderContext actors;
-    private final AttachmentBusinessPort business;
+    private final Map<String,AttachmentBusinessPort> businesses;
     private final AttachmentStorage storage;
     private final AttachmentGrantSigner grants;
     public AttachmentReadService(JdbcTemplate db, AttachmentReaderContext actors, AttachmentBusinessPort business,
+            AttachmentStorage storage, Clock clock, String secret) {
+        this(db, actors, List.of(business), storage, clock, secret);
+    }
+    @org.springframework.beans.factory.annotation.Autowired
+    public AttachmentReadService(JdbcTemplate db, AttachmentReaderContext actors, List<AttachmentBusinessPort> businesses,
             AttachmentStorage storage, Clock clock, @Value("${fams.security.idempotency-hmac-key}") String secret) {
         this.db = db;
         this.actors = actors;
-        this.business = business;
+        this.businesses = businesses.stream().collect(java.util.stream.Collectors.toUnmodifiableMap(
+                AttachmentBusinessPort::businessType, value -> value));
         this.storage = storage;
         this.grants = new AttachmentGrantSigner(secret, clock);
     }
 
     @Transactional
-    public List<Map<String, Object>> list(long receiptId) {
+    public List<Map<String, Object>> list(long receiptId) { return list("INBOUND", receiptId); }
+
+    @Transactional
+    public List<Map<String, Object>> list(String businessType, long receiptId) {
         var actor = actors.requireReaderLocked();
-        business.requireReaderLocked(actor.id(), actor.roles(), receiptId);
+        business(businessType).requireReaderLocked(actor.id(), actor.roles(), receiptId);
         return db.queryForList("SELECT a.object_id objectId,a.original_filename filename,a.content_type contentType,"
                 + "a.size_bytes sizeBytes,a.scan_status scanStatus,a.business_version businessVersion,a.created_at createdAt,"
                 + "COALESCE(r.revision_number,1) revisionNumber,r.previous_object_id previousObjectId,"
                 + "r.correction_reason correctionReason,n.object_id nextObjectId FROM fams_attachment a "
                 + "LEFT JOIN fams_attachment_revision r ON r.object_id=a.object_id "
                 + "LEFT JOIN fams_attachment_revision n ON n.previous_object_id=a.object_id "
-                + "WHERE a.business_type='INBOUND' AND a.business_id=? AND a.deleted_at IS NULL "
-                + "ORDER BY a.created_at,a.object_id FOR UPDATE", receiptId);
+                + "WHERE a.business_type=? AND a.business_id=? AND a.deleted_at IS NULL "
+                + "ORDER BY a.created_at,a.object_id FOR UPDATE", businessType, receiptId);
     }
 
     @Transactional
@@ -78,7 +87,8 @@ public class AttachmentReadService {
     private Map<String, Object> metadata(AttachmentReaderContext.Reader actor, UUID objectId) {
         var rows = db.queryForList("SELECT business_type,business_id FROM fams_attachment WHERE object_id=?",
                 objectId.toString());
-        if (rows.isEmpty() || !"INBOUND".equals(rows.getFirst().get("business_type"))) { throw missing(); }
+        if (rows.isEmpty()) { throw missing(); }
+        var business = business(rows.getFirst().get("business_type").toString());
         business.requireReaderLocked(actor.id(), actor.roles(), ((Number) rows.getFirst().get("business_id")).longValue());
         var current = db.queryForList("SELECT * FROM fams_attachment WHERE object_id=? AND deleted_at IS NULL FOR UPDATE",
                 objectId.toString());
@@ -91,6 +101,11 @@ public class AttachmentReadService {
     }
     private AttachmentGrantSigner.Identity identity(AttachmentReaderContext.Reader actor, UUID id) {
         return new AttachmentGrantSigner.Identity(id, actor.id(), actor.authEpoch(), actor.authorizationVersion());
+    }
+    private AttachmentBusinessPort business(String type) {
+        var business = businesses.get(type);
+        if (business == null) { throw missing(); }
+        return business;
     }
     private AttachmentAccessFailure missing() { return new AttachmentAccessFailure(404, "ATTACHMENT_NOT_FOUND"); }
     private String hash(byte[] bytes) {

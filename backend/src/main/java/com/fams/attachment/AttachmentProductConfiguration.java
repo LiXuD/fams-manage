@@ -34,7 +34,7 @@ public class AttachmentProductConfiguration {
     }
 
     @Bean AttachmentUploadService attachmentUploadService(AttachmentWriter writer, AttachmentRegistry registry,
-            AttachmentActorContext actors, AttachmentBusinessPort inbound) {
+            AttachmentActorContext actors, @org.springframework.beans.factory.annotation.Qualifier("inboundAttachmentPort") AttachmentBusinessPort inbound) {
         return new AttachmentUploadService(writer, registry, actors, inbound);
     }
 

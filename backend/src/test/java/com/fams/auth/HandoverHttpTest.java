@@ -50,6 +50,7 @@ class HandoverHttpTest {
     private static final AtomicLong FIXTURE = new AtomicLong(924000);
     private static final ObjectMapper JSON = new ObjectMapper();
     private final HttpClient http = HttpClient.newHttpClient();
+    private static java.nio.file.Path proxyRoot;
 
     @Value("${local.server.port}")
     int port;
@@ -69,6 +70,12 @@ class HandoverHttpTest {
         MiniWechatIdentityPort requisitionWechatFixture() {
             return code -> new MiniWechatIdentityPort.Identity("requisition-test-app", code);
         }
+        @org.springframework.context.annotation.Bean
+        @org.springframework.context.annotation.Primary
+        @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name="fams.test.proxy-evidence")
+        com.fams.attachment.MalwareScanner proxyEvidenceScannerFixture() {
+            return content -> com.fams.attachment.MalwareScanner.Result.CLEAN;
+        }
     }
 
     @DynamicPropertySource
@@ -77,6 +84,12 @@ class HandoverHttpTest {
         registry.add("spring.datasource.url", settings::url);
         registry.add("spring.datasource.username", settings::username);
         registry.add("spring.datasource.password", settings::password);
+        if (Boolean.getBoolean("d6.15.proxy.runtime")) {
+            try { proxyRoot=java.nio.file.Files.createTempDirectory("fams-d615-proxy-owned-"); }
+            catch(java.io.IOException error) { throw new IllegalStateException(error); }
+            registry.add("fams.attachments.quarantine-root", () -> proxyRoot.toString());
+            registry.add("fams.test.proxy-evidence", () -> "true");
+        }
     }
 
     @BeforeEach
@@ -210,6 +223,19 @@ class HandoverHttpTest {
         if (base == 0) {
             return;
         }
+        var proxyObjects=jdbc.queryForList("SELECT object_id FROM fams_attachment WHERE business_type='PROXY_CONFIRMATION' AND uploader_account_id BETWEEN ? AND ?",base+10,base+17);
+        for(var object:proxyObjects) {
+            String id=object.get("object_id").toString();
+            jdbc.update("DELETE FROM fams_attachment_revision WHERE object_id=? OR previous_object_id=?",id,id);
+            jdbc.update("DELETE FROM fams_attachment_upload_key WHERE object_id=?",id);
+            jdbc.update("DELETE FROM fams_attachment WHERE object_id=?",id);
+            jdbc.update("DELETE FROM fams_attachment_object_guard WHERE object_id=?",id);
+            if(proxyRoot!=null) { try { java.nio.file.Files.deleteIfExists(proxyRoot.resolve(id)); }
+                catch(java.io.IOException error) { throw new IllegalStateException(error); } }
+        }
+        jdbc.update("DELETE s FROM fams_attachment_scope s JOIN fams_proxy_confirmation p ON p.id=s.business_id WHERE s.business_type='PROXY_CONFIRMATION' AND p.creator_account_id BETWEEN ? AND ?",base+10,base+17);
+        jdbc.update("DELETE FROM fams_business_result_notice WHERE recipient_employee_id BETWEEN ? AND ?",base+10,base+17);
+        jdbc.update("DELETE FROM fams_proxy_confirmation WHERE creator_account_id BETWEEN ? AND ? ORDER BY id DESC",base+10,base+17);
         jdbc.update(
                 "DELETE g FROM fams_transfer_receipt_grant g JOIN fams_transfer_item i ON"
                     + " i.id=g.item_id JOIN fams_transfer t ON t.id=i.request_id WHERE"
@@ -2976,6 +3002,311 @@ class HandoverHttpTest {
                 key(), changed.path("version").asLong());
         assertEquals(409, rejected.statusCode(), rejected.body());
         assertTrue(rejected.body().contains("TRANSFER_NOT_PROCESSOR"), rejected.body());
+    }
+
+    @org.junit.jupiter.api.AfterAll
+    static void removeOnlyOwnedProxyStorage() throws Exception {
+        if (proxyRoot != null) {
+            try (var files = java.nio.file.Files.walk(proxyRoot)) {
+                for (var file : files.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                    java.nio.file.Files.delete(file);
+                }
+            }
+        }
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "d6.15.proxy.runtime", matches = "true")
+    void proxyConfirmationEvidenceApprovalExecutionAndReplayAreAtomic() throws Exception {
+        var value = allocated(1);
+        value = warehouseWrite(value, 0, "deliver", delivery(value, 0));
+        var snapshot = proxyContext(value);
+        String input = proxyDraft(snapshot);
+        assertEquals(403, proxyCall(employee, "POST", "", input, key(), null).statusCode());
+        var created = proxyCall(warehouse, "POST", "", input, key(), null);
+        assertEquals(200, created.statusCode(), created.body());
+        var draft = JSON.readTree(created.body());
+        String id = draft.path("id").asText();
+        assertEquals(
+                409,
+                proxyCall(warehouse, "POST", "/" + id + "/submit", null, key(), 0L).statusCode());
+        var uploaded = proxyUpload(id, 0);
+        assertEquals(201, uploaded.statusCode(), uploaded.body());
+        var submitted = proxyCall(warehouse, "POST", "/" + id + "/submit", null, key(), 1L);
+        assertEquals(200, submitted.statusCode(), submitted.body());
+        assertEquals(409, proxyUpload(id, 2).statusCode());
+        assertEquals(
+                403,
+                proxyCall(warehouse, "POST", "/" + id + "/decision", proxyDecision(true), key(), 2L)
+                        .statusCode());
+        var approved =
+                proxyCall(admin, "POST", "/" + id + "/decision", proxyDecision(true), key(), 2L);
+        assertEquals(200, approved.statusCode(), approved.body());
+        assertEquals(
+                "IN_STOCK",
+                jdbc.queryForObject(
+                        "SELECT lifecycle_status FROM fams_asset WHERE id=?",
+                        String.class,
+                        base + 50));
+        assertEquals(
+                0,
+                count("SELECT COUNT(*) FROM fams_business_result_notice WHERE execution_id=?", id));
+        assertEquals(
+                409, proxyCall(other, "POST", "/" + id + "/execute", null, key(), 3L).statusCode());
+        String identity = key();
+        var executed = proxyCall(warehouse, "POST", "/" + id + "/execute", null, identity, 3L);
+        assertEquals(200, executed.statusCode(), executed.body());
+        assertEquals(
+                executed.body(),
+                proxyCall(warehouse, "POST", "/" + id + "/execute", null, identity, 3L).body());
+        assertEquals(
+                "IN_USE",
+                jdbc.queryForObject(
+                        "SELECT lifecycle_status FROM fams_asset WHERE id=?",
+                        String.class,
+                        base + 50));
+        assertEquals(
+                base + 10,
+                jdbc.queryForObject(
+                        "SELECT responsible_employee_id FROM fams_asset WHERE id=?",
+                        Long.class,
+                        base + 50));
+        assertEquals(
+                1,
+                count(
+                        "SELECT COUNT(*) FROM fams_business_result_notice WHERE execution_id=? AND"
+                            + " recipient_employee_id=?",
+                        id,
+                        base + 10));
+        assertEquals(
+                1,
+                count(
+                        "SELECT COUNT(*) FROM fams_requisition_handover_event WHERE allocation_id=?"
+                            + " AND event_type='PROXY_RECEIVED'",
+                        snapshot.path("itemId").asText()));
+        assertEquals(
+                0,
+                count(
+                        "SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND"
+                            + " released_at IS NULL",
+                        base + 50));
+        assertEquals(1, JSON.readTree(proxyCall(admin, "GET", "/" + id + "/attachments",
+                null, null, null).body()).path("items").size());
+        var inbox = JSON.readTree(noticeCall(employee, "GET", "").body());
+        assertEquals(1, inbox.path("total").asInt());
+        assertEquals(1, inbox.path("unread").asInt());
+        String noticeId = inbox.path("items").get(0).path("id").asText();
+        assertEquals(0, JSON.readTree(noticeCall(other, "GET", "").body()).path("total").asInt());
+        assertEquals(404, noticeCall(other, "POST", "/" + noticeId + "/read").statusCode());
+        assertEquals(200, noticeCall(employee, "POST", "/" + noticeId + "/read").statusCode());
+        assertEquals(200, noticeCall(employee, "POST", "/" + noticeId + "/read").statusCode());
+        assertEquals(0, JSON.readTree(noticeCall(employee, "GET", "").body()).path("unread").asInt());
+        assertEquals("IN_USE", jdbc.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=?",
+                String.class, base + 50));
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "d6.15.proxy.runtime", matches = "true")
+    void proxyConfirmationLateNoticeFailureRollsBackBorrowingThenRetriesAndRejectsEvidenceDrift()
+            throws Exception {
+        var value = allocatedDraft(1, borrowDraft("2099-12-31"));
+        value = warehouseWrite(value, 0, "deliver", delivery(value, 0));
+        var snapshot = proxyContext(value);
+        var created = proxyCall(warehouse, "POST", "", proxyDraft(snapshot), key(), null);
+        assertEquals(200, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        var uploaded = proxyUpload(id, 0);
+        assertEquals(201, uploaded.statusCode(), uploaded.body());
+        String object = JSON.readTree(uploaded.body()).path("objectId").asText();
+        assertEquals(
+                200,
+                proxyCall(warehouse, "POST", "/" + id + "/submit", null, key(), 1L).statusCode());
+        jdbc.update(
+                "UPDATE fams_attachment SET content_sha256=REPEAT('0',64) WHERE object_id=?",
+                object);
+        var rejected =
+                proxyCall(admin, "POST", "/" + id + "/decision", proxyDecision(true), key(), 2L);
+        assertEquals(409, rejected.statusCode(), rejected.body());
+        String digest =
+                java.util.HexFormat.of()
+                        .formatHex(
+                                java.security.MessageDigest.getInstance("SHA-256")
+                                        .digest(
+                                                java.nio.file.Files.readAllBytes(
+                                                        proxyRoot.resolve(object))));
+        jdbc.update(
+                "UPDATE fams_attachment SET content_sha256=? WHERE object_id=?", digest, object);
+        var approved =
+                proxyCall(admin, "POST", "/" + id + "/decision", proxyDecision(true), key(), 2L);
+        assertEquals(200, approved.statusCode(), approved.body());
+        String trigger = "d615_proxy_notice_" + base;
+        jdbc.execute(
+                "CREATE TRIGGER "
+                        + trigger
+                        + " BEFORE INSERT ON fams_business_result_notice FOR EACH ROW BEGIN IF"
+                        + " NEW.execution_id="
+                        + id
+                        + " THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='owned notice failure';"
+                        + " END IF; END");
+        String identity = key();
+        try {
+            assertEquals(
+                    500,
+                    proxyCall(warehouse, "POST", "/" + id + "/execute", null, identity, 3L)
+                            .statusCode());
+            assertEquals(
+                    "IN_STOCK",
+                    jdbc.queryForObject(
+                            "SELECT lifecycle_status FROM fams_asset WHERE id=?",
+                            String.class,
+                            base + 50));
+            assertEquals(0, count("SELECT COUNT(*) FROM fams_loan WHERE asset_id=?", base + 50));
+            assertEquals(
+                    1,
+                    count(
+                            "SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND"
+                                + " released_at IS NULL",
+                            base + 50));
+            assertEquals(
+                    "APPROVED",
+                    jdbc.queryForObject(
+                            "SELECT confirmation_status FROM fams_proxy_confirmation WHERE id=?",
+                            String.class,
+                            id));
+            assertEquals(
+                    0,
+                    count(
+                            "SELECT COUNT(*) FROM fams_requisition_handover_event WHERE"
+                                + " allocation_id=? AND event_type='PROXY_RECEIVED'",
+                            snapshot.path("itemId").asText()));
+        } finally {
+            jdbc.execute("DROP TRIGGER " + trigger);
+        }
+        var result = proxyCall(warehouse, "POST", "/" + id + "/execute", null, identity, 3L);
+        assertEquals(200, result.statusCode(), result.body());
+        assertEquals(
+                "BORROWED",
+                jdbc.queryForObject(
+                        "SELECT lifecycle_status FROM fams_asset WHERE id=?",
+                        String.class,
+                        base + 50));
+        assertEquals(
+                1,
+                count(
+                        "SELECT COUNT(*) FROM fams_loan WHERE asset_id=? AND"
+                            + " relation_status='OPEN'",
+                        base + 50));
+    }
+
+    private JsonNode proxyContext(JsonNode value) throws Exception {
+        var response =
+                proxyCall(
+                        warehouse,
+                        "GET",
+                        "/context?businessId="
+                                + value.path("id").asText()
+                                + "&itemId="
+                                + value.path("allocations").get(0).path("id").asText(),
+                        null,
+                        null,
+                        null);
+        assertEquals(200, response.statusCode(), response.body());
+        return JSON.readTree(response.body());
+    }
+
+    private String proxyDraft(JsonNode snapshot) {
+        var body = new java.util.LinkedHashMap<String, Object>();
+        body.put("businessId", snapshot.path("businessId").asText());
+        body.put("itemId", snapshot.path("itemId").asText());
+        body.put("snapshot", snapshot);
+        body.put("observedAssetCode", snapshot.path("assetCode").asText());
+        body.put("actualSigner", "Original responsible recipient");
+        body.put("actualSignerEmployeeId", snapshot.path("targetEmployeeId").asText());
+        body.put("actualReceivedAt", Instant.now().minusSeconds(30).toString());
+        body.put("cannotConfirmReason", "Recipient cannot operate the device");
+        body.put("contactRecord", "Contacted recipient and checked signed asset list");
+        body.put("delegatedReceipt", false);
+        body.put("evidenceKind", "SIGNED_RECEIPT");
+        body.put("collectionMethod", "CODE_CONFIRMED");
+        body.put("targetOrAuthorizedProxyReceived", true);
+        return JSON.writeValueAsString(body);
+    }
+
+    private String proxyDecision(boolean approved) {
+        return "{\"approved\":"
+                + approved
+                + ",\"reason\":\"Signed physical delivery and target"
+                + " checked\",\"physicalEvidenceChecked\":true,\"noDisputeChecked\":true}";
+    }
+
+    private HttpResponse<String> noticeCall(Session session, String method, String path)
+            throws Exception {
+        var builder = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+                + "/api/v1/business-result-notices" + path)).header("Cookie", session.cookie());
+        if ("POST".equals(method)) {
+            builder.header("X-CSRF-Token", session.csrf()).header("Idempotency-Key", key()).POST(HttpRequest.BodyPublishers.noBody());
+        } else {
+            builder.GET();
+        }
+        return http.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> proxyCall(
+            Session session, String method, String path, String body, String identity, Long version)
+            throws Exception {
+        var builder =
+                HttpRequest.newBuilder(
+                                URI.create(
+                                        "http://127.0.0.1:"
+                                                + port
+                                                + "/api/v1/proxy-confirmations"
+                                                + path))
+                        .header("Cookie", session.cookie());
+        if ("POST".equals(method)) {
+            builder.header("X-CSRF-Token", session.csrf()).header("Idempotency-Key", identity);
+            if (version != null) {
+                builder.header("If-Match-Version", version.toString());
+            }
+            builder.header("Content-Type", "application/json")
+                    .POST(
+                            body == null
+                                    ? HttpRequest.BodyPublishers.noBody()
+                                    : HttpRequest.BodyPublishers.ofString(body));
+        } else {
+            builder.GET();
+        }
+        return http.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> proxyUpload(String id, long version) throws Exception {
+        String boundary = "fams-proxy-evidence-boundary";
+        String data =
+                "--"
+                        + boundary
+                        + "\r\n"
+                        + "Content-Disposition: form-data; name=\"file\";"
+                        + " filename=\"signed-list.pdf\"\r\n"
+                        + "Content-Type: application/pdf\r\n\r\n"
+                        + "%PDF-1.7 signed asset list\r\n"
+                        + "--"
+                        + boundary
+                        + "--\r\n";
+        return http.send(
+                HttpRequest.newBuilder(
+                                URI.create(
+                                        "http://127.0.0.1:"
+                                                + port
+                                                + "/api/v1/proxy-confirmations/"
+                                                + id
+                                                + "/attachments"))
+                        .header("Cookie", warehouse.cookie())
+                        .header("X-CSRF-Token", warehouse.csrf())
+                        .header("Idempotency-Key", key())
+                        .header("If-Match-Version", Long.toString(version))
+                        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                        .POST(HttpRequest.BodyPublishers.ofString(data))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     private record Session(String cookie, String csrf) {}

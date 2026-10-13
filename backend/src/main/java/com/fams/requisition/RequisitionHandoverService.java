@@ -359,45 +359,7 @@ class RequisitionHandoverService {
             throw RequisitionFailure.invalid("HANDOVER_REFUSAL_REASON_REQUIRED");
         }
         if (!refuse) {
-            if ("BORROW".equals(header.get("request_type"))) {
-                var parameters = header.get("parameter_snapshot_json").toString();
-                var zone = ZoneId.of(json.readTree(parameters).get("timezone").asText());
-                var businessDate = clock.instant().atZone(zone).toLocalDate();
-                var dueDate = java.time.LocalDate.parse(header.get("expected_return_date").toString());
-                if (!dueDate.isAfter(businessDate)) {
-                    throw RequisitionFailure.conflict("LOAN_RETURN_DATE_EXPIRED");
-                }
-                assets.borrow(n(item, "asset_id"), n(item, "asset_version_snapshot"),
-                        n(demand, "target_organization_id"), target(demand),
-                        n(demand, "target_location_id"), current.id(), request, clock.instant());
-                loans.open(n(item, "asset_id"), target(demand), n(demand, "target_organization_id"),
-                        request, allocation, businessDate, dueDate, parameters, clock.instant());
-            } else {
-                assets.receive(
-                    n(item, "asset_id"),
-                    n(item, "asset_version_snapshot"),
-                    demand.get("custody_type").toString(),
-                    n(demand, "target_organization_id"),
-                    target(demand),
-                    n(demand, "target_location_id"),
-                    current.id(),
-                    request,
-                    clock.instant());
-            }
-            db.update(
-                    "UPDATE fams_requisition_demand SET"
-                        + " pending_handover_quantity=pending_handover_quantity-1,completed_quantity=completed_quantity+1,version=version+1"
-                        + " WHERE id=?",
-                    n(item, "demand_id"));
-            db.update(
-                    "UPDATE fams_requisition_allocation SET"
-                            + " allocation_status='RECEIVED',received_at=?,version=version+1 WHERE"
-                            + " id=?",
-                    now(),
-                    allocation);
-            release(item);
-            close(allocation, "RECEIPT");
-            close(allocation, "HANDOVER_EXCEPTION");
+            completeReceipt(current, header, item, demand, request, allocation);
         } else {
             db.update(
                     "UPDATE fams_requisition_allocation SET version=version+1 WHERE id=?",
@@ -420,6 +382,111 @@ class RequisitionHandoverService {
         result.put("result", refuse ? "REFUSED" : "RECEIVED");
         result.put("version", n(header, "version") + 1);
         return finish(current, action, key, request, allocation, version, input, result);
+    }
+
+    private void completeReceipt(Current current, Map<String, Object> header,
+            Map<String, Object> item, Map<String, Object> demand, long request, long allocation) {
+        if ("BORROW".equals(header.get("request_type"))) {
+            var parameters = header.get("parameter_snapshot_json").toString();
+            var zone = ZoneId.of(json.readTree(parameters).get("timezone").asText());
+            var businessDate = clock.instant().atZone(zone).toLocalDate();
+            var dueDate = java.time.LocalDate.parse(header.get("expected_return_date").toString());
+            if (!dueDate.isAfter(businessDate)) {
+                throw RequisitionFailure.conflict("LOAN_RETURN_DATE_EXPIRED");
+            }
+            assets.borrow(n(item, "asset_id"), n(item, "asset_version_snapshot"),
+                    n(demand, "target_organization_id"), target(demand),
+                    n(demand, "target_location_id"), current.id(), request, clock.instant());
+            loans.open(n(item, "asset_id"), target(demand), n(demand, "target_organization_id"),
+                    request, allocation, businessDate, dueDate, parameters, clock.instant());
+        } else {
+            assets.receive(
+                n(item, "asset_id"),
+                n(item, "asset_version_snapshot"),
+                demand.get("custody_type").toString(),
+                n(demand, "target_organization_id"),
+                target(demand),
+                n(demand, "target_location_id"),
+                current.id(),
+                request,
+                clock.instant());
+        }
+        db.update(
+                "UPDATE fams_requisition_demand SET"
+                    + " pending_handover_quantity=pending_handover_quantity-1,completed_quantity=completed_quantity+1,version=version+1"
+                    + " WHERE id=?",
+                n(item, "demand_id"));
+        db.update(
+                "UPDATE fams_requisition_allocation SET"
+                        + " allocation_status='RECEIVED',received_at=?,version=version+1 WHERE"
+                        + " id=?",
+                now(),
+                allocation);
+        release(item);
+        close(allocation, "RECEIPT");
+        close(allocation, "HANDOVER_EXCEPTION");
+    }
+
+    Map<String, Object> proxySnapshot(Actor actor, long request, long allocation, boolean executing) {
+        var current = actors.revalidateLocked(actor);
+        var header = header(request);
+        if (executing) { warehouse(current, header); }
+        else if (!current.has(Role.ASSET_ADMIN)) { throw RequisitionFailure.forbidden(); }
+        approved(header);
+        var item = item(request, allocation);
+        if (!"DELIVERED_WAITING_RECEIPT".equals(item.get("allocation_status"))) {
+            throw RequisitionFailure.conflict("HANDOVER_NOT_DELIVERED");
+        }
+        if (!db.queryForList("SELECT id FROM fams_todo WHERE business_type='REQUISITION_ALLOCATION'"
+                + " AND business_id=? AND todo_type IN ('HANDOVER_EXCEPTION','RECOVERY') AND closed_at IS NULL FOR UPDATE",
+                allocation).isEmpty()) { throw RequisitionFailure.conflict("PROXY_RECEIPT_DISPUTED"); }
+        var demand = demand(item);
+        targets(demand);
+        var asset = assets.stock(n(item, "asset_id"), n(item, "asset_version_snapshot"));
+        locked(item, null);
+        var lock = one("SELECT lock_version FROM fams_asset_business_lock WHERE id=? FOR UPDATE",
+                n(item, "business_lock_id"));
+        var owner = one("SELECT processor_account_id,ownership_version FROM fams_requisition_ownership"
+                + " WHERE request_id=? AND archived_at IS NULL FOR UPDATE", request);
+        var result = new LinkedHashMap<String, Object>();
+        result.put("businessType", "REQUISITION");
+        result.put("businessId", Long.toString(request));
+        result.put("itemId", Long.toString(allocation));
+        result.put("requestNo", header.get("request_no"));
+        result.put("version", n(header, "version"));
+        result.put("requestVersion", n(header, "request_version"));
+        result.put("itemVersion", n(item, "version"));
+        result.put("assetId", item.get("asset_id").toString());
+        result.put("assetVersion", n(item, "asset_version_snapshot"));
+        result.put("assetCode", asset.get("asset_code"));
+        result.put("targetEmployeeId", Long.toString(target(demand)));
+        result.put("custodyType", demand.get("custody_type"));
+        result.put("lockVersion", n(lock, "lock_version"));
+        result.put("processorAccountId", owner.get("processor_account_id").toString());
+        result.put("ownershipVersion", n(owner, "ownership_version"));
+        result.put("demandVersion", n(demand, "version"));
+        return result;
+    }
+
+    Map<String, Object> proxyReceipt(Actor actor, long request, long allocation,
+            Map<String, Object> expected, String observedCode, long confirmationId) {
+        var snapshot = proxySnapshot(actor, request, allocation, true);
+        if (!json.readTree(json.writeValueAsString(snapshot)).equals(json.readTree(json.writeValueAsString(expected)))) {
+            throw RequisitionFailure.conflict("PROXY_RECEIPT_SCOPE_CHANGED");
+        }
+        var current = actors.revalidateLocked(actor);
+        var header = header(request);
+        var item = item(request, allocation);
+        var demand = demand(item);
+        String observed = assets.observedCode(n(item, "asset_id"), observedCode);
+        completeReceipt(current, header, item, demand, request, allocation);
+        invalidate(allocation);
+        event(actor, current, "PROXY_RECEIVED", item, observed,
+                "异常代确认许可 " + confirmationId, Role.WAREHOUSE_OPERATOR);
+        progress(request);
+        return Map.of("confirmationId", Long.toString(confirmationId), "requestId", Long.toString(request),
+                "allocationId", Long.toString(allocation), "result", "RECEIVED",
+                "targetEmployeeId", Long.toString(target(demand)), "assetCode", observed);
     }
 
     Map<String, Object> receiptDetail(Actor actor, long request, long allocation) {
