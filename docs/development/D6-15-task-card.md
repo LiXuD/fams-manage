@@ -174,3 +174,8 @@ C1仍IN_PROGRESS，独立复核待完成；不等于远端CI、正式QA或生产
 活动业务锁0。此次仅开发浏览器验收，完整候选门禁和独立复核仍待完成。
 证据proxy-confirmation-review-browser-persistence.txt和proxy-objection-*.png。
 SpotBugs修复后退出0；新增OpenAPI本地引用和operationId唯一性检查通过。
+
+2026-10-13 C1固定候选a8b1005完整产品门禁退出0：Java必需测试、Checkstyle/SpotBugs、
+覆盖率（行92.90%、分支75.47%）、Web/小程序、真实升级与应用/数据库恢复、资源清理、
+干净postflight均通过。C1转IN_REVIEW，独立复核待完成；C父任务继续IN_PROGRESS。
+门禁原始证据proxy-confirmation-product-gate-a8b1005.txt。继续C2调拨代确认。
