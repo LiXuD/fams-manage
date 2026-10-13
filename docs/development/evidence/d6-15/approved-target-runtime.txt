@@ -6,7 +6,7 @@ Upgrade: ProxyConfirmationUpgradeRuntimeCase 1/1 PASS, no skips.
 Actual V29 column metadata read before V30; old column definitions and historical
 return full row preserved. V30 applied once, repeat 0, Flyway validation passed.
 New override columns nullable; new target-change table initially empty.
-HTTP: approved target cases 7/7 plus existing shared receiving/recovery race 1/1 PASS, no skips.
+HTTP: approved target cases 8/8 plus existing shared receiving/recovery race 1/1 PASS, no skips.
 - Approval keeps original demand and delivery row unchanged, asset IN_STOCK and lock active.
 - Original recipient grant/receipt rejected; new recipient receipt commits custody and releases lock.
 - Disabled original recipient can be corrected; new reference drift rejects approval atomically.
@@ -33,3 +33,10 @@ The existing shared race fixture now grants the target its required department-m
 role and reauthenticates before the flow; its original 200/409 exclusivity remains asserted.
 Candidate b64ad2a gate exited 1 on this formerly invalid fixture; cleanup/postflight passed.
 A replacement fixed candidate full gate is still required.
+
+Before-delivery target override follow-up: approval stores server-frozen target references.
+Later delivery freezes the new employee ID/name and temporary employee, preserving the
+original demand target. Legacy approved JSON without referenceSnapshot uses its frozen
+ID/version, grants only the new recipient, and never invents historical display names.
+Upgrade 1/1 and target 8/8 plus existing shared race 1/1 PASS, runner exit 0.
+This follow-up is not covered by the earlier passing 5186b9a fixed candidate gate.

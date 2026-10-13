@@ -596,8 +596,11 @@ class RequisitionHandoverService {
         validateChangedTarget(request, allocation, target);
         var item = item(request, allocation);
         String observed = assets.observedCode(n(item, "asset_id"), observedCode);
+        var approved = json.readValue(json.writeValueAsString(target),
+                new tools.jackson.core.type.TypeReference<LinkedHashMap<String, Object>>() {});
+        approved.put("referenceSnapshot", targetReferenceSnapshot(target));
         db.update("UPDATE fams_requisition_allocation SET approved_target_json=?,receipt_target_employee_id=?,"
-                + "version=version+1 WHERE id=?", json.writeValueAsString(target), Long.parseLong(target.employeeId()), allocation);
+                + "version=version+1 WHERE id=?", json.writeValueAsString(approved), Long.parseLong(target.employeeId()), allocation);
         invalidate(allocation);
         if ("DELIVERED_WAITING_RECEIPT".equals(item.get("allocation_status"))) {
             close(allocation, "RECEIPT");
@@ -606,6 +609,28 @@ class RequisitionHandoverService {
         }
         db.update("UPDATE fams_requisition SET version=version+1,updated_at=? WHERE id=?", now(), request);
         event(actor, current, "TARGET_CHANGED", item, observed, "批准目标变更 " + proposal, Role.ASSET_ADMIN);
+    }
+
+    private Map<String, Object> targetReferenceSnapshot(ItemTargetChangeInput.Target target) {
+        var result = new LinkedHashMap<String, Object>();
+        for (String[] spec : new String[][] {{"organization", target.organizationId()},
+                {"employee", target.employeeId()}, {"location", target.locationId()}}) {
+            var reference = new LinkedHashMap<>(references.current(spec[0], Long.parseLong(spec[1]), true));
+            reference.replaceAll((key, value) -> value != null && ("id".equals(key) || key.endsWith("_id"))
+                    ? value.toString() : value);
+            result.put(spec[0], reference);
+        }
+        return result;
+    }
+
+    private Map<String, Object> legacyTargetSnapshot(tools.jackson.databind.JsonNode target) {
+        // Old opt-in overrides have exact frozen IDs/versions but no frozen display names.
+        return Map.of("organization", Map.of("id", target.get("organizationId").asText(),
+                "version", target.get("organizationVersion").asLong()),
+                "employee", Map.of("id", target.get("employeeId").asText(),
+                "version", target.get("employeeVersion").asLong()),
+                "location", Map.of("id", target.get("locationId").asText(),
+                "version", target.get("locationVersion").asLong()));
     }
 
     private void targets(Map<String, Object> demand) {
@@ -897,6 +922,9 @@ class RequisitionHandoverService {
             result.put("employee_version_snapshot", target.get("employeeVersion").asLong());
             result.put("target_location_id", target.get("locationId").asLong());
             result.put("location_version_snapshot", target.get("locationVersion").asLong());
+            var frozen = target.get("referenceSnapshot");
+            result.put("target_snapshot_json", json.writeValueAsString(frozen != null && frozen.isObject()
+                    ? frozen : legacyTargetSnapshot(target)));
         }
         return result;
     }

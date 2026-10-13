@@ -3810,6 +3810,32 @@ class HandoverHttpTest {
         assertEquals("ASSET_ADMIN", jdbc.queryForObject("SELECT actor_role FROM fams_audit_event WHERE resource_type='ITEM_TARGET_CHANGE' AND resource_id=? AND action='TARGET_CHANGE_APPROVED'", String.class, id));
         assertEquals("IN_STOCK", jdbc.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=?", String.class, base + 50));
         assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+        value = JSON.readTree(call(warehouse, "GET", "/" + value.path("id").asText(), null, null, null).body());
+        value = warehouseWrite(value, 0, "deliver", delivery(value, 0));
+        assertEquals(Long.toString(base + 14), jdbc.queryForObject("SELECT JSON_UNQUOTE(JSON_EXTRACT(target_snapshot_json,'$.employee.id')) FROM fams_requisition_handover WHERE allocation_id=?", String.class, value.path("allocations").get(0).path("id").asText()));
+        assertEquals("Person 4", jdbc.queryForObject("SELECT JSON_UNQUOTE(JSON_EXTRACT(target_snapshot_json,'$.employee.name')) FROM fams_requisition_handover WHERE allocation_id=?", String.class, value.path("allocations").get(0).path("id").asText()));
+        assertEquals(base + 14, jdbc.queryForObject("SELECT temporary_employee_id FROM fams_requisition_handover WHERE allocation_id=?", Long.class, value.path("allocations").get(0).path("id").asText()));
+        assertEquals(base + 10, jdbc.queryForObject("SELECT target_employee_id FROM fams_requisition_demand WHERE request_id=?", Long.class, value.path("id").asText()));
+    }
+
+    @Test
+    void approvedItemTargetChangeLegacyOverrideFreezesItsApprovedTargetWhenDelivered() throws Exception {
+        var value = allocated(1);
+        String endpoint = "/context?businessId=" + value.path("id").asText() + "&itemId=" + value.path("allocations").get(0).path("id").asText();
+        var snapshot = JSON.readTree(targetCall(warehouse, "GET", endpoint, null, null, null).body());
+        var created = targetCall(warehouse, "POST", "", targetProposal(snapshot, base + 14), key(), snapshot.path("version").asLong());
+        assertEquals(200, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        String decision = "{\"result\":\"APPROVED\",\"reason\":\"Before delivery approved target\"}";
+        assertEquals(200, targetCall(admin, "POST", "/" + id + "/decision", decision, key(), 0L).statusCode());
+        long allocation = value.path("allocations").get(0).path("id").asLong();
+        jdbc.update("UPDATE fams_requisition_allocation SET approved_target_json=JSON_REMOVE(approved_target_json,'$.referenceSnapshot') WHERE id=?", allocation);
+        value = JSON.readTree(call(warehouse, "GET", "/" + value.path("id").asText(), null, null, null).body());
+        value = warehouseWrite(value, 0, "deliver", delivery(value, 0));
+        assertEquals(Long.toString(base + 14), jdbc.queryForObject("SELECT JSON_UNQUOTE(JSON_EXTRACT(target_snapshot_json,'$.employee.id')) FROM fams_requisition_handover WHERE allocation_id=?", String.class, allocation));
+        assertEquals(0L, jdbc.queryForObject("SELECT CAST(JSON_EXTRACT(target_snapshot_json,'$.employee.version') AS UNSIGNED) FROM fams_requisition_handover WHERE allocation_id=?", Long.class, allocation));
+        assertEquals(404, call(employee, "POST", path(value, 0, "grant"), null, key(), null).statusCode());
+        assertEquals(200, call(department, "POST", path(value, 0, "grant"), null, key(), null).statusCode());
     }
 
     private String targetProposal(JsonNode snapshot, long employeeId) {
