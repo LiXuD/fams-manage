@@ -609,6 +609,7 @@ class RequisitionHandoverService {
     }
 
     private void targets(Map<String, Object> demand) {
+        sharedReceiver(demand);
         for (String[] spec :
                 new String[][] {
                     {"category", "category_id", "category_version_snapshot"},
@@ -631,6 +632,15 @@ class RequisitionHandoverService {
                                     != n(demand, "target_organization_id")) {
                 throw RequisitionFailure.conflict("HANDOVER_TARGET_CHANGED");
             }
+        }
+    }
+
+    private void sharedReceiver(Map<String, Object> demand) {
+        if ("SHARED".equals(demand.get("custody_type"))
+                && db.queryForList("SELECT a.id FROM fams_system_account a JOIN fams_account_role r ON r.account_id=a.id"
+                        + " WHERE a.employee_id=? AND a.status='ENABLED' AND r.role_code='DEPARTMENT_ASSET_MANAGER' FOR UPDATE",
+                        target(demand)).isEmpty()) {
+            throw RequisitionFailure.conflict("HANDOVER_SHARED_RECEIVER_INVALID");
         }
     }
 

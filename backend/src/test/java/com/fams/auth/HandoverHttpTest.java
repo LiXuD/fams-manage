@@ -3762,6 +3762,35 @@ class HandoverHttpTest {
         assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
     }
 
+    @Test
+    void approvedItemTargetChangeSharedRequiresCurrentDepartmentManagerEvenAfterApproval() throws Exception {
+        var value = allocated(1);
+        value = warehouseWrite(value, 0, "deliver", delivery(value, 0));
+        String endpoint = "/context?businessId=" + value.path("id").asText() + "&itemId=" + value.path("allocations").get(0).path("id").asText();
+        var snapshot = JSON.readTree(targetCall(warehouse, "GET", endpoint, null, null, null).body());
+        var bad = (tools.jackson.databind.node.ObjectNode) JSON.readTree(targetProposal(snapshot, base + 10));
+        ((tools.jackson.databind.node.ObjectNode) bad.get("target")).put("custodyType", "SHARED");
+        var refused = targetCall(warehouse, "POST", "", bad.toString(), key(), snapshot.path("version").asLong());
+        assertEquals(409, refused.statusCode(), refused.body());
+        assertEquals("HANDOVER_SHARED_RECEIVER_INVALID", JSON.readTree(refused.body()).path("code").asText());
+        ((tools.jackson.databind.node.ObjectNode) bad.get("target")).put("employeeId", Long.toString(base + 14));
+        var created = targetCall(warehouse, "POST", "", bad.toString(), key(), snapshot.path("version").asLong());
+        assertEquals(200, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        String decision = "{\"result\":\"APPROVED\",\"reason\":\"Valid department manager verified\"}";
+        assertEquals(200, targetCall(admin, "POST", "/" + id + "/decision", decision, key(), 0L).statusCode());
+        // Model persisted role revocation after approval; proxy cannot bypass the new target's current role.
+        jdbc.update("DELETE FROM fams_account_role WHERE account_id=? AND role_code='DEPARTMENT_ASSET_MANAGER'", base + 14);
+        var grant = call(department, "POST", path(value, 0, "grant"), null, key(), null);
+        assertEquals(403, grant.statusCode(), grant.body());
+        var proxy = proxyCall(warehouse, "GET", "/context?businessId=" + value.path("id").asText()
+                + "&itemId=" + value.path("allocations").get(0).path("id").asText(), null, null, null);
+        assertEquals(409, proxy.statusCode(), proxy.body());
+        assertEquals("HANDOVER_SHARED_RECEIVER_INVALID", JSON.readTree(proxy.body()).path("code").asText());
+        assertEquals("IN_STOCK", jdbc.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=?", String.class, base + 50));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+    }
+
     private String targetProposal(JsonNode snapshot, long employeeId) {
         return JSON.writeValueAsString(java.util.Map.of("businessId",snapshot.path("businessId").asText(),
                 "itemId",snapshot.path("itemId").asText(),"snapshot",snapshot,"target",java.util.Map.of(
