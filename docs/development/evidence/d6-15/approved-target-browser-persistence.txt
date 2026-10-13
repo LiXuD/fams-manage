@@ -1,0 +1,16 @@
+After real browser warehouse proposal, admin approval and SIGKILL/new-JVM recovery.
+change_status	business_id	item_id	original_employee	approved_employee
+APPROVED	1	1	3	4
+asset_code	lifecycle_status	responsible_employee_id
+RQ-ASSET-10	IN_STOCK	NULL
+allocation_status	receipt_target_employee_id	version
+DELIVERED_WAITING_RECEIPT	4	2
+target_employee_id	requested_quantity	pending_handover_quantity	completed_quantity
+3	1	1	0
+destination_text
+Original delivery room
+active_locks
+1
+event_type	COUNT(*)
+DELIVERED	1
+TARGET_CHANGED	1

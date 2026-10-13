@@ -17,6 +17,8 @@ export interface RequisitionDemand {
 export interface RequisitionAllocation {
     id: string; demandId: string; assetId: string; allocationStatus: string; version: number; lockVersion: number;
     assetSnapshotJson: { assetCode: string; name: string; version: number }; predecessorAllocationId?: string;
+    approvedTargetJson?: { custodyType: "PERSONAL" | "SHARED"; organizationId: string; employeeId: string; locationId: string } | null;
+    receiptTargetEmployeeId?: string | null;
 }
 export interface Requisition {
     requestType?: "REQUISITION" | "BORROW"; expectedReturnDate?: string | null;

@@ -1,0 +1,18 @@
+D6-15D1 approved requisition/borrow allocation target — local development evidence
+Date: 2026-10-13
+Runner: scripts/verify-d6-15-target-runtime.py
+Owned disposable MySQL 8.4.11; real Spring HTTP and persisted SQL assertions.
+Upgrade: ProxyConfirmationUpgradeRuntimeCase 1/1 PASS, no skips.
+Actual V29 column metadata read before V30; old column definitions and historical
+return full row preserved. V30 applied once, repeat 0, Flyway validation passed.
+New override columns nullable; new target-change table initially empty.
+HTTP: HandoverHttpTest#approvedItemTargetChange* 4/4 PASS, no skips.
+- Approval keeps original demand and delivery row unchanged, asset IN_STOCK and lock active.
+- Original recipient grant/receipt rejected; new recipient receipt commits custody and releases lock.
+- Disabled original recipient can be corrected; new reference drift rejects approval atomically.
+- Current processor/role/version, duplicate pending, changed idempotent payload and physical checks enforced.
+- Late TARGET_CHANGED event failure rolls back override, decision and idempotency; original retry succeeds once.
+- Reassigned processor invalidates original proposal replay and frozen approval scope.
+- Borrow receipt opens only new borrower relationship and keeps original expected return date.
+Owned runtime container and anonymous volume removed; runner exited 0.
+These are internal development checks, not remote CI, formal QA or production acceptance.

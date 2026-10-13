@@ -68,7 +68,7 @@ class RequisitionHandoverService {
                 " FROM fams_requisition_allocation a JOIN fams_requisition_demand d ON"
                         + " d.id=a.demand_id JOIN fams_requisition r ON r.id=a.request_id JOIN"
                         + " fams_requisition_handover h ON h.allocation_id=a.id WHERE"
-                        + " COALESCE(d.target_employee_id,d.target_department_employee_id)=? AND"
+                        + " COALESCE(a.receipt_target_employee_id,d.target_employee_id,d.target_department_employee_id)=? AND"
                         + " a.allocation_status='DELIVERED_WAITING_RECEIPT' AND"
                         + " r.request_status='WAITING_HANDOVER'";
         long total =
@@ -519,6 +519,95 @@ class RequisitionHandoverService {
         return result;
     }
 
+    Map<String, Object> targetChangeContext(Actor actor, long request, long allocation) {
+        var current = actors.revalidateLocked(actor);
+        var header = header(request);
+        if (!current.has(Role.ASSET_ADMIN)) { warehouse(current, header); }
+        if (!List.of("WAITING_HANDOVER", "WAREHOUSE_PROCESSING").contains(header.get("request_status"))
+                || one("SELECT id FROM fams_requisition_decision WHERE request_id=? AND request_version=?"
+                        + " AND decision_result='APPROVED'", request, n(header, "request_version")) == null) {
+            throw RequisitionFailure.conflict("REQUISITION_NOT_APPROVED");
+        }
+        var item = item(request, allocation);
+        if (!List.of("WAITING_DELIVERY", "DELIVERED_WAITING_RECEIPT").contains(item.get("allocation_status"))
+                || !db.queryForList("SELECT id FROM fams_todo WHERE business_type='REQUISITION_ALLOCATION'"
+                        + " AND business_id=? AND todo_type='RECOVERY' AND closed_at IS NULL FOR UPDATE", allocation).isEmpty()) {
+            throw RequisitionFailure.conflict("TARGET_CHANGE_PHYSICAL_STAGE_INVALID");
+        }
+        var asset = assets.stock(n(item, "asset_id"), n(item, "asset_version_snapshot"));
+        locked(item, null);
+        var owner = one("SELECT processor_account_id,ownership_version FROM fams_requisition_ownership"
+                + " WHERE request_id=? AND archived_at IS NULL FOR UPDATE", request);
+        if (owner == null) { throw RequisitionFailure.conflict("REQUISITION_ALREADY_FINISHED"); }
+        var demand = demand(item);
+        var target = new LinkedHashMap<String, Object>();
+        target.put("custodyType", demand.get("custody_type"));
+        target.put("organizationId", demand.get("target_organization_id").toString());
+        target.put("organizationVersion", n(demand, "organization_version_snapshot"));
+        target.put("employeeId", Long.toString(target(demand)));
+        target.put("employeeVersion", n(demand, "employee_version_snapshot"));
+        target.put("locationId", demand.get("target_location_id").toString());
+        target.put("locationVersion", n(demand, "location_version_snapshot"));
+        var snapshot = new LinkedHashMap<String, Object>();
+        snapshot.put("businessType", "REQUISITION");
+        snapshot.put("businessId", Long.toString(request));
+        snapshot.put("itemId", Long.toString(allocation));
+        snapshot.put("requestVersion", n(header, "request_version"));
+        snapshot.put("version", n(header, "version"));
+        snapshot.put("itemVersion", n(item, "version"));
+        snapshot.put("itemStatus", item.get("allocation_status"));
+        snapshot.put("demandVersion", n(demand, "version"));
+        snapshot.put("assetId", item.get("asset_id").toString());
+        snapshot.put("assetVersion", n(item, "asset_version_snapshot"));
+        snapshot.put("assetCode", asset.get("asset_code"));
+        snapshot.put("target", target);
+        snapshot.put("ownershipVersion", n(owner, "ownership_version"));
+        snapshot.put("processorAccountId", owner.get("processor_account_id").toString());
+        snapshot.put("lockVersion", n(Objects.requireNonNull(one("SELECT lock_version FROM fams_asset_business_lock WHERE id=? FOR UPDATE",
+                n(item, "business_lock_id"))), "lock_version"));
+        snapshot.put("handover", db.queryForList("SELECT delivered_at,receipt_deadline_at,destination_text"
+                + " FROM fams_requisition_handover WHERE allocation_id=?", allocation).stream().map(this::clean).toList());
+        return snapshot;
+    }
+
+    void validateChangedTarget(long request, long allocation, ItemTargetChangeInput.Target target) {
+        var header = header(request);
+        if (!List.of("PERSONAL", "SHARED").contains(target.custodyType())
+                || "BORROW".equals(header.get("request_type")) && !"PERSONAL".equals(target.custodyType())) {
+            throw RequisitionFailure.invalid("TARGET_CHANGE_CUSTODY_INVALID");
+        }
+        var next = new LinkedHashMap<>(demand(item(request, allocation)));
+        next.put("custody_type", target.custodyType());
+        next.put("target_organization_id", Long.parseLong(target.organizationId()));
+        next.put("organization_version_snapshot", target.organizationVersion());
+        next.put("target_employee_id", "PERSONAL".equals(target.custodyType()) ? Long.parseLong(target.employeeId()) : null);
+        next.put("target_department_employee_id", "SHARED".equals(target.custodyType()) ? Long.parseLong(target.employeeId()) : null);
+        next.put("employee_version_snapshot", target.employeeVersion());
+        next.put("target_location_id", Long.parseLong(target.locationId()));
+        next.put("location_version_snapshot", target.locationVersion());
+        targets(next);
+    }
+
+    void applyChangedTarget(Actor actor, long request, long allocation, ItemTargetChangeInput.Target target,
+            String observedCode, long proposal) {
+        var current = actors.revalidateLocked(actor);
+        if (!current.has(Role.ASSET_ADMIN)) { throw RequisitionFailure.forbidden(); }
+        targetChangeContext(actor, request, allocation);
+        validateChangedTarget(request, allocation, target);
+        var item = item(request, allocation);
+        String observed = assets.observedCode(n(item, "asset_id"), observedCode);
+        db.update("UPDATE fams_requisition_allocation SET approved_target_json=?,receipt_target_employee_id=?,"
+                + "version=version+1 WHERE id=?", json.writeValueAsString(target), Long.parseLong(target.employeeId()), allocation);
+        invalidate(allocation);
+        if ("DELIVERED_WAITING_RECEIPT".equals(item.get("allocation_status"))) {
+            close(allocation, "RECEIPT");
+            close(allocation, "HANDOVER_EXCEPTION");
+            todo(allocation, "RECEIPT", "RECEIVER", receiverAccount(Long.parseLong(target.employeeId())));
+        }
+        db.update("UPDATE fams_requisition SET version=version+1,updated_at=? WHERE id=?", now(), request);
+        event(actor, current, "TARGET_CHANGED", item, observed, "批准目标变更 " + proposal, Role.ASSET_ADMIN);
+    }
+
     private void targets(Map<String, Object> demand) {
         for (String[] spec :
                 new String[][] {
@@ -784,10 +873,22 @@ class RequisitionHandoverService {
     }
 
     private Map<String, Object> demand(Map<String, Object> item) {
-        return Objects.requireNonNull(
-                one(
-                        "SELECT * FROM fams_requisition_demand WHERE id=? FOR UPDATE",
-                        n(item, "demand_id")));
+        var result = new LinkedHashMap<>(Objects.requireNonNull(
+                one("SELECT * FROM fams_requisition_demand WHERE id=? FOR UPDATE", n(item, "demand_id"))));
+        if (item.get("approved_target_json") != null) {
+            var target = json.readTree(item.get("approved_target_json").toString());
+            result.put("custody_type", target.get("custodyType").asText());
+            result.put("target_organization_id", target.get("organizationId").asLong());
+            result.put("organization_version_snapshot", target.get("organizationVersion").asLong());
+            result.put("target_employee_id", "PERSONAL".equals(target.get("custodyType").asText())
+                    ? target.get("employeeId").asLong() : null);
+            result.put("target_department_employee_id", "SHARED".equals(target.get("custodyType").asText())
+                    ? target.get("employeeId").asLong() : null);
+            result.put("employee_version_snapshot", target.get("employeeVersion").asLong());
+            result.put("target_location_id", target.get("locationId").asLong());
+            result.put("location_version_snapshot", target.get("locationVersion").asLong());
+        }
+        return result;
     }
 
     private Map<String, Object> replay(

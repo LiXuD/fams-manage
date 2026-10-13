@@ -38,6 +38,18 @@ class ProxyConfirmationUpgradeRuntimeCase {
             for (String event : new String[] {"DELIVERED", "RECEIVED", "REFUSED", "RECOVERY_REQUESTED", "RECOVERED", "CANCELLED", "PROXY_RECEIVED"}) {
                 org.junit.jupiter.api.Assertions.assertTrue(check.contains(event));
             }
+            // Read the actual V29 schema before the additive change; no populated target is rewritten.
+            assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='fams_requisition_allocation' AND column_name='approved_target_json'", Integer.class));
+            var oldColumns = db.queryForList("SELECT column_name,column_type,is_nullable FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='fams_requisition_allocation' ORDER BY ordinal_position");
+            var targetUpgrade = Flyway.configure().dataSource(source).locations("classpath:db/migration/d6_04").target("30").load();
+            assertEquals(1, targetUpgrade.migrate().migrationsExecuted);
+            assertEquals(0, targetUpgrade.migrate().migrationsExecuted);
+            targetUpgrade.validate();
+            assertEquals(before, db.queryForMap("SELECT * FROM fams_asset_return WHERE id=923029"));
+            var newColumns = db.queryForList("SELECT column_name,column_type,is_nullable FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='fams_requisition_allocation' ORDER BY ordinal_position");
+            assertEquals(oldColumns, newColumns.subList(0, oldColumns.size()));
+            assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_item_target_change", Integer.class));
+            assertEquals(2, db.queryForObject("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='fams_requisition_allocation' AND column_name IN ('approved_target_json','receipt_target_employee_id') AND is_nullable='YES'", Integer.class));
         } finally {
             for (String table : new String[] {"fams_asset_return", "fams_asset", "fams_business_parameter_version", "fams_system_account", "fams_employee", "fams_organization"}) {
                 db.update("DELETE FROM " + table + " WHERE id=923029");
