@@ -41,13 +41,13 @@ public final class ProxyConfirmationAttachmentController {
     }
 
     @org.springframework.web.bind.annotation.GetMapping(
-            "/api/v1/proxy-confirmations/{receiptId}/attachments")
+            {"/api/v1/proxy-confirmations/{receiptId}/attachments", "/api/v1/mini/proxy-confirmations/{receiptId}/attachments"})
     Map<String, Object> list(@PathVariable long receiptId) {
         return Map.of("items", reads.list("PROXY_CONFIRMATION", receiptId));
     }
 
     @PostMapping(
-            value = "/api/v1/proxy-confirmations/{receiptId}/attachments",
+            value = {"/api/v1/proxy-confirmations/{receiptId}/attachments", "/api/v1/mini/proxy-confirmations/{receiptId}/attachments"},
             consumes = "multipart/form-data")
     ResponseEntity<Map<String, Object>> upload(
             @PathVariable long receiptId,
@@ -84,7 +84,7 @@ public final class ProxyConfirmationAttachmentController {
     }
 
     @PostMapping(
-            value = "/api/v1/proxy-confirmations/{receiptId}/attachments/{objectId}/corrections",
+            value = {"/api/v1/proxy-confirmations/{receiptId}/attachments/{objectId}/corrections", "/api/v1/mini/proxy-confirmations/{receiptId}/attachments/{objectId}/corrections"},
             consumes = "multipart/form-data")
     ResponseEntity<Map<String, Object>> correct(
             @PathVariable long receiptId,

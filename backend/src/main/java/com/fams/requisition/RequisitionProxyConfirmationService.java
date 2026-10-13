@@ -109,7 +109,9 @@ class RequisitionProxyConfirmationService {
                 "pageSize",
                 size,
                 "total",
-                total);
+                total,
+                "canApprove", current.has(Role.ASSET_ADMIN),
+                "canExecute", current.has(Role.WAREHOUSE_OPERATOR));
     }
 
     Map<String, Object> get(Actor actor, long id) {

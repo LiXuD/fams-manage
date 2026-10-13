@@ -64,6 +64,11 @@ class HandoverHttpTest {
     private Session admin;
     private Session department;
 
+    private record ProxyScanPause(java.util.concurrent.CountDownLatch entered,
+            java.util.concurrent.CountDownLatch release) {}
+    private static final java.util.concurrent.atomic.AtomicReference<ProxyScanPause> PROXY_SCAN_PAUSE =
+            new java.util.concurrent.atomic.AtomicReference<>();
+
     @org.springframework.boot.test.context.TestConfiguration
     static class MiniConfiguration {
         @org.springframework.context.annotation.Bean
@@ -74,7 +79,19 @@ class HandoverHttpTest {
         @org.springframework.context.annotation.Primary
         @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name="fams.test.proxy-evidence")
         com.fams.attachment.MalwareScanner proxyEvidenceScannerFixture() {
-            return content -> com.fams.attachment.MalwareScanner.Result.CLEAN;
+            return content -> {
+                var pause = PROXY_SCAN_PAUSE.get();
+                if (pause != null) {
+                    pause.entered().countDown();
+                    try {
+                        if (!pause.release().await(20, TimeUnit.SECONDS)) { return com.fams.attachment.MalwareScanner.Result.UNAVAILABLE; }
+                    } catch (InterruptedException error) {
+                        Thread.currentThread().interrupt();
+                        return com.fams.attachment.MalwareScanner.Result.UNAVAILABLE;
+                    }
+                }
+                return com.fams.attachment.MalwareScanner.Result.CLEAN;
+            };
         }
     }
 
@@ -3002,6 +3019,227 @@ class HandoverHttpTest {
                 key(), changed.path("version").asLong());
         assertEquals(409, rejected.statusCode(), rejected.body());
         assertTrue(rejected.body().contains("TRANSFER_NOT_PROCESSOR"), rejected.body());
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "d6.15.proxy.runtime", matches = "true")
+    void proxyConfirmationNativeRequisitionHandlersUploadApproveExecuteAndNotifyThroughRealHttp() throws Exception {
+        var row = allocated(1);
+        row = warehouseWrite(row, 0, "deliver", delivery(row, 0));
+        verifyNativeProxyHandlers(row, false);
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "d6.15.proxy.runtime", matches = "true")
+    void proxyConfirmationNativeTransferHandlersUploadApproveExecuteAndNotifyThroughRealHttp() throws Exception {
+        personalTransferFixture();
+        var row = claimedTransfer(transferDraft(false, false, base + 15, base + 1, base, 0), employee);
+        row = transferAction(warehouse, row, transferItemPath(row, "deliver"), transferPhysical(row, null, false));
+        verifyNativeProxyHandlers(row, true);
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "d6.15.proxy.runtime", matches = "true")
+    void proxyConfirmationMiniUploadRevalidatesLogoutAfterScanningBeforeRegistration() throws Exception {
+        var row = allocated(1);
+        row = warehouseWrite(row, 0, "deliver", delivery(row, 0));
+        var created = proxyCall(warehouse, "POST", "", proxyDraft(proxyContext(row)), key(), null);
+        assertEquals(200, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        String token = proxyMiniLogin(base + 11, "paused-upload");
+        var pause = new ProxyScanPause(new java.util.concurrent.CountDownLatch(1), new java.util.concurrent.CountDownLatch(1));
+        PROXY_SCAN_PAUSE.set(pause);
+        java.util.concurrent.CompletableFuture<HttpResponse<String>> upload;
+        try {
+            upload = http.sendAsync(proxyMiniUploadRequest(token, id, key()), HttpResponse.BodyHandlers.ofString());
+            assertTrue(pause.entered().await(10, TimeUnit.SECONDS), "Upload did not enter the owned scanner pause");
+            var logout = proxyMiniCall(token, "POST", "/auth/logout", null);
+            assertEquals(204, logout.statusCode(), logout.body());
+        } finally {
+            PROXY_SCAN_PAUSE.set(null);
+            pause.release().countDown();
+        }
+        var rejected = upload.get(20, TimeUnit.SECONDS);
+        assertEquals(401, rejected.statusCode(), rejected.body());
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_attachment WHERE business_type='PROXY_CONFIRMATION' AND business_id=?", id));
+        assertEquals(0L, jdbc.queryForObject("SELECT version FROM fams_proxy_confirmation WHERE id=?", Long.class, id));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "d6.15.proxy.runtime", matches = "true")
+    void proxyConfirmationMiniDownloadGrantCannotSurviveLogoutOrCrossAccountIdentity() throws Exception {
+        var row = allocated(1);
+        row = warehouseWrite(row, 0, "deliver", delivery(row, 0));
+        var created = proxyCall(warehouse, "POST", "", proxyDraft(proxyContext(row)), key(), null);
+        assertEquals(200, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        var proof = proxyUpload(id, 0);
+        assertEquals(201, proof.statusCode(), proof.body());
+        String object = JSON.readTree(proof.body()).path("objectId").asText();
+        String token = proxyMiniLogin(base + 11, "grant-owner");
+        var grant = proxyMiniCall(token, "POST", "/attachments/" + object + "/download-grant", null);
+        assertEquals(200, grant.statusCode(), grant.body());
+        String url = JSON.readTree(grant.body()).path("url").asText();
+        assertTrue(url.startsWith("/api/v1/mini/attachments/"));
+        var content = proxyMiniCall(token, "GET", url.substring("/api/v1/mini".length()), null);
+        assertEquals(200, content.statusCode(), content.body());
+        assertTrue(content.body().startsWith("%PDF-1.7"));
+        String otherToken = proxyMiniLogin(base + 12, "grant-other");
+        var cross = proxyMiniCall(otherToken, "GET", url.substring("/api/v1/mini".length()), null);
+        assertEquals(403, cross.statusCode(), cross.body());
+        assertEquals(204, proxyMiniCall(token, "POST", "/auth/logout", null).statusCode());
+        assertEquals(401, proxyMiniCall(token, "GET", url.substring("/api/v1/mini".length()), null).statusCode());
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_attachment WHERE business_type='PROXY_CONFIRMATION' AND business_id=?", id));
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "d6.15.proxy.runtime", matches = "true")
+    void proxyConfirmationResultNoticeKeepsLargeIdentifiersExactAcrossReadAndReview() throws Exception {
+        var row = allocated(1);
+        row = warehouseWrite(row, 0, "deliver", delivery(row, 0));
+        var created = proxyCall(warehouse, "POST", "", proxyDraft(proxyContext(row)), key(), null);
+        assertEquals(200, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        assertEquals(201, proxyUpload(id, 0).statusCode());
+        assertEquals(200, proxyCall(warehouse, "POST", "/" + id + "/submit", null, key(), 1L).statusCode());
+        assertEquals(200, proxyCall(admin, "POST", "/" + id + "/decision", proxyDecision(true), key(), 2L).statusCode());
+        assertEquals(200, proxyCall(warehouse, "POST", "/" + id + "/execute", null, key(), 3L).statusCode());
+        String large = "9007199254740993";
+        assertEquals(1, jdbc.update("UPDATE fams_business_result_notice SET id=? WHERE execution_id=? AND recipient_employee_id=?", large, id, base + 10));
+        var notice = JSON.readTree(noticeCall(employee, "GET", "").body()).path("items").get(0);
+        assertTrue(notice.path("id").isTextual());
+        assertEquals(large, notice.path("id").asText());
+        assertTrue(notice.path("businessId").isTextual());
+        var read = noticeCall(employee, "POST", "/" + large + "/read");
+        assertEquals(200, read.statusCode(), read.body());
+        assertEquals(large, JSON.readTree(read.body()).path("id").asText());
+        assertEquals(200, noticeObjection(employee, large, "Please check the exact result identifier", key()).statusCode());
+        var review = JSON.readTree(noticeCall(admin, "GET", "/review-requests").body()).path("items").get(0);
+        assertEquals(large, review.path("noticeId").asText());
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='BUSINESS_RESULT_NOTICE' AND resource_id=? AND action='RESULT_NOTICE_OBJECTION'", large));
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "d6.15.proxy.runtime", matches = "true")
+    void proxyConfirmationRequisitionRaceWithActualReceiptCommitsOnlyOneOutcome() throws Exception {
+        var row = allocated(1);
+        row = warehouseWrite(row, 0, "deliver", delivery(row, 0));
+        verifyProxyReceiptRace(row, false);
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "d6.15.proxy.runtime", matches = "true")
+    void proxyConfirmationTransferRaceWithActualReceiptCommitsOnlyOneOutcome() throws Exception {
+        personalTransferFixture();
+        var row = claimedTransfer(transferDraft(false, false, base + 15, base + 1, base, 0), employee);
+        row = transferAction(warehouse, row, transferItemPath(row, "deliver"), transferPhysical(row, null, false));
+        verifyProxyReceiptRace(row, true);
+    }
+
+    private void verifyProxyReceiptRace(JsonNode row, boolean transfer) throws Exception {
+        var context = transfer ? JSON.readTree(transferProxyContext(warehouse, row).body()) : proxyContext(row);
+        var created = proxyCall(warehouse, "POST", "", proxyDraft(context), key(), null);
+        assertEquals(200, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        assertEquals(201, proxyUpload(id, 0).statusCode());
+        assertEquals(200, proxyCall(warehouse, "POST", "/" + id + "/submit", null, key(), 1L).statusCode());
+        assertEquals(200, proxyCall(admin, "POST", "/" + id + "/decision", proxyDecision(true), key(), 2L).statusCode());
+        var receiver = transfer ? login(base + 15) : employee;
+        String receipt = transfer ? transferReceipt(receiver, row, "RQ-ASSET-" + base) : receiptBody(row, 0, "RQ-ASSET-" + base);
+        String normalPath = transfer ? "/receipts/" + context.path("itemId").asText() + "/receive" : path(row, 0, "receive");
+        var start = new java.util.concurrent.CountDownLatch(1);
+        var proxy = CompletableFuture.supplyAsync(() -> proxyRaceResult(start, () ->
+                proxyCall(warehouse, "POST", "/" + id + "/execute", null, key(), 3L).statusCode()));
+        var normal = CompletableFuture.supplyAsync(() -> proxyRaceResult(start, () ->
+                (transfer ? transferCall(receiver, "POST", normalPath, receipt, key(), row.path("version").asLong())
+                        : call(receiver, "POST", normalPath, receipt, key(), row.path("version").asLong())).statusCode()));
+        start.countDown();
+        int proxyStatus = proxy.get(30, TimeUnit.SECONDS), normalStatus = normal.get(30, TimeUnit.SECONDS);
+        assertEquals(java.util.List.of(200, 409), java.util.stream.Stream.of(proxyStatus, normalStatus).sorted().toList());
+        assertEquals(base + (transfer ? 15 : 10), jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+        assertEquals(proxyStatus == 200 ? 1 : 0, count("SELECT COUNT(*) FROM fams_business_result_notice WHERE execution_id=?", id));
+        String sql = transfer ? "SELECT COUNT(*) FROM fams_transfer_event WHERE request_id=? AND event_type IN ('TRANSFER_RECEIVE','TRANSFER_PROXY_RECEIVED')"
+                : "SELECT COUNT(*) FROM fams_requisition_handover_event WHERE allocation_id=? AND event_type IN ('RECEIVED','PROXY_RECEIVED')";
+        assertEquals(1, count(sql, transfer ? row.path("id").asText() : context.path("itemId").asText()));
+        assertEquals(proxyStatus == 200 ? "EXECUTED" : "APPROVED",
+                jdbc.queryForObject("SELECT confirmation_status FROM fams_proxy_confirmation WHERE id=?", String.class, id));
+    }
+
+    private int proxyRaceResult(java.util.concurrent.CountDownLatch start, java.util.concurrent.Callable<Integer> action) {
+        try {
+            start.await();
+            return action.call();
+        } catch (Exception error) { throw new IllegalStateException(error); }
+    }
+
+    private String proxyMiniLogin(long account, String suffix) throws Exception {
+        String code = "proxy-mini-" + base + "-" + suffix;
+        jdbc.update("INSERT INTO fams_mini_binding (account_id,identity_hash,created_at) VALUES (?,?,?)", account,
+                miniSessions.identityHash(new MiniWechatIdentityPort.Identity("requisition-test-app", code)), Timestamp.from(Instant.now()));
+        var response = proxyMiniCall(null, "POST", "/auth/login", JSON.writeValueAsString(java.util.Map.of("code", code)));
+        assertEquals(200, response.statusCode(), response.body());
+        return JSON.readTree(response.body()).path("sessionToken").asText();
+    }
+
+    private HttpResponse<String> proxyMiniCall(String token, String method, String path, String body) throws Exception {
+        var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/mini" + path));
+        if (token != null) { request.header("X-FAMS-Mini-Session", token); }
+        if ("POST".equals(method)) {
+            request.header("Content-Type", "application/json").POST(body == null
+                    ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body));
+        } else { request.GET(); }
+        return http.send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpRequest proxyMiniUploadRequest(String token, String id, String identity) {
+        String boundary = "owned-mini-upload-boundary";
+        String data = "--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"signed.pdf\"\r\n"
+                + "Content-Type: application/pdf\r\n\r\n%PDF-1.7 signed asset list\r\n--" + boundary + "--\r\n";
+        return HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/mini/proxy-confirmations/" + id + "/attachments"))
+                .header("X-FAMS-Mini-Session", token).header("Idempotency-Key", identity).header("If-Match-Version", "0")
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary).POST(HttpRequest.BodyPublishers.ofString(data)).build();
+    }
+
+    private void verifyNativeProxyHandlers(JsonNode row, boolean transfer) throws Exception {
+        String business = transfer ? "TRANSFER" : "REQUISITION", prefix = "proxy-native-" + base;
+        long recipient = base + (transfer ? 15 : 10);
+        for (var entry : java.util.Map.of("warehouse", base + 11, "admin", base + 13, "recipient", recipient).entrySet()) {
+            String code = prefix + "-" + entry.getKey();
+            jdbc.update("INSERT INTO fams_mini_binding (account_id,identity_hash,created_at) VALUES (?,?,?)",
+                    entry.getValue(), miniSessions.identityHash(
+                            new MiniWechatIdentityPort.Identity("requisition-test-app", code)), Timestamp.from(Instant.now()));
+        }
+        var script = java.nio.file.Path.of(System.getProperty("user.dir")).getParent()
+                .resolve("apps/miniprogram/test/runtime-proxy-confirmation-http.mjs");
+        String node = System.getenv("FAMS_TEST_NODE_EXECUTABLE");
+        var builder = new ProcessBuilder("rtk", "proxy", node == null ? "node" : node, script.toString());
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_PROXY_BUSINESS", business);
+        builder.environment().put("FAMS_TEST_PROXY_REQUEST_ID", row.path("id").asText());
+        String item = row.path(transfer ? "items" : "allocations").get(0).path("id").asText();
+        builder.environment().put("FAMS_TEST_PROXY_ITEM_ID", item);
+        for (String role : new String[] {"warehouse", "admin", "recipient"}) {
+            builder.environment().put("FAMS_TEST_PROXY_" + role.toUpperCase(java.util.Locale.ROOT) + "_CODE", prefix + "-" + role);
+        }
+        builder.redirectErrorStream(true);
+        var process = builder.start();
+        assertTrue(process.waitFor(60, TimeUnit.SECONDS));
+        String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        assertEquals(0, process.exitValue(), output);
+        assertEquals(recipient, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+        Long proposal = jdbc.queryForObject("SELECT id FROM fams_proxy_confirmation WHERE business_type=? AND business_id=? AND item_id=?",
+                Long.class, business, row.path("id").asText(), item);
+        assertEquals("EXECUTED", jdbc.queryForObject("SELECT confirmation_status FROM fams_proxy_confirmation WHERE id=?", String.class, proposal));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_business_result_notice WHERE execution_id=? AND recipient_employee_id=? AND read_at IS NOT NULL", proposal, recipient));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_attachment WHERE business_type='PROXY_CONFIRMATION' AND business_id=?", proposal));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_todo WHERE business_type=? AND business_id=? AND todo_type='PROXY_RECEIPT_REVIEW' AND closed_at IS NULL", business, row.path("id").asText()));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE action='RESULT_NOTICE_OBJECTION' AND actor_account_id=?", recipient));
+        String eventSql = transfer ? "SELECT COUNT(*) FROM fams_transfer_event WHERE request_id=? AND event_type='TRANSFER_PROXY_RECEIVED'"
+                : "SELECT COUNT(*) FROM fams_requisition_handover_event WHERE allocation_id=? AND event_type='PROXY_RECEIVED'";
+        assertEquals(1, count(eventSql, transfer ? row.path("id").asText() : item));
     }
 
     @org.junit.jupiter.api.AfterAll

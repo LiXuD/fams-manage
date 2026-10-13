@@ -1,0 +1,12 @@
+<view class="page">
+  <view class="title">代确认结果核查</view><view class="hint">资产管理员共享查看，不因查看保留审批权。核查请求不自动解除责任，请核对原凭证后按现有业务处理。</view>
+  <view wx:if="{{error}}" class="error">{{error}}</view>
+  <button bindtap="onRefresh" disabled="{{busy}}">刷新核查列表</button>
+  <view wx:for="{{reviews}}" wx:key="noticeId" class="card"><view class="value">{{item.recipient}} · {{item.businessType === 'TRANSFER' ? '调拨' : '领用 / 借用'}} {{item.businessId}}</view>
+    <view>{{item.reason}}</view><view>{{item.createdAt}}</view>
+    <button data-id="{{item.executionId}}" bindtap="onOpen" disabled="{{busy}}">查看原许可与签收凭证</button></view>
+  <view wx:if="{{!reviews.length}}" class="hint">暂无待核查请求。</view>
+  <button wx:if="{{page > 1}}" bindtap="onPrevious" disabled="{{busy}}">上一页</button>
+  <button wx:if="{{page * 20 < total}}" bindtap="onNext" disabled="{{busy}}">下一页</button>
+  <navigator url="/pages/mine/index" open-type="redirect">返回我的账号</navigator>
+</view>

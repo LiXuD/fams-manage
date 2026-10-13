@@ -2,6 +2,14 @@ import { type MiniRuntime, type SavedSession } from "./session.ts";
 import { type WechatLogin } from "./binding.ts";
 
 export interface WxApi {
+    uploadFile?(input: { url: string; filePath: string; name: string; header: Record<string, string>; timeout: number;
+        success(reply: { statusCode: number; data: string }): void; fail(error: unknown): void }): void;
+    downloadFile?(input: { url: string; header: Record<string, string>; timeout: number;
+        success(reply: { statusCode: number; tempFilePath: string }): void; fail(error: unknown): void }): void;
+    chooseMessageFile?(input: { count: number; type: string; extension: string[];
+        success(reply: { tempFiles: { path: string; name: string; size: number }[] }): void; fail(error: unknown): void }): void;
+    previewImage?(input: { current: string; urls: string[]; success(): void; fail(error: unknown): void }): void;
+    openDocument?(input: { filePath: string; showMenu: boolean; success(): void; fail(error: unknown): void }): void;
     request(input: { url: string; method: string; header: Record<string, string>; data?: unknown; timeout: number;
         success(reply: { statusCode: number; data: unknown }): void; fail(error: unknown): void }): void;
     scanCode?(input: { onlyFromCamera: boolean; success(reply: { result: string }): void; fail(error: unknown): void }): void;
@@ -15,6 +23,18 @@ export interface WxApi {
 
 export function createWxRuntime(wx: WxApi): MiniRuntime & WechatLogin {
     return {
+        upload: input => new Promise((resolve, reject) => {
+            if (!wx.uploadFile) { reject(new Error("Evidence upload unavailable")); return; }
+            wx.uploadFile({ ...input, name: "file", timeout: 60000,
+                success: reply => {
+                    try { resolve({ statusCode: reply.statusCode, data: JSON.parse(reply.data) as unknown }); }
+                    catch { reject(new Error("Invalid upload response")); }
+                }, fail: reject });
+        }),
+        download: input => new Promise((resolve, reject) => {
+            if (!wx.downloadFile) { reject(new Error("Evidence download unavailable")); return; }
+            wx.downloadFile({ ...input, timeout: 60000, success: resolve, fail: reject });
+        }),
         request: input => new Promise((resolve, reject) => wx.request({ ...input, timeout: 10000,
             header: { "Content-Type": "application/json", ...input.header }, success: resolve, fail: reject })),
         loginCode: () => new Promise((resolve, reject) => wx.login({ timeout: 10000,

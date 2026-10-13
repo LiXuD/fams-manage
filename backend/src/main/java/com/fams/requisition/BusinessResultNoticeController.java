@@ -25,7 +25,7 @@ import java.util.Map;
 @RestController
 @Profile("fams-product")
 @Validated
-@RequestMapping("/api/v1/business-result-notices")
+@RequestMapping({"/api/v1/business-result-notices", "/api/v1/mini/business-result-notices"})
 class BusinessResultNoticeController {
     private final BusinessResultNoticeService service;
     private final RequisitionActorContext actors;

@@ -26,7 +26,7 @@ import java.util.Map;
 @RestController
 @Profile("fams-product")
 @Validated
-@RequestMapping("/api/v1/proxy-confirmations")
+@RequestMapping({"/api/v1/proxy-confirmations", "/api/v1/mini/proxy-confirmations"})
 class RequisitionProxyConfirmationController {
 
     record Draft(

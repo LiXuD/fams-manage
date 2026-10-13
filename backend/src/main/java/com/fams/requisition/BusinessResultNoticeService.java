@@ -46,8 +46,8 @@ class BusinessResultNoticeService {
                 + " ORDER BY id DESC LIMIT ? OFFSET ?", current.employeeId(), pageSize,
                 (page - 1) * pageSize);
         var items = rows.stream().map(row -> Map.of(
-                "id", row.get("id"), "businessType", row.get("business_type"),
-                "businessId", row.get("business_id"), "itemId", row.get("item_id"),
+                "id", row.get("id").toString(), "businessType", row.get("business_type"),
+                "businessId", row.get("business_id").toString(), "itemId", row.get("item_id").toString(),
                 "content", json.readTree(row.get("content_json").toString()),
                 "createdAt", row.get("created_at").toString(),
                 "read", row.get("read_at") != null, "reviewRequested",
@@ -103,7 +103,7 @@ class BusinessResultNoticeService {
         db.update("UPDATE fams_business_result_notice SET read_at=COALESCE(read_at,"
                 + "CURRENT_TIMESTAMP(3)) WHERE id=? AND recipient_employee_id=?", id,
                 current.employeeId());
-        return Map.of("id", id, "read", true);
+        return Map.of("id", Long.toString(id), "read", true);
     }
     @SuppressWarnings("unchecked")
     Map<String, Object> objection(RequisitionActorContext.Actor actor, long id, String key, String reason) {

@@ -1,0 +1,20 @@
+<view class="page">
+  <view class="title">业务结果通知</view><view class="hint">未读 {{unread}} 条。代确认执行后责任已生效，通知无需再次确认。</view>
+  <view wx:if="{{error}}" class="error">{{error}}</view><view wx:if="{{notice}}" class="hint">{{notice}}</view>
+  <button bindtap="onRefresh" disabled="{{busy}}">刷新通知</button><button wx:if="{{retryable}}" bindtap="onRetry" disabled="{{busy}}">原请求重试</button>
+  <view wx:for="{{rows}}" wx:key="id" class="card">
+    <view class="value">{{item.businessType === 'TRANSFER' ? '调拨' : '领用 / 借用'}}代确认执行结果 · {{item.read ? '已读' : '未读'}}</view>
+    <view>原单 {{item.businessId}} / 明细 {{item.itemId}} · {{item.content.result.assetCode}}</view>
+    <view>实际签收人 {{item.content.actualSigner}} · {{item.content.metadata.actualReceivedAt}}</view>
+    <view>原因 {{item.content.metadata.cannotConfirmReason}}；联系记录 {{item.content.metadata.contactRecord}}</view>
+    <view>提交账号 {{item.content.submittedBy}} · 批准账号 {{item.content.approvedBy}} · 执行账号 {{item.content.executedBy}}</view>
+    <button wx:if="{{!item.read}}" data-id="{{item.id}}" bindtap="onRead" disabled="{{busy || retryable}}">标记已读</button>
+    <view wx:if="{{item.reviewRequested}}" class="hint">已登记管理员核查，资产责任保持。</view>
+    <view wx:else><view class="label">核查说明</view><textarea value="{{reasons[item.id]}}" data-id="{{item.id}}" bindinput="onReason" maxlength="1000" disabled="{{busy || retryable}}" />
+      <button data-id="{{item.id}}" bindtap="onReview" disabled="{{busy || retryable || !reasons[item.id]}}">通知管理员核查</button></view>
+  </view>
+  <view wx:if="{{!rows.length}}" class="hint">暂无结果通知。</view>
+  <button wx:if="{{page > 1}}" bindtap="onPrevious" disabled="{{busy || retryable}}">上一页</button>
+  <button wx:if="{{page * 20 < total}}" bindtap="onNext" disabled="{{busy || retryable}}">下一页</button>
+  <navigator url="/pages/mine/index" open-type="redirect">返回我的账号</navigator>
+</view>

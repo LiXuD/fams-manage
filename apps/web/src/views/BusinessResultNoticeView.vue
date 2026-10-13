@@ -3,15 +3,15 @@ import { onMounted, ref } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { loanMessage, loanRequest, type LoanMutation } from "@/loan/api";
 
-interface Notice { id: number; businessType: string; businessId: number; itemId: number;
+interface Notice { id: string; businessType: string; businessId: string; itemId: string;
   content: { result: { assetCode: string }; actualSigner: string; submittedBy: string; approvedBy: string; executedBy: string;
     metadata: { cannotConfirmReason: string; contactRecord: string; actualReceivedAt: string };
     businessSnapshot?: { targetEmployeeId: string; processorAccountId: string } }; createdAt: string; read: boolean; reviewRequested: boolean }
 interface Page { items: Notice[]; total: number; unread: number }
 const rows = ref<Notice[]>([]); const page = ref(1); const total = ref(0);
 const unread = ref(0); const busy = ref(false); const error = ref("");
-const reasons = ref<Record<number, string>>({}); const info = ref("");
-const pendingObjection = ref<(LoanMutation & { id: number }) | null>(null);
+const reasons = ref<Record<string, string>>({}); const info = ref("");
+const pendingObjection = ref<(LoanMutation & { id: string }) | null>(null);
 async function load() {
   const result = await loanRequest<Page>(`/business-result-notices?page=${page.value}&pageSize=20`);
   rows.value = result.items; total.value = result.total; unread.value = result.unread;
@@ -22,7 +22,7 @@ async function refresh(delta = 0) {
   try { await load(); } catch (e) { error.value = loanMessage(e); }
   finally { busy.value = false; }
 }
-async function read(id: number) {
+async function read(id: string) {
   if (busy.value) return;
   busy.value = true; error.value = "";
   try {
@@ -31,7 +31,7 @@ async function read(id: number) {
     }); await load();
   } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
 }
-async function object(id: number) {
+async function object(id: string) {
   if (busy.value) return;
   if (pendingObjection.value && pendingObjection.value.id !== id) return;
   if (!pendingObjection.value && !reasons.value[id]?.trim()) return;

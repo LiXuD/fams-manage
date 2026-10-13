@@ -2,6 +2,10 @@
 export interface MiniRuntime {
     request(input: { url: string; method: string; header: Record<string, string>; data?: unknown }):
         Promise<{ statusCode: number; data: unknown }>;
+    upload?(input: { url: string; filePath: string; header: Record<string, string> }):
+        Promise<{ statusCode: number; data: unknown }>;
+    download?(input: { url: string; header: Record<string, string> }):
+        Promise<{ statusCode: number; tempFilePath: string }>;
     readSession(): unknown;
     writeSession(value: SavedSession): void;
     removeSession(): void;
@@ -123,6 +127,42 @@ export class MiniSessionClient {
         if (response.statusCode === 401) this.clear();
         this.checkResponse(response);
         return response.data;
+    }
+
+    async uploadEvidence(path: string, filePath: string, mutation: { key: string; version: number }): Promise<unknown> {
+        if (!/^\/api\/v1\/mini\/proxy-confirmations\/[1-9][0-9]*\/attachments$/.test(path)
+            || !filePath || mutation.key.length < 16 || mutation.key.length > 128
+            || !Number.isSafeInteger(mutation.version) || mutation.version < 0) {
+            throw new Error("Invalid evidence upload identity");
+        }
+        const session = this.current;
+        if (!session) throw new MiniRequestError(401, "AUTH_SESSION_INVALID");
+        if (!this.runtime.upload) throw new Error("Evidence upload unavailable");
+        const generation = this.generation;
+        const response = await this.runtime.upload({ url: this.origin + path, filePath,
+            header: { "X-FAMS-Mini-Session": session.sessionToken, "Idempotency-Key": mutation.key,
+                "If-Match-Version": String(mutation.version) } });
+        this.assertGeneration(generation);
+        if (response.statusCode === 401) this.clear();
+        this.checkResponse(response);
+        return response.data;
+    }
+
+    async downloadEvidence(path: string): Promise<string> {
+        if (!/^\/api\/v1\/mini\/attachments\/[0-9a-f-]{36}\/content\?grant=[A-Za-z0-9_.-]+$/i.test(path)) {
+            throw new Error("Invalid evidence download path");
+        }
+        const session = this.current;
+        if (!session) throw new MiniRequestError(401, "AUTH_SESSION_INVALID");
+        if (!this.runtime.download) throw new Error("Evidence download unavailable");
+        const generation = this.generation;
+        const response = await this.runtime.download({ url: this.origin + path,
+            header: { "X-FAMS-Mini-Session": session.sessionToken } });
+        this.assertGeneration(generation);
+        if (response.statusCode === 401) this.clear();
+        this.checkResponse({ statusCode: response.statusCode, data: null });
+        if (!response.tempFilePath) throw new Error("Downloaded evidence unavailable");
+        return response.tempFilePath;
     }
 
     async logout(): Promise<void> {

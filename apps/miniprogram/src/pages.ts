@@ -10,6 +10,8 @@ export interface MiniServices {
     navigate(url: string): void;
     confirm(title: string, content: string): Promise<boolean>;
     scan?(): Promise<string>;
+    chooseEvidence?(): Promise<{ path: string; name: string; size: number }>;
+    openEvidence?(path: string, filename?: string): Promise<void>;
 }
 
 function message(error: unknown): string {

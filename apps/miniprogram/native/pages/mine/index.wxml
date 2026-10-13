@@ -24,3 +24,7 @@
 <navigator url="/pages/transfer-receipts/index">调拨实物接收</navigator>
 
 <navigator url="/pages/transfer-reassignment/index">调拨受控转派（资产管理员）</navigator>
+
+<navigator url="/pages/proxy-confirmations/index">异常代确认（库管 / 资产管理员）</navigator>
+<navigator url="/pages/business-result-notices/index">业务结果通知与责任核查</navigator>
+<navigator url="/pages/business-result-reviews/index">代确认结果核查（资产管理员）</navigator>

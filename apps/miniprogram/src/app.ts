@@ -13,6 +13,21 @@ App({
             services = { sessions, wechat: runtime,
                 binding: new MiniBindingClient(API_ORIGIN, runtime, sessions, runtime, deviceId(wx), createUuid),
                 createKey: createUuid,
+                chooseEvidence: () => new Promise((resolve, reject) => {
+                    if (!wx.chooseMessageFile) { reject(new Error("File picker unavailable")); return; }
+                    wx.chooseMessageFile({ count: 1, type: "file", extension: ["pdf", "png", "jpg", "jpeg"],
+                        success: result => result.tempFiles[0] ? resolve(result.tempFiles[0]) : reject(new Error("No evidence selected")),
+                        fail: reject });
+                }),
+                openEvidence: (filePath, filename) => new Promise((resolve, reject) => {
+                    if (filename && /\.(png|jpe?g)$/i.test(filename)) {
+                        if (!wx.previewImage) { reject(new Error("Image viewer unavailable")); return; }
+                        wx.previewImage({ current: filePath, urls: [filePath], success: resolve, fail: reject });
+                        return;
+                    }
+                    if (!wx.openDocument) { reject(new Error("Document viewer unavailable")); return; }
+                    wx.openDocument({ filePath, showMenu: true, success: resolve, fail: reject });
+                }),
                 scan: () => new Promise((resolve, reject) => {
                     if (!wx.scanCode) { reject(new Error("Scanner unavailable")); return; }
                     wx.scanCode({ onlyFromCamera: true, success: result => resolve(result.result), fail: reject });

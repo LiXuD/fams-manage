@@ -1,0 +1,71 @@
+<wxs module="labels">
+var names = {DRAFT:'凭证草稿',SUBMITTED:'待管理员批准',APPROVED:'已批准，待库管执行',REJECTED:'已驳回',EXECUTED:'已执行',WITHDRAWN:'已撤回'};
+module.exports = {status:function(value){return names[value] || '状态已变更';}};
+</wxs>
+<view class="page">
+  <view class="title">异常代确认</view>
+  <view class="hint">仅用于已有真实交付和可核对签收凭证、且无实物或责任争议的情况。批准后仍须当前库管明确执行。</view>
+  <view wx:if="{{error}}" class="error">{{error}}</view><view wx:if="{{notice}}" class="hint">{{notice}}</view>
+  <button bindtap="onRefresh" disabled="{{busy}}">刷新核对当前记录</button>
+  <button wx:if="{{retryable}}" bindtap="onRetry" disabled="{{busy}}">原请求重试</button>
+  <view wx:if="{{retryable}}" class="hint">结果尚未确认，其他办理已暂停。保留本页原请求重试，或刷新核对。</view>
+  <view wx:if="{{canExecute}}" class="card">
+    <view class="label">从待接收明细申请</view>
+    <picker range="{{businessNames}}" bindchange="onBusiness" disabled="{{busy || retryable}}"><view>{{businessType === 'TRANSFER' ? '调拨' : '领用 / 借用'}}</view></picker>
+    <button bindtap="onSources" disabled="{{busy || retryable}}">加载待接收单据</button>
+    <button wx:for="{{sources}}" wx:key="id" data-id="{{item.id}}" bindtap="onSource" disabled="{{busy || retryable}}">{{item.requestNo || '调拨单'}} {{item.id}}</button>
+    <button wx:if="{{sourcePage > 1}}" bindtap="onSourcePrevious" disabled="{{busy || retryable}}">上一页单据</button>
+    <button wx:if="{{sourcePage * 20 < sourceTotal}}" bindtap="onSourceNext" disabled="{{busy || retryable}}">下一页单据</button>
+    <button wx:for="{{items}}" wx:key="id" data-id="{{item.id}}" bindtap="onStart" disabled="{{busy || retryable}}">申请代确认 · {{item.assetCode}}</button>
+  </view>
+  <view wx:if="{{snapshot}}" class="card">
+    <view class="title">真实签收凭证</view><view>单据 {{snapshot.requestNo}} · {{snapshot.assetCode}}</view>
+    <view>原目标责任人员 {{snapshot.targetEmployeeId}}；代理人签收不改变该责任目标。</view>
+    <view class="label">核对实物编码</view><input value="{{form.observedAssetCode}}" data-field="observedAssetCode" bindinput="onField" disabled="{{busy || retryable}}" />
+    <view class="label">实际签收人</view><input value="{{form.actualSigner}}" maxlength="200" data-field="actualSigner" bindinput="onField" disabled="{{busy || retryable}}" />
+    <view class="label">实际签收日期与时间</view>
+    <picker mode="date" value="{{form.actualDate}}" data-field="actualDate" bindchange="onField" disabled="{{busy || retryable}}"><view>{{form.actualDate || '选择日期'}}</view></picker>
+    <picker mode="time" value="{{form.actualTime}}" data-field="actualTime" bindchange="onField" disabled="{{busy || retryable}}"><view>{{form.actualTime || '选择时间'}}</view></picker>
+    <view class="label">无法在线确认的原因</view><textarea value="{{form.cannotConfirmReason}}" maxlength="1000" data-field="cannotConfirmReason" bindinput="onField" disabled="{{busy || retryable}}" />
+    <view class="label">联系记录</view><textarea value="{{form.contactRecord}}" maxlength="1000" data-field="contactRecord" bindinput="onField" disabled="{{busy || retryable}}" />
+    <checkbox-group data-field="delegatedReceipt" bindchange="onFlag"><label><checkbox value="checked" checked="{{form.delegatedReceipt}}" disabled="{{busy || retryable}}" />授权代理人签收</label></checkbox-group>
+    <view wx:if="{{form.delegatedReceipt}}"><view class="label">代理关系</view><textarea value="{{form.delegationRelationship}}" maxlength="1000" data-field="delegationRelationship" bindinput="onField" disabled="{{busy || retryable}}" />
+      <view class="label">授权依据</view><textarea value="{{form.delegationBasis}}" maxlength="1000" data-field="delegationBasis" bindinput="onField" disabled="{{busy || retryable}}" /></view>
+    <view class="label">凭证类别</view><picker range="{{kindNames}}" bindchange="onKind" disabled="{{busy || retryable}}"><view>{{form.evidenceKind === 'AUTHORIZED_PROXY' ? '授权代收' : form.evidenceKind === 'LOGISTICS_RECEIPT' ? '物流签收' : '签收单'}}</view></picker>
+    <view class="label">编码采集方式</view><picker range="{{collectionNames}}" bindchange="onCollection" disabled="{{busy || retryable}}"><view>{{form.collectionMethod === 'MANUAL_RECORD' ? '手工记录' : form.collectionMethod === 'SCAN_CONFIRMED' ? '扫描核对' : '核对编码'}}</view></picker>
+    <view wx:if="{{form.collectionMethod === 'MANUAL_RECORD'}}"><view class="label">手工记录原因</view><textarea value="{{form.manualReason}}" maxlength="1000" data-field="manualReason" bindinput="onField" disabled="{{busy || retryable}}" /></view>
+    <checkbox-group data-field="targetOrAuthorizedProxyReceived" bindchange="onFlag"><label><checkbox value="checked" checked="{{form.targetOrAuthorizedProxyReceived}}" disabled="{{busy || retryable}}" />本人或其授权代理人实际收到，且无实物或责任争议</label></checkbox-group>
+    <button class="primary" bindtap="onCreate" disabled="{{busy || retryable}}">保存凭证草稿</button>
+  </view>
+  <view class="title">代确认记录</view>
+  <button wx:for="{{rows}}" wx:key="id" data-id="{{item.id}}" bindtap="onOpen" disabled="{{busy || retryable}}">代确认 {{item.id}} · {{labels.status(item.confirmationStatus)}}</button>
+  <button wx:if="{{page > 1}}" bindtap="onPrevious" disabled="{{busy || retryable}}">上一页记录</button>
+  <button wx:if="{{page * 20 < total}}" bindtap="onNext" disabled="{{busy || retryable}}">下一页记录</button>
+  <view wx:if="{{selected}}" class="card">
+    <view class="title">代确认 {{selected.id}} · {{labels.status(selected.confirmationStatus)}}</view>
+    <view>{{selected.businessType === 'TRANSFER' ? '调拨' : '领用 / 借用'}} {{selected.businessId}} / 明细 {{selected.itemId}} · {{selected.businessSnapshotJson.assetCode}}</view>
+    <view>原目标责任人员 {{selected.businessSnapshotJson.targetEmployeeId}}</view>
+    <view>实际签收人 {{selected.actualSigner}} · {{selected.actualReceivedAt}}</view>
+    <view>代确认原因 {{selected.cannotConfirmReason}}；联系记录 {{selected.contactRecord}}</view>
+    <view>提交账号 {{selected.creatorAccountId}} · 批准账号 {{selected.approverAccountId || '待批准'}} · 执行账号 {{selected.executorAccountId || '待执行'}}</view>
+    <view wx:if="{{selected.decisionReason}}">决定说明 {{selected.decisionReason}}</view>
+    <view wx:for="{{attachments}}" wx:key="objectId"><view>{{item.filename}} · {{item.scanStatus === 'CLEAN' ? '扫描通过' : '暂不可下载'}}</view>
+      <button data-id="{{item.objectId}}" bindtap="onDownload" disabled="{{busy || retryable || item.scanStatus !== 'CLEAN'}}">下载并查看凭证</button></view>
+    <view wx:if="{{canExecute && selected.confirmationStatus === 'DRAFT' && selected.creatorAccountId === accountId}}">
+      <button bindtap="onPickFile" disabled="{{busy || retryable}}">选择真实签收凭证（PDF / 图片，20MB内）</button><view>{{fileName}}</view>
+      <button bindtap="onUpload" disabled="{{busy || retryable || !fileName}}">上传凭证</button>
+      <button bindtap="onSubmit" disabled="{{busy || retryable || !attachments.length}}">冻结凭证并提交批准</button>
+    </view>
+    <view wx:if="{{canApprove && selected.confirmationStatus === 'SUBMITTED'}}">
+      <view class="label">审批说明</view><textarea value="{{decisionReason}}" maxlength="1000" bindinput="onDecisionReason" disabled="{{busy || retryable}}" />
+      <checkbox-group data-field="physicalChecked" bindchange="onFlag"><label><checkbox value="checked" checked="{{physicalChecked}}" disabled="{{busy || retryable}}" />已下载核验实际签收凭证和授权依据</label></checkbox-group>
+      <checkbox-group data-field="noDisputeChecked" bindchange="onFlag"><label><checkbox value="checked" checked="{{noDisputeChecked}}" disabled="{{busy || retryable}}" />已确认资产、人员与签收事实无争议</label></checkbox-group>
+      <button data-approved="true" bindtap="onDecision" disabled="{{busy || retryable || !physicalChecked || !noDisputeChecked || !decisionReason}}">批准本次代确认</button>
+      <button data-approved="false" bindtap="onDecision" disabled="{{busy || retryable || !decisionReason}}">驳回</button>
+    </view>
+    <button wx:if="{{canExecute && selected.confirmationStatus === 'APPROVED'}}" bindtap="onExecute" disabled="{{busy || retryable}}">执行已批准代确认并通知责任人员</button>
+    <button wx:if="{{canExecute && selected.confirmationStatus === 'REJECTED'}}" bindtap="onReapply" disabled="{{busy || retryable}}">从原单重新核对并申请</button>
+    <view wx:if="{{selected.confirmationStatus === 'EXECUTED'}}" class="hint">代确认已执行。责任人员收到结果通知；未读或异议不会自动撤销资产责任。</view>
+  </view>
+  <navigator url="/pages/mine/index" open-type="redirect">返回我的账号</navigator>
+</view>
