@@ -1,0 +1,22 @@
+D6-15D4 target correction joint runtime evidence — 2026-10-14
+Owned actual MySQL/Spring HTTP: target suite 25/25, upgrade 1/1 PASS, no skips.
+Added six joint cases:
+- Completed requisition allocation and full asset row remain unchanged while another
+  allocation is corrected. Unallocated remainder keeps original demand target; later
+  normal allocation and receipt complete all three with conserved quantities.
+- Entirely unallocated scope uses existing linked change and one administrator decision;
+  old approval row remains identical and no asset lock is invented before allocation.
+- Requisition and transfer decision/actual receipt races permit exactly one success;
+  custody, lock, proposal status and actual receipt event match the winning transaction.
+  Latest run: both actual receipts won (decision=409, receipt=200).
+- Both domains reject execution of the old approved proxy after target correction.
+  A new linked draft with new-target evidence, upload, submission and new single-admin
+  approval executes successfully, notifies only the new target, and releases the lock.
+  The old approved proxy full row and evidence remain unchanged; no old result notice.
+A prior race run observed approval=200/receipt=409; the initial test expected only404.
+The assertion now accepts409 only with the owner's explicit WRITE_CONFLICT code,
+while retaining exactly-one-success and persisted-state assertions. No production
+validation was weakened and no claim is made that database deadlocks are eliminated.
+Owned container and anonymous volume removed; runner exit0.
+Recovery evidence reuses D1/D2 real browser hard restarts and D3 fixed-candidate gate;
+this suite adds no production behavior and is not a new device/browser acceptance.

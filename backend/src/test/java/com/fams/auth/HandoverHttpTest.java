@@ -4156,6 +4156,183 @@ class HandoverHttpTest {
         assertEquals(1, count(event, transfer ? row.path("id").asText() : row.path("allocations").get(0).path("id").asText()));
     }
 
+    @Test
+    void approvedItemTargetChangeJointPreservesCompletedSiblingAndUnallocatedRemainder() throws Exception {
+        var row = allocatedDraft(2, draft(3, base + 10, base));
+        row = warehouseWrite(row, 0, "deliver", delivery(row, 0));
+        var received = call(employee, "POST", path(row, 0, "receive"), receiptBody(row, 0, "RQ-ASSET-" + base), key(), row.path("version").asLong());
+        assertEquals(200, received.statusCode(), received.body());
+        row = get(warehouse, row.path("id").asText());
+        var completedAsset = jdbc.queryForMap("SELECT * FROM fams_asset WHERE id=?", base + 50);
+        var completedAllocation = jdbc.queryForMap("SELECT * FROM fams_requisition_allocation WHERE id=?", row.path("allocations").get(0).path("id").asLong());
+        var originalDemand = jdbc.queryForMap("SELECT * FROM fams_requisition_demand WHERE request_id=?", row.path("id").asLong());
+        long item = row.path("allocations").get(1).path("id").asLong();
+        var contextReply = targetCall(warehouse, "GET", "/context?businessId=" + row.path("id").asText() + "&itemId=" + item, null, null, null);
+        assertEquals(200, contextReply.statusCode(), contextReply.body());
+        var snapshot = JSON.readTree(contextReply.body());
+        var proposed = targetCall(warehouse, "POST", "", targetProposal(snapshot, base + 14), key(), snapshot.path("version").asLong());
+        assertEquals(200, proposed.statusCode(), proposed.body());
+        String proposal = JSON.readTree(proposed.body()).path("id").asText();
+        assertEquals(200, targetCall(admin, "POST", "/" + proposal + "/decision", "{\"result\":\"APPROVED\",\"reason\":\"Only unfinished allocation\"}", key(), 0L).statusCode());
+        assertEquals(originalDemand, jdbc.queryForMap("SELECT * FROM fams_requisition_demand WHERE request_id=?", row.path("id").asLong()));
+        assertEquals(completedAllocation, jdbc.queryForMap("SELECT * FROM fams_requisition_allocation WHERE id=?", row.path("allocations").get(0).path("id").asLong()));
+        assertEquals(completedAsset, jdbc.queryForMap("SELECT * FROM fams_asset WHERE id=?", base + 50));
+        row = get(warehouse, row.path("id").asText());
+        row = warehouseWrite(row, 1, "deliver", delivery(row, 1));
+        var grant = call(department, "POST", path(row, 1, "grant"), null, key(), null);
+        assertEquals(200, grant.statusCode(), grant.body());
+        String body = JSON.writeValueAsString(java.util.Map.of("grant", JSON.readTree(grant.body()).path("grant").asText(),
+                "observedAssetCode", "RQ-ASSET-" + (base + 1), "physicalChecked", true));
+        assertEquals(200, call(department, "POST", path(row, 1, "receive"), body, key(), row.path("version").asLong()).statusCode());
+        row = get(warehouse, row.path("id").asText());
+        assertEquals(1, row.path("demands").get(0).path("pendingAllocationQuantity").asInt());
+        assertEquals(2, row.path("demands").get(0).path("completedQuantity").asInt());
+        row = allocate(row, warehouse, row.path("demands").get(0).path("id").asText(), base + 52, null);
+        row = warehouseWrite(row, 2, "deliver", delivery(row, 2));
+        assertEquals(200, call(employee, "POST", path(row, 2, "receive"), receiptBody(row, 2, "RQ-ASSET-" + (base + 2)), key(), row.path("version").asLong()).statusCode());
+        var done = get(warehouse, row.path("id").asText());
+        assertEquals("COMPLETED", done.path("requestStatus").asText());
+        assertEquals(3, done.path("demands").get(0).path("completedQuantity").asInt());
+        assertEquals(base + 10, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 52));
+        assertEquals(base + 14, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 51));
+        assertEquals(completedAsset, jdbc.queryForMap("SELECT * FROM fams_asset WHERE id=?", base + 50));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE business_type='REQUISITION' AND business_id=? AND released_at IS NULL", row.path("id").asLong()));
+    }
+
+    @Test
+    void approvedItemTargetChangeJointUnallocatedScopeUsesExistingSingleAdminDecision() throws Exception {
+        var row = submitApprove(create(employee, draft(2, base + 10, base)));
+        row = action(warehouse, row, "/claim", null);
+        var before = jdbc.queryForMap("SELECT * FROM fams_requisition_decision WHERE request_id=?", row.path("id").asLong());
+        row = action(warehouse, row, "/changes", draft(2, base + 14, base));
+        assertEquals("PENDING_ADMIN_DECISION", row.path("requestStatus").asText());
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE business_type='REQUISITION' AND business_id=?", row.path("id").asLong()));
+        row = action(admin, row, "/decision", "{\"result\":\"APPROVED\",\"comment\":\"New unallocated target\"}");
+        assertEquals(before, jdbc.queryForMap("SELECT * FROM fams_requisition_decision WHERE id=?", before.get("id")));
+        row = allocate(row, warehouse, row.path("demands").get(0).path("id").asText(), base + 50, null);
+        row = warehouseWrite(row, 0, "deliver", delivery(row, 0));
+        assertEquals(404, call(employee, "POST", path(row, 0, "grant"), null, key(), null).statusCode());
+        assertEquals(200, call(department, "POST", path(row, 0, "grant"), null, key(), null).statusCode());
+        assertEquals(2, row.path("demands").get(0).path("requestedQuantity").asInt());
+        assertEquals(1, row.path("demands").get(0).path("pendingAllocationQuantity").asInt());
+        assertEquals(1, row.path("demands").get(0).path("pendingHandoverQuantity").asInt());
+    }
+
+    @Test
+    void approvedItemTargetChangeJointRaceWithActualReceiptHasOneWinner() throws Exception {
+        var row = allocated(1);
+        row = warehouseWrite(row, 0, "deliver", delivery(row, 0));
+        verifyTargetDecisionRace(row, false);
+    }
+
+    @Test
+    void approvedTransferTargetChangeJointRaceWithActualReceiptHasOneWinner() throws Exception {
+        personalTransferFixture();
+        var row = claimedTransfer(transferDraft(false, false, base + 15, base + 1, base, 0), employee);
+        row = transferAction(warehouse, row, transferItemPath(row, "deliver"), transferPhysical(row, null, false));
+        verifyTargetDecisionRace(row, true);
+    }
+
+    private void verifyTargetDecisionRace(JsonNode row, boolean transfer) throws Exception {
+        String type = transfer ? "TRANSFER" : "REQUISITION";
+        long item = row.path(transfer ? "items" : "allocations").get(0).path("id").asLong();
+        var contextReply = genericTargetCall(warehouse, type, "GET", "/context?businessId=" + row.path("id").asText() + "&itemId=" + item, null, null, null);
+        assertEquals(200, contextReply.statusCode(), contextReply.body());
+        var snapshot = JSON.readTree(contextReply.body());
+        String proposalBody = transfer ? genericTargetProposal(snapshot, transferNewTarget(base + 14, base)) : targetProposal(snapshot, base + 14);
+        var created = genericTargetCall(warehouse, type, "POST", "", proposalBody, key(), snapshot.path("version").asLong());
+        assertEquals(200, created.statusCode(), created.body());
+        String id = JSON.readTree(created.body()).path("id").asText();
+        var receiver = transfer ? login(base + 15) : employee;
+        String receipt = transfer ? transferReceipt(receiver, row, "RQ-ASSET-" + base) : receiptBody(row, 0, "RQ-ASSET-" + base);
+        var start = new java.util.concurrent.CountDownLatch(1);
+        var decision = CompletableFuture.supplyAsync(() -> proxyRaceResult(start, () -> genericTargetCall(admin, type, "POST", "/" + id + "/decision",
+                "{\"result\":\"APPROVED\",\"reason\":\"Concurrent actual receipt\"}", key(), 0L).statusCode()));
+        var receiptReply = new java.util.concurrent.atomic.AtomicReference<String>();
+        var normal = CompletableFuture.supplyAsync(() -> proxyRaceResult(start, () -> {
+            var reply = transfer
+                    ? transferCall(receiver, "POST", "/receipts/" + item + "/receive", receipt, key(), row.path("version").asLong())
+                    : call(receiver, "POST", path(row, 0, "receive"), receipt, key(), row.path("version").asLong());
+            receiptReply.set(reply.body());
+            return reply.statusCode();
+        }));
+        start.countDown();
+        int decided = decision.get(30, TimeUnit.SECONDS), received = normal.get(30, TimeUnit.SECONDS);
+        assertTrue(decided == 200 && (received == 404 || received == 409) || decided == 409 && received == 200,
+                "decision=" + decided + " receive=" + received + " body=" + receiptReply.get());
+        if (received == 409) {
+            assertEquals(transfer ? "TRANSFER_WRITE_CONFLICT" : "REQUISITION_WRITE_CONFLICT",
+                    JSON.readTree(receiptReply.get()).path("code").asText(), receiptReply.get());
+        }
+        System.out.println("Target/receipt race " + type + " decision=" + decided + " receipt=" + received
+                + " rejection=" + JSON.readTree(receiptReply.get()).path("code").asText());
+        assertEquals(received == 200 ? Long.valueOf(base + (transfer ? 15 : 10)) : transfer ? Long.valueOf(base + 10) : null,
+                jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        assertEquals(received == 200 ? 0 : 1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+        assertEquals(decided == 200 ? "APPROVED" : "PENDING", jdbc.queryForObject("SELECT change_status FROM fams_item_target_change WHERE id=?", String.class, id));
+        String sql = transfer ? "SELECT COUNT(*) FROM fams_transfer_event WHERE request_id=? AND event_type='TRANSFER_RECEIVE'"
+                : "SELECT COUNT(*) FROM fams_requisition_handover_event WHERE allocation_id=? AND event_type='RECEIVED'";
+        assertEquals(received == 200 ? 1 : 0, count(sql, transfer ? row.path("id").asText() : Long.toString(item)));
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "d6.15.proxy.runtime", matches = "true")
+    void approvedItemTargetChangeJointInvalidatesApprovedProxyWithoutRetargetingEvidence() throws Exception {
+        var row = allocated(1);
+        row = warehouseWrite(row, 0, "deliver", delivery(row, 0));
+        verifyTargetInvalidatesProxy(row, false);
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "d6.15.proxy.runtime", matches = "true")
+    void approvedTransferTargetChangeJointInvalidatesApprovedProxyWithoutRetargetingEvidence() throws Exception {
+        personalTransferFixture();
+        var row = claimedTransfer(transferDraft(false, false, base + 15, base + 1, base, 0), employee);
+        row = transferAction(warehouse, row, transferItemPath(row, "deliver"), transferPhysical(row, null, false));
+        verifyTargetInvalidatesProxy(row, true);
+    }
+
+    private void verifyTargetInvalidatesProxy(JsonNode row, boolean transfer) throws Exception {
+        String type = transfer ? "TRANSFER" : "REQUISITION";
+        var proxySnapshot = transfer ? JSON.readTree(transferProxyContext(warehouse, row).body()) : proxyContext(row);
+        var proxy = proxyCall(warehouse, "POST", "", proxyDraft(proxySnapshot), key(), null);
+        assertEquals(200, proxy.statusCode(), proxy.body());
+        String proxyId = JSON.readTree(proxy.body()).path("id").asText();
+        assertEquals(201, proxyUpload(proxyId, 0).statusCode());
+        assertEquals(200, proxyCall(warehouse, "POST", "/" + proxyId + "/submit", null, key(), 1L).statusCode());
+        assertEquals(200, proxyCall(admin, "POST", "/" + proxyId + "/decision", proxyDecision(true), key(), 2L).statusCode());
+        var frozenProxy = jdbc.queryForMap("SELECT * FROM fams_proxy_confirmation WHERE id=?", proxyId);
+        long item = row.path(transfer ? "items" : "allocations").get(0).path("id").asLong();
+        var context = genericTargetCall(warehouse, type, "GET", "/context?businessId=" + row.path("id").asText() + "&itemId=" + item, null, null, null);
+        assertEquals(200, context.statusCode(), context.body());
+        var snapshot = JSON.readTree(context.body());
+        String body = transfer ? genericTargetProposal(snapshot, transferNewTarget(base + 14, base)) : targetProposal(snapshot, base + 14);
+        var proposed = genericTargetCall(warehouse, type, "POST", "", body, key(), snapshot.path("version").asLong());
+        assertEquals(200, proposed.statusCode(), proposed.body());
+        String proposalId = JSON.readTree(proposed.body()).path("id").asText();
+        assertEquals(200, genericTargetCall(admin, type, "POST", "/" + proposalId + "/decision", "{\"result\":\"APPROVED\",\"reason\":\"New target supersedes old permission\"}", key(), 0L).statusCode());
+        assertEquals(409, proxyCall(warehouse, "POST", "/" + proxyId + "/execute", null, key(), 3L).statusCode());
+        assertEquals(frozenProxy, jdbc.queryForMap("SELECT * FROM fams_proxy_confirmation WHERE id=?", proxyId));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_business_result_notice WHERE execution_id=?", proxyId));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+        assertEquals(transfer ? Long.valueOf(base + 10) : null, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        var refreshed = transfer ? JSON.readTree(transferProxyContext(warehouse, row).body()) : proxyContext(row);
+        var newDraft = (tools.jackson.databind.node.ObjectNode) JSON.readTree(proxyDraft(refreshed));
+        newDraft.put("previousConfirmationId", proxyId);
+        var replacement = proxyCall(warehouse, "POST", "", JSON.writeValueAsString(newDraft), key(), null);
+        assertEquals(200, replacement.statusCode(), replacement.body());
+        String replacementId = JSON.readTree(replacement.body()).path("id").asText();
+        assertEquals(201, proxyUpload(replacementId, 0).statusCode());
+        assertEquals(200, proxyCall(warehouse, "POST", "/" + replacementId + "/submit", null, key(), 1L).statusCode());
+        assertEquals(200, proxyCall(admin, "POST", "/" + replacementId + "/decision", proxyDecision(true), key(), 2L).statusCode());
+        assertEquals(200, proxyCall(warehouse, "POST", "/" + replacementId + "/execute", null, key(), 3L).statusCode());
+        assertEquals(frozenProxy, jdbc.queryForMap("SELECT * FROM fams_proxy_confirmation WHERE id=?", proxyId));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_business_result_notice WHERE execution_id=?", proxyId));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_business_result_notice WHERE execution_id=? AND recipient_employee_id=?", replacementId, base + 14));
+        assertEquals(base + 14, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+    }
+
     private String targetProposal(JsonNode snapshot, long employeeId) {
         return JSON.writeValueAsString(java.util.Map.of("businessId",snapshot.path("businessId").asText(),
                 "itemId",snapshot.path("itemId").asText(),"snapshot",snapshot,"target",java.util.Map.of(
