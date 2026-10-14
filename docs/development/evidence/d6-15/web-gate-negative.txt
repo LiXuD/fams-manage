@@ -1,0 +1,3 @@
+Web component tests: injected command failure stopped the unified function before subsequent checks PASS
+Web production build: injected command failure stopped the unified function before subsequent checks PASS
+Failure injection tests the gate control flow, not a deliberately broken production source file.

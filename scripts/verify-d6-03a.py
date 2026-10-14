@@ -1212,6 +1212,8 @@ def verify_typescript_quality() -> None:
             "TypeScript lint violations: " + ", ".join(lint_violations)
         )
     require_command("TypeScript compile", ["npm", "run", "typecheck"], timeout=300)
+    require_command("Web component tests", ["npm", "run", "test:web"], timeout=300)
+    require_command("Web production build", ["npm", "run", "build:web"], timeout=300)
     require_command("Mini session transport tests", ["npm", "run", "test:mini"], timeout=300)
     require_command("Native mini package", ["npm", "run", "build", "--workspace", "@fams/miniprogram"], timeout=300)
 
