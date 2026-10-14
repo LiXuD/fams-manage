@@ -19,9 +19,12 @@ import BusinessResultReviewView from "@/views/BusinessResultReviewView.vue";
 import ItemTargetChangeView from "@/views/ItemTargetChangeView.vue";
 import TransferTargetChangeView from "@/views/TransferTargetChangeView.vue";
 
+import InventoryTaskView from "@/views/InventoryTaskView.vue";
+
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
+    { path: "/inventory-tasks", name: "inventory-tasks", component: InventoryTaskView, meta: { requiresAuth: true } },
     { path: "/transfer-target-changes", name: "transfer-target-changes", component: TransferTargetChangeView, meta: { requiresAuth: true } },
     { path: "/requisition-target-changes", name: "requisition-target-changes", component: ItemTargetChangeView, meta: { requiresAuth: true } },
     { path: "/business-result-reviews", name: "business-result-reviews", component: BusinessResultReviewView, meta: { requiresAuth: true } },

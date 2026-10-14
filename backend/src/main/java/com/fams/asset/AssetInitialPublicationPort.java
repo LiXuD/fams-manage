@@ -38,14 +38,17 @@ public class AssetInitialPublicationPort {
     private final AssetSecretCodec codec;
     private final ObjectMapper json;
     private final com.fams.business.InitialBorrowingPort loans;
+    private final java.util.List<AssetDownstreamUsePort> downstream;
 
     AssetInitialPublicationPort(AssetMapper mapper, AssetMasterDataPort masterData,
-            AssetSecretCodec codec, ObjectMapper json, com.fams.business.InitialBorrowingPort loans) {
+            AssetSecretCodec codec, ObjectMapper json, com.fams.business.InitialBorrowingPort loans,
+            java.util.List<AssetDownstreamUsePort> downstream) {
         this.mapper = mapper;
         this.masterData = masterData;
         this.codec = codec;
         this.json = json;
         this.loans = loans;
+        this.downstream = java.util.List.copyOf(downstream);
     }
 
     @Transactional
@@ -114,6 +117,9 @@ public class AssetInitialPublicationPort {
     @Transactional
     public void assertReversible(long assetId, UUID batchId) {
         loans.assertReversible(assetId, batchId);
+        if (downstream.stream().anyMatch(port -> port.hasPublishedUse(assetId))) {
+            throw new IllegalStateException("ASSET_IMPORT_ROLLBACK_DOWNSTREAM");
+        }
     }
 
     public void cancel(long assetId, UUID batchId, long actorId, String reason, Instant now) {

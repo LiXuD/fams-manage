@@ -1,0 +1,10 @@
+<view class="page">
+ <view class="title">我的盘点任务</view><view class="hint">仅显示当前授权应盘项，账面责任用于核对，不代表现场实盘事实。</view>
+ <view wx:if="{{error}}" class="error" role="alert">{{error}}</view><button bindtap="onRefresh" disabled="{{busy}}">刷新任务</button>
+ <view wx:for="{{tasks}}" wx:key="id" class="card"><button bindtap="onOpen" data-id="{{item.id}}" disabled="{{busy}}">{{item.name}} · {{item.task_status}}{{item.overdue ? ' · 逾期' : ''}}</button></view>
+ <button bindtap="onPage" data-delta="-1" disabled="{{busy || page === 1}}">上一页任务</button><view>第 {{page}} 页，共 {{total}} 项</view><button bindtap="onPage" data-delta="1" disabled="{{busy || page * 20 >= total}}">下一页任务</button>
+ <view wx:if="{{task}}" class="card"><view class="title">{{task.name}}</view><view>开始 {{task.starts_at}} · 截止 {{task.due_at}}</view>
+  <view wx:for="{{items}}" wx:key="id" class="card"><view>{{item.snapshot_json.assetCode}} · {{item.snapshot_json.name}}</view><view>账面位置：{{item.snapshot_json.locationName || '未指定'}}</view><view>账面责任：{{item.snapshot_json.responsibleEmployeeName || item.snapshot_json.departmentResponsibleEmployeeName || '仓库保管'}}</view><view>分配版本 {{item.assignment_version}}</view></view>
+  <button bindtap="onItemPage" data-delta="-1" disabled="{{busy || itemPage === 1}}">上页应盘项</button><view>第 {{itemPage}} 页，共 {{itemTotal}} 项</view><button bindtap="onItemPage" data-delta="1" disabled="{{busy || itemPage * 20 >= itemTotal}}">下页应盘项</button>
+ </view>
+</view>

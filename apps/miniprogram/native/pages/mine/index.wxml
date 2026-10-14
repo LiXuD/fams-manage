@@ -30,3 +30,5 @@
 <navigator url="/pages/business-result-reviews/index">代确认结果核查（资产管理员）</navigator>
 
 <navigator url="/pages/target-changes/index">批准目标更正（库管 / 资产管理员）</navigator>
+
+<navigator url="/pages/inventory-tasks/index">我的盘点任务与应盘资产</navigator>

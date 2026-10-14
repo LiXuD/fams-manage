@@ -1,0 +1,52 @@
+{
+  "tasks": [
+    {
+      "id": 1,
+      "name": "D6-16跨JVM原键重试",
+      "task_status": "IN_PROGRESS",
+      "version": 2,
+      "assignment_version": 0,
+      "expected_count": 2,
+      "started_at": "2026-10-14T08:04:05.286"
+    }
+  ],
+  "items": [
+    {
+      "id": 1,
+      "task_id": 1,
+      "asset_id": 933010,
+      "asset_version": 0,
+      "executor_account_id": null,
+      "assignment_version": 0,
+      "snapshot_json": "{\"name\": \"Inventory asset\", \"assetId\": \"933010\", \"version\": 0, \"assetCode\": \"INV-ASSET-933010\", \"exception\": \"NORMAL\", \"lifecycle\": \"IN_STOCK\", \"categoryId\": \"933000\", \"locationId\": \"933000\", \"custodyType\": \"STORAGE\", \"warehouseId\": \"933000\", \"categoryName\": \"Inventory category\", \"locationName\": \"Inventory bin\", \"warehouseName\": \"Inventory warehouse\", \"parameterVersionId\": \"933000\", \"usingOrganizationId\": null, \"owningOrganizationId\": null, \"responsibleEmployeeId\": null, \"usingOrganizationName\": null, \"owningOrganizationName\": null, \"responsibleEmployeeName\": null, \"departmentResponsibleEmployeeId\": null, \"departmentResponsibleEmployeeName\": null}"
+    },
+    {
+      "id": 2,
+      "task_id": 1,
+      "asset_id": 933011,
+      "asset_version": 0,
+      "executor_account_id": null,
+      "assignment_version": 0,
+      "snapshot_json": "{\"name\": \"Inventory asset\", \"assetId\": \"933011\", \"version\": 0, \"assetCode\": \"INV-ASSET-933011\", \"exception\": \"NORMAL\", \"lifecycle\": \"IN_STOCK\", \"categoryId\": \"933000\", \"locationId\": \"933000\", \"custodyType\": \"STORAGE\", \"warehouseId\": \"933000\", \"categoryName\": \"Inventory category\", \"locationName\": \"Inventory bin\", \"warehouseName\": \"Inventory warehouse\", \"parameterVersionId\": \"933000\", \"usingOrganizationId\": null, \"owningOrganizationId\": null, \"responsibleEmployeeId\": null, \"usingOrganizationName\": null, \"owningOrganizationName\": null, \"responsibleEmployeeName\": null, \"departmentResponsibleEmployeeId\": null, \"departmentResponsibleEmployeeName\": null}"
+    }
+  ],
+  "events": [
+    {
+      "task_id": 1,
+      "action": "INVENTORY_CREATED",
+      "count": 1
+    },
+    {
+      "task_id": 1,
+      "action": "INVENTORY_PUBLISHED",
+      "count": 1
+    },
+    {
+      "task_id": 1,
+      "action": "INVENTORY_STARTED",
+      "count": 1
+    }
+  ],
+  "assetLocks": 0,
+  "recentInventoryDates": 0
+}

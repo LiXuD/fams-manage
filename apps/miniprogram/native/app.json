@@ -12,7 +12,8 @@
     "pages/proxy-confirmations/index",
     "pages/business-result-notices/index",
     "pages/business-result-reviews/index",
-    "pages/target-changes/index"
+    "pages/target-changes/index",
+    "pages/inventory-tasks/index"
   ],
   "window": {
     "navigationBarTitleText": "企业资产",

@@ -1,0 +1,24 @@
+### Result
+55. [GET] http://127.0.0.1:5173/api/v1/auth/me => [401] Unauthorized
+56. [GET] http://127.0.0.1:5173/api/v1/auth/permissions => [401] Unauthorized
+57. [POST] http://127.0.0.1:5173/api/v1/auth/login => [200] OK
+58. [GET] http://127.0.0.1:5173/api/v1/auth/permissions => [200] OK
+59. [GET] http://127.0.0.1:5173/api/v1/inventory-tasks?page=1&pageSize=20 => [200] OK
+60. [GET] http://127.0.0.1:5173/api/v1/transfers/catalog/organization?page=1&pageSize=200 => [200] OK
+61. [GET] http://127.0.0.1:5173/api/v1/asset-categories/active-references?page=1&pageSize=200 => [200] OK
+62. [GET] http://127.0.0.1:5173/api/v1/transfers/catalog/warehouse?page=1&pageSize=200 => [200] OK
+63. [GET] http://127.0.0.1:5173/api/v1/transfers/catalog/location?page=1&pageSize=200 => [200] OK
+64. [GET] http://127.0.0.1:5173/api/v1/inventory-tasks/executors?page=1&pageSize=100 => [200] OK
+65. [POST] http://127.0.0.1:5173/api/v1/inventory-tasks => [200] OK
+66. [GET] http://127.0.0.1:5173/api/v1/inventory-tasks?page=1&pageSize=20 => [200] OK
+67. [GET] http://127.0.0.1:5173/api/v1/inventory-tasks/1?page=1&pageSize=20 => [200] OK
+68. [POST] http://127.0.0.1:5173/api/v1/inventory-tasks/preview => [200] OK
+69. [POST] http://127.0.0.1:5173/api/v1/inventory-tasks/1/publication => [200] OK
+70. [GET] http://127.0.0.1:5173/api/v1/inventory-tasks?page=1&pageSize=20 => [200] OK
+71. [GET] http://127.0.0.1:5173/api/v1/inventory-tasks/1?page=1&pageSize=20 => [200] OK
+72. [POST] http://127.0.0.1:5173/api/v1/inventory-tasks/1/start => [FAILED] net::ERR_FAILED
+73. [POST] http://127.0.0.1:5173/api/v1/inventory-tasks/1/start => [200] OK
+74. [GET] http://127.0.0.1:5173/api/v1/inventory-tasks?page=1&pageSize=20 => [200] OK
+75. [GET] http://127.0.0.1:5173/api/v1/inventory-tasks/1?page=1&pageSize=20 => [200] OK
+
+Note: 54 static requests not shown, run with --static option to see them.

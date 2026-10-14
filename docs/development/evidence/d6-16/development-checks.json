@@ -1,0 +1,15 @@
+{
+  "http_tests": 7,
+  "populated_upgrade_tests": 1,
+  "web_tests": 32,
+  "mini_tests": 53,
+  "typecheck_exit": 0,
+  "web_build_exit": 0,
+  "mini_build_exit": 0,
+  "lint_exit": 0,
+  "spotbugs_findings": 0,
+  "spotbugs_analysis_errors": 0,
+  "verifier_tests": 32,
+  "full_candidate_gate": "pending",
+  "independent_review": "pending"
+}

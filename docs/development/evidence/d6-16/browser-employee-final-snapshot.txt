@@ -1,0 +1,58 @@
+### Page
+- Page URL: http://127.0.0.1:5173/inventory-tasks
+- Page Title: FAMS 固定资产管理
+- Console: 3 errors, 0 warnings
+### Snapshot
+```yaml
+- generic [ref=e55]:
+  - banner [ref=e56]:
+    - generic [ref=e57]:
+      - generic [ref=e58]: F
+      - generic [ref=e59]: 示例企业 · 固定资产
+    - generic [ref=e60]:
+      - generic [ref=e61]: inv2 · EMPLOYEE
+      - button "退出" [ref=e62] [cursor=pointer]
+  - generic [ref=e63]:
+    - navigation "主导航" [ref=e64]:
+      - link "工作台" [ref=e65] [cursor=pointer]:
+        - /url: /
+      - link "领用申请与分配" [ref=e66] [cursor=pointer]:
+        - /url: /requisitions
+      - link "盘点任务" [ref=e67] [cursor=pointer]:
+        - /url: /inventory-tasks
+      - link "借用、延期与退还" [ref=e68] [cursor=pointer]:
+        - /url: /loans
+      - link "调拨与人员交接" [ref=e69] [cursor=pointer]:
+        - /url: /transfers
+      - link "业务结果通知" [ref=e70] [cursor=pointer]:
+        - /url: /business-result-notices
+    - main [ref=e71]:
+      - generic [ref=e72]:
+        - heading "盘点任务" [level=1] [ref=e73]
+        - paragraph [ref=e74]: 发布时冻结应盘集合与责任快照。盘点不直接改变资产责任；执行人只查看自己的应盘项。
+        - button "刷新" [ref=e75]
+        - heading "我的任务" [level=2] [ref=e76]
+        - button "D6-16真实盘点恢复验证 · 进行中" [ref=e77]
+        - button "上一页" [disabled] [ref=e78]
+        - text: 1 / 1
+        - button "下一页" [disabled] [ref=e79]
+        - generic [ref=e80]:
+          - heading "D6-16真实盘点恢复验证 · 进行中" [level=2] [ref=e81]
+          - paragraph [ref=e82]: 开始 2026/10/14 08:00:00 · 截止 2026/10/15 18:00:00
+          - table [ref=e83]:
+            - rowgroup [ref=e84]:
+              - row [ref=e85]:
+                - columnheader "资产" [ref=e86]
+                - columnheader "账面位置" [ref=e87]
+                - columnheader "账面责任" [ref=e88]
+                - columnheader "分配版本" [ref=e89]
+            - rowgroup [ref=e90]:
+              - row [ref=e91]:
+                - cell "INV-ASSET-933010 · Inventory asset" [ref=e92]
+                - cell "Inventory bin" [ref=e93]
+                - cell "仓库保管" [ref=e94]
+                - cell "1" [ref=e95]
+          - button "上页应盘项" [disabled] [ref=e96]
+          - text: 1 / 1
+          - button "下页应盘项" [disabled] [ref=e97]
+```
