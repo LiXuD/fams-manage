@@ -1,0 +1,14 @@
+D6-15D3 internal native handlers -> opaque session -> Spring HTTP -> owned MySQL
+2026-10-14: target regression suite 19/19 and upgrade 1/1 PASS; no skips.
+REQUISITION and TRANSFER native proposal, admin approval and actual new-recipient
+receipt all reach real service transactions. Each committed response is deliberately
+lost once; original-key/version/body retry returns the same result with one persisted
+approval, one actual receipt event and a released lock. Original recipient no longer
+has the pending receipt. Formal responsibility belongs to the new recipient.
+First setup attempt failed compilation on fixture argument types; corrected.
+Second attempt: transfer passed; requisition test script used the wrong asset-code
+response level and was correctly rejected. Corrected script; no production validation
+was relaxed. Final suite passed and owned container plus anonymous volume removed.
+Native behavior tests 51/51, typecheck/build, contract generation and Checkstyle/
+SpotBugs 0. These are handler and real HTTP/SQL proofs, not WeChat identity exchange,
+real SMS, trusted public HTTPS, device rendering, formal QA or production acceptance.

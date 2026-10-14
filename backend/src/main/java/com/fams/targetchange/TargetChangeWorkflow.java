@@ -59,7 +59,8 @@ public class TargetChangeWorkflow {
         args.add(size);
         args.add((page - 1) * size);
         var items = db.queryForList("SELECT * FROM fams_item_target_change" + where + " ORDER BY id DESC LIMIT ? OFFSET ?", args.toArray());
-        return Map.of("items", items.stream().map(this::clean).toList(), "total", Objects.requireNonNull(total), "page", page, "pageSize", size);
+        return Map.of("items", items.stream().map(this::clean).toList(), "total", Objects.requireNonNull(total), "page", page, "pageSize", size,
+                "canApprove", current.has(Role.ASSET_ADMIN), "canExecute", current.has(Role.WAREHOUSE_OPERATOR));
     }
 
     public Map<String, Object> propose(Actor actor, String type, long version, String key, TargetChangeInput.Proposal input) {

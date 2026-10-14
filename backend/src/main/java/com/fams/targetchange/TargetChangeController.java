@@ -21,7 +21,7 @@ import java.util.Map;
 @RestController
 @Profile("fams-product")
 @Validated
-@RequestMapping("/api/v1/item-target-changes")
+@RequestMapping({"/api/v1/item-target-changes", "/api/v1/mini/item-target-changes"})
 class TargetChangeController {
     private final TargetChangeWorkflow service;
     private final RequisitionActorContext actors;

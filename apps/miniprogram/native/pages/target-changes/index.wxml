@@ -1,0 +1,51 @@
+<view class="page">
+  <view class="title">批准目标更正</view>
+  <view class="hint">仅更正未完成明细。原责任、交出地点及物理锁保持；批准后仍须原业务实际接收或现场收妥。</view>
+  <view wx:if="{{error}}" class="error" role="alert">{{error}}</view><view wx:if="{{notice}}" class="hint">{{notice}}</view>
+  <picker range="{{businessNames}}" disabled="{{busy || retryable}}" bindchange="onBusiness"><view>{{businessType === 'TRANSFER' ? '调拨' : '领用 / 借用'}}</view></picker>
+  <button bindtap="onRefresh" disabled="{{busy}}">刷新核对</button><button wx:if="{{retryable}}" bindtap="onRetry" disabled="{{busy}}">重试原操作</button>
+  <view wx:if="{{canExecute}}" class="card"><view class="title">选择未完成明细</view>
+    <button bindtap="onSources" disabled="{{busy || retryable}}">加载可办理单据</button>
+    <button wx:for="{{sources}}" wx:key="id" data-id="{{item.id}}" bindtap="onSource" disabled="{{busy || retryable}}">{{item.requestNo || item.id}}</button>
+    <button bindtap="onSourcePrevious" disabled="{{busy || retryable || sourcePage === 1}}">上一页单据</button><text>{{sourcePage}}</text>
+    <button bindtap="onSourceNext" disabled="{{busy || retryable || sourcePage * 20 >= sourceTotal}}">下一页单据</button>
+    <button wx:for="{{items}}" wx:key="id" data-id="{{item.id}}" bindtap="onStart" disabled="{{busy || retryable}}">核对 {{item.assetCode}}</button>
+  </view>
+  <view wx:if="{{snapshot}}" class="card"><view class="title">实物核对 · {{snapshot.assetCode}}</view>
+    <view wx:if="{{snapshot.physical.destination}}">原交出地点：{{snapshot.physical.destination}} · {{snapshot.physical.deliveryEvidence}}</view>
+    <view wx:for="{{snapshot.handover}}" wx:key="id">原交出地点：{{item.destinationText}}</view>
+    <view wx:if="{{businessType === 'TRANSFER'}}">新所属组织
+      <picker range="{{owners}}" range-key="name" data-field="owning" bindchange="onChoice" disabled="{{busy || retryable}}"><view wx:if="{{!owning}}">请选择</view><view wx:for="{{organizations}}" wx:key="id" wx:if="{{item.id === owning}}">{{item.name}}</view></picker>
+    </view>
+    <view wx:if="{{!stock}}">新使用组织
+      <picker range="{{organizations}}" range-key="name" data-field="using" bindchange="onChoice" disabled="{{busy || retryable}}"><view wx:if="{{!using}}">请选择</view><view wx:for="{{organizations}}" wx:key="id" wx:if="{{item.id === using}}">{{item.name}}</view></picker>
+      <view>新责任模式</view><picker range="{{custodyNames}}" data-field="custody" bindchange="onChoice" disabled="{{busy || retryable}}"><view>{{custody === 'SHARED' ? '部门公用' : '个人使用'}}</view></picker>
+      <view>新责任人</view><picker range="{{people}}" range-key="name" data-field="employee" bindchange="onChoice" disabled="{{busy || retryable}}"><view wx:if="{{!employee}}">请选择</view><view wx:for="{{people}}" wx:key="id" wx:if="{{item.id === employee}}">{{item.name}}</view></picker>
+    </view>
+    <view wx:else>新目标仓库<picker range="{{warehouses}}" range-key="name" data-field="warehouse" bindchange="onChoice" disabled="{{busy || retryable}}"><view wx:if="{{!warehouse}}">请选择</view><view wx:for="{{warehouses}}" wx:key="id" wx:if="{{item.id === warehouse}}">{{item.name}}</view></picker></view>
+    <view>新固定位置</view><picker range="{{places}}" range-key="name" data-field="location" bindchange="onChoice" disabled="{{busy || retryable}}"><view wx:if="{{!location}}">请选择</view><view wx:for="{{places}}" wx:key="id" wx:if="{{item.id === location}}">{{item.name}}</view></picker>
+    <textarea placeholder="更正原因" value="{{reason}}" data-field="reason" bindinput="onField" maxlength="1000" disabled="{{busy || retryable}}" />
+    <input placeholder="实物资产编码" value="{{code}}" data-field="code" bindinput="onField" maxlength="128" disabled="{{busy || retryable}}" />
+    <textarea placeholder="实物去向与核对记录" value="{{physical}}" data-field="physical" bindinput="onField" maxlength="1000" disabled="{{busy || retryable}}" />
+    <checkbox-group bindchange="onCheck"><label><checkbox value="checked" checked="{{checked}}" disabled="{{busy || retryable}}" />已核对实物，未自动收回或解除物理锁</label></checkbox-group>
+    <button bindtap="onPropose" disabled="{{busy || retryable}}">提交目标更正</button>
+  </view>
+  <view class="card"><view class="title">更正历史</view>
+    <button wx:for="{{rows}}" wx:key="id" data-id="{{item.id}}" bindtap="onOpen" disabled="{{busy || retryable}}">{{item.source_snapshot_json.assetCode}} · {{item.change_status === 'PENDING' ? '待管理员批准' : item.change_status === 'APPROVED' ? '已批准' : '已驳回'}}</button>
+    <button bindtap="onPrevious" disabled="{{busy || retryable || page === 1}}">上一页</button><text>{{page}}</text><button bindtap="onNext" disabled="{{busy || retryable || page * 20 >= total}}">下一页</button>
+  </view>
+  <view wx:if="{{selected}}" class="card"><view>{{selected.source_snapshot_json.assetCode}}</view><view>更正原因：{{selected.reason}}</view><view>实物核对：{{selected.physical_verification}}</view>
+    <view wx:if="{{selected.source_snapshot_json.physical.destination}}">原交出地点：{{selected.source_snapshot_json.physical.destination}}</view>
+    <view wx:for="{{selected.source_snapshot_json.handover}}" wx:key="id">原交出地点：{{item.destinationText}}</view>
+    <view>原责任模式：{{selected.source_snapshot_json.target.custodyType === 'STORAGE' ? '仓库保管' : selected.source_snapshot_json.target.custodyType === 'SHARED' ? '部门公用' : '个人使用'}}；新责任模式：{{selected.proposed_target_json.custodyType === 'STORAGE' ? '仓库保管' : selected.proposed_target_json.custodyType === 'SHARED' ? '部门公用' : '个人使用'}}</view>
+    <view>原组织：{{selected.source_snapshot_json.target.usingOrganizationId || selected.source_snapshot_json.target.organizationId || '未指定'}}；新组织：{{selected.proposed_target_json.usingOrganizationId || selected.proposed_target_json.organizationId || '未指定'}}</view>
+    <view wx:if="{{businessType === 'TRANSFER'}}">原所属组织：{{selected.source_snapshot_json.target.owningOrganizationId || '未指定'}}；新所属组织：{{selected.proposed_target_json.owningOrganizationId || '未指定'}}；原仓库：{{selected.source_snapshot_json.target.warehouseId || '未指定'}}；新仓库：{{selected.proposed_target_json.warehouseId || '未指定'}}</view>
+    <view>原责任人员：{{selected.source_snapshot_json.target.employeeId || '仓库保管'}}；新责任人员：{{selected.proposed_target_json.employeeId || '仓库保管'}}</view>
+    <view>原位置：{{selected.source_snapshot_json.target.locationId}}；新位置：{{selected.proposed_target_json.locationId}}</view>
+    <view wx:if="{{selected.decision_reason}}">决定意见：{{selected.decision_reason}}</view>
+    <view wx:if="{{canApprove && selected.change_status === 'PENDING'}}"><textarea placeholder="管理员核验意见" data-field="decision" value="{{decision}}" bindinput="onField" maxlength="1000" disabled="{{busy || retryable}}" />
+      <button data-result="APPROVED" bindtap="onDecision" disabled="{{busy || retryable || !decision}}">批准目标更正</button><button data-result="REJECTED" bindtap="onDecision" disabled="{{busy || retryable || !decision}}">驳回</button>
+    </view>
+  </view>
+  <navigator url="/pages/receipts/index">领用 / 借用实际接收</navigator><navigator url="/pages/transfer-receipts/index">调拨实际接收</navigator>
+</view>

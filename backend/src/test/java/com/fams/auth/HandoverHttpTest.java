@@ -4106,6 +4106,56 @@ class HandoverHttpTest {
         return http.send(builder.method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
     }
 
+    @Test
+    @EnabledIfSystemProperty(named = "d6.15.proxy.runtime", matches = "true")
+    void approvedItemTargetChangeNativeHandlersReachRealHttpAndActualReceipt() throws Exception {
+        var row = allocated(1);
+        row = warehouseWrite(row, 0, "deliver", delivery(row, 0));
+        verifyNativeTargetHandlers(row, false);
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "d6.15.proxy.runtime", matches = "true")
+    void approvedTransferTargetChangeNativeHandlersReachRealHttpAndActualReceipt() throws Exception {
+        personalTransferFixture();
+        var row = claimedTransfer(transferDraft(false, false, base + 15, base + 1, base, base), employee);
+        row = transferAction(warehouse, row, transferItemPath(row, "deliver"), transferPhysical(row, null, false));
+        verifyNativeTargetHandlers(row, true);
+    }
+
+    private void verifyNativeTargetHandlers(JsonNode row, boolean transfer) throws Exception {
+        String type = transfer ? "TRANSFER" : "REQUISITION", prefix = "target-native-" + base;
+        for (var entry : java.util.Map.of("warehouse", base + 11, "admin", base + 13,
+                "recipient", base + 12, "original", base + (transfer ? 15 : 10)).entrySet()) {
+            jdbc.update("INSERT INTO fams_mini_binding (account_id,identity_hash,created_at) VALUES (?,?,?)",
+                    entry.getValue(), miniSessions.identityHash(new MiniWechatIdentityPort.Identity(
+                            "requisition-test-app", prefix + "-" + entry.getKey())), Timestamp.from(Instant.now()));
+        }
+        var script = java.nio.file.Path.of(System.getProperty("user.dir")).getParent()
+                .resolve("apps/miniprogram/test/runtime-target-change-http.mjs");
+        String node = System.getenv("FAMS_TEST_NODE_EXECUTABLE");
+        var builder = new ProcessBuilder("rtk", "proxy", node == null ? "node" : node, script.toString());
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_TARGET_BUSINESS", type);
+        builder.environment().put("FAMS_TEST_TARGET_REQUEST", row.path("id").asText());
+        builder.environment().put("FAMS_TEST_TARGET_ITEM", row.path(transfer ? "items" : "allocations").get(0).path("id").asText());
+        builder.environment().put("FAMS_TEST_TARGET_EMPLOYEE", Long.toString(base + 12));
+        builder.environment().put("FAMS_TEST_TARGET_ORGANIZATION", Long.toString(base));
+        builder.environment().put("FAMS_TEST_TARGET_CODE_PREFIX", prefix);
+        builder.redirectErrorStream(true);
+        var process = builder.start();
+        assertTrue(process.waitFor(60, TimeUnit.SECONDS));
+        String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        assertEquals(0, process.exitValue(), output);
+        assertEquals(base + 12, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_item_target_change WHERE business_type=? AND business_id=? AND change_status='APPROVED'", type, row.path("id").asText()));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='ITEM_TARGET_CHANGE' AND action='TARGET_CHANGE_APPROVED' AND actor_account_id=?", base + 13));
+        String event = transfer ? "SELECT COUNT(*) FROM fams_transfer_event WHERE request_id=? AND event_type='TRANSFER_RECEIVE'"
+                : "SELECT COUNT(*) FROM fams_requisition_handover_event WHERE allocation_id=? AND event_type='RECEIVED'";
+        assertEquals(1, count(event, transfer ? row.path("id").asText() : row.path("allocations").get(0).path("id").asText()));
+    }
+
     private String targetProposal(JsonNode snapshot, long employeeId) {
         return JSON.writeValueAsString(java.util.Map.of("businessId",snapshot.path("businessId").asText(),
                 "itemId",snapshot.path("itemId").asText(),"snapshot",snapshot,"target",java.util.Map.of(
