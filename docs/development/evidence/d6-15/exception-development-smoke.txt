@@ -1,0 +1,13 @@
+D6-15E1 internal development smoke — 2026-10-14
+D6-15 development smoke synthetic_history=10000 page_size=20 samples=20 load_ms=15213 p50_us=24919 p95_us=26581 explain={id=1, select_type=SIMPLE, table=fams_item_target_change, partitions=null, type=ref, possible_keys=fk_item_target_change_creator,ix_item_target_change_business, key=fk_item_target_change_creator, key_len=8, ref=const, rows=4806, filtered=49.99, Extra=Using where; Backward index scan}
+
+Owned MySQL/Spring HTTP: target suite26/26, populated V29-to-V30 upgrade1/1 PASS, no skips.
+Synthetic rejected-history rows=10000, warmup=3, samples=20, pageSize=20; first and last pages correct.
+Fixture ingestion time is not application write latency. Single-client local HTTP timing is not a production SLA.
+Source review: list has two business SQL statements plus identity revalidation; row conversion performs no SQL.
+No statement-log query-count measurement is claimed. EXPLAIN row count is an estimate.
+Asset remains IN_STOCK and its existing business lock stays active through the read smoke.
+Populated upgrade compares original allocation columns plus full request, demand, ownership, decision, asset, lock,
+handover, event and grant rows; new override columns NULL, repeat migration0, Flyway validation PASS.
+Historical return full row and original column definitions also retained. All fixtures are owned schema-valid test data.
+Owned container and anonymous volume removed; runner exit0.

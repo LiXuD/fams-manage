@@ -4333,6 +4333,48 @@ class HandoverHttpTest {
         assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
     }
 
+    @Test
+    void approvedItemTargetChangeDevelopmentPerformanceSmokeUsesBoundedPageQueries() throws Exception {
+        var row = allocated(1);
+        String request = row.path("id").asText(), item = row.path("allocations").get(0).path("id").asText();
+        var reply = targetCall(warehouse, "GET", "/context?businessId=" + request + "&itemId=" + item, null, null, null);
+        assertEquals(200, reply.statusCode(), reply.body());
+        var snapshot = JSON.readTree(reply.body());
+        String proposed = JSON.readTree(targetProposal(snapshot, base + 14)).path("target").toString();
+        String insert = "INSERT INTO fams_item_target_change (business_type,business_id,item_id,source_snapshot_json,proposed_target_json,reason,observed_asset_code,physical_verification,change_status,creator_account_id,approver_account_id,decision_reason,version,created_at,decided_at)"
+                + " VALUES ('REQUISITION',?,?,?,?,? ,?,'Synthetic development history','REJECTED',?,?,'Synthetic development history',1,NOW(3),NOW(3))";
+        long loadStart = System.nanoTime();
+        for (int batch = 0; batch < 10; batch++) {
+            var values = new java.util.ArrayList<Object[]>();
+            for (int index = 0; index < 1000; index++) {
+                values.add(new Object[] {request, item, reply.body(), proposed, "Synthetic development history", "RQ-ASSET-" + base, base + 11, base + 13});
+            }
+            jdbc.batchUpdate(insert, values);
+        }
+        long loadedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - loadStart);
+        for (int warm = 0; warm < 3; warm++) { assertEquals(200, targetCall(warehouse, "GET", "?page=1&pageSize=20", null, null, null).statusCode()); }
+        var durations = new java.util.ArrayList<Long>();
+        for (int sample = 0; sample < 20; sample++) {
+            long start = System.nanoTime();
+            var page = targetCall(warehouse, "GET", "?page=1&pageSize=20", null, null, null);
+            durations.add(TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - start));
+            assertEquals(200, page.statusCode(), page.body());
+            assertEquals(10000, JSON.readTree(page.body()).path("total").asInt());
+            assertEquals(20, JSON.readTree(page.body()).path("items").size());
+        }
+        var last = targetCall(admin, "GET", "?page=500&pageSize=20", null, null, null);
+        assertEquals(200, last.statusCode(), last.body());
+        assertEquals(20, JSON.readTree(last.body()).path("items").size());
+        var plan = jdbc.queryForMap("EXPLAIN SELECT * FROM fams_item_target_change WHERE business_type='REQUISITION' AND creator_account_id=? ORDER BY id DESC LIMIT 20 OFFSET 0", base + 11);
+        assertTrue(plan.get("key") != null, plan.toString());
+        durations.sort(Long::compareTo);
+        System.out.println("D6-15 development smoke synthetic_history=10000 page_size=20 samples=20 load_ms=" + loadedMs
+                + " p50_us=" + durations.get(9) + " p95_us=" + durations.get(18) + " explain=" + plan);
+        // Source inspection: two page SQL statements plus current identity revalidation, no per-row SQL.
+        assertEquals("IN_STOCK", jdbc.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=?", String.class, base + 50));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
+    }
+
     private String targetProposal(JsonNode snapshot, long employeeId) {
         return JSON.writeValueAsString(java.util.Map.of("businessId",snapshot.path("businessId").asText(),
                 "itemId",snapshot.path("itemId").asText(),"snapshot",snapshot,"target",java.util.Map.of(
