@@ -21,3 +21,11 @@ PC真实浏览器使用分离的管理员与员工账号，经正常登录及Vit
 另起全新专用数据库及正常登录会话，创建/预览/发布后，在手动开始请求上通过Playwright route.fetch实际提交到真实Spring，再丢弃浏览器响应（没有返回伪造业务响应）。页面显示结果未确认并冻结编辑。SQL确认IN_PROGRESS/version2后SIGKILL后端进程组并启动新JVM，点击页面“重试原操作”返回200；重试前后任务、快照和事件完整投影完全相同。首次开始为net::ERR_FAILED，重试为200，唯一开始事件保持1。最初尝试对发布注入时CLI语法失败，发布正常成功；不将该尝试算作发布丢响应证明。
 
 证据：[丢响应后](evidence/d6-16/lost-start-before-restart.json)、[跨JVM重试后](evidence/d6-16/lost-start-after-retry.json)、[渲染](evidence/d6-16/lost-start-after-retry-snapshot.txt)、[HTTP元数据](evidence/d6-16/lost-start-requests.txt)、[定向运行摘要](evidence/d6-16/inventory-runtime-summary.txt)、[开发检查](evidence/d6-16/development-checks.json)。本轮浏览器及Compose容器/网络/卷也已清理。生产微信/HTTPS/真机及正式验收边界保持。
+
+## 固定候选0555b27
+
+统一完整门禁退出0：Java198、Checkstyle/SpotBugs0，行11028/11867=92.93%、分支3955/5235=75.55%；Web32组件和生产构建、mini53及原生构建、TS检查、依赖完整性、应用与MySQL同卷重启恢复、专用资源清理及干净postflight通过。[完整日志](evidence/d6-16/product-gate-0555b27.txt)。这不替代历史治理、独立复核、QA或生产。后续中文状态及责任人选择调整须绑定新候选另跑，不回填0555b27。
+
+最终界面调整：PC生命周期中文显示，当前责任人由管理员最小人员目录选择（含已有停用责任人的明确标识），原生任务状态中文及设备本地时间。7项HTTP及升级1项、Web32、mini53再次通过。根类型检查曾因上一门禁finally清理生成目标而缺少ContractProbe生成模块失败；独立双端类型检查通过，最终完整门禁将重新生成并验证根类型链路，不把该次失败算通过。
+
+最终PC界面再次在新专用库正常登录并从导航打开，中文生命周期和当前责任人选择显示正确，管理员personnel最小目录真实HTTP返回200且页面无业务错误。证据[页面](evidence/d6-16/final-browser-snapshot.txt)、[HTTP](evidence/d6-16/final-browser-requests.txt)；会话及专用容器/网络/卷已清理。

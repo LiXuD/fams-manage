@@ -11,7 +11,7 @@ type Task = { id: string; name: string; task_status: string; version: number; as
 type Item = { id: string; asset_id: string; assignment_version: number; executor_account_id: string | null; result_count: number;
   snapshot_json: { assetCode: string; name: string; locationName: string; custodyType: string; responsibleEmployeeName?: string; departmentResponsibleEmployeeName?: string } };
 type Detail = { task: Task; items: Item[]; total: number; canManage: boolean };
-type Choice = { id: string; name: string };
+type Choice = { id: string; name: string; status?: string };
 const session = useSessionStore();
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 const tasks = ref<Task[]>([]); const detail = ref<Detail | null>(null); const total = ref(0); const page = ref(1); const itemPage = ref(1);
@@ -23,6 +23,7 @@ const emptyRange = (): Range => ({ usingOrganizationId: null, owningOrganization
   locationId: null, lifecycle: null, exception: null, responsibleEmployeeId: null });
 const range = ref<Range>(emptyRange()); const preview = ref<{ count: number; digest: string } | null>(null);
 const selectedItems = ref<string[]>([]); const executor = ref(""); const reason = ref(""); const recheck = ref(false);
+const lifecycleLabels: Record<string, string> = { IN_STOCK: "在库", IN_USE: "在用", BORROWED: "借出", UNDER_REPAIR: "维修中", FACTORY_REPAIR: "返厂维修", PENDING_SCRAP: "待报废", SCRAPPED: "已报废" };
 const labels: Record<string, string> = { DRAFT: "草稿", READY: "待开始", IN_PROGRESS: "进行中", WAITING_REVIEW: "待复核", COMPLETED: "已完成", CANCELLED: "已取消", TERMINATED: "已终止" };
 async function list() {
   const result = await loanRequest<{ items: Task[]; total: number }>(`/inventory-tasks?page=${page.value}&pageSize=20`);
@@ -107,10 +108,10 @@ onMounted(async () => {
   try {
     await list();
     if (admin.value) {
-      for (const kind of ["organization", "category", "warehouse", "location"]) {
+      for (const kind of ["organization", "category", "warehouse", "location", "employee"]) {
         const all: Choice[] = []; let p = 1; let rows: Choice[];
         do {
-          const path = kind === "category" ? `/asset-categories/active-references?page=${p++}&pageSize=200` : `/transfers/catalog/${kind}?page=${p++}&pageSize=200`;
+          const path = kind === "category" ? `/asset-categories/active-references?page=${p++}&pageSize=200` : `/transfers/catalog/${kind === "employee" ? "personnel" : kind}?page=${p++}&pageSize=200`;
           rows = (await loanRequest<{ items: Choice[] }>(path)).items; all.push(...rows);
         } while (rows.length === 200);
         catalogs.value[kind] = all;
@@ -130,9 +131,9 @@ onMounted(async () => {
       <label>任务名称<input v-model="name" required maxlength="128"></label>
       <label>开始时间<input v-model="start" type="datetime-local" required></label><label>截止时间<input v-model="due" type="datetime-local" required></label>
       <label v-for="field in ([['usingOrganizationId','使用部门','organization'],['owningOrganizationId','所属组织','organization'],['categoryId','分类','category'],['warehouseId','仓库','warehouse'],['locationId','位置','location']] as const)" :key="field[0]">{{ field[1] }}<select v-model="range[field[0]]"><option :value="null">全部</option><option v-for="c in catalogs[field[2]]" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
-      <label>生命周期<select v-model="range.lifecycle"><option :value="null">全部</option><option v-for="v in ['IN_STOCK','IN_USE','BORROWED','UNDER_REPAIR','FACTORY_REPAIR','PENDING_SCRAP','SCRAPPED']" :key="v" :value="v">{{ v }}</option></select></label>
+      <label>生命周期<select v-model="range.lifecycle"><option :value="null">全部</option><option v-for="(text, value) in lifecycleLabels" :key="value" :value="value">{{ text }}</option></select></label>
       <label>异常状态<select v-model="range.exception"><option :value="null">全部</option><option value="NORMAL">正常</option><option value="SEARCHING">查找中</option><option value="LOST">遗失</option></select></label>
-      <label>当前责任人员编号（可选）<input v-model="range.responsibleEmployeeId" inputmode="numeric" placeholder="留空为全部"></label><button type="submit">保存草稿</button>
+      <label>当前责任人<select v-model="range.responsibleEmployeeId"><option :value="null">全部</option><option v-for="c in catalogs.employee" :key="c.id" :value="c.id">{{ c.name }}{{ c.status === "DISABLED" ? "（已停用）" : "" }}</option></select></label><button type="submit">保存草稿</button>
       <button v-if="editing" type="button" @click="editing = null; name = ''; range = emptyRange()">新建其他任务</button>
     </fieldset></form>
     <h2>{{ admin ? "全部任务" : "我的任务" }}</h2><button v-for="t in tasks" :key="t.id" :disabled="locked" @click="choose(t.id)">{{ t.name }} · {{ labels[t.task_status] }}{{ t.overdue ? ' · 逾期' : '' }}</button>

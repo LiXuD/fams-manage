@@ -1,0 +1,115 @@
+### Page
+- Page URL: http://127.0.0.1:5173/inventory-tasks
+- Page Title: FAMS 固定资产管理
+- Console: 3 errors, 0 warnings
+### Snapshot
+```yaml
+- generic [ref=e64]:
+  - banner [ref=e65]:
+    - generic [ref=e66]:
+      - generic [ref=e67]: F
+      - generic [ref=e68]: 示例企业 · 固定资产
+    - generic [ref=e69]:
+      - generic [ref=e70]: inv1 · ASSET_ADMIN
+      - button "退出" [ref=e71] [cursor=pointer]
+  - generic [ref=e72]:
+    - navigation "主导航" [ref=e73]:
+      - link "工作台" [ref=e74] [cursor=pointer]:
+        - /url: /
+      - link "资产台账" [ref=e75] [cursor=pointer]:
+        - /url: /assets
+      - link "期初导入核验" [ref=e76] [cursor=pointer]:
+        - /url: /asset-import-reviews
+      - link "入库管理" [ref=e77] [cursor=pointer]:
+        - /url: /inbound
+      - link "领用申请与分配" [ref=e78] [cursor=pointer]:
+        - /url: /requisitions
+      - link "盘点任务" [ref=e79] [cursor=pointer]:
+        - /url: /inventory-tasks
+      - link "借用、延期与退还" [ref=e80] [cursor=pointer]:
+        - /url: /loans
+      - link "调拨与人员交接" [ref=e81] [cursor=pointer]:
+        - /url: /transfers
+      - link "异常代确认" [ref=e82] [cursor=pointer]:
+        - /url: /proxy-confirmations
+      - link "批准目标变更" [ref=e83] [cursor=pointer]:
+        - /url: /requisition-target-changes
+      - link "调拨目标变更" [ref=e84] [cursor=pointer]:
+        - /url: /transfer-target-changes
+      - link "代确认结果核查" [ref=e85] [cursor=pointer]:
+        - /url: /business-result-reviews
+      - link "业务结果通知" [ref=e86] [cursor=pointer]:
+        - /url: /business-result-notices
+    - main [ref=e87]:
+      - generic [ref=e88]:
+        - heading "盘点任务" [level=1] [ref=e89]
+        - paragraph [ref=e90]: 发布时冻结应盘集合与责任快照。盘点不直接改变资产责任；执行人只查看自己的应盘项。
+        - button "刷新" [ref=e91]
+        - generic [ref=e92]:
+          - heading "创建盘点草稿" [level=2] [ref=e93]
+          - group [ref=e94]:
+            - generic [ref=e95]:
+              - text: 任务名称
+              - textbox "任务名称" [ref=e96]
+            - generic [ref=e97]:
+              - text: 开始时间
+              - textbox "开始时间" [ref=e98]
+            - generic [ref=e99]:
+              - text: 截止时间
+              - textbox "截止时间" [ref=e100]
+            - generic [ref=e101]:
+              - text: 使用部门
+              - combobox "使用部门" [ref=e102]:
+                - option "全部" [selected]
+                - option "Inventory owned"
+            - generic [ref=e103]:
+              - text: 所属组织
+              - combobox "所属组织" [ref=e104]:
+                - option "全部" [selected]
+                - option "Inventory owned"
+            - generic [ref=e105]:
+              - text: 分类
+              - combobox "分类" [ref=e106]:
+                - option "全部" [selected]
+                - option "Inventory category"
+            - generic [ref=e107]:
+              - text: 仓库
+              - combobox "仓库" [ref=e108]:
+                - option "全部" [selected]
+                - option "Inventory warehouse"
+            - generic [ref=e109]:
+              - text: 位置
+              - combobox "位置" [ref=e110]:
+                - option "全部" [selected]
+                - option "Inventory bin"
+            - generic [ref=e111]:
+              - text: 生命周期
+              - combobox "生命周期" [ref=e112]:
+                - option "全部" [selected]
+                - option "在库"
+                - option "在用"
+                - option "借出"
+                - option "维修中"
+                - option "返厂维修"
+                - option "待报废"
+                - option "已报废"
+            - generic [ref=e113]:
+              - text: 异常状态
+              - combobox "异常状态" [ref=e114]:
+                - option "全部" [selected]
+                - option "正常"
+                - option "查找中"
+                - option "遗失"
+            - generic [ref=e115]:
+              - text: 当前责任人
+              - combobox "当前责任人" [ref=e116]:
+                - option "全部" [selected]
+                - option "Inventory person 1"
+                - option "Inventory person 2"
+                - option "Inventory person 3"
+            - button "保存草稿" [ref=e117]
+        - heading "全部任务" [level=2] [ref=e118]
+        - button "上一页" [disabled] [ref=e119]
+        - text: 1 / 1
+        - button "下一页" [disabled] [ref=e120]
+```
