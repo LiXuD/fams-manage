@@ -156,4 +156,11 @@
         <Method name="&lt;init&gt;"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+    <!-- Spring owns the injected read-only inventory reference database collaborator. -->
+    <Match>
+        <Class name="com.fams.masterdata.InventoryReferencePort"/>
+        <Field name="db"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
 </FindBugsFilter>

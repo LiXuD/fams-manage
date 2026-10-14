@@ -39,6 +39,7 @@ public class InventoryService {
     private final RequisitionActorContext actors;
     private final InventoryExecutorPort executors;
     private final AssetMasterDataPort parameters;
+    private final com.fams.masterdata.InventoryReferencePort references;
 
     public InventoryService(
             JdbcTemplate db,
@@ -46,13 +47,21 @@ public class InventoryService {
             Clock clock,
             RequisitionActorContext actors,
             InventoryExecutorPort executors,
-            AssetMasterDataPort parameters) {
+            AssetMasterDataPort parameters,
+            com.fams.masterdata.InventoryReferencePort references) {
         this.db = db;
         this.json = json;
         this.clock = clock;
         this.actors = actors;
         this.executors = executors;
         this.parameters = parameters;
+        this.references = references;
+    }
+
+    public Map<String, Object> referenceChoices(Actor actor, String kind, int page, int size) {
+        admin(actor);
+        return Map.of(
+                "items", references.choices(kind, page, size), "page", page, "pageSize", size);
     }
 
     public Map<String, Object> preview(Actor actor, InventoryInput.Range range) {
@@ -79,7 +88,7 @@ public class InventoryService {
                     + " fams_inventory_task(name,range_json,starts_at,due_at,creator_account_id,created_at,updated_at)"
                     + " VALUES (?,?,?,?,?,?,?)",
                 input.name().strip(),
-                json.writeValueAsString(input.range()),
+                rangeJson(input.range()),
                 Timestamp.from(input.startsAt()),
                 Timestamp.from(input.dueAt()),
                 current.id(),
@@ -111,7 +120,7 @@ public class InventoryService {
                     + " fams_inventory_task(name,range_json,starts_at,due_at,creator_account_id,copied_from_task_id,created_at,updated_at)"
                     + " VALUES (?,?,?,?,?,?,?,?)",
                 input.name().strip(),
-                source.get("range_json").toString(),
+                rangeJson(input.range()),
                 Timestamp.from(input.startsAt()),
                 Timestamp.from(input.dueAt()),
                 current.id(),
@@ -144,7 +153,7 @@ public class InventoryService {
                         + " name=?,range_json=?,starts_at=?,due_at=?,version=version+1,updated_at=?"
                         + " WHERE id=?",
                 input.name().strip(),
-                json.writeValueAsString(input.range()),
+                rangeJson(input.range()),
                 Timestamp.from(input.startsAt()),
                 Timestamp.from(input.dueAt()),
                 now(),
@@ -591,12 +600,38 @@ public class InventoryService {
         return result;
     }
 
+    private String rangeJson(InventoryInput.Range range) {
+        var snapshot = new LinkedHashMap<String, Object>();
+        snapshot.put("usingOrganizationId", identifier(range.usingOrganizationId()));
+        snapshot.put("owningOrganizationId", identifier(range.owningOrganizationId()));
+        snapshot.put("categoryId", identifier(range.categoryId()));
+        snapshot.put("warehouseId", identifier(range.warehouseId()));
+        snapshot.put("locationId", identifier(range.locationId()));
+        snapshot.put("responsibleEmployeeId", identifier(range.responsibleEmployeeId()));
+        snapshot.put("lifecycle", range.lifecycle());
+        snapshot.put("exception", range.exception());
+        return json.writeValueAsString(snapshot);
+    }
+
+    private String identifier(Long id) {
+        return id == null ? null : id.toString();
+    }
+
     private Map<String, Object> clean(Map<String, Object> row) {
         var result = new LinkedHashMap<String, Object>();
         row.forEach(
                 (key, raw) -> {
                     Object value = raw;
-                    if (value != null && key.endsWith("_json")) {
+                    if (value != null && key.equals("range_json")) {
+                        value =
+                                json.readTree(
+                                        rangeJson(
+                                                json.readValue(
+                                                        value instanceof CharSequence
+                                                                ? value.toString()
+                                                                : json.writeValueAsString(value),
+                                                        InventoryInput.Range.class)));
+                    } else if (value != null && key.endsWith("_json")) {
                         value = json.readTree(value.toString());
                     } else if (value instanceof Timestamp
                             || value instanceof java.time.LocalDateTime) {
@@ -674,9 +709,10 @@ public class InventoryService {
         if (!fingerprint(version, input).equals(row.get("payload_sha256"))) {
             throw new InventoryFailure(409, "INVENTORY_IDEMPOTENCY_CONFLICT");
         }
-        return json.readValue(
-                row.get("response_body_json").toString(),
-                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        return clean(
+                json.readValue(
+                        row.get("response_body_json").toString(),
+                        new tools.jackson.core.type.TypeReference<Map<String, Object>>() {}));
     }
 
     private Map<String, Object> finish(

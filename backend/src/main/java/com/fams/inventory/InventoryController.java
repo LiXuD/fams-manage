@@ -46,6 +46,17 @@ class InventoryController {
         return service.list(actors.capture(), page, pageSize);
     }
 
+    @GetMapping("/catalog/{kind}")
+    Map<String, Object> catalog(
+            @PathVariable
+                    @jakarta.validation.constraints.Pattern(
+                            regexp = "organization|category|warehouse|location|employee")
+                    String kind,
+            @RequestParam(defaultValue = "1") @Min(1) @Max(1000000) int page,
+            @RequestParam(defaultValue = "50") @Min(1) @Max(200) int pageSize) {
+        return service.referenceChoices(actors.capture(), kind, page, pageSize);
+    }
+
     @GetMapping("/executors")
     List<Map<String, Object>> executors(
             @RequestParam(defaultValue = "1") @Min(1) @Max(1000000) int page,

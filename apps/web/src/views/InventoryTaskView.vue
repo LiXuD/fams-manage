@@ -111,7 +111,7 @@ onMounted(async () => {
       for (const kind of ["organization", "category", "warehouse", "location", "employee"]) {
         const all: Choice[] = []; let p = 1; let rows: Choice[];
         do {
-          const path = kind === "category" ? `/asset-categories/active-references?page=${p++}&pageSize=200` : `/transfers/catalog/${kind === "employee" ? "personnel" : kind}?page=${p++}&pageSize=200`;
+          const path = `/inventory-tasks/catalog/${kind}?page=${p++}&pageSize=200`;
           rows = (await loanRequest<{ items: Choice[] }>(path)).items; all.push(...rows);
         } while (rows.length === 200);
         catalogs.value[kind] = all;
@@ -130,7 +130,7 @@ onMounted(async () => {
     <form v-if="admin" @submit.prevent="save"><h2>{{ editing ? "修改草稿" : "创建盘点草稿" }}</h2><fieldset :disabled="locked">
       <label>任务名称<input v-model="name" required maxlength="128"></label>
       <label>开始时间<input v-model="start" type="datetime-local" required></label><label>截止时间<input v-model="due" type="datetime-local" required></label>
-      <label v-for="field in ([['usingOrganizationId','使用部门','organization'],['owningOrganizationId','所属组织','organization'],['categoryId','分类','category'],['warehouseId','仓库','warehouse'],['locationId','位置','location']] as const)" :key="field[0]">{{ field[1] }}<select v-model="range[field[0]]"><option :value="null">全部</option><option v-for="c in catalogs[field[2]]" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
+      <label v-for="field in ([['usingOrganizationId','使用部门','organization'],['owningOrganizationId','所属组织','organization'],['categoryId','分类','category'],['warehouseId','仓库','warehouse'],['locationId','位置','location']] as const)" :key="field[0]">{{ field[1] }}<select v-model="range[field[0]]"><option :value="null">全部</option><option v-for="c in catalogs[field[2]]" :key="c.id" :value="c.id">{{ c.name }}{{ c.status === "DISABLED" ? "（已停用）" : "" }}</option></select></label>
       <label>生命周期<select v-model="range.lifecycle"><option :value="null">全部</option><option v-for="(text, value) in lifecycleLabels" :key="value" :value="value">{{ text }}</option></select></label>
       <label>异常状态<select v-model="range.exception"><option :value="null">全部</option><option value="NORMAL">正常</option><option value="SEARCHING">查找中</option><option value="LOST">遗失</option></select></label>
       <label>当前责任人<select v-model="range.responsibleEmployeeId"><option :value="null">全部</option><option v-for="c in catalogs.employee" :key="c.id" :value="c.id">{{ c.name }}{{ c.status === "DISABLED" ? "（已停用）" : "" }}</option></select></label><button type="submit">保存草稿</button>

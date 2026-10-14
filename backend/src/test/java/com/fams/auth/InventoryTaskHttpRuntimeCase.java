@@ -539,6 +539,144 @@ class InventoryTaskHttpRuntimeCase {
                         id));
     }
 
+    @Test
+    void disabledReferencesRemainSelectableForReadOnlyInventoryScopeWithoutPersonnelDisclosure()
+            throws Exception {
+        db.update("UPDATE fams_asset_category SET status='DISABLED' WHERE id=933000");
+        db.update("UPDATE fams_employee SET status='DISABLED' WHERE id=933002");
+        var categories = ok(call(admin, "/catalog/category?page=1&pageSize=200", null, null, 0));
+        assertEquals("933000", categories.path("items").get(0).path("id").asText());
+        assertEquals("DISABLED", categories.path("items").get(0).path("status").asText());
+        var people = ok(call(admin, "/catalog/employee?page=1&pageSize=200", null, null, 0));
+        var disabled =
+                people.path("items")
+                        .valueStream()
+                        .filter(row -> row.path("id").asText().equals("933002"))
+                        .findFirst()
+                        .orElseThrow();
+        assertEquals("DISABLED", disabled.path("status").asText());
+        assertEquals(3, disabled.size());
+        assertEquals(403, call(other, "/catalog/employee", null, null, 0).statusCode());
+        assertEquals(400, call(admin, "/catalog/unknown", null, null, 0).statusCode());
+        String id = create(Instant.now().plusSeconds(3600)).path("id").asText();
+        publish(id);
+        assertEquals(
+                2,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_inventory_item WHERE task_id=?",
+                        Integer.class,
+                        id));
+        assertEquals(
+                "DISABLED",
+                db.queryForObject(
+                        "SELECT status FROM fams_asset_category WHERE id=933000", String.class));
+    }
+
+    @Test
+    void largeRangeIdentifiersRemainStringsAcrossLegacyReadCopyAndPublication() throws Exception {
+        long category = 9007199254740993L;
+        db.update(
+                "INSERT INTO"
+                    + " fams_asset_category(id,code,code_normalized,name,status,created_at,updated_at)"
+                    + " VALUES (?,'INVLARGE','INVLARGE','Large identifier"
+                    + " category','ACTIVE',NOW(3),NOW(3))",
+                category);
+        db.update("UPDATE fams_asset SET category_id=? WHERE id IN (933010,933011)", category);
+        try {
+            String body =
+                    "{\"name\":\"Large range"
+                        + " identity\",\"range\":{\"categoryId\":\"9007199254740993\"},\"startsAt\":\"2026-12-01T00:00:00Z\",\"dueAt\":\"2026-12-02T00:00:00Z\"}";
+            String originalKey = key();
+            var created = ok(call(admin, "", body, originalKey, 0));
+            String id = created.path("id").asText();
+            assertTrue(created.path("range_json").path("categoryId").isTextual());
+            assertEquals(
+                    "9007199254740993", created.path("range_json").path("categoryId").asText());
+            db.update(
+                    "UPDATE fams_idempotency_record SET"
+                        + " response_body_json=JSON_SET(response_body_json,'$.range_json.categoryId',?)"
+                        + " WHERE actor_account_id=933001 AND operation_id='inventory:create' AND"
+                        + " idempotency_key=?",
+                    category,
+                    originalKey);
+            String oldReply =
+                    db.queryForObject(
+                            "SELECT CAST(response_body_json AS CHAR) FROM fams_idempotency_record"
+                                + " WHERE actor_account_id=933001 AND"
+                                + " operation_id='inventory:create' AND idempotency_key=?",
+                            String.class,
+                            originalKey);
+            var replayed = ok(call(admin, "", body, originalKey, 0));
+            assertTrue(replayed.path("range_json").path("categoryId").isTextual());
+            assertEquals(
+                    "9007199254740993", replayed.path("range_json").path("categoryId").asText());
+            assertEquals(
+                    oldReply,
+                    db.queryForObject(
+                            "SELECT CAST(response_body_json AS CHAR) FROM fams_idempotency_record"
+                                + " WHERE actor_account_id=933001 AND"
+                                + " operation_id='inventory:create' AND idempotency_key=?",
+                            String.class,
+                            originalKey));
+            assertEquals(
+                    1,
+                    db.queryForObject(
+                            "SELECT COUNT(*) FROM fams_inventory_task WHERE"
+                                + " creator_account_id=933001",
+                            Integer.class));
+            // Real old-format JSON on disk; public decoding must not change its original bytes.
+            db.update(
+                    "UPDATE fams_inventory_task SET range_json=JSON_OBJECT('categoryId',?) WHERE"
+                        + " id=?",
+                    category,
+                    id);
+            String stored =
+                    db.queryForObject(
+                            "SELECT CAST(range_json AS CHAR) FROM fams_inventory_task WHERE id=?",
+                            String.class,
+                            id);
+            var read = ok(call(admin, "/" + id, null, null, 0)).path("task");
+            assertTrue(read.path("range_json").path("categoryId").isTextual());
+            assertEquals("9007199254740993", read.path("range_json").path("categoryId").asText());
+            var copyBody =
+                    JSON.createObjectNode()
+                            .put("name", "Large copied range")
+                            .put("startsAt", "2026-12-01T00:00:00Z")
+                            .put("dueAt", "2026-12-02T00:00:00Z");
+            copyBody.set("range", read.path("range_json"));
+            var copy = ok(call(admin, "/" + id + "/copy", copyBody.toString(), key(), 0));
+            assertTrue(copy.path("range_json").path("categoryId").isTextual());
+            assertEquals("9007199254740993", copy.path("range_json").path("categoryId").asText());
+            assertEquals(
+                    stored,
+                    db.queryForObject(
+                            "SELECT CAST(range_json AS CHAR) FROM fams_inventory_task WHERE id=?",
+                            String.class,
+                            id));
+            var preview =
+                    ok(call(admin, "/preview", "{\"categoryId\":\"9007199254740993\"}", key(), 0));
+            assertEquals(2, preview.path("count").asInt());
+            ok(
+                    call(
+                            admin,
+                            "/" + id + "/publication",
+                            "{\"expectedCount\":2,\"previewDigest\":\""
+                                    + preview.path("digest").asText()
+                                    + "\"}",
+                            key(),
+                            0));
+            assertEquals(
+                    2,
+                    db.queryForObject(
+                            "SELECT COUNT(*) FROM fams_inventory_item WHERE task_id=?",
+                            Integer.class,
+                            id));
+        } finally {
+            db.update("UPDATE fams_asset SET category_id=933000 WHERE id IN (933010,933011)");
+            db.update("DELETE FROM fams_asset_category WHERE id=?", category);
+        }
+    }
+
     private JsonNode create(Instant start) throws Exception {
         String body =
                 "{\"name\":\"Owned inventory\",\"range\":{\"categoryId\":933000},\"startsAt\":\""

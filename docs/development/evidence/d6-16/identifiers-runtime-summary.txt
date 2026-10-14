@@ -1,0 +1,3 @@
+InventoryUpgradeRuntimeCase PASS tests=1
+InventoryTaskHttpRuntimeCase PASS tests=9
+Owned runtime removed; evidence: <repo>/output/d6-16-inventory-runtime.log
