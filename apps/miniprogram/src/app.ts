@@ -1,8 +1,10 @@
 import { API_ORIGIN } from "./config.ts";
 import { MiniBindingClient } from "./binding.ts";
 import { MiniSessionClient } from "./session.ts";
-import { createUuid, createWxRuntime, deviceId } from "./wx-runtime.ts";
+import { createUuid, createWxRuntime, deviceId, chooseInventoryPhoto } from "./wx-runtime.ts";
 import type { MiniServices } from "./pages.ts";
+import { InventoryQueue } from "./inventory-queue.ts";
+import { createInventoryFiles, type InventoryFileRuntime } from "./inventory-files.ts";
 
 let services: MiniServices | null = null;
 App({
@@ -11,8 +13,20 @@ App({
             const runtime = createWxRuntime(wx);
             const sessions = new MiniSessionClient(API_ORIGIN, runtime);
             services = { sessions, wechat: runtime,
+                inventory: () => {
+                    const identity = sessions.identity;
+                    if (!identity || !wx.env || !wx.getFileSystemManager) throw new Error("Inventory durable storage unavailable");
+                    const files = createInventoryFiles(wx as InventoryFileRuntime, identity); const device = deviceId(wx);
+                    const owner = JSON.stringify(identity);
+                    const storage = { ...files.storage, write: (key: string, value: unknown) => {
+                        if (JSON.stringify(sessions.identity) !== owner) throw new Error("Identity changed before durable save");
+                        files.storage.write(key, value);
+                    } };
+                    return { queue: new InventoryQueue(identity, device, storage, { now: () => Date.now() }), files, deviceId: device };
+                },
                 binding: new MiniBindingClient(API_ORIGIN, runtime, sessions, runtime, deviceId(wx), createUuid),
                 createKey: createUuid,
+                chooseInventoryPhoto: source => chooseInventoryPhoto(wx, source),
                 chooseEvidence: () => new Promise((resolve, reject) => {
                     if (!wx.chooseMessageFile) { reject(new Error("File picker unavailable")); return; }
                     wx.chooseMessageFile({ count: 1, type: "file", extension: ["pdf", "png", "jpg", "jpeg", "webp"],

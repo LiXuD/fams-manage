@@ -1,0 +1,19 @@
+{
+  "recorded_at_utc": "2026-10-16T09:20:12.819684+00:00",
+  "source_state": "working_tree_before_fixed_candidate_commit",
+  "base_commit": "d2a4baf36a63b7d9992a82327104808f4e18867e",
+  "upgrade_runtime_tests": 1,
+  "http_runtime_tests": 11,
+  "time_policy_tests": 2,
+  "mini_tests": 78,
+  "checkstyle_findings": 0,
+  "spotbugs_findings": 0,
+  "mini_typecheck_exit": 0,
+  "mini_build_exit": 0,
+  "gate_verifier_unit_tests": 32,
+  "fixed_product_gate": "PENDING",
+  "independent_review": "PENDING",
+  "real_wechat_https_camera_device_weak_network": "NOT_VERIFIED",
+  "scanner_fixture": "explicit CLEAN substitute",
+  "native_runtime": "production Page handlers and file adapter through explicit local HTTPS/WeChat substitutes; not WXML/device rendering acceptance"
+}

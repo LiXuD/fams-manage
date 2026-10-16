@@ -13,7 +13,8 @@
     "pages/business-result-notices/index",
     "pages/business-result-reviews/index",
     "pages/target-changes/index",
-    "pages/inventory-tasks/index"
+    "pages/inventory-tasks/index",
+    "pages/inventory-collection/index"
   ],
   "window": {
     "navigationBarTitleText": "企业资产",

@@ -1,8 +1,11 @@
 import { MiniBindingClient } from "./binding.ts";
 import { MiniRequestError, MiniSessionClient } from "./session.ts";
 import type { WechatLogin } from "./binding.ts";
+import type { InventoryQueue } from "./inventory-queue.ts";
+import type { createInventoryFiles } from "./inventory-files.ts";
 
 export interface MiniServices {
+    inventory?(): { queue: InventoryQueue; files: ReturnType<typeof createInventoryFiles>; deviceId: string };
     sessions: MiniSessionClient;
     binding: MiniBindingClient;
     wechat: WechatLogin;
@@ -11,6 +14,7 @@ export interface MiniServices {
     confirm(title: string, content: string): Promise<boolean>;
     scan?(): Promise<string>;
     chooseEvidence?(): Promise<{ path: string; name: string; size: number }>;
+    chooseInventoryPhoto?(source: "camera" | "album"): Promise<{ path: string; name: string; size: number }>;
     openEvidence?(path: string, filename?: string): Promise<void>;
 }
 

@@ -129,8 +129,8 @@ export class MiniSessionClient {
         return response.data;
     }
 
-    async uploadEvidence(path: string, filePath: string, mutation: { key: string; version: number }): Promise<unknown> {
-        if (!/^\/api\/v1\/mini\/proxy-confirmations\/[1-9][0-9]*\/attachments$/.test(path)
+    async uploadEvidence(path: string, filePath: string, mutation: { key: string; version: number; deviceId?: string }): Promise<unknown> {
+        if (!/^\/api\/v1\/mini\/(proxy-confirmations\/[1-9][0-9]*\/attachments|inventory-observations\/tasks\/[1-9][0-9]*\/events\/[0-9a-f-]{36}\/photos)$/.test(path)
             || !filePath || mutation.key.length < 16 || mutation.key.length > 128
             || !Number.isSafeInteger(mutation.version) || mutation.version < 0) {
             throw new Error("Invalid evidence upload identity");
@@ -138,10 +138,13 @@ export class MiniSessionClient {
         const session = this.current;
         if (!session) throw new MiniRequestError(401, "AUTH_SESSION_INVALID");
         if (!this.runtime.upload) throw new Error("Evidence upload unavailable");
+        if (path.includes("/inventory-observations/") && !/^[0-9a-f-]{36}$/i.test(mutation.deviceId ?? "")) {
+            throw new Error("Inventory device identity required");
+        }
         const generation = this.generation;
         const response = await this.runtime.upload({ url: this.origin + path, filePath,
             header: { "X-FAMS-Mini-Session": session.sessionToken, "Idempotency-Key": mutation.key,
-                "If-Match-Version": String(mutation.version) } });
+                "If-Match-Version": String(mutation.version), ...(mutation.deviceId ? { "X-FAMS-Device-Id": mutation.deviceId } : {}) } });
         this.assertGeneration(generation);
         if (response.statusCode === 401) this.clear();
         this.checkResponse(response);
@@ -149,7 +152,7 @@ export class MiniSessionClient {
     }
 
     async downloadEvidence(path: string): Promise<string> {
-        if (!/^\/api\/v1\/mini\/attachments\/[0-9a-f-]{36}\/content\?grant=[A-Za-z0-9_.-]+$/i.test(path)) {
+        if (!/^\/api\/v1\/mini\/(attachments\/[0-9a-f-]{36}|inventory-observations\/tasks\/[1-9][0-9]*\/events\/[0-9a-f-]{36}\/photos\/[0-9a-f-]{36})\/content\?grant=[A-Za-z0-9_.-]+$/i.test(path)) {
             throw new Error("Invalid evidence download path");
         }
         const session = this.current;

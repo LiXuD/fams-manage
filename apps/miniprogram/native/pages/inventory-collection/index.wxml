@@ -1,0 +1,44 @@
+<view class="page">
+ <view class="title">现场盘点与待上传</view>
+ <view class="hint">扫码只识别身份，请逐件核实现场；已上传不代表管理员已完成复核。</view>
+ <view wx:if="{{error}}" class="error">{{error}}</view><view wx:if="{{message}}">{{message}}</view>
+ <view wx:if="{{offline}}" class="hint">当前使用离线授权快照，最终权限由服务器校验。</view>
+ <view wx:if="{{task}}" class="card">
+  <view>{{task.name}}</view><picker range="{{locations}}" range-key="name" bindchange="onRoom"><view>确认当前现场房间：{{roomName || '请选择'}}</view></picker>
+  <input value="{{roomDraft}}" data-field="roomDraft" bindinput="onInput" placeholder="授权位置之外或无法确定时填写位置线索"/><button bindtap="onRoomHint" disabled="{{busy}}">确认待核实位置</button>
+  <button bindtap="onScan" disabled="{{busy}}">连续扫码识别</button>
+  <input value="{{query}}" data-field="query" bindinput="onInput" placeholder="标签损坏时按资产编码或名称查找"/>
+  <button bindtap="onSearch" disabled="{{busy}}">查找实物</button>
+  <button bindtap="onManual" disabled="{{busy}}">手工记录待核实实物</button>
+  <input value="{{manualReason}}" data-field="manualReason" bindinput="onInput" placeholder="编码查询或手工记录原因"/>
+  <button wx:for="{{candidates}}" wx:key="id" data-id="{{item.id}}" bindtap="onSelect">{{item.snapshot_json.assetCode}} · {{item.snapshot_json.name}}</button>
+  <view wx:if="{{selected}}" class="card">
+   <view>{{selected.snapshot_json.assetCode}} · {{selected.snapshot_json.name}}</view>
+   <view>账面位置：{{selected.snapshot_json.locationName || '未知'}}</view>
+   <view>账面责任：{{selected.snapshot_json.responsibleEmployeeName || selected.snapshot_json.departmentResponsibleEmployeeName || '仓库保管'}}</view>
+   <view>账面使用模式：{{selected.snapshot_json.custodyType === 'STORAGE' ? '仓库保管' : selected.snapshot_json.custodyType === 'PERSONAL' ? '个人使用' : selected.snapshot_json.custodyType === 'SHARED' ? '部门公用' : '未知'}}</view>
+   <view class="hint">请核实位置、责任、使用模式及实物完好；损坏或不确定请记录差异。</view>
+   <button data-field="normal" bindtap="onSave" disabled="{{busy}}">已逐件核实，与现场一致</button>
+   <button bindtap="onDifference" disabled="{{busy}}">有差异或不确定</button>
+  </view>
+  <view wx:if="{{difference}}" class="card">
+   <picker range="{{['仓库保管','个人使用','部门公用','不确定']}}" bindchange="onMode"><view>实际使用模式：{{custodyType === 'STORAGE' ? '仓库保管' : custodyType === 'PERSONAL' ? '个人使用' : custodyType === 'SHARED' ? '部门公用' : '待确认 / 不确定'}}</view></picker>
+   <picker range="{{people}}" range-key="name" bindchange="onPerson"><view>实际责任人：{{personName || '未确认'}}</view></picker>
+   <input value="{{responsibilityHint}}" data-field="responsibilityHint" bindinput="onInput" placeholder="范围外人员只记待核实线索，不查询全员信息"/>
+   <picker range="{{['完好','损坏','不确定']}}" bindchange="onCondition"><view>实物状况：{{condition === 'GOOD' ? '已确认完好' : condition === 'DAMAGED' ? '已确认损坏' : '待确认 / 不确定'}}</view></picker>
+   <textarea value="{{unknownReason}}" data-field="unknownReason" bindinput="onInput" placeholder="不确定字段与待核实原因"/>
+   <textarea value="{{description}}" data-field="description" bindinput="onInput" placeholder="现场描述，任务外发现必填；不自动认定盘盈"/>
+   <button bindtap="onPhoto" data-field="camera" disabled="{{busy}}">现场拍照（{{photos.length}}/9）</button>
+   <button bindtap="onPhoto" data-field="album" disabled="{{busy}}">选择已有现场照片</button>
+   <image wx:for="{{photos}}" wx:key="path" src="{{item.path}}" mode="aspectFit" data-id="{{item.path}}" bindtap="onPreviewPhoto" style="width:160rpx;height:160rpx"/>
+   <button data-field="difference" bindtap="onSave" disabled="{{busy}}">保存差异或待核实线索</button>
+   <button bindtap="onDiscard" disabled="{{busy}}">放弃当前未保存编辑与照片</button>
+  </view>
+ </view>
+ <view class="card"><view class="title">本机待上传 {{pending.length}} 项</view>
+  <view wx:for="{{pending}}" wx:key="eventId">{{item.label}} · {{item.state}}</view>
+  <button bindtap="onSync" disabled="{{busy}}">上传原记录 / 重试回执</button>
+  <view class="hint">首次保存后保留72小时；照片丢失或过期需安排补盘，重试不会延长期限。</view>
+ </view>
+ <view class="card"><view class="title">本机同步回执</view><view wx:for="{{receipts}}" wx:key="eventId">{{item.message}}</view><view class="hint">仅保留最小状态提示，正式结果以服务器复核记录为准。</view></view>
+</view>
