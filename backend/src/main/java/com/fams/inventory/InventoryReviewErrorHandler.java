@@ -14,11 +14,23 @@ import java.util.UUID;
 
 @Profile("fams-product")
 @Order(-3)
-@RestControllerAdvice(assignableTypes = {InventoryReviewController.class, InventoryDifferenceController.class})
+@RestControllerAdvice(
+        assignableTypes = {
+            InventoryReviewController.class,
+            InventoryDifferenceController.class,
+            InventorySelectionController.class
+        })
 class InventoryReviewErrorHandler {
     @ExceptionHandler(InventoryReviewConflict.class)
-    ResponseEntity<ErrorResponse> conflict(InventoryReviewConflict failure, HttpServletRequest request) {
-        UUID id = request.getAttribute("fams.request.id") instanceof UUID value ? value : UUID.randomUUID();
-        return ResponseEntity.status(409).body(new ErrorResponse(failure.getMessage(), failure.getMessage(), id, failure.fields()));
+    ResponseEntity<ErrorResponse> conflict(
+            InventoryReviewConflict failure, HttpServletRequest request) {
+        UUID id =
+                request.getAttribute("fams.request.id") instanceof UUID value
+                        ? value
+                        : UUID.randomUUID();
+        return ResponseEntity.status(409)
+                .body(
+                        new ErrorResponse(
+                                failure.getMessage(), failure.getMessage(), id, failure.fields()));
     }
 }

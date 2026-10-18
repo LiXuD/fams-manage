@@ -156,6 +156,19 @@ public class InventoryDifferenceService {
                                         + " SHARE",
                                 taskId,
                                 observation.get("item_id"));
+                Long variants =
+                        db.queryForObject(
+                                "SELECT COUNT(DISTINCT fact_sha256) FROM fams_inventory_observation"
+                                    + " WHERE task_id=? AND item_id=? AND recheck_generation=? AND"
+                                    + " outcome NOT IN ('EXPIRED','DUPLICATE','LATE_REVIEW') FOR"
+                                    + " SHARE",
+                                Long.class,
+                                taskId,
+                                item.get("id"),
+                                observation.get("recheck_generation"));
+                if (variants != null && variants > 1) {
+                    dimensions.add("CONFLICT");
+                }
                 var book = json.readTree(item.get("snapshot_json").toString());
                 var actual = json.readTree(observation.get("facts_json").toString()).path("actual");
                 if (!Objects.equals(

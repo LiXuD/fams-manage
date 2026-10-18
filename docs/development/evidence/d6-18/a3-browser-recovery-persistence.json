@@ -1,0 +1,16 @@
+{
+  "accepted": 0,
+  "selected": 1,
+  "activeLocks": 0,
+  "datesChanged": 0,
+  "observations": 3,
+  "versionsChanged": 0,
+  "selectionHistory": 1,
+  "source_state": "D6-18A3 working tree after a29895d; not fixed gate",
+  "artifact_sha256": "43d23362c74bc3f641916909bbaef6a2a11f6633e8c152c2a351ebef5f2c8b43",
+  "task_id": "1",
+  "raw_observations_unchanged": true,
+  "new_jvm_replay_original": true,
+  "new_jvm_duplicate_selection_events": 0,
+  "original_pc_session_recovered": true
+}

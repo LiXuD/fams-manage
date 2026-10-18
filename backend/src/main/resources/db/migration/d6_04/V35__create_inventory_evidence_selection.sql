@@ -1,0 +1,30 @@
+-- Original collection facts and prior review conclusions remain immutable evidence.
+CREATE TABLE fams_inventory_selection_event (
+ item_id BIGINT NOT NULL,
+ recheck_generation BIGINT NOT NULL,
+ review_version BIGINT NOT NULL,
+ task_id BIGINT NOT NULL,
+ observation_id BIGINT NOT NULL,
+ review_status VARCHAR(24) NOT NULL,
+ verified_observed_at DATETIME(3) NOT NULL,
+ time_source VARCHAR(24) NOT NULL,
+ reviewed_asset_version BIGINT NOT NULL,
+ physical_snapshot_json JSON NOT NULL,
+ movement_digest CHAR(64) NOT NULL,
+ movement_count BIGINT NOT NULL,
+ reason VARCHAR(1000) NOT NULL,
+ evidence VARCHAR(2000) NOT NULL,
+ actor_account_id BIGINT NOT NULL,
+ actor_username VARCHAR(128) NOT NULL,
+ recorded_at DATETIME(3) NOT NULL,
+ PRIMARY KEY(item_id,recheck_generation,review_version),
+ CONSTRAINT fk_inventory_selection_review FOREIGN KEY(item_id,recheck_generation)
+   REFERENCES fams_inventory_item_review(item_id,recheck_generation),
+ CONSTRAINT fk_inventory_selection_task FOREIGN KEY(task_id) REFERENCES fams_inventory_task(id),
+ CONSTRAINT fk_inventory_selection_observation FOREIGN KEY(observation_id) REFERENCES fams_inventory_observation(id),
+ CONSTRAINT fk_inventory_selection_actor FOREIGN KEY(actor_account_id) REFERENCES fams_system_account(id),
+ CONSTRAINT ck_inventory_selection_status CHECK(review_status IN ('SELECTED','ACCEPTED')),
+ CONSTRAINT ck_inventory_selection_time CHECK(time_source IN ('CALIBRATED','ADMIN_VERIFIED')),
+ CONSTRAINT ck_inventory_selection_versions CHECK(recheck_generation>=0 AND review_version>0 AND reviewed_asset_version>=0 AND movement_count>=0),
+ INDEX ix_inventory_selection_task(task_id,item_id,review_version)
+);

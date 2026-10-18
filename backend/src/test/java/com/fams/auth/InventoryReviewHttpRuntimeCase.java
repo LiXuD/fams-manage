@@ -150,6 +150,9 @@ class InventoryReviewHttpRuntimeCase {
     @AfterEach
     void cleanup() {
         db.update(
+                "DELETE FROM fams_inventory_selection_event WHERE actor_account_id BETWEEN 943001"
+                        + " AND 943005");
+        db.update(
                 "DELETE FROM fams_inventory_review_transfer WHERE observation_id IN (SELECT id FROM"
                         + " fams_inventory_observation WHERE actor_account_id BETWEEN 943001 AND"
                         + " 943005)");
@@ -855,7 +858,7 @@ class InventoryReviewHttpRuntimeCase {
         // Controlled historical calibration fixture: expiry is not a fresh-clock anomaly.
         db.update(
                 "UPDATE fams_inventory_clock_calibration SET client_time=?,server_time=? WHERE"
-                    + " id=?",
+                        + " id=?",
                 java.sql.Timestamp.from(earlier),
                 java.sql.Timestamp.from(earlier),
                 expired.path("calibrationId").asText());
@@ -985,6 +988,305 @@ class InventoryReviewHttpRuntimeCase {
                 body,
                 operation,
                 version);
+    }
+
+    @Test
+    void explicitSelectionPreservesRawEvidenceAndHistoryWithoutAcceptingDifferences()
+            throws Exception {
+        String task = prepared();
+        var fact = observation(task, 943010);
+        ((tools.jackson.databind.node.ObjectNode) fact.path("actual")).put("locationId", "943099");
+        assertEquals("CONFLICT_REVIEW", ok(observe(task, fact)).path("outcome").asText());
+        long observation =
+                db.queryForObject(
+                        "SELECT id FROM fams_inventory_observation WHERE task_id=? AND"
+                                + " client_event_id=?",
+                        Long.class,
+                        task,
+                        fact.path("eventId").asText());
+        String item = fact.path("itemId").asText();
+        String path = "/api/v1/inventory-reviews/tasks/" + task + "/items/" + item + "/selection";
+        var raw =
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_observation WHERE task_id=? ORDER BY id",
+                        task);
+        var context = ok(request(admin, "GET", path, null, null, null));
+        var input =
+                JSON.createObjectNode()
+                        .put("observationId", Long.toString(observation))
+                        .put("recheckGeneration", 0)
+                        .put("reviewVersion", 0)
+                        .put("assetVersion", 0)
+                        .put("contextDigest", context.path("contextDigest").asText())
+                        .put("reason", "明确选择现场证据")
+                        .put("evidence", "独立现场签字记录与原始照片编号");
+        String key = key();
+        var selected =
+                ok(
+                        request(
+                                admin,
+                                "POST",
+                                path,
+                                input.toString(),
+                                key,
+                                context.path("taskVersion").asLong()));
+        assertEquals("SELECTED", selected.path("review").path("review_status").asText());
+        assertEquals(
+                Long.toString(observation),
+                selected.path("review").path("observation_id").asText());
+        assertEquals(0, view(task).path("reviewedCount").asInt());
+        assertEquals(
+                1,
+                count("SELECT COUNT(*) FROM fams_inventory_selection_event WHERE task_id=?", task));
+        assertEquals(
+                selected,
+                ok(
+                        request(
+                                admin,
+                                "POST",
+                                path,
+                                input.toString(),
+                                key,
+                                context.path("taskVersion").asLong())));
+        var changed = input.deepCopy().put("reason", "改变原载荷");
+        assertEquals(
+                409,
+                request(
+                                admin,
+                                "POST",
+                                path,
+                                changed.toString(),
+                                key,
+                                context.path("taskVersion").asLong())
+                        .statusCode());
+        var loser =
+                request(
+                        other,
+                        "POST",
+                        path,
+                        input.toString(),
+                        key(),
+                        selected.path("version").asLong());
+        assertEquals(409, loser.statusCode());
+        assertEquals(
+                "review1",
+                JSON.readTree(loser.body()).path("fieldErrors").path("processedBy").asText());
+        assertEquals(403, request(employee, "GET", path, null, null, null).statusCode());
+        var second = input.deepCopy().put("reviewVersion", 1).put("reason", "补充复核后的明确选择");
+        var again =
+                ok(
+                        request(
+                                other,
+                                "POST",
+                                path,
+                                second.toString(),
+                                key(),
+                                selected.path("version").asLong()));
+        assertEquals(2, again.path("review").path("version").asInt());
+        var history = ok(request(admin, "GET", path + "?pageSize=1&page=2", null, null, null));
+        assertEquals(2, history.path("total").asInt());
+        assertEquals(1, history.path("history").size());
+        assertEquals("review3", history.path("history").get(0).path("actor_username").asText());
+        assertEquals(
+                raw,
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_observation WHERE task_id=? ORDER BY id",
+                        task));
+        assertEquals(
+                0,
+                count(
+                        "SELECT COUNT(*) FROM fams_asset WHERE id IN (943010,943011) AND"
+                                + " last_inventory_business_date IS NOT NULL",
+                        null));
+        assertEquals(
+                0,
+                count(
+                        "SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id IN"
+                                + " (943010,943011)",
+                        null));
+    }
+
+    @Test
+    void timeSelectionRequiresSeparateVerifiedTimeAndStaleContextCannotWin() throws Exception {
+        String task = prepared();
+        var fact = observation(task, 943010).put("clockAnomaly", true);
+        assertEquals("TIME_REVIEW", ok(observe(task, fact)).path("outcome").asText());
+        String item = fact.path("itemId").asText();
+        long observation =
+                db.queryForObject(
+                        "SELECT id FROM fams_inventory_observation WHERE task_id=? AND"
+                                + " client_event_id=?",
+                        Long.class,
+                        task,
+                        fact.path("eventId").asText());
+        String path = "/api/v1/inventory-reviews/tasks/" + task + "/items/" + item + "/selection";
+        var context = ok(request(admin, "GET", path, null, null, null));
+        var input =
+                JSON.createObjectNode()
+                        .put("observationId", Long.toString(observation))
+                        .put("recheckGeneration", 0)
+                        .put("reviewVersion", 0)
+                        .put("assetVersion", 0)
+                        .put("contextDigest", context.path("contextDigest").asText())
+                        .put("reason", "核实异常设备时间")
+                        .put("evidence", "核对签字表所载现场观察时间和编号");
+        long version = context.path("taskVersion").asLong();
+        assertEquals(
+                400, request(admin, "POST", path, input.toString(), key(), version).statusCode());
+        input.put("verifiedObservedAt", Instant.now().plusSeconds(1).toString());
+        assertEquals(
+                400, request(admin, "POST", path, input.toString(), key(), version).statusCode());
+        input.put("verifiedObservedAt", fact.path("rawObservedAt").asText());
+        transfer(943010, 0, 943099);
+        input.put("assetVersion", 1);
+        assertEquals(
+                409, request(admin, "POST", path, input.toString(), key(), version).statusCode());
+        context = ok(request(admin, "GET", path, null, null, null));
+        input.put("contextDigest", context.path("contextDigest").asText());
+        var selected = ok(request(admin, "POST", path, input.toString(), key(), version));
+        assertEquals("SELECTED", selected.path("review").path("review_status").asText());
+        var history = ok(request(admin, "GET", path, null, null, null)).path("history").get(0);
+        assertEquals("ADMIN_VERIFIED", history.path("time_source").asText());
+        assertTrue(history.path("movement_count").asInt() > 0);
+        assertEquals(
+                "TIME_REVIEW",
+                db.queryForObject(
+                        "SELECT outcome FROM fams_inventory_observation WHERE id=?",
+                        String.class,
+                        observation));
+        assertEquals(0, view(task).path("reviewedCount").asInt());
+    }
+
+    @Test
+    void failedSelectionHistoryWriteRollsBackBeforeOriginalRetryAndAcceptedReviewCannotBeReplaced()
+            throws Exception {
+        String task = prepared();
+        var board = view(task);
+        var row = board.path("items").get(0);
+        String item = row.path("item").path("id").asText();
+        String path = "/api/v1/inventory-reviews/tasks/" + task + "/items/" + item + "/selection";
+        var context = ok(request(admin, "GET", path, null, null, null));
+        var input =
+                JSON.createObjectNode()
+                        .put("observationId", row.path("candidate").path("id").asText())
+                        .put("recheckGeneration", 0)
+                        .put("reviewVersion", 0)
+                        .put("assetVersion", 0)
+                        .put("contextDigest", context.path("contextDigest").asText())
+                        .put("reason", "核对正常证据选择")
+                        .put("evidence", "签字原件与现场照片编号明确可追溯");
+        var retimed = input.deepCopy().put("verifiedObservedAt", Instant.now().toString());
+        assertEquals(
+                400,
+                request(
+                                admin,
+                                "POST",
+                                path,
+                                retimed.toString(),
+                                key(),
+                                board.path("task").path("version").asLong())
+                        .statusCode());
+        String originalKey = key();
+        db.execute(
+                "CREATE TRIGGER owned_selection_failure BEFORE INSERT ON"
+                    + " fams_inventory_selection_event FOR EACH ROW SIGNAL SQLSTATE '45000' SET"
+                    + " MESSAGE_TEXT='Owned selection rollback probe'");
+        try {
+            assertEquals(
+                    500,
+                    request(
+                                    admin,
+                                    "POST",
+                                    path,
+                                    input.toString(),
+                                    originalKey,
+                                    context.path("taskVersion").asLong())
+                            .statusCode());
+        } finally {
+            db.execute("DROP TRIGGER owned_selection_failure");
+        }
+        assertEquals(
+                0, count("SELECT COUNT(*) FROM fams_inventory_item_review WHERE task_id=?", task));
+        assertEquals(
+                0,
+                count("SELECT COUNT(*) FROM fams_inventory_selection_event WHERE task_id=?", task));
+        assertEquals(
+                0,
+                count("SELECT COUNT(*) FROM fams_inventory_review_receipt WHERE task_id=?", task));
+        assertEquals(
+                context.path("taskVersion").asLong(),
+                view(task).path("task").path("version").asLong());
+        var selected =
+                ok(
+                        request(
+                                admin,
+                                "POST",
+                                path,
+                                input.toString(),
+                                originalKey,
+                                context.path("taskVersion").asLong()));
+        var before = view(task);
+        var accepted =
+                ok(
+                        review(
+                                admin,
+                                task,
+                                before.path("task").path("version").asLong(),
+                                key(),
+                                batch(before, 1)));
+        assertEquals(1, accepted.path("accepted").asInt());
+        String acceptedItem = before.path("items").get(1).path("item").path("id").asText();
+        String acceptedPath =
+                "/api/v1/inventory-reviews/tasks/" + task + "/items/" + acceptedItem + "/selection";
+        var acceptedContext = ok(request(admin, "GET", acceptedPath, null, null, null));
+        var replacement =
+                input.deepCopy()
+                        .put(
+                                "observationId",
+                                before.path("items").get(1).path("candidate").path("id").asText())
+                        .put("reviewVersion", 1)
+                        .put("contextDigest", acceptedContext.path("contextDigest").asText());
+        assertEquals(
+                409,
+                request(
+                                admin,
+                                "POST",
+                                acceptedPath,
+                                replacement.toString(),
+                                key(),
+                                acceptedContext.path("taskVersion").asLong())
+                        .statusCode());
+        ok(
+                request(
+                        admin,
+                        "POST",
+                        "/api/v1/inventory-tasks/" + task + "/terminate",
+                        "{\"reason\":\"selection terminal replay\"}",
+                        key(),
+                        view(task).path("task").path("version").asLong()));
+        assertEquals(
+                selected,
+                ok(
+                        request(
+                                admin,
+                                "POST",
+                                path,
+                                input.toString(),
+                                originalKey,
+                                context.path("taskVersion").asLong())));
+        db.update(
+                "DELETE FROM fams_account_role WHERE account_id=943001 AND"
+                    + " role_code='ASSET_ADMIN'");
+        assertEquals(
+                403,
+                request(
+                                admin,
+                                "POST",
+                                path,
+                                input.toString(),
+                                originalKey,
+                                context.path("taskVersion").asLong())
+                        .statusCode());
     }
 
     private JsonNode view(String task) throws Exception {
