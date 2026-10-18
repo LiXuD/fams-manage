@@ -829,6 +829,114 @@ class InventoryObservationHttpRuntimeCase {
         }
     }
 
+    @Test
+    void rejectedFactsAndForeignCalibrationLeaveNoObservationOrTaskMutation() throws Exception {
+        String task = prepared();
+        var original = observation(task);
+        var cases = new java.util.ArrayList<tools.jackson.databind.node.ObjectNode>();
+        cases.add(original.deepCopy().put("source", "OTHER"));
+        cases.add(original.deepCopy().put("source", "CODE"));
+        cases.add(original.deepCopy().put("source", "MANUAL").put("manualReason", " "));
+        cases.add(original.deepCopy().put("itemId", "0"));
+        cases.add(original.deepCopy().put("assetVersion", -1));
+        for (String field : java.util.List.of("locationId", "responsibleEmployeeId")) {
+            var invalid = original.deepCopy();
+            ((tools.jackson.databind.node.ObjectNode) invalid.path("actual")).put(field, "0");
+            cases.add(invalid);
+        }
+        for (String condition : java.util.List.of("OTHER", "DAMAGED", "UNKNOWN")) {
+            var invalid = original.deepCopy();
+            ((tools.jackson.databind.node.ObjectNode) invalid.path("actual"))
+                    .put("condition", condition);
+            cases.add(invalid);
+        }
+        for (String custody : java.util.List.of("OTHER", "PERSONAL", "SHARED")) {
+            var invalid = original.deepCopy();
+            ((tools.jackson.databind.node.ObjectNode) invalid.path("actual"))
+                    .put("custodyType", custody);
+            cases.add(invalid);
+        }
+        for (String field : java.util.List.of("locationId", "custodyType")) {
+            var invalid = original.deepCopy();
+            ((tools.jackson.databind.node.ObjectNode) invalid.path("actual")).putNull(field);
+            cases.add(invalid);
+        }
+        var blankReason = original.deepCopy();
+        ((tools.jackson.databind.node.ObjectNode) blankReason.path("actual"))
+                .putNull("locationId").put("unknownReason", " ");
+        cases.add(blankReason);
+        cases.add(original.deepCopy().putNull("itemId"));
+        for (String invalidTime : java.util.List.of("1999-12-31T23:59:59Z",
+                "2100-01-01T00:00:01Z", "2026-10-16T00:00:00.000001Z")) {
+            cases.add(original.deepCopy().put("rawObservedAt", invalidTime));
+        }
+        cases.add(original.deepCopy().put("calibrationId", key()));
+        for (var invalid : cases) {
+            var response = observe(employee, task, invalid);
+            assertEquals(400, response.statusCode(), response.body());
+        }
+        var foreignPerson = original.deepCopy();
+        ((tools.jackson.databind.node.ObjectNode) foreignPerson.path("actual"))
+                .put("responsibleEmployeeId", "933003");
+        assertEquals(403, observe(employee, task, foreignPerson).statusCode());
+        var foreignDevice = original.deepCopy().put("deviceId", key());
+        assertEquals(403, observe(employee, task, foreignDevice).statusCode());
+        String foreignCalibration = ok(observationCall(other, "/calibrations",
+                "{\"deviceId\":\"" + original.path("deviceId").asText()
+                        + "\",\"clientTime\":\"" + original.path("firstPersistedAt").asText()
+                        + "\"}")).path("calibrationId").asText();
+        assertEquals(403, observe(employee, task,
+                original.deepCopy().put("calibrationId", foreignCalibration)).statusCode());
+        assertEquals(403, observe(admin, task, original).statusCode());
+        var unauthorizedPhoto = original.deepCopy();
+        unauthorizedPhoto.putArray("photoIds").add(key());
+        assertEquals(403, observe(employee, task, unauthorizedPhoto).statusCode());
+        var duplicatePhoto = original.deepCopy();
+        String photo = key();
+        duplicatePhoto.putArray("photoIds").add(photo).add(photo);
+        assertEquals(400, observe(employee, task, duplicatePhoto).statusCode());
+        assertEquals(0, db.queryForObject(
+                "SELECT COUNT(*) FROM fams_inventory_observation WHERE task_id=?",
+                Integer.class, task));
+        assertEquals(0L, db.queryForObject(
+                "SELECT captured_result_count FROM fams_inventory_task WHERE id=?",
+                Long.class, task));
+        assertEquals(3L, db.queryForObject(
+                "SELECT version FROM fams_inventory_task WHERE id=?", Long.class, task));
+        assertEquals(0L, db.queryForObject(
+                "SELECT SUM(result_count) FROM fams_inventory_item WHERE task_id=?",
+                Long.class, task));
+    }
+
+    @Test
+    void identityLookupSeparatesMalformedUnknownOutsideAndOtherExecutors() throws Exception {
+        String task = prepared();
+        String suffix = "/tasks/" + task + "/identification";
+        for (String[] lookup : new String[][] {
+            {"SCAN", "broken-label", "INVALID_TAG"},
+            {"SCAN", "A".repeat(43), "UNVERIFIED"},
+            {"CODE", "INV-DRAFT", "UNVERIFIED"},
+            {"CODE", "missing", "UNVERIFIED"},
+            {"CODE", "INV-ASSET-933011", "NOT_ASSIGNED"},
+            {"CODE", "INV-ASSET-933010", "ASSIGNED"}
+        }) {
+            var body = JSON.createObjectNode().put("source", lookup[0]).put("value", lookup[1]);
+            var result = ok(observationCall(employee, suffix, JSON.writeValueAsString(body)));
+            assertEquals(lookup[2], result.path("kind").asText());
+            if (!"ASSIGNED".equals(lookup[2])) {
+                assertTrue(result.path("snapshot").isMissingNode());
+            }
+        }
+        String outside = create(Instant.now().plusSeconds(3600)).path("id").asText();
+        var result = ok(observationCall(admin, "/tasks/" + outside + "/identification",
+                "{\"source\":\"CODE\",\"value\":\"INV-ASSET-933010\"}"));
+        assertEquals("TASK_OUTSIDE", result.path("kind").asText());
+        assertTrue(result.path("snapshot").isMissingNode());
+        assertEquals(0, db.queryForObject(
+                "SELECT COUNT(*) FROM fams_inventory_observation WHERE task_id=?",
+                Integer.class, task));
+    }
+
     private HttpResponse<String> uploadPhoto(
             Session actor, String task, JsonNode event, String key, byte[] bytes) throws Exception {
         String boundary = "famsInventoryPhotoBoundary";
