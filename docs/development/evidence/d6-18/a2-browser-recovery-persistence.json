@@ -1,0 +1,41 @@
+{
+  "links": 1,
+  "todos": 1,
+  "reviews": 0,
+  "subjects": 2,
+  "decisions": 1,
+  "transfers": 1,
+  "processing": 1,
+  "activeLocks": 1,
+  "datesChanged": 0,
+  "observations": 3,
+  "openConflicts": 1,
+  "versionsChanged": 0,
+  "source_state": "D6-18A2 working tree after 81c827a; not fixed gate",
+  "artifact_sha256": "eed41e1f5277554e37aec695673ab0a002ce4ba0b77a11fe3eb6ebc4c02a8e32",
+  "task_id": "1",
+  "new_jvm_replay_original": true,
+  "new_jvm_duplicate_transfers": 0,
+  "original_pc_session_recovered": true,
+  "browser_steps": [
+    "fixture administrator login",
+    "open first asset original evidence",
+    "explicitly prepare independent differences",
+    "select LOCATION only",
+    "choose formal transfer, target warehouse and second bin, reason and evidence",
+    "confirm joint action",
+    "verify LOCATION PROCESSING while CONFLICT OPEN",
+    "open linked official request in pending approval"
+  ],
+  "cleanup": "Owned Vite, JVM, MySQL container and volume removed; launcher exit 0",
+  "limitations": [
+    "working tree proof, not fixed candidate gate",
+    "official approval/warehouse completion separately proved by real HTTP tests",
+    "mini UI and wider evidence selection, sealing, dependent loss closure remain open"
+  ],
+  "screenshots": {
+    "output/playwright/d6-18-a2-formal-pending-approval.png": "bdbf3c3424b370b40645699b11aea174f4e5c8b2da33233947292f24796613ac",
+    "output/playwright/d6-18-a2-linked-processing.png": "4ff26a3f0885e2bbe3f627496c8a3bef09fa4d3be8b5e1f589cc6c9c0600bd44",
+    "output/playwright/d6-18-a2-independent-dimensions.png": "065160f8455f5f397b9e1c81694f6e2987b06e0ae3d995c5ef5d5438f3870d82"
+  }
+}

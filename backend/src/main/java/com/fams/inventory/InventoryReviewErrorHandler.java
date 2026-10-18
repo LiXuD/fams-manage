@@ -14,7 +14,7 @@ import java.util.UUID;
 
 @Profile("fams-product")
 @Order(-3)
-@RestControllerAdvice(assignableTypes = InventoryReviewController.class)
+@RestControllerAdvice(assignableTypes = {InventoryReviewController.class, InventoryDifferenceController.class})
 class InventoryReviewErrorHandler {
     @ExceptionHandler(InventoryReviewConflict.class)
     ResponseEntity<ErrorResponse> conflict(InventoryReviewConflict failure, HttpServletRequest request) {

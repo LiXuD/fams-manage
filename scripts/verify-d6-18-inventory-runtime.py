@@ -43,6 +43,7 @@ def main():
                 D6_04_TEST_DATASOURCE_URL=f"jdbc:mysql://127.0.0.1:{port}/{database}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",
                 D6_04_TEST_DATASOURCE_USERNAME="d6_04_runtime", D6_04_TEST_DATASOURCE_PASSWORD=password)
             for flag, selection in [("d6.18.inventory.upgrade.runtime", "InventoryReviewUpgradeRuntimeCase"),
+                                    ("d6.18.inventory.difference.upgrade.runtime", "InventoryDifferenceUpgradeRuntimeCase"),
                                     ("d6.18.inventory.runtime", "InventoryReviewHttpRuntimeCase")]:
                 run(["./mvnw", "-pl", "backend", "-Pquality", "-D" + flag + "=true",  "-Dtest=" + selection, "test"], timeout=600)
                 report = ROOT / "backend/target/surefire-reports" / ("TEST-com.fams.auth." + selection.split("#")[0] + ".xml")
