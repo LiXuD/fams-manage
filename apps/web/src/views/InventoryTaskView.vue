@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
+import InventoryReviewPanel from "@/views/InventoryReviewPanel.vue";
 import { LoanApiError, loanMessage, loanRequest, type LoanMutation } from "@/loan/api";
 import { useSessionStore } from "@/auth/sessionStore";
 
@@ -149,6 +150,7 @@ onMounted(async () => {
         <template v-if="['READY','IN_PROGRESS'].includes(detail.task.task_status)"><button :disabled="!reason.trim()" @click="action('cancel')">取消无结果任务</button><button :disabled="!reason.trim()" @click="action('terminate')">终止并保留结果</button>
           <label>主执行人<select v-model="executor"><option value="">请选择</option><option v-for="e in executors" :key="e.id" :value="e.id">{{ e.name }}</option></select></label><label><input v-model="recheck" type="checkbox">明确发起复盘（保留既有结果）</label><button :disabled="!selectedItems.length || !executor || !reason.trim()" @click="assign">分配所选应盘项</button></template>
       </fieldset>
+      <InventoryReviewPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="detail.task.id" :task-id="detail.task.id" @changed="refresh" />
       <table><thead><tr><th v-if="admin">选择</th><th>资产</th><th>账面位置</th><th>账面责任</th><th>分配版本</th></tr></thead><tbody><tr v-for="i in detail.items" :key="i.id"><td v-if="admin"><input v-model="selectedItems" type="checkbox" :value="i.id" :disabled="locked || !['READY','IN_PROGRESS'].includes(detail.task.task_status)"></td><td>{{ i.snapshot_json.assetCode }} · {{ i.snapshot_json.name }}</td><td>{{ i.snapshot_json.locationName }}</td><td>{{ i.snapshot_json.responsibleEmployeeName ?? i.snapshot_json.departmentResponsibleEmployeeName ?? '仓库保管' }}</td><td>{{ i.assignment_version }}</td></tr></tbody></table>
       <button :disabled="locked || itemPage === 1" @click="pages(-1, true)">上页应盘项</button>{{ itemPage }} / {{ Math.max(1, Math.ceil(detail.total / 20)) }}<button :disabled="locked || itemPage * 20 >= detail.total" @click="pages(1, true)">下页应盘项</button>
     </section>

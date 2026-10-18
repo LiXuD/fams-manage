@@ -1,0 +1,29 @@
+{
+  "receipts": 1,
+  "reviewed": 2,
+  "activeLocks": 0,
+  "datesChanged": 0,
+  "observations": 2,
+  "normalSubjects": 2,
+  "versionsChanged": 0,
+  "source_state": "D6-18A1 working tree after 822d980; not fixed gate",
+  "artifact_sha256": "b12227d8b4c83b8ad6a4c47c3838a9f06747aa84e4147bf0b84771205036bb41",
+  "task_id": "1",
+  "browser_steps": [
+    "login fixture account",
+    "open task via navigation",
+    "select two normal observations",
+    "confirm acceptance",
+    "visible accepted 2 of 2 and reviewer"
+  ],
+  "fixture_encoding": "utf8mb4 SQL client; Chinese names rendered correctly in repeat browser run",
+  "limitations": [
+    "working tree proof, not fixed candidate gate",
+    "difference decisions, sealing and loss follow-up remain open"
+  ],
+  "cleanup": "owned application, Vite, MySQL container and volume removed; runtime exit 0",
+  "screenshots": {
+    "output/playwright/d6-18-normal-accepted-utf8-summary.png": "6c4b000a88e52bf1c6a251d5aaee5f53e5db0641c049e50fe2e8c719a9e02c1d",
+    "output/playwright/d6-18-normal-accepted-utf8.png": "6ffa7935de1bc66771a10277bc137ac17dd56968e41f2bc72189c4a05f288483"
+  }
+}
