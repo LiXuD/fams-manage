@@ -1,0 +1,22 @@
+{
+  "candidate_commit": "744032a54c4d8dc8336aa3b2e78a03b5767dc24e",
+  "comparison_base": "d2a4baf36a63b7d9992a82327104808f4e18867e",
+  "recorded_at_utc": "2026-10-18T03:21:34.419714+00:00",
+  "full_product_gate_exit": 0,
+  "java_tests": 217,
+  "checkstyle_findings": 0,
+  "spotbugs_findings": 0,
+  "line_covered": 11733,
+  "line_total": 12623,
+  "branch_covered": 4245,
+  "branch_total": 5611,
+  "web_tests": 32,
+  "web_json_success": true,
+  "mini_tests": 84,
+  "lint_type_build_dependency_integrity": "PASS",
+  "application_restart_database_restart": "PASS",
+  "owned_runtime_cleanup_clean_worktree": "PASS",
+  "independent_review": "PENDING",
+  "real_wechat_https_sms_camera_device_weak_network": "NOT_VERIFIED",
+  "remote_ci_formal_qa_production": "NOT_VERIFIED"
+}

@@ -1,6 +1,6 @@
 # D6-17 开发运行证据
 
-工作区定向证据，最终固定候选统一门禁仍待执行；父项保持IN_PROGRESS。
+最终功能候选744032a54c4d8dc8336aa3b2e78a03b5767dc24e已完成统一产品门禁，A/B材料送审、C真机外部联调仍待，父项开放。下文定向与失败记录保留其原候选边界，最新结论见文末。
 
 ## 实际链路
 
@@ -44,3 +44,10 @@ M12新增从账号首页及任务页直接进入的本机待上传与回执总�
 
 
 最终工作树定向升级1及HTTP14项全部通过：[完整运行](evidence/d6-17/final-development-runtime.txt)、[摘要](evidence/d6-17/final-development-runtime-summary.txt)。包含已清理照片后的明确EXPIRED，以及过期/未过期且空photoIds的跨执行人范围拒绝；拒绝后他人照片仍可用、删除任务及观察均未增加。原生生产处理器的两次强制退出与原事件恢复也在本轮重跑通过。本轮运行专用数据库、容器及本机临时证据已精确清理。固定新候选完整门禁尚待执行。
+
+
+## 2026-10-18 最终固定候选门禁与送审
+
+744032a54c4d8dc8336aa3b2e78a03b5767dc24e完整产品门禁退出0：Java217、Checkstyle/SpotBugs 0、行92.95%/分支75.65%、Web32、mini84；lint/类型/双端构建/依赖/应用与MySQL重启恢复及精确清理、干净工作区均通过。[完整门禁](evidence/d6-17/product-gate-744032a.txt)、[机器摘要](evidence/d6-17/product-gate-744032a.json)、[独立复核材料](2026-10-18-d6-17-independent-review-pack.md)。Web输出解析回退已核实际Vitest JSON32/32零失败跳过。
+
+本地实现与内部开发验证完成；独立复核、真机外部联调、远端CI、正式QA及生产未完成。A/B材料IN_REVIEW，C外部部分仍IN_PROGRESS、父项开放；继续同G3内部开发D6-18不代表已验收D6-17。
