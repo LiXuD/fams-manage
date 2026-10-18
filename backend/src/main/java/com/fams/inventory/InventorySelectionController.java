@@ -54,4 +54,41 @@ class InventorySelectionController {
             @Valid @RequestBody InventorySelectionInput input) {
         return selections.select(actors.capture(), task, item, version, key, input);
     }
+
+    @GetMapping("/tasks/{task}/items/{item}/evidence-subjects")
+    Map<String, Object> subjects(
+            @PathVariable @Positive long task,
+            @PathVariable @Positive long item,
+            @RequestParam @Positive long observationId) {
+        return selections.evidenceSubjects(actors.capture(), task, item, observationId);
+    }
+
+    @GetMapping("/tasks/{task}/items/{item}/evidence-dispositions")
+    Map<String, Object> dispositions(
+            @PathVariable @Positive long task,
+            @PathVariable @Positive long item,
+            @RequestParam(defaultValue = "1") @Min(1) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
+        return selections.dispositions(actors.capture(), task, item, page, pageSize);
+    }
+
+    @PostMapping("/tasks/{task}/items/{item}/evidence-decisions")
+    Map<String, Object> decide(
+            @PathVariable @Positive long task,
+            @PathVariable @Positive long item,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @Valid @RequestBody InventoryEvidenceInput.Decision input) {
+        return selections.decideEvidence(actors.capture(), task, item, version, key, input);
+    }
+
+    @PostMapping("/tasks/{task}/items/{item}/acceptance")
+    Map<String, Object> accept(
+            @PathVariable @Positive long task,
+            @PathVariable @Positive long item,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @Valid @RequestBody InventoryEvidenceInput.Acceptance input) {
+        return selections.acceptSelected(actors.capture(), task, item, version, key, input);
+    }
 }

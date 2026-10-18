@@ -150,6 +150,9 @@ class InventoryReviewHttpRuntimeCase {
     @AfterEach
     void cleanup() {
         db.update(
+                "DELETE FROM fams_inventory_evidence_disposition WHERE actor_account_id BETWEEN"
+                        + " 943001 AND 943005");
+        db.update(
                 "DELETE FROM fams_inventory_selection_event WHERE actor_account_id BETWEEN 943001"
                         + " AND 943005");
         db.update(
@@ -1189,8 +1192,8 @@ class InventoryReviewHttpRuntimeCase {
         String originalKey = key();
         db.execute(
                 "CREATE TRIGGER owned_selection_failure BEFORE INSERT ON"
-                    + " fams_inventory_selection_event FOR EACH ROW SIGNAL SQLSTATE '45000' SET"
-                    + " MESSAGE_TEXT='Owned selection rollback probe'");
+                        + " fams_inventory_selection_event FOR EACH ROW SIGNAL SQLSTATE '45000' SET"
+                        + " MESSAGE_TEXT='Owned selection rollback probe'");
         try {
             assertEquals(
                     500,
@@ -1276,7 +1279,7 @@ class InventoryReviewHttpRuntimeCase {
                                 context.path("taskVersion").asLong())));
         db.update(
                 "DELETE FROM fams_account_role WHERE account_id=943001 AND"
-                    + " role_code='ASSET_ADMIN'");
+                        + " role_code='ASSET_ADMIN'");
         assertEquals(
                 403,
                 request(
@@ -1287,6 +1290,571 @@ class InventoryReviewHttpRuntimeCase {
                                 originalKey,
                                 context.path("taskVersion").asLong())
                         .statusCode());
+    }
+
+    @Test
+    void counterevidenceClosesEveryRejectedDimensionBeforeConcurrentFinalAcceptance()
+            throws Exception {
+        String task = differenceTask(false);
+        var source = view(task).path("items").get(0);
+        String item = source.path("item").path("id").asText();
+        String originalObservation = source.path("candidate").path("id").asText();
+        String bad =
+                db.queryForObject(
+                        "SELECT CAST(id AS CHAR) FROM fams_inventory_observation WHERE task_id=?"
+                                + " AND outcome='CONFLICT_REVIEW'",
+                        String.class,
+                        task);
+        var raw =
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_observation WHERE task_id=? ORDER BY id",
+                        task);
+        chooseEvidence(task, item, originalObservation, null);
+        prepareAll(task);
+        String base = "/api/v1/inventory-reviews/tasks/" + task + "/items/" + item;
+        var acceptance = evidenceAcceptance(task, item);
+        assertEquals(
+                409,
+                request(
+                                admin,
+                                "POST",
+                                base + "/acceptance",
+                                acceptance.toString(),
+                                key(),
+                                taskVersion(task))
+                        .statusCode());
+        var verify = evidenceDecision(task, item, originalObservation, "VERIFY_SELECTED");
+        long verifyVersion = taskVersion(task);
+        ok(
+                request(
+                        other,
+                        "POST",
+                        base + "/evidence-decisions",
+                        verify.toString(),
+                        key(),
+                        taskVersion(task)));
+        var staleVerification =
+                request(
+                        admin,
+                        "POST",
+                        base + "/evidence-decisions",
+                        verify.toString(),
+                        key(),
+                        verifyVersion);
+        assertEquals(409, staleVerification.statusCode());
+        assertEquals(
+                "review3",
+                JSON.readTree(staleVerification.body())
+                        .path("fieldErrors")
+                        .path("processedBy")
+                        .asText());
+        assertEquals(
+                "VERIFY_SELECTED",
+                JSON.readTree(staleVerification.body())
+                        .path("fieldErrors")
+                        .path("method")
+                        .asText());
+        var rejection = evidenceDecision(task, item, bad, "REJECT_EVIDENCE");
+        var incomplete = rejection.deepCopy();
+        incomplete.putArray("subjects").add(rejection.path("subjects").get(0));
+        assertEquals(
+                409,
+                request(
+                                admin,
+                                "POST",
+                                base + "/evidence-decisions",
+                                incomplete.toString(),
+                                key(),
+                                taskVersion(task))
+                        .statusCode());
+        String originalKey = key();
+        long version = taskVersion(task);
+        db.execute(
+                "CREATE TRIGGER owned_disposition_failure BEFORE INSERT ON"
+                    + " fams_inventory_evidence_disposition FOR EACH ROW SIGNAL SQLSTATE '45000'"
+                    + " SET MESSAGE_TEXT='Owned disposition rollback probe'");
+        try {
+            assertEquals(
+                    500,
+                    request(
+                                    admin,
+                                    "POST",
+                                    base + "/evidence-decisions",
+                                    rejection.toString(),
+                                    originalKey,
+                                    version)
+                            .statusCode());
+        } finally {
+            db.execute("DROP TRIGGER owned_disposition_failure");
+        }
+        assertEquals(
+                0,
+                count(
+                        "SELECT COUNT(*) FROM fams_inventory_evidence_disposition WHERE task_id=?",
+                        task));
+        assertEquals(
+                1,
+                count("SELECT COUNT(*) FROM fams_inventory_review_decision WHERE task_id=?", task));
+        assertEquals(
+                2,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_inventory_review_subject WHERE observation_id=?"
+                                + " AND subject_status='OPEN'",
+                        Integer.class,
+                        bad));
+        var rejected =
+                ok(
+                        request(
+                                admin,
+                                "POST",
+                                base + "/evidence-decisions",
+                                rejection.toString(),
+                                originalKey,
+                                version));
+        assertEquals(
+                rejected,
+                ok(
+                        request(
+                                admin,
+                                "POST",
+                                base + "/evidence-decisions",
+                                rejection.toString(),
+                                originalKey,
+                                version)));
+        var selection = selectionView(task, item);
+        var change =
+                JSON.createObjectNode()
+                        .put("observationId", bad)
+                        .put("recheckGeneration", 0)
+                        .put("reviewVersion", 1)
+                        .put("assetVersion", 0)
+                        .put("contextDigest", selection.path("contextDigest").asText())
+                        .put("reason", "试图覆盖已生效反证")
+                        .put("evidence", "原始选择已经作为最终反证依据使用");
+        assertEquals(
+                409,
+                request(
+                                admin,
+                                "POST",
+                                base + "/selection",
+                                change.toString(),
+                                key(),
+                                taskVersion(task))
+                        .statusCode());
+        acceptance = evidenceAcceptance(task, item);
+        final String body = acceptance.toString();
+        final long expected = taskVersion(task);
+        try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var first =
+                    executor.submit(
+                            () ->
+                                    request(
+                                            admin,
+                                            "POST",
+                                            base + "/acceptance",
+                                            body,
+                                            key(),
+                                            expected));
+            var second =
+                    executor.submit(
+                            () ->
+                                    request(
+                                            other,
+                                            "POST",
+                                            base + "/acceptance",
+                                            body,
+                                            key(),
+                                            expected));
+            var replies = java.util.List.of(first.get(), second.get());
+            assertEquals(1, replies.stream().filter(reply -> reply.statusCode() == 200).count());
+            assertEquals(1, replies.stream().filter(reply -> reply.statusCode() == 409).count());
+            var lost =
+                    JSON.readTree(
+                            replies.stream()
+                                    .filter(reply -> reply.statusCode() == 409)
+                                    .findFirst()
+                                    .orElseThrow()
+                                    .body());
+            assertTrue(
+                    java.util.List.of("review1", "review3")
+                            .contains(lost.path("fieldErrors").path("processedBy").asText()));
+        }
+        assertEquals(1, view(task).path("reviewedCount").asInt());
+        assertEquals(
+                2,
+                count("SELECT COUNT(*) FROM fams_inventory_selection_event WHERE task_id=?", task));
+        assertEquals(
+                1,
+                count(
+                        "SELECT COUNT(*) FROM fams_inventory_evidence_disposition WHERE task_id=?",
+                        task));
+        assertEquals(
+                3,
+                count("SELECT COUNT(*) FROM fams_inventory_review_decision WHERE task_id=?", task));
+        assertEquals(
+                raw,
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_observation WHERE task_id=? ORDER BY id",
+                        task));
+        assertEquals(
+                0,
+                count(
+                        "SELECT COUNT(*) FROM fams_asset WHERE id IN (943010,943011) AND"
+                                + " last_inventory_business_date IS NOT NULL",
+                        null));
+        var dispositions =
+                ok(request(admin, "GET", base + "/evidence-dispositions", null, null, null));
+        assertEquals("REJECTED", dispositions.path("items").get(0).path("disposition").asText());
+    }
+
+    @Test
+    void supplementalEvidenceCannotEraseProcessingFormalBusinessOrBypassItsPhysicalDimension()
+            throws Exception {
+        String task = differenceTask(false);
+        var source = view(task).path("items").get(0);
+        String item = source.path("item").path("id").asText();
+        String chosen = source.path("candidate").path("id").asText();
+        String bad =
+                db.queryForObject(
+                        "SELECT CAST(id AS CHAR) FROM fams_inventory_observation WHERE task_id=?"
+                                + " AND outcome='CONFLICT_REVIEW'",
+                        String.class,
+                        task);
+        chooseEvidence(task, item, chosen, null);
+        prepareAll(task);
+        String transferBody = differenceBody(differences(task), "FORMAL_TRANSFER", "LOCATION");
+        var transferInput = (tools.jackson.databind.node.ObjectNode) JSON.readTree(transferBody);
+        transferInput.set(
+                "transferTarget",
+                JSON.readTree(
+                        "{\"owningOrganizationId\":null,\"custodyType\":\"STORAGE\",\"usingOrganizationId\":null,\"employeeId\":null,\"warehouseId\":\"943000\",\"locationId\":\"943099\",\"referenceVersions\":{\"warehouse\":0,\"location\":0}}"));
+        ok(difference(admin, task, taskVersion(task), key(), transferInput.toString()));
+        String base = "/api/v1/inventory-reviews/tasks/" + task + "/items/" + item;
+        var rejected = evidenceDecision(task, item, bad, "REJECT_EVIDENCE");
+        assertEquals(
+                409,
+                request(
+                                admin,
+                                "POST",
+                                base + "/evidence-decisions",
+                                rejected.toString(),
+                                key(),
+                                taskVersion(task))
+                        .statusCode());
+        var supplemental = evidenceDecision(task, item, bad, "SUPPLEMENTAL");
+        ok(
+                request(
+                        admin,
+                        "POST",
+                        base + "/evidence-decisions",
+                        supplemental.toString(),
+                        key(),
+                        taskVersion(task)));
+        assertEquals(
+                "PROCESSING",
+                db.queryForObject(
+                        "SELECT subject_status FROM fams_inventory_review_subject WHERE"
+                                + " observation_id=? AND dimension='LOCATION'",
+                        String.class,
+                        bad));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_inventory_review_transfer", null));
+        var verify = evidenceDecision(task, item, chosen, "VERIFY_SELECTED");
+        ok(
+                request(
+                        admin,
+                        "POST",
+                        base + "/evidence-decisions",
+                        verify.toString(),
+                        key(),
+                        taskVersion(task)));
+        assertEquals(
+                409,
+                request(
+                                admin,
+                                "POST",
+                                base + "/acceptance",
+                                evidenceAcceptance(task, item).toString(),
+                                key(),
+                                taskVersion(task))
+                        .statusCode());
+        assertEquals(0, view(task).path("reviewedCount").asInt());
+    }
+
+    @Test
+    void verifiedObservationTimeCannotInventFirstPersistenceOrResetItsOriginalRetention()
+            throws Exception {
+        String task = prepared();
+        var timed = observation(task, 943010).put("clockAnomaly", true);
+        assertEquals("TIME_REVIEW", ok(observe(task, timed)).path("outcome").asText());
+        String item = timed.path("itemId").asText();
+        String raw =
+                db.queryForObject(
+                        "SELECT CAST(id AS CHAR) FROM fams_inventory_observation WHERE task_id=?"
+                                + " AND client_event_id=?",
+                        String.class,
+                        task,
+                        timed.path("eventId").asText());
+        chooseEvidence(task, item, raw, timed.path("rawObservedAt").asText());
+        prepareAll(task);
+        var verification = evidenceDecision(task, item, raw, "VERIFY_SELECTED");
+        String base = "/api/v1/inventory-reviews/tasks/" + task + "/items/" + item;
+        var failed =
+                request(
+                        admin,
+                        "POST",
+                        base + "/evidence-decisions",
+                        verification.toString(),
+                        key(),
+                        taskVersion(task));
+        assertEquals(409, failed.statusCode());
+        assertEquals(
+                "INVENTORY_REVIEW_RECOLLECTION_REQUIRED",
+                JSON.readTree(failed.body()).path("code").asText());
+        assertEquals(0, view(task).path("reviewedCount").asInt());
+        assertEquals(
+                0,
+                count("SELECT COUNT(*) FROM fams_inventory_review_decision WHERE task_id=?", task));
+        assertEquals(
+                0,
+                count(
+                        "SELECT COUNT(*) FROM fams_inventory_evidence_disposition WHERE task_id=?",
+                        task));
+    }
+
+    @Test
+    void finalAcceptanceFailureRollsBackProjectionHistoryAndReceiptBeforeTerminalOriginalReplay()
+            throws Exception {
+        String task = prepared();
+        var source = view(task).path("items").get(1);
+        String item = source.path("item").path("id").asText();
+        chooseEvidence(task, item, source.path("candidate").path("id").asText(), null);
+        String path = "/api/v1/inventory-reviews/tasks/" + task + "/items/" + item + "/acceptance";
+        var input = evidenceAcceptance(task, item);
+        long version = taskVersion(task);
+        String originalKey = key();
+        assertEquals(
+                403,
+                request(system, "POST", path, input.toString(), originalKey, version).statusCode());
+        assertEquals(
+                409,
+                request(
+                                admin,
+                                "POST",
+                                path,
+                                input.deepCopy().put("assetVersion", 99).toString(),
+                                key(),
+                                version)
+                        .statusCode());
+        assertEquals(
+                409,
+                request(
+                                admin,
+                                "POST",
+                                path,
+                                input.deepCopy().put("recheckGeneration", 1).toString(),
+                                key(),
+                                version)
+                        .statusCode());
+        assertEquals(
+                409,
+                request(
+                                admin,
+                                "POST",
+                                path,
+                                input.deepCopy().put("contextDigest", "0".repeat(64)).toString(),
+                                key(),
+                                version)
+                        .statusCode());
+        db.execute(
+                "CREATE TRIGGER owned_acceptance_failure BEFORE INSERT ON"
+                        + " fams_inventory_selection_event FOR EACH ROW SIGNAL SQLSTATE '45000' SET"
+                        + " MESSAGE_TEXT='Owned final acceptance rollback probe'");
+        try {
+            assertEquals(
+                    500,
+                    request(admin, "POST", path, input.toString(), originalKey, version)
+                            .statusCode());
+        } finally {
+            db.execute("DROP TRIGGER owned_acceptance_failure");
+        }
+        assertEquals(
+                "SELECTED",
+                selectionView(task, item).path("review").path("review_status").asText());
+        assertEquals(
+                1,
+                count("SELECT COUNT(*) FROM fams_inventory_selection_event WHERE task_id=?", task));
+        assertEquals(
+                0,
+                count(
+                        "SELECT COUNT(*) FROM fams_inventory_review_receipt WHERE task_id=? AND"
+                                + " operation='ACCEPT_SELECTED'",
+                        task));
+        assertEquals(version, taskVersion(task));
+        var accepted = ok(request(admin, "POST", path, input.toString(), originalKey, version));
+        assertEquals("ACCEPTED", accepted.path("review").path("review_status").asText());
+        assertEquals(
+                accepted, ok(request(admin, "POST", path, input.toString(), originalKey, version)));
+        assertEquals(
+                409,
+                request(
+                                admin,
+                                "POST",
+                                path,
+                                input.deepCopy().put("reason", "不同载荷不得借用原请求").toString(),
+                                originalKey,
+                                version)
+                        .statusCode());
+        ok(
+                request(
+                        admin,
+                        "POST",
+                        "/api/v1/inventory-tasks/" + task + "/terminate",
+                        "{\"reason\":\"retained final acceptance receipt\"}",
+                        key(),
+                        taskVersion(task)));
+        assertEquals(
+                accepted, ok(request(admin, "POST", path, input.toString(), originalKey, version)));
+        db.update(
+                "DELETE FROM fams_account_role WHERE account_id=943001 AND"
+                        + " role_code='ASSET_ADMIN'");
+        assertEquals(
+                403,
+                request(admin, "POST", path, input.toString(), originalKey, version).statusCode());
+    }
+
+    @Test
+    void priorDispositionReturnsItsActualAdministratorBeforeStaleTaskAndDimensionVersions()
+            throws Exception {
+        String task = differenceTask(false);
+        var row = view(task).path("items").get(0);
+        String item = row.path("item").path("id").asText();
+        chooseEvidence(task, item, row.path("candidate").path("id").asText(), null);
+        prepareAll(task);
+        String observation =
+                db.queryForObject(
+                        "SELECT CAST(id AS CHAR) FROM fams_inventory_observation WHERE task_id=?"
+                            + " AND outcome='CONFLICT_REVIEW'",
+                        String.class,
+                        task);
+        String path =
+                "/api/v1/inventory-reviews/tasks/"
+                        + task
+                        + "/items/"
+                        + item
+                        + "/evidence-decisions";
+        var input = evidenceDecision(task, item, observation, "REJECT_EVIDENCE");
+        long before = taskVersion(task);
+        ok(request(other, "POST", path, input.toString(), key(), before));
+        var lost = request(admin, "POST", path, input.toString(), key(), before);
+        assertEquals(409, lost.statusCode());
+        var fields = JSON.readTree(lost.body()).path("fieldErrors");
+        assertEquals("review3", fields.path("processedBy").asText());
+        assertEquals("REJECT_EVIDENCE", fields.path("method").asText());
+        assertEquals("REJECTED", fields.path("result").asText());
+        assertTrue(fields.path("readOnlyUrl").asText().endsWith("/evidence-dispositions"));
+        assertEquals(
+                1,
+                count(
+                        "SELECT COUNT(*) FROM fams_inventory_evidence_disposition WHERE task_id=?",
+                        task));
+        assertEquals(
+                2,
+                count("SELECT COUNT(*) FROM fams_inventory_review_decision WHERE task_id=?", task));
+    }
+
+    private long taskVersion(String task) throws Exception {
+        return view(task).path("task").path("version").asLong();
+    }
+
+    private JsonNode selectionView(String task, String item) throws Exception {
+        return ok(
+                request(
+                        admin,
+                        "GET",
+                        "/api/v1/inventory-reviews/tasks/" + task + "/items/" + item + "/selection",
+                        null,
+                        null,
+                        null));
+    }
+
+    private void chooseEvidence(String task, String item, String observation, String verifiedTime)
+            throws Exception {
+        var selection = selectionView(task, item);
+        var input =
+                JSON.createObjectNode()
+                        .put("observationId", observation)
+                        .put("recheckGeneration", selection.path("recheckGeneration").asLong())
+                        .put("reviewVersion", selection.path("review").path("version").asLong())
+                        .put("assetVersion", 0)
+                        .put("contextDigest", selection.path("contextDigest").asText())
+                        .put("reason", "明确核对后选择本轮证据")
+                        .put("evidence", "现场独立签字原件及实物标识逐项核对记录");
+        if (verifiedTime != null) {
+            input.put("verifiedObservedAt", verifiedTime);
+        }
+        ok(
+                request(
+                        admin,
+                        "POST",
+                        "/api/v1/inventory-reviews/tasks/" + task + "/items/" + item + "/selection",
+                        input.toString(),
+                        key(),
+                        selection.path("taskVersion").asLong()));
+    }
+
+    private void prepareAll(String task) throws Exception {
+        var input = JSON.createObjectNode();
+        var ids = input.putArray("observationIds");
+        for (var row :
+                db.queryForList(
+                        "SELECT CAST(id AS CHAR) AS id FROM fams_inventory_observation WHERE"
+                                + " task_id=? ORDER BY id",
+                        task)) {
+            ids.add(row.get("id").toString());
+        }
+        ok(
+                request(
+                        admin,
+                        "POST",
+                        "/api/v1/inventory-reviews/tasks/" + task + "/differences/preparation",
+                        input.toString(),
+                        key(),
+                        taskVersion(task)));
+    }
+
+    private tools.jackson.databind.node.ObjectNode evidenceAcceptance(String task, String item)
+            throws Exception {
+        var selection = selectionView(task, item);
+        return JSON.createObjectNode()
+                .put("recheckGeneration", selection.path("recheckGeneration").asLong())
+                .put("reviewVersion", selection.path("review").path("version").asLong())
+                .put("assetVersion", 0)
+                .put("contextDigest", selection.path("contextDigest").asText())
+                .put("reason", "所有独立差异已经逐项核对")
+                .put("evidence", "最终核对原始观察和每项决定及反证签字记录");
+    }
+
+    private tools.jackson.databind.node.ObjectNode evidenceDecision(
+            String task, String item, String observation, String method) throws Exception {
+        var input =
+                evidenceAcceptance(task, item)
+                        .put("observationId", observation)
+                        .put("method", method);
+        var subjects = input.putArray("subjects");
+        for (var row :
+                db.queryForList(
+                        "SELECT dimension,version FROM fams_inventory_review_subject WHERE"
+                                + " observation_id=? ORDER BY dimension",
+                        observation)) {
+            if (!method.equals("VERIFY_SELECTED")
+                    || java.util.List.of("CONFLICT", "OLD_ASSIGNMENT", "TIME")
+                            .contains(row.get("dimension"))) {
+                subjects.addObject()
+                        .put("dimension", row.get("dimension").toString())
+                        .put("version", ((Number) row.get("version")).longValue());
+            }
+        }
+        return input;
     }
 
     private JsonNode view(String task) throws Exception {

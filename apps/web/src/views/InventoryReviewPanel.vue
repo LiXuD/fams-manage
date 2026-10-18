@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import InventoryEvidenceDecisionPanel from "@/views/InventoryEvidenceDecisionPanel.vue";
 import InventorySelectionPanel from "@/views/InventorySelectionPanel.vue";
 import InventoryDifferencePanel from "@/views/InventoryDifferencePanel.vue";
 import { useSessionStore } from "@/auth/sessionStore";
@@ -100,6 +101,7 @@ onBeforeUnmount(() => { live = false; generation++; clear(); });
     <button :disabled="locked || page === 1" @click="paginate(-1)">上页证据</button>第 {{ page }} 页<button :disabled="locked || !board || page * 20 >= board.total" @click="paginate(1)">下页证据</button>
     <fieldset v-if="board && ['IN_PROGRESS','WAITING_REVIEW'].includes(board.task.task_status)" :disabled="locked"><label>正常采信原因<textarea v-model="reason" maxlength="1000" /></label><button :disabled="!selected.length || !reason.trim()" @click="accept">逐项采信所选正常观察</button></fieldset>
     <template v-if="observations && board"><InventorySelectionPanel :key="observations.itemId" :task-id="taskId" :item-id="observations.itemId" :item-page="board.page" :observations="observations.rows" @invalid="clear" @changed="load" /></template>
+    <template v-if="observations && board"><InventoryEvidenceDecisionPanel :key="observations.itemId" :task-id="taskId" :item-id="observations.itemId" :item-page="board.page" :observations="observations.rows" @invalid="clear" @changed="load" /></template>
     <template v-if="observations && board"><InventoryDifferencePanel v-for="row in board.items.filter(value => value.item.id === observations!.itemId)" :key="row.item.id" :task-id="taskId" :item="row" :item-page="board.page" :observation-ids="observations.rows.map(value => value.id)" @invalid="clear" /></template>
     <section v-if="observations" class="panel"><h3>应盘项 {{ observations.itemId }} 的原始证据</h3><article v-for="observation in observations.rows" :key="observation.id"><p>证据 {{ observation.id }} · {{ outcomes[observation.outcome] ?? '待核实' }} · 接收于 {{ new Date(observation.received_at).toLocaleString() }}</p><p>观察于 {{ observation.facts_json.rawObservedAt ? new Date(observation.facts_json.rawObservedAt).toLocaleString() : '未保留或待核实' }}；照片 {{ observation.facts_json.photoIds?.length ?? 0 }} 张</p><p>位置 {{ observation.facts_json.actual?.locationHint || observation.facts_json.actual?.locationId || '未知' }}；责任线索 {{ observation.facts_json.actual?.responsibilityHint || observation.facts_json.actual?.responsibleEmployeeId || '待核实或仓库保管' }}</p><p>{{ observation.facts_json.actual?.description }}</p></article><template v-for="row in board?.items.filter(item => item.item.id === observations!.itemId) ?? []" :key="row.item.id"><button :disabled="locked || observations.page === 1" @click="history(row,-1)">上页原始证据</button><button :disabled="locked || observations.page * 20 >= observations.total" @click="history(row,1)">下页原始证据</button></template></section>
   </section>

@@ -1,0 +1,64 @@
+{
+  "accepted": 1,
+  "selected": 0,
+  "decisions": 3,
+  "activeLocks": 0,
+  "datesChanged": 0,
+  "dispositions": 1,
+  "observations": 3,
+  "versionsChanged": 0,
+  "closedDimensions": 3,
+  "selectionHistory": 2,
+  "source_state": "D6-18A4 working tree after 7fef992; not fixed gate",
+  "artifact_sha256": "c7d38e69108573ecd9b31e38b74f2330cbe6a30f72abab616e7e9ae54ace53f5",
+  "task_id": "1",
+  "raw_observations_unchanged": true,
+  "new_jvm_replay_original": true,
+  "new_jvm_duplicate_selection_events": 0,
+  "original_pc_session_recovered": true,
+  "full_browser_acceptance": "NOT_VERIFIED",
+  "browser_steps_completed": [
+    "login",
+    "explicit select original observation1",
+    "prepare all raw evidence"
+  ],
+  "remaining_decisions": "Executed through independent owned HTTP probe after browser modal control blocked",
+  "original_pc_session_kind": "Fixture-created PC authentication cookie; not a claim browser cookie recovered",
+  "source_artifact_boundary": "A4 working tree before actual-winner feedback ordering fix; not a fixed candidate",
+  "probe_detail": {
+    "scope": "Mixed partial browser and independent HTTP probe; full browser acceptance NOT_VERIFIED",
+    "browser_steps_completed": [
+      "login",
+      "explicit select original observation1",
+      "prepare all current raw evidence"
+    ],
+    "remaining_steps": [
+      "VERIFY_SELECTED via owned HTTP probe",
+      "REJECT_EVIDENCE all dimensions via owned HTTP probe",
+      "ACCEPT_SELECTED via owned HTTP probe"
+    ],
+    "accepted_reply": {
+      "review": {
+        "item_id": "1",
+        "recheck_generation": 0,
+        "task_id": "1",
+        "observation_id": "1",
+        "review_status": "ACCEPTED",
+        "verified_observed_at": "2026-10-18T15:07:58.945Z",
+        "reviewed_asset_version": 0,
+        "reason": "Owned backend probe validates independent evidence",
+        "evidence": "Disposable fixture: independent register and physical identifier; UI confirmation control unavailable",
+        "reviewer_account_id": "983001",
+        "reviewer_username": "owned18admin",
+        "reviewed_at": "2026-10-18T15:21:19.767Z",
+        "version": 2
+      },
+      "taskId": "1",
+      "itemId": "1",
+      "version": 11
+    },
+    "browser_modal_control": "BLOCKED; manual dialog recovery requested",
+    "artifact": "c7d38e69108573ecd9b31e38b74f2330cbe6a30f72abab616e7e9ae54ace53f5",
+    "source_state": "A4 working tree after7fef992 before actual-winner feedback ordering fix; no fixed-gate identity"
+  }
+}

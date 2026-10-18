@@ -132,95 +132,7 @@ public class InventoryDifferenceService {
                     || "DUPLICATE".equals(observation.get("outcome"))) {
                 continue;
             }
-            var dimensions = new LinkedHashSet<String>();
-            var receipt = json.readTree(observation.get("receipt_json").toString());
-            for (var dimension : receipt.path("differences")) {
-                dimensions.add(dimension.asText());
-            }
-            String special =
-                    switch (observation.get("outcome").toString()) {
-                        case "CONFLICT_REVIEW" -> "CONFLICT";
-                        case "OLD_ASSIGNMENT_REVIEW" -> "OLD_ASSIGNMENT";
-                        case "TIME_REVIEW" -> "TIME";
-                        case "FINDING_REVIEW" -> "FINDING";
-                        case "LATE_REVIEW" -> "LATE";
-                        default -> null;
-                    };
-            if (special != null) {
-                dimensions.add(special);
-            }
-            if (observation.get("item_id") != null) {
-                var item =
-                        db.queryForMap(
-                                "SELECT * FROM fams_inventory_item WHERE task_id=? AND id=? FOR"
-                                        + " SHARE",
-                                taskId,
-                                observation.get("item_id"));
-                Long variants =
-                        db.queryForObject(
-                                "SELECT COUNT(DISTINCT fact_sha256) FROM fams_inventory_observation"
-                                    + " WHERE task_id=? AND item_id=? AND recheck_generation=? AND"
-                                    + " outcome NOT IN ('EXPIRED','DUPLICATE','LATE_REVIEW') FOR"
-                                    + " SHARE",
-                                Long.class,
-                                taskId,
-                                item.get("id"),
-                                observation.get("recheck_generation"));
-                if (variants != null && variants > 1) {
-                    dimensions.add("CONFLICT");
-                }
-                var book = json.readTree(item.get("snapshot_json").toString());
-                var actual = json.readTree(observation.get("facts_json").toString()).path("actual");
-                if (!Objects.equals(
-                        scalar(book.path("locationId")), scalar(actual.path("locationId")))) {
-                    dimensions.add("LOCATION");
-                }
-                if (!Objects.equals(
-                        scalar(book.path("custodyType")), scalar(actual.path("custodyType")))) {
-                    dimensions.add("USAGE_MODE");
-                }
-                var owner =
-                        "SHARED".equals(scalar(book.path("custodyType")))
-                                ? book.path("departmentResponsibleEmployeeId")
-                                : book.path("responsibleEmployeeId");
-                if (!Objects.equals(scalar(owner), scalar(actual.path("responsibleEmployeeId")))) {
-                    dimensions.add("RESPONSIBILITY");
-                }
-                if (!"GOOD".equals(scalar(actual.path("condition")))) {
-                    dimensions.add("CONDITION");
-                }
-                if (scalar(actual.path("unknownReason")) != null
-                        && !actual.path("unknownReason").asText().isBlank()) {
-                    dimensions.add("UNKNOWN");
-                }
-                var context =
-                        assets.contexts(
-                                        List.of(number(item, "asset_id")),
-                                        instant(task.get("published_at")))
-                                .get(number(item, "asset_id"));
-                if (context == null || !context.movements().isEmpty()) {
-                    dimensions.add("PERIOD_MOVEMENT");
-                }
-                if (context != null) {
-                    var latest = json.readTree(context.snapshotJson());
-                    for (String field :
-                            List.of(
-                                    "locationId",
-                                    "custodyType",
-                                    "responsibleEmployeeId",
-                                    "departmentResponsibleEmployeeId",
-                                    "usingOrganizationId",
-                                    "owningOrganizationId",
-                                    "lifecycle",
-                                    "exception",
-                                    "warehouseId")) {
-                        if (!Objects.equals(scalar(book.path(field)), scalar(latest.path(field)))) {
-                            dimensions.add("PERIOD_MOVEMENT");
-                            break;
-                        }
-                    }
-                }
-            }
+            var dimensions = requiredDimensions(task, observation);
             for (String dimension : dimensions) {
                 var present =
                         db.queryForList(
@@ -252,6 +164,104 @@ public class InventoryDifferenceService {
                 hash,
                 Map.of("created", created),
                 created > 0);
+    }
+
+    /**
+     * Pure derivation used again at final acceptance, including evidence never explicitly listed.
+     */
+    public java.util.Set<String> requiredDimensions(
+            Map<String, Object> task, Map<String, Object> observation) {
+        long taskId = number(task, "id");
+        var dimensions = new LinkedHashSet<String>();
+        var receipt = json.readTree(observation.get("receipt_json").toString());
+        for (var dimension : receipt.path("differences")) {
+            dimensions.add(dimension.asText());
+        }
+        String special =
+                switch (observation.get("outcome").toString()) {
+                    case "CONFLICT_REVIEW" -> "CONFLICT";
+                    case "OLD_ASSIGNMENT_REVIEW" -> "OLD_ASSIGNMENT";
+                    case "TIME_REVIEW" -> "TIME";
+                    case "FINDING_REVIEW" -> "FINDING";
+                    case "LATE_REVIEW" -> "LATE";
+                    default -> null;
+                };
+        if (special != null) {
+            dimensions.add(special);
+        }
+        if (observation.get("item_id") != null) {
+            var item =
+                    db.queryForMap(
+                            "SELECT * FROM fams_inventory_item WHERE task_id=? AND id=? FOR"
+                                    + " SHARE",
+                            taskId,
+                            observation.get("item_id"));
+            Long variants =
+                    db.queryForObject(
+                            "SELECT COUNT(DISTINCT fact_sha256) FROM fams_inventory_observation"
+                                    + " WHERE task_id=? AND item_id=? AND recheck_generation=? AND"
+                                    + " outcome NOT IN ('EXPIRED','DUPLICATE','LATE_REVIEW') FOR"
+                                    + " SHARE",
+                            Long.class,
+                            taskId,
+                            item.get("id"),
+                            observation.get("recheck_generation"));
+            if (variants != null && variants > 1) {
+                dimensions.add("CONFLICT");
+            }
+            var book = json.readTree(item.get("snapshot_json").toString());
+            var actual = json.readTree(observation.get("facts_json").toString()).path("actual");
+            if (!Objects.equals(
+                    scalar(book.path("locationId")), scalar(actual.path("locationId")))) {
+                dimensions.add("LOCATION");
+            }
+            if (!Objects.equals(
+                    scalar(book.path("custodyType")), scalar(actual.path("custodyType")))) {
+                dimensions.add("USAGE_MODE");
+            }
+            var owner =
+                    "SHARED".equals(scalar(book.path("custodyType")))
+                            ? book.path("departmentResponsibleEmployeeId")
+                            : book.path("responsibleEmployeeId");
+            if (!Objects.equals(scalar(owner), scalar(actual.path("responsibleEmployeeId")))) {
+                dimensions.add("RESPONSIBILITY");
+            }
+            if (!"GOOD".equals(scalar(actual.path("condition")))) {
+                dimensions.add("CONDITION");
+            }
+            if (scalar(actual.path("unknownReason")) != null
+                    && !actual.path("unknownReason").asText().isBlank()) {
+                dimensions.add("UNKNOWN");
+            }
+            var context =
+                    assets.contexts(
+                                    List.of(number(item, "asset_id")),
+                                    instant(task.get("published_at")))
+                            .get(number(item, "asset_id"));
+            if (context == null || !context.movements().isEmpty()) {
+                dimensions.add("PERIOD_MOVEMENT");
+            }
+            if (context != null) {
+                var latest = json.readTree(context.snapshotJson());
+                for (String field :
+                        List.of(
+                                "locationId",
+                                "custodyType",
+                                "responsibleEmployeeId",
+                                "departmentResponsibleEmployeeId",
+                                "usingOrganizationId",
+                                "owningOrganizationId",
+                                "lifecycle",
+                                "exception",
+                                "warehouseId")) {
+                    if (!Objects.equals(scalar(book.path(field)), scalar(latest.path(field)))) {
+                        dimensions.add("PERIOD_MOVEMENT");
+                        break;
+                    }
+                }
+            }
+        }
+        return java.util.Set.copyOf(dimensions);
     }
 
     public Map<String, Object> decide(
