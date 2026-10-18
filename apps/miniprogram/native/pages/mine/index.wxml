@@ -32,3 +32,5 @@
 <navigator url="/pages/target-changes/index">批准目标更正（库管 / 资产管理员）</navigator>
 
 <navigator url="/pages/inventory-tasks/index">我的盘点任务与应盘资产</navigator>
+
+<view class="card"><navigator url="/pages/inventory-pending/index">盘点待上传与回执（未获回执 {{pendingCount}} 条）</navigator><view wx:if="{{queueError}}" class="error">本机待上传数量暂不可读，请进入待上传页核查。</view><navigator wx:if="{{!accountId}}" url="/pages/login/index">重新登录</navigator></view>

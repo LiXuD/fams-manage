@@ -1,0 +1,13 @@
+<view class="page">
+ <view class="title">盘点待上传与回执</view><view class="hint">仅从本机读取当前身份的记录，无网络也可进入。待上传不代表服务端已计入或管理员已复核。</view>
+ <view wx:if="{{error}}" class="error" role="alert">{{error}}</view>
+ <button bindtap="onRefresh" disabled="{{busy}}">刷新本机记录与到期清理</button>
+ <view wx:if="{{!busy &amp;&amp; !error &amp;&amp; !tasks.length}}">本机暂无待上传或回执记录。</view>
+ <view wx:for="{{tasks}}" wx:key="taskId" class="card">
+  <view>{{item.name}}</view><view>未收到回执 {{item.pending}} 条 · 已获回执待本机清理 {{item.cleanup}} 条</view>
+  <view wx:if="{{item.expiresAt}}">最早截止（UTC）：{{item.expiresAt}}；重试不延长。</view>
+  <view wx:for="{{item.statuses}}" wx:for-item="receipt" wx:key="eventId">事件 {{receipt.eventId}} · {{receipt.message}}</view>
+  <button bindtap="onOpen" data-id="{{item.taskId}}" disabled="{{busy}}">查看并同步原记录</button>
+ </view>
+ <navigator url="/pages/mine/index">返回账号首页</navigator>
+</view>

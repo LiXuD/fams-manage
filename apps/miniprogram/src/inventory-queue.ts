@@ -72,6 +72,24 @@ export class InventoryQueue {
         return [...rows].map(([eventId, outcome]) => ({ eventId, outcome }));
     }
     receipt(eventId: string): string | null { return this.read().receipts?.find(row => row.eventId === eventId && row.deviceId === this.deviceId)?.outcome ?? null; }
+    summaries(): { taskId: string; name: string; pending: number; cleanup: number;
+        expiresAt: string | null; statuses: { eventId: string; outcome: string }[] }[] {
+        const saved = this.read();
+        const tasks = new Set<string>();
+        for (const event of saved.events) if (event.deviceId === this.deviceId) tasks.add(event.taskId);
+        for (const row of [...saved.failures, ...(saved.receipts ?? [])]) {
+            if (row.taskId && row.deviceId === this.deviceId) tasks.add(row.taskId);
+        }
+        return [...tasks].filter(task => !saved.revoked?.[this.deviceId]?.[task]).map(taskId => {
+            const events = saved.events.filter(row => row.deviceId === this.deviceId && row.taskId === taskId);
+            const confirmed = new Set((saved.receipts ?? []).filter(row => row.deviceId === this.deviceId).map(row => row.eventId));
+            const waiting = events.filter(row => !confirmed.has(row.eventId));
+            return { taskId, name: saved.tasks?.[this.deviceId]?.[taskId]?.name ?? `任务 ${taskId}`,
+                pending: waiting.length, cleanup: events.length - waiting.length,
+                expiresAt: waiting.map(row => row.expiresAt).sort()[0] ?? null,
+                statuses: this.statuses(taskId) };
+        });
+    }
     photoPaths(): string[] { return this.read().events.flatMap(event => event.photos.map(photo => photo.path)); }
     cache(task: InventoryCachedTask): void {
         if (!id.test(task.id)) throw new Error("Invalid cached task");

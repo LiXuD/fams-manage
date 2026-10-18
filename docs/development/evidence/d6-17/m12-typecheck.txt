@@ -1,0 +1,5 @@
+
+> @fams/miniprogram@0.1.0 typecheck
+> rtk tsc --noEmit -p tsconfig.json
+
+TypeScript: No errors found

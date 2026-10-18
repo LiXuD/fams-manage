@@ -1,0 +1,3 @@
+
+> lint
+> rtk eslint "packages/api-types/src/**/*.ts" "apps/web/src/**/*.{ts,tsx}" "apps/miniprogram/**/*.ts" --no-error-on-unmatched-pattern --max-warnings=0

@@ -248,7 +248,8 @@ export function createInventoryCollectionPage(getServices: () => MiniServices) {
                         }
                         photoIds.push(objectId);
                     }
-                    const { photos: _photos, taskId: _task, ...payload } = event;
+                    const payload: Partial<typeof event> = { ...event };
+                    delete payload.photos; delete payload.taskId;
                     const receipt = await services.sessions.request("POST", `${base}/tasks/${taskId}/events`, { ...payload, photoIds }, { key: event.eventId, version: event.assignmentVersion }) as { eventId: string; outcome: string };
                     if (!valid(epoch)) { identityChanged(this, epoch); return; }
                     if (receipt.eventId !== event.eventId || !receiptText[receipt.outcome]) throw new Error("回执无法核实，保留原记录重试。");

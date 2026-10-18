@@ -66,9 +66,8 @@ export function createInventoryFiles(wx: InventoryFileRuntime, identity: { accou
             return { path: target, name: photo.name, size: photo.size };
         },
         clear() {
-            let files: string[];
             try { fs.accessSync(root); } catch { wx.removeStorageSync(key); return; }
-            files = fs.readdirSync(root);
+            const files = fs.readdirSync(root);
             for (const file of files) remove(`${root}/${file}`);
             wx.removeStorageSync(key);
         },

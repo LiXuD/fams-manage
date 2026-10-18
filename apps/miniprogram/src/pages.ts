@@ -133,49 +133,73 @@ export function createLoginPage(getServices: () => MiniServices) {
     };
 }
 
-interface MineData { accountId: string; busy: boolean; error: string; bindingVersion: number }
+interface MineData { accountId: string; busy: boolean; error: string; bindingVersion: number; pendingCount: number; queueError: boolean }
 interface MineContext { data: MineData; setData(data: Partial<MineData>): void }
 export function createMinePage(getServices: () => MiniServices) {
-    let live = false;
+    let live = false, generation = 0, identity = "";
     let services: MiniServices | null = null;
     let unbindKey: string | null = null;
+    const blank = (): MineData => ({ accountId: "", busy: false, error: "", bindingVersion: 0, pendingCount: 0, queueError: false });
+    const current = (epoch: number) => live && epoch === generation && identity === JSON.stringify(services?.sessions.identity);
+    const count = (page: MineContext) => {
+        try {
+            const queue = services?.inventory?.().queue;
+            const pendingCount = queue ? queue.summaries().reduce((sum, task) => sum + task.pending, 0) : 0;
+            page.setData({ pendingCount, queueError: false });
+        } catch { page.setData({ pendingCount: 0, queueError: true }); }
+    };
+    const warning = (page: MineContext) => page.data.queueError
+        ? "无法读取本机待上传数量。继续操作将清除本身份的本机记录和照片，未上传事实无法恢复。"
+        : `本机有 ${page.data.pendingCount} 条尚未取得服务器回执的盘点记录。继续操作会清除本身份的记录和照片；可取消并先同步。`;
+    const changed = (page: MineContext, epoch: number) => {
+        if (live && epoch === generation) page.setData({ ...blank(), error: "身份已变化，请重新进入账号页。" });
+    };
     return {
-        data: { accountId: "", busy: false, error: "", bindingVersion: 0 } as MineData,
+        data: blank(),
         async onShow(this: MineContext) {
-            live = true;
-            this.setData({ busy: true, error: "" });
+            live = true; const epoch = ++generation;
+            services = getServices(); const nextIdentity = JSON.stringify(services.sessions.identity);
+            if (nextIdentity !== identity) unbindKey = null; identity = nextIdentity;
+            this.setData({ ...blank(), busy: true }); count(this);
             try {
-                services = getServices();
                 const result = await services.sessions.request("GET", "/api/v1/mini/auth/session") as
                     { accountId: string; bindingVersion: number };
-                if (live) this.setData({ accountId: result.accountId, bindingVersion: result.bindingVersion });
+                if (current(epoch)) this.setData({ accountId: result.accountId, bindingVersion: result.bindingVersion });
             } catch (error) {
-                if (live) this.setData({ error: message(error) });
-                if (live && services && !services.sessions.identity) services.navigate("/pages/login/index");
-            } finally { if (live) this.setData({ busy: false }); }
+                if (current(epoch)) this.setData({ error: message(error) });
+                if (live && epoch === generation && !services.sessions.identity) services.navigate("/pages/login/index");
+            } finally { if (current(epoch)) this.setData({ busy: false }); else changed(this, epoch); }
         },
-        onHide() { live = false; },
-        onUnload() { live = false; },
+        onHide(this: MineContext) { live = false; generation++; this.setData(blank()); },
+        onUnload(this: MineContext) { live = false; generation++; this.setData(blank()); },
         async onLogout(this: MineContext) {
-            if (!services || this.data.busy) return;
-            this.setData({ busy: true, error: "" });
-            try { await services.sessions.logout(); }
-            catch { /* Local identity is cleared even when the server cannot be reached. */ }
-            finally { if (live) services.navigate("/pages/login/index"); }
+            if (!services || this.data.busy || !current(generation)) return;
+            const epoch = generation; this.setData({ busy: true, error: "" }); count(this);
+            try {
+                if ((this.data.pendingCount || this.data.queueError)
+                    && !await services.confirm("退出并清除本机资料", warning(this))) return;
+                if (!current(epoch)) { changed(this, epoch); return; }
+                await services.sessions.logout();
+                if (live && epoch === generation && !services.sessions.identity) services.navigate("/pages/login/index");
+            } catch {
+                if (live && epoch === generation && !services.sessions.identity) {
+                    this.setData({ ...blank(), error: "本机身份已退出；网络或资料清理未完成，请重启后继续清理或重新登录。" });
+                }
+            } finally { if (current(epoch)) this.setData({ busy: false }); else if (services?.sessions.identity) changed(this, epoch); }
         },
         async onUnbind(this: MineContext) {
-            if (!services || this.data.busy) return;
-            this.setData({ busy: true, error: "" });
+            if (!services || this.data.busy || !current(generation)) return;
+            const epoch = generation; this.setData({ busy: true, error: "" }); count(this);
             try {
-                if (!await services.confirm("解除微信绑定", "解除后本设备退出登录，待上传资料将清除；再次绑定需要短信验证。")) return;
-                if (!live) return;
+                if (!await services.confirm("解除微信绑定", `${warning(this)} 解除绑定后再次使用需要短信验证。`)) return;
+                if (!current(epoch)) { changed(this, epoch); return; }
                 unbindKey ??= services.createKey();
                 await services.binding.unbind(this.data.bindingVersion, "用户在我的页面确认解绑", unbindKey);
-                if (live) services.navigate("/pages/login/index");
+                if (live && epoch === generation && !services.sessions.identity) services.navigate("/pages/login/index");
             } catch (error) {
-                if (live) this.setData({ error: message(error) });
-                if (live && !services.sessions.identity) services.navigate("/pages/login/index");
-            } finally { if (live) this.setData({ busy: false }); }
+                if (current(epoch)) this.setData({ error: message(error) });
+                else if (live && epoch === generation && !services.sessions.identity) this.setData({ ...blank(), error: "绑定操作或本机清理未完成，请重新登录核对。" });
+            } finally { if (current(epoch)) this.setData({ busy: false }); else if (services?.sessions.identity) changed(this, epoch); }
         },
     };
 }

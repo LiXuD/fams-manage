@@ -1,4 +1,5 @@
 <view class="page">
+ <navigator url="/pages/inventory-pending/index">本机待上传与回执（离线可进入）</navigator>
  <view class="title">我的盘点任务</view><view class="hint">仅显示当前授权应盘项，账面责任用于核对，不代表现场实盘事实。</view>
  <view wx:if="{{error}}" class="error" role="alert">{{error}}</view><button bindtap="onRefresh" disabled="{{busy}}">刷新任务</button>
  <view wx:for="{{tasks}}" wx:key="id" class="card"><button bindtap="onOpen" data-id="{{item.id}}" disabled="{{busy}}">{{item.name}} · {{item.statusLabel}}{{item.overdue ? ' · 逾期' : ''}}</button></view>

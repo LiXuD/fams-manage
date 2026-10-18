@@ -14,7 +14,8 @@
     "pages/business-result-reviews/index",
     "pages/target-changes/index",
     "pages/inventory-tasks/index",
-    "pages/inventory-collection/index"
+    "pages/inventory-collection/index",
+    "pages/inventory-pending/index"
   ],
   "window": {
     "navigationBarTitleText": "企业资产",

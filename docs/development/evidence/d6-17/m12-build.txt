@@ -1,0 +1,6 @@
+
+> @fams/miniprogram@0.1.0 build
+> rtk proxy node build.mjs
+
+TypeScript: No errors found
+Native mini package built; API origin unconfigured (requires external HTTPS resource).
