@@ -560,6 +560,14 @@ class InventoryObservationHttpRuntimeCase {
                 java.sql.Timestamp.from(old),
                 java.sql.Timestamp.from(old),
                 expired.path("calibrationId").asText());
+        // A slow first event upload may arrive after abandoned-photo retention already ran.
+        db.update(
+                "UPDATE fams_inventory_upload_scope SET created_at=? WHERE task_id=? AND"
+                        + " client_event_id=?",
+                java.sql.Timestamp.from(old),
+                task,
+                expired.path("eventId").asText());
+        uploadRetention.expire(50);
         assertEquals("EXPIRED", ok(observe(employee, task, expired)).path("outcome").asText());
         assertEquals(
                 "{}",
@@ -932,6 +940,52 @@ class InventoryObservationHttpRuntimeCase {
                 "{\"source\":\"CODE\",\"value\":\"INV-ASSET-933010\"}"));
         assertEquals("TASK_OUTSIDE", result.path("kind").asText());
         assertTrue(result.path("snapshot").isMissingNode());
+        assertEquals(0, db.queryForObject(
+                "SELECT COUNT(*) FROM fams_inventory_observation WHERE task_id=?",
+                Integer.class, task));
+    }
+
+    @Test
+    void expiredForeignEventCannotDisposeAnotherExecutorsUploadScope() throws Exception {
+        String task = prepared();
+        var original = observation(task);
+        byte[] bytes = java.util.Base64.getDecoder().decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jSZkAAAAASUVORK5CYII=");
+        var uploaded = ok(uploadPhoto(employee, task, original, key(), bytes));
+        ok(call(admin, "/" + task + "/assignments",
+                "{\"itemIds\":[\"" + original.path("itemId").asText()
+                        + "\"],\"executorAccountId\":\"933003\",\"recheck\":false,"
+                        + "\"reason\":\"new authorized executor\"}", key(), 3));
+        Instant old = Instant.now().minusSeconds(73 * 3600)
+                .truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        String device = key();
+        var calibration = ok(observationCall(other, "/calibrations",
+                "{\"deviceId\":\"" + device + "\",\"clientTime\":\"" + old + "\"}"));
+        db.update("UPDATE fams_inventory_clock_calibration SET server_time=? WHERE id=?",
+                java.sql.Timestamp.from(old), calibration.path("calibrationId").asText());
+        var foreign = original.deepCopy().put("deviceId", device)
+                .put("calibrationId", calibration.path("calibrationId").asText())
+                .put("rawScannedAt", old.toString()).put("rawObservedAt", old.toString())
+                .put("firstPersistedAt", old.toString())
+                .put("expiresAt", old.plusSeconds(72 * 3600).toString());
+        foreign.putArray("photoIds").add(uploaded.path("objectId").asText());
+        assertEquals(403, observe(other, task, foreign).statusCode());
+        foreign.putArray("photoIds");
+        assertEquals(403, observe(other, task, foreign).statusCode());
+        Instant current = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        var currentCalibration = ok(observationCall(other, "/calibrations",
+                "{\"deviceId\":\"" + device + "\",\"clientTime\":\"" + current + "\"}"));
+        foreign.put("calibrationId", currentCalibration.path("calibrationId").asText())
+                .put("rawScannedAt", current.toString()).put("rawObservedAt", current.toString())
+                .put("firstPersistedAt", current.toString())
+                .put("expiresAt", current.plusSeconds(72 * 3600).toString());
+        assertEquals(403, observe(other, task, foreign).statusCode());
+        assertEquals(1, db.queryForObject(
+                "SELECT COUNT(*) FROM fams_attachment WHERE object_id=? AND deleted_at IS NULL",
+                Integer.class, uploaded.path("objectId").asText()));
+        assertEquals(0, db.queryForObject(
+                "SELECT COUNT(*) FROM fams_attachment_deletion_job WHERE object_id=?",
+                Integer.class, uploaded.path("objectId").asText()));
         assertEquals(0, db.queryForObject(
                 "SELECT COUNT(*) FROM fams_inventory_observation WHERE task_id=?",
                 Integer.class, task));

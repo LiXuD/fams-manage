@@ -176,7 +176,6 @@ public class InventoryObservationService {
                     row.get("receipt").toString(),
                     new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
         }
-        validateFacts(taskId, current, binding, input);
         Instant received = clock.instant().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
         requireTime(input.rawObservedAt());
         if (input.rawScannedAt() != null) {
@@ -185,6 +184,7 @@ public class InventoryObservationService {
         requireTime(input.firstPersistedAt());
         requireTime(input.expiresAt());
         var time = time(current.id(), binding, input, received);
+        validateFacts(taskId, current, binding, input, !"EXPIRED".equals(time.decision()));
         Map<String, Object> item = null;
         if (input.itemId() != null) {
             var rows =
@@ -393,7 +393,8 @@ public class InventoryObservationService {
             long task,
             RequisitionActorContext.Current actor,
             Long binding,
-            InventoryObservationInput.Observation input) {
+            InventoryObservationInput.Observation input,
+            boolean inspectPhotos) {
         if (!List.of("SCAN", "CODE", "MANUAL").contains(input.source())
                 || !List.of("GOOD", "DAMAGED", "UNKNOWN").contains(input.actual().condition())) {
             throw new InventoryFailure(400, "INVENTORY_FACT_INVALID");
@@ -449,20 +450,28 @@ public class InventoryObservationService {
         if (input.photoIds().stream().distinct().count() != input.photoIds().size()) {
             throw new InventoryFailure(400, "INVENTORY_PHOTO_DUPLICATE");
         }
-        if (!input.photoIds().isEmpty()) {
-            var scopes =
-                    db.queryForList(
-                            "SELECT id,actor_account_id,binding_id,device_id FROM"
-                                    + " fams_inventory_upload_scope WHERE task_id=? AND"
-                                    + " client_event_id=?",
-                            task,
-                            input.eventId().toString());
+        // Expiry skips reading disposed bytes, never authorization to dispose another scope.
+        var scopes =
+                db.queryForList(
+                        "SELECT id,actor_account_id,binding_id,device_id FROM"
+                                + " fams_inventory_upload_scope WHERE task_id=? AND"
+                                + " client_event_id=?",
+                        task,
+                        input.eventId().toString());
+        if (scopes.isEmpty()) {
+            if (inspectPhotos && !input.photoIds().isEmpty()) {
+                throw new InventoryFailure(403, "INVENTORY_PHOTO_NOT_AUTHORIZED");
+            }
+            return;
+        }
+        if (number(scopes.getFirst(), "actor_account_id") != actor.id()
+                || !Objects.equals(nullable(scopes.getFirst(), "binding_id"), binding)
+                || !input.deviceId().toString().equals(scopes.getFirst().get("device_id"))) {
+            throw new InventoryFailure(403, "INVENTORY_PHOTO_NOT_AUTHORIZED");
+        }
+        if (inspectPhotos) {
             var evidence = attachments.getIfAvailable();
-            if (scopes.isEmpty()
-                    || evidence == null
-                    || number(scopes.getFirst(), "actor_account_id") != actor.id()
-                    || !Objects.equals(nullable(scopes.getFirst(), "binding_id"), binding)
-                    || !input.deviceId().toString().equals(scopes.getFirst().get("device_id"))) {
+            if (evidence == null) {
                 throw new InventoryFailure(403, "INVENTORY_PHOTO_NOT_AUTHORIZED");
             }
             for (UUID photo : input.photoIds()) {
