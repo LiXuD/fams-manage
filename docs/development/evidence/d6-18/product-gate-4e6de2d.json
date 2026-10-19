@@ -1,0 +1,41 @@
+{
+  "candidate_commit": "4e6de2d9840d862fe47ec2554c6477d02987e424",
+  "comparison_base": "1b230ac122a20abe867b98d6a5ceb22af84fe682",
+  "auxiliary_fix_commit": "59fde94c057965152879e045bfa24869e92c24c1",
+  "recorded_at_utc": "2026-10-19T01:23:35.332005+00:00",
+  "full_product_gate_exit": 0,
+  "java_tests": 243,
+  "checkstyle_findings": 0,
+  "spotbugs_findings": 0,
+  "line_covered": 13012,
+  "line_total": 14001,
+  "branch_covered": 4703,
+  "branch_total": 6205,
+  "web_tests": 49,
+  "web_json": {
+    "numTotalTests": 49,
+    "numPassedTests": 49,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "numTodoTests": 0,
+    "success": true
+  },
+  "mini_tests": 102,
+  "lint_type_build_dependency_integrity": "PASS",
+  "application_restart_database_restart": "PASS",
+  "owned_runtime_cleanup_clean_worktree": "PASS",
+  "artifact": {
+    "candidate": "4e6de2d",
+    "source": "backend/target/contract-generation-probe-0.1.0-SNAPSHOT.jar",
+    "artifact": "output/d6-18-4e6de2d-backend.jar",
+    "sha256": "cebcfd6553add321f7b8efd078952cbb54e77d4cf4c6669582cafd896911ed98",
+    "size": 58311352,
+    "observer": "passive during frozen candidate gate"
+  },
+  "scope": "D6-18A5 native evidence review and formal owner integration; lossless target IDs; separate delivery timestamp consistency fix",
+  "full_browser_acceptance": "NOT_VERIFIED: second confirmation blocked; partial SQL and cleaned fixture recorded separately",
+  "photo_reading_sync_sealing_owner_followup": "NOT_IMPLEMENTED",
+  "independent_review": "PENDING",
+  "real_wechat_https_sms_camera_device_weak_network": "NOT_VERIFIED",
+  "remote_ci_formal_qa_production": "NOT_VERIFIED"
+}
