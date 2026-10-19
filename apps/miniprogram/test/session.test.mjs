@@ -157,3 +157,17 @@ test("401 does not retain private conflict context and malformed 409 metadata is
     await assert.rejects(client.request("GET", "/api/v1/mini/auth/session"), error => { assert.deepEqual(error.fields, {}); return true; });
     assert.equal(client.identity, null); assert.equal(rt.saved, null);
 });
+
+test("finding lookup permits encoded legacy business codes only in its exact GET query values", async () => {
+    const rt = runtime(saved), client = new MiniSessionClient("https://api.example.test", rt);
+    const base = "/api/v1/mini/inventory-reviews/tasks/9/finding-targets";
+    const query = "?assetCode=" + encodeURIComponent("旧/码 甲") + "&receiptNumber=" + encodeURIComponent("RK/旧号");
+    await client.request("GET", base + query);
+    assert.equal(rt.requests[0].url, "https://api.example.test" + base + query);
+    for (const path of [base.replace("/9/", "/%39/") + query, base + query + "&redirect=other",
+        base + query + "&assetCode=duplicate", base + "?assetCode=%GG", "/api/v1/mini/auth/session?value=%2f"]) {
+        await assert.rejects(client.request("GET", path));
+    }
+    await assert.rejects(client.request("POST", base + query));
+    assert.equal(rt.requests.length, 1);
+});

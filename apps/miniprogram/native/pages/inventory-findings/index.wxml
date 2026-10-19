@@ -1,0 +1,21 @@
+<view class="page">
+ <view class="card"><text class="title">盘盈与任务外线索</text><text>仅关联库管已提交的正式入库。实际验收后才能关闭，不自动建卡或改变原盘点计数。</text>
+ <text wx:if="error">{{error}}</text><text wx:if="notice">{{notice}}</text><button bindtap="onRefresh" disabled="{{busy}}">刷新当前授权结果</button>
+ <button wx:if="retryable" bindtap="onRetry" disabled="{{busy}}">重试原盘盈操作</button>
+ <view wx:if="cleanupPending"><text>本机照片清理未完成，新读取已停止。</text><button bindtap="onCleanup" disabled="{{busy}}">重试照片清理</button></view></view>
+ <view wx:for="{{rows}}" wx:key="id" class="card"><text>线索 {{item.id}}：{{item.facts_json.actual.description}}</text>
+ <button wx:if="item.outcome === 'FINDING_REVIEW'" data-id="{{item.id}}" bindtap="onOpen" disabled="{{busy || retryable}}">核对这条盘盈线索</button><text wx:else>时间、过期或迟到须对应独立复核，原始记录继续保留。</text></view>
+ <button data-delta="-1" bindtap="onPage" disabled="{{busy || retryable || page === 1}}">上一页线索</button><text>第 {{page}} 页，共 {{total}} 条</text><button data-delta="1" bindtap="onPage" disabled="{{busy || retryable || page * 20 >= total}}">下一页线索</button>
+ <view wx:if="detail" class="card"><text class="title">原始线索 {{detail.observation.id}}</text><text>{{detail.observation.facts_json.actual.description}}</text><text>当前处理：{{detail.subject.stateLabel}}</text>
+ <button wx:if="detail.observation.facts_json.photoIds.length" bindtap="onPhotos" disabled="{{busy || retryable || cleanupPending}}">读取原始照片资料（{{detail.observation.facts_json.photoIds.length}}）</button>
+ <view wx:for="{{photos}}" wx:for-item="photo" wx:key="key"><text wx:if="photo.photo">{{photo.photo.filename}}</text><button wx:if="photo.readable" data-id="{{photo.objectId}}" bindtap="onReadPhoto" disabled="{{busy || retryable || cleanupPending}}">读取这张照片</button><text wx:else>照片暂不可读取，原始引用 {{photo.objectId}} 保留。</text></view>
+ <view wx:if="photoPath"><image src="{{photoPath}}" mode="widthFix"/><button bindtap="onCleanup" disabled="{{busy}}">关闭并清理照片</button></view>
+ <button wx:if="detail.subject.version === undefined" data-field="prepare" bindtap="onSave" disabled="{{busy || retryable}}">列入盘盈独立复核</button>
+ <view wx:elif="detail.subject.subject_status !== 'CLOSED'">
+ <picker range="{{methods}}" value="{{method}}" bindchange="onMethod" disabled="{{busy || retryable}}"><text>{{methods[method]}}</text></picker>
+ <view wx:if="method > 0"><input value="{{assetCode}}" data-field="assetCode" bindinput="onField" placeholder="准确资产编码" disabled="{{busy || retryable}}"/><input wx:if="method > 1" value="{{receiptNumber}}" data-field="receiptNumber" bindinput="onField" placeholder="准确正式入库单号" disabled="{{busy || retryable}}"/><button bindtap="onSearch" disabled="{{busy || retryable}}">查找正式依据</button>
+ <view wx:for="{{targets}}" wx:for-item="choice" wx:key="key"><text>{{choice.assetCode}} · {{choice.receiptNumber}} · {{choice.status}}</text><button data-id="{{choice.key}}" bindtap="onTarget" disabled="{{busy || retryable}}">选择此正式依据</button></view><text wx:if="target">已选择 {{target.assetCode}} {{target.receiptNumber}}</text></view>
+ <textarea value="{{reason}}" data-field="reason" bindinput="onField" placeholder="处理原因（至少3字）" maxlength="1000" disabled="{{busy || retryable}}"/><textarea value="{{evidence}}" data-field="evidence" bindinput="onField" placeholder="明确核实依据（至少10字）" maxlength="2000" disabled="{{busy || retryable}}"/><button bindtap="onSave" disabled="{{busy || retryable}}">保存盘盈复核与关联</button>
+ </view><text class="title">最近100条历史 / 共{{detail.historyTotal}}条</text><view wx:for="{{detail.history}}" wx:for-item="history" wx:key="after_version"><text>{{history.actor_username}} · {{history.timeText}} · {{history.stateLabel}} · {{history.methodLabel}} · {{history.reason}}</text><text>{{history.evidence}}</text><text wx:if="history.inboundReceiptId">保留正式入库关联，请在入库管理核对实际审批与验收结果。</text></view>
+ </view>
+</view>

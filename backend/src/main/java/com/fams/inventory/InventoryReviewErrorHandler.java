@@ -18,7 +18,8 @@ import java.util.UUID;
         assignableTypes = {
             InventoryReviewController.class,
             InventoryDifferenceController.class,
-            InventorySelectionController.class
+            InventorySelectionController.class,
+            InventoryFindingController.class
         })
 class InventoryReviewErrorHandler {
     @ExceptionHandler(InventoryReviewConflict.class)

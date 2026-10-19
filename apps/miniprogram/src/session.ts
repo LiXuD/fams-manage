@@ -116,7 +116,11 @@ export class MiniSessionClient {
     async request(method: string, path: string, data?: unknown,
         mutation?: { key: string; version: number }): Promise<unknown> {
         const pathname = path.split("?")[0];
-        if (!path.startsWith("/api/v1/mini/") || /[\\%#\s]/.test(path)
+        // Imported business codes may contain Unicode or slashes. Only this exact read-only lookup
+        // may encode values; encoded path segments, extra parameters and other routes stay denied.
+        const findingLookup = method === "GET" && !mutation && path.length <= 4096
+            && /^\/api\/v1\/mini\/inventory-reviews\/tasks\/[1-9][0-9]{0,18}\/finding-targets\?assetCode=(?:[A-Za-z0-9_.!~*'()-]|%[0-9A-Fa-f]{2})+(?:&receiptNumber=(?:[A-Za-z0-9_.!~*'()-]|%[0-9A-Fa-f]{2})+)?$/.test(path);
+        if (!path.startsWith("/api/v1/mini/") || /[\\#\s]/.test(path) || path.includes("%") && !findingLookup
             || /(^|\/)\.\.?(\/|$)/.test(pathname) || pathname.includes("//")
             || pathname === "/api/v1/mini/auth/login") {
             throw new Error("Mini API path required");

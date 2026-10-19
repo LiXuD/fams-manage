@@ -155,6 +155,26 @@ class InventoryObservationHttpRuntimeCase {
 
     @AfterEach
     void cleanup() {
+        for (String table : new String[] {"fams_inventory_finding_link", "fams_inventory_review_decision",
+                "fams_inventory_review_receipt", "fams_inventory_review_subject"}) {
+            db.update("DELETE FROM " + table + " WHERE task_id IN"
+                    + " (SELECT id FROM fams_inventory_task WHERE creator_account_id=933001)");
+        }
+        String ownedInbound = " IN (SELECT id FROM fams_inbound_receipt WHERE creator_account_id=933003)";
+        db.update("DELETE FROM fams_todo WHERE business_type='INBOUND' AND business_id" + ownedInbound);
+        db.update("DELETE FROM fams_asset_business_lock WHERE business_type='INBOUND' AND business_id" + ownedInbound);
+        db.update("DELETE FROM fams_inbound_acceptance WHERE receipt_item_id IN"
+                + " (SELECT id FROM fams_inbound_receipt_item WHERE receipt_id" + ownedInbound + ")");
+        db.update("DELETE FROM fams_inbound_approval_scope_item WHERE decision_id IN"
+                + " (SELECT id FROM fams_inbound_decision WHERE receipt_id" + ownedInbound + ")");
+        for (String table : new String[] {"fams_inbound_processing_ownership", "fams_inbound_decision", "fams_inbound_receipt_item"}) {
+            db.update("DELETE FROM " + table + " WHERE receipt_id" + ownedInbound);
+        }
+        db.update("DELETE FROM fams_inbound_receipt WHERE creator_account_id=933003");
+        db.update("DELETE FROM fams_asset_timeline_event WHERE asset_id=933012");
+        db.update("DELETE FROM fams_number_allocation WHERE namespace_key='INBOUND_RECEIPT:ENTERPRISE:FIN:NONE:'");
+        db.update("DELETE FROM fams_number_sequence WHERE namespace_key='INBOUND_RECEIPT:ENTERPRISE:FIN:NONE:'");
+        db.update("DELETE FROM fams_numbering_rule WHERE id=933090");
         db.update(
                 "DELETE FROM fams_attachment_deletion_job WHERE object_id IN (SELECT object_id FROM"
                         + " fams_attachment WHERE business_type='INVENTORY_EVENT')");
@@ -1140,6 +1160,402 @@ class InventoryObservationHttpRuntimeCase {
         assertEquals(0, db.queryForObject(
                 "SELECT COUNT(*) FROM fams_inventory_observation WHERE task_id=?",
                 Integer.class, task));
+    }
+
+
+    @Test
+    void findingNonEnterpriseAndDuplicateCardDecisionsKeepRawEvidenceAndOriginalReplies() throws Exception {
+        String task = prepared();
+        var event = observation(task).putNull("itemId").putNull("assetVersion")
+                .put("assignmentVersion", 0).put("source", "MANUAL")
+                .put("manualReason", "现场未见正式标签，先保留盘盈线索").putNull("assetCode");
+        ((tools.jackson.databind.node.ObjectNode) event.path("actual"))
+                .put("description", "现场发现一台待核实权属设备，附原始照片");
+        byte[] bytes = java.util.Base64.getDecoder().decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jSZkAAAAASUVORK5CYII=");
+        var photo = ok(uploadPhoto(employee, task, event, key(), bytes));
+        event.putArray("photoIds").add(photo.path("objectId").asText());
+        assertEquals("FINDING_REVIEW", ok(observe(employee, task, event)).path("outcome").asText());
+        String id = db.queryForObject("SELECT CAST(id AS CHAR) FROM fams_inventory_observation"
+                + " WHERE task_id=? AND client_event_id=?", String.class, task, event.path("eventId").asText());
+        var original = db.queryForList("SELECT * FROM fams_inventory_observation WHERE id=?", id);
+        long version = db.queryForObject("SELECT version FROM fams_inventory_task WHERE id=?", Long.class, task);
+        String base = "/api/v1/inventory-reviews/tasks/" + task;
+        ok(reviewCall(admin, "POST", base + "/differences/preparation",
+                "{\"observationIds\":[\"" + id + "\"]}", key(), version));
+        String path = base + "/findings/" + id;
+        var detail = ok(reviewCall(admin, "GET", path, null, null, null));
+        assertEquals(0, detail.path("subject").path("version").asLong());
+        assertTrue(detail.path("observation").path("facts_json").isObject());
+        String body = "{\"subjectVersion\":0,\"method\":\"NON_ENTERPRISE\","
+                + "\"reason\":\"核对为外部施工单位设备\",\"evidence\":\"施工单位设备登记及现场责任人确认，保留原始照片引用\"}";
+        String requestKey = key();
+        long expected = detail.path("taskVersion").asLong();
+        assertEquals(403, reviewCall(employee, "POST", path + "/decisions", body, requestKey, expected).statusCode());
+        var result = ok(reviewCall(admin, "POST", path + "/decisions", body, requestKey, expected));
+        assertEquals("CLOSED", result.path("status").asText());
+        assertEquals(result, ok(reviewCall(admin, "POST", path + "/decisions", body, requestKey, expected)));
+        assertEquals(409, reviewCall(admin, "POST", path + "/decisions", body, key(), expected).statusCode());
+        assertEquals(409, reviewCall(admin, "POST", path + "/decisions", body.replace("外部施工单位", "其他外部单位"), requestKey, expected).statusCode());
+        assertEquals(original, db.queryForList("SELECT * FROM fams_inventory_observation WHERE id=?", id));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_inventory_review_decision WHERE observation_id=?", Integer.class, id));
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_inventory_finding_link WHERE observation_id=?", Integer.class, id));
+        assertEquals(1L, db.queryForObject("SELECT captured_result_count FROM fams_inventory_task WHERE id=?", Long.class, task));
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_asset WHERE id IN (933010,933011)"
+                + " AND (version<>0 OR last_inventory_business_date IS NOT NULL)", Integer.class));
+        var second = event.deepCopy().put("eventId", key());
+        var secondPhoto = ok(uploadPhoto(employee, task, second, key(), bytes));
+        second.putArray("photoIds").add(secondPhoto.path("objectId").asText());
+        assertEquals("FINDING_REVIEW", ok(observe(employee, task, second)).path("outcome").asText());
+        String secondId = db.queryForObject("SELECT CAST(id AS CHAR) FROM fams_inventory_observation"
+                + " WHERE task_id=? AND client_event_id=?", String.class, task, second.path("eventId").asText());
+        long next = db.queryForObject("SELECT version FROM fams_inventory_task WHERE id=?", Long.class, task);
+        ok(reviewCall(admin, "POST", base + "/differences/preparation",
+                "{\"observationIds\":[\"" + secondId + "\"]}", key(), next));
+        var secondView = ok(reviewCall(admin, "GET", base + "/findings/" + secondId, null, null, null));
+        long secondVersion = secondView.path("taskVersion").asLong();
+        String duplicate = "{\"subjectVersion\":0,\"method\":\"DUPLICATE_ASSET\",\"assetId\":\"933010\","
+                + "\"ownerVersion\":0,\"reason\":\"核对为已登记资产重复线索\","
+                + "\"evidence\":\"现场设备编号与现有正式资产卡一致，原照片与线索保留\"}";
+        String missingOwner = duplicate.replace("DUPLICATE_ASSET", "LINK_INBOUND")
+                .replace("\"ownerVersion\":0", "\"ownerVersion\":0,\"inboundReceiptId\":\"999999\"");
+        assertEquals(409, reviewCall(admin, "POST", base + "/findings/" + secondId + "/decisions",
+                missingOwner, key(), secondVersion).statusCode());
+        var secondResult = ok(reviewCall(admin, "POST", base + "/findings/" + secondId + "/decisions",
+                duplicate, key(), secondVersion));
+        assertEquals("CLOSED", secondResult.path("status").asText());
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_inventory_finding_link WHERE"
+                + " observation_id=? AND link_kind='DUPLICATE_ASSET' AND asset_id=933010", Integer.class, secondId));
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_asset WHERE id IN (933010,933011)"
+                + " AND (version<>0 OR last_inventory_business_date IS NOT NULL)", Integer.class));
+        db.update("DELETE FROM fams_account_role WHERE account_id=933001 AND role_code='ASSET_ADMIN'");
+        assertEquals(403, reviewCall(admin, "POST", path + "/decisions", body, requestKey, expected).statusCode());
+    }
+
+
+    @Test
+    void findingClosesOnlyAfterRealWarehouseInboundAcceptanceAndKeepsOriginalLinkReceipt() throws Exception {
+        String task = prepared();
+        configureFindingWarehouse();
+        db.update("UPDATE fams_asset SET asset_code='旧/码 甲' WHERE id=933012");
+        String draftBody = "{\"businessDate\":\"" + java.time.LocalDate.now() + "\",\"items\":[{\"asset\":{\"id\":\"933012\",\"version\":0},"
+                + "\"targetWarehouse\":{\"id\":\"933000\",\"version\":0},\"targetLocation\":{\"id\":\"933000\",\"version\":0}}]}";
+        var created = reviewCall(other, "POST", "/api/v1/inbound-receipts", draftBody, key(), 0L);
+        assertEquals(201, created.statusCode(), created.body());
+        var receipt = JSON.readTree(created.body());
+        String receiptId = receipt.path("id").asText();
+        var event = observation(task).putNull("itemId").putNull("assetVersion").put("assignmentVersion", 0)
+                .put("source", "MANUAL").put("manualReason", "现场盘盈设备待补建卡入库").putNull("assetCode");
+        ((tools.jackson.databind.node.ObjectNode) event.path("actual")).put("description", "现场实物与待入库草稿设备特征一致，待正式验收");
+        byte[] bytes = java.util.Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jSZkAAAAASUVORK5CYII=");
+        event.putArray("photoIds").add(ok(uploadPhoto(employee, task, event, key(), bytes)).path("objectId").asText());
+        assertEquals("FINDING_REVIEW", ok(observe(employee, task, event)).path("outcome").asText());
+        String id = db.queryForObject("SELECT CAST(id AS CHAR) FROM fams_inventory_observation WHERE task_id=? AND client_event_id=?", String.class, task, event.path("eventId").asText());
+        var original = db.queryForList("SELECT * FROM fams_inventory_observation WHERE id=?", id);
+        String base = "/api/v1/inventory-reviews/tasks/" + task;
+        long version = db.queryForObject("SELECT version FROM fams_inventory_task WHERE id=?", Long.class, task);
+        ok(reviewCall(admin, "POST", base + "/differences/preparation", "{\"observationIds\":[\"" + id + "\"]}", key(), version));
+        String path = base + "/findings/" + id;
+        long expected = ok(reviewCall(admin, "GET", path, null, null, null)).path("taskVersion").asLong();
+        String link = "{\"subjectVersion\":0,\"method\":\"LINK_INBOUND\",\"assetId\":\"933012\",\"inboundReceiptId\":\"" + receiptId
+                + "\",\"ownerVersion\":0,\"reason\":\"正式单据实物核对一致待入库\",\"evidence\":\"现场照片及设备特征与该入库项目一致，保持处理直至库管实际验收\"}";
+        assertEquals(409, reviewCall(admin, "POST", path + "/decisions", link, key(), expected).statusCode());
+        receipt = ok(reviewCall(other, "POST", "/api/v1/inbound-receipts/" + receiptId + "/submit", null, key(), 0L));
+        assertEquals("PENDING_ADMIN_DECISION", receipt.path("status").asText());
+        link = link.replace("\"ownerVersion\":0", "\"ownerVersion\":1");
+        db.execute("CREATE TRIGGER d618_finding_audit_failure BEFORE INSERT ON fams_audit_event FOR EACH ROW"
+                + " BEGIN IF NEW.action='INVENTORY_FINDING_DECIDED' THEN SIGNAL SQLSTATE '45000'"
+                + " SET MESSAGE_TEXT='owned finding audit failure'; END IF; END");
+        try {
+            assertEquals(500, reviewCall(admin, "POST", path + "/decisions", link, key(), expected).statusCode());
+        } finally {
+            db.execute("DROP TRIGGER d618_finding_audit_failure");
+        }
+        assertEquals(0L, db.queryForObject("SELECT version FROM fams_inventory_review_subject WHERE observation_id=? AND dimension='FINDING'", Long.class, id));
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_inventory_finding_link WHERE observation_id=?", Integer.class, id));
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_inventory_review_decision WHERE observation_id=?", Integer.class, id));
+        assertEquals(expected, db.queryForObject("SELECT version FROM fams_inventory_task WHERE id=?", Long.class, task));
+        String originalKey = key();
+        var nativeIdentity = new MiniWechatIdentityPort.Identity("finding-app", "finding-admin");
+        db.update("INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES (933001,?,NOW(3))", miniSessions.identityHash(nativeIdentity));
+        var nativeGrant = miniSessions.start(nativeIdentity, UUID.randomUUID());
+        var nativeScript = java.nio.file.Path.of(System.getProperty("user.dir")).getParent()
+                .resolve("apps/miniprogram/test/runtime-inventory-finding-http.mjs");
+        var builder = new ProcessBuilder("rtk", "proxy", "node", nativeScript.toString());
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_INVENTORY_TASK", task);
+        builder.environment().put("FAMS_TEST_FINDING_OBSERVATION", id);
+        builder.environment().put("FAMS_TEST_FINDING_RECEIPT", receipt.path("receiptNumber").asText());
+        builder.environment().put("FAMS_TEST_FINDING_KEY", originalKey);
+        builder.environment().put("FAMS_TEST_FINDING_ASSET_CODE", "旧/码 甲");
+        builder.environment().put("FAMS_TEST_FINDING_REASON", JSON.readTree(link).path("reason").asText());
+        builder.environment().put("FAMS_TEST_FINDING_EVIDENCE", JSON.readTree(link).path("evidence").asText());
+        builder.environment().put("FAMS_TEST_MINI_GRANT", JSON.writeValueAsString(java.util.Map.of(
+                "sessionToken", nativeGrant.sessionToken(), "accountId", nativeGrant.accountId(), "bindingId", nativeGrant.bindingId())));
+        var nativeProcess = builder.redirectErrorStream(true).start();
+        try {
+            assertTrue(nativeProcess.waitFor(60, java.util.concurrent.TimeUnit.SECONDS));
+            String output = new String(nativeProcess.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            assertEquals(0, nativeProcess.exitValue(), output);
+            var proof = JSON.readTree(output.strip());
+            assertTrue(proof.path("nativeFindingOriginalReplyRecovered").asBoolean());
+            assertTrue(proof.path("originalKeyPayloadVersionRetained").asBoolean());
+            assertTrue(proof.path("formalOwnerLookup").asBoolean());
+            assertTrue(proof.path("noPrematureClosure").asBoolean());
+            System.out.println("D6-18A7 native finding runtime proof: " + proof);
+        } finally {
+            if (nativeProcess.isAlive()) {
+                nativeProcess.descendants().forEach(ProcessHandle::destroyForcibly);
+                nativeProcess.destroyForcibly();
+                nativeProcess.waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
+            }
+        }
+        var first = ok(reviewCall(admin, "POST", path + "/decisions", link, originalKey, expected));
+        assertEquals("PROCESSING", first.path("status").asText());
+        receipt = ok(reviewCall(admin, "POST", "/api/v1/inbound-receipts/" + receiptId + "/decision", "{\"decision\":\"APPROVED\"}", key(), 1L));
+        receipt = ok(reviewCall(other, "POST", "/api/v1/inbound-receipts/" + receiptId + "/claim", null, key(), receipt.path("version").asLong()));
+        String refresh = link.replace("LINK_INBOUND", "REFRESH_INBOUND").replace("\"subjectVersion\":0", "\"subjectVersion\":1").replace("\"ownerVersion\":1", "\"ownerVersion\":" + receipt.path("version").asLong());
+        long beforeRefresh = first.path("version").asLong();
+        var pending = ok(reviewCall(admin, "POST", path + "/decisions", refresh, key(), beforeRefresh));
+        assertEquals("PROCESSING", pending.path("status").asText());
+        String item = receipt.path("items").get(0).path("id").asText();
+        var accepted = ok(reviewCall(other, "POST", "/api/v1/inbound-receipts/" + receiptId + "/items/" + item + "/accept",
+                JSON.writeValueAsString(java.util.Map.of("assetVersion", 1, "lockVersion", 0, "observedAssetCode", "旧/码 甲")), key(), receipt.path("version").asLong()));
+        String completed = link.replace("LINK_INBOUND", "REFRESH_INBOUND").replace("\"subjectVersion\":0", "\"subjectVersion\":2")
+                .replace("\"ownerVersion\":1", "\"ownerVersion\":" + accepted.path("receipt").path("version").asLong());
+        var beforeAsset = db.queryForList("SELECT * FROM fams_asset WHERE id=933012");
+        var closed = ok(reviewCall(admin, "POST", path + "/decisions", completed, key(), pending.path("version").asLong()));
+        assertEquals("CLOSED", closed.path("status").asText());
+        assertEquals(first, ok(reviewCall(admin, "POST", path + "/decisions", link, originalKey, expected)));
+        assertEquals(original, db.queryForList("SELECT * FROM fams_inventory_observation WHERE id=?", id));
+        assertEquals(beforeAsset, db.queryForList("SELECT * FROM fams_asset WHERE id=933012"));
+        assertEquals(3, db.queryForObject("SELECT COUNT(*) FROM fams_inventory_finding_link WHERE observation_id=?", Integer.class, id));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_inbound_acceptance WHERE asset_id=933012", Integer.class));
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=933012 AND released_at IS NULL", Integer.class));
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_todo WHERE business_type='INBOUND' AND business_id=? AND closed_at IS NULL", Integer.class, receiptId));
+        assertEquals(1L, db.queryForObject("SELECT captured_result_count FROM fams_inventory_task WHERE id=?", Long.class, task));
+    }
+
+
+    @Test
+    void rejectedAndCancelledFindingInboundLinksReopenOnlyCurrentVersionAndRetainHistory() throws Exception {
+        String task = prepared();
+        configureFindingWarehouse();
+        var event = observation(task).putNull("itemId").putNull("assetVersion").put("assignmentVersion", 0)
+                .put("source", "MANUAL").put("manualReason", "现场发现待核实企业设备").putNull("assetCode");
+        ((tools.jackson.databind.node.ObjectNode) event.path("actual")).put("description", "保留盘盈线索与原始照片，按正式入库处理");
+        byte[] bytes = java.util.Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jSZkAAAAASUVORK5CYII=");
+        event.putArray("photoIds").add(ok(uploadPhoto(employee, task, event, key(), bytes)).path("objectId").asText());
+        assertEquals("FINDING_REVIEW", ok(observe(employee, task, event)).path("outcome").asText());
+        String id = db.queryForObject("SELECT CAST(id AS CHAR) FROM fams_inventory_observation WHERE task_id=? AND client_event_id=?", String.class, task, event.path("eventId").asText());
+        var original = db.queryForList("SELECT * FROM fams_inventory_observation WHERE id=?", id);
+        String base = "/api/v1/inventory-reviews/tasks/" + task;
+        long version = db.queryForObject("SELECT version FROM fams_inventory_task WHERE id=?", Long.class, task);
+        ok(reviewCall(admin, "POST", base + "/differences/preparation", "{\"observationIds\":[\"" + id + "\"]}", key(), version));
+        String path = base + "/findings/" + id;
+        for (boolean reject : new boolean[] {false, true}) {
+            long assetVersion = db.queryForObject("SELECT version FROM fams_asset WHERE id=933012", Long.class);
+            String draft = "{\"businessDate\":\"" + java.time.LocalDate.now() + "\",\"items\":[{\"asset\":{\"id\":\"933012\",\"version\":" + assetVersion
+                    + "},\"targetWarehouse\":{\"id\":\"933000\",\"version\":0},\"targetLocation\":{\"id\":\"933000\",\"version\":0}}]}";
+            var created = reviewCall(other, "POST", "/api/v1/inbound-receipts", draft, key(), 0L);
+            assertEquals(201, created.statusCode(), created.body());
+            String receipt = JSON.readTree(created.body()).path("id").asText();
+            var submitted = ok(reviewCall(other, "POST", "/api/v1/inbound-receipts/" + receipt + "/submit", null, key(), 0L));
+            var detail = ok(reviewCall(admin, "GET", path, null, null, null));
+            var body = JSON.createObjectNode().put("subjectVersion", detail.path("subject").path("version").asLong()).put("method", "LINK_INBOUND")
+                    .put("assetId", "933012").put("inboundReceiptId", receipt).put("ownerVersion", submitted.path("version").asLong())
+                    .put("reason", "核对正式入库与现场照片").put("evidence", "正式入库项目与线索对应，保持处理中并保留此前所有决定");
+            var linked = ok(reviewCall(admin, "POST", path + "/decisions", body.toString(), key(), detail.path("taskVersion").asLong()));
+            assertEquals("PROCESSING", linked.path("status").asText());
+            var replaced = body.deepCopy().put("method", "NON_ENTERPRISE");
+            replaced.remove("assetId");
+            replaced.remove("inboundReceiptId");
+            replaced.remove("ownerVersion");
+            replaced.put("subjectVersion", linked.path("subjectVersion").asLong());
+            assertEquals(409, reviewCall(admin, "POST", path + "/decisions", replaced.toString(), key(), linked.path("version").asLong()).statusCode());
+            var ended = ok(reviewCall(reject ? admin : other, "POST", "/api/v1/inbound-receipts/" + receipt + (reject ? "/decision" : "/cancel"),
+                    reject ? "{\"decision\":\"REJECTED\",\"reason\":\"核对资料不符，退回重新办理\"}" : "{\"reason\":\"现场资料需重新核实，取消此单\"}", key(), submitted.path("version").asLong()));
+            var refresh = body.deepCopy().put("method", "REFRESH_INBOUND").put("subjectVersion", linked.path("subjectVersion").asLong()).put("ownerVersion", ended.path("version").asLong());
+            var reopened = ok(reviewCall(admin, "POST", path + "/decisions", refresh.toString(), key(), linked.path("version").asLong()));
+            assertEquals("OPEN", reopened.path("status").asText());
+            assertEquals(original, db.queryForList("SELECT * FROM fams_inventory_observation WHERE id=?", id));
+        }
+        assertEquals(4, db.queryForObject("SELECT COUNT(*) FROM fams_inventory_review_decision WHERE observation_id=?", Integer.class, id));
+        assertEquals(4, db.queryForObject("SELECT COUNT(*) FROM fams_inventory_finding_link WHERE observation_id=?", Integer.class, id));
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_inbound_acceptance WHERE asset_id=933012", Integer.class));
+        assertEquals(1L, db.queryForObject("SELECT captured_result_count FROM fams_inventory_task WHERE id=?", Long.class, task));
+    }
+
+
+    @Test
+    void concurrentFindingAdministratorsKeepOneDecisionAndAuditTheRejectedVersion() throws Exception {
+        String task = prepared();
+        db.update("INSERT INTO fams_account_role(account_id,role_code,granted_at) VALUES (933003,'ASSET_ADMIN',NOW(3))");
+        other = login(3);
+        var event = observation(task).putNull("itemId").putNull("assetVersion").put("assignmentVersion", 0)
+                .put("source", "MANUAL").put("manualReason", "盘盈权属尚需独立核实").putNull("assetCode");
+        ((tools.jackson.databind.node.ObjectNode) event.path("actual")).put("description", "现场线索与原照片保持不变，由管理员独立决定");
+        byte[] bytes = java.util.Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jSZkAAAAASUVORK5CYII=");
+        event.putArray("photoIds").add(ok(uploadPhoto(employee, task, event, key(), bytes)).path("objectId").asText());
+        assertEquals("FINDING_REVIEW", ok(observe(employee, task, event)).path("outcome").asText());
+        String id = db.queryForObject("SELECT CAST(id AS CHAR) FROM fams_inventory_observation WHERE task_id=? AND client_event_id=?", String.class, task, event.path("eventId").asText());
+        var original = db.queryForList("SELECT * FROM fams_inventory_observation WHERE id=?", id);
+        String base = "/api/v1/inventory-reviews/tasks/" + task;
+        String path = base + "/findings/" + id + "/decisions";
+        String valid = "{\"subjectVersion\":0,\"method\":\"NON_ENTERPRISE\",\"reason\":\"现场权属核对为施工单位设备\",\"evidence\":\"设备编号及现场登记证明非企业资产，保留全部原始线索\"}";
+        long before = db.queryForObject("SELECT version FROM fams_inventory_task WHERE id=?", Long.class, task);
+        assertEquals(409, reviewCall(admin, "POST", path, valid, key(), before).statusCode());
+        ok(reviewCall(admin, "POST", base + "/differences/preparation", "{\"observationIds\":[\"" + id + "\"]}", key(), before));
+        long version = db.queryForObject("SELECT version FROM fams_inventory_task WHERE id=?", Long.class, task);
+        for (String invalid : new String[] {
+            valid.replace("NON_ENTERPRISE", "UNKNOWN_METHOD"),
+            valid.replace("\"method\":", "\"assetId\":\"933010\",\"method\":"),
+            valid.replace("NON_ENTERPRISE", "DUPLICATE_ASSET"),
+            valid.replace("NON_ENTERPRISE", "LINK_INBOUND"),
+            valid.replace("现场权属核对为施工单位设备", " ")
+        }) {
+            assertEquals(400, reviewCall(admin, "POST", path, invalid, key(), version).statusCode());
+        }
+        String unavailable = valid.replace("NON_ENTERPRISE", "DUPLICATE_ASSET").replace("\"method\":", "\"assetId\":\"999999\",\"ownerVersion\":0,\"method\":");
+        assertEquals(409, reviewCall(admin, "POST", path, unavailable, key(), version).statusCode());
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_inventory_review_decision WHERE observation_id=?", Integer.class, id));
+        var start = new java.util.concurrent.CountDownLatch(1);
+        var futures = new java.util.ArrayList<java.util.concurrent.CompletableFuture<HttpResponse<String>>>();
+        int index = 0;
+        for (Session actor : java.util.List.of(admin, other)) {
+            final String requestBody = valid.replace("施工单位", index++ == 0 ? "施工甲单位" : "施工乙单位");
+            final String requestKey = key();
+            futures.add(java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                try {
+                    start.await();
+                    return reviewCall(actor, "POST", path, requestBody, requestKey, version);
+                } catch (Exception error) {
+                    throw new java.util.concurrent.CompletionException(error);
+                }
+            }));
+        }
+        start.countDown();
+        var responses = futures.stream().map(java.util.concurrent.CompletableFuture::join).toList();
+        assertEquals(java.util.List.of(200, 409), responses.stream().map(HttpResponse::statusCode).sorted().toList());
+        var conflict = JSON.readTree(responses.stream().filter(row -> row.statusCode() == 409).findFirst().orElseThrow().body());
+        assertTrue(conflict.path("fieldErrors").path("processedBy").asText().startsWith("inv"));
+        assertTrue(!Instant.parse(conflict.path("fieldErrors").path("processedAt").asText()).isAfter(Instant.now()));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_inventory_review_decision WHERE observation_id=?", Integer.class, id));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='INVENTORY_TASK' AND resource_id=? AND action='INVENTORY_FINDING_CONFLICT_REJECTED'", Integer.class, task));
+        assertEquals(original, db.queryForList("SELECT * FROM fams_inventory_observation WHERE id=?", id));
+    }
+
+
+    @Test
+    void findingOriginalReceiptSurvivesItsCommittingJvmForcedDeathAndAFreshJvm() throws Exception {
+        String task = prepared();
+        var event = observation(task).putNull("itemId").putNull("assetVersion").put("assignmentVersion", 0)
+                .put("source", "MANUAL").put("manualReason", "现场独立核实盘盈权属").putNull("assetCode");
+        ((tools.jackson.databind.node.ObjectNode) event.path("actual")).put("description", "原始线索照片保留，独立进程完成盘盈权属复核");
+        byte[] bytes = java.util.Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jSZkAAAAASUVORK5CYII=");
+        event.putArray("photoIds").add(ok(uploadPhoto(employee, task, event, key(), bytes)).path("objectId").asText());
+        ok(observe(employee, task, event));
+        String id = db.queryForObject("SELECT CAST(id AS CHAR) FROM fams_inventory_observation WHERE task_id=? AND client_event_id=?", String.class, task, event.path("eventId").asText());
+        var originalRaw = db.queryForList("SELECT * FROM fams_inventory_observation WHERE id=?", id);
+        long version = db.queryForObject("SELECT version FROM fams_inventory_task WHERE id=?", Long.class, task);
+        ok(reviewCall(admin, "POST", "/api/v1/inventory-reviews/tasks/" + task + "/differences/preparation", "{\"observationIds\":[\"" + id + "\"]}", key(), version));
+        version = db.queryForObject("SELECT version FROM fams_inventory_task WHERE id=?", Long.class, task);
+        String body = "{\"subjectVersion\":0,\"method\":\"NON_ENTERPRISE\",\"reason\":\"核实为外部施工单位设备\",\"evidence\":\"现场登记及原始设备照片证明为外部施工单位自有设备\"}";
+        String originalKey = key();
+        var state = java.nio.file.Files.createTempDirectory("fams-finding-jvm-");
+        String classpath = System.getProperty("surefire.test.class.path", System.getProperty("java.class.path"));
+        Process process = null;
+        try {
+            JsonNode first = null;
+            for (String stage : java.util.List.of("hold", "replay")) {
+                var builder = new ProcessBuilder("rtk", "proxy", System.getProperty("java.home") + "/bin/java",
+                        "-cp", classpath, "com.fams.auth.InventoryFindingProcess");
+                builder.environment().put("FAMS_TEST_FINDING_TASK", task);
+                builder.environment().put("FAMS_TEST_FINDING_OBSERVATION", id);
+                builder.environment().put("FAMS_TEST_FINDING_COOKIE", admin.cookie());
+                builder.environment().put("FAMS_TEST_FINDING_CSRF", admin.csrf());
+                builder.environment().put("FAMS_TEST_FINDING_KEY", originalKey);
+                builder.environment().put("FAMS_TEST_FINDING_VERSION", Long.toString(version));
+                builder.environment().put("FAMS_TEST_FINDING_BODY", body);
+                builder.environment().put("FAMS_TEST_FINDING_STAGE", stage);
+                var proofPath = state.resolve(stage + ".json");
+                var logPath = state.resolve(stage + ".log");
+                builder.environment().put("FAMS_TEST_FINDING_PROOF", proofPath.toString());
+                if (first != null) {
+                    builder.environment().put("FAMS_TEST_FINDING_ORIGINAL", first.path("response").toString());
+                }
+                process = builder.redirectErrorStream(true).redirectOutput(logPath.toFile()).start();
+                long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(60);
+                while (!java.nio.file.Files.exists(proofPath)) {
+                    assertTrue(process.isAlive(), java.nio.file.Files.readString(logPath));
+                    assertTrue(System.nanoTime() < deadline, "Owned finding JVM startup deadline");
+                    Thread.sleep(50);
+                }
+                var proof = JSON.readTree(java.nio.file.Files.readString(proofPath));
+                if (first == null) {
+                    first = proof;
+                    var children = process.descendants().toList();
+                    children.forEach(ProcessHandle::destroyForcibly);
+                    for (var child : children) {
+                        child.onExit().get(10, java.util.concurrent.TimeUnit.SECONDS);
+                    }
+                    if (process.isAlive()) {
+                        process.destroyForcibly();
+                    }
+                    assertTrue(process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS));
+                    assertTrue(ProcessHandle.of(proof.path("pid").asLong()).map(handle -> !handle.isAlive()).orElse(true));
+                } else {
+                    assertTrue(process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS));
+                    assertEquals(0, process.exitValue(), java.nio.file.Files.readString(logPath));
+                    assertTrue(first.path("pid").asLong() != proof.path("pid").asLong());
+                    assertTrue(proof.path("originalMatched").asBoolean());
+                    assertEquals(first.path("response"), proof.path("response"));
+                }
+            }
+            assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_inventory_review_decision WHERE observation_id=?", Integer.class, id));
+            assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_inventory_review_receipt WHERE task_id=? AND operation=?", Integer.class, task, "FINDING:" + id));
+            assertEquals(originalRaw, db.queryForList("SELECT * FROM fams_inventory_observation WHERE id=?", id));
+            System.out.println("D6-18A7 JVM proof: committingJvmKilled=true freshJvmOriginalReply=true singleDecision=true rawUnchanged=true");
+        } finally {
+            if (process != null && process.isAlive()) {
+                process.descendants().forEach(ProcessHandle::destroyForcibly);
+                process.destroyForcibly();
+                process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
+            }
+            try (var files = java.nio.file.Files.walk(state)) {
+                for (var file : files.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                    java.nio.file.Files.deleteIfExists(file);
+                }
+            }
+        }
+    }
+
+    private void configureFindingWarehouse() throws Exception {
+        db.update("INSERT INTO fams_account_role(account_id,role_code,granted_at) VALUES (933003,'WAREHOUSE_OPERATOR',NOW(3))");
+        other = login(3);
+        db.update("UPDATE fams_asset SET creator_account_id=933003,category_id=933000,owning_organization_id=933000,model='M1',unit='piece' WHERE id=933012");
+        db.update("INSERT INTO fams_numbering_rule(id,code,code_normalized,target,mode,fixed_prefix,date_part,sequence_length,status,version,created_at,updated_at)"
+                + " VALUES (933090,'FIND-IN','FIND-IN','INBOUND_RECEIPT','ENTERPRISE','FIN','NONE',8,'ACTIVE',0,NOW(3),NOW(3))");
+        db.update("UPDATE fams_business_parameter_version SET snapshot_json=? WHERE id=933000",
+                "{\"timezone\":\"Asia/Shanghai\",\"workWeek\":[\"MONDAY\",\"TUESDAY\",\"WEDNESDAY\",\"THURSDAY\",\"FRIDAY\"],\"holidays\":[],\"adjustedWorkdays\":[],"
+                + "\"adminDecisionDeadlineWorkdays\":2,\"warehouseClaimDeadlineWorkdays\":1,\"warehouseFirstExecutionDeadlineWorkdays\":2}");
+    }
+
+    private HttpResponse<String> reviewCall(Session actor, String method, String path,
+            String body, String requestKey, Long version) throws Exception {
+        var builder = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
+                .header("Cookie", actor.cookie()).header("X-CSRF-Token", actor.csrf());
+        if (requestKey != null) {
+            builder.header("Idempotency-Key", requestKey);
+        }
+        if (version != null) {
+            builder.header("If-Match-Version", version.toString());
+        }
+        if (body != null) {
+            builder.header("Content-Type", "application/json");
+        }
+        return http.send(builder.method(method, body == null ? HttpRequest.BodyPublishers.noBody()
+                : HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> uploadPhoto(

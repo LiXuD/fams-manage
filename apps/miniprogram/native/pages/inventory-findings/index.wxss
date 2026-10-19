@@ -1,0 +1,1 @@
+.card { margin: 20rpx 0; padding: 24rpx; background: white; } text { display: block; margin: 12rpx 0; overflow-wrap: anywhere; } textarea { width: 100%; } image { width: 100%; }

@@ -1,0 +1,69 @@
+{
+  "status": "WORKTREE_VERIFIED_NOT_FIXED_GATE",
+  "source_base": "98afb3a",
+  "upgrade_tests": 2,
+  "http_tests": 20,
+  "failures": 0,
+  "skipped": 0,
+  "runtime_log": "output/d6-18-a7-finding-runtime-9.log",
+  "runtime_log_sha256": "dc89e3fd60157167ef86680ac3b14e4d116841146db5597a500bd851e9adf08c",
+  "native_original_response_proof": {
+    "nativeFindingOriginalReplyRecovered": true,
+    "originalKeyPayloadVersionRetained": true,
+    "formalOwnerLookup": true,
+    "noPrematureClosure": true
+  },
+  "jvm_recovery": {
+    "committing_jvm_forcibly_killed": true,
+    "actual_java_pid_exit_verified": true,
+    "fresh_jvm_original_response": true,
+    "single_decision_and_receipt": true,
+    "raw_observation_unchanged": true
+  },
+  "formal_owner": [
+    "warehouse creates/submits an inbound receipt for an existing prepared asset-card draft; administrator approves; warehouse claims and actually accepts",
+    "link remains processing until real acceptance; cancelled/rejected current finding reopens and retains four history links",
+    "injected audit failure rolls back subject, decision, link, task version and receipt",
+    "two different administrators compete: one200 one409 with handler fields and persisted conflict audit"
+  ],
+  "web": {
+    "numTotalTests": 76,
+    "numPassedTests": 76,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "success": true
+  },
+  "mini_tests": 141,
+  "typecheck_lint": "PASS",
+  "browser": "NOT_VERIFIED: native confirm channel blocked; owned fixture only partial SQL, intentionally cleaned",
+  "boundaries": [
+    "Java/Spring test application and Node HTTPS adapter use real owned MySQL and real HTTP, not WeChat device or production acceptance",
+    "CLEAN scanner is explicit test fixture",
+    "Only itemless FINDING_REVIEW handled here; time/late findings keep their separate review obligations",
+    "Independent review, external services, remote CI, formal QA and production not completed",
+    "Fixed candidate full gate still pending"
+  ],
+  "gate_unit_tests": 32,
+  "static_package": {
+    "status": "PASS",
+    "tests_skipped": true,
+    "coverage_not_evaluated": true,
+    "log": "output/d6-18-a7-static-package-1.log"
+  },
+  "static_infrastructure_exceptions": {
+    "first_verify": "output/d6-18-a7-static-verify-1.log",
+    "findings": "3 EI_EXPOSE_REP2 for Spring-owned constructor infrastructure",
+    "exact_fields": [
+      "InventoryInboundPort.<init>.db",
+      "InventoryFindingService.<init>.db",
+      "InventoryFindingService.<init>.json"
+    ],
+    "rule": "Same exact constructor-field pattern as existing inventory services; business DTO and result checks remain active",
+    "second_verify": "PASS: Checkstyle0 SpotBugs0 (output/d6-18-a7-static-verify-2.log); repeated after final timestamp change pending",
+    "final_verify": "PASS: output/d6-18-a7-static-verify-3.log; tests and coverage explicitly deferred to fixed full gate"
+  },
+  "legacy_code_scope": "Unicode slash and space code through real native handler lookup and actual inbound acceptance passed run8; strict old route negatives remain",
+  "source_validation": "Final processedAt UTC conversion, native exact encoded legacy lookup, real formal owner and fresh JVM recovery verified in run9",
+  "checkstyle_findings": 0,
+  "spotbugs_findings": 0
+}

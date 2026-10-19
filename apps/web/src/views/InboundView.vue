@@ -35,6 +35,8 @@ async function load(): Promise<void> {
   try {
     const result = await listReceipts();
     receipts.value = result.items;
+    const linkedReceipt = new URLSearchParams(window.location.search).get("receiptId");
+    if (!selected.value && linkedReceipt && /^[1-9][0-9]{0,18}$/.test(linkedReceipt)) selected.value = await getReceipt(linkedReceipt);
     if (warehouseRole) {
       const [assetPage, warehousePage, locationPage] = await Promise.all([
         listAssets(), activeReferences("/warehouses"), activeReferences("/locations"),
