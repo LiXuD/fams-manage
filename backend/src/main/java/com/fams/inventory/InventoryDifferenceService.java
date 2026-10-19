@@ -501,7 +501,9 @@ public class InventoryDifferenceService {
             Map<String, Object> subject) {
         var fields = new LinkedHashMap<String, String>();
         fields.put("taskVersion", task.get("version").toString());
-        fields.put("readOnlyUrl", "/inventory-reviews/tasks/" + task.get("id") + "/differences");
+        fields.put(
+                "readOnlyUrl",
+                InventoryReviewLinks.task(actor, number(task, "id")) + "/differences");
         for (String name :
                 List.of(
                         "reviewer_username",

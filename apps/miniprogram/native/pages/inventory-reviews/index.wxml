@@ -1,0 +1,94 @@
+<view class="page">
+  <view class="card">
+    <text class="title">{{board.task.name || '盘点证据复核'}}</text>
+    <text>已采信 {{board.reviewedCount || 0}} / {{board.total || 0}}</text>
+    <text wx:if="error">{{error}}</text><text wx:if="notice">{{notice}}</text>
+    <text wx:if="conflict.processedBy">处理人：{{conflict.processedBy}}；时间：{{conflict.processedAt}}；结果：{{conflict.result}}</text>
+    <button bindtap="onRefresh" disabled="{{busy}}">刷新只读结果</button>
+    <button wx:if="retryable" bindtap="onRetry" disabled="{{busy}}">重试原操作（保留原请求）</button>
+    <button bindtap="onBack" disabled="{{busy || retryable}}">返回盘点任务</button>
+  </view>
+  <view wx:if="board" class="card">
+    <checkbox-group bindchange="onNormalSelection">
+      <view wx:for="{{board.items}}" wx:key="rowId">
+        <label wx:if="item.canAcceptNormal"><checkbox value="{{item.item.id}}" disabled="{{busy || retryable}}"/>正常观察待采信</label>
+        <text>{{item.item.snapshot_json.assetCode}} {{item.item.snapshot_json.name}} · {{item.stateLabel}}</text>
+        <text wx:if="item.blockedReason">{{item.blockedReason}}</text>
+        <button data-id="{{item.item.id}}" bindtap="onOpenItem" disabled="{{busy || retryable}}">查看三栏与原始证据</button>
+      </view>
+    </checkbox-group>
+    <button data-delta="-1" bindtap="onPage" disabled="{{busy || retryable || page === 1}}">上一页</button><text>第 {{page}} 页</text>
+    <button data-delta="1" bindtap="onPage" disabled="{{busy || retryable || page * 20 >= board.total}}">下一页</button>
+    <textarea placeholder="复核原因（至少3字）" value="{{reason}}" data-field="reason" bindinput="onField" disabled="{{busy || retryable}}"/>
+    <textarea placeholder="明确证据及核对依据（至少10字）" value="{{evidence}}" data-field="evidence" bindinput="onField" disabled="{{busy || retryable}}"/>
+    <button bindtap="onNormalAcceptance" disabled="{{busy || retryable || !normalIds.length || (board.task.task_status !== 'IN_PROGRESS' &amp;&amp; board.task.task_status !== 'WAITING_REVIEW')}}">逐项采信勾选的正常观察</button>
+  </view>
+  <view wx:if="item" class="card">
+    <text class="title">{{item.item.snapshot_json.assetCode}} · 账面、当前与复核结论</text>
+    <text>发布账面：{{item.item.snapshot_json.name}} / {{item.item.snapshot_json.locationName || item.item.snapshot_json.locationId}} / {{item.item.snapshot_json.custodyType}}</text>
+    <text>当前实况：{{item.current.name}} / {{item.current.locationName || item.current.locationId}} / {{item.current.custodyType}}；版本 {{item.current.version}}</text>
+    <text>账面责任：{{item.item.snapshot_json.responsibleEmployeeName || item.item.snapshot_json.departmentResponsibleEmployeeName || '仓库保管或待核实'}}；当前责任：{{item.current.responsibleEmployeeName || item.current.departmentResponsibleEmployeeName || '仓库保管或待核实'}}</text>
+    <text>发布后实际流转 {{item.movementEvents.length || 0}} 项；观察时间按本机时区显示。</text>
+    <view wx:for="{{item.movementEvents}}" wx:for-item="movement" wx:key="id"><text>流转 {{movement.id}} · {{movement.type}} · {{movement.occurredAt}}</text></view>
+    <text>复核结论：{{selection.review.review_status || '未选择'}}；证据 {{selection.review.observation_id || '无'}}；复盘轮次 {{selection.recheckGeneration}}</text>
+    <button bindtap="onPrepare" disabled="{{busy || retryable || (board.task.task_status !== 'IN_PROGRESS' &amp;&amp; board.task.task_status !== 'WAITING_REVIEW')}}">列入当前页原始证据的独立差异</button>
+    <view wx:for="{{observations}}" wx:for-item="raw" wx:key="id">
+      <text>证据 {{raw.id}} · {{raw.outcomeLabel}} · 第 {{raw.recheck_generation}} 轮</text>
+      <text>原始观察 {{raw.timeText}}；接收 {{raw.receivedText}}</text>
+      <text>位置 {{raw.facts_json.actual.locationHint || raw.facts_json.actual.locationId}}；使用方式 {{raw.facts_json.actual.custodyType}}；状况 {{raw.facts_json.actual.condition}}</text>
+      <text>{{raw.facts_json.actual.description}} {{raw.facts_json.actual.unknownReason}} {{raw.facts_json.actual.responsibilityHint}}</text>
+      <button wx:if="raw.eligible" data-id="{{raw.id}}" bindtap="onOpenObservation" disabled="{{busy || retryable}}">核对这条证据及关联业务</button>
+    </view>
+    <button data-delta="-1" bindtap="onObservationPage" disabled="{{busy || retryable || observationPage === 1}}">证据上一页</button>
+    <text>证据第 {{observationPage}} 页，共 {{observationTotal}} 条</text>
+    <button data-delta="1" bindtap="onObservationPage" disabled="{{busy || retryable || observationPage * 20 >= observationTotal}}">证据下一页</button>
+  </view>
+  <view wx:if="observation" class="card">
+    <text class="title">正在核对证据 {{observation.id}}</text>
+    <view wx:if="observation.outcome === 'TIME_REVIEW'">
+      <text>核实时间按本机时区填写。原始首次持久化及72小时期限保持不变，无法还原时须补盘。</text>
+      <picker mode="date" value="{{verifiedDate}}" data-field="verifiedDate" bindchange="onField" disabled="{{busy || retryable}}"><text>核实日期 {{verifiedDate}}</text></picker>
+      <picker mode="time" value="{{verifiedTime}}" data-field="verifiedTime" bindchange="onField" disabled="{{busy || retryable}}"><text>时分 {{verifiedTime}}</text></picker>
+      <input value="{{verifiedSecond}}" data-field="verifiedSecond" bindinput="onField" placeholder="秒及毫秒，例如 08.125" disabled="{{busy || retryable}}"/>
+    </view>
+    <button bindtap="onSelectEvidence" disabled="{{busy || retryable || (board.task.task_status !== 'IN_PROGRESS' &amp;&amp; board.task.task_status !== 'WAITING_REVIEW') || selection.review.review_status === 'ACCEPTED'}}">明确保存为待采信选择</button>
+    <picker range="{{evidenceMethods}}" value="{{evidenceMethod}}" bindchange="onEvidenceMethod" disabled="{{busy || retryable}}"><text>{{evidenceMethods[evidenceMethod]}}</text></picker>
+    <button bindtap="onEvidenceDecision" disabled="{{busy || retryable || (board.task.task_status !== 'IN_PROGRESS' &amp;&amp; board.task.task_status !== 'WAITING_REVIEW')}}">共同提交相关证据维度处置</button>
+    <checkbox-group bindchange="onDimensions">
+      <view wx:for="{{subjects}}" wx:for-item="subject" wx:key="dimension">
+        <label><checkbox value="{{subject.dimension}}" disabled="{{busy || retryable || subject.subject_status === 'CLOSED' || subject.subject_status === 'TRANSFERRED'}}"/>{{subject.label}} · {{subject.stateLabel}} · 版本 {{subject.version}}</label>
+        <text>{{subject.reviewer_username}} {{subject.reason}} {{subject.evidence}}</text>
+        <view wx:for="{{subject.decisions}}" wx:for-item="decision" wx:key="after_version"><text>历史 {{decision.after_version}}：{{decision.actor_username}} / {{decision.method}} / {{decision.subject_status}} / {{decision.reason}} / {{decision.evidence}}</text></view>
+        <view wx:for="{{subject.links}}" wx:for-item="link" wx:key="decision_version"><button data-id="{{link.transfer_id}}" bindtap="onViewTransfer" disabled="{{busy || retryable}}">只读查看正式调拨 {{link.transfer_id}}</button></view>
+      </view>
+    </checkbox-group>
+    <picker range="{{physicalMethods}}" value="{{physicalMethod}}" bindchange="onPhysicalMethod" disabled="{{busy || retryable}}"><text>{{physicalMethods[physicalMethod]}}</text></picker>
+    <view wx:if="physicalMethod === 2">
+      <text>正式调拨仍须原审批及库管实际执行。目标选择保留引用版本。</text>
+      <text>权属组织 {{owning.name || '保持现有'}}；使用部门 {{using.name || '未选'}}；责任人 {{employee.name || '未选'}}；仓库 {{warehouse.name || '未选'}}；位置 {{location.name || '未选'}}</text>
+      <button bindtap="onClearOwning" disabled="{{busy || retryable}}">保持现有权属组织</button>
+      <button data-kind="organization" bindtap="onCatalog" disabled="{{busy || retryable}}">选择组织与部门</button>
+      <button data-kind="warehouse" bindtap="onCatalog" disabled="{{busy || retryable}}">选择仓库</button>
+      <button data-kind="location" bindtap="onCatalog" disabled="{{busy || retryable}}">选择位置</button>
+      <button data-kind="employee" bindtap="onCatalog" disabled="{{busy || retryable}}">选择部门责任人</button>
+      <picker range="{{['个人使用','部门公用']}}" bindchange="onCustody" disabled="{{busy || retryable}}"><text>使用方式 {{custody === 'SHARED' ? '部门公用' : '个人使用'}}</text></picker>
+      <view wx:for="{{catalog.rows}}" wx:for-item="choice" wx:key="id">
+        <text>{{choice.name}}</text>
+        <view wx:if="catalog.kind === 'organization'"><button data-id="{{choice.id}}" data-field="owning" bindtap="onTargetChoice" disabled="{{busy || retryable}}">设为权属组织</button><button data-id="{{choice.id}}" data-field="using" bindtap="onTargetChoice" disabled="{{busy || retryable}}">设为使用部门</button></view>
+        <button wx:else data-id="{{choice.id}}" data-field="{{catalog.kind}}" bindtap="onTargetChoice" disabled="{{busy || retryable}}">选择此项</button>
+      </view>
+      <button data-delta="-1" bindtap="onCatalogPage" disabled="{{busy || retryable || catalog.page === 1}}">目录上一页</button><text>目录第 {{catalog.page}} 页，共 {{catalog.total}} 项</text>
+      <button data-delta="1" bindtap="onCatalogPage" disabled="{{busy || retryable || catalog.page * 200 >= catalog.total}}">目录下一页</button>
+    </view>
+    <button bindtap="onPhysicalDecision" disabled="{{busy || retryable || !dimensions.length || (board.task.task_status !== 'IN_PROGRESS' &amp;&amp; board.task.task_status !== 'WAITING_REVIEW')}}">共同提交勾选的独立差异</button>
+  </view>
+  <view wx:if="linked" class="card"><text class="title">正式调拨 {{linked.id}} · {{linked.requestStatus}}</text><text>完成 {{linked.completedQuantity}} / {{linked.totalQuantity}}</text><view wx:for="{{linked.items}}" wx:for-item="transferItem" wx:key="id"><text>资产 {{transferItem.assetId}} · {{transferItem.itemStatus}}；目标位置 {{transferItem.targetSnapshot.locationId}}</text></view></view>
+  <view wx:if="selection" class="card">
+    <button bindtap="onFinalAcceptance" disabled="{{busy || retryable || selection.review.review_status !== 'SELECTED' || (board.task.task_status !== 'IN_PROGRESS' &amp;&amp; board.task.task_status !== 'WAITING_REVIEW')}}">重新核对全部证据并最终采信</button>
+    <text class="title">选择与采信历史</text>
+    <view wx:for="{{selection.history}}" wx:for-item="history" wx:key="key"><text>第 {{history.recheck_generation}} 轮 / 版本 {{history.review_version}} / 证据 {{history.observation_id}} / {{history.review_status}}</text><text>{{history.actor_username}}；核实观察时间 {{history.timeText}}；{{history.reason}}；{{history.evidence}}</text></view>
+    <button data-delta="-1" bindtap="onHistoryPage" disabled="{{busy || retryable || historyPage === 1}}">历史上一页</button><text>历史第 {{historyPage}} 页，共 {{selection.total}} 条</text><button data-delta="1" bindtap="onHistoryPage" disabled="{{busy || retryable || historyPage * 20 >= selection.total}}">历史下一页</button>
+    <text class="title">未选证据处置历史</text><view wx:for="{{dispositions}}" wx:for-item="disposition" wx:key="observation_id"><text>证据 {{disposition.observation_id}} → 反证 {{disposition.counter_observation_id}} / {{disposition.disposition}}</text><text>{{disposition.actor_username}} / {{disposition.recorded_at}} / {{disposition.reason}} / {{disposition.evidence}}</text></view>
+    <button data-delta="-1" bindtap="onDispositionPage" disabled="{{busy || retryable || dispositionPage === 1}}">处置上一页</button><text>处置第 {{dispositionPage}} 页，共 {{dispositionTotal}} 条</text><button data-delta="1" bindtap="onDispositionPage" disabled="{{busy || retryable || dispositionPage * 20 >= dispositionTotal}}">处置下一页</button>
+  </view>
+</view>

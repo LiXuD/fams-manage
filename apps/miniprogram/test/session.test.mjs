@@ -131,3 +131,29 @@ test("logout clears local identity even when server confirmation is lost", async
     assert.equal(rt.saved, null);
     assert.equal(client.identity, null);
 });
+
+
+test("409 exposes only bounded immutable review metadata without persisting it in the credential", async () => {
+    const rt = runtime(saved); rt.reply = { statusCode: 409, data: { code: "INVENTORY_REVIEW_VERSION_CONFLICT", fieldErrors: {
+        processedBy: "Actual administrator", processedAt: "2026-10-18T00:00:00Z", method: "VERIFY_SELECTED", result: "CLOSED",
+        subjectVersion: "3", taskVersion: "9", readOnlyUrl: "/api/v1/mini/inventory-reviews/tasks/1/differences",
+        secret: "must not retain", reviewVersion: { nested: "not a string" } } } };
+    const client = new MiniSessionClient("https://api.example.test", rt);
+    await assert.rejects(client.request("POST", "/api/v1/mini/inventory-reviews/tasks/1/items/2/evidence-decisions", {}, { key: "request-key-01234567", version: 8 }), error => {
+        assert.equal(error.status, 409); assert.equal(error.fields.processedBy, "Actual administrator");
+        assert.equal(error.fields.method, "VERIFY_SELECTED"); assert.equal(error.fields.secret, undefined); assert.equal(error.fields.reviewVersion, undefined);
+        assert.equal(Object.isFrozen(error.fields), true); return true;
+    });
+    assert.deepEqual(rt.saved, saved); assert.equal(JSON.stringify(rt.saved).includes("Actual administrator"), false);
+});
+
+test("401 does not retain private conflict context and malformed 409 metadata is ignored", async () => {
+    const rt = runtime(saved); const client = new MiniSessionClient("https://api.example.test", rt);
+    rt.reply = { statusCode: 409, data: { code: "CONFLICT", fieldErrors: { processedBy: "x".repeat(1001), result: 9 } } };
+    await assert.rejects(client.request("GET", "/api/v1/mini/auth/session"), error => { assert.deepEqual(error.fields, {}); return true; });
+    rt.reply = { statusCode: 409, data: { code: "CONFLICT", fieldErrors: ["not metadata"] } };
+    await assert.rejects(client.request("GET", "/api/v1/mini/auth/session"), error => { assert.deepEqual(error.fields, {}); return true; });
+    rt.reply = { statusCode: 401, data: { code: "AUTH_SESSION_INVALID", fieldErrors: { processedBy: "Private prior administrator" } } };
+    await assert.rejects(client.request("GET", "/api/v1/mini/auth/session"), error => { assert.deepEqual(error.fields, {}); return true; });
+    assert.equal(client.identity, null); assert.equal(rt.saved, null);
+});

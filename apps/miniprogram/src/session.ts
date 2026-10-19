@@ -30,10 +30,20 @@ interface LoginGrant {
 export class MiniRequestError extends Error {
     readonly status: number;
     readonly code: string;
-    constructor(status: number, code: string) {
+    readonly fields: Readonly<Record<string, string>>;
+    constructor(status: number, code: string, metadata: unknown = null) {
         super(code);
         this.status = status;
         this.code = code;
+        const fields: Record<string, string> = {};
+        if (status === 409 && metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
+            const source = metadata as Record<string, unknown>;
+            for (const name of ["processedBy", "processedAt", "method", "result", "taskVersion", "subjectVersion", "reviewVersion", "readOnlyUrl"]) {
+                const value = source[name];
+                if (typeof value === "string" && value.length <= 1000) fields[name] = value;
+            }
+        }
+        this.fields = Object.freeze(fields);
     }
 }
 
@@ -191,9 +201,9 @@ export class MiniSessionClient {
 
     private checkResponse(response: { statusCode: number; data: unknown }): void {
         if (response.statusCode >= 200 && response.statusCode < 300) return;
-        const data = response.data as { code?: unknown } | null;
+        const data = response.data as { code?: unknown; fieldErrors?: unknown } | null;
         const code = typeof data?.code === "string" && /^[A-Z][A-Z0-9_]{0,63}$/.test(data.code)
             ? data.code : "MINI_REQUEST_FAILED";
-        throw new MiniRequestError(response.statusCode, code);
+        throw new MiniRequestError(response.statusCode, code, data?.fieldErrors);
     }
 }

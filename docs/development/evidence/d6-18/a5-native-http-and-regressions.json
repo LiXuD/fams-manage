@@ -1,0 +1,95 @@
+{
+  "source_head_before_changes": "1b230ac122a20abe867b98d6a5ceb22af84fe682",
+  "scope": "D6-18A5 working tree; not a fixed candidate gate",
+  "runtime_suites": {
+    "InventoryReviewUpgradeRuntimeCase": {
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "InventoryDifferenceUpgradeRuntimeCase": {
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "InventorySelectionUpgradeRuntimeCase": {
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "InventoryEvidenceUpgradeRuntimeCase": {
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "InventoryReviewHttpRuntimeCase": {
+      "tests": 22,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "HandoverHttpTest": {
+      "tests": 82,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "mini_tests": {
+    "tests": 102,
+    "failures": 0,
+    "skipped": 0,
+    "log": "output/d6-18-a5-mini-test-4.log"
+  },
+  "runtime_evidence": {
+    "inventory": "output/d6-18-a5-runtime-5.log",
+    "owner_regression": "output/d6-18-a5-owner-regression.log",
+    "source_limit": "Inventory suites after target identifier fix; Handover suite after additional delivery timestamp fix; full candidate gate pending"
+  },
+  "static_checks": {
+    "checkstyle_errors": 0,
+    "spotbugs_log": "output/d6-18-a5-package-static-2.log",
+    "spotbugs_bugs": 0,
+    "spotbugs_errors": 0
+  },
+  "external_boundaries": [
+    "Opaque sessions directly provisioned by test service",
+    "Loopback HTTPS bridge substitutes for actual HTTPS deployment",
+    "No WeChat/device/WXML rendering acceptance",
+    "Administrator retry is page-instance memory, not disk recovery"
+  ],
+  "full_browser_acceptance": "NOT_VERIFIED",
+  "browser_partial": {
+    "accepted": 0,
+    "selected": 1,
+    "subjects": 0,
+    "decisions": 0,
+    "observations": 3,
+    "web_url": "http://localhost:57170",
+    "task_id": "1",
+    "admin_username": "owned18admin",
+    "artifact_sha256": "c0476c13fc10624b4ec3a26431eeb1d631d1769587c9c70cde52775de964461d",
+    "source_state": "D6-18A5 working tree after 1b230ac; not fixed gate",
+    "full_browser_acceptance": "NOT_VERIFIED",
+    "observed_at": "2026-10-19T01:07:32.551788+00:00",
+    "reason": "Second JavaScript confirm blocked CUA focus emulation; no repeated submission; owned runtime interrupted for cleanup before new package build",
+    "artifact_limitation": "Before TransferService target identifier response fix and delivery timestamp fix"
+  },
+  "failure_logs": [
+    "output/d6-18-a5-runtime-1.log",
+    "output/d6-18-a5-runtime-4.log",
+    "output/d6-18-a5-owner-regression-1.log"
+  ],
+  "remaining": [
+    "Fixed candidate gate",
+    "Complete PC browser flow",
+    "Photo reading",
+    "Synchronization/sealing/late evidence",
+    "Finding/repair/loss owner flows",
+    "Independent review and external acceptance"
+  ]
+}

@@ -229,7 +229,9 @@ class InventoryReviewHttpRuntimeCase {
         db.update("DELETE FROM fams_account_role WHERE account_id BETWEEN 943001 AND 943005");
         db.update("DELETE FROM fams_system_account WHERE id BETWEEN 943001 AND 943005");
         db.update("DELETE FROM fams_employee WHERE id BETWEEN 943001 AND 943005");
-        db.update("DELETE FROM fams_location WHERE id IN (943000,943099,9007199254740993)");
+        db.update(
+                "DELETE FROM fams_location WHERE id IN"
+                    + " (943000,943099,9007199254740993,9007199254740995)");
         for (String table :
                 new String[] {"fams_warehouse", "fams_asset_category", "fams_organization"}) {
             db.update("DELETE FROM " + table + " WHERE id=943000");
@@ -479,6 +481,220 @@ class InventoryReviewHttpRuntimeCase {
         assertEquals(401, review(admin, task, version, key, one).statusCode());
         assertEquals(
                 1, count("SELECT COUNT(*) FROM fams_inventory_item_review WHERE task_id=?", task));
+    }
+
+    @Test
+    void nativeReviewHandlersPersistDecisionsAndReplayAnActuallyLostAcceptanceReply()
+            throws Exception {
+        String task = differenceTask(false);
+        var source = view(task).path("items").get(0);
+        String item = source.path("item").path("id").asText();
+        String observation = source.path("candidate").path("id").asText();
+        String counter =
+                db.queryForObject(
+                        "SELECT CAST(id AS CHAR) FROM fams_inventory_observation WHERE task_id=?"
+                                + " AND outcome='CONFLICT_REVIEW'",
+                        String.class,
+                        task);
+        var raw =
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_observation WHERE task_id=? ORDER BY id",
+                        task);
+        var identity = new MiniWechatIdentityPort.Identity("review-app", "native-admin-review");
+        db.update(
+                "INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES"
+                        + " (943001,?,NOW(3))",
+                miniSessions.identityHash(identity));
+        var grant = miniSessions.start(identity, UUID.randomUUID());
+        var script =
+                java.nio.file.Path.of(System.getProperty("user.dir"))
+                        .getParent()
+                        .resolve("apps/miniprogram/test/runtime-inventory-review-http.mjs");
+        var builder = new ProcessBuilder("rtk", "proxy", "node", script.toString());
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_INVENTORY_TASK", task);
+        builder.environment().put("FAMS_TEST_INVENTORY_ITEM", item);
+        builder.environment().put("FAMS_TEST_INVENTORY_OBSERVATION", observation);
+        builder.environment().put("FAMS_TEST_INVENTORY_COUNTER", counter);
+        builder.environment()
+                .put(
+                        "FAMS_TEST_MINI_GRANT",
+                        JSON.writeValueAsString(
+                                java.util.Map.of(
+                                        "sessionToken",
+                                        grant.sessionToken(),
+                                        "accountId",
+                                        grant.accountId(),
+                                        "bindingId",
+                                        grant.bindingId())));
+        var log = java.nio.file.Files.createTempFile("fams-native-review-", ".log");
+        try {
+            var process = builder.redirectErrorStream(true).redirectOutput(log.toFile()).start();
+            if (!process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                throw new IllegalStateException("Native review HTTP timed out");
+            }
+            assertEquals(0, process.exitValue(), java.nio.file.Files.readString(log));
+        } finally {
+            java.nio.file.Files.deleteIfExists(log);
+        }
+        assertEquals(
+                raw,
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_observation WHERE task_id=? ORDER BY id",
+                        task));
+        assertEquals(
+                2,
+                count(
+                        "SELECT COUNT(*) FROM fams_inventory_item_review WHERE task_id=?"
+                                + " AND review_status='ACCEPTED'",
+                        task));
+        assertEquals(
+                2,
+                count("SELECT COUNT(*) FROM fams_inventory_selection_event WHERE task_id=?", task));
+        assertEquals(
+                1,
+                count(
+                        "SELECT COUNT(*) FROM fams_inventory_evidence_disposition WHERE task_id=?",
+                        task));
+        assertEquals(
+                3,
+                count("SELECT COUNT(*) FROM fams_inventory_review_decision WHERE task_id=?", task));
+        assertEquals(
+                0,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_asset WHERE id BETWEEN 943010 AND 943011"
+                                + " AND (last_inventory_business_date IS NOT NULL OR version<>0)",
+                        Integer.class));
+        db.update(
+                "DELETE FROM fams_account_role WHERE account_id=943001 AND"
+                        + " role_code='ASSET_ADMIN'");
+        assertEquals(
+                403,
+                http.send(
+                                HttpRequest.newBuilder(
+                                                URI.create(
+                                                        "http://127.0.0.1:"
+                                                                + port
+                                                                + "/api/v1/mini/inventory-reviews/tasks/"
+                                                                + task))
+                                        .header("X-FAMS-Mini-Session", grant.sessionToken())
+                                        .GET()
+                                        .build(),
+                                HttpResponse.BodyHandlers.ofString())
+                        .statusCode());
+    }
+
+    @Test
+    void nativeConflictReturnsOnlyItsOwnApiChannelAndActualReviewer() throws Exception {
+        String task = prepared();
+        var view = view(task);
+        var identity = new MiniWechatIdentityPort.Identity("review-app", "native-conflict-review");
+        db.update(
+                "INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES"
+                        + " (943001,?,NOW(3))",
+                miniSessions.identityHash(identity));
+        var grant = miniSessions.start(identity, UUID.randomUUID());
+        String path = "/api/v1/mini/inventory-reviews/tasks/" + task + "/normal-acceptance";
+        long version = view.path("task").path("version").asLong();
+        String input = batch(view, 0);
+        ok(mini(grant.sessionToken(), path, input, key(), version));
+        var stale = mini(grant.sessionToken(), path, input, key(), version);
+        assertEquals(409, stale.statusCode(), stale.body());
+        var fields = JSON.readTree(stale.body()).path("fieldErrors");
+        assertEquals(
+                "/api/v1/mini/inventory-reviews/tasks/" + task,
+                fields.path("readOnlyUrl").asText());
+        assertEquals("review1", fields.path("processedBy").asText());
+        assertEquals(
+                1, count("SELECT COUNT(*) FROM fams_inventory_item_review WHERE task_id=?", task));
+    }
+
+    @Test
+    void nativeReviewCreatesFormalTransferThroughCurrentOwnerCatalogsAndKeepsItProcessing()
+            throws Exception {
+        String task = differenceTask(false);
+        db.update(
+                "INSERT INTO"
+                    + " fams_location(id,code,code_normalized,name,location_type,warehouse_id,status,created_at,updated_at)"
+                    + " VALUES (9007199254740995,'NATIVEBIG','NATIVEBIG','Native large"
+                    + " identifier','BIN',943000,'ACTIVE',NOW(3),NOW(3))");
+        var source = view(task).path("items").get(0);
+        var identity = new MiniWechatIdentityPort.Identity("review-app", "native-formal-review");
+        db.update(
+                "INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES"
+                        + " (943001,?,NOW(3))",
+                miniSessions.identityHash(identity));
+        var grant = miniSessions.start(identity, UUID.randomUUID());
+        var script =
+                java.nio.file.Path.of(System.getProperty("user.dir"))
+                        .getParent()
+                        .resolve("apps/miniprogram/test/runtime-inventory-review-http.mjs");
+        var builder = new ProcessBuilder("rtk", "proxy", "node", script.toString());
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_INVENTORY_TASK", task);
+        builder.environment()
+                .put("FAMS_TEST_INVENTORY_ITEM", source.path("item").path("id").asText());
+        builder.environment()
+                .put(
+                        "FAMS_TEST_INVENTORY_OBSERVATION",
+                        source.path("candidate").path("id").asText());
+        builder.environment()
+                .put(
+                        "FAMS_TEST_INVENTORY_COUNTER",
+                        db.queryForObject(
+                                "SELECT CAST(id AS CHAR) FROM fams_inventory_observation WHERE"
+                                        + " task_id=? AND outcome='CONFLICT_REVIEW'",
+                                String.class,
+                                task));
+        builder.environment().put("FAMS_TEST_INVENTORY_MODE", "formal");
+        builder.environment().put("FAMS_TEST_INVENTORY_TARGET", "9007199254740995");
+        builder.environment()
+                .put(
+                        "FAMS_TEST_MINI_GRANT",
+                        JSON.writeValueAsString(
+                                java.util.Map.of(
+                                        "sessionToken",
+                                        grant.sessionToken(),
+                                        "accountId",
+                                        grant.accountId(),
+                                        "bindingId",
+                                        grant.bindingId())));
+        var log = java.nio.file.Files.createTempFile("fams-native-formal-review-", ".log");
+        try {
+            var process = builder.redirectErrorStream(true).redirectOutput(log.toFile()).start();
+            if (!process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                throw new IllegalStateException("Native formal review HTTP timed out");
+            }
+            assertEquals(0, process.exitValue(), java.nio.file.Files.readString(log));
+        } finally {
+            java.nio.file.Files.deleteIfExists(log);
+        }
+        assertEquals(
+                1,
+                count("SELECT COUNT(*) FROM fams_transfer WHERE creator_account_id=943001", null));
+        assertEquals(
+                1,
+                count(
+                        "SELECT COUNT(*) FROM fams_todo WHERE business_type='TRANSFER' AND"
+                                + " closed_at IS NULL",
+                        null));
+        assertEquals(
+                1,
+                count(
+                        "SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=943010 AND"
+                                + " released_at IS NULL",
+                        null));
+        assertEquals(
+                2,
+                count("SELECT COUNT(*) FROM fams_inventory_review_decision WHERE task_id=?", task));
+        assertEquals(
+                0,
+                count(
+                        "SELECT COUNT(*) FROM fams_inventory_item_review WHERE task_id=? AND"
+                                + " review_status='ACCEPTED'",
+                        task));
     }
 
     @Test
@@ -1733,7 +1949,7 @@ class InventoryReviewHttpRuntimeCase {
         String observation =
                 db.queryForObject(
                         "SELECT CAST(id AS CHAR) FROM fams_inventory_observation WHERE task_id=?"
-                            + " AND outcome='CONFLICT_REVIEW'",
+                                + " AND outcome='CONFLICT_REVIEW'",
                         String.class,
                         task);
         String path =

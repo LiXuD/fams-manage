@@ -288,13 +288,33 @@ public class InventorySelectionService {
         var task = task(taskId);
         var item = item(taskId, itemId);
         var raw = observation(taskId, itemId, observationId, number(item, "recheck_generation"));
+        var rows =
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_review_subject WHERE observation_id=? ORDER"
+                            + " BY dimension FOR SHARE",
+                        observationId);
+        var result = new java.util.ArrayList<Object>();
+        for (var row : rows) {
+            var value = new LinkedHashMap<String, Object>(row);
+            value.put(
+                    "decisions",
+                    db.queryForList(
+                            "SELECT * FROM fams_inventory_review_decision WHERE observation_id=?"
+                                + " AND dimension=? ORDER BY after_version FOR SHARE",
+                            observationId,
+                            row.get("dimension")));
+            value.put(
+                    "links",
+                    db.queryForList(
+                            "SELECT * FROM fams_inventory_review_transfer WHERE observation_id=?"
+                                + " AND dimension=? ORDER BY decision_version FOR SHARE",
+                            observationId,
+                            row.get("dimension")));
+            result.add(wire(value));
+        }
         return Map.of(
                 "items",
-                wire(
-                        db.queryForList(
-                                "SELECT * FROM fams_inventory_review_subject WHERE observation_id=?"
-                                        + " ORDER BY dimension FOR SHARE",
-                                observationId)),
+                result,
                 "requiredDimensions",
                 differences.requiredDimensions(task, raw).stream().sorted().toList());
     }
@@ -368,7 +388,7 @@ public class InventorySelectionService {
             var prior =
                     db.queryForList(
                             "SELECT * FROM fams_inventory_evidence_disposition WHERE"
-                                + " observation_id=? FOR UPDATE",
+                                    + " observation_id=? FOR UPDATE",
                             input.observationId());
             if (!prior.isEmpty()) {
                 rejectSubject(
@@ -807,8 +827,7 @@ public class InventorySelectionService {
         fields.put("taskVersion", task.get("version").toString());
         fields.put(
                 "readOnlyUrl",
-                "/api/v1/inventory-reviews/tasks/"
-                        + task.get("id")
+                InventoryReviewLinks.task(actor, number(task, "id"))
                         + (disposition
                                 ? "/items/" + row.get("item_id") + "/evidence-dispositions"
                                 : "/differences"));
@@ -993,7 +1012,7 @@ public class InventorySelectionService {
             Map<String, Object> review) {
         var fields = new LinkedHashMap<String, String>();
         fields.put("taskVersion", task.get("version").toString());
-        fields.put("readOnlyUrl", "/inventory-reviews/tasks/" + task.get("id"));
+        fields.put("readOnlyUrl", InventoryReviewLinks.task(actor, number(task, "id")));
         fields.put(
                 "result", review.getOrDefault("review_status", task.get("task_status")).toString());
         if (!review.isEmpty()) {

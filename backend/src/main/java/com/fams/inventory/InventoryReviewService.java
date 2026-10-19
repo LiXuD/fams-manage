@@ -117,7 +117,7 @@ public class InventoryReviewService {
         }
         if (number(task, "version") != expectedVersion
                 || !List.of("IN_PROGRESS", "WAITING_REVIEW").contains(task.get("task_status"))) {
-            reject(actor, current, task, "INVENTORY_REVIEW_TASK_CHANGED", conflictFields(task, input));
+            reject(actor, current, task, "INVENTORY_REVIEW_TASK_CHANGED", conflictFields(actor, task, input));
         }
         if (input.items().stream().map(InventoryReviewInput.Item::itemId).distinct().count() != input.items().size()) {
             throw new InventoryFailure(400, "INVENTORY_REVIEW_ITEM_DUPLICATE");
@@ -263,11 +263,11 @@ public class InventoryReviewService {
                 + " WHERE r.task_id=? AND r.review_status='ACCEPTED' FOR SHARE", Long.class, task));
     }
 
-    private Map<String, String> conflictFields(Map<String, Object> task, InventoryReviewInput.NormalBatch input) {
+    private Map<String, String> conflictFields(Actor actor, Map<String, Object> task, InventoryReviewInput.NormalBatch input) {
         Map<String, String> fields = new LinkedHashMap<>();
         fields.put("taskVersion", Long.toString(number(task, "version")));
         fields.put("taskStatus", task.get("task_status").toString());
-        fields.put("readOnlyUrl", "/inventory-reviews/tasks/" + task.get("id"));
+        fields.put("readOnlyUrl", InventoryReviewLinks.task(actor, number(task, "id")));
         for (var item : input.items()) {
             var rows = db.queryForList("SELECT reviewer_account_id,reviewer_username,reviewed_at,review_status,version"
                     + " FROM fams_inventory_item_review WHERE task_id=? AND item_id=? AND recheck_generation=? FOR SHARE",

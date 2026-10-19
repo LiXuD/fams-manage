@@ -1,0 +1,4 @@
+text { display: block; overflow-wrap: anywhere; margin: 12rpx 0; }
+textarea { box-sizing: border-box; width: 100%; min-height: 180rpx; margin: 24rpx 0; padding: 20rpx; border: 1rpx solid #c9d4e1; border-radius: 8rpx; background: #fff; }
+picker { border: 1rpx solid #c9d4e1; border-radius: 8rpx; padding: 12rpx 20rpx; margin-top: 24rpx; }
+checkbox-group > view { border-bottom: 1rpx solid #e2e8f0; padding: 20rpx 0; }

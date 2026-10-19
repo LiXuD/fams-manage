@@ -1364,7 +1364,8 @@ class TransferService {
                     }
                     Object output = value;
                     if (value != null && key.endsWith("_json")) {
-                        output = json.readTree(value.toString());
+                        output = "target_snapshot_json".equals(key)
+                                ? wireTarget(value.toString()) : json.readTree(value.toString());
                     } else if (value instanceof Timestamp
                             || value instanceof java.time.LocalDateTime) {
                         output = instant(value).toString();
@@ -1375,5 +1376,19 @@ class TransferService {
                     result.put(name.toString(), output);
                 });
         return result;
+    }
+
+    private tools.jackson.databind.JsonNode wireTarget(String value) {
+        var node = json.readTree(value);
+        if (node instanceof tools.jackson.databind.node.ObjectNode target) {
+            for (String field : List.of("owningOrganizationId", "usingOrganizationId",
+                    "employeeId", "warehouseId", "locationId")) {
+                var identifier = target.get(field);
+                if (identifier != null && identifier.isIntegralNumber()) {
+                    target.put(field, identifier.asText());
+                }
+            }
+        }
+        return node;
     }
 }

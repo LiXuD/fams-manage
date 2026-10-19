@@ -3,10 +3,10 @@ import { MiniRequestError } from "./session.ts";
 interface Task { id: string; name: string; task_status: string; starts_at: string; due_at: string; overdue?: boolean; statusLabel?: string; startsText?: string; dueText?: string }
 interface Item { id: string; assignment_version: number; snapshot_json: { assetCode: string; name: string; locationName?: string;
     responsibleEmployeeName?: string; departmentResponsibleEmployeeName?: string; custodyType?: string } }
-interface Data { tasks: Task[]; task: Task | null; items: Item[]; page: number; total: number; itemPage: number; itemTotal: number; busy: boolean; error: string }
+interface Data { canManage: boolean; tasks: Task[]; task: Task | null; items: Item[]; page: number; total: number; itemPage: number; itemTotal: number; busy: boolean; error: string }
 interface Context { data: Data; setData(value: Partial<Data>): void }
 interface Event { currentTarget: { dataset: { id?: string; delta?: string } } }
-const empty = (): Data => ({ tasks: [], task: null, items: [], page: 1, total: 0, itemPage: 1, itemTotal: 0, busy: false, error: "" });
+const empty = (): Data => ({ canManage: false, tasks: [], task: null, items: [], page: 1, total: 0, itemPage: 1, itemTotal: 0, busy: false, error: "" });
 const base = "/api/v1/mini/inventory-tasks";
 const statusLabels: Record<string, string> = { DRAFT: "草稿", READY: "待开始", IN_PROGRESS: "进行中", WAITING_REVIEW: "待复核", COMPLETED: "已完成", CANCELLED: "已取消", TERMINATED: "已终止" };
 function displayTime(value: string) {
@@ -30,21 +30,34 @@ export function createInventoryPage(getServices: () => MiniServices) {
         const epoch = ++generation; page.setData({ busy: true, error: "" });
         try {
             if (id) {
-                const result = await services.sessions.request("GET", `${base}/${encodeURIComponent(id)}?page=${page.data.itemPage}&pageSize=20`) as { task: Task; items: Item[]; total: number };
-                if (current(epoch)) page.setData({ task: displayTask(result.task), items: result.items, itemTotal: result.total });
+                const result = await services.sessions.request("GET", `${base}/${encodeURIComponent(id)}?page=${page.data.itemPage}&pageSize=20`) as { task: Task; items: Item[]; total: number; canManage?: boolean };
+                if (current(epoch)) page.setData({ task: displayTask(result.task), items: result.items, itemTotal: result.total, canManage: result.canManage === true });
             } else {
-                const result = await services.sessions.request("GET", `${base}?page=${page.data.page}&pageSize=20`) as { items: Task[]; total: number };
-                if (current(epoch)) page.setData({ tasks: result.items.map(displayTask), total: result.total, task: null, items: [], itemTotal: 0 });
+                const result = await services.sessions.request("GET", `${base}?page=${page.data.page}&pageSize=20`) as { items: Task[]; total: number; canManage?: boolean };
+                if (current(epoch)) page.setData({ tasks: result.items.map(displayTask), total: result.total, task: null, items: [], itemTotal: 0, canManage: result.canManage === true });
             }
-        } catch (error) { if (current(epoch)) { page.setData({ task: null, items: [], itemTotal: 0 }); failure(page, error); } }
+        } catch (error) {
+            if (live && epoch === generation && !services.sessions.identity) {
+                generation++; page.setData(empty()); failure(page, error);
+            } else if (current(epoch)) {
+                page.setData({ task: null, items: [], itemTotal: 0, canManage: false,
+                    ...(error instanceof MiniRequestError && [401, 403, 404].includes(error.status) ? { tasks: [], total: 0 } : {}) });
+                failure(page, error);
+            }
+        }
         finally { if (current(epoch)) page.setData({ busy: false }); }
     };
     return {
         data: empty(),
         async onShow(this: Context) {
-            live = true; services = getServices(); const next = JSON.stringify(services.sessions.identity);
-            if (next !== identity) { identity = next; this.setData(empty()); }
-            await read(this);
+            live = true;
+            try {
+                services = getServices(); const next = JSON.stringify(services.sessions.identity);
+                if (next !== identity) { identity = next; this.setData(empty()); }
+                await read(this);
+            } catch {
+                generation++; this.setData({ ...empty(), error: "服务暂未就绪，请联系管理员。" });
+            }
         },
         onHide() { live = false; generation++; },
         onUnload() { live = false; generation++; },
@@ -52,6 +65,10 @@ export function createInventoryPage(getServices: () => MiniServices) {
         async onOpen(this: Context, event: Event) {
             if (this.data.busy || !event.currentTarget.dataset.id) return;
             this.setData({ itemPage: 1 }); await read(this, event.currentTarget.dataset.id);
+        },
+        onReview(this: Context) {
+            if (this.data.busy || !this.data.canManage || !this.data.task || !current(generation)) return;
+            services.navigate("/pages/inventory-reviews/index?taskId=" + encodeURIComponent(this.data.task.id));
         },
         async onPage(this: Context, event: Event) {
             if (this.data.busy) return;
