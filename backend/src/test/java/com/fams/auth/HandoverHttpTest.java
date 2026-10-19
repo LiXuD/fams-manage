@@ -1125,6 +1125,9 @@ class HandoverHttpTest {
                 259200,
                 java.time.Duration.between(deliveryTime.toInstant(), deadline.toInstant())
                         .getSeconds());
+        assertEquals(deliveryTime, jdbc.queryForObject(
+                "SELECT delivered_at FROM fams_requisition_allocation WHERE id=?",
+                Timestamp.class, value.path("allocations").get(0).path("id").asText()));
         assertEquals(
                 404, call(admin, "POST", path(value, 0, "grant"), null, key(), null).statusCode());
         String receive = receiptBody(value, 0, "RQ-ASSET-" + base);

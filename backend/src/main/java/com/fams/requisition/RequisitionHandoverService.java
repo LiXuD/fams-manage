@@ -176,7 +176,8 @@ class RequisitionHandoverService {
         var parameters = json.readTree(header.get("parameter_snapshot_json").toString());
         var zone = ZoneId.of(parameters.get("timezone").asText());
         long days = parameters.get("handoverAcceptanceDeadlineNaturalDays").asLong();
-        var deadline = clock.instant().atZone(zone).plusDays(days).toInstant();
+        var deliveredAt = clock.instant().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        var deadline = deliveredAt.atZone(zone).plusDays(days).toInstant();
         db.update(
                 "INSERT INTO fams_requisition_handover"
                     + " (allocation_id,delivered_by_account_id,delivered_at,receipt_deadline_at,destination_text,"
@@ -184,7 +185,7 @@ class RequisitionHandoverService {
                     + " VALUES (?,?,?,?,?,?,?,?,?)",
                 allocation,
                 current.id(),
-                now(),
+                Timestamp.from(deliveredAt),
                 Timestamp.from(deadline),
                 input.destination(),
                 target(demand),
@@ -195,7 +196,7 @@ class RequisitionHandoverService {
                 "UPDATE fams_requisition_allocation SET"
                     + " allocation_status='DELIVERED_WAITING_RECEIPT',delivered_at=?,version=version+1"
                     + " WHERE id=?",
-                now(),
+                Timestamp.from(deliveredAt),
                 allocation);
         event(
                 actor,
