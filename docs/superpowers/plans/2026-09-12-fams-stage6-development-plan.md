@@ -1171,3 +1171,6 @@ f4a79fb5663913d7e5ade9899e43aa300a7a07b6完整产品门禁退出0：Java240、Ch
 ### 2026-10-19 D6-18A6 工作树验证
 
 原始照片两端读取、当前身份/页面后续请求保护、原生身份专属文件及启动清理、清理失败重试和受控勾选刷新已实现。Web71、mini134、类型/lint通过；独有MySQL填充升级1与HTTP15通过，真实进程强制退出及新进程照片清理、撤权后旧签名403和页面文件清理、原始事实/计数/日期/版本不变均有证明，见[D6-18任务卡A6](../../development/D6-18-task-card.md)及[a6证据](../../development/evidence/d6-18/a6-photo-runtime-and-regressions.json)。CLEAN为测试夹具，微信真机仍后置。新PC环境原生确认框再次阻塞，已请求用户关闭，未重试且完整浏览器保持NOT_VERIFIED。固定候选门禁尚待完成，D6-18A及父项IN_PROGRESS、B/C未开始，前序独立复核和外部/CI/QA/生产结论不变。
+
+
+2026-10-19 A6固定功能候选`13c9c900ef4abcf59ea2487c1f2d732c9a5db0dd`完整产品门禁退出0：Java244，Checkstyle/SpotBugs0，行13016/14001（92.96%）、分支4707/6205（75.86%），Web实际JSON71/71零失败跳过、mini134，类型/lint/构建/依赖、应用及同卷MySQL重启恢复、精确清理与干净工作区通过。固定证据为`docs/development/evidence/d6-18/product-gate-13c9c90.json`及同名txt；冻结运行包SHA256 5c4b6db23ee0d5bdd3d4a95d441f2d49aaa1a4fadce1323171b1fec6cbcfdc54。完整PC仍因原生确认阻塞待补，A/B/C与父项及独立复核、真实外部、CI、QA、生产继续开放。下一内部切片为同步确认，随后封存/迟到及真实所有者后续。

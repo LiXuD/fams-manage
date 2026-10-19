@@ -1,0 +1,40 @@
+{
+  "candidate_commit": "13c9c900ef4abcf59ea2487c1f2d732c9a5db0dd",
+  "comparison_base": "3a1055f",
+  "recorded_at_utc": "2026-10-19T07:36:53.387101+00:00",
+  "full_product_gate_exit": 0,
+  "java_tests": 244,
+  "checkstyle_findings": 0,
+  "spotbugs_findings": 0,
+  "line_covered": 13016,
+  "line_total": 14001,
+  "branch_covered": 4707,
+  "branch_total": 6205,
+  "web_tests": 71,
+  "web_json": {
+    "numTotalTests": 71,
+    "numPassedTests": 71,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "numTodoTests": 0,
+    "success": true
+  },
+  "mini_tests": 134,
+  "lint_type_build_dependency_integrity": "PASS",
+  "application_restart_database_restart": "PASS",
+  "owned_runtime_cleanup_clean_worktree": "PASS",
+  "artifact": {
+    "candidate": "13c9c90",
+    "source": "backend/target/contract-generation-probe-0.1.0-SNAPSHOT.jar",
+    "artifact": "output/d6-18-13c9c90-backend.jar",
+    "sha256": "5c4b6db23ee0d5bdd3d4a95d441f2d49aaa1a4fadce1323171b1fec6cbcfdc54",
+    "size": 58311352,
+    "observer": "passive during frozen candidate gate"
+  },
+  "scope": "D6-18A6 original photo reading, identity file cleanup, stale follow-up request suppression and controlled native checkbox refresh",
+  "full_browser_acceptance": "NOT_VERIFIED: new owned fixture confirmation blocks control; no repeat submission before SQL check",
+  "sync_sealing_owner_followup": "NOT_IMPLEMENTED",
+  "independent_review": "PENDING",
+  "real_wechat_https_sms_camera_device_weak_network": "NOT_VERIFIED",
+  "remote_ci_formal_qa_production": "NOT_VERIFIED"
+}
