@@ -1,5 +1,6 @@
 import type { MiniServices } from "./pages.ts";
 import { MiniRequestError } from "./session.ts";
+import { listReviewPhotos, readReviewPhoto, ReviewPhotoUnavailable, photoReferences, type ReviewPhotoReference } from "./inventory-review-photos.ts";
 import type { Transfer, TransferChoice, TransferTarget } from "../../../packages/api-types/src/transfer";
 
 interface Snapshot { assetCode: string; name: string; version: number; locationId: string | null; locationName?: string;
@@ -12,12 +13,13 @@ interface Review { version: number; observation_id?: string; review_status?: str
 interface Item { item: { id: string; asset_id: string; recheck_generation: number; snapshot_json: Snapshot };
     current: Snapshot | null; candidate: Observation | null; review: Review; canAcceptNormal: boolean; blockedReason: string | null;
     movementEvents?: { id: string; type: string; occurredAt: string }[];
-    stateLabel?: string; modesLabel?: string; rowId?: string }
+    stateLabel?: string; modesLabel?: string; rowId?: string; normalChecked?: boolean }
 interface Board { task: { id: string; name: string; version: number; task_status: string }; items: Item[]; total: number; reviewedCount: number }
 interface Selection { taskVersion: number; recheckGeneration: number; review: Review; contextDigest: string;
     history: { item_id: string; recheck_generation: number; review_version: number; observation_id: string; review_status: string;
         actor_username: string; recorded_at: string; verified_observed_at: string; reason: string; evidence: string; key?: string; timeText?: string }[]; total: number }
 interface Subject { observation_id: string; dimension: string; version: number; subject_status: string; method: string | null;
+    checked?: boolean;
     reviewer_username: string | null; reviewed_at: string | null; reason: string | null; evidence: string | null; label?: string; stateLabel?: string;
     decisions?: { after_version: number; actor_username: string; method: string; subject_status: string; reason: string; evidence: string }[];
     links?: { transfer_id: string; decision_version: number }[] }
@@ -27,6 +29,7 @@ interface Catalog { kind: "organization" | "warehouse" | "location" | "employee"
 interface Scope { page: number; itemId: string; observationPage: number; observationId: string }
 interface Pending extends Scope { path: string; version: number; key: string; body: unknown; label: string }
 interface Data {
+    photos: ReviewPhotoReference[]; photoObservationId: string; photoTotal: number; photoPath: string; photoName: string; photoError: string; photoCleanupPending: boolean;
     taskId: string; board: Board | null; item: Item | null; observations: Observation[]; observation: Observation | null;
     selection: Selection | null; subjects: Subject[]; dispositions: Disposition[]; linked: Transfer | null;
     page: number; observationPage: number; observationTotal: number; historyPage: number; dispositionPage: number; dispositionTotal: number;
@@ -57,7 +60,8 @@ function localParts(value: string) {
 }
 function displayTime(value: string) { const parts = localParts(value); return parts[0] ? `${parts[0]} ${parts[1]}:${parts[2]}` : "时间待核实"; }
 function blank(taskId = ""): Data {
-    return { taskId, board: null, item: null, observations: [], observation: null, selection: null, subjects: [], dispositions: [], linked: null,
+    return { taskId, photos: [], photoObservationId: "", photoTotal: 0, photoPath: "", photoName: "", photoError: "", photoCleanupPending: false,
+        board: null, item: null, observations: [], observation: null, selection: null, subjects: [], dispositions: [], linked: null,
         page: 1, observationPage: 1, observationTotal: 0, historyPage: 1, dispositionPage: 1, dispositionTotal: 0,
         normalIds: [], dimensions: [], reason: "", evidence: "", verifiedDate: "", verifiedTime: "", verifiedSecond: "00.000",
         busy: false, retryable: false, error: "", notice: "", conflict: {}, physicalMethod: 0, evidenceMethod: 0,
@@ -85,6 +89,21 @@ function message(error: unknown) {
 export function createInventoryReviewPage(getServices: () => MiniServices) {
     let services: MiniServices | null = null, live = false, generation = 0, identity = "";
     let pending: Pending | null = null;
+    const downloaded = new Set<string>();
+    const discardPhoto = (path: string) => {
+        try { services!.sessions.discardInventoryPhoto(path); downloaded.delete(path); return true; }
+        catch { return false; }
+    };
+    const clearDownloaded = (page: Context) => {
+        page.setData({ photoPath: "", photoName: "" });
+        for (const path of [...downloaded]) discardPhoto(path);
+        page.setData({ photoCleanupPending: downloaded.size > 0,
+            photoError: downloaded.size ? "本机照片文件清理尚未完成，请重试清理。" : "" });
+        return downloaded.size === 0;
+    };
+    const clearPhotoArea = (page: Context) => {
+        page.setData({ photos: [], photoObservationId: "", photoTotal: 0 }); clearDownloaded(page);
+    };
     const owner = () => JSON.stringify(services?.sessions.identity ?? null);
     const current = (epoch: number, who: string) => live && epoch === generation && identity === who && owner() === who;
     const locked = (page: Context) => page.data.busy || pending !== null;
@@ -96,30 +115,40 @@ export function createInventoryReviewPage(getServices: () => MiniServices) {
         if (!live || epoch !== generation || owner() === who) return;
         generation++; identity = owner(); pending = null;
         page.setData({ ...blank(page.data.taskId), error: "身份或绑定已变化，请重新进入当前任务。" });
+        clearDownloaded(page);
         if (!services?.sessions.identity) services?.navigate("/pages/login/index");
     };
     const failure = (page: Context, error: unknown, epoch: number, who: string) => {
         if (!current(epoch, who)) { changed(page, epoch, who); return; }
         if (error instanceof MiniRequestError && [401, 403, 404].includes(error.status)) {
             pending = null; page.setData({ ...blank(page.data.taskId), error: message(error) });
+            clearDownloaded(page);
         } else page.setData({ error: message(error), retryable: pending !== null,
             conflict: error instanceof MiniRequestError ? error.fields : {} });
         if (!services?.sessions.identity) services?.navigate("/pages/login/index");
     };
+    const photoFailure = (page: Context, error: unknown, epoch: number, who: string) => {
+        if (!current(epoch, who)) { changed(page, epoch, who); return; }
+        if (error instanceof MiniRequestError && [401, 403, 404].includes(error.status)) { failure(page, error, epoch, who); return; }
+        if (error instanceof ReviewPhotoUnavailable) page.setData({ photos: photoReferences(page.data.photos.map(row => row.objectId), []), photoError: error.message });
+        else page.setData({ photoError: "照片读取暂未完成，请刷新原始照片资料后重试。" });
+    };
     const readSubjects = async (page: Context, observation: Observation, epoch: number, who: string) => {
+        clearPhotoArea(page);
         const response = await services!.sessions.request("GET", `${itemBase(page)}/evidence-subjects?observationId=${observation.id}`) as { items: Subject[] };
         if (!current(epoch, who)) { changed(page, epoch, who); return; }
         const chosen = page.data.selection?.review.observation_id === observation.id;
         const parts = localParts(observation.facts_json.rawObservedAt ?? "");
-        page.setData({ observation, subjects: response.items.map(row => ({ ...row, label: dimensions[row.dimension] ?? "待核实差异", stateLabel: statuses[row.subject_status] ?? "待核实" })),
+        page.setData({ observation, subjects: response.items.map(row => ({ ...row, checked: false, label: dimensions[row.dimension] ?? "待核实差异", stateLabel: statuses[row.subject_status] ?? "待核实" })),
             dimensions: [], evidenceMethod: 0, evidenceMethods: chosen ? ["核实所选证据的冲突、旧分配或时间依据"] : ["以明确反证拒绝未选证据", "保留补充线索，物理差异继续处理"],
             verifiedDate: parts[0]!, verifiedTime: parts[1]!, verifiedSecond: parts[2] || "00.000" });
     };
     const load = async (page: Context, wanted: Scope, epoch: number, who: string) => {
+        clearPhotoArea(page);
         const board = await services!.sessions.request("GET", `${base(page)}?page=${wanted.page}&pageSize=20`) as Board;
         if (!current(epoch, who)) { changed(page, epoch, who); return; }
         const selected = board.items.find(row => row.item.id === wanted.itemId) ?? null;
-        page.setData({ board: { ...board, items: board.items.map(row => ({ ...row, rowId: row.item.id, modesLabel: modes[row.item.snapshot_json.custodyType ?? ""] ?? "待核实",
+        page.setData({ board: { ...board, items: board.items.map(row => ({ ...row, rowId: row.item.id, normalChecked: false, modesLabel: modes[row.item.snapshot_json.custodyType ?? ""] ?? "待核实",
             stateLabel: row.review.review_status === "ACCEPTED" ? "已采信" : row.review.review_status === "SELECTED" ? "待采信选择" : "待复核" })) },
             page: wanted.page, item: selected, normalIds: [], linked: null, retryable: pending !== null });
         if (!selected) { page.setData({ observations: [], selection: null, subjects: [], observation: null, dispositions: [] }); return; }
@@ -207,11 +236,43 @@ export function createInventoryReviewPage(getServices: () => MiniServices) {
                 await read(this, pending ?? scope(this));
             } catch { this.setData({ ...blank(this.data.taskId), error: "服务暂未就绪，请联系管理员。" }); }
         },
-        onHide(this: Context) { live = false; generation++; this.setData(blank(this.data.taskId)); },
-        onUnload(this: Context) { live = false; generation++; pending = null; this.setData(blank(this.data.taskId)); },
+        onHide(this: Context) { live = false; generation++; this.setData(blank(this.data.taskId)); clearDownloaded(this); },
+        onUnload(this: Context) { live = false; generation++; pending = null; this.setData(blank(this.data.taskId)); clearDownloaded(this); },
         onBack(this: Context) { if (!locked(this)) services?.navigate("/pages/inventory-tasks/index"); },
         async onRefresh(this: Context) { await read(this, pending ?? scope(this)); },
         async onRetry(this: Context) { await perform(this); },
+        onPhotoCleanup(this: Context) { if (!this.data.busy) clearDownloaded(this); },
+        onClosePhoto(this: Context) { if (!this.data.busy) clearDownloaded(this); },
+        async onPhotos(this: Context, event: Event) {
+            if (!services || locked(this)) return;
+            const observation = this.data.observations.find(row => row.id === event.currentTarget?.dataset?.id);
+            if (!observation?.facts_json.photoIds?.length || !clearDownloaded(this)) return;
+            const epoch = ++generation, who = identity;
+            this.setData({ photos: [], photoObservationId: observation.id, photoTotal: observation.facts_json.photoIds.length, photoError: "", busy: true });
+            try {
+                const photos = await listReviewPhotos(services.sessions, this.data.taskId, observation.client_event_id, observation.facts_json.photoIds, () => current(epoch, who));
+                if (current(epoch, who)) this.setData({ photos }); else changed(this, epoch, who);
+            } catch (error) { photoFailure(this, error, epoch, who); }
+            finally { if (current(epoch, who)) this.setData({ busy: false }); }
+        },
+        async onReadPhoto(this: Context, event: Event) {
+            if (!services || locked(this)) return;
+            const row = this.data.photos.find(value => value.objectId === event.currentTarget?.dataset?.id && value.readable);
+            const observation = this.data.observations.find(value => value.id === this.data.photoObservationId);
+            if (!row?.photo || !observation || !clearDownloaded(this)) return;
+            const epoch = ++generation, who = identity, task = this.data.taskId;
+            this.setData({ busy: true, photoError: "" });
+            try {
+                const path = await readReviewPhoto(services.sessions, task, observation.client_event_id, row.photo, () => services!.createKey(), () => current(epoch, who));
+                downloaded.add(path);
+                if (!current(epoch, who)) {
+                    if (!discardPhoto(path) && live) this.setData({ photoCleanupPending: true, photoError: "本机照片文件清理尚未完成，请重试清理。" });
+                    changed(this, epoch, who); return;
+                }
+                this.setData({ photoPath: path, photoName: row.photo.filename });
+            } catch (error) { photoFailure(this, error, epoch, who); }
+            finally { if (current(epoch, who)) this.setData({ busy: false }); }
+        },
         onField(this: Context, event: Event) {
             if (locked(this) || typeof event.detail?.value !== "string") return;
             const value = event.detail.value;
@@ -226,12 +287,14 @@ export function createInventoryReviewPage(getServices: () => MiniServices) {
         onNormalSelection(this: Context, event: Event) {
             if (locked(this) || !Array.isArray(event.detail?.value)) return;
             const values = event.detail.value;
-            this.setData({ normalIds: this.data.board?.items.filter(row => row.canAcceptNormal && values.includes(row.item.id)).map(row => row.item.id) ?? [] });
+            const normalIds = this.data.board?.items.filter(row => row.canAcceptNormal && values.includes(row.item.id)).map(row => row.item.id) ?? [];
+            this.setData({ normalIds, board: this.data.board ? { ...this.data.board, items: this.data.board.items.map(row => ({ ...row, normalChecked: normalIds.includes(row.item.id) })) } : null });
         },
         onDimensions(this: Context, event: Event) {
             if (locked(this) || !Array.isArray(event.detail?.value)) return;
             const values = event.detail.value;
-            this.setData({ dimensions: this.data.subjects.filter(row => !["CLOSED", "TRANSFERRED"].includes(row.subject_status) && values.includes(row.dimension)).map(row => row.dimension) });
+            const selected = this.data.subjects.filter(row => !["CLOSED", "TRANSFERRED"].includes(row.subject_status) && values.includes(row.dimension)).map(row => row.dimension);
+            this.setData({ dimensions: selected, subjects: this.data.subjects.map(row => ({ ...row, checked: selected.includes(row.dimension) })) });
         },
         async onOpenItem(this: Context, event: Event) {
             const itemId = event.currentTarget?.dataset?.id;

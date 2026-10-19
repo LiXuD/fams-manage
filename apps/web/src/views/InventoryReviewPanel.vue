@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import InventoryEvidenceDecisionPanel from "@/views/InventoryEvidenceDecisionPanel.vue";
 import InventorySelectionPanel from "@/views/InventorySelectionPanel.vue";
 import InventoryDifferencePanel from "@/views/InventoryDifferencePanel.vue";
+import InventoryPhotoEvidence from "@/views/InventoryPhotoEvidence.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import type { LoanMutation } from "@/loan/api";
 import { ReviewApiError, reviewProblems, reviewRequest, type BatchResult, type Board, type Observation, type ReviewItem } from "@/inventory-review/api";
@@ -17,7 +18,7 @@ const identity = computed(() => JSON.stringify([session.user?.id, session.csrfTo
 const locked = computed(() => busy.value || !!pending.value);
 let generation = 0, live = true;
 const current = (epoch: number, owner: string, task: string) => live && epoch === generation && owner === identity.value && props.taskId === task;
-const clear = () => { board.value = null; selected.value = []; observations.value = null; result.value = null; pending.value = null; busy.value = false; };
+const clear = () => { generation++; board.value = null; selected.value = []; observations.value = null; result.value = null; pending.value = null; busy.value = false; };
 function failure(cause: unknown) {
   if (cause instanceof ReviewApiError) {
     if ([401, 403, 404].includes(cause.status)) { clear(); error.value = "登录、权限或当前记录已失效，已隐藏原资料，请重新登录或核对授权。"; return; }
@@ -103,7 +104,7 @@ onBeforeUnmount(() => { live = false; generation++; clear(); });
     <template v-if="observations && board"><InventorySelectionPanel :key="observations.itemId" :task-id="taskId" :item-id="observations.itemId" :item-page="board.page" :observations="observations.rows" @invalid="clear" @changed="load" /></template>
     <template v-if="observations && board"><InventoryEvidenceDecisionPanel :key="observations.itemId" :task-id="taskId" :item-id="observations.itemId" :item-page="board.page" :observations="observations.rows" @invalid="clear" @changed="load" /></template>
     <template v-if="observations && board"><InventoryDifferencePanel v-for="row in board.items.filter(value => value.item.id === observations!.itemId)" :key="row.item.id" :task-id="taskId" :item="row" :item-page="board.page" :observation-ids="observations.rows.map(value => value.id)" @invalid="clear" /></template>
-    <section v-if="observations" class="panel"><h3>应盘项 {{ observations.itemId }} 的原始证据</h3><article v-for="observation in observations.rows" :key="observation.id"><p>证据 {{ observation.id }} · {{ outcomes[observation.outcome] ?? '待核实' }} · 接收于 {{ new Date(observation.received_at).toLocaleString() }}</p><p>观察于 {{ observation.facts_json.rawObservedAt ? new Date(observation.facts_json.rawObservedAt).toLocaleString() : '未保留或待核实' }}；照片 {{ observation.facts_json.photoIds?.length ?? 0 }} 张</p><p>位置 {{ observation.facts_json.actual?.locationHint || observation.facts_json.actual?.locationId || '未知' }}；责任线索 {{ observation.facts_json.actual?.responsibilityHint || observation.facts_json.actual?.responsibleEmployeeId || '待核实或仓库保管' }}</p><p>{{ observation.facts_json.actual?.description }}</p></article><template v-for="row in board?.items.filter(item => item.item.id === observations!.itemId) ?? []" :key="row.item.id"><button :disabled="locked || observations.page === 1" @click="history(row,-1)">上页原始证据</button><button :disabled="locked || observations.page * 20 >= observations.total" @click="history(row,1)">下页原始证据</button></template></section>
+    <section v-if="observations" class="panel"><h3>应盘项 {{ observations.itemId }} 的原始证据</h3><article v-for="observation in observations.rows" :key="observation.id"><p>证据 {{ observation.id }} · {{ outcomes[observation.outcome] ?? '待核实' }} · 接收于 {{ new Date(observation.received_at).toLocaleString() }}</p><p>观察于 {{ observation.facts_json.rawObservedAt ? new Date(observation.facts_json.rawObservedAt).toLocaleString() : '未保留或待核实' }}；照片 {{ observation.facts_json.photoIds?.length ?? 0 }} 张</p><p>位置 {{ observation.facts_json.actual?.locationHint || observation.facts_json.actual?.locationId || '未知' }}；责任线索 {{ observation.facts_json.actual?.responsibilityHint || observation.facts_json.actual?.responsibleEmployeeId || '待核实或仓库保管' }}</p><p>{{ observation.facts_json.actual?.description }}</p><InventoryPhotoEvidence v-if="observation.facts_json.photoIds?.length" :task-id="taskId" :event-id="observation.client_event_id" :photo-ids="observation.facts_json.photoIds" @invalid="clear" /></article><template v-for="row in board?.items.filter(item => item.item.id === observations!.itemId) ?? []" :key="row.item.id"><button :disabled="locked || observations.page === 1" @click="history(row,-1)">上页原始证据</button><button :disabled="locked || observations.page * 20 >= observations.total" @click="history(row,1)">下页原始证据</button></template></section>
   </section>
 </template>
 <style scoped>

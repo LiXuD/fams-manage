@@ -162,3 +162,62 @@ test("time selection preserves milliseconds and refuses malformed seconds withou
     assert.equal(post.body.verifiedObservedAt, "2026-10-18T07:00:00.125Z");
     assert.equal(post.body.firstPersistedAt, undefined); assert.equal(post.body.expiresAt, undefined);
 });
+
+const photoEvent = "22222222-2222-4222-8222-222222222222", photoObject = "33333333-3333-4333-8333-333333333333";
+const photoMetadata = { objectId: photoObject, filename: "现场原图.png", contentType: "image/png", sizeBytes: 3, scanStatus: "CLEAN" };
+async function photoFixture() {
+    const f = fixture(); f.raw.client_event_id = photoEvent; f.raw.facts_json.photoIds = [photoObject]; await f.open();
+    f.setRead(async () => ({ items: [photoMetadata], total: 1 }));
+    f.setPost(async () => ({ url: `/api/v1/mini/inventory-observations/tasks/9/events/${photoEvent}/photos/${photoObject}/content?grant=owned` }));
+    const discarded = []; f.services.sessions.discardInventoryPhoto = path => discarded.push(path);
+    f.services.sessions.downloadInventoryPhoto = async () => "/owned/current.png";
+    return { ...f, discarded };
+}
+test("native raw photo preview is explicit and hiding clears its owned path and metadata", async () => {
+    const f = await photoFixture(); await f.page.onPhotos(event("31")); assert.equal(f.page.data.photoTotal, 1);
+    await f.page.onReadPhoto(event(photoObject)); assert.equal(f.page.data.photoPath, "/owned/current.png");
+    f.page.onHide(); assert.deepEqual(f.discarded, ["/owned/current.png"]); assert.equal(f.page.data.photoPath, ""); assert.deepEqual(f.page.data.photos, []);
+});
+test("a late old-page photo is discarded without clearing a newer preview", async () => {
+    const f = await photoFixture(); await f.page.onPhotos(event("31")); const releases = [];
+    f.services.sessions.downloadInventoryPhoto = () => new Promise(resolve => releases.push(resolve));
+    const old = f.page.onReadPhoto(event(photoObject)); await new Promise(resolve => setImmediate(resolve)); f.page.onHide();
+    f.setRead(null); await f.page.onShow(); await f.page.onOpenItem(event(f.itemId)); await f.page.onOpenObservation(event("31"));
+    f.setRead(async () => ({ items: [photoMetadata], total: 1 })); await f.page.onPhotos(event("31"));
+    const fresh = f.page.onReadPhoto(event(photoObject)); await new Promise(resolve => setImmediate(resolve));
+    releases[1]("/owned/new.png"); await fresh; releases[0]("/owned/old.png"); await old;
+    assert.equal(f.page.data.photoPath, "/owned/new.png"); assert.deepEqual(f.discarded, ["/owned/old.png"]);
+    f.page.onUnload(); assert.deepEqual(f.discarded, ["/owned/old.png", "/owned/new.png"]);
+});
+test("failed local deletion hides the image and blocks another read until cleanup succeeds", async () => {
+    const f = await photoFixture(); await f.page.onPhotos(event("31")); let downloads = 0;
+    f.services.sessions.downloadInventoryPhoto = async () => { downloads++; return "/owned/current.png"; };
+    await f.page.onReadPhoto(event(photoObject)); f.services.sessions.discardInventoryPhoto = () => { throw new Error("owned cleanup failure"); };
+    f.page.onClosePhoto(); assert.equal(f.page.data.photoPath, ""); assert.equal(f.page.data.photoCleanupPending, true);
+    await f.page.onReadPhoto(event(photoObject)); assert.equal(downloads, 1);
+    f.services.sessions.discardInventoryPhoto = path => f.discarded.push(path); f.page.onPhotoCleanup();
+    assert.equal(f.page.data.photoCleanupPending, false); await f.page.onReadPhoto(event(photoObject)); assert.equal(downloads, 2); f.page.onUnload();
+});
+test("photo authorization loss clears the entire old review and login-cleared transport identity", async () => {
+    const f = await photoFixture(); await f.page.onPhotos(event("31"));
+    f.services.sessions.downloadInventoryPhoto = async () => { f.services.sessions.identity = null; throw new MiniRequestError(401, "AUTH_SESSION_INVALID"); };
+    await f.page.onReadPhoto(event(photoObject)); assert.equal(f.page.data.board, null); assert.equal(f.page.data.photoPath, "");
+    assert.deepEqual(f.page.data.photos, []); assert.deepEqual(f.navigations, ["/pages/login/index"]);
+});
+test("a missing photo cannot preserve old private data when current task authorization is denied", async () => {
+    const f = await photoFixture(); f.setRead(async path => { throw new MiniRequestError(path.includes("inventory-reviews") ? 403 : 404, "AUTH_FORBIDDEN"); });
+    await f.page.onPhotos(event("31")); assert.equal(f.page.data.board, null); assert.deepEqual(f.page.data.photos, []);
+});
+test("unreadable expired original photo references remain listed after current task authorization", async () => {
+    const f = await photoFixture(); f.page.data.observations[0].outcome = "EXPIRED"; f.page.data.observations[0].eligible = false;
+    f.setRead(async path => { if (!path.includes("inventory-reviews")) throw new MiniRequestError(404, "INVENTORY_PHOTO_NOT_FOUND"); return {}; });
+    await f.page.onPhotos(event("31")); assert.notEqual(f.page.data.board, null); assert.equal(f.page.data.photoTotal, 1);
+    assert.equal(f.page.data.photos[0].objectId, photoObject); assert.equal(f.page.data.photos[0].photo, null);
+});
+test("native checkbox presentation follows cleared normal and dimension selection after refresh", async () => {
+    const f = fixture(); await f.open(); f.page.onNormalSelection({ detail: { value: [f.itemId] } });
+    f.page.onDimensions({ detail: { value: ["CONFLICT"] } });
+    assert.equal(f.page.data.board.items[0].normalChecked, true); assert.equal(f.page.data.subjects[0].checked, true);
+    await f.page.onRefresh(); assert.deepEqual(f.page.data.normalIds, []); assert.deepEqual(f.page.data.dimensions, []);
+    assert.equal(f.page.data.board.items[0].normalChecked, false); assert.equal(f.page.data.subjects[0].checked, false);
+});

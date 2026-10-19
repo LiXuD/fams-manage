@@ -1,6 +1,7 @@
 import { type MiniRuntime, type SavedSession } from "./session.ts";
 import { type WechatLogin } from "./binding.ts";
 import { createInventoryFiles, type InventoryFileSystem, type InventoryFileRuntime } from "./inventory-files.ts";
+import { createInventoryEvidenceFiles } from "./inventory-evidence-files.ts";
 
 export interface WxApi {
     chooseImage?(input: { count: number; sourceType: ("camera" | "album")[]; sizeType: ("original" | "compressed")[];
@@ -10,8 +11,8 @@ export interface WxApi {
     getFileSystemManager?(): InventoryFileSystem;
     uploadFile?(input: { url: string; filePath: string; name: string; header: Record<string, string>; timeout: number;
         success(reply: { statusCode: number; data: string }): void; fail(error: unknown): void }): void;
-    downloadFile?(input: { url: string; header: Record<string, string>; timeout: number;
-        success(reply: { statusCode: number; tempFilePath: string }): void; fail(error: unknown): void }): void;
+    downloadFile?(input: { url: string; header: Record<string, string>; timeout: number; filePath?: string;
+        success(reply: { statusCode: number; tempFilePath: string; filePath?: string }): void; fail(error: unknown): void }): void;
     chooseMessageFile?(input: { count: number; type: string; extension: string[];
         success(reply: { tempFiles: { path: string; name: string; size: number }[] }): void; fail(error: unknown): void }): void;
     previewImage?(input: { current: string; urls: string[]; success(): void; fail(error: unknown): void }): void;
@@ -43,15 +44,38 @@ export function chooseInventoryPhoto(wx: WxApi, source: "camera" | "album"): Pro
 }
 
 export function createWxRuntime(wx: WxApi): MiniRuntime & WechatLogin {
+    const evidence = wx.env && wx.getFileSystemManager ? createInventoryEvidenceFiles(wx as InventoryFileRuntime) : null;
+    evidence?.cleanupAbandoned();
     const clean = (identity: { accountId: string; bindingId: string }) => {
-        if (wx.env && wx.getFileSystemManager) createInventoryFiles(wx as InventoryFileRuntime, identity).clear();
-        else wx.removeStorageSync(`fams.identity.${identity.accountId}.${identity.bindingId}`);
+        try { evidence?.clear(identity); }
+        finally {
+            if (wx.env && wx.getFileSystemManager) createInventoryFiles(wx as InventoryFileRuntime, identity).clear();
+            else wx.removeStorageSync(`fams.identity.${identity.accountId}.${identity.bindingId}`);
+        }
     };
     const pending = wx.getStorageSync("fams.inventory-cleanup") as { accountId?: unknown; bindingId?: unknown } | null;
     if (pending && typeof pending.accountId === "string" && typeof pending.bindingId === "string") {
         clean({ accountId: pending.accountId, bindingId: pending.bindingId }); wx.removeStorageSync("fams.inventory-cleanup");
     }
     return {
+        downloadInventoryPhoto: input => new Promise((resolve, reject) => {
+            if (!wx.downloadFile || !evidence) { reject(new Error("当前微信无法安全读取现场照片。")); return; }
+            const reserved = evidence.reserve(input.identity, createUuid(), input.contentType);
+            const failed = (error: unknown) => { try { evidence.discard(reserved.path); } catch (cleanup) { reject(cleanup); return; } reject(error); };
+            try { wx.downloadFile({ url: input.url, header: input.header, filePath: reserved.path, timeout: 60000,
+                success: reply => {
+                    try {
+                        if (reply.filePath !== reserved.path) throw new Error("照片未写入当前身份的专属位置。");
+                        if (reply.statusCode === 200) evidence.verify(reserved);
+                        else evidence.discard(reserved.path);
+                        resolve({ statusCode: reply.statusCode, filePath: reply.statusCode === 200 ? reserved.path : "" });
+                    } catch (error) { failed(error); }
+                }, fail: failed }); } catch (error) { failed(error); }
+        }),
+        discardInventoryPhoto: path => {
+            if (!evidence) throw new Error("照片清理服务暂不可用。");
+            evidence.discard(path);
+        },
         upload: input => new Promise((resolve, reject) => {
             if (!wx.uploadFile) { reject(new Error("Evidence upload unavailable")); return; }
             wx.uploadFile({ ...input, name: "file", timeout: 60000,

@@ -427,6 +427,157 @@ class InventoryObservationHttpRuntimeCase {
     }
 
     @Test
+    void nativeReviewPhotoBytesSurviveForcedDeathOnlyUntilStartupAndRespectCurrentRole()
+            throws Exception {
+        String task = prepared();
+        var event = observation(task);
+        byte[] bytes =
+                java.util.Base64.getDecoder()
+                        .decode(
+                                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jSZkAAAAASUVORK5CYII=");
+        var selected = ok(uploadPhoto(employee, task, event, key(), bytes));
+        var unused = ok(uploadPhoto(employee, task, event, key(), bytes));
+        ((tools.jackson.databind.node.ArrayNode) event.path("photoIds"))
+                .add(selected.path("objectId").asText());
+        assertEquals("ACCEPTED", ok(observe(employee, task, event)).path("outcome").asText());
+        String observation =
+                db.queryForObject(
+                        "SELECT CAST(id AS CHAR) FROM fams_inventory_observation WHERE task_id=?",
+                        String.class,
+                        task);
+        var original =
+                db.queryForList("SELECT * FROM fams_inventory_observation WHERE task_id=?", task);
+        var identity =
+                new MiniWechatIdentityPort.Identity("review-photo-app", "native-photo-admin");
+        db.update(
+                "INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES"
+                    + " (933001,?,NOW(3))",
+                miniSessions.identityHash(identity));
+        var grant = miniSessions.start(identity, UUID.randomUUID());
+        String digest =
+                java.util.HexFormat.of()
+                        .formatHex(
+                                java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
+        var state = java.nio.file.Files.createTempDirectory("fams-native-review-photo-");
+        var script =
+                java.nio.file.Path.of(System.getProperty("user.dir"))
+                        .getParent()
+                        .resolve("apps/miniprogram/test/runtime-inventory-review-photos-http.mjs");
+        try {
+            for (String stage : java.util.List.of("crash", "recover")) {
+                var builder = new ProcessBuilder("rtk", "proxy", "node", script.toString());
+                builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+                builder.environment().put("FAMS_TEST_INVENTORY_TASK", task);
+                builder.environment()
+                        .put("FAMS_TEST_INVENTORY_ITEM", event.path("itemId").asText());
+                builder.environment().put("FAMS_TEST_PHOTO_OBSERVATION", observation);
+                builder.environment()
+                        .put("FAMS_TEST_PHOTO_OBJECT", selected.path("objectId").asText());
+                builder.environment()
+                        .put("FAMS_TEST_PHOTO_UNUSED", unused.path("objectId").asText());
+                builder.environment().put("FAMS_TEST_PHOTO_SHA256", digest);
+                builder.environment().put("FAMS_TEST_PHOTO_STATE", state.toString());
+                builder.environment().put("FAMS_TEST_PHOTO_STAGE", stage);
+                builder.environment()
+                        .put(
+                                "FAMS_TEST_MINI_GRANT",
+                                JSON.writeValueAsString(
+                                        java.util.Map.of(
+                                                "sessionToken",
+                                                grant.sessionToken(),
+                                                "accountId",
+                                                grant.accountId(),
+                                                "bindingId",
+                                                grant.bindingId())));
+                var log = state.resolve("run-" + stage + ".log");
+                var process =
+                        builder.redirectErrorStream(true).redirectOutput(log.toFile()).start();
+                try {
+                    long deadline =
+                            System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(45);
+                    while (!java.nio.file.Files.exists(state.resolve("ready-" + stage))
+                            && process.isAlive()
+                            && System.nanoTime() < deadline) {
+                        Thread.sleep(25);
+                    }
+                    assertTrue(
+                            java.nio.file.Files.exists(state.resolve("ready-" + stage)),
+                            java.nio.file.Files.readString(log));
+                    if (stage.equals("recover")) {
+                        db.update(
+                                "DELETE FROM fams_account_role WHERE account_id=933001 AND"
+                                    + " role_code='ASSET_ADMIN'");
+                        java.nio.file.Files.writeString(
+                                state.resolve("continue-recover"), "resume");
+                        assertTrue(
+                                process.waitFor(15, java.util.concurrent.TimeUnit.SECONDS),
+                                java.nio.file.Files.readString(log));
+                        assertEquals(0, process.exitValue(), java.nio.file.Files.readString(log));
+                    }
+                } finally {
+                    process.descendants().forEach(ProcessHandle::destroyForcibly);
+                    if (process.isAlive()) {
+                        process.destroyForcibly();
+                    }
+                    process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
+                }
+                if (stage.equals("crash")) {
+                    var preview =
+                            JSON.readTree(
+                                    java.nio.file.Files.readString(
+                                            state.resolve("preview-crash.json")));
+                    var file = java.nio.file.Path.of(preview.path("filePath").asText()).normalize();
+                    assertTrue(file.startsWith(state.normalize()));
+                    assertTrue(java.nio.file.Files.exists(file));
+                    assertEquals(digest, preview.path("sha256").asText());
+                }
+            }
+            var proof = JSON.readTree(java.nio.file.Files.readString(state.resolve("proof.json")));
+            assertEquals(digest, proof.path("byteSha256").asText());
+            for (String check :
+                    java.util.List.of(
+                            "startupRemovedKilledPreview",
+                            "newProcess",
+                            "originalReferencesOnly",
+                            "roleLossRejectedSignedRead",
+                            "roleLossClearedPageAndBytes",
+                            "noNewLogin",
+                            "grantsNotPersisted")) {
+                assertTrue(proof.path(check).asBoolean(), check);
+            }
+            assertEquals(
+                    original,
+                    db.queryForList(
+                            "SELECT * FROM fams_inventory_observation WHERE task_id=?", task));
+            assertEquals(
+                    0,
+                    db.queryForObject(
+                            "SELECT COUNT(*) FROM fams_inventory_item_review WHERE task_id=?",
+                            Integer.class,
+                            task));
+            assertEquals(
+                    1,
+                    db.queryForObject(
+                            "SELECT captured_result_count FROM fams_inventory_task WHERE id=?",
+                            Integer.class,
+                            task));
+            assertEquals(
+                    0,
+                    db.queryForObject(
+                            "SELECT COUNT(*) FROM fams_asset WHERE id=933010 AND (version<>0 OR"
+                                + " last_inventory_business_date IS NOT NULL)",
+                            Integer.class));
+            System.out.println("D6-18A6 native photo runtime proof: " + proof);
+        } finally {
+            try (var files = java.nio.file.Files.walk(state)) {
+                for (var file : files.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                    java.nio.file.Files.deleteIfExists(file);
+                }
+            }
+        }
+    }
+
+    @Test
     void photoUploadReplaysExactBytesAndRealMetadataBeforeObservation() throws Exception {
         String task = prepared();
         var event = observation(task);

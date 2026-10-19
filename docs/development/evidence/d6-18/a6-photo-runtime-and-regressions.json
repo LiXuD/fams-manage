@@ -1,0 +1,46 @@
+{
+  "status": "WORKTREE_VERIFIED_NOT_FIXED_GATE",
+  "source_base": "3a1055f",
+  "native_real_http": {
+    "upgrade_tests": 1,
+    "http_tests": 15,
+    "failures": 0,
+    "skipped": 0,
+    "proof": {
+      "byteSha256": "4da6fa56e392f463d81ea7bdb666a454ebd78c228fcb3e3a3ca617d62788bea9",
+      "startupRemovedKilledPreview": true,
+      "newProcess": true,
+      "originalReferencesOnly": true,
+      "roleLossRejectedSignedRead": true,
+      "roleLossClearedPageAndBytes": true,
+      "noNewLogin": true,
+      "grantsNotPersisted": true
+    },
+    "log": "output/d6-18-a6-photo-runtime-3.log",
+    "sha256": "c387c5ed54d9c6b3a35cbecd5176eddbab78dc1964d1588cb65b401f5febdd40"
+  },
+  "web": {
+    "tests": 71,
+    "passed": 71,
+    "failed": 0,
+    "skipped": 0,
+    "log": "output/d6-18-a6-web-all-tests-4.log"
+  },
+  "mini": {
+    "tests": 134,
+    "passed": 134,
+    "failed": 0,
+    "skipped": 0,
+    "log": "output/d6-18-a6-mini-all-tests-6.log"
+  },
+  "typecheck": "PASS",
+  "lint": "PASS",
+  "browser": "NOT_VERIFIED: native confirmation blocked; manual close requested, never retry before SQL check",
+  "boundaries": [
+    "Node Wx provider and loopback HTTPS adapter exercise exported native handlers, not WeChat device acceptance",
+    "CLEAN scanner is explicit test fixture, not real antivirus evidence",
+    "Files exist after SIGKILL until durable registry startup cleanup; empty owner directories can remain",
+    "No production Java or migration change in A6; existing V1-V36 unchanged",
+    "D6-18A/B/C parent, independent review, remote CI, formal QA, production remain open"
+  ]
+}

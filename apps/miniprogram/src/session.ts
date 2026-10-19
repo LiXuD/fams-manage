@@ -6,6 +6,9 @@ export interface MiniRuntime {
         Promise<{ statusCode: number; data: unknown }>;
     download?(input: { url: string; header: Record<string, string> }):
         Promise<{ statusCode: number; tempFilePath: string }>;
+    downloadInventoryPhoto?(input: { url: string; header: Record<string, string>;
+        identity: { accountId: string; bindingId: string }; contentType: string }): Promise<{ statusCode: number; filePath: string }>;
+    discardInventoryPhoto?(path: string): void;
     readSession(): unknown;
     writeSession(value: SavedSession): void;
     removeSession(): void;
@@ -185,6 +188,34 @@ export class MiniSessionClient {
         } finally {
             if (generation === this.generation) this.clear();
         }
+    }
+
+    async downloadInventoryPhoto(path: string, contentType: string): Promise<string> {
+        const uuid = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+        if (!new RegExp(`^/api/v1/mini/inventory-observations/tasks/[1-9][0-9]{0,18}/events/${uuid}/photos/${uuid}/content\\?grant=[A-Za-z0-9_.-]{1,256}$`, "i").test(path)
+            || !["image/jpeg", "image/png", "image/webp"].includes(contentType)) throw new Error("Invalid inventory photo download");
+        const session = this.current;
+        if (!session) throw new MiniRequestError(401, "AUTH_SESSION_INVALID");
+        if (!this.runtime.downloadInventoryPhoto || !this.runtime.discardInventoryPhoto) throw new Error("当前环境无法安全读取现场照片。");
+        const generation = this.generation;
+        const response = await this.runtime.downloadInventoryPhoto({ url: this.origin + path,
+            header: { "X-FAMS-Mini-Session": session.sessionToken }, contentType,
+            identity: { accountId: session.accountId, bindingId: session.bindingId } });
+        try {
+            this.assertGeneration(generation);
+            if (response.statusCode === 401) this.clear();
+            this.checkResponse({ statusCode: response.statusCode, data: null });
+            if (!response.filePath) throw new Error("照片文件暂不可读取。");
+            return response.filePath;
+        } catch (error) {
+            if (response.filePath) this.runtime.discardInventoryPhoto(response.filePath);
+            throw error;
+        }
+    }
+
+    discardInventoryPhoto(path: string): void {
+        if (!this.runtime.discardInventoryPhoto) throw new Error("照片清理服务暂不可用。");
+        this.runtime.discardInventoryPhoto(path);
     }
 
     clear(): void {

@@ -7,11 +7,12 @@
     <button bindtap="onRefresh" disabled="{{busy}}">刷新只读结果</button>
     <button wx:if="retryable" bindtap="onRetry" disabled="{{busy}}">重试原操作（保留原请求）</button>
     <button bindtap="onBack" disabled="{{busy || retryable}}">返回盘点任务</button>
+    <view wx:if="photoCleanupPending"><text>本机读取照片清理尚未完成，请重试清理。</text><button bindtap="onPhotoCleanup" disabled="{{busy}}">重试照片文件清理</button></view>
   </view>
   <view wx:if="board" class="card">
     <checkbox-group bindchange="onNormalSelection">
       <view wx:for="{{board.items}}" wx:key="rowId">
-        <label wx:if="item.canAcceptNormal"><checkbox value="{{item.item.id}}" disabled="{{busy || retryable}}"/>正常观察待采信</label>
+        <label wx:if="item.canAcceptNormal"><checkbox value="{{item.item.id}}" checked="{{item.normalChecked}}" disabled="{{busy || retryable}}"/>正常观察待采信</label>
         <text>{{item.item.snapshot_json.assetCode}} {{item.item.snapshot_json.name}} · {{item.stateLabel}}</text>
         <text wx:if="item.blockedReason">{{item.blockedReason}}</text>
         <button data-id="{{item.item.id}}" bindtap="onOpenItem" disabled="{{busy || retryable}}">查看三栏与原始证据</button>
@@ -38,10 +39,22 @@
       <text>位置 {{raw.facts_json.actual.locationHint || raw.facts_json.actual.locationId}}；使用方式 {{raw.facts_json.actual.custodyType}}；状况 {{raw.facts_json.actual.condition}}</text>
       <text>{{raw.facts_json.actual.description}} {{raw.facts_json.actual.unknownReason}} {{raw.facts_json.actual.responsibilityHint}}</text>
       <button wx:if="raw.eligible" data-id="{{raw.id}}" bindtap="onOpenObservation" disabled="{{busy || retryable}}">核对这条证据及关联业务</button>
+      <button wx:if="raw.facts_json.photoIds.length" data-id="{{raw.id}}" bindtap="onPhotos" disabled="{{busy || retryable}}">查看这条原始观察的照片（{{raw.facts_json.photoIds.length}}）</button>
     </view>
     <button data-delta="-1" bindtap="onObservationPage" disabled="{{busy || retryable || observationPage === 1}}">证据上一页</button>
     <text>证据第 {{observationPage}} 页，共 {{observationTotal}} 条</text>
     <button data-delta="1" bindtap="onObservationPage" disabled="{{busy || retryable || observationPage * 20 >= observationTotal}}">证据下一页</button>
+    <view wx:if="photoObservationId">
+      <text class="title">原始观察 {{photoObservationId}} 的照片</text><text>原始引用 {{photoTotal}} 张；未引用上传不计入本次观察。</text>
+      <text wx:if="photoError">{{photoError}}</text>
+      <view wx:for="{{photos}}" wx:for-item="reference" wx:key="key">
+        <text wx:if="reference.photo">{{reference.photo.filename}}</text>
+        <button wx:if="reference.readable" data-id="{{reference.objectId}}" bindtap="onReadPhoto" disabled="{{busy || retryable || photoCleanupPending}}">读取这张原始照片</button>
+        <text wx:elif="reference.photo">尚未通过扫描或格式不可读取，原始引用仍保留。</text>
+        <text wx:else>照片元数据暂不可读取，原始引用 {{reference.objectId}} 仍保留。</text>
+      </view>
+      <view wx:if="photoPath"><image src="{{photoPath}}" mode="widthFix"/><text>{{photoName}}</text><button bindtap="onClosePhoto" disabled="{{busy}}">关闭照片并清理本机文件</button></view>
+    </view>
   </view>
   <view wx:if="observation" class="card">
     <text class="title">正在核对证据 {{observation.id}}</text>
@@ -56,7 +69,7 @@
     <button bindtap="onEvidenceDecision" disabled="{{busy || retryable || (board.task.task_status !== 'IN_PROGRESS' &amp;&amp; board.task.task_status !== 'WAITING_REVIEW')}}">共同提交相关证据维度处置</button>
     <checkbox-group bindchange="onDimensions">
       <view wx:for="{{subjects}}" wx:for-item="subject" wx:key="dimension">
-        <label><checkbox value="{{subject.dimension}}" disabled="{{busy || retryable || subject.subject_status === 'CLOSED' || subject.subject_status === 'TRANSFERRED'}}"/>{{subject.label}} · {{subject.stateLabel}} · 版本 {{subject.version}}</label>
+        <label><checkbox value="{{subject.dimension}}" checked="{{subject.checked}}" disabled="{{busy || retryable || subject.subject_status === 'CLOSED' || subject.subject_status === 'TRANSFERRED'}}"/>{{subject.label}} · {{subject.stateLabel}} · 版本 {{subject.version}}</label>
         <text>{{subject.reviewer_username}} {{subject.reason}} {{subject.evidence}}</text>
         <view wx:for="{{subject.decisions}}" wx:for-item="decision" wx:key="after_version"><text>历史 {{decision.after_version}}：{{decision.actor_username}} / {{decision.method}} / {{decision.subject_status}} / {{decision.reason}} / {{decision.evidence}}</text></view>
         <view wx:for="{{subject.links}}" wx:for-item="link" wx:key="decision_version"><button data-id="{{link.transfer_id}}" bindtap="onViewTransfer" disabled="{{busy || retryable}}">只读查看正式调拨 {{link.transfer_id}}</button></view>

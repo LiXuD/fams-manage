@@ -77,4 +77,23 @@ describe("inventory review panel", () => {
     complete(reply(board())); await flushPromises();
     expect(wrapper.text()).not.toContain("Private asset"); expect(wrapper.text()).toContain("身份或权限已变化"); wrapper.unmount();
   });
+  it("a photo authorization denial invalidates an already pending parent refresh", async () => {
+    let waiting = false, finish!: (value: Response) => void;
+    const raw = board().items[0]!.candidate!;
+    raw.facts_json.photoIds = ["33333333-3333-4333-8333-333333333333"];
+    vi.stubGlobal("fetch", vi.fn(async (path: string) => {
+      if (path.endsWith("/photos")) return reply({ code: "INVENTORY_PHOTO_NOT_AUTHORIZED" }, 403);
+      if (path.includes("/observations?")) return reply({ items: [raw], total: 1 });
+      if (waiting) return new Promise<Response>(resolve => { finish = resolve; });
+      return reply(board());
+    }));
+    const wrapper = mount(InventoryReviewPanel, { props: { taskId: "9" }, global: { stubs: {
+      InventorySelectionPanel: true, InventoryEvidenceDecisionPanel: true, InventoryDifferencePanel: true,
+    } } }); await flushPromises();
+    await action(wrapper, "查看全部原始证据").trigger("click"); await flushPromises();
+    waiting = true; await action(wrapper, "刷新复核信息").trigger("click");
+    await action(wrapper, "查看原始照片资料").trigger("click"); await flushPromises();
+    expect(wrapper.text()).not.toContain("Private asset"); finish(reply(board())); await flushPromises();
+    expect(wrapper.text()).not.toContain("Private asset"); expect(wrapper.find("table").exists()).toBe(false); wrapper.unmount();
+  });
 });
