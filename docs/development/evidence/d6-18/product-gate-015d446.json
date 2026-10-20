@@ -1,0 +1,42 @@
+{
+  "candidate_commit": "015d4463842520667016484609f567cd2d64e3f4",
+  "comparison_base": "c0ff23b",
+  "recorded_date": "2026-10-20",
+  "full_product_gate_exit": 0,
+  "java_tests": 261,
+  "checkstyle_findings": 0,
+  "spotbugs_findings": 0,
+  "line_covered": 13531,
+  "line_total": 14555,
+  "branch_covered": 4869,
+  "branch_total": 6423,
+  "web_tests": 78,
+  "web_json": {
+    "numTotalTests": 78,
+    "numPassedTests": 78,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "numTodoTests": 0,
+    "success": true
+  },
+  "mini_tests": 153,
+  "lint_type_build_dependency_integrity": "PASS",
+  "application_restart_database_restart": "PASS",
+  "owned_runtime_cleanup_clean_worktree": "PASS",
+  "artifact": {
+    "candidate": "015d446",
+    "source": "backend/target/contract-generation-probe-0.1.0-SNAPSHOT.jar",
+    "artifact": "output/d6-18-015d446-backend.jar",
+    "sha256": "d1d0053533e250f498ed199f054d7e5b347d6386056b1a38ed77df7c268c9685",
+    "size": 58381965,
+    "observer": "passive during frozen candidate gate"
+  },
+  "scope": "D6-18B1 scoped executor/device synchronization declaration and immutable original receipt, current-state invalidation, explicit missing roster, durable native queue checks and read-only PC roster",
+  "pc_read_only_synchronization_roster": "PASS in explicitly identified earlier worktree package; original observations, participant roster, task and counts unchanged; owned fixture cleaned",
+  "full_pc_review_acceptance": "NOT_VERIFIED",
+  "unknown_offline_device_empty_proof": "NOT_CLAIMED; executor assertion only",
+  "sealing_late_damage_loss_followup": "NOT_IMPLEMENTED by B1",
+  "independent_review": "PENDING",
+  "real_wechat_https_sms_camera_device_weak_network": "NOT_VERIFIED",
+  "remote_ci_formal_qa_production": "NOT_VERIFIED"
+}
