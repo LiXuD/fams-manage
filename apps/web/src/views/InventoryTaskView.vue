@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
+import InventoryReadinessPanel from "@/views/InventoryReadinessPanel.vue";
 import InventorySynchronizationPanel from "@/views/InventorySynchronizationPanel.vue";
 import InventoryFindingPanel from "@/views/InventoryFindingPanel.vue";
 import InventoryReviewPanel from "@/views/InventoryReviewPanel.vue";
@@ -149,13 +150,14 @@ onMounted(async () => {
         <button v-if="detail.task.task_status === 'READY'" @click="action('start')">手动开始</button>
         <label>操作原因<textarea v-model="reason" maxlength="1000" /></label>
         <button v-if="detail.task.task_status === 'DRAFT'" :disabled="!reason.trim()" @click="action('delete')">删除草稿</button>
-        <template v-if="['READY','IN_PROGRESS'].includes(detail.task.task_status)"><button :disabled="!reason.trim()" @click="action('cancel')">取消无结果任务</button><button :disabled="!reason.trim()" @click="action('terminate')">终止并保留结果</button>
-          <label>主执行人<select v-model="executor"><option value="">请选择</option><option v-for="e in executors" :key="e.id" :value="e.id">{{ e.name }}</option></select></label><label><input v-model="recheck" type="checkbox">明确发起复盘（保留既有结果）</label><button :disabled="!selectedItems.length || !executor || !reason.trim()" @click="assign">分配所选应盘项</button></template>
+        <template v-if="['READY','IN_PROGRESS','WAITING_REVIEW'].includes(detail.task.task_status)"><button :disabled="!reason.trim()" @click="action('cancel')">取消无结果任务</button><button :disabled="!reason.trim()" @click="action('terminate')">终止并保留结果</button>
+          <label>主执行人<select v-model="executor"><option value="">请选择</option><option v-for="e in executors" :key="e.id" :value="e.id">{{ e.name }}</option></select></label><label><input v-model="recheck" type="checkbox">明确发起复盘（保留既有结果）</label><button :disabled="!selectedItems.length || !executor || !reason.trim() || detail.task.task_status === 'WAITING_REVIEW' && !recheck" @click="assign">分配所选应盘项</button></template>
       </fieldset>
       <InventoryReviewPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="detail.task.id" :task-id="detail.task.id" @changed="refresh" />
+      <InventoryReadinessPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="`readiness:${detail.task.id}`" :task-id="detail.task.id" @changed="refresh" />
       <InventorySynchronizationPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="`sync:${detail.task.id}`" :task-id="detail.task.id" />
       <InventoryFindingPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="`finding:${detail.task.id}`" :task-id="detail.task.id" @changed="refresh" />
-      <table><thead><tr><th v-if="admin">选择</th><th>资产</th><th>账面位置</th><th>账面责任</th><th>分配版本</th></tr></thead><tbody><tr v-for="i in detail.items" :key="i.id"><td v-if="admin"><input v-model="selectedItems" type="checkbox" :value="i.id" :disabled="locked || !['READY','IN_PROGRESS'].includes(detail.task.task_status)"></td><td>{{ i.snapshot_json.assetCode }} · {{ i.snapshot_json.name }}</td><td>{{ i.snapshot_json.locationName }}</td><td>{{ i.snapshot_json.responsibleEmployeeName ?? i.snapshot_json.departmentResponsibleEmployeeName ?? '仓库保管' }}</td><td>{{ i.assignment_version }}</td></tr></tbody></table>
+      <table><thead><tr><th v-if="admin">选择</th><th>资产</th><th>账面位置</th><th>账面责任</th><th>分配版本</th></tr></thead><tbody><tr v-for="i in detail.items" :key="i.id"><td v-if="admin"><input v-model="selectedItems" type="checkbox" :value="i.id" :disabled="locked || !['READY','IN_PROGRESS','WAITING_REVIEW'].includes(detail.task.task_status)"></td><td>{{ i.snapshot_json.assetCode }} · {{ i.snapshot_json.name }}</td><td>{{ i.snapshot_json.locationName }}</td><td>{{ i.snapshot_json.responsibleEmployeeName ?? i.snapshot_json.departmentResponsibleEmployeeName ?? '仓库保管' }}</td><td>{{ i.assignment_version }}</td></tr></tbody></table>
       <button :disabled="locked || itemPage === 1" @click="pages(-1, true)">上页应盘项</button>{{ itemPage }} / {{ Math.max(1, Math.ceil(detail.total / 20)) }}<button :disabled="locked || itemPage * 20 >= detail.total" @click="pages(1, true)">下页应盘项</button>
     </section>
   </section></AppChrome>

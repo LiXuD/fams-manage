@@ -7,6 +7,7 @@
  <view wx:if="{{task}}" class="card"><view class="title">{{task.name}}</view><view>开始 {{task.startsText}} · 截止 {{task.dueText}}</view>
   <navigator url="/pages/inventory-synchronization/index?taskId={{task.id}}">核对本机同步并声明</navigator>
   <navigator url="/pages/inventory-collection/index?taskId={{task.id}}">进入现场采集与待上传</navigator>
+  <navigator wx:if="{{canManage}}" url="/pages/inventory-readiness/index?taskId={{task.id}}">管理员未盘原因与待复核</navigator>
   <navigator wx:if="{{canManage}}" url="/pages/inventory-findings/index?taskId={{task.id}}">管理员盘盈与任务外线索复核</navigator>
   <button wx:if="{{canManage}}" bindtap="onReview" disabled="{{busy}}">管理员证据复核</button>
   <view wx:for="{{items}}" wx:key="id" class="card"><view>{{item.snapshot_json.assetCode}} · {{item.snapshot_json.name}}</view><view>账面位置：{{item.snapshot_json.locationName || '未指定'}}</view><view>账面责任：{{item.snapshot_json.responsibleEmployeeName || item.snapshot_json.departmentResponsibleEmployeeName || '仓库保管'}}</view><view>分配版本 {{item.assignment_version}}</view></view>

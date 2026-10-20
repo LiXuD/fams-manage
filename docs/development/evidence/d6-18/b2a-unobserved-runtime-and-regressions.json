@@ -1,0 +1,78 @@
+{
+  "recorded_date": "2026-10-20",
+  "scope": "D6-18B2a explicit unobserved reasons and waiting review only",
+  "source": "Uncommitted working tree on cd713e9; fixed full product gate pending",
+  "runtime": {
+    "populated_v38_to_v39_upgrade_tests": 1,
+    "http_tests": 10,
+    "failures_errors_skips": 0,
+    "raw_log": "output/d6-18-b2a-readiness-runtime-5.log",
+    "raw_log_sha256": "61aa2dce87bfbe938eb6eb72d533a290b348c7227d09ba9c29de0a3f1fdf254a",
+    "native_handler_opaque_http_mysql": true,
+    "actual_committed_reply_dropped_original_request_recovered": true,
+    "actual_committing_jvm_killed_and_new_jvm_original_replayed": true,
+    "current_role_before_replay": true,
+    "two_admin_concurrency_one_commit_and_audited_conflict": true,
+    "reason_and_waiting_audit_failures_rolled_back": true,
+    "accepted_normal_cannot_be_overwritten_as_unobserved": true,
+    "explicit_recheck_new_round_and_old_history_retained": true,
+    "cancel_denied_with_review_history_terminate_preserves": true,
+    "raw_observations_asset_dates_versions_locks_unchanged": true,
+    "owned_mysql_cleanup": "PASS"
+  },
+  "web_tests": {
+    "total": 82,
+    "passed": 82,
+    "failed": 0,
+    "pending": 0,
+    "todo": 0,
+    "raw_log": "output/d6-18-b2a-web-tests.log"
+  },
+  "mini_tests": {
+    "total": 160,
+    "failed": 0,
+    "skipped": 0,
+    "raw_log": "output/d6-18-b2a-mini-tests.log"
+  },
+  "static_quality": {
+    "checkstyle": 0,
+    "spotbugs": 0,
+    "raw_log": "output/d6-18-b2a-static.log",
+    "scope": "Independent static-only verify skips tests and coverage; not fixed full gate",
+    "exact_exclusions": "Spring-owned InventoryReadinessService constructor db/json EI_EXPOSE_REP2 only"
+  },
+  "pc_browser": {
+    "accepted": 0,
+    "captured": 0,
+    "receipts": 3,
+    "taskStatus": "WAITING_REVIEW",
+    "unobserved": 2,
+    "notObserved": 2,
+    "observations": 0,
+    "source_state": "B2a working tree on cd713e9 from independent static package; not a fixed gate candidate",
+    "artifact_sha256": "63ba9c60f900d0652fb38ffbaaf100867d6ea5dfa66dfb11fb0075384aa69dfd",
+    "task_id": "1",
+    "assets_unchanged": true
+  },
+  "pc_ui": "Real interactive admin login, task list, two reason entries, inline review and confirmation, explicit waiting transition and persisted reason history; physical missing remains open",
+  "screenshot": "output/playwright/d6-18-b2a-unobserved-waiting.png",
+  "browser_cleanup": "PASS",
+  "full_pc_A_review_acceptance": "NOT_VERIFIED",
+  "known_boundaries": [
+    "Waiting review is not sealed and does not prove differences closed or synchronization complete.",
+    "ASSET_NOT_FOUND preserves genuine finding/loss follow-up obligations; no text waiver.",
+    "No asset inventory date writes, frozen report or late follow-up in B2a.",
+    "Native admin pending request retained in current page only; no disk-backed recovery claim.",
+    "Native SDK and loopback HTTPS transport are explicit adapters; real WeChat/device/external integration not verified.",
+    "V1-V38 unchanged; actual upgraded V39 must not be rewritten.",
+    "Independent review, remote CI, formal QA and production remain pending."
+  ],
+  "retained_failures": [
+    "runtime-1 upgrade fixture LAST_INSERT_ID across independent connections; business transaction unchanged",
+    "runtime-3 cleanup deleted observation before referencing review row; dependent-row ordering corrected",
+    "runtime-4 new subprocess request path incorrectly contained a space; fixed to /items/ then entire suites rerun",
+    "static-1 two Spring-owned infrastructure constructor reference warnings; only exact fields excluded",
+    "PC getByLabel select locator had no match; inspected live DOM and used observed combobox role"
+  ],
+  "full_fixed_product_gate": "PENDING"
+}

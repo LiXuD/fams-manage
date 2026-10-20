@@ -45,7 +45,7 @@ class InventorySynchronizationController {
     })
     Map<String, Object> status(
             @PathVariable @Positive long task,
-            @RequestParam(defaultValue = "1") @Min(1) int page,
+            @RequestParam(defaultValue = "1") @Min(1) @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         return synchronization.status(actors.capture(), task, page, pageSize);
     }

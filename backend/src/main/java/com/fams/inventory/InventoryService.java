@@ -248,7 +248,7 @@ public class InventoryService {
                 version,
                 "delete".equals(action)
                         ? new String[] {"DRAFT"}
-                        : new String[] {"READY", "IN_PROGRESS"});
+                        : new String[] {"READY", "IN_PROGRESS", "WAITING_REVIEW"});
         long results =
                 Objects.requireNonNull(
                         db.queryForObject(
@@ -257,6 +257,9 @@ public class InventoryService {
                                 Long.class,
                                 id));
         results = Math.max(results, number(task, "captured_result_count"));
+        if (!db.queryForList("SELECT item_id FROM fams_inventory_item_review WHERE task_id=? LIMIT 1", id).isEmpty()) {
+            results = Math.max(results, 1);
+        }
         if ("cancel".equals(action) && results != 0) {
             throw new InventoryFailure(409, "INVENTORY_HAS_RESULTS");
         }
@@ -298,7 +301,10 @@ public class InventoryService {
             return prior;
         }
         var task = task(id, true);
-        require(task, version, "READY", "IN_PROGRESS");
+        require(task, version, "READY", "IN_PROGRESS", "WAITING_REVIEW");
+        if ("WAITING_REVIEW".equals(task.get("task_status")) && !input.recheck()) {
+            throw new InventoryFailure(409, "INVENTORY_RECHECK_REQUIRED");
+        }
         if (!executors.eligible(input.executorAccountId())) {
             throw new InventoryFailure(409, "INVENTORY_EXECUTOR_UNAVAILABLE");
         }
@@ -316,7 +322,10 @@ public class InventoryService {
                 throw new InventoryFailure(404, "INVENTORY_ITEM_NOT_FOUND");
             }
             var item = rows.getFirst();
-            if (number(item, "result_count") > 0 && !input.recheck()) {
+            boolean reviewed = !db.queryForList(
+                    "SELECT item_id FROM fams_inventory_item_review WHERE item_id=? AND recheck_generation=?",
+                    itemId, item.get("recheck_generation")).isEmpty();
+            if ((number(item, "result_count") > 0 || reviewed) && !input.recheck()) {
                 throw new InventoryFailure(409, "INVENTORY_RECHECK_REQUIRED");
             }
             if (Objects.equals(item.get("executor_account_id"), input.executorAccountId())
@@ -362,7 +371,8 @@ public class InventoryService {
             throw new InventoryFailure(409, "INVENTORY_PARTICIPATION_REVOKED");
         }
         db.update(
-                "UPDATE fams_inventory_task SET assignment_version=?,version=version+1,updated_at=?"
+                "UPDATE fams_inventory_task SET assignment_version=?,version=version+1,updated_at=?,"
+                        + " task_status=CASE WHEN task_status='WAITING_REVIEW' THEN 'IN_PROGRESS' ELSE task_status END"
                         + " WHERE id=?",
                 assignment,
                 now(),

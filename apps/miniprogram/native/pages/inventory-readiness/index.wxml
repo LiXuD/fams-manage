@@ -1,0 +1,24 @@
+<view class="page">
+ <view class="title">未盘原因与待复核</view><view>未盘不计正常；实物未找到仍须真实查找或报失后续，不能用原因文字或同步确认代替。</view>
+ <view wx:if="{{error}}" role="alert">{{error}}</view><view wx:if="{{notice}}">{{notice}}</view>
+ <button bindtap="onRefresh" disabled="{{busy}}">刷新当前授权与未盘情况</button>
+ <view wx:if="{{view}}">尚无结果或明确原因 {{view.missingCount}} 项 · 明确未盘 {{view.notObservedCount}} 项</view>
+ <view wx:for="{{view.items}}" wx:key="id" class="card"><view>{{item.item.snapshot_json.assetCode}} · {{item.item.snapshot_json.name}}</view>
+  <view wx:if="{{item.item.review_status === 'NOT_OBSERVED'}}">明确未盘，不计正常 · {{item.item.reason}}</view>
+  <view wx:if="{{item.physicalMissingOpen}}">实物未找到：真实后续尚待闭环</view>
+  <button data-id="{{item.item.id}}" bindtap="onSelect" disabled="{{busy || retry || !item.canRecord}}">记录本轮未盘原因</button>
+  <button data-id="{{item.item.id}}" bindtap="onHistory" disabled="{{busy || retry}}">历次未盘原因</button>
+ </view>
+ <view wx:if="{{selected}}" class="card"><view>{{selected.item.snapshot_json.assetCode}}</view>
+  <picker range="{{kindNames}}" value="{{kindIndex}}" bindchange="onKind" disabled="{{busy || retry}}"><view>类型：{{kindNames[kindIndex]}}</view></picker>
+  <textarea data-field="reason" value="{{reason}}" bindinput="onField" disabled="{{busy || retry}}" maxlength="1000" placeholder="未盘原因" />
+  <textarea data-field="evidence" value="{{evidence}}" bindinput="onField" disabled="{{busy || retry}}" maxlength="2000" placeholder="明确依据" />
+  <button bindtap="onSave" disabled="{{busy || retry}}">确认记录本轮未盘</button>
+ </view>
+ <view wx:if="{{view.task.task_status === 'IN_PROGRESS'}}"><textarea data-field="waitingReason" value="{{waitingReason}}" bindinput="onField" disabled="{{busy || retry}}" maxlength="1000" placeholder="进入待复核原因" />
+  <button bindtap="onWaiting" disabled="{{busy || retry || view.missingCount}}">核对并进入待复核</button></view>
+ <button wx:if="{{retry}}" bindtap="onRetry" disabled="{{busy || !view}}">原键重试未确认操作</button>
+ <button data-delta="-1" bindtap="onPage" disabled="{{busy || retry || page === 1}}">上页应盘检查</button><view>第 {{page}} 页</view><button data-delta="1" bindtap="onPage" disabled="{{busy || retry || page * 20 >= view.total}}">下页应盘检查</button>
+ <view wx:if="{{historyItem}}"><view>历次未盘原因</view><view wx:for="{{history}}" wx:key="id">第 {{item.recheck_generation + 1}} 轮 · {{item.reason}} · {{item.evidence}} · {{item.actor_username}} · {{item.recorded_at}}</view>
+  <button data-delta="-1" bindtap="onHistoryPage" disabled="{{busy || retry || historyPage === 1}}">上页历史</button><button data-delta="1" bindtap="onHistoryPage" disabled="{{busy || retry || historyPage * 20 >= historyTotal}}">下页历史</button></view>
+</view>
