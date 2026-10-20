@@ -1,0 +1,81 @@
+{
+  "recorded_date": "2026-10-20",
+  "scope": "D6-18B1 current binding/device executor synchronization assertions, not sealing or complete D6-18B",
+  "source": "Uncommitted worktree on c0ff23b; fixed candidate full gate pending",
+  "runtime": {
+    "populated_v37_to_v38_upgrade_tests": 1,
+    "http_tests": 10,
+    "failures_errors_skips": 0,
+    "raw_log": "output/d6-18-b1-sync-runtime-9.log",
+    "raw_log_sha256": "016f3cd3cd0243be74c33b74825fb4608c7324481a890c5f284abcb4156b105e",
+    "native_handler_real_http_mysql": true,
+    "actual_committed_reply_dropped_original_request_recovered": true,
+    "durable_queue_read": true,
+    "actual_calibrated_observation_upload_invalidates": true,
+    "duplicate_observation_receipt_does_not_invalidate": true,
+    "task_assignment_change_invalidates": true,
+    "revoked_participant_denies_original_replay": true,
+    "old_binding_devices_retained_after_rebinding": true,
+    "disabled_account_explicitly_missing": true,
+    "local_missing_evidence_prevents_complete_status": true,
+    "task_event_and_central_audit_failure_roll_back_all": true,
+    "concurrent_declarations_commit_one_task_version": true,
+    "actual_committing_jvm_killed_fresh_jvm_replays_original": true,
+    "single_declaration_and_receipt_after_recovery": true,
+    "declarations_do_not_change_collection_count_or_asset_row": true,
+    "owned_mysql_cleanup": "PASS"
+  },
+  "web_tests": {
+    "numTotalTests": 78,
+    "numPassedTests": 78,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "numTodoTests": 0,
+    "success": true
+  },
+  "mini_tests": 153,
+  "gate_script_unit_tests": 32,
+  "type_lint_build": "PASS",
+  "static_quality": {
+    "checkstyle": 0,
+    "spotbugs": 0,
+    "raw_log": "output/d6-18-b1-static-verify-2.log",
+    "scope": "Independent static-only verify explicitly skips tests and coverage; not a full product gate"
+  },
+  "pc_read_only_browser": {
+    "receipts": 0,
+    "declarations": 0,
+    "observations": 3,
+    "participants": 1,
+    "source_state": "B1 working tree on c0ff23b from independent static package; not a fixed gate candidate",
+    "artifact_sha256": "4f7b585ebd051fd269a448a53eded074cfff4d594682f71de97d896df54d5201",
+    "task_id": "1",
+    "read_only_inventory_unchanged": true
+  },
+  "pc_visible_roster": "1 missing-bound executor, 3 unbound observation devices; authorized UI read and refresh through real service; inventory task and raw observations unchanged",
+  "screenshot": "output/playwright/d6-18-b1-sync-roster.png",
+  "browser_fixture_cleanup": "PASS",
+  "full_pc_review_acceptance": "NOT_VERIFIED",
+  "known_boundaries": [
+    "Server cannot prove unknown offline queues empty; declarationOnly is explicit.",
+    "Original receipt is immutable; a fresh authorized GET determines current state.",
+    "Native pending original operation survives same page hide only; no disk-backed admin request recovery claimed.",
+    "Queue storage failure, pending upload, unfinished cleanup or changed queue blocks new or repeated declaration.",
+    "Historical participants and old binding devices remain missing; administrator cannot impersonate executor.",
+    "V1-V37 unchanged; V38 now migration-tested and must not be rewritten.",
+    "No sealing, missing-item reason, asset date update, late follow-up or damage/loss closure implemented by B1.",
+    "Node/HTTPS loopback bridge is an explicit test adapter; no real WeChat, device, external HTTPS or SMS claim."
+  ],
+  "retained_failures": [
+    "runtime-1 Checkstyle five missing test braces; no business test pass",
+    "runtime-2 nullable contract syntax rejected by current generator",
+    "runtime-3 upgrade fixture selected task_id on task table due accidental test variable substitution",
+    "runtime-4 PC denied-only path fell through existing generic 500 handling; exact denial now 403",
+    "runtime-6 missing Instant test import; no business test execution",
+    "static-verify-1 three Spring infrastructure constructor field warnings; exact existing-style field exclusions only"
+  ],
+  "impact_notes": "Native failure function HIGH 3 direct/6 total all within new page; warning was reported after edit, order lapse retained; direct read/send/onDeclare and onShow/onRefresh/onRetry source plus tests checked. Other existing integration and verifier impacts LOW; new unindexed test symbols UNKNOWN, real tests authoritative.",
+  "full_fixed_product_gate": "PENDING",
+  "independent_review": "PENDING",
+  "real_external_remote_ci_formal_qa_production": "NOT_VERIFIED"
+}

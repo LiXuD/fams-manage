@@ -1,0 +1,11 @@
+{
+  "source_candidate": "bec34b9",
+  "artifact_sha256": "ace5815735c45021598e238b04a9f82c62a1db7c34fc49e20a274ee089c6c13e",
+  "columns_sha256": "6aac57a5175d0023935add8c11eefe656dd51ccc5466a7135cacf47bc78f1842",
+  "create_sha256": "038777ef3182a64bde674d2458672eb3bebffde2f6b2e0564256b82fa13a8165",
+  "objects": 103,
+  "business_rows_read": false,
+  "recorded_date": "2026-10-20",
+  "owned_runtime_cleanup": "PASS",
+  "scope": "Owned disposable MySQL metadata only; no business rows read; V37 frozen source before V38 forward migration"
+}
