@@ -72,7 +72,19 @@
     "runtime-3 cleanup deleted observation before referencing review row; dependent-row ordering corrected",
     "runtime-4 new subprocess request path incorrectly contained a space; fixed to /items/ then entire suites rerun",
     "static-1 two Spring-owned infrastructure constructor reference warnings; only exact fields excluded",
-    "PC getByLabel select locator had no match; inspected live DOM and used observed combobox role"
+    "PC getByLabel select locator had no match; inspected live DOM and used observed combobox role",
+    "New gate-order regression first used an empty command mock and failed the pre-existing output-summary guard; corrected mock to a valid summary, all33 passed"
   ],
-  "full_fixed_product_gate": "PENDING"
+  "full_fixed_product_gate": "PENDING",
+  "failed_fixed_candidate": {
+    "candidate": "563d0fce87bed209526599efed3a83b7dc0635dc",
+    "log": "output/d6-18-product-gate-563d0fc.log",
+    "log_sha256": "b16a9afd6b16be01ea9e7e1d69fff217de92056507af738377073babaaa0b528",
+    "result": "FAIL",
+    "cause": "V39 populated upgrade executed after synchronization HTTP had already migrated the shared owned runtime to V39; expected one migration but zero executed",
+    "owned_cleanup": "PASS",
+    "source_clean_postflight": "PASS"
+  },
+  "gate_script_regression_tests": 33,
+  "aoci_correction_debt": "B2a V39 semantic relation path should be V33__create_inventory_review_facts.sql; current entry mistakenly omits _facts. Tool denied optimization while legacy image governance remains, direct repair zero-write rejected; migration source unchanged."
 }

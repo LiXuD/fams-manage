@@ -443,6 +443,24 @@ class AuthenticationRuntimeIntegrationTest(unittest.TestCase):
 
         self.assertIn("-Dd6.04.runtime=true", command.call_args.args[1])
 
+    def test_all_populated_upgrades_precede_any_current_schema_http_boot(self) -> None:
+        verifier = load_verifier()
+        with patch.object(verifier, "require_command", return_value="Tests run: 50, Failures: 0, Errors: 0, Skipped: 0") as command:
+            with patch.object(verifier, "verify_java_reports"):
+                verifier.verify_java_quality(self.context(verifier))
+        selections = [next((arg.removeprefix("-Dtest=") for arg in call.args[1]
+                            if arg.startswith("-Dtest=")), "")
+                      for call in command.call_args_list]
+        upgrade_positions = [index for index, selection in enumerate(selections)
+                             if "UpgradeRuntimeCase" in selection]
+        http_positions = [index for index, selection in enumerate(selections)
+                          if "HttpRuntimeCase" in selection]
+        self.assertTrue(upgrade_positions)
+        self.assertTrue(http_positions)
+        self.assertLess(max(upgrade_positions), min(http_positions), selections)
+        self.assertIn("InventoryReadinessUpgradeRuntimeCase", selections)
+        self.assertIn("InventoryReadinessHttpRuntimeCase", selections)
+
     def test_required_report_floor_counts_the_new_runtime_suites(self) -> None:
         verifier = load_verifier()
 
