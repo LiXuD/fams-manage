@@ -1,0 +1,14 @@
+<view class="page"><view class="title">终态补充证据与关联复盘</view><view>补传不改原报告、完成数或最近盘点日期；后续观察不能证明封存时实物状况，时间异常不能凭文字采信。</view>
+ <view wx:if="{{error}}" role="alert">{{error}}</view><button bindtap="onRefresh" disabled="{{busy}}">刷新补充证据</button><button bindtap="onPrepare" disabled="{{busy || retry || !board}}">准备既有补充证据</button>
+ <button wx:for="{{entries}}" wx:key="id" data-id="{{item.id}}" bindtap="onOpen" disabled="{{busy || retry}}">{{item.label}}</button>
+ <button bindtap="onPage" data-delta="-1" disabled="{{busy || retry || page === 1}}">上页补充证据</button><view>第 {{page}} 页 · 共 {{board.total || 0}} 条</view><button bindtap="onPage" data-delta="1" disabled="{{busy || retry || page * 20 >= board.total}}">下页补充证据</button>
+ <view wx:if="{{detail}}" class="card"><view>原观察 {{detail.case.evidence.snapshot_json.rawObservedAt}} · 原校准时间 {{detail.case.evidence.snapshot_json.calibratedObservedAt || '尚未核实'}} · 接收 {{detail.case.evidence.snapshot_json.receivedAt}}</view><view>原采信观察 {{detail.case.evidence.snapshot_json.acceptedObservationId || '无'}}</view>
+  <text wx:for="{{history}}" wx:key="id" class="history" selectable="{{true}}">{{item.text}}</text>
+  <button bindtap="onHistoryPage" data-delta="-1" disabled="{{busy || retry || detail.history.page === 1}}">上页补充决定</button><view>补充历史第 {{detail.history.page}} 页 · 共 {{detail.history.total}} 条</view><button bindtap="onHistoryPage" data-delta="1" disabled="{{busy || retry || detail.history.page * 20 >= detail.history.total}}">下页补充决定</button>
+  <picker range="{{methodNames}}" value="{{methodIndex}}" bindchange="onMethod" disabled="{{busy || retry}}"><view>补充处理：{{methodNames[methodIndex]}}</view></picker>
+  <textarea data-field="reason" value="{{reason}}" bindinput="onField" disabled="{{busy || retry}}" maxlength="1000" placeholder="补充处理原因" />
+  <textarea data-field="evidence" value="{{evidence}}" bindinput="onField" disabled="{{busy || retry}}" maxlength="2000" placeholder="独立核实依据" />
+  <view wx:if="{{methodIndex === 1 || methodIndex === 2}}"><input data-field="draftName" value="{{draftName}}" bindinput="onField" disabled="{{busy || retry}}" maxlength="128" placeholder="复盘名称" /><input data-field="startsAt" value="{{startsAt}}" bindinput="onField" disabled="{{busy || retry}}" placeholder="开始时间（带时区）" /><input data-field="dueAt" value="{{dueAt}}" bindinput="onField" disabled="{{busy || retry}}" placeholder="截止时间（带时区）" /><view>仅创建原范围复盘草稿，后续须实际发布、分配、实盘及封存。</view></view>
+  <button bindtap="onDecide" disabled="{{busy || retry || !reason || !evidence}}">核对并确认补充处理</button>
+ </view><button wx:if="{{retry}}" bindtap="onRetry" disabled="{{busy || !board}}">原键重试未确认补充处理</button>
+</view>

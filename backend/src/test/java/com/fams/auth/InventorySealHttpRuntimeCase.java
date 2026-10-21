@@ -173,6 +173,12 @@ class InventorySealHttpRuntimeCase {
 
     @AfterEach
     void cleanup() {
+        db.update(
+                "DELETE FROM fams_todo WHERE business_type='INVENTORY_LATE' AND business_id IN (SELECT observation_id FROM fams_inventory_late_case WHERE task_id IN (947000,947100))");
+        db.update(
+                "DELETE FROM fams_inventory_late_decision WHERE observation_id IN (SELECT observation_id FROM fams_inventory_late_case WHERE task_id IN (947000,947100))");
+        db.update(
+                "DELETE FROM fams_inventory_late_case WHERE task_id IN (947000,947100)");
         for (String table :
                 java.util.List.of(
                         "fams_inventory_sealed_item",

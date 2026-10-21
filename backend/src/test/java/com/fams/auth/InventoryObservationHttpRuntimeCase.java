@@ -155,6 +155,12 @@ class InventoryObservationHttpRuntimeCase {
 
     @AfterEach
     void cleanup() {
+        db.update(
+                "DELETE FROM fams_todo WHERE business_type='INVENTORY_LATE' AND business_id IN (SELECT observation_id FROM fams_inventory_late_case WHERE task_id IN (SELECT id FROM fams_inventory_task WHERE creator_account_id=933001))");
+        db.update(
+                "DELETE FROM fams_inventory_late_decision WHERE observation_id IN (SELECT observation_id FROM fams_inventory_late_case WHERE task_id IN (SELECT id FROM fams_inventory_task WHERE creator_account_id=933001))");
+        db.update(
+                "DELETE FROM fams_inventory_late_case WHERE task_id IN (SELECT id FROM fams_inventory_task WHERE creator_account_id=933001)");
         for (String table : new String[] {"fams_inventory_finding_link", "fams_inventory_review_decision",
                 "fams_inventory_review_receipt", "fams_inventory_review_subject"}) {
             db.update("DELETE FROM " + table + " WHERE task_id IN"
@@ -595,6 +601,38 @@ class InventoryObservationHttpRuntimeCase {
                 }
             }
         }
+    }
+
+    @Test
+    void actualDamagedPhotoLateEvidenceKeepsTodoAndRejectsTextOnlySupplement() throws Exception {
+        String task = prepared();
+        var event = observation(task);
+        ((tools.jackson.databind.node.ObjectNode) event.path("actual")).put("condition", "DAMAGED");
+        byte[] bytes = java.util.Base64.getDecoder().decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jSZkAAAAASUVORK5CYII=");
+        var photo = ok(uploadPhoto(employee, task, event, key(), bytes));
+        ((tools.jackson.databind.node.ArrayNode) event.path("photoIds")).add(photo.path("objectId").asText());
+        long version = db.queryForObject("SELECT version FROM fams_inventory_task WHERE id=?", Long.class, task);
+        ok(call(admin, "/" + task + "/cancel", "{\"reason\":\"原任务明确取消，已保存离线照片只能作为合法补充线索\"}", key(), version));
+        var originalTask = db.queryForMap("SELECT * FROM fams_inventory_task WHERE id=?", task);
+        var originalAsset = db.queryForMap("SELECT * FROM fams_asset WHERE id=933010");
+        assertEquals("LATE_REVIEW", ok(observe(employee, task, event)).path("outcome").asText());
+        long observation = db.queryForObject("SELECT id FROM fams_inventory_observation WHERE task_id=? AND client_event_id=?", Long.class, task, event.path("eventId").asText());
+        var response = http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+                + "/api/v1/inventory-late/tasks/" + task + "/observations/" + observation + "/decisions"))
+                .header("Cookie", admin.cookie()).header("X-CSRF-Token", admin.csrf())
+                .header("Idempotency-Key", key()).header("If-Match-Version", "0")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(java.util.Map.of(
+                        "method", "NOTE", "reason", "只有损坏照片，文字不能替代真实报修或复盘",
+                        "evidence", "保留实际上传照片与原观察，独立实物义务仍开放")))).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(409, response.statusCode(), response.body());
+        assertEquals("INVENTORY_LATE_RECHECK_REQUIRED", JSON.readTree(response.body()).path("code").asText());
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_todo WHERE business_type='INVENTORY_LATE' AND business_id=? AND closed_at IS NULL", Long.class, observation));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_inventory_late_decision WHERE observation_id=?", Long.class, observation));
+        assertEquals(originalTask, db.queryForMap("SELECT * FROM fams_inventory_task WHERE id=?", task));
+        assertEquals(originalAsset, db.queryForMap("SELECT * FROM fams_asset WHERE id=933010"));
     }
 
     @Test

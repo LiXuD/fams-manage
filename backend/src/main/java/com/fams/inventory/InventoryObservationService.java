@@ -38,6 +38,7 @@ public class InventoryObservationService {
     private final InventoryIdentityPort identities;
     private final AssetInventoryReadPort assets;
     private final Clock clock;
+    private final InventoryLateEvidencePort late;
     private final org.springframework.beans.factory.ObjectProvider<
                     com.fams.attachment.AttachmentEvidencePort>
             attachments;
@@ -49,6 +50,7 @@ public class InventoryObservationService {
             InventoryIdentityPort identities,
             AssetInventoryReadPort assets,
             Clock clock,
+            InventoryLateEvidencePort late,
             org.springframework.beans.factory.ObjectProvider<
                             com.fams.attachment.AttachmentEvidencePort>
                     attachments) {
@@ -58,6 +60,7 @@ public class InventoryObservationService {
         this.identities = identities;
         this.assets = assets;
         this.clock = clock;
+        this.late = late;
         this.attachments = attachments;
     }
 
@@ -302,6 +305,9 @@ public class InventoryObservationService {
                         Long.class,
                         taskId,
                         input.eventId().toString());
+        if (terminal && !"EXPIRED".equals(outcome)) {
+            late.append(task, java.util.Objects.requireNonNull(observation));
+        }
         if (Boolean.TRUE.equals(receipt.get("counted"))) {
             db.update(
                     "INSERT INTO"

@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import InventoryReadinessPanel from "@/views/InventoryReadinessPanel.vue";
 import InventorySealPanel from "@/views/InventorySealPanel.vue";
+import InventoryLatePanel from "@/views/InventoryLatePanel.vue";
 import InventorySynchronizationPanel from "@/views/InventorySynchronizationPanel.vue";
 import InventoryFindingPanel from "@/views/InventoryFindingPanel.vue";
 import InventoryReviewPanel from "@/views/InventoryReviewPanel.vue";
@@ -157,6 +158,7 @@ onMounted(async () => {
       <InventoryReviewPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="detail.task.id" :task-id="detail.task.id" @changed="refresh" />
       <InventoryReadinessPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="`readiness:${detail.task.id}`" :task-id="detail.task.id" @changed="refresh" />
       <InventorySealPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="`seal:${detail.task.id}`" :task-id="detail.task.id" @changed="refresh" />
+      <InventoryLatePanel v-if="admin && ['COMPLETED', 'CANCELLED', 'TERMINATED'].includes(detail.task.task_status)" :key="`late:${detail.task.id}`" :task-id="detail.task.id" />
       <InventorySynchronizationPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="`sync:${detail.task.id}`" :task-id="detail.task.id" />
       <InventoryFindingPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="`finding:${detail.task.id}`" :task-id="detail.task.id" @changed="refresh" />
       <table><thead><tr><th v-if="admin">选择</th><th>资产</th><th>账面位置</th><th>账面责任</th><th>分配版本</th></tr></thead><tbody><tr v-for="i in detail.items" :key="i.id"><td v-if="admin"><input v-model="selectedItems" type="checkbox" :value="i.id" :disabled="locked || !['READY','IN_PROGRESS','WAITING_REVIEW'].includes(detail.task.task_status)"></td><td>{{ i.snapshot_json.assetCode }} · {{ i.snapshot_json.name }}</td><td>{{ i.snapshot_json.locationName }}</td><td>{{ i.snapshot_json.responsibleEmployeeName ?? i.snapshot_json.departmentResponsibleEmployeeName ?? '仓库保管' }}</td><td>{{ i.assignment_version }}</td></tr></tbody></table>

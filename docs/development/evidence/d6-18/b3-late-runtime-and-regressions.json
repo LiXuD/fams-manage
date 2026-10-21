@@ -1,0 +1,120 @@
+{
+  "recorded_date": "2026-10-21",
+  "source": "B3 uncommitted worktree on a7dd85d; fixed full gate pending",
+  "scope": "terminal supplemental cases, deduplicated administrator todos, append-only decisions and actual linked recheck closure; original reports remain immutable",
+  "runtime": {
+    "upgrade_tests": 1,
+    "http_tests": 18,
+    "failures_errors_skips": 0,
+    "raw_log": "output/d6-18-b3-late-runtime-11.log",
+    "sha256": "8d25c8f67f2bafc39378c202966739368f566b6cde218fbe75cd3722d5cbd6ea",
+    "owned_mysql_cleanup": "PASS",
+    "actual_native_opaque_committed_reply_dropped_and_exact_original_recovered": true,
+    "actual_committing_jvm_forced_death_then_fresh_jvm_original_reply": true,
+    "two_actual_administrators_single_version_and_processing_context_audit": true,
+    "supplement_audit_rolls_back_linked_draft_todo_history_and_receipt": true,
+    "terminal_upload_audit_rolls_back_observation_case_and_todo": true,
+    "actual_published_assigned_collected_accepted_sealed_recheck_closes_only_supplement_todo": true,
+    "completed_unobserved_recheck_stays_open_and_can_explicitly_start_another_round": true,
+    "cancelled_and_terminated_source_counts_versions_and_report_not_changed": true,
+    "original_legal_event_replays_after_73_hours_without_duplicate_case_or_todo": true,
+    "time_uncertainty_never_accepted_by_note_and_expired_first_upload_retains_no_late_body": true,
+    "history_stable_bounded_pages_and_size_overflow_rejection": true,
+    "explicit_damaged_photo_followup_http": true,
+    "actual_uploaded_photo_evidence_stays_open_after_text_only_attempt": true
+  },
+  "existing_regressions": {
+    "raw_log": "output/d6-18-b3-late-runtime-8.log",
+    "sha256": "a02464836fc11027b7d4ce313e6353662616adc025a1fd246cb9fe2d368ea25a",
+    "collection_http_tests": 21,
+    "seal_http_tests": 14,
+    "failures_errors_skips": 0,
+    "scope": "Final upload integration collection21 passed, including actual damaged-photo late evidence; seal14 earlier worktree log retained and final fixed gate repeats seal checks.",
+    "final_collection_raw_log": "output/d6-18-b3-late-runtime-11.log"
+  },
+  "web_tests": 91,
+  "mini_tests": 173,
+  "lint_type_build": "PASS",
+  "gate_verifier_tests": 33,
+  "static_quality": {
+    "checkstyle": 0,
+    "spotbugs": 0,
+    "raw_log": "output/d6-18-b3-static-verify-3.log",
+    "scope": "Independent static-only verify explicitly skips tests and coverage; not full fixed product gate",
+    "exact_constructor_EI_EXPOSE_REP2_fields": [
+      "InventoryLateEvidencePort.db",
+      "InventoryLateEvidencePort.json",
+      "InventoryLateService.db",
+      "InventoryLateService.json",
+      "InventoryLateService.evidence",
+      "InventoryObservationService.late"
+    ],
+    "rationale": "Container-owned db/json and stateless service collaborator references; no business values, methods, packages or classes excluded",
+    "source_state": "Final source PASS; tests and coverage explicitly skipped only in this independent static check"
+  },
+  "pc_browser": {
+    "cases": 2,
+    "drafts": 1,
+    "accepted": 1,
+    "captured": 1,
+    "decisions": 2,
+    "openTodos": 1,
+    "closedTodos": 1,
+    "notObserved": 1,
+    "observations": 3,
+    "source_state": "B3 working tree on a7dd85d from independent static package; not a fixed gate candidate",
+    "artifact_sha256": "10803050c1cb509213cbb04f35500deeb26090668f063e78ac4b75ba84452d9a",
+    "task_id": "1",
+    "asset_rows_dates_versions_and_locks_unchanged": true,
+    "original_observations_unchanged": true,
+    "frozen_report_and_task_version_unchanged": true,
+    "late_receipts": [
+      {
+        "eventId": "400784bc-3888-4e92-92b4-96a46588391c",
+        "outcome": "LATE_REVIEW",
+        "counted": false,
+        "differences": [],
+        "receivedAt": "2026-10-21T01:11:04.787Z",
+        "recollectionRequired": false
+      },
+      {
+        "eventId": "ec3fb2b2-85df-4c65-b79d-51dde09a7d22",
+        "outcome": "LATE_REVIEW",
+        "counted": false,
+        "differences": [],
+        "receivedAt": "2026-10-21T01:11:04.818Z",
+        "recollectionRequired": false
+      }
+    ],
+    "cleanup": "PASS",
+    "actual_draft_visible_in_task_list": true,
+    "console_errors": 0,
+    "registered_route_after_real_login": true,
+    "home_global_navigation_acceptance": "NOT_CLAIMED",
+    "screenshots": [
+      "output/playwright/d6-18-b3-supplement-linked-recheck.png",
+      "output/playwright/d6-18-b3-linked-draft.png"
+    ],
+    "scope": "Identified earlier worktree package before final explicit damaged-followup guard; exercised UNKNOWN cases unaffected by that guard; not fixed candidate artifact"
+  },
+  "fixed_full_product_gate": "PENDING",
+  "retained_failures": [
+    "runtime-1 Checkstyle24 missing braces in new code; corrected without changing quality rules",
+    "runtime-3 three fixture failures: cloned event header version0/body1 and second admin fixture actually EMPLOYEE; corrected fixtures without weaker assertions",
+    "runtime-4 moving first persistence before calibration correctly yielded TIME_REVIEW; corrected to original valid timestamps and actual clock advance73h",
+    "runtime-6 full recheck used wrong publish path; corrected fixture to existing /publication",
+    "runtime-7 full recheck fixture lacked current business-parameter pointer; fixture now points to its owned version and restores previous state on cleanup",
+    "static-1 six Spring-owned constructor-reference EI_EXPOSE_REP2 warnings; exact six field/constructor exceptions only; static-2 zero findings"
+  ],
+  "known_boundaries": [
+    "Only current ASSET_ADMIN may read or decide; current identity precedes durable replay. Upload authorization ordering remains unchanged.",
+    "Future observation times never prove original seal-time condition. NOTE never changes accepted evidence, time confidence, retention, asset ownership, dates, original task version or frozen report.",
+    "Finding/itemless physical follow-up still requires independent actual owner lineage; draft creation or reason text cannot close that obligation.",
+    "A8 itemless time/finding and D19/D21 real physical owner workflows remain open.",
+    "Native confirmation SDK and HTTPS-to-loopback bridge are explicit test adapters; real WeChat/SMS/HTTPS/camera/device/weak network remain deferred.",
+    "V1-V41 have actually been migration-tested and are immutable.",
+    "Independent review, full PC A, remote CI, formal QA and production are not verified.",
+    "Explicit DAMAGED terminal evidence cannot close its todo by NOTE, even matching facts; actual repair owner/ticket is a future D19 boundary, not implemented or claimed by this slice."
+  ],
+  "schema_v41_source_sha256": "c4e75fddb1b81dfa7f3de4e3d932c5e132a98a3286803d58c6afb5c210370db3"
+}

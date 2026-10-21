@@ -1,0 +1,11 @@
+{
+  "source_candidate": "7016335",
+  "artifact_sha256": "af9d881b29a0e5b2bc5fdbbb992c331cd62706392fac49ceebb775e303611490",
+  "columns_sha256": "143e57f06472a2e7ed4a7fdb96da1078d67d78951e6c31c348671b8a915f805e",
+  "create_sha256": "e15ee4d37d28e3805b34e8ef31490823517704e956766a1cfabf77ff057345fc",
+  "objects": 110,
+  "business_rows_read": false,
+  "recorded_date": "2026-10-21",
+  "owned_runtime_cleanup": "PASS",
+  "scope": "Owned frozen V40 metadata before V41, no business rows read"
+}
