@@ -1,6 +1,6 @@
 {
   "recorded_date": "2026-10-21",
-  "source": "A8 worktree on 33a0c19; fixed full product gate pending",
+  "source": "A8 worktree evidence retained; functional candidate 2eeab4b53a88260a268f6d71708850a77f8067a6 separately passed full product gate",
   "scope": "Independent itemless TIME and FINDING obligations, actual later recollection lineage and immutable original evidence",
   "runtime": {
     "upgrade_tests": 1,
@@ -65,7 +65,11 @@
   "pc_screenshot": "output/playwright/d6-18-a8-independent-time-finding.png",
   "pc_dom": "output/d6-18-a8-browser-final-dom.txt",
   "pc_owned_app_vite_mysql_clamd_photo_root_cleanup": "PASS",
-  "fixed_full_product_gate": "PENDING",
+  "fixed_full_product_gate": {
+    "status": "PASS",
+    "candidate": "2eeab4b53a88260a268f6d71708850a77f8067a6",
+    "evidence": "docs/development/evidence/d6-18/product-gate-2eeab4b.json"
+  },
   "retained_failures": [
     "runtime-1 new fixture expected captured0 but itemless uploads produce captured2; missing cleanup of new unobserved item review children caused three later fixture duplicate setup errors",
     "runtime-2 count correction accidentally matched legacy cancellation assertion; legacy restored from HEAD and count change restricted to new method; no production changes made for either count assertion"
