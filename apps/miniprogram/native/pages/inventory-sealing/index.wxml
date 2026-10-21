@@ -1,0 +1,22 @@
+<view class="page">
+ <view class="title">封存检查与冻结报告</view><view>未盘不计正常；差异与实物缺失须真实闭环。声明不能证明未知离线设备为空，缺失须保留待补证名单。</view>
+ <view wx:if="{{error}}" role="alert">{{error}}</view><view wx:if="{{notice}}">{{notice}}</view>
+ <button bindtap="onRefresh" disabled="{{busy}}">刷新封存条件与报告</button>
+ <view wx:if="{{view && !view.sealed}}">
+  <view>封存阻断 {{view.blockerCount}} 项 · 缺少同步确认 {{view.missingSynchronizationCount}} 人</view>
+  <view wx:for="{{blockers}}" wx:key="id">{{item.text}}</view>
+  <view wx:for="{{view.synchronization}}" wx:key="accountId" class="card"><view>{{item.name}} · {{item.current ? '当前已声明' : item.reason}}</view>
+   <view wx:for="{{item.devices}}" wx:for-item="device" wx:key="deviceId">{{device.deviceId}} · {{device.current ? '当前已声明' : device.reason}}</view></view>
+  <textarea data-field="reason" value="{{reason}}" bindinput="onField" disabled="{{busy || retry}}" maxlength="1000" placeholder="封存原因" />
+  <textarea wx:if="{{view.missingSynchronizationCount > 0}}" data-field="waiver" value="{{waiver}}" bindinput="onField" disabled="{{busy || retry}}" maxlength="2000" placeholder="缺少同步确认的明确依据与待补证安排" />
+  <button bindtap="onSeal" disabled="{{busy || retry || view.blockerCount || view.task.task_status !== 'WAITING_REVIEW'}}">核对并确认封存</button>
+ </view>
+ <button wx:if="{{retry}}" bindtap="onRetry" disabled="{{busy || !view}}">原键重试未确认封存</button>
+ <view wx:if="{{view.sealed}}" class="card"><view>已冻结 · {{view.report.actor_username}} · {{view.report.created_at}}</view><view>校验 {{view.report.report_sha256}}</view>
+  <view>已采信 {{view.report.accepted_count}} 项 · 明确未盘 {{view.report.not_observed_count}} 项</view><view wx:if="{{view.report.missing_sync_reason}}">待补证依据：{{view.report.missing_sync_reason}}</view>
+  <picker range="{{sectionNames}}" value="{{sectionIndex}}" bindchange="onSection" disabled="{{busy || retry}}"><view>部分：{{sectionNames[sectionIndex]}}</view></picker>
+  <button bindtap="onReadReport" disabled="{{busy || retry}}">读取本部分冻结记录</button>
+  <text wx:for="{{records}}" wx:key="id" class="record" selectable="{{true}}">{{item.text}}</text>
+  <button bindtap="onPage" data-delta="-1" disabled="{{busy || retry || page === 1}}">上页冻结报告</button><view>第 {{page}} 页 · 共 {{total}} 条</view><button bindtap="onPage" data-delta="1" disabled="{{busy || retry || page * 20 >= total}}">下页冻结报告</button>
+ </view>
+</view>

@@ -1,0 +1,115 @@
+{
+  "recorded_date": "2026-10-21",
+  "scope": "D6-18B2b scoped immutable sealing reports and monotonic valid accepted observation dates; B3 and physical owner follow-up remain open",
+  "source": "Uncommitted worktree on 2af053e; fixed full product gate pending",
+  "runtime": {
+    "populated_v39_to_v40_upgrade_tests": 1,
+    "http_tests": 14,
+    "failures_errors_skips": 0,
+    "raw_log": "output/d6-18-b2b-seal-runtime-9.log",
+    "raw_log_sha256": "cef361883fb9a38959de7ce300e7b492877c61a2911e71fd7f61798f677cc696",
+    "normal_and_selected_acceptance_lineage": true,
+    "selected_disposition_version_before_acceptance_increment": true,
+    "historical_physical_missing_survives_new_unobserved_round": true,
+    "two_tasks_newer_before_older_monotonic_dates": true,
+    "historically_valid_acceptance_after_96_hours": true,
+    "later_observation_after_seal_never_advances_dates_or_report": true,
+    "two_actual_admins_one_report_and_actual_reviewer_conflict_audit": true,
+    "actual_upload_seal_race_and_original_event_retry": true,
+    "actual_native_opaque_http_committed_response_dropped_then_original_recovered": true,
+    "actual_committing_jvm_killed_then_fresh_jvm_original_receipt": true,
+    "central_audit_failure_rolls_back_dates_report_task_events_receipt": true,
+    "current_role_and_physical_missing_not_waivable": true,
+    "unavailable_asset_returns_blocker_not_500": true,
+    "owned_mysql_cleanup": "PASS"
+  },
+  "web_tests": {
+    "total": 86,
+    "passed": 86,
+    "failed": 0,
+    "pending": 0,
+    "todo": 0
+  },
+  "mini_tests": {
+    "total": 166,
+    "passed": 166,
+    "failed": 0,
+    "skipped": 0,
+    "raw_log": "output/d6-18-b2b-mini-tests.log"
+  },
+  "gate_verifier_tests": 33,
+  "type_lint": "PASS",
+  "static_quality": {
+    "checkstyle": 0,
+    "spotbugs": 0,
+    "raw_log": "output/d6-18-b2b-static-verify.log",
+    "scope": "Independent static-only verify explicitly skips tests and coverage; not a fixed full product gate",
+    "exact_exclusions": "Spring-owned ctor fields AssetInventorySealPort.db, InventorySealEvidence.db/json, InventorySealService.db/json only"
+  },
+  "pc_browser": {
+    "report": 1,
+    "accepted": 1,
+    "captured": 1,
+    "reportSync": 1,
+    "taskStatus": "COMPLETED",
+    "datedAssets": 1,
+    "notObserved": 1,
+    "reportItems": 2,
+    "observations": 2,
+    "reportEvidence": 1,
+    "source_state": "B2b working tree on 2af053e from independent static package; not a fixed gate candidate",
+    "artifact_sha256": "b7008314c4811b7e8e856e4d69ab79f27cf37ce51732a5cd1e386e138815c23e",
+    "task_id": "1",
+    "asset_versions_and_locks_unchanged": true,
+    "original_observation_unchanged": true,
+    "late_upload_does_not_change_frozen_rows_dates_or_task_version": true,
+    "late_receipt": {
+      "eventId": "be894c00-f2d3-4dc0-b697-91ed927f0796",
+      "outcome": "LATE_REVIEW",
+      "counted": false,
+      "differences": [],
+      "receivedAt": "2026-10-20T08:18:21.384Z",
+      "recollectionRequired": false
+    }
+  },
+  "pc_download": {
+    "artifact": "output/d6-18-b2b-downloaded-report.json",
+    "sha256": "7cd4c0f8ac9cf79991bb3bc1f006b8da490f85be2c6428135be026524050ec6c",
+    "frozen_items": 2,
+    "frozen_evidence": 1,
+    "frozen_synchronization_roster": 1,
+    "accepted_dates": 1,
+    "unobserved_dates": 0,
+    "secret_scan": "PASS for known fixture password and token header/session key markers"
+  },
+  "pc_late_date_guard": {
+    "scope": "Owned browser fixture only; installed after successful UI seal and before actual late upload",
+    "guard": "Any asset inventory-date change during late upload raises SQL failure; successful late HTTP commit proves sealed dates remain unchanged",
+    "owned_container": "fcbb5564abc18818b7ddd2c2824a804f3c1aa689c5d31e7d04a40fb6c923512c",
+    "download_sha256": "7cd4c0f8ac9cf79991bb3bc1f006b8da490f85be2c6428135be026524050ec6c"
+  },
+  "pc_screenshot": "output/playwright/d6-18-b2b-sealed-report.png",
+  "pc_browser_cleanup": "PASS",
+  "full_pc_A_review_acceptance": "NOT_VERIFIED",
+  "transient_lock_proof": "output/d6-18-b2b-owned-deadlock-locks-6.txt; account X / organization X / account S loop; only lock metadata retained, no SQL values or credentials",
+  "retained_failures": [
+    "runtime-1 physical blocker exception poisoned enclosing preflight transaction; corrected read-only validator rollback policy; date/report/audit writes still roll back",
+    "runtime-4 damaged-without-photo conflict fixture hit valid photo requirement; fixture changed to UNKNOWN plus reason, photo policy unchanged",
+    "runtime-5/6 two concurrency assertions failed due transient lock rollback and stale snapshot report processor context; exact original operation retry and current locked report reads added",
+    "static-1 five Spring injection field warnings; only exact ctor infrastructure exclusions",
+    "owned PC late-date guard first CLI statement delimiter rejected; corrected client delimiter before installing and successful actual late commit"
+  ],
+  "known_boundaries": [
+    "Missing synchronization may be explicitly documented with frozen roster, never waive independent physical/time/evidence obligations.",
+    "Server cannot prove unknown offline devices empty.",
+    "Historical unresolved physical missing remains blocked until actual D21/C owner or explicit future finding-resolution lineage.",
+    "Original administrative request retained within page instance; no disk-backed native administrator retry claim.",
+    "Frozen rows do not imply late supplemental review, todo generation, linked recheck or D19/D21 owner workflows implemented.",
+    "Native SDK confirmation and HTTPS loopback bridge are test adapters; real WeChat/HTTPS/SMS/camera/device/weak network not verified.",
+    "V1-V40 are migration-tested and immutable.",
+    "Independent review, remote CI, formal QA and production remain open."
+  ],
+  "full_fixed_product_gate": "PENDING",
+  "actual_runtime_log_date": "2026-10-20",
+  "type_lint_build": "PASS"
+}

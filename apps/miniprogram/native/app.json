@@ -19,7 +19,8 @@
     "pages/inventory-reviews/index",
     "pages/inventory-findings/index",
     "pages/inventory-synchronization/index",
-    "pages/inventory-readiness/index"
+    "pages/inventory-readiness/index",
+    "pages/inventory-sealing/index"
   ],
   "window": {
     "navigationBarTitleText": "企业资产",
