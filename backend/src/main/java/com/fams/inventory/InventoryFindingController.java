@@ -3,6 +3,7 @@ package com.fams.inventory;
 import com.fams.auth.RequisitionActorContext;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -47,6 +48,25 @@ class InventoryFindingController {
     Map<String, Object> detail(
             @PathVariable @Positive long task, @PathVariable @Positive long observation) {
         return findings.detail(actors.capture(), task, observation);
+    }
+
+    @GetMapping("/tasks/{task}/findings/{observation}/recollection-targets")
+    Map<String, Object> recollectionTargets(
+            @PathVariable @Positive long task,
+            @PathVariable @Positive long observation,
+            @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
+            @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
+        return findings.recollectionTargets(actors.capture(), task, observation, page, pageSize);
+    }
+
+    @PostMapping("/tasks/{task}/findings/{observation}/time-decisions")
+    Map<String, Object> recollect(
+            @PathVariable @Positive long task,
+            @PathVariable @Positive long observation,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @Valid @RequestBody InventoryFindingInput.Recollection input) {
+        return findings.recollect(actors.capture(), task, observation, version, key, input);
     }
 
     @PostMapping("/tasks/{task}/findings/{observation}/decisions")

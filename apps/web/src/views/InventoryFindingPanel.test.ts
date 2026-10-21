@@ -27,6 +27,7 @@ describe("finding owner review", () => {
     await wrapper.findAll("textarea")[0]!.setValue("核对为施工单位自有设备");
     await wrapper.findAll("textarea")[1]!.setValue("设备清单及现场负责人证明为外部施工单位资产");
     await action(wrapper, "保存盘盈复核与关联").trigger("click"); await flushPromises();
+    await action(wrapper, "确认保存当前复核").trigger("click"); await flushPromises();
     expect(wrapper.text()).toContain("操作结果尚未确认");
     await action(wrapper, "重试原盘盈复核操作").trigger("click"); await flushPromises();
     expect(writes).toHaveLength(2); expect(writes[1]).toEqual(writes[0]);
@@ -55,7 +56,44 @@ describe("finding owner review", () => {
     await wrapper.findAll("textarea")[0]!.setValue("核实为该入库项目所对应实物");
     await wrapper.findAll("textarea")[1]!.setValue("正式入库单与现场照片设备特征一致，等待库管实际验收");
     await action(wrapper, "保存盘盈复核与关联").trigger("click"); await flushPromises();
+    await action(wrapper, "确认保存当前复核").trigger("click"); await flushPromises();
     expect(paths).toContain("/api/v1/inbound-receipts?page=1&pageSize=20&receiptNumber=RK-001");
     expect(JSON.parse(writes[0]!.body as string)).toMatchObject({ assetId: "9007199254740995", inboundReceiptId: "9007199254740993", ownerVersion: 4 }); wrapper.unmount();
+  });
+});
+
+
+describe("independent itemless time recollection", () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+  it("requires inline confirmation and reuses the exact time decision after a lost reply", async () => {
+    const timed = { ...raw, outcome: "TIME_REVIEW" };
+    const counter = { ...raw, id: "9007199254740993" };
+    const writes: RequestInit[] = []; let lost = true;
+    vi.stubGlobal("fetch", vi.fn(async (url: string, input: RequestInit) => {
+      if (input.method === "POST") { writes.push(input); if (lost) { lost = false; throw new Error("lost committed response"); } return reply({ status: "CLOSED" }); }
+      if (url.includes("recollection-targets")) return reply({ items: [counter], total: 1 });
+      return reply(url.endsWith("/findings/8") ? { ...detail(), observation: timed, timeSubject: [{ version: 0, subject_status: "OPEN" }], recollections: [] } : { items: [timed], total: 1 });
+    }));
+    const wrapper = panel(); await open(wrapper);
+    await action(wrapper, "读取有效重采线索").trigger("click"); await flushPromises();
+    await wrapper.find("input[type=radio]").setValue(true);
+    await wrapper.findAll("textarea")[0]!.setValue("核对为同一台现场设备");
+    await wrapper.findAll("textarea")[1]!.setValue("两次现场照片和设备特征核对一致，原时间仍不确定");
+    await action(wrapper, "保存独立重采关联").trigger("click"); await flushPromises(); expect(writes).toHaveLength(0);
+    await action(wrapper, "确认保存当前复核").trigger("click"); await flushPromises();
+    await action(wrapper, "重试原盘盈复核操作").trigger("click"); await flushPromises();
+    expect(writes).toHaveLength(2); expect(writes[0]).toEqual(writes[1]);
+    expect(JSON.parse(writes[0]!.body as string)).toMatchObject({ subjectVersion: 0, counterObservationId: "9007199254740993" });
+    expect(wrapper.text()).toContain("原时间仍不确定"); wrapper.unmount();
+  });
+  it("drops an unsubmitted inline decision on an identity change", async () => {
+    state.session = reactive({ user: { id: "1", roles: ["ASSET_ADMIN"] }, csrfToken: "csrf" });
+    const writes: RequestInit[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string, input: RequestInit) => { if (input.method === "POST") writes.push(input); return reply(url.endsWith("/findings/8") ? detail() : { items: [raw], total: 1 }); }));
+    const wrapper = panel(); await open(wrapper);
+    await wrapper.findAll("textarea")[0]!.setValue("核对为外部单位设备"); await wrapper.findAll("textarea")[1]!.setValue("外部单位负责人登记及现场照片特征核对一致");
+    await action(wrapper, "保存盘盈复核与关联").trigger("click"); await flushPromises();
+    state.session.user.id = "3"; await flushPromises();
+    expect(wrapper.text()).not.toContain("确认保存当前复核"); expect(writes).toHaveLength(0); wrapper.unmount();
   });
 });

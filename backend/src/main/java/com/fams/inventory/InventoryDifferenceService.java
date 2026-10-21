@@ -189,6 +189,10 @@ public class InventoryDifferenceService {
         if (special != null) {
             dimensions.add(special);
         }
+        if (observation.get("item_id") == null
+                && "TIME_REVIEW".equals(observation.get("outcome"))) {
+            dimensions.add("FINDING");
+        }
         if (observation.get("item_id") != null) {
             var item =
                     db.queryForMap(

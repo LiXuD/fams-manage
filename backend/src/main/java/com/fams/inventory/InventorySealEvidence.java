@@ -157,7 +157,18 @@ public class InventorySealEvidence {
         }
         if (observation.get("item_id") == null
                 && "TIME_REVIEW".equals(observation.get("outcome"))) {
-            fail("INVENTORY_SEAL_ITEMLESS_TIME_AND_FINDING_REQUIRED");
+            var links =
+                    db.queryForList(
+                            "SELECT l.counter_observation_id FROM"
+                                + " fams_inventory_finding_recollection l JOIN"
+                                + " fams_inventory_review_subject s ON"
+                                + " s.observation_id=l.observation_id AND s.dimension='TIME' AND"
+                                + " s.version=l.decision_version AND s.subject_status='CLOSED' AND"
+                                + " s.method='RECOLLECTED' WHERE l.observation_id=? FOR SHARE",
+                            observation.get("id"));
+            if (links.isEmpty()) {
+                fail("INVENTORY_SEAL_ITEMLESS_TIME_AND_FINDING_REQUIRED");
+            }
         }
         var rows =
                 db.queryForList(

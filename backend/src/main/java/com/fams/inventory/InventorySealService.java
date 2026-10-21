@@ -499,7 +499,9 @@ public class InventorySealService {
                                 "disposition",
                                 "fams_inventory_evidence_disposition",
                                 "findingLinks",
-                                "fams_inventory_finding_link")
+                                "fams_inventory_finding_link",
+                                "recollections",
+                                "fams_inventory_finding_recollection")
                         .entrySet()) {
             result.put(
                     relation.getKey(),

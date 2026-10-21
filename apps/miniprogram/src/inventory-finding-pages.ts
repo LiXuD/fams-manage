@@ -5,9 +5,12 @@ interface Finding { id: string; client_event_id: string; outcome: string;
     facts_json: { actual?: { description?: string }; photoIds?: string[] } }
 interface Target { kind: string; assetId: string; assetCode: string; ownerVersion: number; inboundReceiptId?: string; receiptNumber?: string; status?: string; key?: string }
 interface View { taskVersion: number; observation: Finding; subject: { version?: number; subject_status?: string; stateLabel?: string };
-    history: { after_version: number; actor_username: string; subject_status: string; reason: string; evidence: string; inboundReceiptId?: string; method?: string; occurred_at?: string; stateLabel?: string; methodLabel?: string; timeText?: string }[]; historyTotal: number }
+    history: { after_version: number; actor_username: string; subject_status: string; reason: string; evidence: string; inboundReceiptId?: string; method?: string; occurred_at?: string; stateLabel?: string; methodLabel?: string; timeText?: string }[]; historyTotal: number;
+    timeSubject?: { version: number; subject_status: string; stateLabel?: string }[];
+    recollections?: { after_version: number; actor_username: string; counterObservationId: string; occurred_at: string; reason: string; evidence: string }[] }
 interface Data { taskId: string; rows: Finding[]; total: number; page: number; detail: View | null; method: number; methods: string[];
     reason: string; evidence: string; assetCode: string; receiptNumber: string; targets: Target[]; target: Target | null;
+    counters: Finding[]; counterTotal: number; counterPage: number; counterId: string;
     photos: ReviewPhotoReference[]; photoPath: string; cleanupPending: boolean; busy: boolean; retryable: boolean; error: string; notice: string }
 interface Context { data: Data; setData(value: Partial<Data>): void }
 interface Event { currentTarget?: { dataset?: { id?: string; field?: string; delta?: string } }; detail?: { value?: unknown } }
@@ -17,7 +20,7 @@ const states: Record<string, string> = { OPEN: "待处理", PROCESSING: "处理�
 const codes = ["NON_ENTERPRISE", "DUPLICATE_ASSET", "LINK_INBOUND", "REFRESH_INBOUND"];
 const blank = (taskId = ""): Data => ({ taskId, rows: [], total: 0, page: 1, detail: null, method: 0, methods,
     reason: "", evidence: "", assetCode: "", receiptNumber: "", targets: [], target: null, photos: [], photoPath: "", cleanupPending: false,
-    busy: false, retryable: false, error: "", notice: "" });
+    busy: false, retryable: false, error: "", notice: "", counters: [], counterTotal: 0, counterPage: 1, counterId: "" });
 
 /** Only authorized original finding evidence and existing formal owners can produce a decision. */
 export function createInventoryFindingPage(getServices: () => MiniServices) {
@@ -47,10 +50,10 @@ export function createInventoryFindingPage(getServices: () => MiniServices) {
                 : `${base(page)}/findings?page=${page.data.page}&pageSize=20`);
             if (!current(epoch)) { if (live && epoch === generation) invalidated(page); return; }
             if (observation) { const value = response as View;
-                const detail = { ...value, subject: { ...value.subject, stateLabel: states[value.subject.subject_status ?? ""] ?? "尚未列入复核" },
+                const detail = { ...value, timeSubject: value.timeSubject?.map(row => ({ ...row, stateLabel: states[row.subject_status] ?? "待核实" })), subject: { ...value.subject, stateLabel: states[value.subject.subject_status ?? ""] ?? "尚未列入复核" },
                     history: value.history.map(row => ({ ...row, stateLabel: states[row.subject_status] ?? "待核实", methodLabel: methods[codes.indexOf(row.method ?? "")] ?? "历史处理",
                         timeText: row.occurred_at ? new Date(row.occurred_at).toLocaleString() : "时间待核实" })) };
-                page.setData({ detail, targets: [], target: null,
+                page.setData({ detail, targets: [], target: null, counters: [], counterId: "", counterPage: 1, counterTotal: 0,
                 method: detail.subject.subject_status === "PROCESSING" ? 3 : 0, retryable: pending !== null }); }
             else { const list = response as { items: Finding[]; total: number }; page.setData({ rows: list.items, total: list.total, detail: null }); }
         } catch (error) { failure(page, error, epoch); }
@@ -85,7 +88,7 @@ export function createInventoryFindingPage(getServices: () => MiniServices) {
         onUnload(this: Context) { live = false; generation++; pending = null; this.setData(blank(this.data.taskId)); cleanup(this); },
         async onRefresh(this: Context) { if (!this.data.busy) await read(this, pending?.observation ?? this.data.detail?.observation.id ?? ""); },
         async onOpen(this: Context, event: Event) {
-            if (locked(this)) return; const row = this.data.rows.find(value => value.id === event.currentTarget?.dataset?.id && value.outcome === "FINDING_REVIEW");
+            if (locked(this)) return; const row = this.data.rows.find(value => value.id === event.currentTarget?.dataset?.id && ["FINDING_REVIEW", "TIME_REVIEW"].includes(value.outcome));
             if (row) { this.setData({ reason: "", evidence: "", assetCode: "", receiptNumber: "" }); await read(this, row.id); }
         },
         onField(this: Context, event: Event) {
@@ -121,6 +124,41 @@ export function createInventoryFindingPage(getServices: () => MiniServices) {
             const epoch = generation; this.setData({ busy: true });
             try {
                 if (!await services.confirm("盘盈独立复核", prepare ? "将此原始线索列入独立复核？" : "保存当前明确依据及正式关联？未实际验收不会提前关闭。")) return;
+                if (!current(epoch)) { if (live && epoch === generation) invalidated(this); return; }
+                pending = original; this.setData({ busy: false, retryable: true }); await perform(this);
+            } catch (error) { failure(this, error, epoch); }
+            finally { if (current(epoch)) this.setData({ busy: false }); }
+        },
+        async onRecollectionTargets(this: Context, event?: Event) {
+            if (locked(this) || !this.data.detail) return;
+            const delta = Number(event?.currentTarget?.dataset?.delta ?? 0), next = this.data.counterPage + delta;
+            if (![0, 1, -1].includes(delta) || next < 1 || delta > 0 && (next - 1) * 20 >= this.data.counterTotal) return;
+            const epoch = ++generation; this.setData({ busy: true, error: "" });
+            try {
+                const result = await services.sessions.request("GET", `${base(this)}/findings/${this.data.detail.observation.id}/recollection-targets?page=${next}&pageSize=20`) as { items: Finding[]; total: number };
+                if (current(epoch)) this.setData({ counters: result.items, counterTotal: result.total, counterPage: next, counterId: "" });
+                else if (live && epoch === generation) invalidated(this);
+            } catch (error) { failure(this, error, epoch); }
+            finally { if (current(epoch)) this.setData({ busy: false }); }
+        },
+        onCounter(this: Context, event: Event) {
+            const id = event.currentTarget?.dataset?.id;
+            if (!locked(this) && this.data.counters.some(row => row.id === id)) this.setData({ counterId: id });
+        },
+        async onTimeSave(this: Context) {
+            if (locked(this) || !this.data.detail) return;
+            const subject = this.data.detail.timeSubject?.[0];
+            if (!subject || subject.subject_status === "CLOSED" || !this.data.counterId || this.data.reason.trim().length < 3 || this.data.evidence.trim().length < 10) {
+                this.setData({ error: "请选择实际重采线索并填写同一实物核实依据。" }); return;
+            }
+            const original: Pending = { observation: this.data.detail.observation.id,
+                path: `${base(this)}/findings/${this.data.detail.observation.id}/time-decisions`,
+                key: services.createKey(), version: this.data.detail.taskVersion,
+                body: { subjectVersion: subject.version, counterObservationId: this.data.counterId,
+                    reason: this.data.reason.trim(), evidence: this.data.evidence.trim() } };
+            const epoch = generation; this.setData({ busy: true });
+            try {
+                if (!await services.confirm("关联实际重采", "核对两次照片与实物特征。原时间仍不确定，盘盈归属须独立完成，是否保存此重采关联？")) return;
                 if (!current(epoch)) { if (live && epoch === generation) invalidated(this); return; }
                 pending = original; this.setData({ busy: false, retryable: true }); await perform(this);
             } catch (error) { failure(this, error, epoch); }

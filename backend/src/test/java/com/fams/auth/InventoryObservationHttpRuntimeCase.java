@@ -161,7 +161,7 @@ class InventoryObservationHttpRuntimeCase {
                 "DELETE FROM fams_inventory_late_decision WHERE observation_id IN (SELECT observation_id FROM fams_inventory_late_case WHERE task_id IN (SELECT id FROM fams_inventory_task WHERE creator_account_id=933001))");
         db.update(
                 "DELETE FROM fams_inventory_late_case WHERE task_id IN (SELECT id FROM fams_inventory_task WHERE creator_account_id=933001)");
-        for (String table : new String[] {"fams_inventory_finding_link", "fams_inventory_review_decision",
+        for (String table : new String[] {"fams_inventory_sealed_item", "fams_inventory_sealed_evidence", "fams_inventory_sealed_sync", "fams_inventory_sealed_report", "fams_inventory_finding_recollection", "fams_inventory_selection_event", "fams_inventory_unobserved_reason", "fams_inventory_item_review", "fams_inventory_finding_link", "fams_inventory_review_decision",
                 "fams_inventory_review_receipt", "fams_inventory_review_subject"}) {
             db.update("DELETE FROM " + table + " WHERE task_id IN"
                     + " (SELECT id FROM fams_inventory_task WHERE creator_account_id=933001)");
@@ -1568,6 +1568,593 @@ class InventoryObservationHttpRuntimeCase {
         }
     }
 
+
+    @Test
+    void itemlessTimeAndFindingCloseIndependentlyOnlyWithActualRecollectionAndFrozenLineage()
+            throws Exception {
+        String task = prepared();
+        String original = a8Finding(task, true), counter = a8Finding(task, false);
+        var rawBefore =
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_observation WHERE task_id=? ORDER BY id",
+                        task);
+        var assetBefore =
+                db.queryForList("SELECT * FROM fams_asset WHERE id IN (933010,933011) ORDER BY id");
+        String base = "/api/v1/inventory-reviews/tasks/" + task;
+        ok(
+                reviewCall(
+                        admin,
+                        "POST",
+                        base + "/differences/preparation",
+                        "{\"observationIds\":[\"" + original + "\",\"" + counter + "\"]}",
+                        key(),
+                        a8Version(task)));
+        var detail = ok(reviewCall(admin, "GET", base + "/findings/" + original, null, null, null));
+        assertEquals("OPEN", detail.path("subject").path("subject_status").asText());
+        assertEquals("OPEN", detail.path("timeSubject").get(0).path("subject_status").asText());
+        String body =
+                "{\"subjectVersion\":0,\"counterObservationId\":\""
+                        + counter
+                        + "\",\"reason\":\"实际重新到现场采集\",\"evidence\":\"两次照片设备特征与位置核对一致，原时间仍不确定\"}";
+        long version = a8Version(task);
+        String requestKey = key();
+        var time =
+                ok(
+                        reviewCall(
+                                admin,
+                                "POST",
+                                base + "/findings/" + original + "/time-decisions",
+                                body,
+                                requestKey,
+                                version));
+        assertEquals("UNVERIFIED", time.path("originalTimeConfidence").asText());
+        assertEquals(
+                time,
+                ok(
+                        reviewCall(
+                                admin,
+                                "POST",
+                                base + "/findings/" + original + "/time-decisions",
+                                body,
+                                requestKey,
+                                version)));
+        detail = ok(reviewCall(admin, "GET", base + "/findings/" + original, null, null, null));
+        assertEquals("OPEN", detail.path("subject").path("subject_status").asText());
+        assertEquals("CLOSED", detail.path("timeSubject").get(0).path("subject_status").asText());
+        assertEquals(
+                counter, detail.path("recollections").get(0).path("counterObservationId").asText());
+        a8CloseFinding(task, original);
+        a8CloseFinding(task, counter);
+        for (var item :
+                db.queryForList(
+                        "SELECT id FROM fams_inventory_item WHERE task_id=? ORDER BY id", task)) {
+            ok(
+                    reviewCall(
+                            admin,
+                            "POST",
+                            "/api/v1/inventory-readiness/tasks/"
+                                    + task
+                                    + "/items/"
+                                    + item.get("id")
+                                    + "/unobserved",
+                            "{\"recheckGeneration\":0,\"assetVersion\":0,\"kind\":\"UNABLE_TO_OBSERVE\",\"reason\":\"设备所在房间暂不能进入\",\"evidence\":\"现场门禁通知与任务范围核对，未把盘盈计为应盘项\"}",
+                            key(),
+                            a8Version(task)));
+        }
+        ok(
+                reviewCall(
+                        admin,
+                        "POST",
+                        "/api/v1/inventory-readiness/tasks/" + task + "/waiting-review",
+                        "{\"reason\":\"应盘项明确记录未盘原因并独立处理任务外线索\"}",
+                        key(),
+                        a8Version(task)));
+        var flight =
+                ok(
+                        reviewCall(
+                                admin,
+                                "GET",
+                                "/api/v1/inventory-sealing/tasks/" + task,
+                                null,
+                                null,
+                                null));
+        assertEquals(
+                200,
+                reviewCall(
+                                admin,
+                                "POST",
+                                "/api/v1/inventory-sealing/tasks/" + task + "/seal",
+                                "{\"reason\":\"核对独立时间与归属处理后冻结报告\",\"synchronizationDigest\":\""
+                                        + flight.path("synchronizationDigest").asText()
+                                        + "\",\"missingSynchronizationReason\":\"未收到设备完整同步声明，保留待补证名单及原始线索\"}",
+                                key(),
+                                a8Version(task))
+                        .statusCode());
+        assertEquals(
+                rawBefore,
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_observation WHERE task_id=? ORDER BY id",
+                        task));
+        assertEquals(
+                assetBefore,
+                db.queryForList(
+                        "SELECT * FROM fams_asset WHERE id IN (933010,933011) ORDER BY id"));
+        var frozen =
+                db.queryForObject(
+                        "SELECT snapshot_json FROM fams_inventory_sealed_evidence WHERE task_id=?"
+                                + " AND observation_id=?",
+                        String.class,
+                        task,
+                        original);
+        assertEquals(
+                counter,
+                JSON.readTree(frozen)
+                        .path("recollections")
+                        .get(0)
+                        .path("counter_observation_id")
+                        .asText());
+        assertEquals(
+                2,
+                db.queryForObject(
+                        "SELECT captured_result_count FROM fams_inventory_task WHERE id=?",
+                        Integer.class,
+                        task));
+    }
+
+    @Test
+    void findingFirstNeverClosesTimeAndRecollectionRejectsSelfOtherTaskAndUncertainCounter()
+            throws Exception {
+        String task = prepared();
+        String older = a8Finding(task, false);
+        String original = a8Finding(task, true), uncertain = a8Finding(task, true);
+        String counter = a8Finding(task, false);
+        String otherTask = prepared();
+        String otherCounter = a8Finding(otherTask, false);
+        String base = "/api/v1/inventory-reviews/tasks/" + task;
+        ok(
+                reviewCall(
+                        admin,
+                        "POST",
+                        base + "/differences/preparation",
+                        "{\"observationIds\":[\"" + original + "\"]}",
+                        key(),
+                        a8Version(task)));
+        a8CloseFinding(task, original);
+        var detail = ok(reviewCall(admin, "GET", base + "/findings/" + original, null, null, null));
+        assertEquals("CLOSED", detail.path("subject").path("subject_status").asText());
+        assertEquals("OPEN", detail.path("timeSubject").get(0).path("subject_status").asText());
+        String path = base + "/findings/" + original + "/time-decisions";
+        for (String id : new String[] {original, uncertain, otherCounter, older, "999999"}) {
+            String body =
+                    "{\"subjectVersion\":0,\"counterObservationId\":\""
+                            + id
+                            + "\",\"reason\":\"核对原始线索与实际重采\",\"evidence\":\"两次现场照片与设备特征核对，保留独立时间责任\"}";
+            assertEquals(
+                    id.equals(original) ? 400 : 409,
+                    reviewCall(admin, "POST", path, body, key(), a8Version(task)).statusCode());
+        }
+        assertEquals(
+                400,
+                reviewCall(
+                                admin,
+                                "GET",
+                                base
+                                        + "/findings/"
+                                        + original
+                                        + "/recollection-targets?pageSize=101",
+                                null,
+                                null,
+                                null)
+                        .statusCode());
+        var targets =
+                ok(
+                        reviewCall(
+                                admin,
+                                "GET",
+                                base
+                                        + "/findings/"
+                                        + original
+                                        + "/recollection-targets?page=1&pageSize=1",
+                                null,
+                                null,
+                                null));
+        assertEquals(1, targets.path("total").asInt());
+        assertEquals(counter, targets.path("items").get(0).path("id").asText());
+        assertEquals(
+                0,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_inventory_finding_recollection WHERE task_id=?",
+                        Integer.class,
+                        task));
+    }
+
+    @Test
+    void recollectionAuditFailureRollsBackAllFactsAndOriginalRetryRevalidatesCurrentRole()
+            throws Exception {
+        String task = prepared();
+        String original = a8Finding(task, true), counter = a8Finding(task, false);
+        String base = "/api/v1/inventory-reviews/tasks/" + task;
+        ok(
+                reviewCall(
+                        admin,
+                        "POST",
+                        base + "/differences/preparation",
+                        "{\"observationIds\":[\"" + original + "\"]}",
+                        key(),
+                        a8Version(task)));
+        String path = base + "/findings/" + original + "/time-decisions";
+        String body =
+                "{\"subjectVersion\":0,\"counterObservationId\":\""
+                        + counter
+                        + "\",\"reason\":\"两次实物照片特征一致\",\"evidence\":\"本次已实际重新采集，原线索时间不确定且不改原到期点\"}";
+        long version = a8Version(task);
+        String requestKey = key();
+        assertEquals(
+                403, reviewCall(employee, "POST", path, body, requestKey, version).statusCode());
+        db.execute(
+                "CREATE TRIGGER d618_recollect_audit_failure BEFORE INSERT ON fams_audit_event FOR"
+                        + " EACH ROW BEGIN IF NEW.action='INVENTORY_FINDING_TIME_RECOLLECTED' THEN"
+                        + " SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='owned recollection audit"
+                        + " failure'; END IF; END");
+        try {
+            assertEquals(
+                    500, reviewCall(admin, "POST", path, body, requestKey, version).statusCode());
+        } finally {
+            db.execute("DROP TRIGGER d618_recollect_audit_failure");
+        }
+        assertEquals(version, a8Version(task));
+        assertEquals(
+                0,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_inventory_finding_recollection WHERE task_id=?",
+                        Integer.class,
+                        task));
+        assertEquals(
+                0,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_inventory_review_decision WHERE task_id=?",
+                        Integer.class,
+                        task));
+        var result = ok(reviewCall(admin, "POST", path, body, requestKey, version));
+        assertEquals(result, ok(reviewCall(admin, "POST", path, body, requestKey, version)));
+        assertEquals(409, reviewCall(admin, "POST", path, body, key(), version).statusCode());
+        assertEquals(
+                409,
+                reviewCall(admin, "POST", path, body.replace("两次实物", "不同实物"), requestKey, version)
+                        .statusCode());
+        db.update(
+                "DELETE FROM fams_account_role WHERE account_id=933001 AND"
+                        + " role_code='ASSET_ADMIN'");
+        assertEquals(403, reviewCall(admin, "POST", path, body, requestKey, version).statusCode());
+        assertEquals(
+                1,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_inventory_finding_recollection WHERE task_id=?",
+                        Integer.class,
+                        task));
+    }
+
+    @Test
+    void recollectionOriginalReceiptSurvivesItsCommittingJvmForcedDeathAndAFreshJvm()
+            throws Exception {
+        String task = prepared();
+        String id = a8Finding(task, true), counter = a8Finding(task, false);
+        var originalRaw =
+                db.queryForList("SELECT * FROM fams_inventory_observation WHERE id=?", id);
+        ok(
+                reviewCall(
+                        admin,
+                        "POST",
+                        "/api/v1/inventory-reviews/tasks/" + task + "/differences/preparation",
+                        "{\"observationIds\":[\"" + id + "\"]}",
+                        key(),
+                        a8Version(task)));
+        long version = a8Version(task);
+        String body =
+                "{\"subjectVersion\":0,\"counterObservationId\":\""
+                        + counter
+                        + "\",\"reason\":\"实际重新采集同一设备\",\"evidence\":\"两次现场照片特征与设备位置核对一致，原时间仍不确定\"}";
+        String originalKey = key();
+        var state = java.nio.file.Files.createTempDirectory("fams-finding-jvm-");
+        String classpath =
+                System.getProperty(
+                        "surefire.test.class.path", System.getProperty("java.class.path"));
+        Process process = null;
+        try {
+            JsonNode first = null;
+            for (String stage : java.util.List.of("hold", "replay")) {
+                var builder =
+                        new ProcessBuilder(
+                                "rtk",
+                                "proxy",
+                                System.getProperty("java.home") + "/bin/java",
+                                "-cp",
+                                classpath,
+                                "com.fams.auth.InventoryRecollectionProcess");
+                builder.environment().put("FAMS_TEST_FINDING_TASK", task);
+                builder.environment().put("FAMS_TEST_FINDING_OBSERVATION", id);
+                builder.environment().put("FAMS_TEST_FINDING_COOKIE", admin.cookie());
+                builder.environment().put("FAMS_TEST_FINDING_CSRF", admin.csrf());
+                builder.environment().put("FAMS_TEST_FINDING_KEY", originalKey);
+                builder.environment().put("FAMS_TEST_FINDING_VERSION", Long.toString(version));
+                builder.environment().put("FAMS_TEST_FINDING_BODY", body);
+                builder.environment().put("FAMS_TEST_FINDING_STAGE", stage);
+                var proofPath = state.resolve(stage + ".json");
+                var logPath = state.resolve(stage + ".log");
+                builder.environment().put("FAMS_TEST_FINDING_PROOF", proofPath.toString());
+                if (first != null) {
+                    builder.environment()
+                            .put("FAMS_TEST_FINDING_ORIGINAL", first.path("response").toString());
+                }
+                process =
+                        builder.redirectErrorStream(true).redirectOutput(logPath.toFile()).start();
+                long deadline =
+                        System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(60);
+                while (!java.nio.file.Files.exists(proofPath)) {
+                    assertTrue(process.isAlive(), java.nio.file.Files.readString(logPath));
+                    assertTrue(System.nanoTime() < deadline, "Owned finding JVM startup deadline");
+                    Thread.sleep(50);
+                }
+                var proof = JSON.readTree(java.nio.file.Files.readString(proofPath));
+                if (first == null) {
+                    first = proof;
+                    var children = process.descendants().toList();
+                    children.forEach(ProcessHandle::destroyForcibly);
+                    for (var child : children) {
+                        child.onExit().get(10, java.util.concurrent.TimeUnit.SECONDS);
+                    }
+                    if (process.isAlive()) {
+                        process.destroyForcibly();
+                    }
+                    assertTrue(process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS));
+                    assertTrue(
+                            ProcessHandle.of(proof.path("pid").asLong())
+                                    .map(handle -> !handle.isAlive())
+                                    .orElse(true));
+                } else {
+                    assertTrue(process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS));
+                    assertEquals(0, process.exitValue(), java.nio.file.Files.readString(logPath));
+                    assertTrue(first.path("pid").asLong() != proof.path("pid").asLong());
+                    assertTrue(proof.path("originalMatched").asBoolean());
+                    assertEquals(first.path("response"), proof.path("response"));
+                }
+            }
+            assertEquals(
+                    1,
+                    db.queryForObject(
+                            "SELECT COUNT(*) FROM fams_inventory_review_decision WHERE"
+                                + " observation_id=?",
+                            Integer.class,
+                            id));
+            assertEquals(
+                    1,
+                    db.queryForObject(
+                            "SELECT COUNT(*) FROM fams_inventory_review_receipt WHERE task_id=? AND"
+                                + " operation=?",
+                            Integer.class,
+                            task,
+                            "FINDING_TIME:" + id));
+            assertEquals(
+                    originalRaw,
+                    db.queryForList("SELECT * FROM fams_inventory_observation WHERE id=?", id));
+            System.out.println(
+                    "D6-18A8 time JVM proof: committingJvmKilled=true freshJvmOriginalReply=true"
+                        + " singleDecision=true rawUnchanged=true");
+        } finally {
+            if (process != null && process.isAlive()) {
+                process.descendants().forEach(ProcessHandle::destroyForcibly);
+                process.destroyForcibly();
+                process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
+            }
+            try (var files = java.nio.file.Files.walk(state)) {
+                for (var file : files.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                    java.nio.file.Files.deleteIfExists(file);
+                }
+            }
+        }
+    }
+
+    @Test
+    void nativeRecollectionActualOpaqueReplyLossRecoversOriginalAndKeepsFindingOpen()
+            throws Exception {
+        String task = prepared();
+        String id = a8Finding(task, true), counter = a8Finding(task, false);
+        var originalRaw =
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_observation WHERE task_id=? ORDER BY id",
+                        task);
+        ok(
+                reviewCall(
+                        admin,
+                        "POST",
+                        "/api/v1/inventory-reviews/tasks/" + task + "/differences/preparation",
+                        "{\"observationIds\":[\"" + id + "\"]}",
+                        key(),
+                        a8Version(task)));
+        var nativeIdentity =
+                new MiniWechatIdentityPort.Identity("recollection-app", "recollection-admin");
+        db.update(
+                "INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES"
+                    + " (933001,?,NOW(3))",
+                miniSessions.identityHash(nativeIdentity));
+        var grant = miniSessions.start(nativeIdentity, UUID.randomUUID());
+        var script =
+                java.nio.file.Path.of(System.getProperty("user.dir"))
+                        .getParent()
+                        .resolve("apps/miniprogram/test/runtime-inventory-recollection-http.mjs");
+        var builder = new ProcessBuilder("rtk", "proxy", "node", script.toString());
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_INVENTORY_TASK", task);
+        builder.environment().put("FAMS_TEST_FINDING_OBSERVATION", id);
+        builder.environment().put("FAMS_TEST_FINDING_COUNTER", counter);
+        builder.environment().put("FAMS_TEST_FINDING_KEY", key());
+        builder.environment()
+                .put(
+                        "FAMS_TEST_MINI_GRANT",
+                        JSON.writeValueAsString(
+                                java.util.Map.of(
+                                        "sessionToken",
+                                        grant.sessionToken(),
+                                        "accountId",
+                                        grant.accountId(),
+                                        "bindingId",
+                                        grant.bindingId())));
+        var process = builder.redirectErrorStream(true).start();
+        try {
+            assertTrue(process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS));
+            String output =
+                    new String(
+                            process.getInputStream().readAllBytes(),
+                            java.nio.charset.StandardCharsets.UTF_8);
+            assertEquals(0, process.exitValue(), output);
+            var proof = JSON.readTree(output.strip());
+            assertTrue(proof.path("nativeTimeOriginalReplyRecovered").asBoolean());
+            assertTrue(proof.path("findingRemainsOpen").asBoolean());
+            System.out.println("D6-18A8 native time proof: " + proof);
+        } finally {
+            if (process.isAlive()) {
+                process.destroyForcibly();
+                process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
+            }
+        }
+        assertEquals(
+                originalRaw,
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_observation WHERE task_id=? ORDER BY id",
+                        task));
+        assertEquals(
+                1,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_inventory_finding_recollection WHERE task_id=?",
+                        Integer.class,
+                        task));
+    }
+
+    @Test
+    void twoActualAdministratorsRaceIndependentTimeVersionWithRecordedWinner() throws Exception {
+        String task = prepared();
+        String id = a8Finding(task, true), counter = a8Finding(task, false);
+        ok(
+                reviewCall(
+                        admin,
+                        "POST",
+                        "/api/v1/inventory-reviews/tasks/" + task + "/differences/preparation",
+                        "{\"observationIds\":[\"" + id + "\"]}",
+                        key(),
+                        a8Version(task)));
+        db.update(
+                "INSERT INTO fams_account_role(account_id,role_code,granted_at) VALUES"
+                    + " (933003,'ASSET_ADMIN',NOW(3))");
+        other = login(3);
+        long version = a8Version(task);
+        String body =
+                "{\"subjectVersion\":0,\"counterObservationId\":\""
+                        + counter
+                        + "\",\"reason\":\"两次照片现场核对一致\",\"evidence\":\"实际重新采集同一设备，原时间不确定且盘盈归属独立处理\"}";
+        var start = new java.util.concurrent.CountDownLatch(1);
+        var futures =
+                new java.util.ArrayList<
+                        java.util.concurrent.CompletableFuture<HttpResponse<String>>>();
+        for (Session actor : java.util.List.of(admin, other)) {
+            String requestKey = key();
+            futures.add(
+                    java.util.concurrent.CompletableFuture.supplyAsync(
+                            () -> {
+                                try {
+                                    start.await();
+                                    return reviewCall(
+                                            actor,
+                                            "POST",
+                                            "/api/v1/inventory-reviews/tasks/"
+                                                    + task
+                                                    + "/findings/"
+                                                    + id
+                                                    + "/time-decisions",
+                                            body,
+                                            requestKey,
+                                            version);
+                                } catch (Exception error) {
+                                    throw new java.util.concurrent.CompletionException(error);
+                                }
+                            }));
+        }
+        start.countDown();
+        var replies = futures.stream().map(java.util.concurrent.CompletableFuture::join).toList();
+        assertEquals(
+                java.util.List.of(200, 409),
+                replies.stream().map(HttpResponse::statusCode).sorted().toList());
+        var conflict =
+                JSON.readTree(
+                        replies.stream()
+                                .filter(r -> r.statusCode() == 409)
+                                .findFirst()
+                                .orElseThrow()
+                                .body());
+        assertTrue(conflict.path("fieldErrors").path("processedBy").asText().startsWith("inv"));
+        assertEquals(
+                1,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_inventory_finding_recollection WHERE task_id=?",
+                        Integer.class,
+                        task));
+        assertEquals(
+                1,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_audit_event WHERE resource_id=? AND"
+                            + " action='INVENTORY_FINDING_CONFLICT_REJECTED'",
+                        Integer.class,
+                        task));
+    }
+
+    private long a8Version(String task) {
+        return java.util.Objects.requireNonNull(
+                db.queryForObject(
+                        "SELECT version FROM fams_inventory_task WHERE id=?", Long.class, task));
+    }
+
+    private String a8Finding(String task, boolean uncertain) throws Exception {
+        var event =
+                observation(task)
+                        .putNull("itemId")
+                        .putNull("assetVersion")
+                        .put("assignmentVersion", 0)
+                        .put("source", "MANUAL")
+                        .put("manualReason", "现场未贴正式标签，保留任务外实物证据")
+                        .putNull("assetCode")
+                        .put("clockAnomaly", uncertain);
+        ((tools.jackson.databind.node.ObjectNode) event.path("actual"))
+                .put("description", "同一现场外部施工单位设备，照片特征待独立核实");
+        byte[] bytes =
+                java.util.Base64.getDecoder()
+                        .decode(
+                                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jSZkAAAAASUVORK5CYII=");
+        var photo = ok(uploadPhoto(employee, task, event, key(), bytes));
+        event.putArray("photoIds").add(photo.path("objectId").asText());
+        assertEquals(
+                uncertain ? "TIME_REVIEW" : "FINDING_REVIEW",
+                ok(observe(employee, task, event)).path("outcome").asText());
+        return db.queryForObject(
+                "SELECT CAST(id AS CHAR) FROM fams_inventory_observation WHERE task_id=? AND"
+                        + " client_event_id=?",
+                String.class,
+                task,
+                event.path("eventId").asText());
+    }
+
+    private void a8CloseFinding(String task, String id) throws Exception {
+        ok(
+                reviewCall(
+                        admin,
+                        "POST",
+                        "/api/v1/inventory-reviews/tasks/"
+                                + task
+                                + "/findings/"
+                                + id
+                                + "/decisions",
+                        "{\"subjectVersion\":0,\"method\":\"NON_ENTERPRISE\",\"reason\":\"核对为外部施工单位设备\",\"evidence\":\"核对施工单位登记和两次照片，明确不属于企业资产\"}",
+                        key(),
+                        a8Version(task)));
+    }
     private void configureFindingWarehouse() throws Exception {
         db.update("INSERT INTO fams_account_role(account_id,role_code,granted_at) VALUES (933003,'WAREHOUSE_OPERATOR',NOW(3))");
         other = login(3);

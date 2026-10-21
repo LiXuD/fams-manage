@@ -1,0 +1,82 @@
+{
+  "recorded_date": "2026-10-21",
+  "source": "A8 worktree on 33a0c19; fixed full product gate pending",
+  "scope": "Independent itemless TIME and FINDING obligations, actual later recollection lineage and immutable original evidence",
+  "runtime": {
+    "upgrade_tests": 1,
+    "observation_http_tests": 27,
+    "new_A8_http_cases": 6,
+    "failures_errors_skips": 0,
+    "raw_log": "output/d6-18-a8-recollection-runtime-3.log",
+    "sha256": "4015584dd610a1348ff91fd624b006209f3f2a2415c0d83a4e1249796006eab7",
+    "actual_native_opaque_reply_loss_hide_reread_exact_retry": true,
+    "actual_committing_jvm_forced_death_fresh_jvm_original_reply": true,
+    "actual_two_admins_single_version_conflict_winner_audit": true,
+    "actual_seal_freezes_recollection_lineage_and_original_facts": true,
+    "audit_failure_rolls_back_time_subject_history_link_version_receipt": true,
+    "older_self_other_task_uncertain_counters_rejected": true,
+    "owned_runtime_cleanup": "PASS"
+  },
+  "web_tests": 93,
+  "mini_tests": 176,
+  "lint_type_build": "PASS",
+  "gate_verifier_tests": 33,
+  "static_quality": {
+    "checkstyle": 0,
+    "spotbugs": 0,
+    "raw_log": "output/d6-18-a8-static-verify-1.log",
+    "scope": "Independent static-only verify skips tests and coverage; not fixed full gate"
+  },
+  "pc_browser": {
+    "reports": 0,
+    "captured": 2,
+    "decisions": 3,
+    "observations": 2,
+    "recollections": 1,
+    "closedSubjects": 3,
+    "source_state": "A8 worktree on 33a0c19 from independent static package; not a fixed gate candidate",
+    "artifact_sha256": "d9d1efe9e1d25e5b2953d6b0baf0ddf6daba6e46911d2893d8e9fc45e8f5d352",
+    "task_id": "1",
+    "asset_rows_dates_versions_and_locks_unchanged": true,
+    "original_observations_times_and_retention_unchanged": true,
+    "captured_count_unchanged": true,
+    "scanner_version": "ClamAV 1.4.6/28129/Sun Sep 20 06:26:26 2026",
+    "real_photo_upload_receipts": [
+      {
+        "eventId": "826e9a28-8c39-4b73-a82e-5e97ef6b51f7",
+        "outcome": "TIME_REVIEW",
+        "counted": false,
+        "differences": [],
+        "receivedAt": "2026-10-21T07:12:59.947Z",
+        "recollectionRequired": false
+      },
+      {
+        "eventId": "40d35c71-d172-4f30-a18b-6ff58a852e2f",
+        "outcome": "FINDING_REVIEW",
+        "counted": false,
+        "differences": [],
+        "receivedAt": "2026-10-21T07:13:00.028Z",
+        "recollectionRequired": false
+      }
+    ]
+  },
+  "pc_console_errors": 0,
+  "pc_actual_home_navigation": true,
+  "pc_screenshot": "output/playwright/d6-18-a8-independent-time-finding.png",
+  "pc_dom": "output/d6-18-a8-browser-final-dom.txt",
+  "pc_owned_app_vite_mysql_clamd_photo_root_cleanup": "PASS",
+  "fixed_full_product_gate": "PENDING",
+  "retained_failures": [
+    "runtime-1 new fixture expected captured0 but itemless uploads produce captured2; missing cleanup of new unobserved item review children caused three later fixture duplicate setup errors",
+    "runtime-2 count correction accidentally matched legacy cancellation assertion; legacy restored from HEAD and count change restricted to new method; no production changes made for either count assertion"
+  ],
+  "boundaries": [
+    "Recollection records originalTimeConfidence UNVERIFIED; no assignment of a new timestamp, first persistence or 72-hour expiry to old facts",
+    "Counter must be distinct later actually valid itemless finding in same task; exact physical identity requires current administrator evidence, not automatic fuzzy matching",
+    "FINDING still independently requires non-enterprise evidence, authoritative duplicate card, or actual accepted formal inbound; neither time nor finding can close the other",
+    "PC uses real ClamAV 1.4.6 with bundled signature28129; definition freshness or formal malware/security QA is not claimed",
+    "Real WeChat HTTPS SMS camera device weak-network external acceptance deferred; native confirms and HTTPS-loopback are explicit adapters",
+    "V1-V42 actually migrated and immutable; frozen V41 metadata evidence is separate from full database cognition",
+    "Full PC A4-A7, damage/loss actual owners, parent tasks, independent review, remote CI formal QA and production remain open"
+  ]
+}

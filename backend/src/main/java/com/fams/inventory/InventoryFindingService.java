@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
@@ -133,6 +134,30 @@ public class InventoryFindingService {
                             + " d.after_version DESC LIMIT 100",
                         observationId);
         return Map.of(
+                "timeSubject",
+                db
+                        .queryForList(
+                                "SELECT * FROM fams_inventory_review_subject WHERE observation_id=?"
+                                        + " AND dimension='TIME'",
+                                observationId)
+                        .stream()
+                        .map(this::wire)
+                        .toList(),
+                "recollections",
+                db
+                        .queryForList(
+                                "SELECT d.*,CAST(l.counter_observation_id AS CHAR) AS"
+                                    + " counterObservationId,l.counter_observed_at FROM"
+                                    + " fams_inventory_finding_recollection l JOIN"
+                                    + " fams_inventory_review_decision d ON"
+                                    + " d.observation_id=l.observation_id AND"
+                                    + " d.dimension=l.dimension AND"
+                                    + " d.after_version=l.decision_version WHERE l.observation_id=?"
+                                    + " ORDER BY l.decision_version DESC LIMIT 100",
+                                observationId)
+                        .stream()
+                        .map(this::wire)
+                        .toList(),
                 "taskVersion",
                 task.get("version"),
                 "observation",
@@ -339,6 +364,205 @@ public class InventoryFindingService {
         return result;
     }
 
+    public Map<String, Object> recollectionTargets(
+            Actor actor, long taskId, long observationId, int page, int size) {
+        admin(actor);
+        task(taskId);
+        var original = observation(taskId, observationId);
+        if (!"TIME_REVIEW".equals(original.get("outcome"))) {
+            throw new InventoryFailure(409, "INVENTORY_FINDING_TIME_REQUIRED");
+        }
+        String where =
+                " FROM fams_inventory_observation WHERE task_id=? AND item_id IS NULL AND id>? AND"
+                    + " outcome='FINDING_REVIEW' AND calibrated_observed_at IS NOT NULL AND"
+                    + " calibrated_persisted_at IS NOT NULL AND calibrated_observed_at>=?";
+        return Map.of(
+                "items",
+                db
+                        .queryForList(
+                                "SELECT *" + where + " ORDER BY id LIMIT ? OFFSET ? FOR SHARE",
+                                taskId,
+                                observationId,
+                                original.get("received_at"),
+                                size,
+                                ((long) page - 1) * size)
+                        .stream()
+                        .map(this::wire)
+                        .toList(),
+                "total",
+                java.util.Objects.requireNonNull(
+                        db.queryForObject(
+                                "SELECT COUNT(*)" + where,
+                                Long.class,
+                                taskId,
+                                observationId,
+                                original.get("received_at"))),
+                "page",
+                page,
+                "pageSize",
+                size);
+    }
+
+    /** Recollection resolves uncertainty without assigning a new timestamp to the original fact. */
+    public Map<String, Object> recollect(
+            Actor actor,
+            long taskId,
+            long observationId,
+            long version,
+            UUID key,
+            InventoryFindingInput.Recollection input) {
+        var current = admin(actor);
+        var task = task(taskId);
+        var observation = observation(taskId, observationId);
+        String operation = "FINDING_TIME:" + observationId;
+        String fingerprint = hash(version, input);
+        var prior =
+                db.queryForList(
+                        "SELECT payload_sha256,CAST(response_json AS CHAR) AS response FROM"
+                                + " fams_inventory_review_receipt WHERE task_id=? AND"
+                                + " actor_account_id=? AND operation=? AND request_id=? FOR UPDATE",
+                        taskId,
+                        current.id(),
+                        operation,
+                        key.toString());
+        if (!prior.isEmpty()) {
+            if (!fingerprint.equals(prior.getFirst().get("payload_sha256"))) {
+                reject(actor, current, task, "INVENTORY_REVIEW_IDEMPOTENCY_CONFLICT", Map.of());
+            }
+            return json.readValue(
+                    prior.getFirst().get("response").toString(),
+                    new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        }
+        if (!"TIME_REVIEW".equals(observation.get("outcome"))) {
+            throw new InventoryFailure(409, "INVENTORY_FINDING_TIME_REQUIRED");
+        }
+        var rows =
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_review_subject WHERE"
+                                + " observation_id=? AND dimension='TIME' FOR UPDATE",
+                        observationId);
+        if (rows.isEmpty()) {
+            throw new InventoryFailure(409, "INVENTORY_FINDING_PREPARATION_REQUIRED");
+        }
+        var subject = rows.getFirst();
+        if (number(task, "version") != version
+                || !List.of("IN_PROGRESS", "WAITING_REVIEW").contains(task.get("task_status"))) {
+            reject(actor, current, task, "INVENTORY_REVIEW_TASK_CHANGED", subject);
+        }
+        if (number(subject, "version") != input.subjectVersion()
+                || !List.of("OPEN", "PROCESSING").contains(subject.get("subject_status"))) {
+            reject(actor, current, task, "INVENTORY_REVIEW_VERSION_CONFLICT", subject);
+        }
+        if (input.counterObservationId() == observationId) {
+            throw new InventoryFailure(400, "INVENTORY_FINDING_RECOLLECTION_INVALID");
+        }
+        var counters =
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_observation WHERE task_id=? AND id=? AND"
+                                + " item_id IS NULL AND outcome='FINDING_REVIEW' FOR SHARE",
+                        taskId,
+                        input.counterObservationId());
+        if (counters.isEmpty()) {
+            throw new InventoryFailure(409, "INVENTORY_FINDING_RECOLLECTION_INVALID");
+        }
+        var counter = counters.getFirst();
+        if (counter.get("calibrated_observed_at") == null
+                || counter.get("calibrated_persisted_at") == null) {
+            throw new InventoryFailure(409, "INVENTORY_REVIEW_RECOLLECTION_REQUIRED");
+        }
+        var observed = instant(counter.get("calibrated_observed_at"));
+        var persisted = instant(counter.get("calibrated_persisted_at"));
+        var received = instant(counter.get("received_at"));
+        if (observed.isBefore(instant(observation.get("received_at")))) {
+            throw new InventoryFailure(409, "INVENTORY_FINDING_RECOLLECTION_INVALID");
+        }
+        if (observed.isBefore(instant(task.get("published_at")))
+                || observed.isAfter(persisted.plusSeconds(2))
+                || persisted.isAfter(received.plusSeconds(2))
+                || !received.isBefore(persisted.plus(java.time.Duration.ofHours(72)))) {
+            throw new InventoryFailure(409, "INVENTORY_REVIEW_RECOLLECTION_REQUIRED");
+        }
+        long after = input.subjectVersion() + 1;
+        var now = clock.instant().truncatedTo(ChronoUnit.MILLIS);
+        db.update(
+                "UPDATE fams_inventory_review_subject SET"
+                    + " subject_status='CLOSED',method='RECOLLECTED',"
+                    + " reason=?,evidence=?,reviewer_account_id=?,reviewer_username=?,reviewed_at=?,version=?"
+                    + " WHERE observation_id=? AND dimension='TIME'",
+                input.reason().strip(),
+                input.evidence().strip(),
+                current.id(),
+                current.username(),
+                now,
+                after,
+                observationId);
+        db.update(
+                "INSERT INTO"
+                    + " fams_inventory_review_decision(task_id,observation_id,dimension,before_version,"
+                    + "after_version,method,subject_status,reason,evidence,reviewed_asset_version,actor_account_id,actor_username,occurred_at)"
+                    + " VALUES (?,?,'TIME',?,?,'RECOLLECTED','CLOSED',?,?,0,?,?,?)",
+                taskId,
+                observationId,
+                input.subjectVersion(),
+                after,
+                input.reason().strip(),
+                input.evidence().strip(),
+                current.id(),
+                current.username(),
+                now);
+        db.update(
+                "INSERT INTO"
+                    + " fams_inventory_finding_recollection(observation_id,dimension,decision_version,task_id,counter_observation_id,counter_observed_at,created_at)"
+                    + " VALUES (?,'TIME',?,?,?,?,?)",
+                observationId,
+                after,
+                taskId,
+                input.counterObservationId(),
+                observed,
+                now);
+        db.update(
+                "UPDATE fams_inventory_task SET version=version+1,updated_at=? WHERE id=?",
+                now,
+                taskId);
+        var result =
+                Map.<String, Object>of(
+                        "taskId",
+                        Long.toString(taskId),
+                        "observationId",
+                        Long.toString(observationId),
+                        "version",
+                        version + 1,
+                        "subjectVersion",
+                        after,
+                        "status",
+                        "CLOSED",
+                        "method",
+                        "RECOLLECTED",
+                        "counterObservationId",
+                        Long.toString(input.counterObservationId()),
+                        "originalTimeConfidence",
+                        "UNVERIFIED");
+        audit(actor, current, task, "INVENTORY_FINDING_TIME_RECOLLECTED", result);
+        db.update(
+                "INSERT INTO"
+                    + " fams_inventory_review_receipt(task_id,actor_account_id,operation,request_id,payload_sha256,response_json,created_at)"
+                    + " VALUES (?,?,?,?,?,?,?)",
+                taskId,
+                current.id(),
+                operation,
+                key.toString(),
+                fingerprint,
+                json.writeValueAsString(result),
+                now);
+        return result;
+    }
+
+    private Instant instant(Object value) {
+        return value instanceof java.sql.Timestamp time
+                ? time.toInstant()
+                : ((java.time.LocalDateTime) value).toInstant(java.time.ZoneOffset.UTC);
+    }
+
     private Current admin(Actor actor) {
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.ASSET_ADMIN)) {
@@ -359,8 +583,9 @@ public class InventoryFindingService {
     private Map<String, Object> observation(long task, long id) {
         var rows =
                 db.queryForList(
-                        "SELECT * FROM fams_inventory_observation WHERE task_id=? AND id=?"
-                                + " AND item_id IS NULL AND outcome='FINDING_REVIEW' FOR SHARE",
+                        "SELECT * FROM fams_inventory_observation WHERE task_id=? AND id=? AND"
+                            + " item_id IS NULL AND outcome IN ('FINDING_REVIEW','TIME_REVIEW') FOR"
+                            + " SHARE",
                         task,
                         id);
         if (rows.isEmpty()) {

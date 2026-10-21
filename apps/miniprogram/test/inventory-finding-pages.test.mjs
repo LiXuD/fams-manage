@@ -66,3 +66,35 @@ test("a rejected confirmation releases busy state and writes no finding decision
     const f = fixture(); await open(f); reasons(f); f.services.confirm = async () => { throw new Error("owned confirm failure"); };
     await f.page.onSave(); assert.equal(f.page.data.busy, false); assert.equal(f.calls.filter(row => row.method === "POST").length, 0); f.page.onUnload();
 });
+
+
+test("time recollection retains exact opaque operation through lost reply, hide and reread", async () => {
+    const f = fixture(); f.detail.observation = { ...raw, outcome: "TIME_REVIEW" }; f.detail.timeSubject = [{ version: 0, subject_status: "OPEN" }];
+    const request = f.sessions.request; let lost = true;
+    f.sessions.request = async (...args) => {
+        if (args[1].includes("recollection-targets")) return { items: [{ ...raw, id: "9007199254740993" }], total: 1 };
+        const result = await request(...args);
+        if (args[0] === "POST" && lost) { lost = false; throw new Error("lost committed reply"); } return result;
+    };
+    await open(f); reasons(f); await f.page.onRecollectionTargets(); f.page.onCounter(event("9007199254740993")); await f.page.onTimeSave();
+    assert.equal(f.page.data.retryable, true); f.page.onHide(); await f.page.onShow(); await f.page.onRetry();
+    const writes = f.calls.filter(row => row.method === "POST"); assert.equal(writes.length, 2); assert.deepEqual(writes[0], writes[1]);
+    assert.equal(writes[0].path, "/api/v1/mini/inventory-reviews/tasks/9/findings/8/time-decisions");
+    assert.equal(writes[0].body.counterObservationId, "9007199254740993"); assert.equal(writes[0].body.subjectVersion, 0); f.page.onUnload();
+});
+test("time recollection never submits if current identity changes during confirmation", async () => {
+    const f = fixture(); f.detail.observation = { ...raw, outcome: "TIME_REVIEW" }; f.detail.timeSubject = [{ version: 0, subject_status: "OPEN" }];
+    await open(f); reasons(f); f.page.data.counters = [{ ...raw, id: "10" }]; f.page.onCounter(event("10")); let finish;
+    f.services.confirm = () => new Promise(resolve => { finish = resolve; });
+    const saving = f.page.onTimeSave(); f.sessions.identity = { accountId: "3", bindingId: "4" }; finish(true); await saving;
+    assert.equal(f.calls.filter(row => row.method === "POST").length, 0); assert.equal(f.page.data.detail, null); f.page.onUnload();
+});
+
+
+test("late recollection candidate lookup after a binding change clears old private findings", async () => {
+    const f = fixture(); f.detail.observation = { ...raw, outcome: "TIME_REVIEW" }; f.detail.timeSubject = [{ version: 0, subject_status: "OPEN" }];
+    await open(f); let finish; f.sessions.request = () => new Promise(resolve => { finish = resolve; });
+    const reading = f.page.onRecollectionTargets(); f.sessions.identity = { accountId: "3", bindingId: "4" };
+    finish({ items: [{ ...raw, id: "10" }], total: 1 }); await reading;
+    assert.equal(f.page.data.detail, null); assert.deepEqual(f.page.data.counters, []); assert.equal(f.page.data.busy, false); f.page.onUnload();
+});

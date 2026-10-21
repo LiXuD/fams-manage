@@ -1,0 +1,10 @@
+{
+  "source_candidate": "0c4e4f3",
+  "artifact_sha256": "b0f2cb8bde5bef060dc92053a1aa26d67b87cf8e9d99694b1d5c78fcf9967098",
+  "columns_sha256": "1e894395b8087e99d908e10c68bbe723933ed139669f17f9192fe5490bdbde0c",
+  "create_sha256": "309b44d5e6b0fbc184e516fc550bb384d988beff7dd87bee2b70875bab19be53",
+  "objects": 112,
+  "business_rows_read": false,
+  "owned_app_mysql_cleanup": "PASS",
+  "scope": "Metadata only from frozen B3 package in owned MySQL; not production or full database cognition"
+}
