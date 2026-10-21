@@ -1,0 +1,43 @@
+{
+  "candidate_commit": "0c4e4f3daf7b7d6dc6459355bf3a30d2913279f1",
+  "comparison_base": "a7dd85d",
+  "recorded_date": "2026-10-21",
+  "full_product_gate_exit": 0,
+  "java_tests": 307,
+  "checkstyle_findings": 0,
+  "spotbugs_findings": 0,
+  "line_covered": 14729,
+  "line_total": 15855,
+  "branch_covered": 5247,
+  "branch_total": 6942,
+  "web_tests": 91,
+  "web_json": {
+    "numTotalTests": 91,
+    "numPassedTests": 91,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "numTodoTests": 0,
+    "success": true
+  },
+  "mini_tests": 173,
+  "lint_type_build_dependency_integrity": "PASS",
+  "application_restart_database_restart": "PASS",
+  "owned_runtime_cleanup_clean_worktree": "PASS",
+  "artifact": {
+    "candidate": "0c4e4f3",
+    "source": "backend/target/contract-generation-probe-0.1.0-SNAPSHOT.jar",
+    "artifact": "output/d6-18-0c4e4f3-backend.jar",
+    "sha256": "b0f2cb8bde5bef060dc92053a1aa26d67b87cf8e9d99694b1d5c78fcf9967098",
+    "size": 58538273,
+    "observer": "passive during frozen candidate gate"
+  },
+  "scope": "D6-18B3 terminal supplemental review, durable administrator todo and actual linked recheck closure",
+  "pc_supplemental_note_linked_draft_and_persistence": "PASS in identified earlier worktree package; not frozen gate artifact",
+  "full_pc_A_review_acceptance": "NOT_VERIFIED",
+  "physical_missing_followup": "OPEN; no text or synchronization waiver",
+  "late_supplemental_todo_linked_recheck": "PASS; exact original retries, append-only decisions and actual accepted recheck required",
+  "retained_worktree_failures": "runtime-1/3/4/6/7 and static-1 preserved in B3 worktree evidence; final runtime-11 and static-3 passed",
+  "independent_review": "PENDING",
+  "real_wechat_https_sms_camera_device_weak_network": "NOT_VERIFIED",
+  "remote_ci_formal_qa_production": "NOT_VERIFIED"
+}

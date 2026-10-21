@@ -1,6 +1,6 @@
 {
   "recorded_date": "2026-10-21",
-  "source": "B3 uncommitted worktree on a7dd85d; fixed full gate pending",
+  "source": "B3 worktree evidence retained; fixed functional candidate 0c4e4f3daf7b7d6dc6459355bf3a30d2913279f1 separately passed full gate",
   "scope": "terminal supplemental cases, deduplicated administrator todos, append-only decisions and actual linked recheck closure; original reports remain immutable",
   "runtime": {
     "upgrade_tests": 1,
@@ -97,7 +97,11 @@
     ],
     "scope": "Identified earlier worktree package before final explicit damaged-followup guard; exercised UNKNOWN cases unaffected by that guard; not fixed candidate artifact"
   },
-  "fixed_full_product_gate": "PENDING",
+  "fixed_full_product_gate": {
+    "status": "PASS",
+    "candidate": "0c4e4f3daf7b7d6dc6459355bf3a30d2913279f1",
+    "evidence": "docs/development/evidence/d6-18/product-gate-0c4e4f3.json"
+  },
   "retained_failures": [
     "runtime-1 Checkstyle24 missing braces in new code; corrected without changing quality rules",
     "runtime-3 three fixture failures: cloned event header version0/body1 and second admin fixture actually EMPLOYEE; corrected fixtures without weaker assertions",
