@@ -110,7 +110,8 @@
     "V1-V40 are migration-tested and immutable.",
     "Independent review, remote CI, formal QA and production remain open."
   ],
-  "full_fixed_product_gate": "FAILED 6497f28 npm high audit; patched candidate rerun pending",
+  "full_fixed_product_gate": "PASS 70163357ee946370f2e172a05cd80e3ecd57e1ad; failed6497f28 retained",
   "actual_runtime_log_date": "2026-10-20",
-  "type_lint_build": "PASS"
+  "type_lint_build": "PASS",
+  "fixed_gate_evidence": "docs/development/evidence/d6-18/product-gate-7016335.json"
 }
