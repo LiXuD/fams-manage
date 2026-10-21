@@ -97,7 +97,8 @@
     "runtime-4 damaged-without-photo conflict fixture hit valid photo requirement; fixture changed to UNKNOWN plus reason, photo policy unchanged",
     "runtime-5/6 two concurrency assertions failed due transient lock rollback and stale snapshot report processor context; exact original operation retry and current locked report reads added",
     "static-1 five Spring injection field warnings; only exact ctor infrastructure exclusions",
-    "owned PC late-date guard first CLI statement delimiter rejected; corrected client delimiter before installing and successful actual late commit"
+    "owned PC late-date guard first CLI statement delimiter rejected; corrected client delimiter before installing and successful actual late commit",
+    "fixed candidate6497f28 audit failed: newly reported Vite8.3.0 launch-editor vulnerabilities; prior Java287/Web86/mini166 passed; runtime restart not reached"
   ],
   "known_boundaries": [
     "Missing synchronization may be explicitly documented with frozen roster, never waive independent physical/time/evidence obligations.",
@@ -109,7 +110,7 @@
     "V1-V40 are migration-tested and immutable.",
     "Independent review, remote CI, formal QA and production remain open."
   ],
-  "full_fixed_product_gate": "PENDING",
+  "full_fixed_product_gate": "FAILED 6497f28 npm high audit; patched candidate rerun pending",
   "actual_runtime_log_date": "2026-10-20",
   "type_lint_build": "PASS"
 }

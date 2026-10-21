@@ -1,0 +1,26 @@
+{
+  "candidate_commit": "6497f28a96ec5e90721758181ff4280bb7f2de1c",
+  "recorded_date": "2026-10-21",
+  "full_product_gate_exit": 1,
+  "failed_step": "npm high-severity audit",
+  "audit_affected": "vite 8.3.0-8.3.2; current pinned 8.3.0",
+  "advisories": [
+    "https://github.com/advisories/GHSA-698v-4r3x-3vcv",
+    "https://github.com/advisories/GHSA-r825-w8mm-5pxw",
+    "https://github.com/advisories/GHSA-587h-7wmj-h5pm"
+  ],
+  "java_tests": 287,
+  "checkstyle_findings": 0,
+  "spotbugs_findings": 0,
+  "line_covered": 14337,
+  "line_total": 15421,
+  "branch_covered": 5113,
+  "branch_total": 6758,
+  "web_tests": 86,
+  "web_passed": 86,
+  "mini_tests": 166,
+  "runtime_restart": "NOT_REACHED after audit failure",
+  "cleanup_clean_worktree": "PASS",
+  "remediation": "Pin Vite 8.3.4 and corresponding lock graph then rerun fixed full gate; no audit bypass",
+  "scope": "B2b candidate failed overall despite passing preceding Java and two-client checks"
+}
