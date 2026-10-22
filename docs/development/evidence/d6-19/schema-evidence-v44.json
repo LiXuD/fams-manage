@@ -1,0 +1,10 @@
+{
+  "source_candidate": "08ee306",
+  "artifact_sha256": "999df6b330f609ff5cf070092a39709d3d424535ad8750c7da27d004d3ed9f97",
+  "columns_sha256": "9910fe045a5df955c7f0e6ca6a3a8d791ccc7c47feed230cf6bf6b3c56a66fb7",
+  "create_sha256": "fda9e94c10ef0a2a55e17b720b98e87eb7b88434234b87ebf069187298fff1b9",
+  "objects": 121,
+  "business_rows_read": false,
+  "owned_app_mysql_cleanup": "PASS",
+  "scope": "Metadata-only V44 snapshot from fixed 08ee306 artifact; not production or full database cognition"
+}
