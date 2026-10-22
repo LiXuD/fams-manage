@@ -1,0 +1,554 @@
+[clean worktree preflight] exit=0
+[generated output tracking preflight] exit=0
+[Compose policy model] exit=0
+[Compose static policy] pinned MySQL, loopback port, required task variables, healthcheck, named volume
+[Compose first startup] exit=0
+  Volume fams-d6-03a-6a805c13666ea540_mysql-data Created
+  Volume fams-d6-03a-6a805c13666ea540_mysql-data Created
+  Network fams-d6-03a-6a805c13666ea540_default Created
+  Network fams-d6-03a-6a805c13666ea540_default Created
+  Container fams-d6-03a-6a805c13666ea540-mysql-1 Creating
+  Container fams-d6-03a-6a805c13666ea540-mysql-1 Created
+  Container fams-d6-03a-6a805c13666ea540-mysql-1 Starting
+  Container fams-d6-03a-6a805c13666ea540-mysql-1 Started
+  Container fams-d6-03a-6a805c13666ea540-mysql-1 Waiting
+  Container fams-d6-03a-6a805c13666ea540-mysql-1 Healthy
+[Compose repeated startup] exit=0
+  Container fams-d6-03a-6a805c13666ea540-mysql-1 Running
+  Container fams-d6-03a-6a805c13666ea540-mysql-1 Waiting
+  Container fams-d6-03a-6a805c13666ea540-mysql-1 Healthy
+[D6-04 authentication database provisioning] exit=0
+[pinned MySQL image metadata] exit=0
+[resolved Node runtime] exit=0
+[Java clean] exit=0
+  [INFO]   from pom.xml
+  [INFO] --------------------------------[ jar ]---------------------------------
+  [INFO]
+  [INFO] --- clean:3.5.0:clean (default-clean) @ contract-generation-probe ---
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  0.231 s
+  [INFO] Finished at: 2026-10-22T22:37:01+08:00
+  [INFO] ------------------------------------------------------------------------
+[mini session V16 upgrade] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  20.503 s
+  [INFO] Finished at: 2026-10-22T22:37:22+08:00
+  [INFO] ------------------------------------------------------------------------
+[requisition V18 upgrade and constraints] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  15.707 s
+  [INFO] Finished at: 2026-10-22T22:37:39+08:00
+  [INFO] ------------------------------------------------------------------------
+[requisition V19 change upgrade] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  13.468 s
+  [INFO] Finished at: 2026-10-22T22:37:53+08:00
+  [INFO] ------------------------------------------------------------------------
+[requisition V20 handover upgrade] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  13.680 s
+  [INFO] Finished at: 2026-10-22T22:38:08+08:00
+  [INFO] ------------------------------------------------------------------------
+[loan V21 borrowing and return upgrade] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  13.684 s
+  [INFO] Finished at: 2026-10-22T22:38:22+08:00
+  [INFO] ------------------------------------------------------------------------
+[transfer V25 upgrade and repeat] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  13.590 s
+  [INFO] Finished at: 2026-10-22T22:38:37+08:00
+  [INFO] ------------------------------------------------------------------------
+[transfer V27 ownership upgrade and repeat] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  13.772 s
+  [INFO] Finished at: 2026-10-22T22:38:51+08:00
+  [INFO] ------------------------------------------------------------------------
+[return V28 ownership upgrade and repeat] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  13.687 s
+  [INFO] Finished at: 2026-10-22T22:39:06+08:00
+  [INFO] ------------------------------------------------------------------------
+[proxy confirmation V29 upgrade and repeat] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  14.325 s
+  [INFO] Finished at: 2026-10-22T22:39:21+08:00
+  [INFO] ------------------------------------------------------------------------
+[inventory V31 populated upgrade and repeat] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  13.807 s
+  [INFO] Finished at: 2026-10-22T22:39:36+08:00
+  [INFO] ------------------------------------------------------------------------
+[inventory V32 populated upgrade and repeat] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  13.941 s
+  [INFO] Finished at: 2026-10-22T22:39:51+08:00
+  [INFO] ------------------------------------------------------------------------
+[inventory V33 populated review upgrade and repeat] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  14.108 s
+  [INFO] Finished at: 2026-10-22T22:40:06+08:00
+  [INFO] ------------------------------------------------------------------------
+[inventory V34 populated difference upgrade and repeat] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  13.854 s
+  [INFO] Finished at: 2026-10-22T22:40:20+08:00
+  [INFO] ------------------------------------------------------------------------
+[D6-18 selection filled upgrade runtime] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  13.651 s
+  [INFO] Finished at: 2026-10-22T22:40:35+08:00
+  [INFO] ------------------------------------------------------------------------
+[D6-18 evidence disposition filled upgrade runtime] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  13.926 s
+  [INFO] Finished at: 2026-10-22T22:40:50+08:00
+  [INFO] ------------------------------------------------------------------------
+[inventory V37 populated finding links upgrade and repeat] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  13.637 s
+  [INFO] Finished at: 2026-10-22T22:41:04+08:00
+  [INFO] ------------------------------------------------------------------------
+[inventory V38 populated synchronization upgrade and repeat] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  13.805 s
+  [INFO] Finished at: 2026-10-22T22:41:19+08:00
+  [INFO] ------------------------------------------------------------------------
+[inventory V39 populated unobserved reasons upgrade and repeat] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  13.988 s
+  [INFO] Finished at: 2026-10-22T22:41:34+08:00
+  [INFO] ------------------------------------------------------------------------
+[inventory V40 populated sealed reports upgrade and repeat] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  13.935 s
+  [INFO] Finished at: 2026-10-22T22:41:49+08:00
+  [INFO] ------------------------------------------------------------------------
+[inventory V41 populated terminal supplement upgrade and repeat] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  14.073 s
+  [INFO] Finished at: 2026-10-22T22:42:04+08:00
+  [INFO] ------------------------------------------------------------------------
+[inventory recollection upgrade] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  13.859 s
+  [INFO] Finished at: 2026-10-22T22:42:18+08:00
+  [INFO] ------------------------------------------------------------------------
+[repair V43 populated upgrade and repeat] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  13.979 s
+  [INFO] Finished at: 2026-10-22T22:42:33+08:00
+  [INFO] ------------------------------------------------------------------------
+[repair V44 populated collaboration upgrade] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  14.100 s
+  [INFO] Finished at: 2026-10-22T22:42:48+08:00
+  [INFO] ------------------------------------------------------------------------
+[repair V45 populated physical custody upgrade] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  14.345 s
+  [INFO] Finished at: 2026-10-22T22:43:04+08:00
+  [INFO] ------------------------------------------------------------------------
+[actual repair physical acceptance and atomic inbound HTTP] exit=0
+  [INFO]
+  [INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  24.704 s
+  [INFO] Finished at: 2026-10-22T22:43:29+08:00
+  [INFO] ------------------------------------------------------------------------
+  Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+[invitation scoped technical opinions and private evidence HTTP] exit=0
+  [INFO]
+  [INFO] Tests run: 11, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  24.544 s
+  [INFO] Finished at: 2026-10-22T22:43:55+08:00
+  [INFO] ------------------------------------------------------------------------
+  Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+[actual repair approval ownership custody rollback and photos HTTP] exit=0
+  [INFO]
+  [INFO] Tests run: 14, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  25.869 s
+  [INFO] Finished at: 2026-10-22T22:44:21+08:00
+  [INFO] ------------------------------------------------------------------------
+  Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+[inventory synchronization declaration and native HTTP] exit=0
+  [INFO]
+  [INFO] Tests run: 10, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  29.735 s
+  [INFO] Finished at: 2026-10-22T22:44:52+08:00
+  [INFO] ------------------------------------------------------------------------
+  Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+[inventory explicit unobserved reasons and waiting review HTTP] exit=0
+  [INFO]
+  [INFO] Tests run: 10, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  30.288 s
+  [INFO] Finished at: 2026-10-22T22:45:23+08:00
+  [INFO] ------------------------------------------------------------------------
+  Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+[inventory immutable seal dates and native HTTP] exit=0
+  [INFO]
+  [INFO] Tests run: 14, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  33.593 s
+  [INFO] Finished at: 2026-10-22T22:45:58+08:00
+  [INFO] ------------------------------------------------------------------------
+  Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+[inventory terminal supplemental decisions and native HTTP] exit=0
+  [INFO]
+  [INFO] Tests run: 18, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  38.072 s
+  [INFO] Finished at: 2026-10-22T22:46:37+08:00
+  [INFO] ------------------------------------------------------------------------
+  Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+[inventory task snapshot and assignment HTTP] exit=0
+  [INFO]
+  [INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  22.492 s
+  [INFO] Finished at: 2026-10-22T22:47:00+08:00
+  [INFO] ------------------------------------------------------------------------
+  Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+[inventory collection offline receipts and photos HTTP] exit=0
+  [INFO]
+  [INFO] Tests run: 27, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  49.422 s
+  [INFO] Finished at: 2026-10-22T22:47:50+08:00
+  [INFO] ------------------------------------------------------------------------
+  Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+[inventory explicit review and concurrent administration HTTP] exit=0
+  [INFO]
+  [INFO] Tests run: 22, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  35.450 s
+  [INFO] Finished at: 2026-10-22T22:48:27+08:00
+  [INFO] ------------------------------------------------------------------------
+  Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+[durable job coverage] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  17.171 s
+  [INFO] Finished at: 2026-10-22T22:48:45+08:00
+  [INFO] ------------------------------------------------------------------------
+[asset import batch coverage] exit=0
+  [INFO] Results:
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  13.769 s
+  [INFO] Finished at: 2026-10-22T22:49:00+08:00
+  [INFO] ------------------------------------------------------------------------
+[asset import HTTP coverage] exit=0
+  [INFO]
+  [INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+  [INFO]
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  22.630 s
+  [INFO] Finished at: 2026-10-22T22:49:23+08:00
+  [INFO] ------------------------------------------------------------------------
+  Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+[Java blocking quality] exit=0
+  [INFO] BugInstance size is 0
+  [INFO] Error size is 0
+  [INFO] No errors/warnings found
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  02:48 min
+  [INFO] Finished at: 2026-10-22T22:52:12+08:00
+  [INFO] ------------------------------------------------------------------------
+  Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+[Java quality reports] tests=350, Checkstyle=0, SpotBugs=0, lines=16300/17587 (92.68%), branches=5679/7544 (75.28%)
+[TypeScript lint] exit=0
+  > lint
+  > rtk eslint "packages/api-types/src/**/*.ts" "apps/web/src/**/*.{ts,tsx}" "apps/miniprogram/**/*.ts" --no-error-on-unmatched-pattern --max-warnings=0
+[TypeScript compile] exit=0
+  > typecheck
+  > rtk npm run typecheck --workspaces --if-present
+  > rtk tsc --noEmit -p tsconfig.json
+  TypeScript: No errors found
+  > rtk vue-tsc --noEmit
+  > rtk tsc --noEmit -p tsconfig.json
+  TypeScript: No errors found
+[Web component tests] exit=0
+  > test:web
+  > rtk vitest run
+  JSON report written to <workspace>/apps/web/.vitest/json/output.json
+  [RTK:PASSTHROUGH] vitest parser: All parsing tiers failed
+[Web production build] exit=0
+  computing gzip size...
+  dist/index.html                     0.41 kB │ gzip:   0.30 kB
+  dist/assets/index-Cv_czcpG.css    370.34 kB │ gzip:  50.27 kB
+  dist/assets/index-CsTwPmtW.js   1,346.32 kB │ gzip: 414.29 kB
+  ✓ built in 528ms
+  [plugin builtin:vite-reporter]
+  (!) Some chunks are larger than 500 kB after minification. Consider:
+  - Using dynamic import() to code-split the application
+  - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+  - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+[Mini session transport tests] exit=0
+  ✔ receipt needs physical check and refusal reason; scanner failure allows manual code (0.322417ms)
+  ✔ confirmation failure releases busy state and writes no receipt (0.197334ms)
+  ℹ tests 193
+  ℹ suites 0
+  ℹ pass 193
+  ℹ fail 0
+  ℹ cancelled 0
+  ℹ skipped 0
+  ℹ todo 0
+  ℹ duration_ms 441.115917
+[Native mini package] exit=0
+  > rtk proxy node build.mjs
+  TypeScript: No errors found
+  Native mini package built; API origin unconfigured (requires external HTTPS resource).
+[TypeScript negative fixture] no-unused-vars and no-explicit-any rejected the temporary source
+[TypeScript post-fixture lint] exit=0
+  > lint
+  > rtk eslint "packages/api-types/src/**/*.ts" "apps/web/src/**/*.{ts,tsx}" "apps/miniprogram/**/*.ts" --no-error-on-unmatched-pattern --max-warnings=0
+[npm dependency tree] exit=0
+  │ ├── jsdom@30.1.0
+  │ ├── pinia@4.0.3
+  │ ├── qrcode@1.5.4
+  │ ├── vite@8.3.4
+  │ ├── vitest@5.0.1
+  │ ├── vue-router@5.3.1
+  │ ├── vue-tsc@3.2.6
+  │ └── vue@3.5.43
+  ├── eslint@10.10.0
+  └── typescript-eslint@8.70.0
+[npm high-severity audit] exit=0
+  Vitest: Windows backslash traversal bypasses the @vitest/mocker redirect allowlist fix - https://github.com/advisories/GHSA-xp26-3454-mjgp
+  fix available via `npm audit fix --force`
+  Will install vitest@5.0.5, which is outside the stated dependency range
+  node_modules/@vitest/mocker
+  vitest  5.0.0-beta.1 - 5.0.2
+  Depends on vulnerable versions of @vitest/mocker
+  node_modules/vitest
+  2 moderate severity vulnerabilities
+  To address all issues, run:
+  npm audit fix --force
+[Maven runtime dependency tree] exit=0
+  [INFO]    +- commons-io:commons-io:jar:2.21.0:compile
+  [INFO]    +- com.github.virtuald:curvesapi:jar:1.08:compile
+  [INFO]    +- org.apache.logging.log4j:log4j-api:jar:2.25.5:compile
+  [INFO]    \- org.apache.commons:commons-collections4:jar:4.5.0:compile
+  [INFO] ------------------------------------------------------------------------
+  [INFO] BUILD SUCCESS
+  [INFO] ------------------------------------------------------------------------
+  [INFO] Total time:  0.918 s
+  [INFO] Finished at: 2026-10-22T22:52:41+08:00
+  [INFO] ------------------------------------------------------------------------
+[dependency integrity] locked npm tree, high-severity audit, Enforcer, and runtime dependency markers passed
+[management listener] exit=0
+  COMMAND   PID USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+  java    23101 lixd   14u  IPv6 0x695cecbf2cb39b2f      0t0  TCP 127.0.0.1:53285 (LISTEN)
+[restricted metrics HTTP] business=404, management health=UP, Prometheus JVM metrics present, loopback listener
+[application restart recovery] task probe remained readable after a clean application restart
+[database restart] exit=0
+  Container fams-d6-03a-6a805c13666ea540-mysql-1 Restarting
+  Container fams-d6-03a-6a805c13666ea540-mysql-1 Started
+[database restart health] exit=0
+  Container fams-d6-03a-6a805c13666ea540-mysql-1 Running
+  Container fams-d6-03a-6a805c13666ea540-mysql-1 Waiting
+  Container fams-d6-03a-6a805c13666ea540-mysql-1 Healthy
+[management listener] exit=0
+  COMMAND   PID USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+  java    23153 lixd   14u  IPv6 0xa020b2099034ddfa      0t0  TCP 127.0.0.1:53285 (LISTEN)
+[restricted metrics HTTP] business=404, management health=UP, Prometheus JVM metrics present, loopback listener
+[database restart recovery] same-volume data and application health recovered after MySQL restart
+Current product development checks passed; historical governance audits not rerun.
+[Compose cleanup] exit=0
+[Compose cleanup] task container, network, and named volume removed
+[git diff check] exit=0
+[clean worktree postflight] exit=0
