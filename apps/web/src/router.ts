@@ -21,10 +21,12 @@ import TransferTargetChangeView from "@/views/TransferTargetChangeView.vue";
 
 import InventoryTaskView from "@/views/InventoryTaskView.vue";
 import RepairView from "@/views/RepairView.vue";
+import RepairAssistanceView from "@/views/RepairAssistanceView.vue";
 
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
+    { path: "/repair-assistance/:id?", name: "repair-assistance", component: RepairAssistanceView, meta: { requiresAuth: true } },
     { path: "/repairs/:id?", name: "repairs", component: RepairView, meta: { requiresAuth: true } },
     { path: "/inventory-tasks", name: "inventory-tasks", component: InventoryTaskView, meta: { requiresAuth: true } },
     { path: "/transfer-target-changes", name: "transfer-target-changes", component: TransferTargetChangeView, meta: { requiresAuth: true } },

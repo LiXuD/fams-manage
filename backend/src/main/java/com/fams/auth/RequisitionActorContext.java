@@ -81,6 +81,15 @@ public final class RequisitionActorContext {
     }
 
     public Current revalidateLocked(Actor actor) {
+        return revalidateBusinessIdentity(actor, false);
+    }
+
+    /** Repair invitation owners must separately authorize the participant and minimal fields. */
+    public Current revalidateRepairParticipantLocked(Actor actor) {
+        return revalidateBusinessIdentity(actor, true);
+    }
+
+    private Current revalidateBusinessIdentity(Actor actor, boolean repairParticipant) {
         if (db.queryForList("SELECT id FROM fams_system_account WHERE id=? FOR UPDATE", actor.id())
                 .isEmpty()) {
             throw AuthOperationException.sessionInvalid();
@@ -104,6 +113,7 @@ public final class RequisitionActorContext {
                 .noneMatch(
                         role ->
                                 role == Role.EMPLOYEE
+                                        || repairParticipant && role == Role.TECH_ASSISTANT
                                         || role == Role.DEPARTMENT_ASSET_MANAGER
                                         || role == Role.ASSET_ADMIN
                                         || role == Role.WAREHOUSE_OPERATOR)) {

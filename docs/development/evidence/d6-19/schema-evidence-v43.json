@@ -1,0 +1,10 @@
+{
+  "source_candidate": "71a74b8",
+  "artifact_sha256": "2dd00002e2726d67d6761fbc53c28ac10e2f2cd79f9d1a784255c144bc6352be",
+  "columns_sha256": "f2442c6aa195550ceb7f7d6cdc6b0df441ae4a13bc2d0a86ea4d8274adabc67b",
+  "create_sha256": "c4ed13294b428d66766fb1939838d0f2d71c7de542bb01c2914d22f84dbfae37",
+  "objects": 118,
+  "business_rows_read": false,
+  "owned_app_mysql_cleanup": "PASS",
+  "scope": "Metadata-only V43 snapshot from fixed 71a74b8 package; not production or full database cognition"
+}

@@ -284,6 +284,14 @@ public class RepairService {
                                 "SELECT object_id,content_sha256,purpose FROM fams_repair_photo"
                                         + " WHERE repair_id=? ORDER BY object_id",
                                 id)));
+        basis.put(
+                "technicalOpinions",
+                wire(
+                        db.queryForList(
+                                "SELECT"
+                                    + " id,invitation_id,judgement,method,opinion_result,occurred_at,attachment_ids_json,actor_account_id,actor_username,recorded_at"
+                                    + " FROM fams_repair_opinion WHERE repair_id=? ORDER BY id",
+                                id)));
         basis.put("allowedMethod", input.allowedMethod());
         basis.put("requestVersion", version);
         String frozen = json.writeValueAsString(basis);
@@ -314,6 +322,7 @@ public class RepairService {
             todo(id, "CLAIM", "WAREHOUSE_OPERATOR", null);
         } else {
             release(row, "REPAIR_REJECTED");
+            closeCollaborations(id);
         }
         audit(
                 actor,
@@ -343,6 +352,7 @@ public class RepairService {
         guard(actor, current, row, version, "PENDING_ADMIN_DECISION");
         lock(row, null);
         release(row, "REPAIR_CANCELLED");
+        closeCollaborations(id);
         closeTodos(id);
         db.update(
                 "UPDATE fams_repair_request SET"
@@ -465,6 +475,7 @@ public class RepairService {
                     now(),
                     id);
             release(row, "REPAIR_COMPLETED_IN_PLACE");
+            closeCollaborations(id);
             closeTodos(id);
         } else {
             db.update(
@@ -728,6 +739,24 @@ public class RepairService {
                 id,
                 type,
                 now());
+    }
+
+    private void closeCollaborations(long id) {
+        db.update(
+                "UPDATE fams_todo SET todo_status='CLOSED',closed_at=? WHERE closed_at IS NULL AND"
+                    + " ((business_type='REPAIR_TECH' AND business_id IN (SELECT id FROM"
+                    + " fams_repair_invitation WHERE repair_id=?)) OR"
+                    + " (business_type='REPAIR_OPINION' AND business_id IN (SELECT id FROM"
+                    + " fams_repair_opinion WHERE repair_id=?)))",
+                now(),
+                id,
+                id);
+        db.update(
+                "UPDATE fams_repair_invitation SET"
+                    + " invitation_status='CLOSED',ended_at=?,end_reason='REPAIR_TERMINAL',version=version+1"
+                    + " WHERE repair_id=? AND invitation_status='ACTIVE'",
+                now(),
+                id);
     }
 
     private void closeTodos(long id) {

@@ -18,7 +18,13 @@ import java.util.UUID;
 
 @Profile("fams-product")
 @Order(-3)
-@RestControllerAdvice(assignableTypes = {RepairController.class, RepairPhotoController.class})
+@RestControllerAdvice(
+        assignableTypes = {
+            RepairController.class,
+            RepairPhotoController.class,
+            RepairCollaborationController.class,
+            RepairCollaborationPhotoController.class
+        })
 public class RepairErrorHandler {
     @ExceptionHandler(RepairFailure.class)
     ResponseEntity<ErrorResponse> failure(RepairFailure failure, HttpServletRequest request) {
