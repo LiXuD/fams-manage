@@ -1,0 +1,79 @@
+{
+  "date": "2026-10-22",
+  "scope": "D6-19A no-cost in-place internal repair",
+  "source": "worktree on a184932, not fixed gate candidate",
+  "runtime": {
+    "RepairUpgradeRuntimeCase": {
+      "tests": 1,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    },
+    "RepairHttpRuntimeCase": {
+      "tests": 14,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    }
+  },
+  "static": {
+    "checkstyle": 0,
+    "spotbugs": 0,
+    "source": "static verify skipTests/jacoco.skip, coverage not claimed"
+  },
+  "architecture_tests": 6,
+  "browser": {
+    "events": 6,
+    "photos": 1,
+    "repairs": 1,
+    "completed": 1,
+    "lifecycle": "IN_USE",
+    "liveLocks": 0,
+    "assetVersion": 2,
+    "web_url": "http://127.0.0.1:55921",
+    "api_port": 55919,
+    "admin_username": "owned19admin",
+    "employee_username": "owned19executor",
+    "warehouse_username": "owned19warehouse",
+    "artifact_sha256": "592a65546fd39f4a84a0a8cdb1e10b4c675076500201e96b1cf1ffe4f58d878e",
+    "source_state": "D6-19A independent worktree static package; not fixed gate candidate",
+    "original_custody_dates_unchanged": true,
+    "scanner_version": "ClamAV 1.4.6/28129/Sun Sep 20 06:26:26 2026",
+    "actual_committing_process_group_killed": 95574,
+    "new_process_group": 96029,
+    "permanent_original_after_new_JVM": true,
+    "no_duplicate_completion_or_asset_event": true
+  },
+  "evidence": [
+    {
+      "path": "output/d6-19a-repair-runtime.log",
+      "sha256": "7eafb2f61a8d78f3c444605c509e384da6de5a156d3a305ca50e6b6d298ad8c8"
+    },
+    {
+      "path": "output/d6-19a-static-verify-2.log",
+      "sha256": "ad37849dd690e74a3c5a3758096d01d5dad0d6b74fd277e185db4f17799c0e29"
+    },
+    {
+      "path": "output/d6-19a-architecture-tests.log",
+      "sha256": "6eb7a3b50c81c53b3935138a434becfac1ebbd54105ff9e714be9651c6aacb49"
+    },
+    {
+      "path": "output/d6-19a-browser-persistence.json",
+      "sha256": "ca3c4e5791aa84a77e8205ee546c0b04bb28afee8e54afce5781c8fa50fc907f"
+    },
+    {
+      "path": "output/d6-19a-browser-final-dom.txt",
+      "sha256": "ea3e9f9634e3e1e6f74425d05038966ac090892ff0ae885d471611035eeb6674"
+    },
+    {
+      "path": "output/playwright/d6-19a-actual-repair-completed.png",
+      "sha256": "f4b35119a357151e86e04cf46050801a4fbfeef25bd47a285c8e76c15b30862f"
+    }
+  ],
+  "limitations": [
+    "HTTP runtime scanner is an explicit CLEAN fixture; PC browser uses real ClamAV pinned image and recorded bundled definitions; security QA is separate",
+    "Native handlers use actual opaque session, HTTP and MySQL; WeChat SDK confirmation and HTTPS transport hostname are explicit test adapters, not real device acceptance",
+    "PC Vue public chrome correction served live after independent jar freeze, same final backend source",
+    "A full fixed candidate gate, independent review and D6-19B/C remain open"
+  ]
+}

@@ -1,0 +1,36 @@
+package com.fams.repair;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
+
+import java.time.Instant;
+
+public final class RepairInput {
+    private RepairInput() {}
+
+    public record Submission(
+            @Positive long assetId,
+            @PositiveOrZero long assetVersion,
+            @NotBlank @Size(min = 3, max = 2000) String fault,
+            @NotBlank String impact,
+            @NotNull Instant occurredAt) {}
+
+    public record Decision(
+            @NotBlank String result,
+            String allowedMethod,
+            @NotBlank @Size(min = 3, max = 1000) String reason) {}
+
+    public record Reason(@NotBlank @Size(min = 3, max = 1000) String reason) {}
+
+    public record InPlace(
+            @PositiveOrZero long assetVersion,
+            @PositiveOrZero long ownershipVersion,
+            @PositiveOrZero long lockVersion,
+            @NotBlank @Size(max = 2048) String observedCode,
+            @Positive long actualLocationId,
+            boolean neverLeftCustodian,
+            @NotBlank @Size(min = 10, max = 2000) String evidence) {}
+}

@@ -1,0 +1,10 @@
+{
+  "source_candidate": "2eeab4b",
+  "artifact_sha256": "c2d6e0db5c35edf2cf7211c5d26c43640b293b6af02ebf7d89d1e6c754e311d6",
+  "columns_sha256": "398194f87314017b489ca00d142b429911c4ab9138edcb23c863475011daed60",
+  "create_sha256": "c204ab61ddd81d6bfc95f961107e278765d822b99109b7cb25690a79913563bc",
+  "objects": 113,
+  "business_rows_read": false,
+  "owned_app_mysql_cleanup": "PASS",
+  "scope": "Metadata-only V42 snapshot from frozen A8 package; not production or full database cognition"
+}

@@ -62,3 +62,5 @@ module.exports = {status:function(value){return names[value] || value;},reason:f
   </view>
   <navigator url="/pages/mine/index" open-type="redirect">返回我的账号</navigator>
 </view>
+
+<navigator url="/pages/repairs/index">报修与内部维修（按当前权限）</navigator>
