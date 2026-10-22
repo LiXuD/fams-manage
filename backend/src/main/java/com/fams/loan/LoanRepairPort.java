@@ -67,4 +67,57 @@ public class LoanRepairPort {
             throw new Failure("REPAIR_BORROWING_EXPIRED_INBOUND_REQUIRED");
         }
     }
+
+    /** A separately approved extension may advance dates/version without replacing the borrower. */
+    public Context requireIdentity(long assetId, Context frozen, Long expectedVersion) {
+        var current = open(assetId);
+        if (frozen == null) {
+            if (current != null || expectedVersion != null) {
+                throw new Failure("REPAIR_LOAN_CHANGED");
+            }
+        } else if (current == null
+                || current.id() != frozen.id()
+                || current.borrowerEmployeeId() != frozen.borrowerEmployeeId()
+                || current.organizationId() != frozen.organizationId()
+                || !java.util.Objects.equals(current.version(), expectedVersion)) {
+            throw new Failure("REPAIR_LOAN_CHANGED");
+        }
+        return current;
+    }
+
+    public void closeForRepairInbound(
+            long assetId,
+            Context frozen,
+            Long expectedVersion,
+            long repair,
+            long actor,
+            java.time.Instant actualReturn,
+            java.time.Instant recordedAt) {
+        var current = requireIdentity(assetId, frozen, expectedVersion);
+        if (current == null) {
+            return;
+        }
+        if (db.update(
+                        "UPDATE fams_loan SET"
+                            + " relation_status='RETURNED',closed_at=?,updated_at=?,version=version+1"
+                            + " WHERE id=? AND relation_status='OPEN' AND version=?",
+                        actualReturn,
+                        recordedAt,
+                        current.id(),
+                        current.version())
+                != 1) {
+            throw new Failure("REPAIR_LOAN_CHANGED");
+        }
+        db.update(
+                "INSERT INTO"
+                    + " fams_loan_repair_return(repair_id,loan_id,asset_id,before_loan_version,after_loan_version,returned_at,actor_account_id)"
+                    + " VALUES (?,?,?,?,?,?,?)",
+                repair,
+                current.id(),
+                assetId,
+                current.version(),
+                current.version() + 1,
+                actualReturn,
+                actor);
+    }
 }

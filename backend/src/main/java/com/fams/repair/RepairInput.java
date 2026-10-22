@@ -33,4 +33,28 @@ public final class RepairInput {
             @Positive long actualLocationId,
             boolean neverLeftCustodian,
             @NotBlank @Size(min = 10, max = 2000) String evidence) {}
+
+    public record AwayAcceptance(
+            @PositiveOrZero long assetVersion,
+            @PositiveOrZero long ownershipVersion,
+            @PositiveOrZero long lockVersion,
+            @PositiveOrZero Long loanVersion,
+            @NotBlank @Size(max = 2048) String observedCode,
+            @Positive long actualLocationId,
+            @PositiveOrZero long locationVersion,
+            @NotNull Instant occurredAt,
+            @NotBlank @Size(min = 10, max = 2000) String evidence) {}
+
+    public record Inbound(
+            @PositiveOrZero long assetVersion,
+            @PositiveOrZero long ownershipVersion,
+            @PositiveOrZero long lockVersion,
+            @PositiveOrZero Long loanVersion,
+            @NotBlank @Size(max = 2048) String observedCode,
+            @Positive long warehouseId,
+            @PositiveOrZero long warehouseVersion,
+            @Positive long locationId,
+            @PositiveOrZero long locationVersion,
+            @NotNull Instant occurredAt,
+            @NotBlank @Size(min = 10, max = 2000) String evidence) {}
 }

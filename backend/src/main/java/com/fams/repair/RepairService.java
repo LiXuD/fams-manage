@@ -140,6 +140,18 @@ public class RepairService {
         var port = evidence.getIfAvailable();
         result.put("photosAvailable", port != null);
         result.put("photos", port == null ? List.of() : wire(port.list("REPAIR", id)));
+        boolean away = hasPhysicalHandling(id);
+        result.put(
+                "physicalHandling",
+                wire(
+                        db.queryForList(
+                                "SELECT * FROM fams_repair_physical_handling WHERE repair_id=?",
+                                id)));
+        result.put(
+                "inbound",
+                wire(db.queryForList("SELECT * FROM fams_repair_inbound WHERE repair_id=?", id)));
+        var currentLoan = loans.open(number(row, "asset_id"));
+        result.put("loanVersion", currentLoan == null ? null : currentLoan.version());
         boolean pending = "PENDING_ADMIN_DECISION".equals(row.get("repair_status"));
         boolean processing =
                 "WAREHOUSE_PROCESSING".equals(row.get("repair_status"))
@@ -154,8 +166,10 @@ public class RepairService {
                                 current.has(Role.WAREHOUSE_OPERATOR)
                                         && "WAITING_WAREHOUSE_CLAIM"
                                                 .equals(row.get("repair_status")),
-                        "acceptInPlace", processing && row.get("accepted_at") == null,
-                        "completeInPlace", processing && row.get("accepted_at") != null,
+                        "acceptInPlace", processing && !away && row.get("accepted_at") == null,
+                        "completeInPlace", processing && !away && row.get("accepted_at") != null,
+                        "acceptAway", processing && !away,
+                        "closeInbound", processing && row.get("accepted_at") != null,
                         "addFaultPhoto",
                                 port != null
                                         && pending
@@ -431,6 +445,7 @@ public class RepairService {
         }
         lock(row, input.lockVersion());
         if (!input.neverLeftCustodian()
+                || hasPhysicalHandling(id)
                 || input.assetVersion() != number(row, "asset_version")
                 || !"INTERNAL_NO_COST".equals(row.get("allowed_method"))
                 || complete != (row.get("accepted_at") != null)) {
@@ -497,6 +512,214 @@ public class RepairService {
                 input,
                 Role.WAREHOUSE_OPERATOR.name());
         return remember(current, operation, key, fingerprint, header(id));
+    }
+
+    public Map<String, Object> physicalCatalog(Actor actor, String kind, int page, int size) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.WAREHOUSE_OPERATOR);
+        return assets.physicalCatalog(kind, page, size);
+    }
+
+    public Map<String, Object> acceptAway(
+            Actor actor, long id, long version, UUID key, RepairInput.AwayAcceptance input) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.WAREHOUSE_OPERATOR);
+        var row = header(id);
+        visible(current, row);
+        owner(actor, current, row);
+        String operation = "ACCEPT_AWAY:" + id, fingerprint = hash(operation, version, input);
+        var prior = replay(actor, current, operation, key, fingerprint);
+        if (prior != null) {
+            return prior;
+        }
+        physicalGuard(
+                actor,
+                current,
+                row,
+                version,
+                input.assetVersion(),
+                input.ownershipVersion(),
+                input.lockVersion());
+        if (hasPhysicalHandling(id)) {
+            reject(actor, current, row, "REPAIR_PHYSICAL_ALREADY_RECORDED");
+        }
+        physicalTime(
+                input.occurredAt(),
+                row.get("accepted_at") == null ? row.get("created_at") : row.get("accepted_at"));
+        loans.requireIdentity(number(row, "asset_id"), originalLoan(row), input.loanVersion());
+        long next =
+                assets.acceptAway(
+                        number(row, "asset_id"),
+                        input.assetVersion(),
+                        input.observedCode(),
+                        input.actualLocationId(),
+                        input.locationVersion(),
+                        current.id(),
+                        id,
+                        now());
+        db.update(
+                "INSERT INTO"
+                    + " fams_repair_physical_handling(repair_id,handler_employee_id,actual_location_id,location_version,before_asset_version,occurred_at,evidence,actor_account_id,recorded_at)"
+                    + " VALUES (?,?,?,?,?,?,?,?,?)",
+                id,
+                current.employeeId(),
+                input.actualLocationId(),
+                input.locationVersion(),
+                input.assetVersion(),
+                input.occurredAt(),
+                input.evidence().strip(),
+                current.id(),
+                now());
+        db.update(
+                "UPDATE fams_repair_request SET"
+                    + " accepted_at=COALESCE(accepted_at,?),asset_version=?,version=version+1,updated_at=?"
+                    + " WHERE id=?",
+                now(),
+                next,
+                now(),
+                id);
+        audit(
+                actor,
+                current,
+                row,
+                "REPAIR_ACCEPTED_AWAY",
+                version,
+                version + 1,
+                input,
+                Role.WAREHOUSE_OPERATOR.name());
+        return remember(current, operation, key, fingerprint, header(id));
+    }
+
+    public Map<String, Object> closeInbound(
+            Actor actor, long id, long version, UUID key, RepairInput.Inbound input) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.WAREHOUSE_OPERATOR);
+        var row = header(id);
+        visible(current, row);
+        owner(actor, current, row);
+        String operation = "INBOUND:" + id, fingerprint = hash(operation, version, input);
+        var prior = replay(actor, current, operation, key, fingerprint);
+        if (prior != null) {
+            return prior;
+        }
+        physicalGuard(
+                actor,
+                current,
+                row,
+                version,
+                input.assetVersion(),
+                input.ownershipVersion(),
+                input.lockVersion());
+        if (row.get("accepted_at") == null) {
+            throw new RepairFailure(409, "REPAIR_ACCEPTANCE_REQUIRED");
+        }
+        var handling =
+                db.queryForList(
+                        "SELECT occurred_at FROM fams_repair_physical_handling WHERE repair_id=?",
+                        id);
+        physicalTime(
+                input.occurredAt(),
+                handling.isEmpty()
+                        ? row.get("accepted_at")
+                        : handling.getFirst().get("occurred_at"));
+        var originalLoan = originalLoan(row);
+        loans.requireIdentity(number(row, "asset_id"), originalLoan, input.loanVersion());
+        long next =
+                assets.closeToStorage(
+                        number(row, "asset_id"),
+                        input.assetVersion(),
+                        input.observedCode(),
+                        input.warehouseId(),
+                        input.warehouseVersion(),
+                        input.locationId(),
+                        input.locationVersion(),
+                        current.id(),
+                        id,
+                        now());
+        loans.closeForRepairInbound(
+                number(row, "asset_id"),
+                originalLoan,
+                input.loanVersion(),
+                id,
+                current.id(),
+                input.occurredAt(),
+                now());
+        db.update(
+                "INSERT INTO"
+                    + " fams_repair_inbound(repair_id,warehouse_id,location_id,warehouse_version,location_version,before_asset_version,occurred_at,evidence,actor_account_id,recorded_at)"
+                    + " VALUES (?,?,?,?,?,?,?,?,?,?)",
+                id,
+                input.warehouseId(),
+                input.locationId(),
+                input.warehouseVersion(),
+                input.locationVersion(),
+                input.assetVersion(),
+                input.occurredAt(),
+                input.evidence().strip(),
+                current.id(),
+                now());
+        db.update(
+                "UPDATE fams_repair_request SET"
+                    + " repair_status='COMPLETED',completed_at=?,asset_version=?,version=version+1,updated_at=?"
+                    + " WHERE id=?",
+                now(),
+                next,
+                now(),
+                id);
+        release(row, "REPAIR_COMPLETED_INBOUND");
+        closeCollaborations(id);
+        closeTodos(id);
+        audit(
+                actor,
+                current,
+                row,
+                "REPAIR_COMPLETED_INBOUND",
+                version,
+                version + 1,
+                input,
+                Role.WAREHOUSE_OPERATOR.name());
+        return remember(current, operation, key, fingerprint, header(id));
+    }
+
+    private void physicalGuard(
+            Actor actor,
+            Current current,
+            Map<String, Object> row,
+            long version,
+            long assetVersion,
+            long ownershipVersion,
+            long lockVersion) {
+        guard(actor, current, row, version, "WAREHOUSE_PROCESSING");
+        if (number(row, "ownership_version") != ownershipVersion
+                || number(row, "asset_version") != assetVersion) {
+            reject(actor, current, row, "REPAIR_OWNERSHIP_OR_ASSET_CHANGED");
+        }
+        lock(row, lockVersion);
+        if (!"INTERNAL_NO_COST".equals(row.get("allowed_method"))) {
+            throw new RepairFailure(409, "REPAIR_APPROVAL_SCOPE_INVALID");
+        }
+    }
+
+    private LoanRepairPort.Context originalLoan(Map<String, Object> row) {
+        return row.get("loan_snapshot_json") == null
+                ? null
+                : json.readValue(
+                        row.get("loan_snapshot_json").toString(), LoanRepairPort.Context.class);
+    }
+
+    private void physicalTime(Instant actual, Object earliest) {
+        Instant start = Instant.parse(wire(earliest).toString());
+        if (!actual.equals(actual.truncatedTo(ChronoUnit.MILLIS))
+                || actual.isBefore(start)
+                || actual.isAfter(clock.instant().plusSeconds(2))) {
+            throw new RepairFailure(400, "REPAIR_PHYSICAL_TIME_INVALID");
+        }
+    }
+
+    private boolean hasPhysicalHandling(long id) {
+        return !db.queryForList(
+                        "SELECT repair_id FROM fams_repair_physical_handling WHERE repair_id=?", id)
+                .isEmpty();
     }
 
     public void photoUploader(Actor actor, long id) {
@@ -744,10 +967,10 @@ public class RepairService {
     private void closeCollaborations(long id) {
         db.update(
                 "UPDATE fams_todo SET todo_status='CLOSED',closed_at=? WHERE closed_at IS NULL AND"
-                    + " ((business_type='REPAIR_TECH' AND business_id IN (SELECT id FROM"
-                    + " fams_repair_invitation WHERE repair_id=?)) OR"
-                    + " (business_type='REPAIR_OPINION' AND business_id IN (SELECT id FROM"
-                    + " fams_repair_opinion WHERE repair_id=?)))",
+                        + " ((business_type='REPAIR_TECH' AND business_id IN (SELECT id FROM"
+                        + " fams_repair_invitation WHERE repair_id=?)) OR"
+                        + " (business_type='REPAIR_OPINION' AND business_id IN (SELECT id FROM"
+                        + " fams_repair_opinion WHERE repair_id=?)))",
                 now(),
                 id,
                 id);

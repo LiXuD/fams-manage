@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import RepairCollaborationPanel from "./RepairCollaborationPanel.vue";
+import RepairPhysicalPanel from "./RepairPhysicalPanel.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { RepairApiError, repairProblem, repairRequest, repairStates, type Repair, type RepairAsset, type RepairMutation, type RepairPhoto } from "@/repair/api";
 const session = useSessionStore(), route = useRoute();
@@ -15,7 +16,8 @@ const selectedFile = ref<File | null>(null), preview = ref(""), previewName = re
 const pending = ref<RepairMutation | null>(null), confirmation = ref<RepairMutation | null>(null);
 const busy = ref(false), error = ref(""), notice = ref("");
 const collaborationLocked = ref(false);
-const locked = computed(() => busy.value || !!pending.value || !!confirmation.value || collaborationLocked.value);
+const physicalLocked = ref(false);
+const locked = computed(() => busy.value || !!pending.value || !!confirmation.value || collaborationLocked.value || physicalLocked.value);
 const eventNames: Record<string, string> = { REPAIR_SUBMITTED: "已提交报修", REPAIR_DECIDED: "管理员已决定", REPAIR_CLAIMED: "库管已领取",
   REPAIR_ACCEPTED_IN_PLACE: "已受理原地维修", REPAIR_COMPLETED_IN_PLACE: "已核对原地恢复", REPAIR_CANCELLED: "已取消", REPAIR_FAULT_PHOTO_ADDED: "已补充故障照片", REPAIR_CONFLICT_REJECTED: "旧操作已拒绝" };
 let generation = 0, live = true, download: AbortController | null = null;
@@ -146,7 +148,8 @@ onBeforeUnmount(() => { live = false; reset(); });
       <fieldset v-if="detail.actions?.approve || detail.actions?.cancel" :disabled="locked"><label>本次决定原因<textarea v-model="reason" maxlength="1000" /></label><template v-if="detail.actions.approve"><p>本轮批准范围：内部无费用处理。批准不等于已受理或已修复。</p><button @click="prepare('approve')">批准内部无费用处理</button><button @click="prepare('reject')">驳回无效报修</button></template><button v-if="detail.actions.cancel" @click="prepare('cancel')">取消尚未批准的报修</button></fieldset>
       <button v-if="detail.actions?.claim" :disabled="locked" @click="prepare('claim')">领取维修处理</button>
       <fieldset v-if="detail.actions?.acceptInPlace || detail.actions?.completeInPlace" :disabled="locked"><h3>{{ detail.actions.completeInPlace ? '核对已恢复并原地关闭' : '现场核实并受理原地维修' }}</h3><label>现场核对的资产编码<input v-model="observedCode" maxlength="2048"></label><label><input v-model="confirmedPlace" type="checkbox">已现场核对实物仍在 {{ detail.source.locationName || '原位置' }}</label><label><input v-model="neverLeft" type="checkbox">实物从未离开原保管人，本次按原地处理核实</label><label>实际处理及核实依据<textarea v-model="evidence" maxlength="2000" /></label><button v-if="detail.actions.acceptInPlace" @click="prepare('accept')">核对受理原地维修</button><button v-if="detail.actions.completeInPlace" @click="prepare('complete')">确认已恢复并原地关闭</button></fieldset>
-      <RepairCollaborationPanel :repair-id="detail.id" :request-version="detail.version" :blocked="busy || !!pending || !!confirmation" @changed="load" @invalidated="reset" @busy-change="collaborationLocked = $event" />
+      <RepairPhysicalPanel :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked" @changed="load" @invalidated="reset" @busy-change="physicalLocked = $event" />
+      <RepairCollaborationPanel :repair-id="detail.id" :request-version="detail.version" :blocked="busy || !!pending || !!confirmation || physicalLocked" @changed="load" @invalidated="reset" @busy-change="collaborationLocked = $event" />
       <h3>最近100条处理历史 / 共 {{ detail.historyTotal || 0 }} 条</h3><ul><li v-for="event in detail.history" :key="event.id">{{ event.actor_username }} · {{ new Date(event.occurred_at).toLocaleString() }} · {{ eventNames[event.action] || '历史处理' }} · {{ event.detail_json.reason || event.detail_json.evidence || event.detail_json.fault || '' }}</li></ul>
     </section>
   </section></AppChrome>

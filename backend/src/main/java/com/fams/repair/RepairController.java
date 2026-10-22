@@ -111,6 +111,34 @@ public class RepairController {
         return retry(() -> repairs.completeInPlace(actor, id, version, key, input));
     }
 
+    @GetMapping("/physical-catalog/{kind}")
+    Map<String, Object> physicalCatalog(
+            @PathVariable String kind,
+            @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
+            @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
+        return repairs.physicalCatalog(actors.capture(), kind, page, pageSize);
+    }
+
+    @PostMapping("/{id}/accept-away")
+    Map<String, Object> acceptAway(
+            @PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody RepairInput.AwayAcceptance input) {
+        var actor = actors.capture();
+        return retry(() -> repairs.acceptAway(actor, id, version, key, input));
+    }
+
+    @PostMapping("/{id}/close-inbound")
+    Map<String, Object> closeInbound(
+            @PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody RepairInput.Inbound input) {
+        var actor = actors.capture();
+        return retry(() -> repairs.closeInbound(actor, id, version, key, input));
+    }
+
     private Map<String, Object> retry(Supplier<Map<String, Object>> operation) {
         for (int attempt = 0; ; attempt++) {
             try {

@@ -2,16 +2,22 @@ import type { MiniServices } from "./pages.ts";
 import { MiniRequestError } from "./session.ts";
 interface Asset { id: string; assetCode: string; name: string; version: number; locationId: string | null; locationName: string | null }
 interface Repair { id: string; source: Asset; fault: string; status: string; version: number; assetVersion: number; ownershipVersion: number; lockVersion: number;
+    loanVersion?: number | null; physicalHandling?: { occurred_at: string; evidence: string }[]; inbound?: { occurred_at: string; evidence: string }[];
     actions: Record<string, boolean>; photos?: { objectId: string; filename: string; contentType: string }[];
     history?: { id: string; action: string; actor_username: string; occurred_at: string }[]; historyTotal?: number }
 interface Pending { path: string; key: string; version: number; body?: unknown; file?: string }
+interface PhysicalPlace { id: string; name: string; version: number; warehouse_id?: string | null; location_type?: string }
 interface Data { rows: Repair[]; assets: Asset[]; detail: Repair | null; selectedAsset: string; assetPage: number; assetTotal: number;
     page: number; total: number; busy: boolean; retry: boolean; error: string; fault: string; impact: string; occurredAt: string;
-    reason: string; observedCode: string; evidence: string; locationConfirmed: boolean; neverLeft: boolean; photoPath: string; photoName: string }
+    reason: string; observedCode: string; evidence: string; locationConfirmed: boolean; neverLeft: boolean; photoPath: string; photoName: string;
+    physicalMode: "away" | "inbound"; physicalObservedCode: string; physicalAt: string; physicalEvidence: string;
+    warehouses: PhysicalPlace[]; physicalLocations: PhysicalPlace[]; physicalWarehouseId: string; physicalLocationId: string;
+    warehousePage: number; warehouseTotal: number; physicalLocationPage: number; physicalLocationTotal: number }
 interface Context { data: Data; setData(data: Partial<Data>): void }
 const blank = (): Data => ({ rows: [], assets: [], detail: null, selectedAsset: "", assetPage: 1, assetTotal: 0, page: 1, total: 0,
     busy: false, retry: false, error: "", fault: "", impact: "MEDIUM", occurredAt: "", reason: "", observedCode: "", evidence: "",
-    locationConfirmed: false, neverLeft: false, photoPath: "", photoName: "" });
+    locationConfirmed: false, neverLeft: false, photoPath: "", photoName: "", physicalMode: "away", physicalObservedCode: "", physicalAt: "", physicalEvidence: "",
+    warehouses: [], physicalLocations: [], physicalWarehouseId: "", physicalLocationId: "", warehousePage: 1, warehouseTotal: 0, physicalLocationPage: 1, physicalLocationTotal: 0 });
 export function createRepairPage(getServices: () => MiniServices) {
     let services: MiniServices, identity = "", live = false, generation = 0, pending: Pending | null = null, selectedId = "", photo = "";
     const current = (epoch: number) => live && epoch === generation && identity === JSON.stringify(services.sessions.identity);
@@ -30,7 +36,8 @@ export function createRepairPage(getServices: () => MiniServices) {
         else if (live && epoch === generation) { pending = null; selectedId = ""; clearPhoto(); page.setData({ ...blank(), error: "身份已变化，请重新进入。" }); }
     };
     const read = async (page: Context) => {
-        const epoch = ++generation; clearPhoto(); page.setData({ busy: true, error: "", detail: null, rows: [], assets: [], photoPath: "", photoName: "" });
+        const epoch = ++generation; clearPhoto(); page.setData({ busy: true, error: "", detail: null, rows: [], assets: [], photoPath: "", photoName: "",
+            warehouses: [], physicalLocations: [], physicalWarehouseId: "", physicalLocationId: "", physicalObservedCode: "", physicalAt: "", physicalEvidence: "" });
         try {
             const rows = await services.sessions.request("GET", `/api/v1/mini/repairs?page=${page.data.page}&pageSize=20`) as { items: Repair[]; total: number };
             if (!current(epoch)) return;
@@ -76,10 +83,47 @@ export function createRepairPage(getServices: () => MiniServices) {
         },
         onField(this: Context, event: { currentTarget: { dataset: { field: string } }; detail: { value: string } }) {
             const field = event.currentTarget.dataset.field;
-            if (!this.data.busy && !pending && ["fault","occurredAt","reason","observedCode","evidence"].includes(field)) this.setData({ [field]: event.detail.value });
+            if (!this.data.busy && !pending && ["fault","occurredAt","reason","observedCode","evidence","physicalObservedCode","physicalAt","physicalEvidence"].includes(field)) this.setData({ [field]: event.detail.value });
         },
         onImpact(this: Context, event: { detail: { value: string } }) { const impact = ["LOW","MEDIUM","HIGH"][Number(event.detail.value)]; if (!this.data.busy && !pending && impact) this.setData({ impact }); },
         onPhysical(this: Context, event: { detail: { value: string[] } }) { if (!this.data.busy && !pending) this.setData({ neverLeft: event.detail.value.includes("neverLeft"), locationConfirmed: event.detail.value.includes("location") }); },
+        onPhysicalMode(this: Context, event: { currentTarget: { dataset: { mode: string } } }) {
+            const mode = event.currentTarget.dataset.mode;
+            if (this.data.busy || pending || !current(generation) || !["away", "inbound"].includes(mode)) return;
+            this.setData({ physicalMode: mode as "away" | "inbound", physicalLocationId: "", physicalAt: new Date().toISOString() });
+        },
+        async onPhysicalCatalog(this: Context, event: { currentTarget: { dataset: { kind: string; delta?: string } } }) {
+            const kind = event.currentTarget.dataset.kind, delta = Number(event.currentTarget.dataset.delta ?? "0");
+            if (this.data.busy || pending || !current(generation) || !["warehouse", "location"].includes(kind) || ![-1,0,1].includes(delta)) return;
+            const store = kind === "warehouse", next = (store ? this.data.warehousePage : this.data.physicalLocationPage) + delta;
+            if (next < 1 || delta > 0 && (next-1)*20 >= (store ? this.data.warehouseTotal : this.data.physicalLocationTotal)) return;
+            const epoch = generation; this.setData({ busy: true, error: "" });
+            try { const result = await services.sessions.request("GET", `/api/v1/mini/repairs/physical-catalog/${kind}?page=${next}&pageSize=20`) as { items: PhysicalPlace[]; total: number };
+                if (current(epoch)) this.setData(store ? { warehouses: result.items, warehouseTotal: result.total, warehousePage: next, physicalWarehouseId: "", physicalLocationId: "" }
+                    : { physicalLocations: result.items, physicalLocationTotal: result.total, physicalLocationPage: next, physicalLocationId: "" });
+            } catch (error) { if (current(epoch)) failure(this,error); } finally { finish(this,epoch); }
+        },
+        onPhysicalWarehouse(this: Context, event: { currentTarget: { dataset: { id: string } } }) {
+            const id = event.currentTarget.dataset.id;
+            if (!this.data.busy && !pending && current(generation) && this.data.warehouses.some(row => row.id === id)) this.setData({ physicalWarehouseId: id, physicalLocationId: "" });
+        },
+        onPhysicalLocation(this: Context, event: { currentTarget: { dataset: { id: string } } }) {
+            const row = this.data.physicalLocations.find(row => row.id === event.currentTarget.dataset.id);
+            if (!this.data.busy && !pending && current(generation) && row && (this.data.physicalMode === "away" || row.location_type === "BIN" && row.warehouse_id === this.data.physicalWarehouseId)) this.setData({ physicalLocationId: row.id });
+        },
+        async onPhysicalAction(this: Context) {
+            const row = this.data.detail, mode = this.data.physicalMode;
+            if (this.data.busy || pending || !row || !current(generation) || !row.actions[mode === "away" ? "acceptAway" : "closeInbound"]) return;
+            const place = this.data.physicalLocations.find(row => row.id === this.data.physicalLocationId), warehouse = this.data.warehouses.find(row => row.id === this.data.physicalWarehouseId), at = new Date(this.data.physicalAt);
+            if (!place || !Number.isFinite(at.getTime()) || !/(Z|[+-][0-9]{2}:[0-9]{2})$/i.test(this.data.physicalAt) || !this.data.physicalObservedCode.trim() || this.data.physicalEvidence.trim().length < 10
+                || mode === "inbound" && (!warehouse || place.location_type !== "BIN" || place.warehouse_id !== warehouse.id)) { this.setData({ error: "请核对实物编码、带时区实际时间、有效位置及至少10字依据；回库须选仓库和其所属库位。" }); return; }
+            const body: Record<string,unknown> = { assetVersion: row.assetVersion, ownershipVersion: row.ownershipVersion, lockVersion: row.lockVersion, loanVersion: row.loanVersion ?? null,
+                observedCode: this.data.physicalObservedCode.trim(), occurredAt: at.toISOString(), evidence: this.data.physicalEvidence.trim(), locationVersion: place.version };
+            if (mode === "away") body.actualLocationId = place.id;
+            else { body.warehouseId = warehouse!.id; body.warehouseVersion = warehouse!.version; body.locationId = place.id; }
+            await confirm(this, { path: `/api/v1/mini/repairs/${row.id}/${mode === "away" ? "accept-away" : "close-inbound"}`, key: services.createKey(), version: row.version, body },
+                mode === "away" ? "记录实物离开原保管人的实际接收，维修及资产锁继续保留，之后不能原地关闭。" : "已实际核码和核实修复结果并验收入库，同事务结束原未结借用和维修并释放本单资产锁。");
+        },
         async onSubmit(this: Context) {
             const asset = this.data.assets.find(row => row.id === this.data.selectedAsset), at = new Date(this.data.occurredAt);
             if (this.data.busy || pending || !asset || !current(generation)) return;

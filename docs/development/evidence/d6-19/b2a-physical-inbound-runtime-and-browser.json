@@ -1,0 +1,53 @@
+{
+  "events": 5,
+  "custody": "STORAGE",
+  "inbound": 1,
+  "repairs": 1,
+  "physical": 1,
+  "completed": 1,
+  "lifecycle": "IN_STOCK",
+  "liveLocks": 0,
+  "loanReturns": 1,
+  "assetVersion": 2,
+  "returnedLoans": 1,
+  "web_url": "http://127.0.0.1:49286",
+  "api_port": 49284,
+  "artifact_sha256": "2e81e5e1e1e6b9e0ea4f7f58c5063ae89bc87dac80b684626edc9a87525a0f23",
+  "source_state": "B2a worktree package on 5e3bb4e, not fixed gate candidate",
+  "asset_code": "OWNED19-985010",
+  "original_dates_preserved": true,
+  "actual_committing_process_group_killed": 66639,
+  "new_process_group": 67179,
+  "permanent_original_inbound_after_new_JVM": true,
+  "no_duplicate_event_or_loan_return": true,
+  "runtime": {
+    "populated_V44_upgrade": 1,
+    "physical_http_including_actual_native": 8,
+    "technical_http_regression": 11,
+    "original_repair_http_regression": 14,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "static": {
+    "checkstyle": 0,
+    "spotbugs": 0,
+    "log": "output/d6-19b2a-static-verify-1.log"
+  },
+  "web_tests": 113,
+  "mini_tests": 193,
+  "types_lint_build": "PASS",
+  "native_scope": "Actual Page handlers -> opaque session -> real Spring/MySQL with exact original committed inbound reply retry. SDK confirmation and local HTTPS hostname adapter explicit; no device claim.",
+  "owned_environment_cleanup": true,
+  "photos": "No new B2a attachment workflow; no scanner configured in this independent PC environment. B1 actual ClamAV evidence is separate.",
+  "screenshots": [
+    "output/playwright/d6-19b2a-actual-inbound-completed.png",
+    "output/playwright/d6-19b2a-actual-loan-returned.png"
+  ],
+  "limitations": [
+    "Independent worktree package; fixed full gate not yet run",
+    "B2b actual original-target receipt/refusal/extension and B2c reassignment plus C remain mandatory",
+    "Independent review, actual external devices, remote CI, formal QA and production not verified",
+    "V45 requires coordinated writer replacement, no old application mixed with new physical writes or direct downgrade"
+  ]
+}

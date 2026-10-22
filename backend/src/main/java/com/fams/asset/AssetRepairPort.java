@@ -208,6 +208,165 @@ public class AssetRepairPort {
         return version + 1;
     }
 
+    public Map<String, Object> physicalCatalog(String kind, int page, int size) {
+        String from =
+                switch (kind) {
+                    case "warehouse" -> " FROM fams_warehouse WHERE status='ACTIVE'";
+                    case "location" -> " FROM fams_location WHERE status='ACTIVE'";
+                    default -> throw new AssetHandoverPort.Failure("REPAIR_CATALOG_NOT_FOUND", 404);
+                };
+        String fields =
+                "location".equals(kind)
+                        ? "id,name,version,warehouse_id,location_type"
+                        : "id,name,version";
+        var rows =
+                db.queryForList(
+                        "SELECT " + fields + from + " ORDER BY id LIMIT ? OFFSET ?",
+                        size,
+                        ((long) page - 1) * size);
+        return Map.of(
+                "items",
+                rows.stream()
+                        .map(
+                                row -> {
+                                    var result = new LinkedHashMap<String, Object>(row);
+                                    for (String field : List.of("id", "warehouse_id")) {
+                                        if (result.get(field) != null) {
+                                            result.put(field, result.get(field).toString());
+                                        }
+                                    }
+                                    return result;
+                                })
+                        .toList(),
+                "total",
+                Objects.requireNonNull(db.queryForObject("SELECT COUNT(*)" + from, Long.class)),
+                "page",
+                page,
+                "pageSize",
+                size);
+    }
+
+    public long acceptAway(
+            long assetId,
+            long version,
+            String observed,
+            long location,
+            long locationVersion,
+            long actor,
+            long repair,
+            Instant time) {
+        var row = locked(assetId, version);
+        if (!(available(row)
+                || "UNDER_REPAIR".equals(row.get("lifecycle_status"))
+                        && "ACTIVE".equals(row.get("card_stage"))
+                        && "NORMAL".equals(row.get("exception_status")))) {
+            throw new AssetHandoverPort.Failure("REPAIR_ASSET_CHANGED", 409);
+        }
+        activeLocation(location, locationVersion);
+        identity.observedCode(assetId, observed);
+        db.update(
+                "UPDATE fams_asset SET"
+                    + " lifecycle_status='UNDER_REPAIR',version=version+1,updated_by=?,updated_at=?"
+                    + " WHERE id=? AND version=?",
+                actor,
+                time,
+                assetId,
+                version);
+        mapper.event(
+                assetId,
+                "REPAIR_ACCEPTED_AWAY",
+                time,
+                json.writeValueAsString(
+                        Map.of(
+                                "repairId",
+                                Long.toString(repair),
+                                "physicalDeparture",
+                                true,
+                                "actualLocationId",
+                                Long.toString(location))),
+                actor);
+        return version + 1;
+    }
+
+    public long closeToStorage(
+            long assetId,
+            long version,
+            String observed,
+            long warehouse,
+            long warehouseVersion,
+            long location,
+            long locationVersion,
+            long actor,
+            long repair,
+            Instant time) {
+        var row = locked(assetId, version);
+        if (!"UNDER_REPAIR".equals(row.get("lifecycle_status"))
+                || !"NORMAL".equals(row.get("exception_status"))
+                || !"ACTIVE".equals(row.get("card_stage"))) {
+            throw new AssetHandoverPort.Failure("REPAIR_ASSET_CHANGED", 409);
+        }
+        var warehouses =
+                db.queryForList(
+                        "SELECT id,version,status FROM fams_warehouse WHERE id=? FOR SHARE",
+                        warehouse);
+        if (warehouses.size() != 1
+                || !"ACTIVE".equals(warehouses.getFirst().get("status"))
+                || ((Number) warehouses.getFirst().get("version")).longValue()
+                        != warehouseVersion) {
+            throw new AssetHandoverPort.Failure("REPAIR_INBOUND_TARGET_CHANGED", 409);
+        }
+        var place = activeLocation(location, locationVersion);
+        if (!"BIN".equals(place.get("location_type"))
+                || !Objects.equals(warehouse, nullable(place.get("warehouse_id")))) {
+            throw new AssetHandoverPort.Failure("REPAIR_INBOUND_TARGET_CHANGED", 409);
+        }
+        identity.observedCode(assetId, observed);
+        db.update(
+                "UPDATE fams_asset SET"
+                    + " lifecycle_status='IN_STOCK',custody_type='STORAGE',storage_warehouse_id=?,current_location_id=?,using_organization_id=NULL,responsible_employee_id=NULL,department_responsible_employee_id=NULL,version=version+1,updated_by=?,updated_at=?"
+                    + " WHERE id=? AND version=?",
+                warehouse,
+                location,
+                actor,
+                time,
+                assetId,
+                version);
+        mapper.event(
+                assetId,
+                "REPAIR_COMPLETED_INBOUND",
+                time,
+                json.writeValueAsString(
+                        Map.of(
+                                "repairId",
+                                Long.toString(repair),
+                                "warehouseId",
+                                Long.toString(warehouse),
+                                "locationId",
+                                Long.toString(location))),
+                actor);
+        return version + 1;
+    }
+
+    private Map<String, Object> activeLocation(long location, long version) {
+        var places = db.queryForList("SELECT * FROM fams_location WHERE id=? FOR SHARE", location);
+        if (places.size() != 1
+                || !"ACTIVE".equals(places.getFirst().get("status"))
+                || ((Number) places.getFirst().get("version")).longValue() != version) {
+            throw new AssetHandoverPort.Failure("REPAIR_INBOUND_TARGET_CHANGED", 409);
+        }
+        var place = places.getFirst();
+        if (place.get("warehouse_id") != null) {
+            var warehouses =
+                    db.queryForList(
+                            "SELECT status FROM fams_warehouse WHERE id=? FOR SHARE",
+                            place.get("warehouse_id"));
+            if (warehouses.size() != 1 || !"ACTIVE".equals(warehouses.getFirst().get("status"))) {
+                throw new AssetHandoverPort.Failure("REPAIR_INBOUND_TARGET_CHANGED", 409);
+            }
+        }
+        return place;
+    }
+
     private void requireActiveTarget(Map<String, Object> row) {
         Long location = nullable(row.get("current_location_id"));
         if (location == null

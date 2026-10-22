@@ -5,7 +5,9 @@ export interface RepairPhoto { objectId: string; filename: string; contentType: 
 export interface Repair { id: string; assetId: string; creatorAccountId: string; source: RepairAsset; fault: string; impact: string;
   occurredAt: string; status: string; version: number; assetVersion: number; ownershipVersion: number;
   processorAccountId: string | null; acceptedAt: string | null; completedAt: string | null; lockVersion?: number | null;
-  photosAvailable?: boolean; photos?: RepairPhoto[]; actions?: { approve: boolean; claim: boolean; acceptInPlace: boolean; completeInPlace: boolean; addFaultPhoto: boolean; cancel: boolean };
+  loanVersion?: number | null; physicalHandling?: { handler_employee_id: string; actual_location_id: string; occurred_at: string; evidence: string }[];
+  inbound?: { warehouse_id: string; location_id: string; occurred_at: string; evidence: string }[];
+  photosAvailable?: boolean; photos?: RepairPhoto[]; actions?: { approve: boolean; claim: boolean; acceptInPlace: boolean; completeInPlace: boolean; addFaultPhoto: boolean; cancel: boolean; acceptAway?: boolean; closeInbound?: boolean };
   history?: { id: string; action: string; actor_username: string; actor_role: string; occurred_at: string; detail_json: Record<string, unknown> }[]; historyTotal?: number }
 export interface RepairMutation { path: string; key: string; version: number; body?: unknown; file?: File }
 export class RepairApiError extends Error {
@@ -28,12 +30,15 @@ export async function repairRequest<T>(path: string, mutation?: RepairMutation):
   return await response.json() as T;
 }
 export const repairStates: Record<string, string> = { PENDING_ADMIN_DECISION: "待管理员确认", WAITING_WAREHOUSE_CLAIM: "待库管领取",
-  WAREHOUSE_PROCESSING: "库管处理中", COMPLETED: "已完成原地修复", REJECTED: "已驳回", CANCELLED: "已取消" };
+  WAREHOUSE_PROCESSING: "库管处理中", COMPLETED: "维修已完成", REJECTED: "已驳回", CANCELLED: "已取消" };
 export function repairProblem(error: unknown): string {
   if (error instanceof RepairApiError) {
     if ([401, 403, 404].includes(error.status)) return "当前身份、权限或报修记录已失效，请重新进入核对。";
     if (error.code === "REPAIR_BORROWING_EXPIRED_INBOUND_REQUIRED") return "原借用已到期，需要验收入库并处理借用，当前维修与资产锁继续保留。";
     if (error.code === "REPAIR_RETURN_TARGET_INACTIVE") return "原责任人或位置已失效，需要回库或经批准变更目标，不能原地恢复。";
+    if (error.code === "REPAIR_PHYSICAL_TIME_INVALID") return "请核对实际接收时间，不能早于本单已记录的实物办理，也不能填写未来时间。";
+    if (error.code === "REPAIR_INBOUND_TARGET_CHANGED") return "仓库或位置已变化，请重新查询并核对有效仓库及其库位。";
+    if (error.code === "REPAIR_LOAN_CHANGED") return "原借用关系或版本已变化，请刷新核对；维修不会自动改写延期或原到期日。";
     if (error.status === 409) return error.fields.processedBy ? `当前结果已由 ${error.fields.processedBy} 处理，请刷新核对。` : "单据、实物、处理权或原借用已变化，请刷新核对。";
     if ([400, 413, 422].includes(error.status)) return "请核对实际故障、发生时间和照片，图片不超过10MB。";
   }
