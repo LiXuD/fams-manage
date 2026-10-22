@@ -139,6 +139,51 @@ public class RepairController {
         return retry(() -> repairs.closeInbound(actor, id, version, key, input));
     }
 
+    @GetMapping("/{id}/return-target")
+    Map<String, Object> returnTarget(@PathVariable @Positive long id) {
+        return repairs.returnTarget(actors.capture(), id);
+    }
+
+    @PostMapping("/{id}/return-delivery")
+    Map<String, Object> deliverReturn(
+            @PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody RepairInput.ReturnDelivery input) {
+        var actor = actors.capture();
+        return retry(() -> repairs.deliverReturn(actor, id, version, key, input));
+    }
+
+    @PostMapping("/{id}/return-receipt")
+    Map<String, Object> receiveReturn(
+            @PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody RepairInput.ReturnReceipt input) {
+        var actor = actors.capture();
+        return retry(() -> repairs.receiveReturn(actor, id, version, key, input, false));
+    }
+
+    @PostMapping("/{id}/return-refusal")
+    Map<String, Object> refuseReturn(
+            @PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody RepairInput.ReturnReceipt input) {
+        var actor = actors.capture();
+        return retry(() -> repairs.receiveReturn(actor, id, version, key, input, true));
+    }
+
+    @PostMapping("/{id}/return-recollection")
+    Map<String, Object> recollectReturn(
+            @PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody RepairInput.ReturnRecollection input) {
+        var actor = actors.capture();
+        return retry(() -> repairs.recollectReturn(actor, id, version, key, input));
+    }
+
     private Map<String, Object> retry(Supplier<Map<String, Object>> operation) {
         for (int attempt = 0; ; attempt++) {
             try {

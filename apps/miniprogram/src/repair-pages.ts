@@ -3,21 +3,29 @@ import { MiniRequestError } from "./session.ts";
 interface Asset { id: string; assetCode: string; name: string; version: number; locationId: string | null; locationName: string | null }
 interface Repair { id: string; source: Asset; fault: string; status: string; version: number; assetVersion: number; ownershipVersion: number; lockVersion: number;
     loanVersion?: number | null; physicalHandling?: { occurred_at: string; evidence: string }[]; inbound?: { occurred_at: string; evidence: string }[];
+    loanExpectedReturnDate?: string | null; returnHandovers?: ReturnHandover[]; returnRecollections?: { handover_id: string; occurred_at: string; evidence: string }[];
     actions: Record<string, boolean>; photos?: { objectId: string; filename: string; contentType: string }[];
     history?: { id: string; action: string; actor_username: string; occurred_at: string }[]; historyTotal?: number }
 interface Pending { path: string; key: string; version: number; body?: unknown; file?: string }
 interface PhysicalPlace { id: string; name: string; version: number; warehouse_id?: string | null; location_type?: string }
+interface ReturnTarget { employeeName: string; organizationName: string; locationName: string; employeeVersion: number; organizationVersion: number; locationVersion: number }
+interface ReturnHandover { id: string; handover_status: string; target_snapshot_json: ReturnTarget; delivered_at: string; delivery_evidence: string; receipt_at?: string; receipt_evidence?: string }
+type ReturnMode = "delivery" | "receipt" | "refusal" | "recollection";
 interface Data { rows: Repair[]; assets: Asset[]; detail: Repair | null; selectedAsset: string; assetPage: number; assetTotal: number;
     page: number; total: number; busy: boolean; retry: boolean; error: string; fault: string; impact: string; occurredAt: string;
     reason: string; observedCode: string; evidence: string; locationConfirmed: boolean; neverLeft: boolean; photoPath: string; photoName: string;
     physicalMode: "away" | "inbound"; physicalObservedCode: string; physicalAt: string; physicalEvidence: string;
     warehouses: PhysicalPlace[]; physicalLocations: PhysicalPlace[]; physicalWarehouseId: string; physicalLocationId: string;
-    warehousePage: number; warehouseTotal: number; physicalLocationPage: number; physicalLocationTotal: number }
+    warehousePage: number; warehouseTotal: number; physicalLocationPage: number; physicalLocationTotal: number;
+    returnMode: ReturnMode; returnTarget: ReturnTarget | null; returnObservedCode: string; returnAt: string; returnEvidence: string; returnChecked: boolean;
+    returnLocations: PhysicalPlace[]; returnLocationId: string; returnLocationPage: number; returnLocationTotal: number }
 interface Context { data: Data; setData(data: Partial<Data>): void }
 const blank = (): Data => ({ rows: [], assets: [], detail: null, selectedAsset: "", assetPage: 1, assetTotal: 0, page: 1, total: 0,
     busy: false, retry: false, error: "", fault: "", impact: "MEDIUM", occurredAt: "", reason: "", observedCode: "", evidence: "",
     locationConfirmed: false, neverLeft: false, photoPath: "", photoName: "", physicalMode: "away", physicalObservedCode: "", physicalAt: "", physicalEvidence: "",
-    warehouses: [], physicalLocations: [], physicalWarehouseId: "", physicalLocationId: "", warehousePage: 1, warehouseTotal: 0, physicalLocationPage: 1, physicalLocationTotal: 0 });
+    warehouses: [], physicalLocations: [], physicalWarehouseId: "", physicalLocationId: "", warehousePage: 1, warehouseTotal: 0, physicalLocationPage: 1, physicalLocationTotal: 0,
+    returnMode: "delivery", returnTarget: null, returnObservedCode: "", returnAt: "", returnEvidence: "", returnChecked: false,
+    returnLocations: [], returnLocationId: "", returnLocationPage: 1, returnLocationTotal: 0 });
 export function createRepairPage(getServices: () => MiniServices) {
     let services: MiniServices, identity = "", live = false, generation = 0, pending: Pending | null = null, selectedId = "", photo = "";
     const current = (epoch: number) => live && epoch === generation && identity === JSON.stringify(services.sessions.identity);
@@ -27,7 +35,7 @@ export function createRepairPage(getServices: () => MiniServices) {
             pending = null; selectedId = ""; clearPhoto(); page.setData({ ...blank(), error: "当前身份、权限或记录失效，已隐藏原资料。" });
         } else if (error instanceof MiniRequestError && [400,409,413,422].includes(error.status)) {
             pending = null; page.setData({ retry: false, error: error.code === "REPAIR_BORROWING_EXPIRED_INBOUND_REQUIRED"
-                ? "原借用已到期，需要验收入库并处理借用；维修及资产锁继续保留。"
+                ? "原借用已到期，请先在借用台账获批延期后再返还，或实际验收入库关闭借用；维修及资产锁继续保留。"
                 : "请刷新核对单据、实物、处理权和原借用；照片应为10MB以内的图片。" });
         } else page.setData({ retry: !!pending, error: pending ? "结果尚未确认，请使用原操作重试。" : "读取未完成，请重试。" });
     };
@@ -37,7 +45,9 @@ export function createRepairPage(getServices: () => MiniServices) {
     };
     const read = async (page: Context) => {
         const epoch = ++generation; clearPhoto(); page.setData({ busy: true, error: "", detail: null, rows: [], assets: [], photoPath: "", photoName: "",
-            warehouses: [], physicalLocations: [], physicalWarehouseId: "", physicalLocationId: "", physicalObservedCode: "", physicalAt: "", physicalEvidence: "" });
+            warehouses: [], physicalLocations: [], physicalWarehouseId: "", physicalLocationId: "", physicalObservedCode: "", physicalAt: "", physicalEvidence: "",
+            returnTarget: null, returnObservedCode: "", returnAt: "", returnEvidence: "", returnChecked: false,
+            returnLocations: [], returnLocationId: "", returnLocationPage: 1, returnLocationTotal: 0 });
         try {
             const rows = await services.sessions.request("GET", `/api/v1/mini/repairs?page=${page.data.page}&pageSize=20`) as { items: Repair[]; total: number };
             if (!current(epoch)) return;
@@ -83,7 +93,7 @@ export function createRepairPage(getServices: () => MiniServices) {
         },
         onField(this: Context, event: { currentTarget: { dataset: { field: string } }; detail: { value: string } }) {
             const field = event.currentTarget.dataset.field;
-            if (!this.data.busy && !pending && ["fault","occurredAt","reason","observedCode","evidence","physicalObservedCode","physicalAt","physicalEvidence"].includes(field)) this.setData({ [field]: event.detail.value });
+            if (!this.data.busy && !pending && ["fault","occurredAt","reason","observedCode","evidence","physicalObservedCode","physicalAt","physicalEvidence","returnObservedCode","returnAt","returnEvidence"].includes(field)) this.setData({ [field]: event.detail.value });
         },
         onImpact(this: Context, event: { detail: { value: string } }) { const impact = ["LOW","MEDIUM","HIGH"][Number(event.detail.value)]; if (!this.data.busy && !pending && impact) this.setData({ impact }); },
         onPhysical(this: Context, event: { detail: { value: string[] } }) { if (!this.data.busy && !pending) this.setData({ neverLeft: event.detail.value.includes("neverLeft"), locationConfirmed: event.detail.value.includes("location") }); },
@@ -123,6 +133,54 @@ export function createRepairPage(getServices: () => MiniServices) {
             else { body.warehouseId = warehouse!.id; body.warehouseVersion = warehouse!.version; body.locationId = place.id; }
             await confirm(this, { path: `/api/v1/mini/repairs/${row.id}/${mode === "away" ? "accept-away" : "close-inbound"}`, key: services.createKey(), version: row.version, body },
                 mode === "away" ? "记录实物离开原保管人的实际接收，维修及资产锁继续保留，之后不能原地关闭。" : "已实际核码和核实修复结果并验收入库，同事务结束原未结借用和维修并释放本单资产锁。");
+        },
+        async onReturnMode(this: Context, event: { currentTarget: { dataset: { mode: string } } }) {
+            const value = event.currentTarget.dataset.mode as ReturnMode;
+            const action = { delivery: "deliverReturn", receipt: "receiveReturn", refusal: "refuseReturn", recollection: "recollectReturn" }[value];
+            if (this.data.busy || pending || !current(generation) || !action || !this.data.detail?.actions[action]) return;
+            this.setData({ returnMode: value, returnTarget: null, returnChecked: false, returnLocationId: "", returnAt: new Date().toISOString(), error: "" });
+            if (value !== "delivery") return;
+            const epoch = generation; this.setData({ busy: true });
+            try { const target = await services.sessions.request("GET", `/api/v1/mini/repairs/${this.data.detail.id}/return-target`) as ReturnTarget;
+                if (current(epoch)) this.setData({ returnTarget: target });
+            } catch (error) { if (current(epoch)) failure(this, error); } finally { finish(this, epoch); }
+        },
+        onReturnChecked(this: Context, event: { detail: { value: string[] } }) {
+            if (!this.data.busy && !pending && current(generation)) this.setData({ returnChecked: event.detail.value.includes("physical") });
+        },
+        async onReturnCatalog(this: Context, event: { currentTarget: { dataset: { delta?: string } } }) {
+            const delta = Number(event.currentTarget.dataset.delta ?? "0"), next = this.data.returnLocationPage + delta;
+            if (this.data.busy || pending || !current(generation) || !this.data.detail?.actions.recollectReturn || ![-1, 0, 1].includes(delta) || next < 1
+                || delta > 0 && (next - 1) * 20 >= this.data.returnLocationTotal) return;
+            const epoch = generation; this.setData({ busy: true });
+            try { const result = await services.sessions.request("GET", `/api/v1/mini/repairs/physical-catalog/location?page=${next}&pageSize=20`) as { items: PhysicalPlace[]; total: number };
+                if (current(epoch)) this.setData({ returnLocations: result.items, returnLocationTotal: result.total, returnLocationPage: next, returnLocationId: "" });
+            } catch (error) { if (current(epoch)) failure(this,error); } finally { finish(this,epoch); }
+        },
+        onReturnLocation(this: Context, event: { currentTarget: { dataset: { id: string } } }) {
+            const id = event.currentTarget.dataset.id;
+            if (!this.data.busy && !pending && current(generation) && this.data.returnLocations.some(row => row.id === id)) this.setData({ returnLocationId: id });
+        },
+        async onReturnAction(this: Context) {
+            const row = this.data.detail, mode = this.data.returnMode;
+            const action = { delivery: "deliverReturn", receipt: "receiveReturn", refusal: "refuseReturn", recollection: "recollectReturn" }[mode];
+            if (this.data.busy || pending || !current(generation) || !row || !row.actions[action]) return;
+            const at = new Date(this.data.returnAt), place = this.data.returnLocations.find(row => row.id === this.data.returnLocationId),
+                handover = row.returnHandovers?.find(row => ["WAITING_RECEIPT", "REFUSED"].includes(row.handover_status)), target = this.data.returnTarget;
+            if (!Number.isFinite(at.getTime()) || !/(Z|[+-][0-9]{2}:[0-9]{2})$/i.test(this.data.returnAt) || !this.data.returnObservedCode.trim() || this.data.returnEvidence.trim().length < 10
+                || mode === "delivery" && !target || mode !== "delivery" && !handover || mode === "recollection" && !place
+                || ["receipt", "refusal"].includes(mode) && !this.data.returnChecked) {
+                this.setData({ error: "请核对实物编码、带时区实际时间和至少10字依据；接收或拒收须明确实物核实，收回须选有效实际位置。" }); return;
+            }
+            const body: Record<string, unknown> = { assetVersion: row.assetVersion, lockVersion: row.lockVersion, observedCode: this.data.returnObservedCode.trim(), occurredAt: at.toISOString(), evidence: this.data.returnEvidence.trim() };
+            if (mode === "delivery") Object.assign(body, { ownershipVersion: row.ownershipVersion, loanVersion: row.loanVersion ?? null,
+                employeeVersion: target!.employeeVersion, organizationVersion: target!.organizationVersion, locationVersion: target!.locationVersion });
+            else { body.handoverId = handover!.id;
+                if (mode === "recollection") Object.assign(body, { ownershipVersion: row.ownershipVersion, actualLocationId: place!.id, locationVersion: place!.version });
+                else Object.assign(body, { loanVersion: row.loanVersion ?? null, physicalChecked: true });
+            }
+            await confirm(this, { path: `/api/v1/mini/repairs/${row.id}/return-${mode}`, key: services.createKey(), version: row.version, body },
+                "按实物事实保存本次返还办理：交出保持维修与锁，实际接收才恢复原责任和有效借用；拒收后须库管实际收回才可回库。");
         },
         async onSubmit(this: Context) {
             const asset = this.data.assets.find(row => row.id === this.data.selectedAsset), at = new Date(this.data.occurredAt);

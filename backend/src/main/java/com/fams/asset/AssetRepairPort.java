@@ -347,6 +347,161 @@ public class AssetRepairPort {
         return version + 1;
     }
 
+    /** Frozen responsibility is the target, never proof that physical receipt already happened. */
+    public Map<String, Object> returnTarget(long assetId, long version, String sourceJson) {
+        var row = locked(assetId, version);
+        var source = json.readTree(sourceJson);
+        if (!"UNDER_REPAIR".equals(row.get("lifecycle_status"))
+                || !"ACTIVE".equals(row.get("card_stage"))
+                || !"NORMAL".equals(row.get("exception_status"))
+                || !List.of("PERSONAL", "SHARED").contains(source.path("custodyType").asText())
+                || !Objects.equals(row.get("custody_type"), source.path("custodyType").asText())) {
+            throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_CHANGED", 409);
+        }
+        for (var field :
+                Map.of(
+                                "using_organization_id", "usingOrganizationId",
+                                "responsible_employee_id", "responsibleEmployeeId",
+                                "department_responsible_employee_id",
+                                        "departmentResponsibleEmployeeId",
+                                "storage_warehouse_id", "warehouseId",
+                                "current_location_id", "locationId")
+                        .entrySet()) {
+            var value = source.path(field.getValue());
+            Long expected = value.isNull() || value.isMissingNode() ? null : value.asLong();
+            if (!Objects.equals(expected, nullable(row.get(field.getKey())))) {
+                throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_CHANGED", 409);
+            }
+        }
+        boolean shared = "SHARED".equals(row.get("custody_type"));
+        Long person =
+                nullable(
+                        row.get(
+                                shared
+                                        ? "department_responsible_employee_id"
+                                        : "responsible_employee_id"));
+        Long organization = nullable(row.get("using_organization_id"));
+        Long location = nullable(row.get("current_location_id"));
+        if (person == null || organization == null || location == null) {
+            throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_INACTIVE", 409);
+        }
+        var people =
+                db.queryForList(
+                        "SELECT e.name,e.version,e.organization_id,e.status,o.name AS"
+                            + " organization_name,o.version AS organization_version,o.status AS"
+                            + " organization_status FROM fams_employee e JOIN fams_organization o"
+                            + " ON o.id=e.organization_id WHERE e.id=? FOR SHARE",
+                        person);
+        if (people.size() != 1
+                || !"ACTIVE".equals(people.getFirst().get("status"))
+                || !"ACTIVE".equals(people.getFirst().get("organization_status"))
+                || !Objects.equals(
+                        organization, nullable(people.getFirst().get("organization_id")))) {
+            throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_INACTIVE", 409);
+        }
+        var accounts =
+                db.queryForList(
+                        "SELECT a.id FROM fams_system_account a WHERE a.employee_id=? AND"
+                            + " a.status='ENABLED' AND a.initial_password_required=FALSE AND"
+                            + " (?=FALSE OR EXISTS(SELECT 1 FROM fams_account_role r WHERE"
+                            + " r.account_id=a.id AND r.role_code='DEPARTMENT_ASSET_MANAGER')) FOR"
+                            + " SHARE",
+                        person,
+                        shared);
+        if (accounts.size() != 1) {
+            throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_INACTIVE", 409);
+        }
+        var places =
+                db.queryForList("SELECT version FROM fams_location WHERE id=? FOR SHARE", location);
+        if (places.size() != 1) {
+            throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_INACTIVE", 409);
+        }
+        long placeVersion = ((Number) places.getFirst().get("version")).longValue();
+        var place = activeLocation(location, placeVersion);
+        var target = new LinkedHashMap<String, Object>();
+        target.put("custodyType", row.get("custody_type"));
+        target.put("employeeId", person.toString());
+        target.put("employeeName", people.getFirst().get("name"));
+        target.put("employeeVersion", people.getFirst().get("version"));
+        target.put("organizationId", organization.toString());
+        target.put("organizationName", people.getFirst().get("organization_name"));
+        target.put("organizationVersion", people.getFirst().get("organization_version"));
+        target.put("locationId", location.toString());
+        target.put("locationName", place.get("name"));
+        target.put("locationVersion", placeVersion);
+        target.put("receiverAccountId", accounts.getFirst().get("id").toString());
+        return target;
+    }
+
+    public void checkRepairIdentity(long assetId, long version, String observed) {
+        var row = locked(assetId, version);
+        if (!"UNDER_REPAIR".equals(row.get("lifecycle_status"))
+                || !"ACTIVE".equals(row.get("card_stage"))
+                || !"NORMAL".equals(row.get("exception_status"))) {
+            throw new AssetHandoverPort.Failure("REPAIR_ASSET_CHANGED", 409);
+        }
+        identity.observedCode(assetId, observed);
+    }
+
+    public void checkRepairPhysical(
+            long assetId, long version, String observed, long location, long locationVersion) {
+        var row = locked(assetId, version);
+        if (!"UNDER_REPAIR".equals(row.get("lifecycle_status"))
+                || !"ACTIVE".equals(row.get("card_stage"))
+                || !"NORMAL".equals(row.get("exception_status"))) {
+            throw new AssetHandoverPort.Failure("REPAIR_ASSET_CHANGED", 409);
+        }
+        identity.observedCode(assetId, observed);
+        activeLocation(location, locationVersion);
+    }
+
+    public long closeReturned(
+            long assetId,
+            long version,
+            String sourceJson,
+            String observed,
+            long employeeVersion,
+            long organizationVersion,
+            long locationVersion,
+            long actor,
+            long repair,
+            Instant time) {
+        var target = returnTarget(assetId, version, sourceJson);
+        if (((Number) target.get("employeeVersion")).longValue() != employeeVersion
+                || ((Number) target.get("organizationVersion")).longValue() != organizationVersion
+                || ((Number) target.get("locationVersion")).longValue() != locationVersion) {
+            throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_CHANGED", 409);
+        }
+        String lifecycle = json.readTree(sourceJson).path("lifecycle").asText();
+        if (!List.of("IN_USE", "BORROWED").contains(lifecycle)) {
+            throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_CHANGED", 409);
+        }
+        identity.observedCode(assetId, observed);
+        db.update(
+                "UPDATE fams_asset SET"
+                    + " lifecycle_status=?,version=version+1,updated_by=?,updated_at=? WHERE id=?"
+                    + " AND version=?",
+                lifecycle,
+                actor,
+                time,
+                assetId,
+                version);
+        mapper.event(
+                assetId,
+                "REPAIR_RETURN_RECEIVED",
+                time,
+                json.writeValueAsString(
+                        Map.of(
+                                "repairId",
+                                Long.toString(repair),
+                                "physicalDeparture",
+                                true,
+                                "target",
+                                target)),
+                actor);
+        return version + 1;
+    }
+
     private Map<String, Object> activeLocation(long location, long version) {
         var places = db.queryForList("SELECT * FROM fams_location WHERE id=? FOR SHARE", location);
         if (places.size() != 1

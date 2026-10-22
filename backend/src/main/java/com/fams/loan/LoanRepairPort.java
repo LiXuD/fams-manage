@@ -85,6 +85,15 @@ public class LoanRepairPort {
         return current;
     }
 
+    public Context requireContinuable(
+            long assetId, Context frozen, Long expectedVersion, LocalDate businessDate) {
+        var current = requireIdentity(assetId, frozen, expectedVersion);
+        if (current != null && current.expectedReturnDate().isBefore(businessDate)) {
+            throw new Failure("REPAIR_BORROWING_EXPIRED_INBOUND_REQUIRED");
+        }
+        return current;
+    }
+
     public void closeForRepairInbound(
             long assetId,
             Context frozen,

@@ -1,0 +1,11 @@
+{
+  "source_candidate": "555d698",
+  "artifact_sha256": "eef6031c7347af9235730b06f33c817f1ae630be0367727fc723028b66d06a9e",
+  "columns_sha256": "19fe2939d0637e26ee7bb0ef0d245859611ca018acc8b50a76eb33b67a30434d",
+  "create_sha256": "ef7fd50f35808a9fabbdb421bbe6c9ae70ef9d888a9715c46b2cc24038832064",
+  "objects": 124,
+  "business_rows_read": false,
+  "schema_version": 45,
+  "owned_environment_cleanup": true,
+  "scope": "Metadata only from fixed 555d698 artifact; no business rows read"
+}

@@ -57,4 +57,37 @@ public final class RepairInput {
             @PositiveOrZero long locationVersion,
             @NotNull Instant occurredAt,
             @NotBlank @Size(min = 10, max = 2000) String evidence) {}
+
+    public record ReturnDelivery(
+            @PositiveOrZero long assetVersion,
+            @PositiveOrZero long ownershipVersion,
+            @PositiveOrZero long lockVersion,
+            @PositiveOrZero Long loanVersion,
+            @PositiveOrZero long employeeVersion,
+            @PositiveOrZero long organizationVersion,
+            @PositiveOrZero long locationVersion,
+            @NotBlank @Size(max = 2048) String observedCode,
+            @NotNull Instant occurredAt,
+            @NotBlank @Size(min = 10, max = 2000) String evidence) {}
+
+    public record ReturnReceipt(
+            @Positive long handoverId,
+            @PositiveOrZero long assetVersion,
+            @PositiveOrZero long lockVersion,
+            @PositiveOrZero Long loanVersion,
+            boolean physicalChecked,
+            @NotBlank @Size(max = 2048) String observedCode,
+            @NotNull Instant occurredAt,
+            @NotBlank @Size(min = 10, max = 2000) String evidence) {}
+
+    public record ReturnRecollection(
+            @Positive long handoverId,
+            @PositiveOrZero long assetVersion,
+            @PositiveOrZero long ownershipVersion,
+            @PositiveOrZero long lockVersion,
+            @NotBlank @Size(max = 2048) String observedCode,
+            @Positive long actualLocationId,
+            @PositiveOrZero long locationVersion,
+            @NotNull Instant occurredAt,
+            @NotBlank @Size(min = 10, max = 2000) String evidence) {}
 }

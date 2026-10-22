@@ -152,33 +152,69 @@ public class RepairService {
                 wire(db.queryForList("SELECT * FROM fams_repair_inbound WHERE repair_id=?", id)));
         var currentLoan = loans.open(number(row, "asset_id"));
         result.put("loanVersion", currentLoan == null ? null : currentLoan.version());
+        result.put(
+                "loanExpectedReturnDate",
+                currentLoan == null ? null : currentLoan.expectedReturnDate());
+        var returns =
+                db.queryForList(
+                        "SELECT * FROM fams_repair_return_handover"
+                                + " WHERE repair_id=? ORDER BY id DESC LIMIT 100",
+                        id);
+        result.put("returnHandovers", wire(returns));
+        result.put(
+                "returnRecollections",
+                wire(
+                        db.queryForList(
+                                "SELECT r.* FROM fams_repair_return_recollection r JOIN"
+                                    + " fams_repair_return_handover h ON h.id=r.handover_id WHERE"
+                                    + " h.repair_id=? ORDER BY h.id DESC LIMIT 100",
+                                id)));
+        var outstanding = outstandingReturn(id);
         boolean pending = "PENDING_ADMIN_DECISION".equals(row.get("repair_status"));
         boolean processing =
                 "WAREHOUSE_PROCESSING".equals(row.get("repair_status"))
                         && current.has(Role.WAREHOUSE_OPERATOR)
                         && java.util.Objects.equals(
                                 current.id(), nullable(row.get("processor_account_id")));
-        result.put(
-                "actions",
-                Map.of(
-                        "approve", current.has(Role.ASSET_ADMIN) && pending,
-                        "claim",
-                                current.has(Role.WAREHOUSE_OPERATOR)
-                                        && "WAITING_WAREHOUSE_CLAIM"
-                                                .equals(row.get("repair_status")),
-                        "acceptInPlace", processing && !away && row.get("accepted_at") == null,
-                        "completeInPlace", processing && !away && row.get("accepted_at") != null,
-                        "acceptAway", processing && !away,
-                        "closeInbound", processing && row.get("accepted_at") != null,
-                        "addFaultPhoto",
-                                port != null
-                                        && pending
-                                        && current.id() == number(row, "creator_account_id"),
-                        "cancel",
-                                pending
-                                        && (current.has(Role.ASSET_ADMIN)
-                                                || current.id()
-                                                        == number(row, "creator_account_id"))));
+        var actions =
+                new LinkedHashMap<>(
+                        Map.of(
+                                "approve", current.has(Role.ASSET_ADMIN) && pending,
+                                "claim",
+                                        current.has(Role.WAREHOUSE_OPERATOR)
+                                                && "WAITING_WAREHOUSE_CLAIM"
+                                                        .equals(row.get("repair_status")),
+                                "acceptInPlace",
+                                        processing && !away && row.get("accepted_at") == null,
+                                "completeInPlace",
+                                        processing && !away && row.get("accepted_at") != null,
+                                "acceptAway", processing && !away,
+                                "closeInbound",
+                                        processing
+                                                && row.get("accepted_at") != null
+                                                && outstanding == null,
+                                "addFaultPhoto",
+                                        port != null
+                                                && pending
+                                                && current.id()
+                                                        == number(row, "creator_account_id"),
+                                "cancel",
+                                        pending
+                                                && (current.has(Role.ASSET_ADMIN)
+                                                        || current.id()
+                                                                == number(
+                                                                        row,
+                                                                        "creator_account_id"))));
+        boolean receiver = outstanding != null && isReturnReceiver(current, outstanding);
+        actions.put("deliverReturn", processing && away && outstanding == null);
+        actions.put(
+                "receiveReturn",
+                receiver
+                        && "WAREHOUSE_PROCESSING".equals(row.get("repair_status"))
+                        && "WAITING_RECEIPT".equals(outstanding.get("handover_status")));
+        actions.put("refuseReturn", actions.get("receiveReturn"));
+        actions.put("recollectReturn", processing && outstanding != null);
+        result.put("actions", actions);
         return result;
     }
 
@@ -613,15 +649,7 @@ public class RepairService {
         if (row.get("accepted_at") == null) {
             throw new RepairFailure(409, "REPAIR_ACCEPTANCE_REQUIRED");
         }
-        var handling =
-                db.queryForList(
-                        "SELECT occurred_at FROM fams_repair_physical_handling WHERE repair_id=?",
-                        id);
-        physicalTime(
-                input.occurredAt(),
-                handling.isEmpty()
-                        ? row.get("accepted_at")
-                        : handling.getFirst().get("occurred_at"));
+        physicalTime(input.occurredAt(), latestPhysicalTime(row));
         var originalLoan = originalLoan(row);
         loans.requireIdentity(number(row, "asset_id"), originalLoan, input.loanVersion());
         long next =
@@ -695,6 +723,9 @@ public class RepairService {
             reject(actor, current, row, "REPAIR_OWNERSHIP_OR_ASSET_CHANGED");
         }
         lock(row, lockVersion);
+        if (outstandingReturn(number(row, "id")) != null) {
+            throw new RepairFailure(409, "REPAIR_RETURN_RECOLLECTION_REQUIRED");
+        }
         if (!"INTERNAL_NO_COST".equals(row.get("allowed_method"))) {
             throw new RepairFailure(409, "REPAIR_APPROVAL_SCOPE_INVALID");
         }
@@ -720,6 +751,299 @@ public class RepairService {
         return !db.queryForList(
                         "SELECT repair_id FROM fams_repair_physical_handling WHERE repair_id=?", id)
                 .isEmpty();
+    }
+
+    public Map<String, Object> returnTarget(Actor actor, long id) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.WAREHOUSE_OPERATOR);
+        var row = header(id);
+        visible(current, row);
+        owner(actor, current, row);
+        if (!"WAREHOUSE_PROCESSING".equals(row.get("repair_status")) || !hasPhysicalHandling(id)) {
+            throw new RepairFailure(409, "REPAIR_PHYSICAL_ACCEPTANCE_REQUIRED");
+        }
+        return assets.returnTarget(
+                number(row, "asset_id"),
+                number(row, "asset_version"),
+                row.get("source_snapshot_json").toString());
+    }
+
+    public Map<String, Object> deliverReturn(
+            Actor actor, long id, long version, UUID key, RepairInput.ReturnDelivery input) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.WAREHOUSE_OPERATOR);
+        var row = header(id);
+        visible(current, row);
+        owner(actor, current, row);
+        String operation = "RETURN_DELIVER:" + id, fingerprint = hash(operation, version, input);
+        var prior = replay(actor, current, operation, key, fingerprint);
+        if (prior != null) {
+            return prior;
+        }
+        physicalGuard(
+                actor,
+                current,
+                row,
+                version,
+                input.assetVersion(),
+                input.ownershipVersion(),
+                input.lockVersion());
+        if (!hasPhysicalHandling(id)) {
+            throw new RepairFailure(409, "REPAIR_PHYSICAL_ACCEPTANCE_REQUIRED");
+        }
+        physicalTime(input.occurredAt(), latestPhysicalTime(row));
+        loans.requireContinuable(
+                number(row, "asset_id"),
+                originalLoan(row),
+                input.loanVersion(),
+                LocalDate.ofInstant(clock.instant(), ZoneId.of(row.get("timezone_id").toString())));
+        var target =
+                assets.returnTarget(
+                        number(row, "asset_id"),
+                        input.assetVersion(),
+                        row.get("source_snapshot_json").toString());
+        if (number(target, "employeeVersion") != input.employeeVersion()
+                || number(target, "organizationVersion") != input.organizationVersion()
+                || number(target, "locationVersion") != input.locationVersion()) {
+            throw new RepairFailure(409, "REPAIR_RETURN_TARGET_CHANGED");
+        }
+        assets.checkRepairPhysical(
+                number(row, "asset_id"),
+                input.assetVersion(),
+                input.observedCode(),
+                Long.parseLong(target.get("locationId").toString()),
+                input.locationVersion());
+        int round =
+                java.util.Objects.requireNonNull(
+                        db.queryForObject(
+                                "SELECT COALESCE(MAX(round_number),0)+1 FROM"
+                                        + " fams_repair_return_handover WHERE repair_id=?",
+                                Integer.class,
+                                id));
+        db.update(
+                "INSERT INTO"
+                    + " fams_repair_return_handover(repair_id,round_number,target_snapshot_json,"
+                    + "before_asset_version,delivered_at,delivery_evidence,delivered_by,recorded_at)"
+                    + " VALUES (?,?,?,?,?,?,?,?)",
+                id,
+                round,
+                json.writeValueAsString(target),
+                input.assetVersion(),
+                input.occurredAt(),
+                input.evidence().strip(),
+                current.id(),
+                now());
+        closeTodos(id);
+        todo(
+                id,
+                "RETURN_RECEIPT",
+                "RECEIVER",
+                Long.parseLong(target.get("receiverAccountId").toString()));
+        advanceReturn(actor, current, row, version, "REPAIR_RETURN_DELIVERED", input);
+        return remember(current, operation, key, fingerprint, header(id));
+    }
+
+    public Map<String, Object> receiveReturn(
+            Actor actor,
+            long id,
+            long version,
+            UUID key,
+            RepairInput.ReturnReceipt input,
+            boolean refuse) {
+        var current = actors.revalidateLocked(actor);
+        var row = header(id);
+        visible(current, row);
+        var handover = returnHandover(id, input.handoverId());
+        if (!isReturnReceiver(current, handover)) {
+            throw new RepairFailure(403, "REPAIR_RETURN_RECEIVER_REQUIRED");
+        }
+        String operation = (refuse ? "RETURN_REFUSE:" : "RETURN_RECEIVE:") + id,
+                fingerprint = hash(operation, version, input);
+        var prior = replay(actor, current, operation, key, fingerprint);
+        if (prior != null) {
+            return prior;
+        }
+        guard(actor, current, row, version, "WAREHOUSE_PROCESSING");
+        lock(row, input.lockVersion());
+        if (!"WAITING_RECEIPT".equals(handover.get("handover_status"))
+                || !input.physicalChecked()
+                || input.assetVersion() != number(row, "asset_version")) {
+            throw new RepairFailure(409, "REPAIR_RETURN_RECEIPT_CHANGED");
+        }
+        physicalTime(input.occurredAt(), handover.get("delivered_at"));
+        long next = input.assetVersion();
+        if (!refuse) {
+            loans.requireContinuable(
+                    number(row, "asset_id"),
+                    originalLoan(row),
+                    input.loanVersion(),
+                    LocalDate.ofInstant(
+                            clock.instant(), ZoneId.of(row.get("timezone_id").toString())));
+            var target = json.readTree(handover.get("target_snapshot_json").toString());
+            next =
+                    assets.closeReturned(
+                            number(row, "asset_id"),
+                            input.assetVersion(),
+                            row.get("source_snapshot_json").toString(),
+                            input.observedCode(),
+                            target.path("employeeVersion").asLong(),
+                            target.path("organizationVersion").asLong(),
+                            target.path("locationVersion").asLong(),
+                            current.id(),
+                            id,
+                            now());
+        } else {
+            assets.checkRepairIdentity(
+                    number(row, "asset_id"), input.assetVersion(), input.observedCode());
+        }
+        db.update(
+                "UPDATE fams_repair_return_handover SET handover_status=?,receipt_at=?,"
+                        + "receipt_evidence=?,received_by=? WHERE id=?",
+                refuse ? "REFUSED" : "RECEIVED",
+                input.occurredAt(),
+                input.evidence().strip(),
+                current.id(),
+                input.handoverId());
+        closeTodos(id);
+        if (refuse) {
+            todo(id, "RETURN_EXCEPTION", "WAREHOUSE_OPERATOR", number(row, "processor_account_id"));
+            advanceReturn(actor, current, row, version, "REPAIR_RETURN_REFUSED", input);
+        } else {
+            db.update(
+                    "UPDATE fams_repair_request SET repair_status='COMPLETED',completed_at=?,"
+                            + "asset_version=?,version=version+1,updated_at=? WHERE id=?",
+                    now(),
+                    next,
+                    now(),
+                    id);
+            release(row, "REPAIR_RETURN_RECEIVED");
+            closeCollaborations(id);
+            audit(
+                    actor,
+                    current,
+                    row,
+                    "REPAIR_RETURN_RECEIVED",
+                    version,
+                    version + 1,
+                    input,
+                    role(current));
+        }
+        return remember(current, operation, key, fingerprint, header(id));
+    }
+
+    public Map<String, Object> recollectReturn(
+            Actor actor, long id, long version, UUID key, RepairInput.ReturnRecollection input) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.WAREHOUSE_OPERATOR);
+        var row = header(id);
+        visible(current, row);
+        owner(actor, current, row);
+        String operation = "RETURN_RECOLLECT:" + id, fingerprint = hash(operation, version, input);
+        var prior = replay(actor, current, operation, key, fingerprint);
+        if (prior != null) {
+            return prior;
+        }
+        guard(actor, current, row, version, "WAREHOUSE_PROCESSING");
+        lock(row, input.lockVersion());
+        var handover = returnHandover(id, input.handoverId());
+        if (input.assetVersion() != number(row, "asset_version")
+                || input.ownershipVersion() != number(row, "ownership_version")
+                || !List.of("WAITING_RECEIPT", "REFUSED")
+                        .contains(handover.get("handover_status"))) {
+            throw new RepairFailure(409, "REPAIR_RETURN_RECEIPT_CHANGED");
+        }
+        physicalTime(
+                input.occurredAt(),
+                handover.get("receipt_at") == null
+                        ? handover.get("delivered_at")
+                        : handover.get("receipt_at"));
+        assets.checkRepairPhysical(
+                number(row, "asset_id"),
+                input.assetVersion(),
+                input.observedCode(),
+                input.actualLocationId(),
+                input.locationVersion());
+        db.update(
+                "INSERT INTO fams_repair_return_recollection(handover_id,handler_employee_id,"
+                    + "actual_location_id,location_version,occurred_at,evidence,actor_account_id,recorded_at)"
+                    + " VALUES (?,?,?,?,?,?,?,?)",
+                input.handoverId(),
+                current.employeeId(),
+                input.actualLocationId(),
+                input.locationVersion(),
+                input.occurredAt(),
+                input.evidence().strip(),
+                current.id(),
+                now());
+        db.update(
+                "UPDATE fams_repair_return_handover SET handover_status='RECOLLECTED' WHERE id=?",
+                input.handoverId());
+        closeTodos(id);
+        todo(id, "PROCESS", "WAREHOUSE_OPERATOR", current.id());
+        advanceReturn(actor, current, row, version, "REPAIR_RETURN_RECOLLECTED", input);
+        return remember(current, operation, key, fingerprint, header(id));
+    }
+
+    private Map<String, Object> outstandingReturn(long id) {
+        var rows =
+                db.queryForList(
+                        "SELECT * FROM fams_repair_return_handover WHERE repair_id=? AND"
+                                + " handover_status IN ('WAITING_RECEIPT','REFUSED') FOR UPDATE",
+                        id);
+        return rows.isEmpty() ? null : rows.getFirst();
+    }
+
+    private Map<String, Object> returnHandover(long repair, long id) {
+        var rows =
+                db.queryForList(
+                        "SELECT * FROM fams_repair_return_handover WHERE repair_id=? AND id=?"
+                                + " FOR UPDATE",
+                        repair,
+                        id);
+        if (rows.isEmpty()) {
+            throw new RepairFailure(404, "REPAIR_RETURN_NOT_FOUND");
+        }
+        return rows.getFirst();
+    }
+
+    private boolean isReturnReceiver(Current current, Map<String, Object> handover) {
+        var target = json.readTree(handover.get("target_snapshot_json").toString());
+        return current.id() == target.path("receiverAccountId").asLong()
+                && current.employeeId() == target.path("employeeId").asLong()
+                && current.organizationId() == target.path("organizationId").asLong()
+                && (!"SHARED".equals(target.path("custodyType").asText())
+                        || current.has(Role.DEPARTMENT_ASSET_MANAGER));
+    }
+
+    private Object latestPhysicalTime(Map<String, Object> row) {
+        var recollections =
+                db.queryForList(
+                        "SELECT r.occurred_at FROM fams_repair_return_recollection r JOIN"
+                                + " fams_repair_return_handover h ON h.id=r.handover_id WHERE"
+                                + " h.repair_id=? ORDER BY h.id DESC LIMIT 1",
+                        row.get("id"));
+        if (!recollections.isEmpty()) {
+            return recollections.getFirst().get("occurred_at");
+        }
+        var handling =
+                db.queryForList(
+                        "SELECT occurred_at FROM fams_repair_physical_handling WHERE repair_id=?",
+                        row.get("id"));
+        return handling.isEmpty() ? row.get("accepted_at") : handling.getFirst().get("occurred_at");
+    }
+
+    private void advanceReturn(
+            Actor actor,
+            Current current,
+            Map<String, Object> row,
+            long version,
+            String action,
+            Object input) {
+        db.update(
+                "UPDATE fams_repair_request SET version=version+1,updated_at=? WHERE id=?",
+                now(),
+                row.get("id"));
+        audit(actor, current, row, action, version, version + 1, input, role(current));
     }
 
     public void photoUploader(Actor actor, long id) {

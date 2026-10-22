@@ -1,0 +1,59 @@
+{
+  "events": 6,
+  "custody": "PERSONAL",
+  "inbound": 0,
+  "repairs": 1,
+  "physical": 1,
+  "received": 1,
+  "completed": 1,
+  "lifecycle": "BORROWED",
+  "liveLocks": 0,
+  "openLoans": 1,
+  "deliveries": 1,
+  "loanReturns": 0,
+  "assetVersion": 2,
+  "approvedExtensions": 1,
+  "web_url": "http://127.0.0.1:52451",
+  "api_port": 52449,
+  "artifact_sha256": "5ff2cae87cc5e53bfd4de52550ebb6d3f6795028794778e951f1971431f4bf6e",
+  "source_state": "B2b1 worktree package on 51dd8ec, not fixed gate candidate",
+  "asset_code": "OWNED19-985010",
+  "original_dates_preserved": true,
+  "approved_current_due_date": "2026-11-22",
+  "actual_committing_process_group_killed": 30076,
+  "new_process_group": 30638,
+  "permanent_original_return_receipt_after_new_JVM": true,
+  "no_duplicate_event_or_return": true,
+  "runtime": {
+    "populated_V45_upgrade": 1,
+    "return_http_including_actual_native": 9,
+    "physical_http": 8,
+    "technical_http": 11,
+    "original_repair_http": 14,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "web_tests": 118,
+  "mini_tests": 197,
+  "types_lint_build": "PASS",
+  "static": {
+    "checkstyle": 0,
+    "spotbugs": 0,
+    "scope": "targeted skipTests verify; no coverage claim"
+  },
+  "owned_environment_cleanup": true,
+  "native_scope": "Actual Page handlers and opaque sessions reach real Spring/MySQL; committed receipt dropped then exact original replay after hide and terminal reread. SDK confirmation and local HTTPS adapter explicit; no device claim.",
+  "pc_scope": "Employee report, admin approval, unique warehouse actual departure; expired delivery rejection; actual Loan UI employee extension proposal and administrator approval retaining overdue history; warehouse actual delivery then original borrower actual receipt",
+  "screenshots": [
+    "output/playwright/d6-19b2b1-actual-approved-extension.png",
+    "output/playwright/d6-19b2b1-actual-return-completed.png"
+  ],
+  "limitations": [
+    "Separate worktree package, fixed full gate still pending",
+    "B2b2 approved target change, B2c controlled reassignment and C still mandatory",
+    "V1-V46 immutable; coordinated replacement of old writers only, no old writers with new handovers or direct downgrade",
+    "Actual external devices, remote CI, formal QA, production and independent review not verified",
+    "No new attachment workflow or scanner acceptance in this environment"
+  ]
+}
