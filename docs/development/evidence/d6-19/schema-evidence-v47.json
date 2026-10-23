@@ -1,0 +1,11 @@
+{
+  "source_candidate": "df30962",
+  "artifact_sha256": "2758b6845c3c8bab810f818f5e1253d36f7cf53e476335d1a0fb7bbcf9fd98d1",
+  "columns_sha256": "9e6e1016199735978fd3a4e7ba6d13ac08b6062f17f6aef20f69068331295998",
+  "create_sha256": "ccfda552bac2ba2645ab2ec8dfd6a68f15b4f73e75594485e730529a8237b8fd",
+  "objects": 127,
+  "business_rows_read": false,
+  "schema_version": 47,
+  "owned_environment_cleanup": true,
+  "scope": "Metadata only from fixed df30962 artifact; no business rows read"
+}
