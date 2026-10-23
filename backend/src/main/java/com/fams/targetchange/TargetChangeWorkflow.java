@@ -48,6 +48,10 @@ public class TargetChangeWorkflow {
     }
 
     public Map<String, Object> list(Actor actor, String type, int page, int size) {
+        return list(actor, type, page, size, null);
+    }
+
+    public Map<String, Object> list(Actor actor, String type, int page, int size, Long businessId) {
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.ASSET_ADMIN) && !current.has(Role.WAREHOUSE_OPERATOR)) { throw TargetChangeFailure.forbidden(); }
         domain(type);
@@ -55,6 +59,10 @@ public class TargetChangeWorkflow {
         var args = new java.util.ArrayList<Object>();
         args.add(type);
         if (!current.has(Role.ASSET_ADMIN)) { args.add(current.id()); }
+        if (businessId != null) {
+            where += " AND business_id=?";
+            args.add(businessId);
+        }
         Long total = db.queryForObject("SELECT COUNT(*) FROM fams_item_target_change" + where, Long.class, args.toArray());
         args.add(size);
         args.add((page - 1) * size);
@@ -178,6 +186,11 @@ public class TargetChangeWorkflow {
             else if (value instanceof java.time.LocalDateTime time) { value = time.toInstant(java.time.ZoneOffset.UTC).toString(); }
             else if (value != null && (key.equals("id") || key.endsWith("_id"))) { value = value.toString(); }
             result.put(key, value);
+        }
+        var display = domain(row.get("business_type").toString()).targetDisplay(
+                json.readTree(row.get("proposed_target_json").toString()));
+        if (!display.isEmpty()) {
+            result.put("targetDisplay", display);
         }
         return result;
     }

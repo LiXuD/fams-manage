@@ -77,6 +77,22 @@ class RepairReturnHttpRuntimeCase {
     @AfterEach
     void cleanup() throws Exception {
         db.execute("DROP TRIGGER IF EXISTS owned_repair_return_audit_failure");
+        db.execute("DROP TRIGGER IF EXISTS owned_repair_target_audit_failure");
+        db.update(
+                "DELETE FROM fams_repair_approved_return_target WHERE repair_id IN (SELECT id FROM"
+                        + " fams_repair_request WHERE asset_id BETWEEN 951020 AND 951023)");
+        db.update(
+                "DELETE FROM fams_todo WHERE business_type='ITEM_TARGET_CHANGE' AND business_id IN"
+                    + " (SELECT id FROM fams_item_target_change WHERE business_type='REPAIR' AND"
+                    + " business_id IN (SELECT id FROM fams_repair_request WHERE asset_id BETWEEN"
+                    + " 951020 AND 951023))");
+        db.update(
+                "DELETE FROM fams_item_target_change WHERE business_type='REPAIR' AND business_id"
+                    + " IN (SELECT id FROM fams_repair_request WHERE asset_id BETWEEN 951020 AND"
+                    + " 951023)");
+        db.update(
+                "DELETE FROM fams_idempotency_record WHERE actor_account_id BETWEEN 951001 AND"
+                        + " 951010 AND operation_id LIKE 'targetChange:%'");
         db.update(
                 "DELETE FROM fams_todo WHERE business_type='LOAN_EXTENSION' AND business_id IN"
                         + " (SELECT id FROM fams_loan_extension WHERE loan_id IN (SELECT id FROM"
@@ -523,6 +539,547 @@ class RepairReturnHttpRuntimeCase {
         assertEquals(1, count("fams_repair_return_handover", "handover_status='RECEIVED'"));
         assertEquals(
                 0, count("fams_asset_business_lock", "asset_id=951020 AND released_at IS NULL"));
+    }
+
+    @Test
+    void actualNativeHandlersApproveTargetThenNewReceiverAcceptsAndRetryDecision()
+            throws Exception {
+        var grants = new java.util.LinkedHashMap<String, Object>();
+        for (var entry :
+                Map.of(
+                                "employee",
+                                951002L,
+                                "admin",
+                                951001L,
+                                "warehouse",
+                                951003L,
+                                "receiver",
+                                951006L)
+                        .entrySet()) {
+            var identity =
+                    new MiniWechatIdentityPort.Identity(
+                            "owned-repair-target-native", entry.getKey());
+            db.update(
+                    "INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES"
+                            + " (?,?,NOW(3))",
+                    entry.getValue(),
+                    miniSessions.identityHash(identity));
+            var grant = miniSessions.start(identity, UUID.randomUUID());
+            grants.put(
+                    entry.getKey(),
+                    Map.of(
+                            "sessionToken",
+                            grant.sessionToken(),
+                            "accountId",
+                            entry.getValue().toString(),
+                            "bindingId",
+                            grant.bindingId()));
+        }
+        var script =
+                java.nio.file.Path.of(System.getProperty("user.dir"))
+                        .getParent()
+                        .resolve("apps/miniprogram/test/runtime-repair-target-change-http.mjs");
+        var builder =
+                new ProcessBuilder(
+                                "rtk",
+                                "proxy",
+                                System.getProperty(
+                                        "fams.test.node",
+                                        System.getenv()
+                                                .getOrDefault("FAMS_TEST_NODE_EXECUTABLE", "node")),
+                                script.toString())
+                        .redirectErrorStream(true);
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_REPAIR_GRANTS", JSON.writeValueAsString(grants));
+        var process = builder.start();
+        assertTrue(process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS));
+        var output =
+                new String(
+                        process.getInputStream().readAllBytes(),
+                        java.nio.charset.StandardCharsets.UTF_8);
+        assertEquals(0, process.exitValue(), output);
+        assertTrue(output.contains("\"nativeActualRepairTargetChange\":true"), output);
+        assertEquals("IN_USE", asset().get("lifecycle_status"));
+        assertEquals(0, count("fams_loan", "asset_id=951020 AND relation_status='OPEN'"));
+        assertEquals(0, count("fams_loan_repair_return", "asset_id=951020"));
+        assertEquals(951006L, ((Number) asset().get("responsible_employee_id")).longValue());
+        assertEquals(1, count("fams_repair_approved_return_target", "1=1"));
+        assertEquals(1, count("fams_repair_return_handover", "handover_status='RECEIVED'"));
+        assertEquals(
+                0, count("fams_asset_business_lock", "asset_id=951020 AND released_at IS NULL"));
+    }
+
+    @Test
+    void approvedTargetRetainsOriginalFactsUntilActualNewReceiverAccepts() throws Exception {
+        var row = accepted();
+        String id = row.path("id").asText();
+        var original = asset();
+        var source = row.path("source").deepCopy();
+        // The old employee may be inactive: the independently approved target is validated
+        // separately.
+        db.update("UPDATE fams_employee SET status='DISABLED',version=version+1 WHERE id=951002");
+        var proposal = proposal(row);
+        ok(
+                targetPost(
+                        fixture.admin,
+                        proposal.path("id").asText() + "/decision",
+                        0,
+                        key(),
+                        "{\"result\":\"APPROVED\",\"reason\":\"Approve the verified actual new"
+                                + " return target\"}"));
+        row = detail(id);
+        assertEquals("WAREHOUSE_PROCESSING", row.path("status").asText());
+        assertEquals(original, asset());
+        var backdated = (ObjectNode) JSON.readTree(delivery(row));
+        backdated.put("occurredAt", row.path("acceptedAt").asText());
+        assertEquals(
+                400,
+                post(
+                                fixture.warehouse,
+                                id + "/return-delivery",
+                                row.path("version").asLong(),
+                                key(),
+                                backdated.toString())
+                        .statusCode());
+        assertEquals(0, count("fams_repair_return_handover", "repair_id=" + id));
+        assertEquals(source, row.path("source"));
+        assertEquals(
+                1, count("fams_asset_business_lock", "asset_id=951020 AND released_at IS NULL"));
+        row = delivered(row);
+        assertEquals(
+                401,
+                post(
+                                fixture.employee,
+                                id + "/return-receipt",
+                                row.path("version").asLong(),
+                                key(),
+                                receipt(row))
+                        .statusCode());
+        var receiver = login(6);
+        var receiving = ok(get(receiver, id));
+        assertTrue(receiving.path("actions").path("receiveReturn").asBoolean());
+        assertEquals(200, get(receiver, "").statusCode());
+        long version = row.path("version").asLong();
+        String request = key(), body = receipt(row);
+        var completed = ok(post(receiver, id + "/return-receipt", version, request, body));
+        assertEquals("COMPLETED", completed.path("status").asText());
+        assertEquals(completed, ok(post(receiver, id + "/return-receipt", version, request, body)));
+        assertEquals(951006L, ((Number) asset().get("responsible_employee_id")).longValue());
+        assertEquals(original.get("created_business_date"), asset().get("created_business_date"));
+        assertEquals(
+                original.get("last_inventory_business_date"),
+                asset().get("last_inventory_business_date"));
+        assertEquals(source, detail(id).path("source"));
+        assertEquals(
+                0, count("fams_asset_business_lock", "asset_id=951020 AND released_at IS NULL"));
+    }
+
+    @Test
+    void actualRefusalMustBeRecollectedBeforeTargetChangeAndHistorySurvives() throws Exception {
+        var row = delivered(accepted());
+        String id = row.path("id").asText();
+        ok(
+                post(
+                        fixture.employee,
+                        id + "/return-refusal",
+                        row.path("version").asLong(),
+                        key(),
+                        receipt(row)));
+        row = detail(id);
+        assertEquals(409, targetGet(fixture.warehouse, contextPath(row)).statusCode());
+        ok(
+                post(
+                        fixture.warehouse,
+                        id + "/return-recollection",
+                        row.path("version").asLong(),
+                        key(),
+                        recollection(row)));
+        row = detail(id);
+        var proposal = proposal(row);
+        ok(
+                targetPost(
+                        fixture.admin,
+                        proposal.path("id").asText() + "/decision",
+                        0,
+                        key(),
+                        "{\"result\":\"APPROVED\",\"reason\":\"Approve target after real physical"
+                                + " recollection\"}"));
+        row = delivered(detail(id));
+        assertEquals(2, row.path("returnHandovers").size());
+        assertEquals(
+                "RECOLLECTED", row.path("returnHandovers").get(1).path("handover_status").asText());
+        assertNotNull(row.path("returnHandovers").get(1).get("receipt_evidence"));
+        ok(
+                post(
+                        login(6),
+                        id + "/return-receipt",
+                        row.path("version").asLong(),
+                        key(),
+                        receipt(row)));
+        assertEquals(1, count("fams_repair_return_recollection", "1=1"));
+        assertEquals(
+                1,
+                count(
+                        "fams_repair_event",
+                        "repair_id=" + id + " AND action='REPAIR_RETURN_REFUSED'"));
+    }
+
+    @Test
+    void staleScopeAndChangedNewReferencesCannotBeApprovedButCanBeRejected() throws Exception {
+        var row = accepted();
+        var proposal = proposal(row);
+        db.update("UPDATE fams_employee SET version=version+1 WHERE id=951006");
+        assertEquals(
+                409,
+                targetPost(
+                                fixture.admin,
+                                proposal.path("id").asText() + "/decision",
+                                0,
+                                key(),
+                                "{\"result\":\"APPROVED\",\"reason\":\"Changed references must"
+                                        + " require a fresh proposal\"}")
+                        .statusCode());
+        assertEquals(0, count("fams_repair_approved_return_target", "1=1"));
+        ok(
+                targetPost(
+                        fixture.admin,
+                        proposal.path("id").asText() + "/decision",
+                        0,
+                        key(),
+                        "{\"result\":\"REJECTED\",\"reason\":\"Reject proposal after reference"
+                                + " version change\"}"));
+        proposal = proposal(detail(row.path("id").asText()), target(1));
+        delivered(detail(row.path("id").asText()));
+        assertEquals(
+                409,
+                targetPost(
+                                fixture.admin,
+                                proposal.path("id").asText() + "/decision",
+                                0,
+                                key(),
+                                "{\"result\":\"APPROVED\",\"reason\":\"Cannot retarget an already"
+                                        + " delivered handover\"}")
+                        .statusCode());
+        assertEquals(0, count("fams_repair_approved_return_target", "1=1"));
+    }
+
+    @Test
+    void loanBorrowerCannotBeChangedByRepairApproval() throws Exception {
+        borrowing(false);
+        var row = accepted();
+        var snapshot = ok(targetGet(fixture.warehouse, contextPath(row)));
+        assertEquals(
+                409,
+                targetPost(
+                                fixture.warehouse,
+                                "",
+                                row.path("version").asLong(),
+                                key(),
+                                proposalBody(row, snapshot, target(0)))
+                        .statusCode());
+        assertEquals(0, count("fams_item_target_change", "business_type='REPAIR'"));
+        assertEquals(
+                "OPEN",
+                db.queryForObject(
+                        "SELECT relation_status FROM fams_loan WHERE asset_id=951020",
+                        String.class));
+        assertEquals("UNDER_REPAIR", asset().get("lifecycle_status"));
+    }
+
+    @Test
+    void targetApprovalAuditFailureRollsBackAndOriginalDecisionRetriesExactly() throws Exception {
+        var row = accepted();
+        var proposal = proposal(row);
+        String id = proposal.path("id").asText(),
+                request = key(),
+                body =
+                        "{\"result\":\"APPROVED\",\"reason\":\"Approve separately verified target"
+                                + " and preserve history\"}";
+        db.execute(
+                "CREATE TRIGGER owned_repair_target_audit_failure BEFORE INSERT ON fams_audit_event"
+                        + " FOR EACH ROW BEGIN IF NEW.action='REPAIR_RETURN_TARGET_APPROVED' THEN"
+                        + " SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='owned target approval audit"
+                        + " failure'; END IF; END");
+        try {
+            assertEquals(
+                    500,
+                    targetPost(fixture.admin, id + "/decision", 0, request, body).statusCode());
+            assertEquals(0, count("fams_repair_approved_return_target", "1=1"));
+            assertEquals(
+                    "PENDING",
+                    db.queryForObject(
+                            "SELECT change_status FROM fams_item_target_change WHERE id=?",
+                            String.class,
+                            id));
+            assertEquals(row.path("version"), detail(row.path("id").asText()).path("version"));
+        } finally {
+            db.execute("DROP TRIGGER owned_repair_target_audit_failure");
+        }
+        var approved = ok(targetPost(fixture.admin, id + "/decision", 0, request, body));
+        assertEquals(approved, ok(targetPost(fixture.admin, id + "/decision", 0, request, body)));
+        assertEquals(1, count("fams_repair_approved_return_target", "1=1"));
+        assertEquals(
+                403, targetPost(fixture.warehouse, id + "/decision", 0, key(), body).statusCode());
+    }
+
+    @Test
+    void newReceiverAuthorityIsRevalidatedAndConcurrentAdminDecisionsCommitOnlyOnce()
+            throws Exception {
+        var row = accepted();
+        var proposal = proposal(row);
+        String id = proposal.path("id").asText();
+        try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var start = new java.util.concurrent.CountDownLatch(1);
+            var jobs = new ArrayList<java.util.concurrent.Future<Integer>>();
+            for (var decisionActor : List.of(fixture.admin, login(10))) {
+                jobs.add(
+                        executor.submit(
+                                () -> {
+                                    start.await();
+                                    return targetPost(
+                                                    decisionActor,
+                                                    id + "/decision",
+                                                    0,
+                                                    key(),
+                                                    "{\"result\":\"APPROVED\",\"reason\":\"Concurrent"
+                                                        + " independent decision for one"
+                                                        + " proposal\"}")
+                                            .statusCode();
+                                }));
+            }
+            start.countDown();
+            var statuses = new ArrayList<Integer>();
+            for (var job : jobs) {
+                statuses.add(job.get());
+            }
+            Collections.sort(statuses);
+            assertEquals(List.of(200, 409), statuses);
+        }
+        assertEquals(1, count("fams_repair_approved_return_target", "1=1"));
+        row = delivered(detail(row.path("id").asText()));
+        var receiver = login(6);
+        db.update(
+                "UPDATE fams_employee SET organization_id=951099,version=version+1 WHERE"
+                        + " id=951006");
+        assertEquals(403, get(receiver, row.path("id").asText()).statusCode());
+        assertEquals(
+                403,
+                post(
+                                receiver,
+                                row.path("id").asText() + "/return-receipt",
+                                row.path("version").asLong(),
+                                key(),
+                                receipt(row))
+                        .statusCode());
+        assertEquals("UNDER_REPAIR", asset().get("lifecycle_status"));
+    }
+
+    @Test
+    void approvedSharedTargetRequiresCurrentDepartmentManagerEvenBeforeOriginalReplay()
+            throws Exception {
+        var row = accepted();
+        String id = row.path("id").asText();
+        var target = target(0);
+        target.put("custodyType", "SHARED");
+        var snapshot = ok(targetGet(fixture.warehouse, contextPath(row)));
+        assertEquals(
+                409,
+                targetPost(
+                                fixture.warehouse,
+                                "",
+                                row.path("version").asLong(),
+                                key(),
+                                proposalBody(row, snapshot, target))
+                        .statusCode());
+        target.put("employeeId", "951005");
+        var proposal = proposal(row, target);
+        var listed = ok(targetGet(fixture.admin, "?businessId=" + id));
+        assertEquals(1, listed.path("total").asInt());
+        assertEquals(
+                "Repair person",
+                listed.path("items").get(0).path("targetDisplay").path("employeeName").asText());
+        ok(
+                targetPost(
+                        fixture.admin,
+                        proposal.path("id").asText() + "/decision",
+                        0,
+                        key(),
+                        "{\"result\":\"APPROVED\",\"reason\":\"Approve department shared"
+                                + " responsibility with actual receipt\"}"));
+        row = delivered(detail(id));
+        var receiver = login(5);
+        long version = row.path("version").asLong();
+        String request = key(), body = receipt(row);
+        var completed = ok(post(receiver, id + "/return-receipt", version, request, body));
+        assertEquals("COMPLETED", completed.path("status").asText());
+        assertEquals("SHARED", asset().get("custody_type"));
+        assertNull(asset().get("responsible_employee_id"));
+        assertEquals(
+                951005L, ((Number) asset().get("department_responsible_employee_id")).longValue());
+        db.update(
+                "DELETE FROM fams_account_role WHERE account_id=951005 AND"
+                        + " role_code='DEPARTMENT_ASSET_MANAGER'");
+        assertEquals(
+                403, post(receiver, id + "/return-receipt", version, request, body).statusCode());
+        assertEquals(
+                1,
+                count(
+                        "fams_repair_return_handover",
+                        "repair_id=" + id + " AND handover_status='RECEIVED'"));
+    }
+
+    @Test
+    void malformedUncheckedForeignAndUnownedTargetProposalsWriteNothing() throws Exception {
+        var row = accepted();
+        var snapshot = ok(targetGet(fixture.warehouse, contextPath(row)));
+        var body = (ObjectNode) JSON.readTree(proposalBody(row, snapshot, target(0)));
+        body.put("physicalChecked", false);
+        assertEquals(
+                400,
+                targetPost(
+                                fixture.warehouse,
+                                "",
+                                row.path("version").asLong(),
+                                key(),
+                                body.toString())
+                        .statusCode());
+        for (String field :
+                List.of(
+                        "employeeId",
+                        "organizationId",
+                        "locationId",
+                        "employeeVersion",
+                        "organizationVersion",
+                        "locationVersion",
+                        "custodyType")) {
+            var invalid = target(0);
+            if (field.endsWith("Version")) {
+                invalid.put(field, -1);
+            } else if (field.endsWith("Id")) {
+                invalid.put(field, "9223372036854775808");
+            } else {
+                invalid.put(field, "STORAGE");
+            }
+            assertEquals(
+                    400,
+                    targetPost(
+                                    fixture.warehouse,
+                                    "",
+                                    row.path("version").asLong(),
+                                    key(),
+                                    proposalBody(row, snapshot, invalid))
+                            .statusCode());
+        }
+        assertEquals(
+                403,
+                targetPost(
+                                fixture.otherWarehouse,
+                                "",
+                                row.path("version").asLong(),
+                                key(),
+                                proposalBody(row, snapshot, target(0)))
+                        .statusCode());
+        assertEquals(403, targetGet(fixture.employee, contextPath(row)).statusCode());
+        assertEquals(
+                409,
+                targetGet(
+                                fixture.warehouse,
+                                "context?businessId=" + row.path("id").asText() + "&itemId=951021")
+                        .statusCode());
+        assertEquals(0, count("fams_item_target_change", "business_type='REPAIR'"));
+        assertEquals(0, count("fams_repair_approved_return_target", "1=1"));
+        assertEquals("UNDER_REPAIR", asset().get("lifecycle_status"));
+    }
+
+    private String contextPath(JsonNode row) {
+        return "context?businessId=" + row.path("id").asText() + "&itemId=951020";
+    }
+
+    private ObjectNode target(long employeeVersion) {
+        var target = JSON.createObjectNode();
+        target.put("custodyType", "PERSONAL");
+        target.put("organizationId", "951000");
+        target.put("employeeId", "951006");
+        target.put("locationId", "951001");
+        target.put("organizationVersion", 0);
+        target.put("employeeVersion", employeeVersion);
+        target.put("locationVersion", 0);
+        return target;
+    }
+
+    private JsonNode proposal(JsonNode row) throws Exception {
+        return proposal(row, target(0));
+    }
+
+    private JsonNode proposal(JsonNode row, JsonNode target) throws Exception {
+        var snapshot = ok(targetGet(fixture.warehouse, contextPath(row)));
+        return ok(
+                targetPost(
+                        fixture.warehouse,
+                        "",
+                        row.path("version").asLong(),
+                        key(),
+                        proposalBody(row, snapshot, target)));
+    }
+
+    private String proposalBody(JsonNode row, JsonNode snapshot, JsonNode target) {
+        var body = JSON.createObjectNode();
+        body.put("businessId", row.path("id").asText());
+        body.put("itemId", "951020");
+        body.set("snapshot", snapshot);
+        body.set("target", target);
+        body.put(
+                "reason",
+                "Original target no longer suitable; request explicitly approved actual new"
+                        + " responsibility");
+        body.put("observedAssetCode", row.path("source").path("assetCode").asText());
+        body.put(
+                "physicalVerification",
+                "Actually checked the asset and verified the intended physical receiving person and"
+                        + " place");
+        body.put("physicalChecked", true);
+        return body.toString();
+    }
+
+    private HttpResponse<String> targetGet(Session actor, String path) throws Exception {
+        return targetApi(actor, "GET", path, 0, null, null);
+    }
+
+    private HttpResponse<String> targetPost(
+            Session actor, String path, long version, String key, String body) throws Exception {
+        return targetApi(actor, "POST", path, version, key, body);
+    }
+
+    private HttpResponse<String> targetApi(
+            Session actor, String method, String path, long version, String key, String body)
+            throws Exception {
+        String separator = path.contains("?") ? "&" : "?";
+        var builder =
+                HttpRequest.newBuilder(
+                                URI.create(
+                                        "http://127.0.0.1:"
+                                                + port
+                                                + "/api/v1/item-target-changes"
+                                                + (path.isEmpty() || path.startsWith("?")
+                                                        ? path
+                                                        : "/" + path)
+                                                + separator
+                                                + "businessType=REPAIR"))
+                        .header("Cookie", actor.cookie());
+        if (!method.equals("GET")) {
+            builder.header("X-CSRF-Token", actor.csrf())
+                    .header("Idempotency-Key", key)
+                    .header("If-Match-Version", Long.toString(version))
+                    .header("Content-Type", "application/json");
+        }
+        return http.send(
+                builder.method(
+                                method,
+                                body == null
+                                        ? HttpRequest.BodyPublishers.noBody()
+                                        : HttpRequest.BodyPublishers.ofString(body))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     private JsonNode accepted() throws Exception {

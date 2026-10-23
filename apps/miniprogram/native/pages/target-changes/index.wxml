@@ -2,7 +2,8 @@
   <view class="title">批准目标更正</view>
   <view class="hint">仅更正未完成明细。原责任、交出地点及物理锁保持；批准后仍须原业务实际接收或现场收妥。</view>
   <view wx:if="{{error}}" class="error" role="alert">{{error}}</view><view wx:if="{{notice}}" class="hint">{{notice}}</view>
-  <picker range="{{businessNames}}" disabled="{{busy || retryable}}" bindchange="onBusiness"><view>{{businessType === 'TRANSFER' ? '调拨' : '领用 / 借用'}}</view></picker>
+  <picker range="{{businessNames}}" disabled="{{busy || retryable}}" bindchange="onBusiness"><view>{{businessType === 'REPAIR' ? '维修返还' : businessType === 'TRANSFER' ? '调拨' : '领用 / 借用'}}</view></picker>
+  <view wx:if="{{businessType === 'REPAIR'}}" class="hint">已交出的维修设备必须先实际收回。批准新目标后仍须库管实际交出及新责任人接收；不得借此更换借用人或机构。</view>
   <button bindtap="onRefresh" disabled="{{busy}}">刷新核对</button><button wx:if="{{retryable}}" bindtap="onRetry" disabled="{{busy}}">重试原操作</button>
   <view wx:if="{{canExecute}}" class="card"><view class="title">选择未完成明细</view>
     <button bindtap="onSources" disabled="{{busy || retryable}}">加载可办理单据</button>
@@ -38,14 +39,16 @@
     <view wx:if="{{selected.source_snapshot_json.physical.destination}}">原交出地点：{{selected.source_snapshot_json.physical.destination}}</view>
     <view wx:for="{{selected.source_snapshot_json.handover}}" wx:key="id">原交出地点：{{item.destinationText}}</view>
     <view>原责任模式：{{selected.source_snapshot_json.target.custodyType === 'STORAGE' ? '仓库保管' : selected.source_snapshot_json.target.custodyType === 'SHARED' ? '部门公用' : '个人使用'}}；新责任模式：{{selected.proposed_target_json.custodyType === 'STORAGE' ? '仓库保管' : selected.proposed_target_json.custodyType === 'SHARED' ? '部门公用' : '个人使用'}}</view>
-    <view>原组织：{{selected.source_snapshot_json.target.usingOrganizationId || selected.source_snapshot_json.target.organizationId || '未指定'}}；新组织：{{selected.proposed_target_json.usingOrganizationId || selected.proposed_target_json.organizationId || '未指定'}}</view>
+    <view wx:if="{{businessType === 'REPAIR'}}">本次新目标：{{selected.targetDisplay.organizationName || '待核实'}} · {{selected.targetDisplay.employeeName || '待核实'}} · {{selected.targetDisplay.locationName || '待核实'}}</view>
+    <view wx:if="{{businessType !== 'REPAIR'}}">原组织：{{selected.source_snapshot_json.target.usingOrganizationId || selected.source_snapshot_json.target.organizationId || '未指定'}}；新组织：{{selected.proposed_target_json.usingOrganizationId || selected.proposed_target_json.organizationId || '未指定'}}</view>
     <view wx:if="{{businessType === 'TRANSFER'}}">原所属组织：{{selected.source_snapshot_json.target.owningOrganizationId || '未指定'}}；新所属组织：{{selected.proposed_target_json.owningOrganizationId || '未指定'}}；原仓库：{{selected.source_snapshot_json.target.warehouseId || '未指定'}}；新仓库：{{selected.proposed_target_json.warehouseId || '未指定'}}</view>
-    <view>原责任人员：{{selected.source_snapshot_json.target.employeeId || '仓库保管'}}；新责任人员：{{selected.proposed_target_json.employeeId || '仓库保管'}}</view>
-    <view>原位置：{{selected.source_snapshot_json.target.locationId}}；新位置：{{selected.proposed_target_json.locationId}}</view>
+    <view wx:if="{{businessType !== 'REPAIR'}}">原责任人员：{{selected.source_snapshot_json.target.employeeId || '仓库保管'}}；新责任人员：{{selected.proposed_target_json.employeeId || '仓库保管'}}</view>
+    <view wx:if="{{businessType !== 'REPAIR'}}">原位置：{{selected.source_snapshot_json.target.locationId}}；新位置：{{selected.proposed_target_json.locationId}}</view>
     <view wx:if="{{selected.decision_reason}}">决定意见：{{selected.decision_reason}}</view>
     <view wx:if="{{canApprove && selected.change_status === 'PENDING'}}"><textarea placeholder="管理员核验意见" data-field="decision" value="{{decision}}" bindinput="onField" maxlength="1000" disabled="{{busy || retryable}}" />
       <button data-result="APPROVED" bindtap="onDecision" disabled="{{busy || retryable || !decision}}">批准目标更正</button><button data-result="REJECTED" bindtap="onDecision" disabled="{{busy || retryable || !decision}}">驳回</button>
     </view>
   </view>
+  <navigator url="/pages/repairs/index">维修实际返还与接收</navigator>
   <navigator url="/pages/receipts/index">领用 / 借用实际接收</navigator><navigator url="/pages/transfer-receipts/index">调拨实际接收</navigator>
 </view>

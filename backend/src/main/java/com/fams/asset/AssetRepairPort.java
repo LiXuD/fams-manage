@@ -373,15 +373,20 @@ public class AssetRepairPort {
                 throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_CHANGED", 409);
             }
         }
-        boolean shared = "SHARED".equals(row.get("custody_type"));
-        Long person =
+        return resolveReturnTarget(
+                row.get("custody_type").toString(),
+                nullable(row.get("using_organization_id")),
                 nullable(
                         row.get(
-                                shared
-                                        ? "department_responsible_employee_id"
-                                        : "responsible_employee_id"));
-        Long organization = nullable(row.get("using_organization_id"));
-        Long location = nullable(row.get("current_location_id"));
+                                "PERSONAL".equals(row.get("custody_type"))
+                                        ? "responsible_employee_id"
+                                        : "department_responsible_employee_id")),
+                nullable(row.get("current_location_id")));
+    }
+
+    private Map<String, Object> resolveReturnTarget(
+            String custody, Long organization, Long person, Long location) {
+        boolean shared = "SHARED".equals(custody);
         if (person == null || organization == null || location == null) {
             throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_INACTIVE", 409);
         }
@@ -419,7 +424,7 @@ public class AssetRepairPort {
         long placeVersion = ((Number) places.getFirst().get("version")).longValue();
         var place = activeLocation(location, placeVersion);
         var target = new LinkedHashMap<String, Object>();
-        target.put("custodyType", row.get("custody_type"));
+        target.put("custodyType", custody);
         target.put("employeeId", person.toString());
         target.put("employeeName", people.getFirst().get("name"));
         target.put("employeeVersion", people.getFirst().get("version"));
@@ -431,6 +436,131 @@ public class AssetRepairPort {
         target.put("locationVersion", placeVersion);
         target.put("receiverAccountId", accounts.getFirst().get("id").toString());
         return target;
+    }
+
+    /** Validate a separately approved target without rewriting frozen original responsibility. */
+    public Map<String, Object> approvedReturnTarget(
+            long assetId, long version, String sourceJson, String targetJson) {
+        var source = json.readTree(sourceJson);
+        // Identity and frozen source fields must still match even when the old employee is
+        // inactive.
+        var row = locked(assetId, version);
+        if (!"UNDER_REPAIR".equals(row.get("lifecycle_status"))
+                || !"ACTIVE".equals(row.get("card_stage"))
+                || !"NORMAL".equals(row.get("exception_status"))
+                || !Objects.equals(row.get("custody_type"), source.path("custodyType").asText())) {
+            throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_CHANGED", 409);
+        }
+        for (var field :
+                Map.of(
+                                "using_organization_id",
+                                "usingOrganizationId",
+                                "responsible_employee_id",
+                                "responsibleEmployeeId",
+                                "department_responsible_employee_id",
+                                "departmentResponsibleEmployeeId",
+                                "storage_warehouse_id",
+                                "warehouseId",
+                                "current_location_id",
+                                "locationId")
+                        .entrySet()) {
+            var value = source.path(field.getValue());
+            Long expected = value.isNull() || value.isMissingNode() ? null : value.asLong();
+            if (!Objects.equals(expected, nullable(row.get(field.getKey())))) {
+                throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_CHANGED", 409);
+            }
+        }
+        var input = json.readTree(targetJson);
+        String custody = input.path("custodyType").asText();
+        if (!List.of("PERSONAL", "SHARED").contains(custody)
+                || !List.of("IN_USE", "BORROWED").contains(source.path("lifecycle").asText())) {
+            throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_CHANGED", 409);
+        }
+        Long person = input.path("employeeId").asLong(),
+                org = input.path("organizationId").asLong(),
+                location = input.path("locationId").asLong();
+        if ("BORROWED".equals(source.path("lifecycle").asText())
+                && (!"PERSONAL".equals(custody)
+                        || !Objects.equals(person, source.path("responsibleEmployeeId").asLong())
+                        || !Objects.equals(org, source.path("usingOrganizationId").asLong()))) {
+            throw new AssetHandoverPort.Failure("REPAIR_LOAN_BORROWER_CHANGE_FORBIDDEN", 409);
+        }
+        var target = resolveReturnTarget(custody, org, person, location);
+        if (input.has("receiverAccountId")
+                && !input.path("receiverAccountId")
+                        .asText()
+                        .equals(target.get("receiverAccountId"))) {
+            throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_CHANGED", 409);
+        }
+        for (String field : List.of("employeeVersion", "organizationVersion", "locationVersion")) {
+            if (!input.has(field)
+                    || input.path(field).asLong() != ((Number) target.get(field)).longValue()) {
+                throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_CHANGED", 409);
+            }
+        }
+        var place = activeLocation(location, ((Number) target.get("locationVersion")).longValue());
+        if ("BIN".equals(place.get("location_type"))) {
+            throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_CHANGED", 409);
+        }
+        return target;
+    }
+
+    public long closeApprovedReturn(
+            long assetId,
+            long version,
+            String sourceJson,
+            String targetJson,
+            String observed,
+            long actor,
+            long repair,
+            Instant time) {
+        var target = approvedReturnTarget(assetId, version, sourceJson, targetJson);
+        identity.observedCode(assetId, observed);
+        boolean shared = "SHARED".equals(target.get("custodyType"));
+        db.update(
+                "UPDATE fams_asset SET lifecycle_status=?,custody_type=?,using_organization_id=?,"
+                    + "responsible_employee_id=?,department_responsible_employee_id=?,storage_warehouse_id=NULL,current_location_id=?,version=version+1,updated_by=?,updated_at=?"
+                    + " WHERE id=? AND version=?",
+                json.readTree(sourceJson).path("lifecycle").asText(),
+                target.get("custodyType"),
+                target.get("organizationId"),
+                shared ? null : target.get("employeeId"),
+                shared ? target.get("employeeId") : null,
+                target.get("locationId"),
+                actor,
+                time,
+                assetId,
+                version);
+        mapper.event(
+                assetId,
+                "REPAIR_RETURN_RECEIVED",
+                time,
+                json.writeValueAsString(
+                        Map.of(
+                                "repairId",
+                                Long.toString(repair),
+                                "physicalDeparture",
+                                true,
+                                "target",
+                                target,
+                                "approvedTarget",
+                                true)),
+                actor);
+        return version + 1;
+    }
+
+    public Map<String, String> describeReturnTarget(tools.jackson.databind.JsonNode target) {
+        var labels = new LinkedHashMap<String, String>();
+        for (String kind : List.of("organization", "employee", "location")) {
+            var rows =
+                    db.queryForList(
+                            "SELECT name FROM fams_" + kind + " WHERE id=?",
+                            target.path(kind + "Id").asLong());
+            labels.put(
+                    kind + "Name",
+                    rows.isEmpty() ? "引用已失效" : rows.getFirst().get("name").toString());
+        }
+        return labels;
     }
 
     public void checkRepairIdentity(long assetId, long version, String observed) {

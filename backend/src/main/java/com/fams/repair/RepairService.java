@@ -75,7 +75,12 @@ public class RepairService {
         String where =
                 " FROM fams_repair_request WHERE (? OR creator_account_id=? OR"
                     + " responsible_employee_id=? OR shared_responsible_employee_id=? OR (? AND"
-                    + " using_organization_id=?) OR (? AND approval_snapshot_json IS NOT NULL))";
+                    + " using_organization_id=?) OR (? AND approval_snapshot_json IS NOT NULL) OR"
+                    + " EXISTS(SELECT 1 FROM fams_repair_approved_return_target t WHERE"
+                    + " t.repair_id=fams_repair_request.id AND t.receiver_account_id=? AND"
+                    + " t.employee_id=? AND t.organization_id=? AND (t.custody_type='PERSONAL' OR"
+                    + " ?) AND t.id=(SELECT MAX(t2.id) FROM fams_repair_approved_return_target t2"
+                    + " WHERE t2.repair_id=t.repair_id)))";
         Object[] scope = {
             current.has(Role.ASSET_ADMIN),
             current.id(),
@@ -83,7 +88,11 @@ public class RepairService {
             current.employeeId(),
             current.has(Role.DEPARTMENT_ASSET_MANAGER),
             current.organizationId(),
-            current.has(Role.WAREHOUSE_OPERATOR)
+            current.has(Role.WAREHOUSE_OPERATOR),
+            current.id(),
+            current.employeeId(),
+            current.organizationId(),
+            current.has(Role.DEPARTMENT_ASSET_MANAGER)
         };
         var args = new java.util.ArrayList<Object>(java.util.Arrays.asList(scope));
         args.add(size);
@@ -162,6 +171,13 @@ public class RepairService {
                         id);
         result.put("returnHandovers", wire(returns));
         result.put(
+                "approvedReturnTargets",
+                wire(
+                        db.queryForList(
+                                "SELECT * FROM fams_repair_approved_return_target WHERE repair_id=?"
+                                        + " ORDER BY id DESC LIMIT 100",
+                                id)));
+        result.put(
                 "returnRecollections",
                 wire(
                         db.queryForList(
@@ -207,6 +223,7 @@ public class RepairService {
                                                                         "creator_account_id"))));
         boolean receiver = outstanding != null && isReturnReceiver(current, outstanding);
         actions.put("deliverReturn", processing && away && outstanding == null);
+        actions.put("changeReturnTarget", processing && away && outstanding == null);
         actions.put(
                 "receiveReturn",
                 receiver
@@ -762,10 +779,7 @@ public class RepairService {
         if (!"WAREHOUSE_PROCESSING".equals(row.get("repair_status")) || !hasPhysicalHandling(id)) {
             throw new RepairFailure(409, "REPAIR_PHYSICAL_ACCEPTANCE_REQUIRED");
         }
-        return assets.returnTarget(
-                number(row, "asset_id"),
-                number(row, "asset_version"),
-                row.get("source_snapshot_json").toString());
+        return effectiveReturnTarget(row);
     }
 
     public Map<String, Object> deliverReturn(
@@ -792,16 +806,16 @@ public class RepairService {
             throw new RepairFailure(409, "REPAIR_PHYSICAL_ACCEPTANCE_REQUIRED");
         }
         physicalTime(input.occurredAt(), latestPhysicalTime(row));
+        var approved = approvedTarget(row);
+        if (approved != null) {
+            physicalTime(input.occurredAt(), approved.get("approved_at"));
+        }
         loans.requireContinuable(
                 number(row, "asset_id"),
                 originalLoan(row),
                 input.loanVersion(),
                 LocalDate.ofInstant(clock.instant(), ZoneId.of(row.get("timezone_id").toString())));
-        var target =
-                assets.returnTarget(
-                        number(row, "asset_id"),
-                        input.assetVersion(),
-                        row.get("source_snapshot_json").toString());
+        var target = effectiveReturnTarget(row);
         if (number(target, "employeeVersion") != input.employeeVersion()
                 || number(target, "organizationVersion") != input.organizationVersion()
                 || number(target, "locationVersion") != input.locationVersion()) {
@@ -880,18 +894,31 @@ public class RepairService {
                     LocalDate.ofInstant(
                             clock.instant(), ZoneId.of(row.get("timezone_id").toString())));
             var target = json.readTree(handover.get("target_snapshot_json").toString());
-            next =
-                    assets.closeReturned(
-                            number(row, "asset_id"),
-                            input.assetVersion(),
-                            row.get("source_snapshot_json").toString(),
-                            input.observedCode(),
-                            target.path("employeeVersion").asLong(),
-                            target.path("organizationVersion").asLong(),
-                            target.path("locationVersion").asLong(),
-                            current.id(),
-                            id,
-                            now());
+            if (approvedTarget(row) != null) {
+                next =
+                        assets.closeApprovedReturn(
+                                number(row, "asset_id"),
+                                input.assetVersion(),
+                                row.get("source_snapshot_json").toString(),
+                                handover.get("target_snapshot_json").toString(),
+                                input.observedCode(),
+                                current.id(),
+                                id,
+                                now());
+            } else {
+                next =
+                        assets.closeReturned(
+                                number(row, "asset_id"),
+                                input.assetVersion(),
+                                row.get("source_snapshot_json").toString(),
+                                input.observedCode(),
+                                target.path("employeeVersion").asLong(),
+                                target.path("organizationVersion").asLong(),
+                                target.path("locationVersion").asLong(),
+                                current.id(),
+                                id,
+                                now());
+            }
         } else {
             assets.checkRepairIdentity(
                     number(row, "asset_id"), input.assetVersion(), input.observedCode());
@@ -1044,6 +1071,194 @@ public class RepairService {
                 now(),
                 row.get("id"));
         audit(actor, current, row, action, version, version + 1, input, role(current));
+    }
+
+    private Map<String, Object> approvedTarget(Map<String, Object> row) {
+        var targets =
+                db.queryForList(
+                        "SELECT * FROM fams_repair_approved_return_target WHERE repair_id=? ORDER"
+                                + " BY id DESC LIMIT 1",
+                        row.get("id"));
+        return targets.isEmpty() ? null : targets.getFirst();
+    }
+
+    private Map<String, Object> effectiveReturnTarget(Map<String, Object> row) {
+        var approved = approvedTarget(row);
+        return approved == null
+                ? assets.returnTarget(
+                        number(row, "asset_id"),
+                        number(row, "asset_version"),
+                        row.get("source_snapshot_json").toString())
+                : assets.approvedReturnTarget(
+                        number(row, "asset_id"),
+                        number(row, "asset_version"),
+                        row.get("source_snapshot_json").toString(),
+                        approved.get("target_json").toString());
+    }
+
+    private boolean approvedReceiver(Current current, Map<String, Object> row) {
+        var target = approvedTarget(row);
+        return target != null
+                && current.id() == number(target, "receiver_account_id")
+                && java.util.Objects.equals(
+                        current.employeeId(), nullable(target.get("employee_id")))
+                && java.util.Objects.equals(
+                        current.organizationId(), nullable(target.get("organization_id")))
+                && (!"SHARED".equals(target.get("custody_type"))
+                        || current.has(Role.DEPARTMENT_ASSET_MANAGER));
+    }
+
+    public void lockTargetChange(long id) {
+        header(id);
+    }
+
+    public void requireTargetChangeProcessor(long account, long id) {
+        var row = header(id);
+        if (!java.util.Objects.equals(account, nullable(row.get("processor_account_id")))) {
+            throw new RepairFailure(403, "REPAIR_NOT_PROCESSOR");
+        }
+    }
+
+    public Map<String, Object> targetChangeContext(Actor actor, long id, long item) {
+        var current = actors.revalidateLocked(actor);
+        var row = header(id);
+        if (!current.has(Role.ASSET_ADMIN)) {
+            require(current, Role.WAREHOUSE_OPERATOR);
+            owner(actor, current, row);
+        }
+        if (item != number(row, "asset_id")
+                || !"WAREHOUSE_PROCESSING".equals(row.get("repair_status"))
+                || !hasPhysicalHandling(id)) {
+            throw new RepairFailure(409, "REPAIR_PHYSICAL_ACCEPTANCE_REQUIRED");
+        }
+        if (outstandingReturn(id) != null) {
+            throw new RepairFailure(409, "REPAIR_RETURN_RECOLLECTION_REQUIRED");
+        }
+        lock(row, null);
+        var loan = loans.open(item);
+        loans.requireIdentity(item, originalLoan(row), loan == null ? null : loan.version());
+        var source = json.readTree(row.get("source_snapshot_json").toString());
+        assets.checkRepairIdentity(
+                item, number(row, "asset_version"), source.path("assetCode").asText());
+        var approved = approvedTarget(row);
+        var target = new LinkedHashMap<String, Object>();
+        if (approved != null) {
+            target.putAll(
+                    json.readValue(
+                            approved.get("target_json").toString(),
+                            new tools.jackson.core.type.TypeReference<Map<String, Object>>() {}));
+        } else {
+            target.put("custodyType", source.path("custodyType").asText());
+            target.put("organizationId", source.path("usingOrganizationId").asText());
+            target.put(
+                    "employeeId",
+                    source.path(
+                                    "PERSONAL".equals(source.path("custodyType").asText())
+                                            ? "responsibleEmployeeId"
+                                            : "departmentResponsibleEmployeeId")
+                            .asText());
+            target.put("locationId", source.path("locationId").asText());
+        }
+        var result = new LinkedHashMap<String, Object>();
+        result.put("businessType", "REPAIR");
+        result.put("businessId", Long.toString(id));
+        result.put("itemId", Long.toString(item));
+        result.put("version", row.get("version"));
+        result.put("ownershipVersion", row.get("ownership_version"));
+        result.put("processorAccountId", row.get("processor_account_id").toString());
+        result.put("assetVersion", row.get("asset_version"));
+        result.put("assetCode", source.path("assetCode").asText());
+        result.put("target", target);
+        result.put("approvedTargetId", approved == null ? null : approved.get("id").toString());
+        result.put("loanVersion", loan == null ? null : loan.version());
+        result.put("lastPhysicalTime", wire(latestPhysicalTime(row)));
+        result.put(
+                "lockVersion",
+                db.queryForObject(
+                        "SELECT lock_version FROM fams_asset_business_lock WHERE asset_id=? AND"
+                            + " business_type='REPAIR' AND business_id=? AND released_at IS NULL",
+                        Long.class,
+                        item,
+                        id));
+        return result;
+    }
+
+    public void validateChangedReturnTarget(
+            long id, long item, tools.jackson.databind.JsonNode target) {
+        var row = header(id);
+        if (item != number(row, "asset_id")) {
+            throw new RepairFailure(409, "REPAIR_RETURN_TARGET_CHANGED");
+        }
+        var valid =
+                assets.approvedReturnTarget(
+                        item,
+                        number(row, "asset_version"),
+                        row.get("source_snapshot_json").toString(),
+                        json.writeValueAsString(target));
+        var approved = approvedTarget(row);
+        var old =
+                approved == null
+                        ? json.readTree(row.get("source_snapshot_json").toString())
+                        : json.readTree(approved.get("target_json").toString());
+        boolean original = approved == null;
+        String oldCustody = old.path("custodyType").asText();
+        String oldPerson =
+                old.path(
+                                original
+                                        ? "PERSONAL".equals(oldCustody)
+                                                ? "responsibleEmployeeId"
+                                                : "departmentResponsibleEmployeeId"
+                                        : "employeeId")
+                        .asText();
+        if (oldCustody.equals(valid.get("custodyType"))
+                && oldPerson.equals(valid.get("employeeId"))
+                && old.path(original ? "usingOrganizationId" : "organizationId")
+                        .asText()
+                        .equals(valid.get("organizationId"))
+                && old.path("locationId").asText().equals(valid.get("locationId"))) {
+            throw new RepairFailure(400, "TARGET_CHANGE_UNCHANGED");
+        }
+    }
+
+    public void applyChangedReturnTarget(
+            Actor actor,
+            long id,
+            long item,
+            tools.jackson.databind.JsonNode target,
+            String observedCode,
+            long proposal) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.ASSET_ADMIN);
+        var row = header(id);
+        targetChangeContext(actor, id, item);
+        validateChangedReturnTarget(id, item, target);
+        assets.checkRepairIdentity(item, number(row, "asset_version"), observedCode);
+        var valid =
+                assets.approvedReturnTarget(
+                        item,
+                        number(row, "asset_version"),
+                        row.get("source_snapshot_json").toString(),
+                        json.writeValueAsString(target));
+        db.update(
+                "INSERT INTO fams_repair_approved_return_target(repair_id,proposal_id,target_json,"
+                    + "receiver_account_id,employee_id,organization_id,custody_type,approved_by,approved_at)"
+                    + " VALUES (?,?,?,?,?,?,?,?,?)",
+                id,
+                proposal,
+                json.writeValueAsString(valid),
+                valid.get("receiverAccountId"),
+                valid.get("employeeId"),
+                valid.get("organizationId"),
+                valid.get("custodyType"),
+                current.id(),
+                now());
+        advanceReturn(
+                actor,
+                current,
+                row,
+                number(row, "version"),
+                "REPAIR_RETURN_TARGET_APPROVED",
+                Map.of("proposalId", Long.toString(proposal), "target", valid));
     }
 
     public void photoUploader(Actor actor, long id) {
@@ -1211,7 +1426,8 @@ public class RepairService {
     }
 
     private void visible(Current current, Map<String, Object> row) {
-        if (!(current.has(Role.ASSET_ADMIN)
+        if (!(approvedReceiver(current, row)
+                || current.has(Role.ASSET_ADMIN)
                 || current.id() == number(row, "creator_account_id")
                 || java.util.Objects.equals(
                         current.employeeId(), nullable(row.get("responsible_employee_id")))

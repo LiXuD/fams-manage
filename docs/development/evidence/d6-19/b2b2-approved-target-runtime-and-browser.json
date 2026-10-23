@@ -1,0 +1,66 @@
+{
+  "events": 10,
+  "custody": "PERSONAL",
+  "inbound": 0,
+  "repairs": 1,
+  "physical": 1,
+  "received": 1,
+  "completed": 1,
+  "lifecycle": "IN_USE",
+  "liveLocks": 0,
+  "openLoans": 0,
+  "deliveries": 2,
+  "recollected": 1,
+  "assetVersion": 2,
+  "approvedTargets": 1,
+  "web_url": "http://127.0.0.1:55770",
+  "api_port": 55768,
+  "artifact_sha256": "3fdf94997ffb68a11d4f03eb7752c79e278efc052641eb52438b669a9ed4f79c",
+  "source_state": "B2b2 worktree package on 6bcf34b, not fixed gate candidate",
+  "asset_code": "OWNED19-985010",
+  "original_dates_and_source_preserved": true,
+  "actual_refusal_and_recollection_preserved": true,
+  "actual_committing_process_group_killed": 97678,
+  "new_process_group": 98464,
+  "permanent_original_new_receiver_receipt_after_new_JVM": true,
+  "no_duplicate_event_or_return": true,
+  "runtime": {
+    "populated_V46_to_V47_upgrade": 1,
+    "return_http_including_actual_native": 18,
+    "physical_http": 8,
+    "technical_http": 11,
+    "original_repair_http": 14,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "web_tests": 123,
+  "mini_tests": 201,
+  "types_lint_build": "PASS",
+  "static": {
+    "checkstyle": 0,
+    "spotbugs": 0,
+    "scope": "skipTests verify; no coverage claim"
+  },
+  "owned_environment_cleanup": true,
+  "native_scope": "Actual target-change and repair Page handlers, opaque sessions and real Spring/MySQL; committed approved target decision reply dropped then exact original decision replay, actual new receiver receipt. SDK confirmation and local HTTPS adapter explicit; no device claim.",
+  "pc_scope": "Employee report; administrator repair scope; warehouse claim and actual departure; original receiver refusal; actual warehouse recollection; warehouse explicit new target proposal; administrator approval without completion; new actual delivery and receipt by approved new receiver.",
+  "screenshots": [
+    "output/playwright/d6-19b2b2-actual-approved-target.png",
+    "output/playwright/d6-19b2b2-actual-new-receiver-completed.png"
+  ],
+  "console_warnings_or_errors": [],
+  "limitations": [
+    "Separate worktree package; fixed complete gate still pending",
+    "B2c controlled reassignment, inherited repair exception proxy receipt and C remain mandatory",
+    "V1-V47 immutable; coordinated replacement of old writers only, no mixed old writers or direct downgrade",
+    "External device/SMS/WeChat, remote CI, formal QA, production and independent review unverified",
+    "No new attachment/scanner workflow in this environment"
+  ],
+  "retained_failed_attempts": [
+    "output/d6-19b2b2-return-final-runtime-1-fixture-path-failed.log:17/18 passed; extra slash in collection query fixture corrected",
+    "First PC pending-result test hid retry after terminal props; fixed and verified",
+    "First mini permission-rejection test retained retry marker after clearing authority; fixed and verified",
+    "Real PC catalog used absent total and unscoped employee query; switched to actual scoped catalog with page-length navigation and added regression"
+  ]
+}
