@@ -1,0 +1,62 @@
+{
+  "events": 6,
+  "custody": "STORAGE",
+  "inbound": 1,
+  "repairs": 1,
+  "physical": 1,
+  "completed": 1,
+  "lifecycle": "IN_STOCK",
+  "liveLocks": 0,
+  "assetVersion": 2,
+  "reassignments": 1,
+  "web_url": "http://127.0.0.1:56670",
+  "api_port": 56668,
+  "artifact_sha256": "312843c361ba5109cd92d1cae6ff068d806897d50cc8912bf7678f4aa6eacc67",
+  "source_state": "B2c worktree package on d468cf7, not fixed gate candidate",
+  "asset_code": "OWNED19-985010",
+  "original_dates_and_source_preserved": true,
+  "physical_handler_preserved": true,
+  "new_warehouse_actual_inbound": true,
+  "actual_committing_process_group_killed": 71724,
+  "new_process_group": 72231,
+  "permanent_original_reassignment_after_new_JVM": true,
+  "no_duplicate_event_or_reassignment": true,
+  "runtime": {
+    "reassignment_http_including_actual_native": 15,
+    "prior_return_http": 19,
+    "physical_http": 8,
+    "technical_http": 11,
+    "original_http": 14,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "web_tests": 127,
+  "mini_tests": 205,
+  "types_lint_build": "PASS",
+  "static": {
+    "checkstyle": 0,
+    "spotbugs": 0,
+    "scope": "skipTests verify; no coverage claim"
+  },
+  "owned_environment_cleanup": true,
+  "console_warnings_or_errors": [],
+  "screenshots": [
+    "output/playwright/d6-19b2c-actual-reassigned.png",
+    "output/playwright/d6-19b2c-actual-new-warehouse-completed.png"
+  ],
+  "native_scope": "Actual repair Page handlers and opaque sessions through Spring/MySQL; committed reassignment response dropped then immutable original retry; SDK confirmation and local HTTPS adapter explicit, no device acceptance.",
+  "pc_scope": "Employee report, administrator scope approval, original warehouse claim and actual away acceptance, explicit administrator controlled reassignment with handover evidence, actual new warehouse inbound.",
+  "retained_failed_attempts": [
+    "output/d6-19b2c-reassignment-runtime-1-error-mapping-failed.log: new controller missing repair handler scope caused expected 400/409 to return 500; fixed",
+    "output/d6-19b2c-reassignment-runtime-3-test-import-failed.log: missing test imports; fixed",
+    "output/d6-19b2c-browser-runtime-1-reconstructed-replay-failed.log: first complete PC flow and SQL assertions passed, reconstructed same-semantic replay failed after MySQL reordered JSON keys; new reassignment-only canonical fingerprint fixes this; first package/screenshots retained separately"
+  ],
+  "limitations": [
+    "Fixed candidate complete gate still pending",
+    "B inherited repair exception proxy acceptance and C remain mandatory",
+    "No new photo/scanner workflow in this owned environment",
+    "Independent review, remote CI, formal QA, production and real external devices unverified",
+    "V1-V47 immutable; no new migration for append-only reassignment event evidence"
+  ]
+}

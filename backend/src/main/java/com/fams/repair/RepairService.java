@@ -237,6 +237,11 @@ public class RepairService {
                         && "WAITING_RECEIPT".equals(outstanding.get("handover_status")));
         actions.put("refuseReturn", actions.get("receiveReturn"));
         actions.put("recollectReturn", processing && outstanding != null);
+        actions.put(
+                "reassign",
+                current.has(Role.ASSET_ADMIN)
+                        && "WAREHOUSE_PROCESSING".equals(row.get("repair_status"))
+                        && row.get("processor_account_id") != null);
         result.put("actions", actions);
         return result;
     }
@@ -1268,6 +1273,181 @@ public class RepairService {
                 number(row, "version"),
                 "REPAIR_RETURN_TARGET_APPROVED",
                 Map.of("proposalId", Long.toString(proposal), "target", valid));
+    }
+
+    public Map<String, Object> reassignment(Actor actor, long id) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.ASSET_ADMIN);
+        var row = reassignable(id);
+        var snapshot = reassignmentSnapshot(row);
+        var operators =
+                db.queryForList(
+                        "SELECT a.id,e.name FROM fams_system_account a JOIN fams_employee e ON"
+                            + " e.id=a.employee_id JOIN fams_organization o ON"
+                            + " o.id=e.organization_id JOIN fams_account_role r ON"
+                            + " r.account_id=a.id WHERE a.status='ENABLED' AND"
+                            + " a.initial_password_required=FALSE AND e.status='ACTIVE' AND"
+                            + " o.status='ACTIVE' AND r.role_code='WAREHOUSE_OPERATOR' AND a.id<>?"
+                            + " ORDER BY a.id",
+                        row.get("processor_account_id"));
+        return Map.of("snapshot", snapshot, "operators", wire(operators));
+    }
+
+    public Map<String, Object> reassign(
+            Actor actor,
+            long id,
+            long version,
+            UUID key,
+            RepairReassignmentController.Input input) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.ASSET_ADMIN);
+        String operation = "REASSIGN:" + id;
+        String fingerprint =
+                hash(operation, version, canonicalReassignment(json.valueToTree(input)));
+        var prior = replay(actor, current, operation, key, fingerprint);
+        if (prior != null) {
+            return prior;
+        }
+        // Target account locks precede the header, matching execution's actor-first order.
+        var targets =
+                db.queryForList(
+                        "SELECT id,employee_id,status,initial_password_required FROM"
+                                + " fams_system_account WHERE id=? FOR UPDATE",
+                        input.processorAccountId());
+        if (targets.isEmpty()
+                || !"ENABLED".equals(targets.getFirst().get("status"))
+                || Boolean.TRUE.equals(targets.getFirst().get("initial_password_required"))) {
+            throw new RepairFailure(409, "REPAIR_PROCESSOR_INVALID");
+        }
+        var eligible =
+                db.queryForList(
+                        "SELECT e.id FROM fams_employee e JOIN fams_organization o ON"
+                            + " o.id=e.organization_id JOIN fams_account_role r ON r.account_id=?"
+                            + " WHERE e.id=? AND e.status='ACTIVE' AND o.status='ACTIVE' AND"
+                            + " r.role_code='WAREHOUSE_OPERATOR' FOR UPDATE",
+                        input.processorAccountId(),
+                        targets.getFirst().get("employee_id"));
+        if (eligible.isEmpty()) {
+            throw new RepairFailure(409, "REPAIR_PROCESSOR_INVALID");
+        }
+        var row = reassignable(id);
+        guard(actor, current, row, version, "WAREHOUSE_PROCESSING");
+        if (input.processorAccountId() == number(row, "processor_account_id")) {
+            throw new RepairFailure(409, "REPAIR_OWNERSHIP_CHANGED");
+        }
+        if (!input.unsynchronizedResultsChecked()) {
+            throw new RepairFailure(400, "REPAIR_REASSIGNMENT_CHECK_REQUIRED");
+        }
+        var snapshot = reassignmentSnapshot(row);
+        if (!json.readTree(json.writeValueAsString(snapshot)).equals(input.snapshot())) {
+            throw new RepairFailure(409, "REPAIR_REASSIGNMENT_SNAPSHOT_CHANGED");
+        }
+        var detail = new LinkedHashMap<String, Object>();
+        detail.put("previousProcessorAccountId", row.get("processor_account_id").toString());
+        detail.put("processorAccountId", Long.toString(input.processorAccountId()));
+        detail.put("snapshot", snapshot);
+        detail.put("reason", input.reason());
+        detail.put("evidence", input.evidence());
+        detail.put("unsynchronizedResultsChecked", true);
+        db.update(
+                "UPDATE fams_repair_request SET"
+                    + " processor_account_id=?,ownership_version=ownership_version+1,version=version+1,updated_at=?"
+                    + " WHERE id=?",
+                input.processorAccountId(),
+                now(),
+                id);
+        db.update(
+                "UPDATE fams_todo SET assignee_account_id=? WHERE business_type='REPAIR' AND"
+                        + " business_id=? AND pool_type='WAREHOUSE_OPERATOR' AND closed_at IS NULL",
+                input.processorAccountId(),
+                id);
+        audit(
+                actor,
+                current,
+                row,
+                "REPAIR_CONTROLLED_REASSIGNMENT",
+                version,
+                version + 1,
+                detail,
+                Role.ASSET_ADMIN.name());
+        var result = get(actor, id);
+        saveReceipt(current, operation, key, fingerprint, id, result);
+        return result;
+    }
+
+    private tools.jackson.databind.JsonNode canonicalReassignment(
+            tools.jackson.databind.JsonNode value) {
+        if (value.isObject()) {
+            var sorted = json.createObjectNode();
+            value.properties().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .forEach(
+                            entry ->
+                                    sorted.set(
+                                            entry.getKey(),
+                                            canonicalReassignment(entry.getValue())));
+            return sorted;
+        }
+        if (value.isArray()) {
+            var ordered = json.createArrayNode();
+            value.forEach(item -> ordered.add(canonicalReassignment(item)));
+            return ordered;
+        }
+        return value;
+    }
+
+    private Map<String, Object> reassignable(long id) {
+        var row = header(id);
+        if (!"WAREHOUSE_PROCESSING".equals(row.get("repair_status"))
+                || row.get("processor_account_id") == null
+                || row.get("approval_snapshot_json") == null) {
+            throw new RepairFailure(409, "REPAIR_NOT_PROCESSING");
+        }
+        return row;
+    }
+
+    private Map<String, Object> reassignmentSnapshot(Map<String, Object> row) {
+        long id = number(row, "id"), assetId = number(row, "asset_id");
+        lock(row, null);
+        var loan = loans.open(assetId);
+        loans.requireIdentity(assetId, originalLoan(row), loan == null ? null : loan.version());
+        if (row.get("accepted_at") == null) {
+            assets.requireSubmitted(assetId, number(row, "asset_version"));
+        } else {
+            assets.checkRepairIdentity(
+                    assetId,
+                    number(row, "asset_version"),
+                    json.readTree(row.get("source_snapshot_json").toString())
+                            .path("assetCode")
+                            .asText());
+        }
+        var snapshot = new LinkedHashMap<String, Object>();
+        snapshot.put("id", Long.toString(id));
+        snapshot.put("version", row.get("version"));
+        snapshot.put("ownershipVersion", row.get("ownership_version"));
+        snapshot.put("processorAccountId", row.get("processor_account_id").toString());
+        snapshot.put("assetVersion", row.get("asset_version"));
+        snapshot.put(
+                "lockVersion",
+                db.queryForObject(
+                        "SELECT lock_version FROM fams_asset_business_lock WHERE asset_id=? AND"
+                            + " business_type='REPAIR' AND business_id=? AND released_at IS NULL",
+                        Long.class,
+                        assetId,
+                        id));
+        snapshot.put("acceptedAt", wire(row.get("accepted_at")));
+        snapshot.put(
+                "physicalHandling",
+                wire(
+                        db.queryForList(
+                                "SELECT * FROM fams_repair_physical_handling WHERE repair_id=?",
+                                id)));
+        snapshot.put("outstandingReturn", wire(outstandingReturn(id)));
+        snapshot.put("lastPhysicalTime", wire(latestPhysicalTime(row)));
+        var approved = approvedTarget(row);
+        snapshot.put("approvedTargetId", approved == null ? null : approved.get("id").toString());
+        snapshot.put("loan", loan);
+        return snapshot;
     }
 
     public void photoUploader(Actor actor, long id) {

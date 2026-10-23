@@ -21,6 +21,7 @@ import java.util.UUID;
 @RestControllerAdvice(
         assignableTypes = {
             RepairController.class,
+            RepairReassignmentController.class,
             RepairPhotoController.class,
             RepairCollaborationController.class,
             RepairCollaborationPhotoController.class

@@ -18,14 +18,15 @@ interface Data { rows: Repair[]; assets: Asset[]; detail: Repair | null; selecte
     warehouses: PhysicalPlace[]; physicalLocations: PhysicalPlace[]; physicalWarehouseId: string; physicalLocationId: string;
     warehousePage: number; warehouseTotal: number; physicalLocationPage: number; physicalLocationTotal: number;
     returnMode: ReturnMode; returnTarget: ReturnTarget | null; returnObservedCode: string; returnAt: string; returnEvidence: string; returnChecked: boolean;
-    returnLocations: PhysicalPlace[]; returnLocationId: string; returnLocationPage: number; returnLocationTotal: number }
+    returnLocations: PhysicalPlace[]; returnLocationId: string; returnLocationPage: number; returnLocationTotal: number; reassignment: Reassignment | null; reassignTarget: string; reassignReason: string; reassignEvidence: string; reassignChecked: boolean }
+interface Reassignment { snapshot: { version: number; acceptedAt: string | null; physicalHandling: unknown[]; outstandingReturn: { handover_status: string } | null }; operators: { id: string; name: string }[] }
 interface Context { data: Data; setData(data: Partial<Data>): void }
 const blank = (): Data => ({ rows: [], assets: [], detail: null, selectedAsset: "", assetPage: 1, assetTotal: 0, page: 1, total: 0,
     busy: false, retry: false, error: "", fault: "", impact: "MEDIUM", occurredAt: "", reason: "", observedCode: "", evidence: "",
     locationConfirmed: false, neverLeft: false, photoPath: "", photoName: "", physicalMode: "away", physicalObservedCode: "", physicalAt: "", physicalEvidence: "",
     warehouses: [], physicalLocations: [], physicalWarehouseId: "", physicalLocationId: "", warehousePage: 1, warehouseTotal: 0, physicalLocationPage: 1, physicalLocationTotal: 0,
     returnMode: "delivery", returnTarget: null, returnObservedCode: "", returnAt: "", returnEvidence: "", returnChecked: false,
-    returnLocations: [], returnLocationId: "", returnLocationPage: 1, returnLocationTotal: 0 });
+    returnLocations: [], returnLocationId: "", returnLocationPage: 1, returnLocationTotal: 0, reassignment: null, reassignTarget: "", reassignReason: "", reassignEvidence: "", reassignChecked: false });
 export function createRepairPage(getServices: () => MiniServices) {
     let services: MiniServices, identity = "", live = false, generation = 0, pending: Pending | null = null, selectedId = "", photo = "";
     const current = (epoch: number) => live && epoch === generation && identity === JSON.stringify(services.sessions.identity);
@@ -47,7 +48,7 @@ export function createRepairPage(getServices: () => MiniServices) {
         const epoch = ++generation; clearPhoto(); page.setData({ busy: true, error: "", detail: null, rows: [], assets: [], photoPath: "", photoName: "",
             warehouses: [], physicalLocations: [], physicalWarehouseId: "", physicalLocationId: "", physicalObservedCode: "", physicalAt: "", physicalEvidence: "",
             returnTarget: null, returnObservedCode: "", returnAt: "", returnEvidence: "", returnChecked: false,
-            returnLocations: [], returnLocationId: "", returnLocationPage: 1, returnLocationTotal: 0 });
+            returnLocations: [], returnLocationId: "", returnLocationPage: 1, returnLocationTotal: 0, reassignment: null, reassignTarget: "", reassignReason: "", reassignEvidence: "", reassignChecked: false });
         try {
             const rows = await services.sessions.request("GET", `/api/v1/mini/repairs?page=${page.data.page}&pageSize=20`) as { items: Repair[]; total: number };
             if (!current(epoch)) return;
@@ -93,7 +94,7 @@ export function createRepairPage(getServices: () => MiniServices) {
         },
         onField(this: Context, event: { currentTarget: { dataset: { field: string } }; detail: { value: string } }) {
             const field = event.currentTarget.dataset.field;
-            if (!this.data.busy && !pending && ["fault","occurredAt","reason","observedCode","evidence","physicalObservedCode","physicalAt","physicalEvidence","returnObservedCode","returnAt","returnEvidence"].includes(field)) this.setData({ [field]: event.detail.value });
+            if (!this.data.busy && !pending && ["fault","occurredAt","reason","observedCode","evidence","physicalObservedCode","physicalAt","physicalEvidence","returnObservedCode","returnAt","returnEvidence","reassignReason","reassignEvidence"].includes(field)) this.setData({ [field]: event.detail.value });
         },
         onImpact(this: Context, event: { detail: { value: string } }) { const impact = ["LOW","MEDIUM","HIGH"][Number(event.detail.value)]; if (!this.data.busy && !pending && impact) this.setData({ impact }); },
         onPhysical(this: Context, event: { detail: { value: string[] } }) { if (!this.data.busy && !pending) this.setData({ neverLeft: event.detail.value.includes("neverLeft"), locationConfirmed: event.detail.value.includes("location") }); },
@@ -181,6 +182,32 @@ export function createRepairPage(getServices: () => MiniServices) {
             }
             await confirm(this, { path: `/api/v1/mini/repairs/${row.id}/return-${mode}`, key: services.createKey(), version: row.version, body },
                 "按实物事实保存本次返还办理：交出保持维修与锁，实际接收才恢复原责任和有效借用；拒收后须库管实际收回才可回库。");
+        },
+        async onReassignment(this: Context) {
+            if (this.data.busy || pending || !current(generation) || !this.data.detail?.actions.reassign) return;
+            const epoch = generation; this.setData({ busy: true, error: "" });
+            try { const result = await services.sessions.request("GET", `/api/v1/mini/repairs/${this.data.detail.id}/reassignment`) as Reassignment;
+                if (current(epoch)) this.setData({ reassignment: result, reassignTarget: "", reassignChecked: false });
+            } catch (error) { if (current(epoch)) failure(this, error); } finally { finish(this, epoch); }
+        },
+        onReassignTarget(this: Context, event: { currentTarget: { dataset: { id: string } } }) {
+            const id = event.currentTarget.dataset.id;
+            if (!this.data.busy && !pending && current(generation) && this.data.reassignment?.operators.some(row => row.id === id)) this.setData({ reassignTarget: id });
+        },
+        onReassignChecked(this: Context, event: { detail: { value: string[] } }) {
+            if (!this.data.busy && !pending && current(generation)) this.setData({ reassignChecked: event.detail.value.includes("checked") });
+        },
+        async onReassign(this: Context) {
+            const row = this.data.detail, context = this.data.reassignment;
+            if (this.data.busy || pending || !current(generation) || !row?.actions.reassign || !context) return;
+            if (!this.data.reassignChecked || !context.operators.some(row => row.id === this.data.reassignTarget)
+                || this.data.reassignReason.trim().length < 3 || this.data.reassignEvidence.trim().length < 10) {
+                this.setData({ error: "请选择有效接任库管，核对未同步结果并填写原因和实际交接凭证。" }); return;
+            }
+            await confirm(this, { path: `/api/v1/mini/repairs/${row.id}/reassignment`, key: services.createKey(), version: context.snapshot.version,
+                body: { processorAccountId: this.data.reassignTarget, snapshot: JSON.parse(JSON.stringify(context.snapshot)) as unknown,
+                    reason: this.data.reassignReason.trim(), evidence: this.data.reassignEvidence.trim(), unsynchronizedResultsChecked: true } },
+                "确认转移唯一处理权；保留原审批、资产锁及所有实物交接，已交出设备仍须实际接收或收回。");
         },
         async onSubmit(this: Context) {
             const asset = this.data.assets.find(row => row.id === this.data.selectedAsset), at = new Date(this.data.occurredAt);
