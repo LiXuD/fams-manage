@@ -1,0 +1,11 @@
+{
+  "source_candidate": "a353a53",
+  "artifact_sha256": "c0f4d3759797fc26951b3ac5802ec64f487398db0c3b343a900bbc9d6d888eff",
+  "columns_sha256": "9e6e1016199735978fd3a4e7ba6d13ac08b6062f17f6aef20f69068331295998",
+  "create_sha256": "ccfda552bac2ba2645ab2ec8dfd6a68f15b4f73e75594485e730529a8237b8fd",
+  "objects": 127,
+  "business_rows_read": false,
+  "schema_version": 47,
+  "owned_environment_cleanup": true,
+  "scope": "Metadata only from fixed a353a53 artifact; no business rows read; identical structure hashes to previous fixed V47 witness"
+}
