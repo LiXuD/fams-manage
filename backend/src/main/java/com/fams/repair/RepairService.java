@@ -242,6 +242,11 @@ public class RepairService {
                 current.has(Role.ASSET_ADMIN)
                         && "WAREHOUSE_PROCESSING".equals(row.get("repair_status"))
                         && row.get("processor_account_id") != null);
+        actions.put(
+                "proxyReturn",
+                processing
+                        && outstanding != null
+                        && "WAITING_RECEIPT".equals(outstanding.get("handover_status")));
         result.put("actions", actions);
         return result;
     }
@@ -1446,8 +1451,210 @@ public class RepairService {
         snapshot.put("lastPhysicalTime", wire(latestPhysicalTime(row)));
         var approved = approvedTarget(row);
         snapshot.put("approvedTargetId", approved == null ? null : approved.get("id").toString());
-        snapshot.put("loan", loan);
+        snapshot.put("loan", loanWire(loan));
         return snapshot;
+    }
+
+    private Map<String, Object> loanWire(LoanRepairPort.Context loan) {
+        return loan == null
+                ? null
+                : Map.of(
+                        "id",
+                        Long.toString(loan.id()),
+                        "version",
+                        loan.version(),
+                        "borrowerEmployeeId",
+                        Long.toString(loan.borrowerEmployeeId()),
+                        "organizationId",
+                        Long.toString(loan.organizationId()),
+                        "expectedReturnDate",
+                        loan.expectedReturnDate().toString());
+    }
+
+    public boolean proxyProcessor(long account, long id, boolean locked) {
+        return !db.queryForList(
+                        "SELECT id FROM fams_repair_request WHERE id=? AND processor_account_id=?"
+                                + (locked ? " FOR UPDATE" : ""),
+                        id,
+                        account)
+                .isEmpty();
+    }
+
+    public Map<String, Object> proxySnapshot(Actor actor, long id, long item, boolean executing) {
+        var current = actors.revalidateLocked(actor);
+        var row = header(id);
+        if (executing) {
+            require(current, Role.WAREHOUSE_OPERATOR);
+            owner(actor, current, row);
+        } else {
+            require(current, Role.ASSET_ADMIN);
+        }
+        var handover = outstandingReturn(id);
+        if (item != number(row, "asset_id")
+                || !"WAREHOUSE_PROCESSING".equals(row.get("repair_status"))
+                || !hasPhysicalHandling(id)
+                || handover == null
+                || !"WAITING_RECEIPT".equals(handover.get("handover_status"))) {
+            throw new RepairFailure(409, "REPAIR_PROXY_RECEIPT_NOT_PENDING");
+        }
+        lock(row, null);
+        var loan = loans.open(item);
+        loans.requireContinuable(
+                item,
+                originalLoan(row),
+                loan == null ? null : loan.version(),
+                LocalDate.ofInstant(clock.instant(), ZoneId.of(row.get("timezone_id").toString())));
+        var target =
+                assets.proxyReturnTarget(
+                        item,
+                        number(row, "asset_version"),
+                        row.get("source_snapshot_json").toString(),
+                        handover.get("target_snapshot_json").toString());
+        if (number(handover, "before_asset_version") != number(row, "asset_version")) {
+            throw new RepairFailure(409, "REPAIR_RETURN_RECEIPT_CHANGED");
+        }
+        var snapshot = new LinkedHashMap<String, Object>();
+        snapshot.put("businessType", "REPAIR");
+        snapshot.put("businessId", Long.toString(id));
+        snapshot.put("itemId", Long.toString(item));
+        snapshot.put("assetId", Long.toString(item));
+        snapshot.put("version", row.get("version"));
+        snapshot.put("ownershipVersion", row.get("ownership_version"));
+        snapshot.put("processorAccountId", row.get("processor_account_id").toString());
+        snapshot.put("assetVersion", row.get("asset_version"));
+        snapshot.put(
+                "assetCode",
+                json.readTree(row.get("source_snapshot_json").toString())
+                        .path("assetCode")
+                        .asText());
+        snapshot.put("handoverId", handover.get("id").toString());
+        snapshot.put("deliveredAt", wire(handover.get("delivered_at")));
+        snapshot.put("targetEmployeeId", target.get("employeeId"));
+        snapshot.put("target", target);
+        snapshot.put("loan", loanWire(loan));
+        var approved = approvedTarget(row);
+        snapshot.put("approvedTargetId", approved == null ? null : approved.get("id").toString());
+        snapshot.put(
+                "lockVersion",
+                db.queryForObject(
+                        "SELECT lock_version FROM fams_asset_business_lock WHERE asset_id=? AND"
+                            + " business_type='REPAIR' AND business_id=? AND released_at IS NULL",
+                        Long.class,
+                        item,
+                        id));
+        return snapshot;
+    }
+
+    public Map<String, Object> proxyReceipt(
+            Actor actor,
+            long id,
+            long item,
+            Map<String, Object> expected,
+            String observed,
+            long confirmation,
+            com.fams.proxy.ProxyReceiptPort.ExecutionEvidence proof) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.WAREHOUSE_OPERATOR);
+        var row = header(id);
+        owner(actor, current, row);
+        var actual = proxySnapshot(actor, id, item, true);
+        if (!json.readTree(json.writeValueAsString(actual))
+                .equals(json.readTree(json.writeValueAsString(expected)))) {
+            throw new RepairFailure(409, "PROXY_RECEIPT_SCOPE_CHANGED");
+        }
+        var handover = returnHandover(id, Long.parseLong(actual.get("handoverId").toString()));
+        physicalTime(proof.actualReceivedAt(), handover.get("delivered_at"));
+        if (confirmation < 1
+                || proof.actualSigner() == null
+                || proof.actualSigner().isBlank()
+                || !proof.delegatedReceipt()
+                        && !java.util.Objects.equals(
+                                proof.actualSignerEmployeeId(),
+                                Long.valueOf(actual.get("targetEmployeeId").toString()))
+                || !json.readTree(proof.evidenceJson()).isArray()
+                || json.readTree(proof.evidenceJson()).isEmpty()) {
+            throw new RepairFailure(400, "REPAIR_PROXY_EVIDENCE_REQUIRED");
+        }
+        long next =
+                assets.closeProxyReturn(
+                        item,
+                        number(row, "asset_version"),
+                        row.get("source_snapshot_json").toString(),
+                        handover.get("target_snapshot_json").toString(),
+                        observed,
+                        current.id(),
+                        id,
+                        confirmation,
+                        now());
+        db.update(
+                "UPDATE fams_repair_return_handover SET handover_status='RECEIVED',receipt_at=?,"
+                        + "receipt_evidence=?,received_by=? WHERE id=?",
+                proof.actualReceivedAt(),
+                "经管理员批准的异常代确认 #" + confirmation + "；实际签收人：" + proof.actualSigner(),
+                current.id(),
+                handover.get("id"));
+        db.update(
+                "INSERT INTO"
+                    + " fams_repair_proxy_return_evidence(handover_id,repair_id,confirmation_id,"
+                    + "actual_signer,actual_signer_employee_id,delegated_receipt,actual_received_at,approved_by,executed_by,metadata_json,evidence_json,recorded_at)"
+                    + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                handover.get("id"),
+                id,
+                confirmation,
+                proof.actualSigner(),
+                proof.delegatedReceipt() ? null : proof.actualSignerEmployeeId(),
+                proof.delegatedReceipt(),
+                proof.actualReceivedAt(),
+                proof.approvedBy(),
+                current.id(),
+                proof.metadataJson(),
+                proof.evidenceJson(),
+                now());
+        closeTodos(id);
+        db.update(
+                "UPDATE fams_repair_request SET"
+                    + " repair_status='COMPLETED',completed_at=?,asset_version=?,version=version+1,updated_at=?"
+                    + " WHERE id=?",
+                now(),
+                next,
+                now(),
+                id);
+        release(row, "REPAIR_PROXY_RETURN_RECEIVED");
+        closeCollaborations(id);
+        audit(
+                actor,
+                current,
+                row,
+                "REPAIR_PROXY_RETURN_RECEIVED",
+                number(row, "version"),
+                number(row, "version") + 1,
+                Map.of(
+                        "confirmationId",
+                        Long.toString(confirmation),
+                        "handoverId",
+                        handover.get("id").toString(),
+                        "actualSigner",
+                        proof.actualSigner(),
+                        "actualReceivedAt",
+                        proof.actualReceivedAt().toString(),
+                        "delegatedReceipt",
+                        proof.delegatedReceipt()),
+                Role.WAREHOUSE_OPERATOR.name());
+        return Map.of(
+                "businessId",
+                Long.toString(id),
+                "repairId",
+                Long.toString(id),
+                "itemId",
+                Long.toString(item),
+                "assetCode",
+                actual.get("assetCode"),
+                "targetEmployeeId",
+                actual.get("targetEmployeeId"),
+                "status",
+                "COMPLETED",
+                "version",
+                number(row, "version") + 1);
     }
 
     public void photoUploader(Actor actor, long id) {

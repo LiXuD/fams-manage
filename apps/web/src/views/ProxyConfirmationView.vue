@@ -1,106 +1,108 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { loanMessage, loanRequest, type LoanMutation } from "@/loan/api";
+import { AuthApiError } from "@/auth/api";
+import { LoanApiError, loanMessage, loanRequest, type LoanMutation } from "@/loan/api";
 import { downloadAttachment, type Attachment } from "@/attachment/api";
+import { formatProxyTime } from "@/proxy/time";
 import { uploadProxyEvidence, type ProxyConfirmation, type ProxyPage } from "@/proxy/api";
-
-const route = useRoute(); const router = useRouter(); const session = useSessionStore();
-const rows = ref<ProxyConfirmation[]>([]); const selected = ref<ProxyConfirmation | null>(null);
-const attachments = ref<Attachment[]>([]); const snapshot = ref<Record<string, unknown> | null>(null);
-const page = ref(1); const total = ref(0); const busy = ref(false); const error = ref("");
-const pending = ref<LoanMutation | null>(null);
-const pendingUpload = ref<{ id: string; version: number; file: File; key: string } | null>(null);
+const route = useRoute(), router = useRouter(), session = useSessionStore();
+const rows = ref<ProxyConfirmation[]>([]), selected = ref<ProxyConfirmation | null>(null);
+const attachments = ref<Attachment[]>([]), snapshot = ref<Record<string, unknown> | null>(null);
+const page = ref(1), total = ref(0), busy = ref(false), error = ref("");
+const pending = ref<LoanMutation | null>(null), pendingUpload = ref<{ id: string; version: number; file: File; key: string } | null>(null);
 const file = ref<File | null>(null);
-const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
-const warehouse = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR"));
+const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN")), warehouse = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR"));
 const locked = computed(() => busy.value || !!pending.value || !!pendingUpload.value);
-const form = ref({ observedAssetCode: "", actualSigner: "", actualSignerEmployeeId: "",
-  actualReceivedAt: "", cannotConfirmReason: "", contactRecord: "", delegatedReceipt: false,
-  delegationRelationship: "", delegationBasis: "", evidenceKind: "SIGNED_RECEIPT",
-  collectionMethod: "CODE_CONFIRMED", manualReason: "", targetOrAuthorizedProxyReceived: false });
-const decision = ref({ reason: "", physicalEvidenceChecked: false, noDisputeChecked: false });
-const labels: Record<string, string> = { DRAFT: "凭证草稿", SUBMITTED: "待管理员批准",
-  APPROVED: "已批准，待库管执行", REJECTED: "已驳回", EXECUTED: "已执行", WITHDRAWN: "已撤回" };
-
-async function list() {
-  const result = await loanRequest<ProxyPage>(`/proxy-confirmations?page=${page.value}&pageSize=20`);
-  rows.value = result.items; total.value = result.total;
+const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken]));
+const emptyForm = () => ({ observedAssetCode: "", actualSigner: "", actualSignerEmployeeId: "", actualReceivedAt: "", cannotConfirmReason: "", contactRecord: "", delegatedReceipt: false,
+  delegationRelationship: "", delegationBasis: "", evidenceKind: "SIGNED_RECEIPT", collectionMethod: "CODE_CONFIRMED", manualReason: "", targetOrAuthorizedProxyReceived: false });
+const form = ref(emptyForm()), decision = ref({ reason: "", physicalEvidenceChecked: false, noDisputeChecked: false });
+const labels: Record<string, string> = { DRAFT: "凭证草稿", SUBMITTED: "待管理员批准", APPROVED: "已批准，待库管执行", REJECTED: "已驳回", EXECUTED: "已执行", WITHDRAWN: "已撤回" };
+const businessLabels: Record<string, string> = { REQUISITION: "领用/借用", TRANSFER: "调拨", REPAIR: "维修返还" };
+const businessLink = (type: string, id: string) => type === "REPAIR" ? { path: "/repairs/" + id } : { path: type === "TRANSFER" ? "/transfers" : "/requisitions", query: { id } };
+let generation = 0, live = true;
+const current = (epoch: number, owner: string) => live && epoch === generation && owner === identity.value;
+function clear() { generation++; rows.value = []; selected.value = null; attachments.value = []; snapshot.value = null; pending.value = null; pendingUpload.value = null;
+  file.value = null; form.value = emptyForm(); decision.value = { reason: "", physicalEvidenceChecked: false, noDisputeChecked: false }; page.value = 1; total.value = 0; busy.value = false; }
+function failure(cause: unknown, mutation = false) {
+  if (cause instanceof LoanApiError || cause instanceof AuthApiError) {
+    if ([401, 403, 404].includes(cause.status)) clear();
+    else if (mutation && cause.status >= 400 && cause.status < 500) { pending.value = null; pendingUpload.value = null; }
+  }
+  error.value = loanMessage(cause);
 }
-async function detail(id: string) {
-  selected.value = await loanRequest<ProxyConfirmation>(`/proxy-confirmations/${id}`);
-  attachments.value = (await loanRequest<{ items: Attachment[] }>(`/proxy-confirmations/${id}/attachments`)).items;
-  await router.replace({ query: { id: String(id) } });
+async function list(epoch: number, owner: string) {
+  const result = await loanRequest<ProxyPage>(`/proxy-confirmations?page=${page.value}&pageSize=20`);
+  if (current(epoch, owner)) { rows.value = result.items; total.value = result.total; }
+}
+async function detail(id: string, epoch: number, owner: string) {
+  const record = await loanRequest<ProxyConfirmation>(`/proxy-confirmations/${id}`);
+  if (!current(epoch, owner)) return;
+  const files = await loanRequest<{ items: Attachment[] }>(`/proxy-confirmations/${id}/attachments`);
+  if (!current(epoch, owner)) return;
+  selected.value = record; attachments.value = files.items; await router.replace({ query: { id } });
 }
 async function open(id: string) {
   if (locked.value) return;
-  busy.value = true; error.value = "";
-  try { await detail(id); snapshot.value = null; decision.value = { reason: "", physicalEvidenceChecked: false, noDisputeChecked: false }; }
-  catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  try { await detail(id, epoch, owner); if (current(epoch, owner)) { snapshot.value = null; decision.value = { reason: "", physicalEvidenceChecked: false, noDisputeChecked: false }; } }
+  catch (cause) { if (current(epoch, owner)) failure(cause); } finally { if (current(epoch, owner)) busy.value = false; }
 }
 async function refresh() {
   if (busy.value) return;
-  busy.value = true; error.value = "";
-  try {
-    await list(); if (selected.value) await detail(selected.value.id);
-    // Refresh queries cannot prove whether an uncertain upload or command committed.
-  } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  try { await list(epoch, owner); if (current(epoch, owner) && selected.value) await detail(selected.value.id, epoch, owner); }
+  catch (cause) { if (current(epoch, owner)) failure(cause); } finally { if (current(epoch, owner)) busy.value = false; }
 }
 async function send(path: string, body?: unknown, version = selected.value?.version ?? 0) {
-  if (busy.value || pendingUpload.value) return;
-  if (pending.value && pending.value.path !== path) return;
-  pending.value ??= { path, key: crypto.randomUUID(), version,
-    body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown };
-  busy.value = true; error.value = "";
-  try {
-    const result = await loanRequest<ProxyConfirmation>(pending.value.path, pending.value);
-    pending.value = null; snapshot.value = null;
-    await detail(result.id); await list();
-  } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  if (busy.value || pendingUpload.value || pending.value && pending.value.path !== path) return;
+  pending.value ??= { path, key: crypto.randomUUID(), version, body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown };
+  const operation = pending.value, epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  try { const result = await loanRequest<ProxyConfirmation>(operation.path, operation);
+    if (!current(epoch, owner)) return; pending.value = null; snapshot.value = null;
+    await detail(result.id, epoch, owner); if (current(epoch, owner)) await list(epoch, owner);
+  } catch (cause) { if (current(epoch, owner)) failure(cause, true); } finally { if (current(epoch, owner)) busy.value = false; }
 }
 function create() {
-  if (!snapshot.value || !form.value.actualReceivedAt) return;
-  void send("/proxy-confirmations", { ...form.value, snapshot: snapshot.value,
-    businessId: snapshot.value.businessId, itemId: snapshot.value.itemId,
-    actualSignerEmployeeId: form.value.delegatedReceipt ? null : form.value.actualSignerEmployeeId,
-    actualReceivedAt: new Date(form.value.actualReceivedAt).toISOString() }, 0);
+  if (!warehouse.value || !snapshot.value || !form.value.actualReceivedAt) return;
+  const at = new Date(form.value.actualReceivedAt); if (!Number.isFinite(at.getTime())) { error.value = "请填写有效的实际签收时间。"; return; }
+  void send("/proxy-confirmations", { ...form.value, snapshot: snapshot.value, businessId: snapshot.value.businessId, itemId: snapshot.value.itemId,
+    actualSignerEmployeeId: form.value.delegatedReceipt ? null : form.value.actualSignerEmployeeId, actualReceivedAt: at.toISOString() }, 0);
 }
 async function upload() {
-  if (busy.value || pending.value || !selected.value) return;
-  if (!pendingUpload.value && !file.value) return;
-  pendingUpload.value ??= { id: selected.value.id, version: selected.value.version,
-    file: file.value!, key: crypto.randomUUID() };
-  busy.value = true; error.value = "";
-  try {
-    const request = pendingUpload.value;
-    await uploadProxyEvidence(request.id, request.version, request.file, request.key);
-    pendingUpload.value = null; file.value = null; await detail(request.id); await list();
-  } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  if (busy.value || pending.value || !selected.value || !pendingUpload.value && !file.value) return;
+  pendingUpload.value ??= { id: selected.value.id, version: selected.value.version, file: file.value!, key: crypto.randomUUID() };
+  const operation = pendingUpload.value, epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  try { await uploadProxyEvidence(operation.id, operation.version, operation.file, operation.key);
+    if (!current(epoch, owner)) return; pendingUpload.value = null; file.value = null;
+    await detail(operation.id, epoch, owner); if (current(epoch, owner)) await list(epoch, owner);
+  } catch (cause) { if (current(epoch, owner)) failure(cause, true); } finally { if (current(epoch, owner)) busy.value = false; }
 }
 async function download(item: Attachment) {
   if (busy.value) return;
-  busy.value = true; error.value = "";
-  try { await downloadAttachment(item); }
-  catch (e) { error.value = e instanceof Error ? e.message : "下载失败"; }
-  finally { busy.value = false; }
+  const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  try { await downloadAttachment(item, () => current(epoch, owner)); }
+  catch (cause) { if (current(epoch, owner)) failure(cause); } finally { if (current(epoch, owner)) busy.value = false; }
 }
 async function paginate(delta: number) {
-  if (locked.value) return; page.value += delta; await refresh();
+  if (locked.value || page.value + delta < 1 || (page.value + delta - 1) * 20 >= total.value) return;
+  page.value += delta; await refresh();
 }
-onMounted(async () => {
-  busy.value = true;
-  try {
-    await list();
-    if (route.query.id && /^\d+$/.test(String(route.query.id))) await detail(String(route.query.id));
+async function initialize() {
+  clear(); error.value = ""; const epoch = generation, owner = identity.value; busy.value = true;
+  try { await list(epoch, owner); if (!current(epoch, owner)) return;
+    if (route.query.id && /^[1-9][0-9]*$/.test(String(route.query.id))) await detail(String(route.query.id), epoch, owner);
     else if (warehouse.value && route.query.businessId && route.query.itemId) {
-      snapshot.value = await loanRequest<Record<string, unknown>>(`/proxy-confirmations/context?businessType=${encodeURIComponent(String(route.query.businessType ?? "REQUISITION"))}&businessId=${encodeURIComponent(String(route.query.businessId))}&itemId=${encodeURIComponent(String(route.query.itemId))}`);
-      form.value.actualSignerEmployeeId = String(snapshot.value.targetEmployeeId);
-      form.value.observedAssetCode = String(snapshot.value.assetCode);
+      const result = await loanRequest<Record<string, unknown>>(`/proxy-confirmations/context?businessType=${encodeURIComponent(String(route.query.businessType ?? "REQUISITION"))}&businessId=${encodeURIComponent(String(route.query.businessId))}&itemId=${encodeURIComponent(String(route.query.itemId))}`);
+      if (current(epoch, owner)) { snapshot.value = result; form.value.actualSignerEmployeeId = String(result.targetEmployeeId); form.value.observedAssetCode = String(result.assetCode); }
     }
-  } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
-});
+  } catch (cause) { if (current(epoch, owner)) failure(cause); } finally { if (current(epoch, owner)) busy.value = false; }
+}
+watch(identity, () => { if (session.user) void initialize(); else { clear(); error.value = ""; } }, { immediate: true, flush: "sync" });
+onBeforeUnmount(() => { live = false; clear(); });
 </script>
 
 <template>
@@ -118,7 +120,7 @@ onMounted(async () => {
       <fieldset :disabled="locked">
         <label>核对实物编码<input v-model="form.observedAssetCode" required maxlength="128"></label>
         <label>实际签收人<input v-model="form.actualSigner" required maxlength="200"></label>
-        <label>实际签收时间<input v-model="form.actualReceivedAt" type="datetime-local" required></label>
+        <label>实际签收时间<input v-model="form.actualReceivedAt" type="datetime-local" step="0.001" required></label>
         <label>不能在线确认的原因<textarea v-model="form.cannotConfirmReason" required maxlength="1000" /></label>
         <label>联系记录<textarea v-model="form.contactRecord" required maxlength="1000" /></label>
         <label><input v-model="form.delegatedReceipt" type="checkbox">授权代理人签收</label>
@@ -140,14 +142,14 @@ onMounted(async () => {
     <button :disabled="locked || page * 20 >= total" @click="paginate(1)">下一页</button>
     <section v-if="selected">
       <h2>代确认 {{ selected.id }} · {{ labels[selected.confirmationStatus] }}</h2>
-      <p>{{ selected.businessType === 'TRANSFER' ? '调拨' : '领用/借用' }}单据 {{ selected.businessId }} / 明细 {{ selected.itemId }} · 实物 {{ selected.businessSnapshotJson.assetCode }} · 责任人员 {{ selected.businessSnapshotJson.targetEmployeeId }}</p>
-      <p>实际签收人：{{ selected.actualSigner }} · 时间：{{ selected.actualReceivedAt }}</p>
+      <p>{{ businessLabels[selected.businessType] || '业务' }}单据 {{ selected.businessId }} / 明细 {{ selected.itemId }} · 实物 {{ selected.businessSnapshotJson.assetCode }} · 责任人员 {{ selected.businessSnapshotJson.targetEmployeeId }}</p>
+      <p>实际签收人：{{ selected.actualSigner }} · 时间：{{ formatProxyTime(selected.actualReceivedAt) }}</p>
       <p>无法确认原因：{{ selected.cannotConfirmReason }}；联系记录：{{ selected.contactRecord }}</p>
       <p v-if="selected.delegatedReceipt">代理关系：{{ selected.delegationRelationship }}；授权依据：{{ selected.delegationBasis }}</p>
       <p>凭证 {{ selected.evidenceKind }} · 采集 {{ selected.collectionMethod }} {{ selected.manualReason }}</p>
       <p>提交账号 {{ selected.creatorAccountId }} · 批准账号 {{ selected.approverAccountId ?? '待批准' }} · 执行账号 {{ selected.executorAccountId ?? '待执行' }}</p>
       <p v-if="selected.decisionReason">决定说明：{{ selected.decisionReason }}</p>
-      <router-link :to="{ path: selected.businessType === 'TRANSFER' ? '/transfers' : '/requisitions', query: { id: selected.businessId } }">查看业务单据与核查入口</router-link>
+      <router-link :to="businessLink(selected.businessType, selected.businessId)">查看业务单据与核查入口</router-link>
       <ul><li v-for="attachment in attachments" :key="attachment.objectId">{{ attachment.filename }} · {{ attachment.scanStatus }}
         <button :disabled="busy || attachment.scanStatus !== 'CLEAN'" @click="download(attachment)">下载凭证</button></li></ul>
       <fieldset v-if="warehouse && selected.confirmationStatus === 'DRAFT'" :disabled="locked">

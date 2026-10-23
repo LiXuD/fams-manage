@@ -3,7 +3,7 @@ import { LoanApiError } from "@/loan/api";
 import type { Attachment } from "@/attachment/api";
 
 export interface ProxyConfirmation {
-  id: string; version: number; businessType: "REQUISITION" | "TRANSFER"; businessId: string; itemId: string;
+  id: string; version: number; businessType: "REQUISITION" | "TRANSFER" | "REPAIR"; businessId: string; itemId: string;
   confirmationStatus: string; creatorAccountId: string; actualSigner: string;
   actualReceivedAt: string; cannotConfirmReason: string; contactRecord: string;
   delegatedReceipt: boolean; delegationRelationship: string; delegationBasis: string;

@@ -11,21 +11,22 @@ module.exports = {status:function(value){return names[value] || '状态已变更
   <view wx:if="{{retryable}}" class="hint">结果尚未确认，其他办理已暂停。保留本页原请求重试，或刷新核对。</view>
   <view wx:if="{{canExecute}}" class="card">
     <view class="label">从待接收明细申请</view>
-    <picker range="{{businessNames}}" bindchange="onBusiness" disabled="{{busy || retryable}}"><view>{{businessType === 'TRANSFER' ? '调拨' : '领用 / 借用'}}</view></picker>
+    <picker range="{{businessNames}}" bindchange="onBusiness" disabled="{{busy || retryable}}"><view>{{businessType === 'REPAIR' ? '维修返还' : businessType === 'TRANSFER' ? '调拨' : '领用 / 借用'}}</view></picker>
     <button bindtap="onSources" disabled="{{busy || retryable}}">加载待接收单据</button>
-    <button wx:for="{{sources}}" wx:key="id" data-id="{{item.id}}" bindtap="onSource" disabled="{{busy || retryable}}">{{item.requestNo || '调拨单'}} {{item.id}}</button>
+    <button wx:for="{{sources}}" wx:key="id" data-id="{{item.id}}" bindtap="onSource" disabled="{{busy || retryable}}">{{item.requestNo || (businessType === 'REPAIR' ? '维修单' : '业务单')}} {{item.id}}</button>
     <button wx:if="{{sourcePage > 1}}" bindtap="onSourcePrevious" disabled="{{busy || retryable}}">上一页单据</button>
     <button wx:if="{{sourcePage * 20 < sourceTotal}}" bindtap="onSourceNext" disabled="{{busy || retryable}}">下一页单据</button>
     <button wx:for="{{items}}" wx:key="id" data-id="{{item.id}}" bindtap="onStart" disabled="{{busy || retryable}}">申请代确认 · {{item.assetCode}}</button>
   </view>
   <view wx:if="{{snapshot}}" class="card">
-    <view class="title">真实签收凭证</view><view>单据 {{snapshot.requestNo}} · {{snapshot.assetCode}}</view>
-    <view>原目标责任人员 {{snapshot.targetEmployeeId}}；代理人签收不改变该责任目标。</view>
+    <view class="title">真实签收凭证</view><view>单据 {{snapshot.requestNo || snapshot.businessId}} · {{snapshot.assetCode}}</view>
+    <view>本次有效目标责任人员 {{snapshot.targetEmployeeId}}；代理人签收不改变该责任目标。</view>
     <view class="label">核对实物编码</view><input value="{{form.observedAssetCode}}" data-field="observedAssetCode" bindinput="onField" disabled="{{busy || retryable}}" />
     <view class="label">实际签收人</view><input value="{{form.actualSigner}}" maxlength="200" data-field="actualSigner" bindinput="onField" disabled="{{busy || retryable}}" />
     <view class="label">实际签收日期与时间</view>
     <picker mode="date" value="{{form.actualDate}}" data-field="actualDate" bindchange="onField" disabled="{{busy || retryable}}"><view>{{form.actualDate || '选择日期'}}</view></picker>
     <picker mode="time" value="{{form.actualTime}}" data-field="actualTime" bindchange="onField" disabled="{{busy || retryable}}"><view>{{form.actualTime || '选择时间'}}</view></picker>
+    <view class="label">实际签收秒数（00～59）</view><input type="number" maxlength="2" value="{{form.actualSecond}}" data-field="actualSecond" bindinput="onField" disabled="{{busy || retryable}}"/>
     <view class="label">无法在线确认的原因</view><textarea value="{{form.cannotConfirmReason}}" maxlength="1000" data-field="cannotConfirmReason" bindinput="onField" disabled="{{busy || retryable}}" />
     <view class="label">联系记录</view><textarea value="{{form.contactRecord}}" maxlength="1000" data-field="contactRecord" bindinput="onField" disabled="{{busy || retryable}}" />
     <checkbox-group data-field="delegatedReceipt" bindchange="onFlag"><label><checkbox value="checked" checked="{{form.delegatedReceipt}}" disabled="{{busy || retryable}}" />授权代理人签收</label></checkbox-group>
@@ -43,9 +44,9 @@ module.exports = {status:function(value){return names[value] || '状态已变更
   <button wx:if="{{page * 20 < total}}" bindtap="onNext" disabled="{{busy || retryable}}">下一页记录</button>
   <view wx:if="{{selected}}" class="card">
     <view class="title">代确认 {{selected.id}} · {{labels.status(selected.confirmationStatus)}}</view>
-    <view>{{selected.businessType === 'TRANSFER' ? '调拨' : '领用 / 借用'}} {{selected.businessId}} / 明细 {{selected.itemId}} · {{selected.businessSnapshotJson.assetCode}}</view>
-    <view>原目标责任人员 {{selected.businessSnapshotJson.targetEmployeeId}}</view>
-    <view>实际签收人 {{selected.actualSigner}} · {{selected.actualReceivedAt}}</view>
+    <view>{{selected.businessType === 'REPAIR' ? '维修返还' : selected.businessType === 'TRANSFER' ? '调拨' : '领用 / 借用'}} {{selected.businessId}} / 明细 {{selected.itemId}} · {{selected.businessSnapshotJson.assetCode}}</view>
+    <view>本次有效目标责任人员 {{selected.businessSnapshotJson.targetEmployeeId}}</view>
+    <view>实际签收人 {{selected.actualSigner}} · {{selected.receivedAtDisplay}}</view>
     <view>代确认原因 {{selected.cannotConfirmReason}}；联系记录 {{selected.contactRecord}}</view>
     <view>提交账号 {{selected.creatorAccountId}} · 批准账号 {{selected.approverAccountId || '待批准'}} · 执行账号 {{selected.executorAccountId || '待执行'}}</view>
     <view wx:if="{{selected.decisionReason}}">决定说明 {{selected.decisionReason}}</view>

@@ -549,6 +549,142 @@ public class AssetRepairPort {
         return version + 1;
     }
 
+    /** Approved exception receipt permits an offline account, never inactive responsibility. */
+    public Map<String, Object> proxyReturnTarget(
+            long assetId, long version, String sourceJson, String deliveredTargetJson) {
+        var row = locked(assetId, version);
+        var source = json.readTree(sourceJson);
+        if (!"UNDER_REPAIR".equals(row.get("lifecycle_status"))
+                || !"ACTIVE".equals(row.get("card_stage"))
+                || !"NORMAL".equals(row.get("exception_status"))
+                || !Objects.equals(row.get("custody_type"), source.path("custodyType").asText())
+                || !List.of("IN_USE", "BORROWED").contains(source.path("lifecycle").asText())) {
+            throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_CHANGED", 409);
+        }
+        for (var field :
+                Map.of(
+                                "using_organization_id",
+                                "usingOrganizationId",
+                                "responsible_employee_id",
+                                "responsibleEmployeeId",
+                                "department_responsible_employee_id",
+                                "departmentResponsibleEmployeeId",
+                                "storage_warehouse_id",
+                                "warehouseId",
+                                "current_location_id",
+                                "locationId")
+                        .entrySet()) {
+            var value = source.path(field.getValue());
+            Long expected = value.isNull() || value.isMissingNode() ? null : value.asLong();
+            if (!Objects.equals(expected, nullable(row.get(field.getKey())))) {
+                throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_CHANGED", 409);
+            }
+        }
+        var frozen = json.readTree(deliveredTargetJson);
+        String custody = frozen.path("custodyType").asText();
+        long person = frozen.path("employeeId").asLong(),
+                org = frozen.path("organizationId").asLong(),
+                location = frozen.path("locationId").asLong(),
+                account = frozen.path("receiverAccountId").asLong();
+        if (!List.of("PERSONAL", "SHARED").contains(custody)
+                || "BORROWED".equals(source.path("lifecycle").asText())
+                        && (!"PERSONAL".equals(custody)
+                                || person != source.path("responsibleEmployeeId").asLong()
+                                || org != source.path("usingOrganizationId").asLong())) {
+            throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_CHANGED", 409);
+        }
+        var people =
+                db.queryForList(
+                        "SELECT e.name,e.version,e.organization_id,e.status,o.name AS"
+                            + " organization_name,o.version AS organization_version,o.status AS"
+                            + " organization_status FROM fams_employee e JOIN fams_organization o"
+                            + " ON o.id=e.organization_id WHERE e.id=? FOR SHARE",
+                        person);
+        if (people.size() != 1
+                || !"ACTIVE".equals(people.getFirst().get("status"))
+                || !"ACTIVE".equals(people.getFirst().get("organization_status"))
+                || !Objects.equals(org, nullable(people.getFirst().get("organization_id")))
+                || ((Number) people.getFirst().get("version")).longValue()
+                        != frozen.path("employeeVersion").asLong()
+                || ((Number) people.getFirst().get("organization_version")).longValue()
+                        != frozen.path("organizationVersion").asLong()) {
+            throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_INACTIVE", 409);
+        }
+        // Login availability is deliberately independent of employee and shared-role eligibility.
+        var accounts =
+                db.queryForList(
+                        "SELECT a.id FROM fams_system_account a WHERE a.id=? AND a.employee_id=?"
+                            + " AND (?=FALSE OR EXISTS(SELECT 1 FROM fams_account_role r WHERE"
+                            + " r.account_id=a.id AND r.role_code='DEPARTMENT_ASSET_MANAGER')) FOR"
+                            + " SHARE",
+                        account,
+                        person,
+                        "SHARED".equals(custody));
+        if (accounts.size() != 1) {
+            throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_INACTIVE", 409);
+        }
+        var place = activeLocation(location, frozen.path("locationVersion").asLong());
+        if ("BIN".equals(place.get("location_type"))) {
+            throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_CHANGED", 409);
+        }
+        var target = new LinkedHashMap<String, Object>();
+        target.put("custodyType", custody);
+        target.put("employeeId", Long.toString(person));
+        target.put("employeeName", people.getFirst().get("name"));
+        target.put("employeeVersion", people.getFirst().get("version"));
+        target.put("organizationId", Long.toString(org));
+        target.put("organizationName", people.getFirst().get("organization_name"));
+        target.put("organizationVersion", people.getFirst().get("organization_version"));
+        target.put("locationId", Long.toString(location));
+        target.put("locationName", place.get("name"));
+        target.put("locationVersion", frozen.path("locationVersion").asLong());
+        target.put("receiverAccountId", Long.toString(account));
+        return target;
+    }
+
+    public long closeProxyReturn(
+            long assetId,
+            long version,
+            String sourceJson,
+            String targetJson,
+            String observed,
+            long actor,
+            long repair,
+            long confirmation,
+            Instant time) {
+        var target = proxyReturnTarget(assetId, version, sourceJson, targetJson);
+        identity.observedCode(assetId, observed);
+        boolean shared = "SHARED".equals(target.get("custodyType"));
+        db.update(
+                "UPDATE fams_asset SET lifecycle_status=?,custody_type=?,using_organization_id=?,"
+                    + "responsible_employee_id=?,department_responsible_employee_id=?,storage_warehouse_id=NULL,current_location_id=?,version=version+1,updated_by=?,updated_at=?"
+                    + " WHERE id=? AND version=?",
+                json.readTree(sourceJson).path("lifecycle").asText(),
+                target.get("custodyType"),
+                target.get("organizationId"),
+                shared ? null : target.get("employeeId"),
+                shared ? target.get("employeeId") : null,
+                target.get("locationId"),
+                actor,
+                time,
+                assetId,
+                version);
+        mapper.event(
+                assetId,
+                "REPAIR_PROXY_RETURN_RECEIVED",
+                time,
+                json.writeValueAsString(
+                        Map.of(
+                                "repairId",
+                                Long.toString(repair),
+                                "confirmationId",
+                                Long.toString(confirmation),
+                                "target",
+                                target)),
+                actor);
+        return version + 1;
+    }
+
     public Map<String, String> describeReturnTarget(tools.jackson.databind.JsonNode target) {
         var labels = new LinkedHashMap<String, String>();
         for (String kind : List.of("organization", "employee", "location")) {

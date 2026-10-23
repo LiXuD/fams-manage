@@ -17,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Instant;
@@ -78,9 +77,9 @@ class RequisitionProxyConfirmationService {
         }
         String predicate =
                 current.has(Role.ASSET_ADMIN)
-                        ? "business_type IN ('REQUISITION','TRANSFER') AND (confirmation_status<>'DRAFT' OR creator_account_id="
+                        ? "business_type IN ('REQUISITION','TRANSFER','REPAIR') AND (confirmation_status<>'DRAFT' OR creator_account_id="
                                 + current.id() + ")"
-                        : "business_type IN ('REQUISITION','TRANSFER') AND (creator_account_id="
+                        : "business_type IN ('REQUISITION','TRANSFER','REPAIR') AND (creator_account_id="
                                 + current.id()
                                 + " OR (business_type='REQUISITION' AND EXISTS (SELECT 1 FROM fams_requisition_ownership o WHERE"
                                 + " o.request_id=fams_proxy_confirmation.business_id AND"
@@ -88,6 +87,8 @@ class RequisitionProxyConfirmationService {
                                 + current.id()
                                 + ")) OR (business_type='TRANSFER' AND EXISTS (SELECT 1 FROM fams_transfer t"
                                 + " WHERE t.id=fams_proxy_confirmation.business_id AND t.processor_account_id="
+                                + current.id() + ")) OR (business_type='REPAIR' AND EXISTS (SELECT 1 FROM fams_repair_request p"
+                                + " WHERE p.id=fams_proxy_confirmation.business_id AND p.processor_account_id="
                                 + current.id() + ")))";
         long total =
                 Objects.requireNonNull(
@@ -298,7 +299,8 @@ class RequisitionProxyConfirmationService {
                         number(row, "item_id"),
                         snapshot,
                         row.get("observed_asset_code").toString(),
-                        id);
+                        id,
+                        executionEvidence(row));
         db.update(
                 "UPDATE fams_proxy_confirmation SET"
                     + " confirmation_status='EXECUTED',executor_account_id=?,executed_at=?,execution_result_json=?,version=version+1,updated_at=?"
@@ -337,6 +339,18 @@ class RequisitionProxyConfirmationService {
                 json.writeValueAsString(detail),
                 now());
         return finish(current, "executeProxyConfirmation", key, payload, id, wire(row(id, false)));
+    }
+
+    private ProxyReceiptPort.ExecutionEvidence executionEvidence(Map<String, Object> row) {
+        var metadata = json.readTree(row.get("evidence_metadata_json").toString());
+        var signer = metadata.path("actualSignerEmployeeId");
+        Object time = row.get("actual_received_at");
+        Instant actual = time instanceof java.sql.Timestamp timestamp ? timestamp.toInstant()
+                : ((java.time.LocalDateTime) time).toInstant(java.time.ZoneOffset.UTC);
+        return new ProxyReceiptPort.ExecutionEvidence(actual, row.get("actual_signer").toString(),
+                signer.isNull() || signer.isMissingNode() ? null : signer.asLong(),
+                metadata.path("delegatedReceipt").asBoolean(), number(row,"approver_account_id"),
+                row.get("evidence_metadata_json").toString(), row.get("evidence_snapshot_json").toString());
     }
 
     private ProxyReceiptPort business(String type) {
@@ -418,7 +432,7 @@ class RequisitionProxyConfirmationService {
         var rows =
                 db.queryForList(
                         "SELECT * FROM fams_proxy_confirmation WHERE id=? AND"
-                            + " business_type IN ('REQUISITION','TRANSFER')"
+                            + " business_type IN ('REQUISITION','TRANSFER','REPAIR')"
                                 + (lock ? " FOR UPDATE" : ""),
                         id);
         if (rows.isEmpty()) {
@@ -514,7 +528,7 @@ class RequisitionProxyConfirmationService {
         if (rows.isEmpty()) {
             return null;
         }
-        if (!digest(payload).equals(rows.getFirst().get("payload_sha256"))) {
+        if (!ProxyReceiptPayloads.matches(json, payload, rows.getFirst().get("payload_sha256").toString())) {
             throw conflict("PROXY_RECEIPT_IDEMPOTENCY_CONFLICT");
         }
         return json.readValue(rows.getFirst().get("response_body_json").toString(), Map.class);
@@ -555,7 +569,7 @@ class RequisitionProxyConfirmationService {
     }
 
     private String digest(Object value) {
-        return hash(json.writeValueAsString(value).getBytes(StandardCharsets.UTF_8));
+        return ProxyReceiptPayloads.digest(json, value);
     }
 
     private String hash(byte[] bytes) {

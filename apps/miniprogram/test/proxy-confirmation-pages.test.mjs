@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createProxyConfirmationPage } from "../src/proxy-confirmation-pages.ts";
+import { MiniRequestError } from "../src/session.ts";
 import { createBusinessResultPage } from "../src/business-result-pages.ts";
 
 const base = "/api/v1/mini/proxy-confirmations";
@@ -110,4 +111,86 @@ test("recipient objection retries unchanged reason and administrator opens origi
     let destination; services.navigate = value => destination = value;
     const admin = bind(createBusinessResultPage(() => services, true)); await admin.onShow(); admin.onOpen(event("9"));
     assert.equal(destination, "/pages/proxy-confirmations/index?id=9");
+});
+
+
+test("refresh cannot discard an unknown creation or multipart receipt, including hide/show", async () => {
+    const { page, writes, uploads } = fixture(); await fill(page); await page.onCreate();
+    await page.onRefresh(); assert.equal(page.data.retryable, true);
+    await page.onRetry(); assert.deepEqual(writes[0], writes[1]);
+    await page.onPickFile(); await page.onUpload();
+    page.onHide(); assert.equal(page.data.selected, null); assert.deepEqual(page.data.attachments, []);
+    await page.onShow(); await page.onRefresh(); assert.equal(page.data.retryable, true);
+    await page.onRetry(); assert.deepEqual(uploads[0], uploads[1]); assert.equal(page.data.selected.id, "1");
+});
+test("same-page account switch rejects a late detail before requesting its private attachments", async () => {
+    const { page, services } = fixture(); await fill(page);
+    const requests = []; let finish;
+    services.sessions.request = async (method, path) => { requests.push(path); return new Promise(resolve => finish = resolve); };
+    const opening = page.onOpen(event("41"));
+    services.sessions.identity = { accountId: "2", bindingId: "2" };
+    finish({ id: "41", actualSigner: "Private signer", businessSnapshotJson: snapshot }); await opening;
+    assert.equal(requests.length, 1); assert.equal(page.data.selected, null); assert.equal(page.data.accountId, "");
+    assert.deepEqual(page.data.rows, []); assert.equal(page.data.busy, false);
+});
+test("authorization loss clears pending proof and prevents retry even without a lifecycle event", async () => {
+    const { page, services, writes } = fixture(); await fill(page); await page.onCreate();
+    services.sessions.request = async () => { throw new MiniRequestError(403, "AUTH_FORBIDDEN"); };
+    await page.onRefresh(); assert.equal(page.data.retryable, false); assert.equal(page.data.snapshot, null);
+    await page.onRetry(); assert.equal(writes.length, 1);
+});
+test("repair selector uses the current processor and actual waiting asset, while context entry is server-bound", async () => {
+    const calls = [], repairSnapshot = { ...snapshot, businessType: "REPAIR", businessId: "21", itemId: "951020" };
+    const services = { sessions: { identity: { accountId: "1", bindingId: "1" }, request: async (_method, path) => {
+        calls.push(path);
+        if (path.startsWith(base + "?")) return { items: [], total: 0, canExecute: true, canApprove: false };
+        if (path.includes("/context?")) return repairSnapshot;
+        if (path.includes("/repairs?")) return { items: [{ id: "21", status: "WAREHOUSE_PROCESSING", processorAccountId: "1" }, { id: "22", status: "WAREHOUSE_PROCESSING", processorAccountId: "2" }], total: 2 };
+        return { assetId: "951020", source: { assetCode: "FA-1" }, actions: { proxyReturn: true }, returnHandovers: [{ handover_status: "WAITING_RECEIPT" }] };
+    } }, navigate() {} };
+    const page = bind(createProxyConfirmationPage(() => services)); await page.onShow();
+    page.onBusiness(event(undefined, "2")); await page.onSources(); assert.deepEqual(page.data.sources.map(row => row.id), ["21"]);
+    await page.onSource(event("21")); assert.deepEqual(page.data.items, [{ id: "951020", assetCode: "FA-1" }]);
+    await page.onStart(event("951020")); assert.equal(page.data.snapshot.businessType, "REPAIR");
+    const contextual = bind(createProxyConfirmationPage(() => services)); contextual.onLoad({ businessType: "REPAIR", businessId: "21", itemId: "951020" });
+    await contextual.onShow(); assert.deepEqual(contextual.data.snapshot, repairSnapshot);
+    assert.ok(calls.includes(base + "/context?businessType=REPAIR&businessId=21&itemId=951020"));
+});
+test("identity changes during execution confirmation send no mutation and clear private data", async () => {
+    const { page, services, writes } = fixture(); await fill(page); await page.onCreate(); await page.onRetry();
+    page.setData({ selected: { ...page.data.selected, confirmationStatus: "APPROVED" } });
+    let finish; services.confirm = () => new Promise(resolve => finish = resolve);
+    const executing = page.onExecute(); services.sessions.identity = { accountId: "2", bindingId: "2" }; finish(true); await executing;
+    assert.equal(writes.length, 2); assert.equal(page.data.selected, null); assert.equal(page.data.busy, false);
+});
+test("result notification refresh and hide preserve the exact unknown objection, while rebinding clears late responses", async () => {
+    const writes = []; let lose = true;
+    const services = { sessions: { identity: { accountId: "5", bindingId: "5" }, request: async (method, path, body, options) => {
+        if (method === "POST") { writes.push(structuredClone({ path, body, key: options.key })); if (lose) { lose = false; throw Error("lost"); } return {}; }
+        return { items: [{ id: "7", read: false, reviewRequested: writes.length > 0 }], total: 1, unread: 1 };
+    } }, createKey: () => "original-result-review-key", navigate() {} };
+    const page = bind(createBusinessResultPage(() => services)); await page.onShow(); page.onReason(event("7", "Original facts")); await page.onReview(event("7"));
+    await page.onRefresh(); assert.equal(page.data.retryable, true); page.onHide(); assert.deepEqual(page.data.rows, []); assert.deepEqual(page.data.reasons, {});
+    await page.onShow(); await page.onRetry(); assert.deepEqual(writes[0], writes[1]);
+    let finish; services.sessions.request = () => new Promise(resolve => finish = resolve);
+    const loading = page.onRefresh(); services.sessions.identity = { accountId: "5", bindingId: "6" };
+    finish({ items: [{ id: "secret" }], total: 1, unread: 1 }); await loading;
+    assert.deepEqual(page.data.rows, []); assert.equal(page.data.retryable, false); assert.equal(page.data.busy, false);
+});
+
+test("native receipt preserves explicitly recorded seconds and rejects invalid seconds before posting", async () => {
+    const { page, writes } = fixture(); await fill(page);
+    page.onField(event(undefined, "65", "actualSecond")); await page.onCreate(); assert.equal(writes.length, 0);
+    page.onField(event(undefined, "27", "actualSecond")); await page.onCreate();
+    assert.equal(writes.length, 1); assert.equal(writes[0].body.actualReceivedAt, new Date("2026-10-12T08:00:27").toISOString());
+    assert.equal("actualSecond" in writes[0].body, false);
+});
+
+test("native signed receipt renders legacy UTC in local time without altering server evidence", async () => {
+    const { page, services } = fixture(); await page.onShow();
+    const value = { id: "41", actualReceivedAt: "2026-10-23T17:44:00", businessSnapshotJson: snapshot };
+    services.sessions.request = async (_method, path) => path.endsWith("/attachments") ? { items: [] } : value;
+    await page.onOpen(event("41"));
+    assert.equal(page.data.selected.actualReceivedAt, "2026-10-23T17:44:00");
+    assert.equal(page.data.selected.receivedAtDisplay, new Date("2026-10-23T17:44:00Z").toLocaleString());
 });

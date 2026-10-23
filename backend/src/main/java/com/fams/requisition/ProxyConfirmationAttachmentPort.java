@@ -44,7 +44,7 @@ public class ProxyConfirmationAttachmentPort implements AttachmentBusinessPort {
         var rows =
                 db.queryForList(
                         "SELECT * FROM fams_proxy_confirmation WHERE id=? AND"
-                            + " business_type IN ('REQUISITION','TRANSFER')",
+                            + " business_type IN ('REQUISITION','TRANSFER','REPAIR')",
                         id);
         if (rows.isEmpty()) {
             throw RequisitionFailure.unavailable();

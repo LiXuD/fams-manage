@@ -19,6 +19,12 @@ import java.util.UUID;
 @Order(0)
 @RestControllerAdvice(basePackages = "com.fams.requisition")
 class RequisitionErrorHandler {
+    @ExceptionHandler(com.fams.proxy.ProxyReceiptFailure.class)
+    ResponseEntity<ErrorResponse> proxyFailure(
+            com.fams.proxy.ProxyReceiptFailure error, HttpServletRequest request) {
+        return response(error.status(), error.getMessage(), request);
+    }
+
     @ExceptionHandler(RequisitionFailure.class)
     ResponseEntity<ErrorResponse> failure(RequisitionFailure error, HttpServletRequest request) {
         return response(error.status(), error.code(), request);

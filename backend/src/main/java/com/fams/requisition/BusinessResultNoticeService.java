@@ -76,7 +76,7 @@ class BusinessResultNoticeService {
                 + " AND a.id=(SELECT MAX(x.id) FROM fams_audit_event x"
                 + " WHERE x.resource_type='BUSINESS_RESULT_NOTICE' AND x.resource_id=n.id"
                 + " AND x.action='RESULT_NOTICE_OBJECTION')"
-                + " WHERE n.execution_type='PROXY_CONFIRMATION' AND n.business_type IN ('REQUISITION','TRANSFER')";
+                + " WHERE n.execution_type='PROXY_CONFIRMATION' AND n.business_type IN ('REQUISITION','TRANSFER','REPAIR')";
         var rows = db.queryForList("SELECT n.id,n.execution_id,n.business_id,n.business_type,r.name AS recipient,"
                 + "a.detail_json,a.occurred_at" + from + " ORDER BY a.id DESC LIMIT ? OFFSET ?",
                 pageSize, (page - 1) * pageSize);

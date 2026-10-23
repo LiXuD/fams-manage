@@ -72,6 +72,7 @@ const states: Record<string, string> = { WAITING_RECEIPT: "已交出，待实际
 <p v-if="repair.loanExpectedReturnDate">当前原借用预计归还日：{{ repair.loanExpectedReturnDate }}</p>
 <p v-for="row in repair.returnHandovers" :key="row.id">{{ states[row.handover_status] }} · {{ row.target_snapshot_json.employeeName }} · {{ row.target_snapshot_json.organizationName }} · {{ row.target_snapshot_json.locationName }} · 交出 {{ new Date(row.delivered_at).toLocaleString() }} · {{ row.delivery_evidence }}<span v-if="row.receipt_at"> · 接收决定 {{ new Date(row.receipt_at).toLocaleString() }} · {{ row.receipt_evidence }}</span></p>
 <p v-for="row in repair.returnRecollections" :key="row.handover_id">实际收回 {{ new Date(row.occurred_at).toLocaleString() }} · {{ row.evidence }}</p>
+<router-link v-if="repair.actions?.proxyReturn && !locked && !blocked" :to="{ path: '/proxy-confirmations', query: { businessType: 'REPAIR', businessId: repair.id, itemId: repair.assetId } }">已实际签收但无法在线确认：申请异常代确认</router-link>
 <p v-if="error" role="alert">{{ error }}</p><button v-if="pending" :disabled="busy || blocked" @click="send">重试原返还办理</button>
 <section v-if="prepared" aria-label="确认实际返还办理"><p>请按实物事实确认：交出保留维修和锁；接收后按本次有效目标恢复责任，原借用保持原身份；拒收继续持锁，实际收回才可回库。</p><button :disabled="busy || blocked" @click="confirm">确认保存实际返还办理</button><button :disabled="busy" @click="prepared=null">返回修改返还依据</button></section>
 <fieldset v-if="allowed('delivery') || allowed('receipt') || allowed('refusal') || allowed('recollection')" :disabled="locked || blocked"><legend>按实物事实选择办理</legend>

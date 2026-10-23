@@ -3,9 +3,9 @@
   <view wx:if="{{error}}" class="error">{{error}}</view><view wx:if="{{notice}}" class="hint">{{notice}}</view>
   <button bindtap="onRefresh" disabled="{{busy}}">刷新通知</button><button wx:if="{{retryable}}" bindtap="onRetry" disabled="{{busy}}">原请求重试</button>
   <view wx:for="{{rows}}" wx:key="id" class="card">
-    <view class="value">{{item.businessType === 'TRANSFER' ? '调拨' : '领用 / 借用'}}代确认执行结果 · {{item.read ? '已读' : '未读'}}</view>
+    <view class="value">{{item.businessType === 'REPAIR' ? '维修返还' : item.businessType === 'TRANSFER' ? '调拨' : '领用 / 借用'}}代确认执行结果 · {{item.read ? '已读' : '未读'}}</view>
     <view>原单 {{item.businessId}} / 明细 {{item.itemId}} · {{item.content.result.assetCode}}</view>
-    <view>实际签收人 {{item.content.actualSigner}} · {{item.content.metadata.actualReceivedAt}}</view>
+    <view>实际签收人 {{item.content.actualSigner}} · {{item.receivedAtDisplay}}</view>
     <view>原因 {{item.content.metadata.cannotConfirmReason}}；联系记录 {{item.content.metadata.contactRecord}}</view>
     <view>提交账号 {{item.content.submittedBy}} · 批准账号 {{item.content.approvedBy}} · 执行账号 {{item.content.executedBy}}</view>
     <button wx:if="{{!item.read}}" data-id="{{item.id}}" bindtap="onRead" disabled="{{busy || retryable}}">标记已读</button>

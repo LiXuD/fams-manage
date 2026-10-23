@@ -75,21 +75,26 @@ export async function correctAttachment(receiptId: string, version: number, prev
   return await response.json() as Attachment;
 }
 
-export async function downloadAttachment(attachment: Attachment): Promise<void> {
+export async function downloadAttachment(attachment: Attachment, isCurrent: () => boolean = () => true): Promise<void> {
   if (attachment.scanStatus !== "CLEAN") throw new Error(messages.ATTACHMENT_NOT_CLEAN);
   const id = encodeURIComponent(attachment.objectId);
   const issued = await fetch(`/api/v1/attachments/${id}/download-grant`, {
     method: "POST", credentials: "include", headers: csrfHeaders(),
   });
+  if (!isCurrent()) return;
   if (!issued.ok) throw await failure(issued);
   const grant = await issued.json() as { url: string };
+  if (!isCurrent()) return;
   const url = new URL(grant.url, window.location.origin);
   if (url.origin !== window.location.origin || url.pathname !== `/api/v1/attachments/${id}/content`) {
     throw new Error("下载地址无效，请刷新后重试。");
   }
   const response = await fetch(url.toString(), { credentials: "include", cache: "no-store" });
+  if (!isCurrent()) return;
   if (!response.ok) throw await failure(response);
-  const objectUrl = URL.createObjectURL(await response.blob());
+  const bytes = await response.blob();
+  if (!isCurrent()) return;
+  const objectUrl = URL.createObjectURL(bytes);
   const link = document.createElement("a");
   link.href = objectUrl;
   link.download = Array.from(attachment.filename, (char) =>

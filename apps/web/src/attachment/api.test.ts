@@ -28,4 +28,24 @@ describe("attachment transport", () => {
     await expect(downloadAttachment({ ...attachment, scanStatus: "INFECTED" })).rejects.toThrow("暂不可下载");
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+  it("stops after a late grant when its owner is no longer current", async () => {
+    let complete!: (response: Response) => void, current = true;
+    const fetch = vi.fn().mockImplementation(() => new Promise(resolve => { complete = resolve; })); vi.stubGlobal("fetch", fetch);
+    const attachment: Attachment = { objectId: "id", filename: "doc.pdf", contentType: "application/pdf", sizeBytes: 8, scanStatus: "CLEAN", businessVersion: 5 };
+    const download = downloadAttachment(attachment, () => current); current = false;
+    complete(new Response(JSON.stringify({ url: "/api/v1/attachments/id/content" }))); await download;
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+  it("never creates a download URL for bytes returned after an identity change", async () => {
+    let complete!: (blob: Blob) => void, current = true;
+    const blob = vi.fn().mockImplementation(() => new Promise(resolve => { complete = resolve; }));
+    const createObjectURL = vi.fn(); vi.stubGlobal("URL", class extends URL { static createObjectURL = createObjectURL; });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ url: "/api/v1/attachments/id/content" }))).mockResolvedValueOnce({ ok: true, blob }));
+    const attachment: Attachment = { objectId: "id", filename: "doc.pdf", contentType: "application/pdf", sizeBytes: 8, scanStatus: "CLEAN", businessVersion: 5 };
+    const download = downloadAttachment(attachment, () => current);
+    for (let i = 0; i < 20 && !complete; i++) await Promise.resolve();
+    expect(blob).toHaveBeenCalledOnce(); current = false; complete(new Blob(["private signed receipt"])); await download;
+    expect(createObjectURL).not.toHaveBeenCalled();
+  });
+
 });
