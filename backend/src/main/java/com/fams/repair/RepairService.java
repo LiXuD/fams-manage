@@ -222,8 +222,14 @@ public class RepairService {
                                                                         row,
                                                                         "creator_account_id"))));
         boolean receiver = outstanding != null && isReturnReceiver(current, outstanding);
-        actions.put("deliverReturn", processing && away && outstanding == null);
-        actions.put("changeReturnTarget", processing && away && outstanding == null);
+        boolean returnable =
+                List.of("IN_USE", "BORROWED")
+                        .contains(
+                                json.readTree(row.get("source_snapshot_json").toString())
+                                        .path("lifecycle")
+                                        .asText());
+        actions.put("deliverReturn", processing && away && outstanding == null && returnable);
+        actions.put("changeReturnTarget", processing && away && outstanding == null && returnable);
         actions.put(
                 "receiveReturn",
                 receiver
@@ -1138,6 +1144,9 @@ public class RepairService {
         var loan = loans.open(item);
         loans.requireIdentity(item, originalLoan(row), loan == null ? null : loan.version());
         var source = json.readTree(row.get("source_snapshot_json").toString());
+        if (!List.of("IN_USE", "BORROWED").contains(source.path("lifecycle").asText())) {
+            throw new RepairFailure(409, "REPAIR_RETURN_TARGET_CHANGED");
+        }
         assets.checkRepairIdentity(
                 item, number(row, "asset_version"), source.path("assetCode").asText());
         var approved = approvedTarget(row);

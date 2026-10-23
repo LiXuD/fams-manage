@@ -991,6 +991,59 @@ class RepairReturnHttpRuntimeCase {
         assertEquals("UNDER_REPAIR", asset().get("lifecycle_status"));
     }
 
+    @Test
+    void originalStockRepairOffersActualInboundRatherThanNewUsageThroughTargetApproval()
+            throws Exception {
+        var body = JSON.createObjectNode();
+        body.put("assetId", "951023");
+        body.put("assetVersion", 0);
+        body.put("fault", "Stock asset physical fault requires verified repair");
+        body.put("impact", "HIGH");
+        body.put(
+                "occurredAt",
+                Instant.now().minusSeconds(60).truncatedTo(ChronoUnit.MILLIS).toString());
+        String id = ok(post(fixture.admin, "", 0, key(), body.toString())).path("id").asText();
+        ok(
+                post(
+                        fixture.admin,
+                        id + "/decision",
+                        0,
+                        key(),
+                        "{\"result\":\"APPROVE\",\"allowedMethod\":\"INTERNAL_NO_COST\",\"reason\":\"Approve"
+                            + " verified stock repair with actual warehouse destination\"}"));
+        ok(post(fixture.warehouse, id + "/claim", 1, key(), null));
+        var row = detail(id);
+        ok(
+                post(
+                        fixture.warehouse,
+                        id + "/accept-away",
+                        row.path("version").asLong(),
+                        key(),
+                        away(row)));
+        row = detail(id);
+        assertFalse(row.path("actions").path("deliverReturn").asBoolean());
+        assertFalse(row.path("actions").path("changeReturnTarget").asBoolean());
+        assertTrue(row.path("actions").path("closeInbound").asBoolean());
+        assertEquals(
+                409,
+                targetGet(fixture.warehouse, "context?businessId=" + id + "&itemId=951023")
+                        .statusCode());
+        assertEquals(0, count("fams_item_target_change", "business_type='REPAIR'"));
+        ok(
+                post(
+                        fixture.warehouse,
+                        id + "/close-inbound",
+                        row.path("version").asLong(),
+                        key(),
+                        inbound(row)));
+        assertEquals(
+                "IN_STOCK",
+                db.queryForObject(
+                        "SELECT lifecycle_status FROM fams_asset WHERE id=951023", String.class));
+        assertEquals(
+                0, count("fams_asset_business_lock", "asset_id=951023 AND released_at IS NULL"));
+    }
+
     private String contextPath(JsonNode row) {
         return "context?businessId=" + row.path("id").asText() + "&itemId=951020";
     }

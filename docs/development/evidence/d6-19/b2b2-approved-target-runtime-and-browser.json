@@ -16,7 +16,7 @@
   "web_url": "http://127.0.0.1:55770",
   "api_port": 55768,
   "artifact_sha256": "3fdf94997ffb68a11d4f03eb7752c79e278efc052641eb52438b669a9ed4f79c",
-  "source_state": "B2b2 worktree package on 6bcf34b, not fixed gate candidate",
+  "source_state": "B2b2 four-role PC proof later recorded in a591ab4; worktree package on 6bcf34b, not final fixed gate candidate",
   "asset_code": "OWNED19-985010",
   "original_dates_and_source_preserved": true,
   "actual_refusal_and_recollection_preserved": true,
@@ -26,7 +26,7 @@
   "no_duplicate_event_or_return": true,
   "runtime": {
     "populated_V46_to_V47_upgrade": 1,
-    "return_http_including_actual_native": 18,
+    "return_http_including_actual_native": 19,
     "physical_http": 8,
     "technical_http": 11,
     "original_repair_http": 14,
@@ -62,5 +62,6 @@
     "First PC pending-result test hid retry after terminal props; fixed and verified",
     "First mini permission-rejection test retained retry marker after clearing authority; fixed and verified",
     "Real PC catalog used absent total and unscoped employee query; switched to actual scoped catalog with page-length navigation and added regression"
-  ]
+  ],
+  "pc_additional_boundary": "A later stock-only capability guard is verified separately by the 19th HTTP case; original stock repair retains actual inbound and cannot create new usage through target approval."
 }
