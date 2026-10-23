@@ -1,0 +1,11 @@
+{
+  "source_candidate": "fb22632",
+  "artifact_sha256": "1997da485ae27d0d399fcf3186f794917e8a3961949fd86ce5f46dd7de1cee5f",
+  "columns_sha256": "f840d12f367b9f43f10dd11cdf4955aaf07ab5c78feca1af56d9f3b61b83762e",
+  "create_sha256": "6ce82b99969d09fb51f9b01cf64b58a21d0f943a99a977418d6cfe4d6280f68e",
+  "objects": 128,
+  "business_rows_read": false,
+  "schema_version": 48,
+  "owned_environment_cleanup": true,
+  "scope": "Metadata only from frozen fb22632 artifact; no business rows read; V48 proof linkage adds one table over V47"
+}
