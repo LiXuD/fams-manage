@@ -23,6 +23,12 @@ public final class RepairInput {
             String allowedMethod,
             @NotBlank @Size(min = 3, max = 1000) String reason) {}
 
+    public record ReturnSourceSubmission(
+            @PositiveOrZero long assetVersion,
+            @PositiveOrZero long lockVersion,
+            @NotBlank @Size(min = 3, max = 2000) String fault,
+            @NotBlank String impact) {}
+
     public record Reason(@NotBlank @Size(min = 3, max = 1000) String reason) {}
 
     public record InPlace(

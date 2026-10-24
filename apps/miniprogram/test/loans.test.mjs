@@ -36,3 +36,18 @@ test("native return uses the currently selected asset version and account change
     assert.equal(f.page.data.selected, null); assert.equal(f.page.data.retryable, false);
     await f.page.onRetry(); assert.equal(f.writes.length, 1);
 });
+
+test("source requester sees bounded actual repair progress and hiding clears it", async () => {
+    const f = fixture(); await f.page.onShow(); f.page.data.returns = [{ id: "61", inspectionResult: "DAMAGED" }];
+    f.sessions.request = async () => ({ id: "61", followups: [{ id: "71", followupStatus: "CLOSED", linkedRepairId: "9007199254740993", repairStatus: "COMPLETED" }] });
+    await f.page.onReturnProgress({ currentTarget: { dataset: { id: "61" } } });
+    assert.equal(f.page.data.returnProgress.followups[0].linkedRepairId, "9007199254740993");
+    assert.equal(f.writes.length, 0); f.page.onHide(); assert.equal(f.page.data.returnProgress, null);
+});
+test("source progress arriving after a binding change cannot expose the old return", async () => {
+    const f = fixture(); await f.page.onShow(); f.page.data.returns = [{ id: "61" }]; let complete;
+    f.sessions.request = () => new Promise(resolve => { complete = resolve; });
+    const reading = f.page.onReturnProgress({ currentTarget: { dataset: { id: "61" } } });
+    f.sessions.identity = { accountId: "2" }; complete({ id: "61", reason: "private old source" }); await reading;
+    assert.equal(f.page.data.returnProgress, null);
+});

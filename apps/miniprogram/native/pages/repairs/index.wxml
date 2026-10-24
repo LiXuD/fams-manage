@@ -1,5 +1,6 @@
 <wxs module="labels">var states={PENDING_ADMIN_DECISION:'待管理员确认',WAITING_WAREHOUSE_CLAIM:'待库管领取',WAREHOUSE_PROCESSING:'库管处理中',COMPLETED:'维修已完成',REJECTED:'已驳回',CANCELLED:'已取消'}; module.exports={state:function(s){return states[s]||s;}};</wxs>
 <view class="page"><view class="title">报修与内部维修</view><view class="hint">按实际去向办理内部零费用维修；实物离开过原保管人时不能直接原地恢复，回库须实际验收。</view>
+<navigator url="/pages/repair-return-sources/index">管理员：损坏归还接续维修</navigator>
 <view wx:if="{{error}}" class="error" role="alert">{{error}}</view><button bindtap="onRefresh" disabled="{{busy}}">刷新核对</button><button wx:if="{{retry}}" bindtap="onRetry" disabled="{{busy}}">用原操作重试</button>
 <view wx:for="{{rows}}" wx:key="id" class="card"><view>{{item.source.assetCode}} · {{item.source.name}} · {{labels.state(item.status)}}</view><button data-id="{{item.id}}" bindtap="onOpen" disabled="{{busy || retry}}">查看维修 {{item.id}}</button></view>
 <button wx:if="{{page > 1}}" data-delta="-1" bindtap="onPage" disabled="{{busy || retry}}">上一页维修</button><button wx:if="{{page * 20 < total}}" data-delta="1" bindtap="onPage" disabled="{{busy || retry}}">下一页维修</button>

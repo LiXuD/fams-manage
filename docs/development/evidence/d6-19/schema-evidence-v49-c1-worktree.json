@@ -1,0 +1,11 @@
+{
+  "source_candidate": "C1 worktree on4e9b57d; not fixed gate",
+  "artifact_sha256": "70c71a8dfb929726b6833dbe4c854d3c90d2d5a2edeba31bf8b1182bd8b21a3a",
+  "columns_sha256": "ce313ee7f459c5e78e6fed6580ae4c45ad8d61b2adc6e91b000c84d23011b4c8",
+  "create_sha256": "4a668b53ad4e60c0f9b2855c88c734e3b04cff3cb553db3a0e35f5c51c223fdb",
+  "objects": 129,
+  "business_rows_read": false,
+  "schema_version": 49,
+  "owned_environment_cleanup": true,
+  "scope": "129 objects and existing columns from the separate C1 worktree artifact; metadata only, no business rows; not a fixed-candidate gate artifact"
+}

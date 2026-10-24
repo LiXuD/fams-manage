@@ -7,6 +7,7 @@ import RepairPhysicalPanel from "./RepairPhysicalPanel.vue";
 import RepairReturnPanel from "./RepairReturnPanel.vue";
 import RepairTargetChangePanel from "./RepairTargetChangePanel.vue";
 import RepairReassignmentPanel from "./RepairReassignmentPanel.vue";
+import RepairReturnSourcePanel from "./RepairReturnSourcePanel.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { RepairApiError, repairProblem, repairRequest, repairStates, type Repair, type RepairAsset, type RepairMutation, type RepairPhoto } from "@/repair/api";
 const session = useSessionStore(), route = useRoute();
@@ -23,7 +24,8 @@ const physicalLocked = ref(false);
 const returnLocked = ref(false);
 const targetChangeLocked = ref(false);
 const reassignmentLocked = ref(false);
-const locked = computed(() => busy.value || !!pending.value || !!confirmation.value || collaborationLocked.value || physicalLocked.value || returnLocked.value || targetChangeLocked.value || reassignmentLocked.value);
+const sourceLocked = ref(false);
+const locked = computed(() => busy.value || !!pending.value || !!confirmation.value || collaborationLocked.value || physicalLocked.value || returnLocked.value || targetChangeLocked.value || reassignmentLocked.value || sourceLocked.value);
 const eventNames: Record<string, string> = { REPAIR_SUBMITTED: "已提交报修", REPAIR_DECIDED: "管理员已决定", REPAIR_CLAIMED: "库管已领取", REPAIR_CONTROLLED_REASSIGNMENT: "管理员已受控转派",
   REPAIR_ACCEPTED_IN_PLACE: "已受理原地维修", REPAIR_COMPLETED_IN_PLACE: "已核对原地恢复", REPAIR_CANCELLED: "已取消", REPAIR_FAULT_PHOTO_ADDED: "已补充故障照片", REPAIR_CONFLICT_REJECTED: "旧操作已拒绝" };
 let generation = 0, live = true, download: AbortController | null = null;
@@ -137,6 +139,7 @@ onBeforeUnmount(() => { live = false; reset(); });
     <p v-if="error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p><button :disabled="busy || !!confirmation" @click="load">刷新并核对当前结果</button>
     <button v-if="pending" :disabled="busy" @click="perform">重试原报修操作</button>
     <section v-if="confirmation" aria-label="确认本次报修办理"><p>请核对本次资产、实际依据及处理范围。批准不会自动领取，原地关闭须确认已恢复且实物从未离开原保管人。</p><button :disabled="busy" @click="confirm">确认保存本次办理</button><button :disabled="busy" @click="confirmation = null">返回修改</button></section>
+    <RepairReturnSourcePanel v-if="session.user?.roles.includes('ASSET_ADMIN') && !detail" :blocked="busy || !!pending || !!confirmation" @created="detail=$event;load()" @busy-change="sourceLocked=$event" />
     <section><h2>提交报修</h2><button :disabled="locked" @click="loadAssets()">查找可报修资产</button>
       <label v-for="asset in assets" :key="asset.id"><input v-model="assetId" type="radio" :value="asset.id" :disabled="locked">{{ asset.assetCode }} · {{ asset.name }} · {{ asset.locationName || '位置待核实' }}</label>
       <button :disabled="locked || assetPage === 1" @click="loadAssets(-1)">上一页可报修资产</button>第 {{ assetPage }} 页 / 共 {{ assetTotal }} 项<button :disabled="locked || assetPage * 20 >= assetTotal" @click="loadAssets(1)">下一页可报修资产</button>
@@ -146,6 +149,7 @@ onBeforeUnmount(() => { live = false; reset(); });
       <button :disabled="locked || page === 1" @click="paginate(-1)">上一页报修</button>第 {{ page }} 页 / 共 {{ total }} 条<button :disabled="locked || page * 20 >= total" @click="paginate(1)">下一页报修</button>
     </section>
     <section v-if="detail" aria-label="当前报修详情"><h2>{{ detail.source.assetCode }} · {{ detail.source.name }}</h2><p>{{ repairStates[detail.status] }} · {{ detail.fault }} · 实际发生 {{ new Date(detail.occurredAt).toLocaleString() }}</p>
+      <p v-if="detail.returnOrigin">来自损坏归还 {{ detail.returnOrigin.returnId }}，源后续 {{ detail.returnOrigin.followupId }}；原借用 {{ detail.returnOrigin.closedLoanId || '无' }} 已关闭，实际接修和验收入库后才结束源义务。</p>
       <p>提交时位置：{{ detail.source.locationName || '待核实' }}。原责任与借用作为返回依据保留；实物离开过或原目标失效时，不能直接原地恢复。</p>
       <section><h3>原始故障照片</h3><p v-if="!detail.photosAvailable">照片服务暂不可用，请联系管理员。</p><ul><li v-for="photo in detail.photos" :key="photo.objectId">{{ photo.filename }}<button :disabled="locked || photo.scanStatus !== 'CLEAN'" @click="readPhoto(photo)">读取故障照片 {{ photo.filename }}</button></li></ul>
         <fieldset v-if="detail.actions?.addFaultPhoto" :disabled="locked"><label>选择故障图片<input type="file" accept=".jpg,.jpeg,.png,.webp" @change="fileChosen"></label><button @click="prepare('photo')">核对上传故障照片</button><p>管理员决定后保留批准时的照片依据，不能覆盖原记录。</p></fieldset>

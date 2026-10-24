@@ -192,7 +192,7 @@ onMounted(async () => {
         <p v-else>实物缺失将保留借用责任，进入报失处理。</p><button :disabled="busy || retryable" @click="inspect">提交实物验收</button>
       </div>
       <p v-if="selectedReturn.inspectionResult">验收结果 {{ selectedReturn.inspectionResult }} · {{ selectedReturn.inspectionReason }}</p>
-      <p v-for="followup in selectedReturn.followups" :key="followup.id">后续 {{ followup.id }} · {{ followup.businessType }} · {{ followup.followupStatus }}</p>
+      <p v-for="followup in selectedReturn.followups" :key="followup.id">后续 {{ followup.id }} · {{ followup.businessType === 'REPAIR' ? '损坏维修' : '报失处理' }} · {{ followup.followupStatus === 'CLOSED' ? '已实际完成' : followup.followupStatus === 'ACCEPTED' ? '正式处理中' : '待继续处理' }}<span v-if="followup.linkedRepairId || followup.lastRepairId"> · 正式维修 {{ followup.linkedRepairId || followup.lastRepairId }}（{{ followup.repairStatus === 'COMPLETED' ? '已验收入库' : followup.repairStatus === 'REJECTED' || followup.repairStatus === 'CANCELLED' ? '原维修未执行，源义务仍待处理' : '尚未实际完成' }}）</span></p>
     </div>
     <div><button :disabled="busy || retryable || page === 1" @click="page--; refresh()">上一页</button> {{ page }}
       <button :disabled="busy || retryable || page * 20 >= total" @click="page++; refresh()">下一页</button></div>

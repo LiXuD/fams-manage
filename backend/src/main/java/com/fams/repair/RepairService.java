@@ -10,6 +10,7 @@ import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 import com.fams.loan.LoanRepairPort;
+import com.fams.loan.LoanReturnRepairPort;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Profile;
@@ -44,6 +45,7 @@ public class RepairService {
     private final RequisitionActorContext actors;
     private final AssetRepairPort assets;
     private final LoanRepairPort loans;
+    private final LoanReturnRepairPort returned;
     private final ObjectProvider<AttachmentEvidencePort> evidence;
     private final ObjectProvider<AttachmentRegistry> attachments;
 
@@ -54,6 +56,7 @@ public class RepairService {
             RequisitionActorContext actors,
             AssetRepairPort assets,
             LoanRepairPort loans,
+            LoanReturnRepairPort returned,
             ObjectProvider<AttachmentEvidencePort> evidence,
             ObjectProvider<AttachmentRegistry> attachments) {
         this.db = db;
@@ -62,12 +65,160 @@ public class RepairService {
         this.actors = actors;
         this.assets = assets;
         this.loans = loans;
+        this.returned = returned;
         this.evidence = evidence;
         this.attachments = attachments;
     }
 
     public Map<String, Object> eligible(Actor actor, int page, int size) {
         return assets.eligible(actors.revalidateLocked(actor), page, size);
+    }
+
+    public Map<String, Object> returnSources(Actor actor, int page, int size) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.ASSET_ADMIN);
+        return returned.list(page, size);
+    }
+
+    public Map<String, Object> returnSource(Actor actor, long followup) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.ASSET_ADMIN);
+        var source = returned.pending(followup);
+        var result = new LinkedHashMap<>(returnSourceWire(source));
+        result.put(
+                "asset",
+                json.readTree(
+                        assets.damagedReturnSource(
+                                source.assetId(), -1, source.warehouseId(), source.locationId())));
+        return result;
+    }
+
+    public Map<String, Object> submitReturned(
+            Actor actor,
+            long followup,
+            long version,
+            UUID key,
+            RepairInput.ReturnSourceSubmission input) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.ASSET_ADMIN);
+        String operation = "RETURN_SOURCE:" + followup,
+                fingerprint = hash(operation, version, input);
+        var prior = replay(actor, current, operation, key, fingerprint);
+        if (prior != null) {
+            return prior;
+        }
+        if (!List.of("LOW", "MEDIUM", "HIGH").contains(input.impact())) {
+            throw new RepairFailure(400, "REPAIR_IMPACT_INVALID");
+        }
+        var source = returned.pending(followup);
+        if (source.version() != version || source.lockVersion() != input.lockVersion()) {
+            throw new RepairFailure(409, "REPAIR_RETURN_SOURCE_CHANGED");
+        }
+        String asset =
+                assets.damagedReturnSource(
+                        source.assetId(),
+                        input.assetVersion(),
+                        source.warehouseId(),
+                        source.locationId());
+        if (loans.open(source.assetId()) != null) {
+            throw new RepairFailure(409, "REPAIR_LOAN_CHANGED");
+        }
+        String zone = json.readTree(source.parametersJson()).path("timezone").asText();
+        try {
+            ZoneId.of(zone);
+        } catch (java.time.DateTimeException invalid) {
+            throw new RepairFailure(409, "REPAIR_PARAMETERS_REQUIRED");
+        }
+        db.update(
+                "INSERT INTO fams_repair_request(asset_id,creator_account_id,asset_version,"
+                    + "source_snapshot_json,timezone_id,fault,impact,occurred_at,processor_account_id,created_at,updated_at)"
+                    + " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                source.assetId(),
+                current.id(),
+                input.assetVersion(),
+                asset,
+                zone,
+                input.fault().strip(),
+                input.impact(),
+                source.inspectedAt(),
+                source.processorAccountId(),
+                now(),
+                now());
+        long id =
+                java.util.Objects.requireNonNull(
+                        db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
+        db.update(
+                "INSERT INTO"
+                    + " fams_repair_return_origin(repair_id,followup_id,source_context_json,created_at)"
+                    + " VALUES (?,?,?,?)",
+                id,
+                followup,
+                json.writeValueAsString(returnSourceWire(source)),
+                now());
+        returned.adopt(source, id);
+        todo(id, "APPROVAL", "ASSET_ADMIN", null);
+        audit(
+                actor,
+                current,
+                header(id),
+                "REPAIR_RETURN_SOURCE_SUBMITTED",
+                0,
+                0,
+                Map.of(
+                        "source",
+                        returnSourceWire(source),
+                        "fault",
+                        input.fault(),
+                        "impact",
+                        input.impact()),
+                Role.ASSET_ADMIN.name());
+        return remember(current, operation, key, fingerprint, header(id));
+    }
+
+    private Map<String, Object> returnSourceWire(LoanReturnRepairPort.Context source) {
+        var result = new LinkedHashMap<String, Object>();
+        result.put("followupId", Long.toString(source.id()));
+        result.put("version", source.version());
+        result.put("returnId", Long.toString(source.returnId()));
+        result.put("assetId", Long.toString(source.assetId()));
+        result.put("closedLoanId", source.loanId() == null ? null : source.loanId().toString());
+        result.put("processorAccountId", Long.toString(source.processorAccountId()));
+        result.put("warehouseId", Long.toString(source.warehouseId()));
+        result.put("locationId", Long.toString(source.locationId()));
+        result.put("inspectedAt", source.inspectedAt().toString());
+        result.put("inspectionReason", source.reason());
+        result.put("lockVersion", source.lockVersion());
+        return result;
+    }
+
+    private Map<String, Object> returnOrigin(long repair) {
+        var rows =
+                db.queryForList(
+                        "SELECT * FROM fams_repair_return_origin WHERE repair_id=?", repair);
+        return rows.isEmpty() ? null : rows.getFirst();
+    }
+
+    private void requireRepairSource(Map<String, Object> row) {
+        var origin = returnOrigin(number(row, "id"));
+        if (origin == null) {
+            assets.requireSubmitted(number(row, "asset_id"), number(row, "asset_version"));
+        } else {
+            var source = json.readTree(origin.get("source_context_json").toString());
+            assets.damagedReturnSource(
+                    number(row, "asset_id"),
+                    number(row, "asset_version"),
+                    source.path("warehouseId").asLong(),
+                    source.path("locationId").asLong());
+        }
+    }
+
+    private void releaseOrRestoreReturn(Map<String, Object> row, String status) {
+        var origin = returnOrigin(number(row, "id"));
+        if (origin == null) {
+            release(row, "REPAIR_" + status);
+        } else {
+            returned.progress(number(origin, "followup_id"), number(row, "id"), status, null);
+        }
     }
 
     public Map<String, Object> list(Actor actor, int page, int size) {
@@ -149,6 +300,13 @@ public class RepairService {
         var port = evidence.getIfAvailable();
         result.put("photosAvailable", port != null);
         result.put("photos", port == null ? List.of() : wire(port.list("REPAIR", id)));
+        var returnOrigin = returnOrigin(id);
+        result.put(
+                "returnOrigin",
+                returnOrigin == null
+                        ? null
+                        : json.readTree(returnOrigin.get("source_context_json").toString()));
+        boolean inheritedReturn = returnOrigin != null;
         boolean away = hasPhysicalHandling(id);
         result.put(
                 "physicalHandling",
@@ -201,9 +359,15 @@ public class RepairService {
                                                 && "WAITING_WAREHOUSE_CLAIM"
                                                         .equals(row.get("repair_status")),
                                 "acceptInPlace",
-                                        processing && !away && row.get("accepted_at") == null,
+                                        processing
+                                                && !inheritedReturn
+                                                && !away
+                                                && row.get("accepted_at") == null,
                                 "completeInPlace",
-                                        processing && !away && row.get("accepted_at") != null,
+                                        processing
+                                                && !inheritedReturn
+                                                && !away
+                                                && row.get("accepted_at") != null,
                                 "acceptAway", processing && !away,
                                 "closeInbound",
                                         processing
@@ -348,9 +512,15 @@ public class RepairService {
             throw new RepairFailure(400, "REPAIR_APPROVAL_SCOPE_INVALID");
         }
         if (approve) {
-            assets.requireSubmitted(number(row, "asset_id"), number(row, "asset_version"));
+            requireRepairSource(row);
         }
+        var origin = returnOrigin(id);
         var basis = new LinkedHashMap<String, Object>();
+        basis.put(
+                "returnOrigin",
+                origin == null
+                        ? null
+                        : json.readTree(origin.get("source_context_json").toString()));
         basis.put("source", json.readTree(row.get("source_snapshot_json").toString()));
         basis.put(
                 "loan",
@@ -395,16 +565,28 @@ public class RepairService {
                 "UPDATE fams_repair_request SET"
                     + " repair_status=?,allowed_method=?,approval_snapshot_json=?,version=version+1,updated_at=?"
                     + " WHERE id=?",
-                approve ? "WAITING_WAREHOUSE_CLAIM" : "REJECTED",
+                approve
+                        ? origin == null ? "WAITING_WAREHOUSE_CLAIM" : "WAREHOUSE_PROCESSING"
+                        : "REJECTED",
                 input.allowedMethod(),
                 approve ? frozen : null,
                 now(),
                 id);
         closeTodos(id);
         if (approve) {
-            todo(id, "CLAIM", "WAREHOUSE_OPERATOR", null);
+            if (origin == null) {
+                todo(id, "CLAIM", "WAREHOUSE_OPERATOR", null);
+            } else {
+                db.update(
+                        "UPDATE fams_repair_request SET"
+                                + " ownership_version=ownership_version+1,claimed_at=? WHERE id=?",
+                        now(),
+                        id);
+                todo(id, "PROCESS", "WAREHOUSE_OPERATOR", number(row, "processor_account_id"));
+                returned.progress(number(origin, "followup_id"), id, "WAREHOUSE_PROCESSING", null);
+            }
         } else {
-            release(row, "REPAIR_REJECTED");
+            releaseOrRestoreReturn(row, "REJECTED");
             closeCollaborations(id);
         }
         audit(
@@ -434,7 +616,7 @@ public class RepairService {
         }
         guard(actor, current, row, version, "PENDING_ADMIN_DECISION");
         lock(row, null);
-        release(row, "REPAIR_CANCELLED");
+        releaseOrRestoreReturn(row, "CANCELLED");
         closeCollaborations(id);
         closeTodos(id);
         db.update(
@@ -513,7 +695,8 @@ public class RepairService {
             reject(actor, current, row, "REPAIR_OWNERSHIP_CHANGED");
         }
         lock(row, input.lockVersion());
-        if (!input.neverLeftCustodian()
+        if (returnOrigin(id) != null
+                || !input.neverLeftCustodian()
                 || hasPhysicalHandling(id)
                 || input.assetVersion() != number(row, "asset_version")
                 || !"INTERNAL_NO_COST".equals(row.get("allowed_method"))
@@ -614,8 +797,15 @@ public class RepairService {
         }
         physicalTime(
                 input.occurredAt(),
-                row.get("accepted_at") == null ? row.get("created_at") : row.get("accepted_at"));
+                returnOrigin(id) != null
+                        ? row.get("claimed_at")
+                        : row.get("accepted_at") == null
+                                ? row.get("created_at")
+                                : row.get("accepted_at"));
         loans.requireIdentity(number(row, "asset_id"), originalLoan(row), input.loanVersion());
+        if (returnOrigin(id) != null) {
+            requireRepairSource(row);
+        }
         long next =
                 assets.acceptAway(
                         number(row, "asset_id"),
@@ -727,6 +917,10 @@ public class RepairService {
                 next,
                 now(),
                 id);
+        var origin = returnOrigin(id);
+        if (origin != null) {
+            returned.progress(number(origin, "followup_id"), id, "COMPLETED", null);
+        }
         release(row, "REPAIR_COMPLETED_INBOUND");
         closeCollaborations(id);
         closeTodos(id);
@@ -1366,6 +1560,14 @@ public class RepairService {
                         + " business_id=? AND pool_type='WAREHOUSE_OPERATOR' AND closed_at IS NULL",
                 input.processorAccountId(),
                 id);
+        var origin = returnOrigin(id);
+        if (origin != null) {
+            returned.progress(
+                    number(origin, "followup_id"),
+                    id,
+                    "WAREHOUSE_PROCESSING",
+                    input.processorAccountId());
+        }
         audit(
                 actor,
                 current,
@@ -1417,7 +1619,7 @@ public class RepairService {
         var loan = loans.open(assetId);
         loans.requireIdentity(assetId, originalLoan(row), loan == null ? null : loan.version());
         if (row.get("accepted_at") == null) {
-            assets.requireSubmitted(assetId, number(row, "asset_version"));
+            requireRepairSource(row);
         } else {
             assets.checkRepairIdentity(
                     assetId,

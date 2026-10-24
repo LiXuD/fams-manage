@@ -14,6 +14,7 @@ export interface Repair { id: string; assetId: string; creatorAccountId: string;
   approvedReturnTargets?: { id: string; target_json: RepairReturnTarget; approved_at: string }[];
   returnRecollections?: { handover_id: string; occurred_at: string; evidence: string }[];
   photosAvailable?: boolean; photos?: RepairPhoto[]; actions?: { approve: boolean; claim: boolean; acceptInPlace: boolean; completeInPlace: boolean; addFaultPhoto: boolean; cancel: boolean; acceptAway?: boolean; closeInbound?: boolean; deliverReturn?: boolean; receiveReturn?: boolean; refuseReturn?: boolean; recollectReturn?: boolean; changeReturnTarget?: boolean; proxyReturn?: boolean };
+  returnOrigin?: { followupId: string; returnId: string; closedLoanId: string | null; processorAccountId: string } | null;
   history?: { id: string; action: string; actor_username: string; actor_role: string; occurred_at: string; detail_json: Record<string, unknown> }[]; historyTotal?: number }
 export interface RepairMutation { path: string; key: string; version: number; body?: unknown; file?: File }
 export class RepairApiError extends Error {

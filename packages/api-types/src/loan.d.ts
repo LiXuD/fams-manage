@@ -26,6 +26,6 @@ export interface AssetReturn {
   processorAccountId: string | null; inspectionResult: "NORMAL" | "DAMAGED" | "MISSING" | null;
   inspectionReason: string | null; lockVersion?: number | null;
   asset?: { id: string; assetCode: string; name: string; version: number; lifecycleStatus: string; exceptionStatus: string };
-  followups?: { id: string; businessType: string; followupStatus: string }[];
+  followups?: { id: string; businessType: string; followupStatus: string; linkedRepairId?: string | null; lastRepairId?: string | null; repairStatus?: string | null }[];
 }
 export interface ReturnChoice { id: string; name: string; version: number; warehouseId?: string }

@@ -33,8 +33,9 @@
     <button bindtap="onReturn" disabled="{{busy || retryable}}">提请退库</button></view>
   <view class="title">退还进度</view>
   <view wx:for="{{returns}}" wx:key="id" class="card"><view>退还 {{item.id}} · {{item.returnStatus}}</view><view>{{item.reason}}</view>
-    <view wx:if="{{item.inspectionResult}}">验收 {{item.inspectionResult}} · {{item.inspectionReason}}</view>
+    <view wx:if="{{item.inspectionResult}}">验收 {{item.inspectionResult}} · {{item.inspectionReason}}</view><button data-id="{{item.id}}" bindtap="onReturnProgress" disabled="{{busy || retryable}}">核对后续实际进度</button>
   </view>
+  <view wx:if="{{returnProgress}}" class="card"><view>原归还 {{returnProgress.id}} 的后续义务</view><view wx:for="{{returnProgress.followups}}" wx:key="id">{{item.businessType === 'REPAIR' ? '损坏维修' : '报失处理'}} · {{item.followupStatus === 'CLOSED' ? '已实际完成' : item.followupStatus === 'ACCEPTED' ? '正式处理中' : '待继续处理'}}<view wx:if="{{item.linkedRepairId || item.lastRepairId}}">正式维修 {{item.linkedRepairId || item.lastRepairId}} · {{item.repairStatus === 'COMPLETED' ? '已验收入库' : '原维修尚未实际完成'}}</view></view></view>
   <button bindtap="onPrevious" disabled="{{busy || retryable || page <= 1}}">上一页</button><view>第 {{page}} 页</view>
   <button bindtap="onNext" disabled="{{busy || retryable || page * 20 >= total}}">下一页</button>
   <navigator url="/pages/mine/index" open-type="redirect">返回我的</navigator>

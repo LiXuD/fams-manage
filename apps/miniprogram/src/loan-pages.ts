@@ -4,7 +4,7 @@ import type { AssetReturn, BusinessPage, Loan, ReturnAssetChoice } from "../../.
 
 interface Data {
     busy: boolean; error: string; notice: string; retryable: boolean; loans: Loan[]; returns: AssetReturn[];
-    selected: Loan | null; assets: ReturnAssetChoice[]; selectedAsset: ReturnAssetChoice | null;
+    returnProgress: AssetReturn | null; selected: Loan | null; assets: ReturnAssetChoice[]; selectedAsset: ReturnAssetChoice | null;
     reason: string; dueDate: string; page: number; total: number;
 }
 interface Context { data: Data; setData(data: Partial<Data>): void }
@@ -53,12 +53,12 @@ export function createLoanPage(getServices: () => MiniServices) {
     };
     return {
         data: { busy: false, error: "", notice: "", retryable: false, loans: [], returns: [], selected: null,
-            assets: [], selectedAsset: null, reason: "", dueDate: "", page: 1, total: 0 } as Data,
+            assets: [], selectedAsset: null, returnProgress: null, reason: "", dueDate: "", page: 1, total: 0 } as Data,
         async onShow(this: Context) {
             live = true; const current = ++generation;
             services = getServices(); const next = JSON.stringify(services.sessions.identity);
             if (identity !== next) { identity = next; pending = null;
-                this.setData({ loans: [], returns: [], assets: [], selected: null, selectedAsset: null,
+                this.setData({ loans: [], returns: [], assets: [], selected: null, selectedAsset: null, returnProgress: null,
                     reason: "", dueDate: "", page: 1, retryable: false }); }
             this.setData({ busy: true, error: "" });
             try { await load(this, current); }
@@ -66,8 +66,18 @@ export function createLoanPage(getServices: () => MiniServices) {
                 if (live && !services.sessions.identity) services.navigate("/pages/login/index"); }
             finally { if (live && generation === current) this.setData({ busy: false }); }
         },
-        onHide() { live = false; generation++; },
+        onHide(this: Context) { live = false; generation++; this.setData({ returnProgress: null }); },
         onUnload() { live = false; generation++; pending = null; },
+        async onReturnProgress(this: Context, event: Selection) {
+            if (!services || !live || this.data.busy || pending || identity !== JSON.stringify(services.sessions.identity)
+                || !this.data.returns.some(row => row.id === event.currentTarget.dataset.id)) return;
+            const current = generation; this.setData({ busy: true, error: "", returnProgress: null });
+            try {
+                const result = await services.sessions.request("GET", "/api/v1/mini/asset-returns/" + event.currentTarget.dataset.id) as AssetReturn;
+                if (live && generation === current && identity === JSON.stringify(services.sessions.identity)) this.setData({ returnProgress: result });
+            } catch (error) { if (live && generation === current) this.setData({ error: message(error), returnProgress: null }); }
+            finally { if (live && generation === current) this.setData({ busy: false }); }
+        },
         onReason(this: Context, event: Input) { if (!this.data.busy && !pending) this.setData({ reason: event.detail.value }); },
         onDueDate(this: Context, event: Input) { if (!this.data.busy && !pending) this.setData({ dueDate: event.detail.value }); },
         onSelectAsset(this: Context, event: Selection) {

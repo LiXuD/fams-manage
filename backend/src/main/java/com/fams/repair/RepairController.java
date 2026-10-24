@@ -42,6 +42,28 @@ public class RepairController {
         return repairs.eligible(actors.capture(), page, pageSize);
     }
 
+    @GetMapping("/return-sources")
+    Map<String, Object> returnSources(
+            @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
+            @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
+        return repairs.returnSources(actors.capture(), page, pageSize);
+    }
+
+    @GetMapping("/return-sources/{id}")
+    Map<String, Object> returnSource(@PathVariable @Positive long id) {
+        return repairs.returnSource(actors.capture(), id);
+    }
+
+    @PostMapping("/return-sources/{id}")
+    Map<String, Object> submitReturned(
+            @PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody RepairInput.ReturnSourceSubmission input) {
+        var actor = actors.capture();
+        return retry(() -> repairs.submitReturned(actor, id, version, key, input));
+    }
+
     @GetMapping
     Map<String, Object> list(
             @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,

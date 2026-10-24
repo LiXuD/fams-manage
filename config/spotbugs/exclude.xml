@@ -443,6 +443,13 @@
         <Method name="&lt;init&gt;"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+    <!-- Spring owns this shared JDBC collaborator; source inputs and returned facts remain checked. -->
+    <Match>
+        <Class name="com.fams.loan.LoanReturnRepairPort"/>
+        <Field name="db"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
     <!-- Exact Spring-owned collaboration infrastructure; input and result lists remain checked. -->
     <Match>
         <Class name="com.fams.repair.RepairCollaborationPhotoService"/>

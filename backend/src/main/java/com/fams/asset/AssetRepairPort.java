@@ -114,6 +114,23 @@ public class AssetRepairPort {
         }
     }
 
+    /** A completed damaged return is already in repair custody, not a new ordinary report. */
+    public String damagedReturnSource(long assetId, long version, long warehouse, long location) {
+        var row = locked(assetId, version);
+        if (!"ACTIVE".equals(row.get("card_stage"))
+                || !"NORMAL".equals(row.get("exception_status"))
+                || !"UNDER_REPAIR".equals(row.get("lifecycle_status"))
+                || !"STORAGE".equals(row.get("custody_type"))
+                || row.get("using_organization_id") != null
+                || row.get("responsible_employee_id") != null
+                || row.get("department_responsible_employee_id") != null
+                || !Objects.equals(warehouse, nullable(row.get("storage_warehouse_id")))
+                || !Objects.equals(location, nullable(row.get("current_location_id")))) {
+            throw new AssetHandoverPort.Failure("REPAIR_RETURN_SOURCE_CHANGED", 409);
+        }
+        return json.writeValueAsString(snapshot(row));
+    }
+
     public long accept(
             long assetId,
             long version,

@@ -1,0 +1,108 @@
+{
+  "origin": 1,
+  "inbound": 1,
+  "repairs": 1,
+  "physical": 1,
+  "completed": 1,
+  "lifecycle": "IN_STOCK",
+  "liveLocks": 0,
+  "assetVersion": 3,
+  "sourceClosed": 1,
+  "loanStillReturned": 1,
+  "duplicateLoanClosure": 0,
+  "web_url": "http://127.0.0.1:53258",
+  "api_port": 53256,
+  "artifact_sha256": "70c71a8dfb929726b6833dbe4c854d3c90d2d5a2edeba31bf8b1182bd8b21a3a",
+  "source_state": "C1 worktree package on 4e9b57d, not fixed gate candidate",
+  "asset_code": "OWNED19-985010",
+  "original_return_and_closed_loan_unchanged": true,
+  "original_dates_preserved": true,
+  "actual_committing_process_group_killed": 86400,
+  "new_process_group": 87625,
+  "permanent_original_inbound_reply_after_new_JVM": true,
+  "no_duplicate_inbound_or_source": true,
+  "scanner_scope": "No attachment change in C1; no new ClamAV claim",
+  "runtime": {
+    "damaged_return_source_http_including_native": 9,
+    "populated_v48_to_v49_upgrade_and_repeat": 1,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "web_tests": 137,
+  "mini_tests": 219,
+  "types_lint_build": "PASS",
+  "script_tests": 33,
+  "static": {
+    "checkstyle": 0,
+    "spotbugs": 0,
+    "scope": "skipTests and jacoco.skip verify; no complete gate or coverage claim"
+  },
+  "owned_environment_cleanup": true,
+  "screenshots": [
+    "output/playwright/d6-19c1-pc-completed.png",
+    "output/playwright/d6-19c1-pc-source-closed.png"
+  ],
+  "retained_failures": [
+    "output/d6-19c1-source-runtime-1-braces-failed.log: missing required braces, corrected",
+    "output/d6-19c1-source-runtime-3-test-import-failed.log: missing test assertTrue import, corrected",
+    "output/d6-19c1-web-unit-1-test-clone-failed.log: structuredClone cannot clone Vue reactive test input; corrected test to serialize actual payload",
+    "output/d6-19c1-script-unit-1-wrong-discovery-directory.log: incorrect test discovery directory; actual script33 passed",
+    "output/d6-19c1-pc-preflight-fixture-failed.json: synthetic open-loan seed omitted timezone, corrected before any return existed; production unchanged"
+  ],
+  "native_scope": "Actual source, repair and original-loan Page handlers, opaque sessions and Spring/MySQL; source creation and inbound replies deliberately lost after commit and exact originals recovered across refresh/hide; explicit SDK/HTTPS adapter fixtures, no device claim",
+  "business_invariants": [
+    "Completed original return and already returned borrowing remain byte-identical",
+    "Same live lock adopted without a release/reacquire gap; inherited original warehouse owner",
+    "Single admin repair range approval leaves physical acceptance pending",
+    "Rejection/cancellation restores source lock and followup for explicit continuation",
+    "Controlled handoff updates current source owner while preserving original inspector and frozen source",
+    "Actual inbound alone closes source; source/audit late failure rolls back every owner and receipt"
+  ],
+  "limitations": [
+    "C2 inventory damaged condition/late evidence repair linkage remains mandatory",
+    "Complete C fixed candidate gate and independent review still pending",
+    "No new attachment/scanner claim in C1",
+    "Real external WeChat/SMS/HTTPS/devices, remote CI, formal QA and production unverified",
+    "V1-V49 immutable; coordinated replacement of old writers only",
+    "AOCI incremental maintenance will close the final stable C batch; no whole-index alignment claim"
+  ],
+  "raw_evidence": [
+    {
+      "path": "output/d6-19c1-source-runtime.log",
+      "sha256": "aa40f86b9f0db52ba2b75b8ee5e5030ef3fbb56656fb431f0efdcc39acc2dfb4"
+    },
+    {
+      "path": "output/d6-19c1-static-verify.log",
+      "sha256": "323e9c3598f8579a703efaed19e7718a3e9a3a4bc9d12e02a17e8f13e91d0c01"
+    },
+    {
+      "path": "output/d6-19c1-web-unit.log",
+      "sha256": "280391e2df399a1d70a9b5aeaef6a9ef5a4fba573eb79a1f3d736595798fe332"
+    },
+    {
+      "path": "output/d6-19c1-mini-unit.log",
+      "sha256": "5b2bd8ab0998002182e3aa423c9acaf5e3ec7b2d32009eb6e8819b08db46f8bd"
+    },
+    {
+      "path": "output/d6-19c1-existing-regression-runtime.log",
+      "sha256": "4c04bfa76eb13235acf474ef570b57185fc34873a73485b81dbf947e5aa3bb0b"
+    },
+    {
+      "path": "output/d6-19c1-architecture.log",
+      "sha256": "977f8d9538a818d4129597d0c44fc96ba60cb39198e46f7118198a89966bd18c"
+    }
+  ],
+  "existing_regression": {
+    "original_repair": 14,
+    "collaboration": 11,
+    "physical": 8,
+    "return": 19,
+    "reassignment": 15,
+    "proxy": 16,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "architecture_tests": 6
+}
