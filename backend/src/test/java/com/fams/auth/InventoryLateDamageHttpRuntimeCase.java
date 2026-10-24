@@ -91,7 +91,7 @@ class InventoryLateDamageHttpRuntimeCase {
                 new BCryptPasswordEncoder(4).encode(PASSWORD));
         db.update(
                 "INSERT INTO fams_account_role(account_id,role_code,granted_at) VALUES"
-                    + " (948004,'WAREHOUSE_OPERATOR',NOW(3))");
+                        + " (948004,'WAREHOUSE_OPERATOR',NOW(3))");
         admin = login(1);
         employee = login(2);
         other = login(3);
@@ -103,7 +103,7 @@ class InventoryLateDamageHttpRuntimeCase {
         db.execute("DROP TRIGGER IF EXISTS owned_late_damage_audit_failure");
         String observations =
                 " IN (SELECT observation_id FROM fams_inventory_late_case WHERE task_id IN (SELECT"
-                    + " id FROM fams_inventory_task WHERE creator_account_id=948001))";
+                        + " id FROM fams_inventory_task WHERE creator_account_id=948001))";
         db.update(
                 "DELETE FROM fams_inventory_late_damage_decision WHERE observation_id"
                         + observations);
@@ -133,15 +133,15 @@ class InventoryLateDamageHttpRuntimeCase {
         }
         db.update(
                 "DELETE FROM fams_inventory_photo_receipt WHERE scope_id IN (SELECT id FROM"
-                    + " fams_inventory_upload_scope WHERE actor_account_id=948002)");
+                        + " fams_inventory_upload_scope WHERE actor_account_id=948002)");
         db.update(
                 "DELETE FROM fams_attachment WHERE business_type='INVENTORY_EVENT' AND business_id"
-                    + " IN (SELECT id FROM fams_inventory_upload_scope WHERE"
-                    + " actor_account_id=948002)");
+                        + " IN (SELECT id FROM fams_inventory_upload_scope WHERE"
+                        + " actor_account_id=948002)");
         db.update(
                 "DELETE FROM fams_attachment_scope WHERE business_type='INVENTORY_EVENT' AND"
-                    + " business_id IN (SELECT id FROM fams_inventory_upload_scope WHERE"
-                    + " actor_account_id=948002)");
+                        + " business_id IN (SELECT id FROM fams_inventory_upload_scope WHERE"
+                        + " actor_account_id=948002)");
         db.update("DELETE FROM fams_inventory_upload_scope WHERE actor_account_id=948002");
         db.update("DELETE FROM fams_asset_timeline_event WHERE asset_id IN (948010,948011)");
         db.update("DELETE FROM fams_audit_event WHERE actor_account_id=948004");
@@ -236,9 +236,9 @@ class InventoryLateDamageHttpRuntimeCase {
         String request = key();
         db.execute(
                 "CREATE TRIGGER owned_late_damage_audit_failure BEFORE INSERT ON fams_audit_event"
-                    + " FOR EACH ROW BEGIN IF NEW.action='INVENTORY_LATE_DAMAGE_DECIDED' THEN"
-                    + " SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='owned late damage audit"
-                    + " rollback'; END IF; END");
+                        + " FOR EACH ROW BEGIN IF NEW.action='INVENTORY_LATE_DAMAGE_DECIDED' THEN"
+                        + " SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='owned late damage audit"
+                        + " rollback'; END IF; END");
         assertTrue(decide(admin, observation, 0, request, input).statusCode() >= 400);
         assertEquals(
                 0,
@@ -264,14 +264,14 @@ class InventoryLateDamageHttpRuntimeCase {
                 0,
                 db.queryForObject(
                         "SELECT COUNT(*) FROM fams_inventory_late_damage_decision WHERE"
-                            + " observation_id=?",
+                                + " observation_id=?",
                         Integer.class,
                         observation));
         assertEquals(
                 0,
                 db.queryForObject(
                         "SELECT COUNT(*) FROM fams_inventory_review_receipt WHERE task_id=948000"
-                            + " AND operation='LATE_DAMAGE_REPAIR'",
+                                + " AND operation='LATE_DAMAGE_REPAIR'",
                         Integer.class));
         assertEquals(before, lateCase(observation));
         assertEquals(2, todos(observation));
@@ -310,7 +310,7 @@ class InventoryLateDamageHttpRuntimeCase {
                 1,
                 db.queryForObject(
                         "SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=948010 AND"
-                            + " released_at IS NULL",
+                                + " released_at IS NULL",
                         Integer.class));
         ok(
                 request(
@@ -331,7 +331,7 @@ class InventoryLateDamageHttpRuntimeCase {
                 2,
                 db.queryForObject(
                         "SELECT COUNT(*) FROM fams_repair_inventory_evidence WHERE"
-                            + " observation_id=?",
+                                + " observation_id=?",
                         Integer.class,
                         observation));
     }
@@ -390,9 +390,153 @@ class InventoryLateDamageHttpRuntimeCase {
                 1,
                 db.queryForObject(
                         "SELECT COUNT(*) FROM fams_inventory_late_damage_decision WHERE"
-                            + " observation_id=?",
+                                + " observation_id=?",
                         Integer.class,
                         observation));
+    }
+
+    @Test
+    void actualNativeLateCreationAndSourcePhotosUseOpaqueSessions() throws Exception {
+        nativeLateDamage(false);
+    }
+
+    @Test
+    void actualNativeLateExistingRepairLinkKeepsSupplementIndependent() throws Exception {
+        nativeLateDamage(true);
+    }
+
+    private void nativeLateDamage(boolean link) throws Exception {
+        long observation = lateDamage();
+        String task = "948000";
+        var original =
+                Map.of(
+                        "task",
+                        task(),
+                        "report",
+                        report(),
+                        "raw",
+                        raw(observation),
+                        "case",
+                        lateCase(observation));
+        String existing = "";
+        if (link) {
+            var input =
+                    JSON.createObjectNode()
+                            .put("assetId", "948010")
+                            .put("assetVersion", 0)
+                            .put("fault", "Actual existing repair for damaged inventory")
+                            .put("impact", "HIGH")
+                            .put(
+                                    "occurredAt",
+                                    testClock
+                                            .instant()
+                                            .minusSeconds(5)
+                                            .truncatedTo(java.time.temporal.ChronoUnit.MILLIS)
+                                            .toString());
+            existing =
+                    ok(request(admin, "POST", "/api/v1/repairs", input.toString(), key(), null))
+                            .path("id")
+                            .asText();
+        }
+        var grants = new java.util.LinkedHashMap<String, Object>();
+        for (var entry : java.util.Map.of("admin", 948001L, "warehouse", 948004L).entrySet()) {
+            var identity =
+                    new com.fams.auth.MiniWechatIdentityPort.Identity(
+                            "owned-inventory-repair-native", entry.getKey());
+            db.update(
+                    "INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES"
+                            + " (?,?,NOW(3))",
+                    entry.getValue(),
+                    sessions.identityHash(identity));
+            var grant = sessions.start(identity, UUID.randomUUID());
+            grants.put(
+                    entry.getKey(),
+                    java.util.Map.of(
+                            "sessionToken",
+                            grant.sessionToken(),
+                            "accountId",
+                            entry.getValue().toString(),
+                            "bindingId",
+                            grant.bindingId()));
+        }
+        var script =
+                java.nio.file.Path.of(System.getProperty("user.dir"))
+                        .getParent()
+                        .resolve("apps/miniprogram/test/runtime-inventory-late-damage-http.mjs");
+        var builder =
+                new ProcessBuilder(
+                                "rtk",
+                                "proxy",
+                                System.getProperty(
+                                        "fams.test.node",
+                                        System.getenv()
+                                                .getOrDefault("FAMS_TEST_NODE_EXECUTABLE", "node")),
+                                script.toString())
+                        .redirectErrorStream(true);
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_INVENTORY_TASK", task);
+        builder.environment().put("FAMS_TEST_INVENTORY_ITEM", "948010");
+        builder.environment().put("FAMS_TEST_INVENTORY_OBSERVATION", Long.toString(observation));
+        builder.environment().put("FAMS_TEST_REPAIR_EXISTING", existing);
+        builder.environment().put("FAMS_TEST_REPAIR_GRANTS", JSON.writeValueAsString(grants));
+        byte[] bytes =
+                java.util.Base64.getDecoder()
+                        .decode(
+                                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==");
+        builder.environment()
+                .put(
+                        "FAMS_TEST_PHOTO_SHA256",
+                        java.util.HexFormat.of()
+                                .formatHex(
+                                        java.security.MessageDigest.getInstance("SHA-256")
+                                                .digest(bytes)));
+        var log = java.nio.file.Files.createTempFile("fams-inventory-repair-native-", ".log");
+        try {
+            var process = builder.redirectOutput(log.toFile()).start();
+            if (!process.waitFor(45, java.util.concurrent.TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                throw new IllegalStateException("Owned native inventory repair HTTP timed out");
+            }
+            String output = java.nio.file.Files.readString(log);
+            assertEquals(0, process.exitValue(), output);
+            assertTrue(output.contains("\"nativeActualLateDamageClosed\":true"), output);
+        } finally {
+            java.nio.file.Files.deleteIfExists(log);
+        }
+        var latest = ok(request(admin, "GET", damagePath(observation), null, null, null));
+        assertEquals("CLOSED", latest.path("damage").path("damage_status").asText());
+        assertEquals("OPEN", latest.path("recheckResult").asText());
+        assertEquals(true, latest.path("todoOpen").asBoolean());
+        assertEquals(
+                1,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_repair_request WHERE asset_id=948010 AND"
+                                + " repair_status='COMPLETED'",
+                        Integer.class));
+        assertEquals(
+                1,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_repair_inventory_evidence WHERE observation_id=?"
+                                + " AND source_kind='LATE'",
+                        Integer.class,
+                        observation));
+        assertEquals(
+                0,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=948010 AND"
+                                + " released_at IS NULL",
+                        Integer.class));
+        assertEquals(
+                original,
+                Map.of(
+                        "task",
+                        task(),
+                        "report",
+                        report(),
+                        "raw",
+                        raw(observation),
+                        "case",
+                        lateCase(observation)));
     }
 
     private long lateDamage() throws Exception {
@@ -410,7 +554,7 @@ class InventoryLateDamageHttpRuntimeCase {
         assertEquals("LATE_REVIEW", ok(observe(948000, event)).path("outcome").asText());
         return db.queryForObject(
                 "SELECT id FROM fams_inventory_observation WHERE task_id=948000 AND"
-                    + " client_event_id=?",
+                        + " client_event_id=?",
                 Long.class,
                 event.path("eventId").asText());
     }
@@ -720,7 +864,7 @@ class InventoryLateDamageHttpRuntimeCase {
     private int todos(long observation) {
         return db.queryForObject(
                 "SELECT COUNT(*) FROM fams_todo WHERE business_type='INVENTORY_LATE' AND"
-                    + " business_id=? AND closed_at IS NULL",
+                        + " business_id=? AND closed_at IS NULL",
                 Integer.class,
                 observation);
     }

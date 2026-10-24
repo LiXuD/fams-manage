@@ -1,0 +1,69 @@
+{
+  "batch": "D6-19C2b2 native known-asset terminal damage repair",
+  "base_commit": "acd9ac4",
+  "candidate_kind": "native and test-compiled worktree; not a fixed C gate",
+  "production_java_contract_and_migrations_unchanged_from_base": true,
+  "runtime": {
+    "source_http_cases": 8,
+    "new_actual_native_cases": 2,
+    "native_modes": [
+      "FORMAL_REPAIR",
+      "LINK_REPAIR"
+    ],
+    "opaque_spring_mysql": true,
+    "owned_mysql": "8.4.11",
+    "node": "24.18.0",
+    "owned_environment_cleanup": true
+  },
+  "native_facts": [
+    "Original late evidence Page offers only service-returned observation damage navigation",
+    "Independent discovery time and checks do not use raw device timestamp",
+    "Actual formal source commit reply dropped in adapter; hide/show and exact original key/body/version replay",
+    "Normal administrator approval then warehouse actual claim and original source photo download",
+    "Unclaimed warehouse denied original source metadata and bytes",
+    "Original PNG SHA256 verified on real identity-scoped filesystem; hide/unload delete bytes",
+    "Actual acceptance and repair completion then native refresh closes damage only; original supplemental review remains OPEN with active todo",
+    "One completed repair and one LATE evidence origin; no active asset lock; original task/report/observation/case identical"
+  ],
+  "checks": {
+    "mini_unit": 239,
+    "new_page_cases": 8,
+    "all_workspace_types": "PASS",
+    "frontend_lint": "PASS",
+    "native_build": "PASS",
+    "current_checkstyle": 0,
+    "spotbugs": "production unchanged from acd9ac4; not rerun in this batch"
+  },
+  "raw_logs": [
+    "output/d6-19c2b2-source-runtime.log",
+    "output/d6-19c2b2-mini-unit.log",
+    "output/d6-19c2b2-types.log",
+    "output/d6-19c2b2-frontend-lint.log",
+    "output/d6-19c2b2-mini-build.log"
+  ],
+  "failure_retained": {
+    "log": "output/d6-19c2b2-source-runtime-1-fixture-compile-failed.log",
+    "cause": "New runtime helper referred to a nonexistent original snapshot helper",
+    "correction": "Use actual task/report/raw/case snapshot readers and exact damage context; all eight runtime tests rerun PASS",
+    "production_guards_changed": false
+  },
+  "schema": {
+    "version": 51,
+    "migration_sha256": "ce7718d0476a78aedcc074290a89171b9420ccb8c743880bc97dc5c8e3b6fbe0",
+    "changed": false,
+    "inherited_metadata": "schema-evidence-v51-c2b1-worktree.json"
+  },
+  "limits": [
+    "SDK confirmation and wx callbacks are fixtures",
+    "Controlled loopback transport is not actual HTTPS or WeChat",
+    "Existing explicit CLEAN scanner is not actual ClamAV",
+    "No actual C2 PC browser or JVM kill acceptance in this batch",
+    "No complete fixed C gate, independent review, remote CI, formal QA or production"
+  ],
+  "next": [
+    "C2 actual PC browser and targeted process recovery",
+    "Complete fixed C gate and independent review",
+    "D6-20 through D6-27"
+  ],
+  "status": "C and parent IN_PROGRESS"
+}

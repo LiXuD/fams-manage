@@ -22,6 +22,7 @@
     "pages/inventory-readiness/index",
     "pages/inventory-sealing/index",
     "pages/inventory-late/index",
+    "pages/inventory-late-damage/index",
     "pages/repairs/index",
     "pages/repair-return-sources/index",
     "pages/repair-inventory-evidence/index"

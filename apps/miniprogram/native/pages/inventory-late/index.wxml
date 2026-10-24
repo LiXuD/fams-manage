@@ -3,6 +3,7 @@
  <button wx:for="{{entries}}" wx:key="id" data-id="{{item.id}}" bindtap="onOpen" disabled="{{busy || retry}}">{{item.label}}</button>
  <button bindtap="onPage" data-delta="-1" disabled="{{busy || retry || page === 1}}">上页补充证据</button><view>第 {{page}} 页 · 共 {{board.total || 0}} 条</view><button bindtap="onPage" data-delta="1" disabled="{{busy || retry || page * 20 >= board.total}}">下页补充证据</button>
  <view wx:if="{{detail}}" class="card"><view>原观察 {{detail.case.evidence.snapshot_json.rawObservedAt}} · 原校准时间 {{detail.case.evidence.snapshot_json.calibratedObservedAt || '尚未核实'}} · 接收 {{detail.case.evidence.snapshot_json.receivedAt}}</view><view>原采信观察 {{detail.case.evidence.snapshot_json.acceptedObservationId || '无'}}</view>
+  <button wx:if="{{detail.case.damageFollowup.observation_id}}" bindtap="onDamage" disabled="{{busy || retry}}">处理独立损坏维修（{{detail.case.damageFollowup.damage_status}}）</button>
   <text wx:for="{{history}}" wx:key="id" class="history" selectable="{{true}}">{{item.text}}</text>
   <button bindtap="onHistoryPage" data-delta="-1" disabled="{{busy || retry || detail.history.page === 1}}">上页补充决定</button><view>补充历史第 {{detail.history.page}} 页 · 共 {{detail.history.total}} 条</view><button bindtap="onHistoryPage" data-delta="1" disabled="{{busy || retry || detail.history.page * 20 >= detail.history.total}}">下页补充决定</button>
   <picker range="{{methodNames}}" value="{{methodIndex}}" bindchange="onMethod" disabled="{{busy || retry}}"><view>补充处理：{{methodNames[methodIndex]}}</view></picker>

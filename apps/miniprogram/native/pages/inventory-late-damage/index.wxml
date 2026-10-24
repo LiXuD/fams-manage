@@ -1,0 +1,18 @@
+<view class="page"><view class="title">迟到损坏独立维修</view><view>损坏维修与原补充复核分别履行。维修实际完成才关闭损坏，原任务、观察和封存报告不改。</view>
+ <view wx:if="{{error}}" role="alert">{{error}}</view><view wx:if="{{notice}}">{{notice}}</view><button bindtap="onRefresh" disabled="{{busy}}">刷新独立损坏与当前资产</button>
+ <view wx:if="{{detail}}" class="card"><view>{{detail.currentAsset.assetCode || detail.assetId}} · {{detail.damage.damage_status}} · 独立损坏第 {{detail.damage.version}} 版</view><view>原观察 {{detail.originalEvidence.rawObservedAt}} · 补充复核 {{detail.recheckResult}} · {{detail.todoOpen ? '仍有开放待办' : '两项待办均已结束'}}</view>
+  <button wx:if="{{detail.damage.repair_id}}" bindtap="onRepair" disabled="{{busy || retry}}">查看正式维修 {{detail.damage.repair_id}}（{{detail.damage.repair_status}}）</button>
+  <text wx:for="{{history}}" wx:key="id" selectable="{{true}}" class="history">{{item.text}}</text>
+  <button bindtap="onHistoryPage" data-delta="-1" disabled="{{busy || retry || page === 1}}">上页损坏历史</button><view>第 {{page}} 页 · 共 {{detail.history.total}} 条</view><button bindtap="onHistoryPage" data-delta="1" disabled="{{busy || retry || page * 20 >= detail.history.total}}">下页损坏历史</button>
+  <view wx:if="{{detail.damage.damage_status !== 'CLOSED'}}"><picker range="{{methodNames}}" value="{{methodIndex}}" bindchange="onMethod" disabled="{{busy || retry}}"><view>损坏处理：{{methodNames[methodIndex]}}</view></picker>
+   <view wx:if="{{methodIndex !== 2}}"><view>另行核实实际发现损坏时间（本机时区），不得直接采用异常设备时间。</view>
+    <picker mode="date" value="{{discoveryDate}}" data-field="discoveryDate" bindchange="onField" disabled="{{busy || retry}}"><view>发现日期：{{discoveryDate || '请选择'}}</view></picker>
+    <picker mode="time" value="{{discoveryTime}}" data-field="discoveryTime" bindchange="onField" disabled="{{busy || retry}}"><view>发现时分：{{discoveryTime || '请选择'}}</view></picker>
+    <input data-field="discoverySecond" value="{{discoverySecond}}" bindinput="onField" disabled="{{busy || retry}}" maxlength="6" placeholder="秒及毫秒，例如11.123" />
+    <checkbox-group bindchange="onChecked"><label><checkbox value="physical" checked="{{physicalChecked}}" disabled="{{busy || retry}}" />已核实实际损坏及原始证据</label><label><checkbox value="time" checked="{{timeChecked}}" disabled="{{busy || retry}}" />已独立核实发现时间</label></checkbox-group>
+    <view wx:if="{{methodIndex === 0}}"><textarea data-field="fault" value="{{fault}}" bindinput="onField" disabled="{{busy || retry}}" maxlength="2000" placeholder="实际故障" /><picker range="{{impactNames}}" value="{{impactIndex}}" bindchange="onImpact" disabled="{{busy || retry}}"><view>影响程度：{{impactNames[impactIndex]}}</view></picker></view>
+    <view wx:else><input data-field="repairId" value="{{repairId}}" bindinput="onField" disabled="{{busy || retry}}" maxlength="19" placeholder="同资产已有正式维修编号" /><button bindtap="onInspect" disabled="{{busy || retry}}">核对同资产维修</button><view wx:if="{{linked}}">维修 {{linked.id}} · 第 {{linked.version}} 版 · {{linked.status}}</view></view>
+   </view><textarea data-field="reason" value="{{reason}}" bindinput="onField" disabled="{{busy || retry}}" maxlength="1000" placeholder="处理原因" /><textarea data-field="evidence" value="{{evidence}}" bindinput="onField" disabled="{{busy || retry}}" maxlength="2000" placeholder="独立核实依据" /><button bindtap="onDecide" disabled="{{busy || retry}}">核对并确认独立损坏处理</button>
+  </view>
+ </view><button wx:if="{{retry}}" bindtap="onRetry" disabled="{{busy}}">原键重试独立损坏处理</button><button bindtap="onBack" disabled="{{busy || retry}}">返回原补充复核</button>
+</view>

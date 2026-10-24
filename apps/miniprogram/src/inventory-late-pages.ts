@@ -1,7 +1,7 @@
 import type { MiniServices } from "./pages.ts";
 import { MiniRequestError } from "./session.ts";
 interface Entry { evidence: { observation_id: string; comparison_kind: string; snapshot_json: { rawObservedAt: string; calibratedObservedAt: string | null; receivedAt: string; acceptedObservationId: string | null } };
-    review: { decision_version: number; result: string }; todoOpen: boolean }
+    review: { decision_version: number; result: string }; todoOpen: boolean; damageFollowup?: { observation_id?: string; damage_status?: string } }
 interface Decision { decision_version: number; method: string; reason: string; evidence: string; linked_task_id: string | null; actor_username: string; decided_at: string }
 interface Board { task: { version: number; name: string; range_json: unknown }; items: Entry[]; total: number }
 interface Detail { case: Entry; history: { items: Decision[]; page: number; pageSize: number; total: number } }
@@ -59,6 +59,11 @@ export function createInventoryLatePage(getServices: () => MiniServices) {
         onHide(this: Context) { live = false; generation++; this.setData({ ...blank(), taskId: this.data.taskId }); },
         onUnload(this: Context) { live = false; generation++; pending = null; this.setData(blank()); },
         async onRefresh(this: Context) { if (!this.data.busy) await read(this); },
+        onDamage(this: Context) {
+            const observation = this.data.detail?.case.damageFollowup?.observation_id;
+            if (!this.data.busy && !pending && current(generation) && observation === this.data.detail?.case.evidence.observation_id && /^[1-9][0-9]{0,18}$/.test(observation ?? ""))
+                services.navigate(`/pages/inventory-late-damage/index?taskId=${this.data.taskId}&observationId=${observation}`);
+        },
         async onPrepare(this: Context) {
             if (this.data.busy || pending || !this.data.board || !current(generation)) return;
             await confirm(this, { path: `/api/v1/mini/inventory-late/tasks/${this.data.taskId}/prepare`, key: services.createKey(), version: this.data.board.task.version },
