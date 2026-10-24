@@ -1,0 +1,76 @@
+{
+  "batch": "D6-19C2a1 inventory damage formal repair backend and PC",
+  "base_commit": "dac308f",
+  "candidate_kind": "worktree, not a fixed C gate",
+  "artifact": {
+    "path": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/output/d6-19c2a1-backend.jar",
+    "sha256": "5098052544ed8ff4c0861dfa4285477b470732d3d07278610345248e434b3d74",
+    "size": 58902533
+  },
+  "features": [
+    "explicit CONDITION-only FORMAL_REPAIR/LINK_REPAIR/REFRESH_REPAIR via repair public port",
+    "only actual COMPLETED closes condition; rejected/cancelled reopens under an append-only decision",
+    "original observation times, facts and source photos immutable; independent damage/time verification",
+    "public repair owner authority plus inventory original-event scope before every photo grant/content read",
+    "PC inline confirmations, durable original mutation retry and identity-scoped photo cleanup",
+    "linked-source reject guard and frozen report repair references"
+  ],
+  "verified": {
+    "v49_to_v50_populated_upgrade_and_repeat": 1,
+    "source_http": 7,
+    "existing_inventory_http": 22,
+    "existing_repair_http": 14,
+    "legacy_payload_compatibility": 1,
+    "architecture": 6,
+    "web_unit": 143,
+    "types": "PASS",
+    "frontend_lint": "PASS",
+    "web_build": "PASS",
+    "script_unit": 33,
+    "checkstyle": 0,
+    "spotbugs_findings": 0,
+    "spotbugs_analysis_errors": 0,
+    "owned_mysql_cleanup": true
+  },
+  "source_http_cases": [
+    "actual formal approval/claim/physical accept/complete then only CONDITION closes, TIME remains OPEN",
+    "whole transaction rollback at late source link insert; original key retry",
+    "formal rejection reopens only damage and explicit continuation creates next link",
+    "current authority, independently checked discovery time and stale asset guard",
+    "same active repair version and one asset lock; legacy direct close blocked",
+    "two actual administrators create one repair/source decision",
+    "counterevidence rejection cannot erase active formal repair"
+  ],
+  "raw_logs": [
+    "output/d6-19c2a-source-runtime.log",
+    "output/d6-19c2a-existing-regression-runtime.log",
+    "output/d6-19c2a-web-unit.log",
+    "output/d6-19c2a-types.log",
+    "output/d6-19c2a-frontend-lint.log",
+    "output/d6-19c2a-web-build.log"
+  ],
+  "retained_first_failure": {
+    "path": "output/d6-19c2a-source-runtime-1-test-role-code-failed.log",
+    "reason": "test expected 401 after direct role row deletion; current role revalidation correctly returned 403; assertion corrected, no authorization guard relaxed"
+  },
+  "schema": {
+    "version": 50,
+    "objects": 131,
+    "migration_sha256": "f43ced29cdb1c32995b422f3b088538fa21175453877b2950d33d4ab5f2e10ec",
+    "metadata": {
+      "source_candidate": "C2a worktree on dac308f; test-compiled V50; not a fixed gate artifact",
+      "columns_sha256": "2170065d6bc9da3c6e38a60c71ccd53099fa2cf635998ff700d3cd54e56d6ef0",
+      "create_sha256": "25f011a37de668f326bdaa0c6f225f67dec67fd9e9d29d6a4985a90a52595e59",
+      "objects": 131,
+      "business_rows_read": false
+    }
+  },
+  "open": [
+    "native inventory damage create/link/progress and source-photo UI",
+    "late damage actual formal repair continuation",
+    "real PC browser verification for C2",
+    "full fixed-candidate C gate, independent review",
+    "CI, formal QA, external integration and production"
+  ],
+  "status": "C2/C/parent IN_PROGRESS; no DEV_VERIFIED or review-complete claim"
+}

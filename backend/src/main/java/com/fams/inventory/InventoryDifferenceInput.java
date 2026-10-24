@@ -1,6 +1,7 @@
 package com.fams.inventory;
 
 import com.fams.asset.AssetTransferPort;
+import com.fasterxml.jackson.annotation.JsonInclude;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -9,6 +10,7 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
+import java.time.Instant;
 import java.util.List;
 
 public final class InventoryDifferenceInput {
@@ -32,9 +34,29 @@ public final class InventoryDifferenceInput {
             @NotBlank String method,
             @NotBlank @Size(min = 3, max = 1000) String reason,
             @NotBlank @Size(min = 10, max = 2000) String evidence,
-            @Valid AssetTransferPort.Target transferTarget) {
+            @Valid AssetTransferPort.Target transferTarget,
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Valid Damage repair) {
+        public Decision(
+                List<Subject> subjects,
+                long assetVersion,
+                String method,
+                String reason,
+                String evidence,
+                AssetTransferPort.Target transferTarget) {
+            this(subjects, assetVersion, method, reason, evidence, transferTarget, null);
+        }
+
         public Decision {
             subjects = subjects == null ? null : List.copyOf(subjects);
         }
     }
+
+    public record Damage(
+            @Positive Long repairId,
+            @PositiveOrZero Long repairVersion,
+            Instant verifiedDiscoveryAt,
+            @Size(min = 3, max = 2000) String fault,
+            String impact,
+            boolean physicalDamageChecked,
+            boolean discoveryTimeVerified) {}
 }

@@ -19,7 +19,8 @@ import java.util.UUID;
 
 @Profile("fams-product")
 @Order(-3)
-@RestControllerAdvice(assignableTypes = InventoryPhotoController.class)
+@RestControllerAdvice(
+        assignableTypes = {InventoryPhotoController.class, InventoryRepairPhotoController.class})
 final class InventoryPhotoErrorHandler {
     @ExceptionHandler({
         org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,

@@ -291,7 +291,7 @@ public class InventorySelectionService {
         var rows =
                 db.queryForList(
                         "SELECT * FROM fams_inventory_review_subject WHERE observation_id=? ORDER"
-                            + " BY dimension FOR SHARE",
+                                + " BY dimension FOR SHARE",
                         observationId);
         var result = new java.util.ArrayList<Object>();
         for (var row : rows) {
@@ -300,14 +300,21 @@ public class InventorySelectionService {
                     "decisions",
                     db.queryForList(
                             "SELECT * FROM fams_inventory_review_decision WHERE observation_id=?"
-                                + " AND dimension=? ORDER BY after_version FOR SHARE",
+                                    + " AND dimension=? ORDER BY after_version FOR SHARE",
                             observationId,
                             row.get("dimension")));
             value.put(
                     "links",
                     db.queryForList(
                             "SELECT * FROM fams_inventory_review_transfer WHERE observation_id=?"
-                                + " AND dimension=? ORDER BY decision_version FOR SHARE",
+                                    + " AND dimension=? ORDER BY decision_version FOR SHARE",
+                            observationId,
+                            row.get("dimension")));
+            value.put(
+                    "repairLinks",
+                    db.queryForList(
+                            "SELECT * FROM fams_inventory_review_repair WHERE observation_id=? AND"
+                                + " dimension=? ORDER BY decision_version FOR SHARE",
                             observationId,
                             row.get("dimension")));
             result.add(wire(value));
@@ -473,9 +480,11 @@ public class InventorySelectionService {
         if ("REJECT_EVIDENCE".equals(input.method())) {
             Long links =
                     db.queryForObject(
-                            "SELECT COUNT(*) FROM fams_inventory_review_transfer WHERE"
-                                    + " observation_id=? FOR SHARE",
+                            "SELECT (SELECT COUNT(*) FROM fams_inventory_review_transfer WHERE"
+                                + " observation_id=?) + (SELECT COUNT(*) FROM"
+                                + " fams_inventory_review_repair WHERE observation_id=?)",
                             Long.class,
+                            input.observationId(),
                             input.observationId());
             if (links != null && links > 0) {
                 throw new InventoryFailure(409, "INVENTORY_REVIEW_LINKED_EVIDENCE_REQUIRED");
@@ -492,9 +501,13 @@ public class InventorySelectionService {
             }
             Long activeLinks =
                     db.queryForObject(
-                            "SELECT COUNT(*) FROM fams_inventory_review_transfer WHERE"
-                                    + " observation_id=? AND dimension=? FOR SHARE",
+                            "SELECT (SELECT COUNT(*) FROM fams_inventory_review_transfer WHERE"
+                                + " observation_id=? AND dimension=?) + (SELECT COUNT(*) FROM"
+                                + " fams_inventory_review_repair WHERE observation_id=? AND"
+                                + " dimension=?)",
                             Long.class,
+                            input.observationId(),
+                            dimension,
                             input.observationId(),
                             dimension);
             if ("PROCESSING".equals(subject.get("subject_status"))

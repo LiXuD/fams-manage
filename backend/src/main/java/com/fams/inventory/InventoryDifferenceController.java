@@ -53,6 +53,12 @@ class InventoryDifferenceController {
         return differences.prepare(actors.capture(), task, version, key, input);
     }
 
+    @GetMapping("/tasks/{task}/differences/{observation}/repair-context")
+    Map<String, Object> repairContext(
+            @PathVariable @Positive long task, @PathVariable @Positive long observation) {
+        return differences.repairContext(actors.capture(), task, observation);
+    }
+
     @PostMapping("/tasks/{task}/differences/decisions")
     Map<String, Object> decide(
             @PathVariable @Positive long task,

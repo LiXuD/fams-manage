@@ -271,6 +271,34 @@ public class RepairService {
         visible(current, row);
         var result = new LinkedHashMap<>(view(row));
         result.put(
+                "inventoryEvidence",
+                inventoryEvidenceAllowed(current, row)
+                        ? db
+                                .queryForList(
+                                        "SELECT source_context_json FROM"
+                                            + " fams_repair_inventory_evidence WHERE repair_id=?"
+                                            + " ORDER BY observation_id",
+                                        id)
+                                .stream()
+                                .map(
+                                        source -> {
+                                            var facts =
+                                                    json.readTree(
+                                                            source.get("source_context_json")
+                                                                    .toString());
+                                            return Map.of(
+                                                    "taskId",
+                                                    facts.path("taskId").asText(),
+                                                    "observationId",
+                                                    facts.path("observationId").asText(),
+                                                    "clientEventId",
+                                                    facts.path("clientEventId").asText(),
+                                                    "photoIds",
+                                                    facts.path("photoIds"));
+                                        })
+                                .toList()
+                        : List.of());
+        result.put(
                 "decisions",
                 wire(
                         db.queryForList(
@@ -413,6 +441,25 @@ public class RepairService {
                         && "WAITING_RECEIPT".equals(outstanding.get("handover_status")));
         result.put("actions", actions);
         return result;
+    }
+
+    public void requireInventoryAdministrator(Actor actor) {
+        require(actors.revalidateLocked(actor), Role.ASSET_ADMIN);
+    }
+
+    public void requireInventoryEvidenceReader(Actor actor, long id) {
+        var current = actors.revalidateLocked(actor);
+        if (!inventoryEvidenceAllowed(current, header(id))) {
+            throw new RepairFailure(403, "INVENTORY_REPAIR_EVIDENCE_FORBIDDEN");
+        }
+    }
+
+    private boolean inventoryEvidenceAllowed(Current current, Map<String, Object> row) {
+        return current.has(Role.ASSET_ADMIN)
+                || current.has(Role.WAREHOUSE_OPERATOR)
+                        && row.get("approval_snapshot_json") != null
+                        && java.util.Objects.equals(
+                                current.id(), nullable(row.get("processor_account_id")));
     }
 
     public Map<String, Object> submit(Actor actor, UUID key, RepairInput.Submission input) {

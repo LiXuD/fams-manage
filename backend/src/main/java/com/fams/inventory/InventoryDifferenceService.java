@@ -5,6 +5,7 @@ import com.fams.auth.RequisitionActorContext;
 import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
+import com.fams.repair.InventoryRepairPort;
 import com.fams.transfer.InventoryTransferPort;
 
 import org.springframework.context.annotation.Profile;
@@ -35,6 +36,7 @@ public class InventoryDifferenceService {
     private final RequisitionActorContext actors;
     private final AssetInventoryReviewPort assets;
     private final InventoryTransferPort transfers;
+    private final InventoryRepairPort repairs;
     private final Clock clock;
 
     public InventoryDifferenceService(
@@ -43,12 +45,14 @@ public class InventoryDifferenceService {
             RequisitionActorContext actors,
             AssetInventoryReviewPort assets,
             InventoryTransferPort transfers,
+            InventoryRepairPort repairs,
             Clock clock) {
         this.db = db;
         this.json = json;
         this.actors = actors;
         this.assets = assets;
         this.transfers = transfers;
+        this.repairs = repairs;
         this.clock = clock;
     }
 
@@ -79,6 +83,13 @@ public class InventoryDifferenceService {
                     db.queryForList(
                             "SELECT * FROM fams_inventory_review_transfer WHERE observation_id=?"
                                     + " AND dimension=? ORDER BY decision_version FOR SHARE",
+                            row.get("observation_id"),
+                            row.get("dimension")));
+            value.put(
+                    "repairLinks",
+                    db.queryForList(
+                            "SELECT * FROM fams_inventory_review_repair WHERE observation_id=? AND"
+                                    + " dimension=? ORDER BY decision_version FOR SHARE",
                             row.get("observation_id"),
                             row.get("dimension")));
             values.add(wire(value));
@@ -281,6 +292,9 @@ public class InventoryDifferenceService {
         if (prior != null) {
             return prior;
         }
+        if (List.of("FORMAL_REPAIR", "LINK_REPAIR", "REFRESH_REPAIR").contains(input.method())) {
+            return decideRepair(actor, current, task, version, key, hash, input);
+        }
         if (!List.of("BOOK_CORRECT", "CONTINUE_SEARCH", "FORMAL_TRANSFER", "REFRESH_TRANSFER")
                 .contains(input.method())) {
             throw new InventoryFailure(400, "INVENTORY_REVIEW_METHOD_INVALID");
@@ -328,6 +342,15 @@ public class InventoryDifferenceService {
         }
         var links = new ArrayList<InventoryTransferPort.Link>();
         for (var row : rows) {
+            if ("PROCESSING".equals(row.get("subject_status"))
+                    && !db.queryForList(
+                                    "SELECT repair_id FROM fams_inventory_review_repair WHERE"
+                                            + " observation_id=? AND dimension=? LIMIT 1 FOR SHARE",
+                                    row.get("observation_id"),
+                                    row.get("dimension"))
+                            .isEmpty()) {
+                throw new InventoryFailure(409, "INVENTORY_REPAIR_PROGRESS_REQUIRED");
+            }
             if ("PROCESSING".equals(row.get("subject_status"))
                     && !db.queryForList(
                                     "SELECT transfer_id FROM fams_inventory_review_transfer WHERE"
@@ -459,6 +482,264 @@ public class InventoryDifferenceService {
                 hash,
                 Map.of("items", decisions),
                 true);
+    }
+
+    public Map<String, Object> repairContext(Actor actor, long taskId, long observationId) {
+        admin(actor);
+        var task = task(taskId);
+        var subject = repairSubject(taskId, observationId);
+        var observation = repairObservation(taskId, observationId);
+        var item =
+                db.queryForMap(
+                        "SELECT * FROM fams_inventory_item WHERE task_id=? AND id=? FOR SHARE",
+                        taskId,
+                        subject.get("item_id"));
+        long asset = number(item, "asset_id");
+        var context = assets.contexts(List.of(asset), java.time.Instant.EPOCH).get(asset);
+        if (context == null) {
+            throw new InventoryFailure(409, "INVENTORY_REVIEW_ASSET_CHANGED");
+        }
+        var result = new LinkedHashMap<String, Object>();
+        result.put("taskId", Long.toString(taskId));
+        result.put("taskVersion", number(task, "version"));
+        result.put("observationId", Long.toString(observationId));
+        result.put("subjectVersion", number(subject, "version"));
+        result.put("subjectStatus", subject.get("subject_status"));
+        result.put("assetId", Long.toString(asset));
+        result.put("currentAsset", json.readTree(context.snapshotJson()));
+        result.put("originalObservedAt", wire(observation.get("raw_observed_at")));
+        result.put("originalFacts", json.readTree(observation.get("facts_json").toString()));
+        result.put(
+                "repairLinks",
+                wire(
+                        db.queryForList(
+                                "SELECT * FROM fams_inventory_review_repair WHERE observation_id=?"
+                                        + " AND dimension='CONDITION' ORDER BY decision_version FOR"
+                                        + " SHARE",
+                                observationId)));
+        return result;
+    }
+
+    private Map<String, Object> decideRepair(
+            Actor actor,
+            Current current,
+            Map<String, Object> task,
+            long version,
+            UUID key,
+            String hash,
+            InventoryDifferenceInput.Decision input) {
+        if (input.subjects().size() != 1
+                || !"CONDITION".equals(input.subjects().getFirst().dimension())
+                || input.transferTarget() != null) {
+            throw new InventoryFailure(400, "INVENTORY_REPAIR_CONDITION_REQUIRED");
+        }
+        long taskId = number(task, "id");
+        var ref = input.subjects().getFirst();
+        var subject = repairSubject(taskId, ref.observationId());
+        if (number(subject, "version") != ref.version()
+                || List.of("CLOSED", "TRANSFERRED").contains(subject.get("subject_status"))) {
+            reject(actor, current, task, "INVENTORY_REVIEW_VERSION_CONFLICT", subject);
+        }
+        reviewable(actor, current, task, version);
+        var observation = repairObservation(taskId, ref.observationId());
+        var item =
+                db.queryForMap(
+                        "SELECT * FROM fams_inventory_item WHERE task_id=? AND id=? FOR UPDATE",
+                        taskId,
+                        subject.get("item_id"));
+        long asset = number(item, "asset_id");
+        if (!assets.matchesVersion(asset, input.assetVersion())) {
+            reject(actor, current, task, "INVENTORY_REVIEW_ASSET_CHANGED", Map.of());
+        }
+        var existing =
+                db.queryForList(
+                        "SELECT repair_id FROM fams_inventory_review_repair WHERE observation_id=?"
+                            + " AND dimension='CONDITION' ORDER BY decision_version DESC LIMIT 1"
+                            + " FOR SHARE",
+                        ref.observationId());
+        boolean refresh = "REFRESH_REPAIR".equals(input.method());
+        if ("PROCESSING".equals(subject.get("subject_status")) && !refresh) {
+            throw new InventoryFailure(409, "INVENTORY_REPAIR_PROGRESS_REQUIRED");
+        }
+        InventoryRepairPort.Link linked;
+        try {
+            if (refresh) {
+                if (existing.isEmpty()) {
+                    throw new InventoryFailure(409, "INVENTORY_REPAIR_LINK_REQUIRED");
+                }
+                linked = repairs.progress(actor, number(existing.getFirst(), "repair_id"), asset);
+            } else {
+                var damage = input.repair();
+                if (damage == null
+                        || !damage.physicalDamageChecked()
+                        || !damage.discoveryTimeVerified()
+                        || damage.verifiedDiscoveryAt() == null
+                        || damage.verifiedDiscoveryAt().isAfter(clock.instant())
+                        || !damage.verifiedDiscoveryAt()
+                                .equals(
+                                        damage.verifiedDiscoveryAt()
+                                                .truncatedTo(
+                                                        java.time.temporal.ChronoUnit.MILLIS))) {
+                    throw new InventoryFailure(400, "INVENTORY_REPAIR_VERIFICATION_REQUIRED");
+                }
+                var facts = json.readTree(observation.get("facts_json").toString());
+                var photos = new ArrayList<UUID>();
+                for (var photo : facts.path("photoIds")) {
+                    photos.add(UUID.fromString(photo.asText()));
+                }
+                var evidence =
+                        new InventoryRepairPort.Evidence(
+                                "CONDITION",
+                                Long.toString(taskId),
+                                Long.toString(ref.observationId()),
+                                observation.get("client_event_id").toString(),
+                                photos,
+                                wire(observation.get("raw_observed_at")).toString(),
+                                observation.get("facts_json").toString(),
+                                damage.verifiedDiscoveryAt(),
+                                input.evidence());
+                if ("FORMAL_REPAIR".equals(input.method())) {
+                    if (damage.repairId() != null
+                            || damage.fault() == null
+                            || damage.fault().isBlank()
+                            || damage.fault().length() < 3
+                            || damage.fault().length() > 2000
+                            || damage.impact() == null
+                            || !List.of("LOW", "MEDIUM", "HIGH").contains(damage.impact())) {
+                        throw new InventoryFailure(400, "INVENTORY_REPAIR_SUBMISSION_INVALID");
+                    }
+                    linked =
+                            repairs.create(
+                                    actor,
+                                    key,
+                                    asset,
+                                    input.assetVersion(),
+                                    damage.fault(),
+                                    damage.impact(),
+                                    evidence);
+                } else {
+                    if (damage.repairId() == null || damage.repairVersion() == null) {
+                        throw new InventoryFailure(400, "INVENTORY_REPAIR_LINK_REQUIRED");
+                    }
+                    linked =
+                            repairs.link(
+                                    actor,
+                                    damage.repairId(),
+                                    asset,
+                                    damage.repairVersion(),
+                                    evidence);
+                }
+            }
+        } catch (InventoryRepairPort.Failure failure) {
+            throw new InventoryFailure(failure.status(), failure.getMessage());
+        }
+        String status =
+                refresh && "COMPLETED".equals(linked.status())
+                        ? "CLOSED"
+                        : refresh && List.of("REJECTED", "CANCELLED").contains(linked.status())
+                                ? "OPEN"
+                                : "PROCESSING";
+        long before = number(subject, "version"), after = before + 1;
+        db.update(
+                "UPDATE fams_inventory_review_subject SET"
+                    + " subject_status=?,method=?,reason=?,evidence=?,reviewer_account_id=?,reviewer_username=?,reviewed_at=?,version=?"
+                    + " WHERE observation_id=? AND dimension='CONDITION'",
+                status,
+                input.method(),
+                input.reason(),
+                input.evidence(),
+                current.id(),
+                current.username(),
+                now(),
+                after,
+                ref.observationId());
+        db.update(
+                "INSERT INTO"
+                    + " fams_inventory_review_decision(task_id,observation_id,dimension,before_version,after_version,method,subject_status,reason,evidence,reviewed_asset_version,actor_account_id,actor_username,occurred_at)"
+                    + " VALUES (?,?,'CONDITION',?,?,?,?,?,?,?,?,?,?)",
+                taskId,
+                ref.observationId(),
+                before,
+                after,
+                input.method(),
+                status,
+                input.reason(),
+                input.evidence(),
+                input.assetVersion(),
+                current.id(),
+                current.username(),
+                now());
+        if (!refresh) {
+            db.update(
+                    "INSERT INTO"
+                        + " fams_inventory_review_repair(observation_id,dimension,decision_version,repair_id,created_at)"
+                        + " VALUES (?,'CONDITION',?,?,?)",
+                    ref.observationId(),
+                    after,
+                    linked.repairId(),
+                    now());
+        }
+        return finish(
+                actor,
+                current,
+                task,
+                version,
+                key,
+                "DECIDE_DIFFERENCES",
+                hash,
+                Map.of(
+                        "items",
+                        List.of(
+                                Map.of(
+                                        "observationId",
+                                        Long.toString(ref.observationId()),
+                                        "dimension",
+                                        "CONDITION",
+                                        "version",
+                                        after,
+                                        "status",
+                                        status,
+                                        "linkedRequestId",
+                                        "",
+                                        "linkedRepairId",
+                                        linked.repairId(),
+                                        "repairStatus",
+                                        linked.status()))),
+                true);
+    }
+
+    private Map<String, Object> repairSubject(long taskId, long observationId) {
+        var rows =
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_review_subject WHERE task_id=? AND"
+                                + " observation_id=? AND dimension='CONDITION' FOR UPDATE",
+                        taskId,
+                        observationId);
+        if (rows.isEmpty() || rows.getFirst().get("item_id") == null) {
+            throw new InventoryFailure(404, "INVENTORY_REPAIR_CONDITION_NOT_FOUND");
+        }
+        return rows.getFirst();
+    }
+
+    private Map<String, Object> repairObservation(long taskId, long observationId) {
+        var rows =
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_observation WHERE task_id=? AND id=? FOR"
+                                + " SHARE",
+                        taskId,
+                        observationId);
+        if (rows.isEmpty()
+                || List.of("LATE_REVIEW", "EXPIRED", "DUPLICATE")
+                        .contains(rows.getFirst().get("outcome"))
+                || !"DAMAGED"
+                        .equals(
+                                json.readTree(rows.getFirst().get("facts_json").toString())
+                                        .path("actual")
+                                        .path("condition")
+                                        .asText())) {
+            throw new InventoryFailure(409, "INVENTORY_REPAIR_DAMAGE_REQUIRED");
+        }
+        return rows.getFirst();
     }
 
     private String scalar(tools.jackson.databind.JsonNode node) {

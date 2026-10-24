@@ -28,6 +28,7 @@ describe("independent inventory difference panel", () => {
     }));
     const wrapper = panel(); await flushPromises(); await choose(wrapper);
     await action(wrapper, "共同提交所选差异").trigger("click"); await flushPromises();
+    await action(wrapper, "确认保存本次操作").trigger("click"); await flushPromises();
     expect(writes).toHaveLength(1);
     expect(JSON.parse(writes[0]!.body as string)).toMatchObject({ subjects: [{ observationId: "30", dimension: "LOCATION", version: 2 }, { observationId: "30", dimension: "RESPONSIBILITY", version: 3 }], assetVersion: 5, method: "BOOK_CORRECT" });
     expect(writes[0]!.headers).toMatchObject({ "If-Match-Version": "7", "X-CSRF-Token": "csrf-a" });
@@ -42,6 +43,7 @@ describe("independent inventory difference panel", () => {
     }));
     const wrapper = panel(); await flushPromises(); await choose(wrapper);
     await action(wrapper, "共同提交所选差异").trigger("click"); await flushPromises();
+    await action(wrapper, "确认保存本次操作").trigger("click"); await flushPromises();
     expect(wrapper.text()).toContain("结果尚未确认"); expect(wrapper.find("fieldset").element.matches(":disabled")).toBe(true);
     await action(wrapper, "重试原差异操作").trigger("click"); await flushPromises();
     expect(writes[1]).toEqual(writes[0]); expect(wrapper.text()).toContain("本次处理已保存"); wrapper.unmount();
@@ -50,7 +52,40 @@ describe("independent inventory difference panel", () => {
     vi.stubGlobal("fetch", vi.fn(async (path: string, input: RequestInit) => input.method === "POST" ? response({ code: "INVENTORY_REVIEW_ADMIN_REQUIRED" }, 403) : response(path.includes("/differences?") ? subjects() : board())));
     const wrapper = panel(); await flushPromises(); expect(wrapper.text()).toContain("PRIVATE-100");
     await action(wrapper, "列入当前页证据的差异").trigger("click"); await flushPromises();
+    await action(wrapper, "确认保存本次操作").trigger("click"); await flushPromises();
     expect(wrapper.emitted("invalid")).toHaveLength(1); expect(wrapper.text()).not.toContain("PRIVATE-100"); expect(wrapper.text()).toContain("原资料已隐藏"); wrapper.unmount();
+  });
+  it("cancels an inline confirmation without sending or opening a native dialog", async () => {
+    const writes: RequestInit[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (path: string, input: RequestInit) => { if (input.method === "POST") writes.push(input); return response(path.includes("/differences?") ? subjects() : board()); }));
+    const wrapper = panel(); await flushPromises();
+    await action(wrapper, "列入当前页证据的差异").trigger("click");
+    expect(writes).toHaveLength(0); expect(window.confirm).not.toHaveBeenCalled();
+    await action(wrapper, "取消本次操作").trigger("click");
+    expect(writes).toHaveLength(0); expect(wrapper.find('[aria-label="确认差异操作"]').exists()).toBe(false); wrapper.unmount();
+  });
+  it("captures one damage dimension with independently verified time and preserves an unknown original reply", async () => {
+    const writes: RequestInit[] = []; let lost = true;
+    vi.stubGlobal("fetch", vi.fn(async (path: string, input: RequestInit) => {
+      if (input.method === "POST") { writes.push(structuredClone(input)); if (lost) { lost = false; throw Error("lost"); } return response({ version: 8 }); }
+      const data = subjects(); data.items = [{ ...data.items[0]!, dimension: "CONDITION" }]; data.total = 1;
+      return response(path.includes("/differences?") ? data : board());
+    }));
+    const wrapper = panel(); await flushPromises();
+    await wrapper.find('input[type=checkbox]').setValue(true);
+    await wrapper.find('select').setValue("FORMAL_REPAIR");
+    await wrapper.find('input[type=datetime-local]').setValue("2026-01-01T10:00:00.123");
+    await wrapper.findAll('input[type=checkbox]')[1]!.setValue(true);
+    await wrapper.findAll('input[type=checkbox]')[2]!.setValue(true);
+    await wrapper.findAll('textarea')[0]!.setValue("Actual verified physical fault");
+    await wrapper.findAll('textarea')[1]!.setValue("Signed independent damage check");
+    await wrapper.findAll('textarea')[2]!.setValue("Signed photo and independent discovery timestamp");
+    await action(wrapper, "共同提交所选差异").trigger("click");
+    expect(writes).toHaveLength(0);
+    await action(wrapper, "确认保存本次操作").trigger("click"); await flushPromises();
+    expect(JSON.parse(writes[0]!.body as string)).toMatchObject({ method: "FORMAL_REPAIR", subjects: [{ dimension: "CONDITION", version: 2 }], repair: { physicalDamageChecked: true, discoveryTimeVerified: true, fault: "Actual verified physical fault" } });
+    await action(wrapper, "重试原差异操作").trigger("click"); await flushPromises();
+    expect(writes[1]).toEqual(writes[0]); expect(window.confirm).not.toHaveBeenCalled(); wrapper.unmount();
   });
   it("an old identity read cannot restore previous evidence after the session changes", async () => {
     const reads: ((value: Response) => void)[] = [];

@@ -1,0 +1,10 @@
+{
+  "source_candidate": "C2a worktree on dac308f; test-compiled V50; not a fixed gate artifact",
+  "columns_sha256": "2170065d6bc9da3c6e38a60c71ccd53099fa2cf635998ff700d3cd54e56d6ef0",
+  "create_sha256": "25f011a37de668f326bdaa0c6f225f67dec67fd9e9d29d6a4985a90a52595e59",
+  "objects": 131,
+  "business_rows_read": false,
+  "schema_version": 50,
+  "owned_environment_cleanup": true,
+  "scope": "V50 test-compiled worktree schema; metadata only, no business rows; not a fixed gate artifact"
+}

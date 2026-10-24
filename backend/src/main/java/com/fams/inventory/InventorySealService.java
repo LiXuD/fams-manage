@@ -496,6 +496,8 @@ public class InventorySealService {
                                 "fams_inventory_review_decision",
                                 "transfers",
                                 "fams_inventory_review_transfer",
+                                "repairs",
+                                "fams_inventory_review_repair",
                                 "disposition",
                                 "fams_inventory_evidence_disposition",
                                 "findingLinks",
