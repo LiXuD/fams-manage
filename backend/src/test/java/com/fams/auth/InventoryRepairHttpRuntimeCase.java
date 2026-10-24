@@ -371,13 +371,13 @@ class InventoryRepairHttpRuntimeCase {
         String item =
                 db.queryForObject(
                         "SELECT CAST(id AS CHAR) FROM fams_inventory_item WHERE task_id=? AND"
-                            + " asset_id=943010",
+                                + " asset_id=943010",
                         String.class,
                         task);
         String chosen =
                 db.queryForObject(
                         "SELECT CAST(id AS CHAR) FROM fams_inventory_observation WHERE task_id=?"
-                            + " AND item_id=? AND outcome='ACCEPTED'",
+                                + " AND item_id=? AND outcome='ACCEPTED'",
                         String.class,
                         task,
                         item);
@@ -405,7 +405,7 @@ class InventoryRepairHttpRuntimeCase {
         for (var row :
                 db.queryForList(
                         "SELECT dimension,version FROM fams_inventory_review_subject WHERE"
-                            + " observation_id=? ORDER BY dimension",
+                                + " observation_id=? ORDER BY dimension",
                         observation)) {
             subjects.addObject()
                     .put("dimension", row.get("dimension").toString())
@@ -428,9 +428,144 @@ class InventoryRepairHttpRuntimeCase {
                 0,
                 db.queryForObject(
                         "SELECT COUNT(*) FROM fams_inventory_evidence_disposition WHERE"
-                            + " observation_id=?",
+                                + " observation_id=?",
                         Integer.class,
                         observation));
+    }
+
+    @Test
+    void actualNativeCreationCompletionAndOriginalPhotoBytesUseOpaqueSessions() throws Exception {
+        nativeDamage(false);
+    }
+
+    @Test
+    void actualNativeExistingRepairAssociationUsesOneLockAndRealCompletion() throws Exception {
+        nativeDamage(true);
+    }
+
+    private void nativeDamage(boolean link) throws Exception {
+        String task = damaged();
+        var original =
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_observation WHERE task_id=? ORDER BY id",
+                        task);
+        var source =
+                db.queryForMap(
+                        "SELECT observation_id,item_id FROM fams_inventory_review_subject WHERE"
+                            + " task_id=? AND dimension='CONDITION'",
+                        task);
+        String existing = "";
+        if (link) {
+            var input =
+                    JSON.createObjectNode()
+                            .put("assetId", "943010")
+                            .put("assetVersion", 0)
+                            .put("fault", "Actual existing repair for damaged inventory")
+                            .put("impact", "HIGH")
+                            .put(
+                                    "occurredAt",
+                                    Instant.now()
+                                            .minusSeconds(5)
+                                            .truncatedTo(java.time.temporal.ChronoUnit.MILLIS)
+                                            .toString());
+            existing =
+                    ok(request(admin, "POST", "/api/v1/repairs", input.toString(), key(), null))
+                            .path("id")
+                            .asText();
+        }
+        var grants = new java.util.LinkedHashMap<String, Object>();
+        for (var entry : java.util.Map.of("admin", 943001L, "warehouse", 943004L).entrySet()) {
+            var identity =
+                    new MiniWechatIdentityPort.Identity(
+                            "owned-inventory-repair-native", entry.getKey());
+            db.update(
+                    "INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES"
+                        + " (?,?,NOW(3))",
+                    entry.getValue(),
+                    miniSessions.identityHash(identity));
+            var grant = miniSessions.start(identity, UUID.randomUUID());
+            grants.put(
+                    entry.getKey(),
+                    java.util.Map.of(
+                            "sessionToken",
+                            grant.sessionToken(),
+                            "accountId",
+                            entry.getValue().toString(),
+                            "bindingId",
+                            grant.bindingId()));
+        }
+        var script =
+                java.nio.file.Path.of(System.getProperty("user.dir"))
+                        .getParent()
+                        .resolve("apps/miniprogram/test/runtime-inventory-repair-http.mjs");
+        var builder =
+                new ProcessBuilder(
+                                "rtk",
+                                "proxy",
+                                System.getProperty(
+                                        "fams.test.node",
+                                        System.getenv()
+                                                .getOrDefault("FAMS_TEST_NODE_EXECUTABLE", "node")),
+                                script.toString())
+                        .redirectErrorStream(true);
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_INVENTORY_TASK", task);
+        builder.environment().put("FAMS_TEST_INVENTORY_ITEM", source.get("item_id").toString());
+        builder.environment()
+                .put("FAMS_TEST_INVENTORY_OBSERVATION", source.get("observation_id").toString());
+        builder.environment().put("FAMS_TEST_REPAIR_EXISTING", existing);
+        builder.environment().put("FAMS_TEST_REPAIR_GRANTS", JSON.writeValueAsString(grants));
+        byte[] bytes =
+                java.util.Base64.getDecoder()
+                        .decode(
+                                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==");
+        builder.environment()
+                .put(
+                        "FAMS_TEST_PHOTO_SHA256",
+                        java.util.HexFormat.of()
+                                .formatHex(
+                                        java.security.MessageDigest.getInstance("SHA-256")
+                                                .digest(bytes)));
+        var log = java.nio.file.Files.createTempFile("fams-inventory-repair-native-", ".log");
+        try {
+            var process = builder.redirectOutput(log.toFile()).start();
+            if (!process.waitFor(45, java.util.concurrent.TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                throw new IllegalStateException("Owned native inventory repair HTTP timed out");
+            }
+            String output = java.nio.file.Files.readString(log);
+            assertEquals(0, process.exitValue(), output);
+            assertTrue(output.contains("\"nativeActualInventoryRepairClosed\":true"), output);
+        } finally {
+            java.nio.file.Files.deleteIfExists(log);
+        }
+        assertEquals("CLOSED", status(task, "CONDITION"));
+        assertEquals("OPEN", status(task, "TIME"));
+        assertEquals(
+                1,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_repair_request WHERE asset_id=943010 AND"
+                            + " repair_status='COMPLETED'",
+                        Integer.class));
+        assertEquals(
+                1,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_repair_inventory_evidence", Integer.class));
+        assertEquals(
+                1,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_inventory_review_repair", Integer.class));
+        assertEquals(
+                0,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=943010 AND"
+                            + " released_at IS NULL",
+                        Integer.class));
+        assertEquals(
+                original,
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_observation WHERE task_id=? ORDER BY id",
+                        task));
     }
 
     private String damaged() throws Exception {

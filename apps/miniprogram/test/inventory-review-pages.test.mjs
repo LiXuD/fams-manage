@@ -221,3 +221,56 @@ test("native checkbox presentation follows cleared normal and dimension selectio
     await f.page.onRefresh(); assert.deepEqual(f.page.data.normalIds, []); assert.deepEqual(f.page.data.dimensions, []);
     assert.equal(f.page.data.board.items[0].normalChecked, false); assert.equal(f.page.data.subjects[0].checked, false);
 });
+
+
+async function openDamage(f, method = 4) {
+    f.subjects.splice(0, f.subjects.length, { observation_id: "31", dimension: "CONDITION", version: 8, subject_status: "OPEN", repairLinks: [{ repair_id: "9007199254740995", decision_version: 1 }] });
+    f.raw.facts_json.actual.condition = "DAMAGED";
+    await f.open();
+    assert.equal(f.page.data.damageDate, "");
+    await f.page.onPhysicalMethod({ detail: { value: String(method) } });
+    f.page.onDimensions({ detail: { value: ["CONDITION"] } });
+    for (const [field,value] of Object.entries({ damageDate: "2026-01-01", damageTime: "09:10", damageSecond: "11.123", damageFault: "现场实物故障已核实" })) f.page.onField({ currentTarget: { dataset: { field } }, detail: { value } });
+    f.page.onDamageChecked({ detail: { value: ["physical", "time"] } });
+}
+test("native damage submission retains independently verified time and the exact unknown original request across hide", async () => {
+    const f = fixture(); await openDamage(f); let lost = true;
+    f.setPost(async () => { if (lost) { lost = false; throw Error("lost reply"); } return {}; });
+    await f.page.onPhysicalDecision();
+    const original = f.calls.find(row => row.method === "POST");
+    assert.equal(original.body.method, "FORMAL_REPAIR");
+    assert.deepEqual(original.body.subjects, [{ observationId: "31", dimension: "CONDITION", version: 8 }]);
+    assert.equal(original.body.repair.verifiedDiscoveryAt, new Date("2026-01-01T09:10:11.123").toISOString());
+    assert.notEqual(original.body.repair.verifiedDiscoveryAt, f.raw.facts_json.rawObservedAt);
+    assert.equal(original.body.repair.physicalDamageChecked, true); assert.equal(original.body.repair.discoveryTimeVerified, true);
+    f.page.onHide(); assert.equal(f.page.data.damageFault, ""); assert.equal(f.page.data.damageDate, "");
+    f.selection.taskVersion = 99; await f.page.onShow(); await f.page.onRetry();
+    assert.deepEqual(f.calls.filter(row => row.method === "POST"), [original, original]);
+});
+test("native repair refuses mixed dimensions and unverified damage discovery", async () => {
+    const f = fixture(); await openDamage(f);
+    f.page.onDamageChecked({ detail: { value: ["physical"] } }); await f.page.onPhysicalDecision();
+    assert.equal(f.calls.filter(row => row.method === "POST").length, 0);
+    f.page.onDamageChecked({ detail: { value: ["physical", "time"] } });
+    f.page.data.subjects.push({ observation_id: "31", dimension: "TIME", version: 2, subject_status: "OPEN" });
+    f.page.onDimensions({ detail: { value: ["CONDITION", "TIME"] } }); await f.page.onPhysicalDecision();
+    assert.equal(f.calls.filter(row => row.method === "POST").length, 0); assert.match(f.page.data.error, /一条损坏维度/);
+});
+test("native link uses the exact current version from a same-asset formal repair read", async () => {
+    const f = fixture(); await openDamage(f, 5);
+    f.page.onField({ currentTarget: { dataset: { field: "damageRepairId" } }, detail: { value: "9007199254740995" } });
+    await f.page.onPhysicalDecision(); assert.equal(f.calls.filter(row => row.method === "POST").length, 0);
+    f.setRead(async () => ({ id: "9007199254740995", assetId: "20", version: 4, status: "WAREHOUSE_PROCESSING" }));
+    await f.page.onInspectDamageRepair(); assert.equal(f.page.data.damageLinked, null);
+    f.setRead(async () => ({ id: "9007199254740995", assetId: "19", version: 7, status: "WAREHOUSE_PROCESSING" }));
+    await f.page.onInspectDamageRepair(); f.setRead(null);
+    await f.page.onPhysicalDecision(); const post = f.calls.find(row => row.method === "POST");
+    assert.equal(post.body.method, "LINK_REPAIR"); assert.equal(post.body.repair.repairId, "9007199254740995"); assert.equal(post.body.repair.repairVersion, 7);
+});
+test("native repair refresh needs no invented discovery facts and source navigation is bounded", async () => {
+    const f = fixture(); await openDamage(f, 6); f.page.data.damageDate = ""; f.page.data.damageTimeChecked = false;
+    f.page.onViewRepair(event("unowned")); assert.equal(f.navigations.length, 0);
+    f.page.onViewRepair(event("9007199254740995")); assert.deepEqual(f.navigations, ["/pages/repairs/index?id=9007199254740995"]);
+    await f.page.onPhysicalDecision(); const post = f.calls.find(row => row.method === "POST");
+    assert.equal(post.body.method, "REFRESH_REPAIR"); assert.equal(post.body.repair, undefined);
+});

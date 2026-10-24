@@ -23,7 +23,8 @@
     "pages/inventory-sealing/index",
     "pages/inventory-late/index",
     "pages/repairs/index",
-    "pages/repair-return-sources/index"
+    "pages/repair-return-sources/index",
+    "pages/repair-inventory-evidence/index"
   ],
   "window": {
     "navigationBarTitleText": "企业资产",

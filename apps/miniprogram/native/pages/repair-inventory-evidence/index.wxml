@@ -1,0 +1,4 @@
+<view class="page"><view class="title">原始盘点损坏照片</view><view>维修 {{repairId}} · 盘点 {{taskId}} · 原始证据 {{observationId}}</view><view>保留原始照片引用；仅当前管理员或已批准维修的当前库管可以读取。</view>
+<view wx:if="error">{{error}}</view><button bindtap="onRefresh" disabled="{{busy || cleanupPending}}">刷新原始证据</button><button bindtap="onClose" disabled="{{busy}}">{{cleanupPending ? '重试清理本机照片' : '关闭原图并清理'}}</button>
+<view wx:for="{{photos}}" wx:for-item="photo" wx:key="key"><view>{{photo.objectId}} · {{photo.photo.filename || '原始引用，照片暂不可读取'}}</view><button wx:if="photo.readable" data-id="{{photo.objectId}}" bindtap="onRead" disabled="{{busy || cleanupPending}}">读取这张盘点原图</button></view>
+<view wx:if="photoPath"><image src="{{photoPath}}" mode="widthFix"/><view>{{photoName}}</view></view><button bindtap="onBack" disabled="{{busy || cleanupPending}}">返回维修单</button></view>

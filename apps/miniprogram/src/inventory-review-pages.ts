@@ -22,13 +22,18 @@ interface Subject { observation_id: string; dimension: string; version: number; 
     checked?: boolean;
     reviewer_username: string | null; reviewed_at: string | null; reason: string | null; evidence: string | null; label?: string; stateLabel?: string;
     decisions?: { after_version: number; actor_username: string; method: string; subject_status: string; reason: string; evidence: string }[];
-    links?: { transfer_id: string; decision_version: number }[] }
+    links?: { transfer_id: string; decision_version: number }[]; repairLinks?: { repair_id: string; decision_version: number }[] }
 interface Disposition { observation_id: string; counter_observation_id: string; counter_review_version: number; disposition: string;
     actor_username: string; recorded_at: string; reason: string; evidence: string }
 interface Catalog { kind: "organization" | "warehouse" | "location" | "employee"; rows: TransferChoice[]; page: number; total: number }
 interface Scope { page: number; itemId: string; observationPage: number; observationId: string }
 interface Pending extends Scope { path: string; version: number; key: string; body: unknown; label: string }
-interface Data {
+interface DamageRepair { id: string; assetId: string; version: number; status: string }
+interface DamageData { damageDate: string; damageTime: string; damageSecond: string; damageFault: string; damageImpact: string;
+    damagePhysicalChecked: boolean; damageTimeChecked: boolean; damageRepairId: string; damageLinked: DamageRepair | null }
+const blankDamage = (): DamageData => ({ damageDate: "", damageTime: "", damageSecond: "00.000", damageFault: "", damageImpact: "HIGH",
+    damagePhysicalChecked: false, damageTimeChecked: false, damageRepairId: "", damageLinked: null });
+interface Data extends DamageData {
     photos: ReviewPhotoReference[]; photoObservationId: string; photoTotal: number; photoPath: string; photoName: string; photoError: string; photoCleanupPending: boolean;
     taskId: string; board: Board | null; item: Item | null; observations: Observation[]; observation: Observation | null;
     selection: Selection | null; subjects: Subject[]; dispositions: Disposition[]; linked: Transfer | null;
@@ -48,8 +53,8 @@ const statuses: Record<string, string> = { OPEN: "待处理", PROCESSING: "处�
 const modes: Record<string, string> = { STORAGE: "仓库保管", PERSONAL: "个人使用", SHARED: "部门公用" };
 const outcomes: Record<string, string> = { ACCEPTED: "本轮观察候选", DIFFERENCE_REVIEW: "差异待复核", CONFLICT_REVIEW: "冲突待复核", OLD_ASSIGNMENT_REVIEW: "旧分配证据",
     TIME_REVIEW: "时间待核实", DUPLICATE: "重复，未重复计数", EXPIRED: "过期，需补盘", LATE_REVIEW: "迟到补充线索", FINDING_REVIEW: "任务外线索" };
-const physicalCodes = ["BOOK_CORRECT", "CONTINUE_SEARCH", "FORMAL_TRANSFER", "REFRESH_TRANSFER"];
-const physicalLabels = ["有明确证据确认账面正确", "继续查找与核实", "转正式调拨", "核对关联调拨进度"];
+const physicalCodes = ["BOOK_CORRECT", "CONTINUE_SEARCH", "FORMAL_TRANSFER", "REFRESH_TRANSFER", "FORMAL_REPAIR", "LINK_REPAIR", "REFRESH_REPAIR"];
+const physicalLabels = ["有明确证据确认账面正确", "继续查找与核实", "转正式调拨", "核对关联调拨进度", "转正式维修", "关联已有维修单", "核对关联维修进度"];
 const special = (dimension: string) => ["CONFLICT", "OLD_ASSIGNMENT", "TIME"].includes(dimension);
 const id = (value: unknown): value is string => typeof value === "string" && /^[1-9][0-9]{0,18}$/.test(value);
 const pad = (value: number, length = 2) => String(value).padStart(length, "0");
@@ -60,7 +65,7 @@ function localParts(value: string) {
 }
 function displayTime(value: string) { const parts = localParts(value); return parts[0] ? `${parts[0]} ${parts[1]}:${parts[2]}` : "时间待核实"; }
 function blank(taskId = ""): Data {
-    return { taskId, photos: [], photoObservationId: "", photoTotal: 0, photoPath: "", photoName: "", photoError: "", photoCleanupPending: false,
+    return { ...blankDamage(), taskId, photos: [], photoObservationId: "", photoTotal: 0, photoPath: "", photoName: "", photoError: "", photoCleanupPending: false,
         board: null, item: null, observations: [], observation: null, selection: null, subjects: [], dispositions: [], linked: null,
         page: 1, observationPage: 1, observationTotal: 0, historyPage: 1, dispositionPage: 1, dispositionTotal: 0,
         normalIds: [], dimensions: [], reason: "", evidence: "", verifiedDate: "", verifiedTime: "", verifiedSecond: "00.000",
@@ -139,7 +144,7 @@ export function createInventoryReviewPage(getServices: () => MiniServices) {
         if (!current(epoch, who)) { changed(page, epoch, who); return; }
         const chosen = page.data.selection?.review.observation_id === observation.id;
         const parts = localParts(observation.facts_json.rawObservedAt ?? "");
-        page.setData({ observation, subjects: response.items.map(row => ({ ...row, checked: false, label: dimensions[row.dimension] ?? "待核实差异", stateLabel: statuses[row.subject_status] ?? "待核实" })),
+        page.setData({ ...blankDamage(), physicalMethod: 0, observation, subjects: response.items.map(row => ({ ...row, checked: false, label: dimensions[row.dimension] ?? "待核实差异", stateLabel: statuses[row.subject_status] ?? "待核实" })),
             dimensions: [], evidenceMethod: 0, evidenceMethods: chosen ? ["核实所选证据的冲突、旧分配或时间依据"] : ["以明确反证拒绝未选证据", "保留补充线索，物理差异继续处理"],
             verifiedDate: parts[0]!, verifiedTime: parts[1]!, verifiedSecond: parts[2] || "00.000" });
     };
@@ -282,6 +287,12 @@ export function createInventoryReviewPage(getServices: () => MiniServices) {
                 case "verifiedDate": this.setData({ verifiedDate: value }); break;
                 case "verifiedTime": this.setData({ verifiedTime: value }); break;
                 case "verifiedSecond": this.setData({ verifiedSecond: value }); break;
+                case "damageDate": this.setData({ damageDate: value }); break;
+                case "damageTime": this.setData({ damageTime: value }); break;
+                case "damageSecond": this.setData({ damageSecond: value }); break;
+                case "damageFault": this.setData({ damageFault: value }); break;
+                case "damageImpact": if (["LOW", "MEDIUM", "HIGH"].includes(value)) this.setData({ damageImpact: value }); break;
+                case "damageRepairId": this.setData({ damageRepairId: value, damageLinked: null }); break;
             }
         },
         onNormalSelection(this: Context, event: Event) {
@@ -375,9 +386,46 @@ export function createInventoryReviewPage(getServices: () => MiniServices) {
             const rows = this.data.subjects.filter(row => this.data.dimensions.includes(row.dimension)); if (!rows.length) return;
             const method = physicalCodes[this.data.physicalMethod]!, transferTarget = method === "FORMAL_TRANSFER" ? target(this) : null;
             if (method === "FORMAL_TRANSFER" && !transferTarget) { this.setData({ error: "请明确选择有效目标组织、部门、责任人、仓库和位置。" }); return; }
+            let repair: unknown;
+            if (["FORMAL_REPAIR", "LINK_REPAIR", "REFRESH_REPAIR"].includes(method)) {
+                if (rows.length !== 1 || rows[0]?.dimension !== "CONDITION") { this.setData({ error: "维修只处理一条损坏维度，其他差异分别核实。" }); return; }
+                if (method !== "REFRESH_REPAIR") {
+                    const { damageDate: day, damageTime: time, damageSecond: seconds } = this.data;
+                    const discovered = new Date(`${day}T${time}:${seconds}`);
+                    if (!this.data.damagePhysicalChecked || !this.data.damageTimeChecked || !/^\d{4}-\d{2}-\d{2}$/.test(day)
+                        || !/^\d{2}:\d{2}$/.test(time) || !/^[0-5]\d(?:\.\d{1,3})?$/.test(seconds)
+                        || !Number.isFinite(discovered.getTime()) || discovered.getTime() > Date.now()) { this.setData({ error: "请独立核实实际损坏及发现日期、时分和秒，再勾选确认。" }); return; }
+                    if (method === "FORMAL_REPAIR" && (this.data.damageFault.trim().length < 3 || this.data.damageFault.length > 2000)) { this.setData({ error: "请填写实际故障。" }); return; }
+                    const linked = this.data.damageLinked;
+                    if (method === "LINK_REPAIR" && (!linked || linked.id !== this.data.damageRepairId.trim() || linked.assetId !== this.data.item?.item.asset_id)) { this.setData({ error: "请先核对同一资产的当前正式维修单。" }); return; }
+                    repair = { verifiedDiscoveryAt: discovered.toISOString(), physicalDamageChecked: true, discoveryTimeVerified: true,
+                        ...(method === "FORMAL_REPAIR" ? { fault: this.data.damageFault.trim(), impact: this.data.damageImpact } : { repairId: linked!.id, repairVersion: linked!.version }) };
+                }
+            }
             await propose(this, `${base(this)}/differences/decisions`, selection.taskVersion, { subjects: rows.map(row => ({ observationId: raw.id, dimension: row.dimension, version: row.version })),
-                assetVersion: value.assetVersion, method, reason: value.reason, evidence: value.evidence, ...(transferTarget ? { transferTarget } : {}) }, this.data.physicalMethods[this.data.physicalMethod]!,
-                `共同提交 ${rows.length} 个差异，任一版本变化均不保存。正式调拨仍须原审批及库管实际执行。`);
+                assetVersion: value.assetVersion, method, reason: value.reason, evidence: value.evidence, ...(transferTarget ? { transferTarget } : {}), ...(repair ? { repair } : {}) }, this.data.physicalMethods[this.data.physicalMethod]!,
+                `共同提交 ${rows.length} 个差异，任一版本变化均不保存。正式调拨或维修仍须正式审批及实际办理，未完成前不关闭物理差异。`);
+        },
+        onDamageChecked(this: Context, event: Event) {
+            if (locked(this) || !Array.isArray(event.detail?.value)) return;
+            this.setData({ damagePhysicalChecked: event.detail.value.includes("physical"), damageTimeChecked: event.detail.value.includes("time") });
+        },
+        async onInspectDamageRepair(this: Context) {
+            if (!services || locked(this) || !id(this.data.damageRepairId.trim()) || !this.data.item) return;
+            const requested = this.data.damageRepairId.trim(), asset = this.data.item.item.asset_id;
+            const epoch = ++generation, who = identity; this.setData({ busy: true, error: "", damageLinked: null });
+            try {
+                const row = await services.sessions.request("GET", `/api/v1/mini/repairs/${requested}`) as DamageRepair;
+                if (!current(epoch, who)) { changed(this, epoch, who); return; }
+                if (row.id !== requested || this.data.damageRepairId.trim() !== requested || row.assetId !== asset
+                    || !["PENDING_ADMIN_DECISION", "WAITING_WAREHOUSE_CLAIM", "WAREHOUSE_PROCESSING"].includes(row.status)) this.setData({ error: "请选择同一资产的有效维修单。" });
+                else this.setData({ damageLinked: row });
+            } catch (error) { failure(this, error, epoch, who); }
+            finally { if (current(epoch, who)) this.setData({ busy: false }); }
+        },
+        onViewRepair(this: Context, event: Event) {
+            const repair = event.currentTarget?.dataset?.id;
+            if (services && !locked(this) && id(repair) && this.data.subjects.some(row => row.repairLinks?.some(link => link.repair_id === repair))) services.navigate(`/pages/repairs/index?id=${repair}`);
         },
         async onCatalog(this: Context, event: Event) { const kind = event.currentTarget?.dataset?.kind; if (["organization", "warehouse", "location", "employee"].includes(kind ?? "")) await catalog(this, kind as Catalog["kind"]); },
         async onCatalogPage(this: Context, event: Event) {

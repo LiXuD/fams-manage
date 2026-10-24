@@ -196,7 +196,7 @@ export class MiniSessionClient {
 
     async downloadInventoryPhoto(path: string, contentType: string): Promise<string> {
         const uuid = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-        if (!new RegExp(`^/api/v1/mini/inventory-observations/tasks/[1-9][0-9]{0,18}/events/${uuid}/photos/${uuid}/content\\?grant=[A-Za-z0-9_.-]{1,256}$`, "i").test(path)
+        if (!new RegExp(`^/api/v1/mini/(inventory-observations/tasks/[1-9][0-9]{0,18}/events/${uuid}|inventory-repair-evidence/[1-9][0-9]{0,18}/observations/[1-9][0-9]{0,18})/photos/${uuid}/content\\?grant=[A-Za-z0-9_.-]{1,256}$`, "i").test(path)
             || !["image/jpeg", "image/png", "image/webp"].includes(contentType)) throw new Error("Invalid inventory photo download");
         const session = this.current;
         if (!session) throw new MiniRequestError(401, "AUTH_SESSION_INVALID");

@@ -1,0 +1,65 @@
+{
+  "batch": "D6-19C2a2 native inventory damage and source-photo interfaces",
+  "base_commit": "684c6dc",
+  "candidate_kind": "test-compiled production and native worktree; not a fixed C gate",
+  "production_java_and_contract_unchanged_from_base": true,
+  "runtime": {
+    "java": "21",
+    "node": "24.18.0",
+    "owned_mysql": "8.4.11",
+    "spring_opaque_session_chain": true,
+    "source_http_cases": 9,
+    "new_actual_native_cases": 2,
+    "new_actual_native_modes": [
+      "FORMAL_REPAIR",
+      "LINK_REPAIR"
+    ],
+    "owned_environment_cleanup": true
+  },
+  "native_facts": [
+    "actual inventory review Page creates or links current same-asset formal repair via opaque session",
+    "after real server commit, adapter drops source reply; hide/show and original key/body/version replay",
+    "normal formal approval followed by actual warehouse claim, original photo authorization, actual acceptance and actual in-place completion",
+    "before claim, warehouse gets no source references and no image bytes",
+    "original photo reaches real identity-scoped filesystem through wx runtime; SHA256 equals original PNG; hide/unload remove bytes",
+    "after real completion, native review refresh closes only CONDITION; TIME remains OPEN; observation facts unchanged",
+    "one formal repair, one original evidence relation, one source decision link and no remaining asset lock"
+  ],
+  "fixture_boundaries": [
+    "wx callbacks and confirmations are explicit SDK fixtures",
+    "HTTPS origin uses controlled loopback HTTP transport",
+    "attachment CLEAN scanner is the existing explicit test fixture, not a real ClamAV or device claim",
+    "no actual C2 JVM kill, real WeChat, camera or device acceptance in this batch"
+  ],
+  "checks": {
+    "mini_unit": 231,
+    "new_review_handler_cases": 4,
+    "new_photo_helper_page_transport_cases": 8,
+    "all_workspace_types": "PASS",
+    "frontend_lint": "PASS",
+    "native_build": "PASS",
+    "current_java_checkstyle": 0,
+    "production_java_spotbugs": "unchanged from 684c6dc verified production; not rerun in this batch"
+  },
+  "raw_logs": [
+    "output/d6-19c2a2-source-runtime.log",
+    "output/d6-19c2a2-mini-unit.log",
+    "output/d6-19c2a2-types.log",
+    "output/d6-19c2a2-frontend-lint.log",
+    "output/d6-19c2a2-mini-build.log"
+  ],
+  "schema": {
+    "version": 50,
+    "migration_sha256": "f43ced29cdb1c32995b422f3b088538fa21175453877b2950d33d4ab5f2e10ec",
+    "changed": false,
+    "inherited_metadata": "schema-evidence-v50-c2a1-worktree.json"
+  },
+  "open": [
+    "C2 real PC browser and targeted process recovery evidence",
+    "C2b late damage actual formal repair continuation",
+    "full fixed-candidate C gate and independent review",
+    "D6-20 through D6-27",
+    "remote CI, external integration, formal QA and production"
+  ],
+  "status": "C and parent IN_PROGRESS"
+}

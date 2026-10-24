@@ -72,10 +72,21 @@
         <label><checkbox value="{{subject.dimension}}" checked="{{subject.checked}}" disabled="{{busy || retryable || subject.subject_status === 'CLOSED' || subject.subject_status === 'TRANSFERRED'}}"/>{{subject.label}} · {{subject.stateLabel}} · 版本 {{subject.version}}</label>
         <text>{{subject.reviewer_username}} {{subject.reason}} {{subject.evidence}}</text>
         <view wx:for="{{subject.decisions}}" wx:for-item="decision" wx:key="after_version"><text>历史 {{decision.after_version}}：{{decision.actor_username}} / {{decision.method}} / {{decision.subject_status}} / {{decision.reason}} / {{decision.evidence}}</text></view>
+        <view wx:for="{{subject.repairLinks}}" wx:for-item="link" wx:key="decision_version"><button data-id="{{link.repair_id}}" bindtap="onViewRepair" disabled="{{busy || retryable}}">查看正式维修 {{link.repair_id}}</button></view>
         <view wx:for="{{subject.links}}" wx:for-item="link" wx:key="decision_version"><button data-id="{{link.transfer_id}}" bindtap="onViewTransfer" disabled="{{busy || retryable}}">只读查看正式调拨 {{link.transfer_id}}</button></view>
       </view>
     </checkbox-group>
     <picker range="{{physicalMethods}}" value="{{physicalMethod}}" bindchange="onPhysicalMethod" disabled="{{busy || retryable}}"><text>{{physicalMethods[physicalMethod]}}</text></picker>
+    <view wx:if="physicalMethod >= 4"><text>仅处理一条损坏维度。原始照片和设备时间保持不变，实际维修完成后才能关闭；其他差异继续独立核实。</text>
+      <view wx:if="physicalMethod !== 6"><text>独立核实的发现损坏时间（本机时区，不能直接采信异常设备时间）</text>
+        <picker mode="date" value="{{damageDate}}" data-field="damageDate" bindchange="onField" disabled="{{busy || retryable}}"><text>日期：{{damageDate || '请选择'}}</text></picker>
+        <picker mode="time" value="{{damageTime}}" data-field="damageTime" bindchange="onField" disabled="{{busy || retryable}}"><text>时分：{{damageTime || '请选择'}}</text></picker>
+        <input value="{{damageSecond}}" data-field="damageSecond" bindinput="onField" placeholder="秒和毫秒，例如00.000" disabled="{{busy || retryable}}" />
+        <checkbox-group bindchange="onDamageChecked"><label><checkbox value="physical" checked="{{damagePhysicalChecked}}" disabled="{{busy || retryable}}" />已按实物和原始证据核实损坏</label><label><checkbox value="time" checked="{{damageTimeChecked}}" disabled="{{busy || retryable}}" />已独立核实上述发现时间</label></checkbox-group>
+        <view wx:if="physicalMethod === 4"><textarea value="{{damageFault}}" data-field="damageFault" bindinput="onField" maxlength="2000" placeholder="实际故障" disabled="{{busy || retryable}}" /><radio-group data-field="damageImpact" bindchange="onField"><label><radio value="LOW" checked="{{damageImpact === 'LOW'}}" disabled="{{busy || retryable}}" />低影响</label><label><radio value="MEDIUM" checked="{{damageImpact === 'MEDIUM'}}" disabled="{{busy || retryable}}" />中影响</label><label><radio value="HIGH" checked="{{damageImpact === 'HIGH'}}" disabled="{{busy || retryable}}" />高影响</label></radio-group></view>
+        <view wx:if="physicalMethod === 5"><input value="{{damageRepairId}}" data-field="damageRepairId" bindinput="onField" placeholder="已有正式维修单编号" disabled="{{busy || retryable}}" /><button bindtap="onInspectDamageRepair" disabled="{{busy || retryable}}">核对同资产维修单</button><text wx:if="damageLinked">已核对维修 {{damageLinked.id}} · 第 {{damageLinked.version}} 版 · {{damageLinked.status}}</text></view>
+      </view>
+    </view>
     <view wx:if="physicalMethod === 2">
       <text>正式调拨仍须原审批及库管实际执行。目标选择保留引用版本。</text>
       <text>权属组织 {{owning.name || '保持现有'}}；使用部门 {{using.name || '未选'}}；责任人 {{employee.name || '未选'}}；仓库 {{warehouse.name || '未选'}}；位置 {{location.name || '未选'}}</text>
