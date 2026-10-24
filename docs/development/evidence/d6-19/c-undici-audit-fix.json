@@ -1,0 +1,22 @@
+{
+  "dependency": "undici",
+  "via": "jsdom 30.1.0 development dependency",
+  "before": "8.10.2",
+  "after": "8.12.3",
+  "changed_scope": "package-lock.json only: version, registry URL, integrity",
+  "upstream_patched_floor": "8.12.2",
+  "upstream_advisory": "https://github.com/nodejs/undici/security/advisories/GHSA-xjj6-f33q-929c",
+  "checks": {
+    "npm_ci": "PASS",
+    "audit_high_threshold": "PASS; two preexisting moderate Vitest tooling advisories remain",
+    "web_tests": 150,
+    "web_build_and_types": "PASS"
+  },
+  "raw_logs": [
+    "output/d6-19c-undici-npm-ci.log",
+    "output/d6-19c-undici-audit.log",
+    "output/d6-19c-undici-web-unit.log",
+    "output/d6-19c-undici-web-build.log"
+  ],
+  "full_fixed_C_gate": "NOT_RERUN on this dependency correction yet; cc0715a failure retained"
+}

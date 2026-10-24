@@ -1,0 +1,31 @@
+{
+  "candidate_commit": "cc0715a19639c5195660855b604ee5701817c3c1",
+  "full_product_gate_exit": 1,
+  "result": "FAILED_DEPENDENCY_AUDIT",
+  "java_tests": 432,
+  "checkstyle": 0,
+  "spotbugs": 0,
+  "line_covered": 18160,
+  "line_total": 19579,
+  "branch_covered": 6286,
+  "branch_total": 8372,
+  "web_tests": 150,
+  "mini_tests": 239,
+  "types_lint_build": "PASS",
+  "dependency_audit": "FAIL: undici 8.10.2 has one high advisory; two moderate development advisories also reported",
+  "application_and_database_restart": "NOT_EXECUTED: dependency audit failed first",
+  "owned_cleanup_clean_worktree": "PASS",
+  "artifact": {
+    "candidate": "cc0715a",
+    "source": "backend/target/contract-generation-probe-0.1.0-SNAPSHOT.jar",
+    "artifact": "output/d6-19-cc0715a-backend.jar",
+    "sha256": "cd1c71d80ef79230529316b7f36da8cbbefc8bddf0bc575d6b085ad4978aa287",
+    "size": 58944430,
+    "observer": "passive during frozen candidate gate"
+  },
+  "raw_output": "product-gate-cc0715a.txt",
+  "PC_evidence": "c2-pc-and-jvm-recovery.json; separate actual worktree package",
+  "status": "D6-19C and parent remain IN_PROGRESS; no full fixed C gate pass",
+  "next": "Resolve undici in lockfile and rerun complete gate on a new clean candidate",
+  "real_external_device_CI_formal_QA_production": "NOT_VERIFIED"
+}
