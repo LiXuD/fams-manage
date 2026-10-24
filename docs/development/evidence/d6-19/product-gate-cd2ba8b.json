@@ -1,0 +1,38 @@
+{
+  "candidate_commit": "cd2ba8b849eca89337b9d227ffea5da5f857d4ff",
+  "comparison_base": "cc0715a",
+  "date": "2026-10-24",
+  "full_product_gate_exit": 0,
+  "java_tests": 432,
+  "checkstyle": 0,
+  "spotbugs": 0,
+  "line_covered": 18164,
+  "line_total": 19579,
+  "branch_covered": 6291,
+  "branch_total": 8372,
+  "web_tests": 150,
+  "mini_tests": 239,
+  "lint_type_build_dependency_integrity": "PASS",
+  "application_and_database_restart": "PASS",
+  "owned_cleanup_clean_worktree": "PASS",
+  "artifact": {
+    "candidate": "cd2ba8b",
+    "source": "backend/target/contract-generation-probe-0.1.0-SNAPSHOT.jar",
+    "artifact": "output/d6-19-cd2ba8b-backend.jar",
+    "sha256": "845ba3fd64b3605565fea556127acb305581f9bda96fac024ed1d64f689ba309",
+    "size": 58944430,
+    "observer": "passive during frozen candidate gate"
+  },
+  "scope": "D6-19C actual damaged return continuation, ordinary inventory damage repair and independent known-asset terminal late damage repair; PC/native sources and original photos",
+  "independent_PC_evidence": [
+    "c1-damaged-return-runtime-and-browser.json: separate actual prior source package",
+    "c2-pc-and-jvm-recovery.json: separate actual worktree package 0f68c1dff5fe7be04fb2cb22f6d6568f78ebcca8ba6e91ff4cd52fd8170cbee4"
+  ],
+  "D6_19_C": "IN_REVIEW; independent reviewer has not signed",
+  "D6_19_parent": "IN_PROGRESS; A/B/C independent review open",
+  "dependency_audit": "High-severity threshold PASS after undici 8.12.3; two moderate Vitest tooling advisories retained",
+  "first_failed_candidate": "product-gate-cc0715a.json and product-gate-cc0715a.txt; audit failed before general restart",
+  "migration_rollout": "V1-V51 immutable; populated V50 to V51 and repeated migration passed; coordinated replacement of old writers only",
+  "real_external_device_CI_formal_QA_production": "NOT_VERIFIED",
+  "aoci": "Prior stable dependency/PC/failure text batch8 maintained; current evidence requires final stable maintenance; historical14 PNG/28 governance debts remain, no whole-index alignment claim"
+}
