@@ -14,7 +14,8 @@ import java.util.UUID;
 
 @Profile("fams-product")
 @Order(-3)
-@RestControllerAdvice(assignableTypes = InventoryLateController.class)
+@RestControllerAdvice(
+        assignableTypes = {InventoryLateController.class, InventoryLateDamageController.class})
 class InventoryLateConflictHandler {
     @ExceptionHandler(InventoryReviewConflict.class)
     ResponseEntity<ErrorResponse> conflict(

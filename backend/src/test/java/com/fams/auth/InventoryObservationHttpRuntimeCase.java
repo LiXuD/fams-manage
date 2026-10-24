@@ -159,6 +159,8 @@ class InventoryObservationHttpRuntimeCase {
                 "DELETE FROM fams_todo WHERE business_type='INVENTORY_LATE' AND business_id IN (SELECT observation_id FROM fams_inventory_late_case WHERE task_id IN (SELECT id FROM fams_inventory_task WHERE creator_account_id=933001))");
         db.update(
                 "DELETE FROM fams_inventory_late_decision WHERE observation_id IN (SELECT observation_id FROM fams_inventory_late_case WHERE task_id IN (SELECT id FROM fams_inventory_task WHERE creator_account_id=933001))");
+        db.update("DELETE FROM fams_inventory_late_damage_decision WHERE observation_id IN (SELECT observation_id FROM fams_inventory_late_case WHERE task_id IN (SELECT id FROM fams_inventory_task WHERE creator_account_id=933001))");
+        db.update("DELETE FROM fams_inventory_late_damage WHERE observation_id IN (SELECT observation_id FROM fams_inventory_late_case WHERE task_id IN (SELECT id FROM fams_inventory_task WHERE creator_account_id=933001))");
         db.update(
                 "DELETE FROM fams_inventory_late_case WHERE task_id IN (SELECT id FROM fams_inventory_task WHERE creator_account_id=933001)");
         for (String table : new String[] {"fams_inventory_sealed_item", "fams_inventory_sealed_evidence", "fams_inventory_sealed_sync", "fams_inventory_sealed_report", "fams_inventory_finding_recollection", "fams_inventory_selection_event", "fams_inventory_unobserved_reason", "fams_inventory_item_review", "fams_inventory_finding_link", "fams_inventory_review_decision",
@@ -629,7 +631,8 @@ class InventoryObservationHttpRuntimeCase {
                 HttpResponse.BodyHandlers.ofString());
         assertEquals(409, response.statusCode(), response.body());
         assertEquals("INVENTORY_LATE_RECHECK_REQUIRED", JSON.readTree(response.body()).path("code").asText());
-        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_todo WHERE business_type='INVENTORY_LATE' AND business_id=? AND closed_at IS NULL", Long.class, observation));
+        assertEquals(2L, db.queryForObject("SELECT COUNT(*) FROM fams_todo WHERE business_type='INVENTORY_LATE' AND business_id=? AND closed_at IS NULL", Long.class, observation));
+        assertEquals("OPEN", db.queryForObject("SELECT damage_status FROM fams_inventory_late_damage WHERE observation_id=?", String.class, observation));
         assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_inventory_late_decision WHERE observation_id=?", Long.class, observation));
         assertEquals(originalTask, db.queryForMap("SELECT * FROM fams_inventory_task WHERE id=?", task));
         assertEquals(originalAsset, db.queryForMap("SELECT * FROM fams_asset WHERE id=933010"));

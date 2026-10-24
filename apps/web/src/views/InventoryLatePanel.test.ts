@@ -48,3 +48,24 @@ it("reads bounded supplemental history pages without changing a draft or writing
   const wrapper = panel(); await flushPromises(); await prepare(wrapper); await button(wrapper, "下页补充决定").trigger("click"); await flushPromises();
   expect(wrapper.text()).toContain("第二页核实人"); expect(wrapper.findAll("textarea")[0]!.element.value).toBe("逐项核实不同观察时点的补充结论"); expect(paths.some(path => path.endsWith("?page=2&pageSize=20"))).toBe(true); expect(writes).toHaveLength(0); wrapper.unmount();
 });
+
+it("keeps an unknown independent damage write mounted while blocking parent refresh and recheck", async () => {
+  const damage = { assetId: "9007199254740994", currentAsset: { version: 4, assetCode: "DAMAGE-PRIVATE" }, damage: { observation_id: entry().evidence.observation_id, version: 2, damage_status: "PROCESSING", repair_id: "88", repair_status: "WAREHOUSE_PROCESSING" }, originalEvidence: { rawObservedAt: "2099-01-01T00:00:00Z" }, recheckResult: "FOLLOWUP_OPEN", todoOpen: true, history: { items: [], page: 1, total: 0 } };
+  const source = { ...entry(), damageFollowup: { observation_id: entry().evidence.observation_id, damage_status: "PROCESSING" } };
+  const writes: RequestInit[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, input: RequestInit) => {
+    if (input.method === "POST") { writes.push(structuredClone(input)); throw Error("committed reply lost"); }
+    if (url.includes("/damage-repair")) return response(damage);
+    return response(url.includes("/observations/") ? { case: source, history: { items: [], page: 1, total: 0 } } : { ...fixture(), items: [source] });
+  }));
+  const wrapper = panel(); await flushPromises(); await button(wrapper, "核对原证据与补充历史").trigger("click"); await flushPromises();
+  const child = wrapper.find('[aria-label="迟到损坏独立维修"]'); expect(child.text()).toContain("DAMAGE-PRIVATE");
+  await child.findAll("textarea")[0]!.setValue("Actual independent repair progress"); await child.findAll("textarea")[1]!.setValue("Signed actual repair and physical acceptance records");
+  await button(wrapper, "核对独立损坏处理").trigger("click");
+  expect(button(wrapper, "刷新补充证据").attributes("disabled")).toBeDefined();
+  expect(button(wrapper, "确认保存独立损坏处理").attributes("disabled")).toBeUndefined();
+  await button(wrapper, "确认保存独立损坏处理").trigger("click"); await flushPromises();
+  expect(writes).toHaveLength(1); expect(wrapper.text()).toContain("原键重试独立损坏处理");
+  expect(button(wrapper, "刷新补充证据").attributes("disabled")).toBeDefined();
+  expect(button(wrapper, "核对补充处理").element.matches(":disabled")).toBe(true); wrapper.unmount();
+});

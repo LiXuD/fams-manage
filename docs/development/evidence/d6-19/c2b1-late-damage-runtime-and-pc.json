@@ -1,0 +1,74 @@
+{
+  "batch": "D6-19C2b1 known-asset terminal damage backend and PC",
+  "base_commit": "3fd8869",
+  "candidate_kind": "verified worktree; not a fixed C gate",
+  "artifact_sha256": "0f68c1dff5fe7be04fb2cb22f6d6568f78ebcca8ba6e91ff4cd52fd8170cbee4",
+  "behavior": [
+    "Independent damage header, history, version and todo coexist with original supplemental recheck",
+    "Real formal repair create or exact active same-asset link; only actual COMPLETED closes damage",
+    "Both completion orders preserve the other obligation until separately finished",
+    "Original observation, late case, sealed report and task version remain unchanged",
+    "Verified physical discovery time is separate from abnormal raw device timestamp",
+    "Current role revalidation, permanent exact original receipt, actual winner conflict fields and atomic late audit rollback",
+    "PC inline confirmation and unknown original key/body/version survive refresh; parent cannot unmount an unresolved child"
+  ],
+  "checks": {
+    "late_damage_http": 6,
+    "populated_v50_to_v51_upgrade_and_repeat": 1,
+    "existing_late_http": 18,
+    "existing_observation_http": 27,
+    "existing_inventory_repair_http": 9,
+    "architecture": 6,
+    "web_unit": 150,
+    "script_unit": 33,
+    "checkstyle": 0,
+    "spotbugs": 0,
+    "all_workspace_types": "PASS",
+    "frontend_lint": "PASS",
+    "web_build": "PASS"
+  },
+  "schema": {
+    "version": 51,
+    "migration_sha256": "ce7718d0476a78aedcc074290a89171b9420ccb8c743880bc97dc5c8e3b6fbe0",
+    "expansion": "two additive tables; coordinated writer replacement",
+    "backfill": "pending known-asset DAMAGED and FOLLOWUP_OPEN only; reviewed cases, unknown findings and GOOD observations excluded",
+    "old_columns_and_populated_source_facts_preserved": true,
+    "mixed_old_new_writers_supported": false,
+    "metadata_objects": 133,
+    "witness": "schema-evidence-v51-c2b1-worktree.json",
+    "owned_environment_cleanup": true
+  },
+  "failures_retained": [
+    {
+      "log": "output/d6-19c2b1-source-runtime-1-conflict-handler-failed.log",
+      "first_result": "6 tests; 2 failures",
+      "cause": "New controller was missing from InventoryLateConflictHandler; stale and competing request returned 500",
+      "correction": "Include controller in existing conflict advice; no business guard weakened; all six rerun PASS"
+    }
+  ],
+  "raw_logs": [
+    "output/d6-19c2b1-source-runtime.log",
+    "output/d6-19c2b1-upgrade-regression.log",
+    "output/d6-19c2b1-web-unit-final.log",
+    "output/d6-19c2b1-types.log",
+    "output/d6-19c2b1-frontend-lint.log",
+    "output/d6-19c2b1-web-build.log",
+    "output/d6-19c2b1-static-verify.log",
+    "output/d6-19c2b1-script-tests.log"
+  ],
+  "owned_source_runtime_cleanup": true,
+  "limits": [
+    "Known-asset late evidence only; unknown asset finding uses existing finding/recheck flow",
+    "No actual C2 PC browser or JVM kill acceptance in this batch",
+    "No native late damage Page in this batch",
+    "Existing explicit CLEAN scanner, wx, HTTPS and WeChat fixtures are not real external or device acceptance",
+    "No full fixed C gate, independent review, remote CI, formal QA or production claim"
+  ],
+  "next": [
+    "C2b2 native late damage Page and opaque runtime",
+    "C2 actual PC and targeted process recovery",
+    "Full fixed C gate and independent review",
+    "D6-20 through D6-27"
+  ],
+  "status": "C and parent IN_PROGRESS"
+}

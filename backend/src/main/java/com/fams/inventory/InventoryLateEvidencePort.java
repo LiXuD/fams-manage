@@ -174,6 +174,27 @@ public class InventoryLateEvidencePort {
                     observationId,
                     raw.get("received_at"));
         }
+        if (assetId != null
+                && "DAMAGED"
+                        .equals(
+                                json.readTree(raw.get("facts_json").toString())
+                                        .path("actual")
+                                        .path("condition")
+                                        .asText())) {
+            db.update(
+                    "INSERT INTO fams_inventory_late_damage(observation_id,created_at,updated_at)"
+                        + " VALUES (?,?,?)",
+                    observationId,
+                    raw.get("received_at"),
+                    raw.get("received_at"));
+            db.update(
+                    "INSERT INTO"
+                        + " fams_todo(pool_type,assignee_account_id,business_type,business_id,todo_type,todo_status,opened_at)"
+                        + " VALUES"
+                        + " ('ASSET_ADMIN',NULL,'INVENTORY_LATE',?,'LATE_DAMAGE_REPAIR','OPEN',?)",
+                    observationId,
+                    raw.get("received_at"));
+        }
     }
 
     private Map<String, Object> wire(Map<String, Object> source) {

@@ -318,6 +318,10 @@ public class InventoryLateService {
     private Map<String, Object> view(Map<String, Object> row) {
         long observation = number(row, "observation_id");
         var previous = latest(observation);
+        var damage =
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_late_damage WHERE observation_id=? FOR SHARE",
+                        observation);
         return Map.of(
                 "evidence",
                 wire(row),
@@ -331,11 +335,14 @@ public class InventoryLateService {
                                         ? "OPEN"
                                         : "INFORMATION")
                         : wire(previous),
+                "damageFollowup",
+                damage.isEmpty() ? Map.of() : wire(damage.getFirst()),
                 "todoOpen",
                 !db.queryForList(
                                 "SELECT id FROM fams_todo WHERE business_type='INVENTORY_LATE' AND"
-                                        + " business_id=? AND todo_type='LATE_EVIDENCE_REVIEW' AND"
-                                        + " closed_at IS NULL FOR SHARE",
+                                    + " business_id=? AND todo_type IN"
+                                    + " ('LATE_EVIDENCE_REVIEW','LATE_DAMAGE_REPAIR') AND closed_at"
+                                    + " IS NULL FOR SHARE",
                                 observation)
                         .isEmpty());
     }
