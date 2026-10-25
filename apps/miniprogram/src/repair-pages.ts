@@ -1,10 +1,11 @@
 import type { MiniServices } from "./pages.ts";
 import { MiniRequestError } from "./session.ts";
+import type { FactorySummary } from "./repair-factory-types.ts";
 interface Asset { id: string; assetCode: string; name: string; version: number; locationId: string | null; locationName: string | null }
 interface Repair { inventoryEvidence?: { taskId: string; observationId: string; photoIds: string[] }[]; id: string; source: Asset; fault: string; status: string; version: number; assetVersion: number; ownershipVersion: number; lockVersion: number;
     loanVersion?: number | null; physicalHandling?: { occurred_at: string; evidence: string }[]; inbound?: { occurred_at: string; evidence: string }[];
     loanExpectedReturnDate?: string | null; returnHandovers?: ReturnHandover[]; returnRecollections?: { handover_id: string; occurred_at: string; evidence: string }[];
-    actions: Record<string, boolean>; photos?: { objectId: string; filename: string; contentType: string }[];
+    actions: Record<string, boolean>; factorySummary?: FactorySummary; photos?: { objectId: string; filename: string; contentType: string }[];
     history?: { id: string; action: string; actor_username: string; occurred_at: string }[]; historyTotal?: number }
 interface Pending { path: string; key: string; version: number; body?: unknown; file?: string }
 interface PhysicalPlace { id: string; name: string; version: number; warehouse_id?: string | null; location_type?: string }
@@ -88,6 +89,10 @@ export function createRepairPage(getServices: () => MiniServices) {
         async onOpen(this: Context, event: { currentTarget: { dataset: { id: string } } }) {
             if (this.data.busy || pending || !current(generation) || !this.data.rows.some(row => row.id === event.currentTarget.dataset.id)) return;
             selectedId = event.currentTarget.dataset.id; await read(this);
+        },
+        onFactory(this: Context) {
+            if (this.data.busy || pending || !current(generation) || !this.data.detail?.actions.manageFactory) return;
+            services.navigate("/pages/repair-factory/index?id=" + this.data.detail.id);
         },
         onAsset(this: Context, event: { currentTarget: { dataset: { id: string } } }) {
             if (!this.data.busy && !pending && this.data.assets.some(row => row.id === event.currentTarget.dataset.id)) this.setData({ selectedAsset: event.currentTarget.dataset.id });

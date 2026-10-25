@@ -73,6 +73,78 @@ class RepairFactoryHttpRuntimeCase {
     @Value("${local.server.port}")
     int port;
 
+    @Test
+    void actualNativeFactoryPagesRoundTripOwnedOriginalsAndCloseOnlyAfterInbound()
+            throws Exception {
+        var grants = new LinkedHashMap<String, Object>();
+        for (var entry :
+                Map.of("employee", 951002L, "admin", 951001L, "warehouse", 951003L).entrySet()) {
+            var identity =
+                    new MiniWechatIdentityPort.Identity("owned-factory-native", entry.getKey());
+            db.update(
+                    "INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES"
+                            + " (?,?,NOW(3))",
+                    entry.getValue(),
+                    miniSessions.identityHash(identity));
+            var grant = miniSessions.start(identity, UUID.randomUUID());
+            grants.put(
+                    entry.getKey(),
+                    Map.of(
+                            "sessionToken",
+                            grant.sessionToken(),
+                            "accountId",
+                            entry.getValue().toString(),
+                            "bindingId",
+                            grant.bindingId()));
+        }
+        var script =
+                java.nio.file.Path.of(System.getProperty("user.dir"))
+                        .getParent()
+                        .resolve("apps/miniprogram/test/runtime-repair-factory-http.mjs");
+        var builder =
+                new ProcessBuilder(
+                                "rtk",
+                                "proxy",
+                                System.getProperty(
+                                        "fams.test.node",
+                                        System.getenv()
+                                                .getOrDefault("FAMS_TEST_NODE_EXECUTABLE", "node")),
+                                script.toString())
+                        .redirectErrorStream(true);
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_REPAIR_GRANTS", JSON.writeValueAsString(grants));
+        var process = builder.start();
+        try {
+            assertTrue(process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS));
+            var output =
+                    new String(
+                            process.getInputStream().readAllBytes(),
+                            java.nio.charset.StandardCharsets.UTF_8);
+            assertEquals(0, process.exitValue(), output);
+            assertTrue(output.contains("\"nativeFactoryClosed\":true"), output);
+            System.out.println(output.strip());
+        } finally {
+            if (process.isAlive()) {
+                process.descendants().forEach(ProcessHandle::destroyForcibly);
+                process.destroyForcibly();
+                assertTrue(process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS));
+            }
+        }
+        assertEquals("IN_STOCK", lifecycle());
+        assertEquals(
+                3L,
+                db.queryForObject("SELECT COUNT(*) FROM fams_repair_factory_round", Long.class));
+        assertEquals(
+                4L,
+                db.queryForObject("SELECT COUNT(*) FROM fams_repair_factory_evidence", Long.class));
+        assertEquals(
+                0L,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=951020 AND"
+                                + " released_at IS NULL",
+                        Long.class));
+    }
+
     @TestConfiguration
     static class ExternalFixtures {
         @Bean

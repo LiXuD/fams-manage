@@ -44,6 +44,16 @@ async function physical(wrapper: Page, receive = false) {
 beforeEach(() => { state.session = reactive({ user: { id: "1", roles: ["WAREHOUSE_OPERATOR"] }, csrfToken: "csrf" }); });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
+it("completed repair retains rounds without asking users to finish the repair again", async () => {
+  const closed = { ...detail(), status: "COMPLETED", summary: { scope: { id: "27", scopeStatus: "APPROVED" as const, version: 1 }, round: null, actualDispatchCount: 2, followupOpen: false } };
+  wire(() => closed, () => null, async () => response({}));
+  const wrapper = page(); await open(wrapper);
+  expect(wrapper.text()).toContain("维修已实际结束，轮次原记录保留");
+  expect(wrapper.text()).not.toContain("维修尚需核实实际结束");
+  expect(wrapper.find('[aria-label="确认本次返厂办理"]').exists()).toBe(false);
+  wrapper.unmount();
+});
+
 it("scope changes require inline confirmation and freeze all independent versions", async () => {
   const writes: RequestInit[] = []; wire(() => detail({ requestScope: true }), () => null, async input => { writes.push(input); return response({}); });
   const wrapper = page(); await open(wrapper); await field(wrapper, "本次范围或取消原因", "实际接修后仍无法内部修复，申请必要返厂。"); await button(wrapper, "申请必要的无费用返厂").trigger("click");

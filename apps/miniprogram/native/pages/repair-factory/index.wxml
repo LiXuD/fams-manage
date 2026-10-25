@@ -1,0 +1,65 @@
+<wxs module="labels">
+var states={PENDING:'待管理员确认范围',APPROVED:'已批准无费用返厂',REJECTED:'范围已驳回',WITHDRAWN:'范围已撤回',PENDING_DISPATCH:'待寄出',DISPATCHED:'已寄出，待原机收回',RECEIVED:'原机已实际收回',CANCELLED:'待寄出轮次已取消',WAREHOUSE_PROCESSING:'库管处理中',COMPLETED:'维修已实际结束'};
+var events={FACTORY_SCOPE_REQUESTED:'已申请返厂范围',FACTORY_SCOPE_APPROVED:'已批准无费用范围',FACTORY_SCOPE_REJECTED:'已驳回范围',FACTORY_SCOPE_WITHDRAWN:'已撤回范围',FACTORY_ROUND_CREATED:'已新建待寄出轮次',FACTORY_ROUND_CANCELLED:'已取消待寄出轮次',FACTORY_ROUND_DISPATCHED:'原机已实际寄出',FACTORY_ROUND_RECEIVED:'原机已实际收回',FACTORY_EVIDENCE_ADDED:'已追加本轮原件'};
+module.exports={state:function(s){return states[s]||'历史阶段';},event:function(s){return events[s]||'历史办理';}};
+</wxs>
+<view class="page">
+<view class="title">返厂范围与原机往返</view>
+<view class="hint">当前仅办理无费用返厂。原机收回本身不结束维修；整机换新不能登记为原机收回。</view>
+<view wx:if="{{error}}" class="error" role="alert">{{error}}</view><view wx:if="{{notice}}" class="hint">{{notice}}</view>
+<button bindtap="onRefresh" disabled="{{busy || confirmation}}">刷新核对当前只读进度</button>
+<view wx:if="{{retry}}" class="card"><view>原办理结果待核对：{{pendingLabel}}</view><button bindtap="onRetry" disabled="{{busy}}">用原返厂操作重试</button></view>
+<view wx:if="{{confirmation}}" class="card"><view>请核对：{{confirmation}}。保存后保留本次原记录。</view><button bindtap="onConfirm" disabled="{{busy}}">确认保存返厂办理</button><button bindtap="onCancel" disabled="{{busy}}">返回修改返厂资料</button></view>
+<view wx:if="{{detail}}">
+<view class="card"><view class="title">维修 {{detail.repairId}} · {{labels.state(detail.status)}}</view>
+<view wx:if="{{detail.pendingScope}}">{{labels.state(detail.pendingScope.scopeStatus)}} · {{detail.pendingScope.requestReason}}</view>
+<view wx:if="{{detail.approvedScope}}">已批准无费用返厂 · {{detail.approvedScope.decisionReason}}</view>
+<view wx:if="{{detail.summary}}">已实际寄出 {{detail.summary.actualDispatchCount}} 次；{{detail.summary.followupOpen ? '返厂事项仍在办理' : detail.status === 'COMPLETED' ? '维修已实际结束，原轮次保留' : '返厂事项已记录，整单维修继续办理'}}。</view>
+<view wx:if="{{detail.actions.requestScope || detail.actions.decideScope || detail.actions.withdrawScope || detail.actions.cancelRound}}">
+<view>本次范围或取消原因</view><textarea value="{{reason}}" data-field="reason" bindinput="onField" maxlength="1000" disabled="{{busy || retry || confirmation || stale}}"/>
+<button wx:if="{{detail.actions.requestScope}}" data-action="requestScope" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">申请必要的无费用返厂</button>
+<button wx:if="{{detail.actions.decideScope}}" data-action="approveScope" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">批准无费用返厂范围</button>
+<button wx:if="{{detail.actions.decideScope}}" data-action="rejectScope" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">驳回返厂范围</button>
+<button wx:if="{{detail.actions.withdrawScope}}" data-action="withdrawScope" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">撤回未决定的范围申请</button>
+<button wx:if="{{activeSelected &amp;&amp; detail.actions.cancelRound}}" data-action="cancelRound" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">取消尚未寄出的本轮</button></view></view>
+<view wx:if="{{detail.actions.createRound}}" class="card"><view class="title">新建一轮待寄出记录</view>
+<view>厂家或服务商</view><input value="{{provider}}" data-field="provider" bindinput="onField" maxlength="200" disabled="{{busy || retry || confirmation || stale}}"/>
+<view>服务联系人</view><input value="{{contact}}" data-field="contact" bindinput="onField" maxlength="100" disabled="{{busy || retry || confirmation || stale}}"/>
+<view>服务电话</view><input value="{{phone}}" data-field="phone" bindinput="onField" maxlength="64" disabled="{{busy || retry || confirmation || stale}}"/>
+<view>预计收回日期（年-月-日）</view><input value="{{due}}" data-field="due" bindinput="onField" placeholder="2026-11-01" disabled="{{busy || retry || confirmation || stale}}"/>
+<view>本轮实际故障</view><textarea value="{{fault}}" data-field="fault" bindinput="onField" maxlength="2000" disabled="{{busy || retry || confirmation || stale}}"/>
+<button data-action="createRound" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对新建待寄出轮次</button></view>
+<view class="card"><view class="title">独立轮次 · 共{{total}}轮</view>
+<button wx:for="{{rows}}" wx:key="id" data-id="{{item.id}}" bindtap="onRound" disabled="{{busy || retry || confirmation || stale}}">第{{item.roundNumber}}轮 · {{item.providerName}} · {{labels.state(item.roundStatus)}}</button>
+<button wx:if="{{page > 1}}" data-kind="rounds" data-delta="-1" bindtap="onPage" disabled="{{busy || retry || confirmation || stale}}">上一页返厂轮次</button><view>轮次第{{page}}页</view><button wx:if="{{page * 20 &lt; total}}" data-kind="rounds" data-delta="1" bindtap="onPage" disabled="{{busy || retry || confirmation || stale}}">下一页返厂轮次</button></view>
+<view wx:if="{{selected}}" class="card"><view class="title">第{{selected.roundNumber}}轮 · {{labels.state(selected.roundStatus)}}</view>
+<view>{{selected.providerName}} · {{selected.serviceContact}} · {{selected.servicePhone}}</view><view>预计收回 {{selected.expectedReturnDate}}</view><view>{{selected.fault}}</view>
+<view>实际寄出 {{selected.dispatchedAt || '尚未记录'}}；实际原机收回 {{selected.receivedAt || '尚未记录'}}</view>
+<view wx:if="{{selected.cancelReason}}">取消原因：{{selected.cancelReason}}；本轮未计实际寄出次数。</view>
+<view wx:if="{{selected.receivedAt}}">原机状况：{{selected.conditionResult === 'RESTORED' ? '已恢复' : '仍有故障'}}；{{selected.treatmentResult}}；实际费用 {{selected.actualCost}} 元。</view>
+<view class="title">本轮原始凭证</view><view wx:if="{{!detail.photosAvailable}}">原件服务暂不可用，请保留实物及原始文件。</view>
+<button wx:for="{{selected.files}}" wx:key="objectId" data-id="{{item.objectId}}" bindtap="onFile" disabled="{{busy || retry || confirmation || stale || item.scanStatus !== 'CLEAN'}}">读取厂家原件 {{item.filename}}</button>
+<view wx:if="{{activeSelected &amp;&amp; detail.actions.uploadEvidence}}">
+<picker range="{{purposeLabels}}" value="{{purposeIndex}}" bindchange="onPurpose" disabled="{{busy || retry || confirmation || stale}}"><view>本次凭证用途：{{purposeLabels[purposeIndex]}}</view></picker>
+<button bindtap="onChoose" disabled="{{busy || retry || confirmation || stale}}">选择图片或PDF原件</button><view>{{fileName}}</view><button data-action="upload" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale || !fileName}}">核对追加本轮原件</button></view>
+<view wx:if="{{activeSelected &amp;&amp; (detail.actions.dispatch || detail.actions.receive)}}">
+<view class="title">{{detail.actions.receive ? '核实原机实际收回' : '登记原机实际寄出'}}</view><view>本轮原机：{{selected.originalIdentity.assetCode}}；{{selected.originalIdentity.serialNumber}}</view>
+<view>现场核对的资产编码</view><input value="{{observedCode}}" data-field="observedCode" bindinput="onField" maxlength="2048" disabled="{{busy || retry || confirmation || stale}}"/>
+<view wx:if="{{selected.originalIdentity.serialNumber}}">现场核对的原机序列号<input value="{{serial}}" data-field="serial" bindinput="onField" maxlength="128" disabled="{{busy || retry || confirmation || stale}}"/></view>
+<button bindtap="onNow" disabled="{{busy || retry || confirmation || stale}}">使用当前办理时间</button>
+<view>实际办理日期（年-月-日，本机时区）</view><input value="{{actualDate}}" data-field="actualDate" bindinput="onField" disabled="{{busy || retry || confirmation || stale}}"/>
+<view>实际办理时刻（时:分:秒，本机时区）</view><input value="{{actualTime}}" data-field="actualTime" bindinput="onField" disabled="{{busy || retry || confirmation || stale}}"/>
+<checkbox-group bindchange="onChecked"><label><checkbox value="original" checked="{{originalChecked}}" disabled="{{busy || retry || confirmation || stale}}"/>已亲自核实是本轮原机，编码与身份一致</label><label wx:if="{{detail.actions.receive}}"><checkbox value="noCost" checked="{{noCostChecked}}" disabled="{{busy || retry || confirmation || stale}}"/>已核实本轮实际没有费用</label></checkbox-group>
+<view>明确选用本轮对应原件</view><checkbox-group bindchange="onEvidence"><label wx:for="{{eligibleFiles}}" wx:key="object_id"><checkbox value="{{item.object_id}}" disabled="{{busy || retry || confirmation || stale}}"/>{{item.filename}}</label></checkbox-group>
+<view wx:if="{{!eligibleFiles.length}}">请先上传本轮对应阶段原件，再明确选用。</view>
+<view wx:if="{{detail.actions.receive}}"><picker range="{{['请选择实际状况','已恢复','仍有故障，继续维修']}}" value="{{conditionIndex}}" bindchange="onCondition" disabled="{{busy || retry || confirmation || stale}}"><view>原机实际状况：{{['请选择实际状况','已恢复','仍有故障，继续维修'][conditionIndex]}}</view></picker>
+<button bindtap="onLocations" disabled="{{busy || retry || confirmation || stale}}">查询有效实际收回地点</button>
+<button wx:for="{{locations}}" wx:key="id" data-id="{{item.id}}" bindtap="onLocation" disabled="{{busy || retry || confirmation || stale}}">{{locationId === item.id ? '已选：' : '选择：'}}{{item.name}}</button>
+<button wx:if="{{locationPage > 1}}" data-delta="-1" bindtap="onLocations" disabled="{{busy || retry || confirmation || stale}}">上一页收回地点</button><button wx:if="{{locationPage * 20 &lt; locationTotal}}" data-delta="1" bindtap="onLocations" disabled="{{busy || retry || confirmation || stale}}">下一页收回地点</button></view>
+<view>{{detail.actions.receive ? '实际收回状况与处理结果（至少10字）' : '实际寄出与厂家接收依据（至少10字）'}}</view><textarea value="{{evidence}}" data-field="evidence" bindinput="onField" maxlength="2000" disabled="{{busy || retry || confirmation || stale}}"/>
+<button wx:if="{{detail.actions.dispatch}}" data-action="dispatch" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对原机已实际寄出</button><button wx:if="{{detail.actions.receive}}" data-action="receive" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对原机已实际收回</button></view></view>
+<view wx:if="{{previewPath}}" class="card"><view>{{previewName}}</view><image wx:if="{{previewMime !== 'application/pdf'}}" src="{{previewPath}}" mode="widthFix"/><button bindtap="onViewFile" disabled="{{busy || retry || confirmation || stale}}">打开这份原件</button><button bindtap="onCloseFile">关闭并清理原件</button></view>
+<view class="card"><view class="title">独立办理历史 · 共{{historyTotal}}条</view><view wx:for="{{history}}" wx:key="id">{{item.actor_username}} · {{item.recorded_at}} · {{labels.event(item.action)}}</view>
+<button wx:if="{{historyPage > 1}}" data-kind="history" data-delta="-1" bindtap="onPage" disabled="{{busy || retry || confirmation || stale}}">上一页返厂历史</button><view>历史第{{historyPage}}页</view><button wx:if="{{historyPage * 20 &lt; historyTotal}}" data-kind="history" data-delta="1" bindtap="onPage" disabled="{{busy || retry || confirmation || stale}}">下一页返厂历史</button></view>
+</view><button bindtap="onBack" disabled="{{busy || retry || confirmation}}">返回维修单</button>
+</view>

@@ -442,6 +442,12 @@ public class RepairService {
                 processing
                         && outstanding != null
                         && "WAITING_RECEIPT".equals(outstanding.get("handover_status")));
+        if (current.has(Role.ASSET_ADMIN)
+                || current.has(Role.WAREHOUSE_OPERATOR)
+                        && java.util.Objects.equals(
+                                current.id(), nullable(row.get("processor_account_id")))) {
+            actions.put("manageFactory", true);
+        }
         var factorySummary = factory.summary(id);
         if (factorySummary != null) {
             result.put("factorySummary", wire(factorySummary));

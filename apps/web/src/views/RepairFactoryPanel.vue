@@ -164,13 +164,13 @@ onBeforeUnmount(() => { live = false; reset(); emit("busy-change", false); });
 </script>
 <template>
   <section v-if="canRead" aria-label="无费用返厂轮次" class="factory-panel"><h3>返厂范围与实物轮次</h3>
-    <p>当前办理无费用返厂。原实物收回后继续处于维修中；更换整机必须单独建卡，不能登记为原机收回。</p>
+    <p>当前办理无费用返厂。原实物收回本身不结束整单维修；更换整机必须单独建卡，不能登记为原机收回。</p>
     <button :disabled="props.blocked || busy || !!confirmation" @click="load">核对返厂范围与轮次</button>
     <template v-if="opened"><p v-if="error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p>
       <button v-if="pending" :disabled="busy || props.blocked" @click="perform">重试原返厂办理</button>
       <section v-if="confirmation" aria-label="确认本次返厂办理"><p>{{ confirmation.label }}。请核对本次已填写的实物、厂家及实际依据；登记后保留原记录。</p><button :disabled="busy || props.blocked" @click="confirm">确认保存本次返厂办理</button><button :disabled="busy || props.blocked" @click="confirmation = null">返回修改返厂办理</button></section>
       <template v-if="data"><p v-if="data.pendingScope">{{ factoryScopeStates[data.pendingScope.scopeStatus] }} · {{ data.pendingScope.requestReason }}</p><p v-if="data.approvedScope">{{ factoryScopeStates[data.approvedScope.scopeStatus] }} · {{ data.approvedScope.decisionReason }}</p>
-        <p v-if="data.summary">已实际寄出 {{ data.summary.actualDispatchCount }} 次；{{ data.summary.followupOpen ? '返厂事项仍在办理' : '本轮事项已记录，维修尚需核实实际结束' }}。</p>
+        <p v-if="data.summary">已实际寄出 {{ data.summary.actualDispatchCount }} 次；{{ data.summary.followupOpen ? '返厂事项仍在办理' : data.status === 'COMPLETED' ? '维修已实际结束，轮次原记录保留' : '本轮事项已记录，维修尚需核实实际结束' }}。</p>
         <fieldset v-if="data.actions.requestScope || data.actions.decideScope || data.actions.withdrawScope || data.actions.cancelRound" :disabled="locked || stale"><label>本次范围或取消原因<textarea v-model="reason" maxlength="1000" /></label>
           <button v-if="data.actions.requestScope" @click="prepare('requestScope')">申请必要的无费用返厂</button><button v-if="data.actions.decideScope" @click="prepare('approveScope')">批准无费用返厂范围</button><button v-if="data.actions.decideScope" @click="prepare('rejectScope')">驳回返厂范围变更</button><button v-if="data.actions.withdrawScope" @click="prepare('withdrawScope')">撤回尚未决定的范围申请</button><button v-if="data.actions.cancelRound && activeSelected" @click="prepare('cancelRound')">取消尚未寄出的本轮</button>
         </fieldset>

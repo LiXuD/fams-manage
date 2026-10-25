@@ -25,7 +25,8 @@
     "pages/inventory-late-damage/index",
     "pages/repairs/index",
     "pages/repair-return-sources/index",
-    "pages/repair-inventory-evidence/index"
+    "pages/repair-inventory-evidence/index",
+    "pages/repair-factory/index"
   ],
   "window": {
     "navigationBarTitleText": "企业资产",

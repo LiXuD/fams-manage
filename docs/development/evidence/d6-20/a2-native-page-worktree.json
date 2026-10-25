@@ -1,0 +1,80 @@
+{
+  "task": "D6-20A2",
+  "state": "IN_PROGRESS",
+  "source": "worktree based on f1d512c; not a fixed-candidate full gate",
+  "local": {
+    "mini": 267,
+    "web": 161,
+    "lint": 0,
+    "workspaceTypes": 0,
+    "nativePackageBuild": true,
+    "upgrade": 1,
+    "factoryHttp": 15,
+    "finalNativeHandlerReplay": 1,
+    "checkstyle": 0,
+    "spotbugs": 0
+  },
+  "nativeActualChain": {
+    "nativeFactoryClosed": true,
+    "repairId": "1",
+    "twoActualRounds": true,
+    "canceledRoundNotCounted": true,
+    "opaqueOriginalMetadataAndBytes": true,
+    "committedOriginalRetry": true,
+    "employeePrivacy": true,
+    "independentInboundClosed": true,
+    "rounds": 3,
+    "actualDispatchCount": 2,
+    "originals": 4
+  },
+  "identityAndRetry": [
+    "server-derived manageFactory only; each API independently revalidates",
+    "one frozen original request across readonly refresh and same-identity hide/show",
+    "same-account credential revision invalidates private data and original copies",
+    "unknown uploaded response replay retains exact four versions, original key and copied bytes",
+    "401/403/404 and late original cleanup",
+    "preserve selected current-time milliseconds; manual time edit discards captured instant"
+  ],
+  "nativeFilesystemAndTransport": "actual owned temporary files, real MiniSessionClient/createWxRuntime and actual HTTP/MySQL; SDK opaque multipart part uses paired filename/MIME hints and actual bytes; external WeChat, hostname transport, scanner remain fixtures",
+  "originals": {
+    "count": 4,
+    "uploadAttempts": 5,
+    "sha256": "4da6fa56e392f463d81ea7bdb666a454ebd78c228fcb3e3a3ca617d62788bea9",
+    "copiedSourcesMutatedBeforeSend": true,
+    "previewAndPendingCopiesRemoved": true
+  },
+  "preservedRed": [
+    "current-time .678 incorrectly truncated to .000",
+    "identity changed during inline confirmation left old private detail visible",
+    "new runtime initially called private fixture counter; fixed in test only",
+    "two ESLint redundant initial assignments; removed"
+  ],
+  "impact": {
+    "RepairService.get": "CRITICAL: 43 direct consumers, 16 flows; optional server action only",
+    "createRepairPage": "LOW: 1 direct consumer, no indexed flows",
+    "RepairFactoryHttpRuntimeCase": "LOW: 0 consumers/flows; native flow absence is not zero runtime risk"
+  },
+  "frozenMigration": {
+    "V52Sha256": "e3eb8a8b327a71cab93e8938dd7d6e892898f5da0c43da53786a5b2d9dddeed7",
+    "changed": false
+  },
+  "boundaries": [
+    "fixed clean candidate full gate pending",
+    "independent review unsigned",
+    "actual WeChat HTTPS/camera/device acceptance deferred",
+    "no mini cold-process restart or OS viewer cache claim",
+    "no remote CI, QA, production claim",
+    "one accidentally overlapping static invocation excluded; authoritative Checkstyle/SpotBugs then rerun serially after runtime exited, both 0"
+  ],
+  "logSha256": {
+    "output/d6-20a2-page-unit-first.log": "4b4a2e2c1605bbc612be560e1f7c77cd92b9823a02745586f3e8e5b8eb17e880",
+    "output/d6-20a2-page-unit-red.log": "a807cbca21caaed3885237789a88ab669c41f1f07dcb1d04d871bbdb833799c8",
+    "output/d6-20a2-page-unit-green.log": "0fe35a0f7d749149e7518be300d808586b0e3241fca68dfe53fb21ac2a206765",
+    "output/d6-20a2-pages-compile-failure.log": "da9664e8000a7711561f7e4282fee306b0a167371338669340acf50c076e99ee",
+    "output/d6-20a2-pages-lint-failure.log": "c90090f3c74ab46a48d523338d79a6f788db51e98cc5bb610a0a17ad224a3689",
+    "output/d6-20a2-pages-runtime.log": "8a730a9b7c130edea3fc3b1dc3922b42cf1139073ce6173bdddd743f7f5da5f6",
+    "output/d6-20a2-page-final-runtime.log": "66038249b37f2e9be931ebfb3d83a239d8e765d545ae65e2058f49dd15b40528",
+    "output/d6-20a2-page-local-checks.log": "c18efd3fb8eee08a9ae83b2109134429cef05070591f239a5dda49ee082b0415",
+    "output/d6-20a2-page-java-static.log": "8eb4a82325f7e7af20988a629fa7c148fe591858e3e2a78a06300a4abfcd26fc"
+  }
+}

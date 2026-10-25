@@ -531,7 +531,7 @@ Agent-Limitation: 真机弱网联调尚未完成，本任务不得标记已验�
 | 必需子项 | 规模 | 前置 | 验证范围 | 状态 | 当前证据 |
 |---|---|---|---|---|---|
 | D6-20A1 无费用返厂轮次后端/PC | L | D6-19A/B/C固定实现 | 明确范围变更批准、两轮待寄出/实际寄出/原机收回、独占处理权/唯一锁、受限原件、回滚并发恢复/真实PC及固定门禁 | IN_REVIEW | 固定38df375完整门禁446/160/239及静态0，真实PC取消+两实际往返/四原件/提交JVM强杀原键恢复通过；独立入库后COMPLETED/IN_STOCK/锁0。见D6-20任务卡及a1-pc-jvm-38df375.json；独立复核未签，V52冻结 |
-| D6-20A2 原生返厂及原件 | M | D6-20A1 | 当前身份/原键待定、真实Page opaque HTTP/MySQL轮次/原件字节及清理 | IN_PROGRESS | 首批原件传输mini251/HTTP14/升级1/静态0局部通过，见a2-originals-transport-worktree.json；原生Page/真实opaque链路与固定门禁继续，不以适配器当真机 |
+| D6-20A2 原生返厂及原件 | M | D6-20A1 | 当前身份/原键待定、真实Page opaque HTTP/MySQL轮次/原件字节及清理 | IN_PROGRESS | 原生Page/opaque真实链路局部通过：mini267/Web161/HTTP15/升级1/静态0，见a2-native-page-worktree.json；固定全门禁及独立复核待，不以适配器当真机 |
 | D6-20B 费用与初始直接范围 | L | D6-20A1/A2 | 初始单管理员直接范围、费用约束/报价/合计去重与两端实际链路 | NOT_STARTED | 尚未执行 |
 | D6-20C 实物换新与部件变更 | L | D6-20A/B、D6-07入库 | 新卡新码新序列真实换机入库、旧机责任及部件事件追溯 | NOT_STARTED | 尚未执行 |
 | D6-20D 真实异常结束与恢复 | L | D6-20A/B源端口、D6-21/22具体转换 | 无法收回真实报失转锁/找回续修、收旧凭证真实报废/驳回恢复，不填虚假收回 | NOT_STARTED | 不以父项互等制造循环；具体端口可先交付，集成未实做不关闭 |
@@ -1411,3 +1411,5 @@ B3恢复补查：原PC/JVM包bbc149887fc90047a6c28af69e59d4027cfd7bd09e0e8a9de05
 2026-10-25 D6-20A2启动：在035bc27交接及38df375已验后端基础上实现当前身份独立原件副本、PDF/图片受限读回和额外multipart声明元数据；保留真实魔数/扫描和旧照片白名单。MiniSessionClient/MiniRuntime影响为CRITICAL（30/39直接消费者，索引未识别原生流程），不据零流程认定无影响；保持旧端口并用全量小程序回归及真实链路复验。
 
 2026-10-25 A2传输增量局部收口：mini251、全部TypeScript/lint及原生构建通过；真实MySQL升级1和返厂HTTP14、Checkstyle0/SpotBugs0，V52摘要不变且自有环境清理。上传副本与账号/绑定下载目录隔离，SDK配对元数据仍服从扩展名/字节/扫描，旧照片不放宽。初次样式失败和魔数HTTP400误断言保留，修正后绿色；Page/opaque/固定全门禁和独立外部仍未验。
+
+2026-10-25 A2原生Page批次局部验证：mini267/Web161、lint/全部类型及原生构建通过，升级1/返厂HTTP15通过；最终原生处理器单项重验与串行Checkstyle0/SpotBugs0通过。真实Page→MiniSessionClient/createWxRuntime→opaque HTTP/MySQL完成1取消、2实际往返、4原件；已提交上传失响应后原键/原四版本及自有副本重放，修改选择源文件不改变送达字节，员工无私有厂家/原件，独立实物验收入库才COMPLETED/IN_STOCK/锁0。毫秒截断及确认期间身份变化遗留私有资料两红例均修复，编译/ESLint早期失败保留。一次误并行静态检查不作权威证据，待运行退出后串行重验通过。PC整单结束提示同步纠正。见evidence/d6-20/a2-native-page-worktree.json；A2仍IN_PROGRESS，下一稳定候选固定完整门禁后送独立复核，再B/C/D与D6-21～27；不以适配器或原生包构建替代真实微信/HTTPS/设备、冷进程恢复、CI/QA/生产。
