@@ -48,6 +48,7 @@ public class RepairService {
     private final LoanReturnRepairPort returned;
     private final ObjectProvider<AttachmentEvidencePort> evidence;
     private final ObjectProvider<AttachmentRegistry> attachments;
+    private final RepairFactoryGuard factory;
 
     public RepairService(
             JdbcTemplate db,
@@ -58,7 +59,8 @@ public class RepairService {
             LoanRepairPort loans,
             LoanReturnRepairPort returned,
             ObjectProvider<AttachmentEvidencePort> evidence,
-            ObjectProvider<AttachmentRegistry> attachments) {
+            ObjectProvider<AttachmentRegistry> attachments,
+            RepairFactoryGuard factory) {
         this.db = db;
         this.json = json;
         this.clock = clock;
@@ -68,6 +70,7 @@ public class RepairService {
         this.returned = returned;
         this.evidence = evidence;
         this.attachments = attachments;
+        this.factory = factory;
     }
 
     public Map<String, Object> eligible(Actor actor, int page, int size) {
@@ -439,6 +442,26 @@ public class RepairService {
                 processing
                         && outstanding != null
                         && "WAITING_RECEIPT".equals(outstanding.get("handover_status")));
+        var factorySummary = factory.summary(id);
+        if (factorySummary != null) {
+            result.put("factorySummary", wire(factorySummary));
+            if (Boolean.TRUE.equals(factorySummary.get("followupOpen"))) {
+                for (var action :
+                        List.of(
+                                "acceptInPlace",
+                                "completeInPlace",
+                                "acceptAway",
+                                "closeInbound",
+                                "deliverReturn",
+                                "receiveReturn",
+                                "refuseReturn",
+                                "recollectReturn",
+                                "changeReturnTarget",
+                                "proxyReturn")) {
+                    actions.put(action, false);
+                }
+            }
+        }
         result.put("actions", actions);
         return result;
     }
@@ -742,6 +765,7 @@ public class RepairService {
             reject(actor, current, row, "REPAIR_OWNERSHIP_CHANGED");
         }
         lock(row, input.lockVersion());
+        factory.requireInternal(id);
         if (returnOrigin(id) != null
                 || !input.neverLeftCustodian()
                 || hasPhysicalHandling(id)
@@ -997,6 +1021,7 @@ public class RepairService {
             reject(actor, current, row, "REPAIR_OWNERSHIP_OR_ASSET_CHANGED");
         }
         lock(row, lockVersion);
+        factory.requireInternal(number(row, "id"));
         if (outstandingReturn(number(row, "id")) != null) {
             throw new RepairFailure(409, "REPAIR_RETURN_RECOLLECTION_REQUIRED");
         }
@@ -1300,20 +1325,7 @@ public class RepairService {
     }
 
     private Object latestPhysicalTime(Map<String, Object> row) {
-        var recollections =
-                db.queryForList(
-                        "SELECT r.occurred_at FROM fams_repair_return_recollection r JOIN"
-                                + " fams_repair_return_handover h ON h.id=r.handover_id WHERE"
-                                + " h.repair_id=? ORDER BY h.id DESC LIMIT 1",
-                        row.get("id"));
-        if (!recollections.isEmpty()) {
-            return recollections.getFirst().get("occurred_at");
-        }
-        var handling =
-                db.queryForList(
-                        "SELECT occurred_at FROM fams_repair_physical_handling WHERE repair_id=?",
-                        row.get("id"));
-        return handling.isEmpty() ? row.get("accepted_at") : handling.getFirst().get("occurred_at");
+        return factory.latestPhysicalTime(row);
     }
 
     private void advanceReturn(
@@ -1367,6 +1379,7 @@ public class RepairService {
 
     public void lockTargetChange(long id) {
         header(id);
+        factory.requireInternal(id);
     }
 
     public void requireTargetChangeProcessor(long account, long id) {
@@ -1667,7 +1680,7 @@ public class RepairService {
         loans.requireIdentity(assetId, originalLoan(row), loan == null ? null : loan.version());
         if (row.get("accepted_at") == null) {
             requireRepairSource(row);
-        } else {
+        } else if (!factory.dispatchedIdentity(row)) {
             assets.checkRepairIdentity(
                     assetId,
                     number(row, "asset_version"),
@@ -1701,6 +1714,10 @@ public class RepairService {
         var approved = approvedTarget(row);
         snapshot.put("approvedTargetId", approved == null ? null : approved.get("id").toString());
         snapshot.put("loan", loanWire(loan));
+        var factorySummary = factory.summary(id);
+        if (factorySummary != null) {
+            snapshot.put("factorySummary", wire(factorySummary));
+        }
         return snapshot;
     }
 

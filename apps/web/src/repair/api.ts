@@ -1,4 +1,5 @@
 import { useSessionStore } from "@/auth/sessionStore";
+import type { FactorySummary } from "./factory-types";
 export interface RepairAsset { id: string; assetCode: string; name: string; version: number; lifecycle: string;
   custodyType: string; locationId: string | null; locationName: string | null }
 export interface RepairPhoto { objectId: string; filename: string; contentType: string; sizeBytes: number; scanStatus: string }
@@ -13,6 +14,7 @@ export interface Repair { id: string; assetId: string; creatorAccountId: string;
   loanExpectedReturnDate?: string | null; returnHandovers?: RepairReturnHandover[];
   approvedReturnTargets?: { id: string; target_json: RepairReturnTarget; approved_at: string }[];
   returnRecollections?: { handover_id: string; occurred_at: string; evidence: string }[];
+  factorySummary?: FactorySummary;
   photosAvailable?: boolean; photos?: RepairPhoto[]; actions?: { approve: boolean; claim: boolean; acceptInPlace: boolean; completeInPlace: boolean; addFaultPhoto: boolean; cancel: boolean; acceptAway?: boolean; closeInbound?: boolean; deliverReturn?: boolean; receiveReturn?: boolean; refuseReturn?: boolean; recollectReturn?: boolean; changeReturnTarget?: boolean; proxyReturn?: boolean };
   inventoryEvidence?: { taskId: string; observationId: string; clientEventId: string; photoIds: string[] }[];
   returnOrigin?: { followupId: string; returnId: string; closedLoanId: string | null; processorAccountId: string } | null;

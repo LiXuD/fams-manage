@@ -9,6 +9,8 @@ import RepairTargetChangePanel from "./RepairTargetChangePanel.vue";
 import RepairReassignmentPanel from "./RepairReassignmentPanel.vue";
 import RepairReturnSourcePanel from "./RepairReturnSourcePanel.vue";
 import RepairInventoryPhoto from "./RepairInventoryPhoto.vue";
+import RepairFactoryPanel from "./RepairFactoryPanel.vue";
+import { factoryEventNames, factoryRoundStates, factoryScopeStates } from "@/repair/factory-api";
 import { useSessionStore } from "@/auth/sessionStore";
 import { RepairApiError, repairProblem, repairRequest, repairStates, type Repair, type RepairAsset, type RepairMutation, type RepairPhoto } from "@/repair/api";
 const session = useSessionStore(), route = useRoute();
@@ -26,16 +28,18 @@ const returnLocked = ref(false);
 const targetChangeLocked = ref(false);
 const reassignmentLocked = ref(false);
 const sourceLocked = ref(false);
-const locked = computed(() => busy.value || !!pending.value || !!confirmation.value || collaborationLocked.value || physicalLocked.value || returnLocked.value || targetChangeLocked.value || reassignmentLocked.value || sourceLocked.value);
+const factoryLocked = ref(false);
+const locked = computed(() => busy.value || !!pending.value || !!confirmation.value || collaborationLocked.value || physicalLocked.value || returnLocked.value || targetChangeLocked.value || reassignmentLocked.value || sourceLocked.value || factoryLocked.value);
 const eventNames: Record<string, string> = { REPAIR_SUBMITTED: "已提交报修", REPAIR_DECIDED: "管理员已决定", REPAIR_CLAIMED: "库管已领取", REPAIR_CONTROLLED_REASSIGNMENT: "管理员已受控转派",
-  REPAIR_ACCEPTED_IN_PLACE: "已受理原地维修", REPAIR_COMPLETED_IN_PLACE: "已核对原地恢复", REPAIR_CANCELLED: "已取消", REPAIR_FAULT_PHOTO_ADDED: "已补充故障照片", REPAIR_CONFLICT_REJECTED: "旧操作已拒绝" };
+  REPAIR_ACCEPTED_IN_PLACE: "已受理原地维修", REPAIR_COMPLETED_IN_PLACE: "已核对原地恢复", REPAIR_CANCELLED: "已取消", REPAIR_FAULT_PHOTO_ADDED: "已补充故障照片", REPAIR_CONFLICT_REJECTED: "旧操作已拒绝",
+  ...Object.fromEntries(Object.entries(factoryEventNames).map(([action, label]) => [`REPAIR_${action}`, label])) };
 let generation = 0, live = true, download: AbortController | null = null;
 const current = (epoch: number, owner: string) => live && generation === epoch && identity.value === owner;
 function clearPhoto() { download?.abort(); download = null; if (preview.value) URL.revokeObjectURL(preview.value); preview.value = ""; previewName.value = ""; }
 function reset() {
   generation++; clearPhoto(); rows.value = []; assets.value = []; detail.value = null; pending.value = null; confirmation.value = null; selectedFile.value = null;
   fault.value = ""; reason.value = ""; evidence.value = ""; observedCode.value = ""; assetId.value = ""; occurredAt.value = ""; neverLeft.value = false; confirmedPlace.value = false;
-  busy.value = false; total.value = 0; assetTotal.value = 0; page.value = 1; assetPage.value = 1;
+  busy.value = false; factoryLocked.value = false; total.value = 0; assetTotal.value = 0; page.value = 1; assetPage.value = 1;
 }
 function failure(cause: unknown) {
   if (cause instanceof RepairApiError && [401, 403, 404].includes(cause.status)) reset();
@@ -136,11 +140,11 @@ watch(identity, () => { reset(); error.value = ""; notice.value = ""; void load(
 onBeforeUnmount(() => { live = false; reset(); });
 </script>
 <template>
-  <AppChrome><section aria-label="报修与内部维修" class="repair-page"><h1>报修与内部维修</h1><p>为本人责任资产或本部门公用资产报修。管理员批准处理范围后，由唯一处理库管核实实物并办理。</p>
-    <p v-if="error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p><button :disabled="busy || !!confirmation" @click="load">刷新并核对当前结果</button>
+  <AppChrome><section aria-label="报修与维修" class="repair-page"><h1>报修与维修</h1><p>为本人责任资产或本部门公用资产报修。管理员批准处理范围后，由唯一处理库管核实实物并办理。</p>
+    <p v-if="error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p><button :disabled="busy || !!confirmation || factoryLocked" @click="load">刷新并核对当前结果</button>
     <button v-if="pending" :disabled="busy" @click="perform">重试原报修操作</button>
     <section v-if="confirmation" aria-label="确认本次报修办理"><p>请核对本次资产、实际依据及处理范围。批准不会自动领取，原地关闭须确认已恢复且实物从未离开原保管人。</p><button :disabled="busy" @click="confirm">确认保存本次办理</button><button :disabled="busy" @click="confirmation = null">返回修改</button></section>
-    <RepairReturnSourcePanel v-if="session.user?.roles.includes('ASSET_ADMIN') && !detail" :blocked="busy || !!pending || !!confirmation" @created="detail=$event;load()" @busy-change="sourceLocked=$event" />
+    <RepairReturnSourcePanel v-if="session.user?.roles.includes('ASSET_ADMIN') && !detail" :blocked="busy || !!pending || !!confirmation || factoryLocked" @created="detail=$event;load()" @busy-change="sourceLocked=$event" />
     <section><h2>提交报修</h2><button :disabled="locked" @click="loadAssets()">查找可报修资产</button>
       <label v-for="asset in assets" :key="asset.id"><input v-model="assetId" type="radio" :value="asset.id" :disabled="locked">{{ asset.assetCode }} · {{ asset.name }} · {{ asset.locationName || '位置待核实' }}</label>
       <button :disabled="locked || assetPage === 1" @click="loadAssets(-1)">上一页可报修资产</button>第 {{ assetPage }} 页 / 共 {{ assetTotal }} 项<button :disabled="locked || assetPage * 20 >= assetTotal" @click="loadAssets(1)">下一页可报修资产</button>
@@ -160,11 +164,13 @@ onBeforeUnmount(() => { live = false; reset(); });
       <button v-if="detail.actions?.claim" :disabled="locked" @click="prepare('claim')">领取维修处理</button>
       <fieldset v-if="detail.actions?.acceptInPlace || detail.actions?.completeInPlace" :disabled="locked"><h3>{{ detail.actions.completeInPlace ? '核对已恢复并原地关闭' : '现场核实并受理原地维修' }}</h3><label>现场核对的资产编码<input v-model="observedCode" maxlength="2048"></label><label><input v-model="confirmedPlace" type="checkbox">已现场核对实物仍在 {{ detail.source.locationName || '原位置' }}</label><label><input v-model="neverLeft" type="checkbox">实物从未离开原保管人，本次按原地处理核实</label><label>实际处理及核实依据<textarea v-model="evidence" maxlength="2000" /></label><button v-if="detail.actions.acceptInPlace" @click="prepare('accept')">核对受理原地维修</button><button v-if="detail.actions.completeInPlace" @click="prepare('complete')">确认已恢复并原地关闭</button></fieldset>
       <section v-if="detail.inventoryEvidence?.length" aria-label="原始盘点损坏证据"><h3>原始盘点损坏证据</h3><p>保留原始事件照片；损坏核实和发现时间以盘点复核记录为准。</p><div v-for="origin in detail.inventoryEvidence" :key="origin.observationId"><p>盘点 {{ origin.taskId }} · 原始证据 {{ origin.observationId }}</p><RepairInventoryPhoto v-for="photo in origin.photoIds" :key="`${detail.id}:${detail.version}:${origin.observationId}:${photo}`" :repair-id="detail.id" :observation-id="origin.observationId" :object-id="photo" :blocked="locked" @invalidated="reset" /></div></section>
-      <RepairReassignmentPanel :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || physicalLocked || returnLocked || targetChangeLocked" @changed="load" @invalidated="reset" @busy-change="reassignmentLocked = $event" />
-      <RepairPhysicalPanel :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || returnLocked || targetChangeLocked || reassignmentLocked" @changed="load" @invalidated="reset" @busy-change="physicalLocked = $event" />
-      <RepairReturnPanel :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || physicalLocked || targetChangeLocked || reassignmentLocked" @changed="load" @invalidated="reset" @busy-change="returnLocked = $event" />
-      <RepairTargetChangePanel :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || physicalLocked || returnLocked || reassignmentLocked" @changed="load" @invalidated="reset" @busy-change="targetChangeLocked = $event" />
-      <RepairCollaborationPanel :repair-id="detail.id" :request-version="detail.version" :blocked="busy || !!pending || !!confirmation || physicalLocked || returnLocked || targetChangeLocked || reassignmentLocked" @changed="load" @invalidated="reset" @busy-change="collaborationLocked = $event" />
+      <section v-if="detail.factorySummary" aria-label="返厂进度摘要"><h3>返厂进度</h3><p v-if="detail.factorySummary.scope">范围：{{ factoryScopeStates[detail.factorySummary.scope.scopeStatus] }}</p><p>实际寄出 {{ detail.factorySummary.actualDispatchCount }} 次</p><p v-if="detail.factorySummary.round">第 {{ detail.factorySummary.round.roundNumber }} 轮 · {{ factoryRoundStates[detail.factorySummary.round.roundStatus] }} · 预计收回 {{ detail.factorySummary.round.expectedReturnDate }}<span v-if="detail.factorySummary.round.dispatchedAt"> · 实际寄出 {{ new Date(detail.factorySummary.round.dispatchedAt).toLocaleString() }}</span><span v-if="detail.factorySummary.round.receivedAt"> · 实际收回 {{ new Date(detail.factorySummary.round.receivedAt).toLocaleString() }}</span></p></section>
+      <RepairFactoryPanel v-if="session.user?.roles.includes('ASSET_ADMIN') || session.user?.roles.includes('WAREHOUSE_OPERATOR') && detail.processorAccountId === session.user.id" :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || physicalLocked || returnLocked || targetChangeLocked || reassignmentLocked || sourceLocked" @changed="load" @invalidated="reset" @busy-change="factoryLocked=$event" />
+      <RepairReassignmentPanel :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || physicalLocked || returnLocked || targetChangeLocked || factoryLocked" @changed="load" @invalidated="reset" @busy-change="reassignmentLocked = $event" />
+      <RepairPhysicalPanel :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || returnLocked || targetChangeLocked || reassignmentLocked || factoryLocked" @changed="load" @invalidated="reset" @busy-change="physicalLocked = $event" />
+      <RepairReturnPanel :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || physicalLocked || targetChangeLocked || reassignmentLocked || factoryLocked" @changed="load" @invalidated="reset" @busy-change="returnLocked = $event" />
+      <RepairTargetChangePanel :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || physicalLocked || returnLocked || reassignmentLocked || factoryLocked" @changed="load" @invalidated="reset" @busy-change="targetChangeLocked = $event" />
+      <RepairCollaborationPanel :repair-id="detail.id" :request-version="detail.version" :blocked="busy || !!pending || !!confirmation || physicalLocked || returnLocked || targetChangeLocked || reassignmentLocked || factoryLocked" @changed="load" @invalidated="reset" @busy-change="collaborationLocked = $event" />
       <h3>最近100条处理历史 / 共 {{ detail.historyTotal || 0 }} 条</h3><ul><li v-for="event in detail.history" :key="event.id">{{ event.actor_username }} · {{ new Date(event.occurred_at).toLocaleString() }} · {{ eventNames[event.action] || '历史处理' }} · {{ event.detail_json.reason || event.detail_json.evidence || event.detail_json.fault || '' }}</li></ul>
     </section>
   </section></AppChrome>

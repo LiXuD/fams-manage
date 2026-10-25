@@ -1,0 +1,84 @@
+{
+  "scope": "current A1 worktree backward compatibility; not fixed product gate",
+  "suites": [
+    {
+      "suite": "RepairHttpRuntimeCase",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report_sha256": "874e864f04396ba4420d1d1b8e940f008e5e5e319e97e4fe3e0c44801c100ab0"
+    },
+    {
+      "suite": "RepairCollaborationHttpRuntimeCase",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report_sha256": "e84e6e0ab866d5fb4ce63c49d96ec1b8c928f1e7ece2ff9900ff9a5ea53181ac"
+    },
+    {
+      "suite": "RepairPhysicalHttpRuntimeCase",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report_sha256": "bd0eba7fb8684395c21c854186fe414c8ea79578e27835646c6d4a16e1bf2d77"
+    },
+    {
+      "suite": "RepairReturnHttpRuntimeCase",
+      "tests": 19,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report_sha256": "0c8078473dc31bdcb050131be6d40477c2971989a899ef83ef5f6762ecb5f2f8"
+    },
+    {
+      "suite": "RepairReassignmentHttpRuntimeCase",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report_sha256": "e2ff89094bf5c1f7e8a68ece5ac1360ef7c9fbbf715589e461065ce32762f922"
+    },
+    {
+      "suite": "RepairProxyHttpRuntimeCase",
+      "tests": 16,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report_sha256": "5b47723e49f46c68704c63a72739e3e7536c465df68cbfb62c738e7e7c6ab23d"
+    },
+    {
+      "suite": "RepairReturnSourceHttpRuntimeCase",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report_sha256": "e778828d35f2693b6f2783f33b1b016d17e780883aff720cce1f357598151d6c"
+    },
+    {
+      "suite": "InventoryRepairHttpRuntimeCase",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report_sha256": "a64f37782423798a4085231fb48978295e10dd58c215cffdc9a88710b6fe5a39"
+    },
+    {
+      "suite": "InventoryLateDamageHttpRuntimeCase",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report_sha256": "46bf297cf01460500cafb5e19d8fa08d67042829480cf727afdd7dbeb796f11c"
+    }
+  ],
+  "executed": 109,
+  "raw_log": "output/d6-20a1-existing-regression-runtime.log",
+  "raw_log_sha256": "dff7c03bd705c76dbb455cd8df39f2af9dbb52b9cb4eaa3604f78fbaf566a96d",
+  "checkstyle": 0,
+  "spotbugs": 0,
+  "static_log": "output/d6-20a1-java-final-static.log",
+  "owned_database_cleanup": true
+}

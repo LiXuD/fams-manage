@@ -513,4 +513,53 @@
         <Method name="&lt;init&gt;"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+    <!-- Exact Spring-owned factory infrastructure retains shared collaborator identity. -->
+    <Match>
+        <Class name="com.fams.asset.AssetFactoryRepairPort"/>
+        <Field name="db"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.asset.AssetFactoryRepairPort"/>
+        <Field name="json"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.asset.AssetFactoryRepairPort"/>
+        <Field name="mapper"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.repair.RepairFactoryEvidenceService"/>
+        <Field name="storage"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.repair.RepairFactoryEvidenceService"/>
+        <Field name="writer"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.repair.RepairFactoryGuard"/>
+        <Field name="db"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.repair.RepairFactoryService"/>
+        <Field name="db"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.repair.RepairFactoryService"/>
+        <Field name="json"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
 </FindBugsFilter>

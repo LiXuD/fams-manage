@@ -1,0 +1,44 @@
+{
+  "scope": "source-worktree backend A1 tests; no browser/native/fixed candidate acceptance",
+  "reports": [
+    {
+      "suite": "RepairFactoryUpgradeRuntimeCase",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        "populatedVersionFiftyOneFactsAndShapesSurviveAdditiveFactoryHistory"
+      ],
+      "sha256": "966a027cdfbc5b245a6ce7cad9b018b88b0a3d2ec2b6e0c158c1f58066fdb1e1"
+    },
+    {
+      "suite": "RepairFactoryHttpRuntimeCase",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        "factoryScopeCannotBypassActualAcceptanceOrDuplicateAnExistingScope",
+        "concurrentScopeAdministratorsAndRoundCreationHaveOneWinnerAndAuditedLoser",
+        "permanentReplyStillRequiresCurrentRoleAndUnchangedOriginalBody",
+        "scannerFailureAndDuplicateUploadDoNotCreateFactsOrDuplicateStoredOriginals",
+        "twoActualRoundsRetainOneLockAndOriginalsUntilSeparateRealRepairClosure",
+        "realCancelledRoundsAndTheirImmutableHistoryPageIndependently",
+        "pendingDispatchCanBeControlledTransferredAndCancelledOnlyByTheNewOwner",
+        "originalWithoutRecordedSerialCanReallyReturnWithoutInventingASerial",
+        "auditFailureRollsBackDispatchAndReceiptAcrossAssetRoundTodoAndOriginalReply",
+        "scopeRejectionWithdrawalAndChangedOwnershipNeverRewriteInitialApproval",
+        "privateOriginalsAndCurrentWarehouseSurviveControlledInTransitReassignment",
+        "originalIdentityActualTimeScopeFeeAndLocationChecksPrecedePhysicalWrites"
+      ],
+      "sha256": "5cbae30a486413e00108cc12392d47b979a9eb950394bb9e1cabd7e62bef8f84"
+    }
+  ],
+  "raw_log": "output/d6-20a1-source-runtime.log",
+  "raw_log_sha256": "504c0f486b899faa5c9b81152212038b539338d50e8594989ffd271dfced4cc8",
+  "v52_sha256": "e3eb8a8b327a71cab93e8938dd7d6e892898f5da0c43da53786a5b2d9dddeed7",
+  "external_fixtures": "owned external WeChat and scanner fixtures, actual Spring HTTP/MySQL/asset ports",
+  "cleanup": "owned disposable database container removed; unrelated existing database untouched",
+  "additional_boundaries": "No recorded serial, controlled pending dispatch transfer/cancel, actual acceptance and scope duplication guards"
+}

@@ -1,0 +1,7 @@
+{
+  "scope": "F1 standalone UTF8 golden across eight fresh Java21 JVMs; not committing application recovery acceptance",
+  "digest": "e5dda39f2fd5a0a923a49d7d28079e6f323cda6a1a7faec21b020d23bb142a12",
+  "fresh_jvms": 8,
+  "all_equal": true,
+  "golden_unit_tests": 3
+}

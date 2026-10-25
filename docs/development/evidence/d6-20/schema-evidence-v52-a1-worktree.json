@@ -1,0 +1,12 @@
+{
+  "source_candidate": "D6-20A1 source worktree on3804097; not fixed gate",
+  "execution_kind": "actual Spring/MySQL Surefire applications from compiled target classes",
+  "schema_version": 52,
+  "objects": 137,
+  "columns_sha256": "dfe9e720d937f2cfa995e4ddc8e7e73381576c36a6c4dca3a181530161c7028e",
+  "create_sha256": "4f4d0af7ca864d45cc7f9b88fd5a2f28c0d8143112db99c8b6453365bc1ba81f",
+  "migration_sha256": "e3eb8a8b327a71cab93e8938dd7d6e892898f5da0c43da53786a5b2d9dddeed7",
+  "business_rows_read": false,
+  "owned_environment_cleanup": true,
+  "formal_database_cognition": "not configured; metadata witness only"
+}

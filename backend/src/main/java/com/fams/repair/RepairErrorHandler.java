@@ -23,6 +23,8 @@ import java.util.UUID;
             RepairController.class,
             RepairReassignmentController.class,
             RepairPhotoController.class,
+            RepairFactoryController.class,
+            RepairFactoryEvidenceController.class,
             RepairCollaborationController.class,
             RepairCollaborationPhotoController.class
         })
