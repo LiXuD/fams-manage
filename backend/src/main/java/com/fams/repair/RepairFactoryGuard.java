@@ -85,7 +85,7 @@ public class RepairFactoryGuard {
             round.put("id", row.get("id").toString());
             round.put("roundNumber", row.get("round_number"));
             round.put("roundStatus", row.get("round_status"));
-            round.put("expectedReturnDate", row.get("expected_return_date"));
+            round.put("expectedReturnDate", row.get("expected_return_date").toString());
             round.put("dispatchedAt", row.get("dispatched_at"));
             round.put("receivedAt", row.get("received_at"));
             round.put("version", row.get("version"));

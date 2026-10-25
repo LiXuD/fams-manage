@@ -1,0 +1,41 @@
+{
+  "candidate_commit": "1c6ee3c2b7f5f583dd45ac531a2831c95d057ae2",
+  "date": "2026-10-25",
+  "full_product_gate_exit": 0,
+  "java_tests": 445,
+  "web_tests": 160,
+  "mini_tests": 239,
+  "checkstyle": 0,
+  "spotbugs": 0,
+  "coverage": {
+    "LINE": {
+      "covered": 19053,
+      "missed": 1469,
+      "total": 20522,
+      "ratio": 0.9284182828184387
+    },
+    "BRANCH": {
+      "covered": 6602,
+      "missed": 2190,
+      "total": 8792,
+      "ratio": 0.7509099181073703
+    }
+  },
+  "artifact": {
+    "candidate": "1c6ee3c",
+    "source": "backend/target/contract-generation-probe-0.1.0-SNAPSHOT.jar",
+    "artifact": "output/d6-20a1-1c6ee3c-backend.jar",
+    "sha256": "fdea9849c147997805445e00ebc42e9dabab7908f7be90d8086bc7dba09b362d",
+    "size": 59076543,
+    "observer": "passive during frozen candidate gate"
+  },
+  "application_and_database_restart": "PASS",
+  "owned_cleanup_clean_worktree": "PASS",
+  "dependency_audit": "high threshold PASS; pre-existing two moderate Vitest tooling advisories remain",
+  "raw_log_sha256": "f9f79d37a16e8cd859ea6584c5619077c092f32e0b71e24e90f0893866eecc37",
+  "first_preflight": "generated targets initially present; stopped before runtime; archived and cleared gate-owned targets before successful full rerun",
+  "pc_acceptance": "FAILED separately: expected DATE 2026-11-01 rendered as 2026-10-31T16:00:00.000Z; see pc-date-failure-1c6ee3c.json",
+  "A1": "IN_PROGRESS; actual PC/committing JVM and corrected-candidate gate still required",
+  "migration": "V1-V52 immutable; no schema changes in date projection repair",
+  "independent_review_external_CI_QA_production": "NOT_VERIFIED"
+}

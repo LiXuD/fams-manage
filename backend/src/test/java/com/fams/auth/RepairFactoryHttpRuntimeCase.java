@@ -925,6 +925,47 @@ class RepairFactoryHttpRuntimeCase {
         assertEquals(1, activeLocks());
     }
 
+    @Test
+    void expectedReturnCalendarDateRemainsUnshiftedInAllFiveResponseProjections() throws Exception {
+        String id = approved();
+        JsonNode before = privateDetail(fixture.warehouse, id);
+        var input = roundCreation(before);
+        String expected = input.path("expectedReturnDate").asText();
+        JsonNode created =
+                ok(
+                        post(
+                                fixture.warehouse,
+                                path(id, "/rounds"),
+                                before.path("version").asLong(),
+                                key(),
+                                input));
+        String round = created.path("round").path("id").asText();
+        assertEquals(expected, created.path("round").path("expectedReturnDate").asText());
+        assertEquals(
+                expected,
+                privateDetail(fixture.warehouse, id)
+                        .path("activeRound")
+                        .path("expectedReturnDate")
+                        .asText());
+        assertEquals(
+                expected,
+                privateRound(fixture.warehouse, id, round).path("expectedReturnDate").asText());
+        assertEquals(
+                expected,
+                ok(get(fixture.warehouse, path(id, "/rounds?page=1&pageSize=20")))
+                        .path("items")
+                        .get(0)
+                        .path("expectedReturnDate")
+                        .asText());
+        assertEquals(
+                expected,
+                root(fixture.employee, id)
+                        .path("factorySummary")
+                        .path("round")
+                        .path("expectedReturnDate")
+                        .asText());
+    }
+
     private String begin() throws Exception {
         var submission = JSON.createObjectNode();
         submission.put("assetId", "951020");

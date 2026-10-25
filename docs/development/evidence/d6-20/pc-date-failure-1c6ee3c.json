@@ -1,0 +1,15 @@
+{
+  "candidate": "1c6ee3c",
+  "artifact_sha256": "fdea9849c147997805445e00ebc42e9dabab7908f7be90d8086bc7dba09b362d",
+  "full_product_gate": "PASS; Java445/Web160/mini239, not actual PC acceptance",
+  "pc_acceptance": "FAILED at first pending round date projection; no full two-round or committing-JVM acceptance claimed",
+  "submitted_expected_return_date": "2026-11-01",
+  "actual_rendered_expected_return_date": "2026-10-31T16:00:00.000Z",
+  "screenshot": "output/d6-20a1-1c6ee3c-date-projection-failed.png",
+  "screenshot_sha256": "fd5e3c052d12b36ccdd4376150688841b3baa57092d112e61fa7d97c122e38c8",
+  "request": "stop owned fixture, add actual HTTP date projection regression and correct response formatting; keep migration V52 immutable",
+  "owned_cleanup": true,
+  "real_factory_original_uploads_and_committing_jvm_recovery": "NOT_EXECUTED; stopped at first pending round",
+  "red_http_regression": "expectedReturnCalendarDateRemainsUnshiftedInAllFiveResponseProjections fails against unchanged production code with exactly the observed date shift; actual MySQL cleanup passed",
+  "red_report_sha256": "9cf1800967539ac743687087fc101e184b8f13e2f22ed4bc30e8cf732bbe8282"
+}

@@ -1,0 +1,41 @@
+{
+  "scope": "actual PC-triggered calendar DATE projection repair; worktree proof, next fixed gate and PC required",
+  "red": {
+    "candidate": "1c6ee3c production code",
+    "tests": 1,
+    "failures": 1,
+    "expected": "2026-11-01",
+    "actual": "2026-10-31T16:00:00.000Z",
+    "report_sha256": "9cf1800967539ac743687087fc101e184b8f13e2f22ed4bc30e8cf732bbe8282"
+  },
+  "green": {
+    "tests": 13,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "five_projections": [
+      "round creation permanent reply",
+      "private active round",
+      "private round detail",
+      "private round list",
+      "public repair summary"
+    ],
+    "report_sha256": "08291ba7f4ecb46e8ac5078b96c04e071d494e26dfc0cbb6ed88bc92df8612a2",
+    "log_sha256": "fa2a8a14e5401c945df246617eb3f31571a2196477b44c5097979f298b1b4a6c",
+    "checkstyle": 0,
+    "spotbugs": 0
+  },
+  "changes": {
+    "backend/src/main/java/com/fams/repair/RepairFactoryService.java": {
+      "before_sha256": "82722a1bc176b4860d1f5255c8ca730226ba4fb1537a46e16badba5d513f4a29",
+      "after_sha256": "4bd3fa0a1430c0aaa4283db6f92ac0787887a727456a32580a12bfe390481a8a"
+    },
+    "backend/src/main/java/com/fams/repair/RepairFactoryGuard.java": {
+      "before_sha256": "688e7a81ad63a12db63802e59978022a93836682c3ba95de5a80396e103f4f20",
+      "after_sha256": "18fe3c16080b4c5a005ed08b40286d2932954ee3530ae4974d4cf45481e15980"
+    }
+  },
+  "v52_immutable_sha256": "e3eb8a8b327a71cab93e8938dd7d6e892898f5da0c43da53786a5b2d9dddeed7",
+  "old_permanent_receipts": "return stored response unchanged; no rewriting of historical receipt or physical facts",
+  "owned_environment_cleanup": true
+}

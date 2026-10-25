@@ -1198,6 +1198,9 @@ public class RepairFactoryService {
         if (value instanceof List<?> list) {
             return list.stream().map(this::wire).toList();
         }
+        if (value instanceof java.sql.Date date) {
+            return date.toLocalDate().toString();
+        }
         if (value instanceof java.sql.Timestamp
                 || value instanceof java.time.LocalDateTime
                 || value instanceof Instant) {
