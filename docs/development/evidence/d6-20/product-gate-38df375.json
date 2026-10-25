@@ -1,0 +1,42 @@
+{
+  "candidate_commit": "38df375b5dc0ee77bdb7a43698b228b399e359e3",
+  "date": "2026-10-25",
+  "full_product_gate_exit": 0,
+  "java_tests": 446,
+  "web_tests": 160,
+  "mini_tests": 239,
+  "checkstyle": 0,
+  "spotbugs": 0,
+  "coverage": {
+    "LINE": {
+      "covered": 19053,
+      "missed": 1471,
+      "total": 20524,
+      "ratio": 0.9283278113428182
+    },
+    "BRANCH": {
+      "covered": 6604,
+      "missed": 2190,
+      "total": 8794,
+      "ratio": 0.7509665681146236
+    }
+  },
+  "coverage_xml_sha256": "029986fbf8031d9b7246865b64634c6f880b00ea870dcac0c6300658ef789599",
+  "artifact": {
+    "candidate": "38df375",
+    "source": "backend/target/contract-generation-probe-0.1.0-SNAPSHOT.jar",
+    "artifact": "output/d6-20a1-38df375-backend.jar",
+    "sha256": "43d7570ceb2fd4956c41221786a9ebb9d2c5e4abd7a65e8a8e03575869a083b6",
+    "size": 59076616,
+    "observer": "passive during frozen candidate gate"
+  },
+  "application_and_database_restart": "PASS",
+  "owned_cleanup_clean_worktree": "PASS",
+  "dependency_audit": "high threshold PASS; pre-existing two moderate Vitest tooling advisories remain",
+  "raw_log_sha256": "d3be8506f416a8909d22c2f163fbd4d7396a646bdce7e71c2aea94c936874805",
+  "tracked_log_sha256": "eb1b43287768b98c342ca49c6fae13d0e4019ff8aee40d16080e03a481b12306",
+  "pc_acceptance": "PASS separately; see a1-pc-jvm-38df375.json",
+  "A1": "IN_REVIEW; independent reviewer has not signed",
+  "migration": "V1-V52 immutable; no schema changes in calendar-date repair",
+  "independent_review_external_CI_QA_production": "NOT_VERIFIED"
+}

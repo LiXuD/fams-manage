@@ -1,0 +1,146 @@
+{
+  "web_url": "http://127.0.0.1:60889",
+  "api_port": 60887,
+  "candidate": "38df375",
+  "artifact_sha256": "43d7570ceb2fd4956c41221786a9ebb9d2c5e4abd7a65e8a8e03575869a083b6",
+  "admin_username": "owned20admin",
+  "employee_username": "owned20employee",
+  "warehouse_username": "owned20warehouse",
+  "asset_code": "OWNED20-983010",
+  "original_serial": "OWNED20-SERIAL-983010",
+  "initial_custody": "PERSONAL\t983000\t983002\t983099\n",
+  "scanner_version": "ClamAV 1.4.6/28129/Sun Sep 20 06:26:26 2026",
+  "container": "fams-d6-20a1-browser-5b714090d3c63ad2",
+  "actual_committing_jvm_pid": 16253,
+  "actual_committing_process_group_killed": 16251,
+  "new_process_group": 17289,
+  "original_receipt_replayed": true,
+  "rounds_and_header_unchanged_after_replay": true,
+  "before_closure": {
+    "locks": 1,
+    "rounds": 3,
+    "scopes": 1,
+    "repairs": 1,
+    "received": 2,
+    "cancelled": 1,
+    "lifecycle": "UNDER_REPAIR",
+    "dispatched": 2
+  },
+  "originals": [
+    {
+      "round": "2",
+      "object": "f14cac46-4ce5-425c-984b-ed17e4e60610",
+      "sha256": "4da6fa56e392f463d81ea7bdb666a454ebd78c228fcb3e3a3ca617d62788bea9",
+      "purpose": "FACTORY_ACK",
+      "read_sha256": "4da6fa56e392f463d81ea7bdb666a454ebd78c228fcb3e3a3ca617d62788bea9",
+      "bytes": 68
+    },
+    {
+      "round": "2",
+      "object": "bcdf9892-a91f-40e5-82c0-77eb242315fd",
+      "sha256": "4da6fa56e392f463d81ea7bdb666a454ebd78c228fcb3e3a3ca617d62788bea9",
+      "purpose": "RECEIPT",
+      "read_sha256": "4da6fa56e392f463d81ea7bdb666a454ebd78c228fcb3e3a3ca617d62788bea9",
+      "bytes": 68
+    },
+    {
+      "round": "3",
+      "object": "696da036-7c53-42d1-abba-925b9e8b4adb",
+      "sha256": "4da6fa56e392f463d81ea7bdb666a454ebd78c228fcb3e3a3ca617d62788bea9",
+      "purpose": "FACTORY_ACK",
+      "read_sha256": "4da6fa56e392f463d81ea7bdb666a454ebd78c228fcb3e3a3ca617d62788bea9",
+      "bytes": 68
+    },
+    {
+      "round": "3",
+      "object": "97dbc937-05f8-4a00-834b-d371a8e67cd1",
+      "sha256": "4da6fa56e392f463d81ea7bdb666a454ebd78c228fcb3e3a3ca617d62788bea9",
+      "purpose": "RECEIPT",
+      "read_sha256": "4da6fa56e392f463d81ea7bdb666a454ebd78c228fcb3e3a3ca617d62788bea9",
+      "bytes": 68
+    }
+  ],
+  "expected_calendar_dates": [
+    "2026-11-01",
+    "2026-11-01",
+    "2026-11-01"
+  ],
+  "business_side_effects_unchanged": {
+    "repair_events": {
+      "rows": 18,
+      "sha256": "20f84a6576b0a303162b46049180fd817c20b63dbd995791d92fa90b13967e96"
+    },
+    "factory_audits": {
+      "rows": 18,
+      "sha256": "7287832972eae97f29697b27b336b4788696e7c06ebfdcb5e2bb880460977bc8"
+    },
+    "repair_todos": {
+      "rows": 9,
+      "sha256": "dcafa1c6199e8b074c2af14768df3dfba477fbd6de3437a1a9c79a5e5c5638a5"
+    },
+    "permanent_receipts": {
+      "rows": 18,
+      "sha256": "edcec7644e117836e760b345cec112fb85f9a0b68b2dffbcc2d3b34f98ce3f02"
+    },
+    "asset_locks": {
+      "rows": 1,
+      "sha256": "9009ad2f58ad1f0721f35f650fe675bae7794e3c0ff72808d053095100c9ad48"
+    }
+  },
+  "replay_body_source": "Complete persisted typed OriginalReceipt input; equivalent F1 canonical request, not a raw transport-byte claim",
+  "after_real_separate_inbound": {
+    "locks": 0,
+    "rounds": 3,
+    "scopes": 1,
+    "repairs": 1,
+    "received": 2,
+    "cancelled": 1,
+    "lifecycle": "IN_STOCK",
+    "dispatched": 2
+  },
+  "original_rounds_immutable": true,
+  "asset_dates_unchanged": true,
+  "candidate_commit": "38df375b5dc0ee77bdb7a43698b228b399e359e3",
+  "date": "2026-10-25",
+  "acceptance_scope": "Owned synthetic fixtures through actual PC Vue/Spring/MySQL/ClamAV, not physical shipping or real-device acceptance",
+  "runtime_exit": 0,
+  "owned_cleanup": true,
+  "source_file_sha256": "4da6fa56e392f463d81ea7bdb666a454ebd78c228fcb3e3a3ca617d62788bea9",
+  "source_files_and_four_reads_match": true,
+  "midway_still_faulty": {
+    "locks": 1,
+    "rounds": 2,
+    "status": "WAREHOUSE_PROCESSING",
+    "evidence": 2,
+    "received": 1,
+    "cancelled": 1,
+    "lifecycle": "UNDER_REPAIR",
+    "stillFaulty": 1
+  },
+  "employee_visible_public_summary_only": true,
+  "private_preview_removed_on_logout": true,
+  "completed_status_visible_in_employee_ui": true,
+  "independent_review_external_CI_QA_production": "NOT_VERIFIED",
+  "harness": {
+    "path": "output/d6-20a1-browser-runtime-38df375.py",
+    "sha256": "8365b1cf1c1511d3b82fb60f3b776229da7f56b77b96384fb33be4d738b97937"
+  },
+  "screenshots": [
+    {
+      "path": "output/d6-20a1-38df375-date-verified.png",
+      "sha256": "a021fa265d1ec5a93e99bb74696d090716bbdecc6369714e2cde4067e20b1328"
+    },
+    {
+      "path": "output/d6-20a1-38df375-two-rounds.png",
+      "sha256": "f6718b8c1a70c1c8d48bf335c92a9714a3892311709c32f435e93f07b9bd8086"
+    },
+    {
+      "path": "output/d6-20a1-38df375-employee-public-summary.png",
+      "sha256": "d5932d28f4939896fffc826709776ff8efca904ed8fd6dc7c7de54cb3fd1581c"
+    },
+    {
+      "path": "output/d6-20a1-38df375-final-completed.png",
+      "sha256": "67b15a51c82d4e6240c22154a85e616f4a6a18b80dfe4ca43ec6905b9784475f"
+    }
+  ]
+}
