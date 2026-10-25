@@ -966,6 +966,143 @@ class RepairFactoryHttpRuntimeCase {
                         .asText());
     }
 
+    @Test
+    void nativeMultipartHintsPreserveChosenOriginalAndCannotOverrideRealBytes() throws Exception {
+        String id = approved();
+        String round = create(id, fixture.warehouse);
+        JsonNode detail = privateDetail(fixture.warehouse, id);
+        var hints = Map.of("originalFilename", "厂家接收原件.png", "declaredContentType", "image/png");
+        for (var invalid :
+                List.of(
+                        Map.of("originalFilename", "incomplete.png"),
+                        Map.of(
+                                "originalFilename",
+                                "../escape.png",
+                                "declaredContentType",
+                                "image/png"))) {
+            assertEquals(
+                    422,
+                    nativeMetadataUpload(
+                                    id, round, detail, key(), invalid, "application/octet-stream")
+                            .statusCode());
+        }
+        var wrongBytes =
+                nativeMetadataUpload(
+                        id,
+                        round,
+                        detail,
+                        key(),
+                        Map.of(
+                                "originalFilename",
+                                "not-the-bytes.jpg",
+                                "declaredContentType",
+                                "image/jpeg"),
+                        "application/octet-stream");
+        assertEquals(400, wrongBytes.statusCode());
+        assertEquals(
+                "REPAIR_PHOTO_OR_INPUT_INVALID",
+                JSON.readTree(wrongBytes.body()).path("code").asText());
+        assertEquals(
+                422,
+                nativeMetadataUpload(id, round, detail, key(), hints, "image/jpeg").statusCode());
+        assertEquals(
+                0,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_repair_factory_evidence", Integer.class));
+        assertEquals(detail.path("version"), privateDetail(fixture.warehouse, id).path("version"));
+        String key = key();
+        JsonNode reply =
+                ok(nativeMetadataUpload(id, round, detail, key, hints, "application/octet-stream"));
+        assertEquals(
+                reply,
+                ok(
+                        nativeMetadataUpload(
+                                id, round, detail, key, hints, "application/octet-stream")));
+        assertEquals(
+                1,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_repair_factory_evidence", Integer.class));
+        var file = privateRound(fixture.warehouse, id, round).path("files").get(0);
+        assertEquals("厂家接收原件.png", file.path("filename").asText());
+        assertEquals("image/png", file.path("contentType").asText());
+        assertEquals(PNG.length, file.path("sizeBytes").asInt());
+        String object = reply.path("objectId").asText();
+        var grant =
+                ok(
+                        get(
+                                fixture.warehouse,
+                                path(id, "/rounds/" + round + "/evidence/" + object + "/grant")));
+        assertArrayEquals(
+                PNG,
+                content(fixture.warehouse, id, round, object, grant.path("token").asText()).body());
+        assertEquals(
+                409,
+                nativeMetadataUpload(
+                                id,
+                                round,
+                                detail,
+                                key,
+                                Map.of(
+                                        "originalFilename",
+                                        "different.png",
+                                        "declaredContentType",
+                                        "image/png"),
+                                "application/octet-stream")
+                        .statusCode());
+    }
+
+    private HttpResponse<String> nativeMetadataUpload(
+            String id,
+            String round,
+            JsonNode detail,
+            String key,
+            Map<String, String> hints,
+            String partMime)
+            throws Exception {
+        String boundary = "native-factory-" + UUID.randomUUID();
+        var bytes = new java.io.ByteArrayOutputStream();
+        var fields = new LinkedHashMap<>(hints);
+        fields.put("purpose", "FACTORY_ACK");
+        fields.put("roundVersion", detail.path("activeRound").path("version").asText());
+        for (String field : List.of("assetVersion", "ownershipVersion", "lockVersion")) {
+            fields.put(field, detail.path(field).asText());
+        }
+        for (var entry : fields.entrySet()) {
+            bytes.write(
+                    ("--"
+                                    + boundary
+                                    + "\r\nContent-Disposition: form-data; name=\""
+                                    + entry.getKey()
+                                    + "\"\r\n\r\n"
+                                    + entry.getValue()
+                                    + "\r\n")
+                            .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+        bytes.write(
+                ("--"
+                                + boundary
+                                + "\r\n"
+                                + "Content-Disposition: form-data; name=\"file\";"
+                                + " filename=\"wx-opaque-tmp\"\r\n"
+                                + "Content-Type: "
+                                + partMime
+                                + "\r\n\r\n")
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        bytes.write(PNG);
+        bytes.write(
+                ("\r\n--" + boundary + "--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return http.send(
+                HttpRequest.newBuilder(uri(path(id, "/rounds/" + round + "/evidence")))
+                        .header("Cookie", fixture.warehouse.cookie())
+                        .header("X-CSRF-Token", fixture.warehouse.csrf())
+                        .header("Idempotency-Key", key)
+                        .header("If-Match-Version", detail.path("version").asText())
+                        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                        .POST(HttpRequest.BodyPublishers.ofByteArray(bytes.toByteArray()))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
     private String begin() throws Exception {
         var submission = JSON.createObjectNode();
         submission.put("assetId", "951020");

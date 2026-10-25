@@ -9,7 +9,7 @@ export interface WxApi {
     getImageInfo?(input: { src: string; success(reply: { type: string }): void; fail(error: unknown): void }): void;
     env?: { USER_DATA_PATH: string };
     getFileSystemManager?(): InventoryFileSystem;
-    uploadFile?(input: { url: string; filePath: string; name: string; header: Record<string, string>; timeout: number;
+    uploadFile?(input: { url: string; filePath: string; name: string; header: Record<string, string>; timeout: number; formData?: Readonly<Record<string, string>>;
         success(reply: { statusCode: number; data: string }): void; fail(error: unknown): void }): void;
     downloadFile?(input: { url: string; header: Record<string, string>; timeout: number; filePath?: string;
         success(reply: { statusCode: number; tempFilePath: string; filePath?: string }): void; fail(error: unknown): void }): void;
@@ -45,12 +45,16 @@ export function chooseInventoryPhoto(wx: WxApi, source: "camera" | "album"): Pro
 
 export function createWxRuntime(wx: WxApi): MiniRuntime & WechatLogin {
     const evidence = wx.env && wx.getFileSystemManager ? createInventoryEvidenceFiles(wx as InventoryFileRuntime) : null;
-    evidence?.cleanupAbandoned();
+    const factory = wx.env && wx.getFileSystemManager ? createInventoryEvidenceFiles(wx as InventoryFileRuntime, "factory") : null;
+    try { evidence?.cleanupAbandoned(); } finally { factory?.cleanupAbandoned(); }
     const clean = (identity: { accountId: string; bindingId: string }) => {
         try { evidence?.clear(identity); }
         finally {
-            if (wx.env && wx.getFileSystemManager) createInventoryFiles(wx as InventoryFileRuntime, identity).clear();
-            else wx.removeStorageSync(`fams.identity.${identity.accountId}.${identity.bindingId}`);
+            try { factory?.clear(identity); }
+            finally {
+                if (wx.env && wx.getFileSystemManager) createInventoryFiles(wx as InventoryFileRuntime, identity).clear();
+                else wx.removeStorageSync(`fams.identity.${identity.accountId}.${identity.bindingId}`);
+            }
         }
     };
     const pending = wx.getStorageSync("fams.inventory-cleanup") as { accountId?: unknown; bindingId?: unknown } | null;
@@ -58,6 +62,32 @@ export function createWxRuntime(wx: WxApi): MiniRuntime & WechatLogin {
         clean({ accountId: pending.accountId, bindingId: pending.bindingId }); wx.removeStorageSync("fams.inventory-cleanup");
     }
     return {
+        stageFactoryEvidence: input => {
+            if (!factory) throw new Error("返厂原件副本服务暂不可用。");
+            return factory.stage(input.identity, createUuid(), input.file);
+        },
+        verifyFactoryEvidence: input => {
+            if (!factory) throw new Error("返厂原件副本服务暂不可用。");
+            factory.verifyUpload(input.identity, input.file);
+        },
+        discardFactoryEvidence: path => {
+            if (!factory) throw new Error("返厂原件清理服务暂不可用。");
+            factory.discard(path);
+        },
+        downloadFactoryEvidence: input => new Promise((resolve, reject) => {
+            if (!wx.downloadFile || !factory) { reject(new Error("当前微信无法安全读取返厂原件。")); return; }
+            const reserved = factory.reserve(input.identity, createUuid(), input.contentType);
+            const failed = (error: unknown) => { try { factory.discard(reserved.path); } catch (cleanup) { reject(cleanup); return; } reject(error); };
+            try { wx.downloadFile({ url: input.url, header: input.header, filePath: reserved.path, timeout: 60000,
+                success: reply => {
+                    try {
+                        if (reply.filePath !== reserved.path) throw new Error("返厂原件未写入当前身份专属位置。");
+                        if (reply.statusCode === 200) factory.verify(reserved, input.sizeBytes);
+                        else factory.discard(reserved.path);
+                        resolve({ statusCode: reply.statusCode, filePath: reply.statusCode === 200 ? reserved.path : "" });
+                    } catch (error) { failed(error); }
+                }, fail: failed }); } catch (error) { failed(error); }
+        }),
         downloadInventoryPhoto: input => new Promise((resolve, reject) => {
             if (!wx.downloadFile || !evidence) { reject(new Error("当前微信无法安全读取现场照片。")); return; }
             const reserved = evidence.reserve(input.identity, createUuid(), input.contentType);
@@ -78,7 +108,7 @@ export function createWxRuntime(wx: WxApi): MiniRuntime & WechatLogin {
         },
         upload: input => new Promise((resolve, reject) => {
             if (!wx.uploadFile) { reject(new Error("Evidence upload unavailable")); return; }
-            wx.uploadFile({ ...input, name: "file", timeout: 60000,
+            wx.uploadFile({ ...input, ...(input.formData ? { formData: { ...input.formData } } : {}), name: "file", timeout: 60000,
                 success: reply => {
                     try { resolve({ statusCode: reply.statusCode, data: JSON.parse(reply.data) as unknown }); }
                     catch { reject(new Error("Invalid upload response")); }

@@ -56,8 +56,32 @@ public class RepairFactoryEvidenceController {
             @RequestParam @PositiveOrZero long ownershipVersion,
             @RequestParam @PositiveOrZero long lockVersion,
             @RequestParam @NotBlank @Pattern(regexp = "FAULT|FACTORY_ACK|RECEIPT") String purpose,
+            @RequestParam(required = false) String originalFilename,
+            @RequestParam(required = false) String declaredContentType,
             @RequestParam("file") MultipartFile file)
             throws IOException {
+        String filename =
+                file.getOriginalFilename() == null ? "evidence" : file.getOriginalFilename();
+        String mime = file.getContentType();
+        if (originalFilename != null || declaredContentType != null) {
+            if (originalFilename == null
+                    || originalFilename.isBlank()
+                    || originalFilename.length() > 255
+                    || originalFilename.contains("/")
+                    || originalFilename.contains("\\")
+                    || originalFilename.codePoints().anyMatch(Character::isISOControl)
+                    || !java.util.Set.of("image/jpeg", "image/png", "image/webp", "application/pdf")
+                            .contains(declaredContentType == null ? "" : declaredContentType)
+                    || mime != null
+                            && !MediaType.APPLICATION_OCTET_STREAM_VALUE.equals(mime)
+                            && !mime.equals(declaredContentType)) {
+                throw new RepairFailure(422, "REPAIR_FACTORY_EVIDENCE_REJECTED");
+            }
+            // wx.uploadFile cannot declare a part filename/MIME independently. The shared
+            // quarantine still validates these hints against extension, bytes, size and scan.
+            filename = originalFilename;
+            mime = declaredContentType;
+        }
         try (var bytes = file.getInputStream()) {
             return service()
                     .upload(
@@ -71,10 +95,8 @@ public class RepairFactoryEvidenceController {
                             lockVersion,
                             key,
                             purpose,
-                            file.getOriginalFilename() == null
-                                    ? "evidence"
-                                    : file.getOriginalFilename(),
-                            file.getContentType(),
+                            filename,
+                            mime,
                             bytes);
         }
     }

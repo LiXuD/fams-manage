@@ -2,18 +2,25 @@
 export interface MiniRuntime {
     request(input: { url: string; method: string; header: Record<string, string>; data?: unknown }):
         Promise<{ statusCode: number; data: unknown }>;
-    upload?(input: { url: string; filePath: string; header: Record<string, string> }):
+    upload?(input: { url: string; filePath: string; header: Record<string, string>; formData?: Readonly<Record<string, string>> }):
         Promise<{ statusCode: number; data: unknown }>;
     download?(input: { url: string; header: Record<string, string> }):
         Promise<{ statusCode: number; tempFilePath: string }>;
     downloadInventoryPhoto?(input: { url: string; header: Record<string, string>;
         identity: { accountId: string; bindingId: string }; contentType: string }): Promise<{ statusCode: number; filePath: string }>;
     discardInventoryPhoto?(path: string): void;
+    stageFactoryEvidence?(input: { identity: { accountId: string; bindingId: string }; file: { path: string; name: string; size: number } }): FactoryEvidenceFile;
+    verifyFactoryEvidence?(input: { identity: { accountId: string; bindingId: string }; file: FactoryEvidenceFile }): void;
+    downloadFactoryEvidence?(input: { url: string; header: Record<string, string>; identity: { accountId: string; bindingId: string };
+        contentType: string; sizeBytes: number }): Promise<{ statusCode: number; filePath: string }>;
+    discardFactoryEvidence?(path: string): void;
     readSession(): unknown;
     writeSession(value: SavedSession): void;
     removeSession(): void;
     clearIdentityData(identity: { accountId: string; bindingId: string }): void;
 }
+
+export interface FactoryEvidenceFile { readonly path: string; readonly name: string; readonly size: number; readonly contentType: string }
 
 export interface SavedSession {
     sessionToken: string;
@@ -78,6 +85,62 @@ export class MiniSessionClient {
 
     get identity(): { accountId: string; bindingId: string } | null {
         return this.current ? { accountId: this.current.accountId, bindingId: this.current.bindingId } : null;
+    }
+
+    /** Changes on login/clearing even when the same account and binding return; never exposes a token. */
+    get identityRevision(): number { return this.generation; }
+
+    stageFactoryEvidence(file: { path: string; name: string; size: number }): FactoryEvidenceFile {
+        const identity = this.identity, generation = this.generation;
+        if (!identity) throw new MiniRequestError(401, "AUTH_SESSION_INVALID");
+        if (!this.runtime.stageFactoryEvidence || !this.runtime.discardFactoryEvidence) throw new Error("当前环境无法保存返厂原件副本。");
+        const copy = this.runtime.stageFactoryEvidence({ identity, file });
+        try { this.assertGeneration(generation); return Object.freeze({ ...copy }); }
+        catch (error) { this.runtime.discardFactoryEvidence(copy.path); throw error; }
+    }
+
+    async uploadFactoryEvidence(path: string, file: FactoryEvidenceFile, mutation: { key: string; version: number;
+        roundVersion: number; assetVersion: number; ownershipVersion: number; lockVersion: number; purpose: string }): Promise<unknown> {
+        if (!/^\/api\/v1\/mini\/repairs\/[1-9][0-9]{0,18}\/factory\/rounds\/[1-9][0-9]{0,18}\/evidence$/.test(path)
+            || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(mutation.key)
+            || ![mutation.version, mutation.roundVersion, mutation.assetVersion, mutation.ownershipVersion, mutation.lockVersion].every(v => Number.isSafeInteger(v) && v >= 0)
+            || !["FAULT", "FACTORY_ACK", "RECEIPT"].includes(mutation.purpose)) throw new Error("返厂上传身份或版本无效。");
+        const session = this.current, generation = this.generation;
+        if (!session) throw new MiniRequestError(401, "AUTH_SESSION_INVALID");
+        if (!this.runtime.upload || !this.runtime.verifyFactoryEvidence) throw new Error("当前环境无法安全上传返厂原件。");
+        this.runtime.verifyFactoryEvidence({ identity: { accountId: session.accountId, bindingId: session.bindingId }, file });
+        this.assertGeneration(generation);
+        const response = await this.runtime.upload({ url: this.origin + path, filePath: file.path,
+            header: { "X-FAMS-Mini-Session": session.sessionToken, "Idempotency-Key": mutation.key, "If-Match-Version": String(mutation.version) },
+            formData: Object.freeze({ roundVersion: String(mutation.roundVersion), assetVersion: String(mutation.assetVersion),
+                ownershipVersion: String(mutation.ownershipVersion), lockVersion: String(mutation.lockVersion), purpose: mutation.purpose,
+                originalFilename: file.name, declaredContentType: file.contentType }) });
+        this.assertGeneration(generation);
+        if (response.statusCode === 401) this.clear();
+        this.checkResponse(response); return response.data;
+    }
+
+    async downloadFactoryEvidence(path: string, contentType: string, sizeBytes: number): Promise<string> {
+        if (!/^\/api\/v1\/mini\/repairs\/[1-9][0-9]{0,18}\/factory\/rounds\/[1-9][0-9]{0,18}\/evidence\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/content\?token=[A-Za-z0-9_.-]{1,4096}$/i.test(path)
+            || !["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(contentType)
+            || !Number.isSafeInteger(sizeBytes) || sizeBytes <= 0 || sizeBytes > (contentType === "application/pdf" ? 20 : 10) * 1024 * 1024) throw new Error("返厂原件读取参数无效。");
+        const session = this.current, generation = this.generation;
+        if (!session) throw new MiniRequestError(401, "AUTH_SESSION_INVALID");
+        if (!this.runtime.downloadFactoryEvidence || !this.runtime.discardFactoryEvidence) throw new Error("当前环境无法安全读取返厂原件。");
+        const response = await this.runtime.downloadFactoryEvidence({ url: this.origin + path,
+            header: { "X-FAMS-Mini-Session": session.sessionToken }, identity: { accountId: session.accountId, bindingId: session.bindingId }, contentType, sizeBytes });
+        try {
+            this.assertGeneration(generation);
+            if (response.statusCode === 401) this.clear();
+            this.checkResponse({ statusCode: response.statusCode, data: null });
+            if (!response.filePath) throw new Error("返厂原件暂不可读取。");
+            return response.filePath;
+        } catch (error) { if (response.filePath) this.runtime.discardFactoryEvidence(response.filePath); throw error; }
+    }
+
+    discardFactoryEvidence(path: string): void {
+        if (!this.runtime.discardFactoryEvidence) throw new Error("返厂原件清理服务暂不可用。");
+        this.runtime.discardFactoryEvidence(path);
     }
 
     async login(code: string): Promise<"BOUND" | "UNBOUND"> {

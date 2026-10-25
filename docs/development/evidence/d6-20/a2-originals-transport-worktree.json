@@ -1,0 +1,53 @@
+{
+  "base_commit": "035bc27",
+  "date": "2026-10-25",
+  "scope": "D6-20A2 originals transport increment only; native Page and actual opaque chain not implemented yet",
+  "java_runtime": {
+    "RepairFactoryUpgradeRuntimeCase": 1,
+    "RepairFactoryHttpRuntimeCase": 14
+  },
+  "mini_tests": 251,
+  "lint": "PASS",
+  "typecheck_all_workspaces": "PASS",
+  "native_package": "PASS; external HTTPS origin remains unconfigured",
+  "checkstyle": 0,
+  "spotbugs": 0,
+  "owned_mysql_cleanup": true,
+  "source_sha256": {
+    "apps/miniprogram/src/inventory-evidence-files.ts": "4f27d7f4c49f83afc93418e33d5a5772397941f45e1a2c7a22f6610b7ee1af4f",
+    "apps/miniprogram/src/session.ts": "e316e31e444205eb940da17f36491eab18b4e62e295acd10ac015cad35925361",
+    "apps/miniprogram/src/wx-runtime.ts": "b607b5f2cb5c30ff8a1597ad8748c26bf44e26ec20a0a0409847560a9564052d",
+    "apps/miniprogram/test/factory-evidence.test.mjs": "b7959927c1cdae20fd84bd0eaa035f8f2bead5d6fc7b4994c739cb1790b97e1e",
+    "backend/src/main/java/com/fams/repair/RepairFactoryEvidenceController.java": "87a4088f89b6561e1c121ca6e49fa8e68755356ddf01be18696354199c2093e3",
+    "backend/src/test/java/com/fams/auth/RepairFactoryHttpRuntimeCase.java": "123e424e85d41c68f51e02c4299850b92f43d74cd646a8bc7ce65efeac8e75b4",
+    "contracts/fams-core-v1.yaml": "8e85a8825d722b84f4d46cfa79bba4f995f9ce4b3152e1e4f069904f6554a94e"
+  },
+  "migration_v52_sha256": "e3eb8a8b327a71cab93e8938dd7d6e892898f5da0c43da53786a5b2d9dddeed7",
+  "asserted_boundaries": [
+    "Owned immutable original copy separate from selection source and inventory queue",
+    "Account and binding string ownership; paired registry cleanup runs even if one scene fails",
+    "Late old download erased and HTTP401 clears staged/read files",
+    "Same-account renewal exposes nonsecret revision for upcoming private Page invalidation",
+    "Exact factory upload/download routes, opaque header only, all four versions and purpose",
+    "Image10MB/PDF20MB and exact downloaded size; inventory remains image-only",
+    "SDK-shaped multipart generic part accepts paired chosen-name/MIME hints; actual extension/magic/scan remain authoritative",
+    "Bad magic still returns existing HTTP400, partial/unsafe/conflicting hints422, changed-name same-key409; success replay does not duplicate metadata"
+  ],
+  "prior_failures": [
+    {
+      "path": "output/d6-20a2-files-checkstyle-first-failure.log",
+      "sha256": "ac13c5dced248cffdd885e27ac62bb21cd1a8b89b54a132bb1696857733fd6e3"
+    },
+    {
+      "path": "output/d6-20a2-files-http-first-failure.log",
+      "sha256": "e0c8ac75ffadf0f5092f0b674c633277718b85c9e5ee2821354d5bd9e860d719"
+    },
+    {
+      "path": "output/d6-20a2-files-eslint-first-failure.log",
+      "sha256": "efa34455afe629af7271de35f8a606e1f6bbbdf1ebdec00f845878cb686b20be"
+    }
+  ],
+  "source_basis": "Official WeChat API typings UploadFileOption exposes formData without independent part filename/MIME; actual SDK transport and devices remain unverified",
+  "sdk_types": "https://raw.githubusercontent.com/wechat-miniprogram/api-typings/master/types/wx/lib.wx.api.d.ts",
+  "full_fixed_gate_independent_review_real_wechat_CI_QA_production": "NOT_VERIFIED for A2"
+}
