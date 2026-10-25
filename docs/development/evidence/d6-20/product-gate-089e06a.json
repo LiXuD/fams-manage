@@ -1,0 +1,59 @@
+{
+  "task": "D6-20A2",
+  "candidate": "089e06a",
+  "gate": "PASS",
+  "exit": 0,
+  "checks": {
+    "requiredJavaTests": 448,
+    "webTests": 161,
+    "miniTests": 267,
+    "checkstyle": 0,
+    "spotbugs": 0,
+    "lines": {
+      "covered": 19080,
+      "missed": 1461,
+      "total": 20541,
+      "ratio": 0.9288739593982767
+    },
+    "branches": {
+      "covered": 6635,
+      "missed": 2191,
+      "total": 8826,
+      "ratio": 0.7517561749376841
+    },
+    "lintAndTypes": true,
+    "bothBuilds": true,
+    "lockedDependenciesAndHighSeverityAudit": true,
+    "applicationRestart": true,
+    "sameVolumeDatabaseRestart": true,
+    "ownedCleanup": true,
+    "cleanPreflightAndPostflight": true
+  },
+  "artifact": {
+    "candidate": "089e06a",
+    "source": "backend/target/contract-generation-probe-0.1.0-SNAPSHOT.jar",
+    "artifact": "output/d6-20a2-089e06a-backend.jar",
+    "sha256": "5b46f2c6f600df46e62b92b5a280f64078a6909b1a901376e1400bc5d1d5f9ff",
+    "size": 59077530,
+    "observer": "passive during frozen candidate gate"
+  },
+  "coverageXmlSha256": "deef0ede8d4a3deb5c6834a5b8d4db76115b16c1d38f0785f5672a5a65ac2431",
+  "rawLogSha256": "859d8d4ede7f47b30e6977f6a71876c9be4081c70777a240387b9fa648f7da2f",
+  "rawLog": "output/d6-20a2-product-gate-089e06a.log",
+  "capturedReports": "output/d6-20a2-089e06a-fixed-reports",
+  "nativeOpaqueWitness": "a2-native-page-worktree.json; same actual handler case executed in frozen candidate factory suite 15/15",
+  "notes": [
+    "two existing moderate dependency advisories remain",
+    "Vite chunk-size warning is nonblocking and preserved",
+    "native package API origin remains unconfigured for external HTTPS",
+    "no actual WeChat renderer/device/camera claim",
+    "no new native cold-process restart claim",
+    "A1 actual PC/committing-JVM evidence stays bound to 38df375, not relabeled as this package",
+    "independent review unsigned; B/C/D and parent open; no remote CI/QA/production claim"
+  ],
+  "migration": {
+    "latest": 52,
+    "V52Sha256": "e3eb8a8b327a71cab93e8938dd7d6e892898f5da0c43da53786a5b2d9dddeed7",
+    "changed": false
+  }
+}
