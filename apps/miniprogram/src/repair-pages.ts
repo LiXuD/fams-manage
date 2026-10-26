@@ -13,7 +13,7 @@ interface ReturnTarget { employeeName: string; organizationName: string; locatio
 interface ReturnHandover { id: string; handover_status: string; target_snapshot_json: ReturnTarget; delivered_at: string; delivery_evidence: string; receipt_at?: string; receipt_evidence?: string }
 type ReturnMode = "delivery" | "receipt" | "refusal" | "recollection";
 interface Data { rows: Repair[]; assets: Asset[]; detail: Repair | null; selectedAsset: string; assetPage: number; assetTotal: number;
-    approvalMethod: "INTERNAL_NO_COST" | "INTERNAL_OR_FACTORY"; approvalMethodIndex: number;
+    approvalMethod: "INTERNAL_NO_COST" | "INTERNAL_OR_FACTORY"; approvalMethodIndex: number; factoryCostPolicyIndex: number; factoryCostPolicyLabels: string[]; factoryCostLimit: string;
     page: number; total: number; busy: boolean; retry: boolean; error: string; fault: string; impact: string; occurredAt: string;
     reason: string; observedCode: string; evidence: string; locationConfirmed: boolean; neverLeft: boolean; photoPath: string; photoName: string;
     physicalMode: "away" | "inbound"; physicalObservedCode: string; physicalAt: string; physicalEvidence: string;
@@ -23,8 +23,10 @@ interface Data { rows: Repair[]; assets: Asset[]; detail: Repair | null; selecte
     returnLocations: PhysicalPlace[]; returnLocationId: string; returnLocationPage: number; returnLocationTotal: number; reassignment: Reassignment | null; reassignTarget: string; reassignReason: string; reassignEvidence: string; reassignChecked: boolean }
 interface Reassignment { snapshot: { version: number; acceptedAt: string | null; physicalHandling: unknown[]; outstandingReturn: { handover_status: string } | null }; operators: { id: string; name: string }[] }
 interface Context { data: Data; setData(data: Partial<Data>): void }
+const costPolicies = ["NO_COST", "LIMITED", "UNLIMITED"] as const;
+const moneyPattern = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/;
 const blank = (): Data => ({ rows: [], assets: [], detail: null, selectedAsset: "", assetPage: 1, assetTotal: 0, page: 1, total: 0,
-    approvalMethod: "INTERNAL_NO_COST", approvalMethodIndex: 0,
+    approvalMethod: "INTERNAL_NO_COST", approvalMethodIndex: 0, factoryCostPolicyIndex: 0, factoryCostPolicyLabels: ["返厂无费用", "所有返厂轮次累计限额", "不限费用"], factoryCostLimit: "",
     busy: false, retry: false, error: "", fault: "", impact: "MEDIUM", occurredAt: "", reason: "", observedCode: "", evidence: "",
     locationConfirmed: false, neverLeft: false, photoPath: "", photoName: "", physicalMode: "away", physicalObservedCode: "", physicalAt: "", physicalEvidence: "",
     warehouses: [], physicalLocations: [], physicalWarehouseId: "", physicalLocationId: "", warehousePage: 1, warehouseTotal: 0, physicalLocationPage: 1, physicalLocationTotal: 0,
@@ -49,9 +51,11 @@ export function createRepairPage(getServices: () => MiniServices) {
         else if (live && epoch === generation) { pending = null; selectedId = ""; clearPhoto(); page.setData({ ...blank(), error: "身份已变化，请重新进入。" }); }
     };
     const read = async (page: Context) => {
-        const originalMethod = (pending?.body as { allowedMethod?: string } | undefined)?.allowedMethod;
+        const originalDecision = pending?.body as { allowedMethod?: string; factoryCostPolicy?: string; factoryCostLimit?: string } | undefined;
+        const originalMethod = originalDecision?.allowedMethod;
+        const originalPolicy = Math.max(0, costPolicies.findIndex(p => p === originalDecision?.factoryCostPolicy));
         const epoch = ++generation; clearPhoto(); page.setData({ busy: true, error: "", detail: null, rows: [], assets: [], photoPath: "", photoName: "",
-            approvalMethod: originalMethod === "INTERNAL_OR_FACTORY" ? "INTERNAL_OR_FACTORY" : "INTERNAL_NO_COST", approvalMethodIndex: originalMethod === "INTERNAL_OR_FACTORY" ? 1 : 0,
+            approvalMethod: originalMethod === "INTERNAL_OR_FACTORY" ? "INTERNAL_OR_FACTORY" : "INTERNAL_NO_COST", approvalMethodIndex: originalMethod === "INTERNAL_OR_FACTORY" ? 1 : 0, factoryCostPolicyIndex: originalPolicy, factoryCostLimit: originalDecision?.factoryCostLimit ?? "",
             warehouses: [], physicalLocations: [], physicalWarehouseId: "", physicalLocationId: "", physicalObservedCode: "", physicalAt: "", physicalEvidence: "",
             returnTarget: null, returnObservedCode: "", returnAt: "", returnEvidence: "", returnChecked: false,
             returnLocations: [], returnLocationId: "", returnLocationPage: 1, returnLocationTotal: 0, reassignment: null, reassignTarget: "", reassignReason: "", reassignEvidence: "", reassignChecked: false });
@@ -102,14 +106,21 @@ export function createRepairPage(getServices: () => MiniServices) {
         onApprovalMethod(this: Context, event: { detail: { value: string } }) {
             if (!current(generation)) { finish(this, generation); return; }
             const index = Number(event.detail.value), method = (["INTERNAL_NO_COST", "INTERNAL_OR_FACTORY"] as const)[index];
-            if (!this.data.busy && !pending && this.data.detail?.actions.approve && method) this.setData({ approvalMethod: method, approvalMethodIndex: index });
+            if (!this.data.busy && !pending && this.data.detail?.actions.approve && method) this.setData({ approvalMethod: method, approvalMethodIndex: index, ...(method === "INTERNAL_NO_COST" ? { factoryCostPolicyIndex: 0, factoryCostLimit: "" } : {}) });
+        },
+        onFactoryCostPolicy(this: Context, event: { detail: { value: string } }) {
+            if (!current(generation)) { finish(this, generation); return; }
+            const index = Number(event.detail.value);
+            if (!this.data.busy && !pending && this.data.detail?.actions.approve && this.data.approvalMethod === "INTERNAL_OR_FACTORY" && [0, 1, 2].includes(index)) this.setData({ factoryCostPolicyIndex: index, factoryCostLimit: "" });
         },
         onAsset(this: Context, event: { currentTarget: { dataset: { id: string } } }) {
             if (!this.data.busy && !pending && this.data.assets.some(row => row.id === event.currentTarget.dataset.id)) this.setData({ selectedAsset: event.currentTarget.dataset.id });
         },
         onField(this: Context, event: { currentTarget: { dataset: { field: string } }; detail: { value: string } }) {
             const field = event.currentTarget.dataset.field;
-            if (!this.data.busy && !pending && ["fault","occurredAt","reason","observedCode","evidence","physicalObservedCode","physicalAt","physicalEvidence","returnObservedCode","returnAt","returnEvidence","reassignReason","reassignEvidence"].includes(field)) this.setData({ [field]: event.detail.value });
+            if (!current(generation)) { finish(this, generation); return; }
+            if (field === "factoryCostLimit" && (!this.data.detail?.actions.approve || this.data.approvalMethod !== "INTERNAL_OR_FACTORY")) return;
+            if (!this.data.busy && !pending && ["factoryCostLimit", "fault","occurredAt","reason","observedCode","evidence","physicalObservedCode","physicalAt","physicalEvidence","returnObservedCode","returnAt","returnEvidence","reassignReason","reassignEvidence"].includes(field)) this.setData({ [field]: event.detail.value });
         },
         onImpact(this: Context, event: { detail: { value: string } }) { const impact = ["LOW","MEDIUM","HIGH"][Number(event.detail.value)]; if (!this.data.busy && !pending && impact) this.setData({ impact }); },
         onPhysical(this: Context, event: { detail: { value: string[] } }) { if (!this.data.busy && !pending) this.setData({ neverLeft: event.detail.value.includes("neverLeft"), locationConfirmed: event.detail.value.includes("location") }); },
@@ -236,10 +247,16 @@ export function createRepairPage(getServices: () => MiniServices) {
             const permissions: Record<string, string> = { approve: "approve", reject: "approve", cancel: "cancel", claim: "claim", accept: "acceptInPlace", complete: "completeInPlace" };
             if (this.data.busy || pending || !row || !current(generation) || !permissions[action] || !row.actions[permissions[action]!]) return;
             let path = action, body: unknown;
+            const policy = costPolicies[this.data.factoryCostPolicyIndex];
+            const factory = action === "approve" && this.data.approvalMethod === "INTERNAL_OR_FACTORY";
+            if (factory && (!policy || policy === "LIMITED" && (!moneyPattern.test(this.data.factoryCostLimit.trim()) || !/[1-9]/.test(this.data.factoryCostLimit)))) {
+                this.setData({ error: "请明确返厂费用约束，累计限额须为正金额并最多两位小数。" }); return;
+            }
+            const costFields = factory && policy !== "NO_COST" ? { factoryCostPolicy: policy, ...(policy === "LIMITED" ? { factoryCostLimit: this.data.factoryCostLimit.trim() } : {}) } : {};
             if (["approve","reject","cancel"].includes(action)) {
                 if (this.data.reason.trim().length < 3) { this.setData({ error: "请填写至少3字的实际处理依据。" }); return; }
                 body = { reason: this.data.reason.trim() };
-                if (action !== "cancel") { path = "decision"; body = { reason: this.data.reason.trim(), result: action === "approve" ? "APPROVE" : "REJECT", allowedMethod: action === "approve" ? this.data.approvalMethod : null }; }
+                if (action !== "cancel") { path = "decision"; body = { reason: this.data.reason.trim(), result: action === "approve" ? "APPROVE" : "REJECT", allowedMethod: action === "approve" ? this.data.approvalMethod : null, ...costFields }; }
             }
             if (["accept","complete"].includes(action)) {
                 if (!this.data.locationConfirmed || !this.data.neverLeft || !row.source.locationId || !this.data.observedCode.trim() || this.data.evidence.trim().length < 10) { this.setData({ error: "请实际核码、核对原位置、确认未离开保管方，并填写至少10字依据。" }); return; }
@@ -247,7 +264,7 @@ export function createRepairPage(getServices: () => MiniServices) {
                 body = { assetVersion: row.assetVersion, ownershipVersion: row.ownershipVersion, lockVersion: row.lockVersion, observedCode: this.data.observedCode.trim(),
                     actualLocationId: row.source.locationId, neverLeftCustodian: true, evidence: this.data.evidence.trim() };
             }
-            const descriptions: Record<string,string> = { approve: this.data.approvalMethod === "INTERNAL_OR_FACTORY" ? "一次批准内部或必要时返厂的无费用范围；尚未领取、接修或寄出。" : "仅批准内部零费用维修，尚未接收或修复。", reject: "驳回申请并释放本单资产锁。", cancel: "取消尚未批准的报修。", claim: "领取实际处理权。", accept: "实物仍在原位置，实际接修并标为维修中。", complete: "确认实际修复并恢复原保管状态，结束维修并释放本单资产锁。" };
+            const descriptions: Record<string,string> = { approve: this.data.approvalMethod === "INTERNAL_OR_FACTORY" ? "一次批准内部或必要返厂范围；返厂费用" + (policy === "LIMITED" ? "所有轮次累计限额 " + this.data.factoryCostLimit.trim() + " 元" : policy === "UNLIMITED" ? "不限" : "为零") + "；尚未领取、接修或寄出。" : "仅批准内部零费用维修，尚未接收或修复。", reject: "驳回申请并释放本单资产锁。", cancel: "取消尚未批准的报修。", claim: "领取实际处理权。", accept: "实物仍在原位置，实际接修并标为维修中。", complete: "确认实际修复并恢复原保管状态，结束维修并释放本单资产锁。" };
             await confirm(this, { path: `/api/v1/mini/repairs/${row.id}/${path}`, key: services.createKey(), version: row.version, body }, descriptions[action]!);
         },
         async onUpload(this: Context) {

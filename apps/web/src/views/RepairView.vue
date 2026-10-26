@@ -19,6 +19,8 @@ const rows = ref<Repair[]>([]), total = ref(0), page = ref(1), detail = ref<Repa
 const assets = ref<RepairAsset[]>([]), assetTotal = ref(0), assetPage = ref(1), assetId = ref("");
 const fault = ref(""), impact = ref("MEDIUM"), occurredAt = ref(""), reason = ref("");
 const approvalMethod = ref("INTERNAL_NO_COST");
+const factoryCostPolicy = ref("NO_COST"), factoryCostLimit = ref("");
+const moneyPattern = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/;
 const observedCode = ref(""), evidence = ref(""), confirmedPlace = ref(false), neverLeft = ref(false);
 const selectedFile = ref<File | null>(null), preview = ref(""), previewName = ref("");
 const pending = ref<RepairMutation | null>(null), confirmation = ref<RepairMutation | null>(null);
@@ -39,7 +41,7 @@ const current = (epoch: number, owner: string) => live && generation === epoch &
 function clearPhoto() { download?.abort(); download = null; if (preview.value) URL.revokeObjectURL(preview.value); preview.value = ""; previewName.value = ""; }
 function reset() {
   generation++; clearPhoto(); rows.value = []; assets.value = []; detail.value = null; pending.value = null; confirmation.value = null; selectedFile.value = null;
-  fault.value = ""; reason.value = ""; approvalMethod.value = "INTERNAL_NO_COST"; evidence.value = ""; observedCode.value = ""; assetId.value = ""; occurredAt.value = ""; neverLeft.value = false; confirmedPlace.value = false;
+  fault.value = ""; reason.value = ""; approvalMethod.value = "INTERNAL_NO_COST"; factoryCostPolicy.value = "NO_COST"; factoryCostLimit.value = ""; evidence.value = ""; observedCode.value = ""; assetId.value = ""; occurredAt.value = ""; neverLeft.value = false; confirmedPlace.value = false;
   busy.value = false; factoryLocked.value = false; total.value = 0; assetTotal.value = 0; page.value = 1; assetPage.value = 1;
 }
 function failure(cause: unknown) {
@@ -60,7 +62,7 @@ async function load() {
 async function open(row: Repair) {
   if (locked.value) return;
   const epoch = ++generation, owner = identity.value; busy.value = true; error.value = ""; clearPhoto(); detail.value = null;
-  selectedFile.value = null; reason.value = ""; approvalMethod.value = "INTERNAL_NO_COST"; observedCode.value = ""; evidence.value = ""; confirmedPlace.value = false; neverLeft.value = false;
+  selectedFile.value = null; reason.value = ""; approvalMethod.value = "INTERNAL_NO_COST"; factoryCostPolicy.value = "NO_COST"; factoryCostLimit.value = ""; observedCode.value = ""; evidence.value = ""; confirmedPlace.value = false; neverLeft.value = false;
   try { const result = await repairRequest<Repair>(`/${row.id}`); if (current(epoch, owner)) detail.value = result; }
   catch (cause) { if (current(epoch, owner)) failure(cause); }
   finally { if (current(epoch, owner)) busy.value = false; }
@@ -88,6 +90,11 @@ function prepare(action: "submit" | "approve" | "reject" | "cancel" | "claim" | 
       if (reason.value.trim().length < 3) { error.value = "请填写本次决定的明确原因。"; return; }
       path += action === "cancel" ? "/cancel" : "/decision";
       body = action === "cancel" ? { reason: reason.value.trim() } : { result: action === "approve" ? "APPROVE" : "REJECT", allowedMethod: action === "approve" ? approvalMethod.value : null, reason: reason.value.trim() };
+      if (action === "approve" && approvalMethod.value === "INTERNAL_OR_FACTORY") {
+        const policy = factoryCostPolicy.value, limit = factoryCostLimit.value.trim();
+        if (!["NO_COST", "LIMITED", "UNLIMITED"].includes(policy) || policy === "LIMITED" && (!moneyPattern.test(limit) || !/[1-9]/.test(limit))) { error.value = "请明确返厂费用约束，累计限额须为正金额并最多两位小数。"; return; }
+        if (policy !== "NO_COST") body = { ...(body as Record<string, unknown>), factoryCostPolicy: policy, ...(policy === "LIMITED" ? { factoryCostLimit: limit } : {}) };
+      }
     } else if (action === "claim") path += "/claim";
     else if (action === "photo") {
       const value = selectedFile.value;
@@ -144,7 +151,7 @@ onBeforeUnmount(() => { live = false; reset(); });
   <AppChrome><section aria-label="报修与维修" class="repair-page"><h1>报修与维修</h1><p>为本人责任资产或本部门公用资产报修。管理员批准处理范围后，由唯一处理库管核实实物并办理。</p>
     <p v-if="error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p><button :disabled="busy || !!confirmation || factoryLocked" @click="load">刷新并核对当前结果</button>
     <button v-if="pending" :disabled="busy" @click="perform">重试原报修操作</button>
-    <section v-if="confirmation" aria-label="确认本次报修办理"><p>请核对本次资产、实际依据及处理范围。批准不会自动领取，原地关闭须确认已恢复且实物从未离开原保管人。</p><button :disabled="busy" @click="confirm">确认保存本次办理</button><button :disabled="busy" @click="confirmation = null">返回修改</button></section>
+    <section v-if="confirmation" aria-label="确认本次报修办理"><p>请核对本次资产、实际依据及处理范围。批准不会自动领取，原地关闭须确认已恢复且实物从未离开原保管人。</p><p v-if="(confirmation.body as Record<string, unknown> | undefined)?.allowedMethod === 'INTERNAL_OR_FACTORY'">返厂费用范围：{{ (confirmation.body as Record<string, unknown>).factoryCostPolicy === 'UNLIMITED' ? '不限费用' : (confirmation.body as Record<string, unknown>).factoryCostPolicy === 'LIMITED' ? '所有轮次累计限额 ' + (confirmation.body as Record<string, unknown>).factoryCostLimit + ' 元' : '无费用' }}</p><button :disabled="busy" @click="confirm">确认保存本次办理</button><button :disabled="busy" @click="confirmation = null">返回修改</button></section>
     <RepairReturnSourcePanel v-if="session.user?.roles.includes('ASSET_ADMIN') && !detail" :blocked="busy || !!pending || !!confirmation || factoryLocked" @created="detail=$event;load()" @busy-change="sourceLocked=$event" />
     <section><h2>提交报修</h2><button :disabled="locked" @click="loadAssets()">查找可报修资产</button>
       <label v-for="asset in assets" :key="asset.id"><input v-model="assetId" type="radio" :value="asset.id" :disabled="locked">{{ asset.assetCode }} · {{ asset.name }} · {{ asset.locationName || '位置待核实' }}</label>
@@ -161,7 +168,7 @@ onBeforeUnmount(() => { live = false; reset(); });
         <fieldset v-if="detail.actions?.addFaultPhoto" :disabled="locked"><label>选择故障图片<input type="file" accept=".jpg,.jpeg,.png,.webp" @change="fileChosen"></label><button @click="prepare('photo')">核对上传故障照片</button><p>管理员决定后保留批准时的照片依据，不能覆盖原记录。</p></fieldset>
         <figure v-if="preview"><img :src="preview" :alt="`故障照片：${previewName}`"><figcaption>{{ previewName }}</figcaption><button @click="clearPhoto">关闭故障照片</button></figure>
       </section>
-      <fieldset v-if="detail.actions?.approve || detail.actions?.cancel" :disabled="locked"><label>本次决定原因<textarea v-model="reason" maxlength="1000" /></label><template v-if="detail.actions.approve"><label>本次批准处理方式<select v-model="approvalMethod" aria-label="本次批准处理方式"><option value="INTERNAL_NO_COST">仅内部无费用处理</option><option value="INTERNAL_OR_FACTORY">内部或必要时返厂（无费用）</option></select></label><p>一次批准所选范围。批准不等于已领取、接修或寄出。</p><button @click="prepare('approve')">{{ approvalMethod === 'INTERNAL_OR_FACTORY' ? '批准内部或必要时返厂（无费用）' : '批准内部无费用处理' }}</button><button @click="prepare('reject')">驳回无效报修</button></template><button v-if="detail.actions.cancel" @click="prepare('cancel')">取消尚未批准的报修</button></fieldset>
+      <fieldset v-if="detail.actions?.approve || detail.actions?.cancel" :disabled="locked"><label>本次决定原因<textarea v-model="reason" maxlength="1000" /></label><template v-if="detail.actions.approve"><label>本次批准处理方式<select v-model="approvalMethod" aria-label="本次批准处理方式"><option value="INTERNAL_NO_COST">仅内部无费用处理</option><option value="INTERNAL_OR_FACTORY">内部或必要时返厂</option></select></label><template v-if="approvalMethod === 'INTERNAL_OR_FACTORY'"><label>本维修所有返厂轮次费用约束<select v-model="factoryCostPolicy" aria-label="本次返厂费用约束"><option value="NO_COST">无费用</option><option value="LIMITED">所有轮次累计限额</option><option value="UNLIMITED">不限费用</option></select></label><label v-if="factoryCostPolicy === 'LIMITED'">所有轮次累计正限额（元）<input v-model="factoryCostLimit" inputmode="decimal" maxlength="15"></label></template><p>一次批准所选范围及明确费用约束。批准不等于已领取、接修或寄出。</p><button @click="prepare('approve')">{{ approvalMethod === 'INTERNAL_OR_FACTORY' ? '批准内部或必要时返厂' : '批准内部无费用处理' }}</button><button @click="prepare('reject')">驳回无效报修</button></template><button v-if="detail.actions.cancel" @click="prepare('cancel')">取消尚未批准的报修</button></fieldset>
       <button v-if="detail.actions?.claim" :disabled="locked" @click="prepare('claim')">领取维修处理</button>
       <fieldset v-if="detail.actions?.acceptInPlace || detail.actions?.completeInPlace" :disabled="locked"><h3>{{ detail.actions.completeInPlace ? '核对已恢复并原地关闭' : '现场核实并受理原地维修' }}</h3><label>现场核对的资产编码<input v-model="observedCode" maxlength="2048"></label><label><input v-model="confirmedPlace" type="checkbox">已现场核对实物仍在 {{ detail.source.locationName || '原位置' }}</label><label><input v-model="neverLeft" type="checkbox">实物从未离开原保管人，本次按原地处理核实</label><label>实际处理及核实依据<textarea v-model="evidence" maxlength="2000" /></label><button v-if="detail.actions.acceptInPlace" @click="prepare('accept')">核对受理原地维修</button><button v-if="detail.actions.completeInPlace" @click="prepare('complete')">确认已恢复并原地关闭</button></fieldset>
       <section v-if="detail.inventoryEvidence?.length" aria-label="原始盘点损坏证据"><h3>原始盘点损坏证据</h3><p>保留原始事件照片；损坏核实和发现时间以盘点复核记录为准。</p><div v-for="origin in detail.inventoryEvidence" :key="origin.observationId"><p>盘点 {{ origin.taskId }} · 原始证据 {{ origin.observationId }}</p><RepairInventoryPhoto v-for="photo in origin.photoIds" :key="`${detail.id}:${detail.version}:${origin.observationId}:${photo}`" :repair-id="detail.id" :observation-id="origin.observationId" :object-id="photo" :blocked="locked" @invalidated="reset" /></div></section>

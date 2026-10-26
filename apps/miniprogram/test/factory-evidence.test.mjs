@@ -53,7 +53,7 @@ test("factory cannot widen the old photo route or send private credentials to fo
     for (const invalid of ["https://evil.invalid" + route, route.replace("/mini/", "/"), route + "?x=1", route.replace("/9/", "/../")])
         await assert.rejects(f.client.uploadFactoryEvidence(invalid, file, mutation));
     await assert.rejects(f.client.uploadEvidence(route, file.path, mutation));
-    for (const invalid of [{ ...mutation, roundVersion: -1 }, { ...mutation, ownershipVersion: Number.MAX_SAFE_INTEGER + 1 }, { ...mutation, purpose: "QUOTE" }])
+    for (const invalid of [{ ...mutation, roundVersion: -1 }, { ...mutation, ownershipVersion: Number.MAX_SAFE_INTEGER + 1 }, { ...mutation, purpose: "UNKNOWN_PURPOSE" }])
         await assert.rejects(f.client.uploadFactoryEvidence(route, file, invalid));
     assert.equal(f.uploads.length, 0);
 });
@@ -127,4 +127,14 @@ test("unsafe selected names and oversized media fail before private files or own
     for (const file of [{ ...f.selected, size: 10 * 1024 * 1024 + 1 }, { ...f.selected, name: "large.pdf", size: 20 * 1024 * 1024 + 1 }])
         assert.throws(() => f.client.stageFactoryEvidence(file), /容量/);
     assert.equal(f.disk.has("fams.factory-evidence-owners"), false); assert.equal(fs.existsSync(f.source), true);
+});
+
+test("financial originals use the factory route and retain private opaque credentials", async t => {
+    const f = fixture(t), file = f.client.stageFactoryEvidence(f.selected);
+    for (const purpose of ["QUOTE", "COST_RECEIPT"]) {
+        await f.client.uploadFactoryEvidence(route, file, { ...mutation, purpose });
+        const upload = f.uploads.at(-1); assert.equal(upload.formData.purpose, purpose);
+        assert.deepEqual(upload.header, { "X-FAMS-Mini-Session": saved.sessionToken, "Idempotency-Key": mutation.key, "If-Match-Version": "3" });
+        assert.equal(upload.bytes.toString(), "selected original bytes");
+    }
 });

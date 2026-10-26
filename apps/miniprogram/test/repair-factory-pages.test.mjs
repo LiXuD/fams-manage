@@ -141,3 +141,54 @@ test("post succeeded but authoritative reread failed still retains the original 
     await scope(f); await f.page.onConfirm(); assert.equal(f.page.data.retry, true);
     await f.page.onRefresh(); await f.page.onRetry(); assert.deepEqual(writes(f)[0], writes(f)[1]); assert.equal(f.page.data.retry, false);
 });
+
+function financialFixture(purpose = "COST_RECEIPT") {
+    const f = fixture("receive"); f.detail.activeRound = null; f.detail.actions.receive = false;
+    f.round.roundStatus = "RECEIVED"; f.round.evidence[0].purpose = purpose;
+    f.round.actions = { recordQuote: true, recordCost: true, uploadFinancialEvidence: true }; return f;
+}
+async function money(f, amount = "10.01") {
+    await f.page.onShow(); f.page.onField(field("moneyAmount", amount));
+    f.page.onField(field("moneyReason", "已核对本轮最终实际费用及原始凭证"));
+    f.page.onMoneyEvidence({ detail: { value: [object] } }); f.page.onMoneyChecked({ detail: { value: ["checked"] } });
+}
+test("historical returned round final cost freezes exact decimal and all original versions across lost reply", async () => {
+    const f = financialFixture(), original = f.sessions.request; let lost = true;
+    f.sessions.request = async (...args) => { const result = await original(...args); if (args[0] === "POST" && lost) { lost = false; f.detail.version = 91; f.round.version = 92; f.round.actualCost = "10.01"; f.round.actions.recordCost = false; throw new Error("committed cost reply lost"); } return result; };
+    await money(f); f.page.onPrepare(event({ action: "cost" })); assert.match(f.page.data.confirmation, /10.01/); assert.equal(writes(f).length, 0);
+    await f.page.onConfirm(); assert.equal(f.page.data.retry, true); await f.page.onRefresh(); f.page.onHide();
+    assert.equal(f.page.data.moneyAmount, ""); await f.page.onShow(); await f.page.onRetry();
+    assert.deepEqual(writes(f)[1], writes(f)[0]); assert.equal(writes(f)[0].mutation.version, 5);
+    assert.deepEqual(writes(f)[0].body, { assetVersion: 7, ownershipVersion: 2, lockVersion: 3, roundVersion: 10, amount: "10.01", evidenceIds: [object], reason: "已核对本轮最终实际费用及原始凭证", finalAmountChecked: true });
+});
+test("financial fact requires explicit checked amount and matching original purpose", async () => {
+    const f = financialFixture("QUOTE"); await money(f); f.page.onPrepare(event({ action: "cost" })); assert.equal(f.page.data.confirmation, "");
+    f.page.onPrepare(event({ action: "quote" })); assert.ok(f.page.data.confirmation); f.page.onCancel();
+    f.page.onField(field("moneyAmount", "1.001")); f.page.onPrepare(event({ action: "quote" })); assert.equal(f.page.data.confirmation, "");
+    assert.equal(writes(f).length, 0);
+});
+test("unknown physical return is explicit and never fabricated as a zero cost", async () => {
+    const f = fixture("receive"); await physical(f, true); f.page.onCondition({ detail: { value: "1" } });
+    f.page.onChecked({ detail: { value: ["original", "unassessed"] } }); f.page.onPrepare(event({ action: "receive" })); await f.page.onConfirm();
+    assert.equal(writes(f)[0].body.actualCost, null); assert.equal(writes(f)[0].body.costUnassessed, true);
+});
+test("known positive final cost is carried into the actual original receipt unchanged", async () => {
+    const f = fixture("receive"); f.round.actualCost = "99.95"; await physical(f, true); f.page.onCondition({ detail: { value: "1" } });
+    f.page.onPrepare(event({ action: "receive" })); await f.page.onConfirm(); assert.equal(writes(f)[0].body.actualCost, "99.95");
+    assert.equal(writes(f)[0].body.costUnassessed, undefined);
+});
+test("returned rounds can append financial originals without reopening physical dispatch", async () => {
+    const f = financialFixture(); await f.page.onShow(); await f.page.onChoose();
+    f.page.onPurpose({ detail: { value: "1" } }); f.page.onPrepare(event({ action: "upload" })); await f.page.onConfirm();
+    const upload = f.calls.find(c => c.upload); assert.equal(upload.upload[2].purpose, "COST_RECEIPT"); assert.equal(upload.upload[2].roundVersion, 10);
+    assert.equal(writes(f).length, 0);
+});
+test("identity renewal clears an unsent private amount and selected money originals", async () => {
+    const f = financialFixture(); await money(f); f.sessions.identityRevision++; f.page.onField(field("moneyReason", "late private input"));
+    assert.equal(f.page.data.moneyAmount, ""); assert.equal(f.page.data.moneyReason, ""); assert.deepEqual(f.page.data.moneyEvidenceIds, []); assert.equal(f.page.data.detail, null);
+});
+test("explicit limited replacement scope keeps cumulative limit as an exact string", async () => {
+    const f = fixture(); f.detail.actions.requestCostScope = true; await f.page.onShow();
+    f.page.onField(field("reason", "申请本维修所有轮次累计费用限额")); f.page.onCostPolicy({ detail: { value: "1" } }); f.page.onField(field("costLimit", "105.01"));
+    f.page.onPrepare(event({ action: "requestCostScope" })); await f.page.onConfirm(); assert.equal(writes(f)[0].body.costLimit, "105.01"); assert.equal(writes(f)[0].body.costPolicy, "LIMITED");
+});

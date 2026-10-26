@@ -103,7 +103,32 @@ class RepairFactoryHttpRuntimeCase {
                         Long.class));
     }
 
+    @Test
+    void actualNativeExpensePagesKeepOriginalCostReplayAndCumulativeAuthority() throws Exception {
+        runNativeScenario(true, true);
+        assertEquals(
+                2L, db.queryForObject("SELECT COUNT(*) FROM fams_repair_factory_cost", Long.class));
+        assertEquals(
+                2L,
+                db.queryForObject("SELECT COUNT(*) FROM fams_repair_factory_quote", Long.class));
+        assertEquals(
+                new java.math.BigDecimal("105.01"),
+                db.queryForObject(
+                        "SELECT SUM(amount) FROM fams_repair_factory_cost",
+                        java.math.BigDecimal.class));
+        assertEquals(
+                2L,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_repair_factory_scope WHERE"
+                            + " scope_status='APPROVED'",
+                        Long.class));
+    }
+
     private void runNativeScenario(boolean initial) throws Exception {
+        runNativeScenario(initial, false);
+    }
+
+    private void runNativeScenario(boolean initial, boolean priced) throws Exception {
         var grants = new LinkedHashMap<String, Object>();
         for (var entry :
                 Map.of("employee", 951002L, "admin", 951001L, "warehouse", 951003L).entrySet()) {
@@ -142,6 +167,7 @@ class RepairFactoryHttpRuntimeCase {
         builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
         builder.environment().put("FAMS_TEST_REPAIR_GRANTS", JSON.writeValueAsString(grants));
         builder.environment().put("FAMS_TEST_FACTORY_INITIAL", initial ? "1" : "0");
+        builder.environment().put("FAMS_TEST_FACTORY_PRICED", priced ? "1" : "0");
         var process = builder.start();
         try {
             assertTrue(process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS));
@@ -164,7 +190,7 @@ class RepairFactoryHttpRuntimeCase {
                 3L,
                 db.queryForObject("SELECT COUNT(*) FROM fams_repair_factory_round", Long.class));
         assertEquals(
-                4L,
+                priced ? 8L : 4L,
                 db.queryForObject("SELECT COUNT(*) FROM fams_repair_factory_evidence", Long.class));
         assertEquals(
                 0L,

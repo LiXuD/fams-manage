@@ -1,0 +1,89 @@
+{
+  "task": "D6-20B3 private expense clients",
+  "sourceBase": "a916a07",
+  "candidate": "current working tree; fixed full B gate still pending",
+  "status": "LOCAL_CLIENT_AND_NATIVE_HTTP_VERIFIED_ONLY",
+  "sourceHashes": {
+    "apps/miniprogram/native/pages/repair-factory/index.wxml": "8a1f63b2cbcd63fe4da23dcfbe5a3a7fbd8ebbb67beac978c8a4e8ba84d4cce3",
+    "apps/miniprogram/native/pages/repairs/index.wxml": "41a9458b9cf9b55b642843ecb81880e11fd62b8ec4837fd32792f631704b8dc1",
+    "apps/miniprogram/src/repair-factory-pages.ts": "5e3f11e28c6ef613803e6e69c4b781e8a31bfc60af5242cd0b53c80ee84cd109",
+    "apps/miniprogram/src/repair-factory-types.ts": "507e59beecf5256f6ea32ec4c6415772d250c32d8f182bafb5bf4b52cdd46205",
+    "apps/miniprogram/src/repair-pages.ts": "13c7983ac377268ead6f73cfd5007baec6e535e9e1c8d1826d799852aaf8b616",
+    "apps/miniprogram/src/session.ts": "33544f4f43096098de6eba0855067c506611105494f12f6b3ff86e9a2afa841d",
+    "apps/miniprogram/test/factory-evidence.test.mjs": "cc28c16e136e93c351e4e149c7ce637182c152078416b8399743bff4b43067a1",
+    "apps/miniprogram/test/repair-factory-pages.test.mjs": "8701feb8ea39b31a304148cd71950971c2f71a8664a9bfc79d02ac8854631e2b",
+    "apps/miniprogram/test/repair-pages.test.mjs": "1bad137b88286ef6f5965a1c08492a4aef5011a4ade0c7325271cbfb5f26cca5",
+    "apps/miniprogram/test/runtime-repair-factory-http.mjs": "0460e779effdfa226d4d9c5b048bde28d04678fbecccb609ecd32f8767ce283e",
+    "apps/web/src/repair/factory-api.ts": "5f79704ac0f740616890b231484c82c7c2b239e7183be89b4df6ee273157cf83",
+    "apps/web/src/repair/factory-types.ts": "57fc720bb635cac0259c7446d3b967f42ac6d8c96a552ca5464c144ba7681e67",
+    "apps/web/src/views/RepairFactoryPanel.test.ts": "f2f5ec427c3c2d459df13c892a74fb57c302b4b17f3914d2cee4c457baa39d78",
+    "apps/web/src/views/RepairFactoryPanel.vue": "881c393c3291be1bf13977fa9ff86e9fdd662d472255023b39501024707de205",
+    "apps/web/src/views/RepairView.test.ts": "23db87d3868313fc3c67ac49947a22f535e0b84bfb522885538ac7ed216c0fa8",
+    "apps/web/src/views/RepairView.vue": "844e094e86bf87f69c23cdd06b81bd5e275d56e0ec2bdf93e9386263e191381f",
+    "backend/src/test/java/com/fams/auth/RepairFactoryHttpRuntimeCase.java": "fe9f8ca664fcc6e7331534f9c548e55c39e1be2524072d8d45fcc8ba9eb229ae",
+    "scripts/verify-d6-03a.py": "ed3c5d0a6350febcc5323111cfe37f7521ff9f6983d923e1b2d8be0fad14deb4"
+  },
+  "verification": {
+    "factoryHttp": 32,
+    "existingFactoryUpgrade": 1,
+    "webComponentAndUnitTests": 169,
+    "miniPageAndClientTests": 279,
+    "lintAndWorkspaceTypes": true,
+    "webAndNativeBuild": true,
+    "checkstyle": 0,
+    "spotbugs": 0,
+    "ownRuntimesRemoved": true
+  },
+  "nativeRealChain": {
+    "path": "Actual createRepairPage/createRepairFactoryPage -> MiniSessionClient -> createWxRuntime -> opaque HTTP -> Spring/MySQL",
+    "initialCumulativeApproval": "100.00",
+    "quotes": [
+      "39.99",
+      "60.01"
+    ],
+    "actualRoundCosts": [
+      "39.99",
+      "65.02"
+    ],
+    "exactConfirmedTotal": "105.01",
+    "laterExplicitCumulativeApproval": "105.01",
+    "physicalReturnWithNullUnassessedCost": true,
+    "afterReturnFinancialOriginals": true,
+    "droppedCommittedFinalCostReplyOriginalRequestReplay": true,
+    "sameIdentityHideShowNotColdProcess": true,
+    "droppedInitialDecisionAndOriginalUploadReply": true,
+    "privateQuoteAndExpenseOriginals": 4,
+    "physicalOriginals": 4,
+    "employeePrivateDataDenied": true,
+    "independentInboundThenCompleted": true,
+    "actualWeChatSdkOrDevice": false,
+    "externalIdentityAndScanner": "fixtures"
+  },
+  "pcBoundary": {
+    "renderedVueComponentTests": true,
+    "actualBrowserBusinessAcceptance": false,
+    "committingJvmKillRestart": false
+  },
+  "upgradeGateIntegration": "V53 populated upgrade/repeat now included in the full product gate selection; fixed gate run still pending",
+  "migration": "V1-V53 frozen; no DDL change",
+  "logs": {
+    "output/d6-20b3-expense-client-runtime-green.log": "8a4213e54c5e9cb70e18a8d8cecd4b356653f0dc999193df773609e71e1dec16",
+    "output/d6-20b3-expense-client-first-capability-assumption-failure.log": "89836d7b4eca1b4aed8189ebe2c87265f99aa9c9324f4d809f6231f1b0cfe3f2",
+    "output/d6-20b3-mini-confirmation-green.log": "3f2c6e0fec64686850f6b30e6a3b6b7a7c823c2def3f4d24839b988e4c2eaa1b",
+    "output/d6-20b3-web-final.log": "a2fb9f89e146b500e4550af32fa648de626fb760b849804ebea9de7494af3efe",
+    "output/d6-20b3-mini-build-final.log": "facb1c0689b419c6de3e1df5dbe76ecc221e812249f1aca260f2014d4528ac16",
+    "output/d6-20b3-final-static-client.log": "cf7559f007dbbff9a6eb79349a28e53cae6e5ea3176842495824932463570c3a"
+  },
+  "retainedFailures": [
+    "Unsupported-purpose expectation updated to UNKNOWN_PURPOSE while old photo and foreign route protections remain",
+    "Old button text and incorrect test cancellation handler corrected",
+    "Initial confirmation test must inspect SDK confirmation body, not title",
+    "First real priced scenario incorrectly assumed creation of an empty round was a financial commitment; assertion now checks open cost followup, original dispatch and completion guards unchanged"
+  ],
+  "limitations": [
+    "Real PC browser, committing JVM recovery and current fixed full product gate still pending",
+    "Synthetic original PNG/bill and organization fixtures; no physical shipping, actual invoice authenticity or real device claim",
+    "No independent review signature, remote CI, QA or production acceptance",
+    "Preexisting PNG cognition curation and two moderate dependencies remain separate"
+  ]
+}

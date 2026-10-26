@@ -1,10 +1,14 @@
+export type FactoryCostPolicy = "NO_COST" | "LIMITED" | "UNLIMITED";
+export interface FactoryCostSummary { costPolicy: FactoryCostPolicy; costLimit: string | null; confirmedTotal: string; unassessedCount: number; overrun: boolean; followupOpen: boolean }
+export interface FactoryMoneyFact { amount: string; evidenceIds: string[] }
 export interface FactoryScope {
   id: string; repairId: string; scopeStatus: "PENDING" | "APPROVED" | "REJECTED" | "WITHDRAWN";
-  allowedMethod: "FACTORY_NO_COST"; requestReason: string; requestedBy: string; requestedAt: string;
+  allowedMethod: "FACTORY_NO_COST" | "FACTORY_COST_ALLOWED"; costPolicy?: FactoryCostPolicy; costLimit?: string | null; requestReason: string; requestedBy: string; requestedAt: string;
   decisionReason: string | null; decidedBy: string | null; decidedAt: string | null; version: number;
   requestBasis: Record<string, unknown>; decisionBasis: Record<string, unknown> | null;
 }
 export interface FactoryRound {
+    quotes?: FactoryMoneyFact[]; costFact?: FactoryMoneyFact | null; dispatchScopeId?: string | null;
   id: string; repairId: string; assetId: string; scopeId: string; roundNumber: number;
   roundStatus: "PENDING_DISPATCH" | "DISPATCHED" | "RECEIVED" | "CANCELLED";
   providerName: string; serviceContact: string; servicePhone: string; expectedReturnDate: string;
@@ -27,15 +31,16 @@ export interface FactoryReply {
 }
 export interface FactoryDetail extends FactoryReply {
   pendingScope: FactoryScope | null; approvedScope: FactoryScope | null; activeRound: FactoryRound | null;
-  summary: FactorySummary | null; photosAvailable: boolean;
-  actions: Record<"requestScope" | "decideScope" | "withdrawScope" | "createRound" | "dispatch" | "cancelRound" | "receive" | "uploadEvidence", boolean>;
+  summary: FactorySummary | null; photosAvailable: boolean; costSummary?: FactoryCostSummary;
+  actions: Record<"requestScope" | "decideScope" | "withdrawScope" | "createRound" | "dispatch" | "cancelRound" | "receive" | "uploadEvidence", boolean> & { requestCostScope?: boolean };
 }
 export interface FactoryFile {
   objectId: string; filename: string; contentType: string; sizeBytes: number;
   scanStatus: string; businessVersion: number; createdAt: string;
 }
 export interface FactoryRoundDetail extends FactoryRound {
-  evidence: { object_id: string; purpose: "FAULT" | "FACTORY_ACK" | "RECEIPT"; content_sha256: string; uploader_account_id: number; recorded_at: string }[];
+    actions?: Record<string, boolean>;
+  evidence: { object_id: string; purpose: "FAULT" | "FACTORY_ACK" | "RECEIPT" | "QUOTE" | "COST_RECEIPT"; content_sha256: string; uploader_account_id: number; recorded_at: string }[];
   files: FactoryFile[];
 }
 export interface FactoryHistory {
