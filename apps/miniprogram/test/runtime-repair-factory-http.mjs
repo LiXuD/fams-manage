@@ -15,7 +15,9 @@ const origin="https://factory-test.invalid", root=fs.mkdtempSync(path.join(os.tm
 const png=Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+afo0AAAAASUVORK5CYII=","base64");
 const digest=b=>createHash("sha256").update(b).digest("hex"), uploads=[],clients=new Map();
 const direct=process.env.FAMS_TEST_FACTORY_INITIAL==="1",priced=process.env.FAMS_TEST_FACTORY_PRICED==="1",decisions=[],moneyWrites=[];
+const partsCase=process.env.FAMS_TEST_FACTORY_PARTS==="1",partsWrites=[];
 let dropUpload=true,dropDecision=direct,dropCost=priced;
+let dropParts=partsCase;
 const dueDate=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
 const target=url=>{assert.ok(url.startsWith(origin+"/api/v1/mini/"));return "http://127.0.0.1:"+port+url.slice(origin.length);};
 const event=dataset=>({currentTarget:{dataset}}),field=(key,value)=>({...event({field:key}),detail:{value}});
@@ -27,6 +29,7 @@ function services(role){
   request:input=>{void(async()=>{const response=await fetch(target(input.url),{method:input.method,headers:{"Content-Type":"application/json",...input.header},body:input.data===undefined?undefined:JSON.stringify(input.data),redirect:"error"});
    const data=await response.json();if(input.method==="POST"&&input.url.endsWith("/decision")){decisions.push({body:structuredClone(input.data),key:input.header["Idempotency-Key"],version:input.header["If-Match-Version"]});if(dropDecision&&response.status===200){dropDecision=false;input.fail(new Error("Owned adapter dropped committed initial decision"));return;}}
    if(input.method==="POST"&&/\/(quotes|cost)$/.test(input.url)){moneyWrites.push({path:input.url,body:structuredClone(input.data),key:input.header["Idempotency-Key"],version:input.header["If-Match-Version"]});if(dropCost&&input.url.endsWith("/cost")&&response.status===200){dropCost=false;input.fail(new Error("Owned adapter dropped committed final cost"));return;}}
+   if(input.method==="POST"&&input.url.endsWith("/parts")){partsWrites.push({path:input.url,body:structuredClone(input.data),key:input.header["Idempotency-Key"],version:input.header["If-Match-Version"]});if(dropParts&&response.status===200){dropParts=false;input.fail(new Error("Owned adapter dropped committed parts fact"));return;}}
    input.success({statusCode:response.status,data});})().catch(input.fail);},
   uploadFile:input=>{void(async()=>{const bytes=fs.readFileSync(input.filePath),form=new FormData();
    for(const[k,v]of Object.entries(input.formData))form.append(k,v);
@@ -83,14 +86,27 @@ try{
  }
  if(priced){assert.equal(factory.data.detail.costSummary.confirmedTotal,"105.01");assert.equal(factory.data.detail.costSummary.overrun,true);assert.equal(factory.data.detail.costSummary.followupOpen,true);factory.onCostPolicy({detail:{value:"1"}});factory.onField(field("costLimit","105.01"));factory.onField(field("reason","实际累计费用超出原范围，申请明确累计105.01元"));await act(factory,"requestCostScope");factory.onHide();const approval=await page("admin",id,true);approval.onField(field("reason","核对已发生费用105.01元后明确批准累计新范围"));await act(approval,"approveScope");approval.onUnload();await factory.onShow();okay(factory);assert.equal(factory.data.detail.costSummary.overrun,false);}
 
+ if(partsCase){
+  await factory.onParts(event({}));okay(factory);assert.equal(factory.data.parts.canRecord,true);dropUpload=true;
+  const evidence=await original(factory,"PARTS_CHANGE");assert.equal(factory.data.parts.total,0);
+  async function observe(before,after){
+   for(const[k,v]of Object.entries({partsName:"内存",partsBefore:before,partsAfter:after,partsReason:"亲自核对同一原机、部件前后资料及所选本轮原件一致",observedCode:"REP-ASSET-951020",serial:"ORIGINAL-FACTORY-951020"}))factory.onField(field(k,v));
+   factory.onNow();factory.onChecked({detail:{value:["original"]}});factory.onPartsEvidence({detail:{value:[evidence]}});factory.onPrepare(event({action:"parts"}));assert.ok(factory.data.confirmation,factory.data.error);await factory.onConfirm();
+   if(factory.data.retry){const frozen=structuredClone(partsWrites.at(-1));await factory.onRefresh();factory.onHide();await factory.onShow();await factory.onRetry();assert.deepEqual(partsWrites.at(-1),frozen);}
+   okay(factory);assert.equal(factory.data.detail.status,"WAREHOUSE_PROCESSING");assert.notEqual(factory.data.detail.lockVersion,null);
+  }
+  await observe("PRIVATE-NATIVE-PART-BEFORE","PRIVATE-NATIVE-PART-AFTER");assert.equal(partsWrites.length,2);assert.equal(factory.data.parts.total,1);const first=structuredClone(factory.data.parts.items[0]);
+  await observe("独立现场核实的部件旧标识","独立现场核实的部件新标识");assert.equal(factory.data.parts.total,2);assert.deepEqual(factory.data.parts.items.find(x=>x.id===first.id),first);
+  const adminParts=await page("admin",id,true);await adminParts.onParts(event({}));okay(adminParts);assert.equal(adminParts.data.parts.canRecord,false);assert.equal(adminParts.data.parts.total,2);adminParts.onPrepare(event({action:"parts"}));assert.equal(adminParts.data.confirmation,"");adminParts.onUnload();
+ }
  assert.equal(factory.data.rows.length,3);assert.equal(factory.data.rows.filter(r=>r.roundStatus==="CANCELLED").length,1);assert.equal(factory.data.detail.summary.actualDispatchCount,2);factory.onHide();
- const publicPage=await page("employee",id);okay(publicPage);const publicJson=JSON.stringify(publicPage.data.detail);for(const word of ["13800000001","独立原生厂家","原生私有联系人","厂家原机依据.png","直接范围私有依据",...(priced?["105.01","65.02","factoryCostPolicy","costSummary"]:[])])assert.ok(!publicJson.includes(word));assert.equal(publicPage.data.detail.factorySummary.actualDispatchCount,2);publicPage.onUnload();
+ const publicPage=await page("employee",id);okay(publicPage);const publicJson=JSON.stringify(publicPage.data.detail);for(const word of ["13800000001","独立原生厂家","原生私有联系人","厂家原机依据.png","直接范围私有依据","PRIVATE-NATIVE-PART","独立现场核实的部件",...(priced?["105.01","65.02","factoryCostPolicy","costSummary"]:[])])assert.ok(!publicJson.includes(word));assert.equal(publicPage.data.detail.factorySummary.actualDispatchCount,2);publicPage.onUnload();
  const denied=await page("employee",id,true);assert.equal(denied.data.detail,null);assert.ok(denied.data.error);denied.onUnload();
  await warehouse.onShow();okay(warehouse);warehouse.onPhysicalMode(event({mode:"inbound"}));await warehouse.onPhysicalCatalog(event({kind:"warehouse",delta:"0"}));warehouse.onPhysicalWarehouse(event({id:"951000"}));await warehouse.onPhysicalCatalog(event({kind:"location",delta:"0"}));warehouse.onPhysicalLocation(event({id:"951000"}));
  for(const[k,v]of Object.entries({physicalObservedCode:"REP-ASSET-951020",physicalAt:new Date().toISOString(),physicalEvidence:"原机已实际修复，核验编号及原机真实验收入库结束维修"}))warehouse.onField(field(k,v));
  await warehouse.onPhysicalAction();okay(warehouse);assert.equal(warehouse.data.detail.status,"COMPLETED");warehouse.onUnload();
- await factory.onShow();okay(factory);assert.equal(factory.data.detail.summary.followupOpen,false);assert.equal(factory.data.rows.length,3);factory.onUnload();
+ await factory.onShow();okay(factory);assert.equal(factory.data.detail.summary.followupOpen,false);assert.equal(factory.data.rows.length,3);if(partsCase){assert.equal(factory.data.parts.total,2);assert.equal(factory.data.parts.canRecord,false);}factory.onUnload();
  for(const service of clients.values())service.sessions.clear();
- assert.equal(uploads.length,priced?9:5);assert.ok(uploads.every(x=>x.sha===digest(png)));
- console.log(JSON.stringify({nativeFactoryClosed:true,pricedFactory:priced,committedCostOriginalReplay:priced,unknownReturnThenFinalCost:priced,cumulativeOverrunExplicitlyApproved:priced,initialSingleFactoryApproval:direct,initialDecisionOriginalReplay:direct,repairId:id,twoActualRounds:true,canceledRoundNotCounted:true,opaqueOriginalMetadataAndBytes:true,committedOriginalRetry:true,employeePrivacy:true,independentInboundClosed:true,rounds:3,actualDispatchCount:2,originals:priced?8:4}));
+ assert.equal(uploads.length,(priced?9:5)+(partsCase?2:0));assert.ok(uploads.every(x=>x.sha===digest(png)));
+ console.log(JSON.stringify({nativeFactoryClosed:true,nativePartsObserved:partsCase,committedPartsOriginalReplay:partsCase,partsImmutable:partsCase,pricedFactory:priced,committedCostOriginalReplay:priced,unknownReturnThenFinalCost:priced,cumulativeOverrunExplicitlyApproved:priced,initialSingleFactoryApproval:direct,initialDecisionOriginalReplay:direct,repairId:id,twoActualRounds:true,canceledRoundNotCounted:true,opaqueOriginalMetadataAndBytes:true,committedOriginalRetry:true,employeePrivacy:true,independentInboundClosed:true,rounds:3,actualDispatchCount:2,originals:(priced?8:4)+(partsCase?1:0)}));
 }finally{fs.rmSync(root,{recursive:true,force:true});}

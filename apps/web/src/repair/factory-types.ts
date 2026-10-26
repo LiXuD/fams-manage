@@ -40,7 +40,7 @@ export interface FactoryFile {
 }
 export interface FactoryRoundDetail extends FactoryRound {
     actions?: Record<string, boolean>;
-  evidence: { object_id: string; purpose: "FAULT" | "FACTORY_ACK" | "RECEIPT" | "QUOTE" | "COST_RECEIPT"; content_sha256: string; uploader_account_id: number; recorded_at: string }[];
+  evidence: { object_id: string; purpose: "FAULT" | "FACTORY_ACK" | "RECEIPT" | "QUOTE" | "COST_RECEIPT" | "PARTS_CHANGE"; content_sha256: string; uploader_account_id: number; recorded_at: string }[];
   files: FactoryFile[];
 }
 export interface FactoryHistory {
@@ -48,3 +48,5 @@ export interface FactoryHistory {
   detail_json: Record<string, unknown>; before_version: number; after_version: number;
 }
 export interface FactoryPage<T> { items: T[]; total: number; page: number; pageSize: number }
+export interface FactoryPartsFact { id: string; roundId: string; assetId: string; partName: string; beforeInfo: string; afterInfo: string; observedAt: string; recordedAt: string; evidenceIds: string[]; recordedBy: string }
+export interface FactoryPartsPage extends FactoryPage<FactoryPartsFact> { canRecord: boolean }

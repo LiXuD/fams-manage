@@ -41,6 +41,66 @@ function fixture(mode = "scope") {
     page.onLoad({ id: "9" }); return { page, sessions, services, calls, discarded, staged, detail, round };
 }
 const writes = f => f.calls.filter(c => c.method === "POST");
+function partsFixture(canRecord = true) {
+    const f = fixture("upload"), request = f.sessions.request;
+    f.round.roundStatus = "RECEIVED"; f.round.receivedAt = "2026-10-26T01:00:00Z"; f.round.evidence[0].purpose = "PARTS_CHANGE";
+    f.detail.activeRound = null; f.detail.actions.uploadEvidence = false;
+    const parts = { page: 1, pageSize: 20, total: 21, canRecord, items: [{ id: "901", roundId, assetId: "20", partName: "原始部件事实", beforeInfo: "原始旧件", afterInfo: "原始新件", observedAt: "2026-10-26T02:00:00Z", recordedAt: "2026-10-26T02:01:00Z", evidenceIds: [object], recordedBy: "1" }] };
+    f.sessions.request = async (...args) => {
+        if (args[0] === "GET" && args[1].includes("/parts?")) { f.calls.push(structuredClone({ method: args[0], path: args[1] })); return structuredClone(parts); }
+        return request(...args);
+    };
+    return { ...f, parts };
+}
+async function partsDraft(f) {
+    await f.page.onShow(); await f.page.onParts(event({}));
+    for (const [name, value] of Object.entries({ partsName: "内存", partsBefore: "原内存8GB", partsAfter: "新内存16GB", partsReason: "已亲自核实同一原机内存前后资料和本轮原件相符。", observedCode: "ORIGINAL-1", serial: "SERIAL-1", actualDate: "2026-10-27", actualTime: "11:12:13" })) f.page.onField(field(name, value));
+    f.page.onPartsEvidence({ detail: { value: [object] } }); f.page.onChecked({ detail: { value: ["original"] } });
+}
+test("parts remain lazy and explicit confirmation freezes original-machine fact and four versions", async () => {
+    const f = partsFixture(); await f.page.onShow(); assert.equal(f.calls.some(c => c.path?.includes("/parts?")), false);
+    await partsDraft(f); assert.equal(f.page.data.parts.items[0].beforeInfo, "原始旧件"); f.page.onPrepare(event({ action: "parts" }));
+    assert.equal(writes(f).length, 0); assert.match(f.page.data.confirmation, /原内存8GB/); await f.page.onConfirm();
+    assert.deepEqual(writes(f)[0].body, { assetVersion: 7, ownershipVersion: 2, lockVersion: 3, roundVersion: 10, partName: "内存", beforeInfo: "原内存8GB", afterInfo: "新内存16GB", observedAt: new Date("2026-10-27T11:12:13").toISOString(), observedCode: "ORIGINAL-1", observedSerial: "SERIAL-1", evidenceIds: [object], reason: "已亲自核实同一原机内存前后资料和本轮原件相符。", originalPhysicalIdentityChecked: true });
+    assert.equal(writes(f)[0].mutation.version, 5); assert.equal(f.page.data.parts.items[0].afterInfo, "原始新件");
+});
+test("unknown parts result keeps exact original request after private refresh and hide-show", async () => {
+    const f = partsFixture(), request = f.sessions.request; let lost = true;
+    f.sessions.request = async (...args) => { const result = await request(...args); if (args[0] === "POST" && lost) { lost = false; f.detail.version = 80; f.detail.assetVersion = 81; f.round.version = 82; throw new Error("committed parts reply lost"); } return result; };
+    await partsDraft(f); f.page.onPrepare(event({ action: "parts" })); await f.page.onConfirm(); assert.equal(f.page.data.retry, true);
+    await f.page.onParts(event({})); f.page.onHide(); assert.equal(f.page.data.parts, null); await f.page.onShow(); await f.page.onRetry();
+    assert.deepEqual(writes(f)[1], writes(f)[0]); assert.equal(f.page.data.retry, false);
+});
+test("parts uploads freeze purpose and owned original across unknown reply and cleanup after success", async () => {
+    const f = partsFixture(), upload = f.sessions.uploadFactoryEvidence; let lost = true;
+    f.sessions.uploadFactoryEvidence = async (...args) => { const result = await upload(...args); if (lost) { lost = false; f.detail.version = 90; f.round.version = 91; throw new Error("uploaded reply lost"); } return result; };
+    await f.page.onShow(); await f.page.onParts(event({})); f.page.onPurpose({ detail: { value: String(f.page.data.purposeKinds.indexOf("PARTS_CHANGE")) } });
+    await f.page.onChoose(); f.page.onPrepare(event({ action: "upload" })); await f.page.onConfirm(); f.page.onHide(); assert.ok(!f.discarded.includes("/owned/copied.png"));
+    await f.page.onShow(); await f.page.onRetry(); const uploads = f.calls.filter(c => c.upload); assert.deepEqual(uploads[1], uploads[0]); assert.equal(uploads[0].upload[2].purpose, "PARTS_CHANGE"); assert.equal(uploads[0].upload[2].roundVersion, 10); assert.ok(f.discarded.includes("/owned/copied.png"));
+});
+test("readonly parts permission cannot be bypassed by invoking native handlers", async () => {
+    const f = partsFixture(false); await partsDraft(f); f.page.onPrepare(event({ action: "parts" })); assert.equal(f.page.data.confirmation, ""); assert.equal(writes(f).length, 0); assert.equal(f.page.data.parts.items[0].partName, "原始部件事实");
+});
+test("parts reject wrong-purpose originals, equal descriptions and rolled-over calendar dates", async () => {
+    const f = partsFixture(); f.round.evidence[0].purpose = "QUOTE"; await partsDraft(f); f.page.onPrepare(event({ action: "parts" })); assert.equal(f.page.data.confirmation, "");
+    f.round.evidence[0].purpose = "PARTS_CHANGE"; await partsDraft(f); f.page.onField(field("partsAfter", "原内存8GB")); f.page.onPrepare(event({ action: "parts" })); assert.equal(f.page.data.confirmation, "");
+    await partsDraft(f); f.page.onField(field("actualDate", "2026-02-31")); f.page.onPrepare(event({ action: "parts" })); assert.equal(f.page.data.confirmation, ""); assert.equal(writes(f).length, 0);
+});
+test("parts rejection clears retry and requires explicit fresh decision", async () => {
+    const f = partsFixture(), request = f.sessions.request;
+    f.sessions.request = async (...args) => { if (args[0] === "POST") throw new MiniRequestError(409, "REPAIR_VERSION_MISMATCH"); return request(...args); };
+    await partsDraft(f); f.page.onPrepare(event({ action: "parts" })); await f.page.onConfirm(); assert.equal(f.page.data.retry, false); assert.equal(f.page.data.stale, true);
+    f.page.onPrepare(event({ action: "parts" })); assert.equal(f.page.data.confirmation, "");
+});
+test("identity renewal wipes parts records and pending owned original before retry", async () => {
+    const f = partsFixture(); await f.page.onShow(); await f.page.onParts(event({})); f.page.onPurpose({ detail: { value: String(f.page.data.purposeKinds.indexOf("PARTS_CHANGE")) } });
+    await f.page.onChoose(); f.page.onPrepare(event({ action: "upload" })); f.sessions.uploadFactoryEvidence = async () => { throw new Error("unknown"); }; await f.page.onConfirm();
+    f.sessions.identityRevision++; await f.page.onRetry(); assert.equal(f.page.data.parts, null); assert.equal(f.page.data.retry, false); assert.ok(f.discarded.includes("/owned/copied.png"));
+});
+test("parts pagination stays independent of rounds and private history", async () => {
+    const f = partsFixture(); await f.page.onShow(); await f.page.onParts(event({})); await f.page.onParts(event({ delta: "1" }));
+    assert.equal(f.page.data.partsPage, 2); assert.equal(f.page.data.page, 1); assert.equal(f.page.data.historyPage, 1); assert.ok(f.calls.some(c => c.path?.endsWith("/parts?page=2&pageSize=20")));
+});
 async function scope(f) { await f.page.onShow(); f.page.onField(field("reason", "实物接修后仍无法内部修复，需要明确返厂范围。")); f.page.onPrepare(event({ action: "requestScope" })); }
 async function physical(f, receive = false) {
     await f.page.onShow();

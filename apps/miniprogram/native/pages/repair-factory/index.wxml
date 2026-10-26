@@ -1,6 +1,6 @@
 <wxs module="labels">
 var states={PENDING:'待管理员确认范围',APPROVED:'返厂范围已批准',REJECTED:'范围已驳回',WITHDRAWN:'范围已撤回',PENDING_DISPATCH:'待寄出',DISPATCHED:'已寄出，待原机收回',RECEIVED:'原机已实际收回',CANCELLED:'待寄出轮次已取消',WAREHOUSE_PROCESSING:'库管处理中',COMPLETED:'维修已实际结束'};
-var events={FACTORY_SCOPE_REQUESTED:'已申请返厂范围',FACTORY_SCOPE_APPROVED:'已批准返厂范围',FACTORY_SCOPE_REJECTED:'已驳回范围',FACTORY_SCOPE_WITHDRAWN:'已撤回范围',FACTORY_ROUND_CREATED:'已新建待寄出轮次',FACTORY_ROUND_CANCELLED:'已取消待寄出轮次',FACTORY_ROUND_DISPATCHED:'原机已实际寄出',FACTORY_ROUND_RECEIVED:'原机已实际收回',FACTORY_EVIDENCE_ADDED:'已追加本轮原件',FACTORY_QUOTE_RECORDED:'已登记本轮报价',FACTORY_COST_RECORDED:'已确认本轮最终费用'};
+var events={FACTORY_SCOPE_REQUESTED:'已申请返厂范围',FACTORY_SCOPE_APPROVED:'已批准返厂范围',FACTORY_SCOPE_REJECTED:'已驳回范围',FACTORY_SCOPE_WITHDRAWN:'已撤回范围',FACTORY_ROUND_CREATED:'已新建待寄出轮次',FACTORY_ROUND_CANCELLED:'已取消待寄出轮次',FACTORY_ROUND_DISPATCHED:'原机已实际寄出',FACTORY_ROUND_RECEIVED:'原机已实际收回',FACTORY_EVIDENCE_ADDED:'已追加本轮原件',FACTORY_QUOTE_RECORDED:'已登记本轮报价',FACTORY_COST_RECORDED:'已确认本轮最终费用',FACTORY_PARTS_OBSERVED:'已核实原机部件变更'};
 module.exports={state:function(s){return states[s]||'历史阶段';},event:function(s){return events[s]||'历史办理';}};
 </wxs>
 <view class="page">
@@ -43,7 +43,7 @@ module.exports={state:function(s){return states[s]||'历史阶段';},event:funct
 <view wx:if="{{selected.receivedAt}}">原机状况：{{selected.conditionResult === 'RESTORED' ? '已恢复' : '仍有故障'}}；{{selected.treatmentResult}}；实际费用 {{selected.actualCost === null ? '待核实' : selected.actualCost + ' 元'}}。</view>
 <view class="title">本轮原始凭证</view><view wx:if="{{!detail.photosAvailable}}">原件服务暂不可用，请保留实物及原始文件。</view>
 <button wx:for="{{selected.files}}" wx:key="objectId" data-id="{{item.objectId}}" bindtap="onFile" disabled="{{busy || retry || confirmation || stale || item.scanStatus !== 'CLEAN'}}">读取厂家原件 {{item.filename}}</button>
-<view wx:if="{{(activeSelected &amp;&amp; detail.actions.uploadEvidence) || selected.actions.uploadFinancialEvidence}}">
+<view wx:if="{{(activeSelected &amp;&amp; detail.actions.uploadEvidence) || selected.actions.uploadFinancialEvidence || parts.canRecord}}">
 <picker range="{{purposeLabels}}" value="{{purposeIndex}}" bindchange="onPurpose" disabled="{{busy || retry || confirmation || stale}}"><view>本次凭证用途：{{purposeLabels[purposeIndex]}}</view></picker>
 <button bindtap="onChoose" disabled="{{busy || retry || confirmation || stale}}">选择图片或PDF原件</button><view>{{fileName}}</view><button data-action="upload" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale || !fileName}}">核对追加本轮原件</button></view>
 <view wx:if="{{selected.quotes.length}}"><view class="title">本轮报价记录（不计作实际费用）</view><view wx:for="{{selected.quotes}}" wx:key="id">报价 {{item.amount}} 元</view></view>
@@ -54,6 +54,25 @@ module.exports={state:function(s){return states[s]||'历史阶段';},event:funct
 <checkbox-group bindchange="onMoneyEvidence"><label wx:for="{{financialFiles}}" wx:key="object_id"><checkbox value="{{item.object_id}}" disabled="{{busy || retry || confirmation || stale}}"/>{{item.purpose === 'QUOTE' ? '报价原件：' : '费用原件：'}}{{item.filename}}</label></checkbox-group>
 <checkbox-group bindchange="onMoneyChecked"><label><checkbox value="checked" checked="{{moneyChecked}}" disabled="{{busy || retry || confirmation || stale}}"/>已亲自核对本次金额及所选本轮原件</label></checkbox-group>
 <button wx:if="{{selected.actions.recordQuote}}" data-action="quote" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对登记本轮报价</button><button wx:if="{{selected.actions.recordCost}}" data-action="cost" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对确认本轮最终费用</button></view>
+<view wx:if="{{selected.roundStatus === 'RECEIVED'}}" class="card"><view class="title">同一原机的部件变更</view><view>核实部件前后资料并保留原记录；本次核实不结束维修，整机换新须独立建卡。</view>
+<button bindtap="onParts" disabled="{{busy || confirmation}}">核对部件变更记录</button>
+<view wx:if="{{parts}}"><view>本轮部件核实记录共{{parts.total}}条 · 第{{partsPage}}页</view>
+<view wx:for="{{parts.items}}" wx:key="id"><view>{{item.partName}}</view><view>变更前：{{item.beforeInfo}}</view><view>变更后：{{item.afterInfo}}</view><view>实际核实 {{item.observedAt}}；记录于 {{item.recordedAt}}</view></view>
+<button wx:if="{{partsPage > 1}}" data-delta="-1" bindtap="onParts" disabled="{{busy || confirmation}}">上一页部件记录</button><button wx:if="{{partsPage * 20 &lt; parts.total}}" data-delta="1" bindtap="onParts" disabled="{{busy || confirmation}}">下一页部件记录</button>
+<view wx:if="{{!parts.canRecord}}">当前仅可核对原记录，须由当前处理库管在最新原机收回且实物仍待办理时核实部件。</view>
+<view wx:else><view>请先在本轮原始凭证中选择“本轮部件变更原件”用途追加原件，再核实原机 {{selected.originalIdentity.assetCode}}；{{selected.originalIdentity.serialNumber}}。</view>
+<input value="{{partsName}}" data-field="partsName" bindinput="onField" maxlength="100" placeholder="核实的部件名称" disabled="{{busy || retry || confirmation || stale || !detail.photosAvailable}}"/>
+<textarea value="{{partsBefore}}" data-field="partsBefore" bindinput="onField" maxlength="2000" placeholder="变更前部件或身份资料" disabled="{{busy || retry || confirmation || stale || !detail.photosAvailable}}"/>
+<textarea value="{{partsAfter}}" data-field="partsAfter" bindinput="onField" maxlength="2000" placeholder="变更后部件或身份资料" disabled="{{busy || retry || confirmation || stale || !detail.photosAvailable}}"/>
+<input value="{{observedCode}}" data-field="observedCode" bindinput="onField" maxlength="2048" placeholder="部件核实的原机资产编码" disabled="{{busy || retry || confirmation || stale || !detail.photosAvailable}}"/>
+<input wx:if="{{selected.originalIdentity.serialNumber}}" value="{{serial}}" data-field="serial" bindinput="onField" maxlength="128" placeholder="部件核实的原机序列号" disabled="{{busy || retry || confirmation || stale || !detail.photosAvailable}}"/>
+<button bindtap="onNow" disabled="{{busy || retry || confirmation || stale || !detail.photosAvailable}}">使用当前部件核实时间</button>
+<input value="{{actualDate}}" data-field="actualDate" bindinput="onField" placeholder="部件核实日期（年-月-日，本机时区）" disabled="{{busy || retry || confirmation || stale || !detail.photosAvailable}}"/>
+<input value="{{actualTime}}" data-field="actualTime" bindinput="onField" placeholder="部件核实时刻（时:分:秒，本机时区）" disabled="{{busy || retry || confirmation || stale || !detail.photosAvailable}}"/>
+<textarea value="{{partsReason}}" data-field="partsReason" bindinput="onField" maxlength="1000" placeholder="部件变更核实依据（至少10字）" disabled="{{busy || retry || confirmation || stale || !detail.photosAvailable}}"/>
+<checkbox-group bindchange="onPartsEvidence"><label wx:for="{{partsFiles}}" wx:key="object_id"><checkbox value="{{item.object_id}}" disabled="{{busy || retry || confirmation || stale || !detail.photosAvailable}}"/>选用部件变更原件 {{item.filename}}</label></checkbox-group>
+<checkbox-group bindchange="onChecked"><label><checkbox value="original" checked="{{originalChecked}}" disabled="{{busy || retry || confirmation || stale || !detail.photosAvailable}}"/>已亲自核实仍为原实物，部件前后资料与所选原件相符</label></checkbox-group>
+<button data-action="parts" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale || !detail.photosAvailable}}">核对保存部件变更</button></view></view></view>
 <view wx:if="{{activeSelected &amp;&amp; (detail.actions.dispatch || detail.actions.receive)}}">
 <view class="title">{{detail.actions.receive ? '核实原机实际收回' : '登记原机实际寄出'}}</view><view>本轮原机：{{selected.originalIdentity.assetCode}}；{{selected.originalIdentity.serialNumber}}</view>
 <view>现场核对的资产编码</view><input value="{{observedCode}}" data-field="observedCode" bindinput="onField" maxlength="2048" disabled="{{busy || retry || confirmation || stale}}"/>

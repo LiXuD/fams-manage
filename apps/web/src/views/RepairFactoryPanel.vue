@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import RepairFactoryPartsPanel from "./RepairFactoryPartsPanel.vue";
 import { RepairApiError, repairRequest, type Repair } from "@/repair/api";
 import { factoryEventNames, factoryProblem, factoryRequest, factoryRoundStates, factoryScopeStates, type FactoryMutation } from "@/repair/factory-api";
 import type { FactoryDetail, FactoryFile, FactoryHistory, FactoryPage, FactoryReply, FactoryRound, FactoryRoundDetail } from "@/repair/factory-types";
@@ -10,6 +11,7 @@ const session = useSessionStore();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, props.repair.id]));
 const canRead = computed(() => !!session.user?.roles.includes("ASSET_ADMIN") || !!session.user?.roles.includes("WAREHOUSE_OPERATOR") && String(session.user.id) === props.repair.processorAccountId);
 const opened = ref(false), busy = ref(false), stale = ref(true), error = ref(""), notice = ref("");
+const partsBusy = ref(false);
 const data = ref<FactoryDetail | null>(null), rows = ref<FactoryRound[]>([]), selected = ref<FactoryRoundDetail | null>(null), selectedId = ref("");
 const history = ref<FactoryHistory[]>([]), total = ref(0), page = ref(1), historyTotal = ref(0), historyPage = ref(1);
 const confirmation = ref<FactoryMutation | null>(null), pending = ref<FactoryMutation | null>(null);
@@ -24,16 +26,17 @@ const file = ref<File | null>(null), purpose = ref("FACTORY_ACK"), selectedEvide
 const preview = ref(""), previewName = ref(""), previewMime = ref("");
 let generation = 0, live = true, download: AbortController | null = null;
 const current = (epoch: number, owner: string) => live && epoch === generation && identity.value === owner;
-const locked = computed(() => props.blocked || busy.value || !!pending.value || !!confirmation.value);
+const locked = computed(() => props.blocked || busy.value || partsBusy.value || !!pending.value || !!confirmation.value);
 const activeSelected = computed(() => !!selected.value && selected.value.id === data.value?.activeRound?.id);
 const evidencePurpose = computed(() => data.value?.activeRound?.roundStatus === "DISPATCHED" ? "RECEIPT" : "FACTORY_ACK");
 const eligibleEvidence = computed(() => selected.value?.evidence.filter(item => item.purpose === evidencePurpose.value) ?? []);
 const financialEvidence = computed(() => selected.value?.evidence.filter(item => ["QUOTE", "COST_RECEIPT"].includes(item.purpose) && selected.value?.files.some(file => file.objectId === item.object_id && file.scanStatus === "CLEAN")) ?? []);
 function clearMoney() { moneyAmount.value = ""; moneyReason.value = ""; moneyChecked.value = false; moneyEvidence.value = []; costUnassessed.value = false; }
-watch([busy, pending, confirmation], () => emit("busy-change", busy.value || !!pending.value || !!confirmation.value), { flush: "sync" });
+watch([busy, pending, confirmation, partsBusy], () => emit("busy-change", busy.value || !!pending.value || !!confirmation.value || partsBusy.value), { flush: "sync" });
 function clearPreview() { download?.abort(); download = null; if (preview.value) URL.revokeObjectURL(preview.value); preview.value = ""; previewName.value = ""; previewMime.value = ""; }
 function clearPhysical() { clearMoney(); observedCode.value = ""; serial.value = ""; actualDate.value = ""; actualTime.value = ""; evidence.value = ""; originalChecked.value = false; noCostChecked.value = false; selectedEvidence.value = []; locationId.value = ""; }
 function reset() {
+  partsBusy.value = false;
   generation++; clearPreview(); opened.value = false; busy.value = false; stale.value = true; data.value = null; rows.value = []; history.value = []; selected.value = null; selectedId.value = "";
   confirmation.value = null; pending.value = null; file.value = null; locations.value = []; total.value = 0; historyTotal.value = 0; page.value = 1; historyPage.value = 1;
   costPolicy.value = "NO_COST"; costLimit.value = ""; reason.value = ""; provider.value = ""; contact.value = ""; phone.value = ""; due.value = ""; fault.value = ""; purpose.value = "FACTORY_ACK"; clearPhysical();
@@ -219,6 +222,7 @@ onBeforeUnmount(() => { live = false; reset(); emit("busy-change", false); });
             <template v-if="data.actions.receive"><label>原机实际状况<select v-model="condition"><option value="RESTORED">已恢复</option><option value="STILL_FAULTY">仍有故障，继续维修</option></select></label><button @click="loadLocations()">查询有效收回地点</button><label v-for="location in locations" :key="location.id"><input v-model="locationId" type="radio" :value="location.id">{{ location.name }}</label><button :disabled="locationPage === 1" @click="loadLocations(-1)">上一页收回地点</button><button :disabled="locationPage * 20 >= locationTotal" @click="loadLocations(1)">下一页收回地点</button><label><input v-model="noCostChecked" type="checkbox">{{ selected.actualCost === null ? '已核实本轮实际没有费用' : '已核对本轮已记录最终费用 ' + selected.actualCost + ' 元' }}</label><label v-if="selected.actualCost === null"><input v-model="costUnassessed" type="checkbox">费用尚待核实，先记录原机实际收回</label></template>
             <label>{{ data.actions.receive ? '实际收回状况与处理结果' : '实物寄出与厂家接收依据' }}<textarea v-model="evidence" maxlength="2000" /></label><button v-if="data.actions.dispatch" @click="prepare('dispatch')">核对实际寄出原实物</button><button v-if="data.actions.receive" @click="prepare('receive')">核对原实物已实际收回</button>
           </fieldset>
+          <RepairFactoryPartsPanel v-if="selected.roundStatus === 'RECEIVED'" :key="`${identity}:${selected.id}`" :repair="props.repair" :round="selected" :blocked="props.blocked || busy || !!pending || !!confirmation || stale" @busy-change="partsBusy = $event" @changed="load" @invalidated="reset();emit('invalidated')" @read-file="readFile" />
           <figure v-if="preview"><img v-if="previewMime !== 'application/pdf'" :src="preview" :alt="`厂家凭证：${previewName}`"><p v-else>PDF原件已读取，可保存查看。</p><figcaption>{{ previewName }}</figcaption><a :href="preview" :download="previewName">保存这份厂家原件</a><button @click="clearPreview">关闭厂家凭证</button></figure>
         </section>
         <h4>独立办理历史 / 共 {{ historyTotal }} 条</h4><ul><li v-for="item in history" :key="item.id">{{ item.actor_username }} · {{ new Date(item.recorded_at).toLocaleString() }} · {{ factoryEventNames[item.action] || '历史返厂办理' }}</li></ul><button :disabled="locked || historyPage === 1" @click="paginate(-1,true)">上一页返厂历史</button>第 {{ historyPage }} 页<button :disabled="locked || historyPage * 20 >= historyTotal" @click="paginate(1,true)">下一页返厂历史</button>

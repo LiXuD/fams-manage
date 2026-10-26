@@ -1,0 +1,66 @@
+{
+  "base": "4b5eaf0",
+  "commit": "7de71af",
+  "detectRisk": "critical",
+  "changedSymbols": 50,
+  "affectedFlows": 33,
+  "methodAstReview": [
+    {
+      "class": "AssetFactoryRepairPort",
+      "oldMethods": 4,
+      "unchangedMethods": 4,
+      "changedExisting": [],
+      "added": [
+        "AssetFactoryRepairPort.recordPartsObservation(long,long,String,String,String,long,long,long,long,Instant,Instant)"
+      ]
+    },
+    {
+      "class": "RepairFactoryController",
+      "oldMethods": 15,
+      "unchangedMethods": 15,
+      "changedExisting": [],
+      "added": [
+        "RepairFactoryController.parts(long,long,int,int)",
+        "RepairFactoryController.recordParts(long,long,long,UUID,RepairFactoryInput.PartsFact)"
+      ]
+    },
+    {
+      "class": "RepairFactoryEvidenceController",
+      "oldMethods": 5,
+      "unchangedMethods": 4,
+      "changedExisting": [
+        "RepairFactoryEvidenceController.upload(long,long,long,UUID,long,long,long,long,String,String,String,MultipartFile)"
+      ],
+      "added": []
+    },
+    {
+      "class": "RepairFactoryInput",
+      "oldMethods": 6,
+      "unchangedMethods": 6,
+      "changedExisting": [],
+      "added": [
+        "RepairFactoryInput.PartsFact.<init>(Long,Long,Long,Long,String,String,String,String,String,Instant,List<@NotNull UUID>,String,Boolean)"
+      ]
+    },
+    {
+      "class": "RepairFactoryService",
+      "oldMethods": 59,
+      "unchangedMethods": 58,
+      "changedExisting": [
+        "RepairFactoryService.registerEvidence(Actor,long,long,long,long,UUID,long,long,long,String,String,AttachmentIntake.QuarantinedAttachment)"
+      ],
+      "added": [
+        "RepairFactoryService.parts(Actor,long,long,int,int)",
+        "RepairFactoryService.partsPhase(long,Map<String, Object>)",
+        "RepairFactoryService.recordParts(Actor,long,long,long,UUID,RepairFactoryInput.PartsFact)"
+      ]
+    }
+  ],
+  "method": "Java21 public compiler parse AST, including signatures and annotations; hashes ignore formatting trivia, imports manually inspected",
+  "intendedExistingChanges": "Evidence upload parameter purpose gains PARTS_CHANGE; registerEvidence adds its post-receipt phase guard",
+  "runtimeEvidence": "HTTP36, architecture6 and static0; inherited pricing and original movement tests retained",
+  "notIndependentReview": true,
+  "limitations": "AST equality is not whole-program runtime equivalence; new transport flows still require UI/fixed-gate acceptance",
+  "reviewedSha": "7de71afe1e4e1c9fe9905afdb8b5ee80df3c62be",
+  "baseSha": "4b5eaf0019af2eb099f0b0b0b31474d282aa365d"
+}

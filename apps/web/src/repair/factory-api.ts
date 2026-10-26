@@ -37,6 +37,7 @@ export const factoryEventNames: Record<string, string> = {
   FACTORY_ROUND_DISPATCHED: "实物已实际寄出", FACTORY_ROUND_RECEIVED: "原实物已核实收回",
   FACTORY_QUOTE_RECORDED: "已登记本轮报价", FACTORY_COST_RECORDED: "已确认本轮最终费用", FACTORY_FOLLOWUP_RECORDED: "已登记返厂后续资料",
   FACTORY_EVIDENCE_ADDED: "已追加厂家凭证", FACTORY_CONFLICT_REJECTED: "过期办理已拒绝",
+  FACTORY_PARTS_OBSERVED: "已核实原机部件变更",
 };
 export function factoryProblem(cause: unknown): string {
   if (cause instanceof RepairApiError) {

@@ -1,6 +1,6 @@
 import type { MiniServices } from "./pages.ts";
 import { MiniRequestError, type FactoryEvidenceFile } from "./session.ts";
-import type { FactoryDetail, FactoryFile, FactoryHistory, FactoryList, FactoryRound, FactoryRoundDetail } from "./repair-factory-types.ts";
+import type { FactoryDetail, FactoryFile, FactoryHistory, FactoryList, FactoryPartsPage, FactoryRound, FactoryRoundDetail } from "./repair-factory-types.ts";
 
 interface Place { id: string; name: string; version: number }
 interface Intent { readonly path: string; readonly key: string; readonly version: number; readonly body?: string;
@@ -20,12 +20,14 @@ interface Data {
     moneyAmount: string; moneyReason: string; moneyChecked: boolean; moneyEvidenceIds: string[]; costUnassessed: boolean;
     financialFiles: { object_id: string; filename: string; purpose: string }[]; purposeKinds: string[];
     previewPath: string; previewName: string; previewMime: string;
+    parts: FactoryPartsPage | null; partsPage: number; partsName: string; partsBefore: string; partsAfter: string; partsReason: string;
+    partsEvidenceIds: string[]; partsFiles: { object_id: string; filename: string }[];
 }
 interface Context { data: Data; setData(update: Partial<Data>): void }
-type Action = "requestCostScope" | "quote" | "cost" | "requestScope" | "approveScope" | "rejectScope" | "withdrawScope" | "createRound" | "cancelRound" | "dispatch" | "receive" | "upload";
+type Action = "parts" | "requestCostScope" | "quote" | "cost" | "requestScope" | "approveScope" | "rejectScope" | "withdrawScope" | "createRound" | "cancelRound" | "dispatch" | "receive" | "upload";
 class FactoryFormError extends Error {}
 const moneyPattern = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/;
-const purposeNames: Record<string, string> = { FAULT: "实际故障", FACTORY_ACK: "厂家接收依据", RECEIPT: "原机收回依据", QUOTE: "本轮报价原件", COST_RECEIPT: "本轮实际费用凭证" };
+const purposeNames: Record<string, string> = { FAULT: "实际故障", FACTORY_ACK: "厂家接收依据", RECEIPT: "原机收回依据", QUOTE: "本轮报价原件", COST_RECEIPT: "本轮实际费用凭证", PARTS_CHANGE: "本轮部件变更原件" };
 const costPolicies = ["NO_COST", "LIMITED", "UNLIMITED"] as const;
 const costText = (policy?: string, limit?: string | null) => policy === "UNLIMITED" ? "费用不限" : policy === "LIMITED" ? "所有轮次累计限额 " + (limit ?? "待核对") + " 元" : "无费用";
 const idPattern = /^[1-9][0-9]{0,18}$/;
@@ -37,7 +39,7 @@ const blank = (): Data => ({ detail: null, rows: [], selected: null, history: []
     costPolicyIndex: 0, costPolicyLabels: ["无费用", "所有轮次累计限额", "不限费用"], costLimit: "", approvedCostLabel: "", pendingCostLabel: "",
     moneyAmount: "", moneyReason: "", moneyChecked: false, moneyEvidenceIds: [], costUnassessed: false, financialFiles: [],
     purposeKinds: ["FAULT", "FACTORY_ACK", "QUOTE", "COST_RECEIPT"],
-    previewPath: "", previewName: "", previewMime: "" });
+    previewPath: "", previewName: "", previewMime: "", parts: null, partsPage: 1, partsName: "", partsBefore: "", partsAfter: "", partsReason: "", partsEvidenceIds: [], partsFiles: [] });
 const clock = (date: Date) => [date.getHours(), date.getMinutes(), date.getSeconds()].map(n => String(n).padStart(2, "0")).join(":");
 const day = (date: Date) => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
 function physicalTime(date: string, time: string): string {
@@ -51,12 +53,14 @@ function physicalTime(date: string, time: string): string {
 export function createRepairFactoryPage(getServices: () => MiniServices) {
     let services: MiniServices, repairId = "", selectedId = "", identity = "", live = false, generation = 0;
     let pending: Intent | null = null, prepared: Intent | null = null, preview = "", actualInstant = "", chosen: { path: string; name: string; size: number } | null = null;
+    let partsRoundId = "", partsPage = 1;
     const owner = () => JSON.stringify([services.sessions.identity, services.sessions.identityRevision]);
     const current = (epoch: number) => live && epoch === generation && identity === owner();
     const route = (path = "") => "/api/v1/mini/repairs/" + repairId + "/factory" + path;
     const discard = (file?: FactoryEvidenceFile) => { if (file) services.sessions.discardFactoryEvidence(file.path); };
     const clearPreview = () => { const old = preview; preview = ""; if (old) services.sessions.discardFactoryEvidence(old); };
     const wipe = (page: Context, message: string) => {
+        partsRoundId = ""; partsPage = 1;
         const files = new Set([pending?.file, prepared?.file]); pending = null; prepared = null; chosen = null; selectedId = ""; actualInstant = "";
         page.setData({ ...blank(), error: message });
         try { clearPreview(); } finally { for (const file of files) discard(file); }
@@ -94,11 +98,16 @@ export function createRepairFactoryPage(getServices: () => MiniServices) {
         const selected = next ? await services.sessions.request("GET", route("/rounds/" + next)) as FactoryRoundDetail : null;
         if (!current(epoch)) return false;
         selectedId = next;
+        if (partsRoundId !== next || selected?.roundStatus !== "RECEIVED") { partsRoundId = ""; partsPage = 1; }
+        const parts = partsRoundId ? await services.sessions.request("GET", route("/rounds/" + next + "/parts?page=" + partsPage + "&pageSize=20")) as FactoryPartsPage : null;
+        if (!current(epoch)) return false;
         const purpose = detail.activeRound?.roundStatus === "DISPATCHED" ? "RECEIPT" : "FACTORY_ACK";
         const activeSelected = !!selected && selected.id === detail.activeRound?.id;
         const purposeKinds = activeSelected ? ["FAULT", purpose, "QUOTE", "COST_RECEIPT"] : ["QUOTE", "COST_RECEIPT"];
+        if (parts?.canRecord) purposeKinds.push("PARTS_CHANGE");
         const files = new Map(selected?.files.filter(f => f.scanStatus === "CLEAN").map(f => [f.objectId, f.filename]) ?? []);
         page.setData({ detail, rows: list.items, total: list.total, history: events.items, historyTotal: events.total, selected,
+            parts, partsPage, partsFiles: selected?.evidence.filter(f => f.purpose === "PARTS_CHANGE" && files.has(f.object_id)).map(f => ({ object_id: f.object_id, filename: files.get(f.object_id)! })) ?? [],
             activeSelected, stale: false, retry: !!pending, pendingLabel: pending?.label ?? "",
             eligibleFiles: selected?.evidence.filter(f => f.purpose === purpose && files.has(f.object_id)).map(f => ({ object_id: f.object_id, filename: files.get(f.object_id)! })) ?? [],
             approvedCostLabel: detail.approvedScope ? costText(detail.approvedScope.costPolicy, detail.approvedScope.costLimit) : "尚无批准范围",
@@ -130,17 +139,19 @@ export function createRepairFactoryPage(getServices: () => MiniServices) {
                 page: page.data.page, total: page.data.total, historyPage: page.data.historyPage, historyTotal: page.data.historyTotal,
                 eligibleFiles: page.data.eligibleFiles, activeSelected: page.data.activeSelected, purposeLabels: page.data.purposeLabels,
                 purposeKinds: page.data.purposeKinds, financialFiles: page.data.financialFiles,
+                parts: page.data.parts, partsPage: page.data.partsPage, partsFiles: page.data.partsFiles,
                 approvedCostLabel: page.data.approvedCostLabel, pendingCostLabel: page.data.pendingCostLabel };
             page.setData({ ...blank(), ...saved, stale: false, notice: "本次办理结果已核对，实际进度以当前单据为准。" });
             discard(operation.file); clearPreview();
         } catch (error) { if (current(epoch)) failure(page, error); } finally { finish(page, epoch); }
     };
     const prepare = (page: Context, action: Action) => {
-        if (!editable(page) || !page.data.detail || !["requestScope", "requestCostScope", "quote", "cost", "approveScope", "rejectScope", "withdrawScope", "createRound", "cancelRound", "dispatch", "receive", "upload"].includes(action)) return;
+        if (!editable(page) || !page.data.detail || !["parts", "requestScope", "requestCostScope", "quote", "cost", "approveScope", "rejectScope", "withdrawScope", "createRound", "cancelRound", "dispatch", "receive", "upload"].includes(action)) return;
         const d = page.data.detail, row = page.data.selected, permission = ["approveScope", "rejectScope"].includes(action) ? "decideScope" : action === "upload" ? "uploadEvidence" : action;
         const financialPurpose = ["QUOTE", "COST_RECEIPT"].includes(page.data.purposeKinds[page.data.purposeIndex] ?? "");
         const financial = action === "quote" || action === "cost" || action === "upload" && financialPurpose;
-        const permitted = action === "quote" ? row?.actions?.recordQuote : action === "cost" ? row?.actions?.recordCost
+        const partsAction = action === "parts" || action === "upload" && page.data.purposeKinds[page.data.purposeIndex] === "PARTS_CHANGE";
+        const permitted = partsAction ? page.data.parts?.canRecord && d.photosAvailable : action === "quote" ? row?.actions?.recordQuote : action === "cost" ? row?.actions?.recordCost
             : action === "upload" && financialPurpose ? row?.actions?.uploadFinancialEvidence : d.actions[permission];
         if (!permitted) return;
         const guards = { assetVersion: d.assetVersion, ownershipVersion: d.ownershipVersion, lockVersion: d.lockVersion };
@@ -166,9 +177,19 @@ export function createRepairFactoryPage(getServices: () => MiniServices) {
                     serviceContact: page.data.contact.trim(), servicePhone: page.data.phone.trim(), expectedReturnDate: page.data.due, fault: page.data.fault.trim() };
                 label = "新建待寄出轮次：" + page.data.provider.trim() + "；预计收回 " + page.data.due;
             } else {
-                if (!row || !financial && (row.id !== d.activeRound?.id || row.version !== d.activeRound.version) || d.lockVersion === null) throw new FactoryFormError("请刷新并选中当前活动轮次。");
+                if (!row || !financial && !partsAction && (row.id !== d.activeRound?.id || row.version !== d.activeRound.version) || d.lockVersion === null) throw new FactoryFormError("请刷新并选中当前活动轮次。");
                 path = "/rounds/" + row.id;
-                if (action === "quote" || action === "cost") {
+                if (action === "parts") {
+                    const partName = page.data.partsName.trim(), beforeInfo = page.data.partsBefore.trim(), afterInfo = page.data.partsAfter.trim(), reason = page.data.partsReason.trim();
+                    const evidenceIds = [...page.data.partsEvidenceIds], allowed = new Set(page.data.partsFiles.map(f => f.object_id));
+                    if (!partName || partName.length > 100 || !beforeInfo || beforeInfo.length > 2000 || !afterInfo || afterInfo.length > 2000 || beforeInfo === afterInfo || reason.length < 10 || reason.length > 1000
+                        || !page.data.observedCode.trim() || row.originalIdentity.serialNumber && !page.data.serial.trim() || !page.data.originalChecked
+                        || !evidenceIds.length || evidenceIds.length > 14 || !evidenceIds.every(id => allowed.has(id))) throw new FactoryFormError("请核实同一原机编码、序列号、部件前后不同资料、真实核实时间和本轮部件变更原件，并填写至少10字依据。");
+                    let observedAt = physicalTime(page.data.actualDate, page.data.actualTime);
+                    if (actualInstant && day(new Date(actualInstant)) === page.data.actualDate && clock(new Date(actualInstant)) === page.data.actualTime) observedAt = actualInstant;
+                    path += "/parts"; body = { ...guards, roundVersion: row.version, partName, beforeInfo, afterInfo, observedAt, observedCode: page.data.observedCode.trim(), observedSerial: page.data.serial.trim() || null, evidenceIds, reason, originalPhysicalIdentityChecked: true };
+                    label = "核实同一原机部件变更：" + partName + "；变更前：" + beforeInfo + "；变更后：" + afterInfo;
+                } else if (action === "quote" || action === "cost") {
                     const amount = page.data.moneyAmount.trim(), selected = [...page.data.moneyEvidenceIds], purpose = action === "quote" ? "QUOTE" : "COST_RECEIPT";
                     const allowed = new Set(page.data.financialFiles.filter(f => f.purpose === purpose).map(f => f.object_id));
                     if (!moneyPattern.test(amount) || !page.data.moneyChecked || page.data.moneyReason.trim().length < 3
@@ -225,7 +246,7 @@ export function createRepairFactoryPage(getServices: () => MiniServices) {
         async onRefresh(this: Context) { if (ensureCurrent(this) && !this.data.busy && !prepared) await read(this); },
         onField(this: Context, e: { currentTarget: { dataset: { field: string } }; detail: { value: string } }) {
             const field = e.currentTarget.dataset.field;
-            if (editable(this) && ["reason", "provider", "contact", "phone", "due", "fault", "observedCode", "serial", "actualDate", "actualTime", "evidence", "costLimit", "moneyAmount", "moneyReason"].includes(field)) {
+            if (editable(this) && ["reason", "provider", "contact", "phone", "due", "fault", "observedCode", "serial", "actualDate", "actualTime", "evidence", "costLimit", "moneyAmount", "moneyReason", "partsName", "partsBefore", "partsAfter", "partsReason"].includes(field)) {
                 if (["actualDate", "actualTime"].includes(field)) actualInstant = "";
                 this.setData({ [field]: e.detail.value });
             }
@@ -238,6 +259,13 @@ export function createRepairFactoryPage(getServices: () => MiniServices) {
         onCostPolicy(this: Context, e: { detail: { value: string } }) { const index = Number(e.detail.value); if (editable(this) && [0, 1, 2].includes(index)) this.setData({ costPolicyIndex: index, costLimit: "" }); },
         onMoneyChecked(this: Context, e: { detail: { value: string[] } }) { if (editable(this)) this.setData({ moneyChecked: e.detail.value.includes("checked") }); },
         onMoneyEvidence(this: Context, e: { detail: { value: string[] } }) { if (editable(this)) this.setData({ moneyEvidenceIds: e.detail.value.filter(id => this.data.financialFiles.some(f => f.object_id === id)) }); },
+        onPartsEvidence(this: Context, e: { detail: { value: string[] } }) { if (editable(this)) this.setData({ partsEvidenceIds: e.detail.value.filter(id => this.data.partsFiles.some(f => f.object_id === id)) }); },
+        async onParts(this: Context, e: { currentTarget: { dataset: { delta?: string } } }) {
+            if (!ensureCurrent(this) || this.data.busy || prepared || this.data.selected?.roundStatus !== "RECEIVED") return;
+            const delta = Number(e.currentTarget.dataset.delta ?? "0"), next = partsPage + delta;
+            if (![-1, 0, 1].includes(delta) || next < 1 || delta > 0 && (next - 1) * 20 >= (this.data.parts?.total ?? 0)) return;
+            partsRoundId = this.data.selected.id; partsPage = next; await read(this);
+        },
         async onChoose(this: Context) {
             if (!editable(this) || !services.chooseEvidence) return;
             const epoch = generation; this.setData({ busy: true, error: "" });

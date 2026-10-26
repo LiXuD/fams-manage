@@ -130,6 +130,42 @@ class RepairFactoryHttpRuntimeCase {
     }
 
     private void runNativeScenario(boolean initial, boolean priced) throws Exception {
+        runNativeScenario(initial, priced, false);
+    }
+
+    @Test
+    void actualNativePartsPagesRetainOriginalCardAndReplayCommittedIndependentFacts()
+            throws Exception {
+        var original =
+                db.queryForMap(
+                        "SELECT id,asset_code,serial_number,created_business_date,"
+                                + "last_inventory_business_date FROM fams_asset WHERE id=951020");
+        runNativeScenario(false, false, true);
+        assertEquals(
+                original,
+                db.queryForMap(
+                        "SELECT id,asset_code,serial_number,created_business_date,"
+                                + "last_inventory_business_date FROM fams_asset WHERE id=951020"));
+        assertEquals(
+                2L,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_repair_factory_parts_change", Long.class));
+        assertEquals(
+                2L,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_asset_timeline_event WHERE asset_id=951020"
+                                + " AND event_type='REPAIR_FACTORY_PARTS_OBSERVED'",
+                        Long.class));
+        assertFalse(
+                db.queryForList(
+                                "SELECT summary_json FROM fams_asset_timeline_event WHERE"
+                                    + " asset_id=951020")
+                        .toString()
+                        .contains("PRIVATE-NATIVE-PART"));
+    }
+
+    private void runNativeScenario(boolean initial, boolean priced, boolean parts)
+            throws Exception {
         var grants = new LinkedHashMap<String, Object>();
         for (var entry :
                 Map.of("employee", 951002L, "admin", 951001L, "warehouse", 951003L).entrySet()) {
@@ -169,6 +205,7 @@ class RepairFactoryHttpRuntimeCase {
         builder.environment().put("FAMS_TEST_REPAIR_GRANTS", JSON.writeValueAsString(grants));
         builder.environment().put("FAMS_TEST_FACTORY_INITIAL", initial ? "1" : "0");
         builder.environment().put("FAMS_TEST_FACTORY_PRICED", priced ? "1" : "0");
+        builder.environment().put("FAMS_TEST_FACTORY_PARTS", parts ? "1" : "0");
         var process = builder.start();
         try {
             assertTrue(process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS));
@@ -178,6 +215,11 @@ class RepairFactoryHttpRuntimeCase {
                             java.nio.charset.StandardCharsets.UTF_8);
             assertEquals(0, process.exitValue(), output);
             assertTrue(output.contains("\"nativeFactoryClosed\":true"), output);
+            if (parts) {
+                assertTrue(output.contains("\"nativePartsObserved\":true"), output);
+                assertTrue(output.contains("\"committedPartsOriginalReplay\":true"), output);
+                assertTrue(output.contains("\"partsImmutable\":true"), output);
+            }
             System.out.println(output.strip());
         } finally {
             if (process.isAlive()) {
@@ -191,7 +233,7 @@ class RepairFactoryHttpRuntimeCase {
                 3L,
                 db.queryForObject("SELECT COUNT(*) FROM fams_repair_factory_round", Long.class));
         assertEquals(
-                priced ? 8L : 4L,
+                (priced ? 8L : 4L) + (parts ? 1L : 0L),
                 db.queryForObject("SELECT COUNT(*) FROM fams_repair_factory_evidence", Long.class));
         assertEquals(
                 0L,
@@ -2157,7 +2199,7 @@ class RepairFactoryHttpRuntimeCase {
         var originalObservation =
                 db.queryForMap(
                         "SELECT * FROM fams_repair_factory_parts_change WHERE repair_id=? ORDER BY"
-                            + " id LIMIT 1",
+                                + " id LIMIT 1",
                         id);
         var continued =
                 partsBody(
@@ -2176,7 +2218,7 @@ class RepairFactoryHttpRuntimeCase {
                 originalObservation,
                 db.queryForMap(
                         "SELECT * FROM fams_repair_factory_parts_change WHERE repair_id=? ORDER BY"
-                            + " id LIMIT 1",
+                                + " id LIMIT 1",
                         id));
         create(id, fixture.warehouse);
         assertFalse(ok(get(fixture.warehouse, route)).path("canRecord").asBoolean());

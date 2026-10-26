@@ -28,3 +28,5 @@ export interface FactoryRoundDetail extends FactoryRound {
 }
 export interface FactoryHistory { id: number; action: string; actor_username: string; recorded_at: string }
 export interface FactoryList<T> { items: T[]; total: number }
+export interface FactoryPartsFact { id: string; roundId: string; assetId: string; partName: string; beforeInfo: string; afterInfo: string; observedAt: string; recordedAt: string; evidenceIds: string[]; recordedBy: string }
+export interface FactoryPartsPage extends FactoryList<FactoryPartsFact> { page: number; pageSize: number; canRecord: boolean }

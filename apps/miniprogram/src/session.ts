@@ -104,7 +104,7 @@ export class MiniSessionClient {
         if (!/^\/api\/v1\/mini\/repairs\/[1-9][0-9]{0,18}\/factory\/rounds\/[1-9][0-9]{0,18}\/evidence$/.test(path)
             || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(mutation.key)
             || ![mutation.version, mutation.roundVersion, mutation.assetVersion, mutation.ownershipVersion, mutation.lockVersion].every(v => Number.isSafeInteger(v) && v >= 0)
-            || !["FAULT", "FACTORY_ACK", "RECEIPT", "QUOTE", "COST_RECEIPT"].includes(mutation.purpose)) throw new Error("返厂上传身份或版本无效。");
+            || !["FAULT", "FACTORY_ACK", "RECEIPT", "QUOTE", "COST_RECEIPT", "PARTS_CHANGE"].includes(mutation.purpose)) throw new Error("返厂上传身份或版本无效。");
         const session = this.current, generation = this.generation;
         if (!session) throw new MiniRequestError(401, "AUTH_SESSION_INVALID");
         if (!this.runtime.upload || !this.runtime.verifyFactoryEvidence) throw new Error("当前环境无法安全上传返厂原件。");
