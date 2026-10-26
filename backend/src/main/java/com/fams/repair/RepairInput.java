@@ -21,7 +21,17 @@ public final class RepairInput {
     public record Decision(
             @NotBlank String result,
             String allowedMethod,
-            @NotBlank @Size(min = 3, max = 1000) String reason) {}
+            @NotBlank @Size(min = 3, max = 1000) String reason,
+            @com.fasterxml.jackson.annotation.JsonInclude(
+                            com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                    String factoryCostPolicy,
+            @com.fasterxml.jackson.annotation.JsonInclude(
+                            com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+                    String factoryCostLimit) {
+        public Decision(String result, String allowedMethod, String reason) {
+            this(result, allowedMethod, reason, null, null);
+        }
+    }
 
     public record ReturnSourceSubmission(
             @PositiveOrZero long assetVersion,

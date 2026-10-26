@@ -1,0 +1,37 @@
+{
+  "task": "D6-20B2 full contract generation compatibility fix",
+  "sourceBase": "080ce00",
+  "scope": "current working tree; generated outputs remain ignored",
+  "defect": "AssetImportCellError.sheet wire enum value 资产 generates an empty member identifier in the existing TypeScript template",
+  "fix": "Use the actual JMustache String.isEmpty boolean to fall back to the already escaped wire-value literal only for an empty generated enum name; retain all nonempty names and all wire values",
+  "sourceHashes": {
+    "contracts/fams-core-v1.yaml": "ce822cb79b788e32ac0b5d4b11eafb838303696bbf1b475da79fc745a46c3110",
+    "packages/api-types/openapi-templates/typescript-fetch/modelGeneric.mustache": "57ef6b96dd8652237c4e41bbf978547f0ea969ec5579f6023513cb1e27e742a7",
+    "packages/api-types/openapi-templates/typescript-fetch/modelEnum.mustache": "9fad49edc08467d256325fe6533563be9cb3edd36af47167f7bca6a9670c01c9"
+  },
+  "verification": {
+    "cleanIndependentGenerations": 2,
+    "javaFiles": 487,
+    "typescriptTargetFiles": 467,
+    "manifestDifferences": 0,
+    "generatedJavaCompile": true,
+    "generatedTypeScriptCompile": true,
+    "actualJMustacheProbe": {
+      "version": "1.16",
+      "nonemptyNamePreserved": "Draft",
+      "emptyNameFallsBackToEscapedWireValue": true
+    }
+  },
+  "log": "output/d6-20b2-cost-real-contract-generation.log",
+  "logSha256": "4d23396141dac052ec1d6ffed9b2bbb6ac1faad8445c0f38729535aa77ed6475",
+  "retainedFailures": [
+    "output/d6-20b2-cost-contract-dirty-target-first-failure.log",
+    "output/d6-20b2-cost-contract-cjk-enum-red.log",
+    "output/d6-20b2-cost-contract-cjk-conditional-first-failure.log"
+  ],
+  "limitations": [
+    "No current fixed full product gate or CI claim",
+    "Existing two moderate dependency findings remain",
+    "Historical global contract mutation/mini CSRF audit exceptions remain separate"
+  ]
+}

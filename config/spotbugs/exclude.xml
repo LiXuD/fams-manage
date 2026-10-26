@@ -562,4 +562,11 @@
         <Method name="&lt;init&gt;"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+    <!-- Repair-owned helper retains the same transaction-bound JDBC collaborator. -->
+    <Match>
+        <Class name="com.fams.repair.RepairFactoryCosts"/>
+        <Field name="db"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
 </FindBugsFilter>

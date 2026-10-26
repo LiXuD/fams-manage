@@ -68,6 +68,18 @@ public class RepairFactoryService {
     /** Joins the original single administrator decision; it does not perform a second approval. */
     @Transactional(propagation = Propagation.MANDATORY)
     public void approveInitially(Actor actor, long id, long beforeVersion, String reason) {
+        approveInitially(actor, id, beforeVersion, reason, null, null);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void approveInitially(
+            Actor actor,
+            long id,
+            long beforeVersion,
+            String reason,
+            String costPolicy,
+            String costLimit) {
+        var policy = RepairFactoryCostPolicy.parse(costPolicy, costLimit);
         var current = reader(actor);
         if (!current.has(Role.ASSET_ADMIN)) {
             throw new RepairFailure(403, "REPAIR_FACTORY_ADMIN_REQUIRED");
@@ -85,15 +97,20 @@ public class RepairFactoryService {
         var frozen = new LinkedHashMap<String, Object>();
         frozen.put("source", "INITIAL_SINGLE_REPAIR_DECISION");
         frozen.put("requestVersion", beforeVersion);
-        frozen.put("allowedMethod", "FACTORY_NO_COST");
+        frozen.put("allowedMethod", policy.method());
+        frozen.put("costPolicy", policy.mode());
+        frozen.put("costLimit", policy.limit() == null ? null : policy.limit().toPlainString());
         frozen.put("reason", reason.strip());
         frozen.put("repairApproval", json.readTree(row.get("approval_snapshot_json").toString()));
         String body = json.writeValueAsString(frozen);
         db.update(
                 "INSERT INTO"
-                    + " fams_repair_factory_scope(repair_id,scope_status,request_snapshot_json,request_reason,requested_by,requested_at,decision_snapshot_json,decision_reason,decided_by,decided_at)"
-                    + " VALUES (?,'APPROVED',?,?,?,?,?,?,?,?)",
+                    + " fams_repair_factory_scope(repair_id,scope_status,allowed_method,cost_policy,cost_limit,request_snapshot_json,request_reason,requested_by,requested_at,decision_snapshot_json,decision_reason,decided_by,decided_at)"
+                    + " VALUES (?,'APPROVED',?,?,?,?,?,?,?,?,?,?,?)",
                 id,
+                policy.method(),
+                policy.mode(),
+                policy.limit(),
                 body,
                 reason.strip(),
                 current.id(),
@@ -132,6 +149,7 @@ public class RepairFactoryService {
         result.put("activeRound", active == null ? null : roundView(active));
         result.put("summary", wire(factory.summary(id)));
         result.put("photosAvailable", evidence.getIfAvailable() != null);
+        result.put("costSummary", costs().summary(id));
         result.put(
                 "actions",
                 Map.of(
@@ -169,7 +187,13 @@ public class RepairFactoryService {
                                         && processing
                                         && active != null
                                         && "DISPATCHED".equals(active.get("round_status")),
-                        "uploadEvidence", owner && processing && active != null));
+                        "uploadEvidence", owner && processing && active != null,
+                        "requestCostScope",
+                                owner
+                                        && processing
+                                        && pending == null
+                                        && handled(id)
+                                        && !outstanding(id)));
         return result;
     }
 
@@ -198,8 +222,22 @@ public class RepairFactoryService {
 
     public Map<String, Object> round(Actor actor, long id, long round) {
         var current = reader(actor);
-        readable(current, header(id));
-        var result = new LinkedHashMap<>(roundView(round(id, round)));
+        var repair = header(id);
+        readable(current, repair);
+        var selected = round(id, round);
+        var result = new LinkedHashMap<>(roundView(selected));
+        boolean writable =
+                owner(current, repair)
+                        && "WAREHOUSE_PROCESSING".equals(repair.get("repair_status"));
+        result.put(
+                "actions",
+                Map.of(
+                        "uploadFinancialEvidence",
+                        writable,
+                        "recordQuote",
+                        writable && selected.get("actual_cost") == null,
+                        "recordCost",
+                        writable && selected.get("actual_cost") == null));
         var port = evidence.getIfAvailable();
         result.put(
                 "evidence",
@@ -254,22 +292,28 @@ public class RepairFactoryService {
                 input.assetVersion(),
                 input.ownershipVersion(),
                 input.lockVersion());
+        var policy = RepairFactoryCostPolicy.parse(input.costPolicy(), input.costLimit());
+        boolean replacement = input.costPolicy() != null;
         if (scope(id, "PENDING") != null
-                || scope(id, "APPROVED") != null
-                || factory.active(id) != null
+                || !replacement && (scope(id, "APPROVED") != null || factory.active(id) != null)
                 || !handled(id)
                 || outstanding(id)) {
             throw new RepairFailure(409, "REPAIR_FACTORY_SCOPE_NOT_AVAILABLE");
         }
         var basis = basis(row, input.lockVersion());
+        basis.put("costBasis", costs().basis(id));
         db.update(
-                "INSERT INTO fams_repair_factory_scope(repair_id,request_snapshot_json,"
-                        + "request_reason,requested_by,requested_at) VALUES (?,?,?,?,?)",
+                "INSERT INTO"
+                    + " fams_repair_factory_scope(repair_id,request_snapshot_json,request_reason,requested_by,requested_at,allowed_method,cost_policy,cost_limit)"
+                    + " VALUES (?,?,?,?,?,?,?,?)",
                 id,
                 json.writeValueAsString(basis),
                 input.reason().strip(),
                 current.id(),
-                now());
+                now(),
+                policy.method(),
+                policy.mode(),
+                policy.limit());
         long scope = lastId();
         todo(id, "FACTORY_SCOPE_APPROVAL", "ASSET_ADMIN", null);
         advance(
@@ -346,6 +390,20 @@ public class RepairFactoryService {
                                 != original.path("processorAccountId").asLong())) {
             conflict(actor, current, row, "REPAIR_FACTORY_SCOPE_BASIS_CHANGED");
         }
+        if ("APPROVE".equals(input.result())) {
+            var policy = costs().policy(pending);
+            if (!policy.covers(costs().total(number(row, "id")))) {
+                throw new RepairFailure(409, "REPAIR_FACTORY_COST_SCOPE_REQUIRED");
+            }
+            if (original.has("costBasis")
+                    && !original.get("costBasis")
+                            .equals(
+                                    json.readTree(
+                                            json.writeValueAsString(
+                                                    costs().basis(number(row, "id")))))) {
+                throw new RepairFailure(409, "REPAIR_FACTORY_SCOPE_BASIS_CHANGED");
+            }
+        }
         lock(row, original.path("lockVersion").asLong());
         var frozen = new LinkedHashMap<String, Object>();
         frozen.put("request", original);
@@ -375,6 +433,7 @@ public class RepairFactoryService {
                 input.scopeId(),
                 input.scopeVersion());
         closeTodo(number(row, "id"), "FACTORY_SCOPE_APPROVAL");
+        syncCostTodo(row);
         Role role = current.has(Role.ASSET_ADMIN) ? Role.ASSET_ADMIN : Role.WAREHOUSE_OPERATOR;
         advance(
                 actor,
@@ -534,6 +593,10 @@ public class RepairFactoryService {
                 input.lockVersion());
         var round = round(id, roundId);
         roundGuard(actor, current, row, round, input.roundVersion(), "PENDING_DISPATCH");
+        if (scope(id, "PENDING") != null) {
+            throw new RepairFailure(409, "REPAIR_FACTORY_SCOPE_PENDING");
+        }
+        var dispatchScope = costs().dispatchScope(id, round);
         physicalTime(input.occurredAt(), instant(round.get("created_at")));
         LocalDate due = LocalDate.parse(round.get("expected_return_date").toString());
         if (due.isBefore(
@@ -558,11 +621,13 @@ public class RepairFactoryService {
                         input.occurredAt(),
                         now());
         db.update(
-                "UPDATE fams_repair_factory_round SET round_status='DISPATCHED',dispatched_at=?,"
-                        + "dispatched_by=?,dispatch_evidence=?,version=version+1 WHERE id=?",
+                "UPDATE fams_repair_factory_round SET"
+                    + " round_status='DISPATCHED',dispatched_at=?,dispatched_by=?,dispatch_evidence=?,dispatch_scope_id=?,version=version+1"
+                    + " WHERE id=?",
                 input.occurredAt(),
                 current.id(),
                 input.evidence().strip(),
+                dispatchScope.get("id"),
                 roundId);
         row.put("asset_version", next);
         closeTodo(id, "FACTORY_DISPATCH");
@@ -610,7 +675,17 @@ public class RepairFactoryService {
                 || !List.of("RESTORED", "STILL_FAULTY").contains(input.conditionResult())) {
             throw new RepairFailure(400, "REPAIR_FACTORY_ORIGINAL_RECEIPT_REQUIRED");
         }
-        if (new BigDecimal(input.actualCost()).signum() != 0) {
+        BigDecimal actualCost =
+                input.actualCost() == null
+                        ? null
+                        : RepairFactoryCostPolicy.amount(input.actualCost());
+        BigDecimal recordedCost = (BigDecimal) round.get("actual_cost");
+        if (actualCost == null && !Boolean.TRUE.equals(input.costUnassessed())
+                || actualCost != null && Boolean.TRUE.equals(input.costUnassessed())) {
+            throw new RepairFailure(400, "REPAIR_FACTORY_COST_ASSESSMENT_REQUIRED");
+        }
+        if (recordedCost != null && (actualCost == null || recordedCost.compareTo(actualCost) != 0)
+                || actualCost != null && actualCost.signum() > 0 && recordedCost == null) {
             throw new RepairFailure(409, "REPAIR_FACTORY_COST_SCOPE_REQUIRED");
         }
         physicalTime(input.occurredAt(), instant(round.get("dispatched_at")));
@@ -633,7 +708,7 @@ public class RepairFactoryService {
         db.update(
                 "UPDATE fams_repair_factory_round SET"
                     + " round_status='RECEIVED',received_at=?,received_by=?,"
-                    + "receive_location_id=?,receive_location_version=?,condition_result=?,treatment_result=?,actual_cost=0,version=version+1"
+                    + "receive_location_id=?,receive_location_version=?,condition_result=?,treatment_result=?,actual_cost=?,version=version+1"
                     + " WHERE id=?",
                 input.occurredAt(),
                 current.id(),
@@ -641,7 +716,9 @@ public class RepairFactoryService {
                 input.locationVersion(),
                 input.conditionResult(),
                 input.treatmentResult().strip(),
+                actualCost,
                 roundId);
+        syncCostTodo(row);
         row.put("asset_version", next);
         closeTodo(id, "FACTORY_RETURN");
         advance(
@@ -655,6 +732,133 @@ public class RepairFactoryService {
                 Role.WAREHOUSE_OPERATOR);
         return remember(
                 current, operation, key, fingerprint, id, number(round, "scope_id"), roundId);
+    }
+
+    public Map<String, Object> recordQuote(
+            Actor actor,
+            long id,
+            long roundId,
+            long version,
+            UUID key,
+            RepairFactoryInput.MoneyFact input) {
+        return recordMoney(actor, id, roundId, version, key, input, false);
+    }
+
+    public Map<String, Object> recordCost(
+            Actor actor,
+            long id,
+            long roundId,
+            long version,
+            UUID key,
+            RepairFactoryInput.MoneyFact input) {
+        return recordMoney(actor, id, roundId, version, key, input, true);
+    }
+
+    private Map<String, Object> recordMoney(
+            Actor actor,
+            long id,
+            long roundId,
+            long version,
+            UUID key,
+            RepairFactoryInput.MoneyFact input,
+            boolean actual) {
+        var current = warehouse(actor);
+        var row = header(id);
+        requireOwner(current, row);
+        String operation = (actual ? "FACTORY_COST:" : "FACTORY_QUOTE:") + id + ":" + roundId;
+        String fingerprint = hash(operation, version, input);
+        var prior = replay(actor, current, row, operation, key, fingerprint);
+        if (prior != null) {
+            return prior;
+        }
+        if (!Boolean.TRUE.equals(input.finalAmountChecked())) {
+            throw new RepairFailure(400, "REPAIR_FACTORY_COST_ASSESSMENT_REQUIRED");
+        }
+        guard(
+                actor,
+                current,
+                row,
+                version,
+                input.assetVersion(),
+                input.ownershipVersion(),
+                input.lockVersion());
+        var round = round(id, roundId);
+        if (number(round, "version") != input.roundVersion()) {
+            conflict(actor, current, row, "REPAIR_FACTORY_ROUND_CHANGED");
+        }
+        if (round.get("actual_cost") != null) {
+            throw new RepairFailure(409, "REPAIR_FACTORY_FINAL_COST_ALREADY_RECORDED");
+        }
+        var amount = RepairFactoryCostPolicy.amount(input.amount());
+        if (!actual || amount.signum() > 0) {
+            if (input.evidenceIds().isEmpty()) {
+                throw new RepairFailure(400, "REPAIR_FACTORY_COST_ORIGINAL_REQUIRED");
+            }
+            selected(current, id, roundId, input.evidenceIds(), actual ? "COST_RECEIPT" : "QUOTE");
+        } else if (!input.evidenceIds().isEmpty()) {
+            selected(current, id, roundId, input.evidenceIds(), "COST_RECEIPT");
+        }
+        var frozen = new LinkedHashMap<String, Object>();
+        frozen.put("input", input);
+        frozen.put("authorization", wire(costs().approved(id)));
+        frozen.put("previousCostBasis", costs().basis(id));
+        if (actual) {
+            db.update(
+                    "INSERT INTO"
+                        + " fams_repair_factory_cost(round_id,amount,evidence_ids_json,snapshot_json,recorded_by,recorded_at)"
+                        + " VALUES (?,?,?,?,?,?)",
+                    roundId,
+                    amount,
+                    json.writeValueAsString(input.evidenceIds()),
+                    json.writeValueAsString(frozen),
+                    current.id(),
+                    now());
+            db.update(
+                    "UPDATE fams_repair_factory_round SET actual_cost=?,version=version+1 WHERE"
+                            + " id=?",
+                    amount,
+                    roundId);
+        } else {
+            db.update(
+                    "INSERT INTO"
+                        + " fams_repair_factory_quote(round_id,amount,evidence_ids_json,snapshot_json,created_by,created_at)"
+                        + " VALUES (?,?,?,?,?,?)",
+                    roundId,
+                    amount,
+                    json.writeValueAsString(input.evidenceIds()),
+                    json.writeValueAsString(frozen),
+                    current.id(),
+                    now());
+            db.update("UPDATE fams_repair_factory_round SET version=version+1 WHERE id=?", roundId);
+        }
+        syncCostTodo(row);
+        advance(
+                actor,
+                current,
+                row,
+                actual ? "FACTORY_COST_RECORDED" : "FACTORY_QUOTE_RECORDED",
+                number(round, "scope_id"),
+                roundId,
+                frozen,
+                Role.WAREHOUSE_OPERATOR);
+        return remember(
+                current, operation, key, fingerprint, id, number(round, "scope_id"), roundId);
+    }
+
+    private RepairFactoryCosts costs() {
+        return new RepairFactoryCosts(db);
+    }
+
+    private void syncCostTodo(Map<String, Object> row) {
+        long id = number(row, "id");
+        closeTodo(id, "FACTORY_COST_FOLLOWUP");
+        if (costs().blocked(id)) {
+            todo(
+                    id,
+                    "FACTORY_COST_FOLLOWUP",
+                    "WAREHOUSE_OPERATOR",
+                    number(row, "processor_account_id"));
+        }
     }
 
     public Current evidenceAccess(Actor actor, long id, long roundId, UUID object) {
@@ -719,9 +923,12 @@ public class RepairFactoryService {
         if (number(round, "version") != roundVersion) {
             conflict(actor, current, row, "REPAIR_FACTORY_ROUND_CHANGED");
         }
-        if (!List.of("PENDING_DISPATCH", "DISPATCHED").contains(round.get("round_status"))
-                || !List.of("FAULT", "FACTORY_ACK", "RECEIPT").contains(purpose)
-                || "RECEIPT".equals(purpose) && !"DISPATCHED".equals(round.get("round_status"))) {
+        boolean financial = "QUOTE".equals(purpose) || "COST_RECEIPT".equals(purpose);
+        if (!financial
+                && (!List.of("PENDING_DISPATCH", "DISPATCHED").contains(round.get("round_status"))
+                        || !List.of("FAULT", "FACTORY_ACK", "RECEIPT").contains(purpose)
+                        || "RECEIPT".equals(purpose)
+                                && !"DISPATCHED".equals(round.get("round_status")))) {
             throw new RepairFailure(409, "REPAIR_FACTORY_EVIDENCE_PHASE_INVALID");
         }
         if (attachment.scanResult() == MalwareScanner.Result.UNAVAILABLE) {
@@ -891,7 +1098,9 @@ public class RepairFactoryService {
         result.put(
                 "asset",
                 assets.snapshot(
-                        number(row, "asset_id"), number(row, "asset_version"), "UNDER_REPAIR"));
+                        number(row, "asset_id"),
+                        number(row, "asset_version"),
+                        factory.dispatchedIdentity(row) ? "FACTORY_REPAIR" : "UNDER_REPAIR"));
         return result;
     }
 
@@ -1066,7 +1275,9 @@ public class RepairFactoryService {
                     + " fams_repair_event(repair_id,action,before_version,after_version,actor_account_id,actor_username,actor_role,detail_json,occurred_at)"
                     + " VALUES (?,?,?,?,?,?,?,?,?)",
                 row.get("id"),
-                "REPAIR_" + action,
+                "FACTORY_COST_RECORDED".equals(action) || "FACTORY_QUOTE_RECORDED".equals(action)
+                        ? "REPAIR_FACTORY_FOLLOWUP_RECORDED"
+                        : "REPAIR_" + action,
                 before,
                 after,
                 current.id(),
@@ -1164,6 +1375,8 @@ public class RepairFactoryService {
                         "repair_id",
                         "scope_status",
                         "allowed_method",
+                        "cost_policy",
+                        "cost_limit",
                         "request_reason",
                         "requested_by",
                         "requested_at",
@@ -1188,6 +1401,7 @@ public class RepairFactoryService {
                         "repair_id",
                         "asset_id",
                         "scope_id",
+                        "dispatch_scope_id",
                         "round_number",
                         "round_status",
                         "provider_name",
@@ -1209,6 +1423,40 @@ public class RepairFactoryService {
                         "actual_cost",
                         "cancel_reason",
                         "version");
+        result.put(
+                "quotes",
+                db
+                        .queryForList(
+                                "SELECT * FROM fams_repair_factory_quote WHERE round_id=? ORDER BY"
+                                        + " id",
+                                row.get("id"))
+                        .stream()
+                        .map(
+                                q -> {
+                                    var value =
+                                            fields(
+                                                    q,
+                                                    "id",
+                                                    "round_id",
+                                                    "amount",
+                                                    "created_by",
+                                                    "created_at");
+                                    value.put(
+                                            "evidenceIds",
+                                            json.readTree(q.get("evidence_ids_json").toString()));
+                                    return value;
+                                })
+                        .toList());
+        var facts =
+                db.queryForList(
+                        "SELECT * FROM fams_repair_factory_cost WHERE round_id=?", row.get("id"));
+        Map<String, Object> fact = null;
+        if (!facts.isEmpty()) {
+            var value = facts.getFirst();
+            fact = fields(value, "round_id", "amount", "recorded_by", "recorded_at");
+            fact.put("evidenceIds", json.readTree(value.get("evidence_ids_json").toString()));
+        }
+        result.put("costFact", fact);
         result.put("originalIdentity", json.readTree(row.get("original_identity_json").toString()));
         return result;
     }

@@ -75,6 +75,11 @@ public class RepairErrorHandler {
         return response(413, "REPAIR_PHOTO_TOO_LARGE", Map.of(), request);
     }
 
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    ResponseEntity<ErrorResponse> unreadable(HttpServletRequest request) {
+        return response(400, "REPAIR_INPUT_UNREADABLE", Map.of(), request);
+    }
+
     private ResponseEntity<ErrorResponse> response(
             int status, String code, Map<String, String> fields, HttpServletRequest request) {
         UUID id =

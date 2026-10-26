@@ -1,0 +1,87 @@
+{
+  "task": "D6-20B2 private expense backend",
+  "sourceBase": "080ce00",
+  "candidate": "current working tree; not a fixed full product gate",
+  "status": "LOCAL_BACKEND_VERIFIED_ONLY",
+  "sourceHashes": {
+    "backend/src/main/java/com/fams/repair/RepairFactoryController.java": "ad90ee9d72f323cf2b1080da8e466333fe99069c89a933e7c4d4961064570231",
+    "backend/src/main/java/com/fams/repair/RepairFactoryCosts.java": "759428eb3467643c56fa5e840e6cbea345fd1141de5c5f99c01e3c922dc5d3e7",
+    "backend/src/main/java/com/fams/repair/RepairFactoryService.java": "d94e043ac2a628cdd73baafdef57ae387ea8bdd29f016129fb0fab973abb578f",
+    "backend/src/main/java/com/fams/repair/RepairFactoryEvidenceController.java": "ed26cdc95ecc1d066685eb8c67b0b7e3b5ed83690e01f00d6bacde3404515181",
+    "backend/src/main/java/com/fams/repair/RepairFactoryInput.java": "bb188d1a9c61e531e685b70e65918872d87570f1b7296af7e986778da9fe4c71",
+    "backend/src/main/java/com/fams/repair/RepairErrorHandler.java": "b49acf1cc36e4d14920f6258aa98c125edeefe9944ae837521b8e561b6442051",
+    "backend/src/main/java/com/fams/repair/RepairInput.java": "2cb4b9bc3588c28da63a6d56f7459fb90c775c231ceb93157058f1759c42803e",
+    "backend/src/main/java/com/fams/repair/RepairService.java": "c8338db6c7aa4c86fd1b6564661af4fafc58f2f03fc2ebf919325628ec52f9ed",
+    "backend/src/main/java/com/fams/repair/RepairFactoryGuard.java": "a7ccda26edfbae61fc1b8d89080940bbd244db63fb08a300fc39aa6351dc829d",
+    "backend/src/main/java/com/fams/repair/RepairFactoryCostPolicy.java": "caf61b68a6d68e4cb3fd3a0c79f10b8fbc57fcda8602cd4ec7b4f2725009395e"
+  },
+  "migration": {
+    "version": 53,
+    "sha256": "e86e3c607da15c5957c4119ec60225b8ab90b1504ecffa8240b7b12a102f9870",
+    "frozen": true,
+    "noFurtherSchemaChange": true
+  },
+  "capabilities": [
+    "Single initial private NO_COST/LIMITED/UNLIMITED authority and explicit later repair-wide scope request/decision",
+    "Independent quote originals and one immutable final actual-cost fact per round",
+    "Exact cumulative decimal amount, uploads and quote copies never added as costs",
+    "Truthful original receipt with null unassessed cost; ordinary completion remains held until assessment/adequate approval",
+    "Current owner responsibility and expense todo transfer, current-role checks before original reply",
+    "Immutable creation scope and actual dispatch approval identity retained separately"
+  ],
+  "verification": {
+    "factoryHttp": 31,
+    "populatedV52Upgrade": 1,
+    "legacyNineRuntimeSuites": 109,
+    "costPolicyAndF1Units": 6,
+    "checkstyle": 0,
+    "spotbugs": 0,
+    "fullContractGenerationEvidence": "b2-contract-enum-generation.json",
+    "ownRuntimesRemoved": true,
+    "webCompatibility": 162,
+    "miniCompatibility": 269,
+    "clientLintAndWorkspaceTypes": true
+  },
+  "targetedCases": [
+    "Two rounds 39.99+65.02=105.01 under initial 100.00; real overrun receipt succeeds, ordinary close rejects until explicit 105.01 scope approval",
+    "Actual original receipt may preserve null, never fabricated zero; later checked final zero resolves hold",
+    "Controlled owner transfer retains expense responsibility and removes prior owner private access",
+    "Late central audit failure rolls back quote/cost, versions, todo and original receipt; concurrent cost records produce one fact",
+    "Finite dispatch requires actual quoted original within current repair-wide ceiling; changed quote invalidates frozen request basis",
+    "Four explicit versions, final checked flag, exact decimal string and JSON input errors reject as 400"
+  ],
+  "currentReadRegression": {
+    "before": "expected 409, actual 200 after a request waited on the repair head while authority ceiling changed 200 to 100 with quote 150",
+    "after": "409 REPAIR_FACTORY_COST_SCOPE_REQUIRED; no asset dispatch",
+    "approvalTransition": "controlled SQL transaction fixture, not actual administrator endpoint concurrency acceptance",
+    "actualHttpHeaderWaitObserved": true,
+    "fix": "All private authority, amount rows and quote reads use current locking reads; exact sums are computed with BigDecimal"
+  },
+  "replayBoundary": {
+    "oldRootThreeFieldSerializationRedThenGreen": true,
+    "optionalFactoryFieldsRemainF1Compatible": true,
+    "newMoneyOriginalReplyExactReplayWithoutDuplicateCharge": true,
+    "oldCommittingJvmCrossVersionRestartAcceptance": false
+  },
+  "logs": {
+    "output/d6-20b2-cost-business-runtime.log": "50505a09b1160a6ab6b89a4bab2bab03139b308935c4d8231b84482848f089b5",
+    "output/d6-20b2-cost-current-read-red.log": "d1057387eaed86259c05d0b487fae370780ff89c3045fe8c04aa83832d648076",
+    "output/d6-20b2-cost-current-read-green.log": "07cc228ac3e462e92fb47259f4a73fec7b49005a3b2074dc39ceaef6dbe0ca00",
+    "output/d6-20b2-cost-policy-legacy-red.log": "e3cbeea4655cec0bd1759f9e38da035aca6c7b9063fedf5c1ab9c675b8580a91",
+    "output/d6-20b2-cost-unit-static.log": "e151142e233ad86e842217d74419a9ba2c9b8f9602c28fc960bd36781fc1e874",
+    "output/d6-20b2-cost-java-static.log": "85d60ab62e08a2246410c487c1b52ec42cf7a8303874b3b942da05b33a8f41c7",
+    "output/d6-20b2-cost-regression-runtime.log": "7032a6af7123c64fef9aeb07b56f9721c3eae21f43f46448ea939d99c4c8ce86",
+    "output/d6-20b2-cost-client-compatibility.log": "d46a59e56539ae8335be23af02f0203ed002d0b13983b8066c9c1f6703e21b89"
+  },
+  "retainedFailures": [
+    "output/d6-20b2-cost-business-first-purpose-red.log",
+    "output/d6-20b2-cost-confirmation-parse-red.log",
+    "output/d6-20b2-cost-static-combined-goals-failure.log"
+  ],
+  "limitations": [
+    "Expense PC/native pages and actual two-client expense acceptance remain to implement",
+    "No current fixed full B gate, current PC/JVM restart, independent review signature, real WeChat/device, CI, QA or production claim",
+    "Real HTTP and MySQL use synthetic organizational/bill/image fixtures and external identity/scanner fixtures",
+    "Preexisting PNG cognition curation and two moderate dependencies remain separate"
+  ]
+}

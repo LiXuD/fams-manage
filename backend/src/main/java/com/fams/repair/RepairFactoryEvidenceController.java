@@ -55,7 +55,10 @@ public class RepairFactoryEvidenceController {
             @RequestParam @PositiveOrZero long assetVersion,
             @RequestParam @PositiveOrZero long ownershipVersion,
             @RequestParam @PositiveOrZero long lockVersion,
-            @RequestParam @NotBlank @Pattern(regexp = "FAULT|FACTORY_ACK|RECEIPT") String purpose,
+            @RequestParam
+                    @NotBlank
+                    @Pattern(regexp = "FAULT|FACTORY_ACK|RECEIPT|QUOTE|COST_RECEIPT")
+                    String purpose,
             @RequestParam(required = false) String originalFilename,
             @RequestParam(required = false) String declaredContentType,
             @RequestParam("file") MultipartFile file)

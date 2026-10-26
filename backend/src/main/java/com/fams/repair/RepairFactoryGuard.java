@@ -38,7 +38,8 @@ public class RepairFactoryGuard {
     }
 
     public boolean blocked(long repair) {
-        return active(repair) != null
+        return new RepairFactoryCosts(db).blocked(repair)
+                || active(repair) != null
                 || !db.queryForList(
                                 "SELECT id FROM fams_repair_factory_scope WHERE repair_id=? AND"
                                         + " scope_status='PENDING' FOR UPDATE",

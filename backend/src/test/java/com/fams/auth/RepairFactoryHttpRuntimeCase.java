@@ -359,6 +359,15 @@ class RepairFactoryHttpRuntimeCase {
                             + owned
                             + ")");
         }
+        for (String table : List.of("fams_repair_factory_cost", "fams_repair_factory_quote")) {
+            db.update(
+                    "DELETE FROM "
+                            + table
+                            + " WHERE round_id IN (SELECT id FROM fams_repair_factory_round WHERE"
+                            + " repair_id"
+                            + owned
+                            + ")");
+        }
         db.update("DELETE FROM fams_repair_factory_round WHERE repair_id" + owned);
         db.update("DELETE FROM fams_repair_factory_scope WHERE repair_id" + owned);
         for (String table :
@@ -369,6 +378,622 @@ class RepairFactoryHttpRuntimeCase {
             db.update("DELETE FROM " + table + " WHERE repair_id" + owned);
         }
         fixture.cleanup();
+    }
+
+    @Test
+    void twoActualPaidRoundsUsePrivateBudgetAndTruthfulOverrunUntilExplicitExpansion()
+            throws Exception {
+        String id = begin();
+        expenseScope(id, "LIMITED", "100.00");
+        approve(id);
+        String first = create(id, fixture.warehouse);
+        money(id, first, "quotes", "40.10", "QUOTE");
+        dispatch(id, first, fixture.warehouse);
+        money(id, first, "cost", "39.99", "COST_RECEIPT");
+        paidReceipt(id, first, "39.99", "STILL_FAULTY");
+        String second = create(id, fixture.warehouse);
+        money(id, second, "quotes", "60.01", "QUOTE");
+        dispatch(id, second, fixture.warehouse);
+        money(id, second, "cost", "65.02", "COST_RECEIPT");
+        paidReceipt(id, second, "65.02", "RESTORED");
+        var detail = privateDetail(fixture.warehouse, id);
+        assertEquals("105.01", detail.path("costSummary").path("confirmedTotal").asText());
+        assertTrue(detail.path("costSummary").path("overrun").asBoolean());
+        assertTrue(detail.path("summary").path("followupOpen").asBoolean());
+        assertEquals(
+                2,
+                db.queryForObject("SELECT COUNT(*) FROM fams_repair_factory_cost", Integer.class));
+        assertEquals("UNDER_REPAIR", lifecycle());
+        var row = root(fixture.warehouse, id);
+        assertEquals(
+                409,
+                post(
+                                fixture.warehouse,
+                                "/" + id + "/close-inbound",
+                                row.path("version").asLong(),
+                                key(),
+                                inbound(row, now()))
+                        .statusCode());
+        assertFalse(root(fixture.employee, id).toString().contains("105.01"));
+        assertFalse(root(fixture.employee, id).toString().contains("costPolicy"));
+        expenseScope(id, "LIMITED", "105.01");
+        approve(id);
+        assertFalse(
+                privateDetail(fixture.warehouse, id)
+                        .path("costSummary")
+                        .path("followupOpen")
+                        .asBoolean());
+        row = root(fixture.warehouse, id);
+        ok(
+                post(
+                        fixture.warehouse,
+                        "/" + id + "/close-inbound",
+                        row.path("version").asLong(),
+                        key(),
+                        inbound(row, now())));
+        assertEquals("COMPLETED", root(fixture.employee, id).path("status").asText());
+        assertEquals(0, activeLocks());
+    }
+
+    @Test
+    void actualReceiptCanRetainUnassessedCostAndLateOriginalDoesNotInventZero() throws Exception {
+        String id = approved(), round = create(id, fixture.warehouse);
+        dispatch(id, round, fixture.warehouse);
+        upload(id, round, fixture.warehouse, "RECEIPT");
+        var row = privateDetail(fixture.warehouse, id);
+        var receipt = movement(id, round, fixture.warehouse, true, "RESTORED");
+        receipt.remove("actualCost");
+        receipt.put("costUnassessed", true);
+        ok(
+                post(
+                        fixture.warehouse,
+                        path(id, "/rounds/" + round + "/receive-original"),
+                        row.path("version").asLong(),
+                        key(),
+                        receipt));
+        assertTrue(privateRound(fixture.warehouse, id, round).path("actualCost").isNull());
+        assertEquals(
+                1,
+                privateDetail(fixture.warehouse, id)
+                        .path("costSummary")
+                        .path("unassessedCount")
+                        .asInt());
+        assertEquals("UNDER_REPAIR", lifecycle());
+        row = root(fixture.warehouse, id);
+        assertEquals(
+                409,
+                post(
+                                fixture.warehouse,
+                                "/" + id + "/close-inbound",
+                                row.path("version").asLong(),
+                                key(),
+                                inbound(row, now()))
+                        .statusCode());
+        money(id, round, "cost", "0.00", null);
+        assertEquals(
+                "0.00", privateRound(fixture.warehouse, id, round).path("actualCost").asText());
+        assertEquals(
+                0,
+                privateDetail(fixture.warehouse, id)
+                        .path("costSummary")
+                        .path("unassessedCount")
+                        .asInt());
+        row = root(fixture.warehouse, id);
+        ok(
+                post(
+                        fixture.warehouse,
+                        "/" + id + "/close-inbound",
+                        row.path("version").asLong(),
+                        key(),
+                        inbound(row, now())));
+    }
+
+    @Test
+    void initialPrivateExpenseApprovalIsAtomicAndCannotBeSmuggledIntoInternalDecision()
+            throws Exception {
+        String id = submittedForInitialApproval();
+        var body = initialDecision();
+        body.put("factoryCostPolicy", "LIMITED");
+        body.put("factoryCostLimit", "99.95");
+        body.put("allowedMethod", "INTERNAL_NO_COST");
+        assertEquals(400, post(fixture.admin, "/" + id + "/decision", 0, key(), body).statusCode());
+        body.put("allowedMethod", "INTERNAL_OR_FACTORY");
+        ok(post(fixture.admin, "/" + id + "/decision", 0, key(), body));
+        var detail = privateDetail(fixture.admin, id);
+        assertEquals("LIMITED", detail.path("approvedScope").path("costPolicy").asText());
+        assertEquals("99.95", detail.path("approvedScope").path("costLimit").asText());
+        assertFalse(root(fixture.employee, id).toString().contains("99.95"));
+        assertEquals(
+                1, db.queryForObject("SELECT COUNT(*) FROM fams_repair_decision", Integer.class));
+    }
+
+    @Test
+    void pendingExpenseApprovalNeverPreventsActualReceiptAndChangedPhysicalBasisNeedsNewRequest()
+            throws Exception {
+        String id = approved(), round = create(id, fixture.warehouse);
+        dispatch(id, round, fixture.warehouse);
+        money(id, round, "cost", "25.00", "COST_RECEIPT");
+        expenseScope(id, "LIMITED", "25.00");
+        paidReceipt(id, round, "25.00", "RESTORED");
+        var detail = privateDetail(fixture.admin, id);
+        assertEquals(
+                409,
+                post(
+                                fixture.admin,
+                                path(id, "/scope-decision"),
+                                detail.path("version").asLong(),
+                                key(),
+                                scopeDecision(detail, "APPROVE"))
+                        .statusCode());
+        ok(
+                post(
+                        fixture.admin,
+                        path(id, "/scope-withdrawal"),
+                        detail.path("version").asLong(),
+                        key(),
+                        scopeDecision(detail, "WITHDRAW")));
+        var physical = privateRound(fixture.warehouse, id, round);
+        expenseScope(id, "LIMITED", "25.00");
+        approve(id);
+        var after = privateRound(fixture.warehouse, id, round);
+        assertEquals(physical.path("receivedAt"), after.path("receivedAt"));
+        assertEquals(physical.path("scopeId"), after.path("scopeId"));
+        assertEquals(physical.path("dispatchScopeId"), after.path("dispatchScopeId"));
+        assertFalse(
+                privateDetail(fixture.warehouse, id)
+                        .path("costSummary")
+                        .path("followupOpen")
+                        .asBoolean());
+    }
+
+    @Test
+    void expenseHoldRetainsResponsibilityAcrossControlledOwnerTransfer() throws Exception {
+        String id = approved(), round = create(id, fixture.warehouse);
+        dispatch(id, round, fixture.warehouse);
+        upload(id, round, fixture.warehouse, "RECEIPT");
+        var row = privateDetail(fixture.warehouse, id);
+        var receipt = movement(id, round, fixture.warehouse, true, "RESTORED");
+        receipt.remove("actualCost");
+        receipt.put("costUnassessed", true);
+        ok(
+                post(
+                        fixture.warehouse,
+                        path(id, "/rounds/" + round + "/receive-original"),
+                        row.path("version").asLong(),
+                        key(),
+                        receipt));
+        var inspection = ok(get(fixture.admin, "/" + id + "/reassignment"));
+        var transfer = JSON.createObjectNode();
+        transfer.put("processorAccountId", "951004");
+        transfer.set("snapshot", inspection.path("snapshot"));
+        transfer.put("unsynchronizedResultsChecked", true);
+        transfer.put(
+                "reason", "Controlled actual transfer retains unresolved expense responsibility");
+        transfer.put(
+                "evidence",
+                "Both warehouses checked the actually received original and unresolved expense"
+                        + " follow-up");
+        ok(
+                post(
+                        fixture.admin,
+                        "/" + id + "/reassignment",
+                        root(fixture.admin, id).path("version").asLong(),
+                        key(),
+                        transfer));
+        assertEquals(403, get(fixture.warehouse, path(id, "")).statusCode());
+        row = privateDetail(fixture.otherWarehouse, id);
+        assertTrue(row.path("costSummary").path("followupOpen").asBoolean());
+        assertEquals(
+                1,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_todo WHERE business_type='REPAIR' AND"
+                                + " business_id=? AND todo_type='FACTORY_COST_FOLLOWUP' AND"
+                                + " todo_status='OPEN' AND assignee_account_id=951004",
+                        Integer.class,
+                        id));
+        var body = guards(row);
+        body.put(
+                "roundVersion",
+                privateRound(fixture.otherWarehouse, id, round).path("version").asLong());
+        body.put("amount", "0.00");
+        body.put("reason", "Final verified warranty no-cost fact checked by new owner");
+        body.put("finalAmountChecked", true);
+        body.set("evidenceIds", JSON.createArrayNode());
+        ok(
+                post(
+                        fixture.otherWarehouse,
+                        path(id, "/rounds/" + round + "/cost"),
+                        row.path("version").asLong(),
+                        key(),
+                        body));
+        assertFalse(
+                privateDetail(fixture.otherWarehouse, id)
+                        .path("costSummary")
+                        .path("followupOpen")
+                        .asBoolean());
+    }
+
+    @Test
+    void concurrentFinalCostsHaveOneFactAndOneVersionWinner() throws Exception {
+        String id = approved(), round = create(id, fixture.warehouse);
+        var row = privateDetail(fixture.warehouse, id);
+        var body = guards(row);
+        body.put(
+                "roundVersion",
+                privateRound(fixture.warehouse, id, round).path("version").asLong());
+        body.put("amount", "0.00");
+        body.put("reason", "Both final facts checked against the same pending round");
+        body.put("finalAmountChecked", true);
+        body.set("evidenceIds", JSON.createArrayNode());
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var first =
+                    pool.submit(
+                            () ->
+                                    post(
+                                                    fixture.warehouse,
+                                                    path(id, "/rounds/" + round + "/cost"),
+                                                    row.path("version").asLong(),
+                                                    key(),
+                                                    body)
+                                            .statusCode());
+            var second =
+                    pool.submit(
+                            () ->
+                                    post(
+                                                    fixture.warehouse,
+                                                    path(id, "/rounds/" + round + "/cost"),
+                                                    row.path("version").asLong(),
+                                                    key(),
+                                                    body)
+                                            .statusCode());
+            assertEquals(
+                    List.of(200, 409),
+                    java.util.stream.Stream.of(first.get(), second.get()).sorted().toList());
+        }
+        assertEquals(
+                1,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_repair_factory_cost WHERE round_id=?",
+                        Integer.class,
+                        round));
+    }
+
+    @Test
+    void quoteAndCostLateAuditFailuresRollBackAllFactsVersionsAndOriginals() throws Exception {
+        String id = approved(), round = create(id, fixture.warehouse);
+        for (String operation : List.of("quotes", "cost")) {
+            String object =
+                    upload(
+                            id,
+                            round,
+                            fixture.warehouse,
+                            operation.equals("quotes") ? "QUOTE" : "COST_RECEIPT");
+            var row = privateDetail(fixture.warehouse, id);
+            var body = guards(row);
+            body.put(
+                    "roundVersion",
+                    privateRound(fixture.warehouse, id, round).path("version").asLong());
+            body.put("amount", "1.00");
+            body.put("reason", "Exact original final amount is a truthful unapproved overrun");
+            body.put("finalAmountChecked", true);
+            body.set("evidenceIds", JSON.createArrayNode().add(object));
+            String nonce = key(),
+                    action =
+                            operation.equals("quotes")
+                                    ? "FACTORY_QUOTE_RECORDED"
+                                    : "FACTORY_COST_RECORDED";
+            db.execute(
+                    "CREATE TRIGGER owned_factory_audit_failure BEFORE INSERT ON fams_audit_event"
+                            + " FOR EACH ROW BEGIN IF NEW.action='"
+                            + action
+                            + "' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='owned cost late"
+                            + " audit failure'; END IF; END");
+            assertEquals(
+                    500,
+                    post(
+                                    fixture.warehouse,
+                                    path(id, "/rounds/" + round + "/" + operation),
+                                    row.path("version").asLong(),
+                                    nonce,
+                                    body)
+                            .statusCode());
+            assertEquals(row, privateDetail(fixture.warehouse, id));
+            assertEquals(
+                    0,
+                    db.queryForObject(
+                            "SELECT COUNT(*) FROM fams_repair_receipt WHERE request_id=?",
+                            Integer.class,
+                            nonce));
+            db.execute("DROP TRIGGER owned_factory_audit_failure");
+            ok(
+                    post(
+                            fixture.warehouse,
+                            path(id, "/rounds/" + round + "/" + operation),
+                            row.path("version").asLong(),
+                            nonce,
+                            body));
+        }
+    }
+
+    @Test
+    void dispatchMustUseCurrentApprovedBudgetAfterWaitingOnRepairHeader() throws Exception {
+        String id = begin();
+        expenseScope(id, "LIMITED", "200.00");
+        approve(id);
+        String round = create(id, fixture.warehouse);
+        money(id, round, "quotes", "150.00", "QUOTE");
+        upload(id, round, fixture.warehouse, "FACTORY_ACK");
+        expenseScope(id, "LIMITED", "100.00");
+        var detail = privateDetail(fixture.warehouse, id);
+        var body = movement(id, round, fixture.warehouse, false, "RESTORED");
+        long predictedVersion = detail.path("version").asLong() + 1;
+        try (var blocker = Objects.requireNonNull(db.getDataSource()).getConnection();
+                var pool = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            blocker.setAutoCommit(false);
+            try (var query =
+                    blocker.prepareStatement(
+                            "SELECT id FROM fams_repair_request WHERE id=? FOR UPDATE")) {
+                query.setString(1, id);
+                try (var held = query.executeQuery()) {
+                    assertTrue(held.next());
+                }
+            }
+            var request =
+                    pool.submit(
+                            () ->
+                                    post(
+                                            fixture.warehouse,
+                                            path(id, "/rounds/" + round + "/dispatch"),
+                                            predictedVersion,
+                                            key(),
+                                            body));
+            boolean waiting = false;
+            for (int attempt = 0; attempt < 200; attempt++) {
+                int count =
+                        Objects.requireNonNull(
+                                db.queryForObject(
+                                        "SELECT COUNT(*) FROM information_schema.processlist WHERE"
+                                            + " ID<>CONNECTION_ID() AND DB=DATABASE() AND INFO LIKE"
+                                            + " '%fams_repair_request%FOR UPDATE%'",
+                                        Integer.class));
+                if (count > 0) {
+                    waiting = true;
+                    break;
+                }
+                Thread.sleep(25);
+            }
+            assertTrue(
+                    waiting,
+                    "Owned HTTP request must actually wait on the repair header before fixture"
+                            + " approval commits");
+            // Controlled approval fixture, not an assertion that this is the real administrator
+            // endpoint.
+            try (var update =
+                    blocker.prepareStatement(
+                            "UPDATE fams_repair_factory_scope SET"
+                                + " scope_status='APPROVED',decision_snapshot_json='{\"ownedConcurrencyFixtureOnly\":true}',decision_reason='Owned"
+                                + " current approval fixture',decided_by=(SELECT decided_by FROM"
+                                + " (SELECT decided_by FROM fams_repair_factory_scope WHERE"
+                                + " repair_id=? AND scope_status=\'APPROVED\' ORDER BY id DESC"
+                                + " LIMIT 1) old_scope),decided_at=NOW(3),version=version+1 WHERE"
+                                + " id=?")) {
+                update.setString(1, id);
+                update.setString(2, detail.path("pendingScope").path("id").asText());
+                assertEquals(1, update.executeUpdate());
+            }
+            try (var update =
+                    blocker.prepareStatement(
+                            "UPDATE fams_repair_request SET version=version+1 WHERE id=?")) {
+                update.setString(1, id);
+                assertEquals(1, update.executeUpdate());
+            }
+            blocker.commit();
+            var rejected = request.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(409, rejected.statusCode());
+            assertEquals(
+                    "REPAIR_FACTORY_COST_SCOPE_REQUIRED",
+                    JSON.readTree(rejected.body()).path("code").asText());
+        }
+        assertEquals("UNDER_REPAIR", lifecycle());
+        assertEquals(
+                "PENDING_DISPATCH",
+                privateRound(fixture.warehouse, id, round).path("roundStatus").asText());
+    }
+
+    @Test
+    void finiteDispatchRequiresQuotedOriginalWithinCurrentRepairWideCeiling() throws Exception {
+        String id = begin();
+        expenseScope(id, "LIMITED", "50.00");
+        approve(id);
+        String round = create(id, fixture.warehouse);
+        upload(id, round, fixture.warehouse, "FACTORY_ACK");
+        for (boolean excessive : List.of(false, true)) {
+            if (excessive) {
+                money(id, round, "quotes", "50.01", "QUOTE");
+            }
+            var detail = privateDetail(fixture.warehouse, id);
+            assertEquals(
+                    409,
+                    post(
+                                    fixture.warehouse,
+                                    path(id, "/rounds/" + round + "/dispatch"),
+                                    detail.path("version").asLong(),
+                                    key(),
+                                    movement(id, round, fixture.warehouse, false, "RESTORED"))
+                            .statusCode());
+            assertEquals("UNDER_REPAIR", lifecycle());
+        }
+        money(id, round, "quotes", "50.00", "QUOTE");
+        dispatch(id, round, fixture.warehouse);
+        assertEquals(
+                "0.00",
+                privateDetail(fixture.warehouse, id)
+                        .path("costSummary")
+                        .path("confirmedTotal")
+                        .asText());
+        assertEquals(2, privateRound(fixture.warehouse, id, round).path("quotes").size());
+    }
+
+    @Test
+    void newFinancialFactsRequireEveryExplicitVersionAndFinalAmountConfirmation() throws Exception {
+        String id = approved(), round = create(id, fixture.warehouse);
+        var detail = privateDetail(fixture.warehouse, id);
+        var input = guards(detail);
+        input.put(
+                "roundVersion",
+                privateRound(fixture.warehouse, id, round).path("version").asLong());
+        input.put("amount", "0.00");
+        input.put("reason", "Explicit final original amount and every live version checked");
+        input.put("finalAmountChecked", true);
+        input.set("evidenceIds", JSON.createArrayNode());
+        for (String missing :
+                List.of(
+                        "assetVersion",
+                        "ownershipVersion",
+                        "lockVersion",
+                        "roundVersion",
+                        "finalAmountChecked")) {
+            var body = input.deepCopy();
+            body.remove(missing);
+            assertEquals(
+                    400,
+                    post(
+                                    fixture.warehouse,
+                                    path(id, "/rounds/" + round + "/cost"),
+                                    detail.path("version").asLong(),
+                                    key(),
+                                    body)
+                            .statusCode());
+        }
+        for (String bad : List.of("01.00", "1.001", "1e2", "-1.00")) {
+            var body = input.deepCopy();
+            body.put("amount", bad);
+            assertEquals(
+                    400,
+                    post(
+                                    fixture.warehouse,
+                                    path(id, "/rounds/" + round + "/cost"),
+                                    detail.path("version").asLong(),
+                                    key(),
+                                    body)
+                            .statusCode());
+        }
+        var numericAmount = input.deepCopy();
+        numericAmount.put("amount", 1);
+        assertEquals(
+                400,
+                post(
+                                fixture.warehouse,
+                                path(id, "/rounds/" + round + "/cost"),
+                                detail.path("version").asLong(),
+                                key(),
+                                numericAmount)
+                        .statusCode());
+        assertTrue(privateRound(fixture.warehouse, id, round).path("actualCost").isNull());
+        assertEquals(
+                0,
+                db.queryForObject("SELECT COUNT(*) FROM fams_repair_factory_cost", Integer.class));
+    }
+
+    @Test
+    void changedQuoteInvalidatesFrozenScopeBasisAndDispatchRetainsItsActualAuthorization()
+            throws Exception {
+        String id = approved(), round = create(id, fixture.warehouse);
+        String creationScope = privateRound(fixture.warehouse, id, round).path("scopeId").asText();
+        expenseScope(id, "LIMITED", "100.00");
+        money(id, round, "quotes", "10.00", "QUOTE");
+        var detail = privateDetail(fixture.admin, id);
+        assertEquals(
+                409,
+                post(
+                                fixture.admin,
+                                path(id, "/scope-decision"),
+                                detail.path("version").asLong(),
+                                key(),
+                                scopeDecision(detail, "APPROVE"))
+                        .statusCode());
+        ok(
+                post(
+                        fixture.admin,
+                        path(id, "/scope-withdrawal"),
+                        detail.path("version").asLong(),
+                        key(),
+                        scopeDecision(detail, "WITHDRAW")));
+        expenseScope(id, "LIMITED", "100.00");
+        approve(id);
+        String dispatchScope =
+                privateDetail(fixture.warehouse, id).path("approvedScope").path("id").asText();
+        dispatch(id, round, fixture.warehouse);
+        var physical = privateRound(fixture.warehouse, id, round);
+        assertEquals(creationScope, physical.path("scopeId").asText());
+        assertEquals(dispatchScope, physical.path("dispatchScopeId").asText());
+        assertFalse(creationScope.equals(dispatchScope));
+    }
+
+    private void expenseScope(String id, String policy, String limit) throws Exception {
+        var detail = privateDetail(fixture.warehouse, id);
+        var body = guards(detail);
+        body.put("reason", "Private repair-wide expense authority must cover all actual rounds");
+        body.put("costPolicy", policy);
+        if (limit != null) {
+            body.put("costLimit", limit);
+        }
+        ok(
+                post(
+                        fixture.warehouse,
+                        path(id, "/scopes"),
+                        detail.path("version").asLong(),
+                        key(),
+                        body));
+    }
+
+    private void money(String id, String round, String operation, String amount, String purpose)
+            throws Exception {
+        String original = purpose == null ? null : upload(id, round, fixture.warehouse, purpose);
+        var detail = privateDetail(fixture.warehouse, id);
+        var body = guards(detail);
+        body.put(
+                "roundVersion",
+                privateRound(fixture.warehouse, id, round).path("version").asLong());
+        body.put("amount", amount);
+        body.put("reason", "Private original and exact amount checked for this round");
+        body.put("finalAmountChecked", true);
+        var ids = JSON.createArrayNode();
+        if (original != null) {
+            ids.add(original);
+        }
+        body.set("evidenceIds", ids);
+        String nonce = key();
+        long version = detail.path("version").asLong();
+        String url = path(id, "/rounds/" + round + "/" + operation);
+        var first = ok(post(fixture.warehouse, url, version, nonce, body));
+        assertEquals(first, ok(post(fixture.warehouse, url, version, nonce, body)));
+        assertEquals(403, post(fixture.employee, url, version, nonce, body).statusCode());
+        if ("cost".equals(operation)) {
+            var current = privateDetail(fixture.warehouse, id);
+            body.put(
+                    "roundVersion",
+                    privateRound(fixture.warehouse, id, round).path("version").asLong());
+            assertEquals(
+                    409,
+                    post(fixture.warehouse, url, current.path("version").asLong(), key(), body)
+                            .statusCode());
+        }
+    }
+
+    private void paidReceipt(String id, String round, String amount, String condition)
+            throws Exception {
+        upload(id, round, fixture.warehouse, "RECEIPT");
+        var row = privateDetail(fixture.warehouse, id);
+        var body = movement(id, round, fixture.warehouse, true, condition);
+        body.put("actualCost", amount);
+        ok(
+                post(
+                        fixture.warehouse,
+                        path(id, "/rounds/" + round + "/receive-original"),
+                        row.path("version").asLong(),
+                        key(),
+                        body));
     }
 
     @Test

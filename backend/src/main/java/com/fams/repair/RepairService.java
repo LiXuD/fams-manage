@@ -585,19 +585,25 @@ public class RepairService {
         guard(actor, current, row, version, "PENDING_ADMIN_DECISION");
         lock(row, null);
         boolean approve = "APPROVE".equals(input.result());
+        boolean initialFactory = approve && "INTERNAL_OR_FACTORY".equals(input.allowedMethod());
         if (!List.of("APPROVE", "REJECT").contains(input.result())
                 || approve && !noCostHandling(input.allowedMethod())
-                || !approve && input.allowedMethod() != null) {
+                || !approve && input.allowedMethod() != null
+                || !initialFactory
+                        && (input.factoryCostPolicy() != null
+                                || input.factoryCostLimit() != null)) {
             throw new RepairFailure(400, "REPAIR_APPROVAL_SCOPE_INVALID");
         }
         if (approve) {
             requireRepairSource(row);
         }
-        boolean initialFactory = approve && "INTERNAL_OR_FACTORY".equals(input.allowedMethod());
+        if (initialFactory) {
+            RepairFactoryCostPolicy.parse(input.factoryCostPolicy(), input.factoryCostLimit());
+        }
         var publicDecision =
                 initialFactory
                         ? new RepairInput.Decision(
-                                input.result(), input.allowedMethod(), "已批准内部或必要返厂的无费用范围，具体依据按权限保存")
+                                input.result(), input.allowedMethod(), "已批准内部或必要返厂范围，具体依据按权限保存")
                         : input;
         var origin = returnOrigin(id);
         var basis = new LinkedHashMap<String, Object>();
@@ -658,7 +664,13 @@ public class RepairService {
                 now(),
                 id);
         if (initialFactory) {
-            factoryOperations.approveInitially(actor, id, version, input.reason());
+            factoryOperations.approveInitially(
+                    actor,
+                    id,
+                    version,
+                    input.reason(),
+                    input.factoryCostPolicy(),
+                    input.factoryCostLimit());
         }
         closeTodos(id);
         if (approve) {
