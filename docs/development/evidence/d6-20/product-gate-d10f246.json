@@ -1,0 +1,52 @@
+{
+  "task": "D6-20B fixed product gate",
+  "candidate": "d10f246",
+  "gateExit": 0,
+  "status": "FIXED_LOCAL_GATE_PASSED_PC_AND_JVM_VERIFIED_SEPARATELY",
+  "java": {
+    "tests": 582,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "javaReports": 99,
+  "webTests": 169,
+  "miniTests": 279,
+  "checkstyle": 0,
+  "spotbugs": 0,
+  "coverage": {
+    "LINE": {
+      "covered": 19351,
+      "missed": 1473,
+      "total": 20824,
+      "ratio": 0.9292643104110642
+    },
+    "BRANCH": {
+      "covered": 6813,
+      "missed": 2209,
+      "total": 9022,
+      "ratio": 0.7551540678341832
+    }
+  },
+  "artifact": {
+    "candidate": "d10f246",
+    "source": "backend/target/contract-generation-probe-0.1.0-SNAPSHOT.jar",
+    "artifact": "output/d6-20b-d10f246-backend.jar",
+    "sha256": "1ecb1c42d07dc688e6c88f3462a8724872803c6ceb86abf78a2f51c3dd2ed08e",
+    "size": 59111710,
+    "observer": "passive during frozen candidate gate"
+  },
+  "dependencyIntegrity": "PASS; two preexisting moderate npm advisories retained, high threshold satisfied",
+  "applicationRestart": true,
+  "sameVolumeMySqlRestart": true,
+  "ownComposeRemoved": true,
+  "cleanPostflight": true,
+  "rawLogSha256": "f33ec848e12eeecbb4ae58f7a62bf3169b49b152e531c9f02fa80a1455d59aa9",
+  "coverageXmlSha256": "2ea85fd84912774280367451f4473764674217fbbf833d626c3e03048b0df210",
+  "limitations": [
+    "Independent review, real WeChat/device, remote CI, formal QA and production not verified",
+    "D6-20B is IN_REVIEW; parent, C/D and D21-D27 remain open"
+  ],
+  "reviewedSource": "d10f2466b6033fd9ec4281c86fd2a57f97f001f5",
+  "pcEvidence": "b6-pc-jvm-d10f246.json"
+}

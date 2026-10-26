@@ -1,0 +1,291 @@
+{
+  "task": "D6-20B actual PC, committed-process recovery and final database persistence",
+  "candidate": "d10f2466b6033fd9ec4281c86fd2a57f97f001f5",
+  "backendArtifactSha256": "1ecb1c42d07dc688e6c88f3462a8724872803c6ceb86abf78a2f51c3dd2ed08e",
+  "status": "IN_REVIEW",
+  "environment": {
+    "freshOwnedMySql": "fams-d6-20b-browser-819d25e202dcb2aa",
+    "scanner": "ClamAV 1.4.6/28129/Sun Sep 20 06:26:26 2026",
+    "normalUiRoles": [
+      "EMPLOYEE",
+      "ASSET_ADMIN",
+      "WAREHOUSE_OPERATOR"
+    ],
+    "businessWrites": "Actual PC UI; only the deliberate typed original-key recovery replay uses authenticated HTTP",
+    "cleanup": "Owned app/Vite/MySQL/volume/Clamd/photo root removed; unrelated resources retained"
+  },
+  "flow": {
+    "initialApproval": "One administrator decision; INTERNAL_OR_FACTORY, cumulative LIMITED 100.00; no second initial approval",
+    "cancelledPendingRounds": 1,
+    "actualDispatchedAndReceivedRounds": 2,
+    "sameOriginalPathSelectedForAllEightUploads": true,
+    "quotes": [
+      "39.99",
+      "60.01"
+    ],
+    "actualFinalCosts": [
+      "39.99",
+      "65.02"
+    ],
+    "actualTotal": "105.01",
+    "bothActualReturnsInitiallyUnassessed": true,
+    "overrunBeforeReapproval": {
+      "confirmed_total": "105.01",
+      "current_limit": "100.00",
+      "cost_facts": 2,
+      "assigned_cost_followups": 1,
+      "active_locks": 1,
+      "lifecycle": "UNDER_REPAIR",
+      "repair_status": "WAREHOUSE_PROCESSING"
+    },
+    "replacementApprovedLimit": "105.01",
+    "approvalDoesNotCloseRepair": true
+  },
+  "recovery": {
+    "actual_committing_jvm_pid": 4265,
+    "actual_committing_process_group_killed": 4264,
+    "new_process_group": 5342,
+    "original_receipt_replayed": true,
+    "rounds_and_header_unchanged_after_replay": true,
+    "business_side_effects_unchanged": {
+      "repair_events": {
+        "rows": 27,
+        "sha256": "589e1f1ae1813ed75379b1d81bd788825232aeb786ea1c95c0f88cdc95ae34e4"
+      },
+      "factory_audits": {
+        "rows": 27,
+        "sha256": "236a2f570611597ff1b0de1d6feb8b8a12c0436af6e31376f1baebf6153da21a"
+      },
+      "repair_todos": {
+        "rows": 12,
+        "sha256": "38d306bdebee71b02f101d0f60639ee4e3fca485c108cd68d4fefa94cc2d6f4b"
+      },
+      "permanent_receipts": {
+        "rows": 26,
+        "sha256": "c3fcb6041d2f9d78ff3d5d9f64c18528e4931ae872c8c1053d200466f2317c0a"
+      },
+      "asset_locks": {
+        "rows": 1,
+        "sha256": "044316aa7e3f559eae41b9d33c422c67c3956a602c39ee15a0a408938fc592d8"
+      },
+      "quotes": {
+        "rows": 2,
+        "sha256": "0422ac8bf2baf1939b3443549bc2a760905a2cfc9e85662e72c5883a841c54e4"
+      },
+      "costs": {
+        "rows": 2,
+        "sha256": "fb8114cff89dedfda4a9f2d6a30d2c25bd081ab3c4c397e4cd73d3b396b85ee5"
+      },
+      "scopes": {
+        "rows": 2,
+        "sha256": "7c622944ccbf06cd795ca8f253073d72ee87b8f49c08f1bd5125ad6ef91cfb11"
+      }
+    },
+    "replay_body_source": "Complete persisted typed MoneyFact input; equivalent F1 canonical request, not a raw transport-byte claim"
+  },
+  "additionalWholeRowsUnchanged": {
+    "asset": {
+      "rows": 1,
+      "sha256": "b99ee35a3e8d93ef951bd77b23e5459968354146bd8f1c3a9395f131ab4bd546"
+    },
+    "asset_events": {
+      "rows": 5,
+      "sha256": "1a60ad9857f4b9f8614c9aac1d197c19eee8a8a210d72791ef360fcc238f1981"
+    },
+    "repair_header": {
+      "rows": 1,
+      "sha256": "4d20f69e2209d6da0ce7f5e62201d2cfb884fde1f26fa664befbce3abe3911a5"
+    },
+    "factory_events": {
+      "rows": 23,
+      "sha256": "f58ae566ea7e4932b4c1ff5f53f2bfc5b2212697fef15f8cb1c3c324b7130acd"
+    },
+    "factory_evidence": {
+      "rows": 8,
+      "sha256": "885ccd3468740b9d5f3342efa8e5a3f537b1b6a307fec2c844a700a43d80fbef"
+    }
+  },
+  "originals": [
+    {
+      "round": "2",
+      "object": "4d7ba184-3c53-4919-8212-4832f22a2b92",
+      "sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "purpose": "COST_RECEIPT",
+      "read_sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "bytes": 68
+    },
+    {
+      "round": "2",
+      "object": "913886c4-07d7-40ac-a1c1-0ee080624c46",
+      "sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "purpose": "FACTORY_ACK",
+      "read_sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "bytes": 68
+    },
+    {
+      "round": "2",
+      "object": "e7aef592-35b4-4b3c-97a9-fcfbf0886bc0",
+      "sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "purpose": "QUOTE",
+      "read_sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "bytes": 68
+    },
+    {
+      "round": "2",
+      "object": "75c88ebc-3f6e-4a31-8cbc-7e9ceb61f115",
+      "sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "purpose": "RECEIPT",
+      "read_sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "bytes": 68
+    },
+    {
+      "round": "3",
+      "object": "dc52a875-6ea7-42b0-aeac-631e0666a40e",
+      "sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "purpose": "COST_RECEIPT",
+      "read_sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "bytes": 68
+    },
+    {
+      "round": "3",
+      "object": "95a090a7-7f01-4c43-bec4-95f29fc5e3fb",
+      "sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "purpose": "FACTORY_ACK",
+      "read_sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "bytes": 68
+    },
+    {
+      "round": "3",
+      "object": "d8e2b7e6-7688-4eed-b42f-d4bfdec33a0a",
+      "sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "purpose": "QUOTE",
+      "read_sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "bytes": 68
+    },
+    {
+      "round": "3",
+      "object": "fe20f9fe-f8d4-482a-b962-f3e544e0af74",
+      "sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "purpose": "RECEIPT",
+      "read_sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "bytes": 68
+    }
+  ],
+  "final": {
+    "repairStatus": "COMPLETED",
+    "locks": 0,
+    "rounds": 3,
+    "scopes": 2,
+    "repairs": 1,
+    "received": 2,
+    "cancelled": 1,
+    "lifecycle": "IN_STOCK",
+    "dispatched": 2,
+    "originalRoundsImmutable": true,
+    "unchangedAssetDateColumns": [
+      "created_business_date",
+      "last_inventory_business_date"
+    ],
+    "expectedReturnDates": [
+      "2026-11-01",
+      "2026-11-01",
+      "2026-11-01"
+    ],
+    "capture": "Automatic immediately on committed COMPLETED, before cleanup; exit 0"
+  },
+  "privacy": {
+    "employeeViewContainsNoPrivateVendorContactCostsOrFilename": true,
+    "employeePrivateApiCode": "REPAIR_FACTORY_PRIVATE_ACCESS_REQUIRED",
+    "requestId": "ecd09b1f-3c21-4499-9304-cbb46b8a8a25",
+    "actualHttpNumericStatusSeparatelyCaptured": false,
+    "logoutClearsPrivateView": true,
+    "browserConsoleErrors": []
+  },
+  "previousAttempt": {
+    "path": "output/d6-20b-d10-expired-run/closure-timeout.json",
+    "finalDatabaseAssertionsCompleted": false,
+    "notFullPcAcceptance": true,
+    "resolution": "Fresh isolated rerun with automatic committed-state capture; prior evidence retained"
+  },
+  "localArtifacts": [
+    {
+      "path": "output/d6-20b-browser-persistence.json",
+      "sha256": "677fe1374d471511b41ea28ac6e310cca2838a4bbb9f97c858f1961cbded7e6e"
+    },
+    {
+      "path": "output/d6-20b-browser-recovery.json",
+      "sha256": "0994de393181ba469cc4790f7821f1d5b823600b86301b9e7e79cfcf670b574e"
+    },
+    {
+      "path": "output/d6-20b-browser-overrun-proof.json",
+      "sha256": "e2c8278e18769b0d792b8b1cad153b79ff1d909144f0cd02cdf1e4021e0ada48"
+    },
+    {
+      "path": "output/d6-20b-d10-whole-row-recovery.json",
+      "sha256": "1de218472c1c3bc5864042e4d60ed8ca0ea1dae2feab29f6a35100bf2e16a2fa"
+    },
+    {
+      "path": "output/d6-20b-browser-runtime-d10f246-auto-close.py",
+      "sha256": "fcfd495145c028e0176405e3e8a958e803988e3cde45a058dbd432baea0f5f78"
+    },
+    {
+      "path": "output/d6-20b-d10-pc-approved.txt",
+      "sha256": "0a7b03654b7ad52126b94eec41f7bc6fb47378ea31bf128140b98bc9c7849320"
+    },
+    {
+      "path": "output/d6-20b-d10-pc-completed-viewport.png",
+      "sha256": "5720296aa733ce58eb28831bd039f13231367ed17b4d46a8c07ddf14e56b2c9e"
+    },
+    {
+      "path": "output/d6-20b-d10-pc-completed.png",
+      "sha256": "550764e928189bb7c77e7597a4a25085eff803f92b74c6d904303d700167bcb1"
+    },
+    {
+      "path": "output/d6-20b-d10-pc-completed.txt",
+      "sha256": "17892f5a2c6a16ac5d7aa7b9587cf79dccfb7799f88d32d4f5ea799fcbc0ff1e"
+    },
+    {
+      "path": "output/d6-20b-d10-pc-console.json",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "path": "output/d6-20b-d10-pc-employee-denied.txt",
+      "sha256": "0e2ecb63328557cb4dc88f6664b1fb18362514b914404bc8dd5a719df14a6358"
+    },
+    {
+      "path": "output/d6-20b-d10-pc-employee.png",
+      "sha256": "31a9c9fb5d2b7fa28848342848368ce32b8550fd71299330c010828ad0916c65"
+    },
+    {
+      "path": "output/d6-20b-d10-pc-employee.txt",
+      "sha256": "5db097ccc2ed697b2b8419e24881fd79b9050cc915ceea619ec751dfd2089875"
+    },
+    {
+      "path": "output/d6-20b-d10-pc-first-return.txt",
+      "sha256": "e101236f6246dc6d7b156bf18f8f891385652c739902ca986667a47eccf09de0"
+    },
+    {
+      "path": "output/d6-20b-d10-pc-logout.txt",
+      "sha256": "a9ddefa9185892b2a88fc6f2c1f231f41064e5db3fdde5aadb9d4ba37d8d38fe"
+    },
+    {
+      "path": "output/d6-20b-d10-pc-overrun.png",
+      "sha256": "6aa5468c2001a75ba78299162664c2446b8539f2226b0f7aa78841b1a23d4bd2"
+    },
+    {
+      "path": "output/d6-20b-d10-pc-overrun.txt",
+      "sha256": "bbb5f9f13371c8843f0738f8d1c63bd886c59d36c9594948dd0482115ac3592d"
+    },
+    {
+      "path": "output/d6-20b-d10-pc-second-return.txt",
+      "sha256": "25f4b5f7593c66803f2ff091c1d71c57e5f1e376fc80a6669bc047abf8418a27"
+    }
+  ],
+  "limitations": [
+    "Fixture PNG originals are 68-byte scan/readback probes, not authenticated real invoices or physical shipping",
+    "Typed complete persisted MoneyFact input replay is not a raw transport-byte equivalence claim",
+    "Node opaque Page integration is separate from real WeChat/device/cold-process acceptance",
+    "Independent non-implementer review unsigned; parent and C/D, D21-D27 remain open",
+    "AOCI retains preexisting PNG curation debt; no claim of whole-index alignment"
+  ]
+}
