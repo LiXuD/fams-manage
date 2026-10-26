@@ -105,7 +105,7 @@ class RepairFactoryUpgradeRuntimeCase {
         }
     }
 
-    private void seed(JdbcTemplate db) {
+    void seed(JdbcTemplate db) {
         db.update(
                 "INSERT INTO"
                     + " fams_employee(id,employee_no,employee_no_normalized,name,organization_id,status,created_at,updated_at)"

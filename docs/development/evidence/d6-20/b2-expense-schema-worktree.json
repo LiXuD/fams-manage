@@ -1,0 +1,75 @@
+{
+  "task": "D6-20B2 expense schema expansion",
+  "sourceBase": "eb367b8",
+  "scope": "V52 populated owned fixture backup/restore, V53 forward-only DDL, existing no-cost actual HTTP/native opaque compatibility",
+  "status": "LOCAL_SCHEMA_VERIFIED_ONLY",
+  "schemaVersion": 53,
+  "migrationSha256": "e86e3c607da15c5957c4119ec60225b8ab90b1504ecffa8240b7b12a102f9870",
+  "executedResourceSha256": "e86e3c607da15c5957c4119ec60225b8ab90b1504ecffa8240b7b12a102f9870",
+  "backupRestore": {
+    "ownedBackupRestore": true,
+    "schemaVersion": 52,
+    "fixtureOnlyNotActualBusiness": true,
+    "restoredTables": 137,
+    "legacyRounds": 2,
+    "verifiedZeroReceived": 1,
+    "backupSha256": "a1f9a46f7fa12307a1f83c61ef3ca05e5dc13814627671cdb29fd86f01ee7889",
+    "backupBytes": 247691,
+    "selectedFactsSha256": "a7ff6599db7b0cc977ab61d14c3ac106cea66142ad4921d71c7f15cc64a5f1d9",
+    "restoredSelectedFactsEqual": true
+  },
+  "upgrade": {
+    "tests": 1,
+    "applied": 1,
+    "repeat": 0,
+    "allLegacyTableOldColumnFactsUnchanged": true,
+    "legacyReceivedZeroRetained": true,
+    "noFabricatedCostBackfill": true,
+    "constraintsVerified": [
+      "limited positive budget",
+      "unlimited nullable budget",
+      "nonnegative actual cost",
+      "dispatch authorization requires actual dispatch",
+      "physical receipt may retain unknown cost",
+      "one actual cost fact per round",
+      "quote requires original binding"
+    ],
+    "fixtureOnlyNotBusinessAcceptance": true
+  },
+  "compatibility": {
+    "previousV52UpgradeTests": 1,
+    "factoryHttpTests": 20,
+    "nativeOpaqueModes": [
+      "subsequent scope",
+      "initial single approval"
+    ],
+    "actualTwoRoundsAndOriginalRetry": true,
+    "noNewExpenseApiAcceptance": true
+  },
+  "static": {
+    "checkstyle": 0,
+    "spotbugs": 0
+  },
+  "historicalFailures": [
+    {
+      "log": "output/d6-20b2-upgrade-first-checkstyle-failure.log",
+      "reason": "fixture loop missing required braces; before V53 execution"
+    },
+    {
+      "log": "output/d6-20b2-upgrade-first-applied-failure.log",
+      "reason": "test LAST_INSERT_ID read on a different connection returned zero; negative UPDATE affected no row; fixed controlled unique-key ID lookup without changing V53"
+    }
+  ],
+  "runtime": "owned disposable MySQL 8.4.11; all own containers removed",
+  "limitations": [
+    "expense API, quote/cost originals, totals and scope-change handling not implemented",
+    "no current fixed full gate or PC expense acceptance",
+    "no independent review signature, real WeChat/device, CI, QA or production acceptance"
+  ],
+  "logs": {
+    "output/d6-20b2-baseline-runtime.log": "eb6b38e02923ca2485e2ee50776b62b4b36e44517ffb915e6a5208441866c101",
+    "output/d6-20b2-cost-upgrade-runtime.log": "4c1ac391b7a82263ea412ee2c2c43714a5197ce0d4bcd5ec22597ae0d6517dfc",
+    "output/d6-20b2-schema-compatibility-runtime.log": "9c286a60fa78386d123a65c03b0a72838e35932f49cf08aad7608bbde3c15f80",
+    "output/d6-20b2-schema-java-static.log": "e44ec6c624b34d30d26f4e41cd92aaf127926acf5f837a8af2098b95646e514c"
+  }
+}
