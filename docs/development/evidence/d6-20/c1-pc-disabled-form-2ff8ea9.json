@@ -1,0 +1,55 @@
+{
+  "candidate": "2ff8ea9fbf67a61c5697e96d743f3dca4b950cc0",
+  "status": "PC_ACCEPTANCE_INCOMPLETE_KNOWN_DISABLED_FORM_DEFECT",
+  "observed": [
+    "Normal employee repair submission, single admin direct no-cost factory approval, warehouse claim and actual away acceptance completed through PC UI.",
+    "One original-machine round was created, ACK original uploaded, original dispatched, RECEIPT original uploaded and original received restored with explicit zero-cost confirmation.",
+    "PARTS_CHANGE original uploaded through the new child panel and actual ClamAV; purpose-specific clean original checkbox appeared.",
+    "After normal parent refresh completed, part-name field remained disabled while explicit record refresh stayed enabled. No parts fact was submitted."
+  ],
+  "uiObservation": {
+    "formEnabled": false,
+    "canRefresh": true,
+    "partsRecords": 0,
+    "cleanPurposeEvidenceVisible": true
+  },
+  "sourceDiagnosis": {
+    "confidence": "SOURCE_INFERENCE_NOT_YET_NEW_RED_TEST",
+    "file": "apps/web/src/views/RepairFactoryPartsPanel.vue",
+    "readyLine": 21,
+    "watcherLine": 98,
+    "hypothesis": "Round props arrive before repair header props; mismatch watcher latches stale=true, then matching later props do not clear it. ready already compares both versions.",
+    "firstNextStep": "Add regression with successful upload, then update round props and repair props separately; preserve rejection-forces-fresh-read behavior.",
+    "unmodified": true,
+    "newRegressionWritten": false
+  },
+  "evidence": {
+    "screenshot": {
+      "path": "output/d6-20c1-2ff8ea9-disabled-form.png",
+      "sha256": "1ec387ad594920a4154be615b8fbf8844973e992afeb2ecc258761214b0cd173"
+    },
+    "dom": {
+      "path": "output/d6-20c1-2ff8ea9-disabled-form-dom.txt",
+      "sha256": "42b4bc02ece56382213e41cd9431b66ac49d17c46c45421456cf03d132c3dd59"
+    },
+    "fixture": "output/d6-20c1-browser-fixture.json",
+    "runtime": "output/d6-20c1-browser-runtime-2ff8ea9.py"
+  },
+  "runtimeExit": {
+    "code": 1,
+    "observedError": "Owned PC acceptance deadline exceeded",
+    "observedCleanupMessage": "Owned browser app, Vite, MySQL and volume removed.",
+    "note": "User later requested handoff; the observed exit was the runner deadline, not a successful recovery/closure."
+  },
+  "cleanup": {
+    "ownedMysqlClamdAppVitePhotoDirectory": "REMOVED",
+    "ownedTab6": "CLOSED",
+    "unrelatedMysqlPreserved": "fams-d6-03a-625409ba1409fdb7-mysql-1"
+  },
+  "notExecuted": [
+    "parts observation persistence through PC",
+    "actual committing JVM kill and original-key replay",
+    "final separate actual inbound"
+  ],
+  "stillOpen": "D6-20C and parent IN_PROGRESS"
+}
