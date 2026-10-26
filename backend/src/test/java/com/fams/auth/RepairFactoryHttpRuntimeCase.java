@@ -120,7 +120,7 @@ class RepairFactoryHttpRuntimeCase {
                 2L,
                 db.queryForObject(
                         "SELECT COUNT(*) FROM fams_repair_factory_scope WHERE"
-                            + " scope_status='APPROVED'",
+                                + " scope_status='APPROVED'",
                         Long.class));
     }
 
@@ -1013,6 +1013,10 @@ class RepairFactoryHttpRuntimeCase {
         var row = privateDetail(fixture.warehouse, id);
         var body = movement(id, round, fixture.warehouse, true, condition);
         body.put("actualCost", amount);
+        body.put(
+                "treatmentResult",
+                "Original physical identity and actual receipt checked against the selected"
+                    + " evidence and recorded final cost");
         ok(
                 post(
                         fixture.warehouse,

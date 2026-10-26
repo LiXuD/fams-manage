@@ -1,0 +1,43 @@
+{
+  "task": "D6-20B4 upgrade fixture isolation",
+  "sourceBase": "1c2388e",
+  "candidate": "working-tree fixture correction; new fixed full gate pending",
+  "status": "LOCAL_UPGRADE_TO_BUSINESS_SUCCESSOR_VERIFIED",
+  "sourceHashes": {
+    "backend/src/test/java/com/fams/auth/RepairFactoryCostUpgradeRuntimeCase.java": "9011e263faaa7ce2ced15249e049a5978cdd2e5805c490f86450ee852c2194c0",
+    "backend/src/test/java/com/fams/auth/RepairFactoryHttpRuntimeCase.java": "a7483e09a7c275686ad923699c39df08cd5abb58ef6e3b59d7351d9c58739301",
+    "apps/miniprogram/test/runtime-repair-factory-http.mjs": "f09c1854ca818972273d25885e55c0efa3a407fdac6ca5ceb4d721cf53a663d2"
+  },
+  "failedFixedCandidate": {
+    "candidate": "1c2388e",
+    "exit": 1,
+    "cause": "Retained ACTIVE business parameter 954520 from newly integrated populated V53 upgrade conflicts with successor repair fixture ACTIVE parameter 951000",
+    "businessSuite": "32 BeforeEach errors; no business pass claim",
+    "ownedComposeRemoved": true
+  },
+  "fix": "AfterEach transaction removes only fixture 954520 financial rows and repair/asset/reference/account facts in foreign-key order; standalone V52 backup baseline remains intentionally retained",
+  "verification": {
+    "sameOwnedDatabaseSequentialCostUpgrade": 1,
+    "sameOwnedDatabaseSuccessorFactoryHttp": 32,
+    "factoryFailures": 0,
+    "factoryErrors": 0,
+    "factorySkipped": 0,
+    "checkstyle": 0,
+    "spotbugs": 0,
+    "ownRuntimeRemoved": true,
+    "threeNativeScenarios": true
+  },
+  "fixtureTextCorrection": "Positive expense receipt treatment and initial LIMITED100 approval reason now agree with actual amounts; no production request shape or logic change",
+  "migration": "V1-V53 unchanged and frozen",
+  "logs": {
+    "output/d6-20b-product-gate-1c2388e.log": "bf809fa788486d5179197bb96e8477c68e3768fc7ff282c066b6ef38d6ab3ac0",
+    "output/d6-20b-product-gate-1c2388e-generated-precondition-failure.log": "ece9905a4ea268cc55d634d82dded045d39bb848191ce0147822f101a7fe97c0",
+    "output/d6-20b4-fixture-successor-runtime.log": "cd3547f7ace453c37609eec2270055a43495d56b66a707a7f3bab6babbe5d0a1",
+    "output/d6-20b4-fixture-static.log": "fc4b8f6f95a3c3d13fbef710baf324032d5d854c2c7f3ce421e4fa47e15975f8"
+  },
+  "limitations": [
+    "Full product gate for the correction still pending",
+    "Real PC and actual committing JVM expense recovery still pending",
+    "No independent review, real device, CI, QA or production acceptance claim"
+  ]
+}
