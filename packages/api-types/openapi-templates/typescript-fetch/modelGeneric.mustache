@@ -28,7 +28,7 @@ export interface {{classname}} {
 export const {{classname}}{{enumName}} = {
 {{#allowableValues}}
 {{#enumVars}}
-    {{{name}}}: {{{value}}},
+    {{#name.isEmpty}}{{{value}}}{{/name.isEmpty}}{{^name.isEmpty}}{{{name}}}{{/name.isEmpty}}: {{{value}}},
 {{/enumVars}}
 {{/allowableValues}}
 } as const;

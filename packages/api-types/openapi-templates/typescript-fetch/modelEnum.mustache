@@ -11,7 +11,7 @@
 export enum {{classname}} {
 {{#allowableValues}}
 {{#enumVars}}
-    {{{name}}} = {{{value}}},
+    {{#name.isEmpty}}{{{value}}}{{/name.isEmpty}}{{^name.isEmpty}}{{{name}}}{{/name.isEmpty}} = {{{value}}},
 {{/enumVars}}
 {{/allowableValues}}
 }
@@ -20,7 +20,7 @@ export enum {{classname}} {
 export const {{classname}} = {
 {{#allowableValues}}
 {{#enumVars}}
-    {{{name}}}: {{{value}}},
+    {{#name.isEmpty}}{{{value}}}{{/name.isEmpty}}{{^name.isEmpty}}{{{name}}}{{/name.isEmpty}}: {{{value}}},
 {{/enumVars}}
 {{/allowableValues}}
 } as const;
