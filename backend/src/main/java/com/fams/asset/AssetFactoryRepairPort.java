@@ -70,6 +70,58 @@ public class AssetFactoryRepairPort {
         }
     }
 
+    /** Append a non-private trace; technical before/after evidence remains with repair. */
+    public long recordPartsObservation(
+            long asset,
+            long version,
+            String originalJson,
+            String observedCode,
+            String observedSerial,
+            long actor,
+            long repair,
+            long round,
+            long change,
+            Instant observedAt,
+            Instant recordedAt) {
+        var current = snapshot(asset, version, "UNDER_REPAIR");
+        requireOriginal(current, originalJson);
+        identity.observedCode(asset, observedCode);
+        String serial = (String) current.get("serialNumber");
+        if (serial != null
+                && (observedSerial == null
+                        || !serial.strip()
+                                .toUpperCase(Locale.ROOT)
+                                .equals(observedSerial.strip().toUpperCase(Locale.ROOT)))) {
+            throw new AssetHandoverPort.Failure("REPAIR_FACTORY_ORIGINAL_SERIAL_MISMATCH", 409);
+        }
+        if (db.update(
+                        "UPDATE fams_asset SET version=version+1,updated_by=?,updated_at=?"
+                                + " WHERE id=? AND version=?",
+                        actor,
+                        recordedAt,
+                        asset,
+                        version)
+                != 1) {
+            throw new AssetHandoverPort.Failure("REPAIR_FACTORY_ASSET_CHANGED", 409);
+        }
+        mapper.event(
+                asset,
+                "REPAIR_FACTORY_PARTS_OBSERVED",
+                recordedAt,
+                json.writeValueAsString(
+                        Map.of(
+                                "repairId",
+                                Long.toString(repair),
+                                "roundId",
+                                Long.toString(round),
+                                "partsChangeId",
+                                Long.toString(change),
+                                "observedAt",
+                                observedAt.toString())),
+                actor);
+        return version + 1;
+    }
+
     public long move(
             long asset,
             long version,
@@ -102,7 +154,7 @@ public class AssetFactoryRepairPort {
             var locations =
                     db.queryForList(
                             "SELECT id,warehouse_id FROM fams_location WHERE id=? AND version=? AND"
-                                + " status='ACTIVE' FOR UPDATE",
+                                    + " status='ACTIVE' FOR UPDATE",
                             actualLocation,
                             locationVersion);
             if (locations.isEmpty()) {

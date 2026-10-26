@@ -1224,6 +1224,8 @@ def verify_java_quality(context: RuntimeContext) -> None:
              "RepairFactoryUpgradeRuntimeCase"),
             ("repair V53 populated private expense expansion and repeat", "-Dd6.20.repair.factory.cost.upgrade.runtime=true",
              "RepairFactoryCostUpgradeRuntimeCase"),
+            ("repair V54 populated original parts expansion and repeat", "-Dd6.20.repair.factory.parts.upgrade.runtime=true",
+             "RepairFactoryPartsUpgradeRuntimeCase"),
             ("actual factory scope rounds private evidence and receipt HTTP", "-Dd6.20.repair.factory.runtime=true",
              "RepairFactoryHttpRuntimeCase"),
             ("inventory independent terminal damage and supplemental obligations HTTP", "-Dd6.19.inventory.late.damage.runtime=true",

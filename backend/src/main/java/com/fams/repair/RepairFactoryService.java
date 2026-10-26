@@ -734,6 +734,192 @@ public class RepairFactoryService {
                 current, operation, key, fingerprint, id, number(round, "scope_id"), roundId);
     }
 
+    public Map<String, Object> parts(Actor actor, long id, long roundId, int page, int size) {
+        var current = reader(actor);
+        var row = header(id);
+        readable(current, row);
+        var round = round(id, roundId);
+        var items =
+                db.queryForList(
+                        "SELECT * FROM fams_repair_factory_parts_change WHERE repair_id=? AND"
+                                + " round_id=? ORDER BY id DESC LIMIT ? OFFSET ?",
+                        id,
+                        roundId,
+                        size,
+                        (page - 1L) * size);
+        var views =
+                items.stream()
+                        .map(
+                                item ->
+                                        Map.<String, Object>of(
+                                                "id",
+                                                item.get("id").toString(),
+                                                "roundId",
+                                                Long.toString(roundId),
+                                                "assetId",
+                                                item.get("asset_id").toString(),
+                                                "partName",
+                                                item.get("part_name"),
+                                                "beforeInfo",
+                                                item.get("before_info"),
+                                                "afterInfo",
+                                                item.get("after_info"),
+                                                "observedAt",
+                                                instant(item.get("observed_at")).toString(),
+                                                "recordedAt",
+                                                instant(item.get("recorded_at")).toString(),
+                                                "evidenceIds",
+                                                json.readTree(
+                                                        item.get("evidence_ids_json").toString()),
+                                                "recordedBy",
+                                                item.get("recorded_by").toString()))
+                        .toList();
+        return Map.of(
+                "page",
+                page,
+                "pageSize",
+                size,
+                "total",
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_repair_factory_parts_change WHERE repair_id=?"
+                                + " AND round_id=?",
+                        Long.class,
+                        id,
+                        roundId),
+                "items",
+                views,
+                "canRecord",
+                owner(current, row)
+                        && "WAREHOUSE_PROCESSING".equals(row.get("repair_status"))
+                        && partsPhase(id, round));
+    }
+
+    private boolean partsPhase(long id, Map<String, Object> round) {
+        if (!"RECEIVED".equals(round.get("round_status"))
+                || factory.active(id) != null
+                || !db.queryForList(
+                                "SELECT id FROM fams_repair_return_handover WHERE repair_id=? AND"
+                                        + " handover_status IN ('WAITING_RECEIPT','REFUSED') FOR"
+                                        + " UPDATE",
+                                id)
+                        .isEmpty()
+                || db.queryForList(
+                                "SELECT repair_id FROM fams_repair_physical_handling"
+                                        + " WHERE repair_id=? FOR UPDATE",
+                                id)
+                        .isEmpty()) {
+            return false;
+        }
+        var latest =
+                db.queryForList(
+                        "SELECT id FROM fams_repair_factory_round WHERE repair_id=? AND"
+                                + " round_status='RECEIVED' ORDER BY id DESC LIMIT 1 FOR UPDATE",
+                        id);
+        return !latest.isEmpty() && number(round, "id") == number(latest.getFirst(), "id");
+    }
+
+    public Map<String, Object> recordParts(
+            Actor actor,
+            long id,
+            long roundId,
+            long version,
+            UUID key,
+            RepairFactoryInput.PartsFact input) {
+        var current = warehouse(actor);
+        var row = header(id);
+        requireOwner(current, row);
+        String operation = "FACTORY_PARTS:" + id + ":" + roundId;
+        String fingerprint = hash(operation, version, input);
+        var prior = replay(actor, current, row, operation, key, fingerprint);
+        if (prior != null) {
+            return prior;
+        }
+        guard(
+                actor,
+                current,
+                row,
+                version,
+                input.assetVersion(),
+                input.ownershipVersion(),
+                input.lockVersion());
+        var round = round(id, roundId);
+        roundGuard(actor, current, row, round, input.roundVersion(), "RECEIVED");
+        if (!partsPhase(id, round)) {
+            throw new RepairFailure(409, "REPAIR_FACTORY_PARTS_PHASE_INVALID");
+        }
+        if (!Boolean.TRUE.equals(input.originalPhysicalIdentityChecked())) {
+            throw new RepairFailure(400, "REPAIR_FACTORY_ORIGINAL_RECEIPT_REQUIRED");
+        }
+        String before = input.beforeInfo().strip();
+        String after = input.afterInfo().strip();
+        String name = input.partName().strip();
+        if (before.equals(after)) {
+            throw new RepairFailure(400, "REPAIR_FACTORY_PARTS_CHANGE_REQUIRED");
+        }
+        Instant earliest = instant(round.get("received_at"));
+        var recollected =
+                db.queryForList(
+                        "SELECT r.occurred_at FROM fams_repair_return_recollection r JOIN"
+                                + " fams_repair_return_handover h ON h.id=r.handover_id WHERE"
+                                + " h.repair_id=? ORDER BY r.occurred_at DESC LIMIT 1 FOR UPDATE",
+                        id);
+        if (!recollected.isEmpty()
+                && instant(recollected.getFirst().get("occurred_at")).isAfter(earliest)) {
+            earliest = instant(recollected.getFirst().get("occurred_at"));
+        }
+        physicalTime(input.observedAt(), earliest);
+        if (input.observedAt().isAfter(now())) {
+            throw new RepairFailure(400, "REPAIR_FACTORY_PARTS_TIME_INVALID");
+        }
+        selected(current, id, roundId, input.evidenceIds(), "PARTS_CHANGE");
+        Instant recordedAt = now();
+        db.update(
+                "INSERT INTO fams_repair_factory_parts_change(repair_id,round_id,asset_id,"
+                        + "part_name,before_info,after_info,observed_at,evidence_ids_json,"
+                        + "snapshot_json,recorded_by,recorded_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                id,
+                roundId,
+                row.get("asset_id"),
+                name,
+                before,
+                after,
+                input.observedAt(),
+                json.writeValueAsString(input.evidenceIds()),
+                json.writeValueAsString(input),
+                current.id(),
+                recordedAt);
+        long change =
+                Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
+        long next =
+                assets.recordPartsObservation(
+                        number(row, "asset_id"),
+                        input.assetVersion(),
+                        round.get("original_identity_json").toString(),
+                        input.observedCode(),
+                        input.observedSerial(),
+                        current.id(),
+                        id,
+                        roundId,
+                        change,
+                        input.observedAt(),
+                        recordedAt);
+        row.put("asset_version", next);
+        db.update("UPDATE fams_repair_factory_round SET version=version+1 WHERE id=?", roundId);
+        advance(
+                actor,
+                current,
+                row,
+                "FACTORY_PARTS_OBSERVED",
+                number(round, "scope_id"),
+                roundId,
+                Map.of("input", input, "partsChangeId", Long.toString(change)),
+                Role.WAREHOUSE_OPERATOR);
+        var result = reply(header(id), number(round, "scope_id"), roundId);
+        result.put("partsChangeId", Long.toString(change));
+        save(current, operation, key, fingerprint, id, result);
+        return result;
+    }
+
     public Map<String, Object> recordQuote(
             Actor actor,
             long id,
@@ -924,7 +1110,12 @@ public class RepairFactoryService {
             conflict(actor, current, row, "REPAIR_FACTORY_ROUND_CHANGED");
         }
         boolean financial = "QUOTE".equals(purpose) || "COST_RECEIPT".equals(purpose);
+        boolean parts = "PARTS_CHANGE".equals(purpose);
+        if (parts && !partsPhase(id, round)) {
+            throw new RepairFailure(409, "REPAIR_FACTORY_PARTS_PHASE_INVALID");
+        }
         if (!financial
+                && !parts
                 && (!List.of("PENDING_DISPATCH", "DISPATCHED").contains(round.get("round_status"))
                         || !List.of("FAULT", "FACTORY_ACK", "RECEIPT").contains(purpose)
                         || "RECEIPT".equals(purpose)

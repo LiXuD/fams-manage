@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Actual HTTP/MySQL/owner ports; only external identity and scanner outcomes are fixtures. */
@@ -374,6 +375,7 @@ class RepairFactoryHttpRuntimeCase {
         db.execute("DROP TRIGGER IF EXISTS owned_factory_audit_failure");
         String owned =
                 " IN (SELECT id FROM fams_repair_request WHERE asset_id BETWEEN 951020 AND 951023)";
+        db.update("DELETE FROM fams_repair_factory_parts_change WHERE repair_id" + owned);
         db.update("DELETE FROM fams_repair_factory_event WHERE repair_id" + owned);
         db.update("DELETE FROM fams_repair_factory_evidence WHERE repair_id" + owned);
         for (String table : List.of("fams_attachment", "fams_attachment_scope")) {
@@ -1016,7 +1018,7 @@ class RepairFactoryHttpRuntimeCase {
         body.put(
                 "treatmentResult",
                 "Original physical identity and actual receipt checked against the selected"
-                    + " evidence and recorded final cost");
+                        + " evidence and recorded final cost");
         ok(
                 post(
                         fixture.warehouse,
@@ -1994,6 +1996,303 @@ class RepairFactoryHttpRuntimeCase {
                         .POST(HttpRequest.BodyPublishers.ofByteArray(bytes.toByteArray()))
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
+    }
+
+    @Test
+    void partsObservationRetainsOriginalCardAndAppendsPrivateBeforeAfterWithPermanentReplay()
+            throws Exception {
+        String id = approved(), round = create(id, fixture.warehouse);
+        dispatch(id, round, fixture.warehouse);
+        receive(id, round, fixture.warehouse, "RESTORED");
+        uploadPartsOriginal(id, round);
+        var asset = new LinkedHashMap<>(db.queryForMap("SELECT * FROM fams_asset WHERE id=951020"));
+        var frozenRound =
+                new LinkedHashMap<>(
+                        db.queryForMap(
+                                "SELECT * FROM fams_repair_factory_round WHERE id=?", round));
+        var lock =
+                db.queryForMap(
+                        "SELECT * FROM fams_asset_business_lock WHERE asset_id=951020 AND"
+                                + " released_at IS NULL");
+        var body = partsBody(id, round, "PRIVATE-PART-OLD", "PRIVATE-PART-NEW");
+        long version = privateDetail(fixture.warehouse, id).path("version").asLong();
+        String nonce = key(), route = path(id, "/rounds/" + round + "/parts");
+        var saved = ok(post(fixture.warehouse, route, version, nonce, body));
+        assertEquals(saved, ok(post(fixture.warehouse, route, version, nonce, body)));
+        var currentAsset =
+                new LinkedHashMap<>(db.queryForMap("SELECT * FROM fams_asset WHERE id=951020"));
+        for (String field : List.of("version", "updated_by", "updated_at")) {
+            asset.remove(field);
+            currentAsset.remove(field);
+        }
+        assertEquals(asset, currentAsset);
+        assertEquals(
+                lock,
+                db.queryForMap(
+                        "SELECT * FROM fams_asset_business_lock WHERE asset_id=951020 AND"
+                                + " released_at IS NULL"));
+        var currentRound =
+                new LinkedHashMap<>(
+                        db.queryForMap(
+                                "SELECT * FROM fams_repair_factory_round WHERE id=?", round));
+        assertEquals(
+                ((Number) frozenRound.remove("version")).longValue() + 1,
+                ((Number) currentRound.remove("version")).longValue());
+        assertEquals(frozenRound, currentRound);
+        var page = ok(get(fixture.admin, route));
+        assertEquals(1, page.path("total").asInt());
+        assertEquals("PRIVATE-PART-OLD", page.path("items").get(0).path("beforeInfo").asText());
+        assertEquals("PRIVATE-PART-NEW", page.path("items").get(0).path("afterInfo").asText());
+        assertFalse(page.path("canRecord").asBoolean());
+        assertTrue(ok(get(fixture.warehouse, route)).path("canRecord").asBoolean());
+        assertEquals(403, get(fixture.employee, route).statusCode());
+        assertEquals(403, get(fixture.otherWarehouse, route).statusCode());
+        assertFalse(root(fixture.employee, id).toString().contains("PRIVATE-PART"));
+        assertFalse(
+                db.queryForList(
+                                "SELECT summary_json FROM fams_asset_timeline_event WHERE"
+                                        + " asset_id=951020")
+                        .toString()
+                        .contains("PRIVATE-PART"));
+        assertEquals(
+                1L,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_asset_timeline_event WHERE asset_id=951020 AND"
+                                + " event_type='REPAIR_FACTORY_PARTS_OBSERVED'",
+                        Long.class));
+        assertEquals("UNDER_REPAIR", lifecycle());
+        assertEquals(1, activeLocks());
+        var root = root(fixture.warehouse, id);
+        ok(
+                post(
+                        fixture.warehouse,
+                        "/" + id + "/close-inbound",
+                        root.path("version").asLong(),
+                        key(),
+                        inbound(root, now())));
+        assertEquals("COMPLETED", root(fixture.employee, id).path("status").asText());
+        assertEquals(0, activeLocks());
+        assertEquals(1, ok(get(fixture.admin, route)).path("total").asInt());
+    }
+
+    @Test
+    void partsObservationLateAuditFailureRollsBackOwnerEventFactAndOriginalReceipt()
+            throws Exception {
+        String id = approved(), round = create(id, fixture.warehouse);
+        dispatch(id, round, fixture.warehouse);
+        receive(id, round, fixture.warehouse, "RESTORED");
+        uploadPartsOriginal(id, round);
+        var body = partsBody(id, round, "OLD-PRIVATE-CPU", "NEW-PRIVATE-CPU");
+        var before = partsMutationFacts(id, round);
+        long version = privateDetail(fixture.warehouse, id).path("version").asLong();
+        String nonce = key(), route = path(id, "/rounds/" + round + "/parts");
+        db.execute(
+                "CREATE TRIGGER owned_factory_audit_failure BEFORE INSERT ON fams_audit_event FOR"
+                    + " EACH ROW BEGIN IF NEW.action='FACTORY_PARTS_OBSERVED' THEN SIGNAL SQLSTATE"
+                    + " '45000' SET MESSAGE_TEXT='owned parts late audit failure'; END IF; END");
+        assertEquals(500, post(fixture.warehouse, route, version, nonce, body).statusCode());
+        assertEquals(before, partsMutationFacts(id, round));
+        assertEquals(
+                0,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_repair_receipt WHERE request_id=?",
+                        Integer.class,
+                        nonce));
+        db.execute("DROP TRIGGER owned_factory_audit_failure");
+        var saved = ok(post(fixture.warehouse, route, version, nonce, body));
+        assertEquals(saved, ok(post(fixture.warehouse, route, version, nonce, body)));
+        assertEquals(
+                1,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_repair_factory_parts_change", Integer.class));
+    }
+
+    @Test
+    void partsObservationRequiresLatestPhysicalCustodyExactOriginalAndCurrentTechnicalBasis()
+            throws Exception {
+        String id = approved(), round = create(id, fixture.warehouse);
+        var pending = privateDetail(fixture.warehouse, id);
+        assertEquals(
+                409,
+                uploadResponse(id, round, fixture.warehouse, "PARTS_CHANGE", pending, key())
+                        .statusCode());
+        dispatch(id, round, fixture.warehouse);
+        assertFalse(
+                ok(get(fixture.warehouse, path(id, "/rounds/" + round + "/parts")))
+                        .path("canRecord")
+                        .asBoolean());
+        receive(id, round, fixture.warehouse, "RESTORED");
+        uploadPartsOriginal(id, round);
+        String route = path(id, "/rounds/" + round + "/parts");
+        var body = partsBody(id, round, "OLD-PRIVATE-DISK", "NEW-PRIVATE-DISK");
+        long version = privateDetail(fixture.warehouse, id).path("version").asLong();
+        for (String field :
+                List.of(
+                        "roundVersion",
+                        "assetVersion",
+                        "ownershipVersion",
+                        "lockVersion",
+                        "originalPhysicalIdentityChecked")) {
+            var missing = body.deepCopy();
+            missing.remove(field);
+            assertEquals(
+                    400,
+                    post(fixture.warehouse, route, version, key(), missing).statusCode(),
+                    field);
+        }
+        var wrong = body.deepCopy();
+        wrong.put("observedSerial", "DIFFERENT-WHOLE-DEVICE");
+        assertEquals(409, post(fixture.warehouse, route, version, key(), wrong).statusCode());
+        var same = body.deepCopy();
+        same.put("afterInfo", body.path("beforeInfo").asText());
+        assertEquals(400, post(fixture.warehouse, route, version, key(), same).statusCode());
+        var future = body.deepCopy();
+        future.put("observedAt", Instant.now().plusSeconds(60).toString());
+        assertEquals(400, post(fixture.warehouse, route, version, key(), future).statusCode());
+        assertEquals(403, post(fixture.admin, route, version, key(), body).statusCode());
+        assertEquals(403, post(fixture.otherWarehouse, route, version, key(), body).statusCode());
+        ok(post(fixture.warehouse, route, version, key(), body));
+        var stale = partsBody(id, round, "OLD-PRIVATE-DISK", "THIRD-PRIVATE-DISK");
+        assertEquals(409, post(fixture.warehouse, route, version, key(), stale).statusCode());
+        var originalObservation =
+                db.queryForMap(
+                        "SELECT * FROM fams_repair_factory_parts_change WHERE repair_id=? ORDER BY"
+                            + " id LIMIT 1",
+                        id);
+        var continued =
+                partsBody(
+                        id,
+                        round,
+                        "Freshly observed original 8GB module",
+                        "Observed replacement 8GB module");
+        ok(
+                post(
+                        fixture.warehouse,
+                        route,
+                        privateDetail(fixture.warehouse, id).path("version").asLong(),
+                        key(),
+                        continued));
+        assertEquals(
+                originalObservation,
+                db.queryForMap(
+                        "SELECT * FROM fams_repair_factory_parts_change WHERE repair_id=? ORDER BY"
+                            + " id LIMIT 1",
+                        id));
+        create(id, fixture.warehouse);
+        assertFalse(ok(get(fixture.warehouse, route)).path("canRecord").asBoolean());
+        var active = partsBody(id, round, "THIRD-PRIVATE-DISK", "FOURTH-PRIVATE-DISK");
+        assertEquals(
+                409,
+                post(
+                                fixture.warehouse,
+                                route,
+                                privateDetail(fixture.warehouse, id).path("version").asLong(),
+                                key(),
+                                active)
+                        .statusCode());
+        assertEquals(
+                2,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_repair_factory_parts_change", Integer.class));
+    }
+
+    @Test
+    void partsObservationConcurrentDistinctKeysHaveOneWinnerAndRoleRevocationBlocksReplay()
+            throws Exception {
+        String id = approved(), round = create(id, fixture.warehouse);
+        dispatch(id, round, fixture.warehouse);
+        receive(id, round, fixture.warehouse, "RESTORED");
+        uploadPartsOriginal(id, round);
+        var body = partsBody(id, round, "OLD-PRIVATE-MEMORY", "NEW-PRIVATE-MEMORY");
+        long version = privateDetail(fixture.warehouse, id).path("version").asLong();
+        String route = path(id, "/rounds/" + round + "/parts"), firstKey = key(), secondKey = key();
+        var pool = Executors.newFixedThreadPool(2);
+        int first;
+        try {
+            var one = pool.submit(() -> post(fixture.warehouse, route, version, firstKey, body));
+            var two = pool.submit(() -> post(fixture.warehouse, route, version, secondKey, body));
+            first = one.get().statusCode();
+            assertEquals(
+                    List.of(200, 409),
+                    List.of(first, two.get().statusCode()).stream().sorted().toList());
+        } finally {
+            pool.shutdownNow();
+        }
+        assertEquals(
+                1,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_repair_factory_parts_change", Integer.class));
+        db.update(
+                "DELETE FROM fams_account_role WHERE account_id=951003 AND"
+                        + " role_code='WAREHOUSE_OPERATOR'");
+        assertEquals(
+                403,
+                post(fixture.warehouse, route, version, first == 200 ? firstKey : secondKey, body)
+                        .statusCode());
+    }
+
+    private void uploadPartsOriginal(String id, String round) throws Exception {
+        var detail = (ObjectNode) privateDetail(fixture.warehouse, id);
+        detail.set("activeRound", privateRound(fixture.warehouse, id, round));
+        ok(uploadResponse(id, round, fixture.warehouse, "PARTS_CHANGE", detail, key()));
+    }
+
+    private ObjectNode partsBody(String id, String round, String before, String after)
+            throws Exception {
+        var body = guards(privateDetail(fixture.warehouse, id));
+        var original = privateRound(fixture.warehouse, id, round);
+        body.put("roundVersion", original.path("version").asLong());
+        body.put("partName", "Memory component");
+        body.put("beforeInfo", before);
+        body.put("afterInfo", after);
+        body.put("observedCode", "REP-ASSET-951020");
+        body.put("observedSerial", "ORIGINAL-FACTORY-951020");
+        body.put("observedAt", now());
+        body.put("originalPhysicalIdentityChecked", true);
+        body.put(
+                "reason",
+                "Observed the returned original and checked private before/after component"
+                        + " originals");
+        var originals = JSON.createArrayNode();
+        for (var item : original.path("evidence")) {
+            if ("PARTS_CHANGE".equals(item.path("purpose").asText())) {
+                originals.add(item.path("object_id").asText());
+            }
+        }
+        body.set("evidenceIds", originals);
+        return body;
+    }
+
+    private Map<String, Object> partsMutationFacts(String id, String round) {
+        var facts = new LinkedHashMap<String, Object>();
+        facts.put("asset", db.queryForList("SELECT * FROM fams_asset WHERE id=951020"));
+        facts.put(
+                "round",
+                db.queryForList("SELECT * FROM fams_repair_factory_round WHERE id=?", round));
+        facts.put(
+                "assetEvents",
+                db.queryForList(
+                        "SELECT * FROM fams_asset_timeline_event WHERE asset_id=951020 ORDER BY"
+                                + " id"));
+        for (String table :
+                List.of(
+                        "fams_repair_request",
+                        "fams_repair_factory_parts_change",
+                        "fams_repair_factory_event",
+                        "fams_repair_event",
+                        "fams_repair_receipt")) {
+            facts.put(
+                    table,
+                    db.queryForList(
+                            "SELECT * FROM "
+                                    + table
+                                    + " WHERE "
+                                    + ("fams_repair_request".equals(table) ? "id" : "repair_id")
+                                    + "=? ORDER BY "
+                                    + ("fams_repair_receipt".equals(table) ? "request_id" : "id"),
+                            id));
+        }
+        return facts;
     }
 
     private String begin() throws Exception {

@@ -1,0 +1,198 @@
+{
+  "task": "D6-20C1 parts schema and backend foundation",
+  "baseCommit": "4b5eaf0",
+  "status": "WORKTREE_BACKEND_VERIFIED_UI_PENDING",
+  "taskStatus": "IN_PROGRESS",
+  "schema": {
+    "previous": 53,
+    "current": 54,
+    "migrationSha256": "b5b5353d9d039d558f5e05255da27ffc298d1bc50fbb3545470653a2c179071e",
+    "migrationsExecuted": 1,
+    "repeatExecuted": 0,
+    "allOldColumnsAndRowsUnchanged": true,
+    "oldReceiptsAndChargesNotRewritten": true,
+    "newPartsTableInitiallyEmpty": true,
+    "backupRestore": {
+      "bytes": 251779,
+      "sha256": "536fa1b3eab902a5e2f6b7b7a51449ca2c479ce7f0bb65723212f06c522d8dcd",
+      "tables": 139,
+      "allTableFactsMatch": true
+    },
+    "restoreViewDefiner": "Original disposable definer retained; SELECT granted only on exact owned restore schema; source-schema view references rejected",
+    "frozenMigrations": "V1-V54; next structure V55",
+    "fixtureOnlyNotActualManufacturerOrFinancialEvidence": true
+  },
+  "business": {
+    "httpTests": 36,
+    "newPartsCases": 4,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "finalRuntime": "Fresh owned V54 initialization; source upgrade/backup verified separately",
+    "old32AndThreeOpaqueFactoryScenariosRetained": true,
+    "partsRules": [
+      "Current unique warehouse handler revalidated before permanent original-key replay",
+      "Latest actually received original round, no active round or outstanding return handover",
+      "Original code and serial verified; four explicit versions and explicit physical identity confirmation",
+      "Clean current-round PARTS_CHANGE originals; warehouse observation time after physical receipt/recollection",
+      "Append-only independent before/after observations; no global literal match on free-form technical descriptions",
+      "Asset owner updates version and appends safe trace; card identity, formal custody, lifecycle, dates and original lock unchanged",
+      "One concurrent winner, exact permanent replay, role revocation blocks replay, late audit fault rolls all writes back",
+      "Admin reads privately but cannot record; employee and unrelated warehouse cannot read technical facts",
+      "Independent real inbound closes repair after parts fact; the fact alone never closes it"
+    ]
+  },
+  "quality": {
+    "checkstyle": 0,
+    "spotbugs": 0,
+    "scriptTests": 33,
+    "lint": "PASS zero warnings",
+    "workspaceTypes": "PASS",
+    "generatedNewContractModelsCompile": true,
+    "architectureTests": 6
+  },
+  "reports": [
+    {
+      "class": "RepairFactoryPartsBaselineRuntimeCase",
+      "tests": 1,
+      "path": "output/d6-20c1-backend-reports/TEST-com.fams.auth.RepairFactoryPartsBaselineRuntimeCase.xml",
+      "sha256": "d4b65da09faed2a94e06e23ea46b2239814ee5e490346eb33bb0c55db6e84092"
+    },
+    {
+      "class": "RepairFactoryPartsUpgradeRuntimeCase",
+      "tests": 1,
+      "path": "output/d6-20c1-backend-reports/TEST-com.fams.auth.RepairFactoryPartsUpgradeRuntimeCase.xml",
+      "sha256": "8ad599c74a490e232715c2a5689cc3c7fc5905422bd6e5ce95a13eebd6ad0237"
+    },
+    {
+      "class": "RepairFactoryHttpRuntimeCase",
+      "tests": 36,
+      "path": "output/d6-20c1-backend-reports/TEST-com.fams.auth.RepairFactoryHttpRuntimeCase.xml",
+      "sha256": "859c7ae9e206b20bd9105f7329a45b2547eec2bfcdc546495270a17c316e54f8"
+    },
+    {
+      "class": "FamsArchitectureTest",
+      "tests": 3,
+      "path": "output/d6-20c1-backend-reports/TEST-com.fams.architecture.FamsArchitectureTest.xml",
+      "sha256": "bfc6543c2a812dc940493b9040bd70533b2d14d7df02aadac91d0e32876c099b"
+    },
+    {
+      "class": "FamsArchitectureRulesTest",
+      "tests": 3,
+      "path": "output/d6-20c1-backend-reports/TEST-com.fams.architecture.FamsArchitectureRulesTest.xml",
+      "sha256": "7473f7932d479afd4cfbb01cd274b56ff7ec5ab51543bf2949c8ee327cf1653b"
+    }
+  ],
+  "sourceBindings": [
+    {
+      "path": "backend/src/main/java/com/fams/asset/AssetFactoryRepairPort.java",
+      "sha256": "2a8083a5e719a0912b0cf3668c1b09684be699044a9df4e5843e5c741a5dffbe"
+    },
+    {
+      "path": "backend/src/main/java/com/fams/repair/RepairFactoryController.java",
+      "sha256": "e729cad78745ffbc8c8c097c442573fa3b05891d7bcf361e5861077d47802931"
+    },
+    {
+      "path": "backend/src/main/java/com/fams/repair/RepairFactoryEvidenceController.java",
+      "sha256": "40a2d8be1f2570fa918161b48c6d723192271b9e7df9a85d3d81a2c25097cfc2"
+    },
+    {
+      "path": "backend/src/main/java/com/fams/repair/RepairFactoryInput.java",
+      "sha256": "03bdad6bd0d33e36207efd532fec00ac18e15ae3ab7adf8b908bebc6e734b718"
+    },
+    {
+      "path": "backend/src/main/java/com/fams/repair/RepairFactoryService.java",
+      "sha256": "897577303ccda25c5c86ffccb46506c9b93eef325dc7688cb40c7ef1b08d6492"
+    },
+    {
+      "path": "backend/src/test/java/com/fams/auth/RepairFactoryHttpRuntimeCase.java",
+      "sha256": "e4aac9bcc2c6740488150978313cc9de295f34c99478b889b93b939bcfe84478"
+    },
+    {
+      "path": "backend/src/test/java/com/fams/auth/RepairFactoryPartsBaselineRuntimeCase.java",
+      "sha256": "05d9408b187c594f066530025e4f7de99e49c1a154690075fb031b63908ddd9b"
+    },
+    {
+      "path": "backend/src/test/java/com/fams/auth/RepairFactoryPartsUpgradeRuntimeCase.java",
+      "sha256": "08adf41a9f914e6c61e2baae748540b84faefc07042e3eff342d2e5d717ecb83"
+    },
+    {
+      "path": "contracts/fams-core-v1.yaml",
+      "sha256": "55a884f7c5453d12f8ff503cf2d565a44704a3cedd05a2e0ac55e71d96821f39"
+    },
+    {
+      "path": "scripts/verify-d6-03a.py",
+      "sha256": "448d25f02d0f42b5a86152237f3bae2f03903ebf88363f06893821c73fa59a15"
+    },
+    {
+      "path": "backend/src/main/resources/db/migration/d6_04/V54__record_repair_factory_parts_changes.sql",
+      "sha256": "b5b5353d9d039d558f5e05255da27ffc298d1bc50fbb3545470653a2c179071e"
+    }
+  ],
+  "localArtifacts": [
+    {
+      "path": "output/d6-20c1-parts-runtime.log",
+      "sha256": "be8bf129bf6250e0607a37a745f526cd9673366ab23e18a27ea68ccdc577ab8d"
+    },
+    {
+      "path": "output/d6-20c1-parts-http-runtime.log",
+      "sha256": "329b3b870cdc9811088c20e368438c24782a3be6442bf690e7baa4d475d2c5e6"
+    },
+    {
+      "path": "output/d6-20c1-parts-static.log",
+      "sha256": "dea2ee0d90acdf928045fe33c4739c212ab4bee2a7ac012e025221b7c2e2a765"
+    },
+    {
+      "path": "output/d6-20c1-v53-backup-restore.json",
+      "sha256": "74517ad984c0e84bdae41953659ffa051deb0e324422906c04ce67fa05889f37"
+    },
+    {
+      "path": "output/d6-20c1-owned-v53-backup.sql",
+      "sha256": "536fa1b3eab902a5e2f6b7b7a51449ca2c479ce7f0bb65723212f06c522d8dcd"
+    },
+    {
+      "path": "output/d6-20c1-parts-first-test-compile-missing-import.log",
+      "sha256": "ca15d659348745fe83280b28bfb84deef5554169d411992f9df140628a129459"
+    },
+    {
+      "path": "output/d6-20c1-parts-restore-definer-rights-first-failure.log",
+      "sha256": "9e92339148f4eece71863f700e51380c28521cbd6ac75bffe95c44b7f96c5680"
+    },
+    {
+      "path": "output/d6-20c1-parts-received-round-fixture-red.log",
+      "sha256": "b27c883d24ef1e833af64ffdd935b98b9fbd8419995ada5f13da7f037447e48a"
+    },
+    {
+      "path": "output/d6-20c1-parts-timeline-query-fixture-red.log",
+      "sha256": "be8bf129bf6250e0607a37a745f526cd9673366ab23e18a27ea68ccdc577ab8d"
+    },
+    {
+      "path": "output/d6-20c1-parts-static-nullable-id-red.log",
+      "sha256": "f80fdf2579fdc80ef6b283486754a19479c748742de717d37219f8f21b79face"
+    },
+    {
+      "path": "output/d6-20c1-parts-architecture.log",
+      "sha256": "60dda519b7d2d04f2b177b79089049e342ce2e29bc42679e79d43efa7b1b4789"
+    },
+    {
+      "path": "output/d6-20c1-parts-free-description-red-runtime.log",
+      "sha256": "f8b325ccd54da7bdf4d63b77af922db031eea77f14b74bec79b79707763ace20"
+    }
+  ],
+  "failuresRetained": [
+    "Initial test compilation missing Executors import, before V54 execution",
+    "First restore definer lacked SELECT on owned restore schema, before V54 execution",
+    "Four new tests supplied empty active-round version after receipt; only the new fixture now supplies the selected round version",
+    "One new timeline assertion used detail_json instead of actual summary_json; corrected against frozen V6 metadata",
+    "SpotBugs found nullable inserted ID unboxing; explicit non-null requirement added without excluding the check",
+    "Fresh independent technical description red case returned 409 from an extra global literal comparison; removed that extra rule while retaining immutable history and stale-version rejection; full 36 green"
+  ],
+  "limitations": [
+    "This is backend/schema foundation, not completed D6-20C or a fixed whole-product gate",
+    "C1 PC and native page integration, actual browser/ClamAV and committing-JVM recovery still pending",
+    "New parts opaque Page scenario not yet executed; three retained opaque scenarios exercise earlier factory features",
+    "Schema fixtures and scanner outcomes are controlled; no authentic manufacturer documents or physical installation proof",
+    "C2 independent whole-unit card/source-marked inbound and D6-20D/D21-D27 remain open",
+    "Independent review, real WeChat/device, CI, QA and production not verified"
+  ]
+}

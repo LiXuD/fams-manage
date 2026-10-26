@@ -122,6 +122,26 @@ public final class RepairFactoryInput {
         }
     }
 
+    public record PartsFact(
+            @NotNull @PositiveOrZero Long roundVersion,
+            @NotNull @PositiveOrZero Long assetVersion,
+            @NotNull @PositiveOrZero Long ownershipVersion,
+            @NotNull @PositiveOrZero Long lockVersion,
+            @NotBlank @Size(max = 100) String partName,
+            @NotBlank @Size(max = 2000) String beforeInfo,
+            @NotBlank @Size(max = 2000) String afterInfo,
+            @NotBlank @Size(max = 2048) String observedCode,
+            @Size(max = 128) String observedSerial,
+            @NotNull Instant observedAt,
+            @NotNull @Size(min = 1, max = 14) List<@NotNull UUID> evidenceIds,
+            @NotBlank @Size(min = 10, max = 1000) String reason,
+            @NotNull @jakarta.validation.constraints.AssertTrue
+                    Boolean originalPhysicalIdentityChecked) {
+        public PartsFact {
+            evidenceIds = evidenceIds == null ? null : List.copyOf(evidenceIds);
+        }
+    }
+
     public record MoneyFact(
             @NotNull @PositiveOrZero Long roundVersion,
             @NotNull @PositiveOrZero Long assetVersion,
