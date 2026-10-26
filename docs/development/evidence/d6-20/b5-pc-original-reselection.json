@@ -1,0 +1,45 @@
+{
+  "task": "D6-20B5 PC repeated original selection",
+  "backendCandidate": "33e730c",
+  "backendArtifactSha256": "88b6e9b4a29b28bd1e283dcf36cc3c4b3191fc711982bc4a9d8d5dbb729d8a4a",
+  "frontend": "working tree correction; new fixed gate pending",
+  "frontendSourceSha256": "43c028de930ede853cbf74c658edd34a31cf8217bf3fcc3045c1f4a5a135a5e4",
+  "status": "LOCAL_ACTUAL_BROWSER_REGRESSION_PASSED_ONLY",
+  "red": "After a committed quotation and upload, selecting the identical path repeatedly cannot prepare another purpose; a different path prepares normally",
+  "fix": "Capture selected File then clear the DOM input value so identical re-selection produces change; display selected filename separately",
+  "actualBrowserGreen": "The same exact original path was selected, confirmed and committed successively for FACTORY_ACK and FAULT after QUOTE; real ClamAV and Spring/MySQL chain",
+  "persistence": {
+    "evidence": 3,
+    "purposes": [
+      "FACTORY_ACK",
+      "FAULT",
+      "QUOTE"
+    ],
+    "quotes": 1,
+    "costFacts": 0,
+    "actualCosts": "0",
+    "dispatches": 0
+  },
+  "verification": {
+    "webTests": 169,
+    "lint": true,
+    "workspaceTypes": true,
+    "webBuild": true,
+    "ownBrowserAppViteClamdMySqlAndPhotoRootRemoved": true
+  },
+  "logs": {
+    "output/d6-20b5-file-reselection-checks.log": "4c34f43f6d39842d71eb3a1a52370a22307dc9226a19fdc34fd09e9a85d902db",
+    "output/d6-20b-pc-same-original-selection-red-dom.txt": "2dcc339f1fa8b40c35efcbd1e8c9a0eff722c23225677509bf67c16fabf964f8",
+    "output/d6-20b-pc-same-original-selection-green-dom.txt": "b6ba0b6754ff0d3b43d2f0d6189cd283f94be3b38d4d9e7bb3ab4ef58f7a1756",
+    "output/d6-20b-pc-same-original-persistence.txt": "0600c33210a28942663441198d6cea259711d59125ddb0895a9c939f3bddaa14"
+  },
+  "screenshots": {
+    "output/d6-20b-pc-same-original-selection-red.png": "f04f4c94e3e0aea11753b7d8a177aadab8302009c2ce2292cdce901cb874377c",
+    "output/d6-20b-pc-same-original-selection-green.png": "6e0e9f33de5c5390ec5b67e689ec675aa526949f88561d89f9555f576356d51d"
+  },
+  "limitations": [
+    "This is a partial PC fixture, deliberately stopped and cleaned before full rounds or JVM recovery; runner exit1 is intentional stop, not a complete acceptance pass",
+    "New fixed full gate and fresh complete PC/JVM still pending",
+    "Synthetic organization/accounts/PNG, no real bill authenticity/device/physical transport claim"
+  ]
+}

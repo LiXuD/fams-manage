@@ -161,7 +161,12 @@ async function perform() {
   if (current(epoch, owner) && !pending.value) emit("changed");
 }
 async function confirm() { if (busy.value || props.blocked || pending.value || !confirmation.value) return; pending.value = confirmation.value; confirmation.value = null; await perform(); }
-function fileChosen(event: Event) { if (!locked.value) file.value = (event.target as HTMLInputElement).files?.[0] ?? null; }
+function fileChosen(event: Event) {
+  if (locked.value) return;
+  const input = event.target as HTMLInputElement;
+  file.value = input.files?.[0] ?? null;
+  input.value = "";
+}
 async function readFile(item: FactoryFile) {
   if (locked.value || !selected.value || item.scanStatus !== "CLEAN") return; clearPreview();
   const repair = props.repair.id, round = selected.value.id, epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
@@ -202,7 +207,7 @@ onBeforeUnmount(() => { live = false; reset(); emit("busy-change", false); });
         <h4>独立轮次 / 共 {{ total }} 轮</h4><ul><li v-for="row in rows" :key="row.id"><button :disabled="locked" @click="selectRound(row)">第 {{ row.roundNumber }} 轮 · {{ row.providerName }} · {{ factoryRoundStates[row.roundStatus] }}</button></li></ul><button :disabled="locked || page === 1" @click="paginate(-1)">上一页返厂轮次</button>第 {{ page }} 页<button :disabled="locked || page * 20 >= total" @click="paginate(1)">下一页返厂轮次</button>
         <section v-if="selected" aria-label="所选返厂轮次"><h4>第 {{ selected.roundNumber }} 轮 · {{ factoryRoundStates[selected.roundStatus] }}</h4><p>{{ selected.providerName }} · {{ selected.serviceContact }} · {{ selected.servicePhone }}；预计收回 {{ selected.expectedReturnDate }}。</p><p>{{ selected.fault }}</p><p>实际寄出 {{ selected.dispatchedAt || '尚未记录' }}；实际原机收回 {{ selected.receivedAt || '尚未记录' }}。</p><p v-if="selected.receivedAt">实际状况：{{ selected.conditionResult === 'RESTORED' ? '已恢复' : '仍有故障，继续维修' }}；{{ selected.treatmentResult }}；本轮实际费用 {{ selected.actualCost === null ? '待核实' : selected.actualCost + ' 元' }}。</p><p v-if="selected.cancelReason">取消原因：{{ selected.cancelReason }}。本轮未计作实际返厂次数。</p>
           <h4>本轮原始凭证</h4><p v-if="!data.photosAvailable">原件服务暂不可用。</p><ul><li v-for="item in selected.files" :key="item.objectId">{{ item.filename }}<button :disabled="locked || item.scanStatus !== 'CLEAN'" @click="readFile(item)">读取厂家凭证 {{ item.filename }}</button></li></ul>
-          <fieldset v-if="activeSelected && data.actions.uploadEvidence || selected.actions?.uploadFinancialEvidence" :disabled="locked || stale"><label>本次凭证用途<select v-model="purpose"><option value="FAULT" :disabled="!activeSelected">实际故障</option><option value="FACTORY_ACK" :disabled="!activeSelected">厂家接收依据</option><option value="RECEIPT" :disabled="selected.roundStatus !== 'DISPATCHED'">原机实际收回依据</option><option value="QUOTE" :disabled="!selected.actions?.uploadFinancialEvidence">本轮报价原件</option><option value="COST_RECEIPT" :disabled="!selected.actions?.uploadFinancialEvidence">本轮实际费用凭证</option></select></label><label>选择图片或PDF原件<input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" @change="fileChosen"></label><button @click="prepare('upload')">核对追加本轮凭证</button></fieldset>
+          <fieldset v-if="activeSelected && data.actions.uploadEvidence || selected.actions?.uploadFinancialEvidence" :disabled="locked || stale"><label>本次凭证用途<select v-model="purpose"><option value="FAULT" :disabled="!activeSelected">实际故障</option><option value="FACTORY_ACK" :disabled="!activeSelected">厂家接收依据</option><option value="RECEIPT" :disabled="selected.roundStatus !== 'DISPATCHED'">原机实际收回依据</option><option value="QUOTE" :disabled="!selected.actions?.uploadFinancialEvidence">本轮报价原件</option><option value="COST_RECEIPT" :disabled="!selected.actions?.uploadFinancialEvidence">本轮实际费用凭证</option></select></label><label>选择图片或PDF原件<input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" @change="fileChosen"></label><p v-if="file">已选原件：{{ file.name }}</p><button @click="prepare('upload')">核对追加本轮凭证</button></fieldset>
           <p v-for="(quote, index) in selected.quotes || []" :key="index">本轮报价 {{ quote.amount }} 元（不计作实际费用）</p>
           <p v-if="selected.actualCost !== null">本轮已确认最终费用 {{ selected.actualCost }} 元。</p>
           <fieldset v-if="selected.actions?.recordQuote || selected.actions?.recordCost" :disabled="locked || stale"><h4>本轮报价与最终费用</h4><p>先追加本轮对应用途原件，再核对金额。最终费用确认后保留原记录。</p><label>本次金额（元，最多两位小数）<input v-model="moneyAmount" inputmode="decimal" maxlength="15"></label><label>本次费用核对依据<textarea v-model="moneyReason" maxlength="1000" /></label>

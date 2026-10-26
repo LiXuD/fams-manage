@@ -1,0 +1,51 @@
+{
+  "task": "D6-20B fixed product gate",
+  "candidate": "33e730c",
+  "gateExit": 0,
+  "status": "FIXED_LOCAL_GATE_PASSED_PC_INCOMPLETE",
+  "java": {
+    "tests": 582,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "javaReports": 99,
+  "webTests": 169,
+  "miniTests": 279,
+  "checkstyle": 0,
+  "spotbugs": 0,
+  "coverage": {
+    "LINE": {
+      "covered": 19353,
+      "missed": 1471,
+      "total": 20824,
+      "ratio": 0.9293603534383403
+    },
+    "BRANCH": {
+      "covered": 6814,
+      "missed": 2208,
+      "total": 9022,
+      "ratio": 0.7552649080026602
+    }
+  },
+  "artifact": {
+    "candidate": "33e730c",
+    "source": "backend/target/contract-generation-probe-0.1.0-SNAPSHOT.jar",
+    "artifact": "output/d6-20b-33e730c-backend.jar",
+    "sha256": "88b6e9b4a29b28bd1e283dcf36cc3c4b3191fc711982bc4a9d8d5dbb729d8a4a",
+    "size": 59111710,
+    "observer": "passive during frozen candidate gate"
+  },
+  "dependencyIntegrity": "PASS; two preexisting moderate npm advisories retained, high threshold satisfied",
+  "applicationRestart": true,
+  "sameVolumeMySqlRestart": true,
+  "ownComposeRemoved": true,
+  "cleanPostflight": true,
+  "rawLogSha256": "7cad7b8a3945cb63bd504273da9a76c16864f3e07775f411bd28c9e456783c33",
+  "coverageXmlSha256": "29b3667e75de18d5bb73097f8f430cf220aa6272d692cc546697f8b935118ec2",
+  "pcFinding": "Actual PC repeated same-path original selection failed after a prior upload; a subsequent source-bound client correction is separate. No full PC/JVM pass for this candidate",
+  "limitations": [
+    "Independent review, real WeChat/device, remote CI, formal QA and production not verified",
+    "D6-20B and parent remain IN_PROGRESS; C/D and D21-D27 remain open"
+  ]
+}
