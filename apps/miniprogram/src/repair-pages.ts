@@ -13,6 +13,7 @@ interface ReturnTarget { employeeName: string; organizationName: string; locatio
 interface ReturnHandover { id: string; handover_status: string; target_snapshot_json: ReturnTarget; delivered_at: string; delivery_evidence: string; receipt_at?: string; receipt_evidence?: string }
 type ReturnMode = "delivery" | "receipt" | "refusal" | "recollection";
 interface Data { rows: Repair[]; assets: Asset[]; detail: Repair | null; selectedAsset: string; assetPage: number; assetTotal: number;
+    approvalMethod: "INTERNAL_NO_COST" | "INTERNAL_OR_FACTORY"; approvalMethodIndex: number;
     page: number; total: number; busy: boolean; retry: boolean; error: string; fault: string; impact: string; occurredAt: string;
     reason: string; observedCode: string; evidence: string; locationConfirmed: boolean; neverLeft: boolean; photoPath: string; photoName: string;
     physicalMode: "away" | "inbound"; physicalObservedCode: string; physicalAt: string; physicalEvidence: string;
@@ -23,6 +24,7 @@ interface Data { rows: Repair[]; assets: Asset[]; detail: Repair | null; selecte
 interface Reassignment { snapshot: { version: number; acceptedAt: string | null; physicalHandling: unknown[]; outstandingReturn: { handover_status: string } | null }; operators: { id: string; name: string }[] }
 interface Context { data: Data; setData(data: Partial<Data>): void }
 const blank = (): Data => ({ rows: [], assets: [], detail: null, selectedAsset: "", assetPage: 1, assetTotal: 0, page: 1, total: 0,
+    approvalMethod: "INTERNAL_NO_COST", approvalMethodIndex: 0,
     busy: false, retry: false, error: "", fault: "", impact: "MEDIUM", occurredAt: "", reason: "", observedCode: "", evidence: "",
     locationConfirmed: false, neverLeft: false, photoPath: "", photoName: "", physicalMode: "away", physicalObservedCode: "", physicalAt: "", physicalEvidence: "",
     warehouses: [], physicalLocations: [], physicalWarehouseId: "", physicalLocationId: "", warehousePage: 1, warehouseTotal: 0, physicalLocationPage: 1, physicalLocationTotal: 0,
@@ -30,7 +32,8 @@ const blank = (): Data => ({ rows: [], assets: [], detail: null, selectedAsset: 
     returnLocations: [], returnLocationId: "", returnLocationPage: 1, returnLocationTotal: 0, reassignment: null, reassignTarget: "", reassignReason: "", reassignEvidence: "", reassignChecked: false });
 export function createRepairPage(getServices: () => MiniServices) {
     let services: MiniServices, identity = "", live = false, generation = 0, pending: Pending | null = null, selectedId = "", photo = "";
-    const current = (epoch: number) => live && epoch === generation && identity === JSON.stringify(services.sessions.identity);
+    const owner = () => JSON.stringify([services.sessions.identity, services.sessions.identityRevision]);
+    const current = (epoch: number) => live && epoch === generation && identity === owner();
     const clearPhoto = () => { if (photo) { services.sessions.discardInventoryPhoto(photo); photo = ""; } };
     const failure = (page: Context, error: unknown) => {
         if (error instanceof MiniRequestError && [401,403,404].includes(error.status)) {
@@ -46,7 +49,9 @@ export function createRepairPage(getServices: () => MiniServices) {
         else if (live && epoch === generation) { pending = null; selectedId = ""; clearPhoto(); page.setData({ ...blank(), error: "身份已变化，请重新进入。" }); }
     };
     const read = async (page: Context) => {
+        const originalMethod = (pending?.body as { allowedMethod?: string } | undefined)?.allowedMethod;
         const epoch = ++generation; clearPhoto(); page.setData({ busy: true, error: "", detail: null, rows: [], assets: [], photoPath: "", photoName: "",
+            approvalMethod: originalMethod === "INTERNAL_OR_FACTORY" ? "INTERNAL_OR_FACTORY" : "INTERNAL_NO_COST", approvalMethodIndex: originalMethod === "INTERNAL_OR_FACTORY" ? 1 : 0,
             warehouses: [], physicalLocations: [], physicalWarehouseId: "", physicalLocationId: "", physicalObservedCode: "", physicalAt: "", physicalEvidence: "",
             returnTarget: null, returnObservedCode: "", returnAt: "", returnEvidence: "", returnChecked: false,
             returnLocations: [], returnLocationId: "", returnLocationPage: 1, returnLocationTotal: 0, reassignment: null, reassignTarget: "", reassignReason: "", reassignEvidence: "", reassignChecked: false });
@@ -81,7 +86,7 @@ export function createRepairPage(getServices: () => MiniServices) {
     return {
         data: blank(),
         onLoad(_options: { id?: string }) { if (/^[1-9][0-9]*$/.test(_options.id ?? "")) selectedId = _options.id!; },
-        async onShow(this: Context) { live = true; services = getServices(); const next = JSON.stringify(services.sessions.identity);
+        async onShow(this: Context) { live = true; services = getServices(); const next = owner();
             if (next !== identity) { pending = null; if (identity) selectedId = ""; clearPhoto(); this.setData(blank()); } identity = next; await read(this); },
         onHide(this: Context) { live = false; generation++; clearPhoto(); this.setData(blank()); },
         onUnload(this: Context) { live = false; generation++; clearPhoto(); pending = null; selectedId = ""; this.setData(blank()); },
@@ -93,6 +98,11 @@ export function createRepairPage(getServices: () => MiniServices) {
         onFactory(this: Context) {
             if (this.data.busy || pending || !current(generation) || !this.data.detail?.actions.manageFactory) return;
             services.navigate("/pages/repair-factory/index?id=" + this.data.detail.id);
+        },
+        onApprovalMethod(this: Context, event: { detail: { value: string } }) {
+            if (!current(generation)) { finish(this, generation); return; }
+            const index = Number(event.detail.value), method = (["INTERNAL_NO_COST", "INTERNAL_OR_FACTORY"] as const)[index];
+            if (!this.data.busy && !pending && this.data.detail?.actions.approve && method) this.setData({ approvalMethod: method, approvalMethodIndex: index });
         },
         onAsset(this: Context, event: { currentTarget: { dataset: { id: string } } }) {
             if (!this.data.busy && !pending && this.data.assets.some(row => row.id === event.currentTarget.dataset.id)) this.setData({ selectedAsset: event.currentTarget.dataset.id });
@@ -229,7 +239,7 @@ export function createRepairPage(getServices: () => MiniServices) {
             if (["approve","reject","cancel"].includes(action)) {
                 if (this.data.reason.trim().length < 3) { this.setData({ error: "请填写至少3字的实际处理依据。" }); return; }
                 body = { reason: this.data.reason.trim() };
-                if (action !== "cancel") { path = "decision"; body = { reason: this.data.reason.trim(), result: action === "approve" ? "APPROVE" : "REJECT", allowedMethod: action === "approve" ? "INTERNAL_NO_COST" : null }; }
+                if (action !== "cancel") { path = "decision"; body = { reason: this.data.reason.trim(), result: action === "approve" ? "APPROVE" : "REJECT", allowedMethod: action === "approve" ? this.data.approvalMethod : null }; }
             }
             if (["accept","complete"].includes(action)) {
                 if (!this.data.locationConfirmed || !this.data.neverLeft || !row.source.locationId || !this.data.observedCode.trim() || this.data.evidence.trim().length < 10) { this.setData({ error: "请实际核码、核对原位置、确认未离开保管方，并填写至少10字依据。" }); return; }
@@ -237,7 +247,7 @@ export function createRepairPage(getServices: () => MiniServices) {
                 body = { assetVersion: row.assetVersion, ownershipVersion: row.ownershipVersion, lockVersion: row.lockVersion, observedCode: this.data.observedCode.trim(),
                     actualLocationId: row.source.locationId, neverLeftCustodian: true, evidence: this.data.evidence.trim() };
             }
-            const descriptions: Record<string,string> = { approve: "仅批准内部零费用维修，尚未接收或修复。", reject: "驳回申请并释放本单资产锁。", cancel: "取消尚未批准的报修。", claim: "领取实际处理权。", accept: "实物仍在原位置，实际接修并标为维修中。", complete: "确认实际修复并恢复原保管状态，结束维修并释放本单资产锁。" };
+            const descriptions: Record<string,string> = { approve: this.data.approvalMethod === "INTERNAL_OR_FACTORY" ? "一次批准内部或必要时返厂的无费用范围；尚未领取、接修或寄出。" : "仅批准内部零费用维修，尚未接收或修复。", reject: "驳回申请并释放本单资产锁。", cancel: "取消尚未批准的报修。", claim: "领取实际处理权。", accept: "实物仍在原位置，实际接修并标为维修中。", complete: "确认实际修复并恢复原保管状态，结束维修并释放本单资产锁。" };
             await confirm(this, { path: `/api/v1/mini/repairs/${row.id}/${path}`, key: services.createKey(), version: row.version, body }, descriptions[action]!);
         },
         async onUpload(this: Context) {

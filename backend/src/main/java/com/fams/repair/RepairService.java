@@ -49,6 +49,7 @@ public class RepairService {
     private final ObjectProvider<AttachmentEvidencePort> evidence;
     private final ObjectProvider<AttachmentRegistry> attachments;
     private final RepairFactoryGuard factory;
+    private final RepairFactoryService factoryOperations;
 
     public RepairService(
             JdbcTemplate db,
@@ -60,7 +61,8 @@ public class RepairService {
             LoanReturnRepairPort returned,
             ObjectProvider<AttachmentEvidencePort> evidence,
             ObjectProvider<AttachmentRegistry> attachments,
-            RepairFactoryGuard factory) {
+            RepairFactoryGuard factory,
+            RepairFactoryService factoryOperations) {
         this.db = db;
         this.json = json;
         this.clock = clock;
@@ -71,6 +73,7 @@ public class RepairService {
         this.evidence = evidence;
         this.attachments = attachments;
         this.factory = factory;
+        this.factoryOperations = factoryOperations;
     }
 
     public Map<String, Object> eligible(Actor actor, int page, int size) {
@@ -583,13 +586,19 @@ public class RepairService {
         lock(row, null);
         boolean approve = "APPROVE".equals(input.result());
         if (!List.of("APPROVE", "REJECT").contains(input.result())
-                || approve && !"INTERNAL_NO_COST".equals(input.allowedMethod())
+                || approve && !noCostHandling(input.allowedMethod())
                 || !approve && input.allowedMethod() != null) {
             throw new RepairFailure(400, "REPAIR_APPROVAL_SCOPE_INVALID");
         }
         if (approve) {
             requireRepairSource(row);
         }
+        boolean initialFactory = approve && "INTERNAL_OR_FACTORY".equals(input.allowedMethod());
+        var publicDecision =
+                initialFactory
+                        ? new RepairInput.Decision(
+                                input.result(), input.allowedMethod(), "已批准内部或必要返厂的无费用范围，具体依据按权限保存")
+                        : input;
         var origin = returnOrigin(id);
         var basis = new LinkedHashMap<String, Object>();
         basis.put(
@@ -634,7 +643,7 @@ public class RepairService {
                 input.result(),
                 input.allowedMethod(),
                 frozen,
-                input.reason().strip(),
+                publicDecision.reason().strip(),
                 current.id(),
                 now());
         db.update(
@@ -648,6 +657,9 @@ public class RepairService {
                 approve ? frozen : null,
                 now(),
                 id);
+        if (initialFactory) {
+            factoryOperations.approveInitially(actor, id, version, input.reason());
+        }
         closeTodos(id);
         if (approve) {
             if (origin == null) {
@@ -672,7 +684,7 @@ public class RepairService {
                 "REPAIR_DECIDED",
                 version,
                 version + 1,
-                input,
+                publicDecision,
                 Role.ASSET_ADMIN.name());
         return remember(current, operation, key, fingerprint, header(id));
     }
@@ -776,7 +788,7 @@ public class RepairService {
                 || !input.neverLeftCustodian()
                 || hasPhysicalHandling(id)
                 || input.assetVersion() != number(row, "asset_version")
-                || !"INTERNAL_NO_COST".equals(row.get("allowed_method"))
+                || !noCostHandling(row.get("allowed_method"))
                 || complete != (row.get("accepted_at") != null)) {
             throw new RepairFailure(409, "REPAIR_IN_PLACE_NOT_ALLOWED");
         }
@@ -1031,9 +1043,13 @@ public class RepairService {
         if (outstandingReturn(number(row, "id")) != null) {
             throw new RepairFailure(409, "REPAIR_RETURN_RECOLLECTION_REQUIRED");
         }
-        if (!"INTERNAL_NO_COST".equals(row.get("allowed_method"))) {
+        if (!noCostHandling(row.get("allowed_method"))) {
             throw new RepairFailure(409, "REPAIR_APPROVAL_SCOPE_INVALID");
         }
+    }
+
+    private static boolean noCostHandling(Object method) {
+        return "INTERNAL_NO_COST".equals(method) || "INTERNAL_OR_FACTORY".equals(method);
     }
 
     private LoanRepairPort.Context originalLoan(Map<String, Object> row) {

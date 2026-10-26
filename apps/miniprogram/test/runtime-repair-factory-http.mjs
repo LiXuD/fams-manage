@@ -14,7 +14,8 @@ assert.match(port??"",/^[0-9]{1,5}$/);
 const origin="https://factory-test.invalid", root=fs.mkdtempSync(path.join(os.tmpdir(),"fams-native-factory-"));
 const png=Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+afo0AAAAASUVORK5CYII=","base64");
 const digest=b=>createHash("sha256").update(b).digest("hex"), uploads=[],clients=new Map();
-let dropUpload=true;
+const direct=process.env.FAMS_TEST_FACTORY_INITIAL==="1",decisions=[];
+let dropUpload=true,dropDecision=direct;
 const dueDate=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
 const target=url=>{assert.ok(url.startsWith(origin+"/api/v1/mini/"));return "http://127.0.0.1:"+port+url.slice(origin.length);};
 const event=dataset=>({currentTarget:{dataset}}),field=(key,value)=>({...event({field:key}),detail:{value}});
@@ -24,7 +25,8 @@ function services(role){
  const io={mkdirSync:(p,recursive)=>fs.mkdirSync(p,{recursive}),copyFileSync:fs.copyFileSync,statSync:fs.statSync,unlinkSync:fs.unlinkSync,readdirSync:fs.readdirSync,accessSync:fs.accessSync};
  const wx={env:{USER_DATA_PATH:dir},getFileSystemManager:()=>io,getStorageSync:k=>store.get(k),setStorageSync:(k,v)=>store.set(k,structuredClone(v)),removeStorageSync:k=>store.delete(k),
   request:input=>{void(async()=>{const response=await fetch(target(input.url),{method:input.method,headers:{"Content-Type":"application/json",...input.header},body:input.data===undefined?undefined:JSON.stringify(input.data),redirect:"error"});
-   input.success({statusCode:response.status,data:await response.json()});})().catch(input.fail);},
+   const data=await response.json();if(input.method==="POST"&&input.url.endsWith("/decision")){decisions.push({body:structuredClone(input.data),key:input.header["Idempotency-Key"],version:input.header["If-Match-Version"]});if(dropDecision&&response.status===200){dropDecision=false;input.fail(new Error("Owned adapter dropped committed initial decision"));return;}}
+   input.success({statusCode:response.status,data});})().catch(input.fail);},
   uploadFile:input=>{void(async()=>{const bytes=fs.readFileSync(input.filePath),form=new FormData();
    for(const[k,v]of Object.entries(input.formData))form.append(k,v);
    // WeChat's upload API exposes no independent filename/MIME parameter. Exercise an opaque generic part.
@@ -60,17 +62,19 @@ async function physical(p,action,object,condition){
 }
 try{
  const employee=await page("employee");okay(employee);employee.onAsset(event({id:"951020"}));employee.onField(field("fault","实际设备无法开机，原生返厂闭环验证"));employee.onField(field("occurredAt",new Date(Date.now()-60000).toISOString()));await employee.onSubmit();okay(employee);const id=employee.data.detail.id;assert.equal(employee.data.detail.actions.manageFactory,undefined);employee.onUnload();
- const admin=await page("admin",id);okay(admin);assert.equal(admin.data.detail.actions.manageFactory,true);admin.onField(field("reason","批准内部无费用维修，返厂范围另行独立判断"));await admin.onAction(event({action:"approve"}));okay(admin);admin.onUnload();
+ const admin=await page("admin",id);okay(admin);assert.equal(admin.data.detail.actions.manageFactory,true);admin.onField(field("reason",direct?"直接范围私有依据，13800000001，已确认原机及无费用边界":"批准内部无费用维修，返厂范围另行独立判断"));if(direct)admin.onApprovalMethod({detail:{value:"1"}});await admin.onAction(event({action:"approve"}));
+ if(direct){assert.equal(admin.data.retry,true);admin.onHide();await admin.onShow();assert.equal(admin.data.approvalMethod,"INTERNAL_OR_FACTORY");await admin.onRetry();assert.deepEqual(decisions[0],decisions[1]);assert.equal(admin.data.detail.factorySummary.scope.scopeStatus,"APPROVED");}okay(admin);admin.onUnload();
  const warehouse=await page("warehouse",id);okay(warehouse);await warehouse.onAction(event({action:"claim"}));okay(warehouse);assert.equal(warehouse.data.detail.actions.manageFactory,true);warehouse.onFactory();assert.equal(services("warehouse").navigation,"/pages/repair-factory/index?id="+id);
  warehouse.onPhysicalMode(event({mode:"away"}));await warehouse.onPhysicalCatalog(event({kind:"location",delta:"0"}));warehouse.onPhysicalLocation(event({id:"951001"}));
  for(const[k,v]of Object.entries({physicalObservedCode:"REP-ASSET-951020",physicalAt:new Date().toISOString(),physicalEvidence:"已核验原机实际离开原保管方，由本库管接收待修"}))warehouse.onField(field(k,v));
  await warehouse.onPhysicalAction();okay(warehouse);warehouse.onHide();
- const factory=await page("warehouse",id,true);okay(factory);factory.onField(field("reason","维修实际诊断需返厂，申请额外无费用范围"));await act(factory,"requestScope");factory.onHide();
- const approval=await page("admin",id,true);okay(approval);approval.onField(field("reason","确认实际必要性，明确批准无费用返厂范围"));await act(approval,"approveScope");approval.onUnload();
- await factory.onShow();okay(factory);await round(factory);factory.onField(field("reason","本轮尚未寄出，实际调整厂家后重新建立"));await act(factory,"cancelRound");
+ const factory=await page("warehouse",id,true);okay(factory);
+ if(direct){assert.equal(factory.data.detail.pendingScope,null);assert.ok(factory.data.detail.approvedScope.decisionReason.includes("直接范围私有依据"));assert.equal(factory.data.detail.actions.requestScope,false);}
+ else{factory.onField(field("reason","维修实际诊断需返厂，申请额外无费用范围"));await act(factory,"requestScope");factory.onHide();const approval=await page("admin",id,true);okay(approval);approval.onField(field("reason","确认实际必要性，明确批准无费用返厂范围"));await act(approval,"approveScope");approval.onUnload();await factory.onShow();okay(factory);}
+ await round(factory);factory.onField(field("reason","本轮尚未寄出，实际调整厂家后重新建立"));await act(factory,"cancelRound");
  for(const condition of ["STILL_FAULTY","RESTORED"]){await round(factory);const ack=await original(factory);await physical(factory,"dispatch",ack);assert.equal(factory.data.selected.roundStatus,"DISPATCHED");const receipt=await original(factory);await physical(factory,"receive",receipt,condition);assert.equal(factory.data.selected.conditionResult,condition);assert.equal(factory.data.detail.status,"WAREHOUSE_PROCESSING");assert.notEqual(factory.data.detail.lockVersion,null);}
  assert.equal(factory.data.rows.length,3);assert.equal(factory.data.rows.filter(r=>r.roundStatus==="CANCELLED").length,1);assert.equal(factory.data.detail.summary.actualDispatchCount,2);factory.onHide();
- const publicPage=await page("employee",id);okay(publicPage);const publicJson=JSON.stringify(publicPage.data.detail);for(const word of ["13800000001","独立原生厂家","原生私有联系人","厂家原机依据.png"])assert.ok(!publicJson.includes(word));assert.equal(publicPage.data.detail.factorySummary.actualDispatchCount,2);publicPage.onUnload();
+ const publicPage=await page("employee",id);okay(publicPage);const publicJson=JSON.stringify(publicPage.data.detail);for(const word of ["13800000001","独立原生厂家","原生私有联系人","厂家原机依据.png","直接范围私有依据"])assert.ok(!publicJson.includes(word));assert.equal(publicPage.data.detail.factorySummary.actualDispatchCount,2);publicPage.onUnload();
  const denied=await page("employee",id,true);assert.equal(denied.data.detail,null);assert.ok(denied.data.error);denied.onUnload();
  await warehouse.onShow();okay(warehouse);warehouse.onPhysicalMode(event({mode:"inbound"}));await warehouse.onPhysicalCatalog(event({kind:"warehouse",delta:"0"}));warehouse.onPhysicalWarehouse(event({id:"951000"}));await warehouse.onPhysicalCatalog(event({kind:"location",delta:"0"}));warehouse.onPhysicalLocation(event({id:"951000"}));
  for(const[k,v]of Object.entries({physicalObservedCode:"REP-ASSET-951020",physicalAt:new Date().toISOString(),physicalEvidence:"原机已实际修复，核验编号及原机真实验收入库结束维修"}))warehouse.onField(field(k,v));
@@ -78,5 +82,5 @@ try{
  await factory.onShow();okay(factory);assert.equal(factory.data.detail.summary.followupOpen,false);assert.equal(factory.data.rows.length,3);factory.onUnload();
  for(const service of clients.values())service.sessions.clear();
  assert.equal(uploads.length,5);assert.ok(uploads.every(x=>x.sha===digest(png)));
- console.log(JSON.stringify({nativeFactoryClosed:true,repairId:id,twoActualRounds:true,canceledRoundNotCounted:true,opaqueOriginalMetadataAndBytes:true,committedOriginalRetry:true,employeePrivacy:true,independentInboundClosed:true,rounds:3,actualDispatchCount:2,originals:4}));
+ console.log(JSON.stringify({nativeFactoryClosed:true,initialSingleFactoryApproval:direct,initialDecisionOriginalReplay:direct,repairId:id,twoActualRounds:true,canceledRoundNotCounted:true,opaqueOriginalMetadataAndBytes:true,committedOriginalRetry:true,employeePrivacy:true,independentInboundClosed:true,rounds:3,actualDispatchCount:2,originals:4}));
 }finally{fs.rmSync(root,{recursive:true,force:true});}

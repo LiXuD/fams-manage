@@ -1,0 +1,86 @@
+{
+  "task": "D6-20B initial single administrator scope increment",
+  "status": "IN_PROGRESS",
+  "source": "worktree based on acb9563; no B fixed full gate",
+  "checks": {
+    "upgrade": 1,
+    "factoryHttp": 20,
+    "existingRepairRuntimeSuites": 9,
+    "existingRepairRuntimeTests": 109,
+    "mini": 269,
+    "web": 162,
+    "lint": 0,
+    "types": 0,
+    "bothBuilds": true,
+    "checkstyle": 0,
+    "spotbugs": 0
+  },
+  "actualNativeScenarios": [
+    {
+      "nativeFactoryClosed": true,
+      "initialSingleFactoryApproval": false,
+      "initialDecisionOriginalReplay": false,
+      "repairId": "954528",
+      "twoActualRounds": true,
+      "canceledRoundNotCounted": true,
+      "opaqueOriginalMetadataAndBytes": true,
+      "committedOriginalRetry": true,
+      "employeePrivacy": true,
+      "independentInboundClosed": true,
+      "rounds": 3,
+      "actualDispatchCount": 2,
+      "originals": 4
+    },
+    {
+      "nativeFactoryClosed": true,
+      "initialSingleFactoryApproval": true,
+      "initialDecisionOriginalReplay": true,
+      "repairId": "954536",
+      "twoActualRounds": true,
+      "canceledRoundNotCounted": true,
+      "opaqueOriginalMetadataAndBytes": true,
+      "committedOriginalRetry": true,
+      "employeePrivacy": true,
+      "independentInboundClosed": true,
+      "rounds": 3,
+      "actualDispatchCount": 2,
+      "originals": 4
+    }
+  ],
+  "newBoundaries": [
+    "single original administrator decision creates approved private no-cost scope atomically; no second scope decision",
+    "original root decision response and original upload response dropped after actual commit; original frozen requests replayed",
+    "same-account credential revision during confirmation cancels old decision",
+    "private initial basis never exposed through common decision or history",
+    "two administrators one original decision and one scope",
+    "private scope audit failure rolls back original approval; same key safely retries",
+    "actual internal completion remains possible without invented factory dispatch",
+    "missing handling selection returns 400, not 500, with no factory facts"
+  ],
+  "failuresPreserved": [
+    "missing selector and same-account confirmation invalidation: two initial native red cases",
+    "null selection caused List.of.contains(null) NPE/500: actual HTTP red then null-safe comparison fixed",
+    "first TypeScript check started before Maven restored generated ContractProbe; regenerated artifacts present and dependency-ordered rerun passed"
+  ],
+  "migration": {
+    "latest": 52,
+    "newMigration": false,
+    "V52Sha256": "e3eb8a8b327a71cab93e8938dd7d6e892898f5da0c43da53786a5b2d9dddeed7"
+  },
+  "boundaries": [
+    "B is incomplete: actual expenses, quotes, sums and overrun scope still to implement",
+    "no B fixed full product gate or current PC browser acceptance claim",
+    "SDK/hostname/scanner adapters are not actual WeChat/device acceptance",
+    "A1/A2 independent reviews unsigned; no remote CI/QA/production"
+  ],
+  "logSha256": {
+    "output/d6-20b1-native-first-red.log": "2649476a43f766d694702f9ab0074ebf9fb572755a64fdba3ac9cde5bd619629",
+    "output/d6-20b1-native-green.log": "8a8e4829d9f62f334fbede916a9c1159335a3d065ebac7842874eed82a9b39f9",
+    "output/d6-20b1-first-types-failure.log": "b90fa874cd9f39e2acd4a0f8322e0b6900048834265847ad0e5638b61e1e61b7",
+    "output/d6-20b1-null-choice-red.log": "35d1d8e1dde89ffa95fdb57c2600cdfc878a23d807e90b25a0799aff361fefe2",
+    "output/d6-20b1-runtime.log": "c0da83a0ef8232bb3452322e8334911ba2003611b1c794e1ffd0014a93c4742b",
+    "output/d6-20b1-regression-runtime.log": "9a7f3ea7495b8e01a373348c16c10e083dadde99f54f9187576ae24daa2609a2",
+    "output/d6-20b1-local-checks.log": "7d81badceafce748fed019306a59305ac2a4a69b36703c74b82393821ecc207d",
+    "output/d6-20b1-java-static.log": "6c72a298d27897c22a597b78c47acdba22e4973504eb0547d06af443b4605cc9"
+  }
+}

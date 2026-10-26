@@ -65,6 +65,58 @@ public class RepairFactoryService {
         this.attachments = attachments;
     }
 
+    /** Joins the original single administrator decision; it does not perform a second approval. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void approveInitially(Actor actor, long id, long beforeVersion, String reason) {
+        var current = reader(actor);
+        if (!current.has(Role.ASSET_ADMIN)) {
+            throw new RepairFailure(403, "REPAIR_FACTORY_ADMIN_REQUIRED");
+        }
+        var row = header(id);
+        if (number(row, "version") != beforeVersion + 1
+                || !"INTERNAL_OR_FACTORY".equals(row.get("allowed_method"))
+                || row.get("approval_snapshot_json") == null
+                || !List.of("WAITING_WAREHOUSE_CLAIM", "WAREHOUSE_PROCESSING")
+                        .contains(row.get("repair_status"))
+                || scope(id, "PENDING") != null
+                || scope(id, "APPROVED") != null) {
+            throw new RepairFailure(409, "REPAIR_FACTORY_INITIAL_SCOPE_NOT_AVAILABLE");
+        }
+        var frozen = new LinkedHashMap<String, Object>();
+        frozen.put("source", "INITIAL_SINGLE_REPAIR_DECISION");
+        frozen.put("requestVersion", beforeVersion);
+        frozen.put("allowedMethod", "FACTORY_NO_COST");
+        frozen.put("reason", reason.strip());
+        frozen.put("repairApproval", json.readTree(row.get("approval_snapshot_json").toString()));
+        String body = json.writeValueAsString(frozen);
+        db.update(
+                "INSERT INTO"
+                    + " fams_repair_factory_scope(repair_id,scope_status,request_snapshot_json,request_reason,requested_by,requested_at,decision_snapshot_json,decision_reason,decided_by,decided_at)"
+                    + " VALUES (?,'APPROVED',?,?,?,?,?,?,?,?)",
+                id,
+                body,
+                reason.strip(),
+                current.id(),
+                now(),
+                body,
+                reason.strip(),
+                current.id(),
+                now());
+        long scopeId = lastId();
+        var before = new LinkedHashMap<>(row);
+        before.put("version", beforeVersion);
+        audit(
+                actor,
+                current,
+                before,
+                "FACTORY_SCOPE_APPROVED",
+                scopeId,
+                null,
+                beforeVersion + 1,
+                frozen,
+                Role.ASSET_ADMIN);
+    }
+
     public Map<String, Object> get(Actor actor, long id) {
         var current = reader(actor);
         var row = header(id);

@@ -76,6 +76,34 @@ class RepairFactoryHttpRuntimeCase {
     @Test
     void actualNativeFactoryPagesRoundTripOwnedOriginalsAndCloseOnlyAfterInbound()
             throws Exception {
+        runNativeScenario(false);
+    }
+
+    @Test
+    void actualNativeInitialSingleFactoryApprovalRetriesAndNeedsNoSecondDecision()
+            throws Exception {
+        runNativeScenario(true);
+        assertEquals(
+                1L,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_repair_factory_scope WHERE"
+                                + " scope_status='APPROVED'",
+                        Long.class));
+        assertEquals(
+                0L,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_repair_factory_event WHERE"
+                                + " action='FACTORY_SCOPE_REQUESTED'",
+                        Long.class));
+        assertEquals(
+                1L,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_repair_decision WHERE"
+                                + " allowed_method='INTERNAL_OR_FACTORY'",
+                        Long.class));
+    }
+
+    private void runNativeScenario(boolean initial) throws Exception {
         var grants = new LinkedHashMap<String, Object>();
         for (var entry :
                 Map.of("employee", 951002L, "admin", 951001L, "warehouse", 951003L).entrySet()) {
@@ -113,6 +141,7 @@ class RepairFactoryHttpRuntimeCase {
                         .redirectErrorStream(true);
         builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
         builder.environment().put("FAMS_TEST_REPAIR_GRANTS", JSON.writeValueAsString(grants));
+        builder.environment().put("FAMS_TEST_FACTORY_INITIAL", initial ? "1" : "0");
         var process = builder.start();
         try {
             assertTrue(process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS));
@@ -143,6 +172,143 @@ class RepairFactoryHttpRuntimeCase {
                         "SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=951020 AND"
                                 + " released_at IS NULL",
                         Long.class));
+    }
+
+    @Test
+    void initialFactoryScopeAllowsActualInternalCompletionWithoutInventingDispatch()
+            throws Exception {
+        String id = submittedForInitialApproval();
+        var decision = initialDecision();
+        ok(post(fixture.admin, "/" + id + "/decision", 0, key(), decision));
+        assertEquals("IN_USE", lifecycle());
+        assertEquals(
+                "APPROVED",
+                privateDetail(fixture.admin, id)
+                        .path("approvedScope")
+                        .path("scopeStatus")
+                        .asText());
+        ok(post(fixture.warehouse, "/" + id + "/claim", 1, key(), null));
+        for (String action : List.of("accept-in-place", "complete-in-place")) {
+            var current = root(fixture.warehouse, id);
+            var physical = guards(current);
+            physical.put("observedCode", "REP-ASSET-951020");
+            physical.put("actualLocationId", "951001");
+            physical.put("neverLeftCustodian", true);
+            physical.put(
+                    "evidence",
+                    "Actual original device never left its custodian and was checked at the"
+                            + " unchanged location");
+            ok(
+                    post(
+                            fixture.warehouse,
+                            "/" + id + "/" + action,
+                            current.path("version").asLong(),
+                            key(),
+                            physical));
+        }
+        assertEquals("COMPLETED", root(fixture.employee, id).path("status").asText());
+        assertEquals("IN_USE", lifecycle());
+        assertEquals(
+                0L,
+                db.queryForObject("SELECT COUNT(*) FROM fams_repair_factory_round", Long.class));
+    }
+
+    @Test
+    void initialFactoryPrivateAuditFailureRollsBackOriginalApprovalAndRetryIsSafe()
+            throws Exception {
+        String id = submittedForInitialApproval(), nonce = key();
+        var decision = initialDecision();
+        db.execute(
+                "CREATE TRIGGER owned_factory_audit_failure BEFORE INSERT ON"
+                        + " fams_repair_factory_event FOR EACH ROW SIGNAL SQLSTATE '45000' SET"
+                        + " MESSAGE_TEXT='owned_initial_factory_failure'");
+        assertEquals(
+                500, post(fixture.admin, "/" + id + "/decision", 0, nonce, decision).statusCode());
+        assertEquals("PENDING_ADMIN_DECISION", root(fixture.admin, id).path("status").asText());
+        assertEquals(0, root(fixture.admin, id).path("version").asInt());
+        assertEquals(
+                0L, db.queryForObject("SELECT COUNT(*) FROM fams_repair_decision", Long.class));
+        assertEquals(
+                0L,
+                db.queryForObject("SELECT COUNT(*) FROM fams_repair_factory_scope", Long.class));
+        assertEquals(
+                0L,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_repair_receipt WHERE operation=?",
+                        Long.class,
+                        "DECIDE:" + id));
+        assertEquals("IN_USE", lifecycle());
+        db.execute("DROP TRIGGER owned_factory_audit_failure");
+        var first = ok(post(fixture.admin, "/" + id + "/decision", 0, nonce, decision));
+        var again = ok(post(fixture.admin, "/" + id + "/decision", 0, nonce, decision));
+        assertEquals(first, again);
+        assertEquals(
+                1L,
+                db.queryForObject("SELECT COUNT(*) FROM fams_repair_factory_scope", Long.class));
+    }
+
+    @Test
+    void concurrentInitialAdministratorsCreateOneOriginalDecisionAndOneFactoryScope()
+            throws Exception {
+        String id = submittedForInitialApproval();
+        var decision = initialDecision();
+        Session another = login(10);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            var first =
+                    pool.submit(
+                            () -> post(fixture.admin, "/" + id + "/decision", 0, key(), decision));
+            var second =
+                    pool.submit(() -> post(another, "/" + id + "/decision", 0, key(), decision));
+            assertEquals(
+                    List.of(200, 409),
+                    List.of(first.get().statusCode(), second.get().statusCode()).stream()
+                            .sorted()
+                            .toList());
+        } finally {
+            pool.shutdownNow();
+        }
+        assertEquals(
+                1L, db.queryForObject("SELECT COUNT(*) FROM fams_repair_decision", Long.class));
+        assertEquals(
+                1L,
+                db.queryForObject("SELECT COUNT(*) FROM fams_repair_factory_scope", Long.class));
+        assertEquals("WAITING_WAREHOUSE_CLAIM", root(fixture.admin, id).path("status").asText());
+        assertEquals("IN_USE", lifecycle());
+    }
+
+    @Test
+    void missingInitialHandlingChoiceIsAClientRejectionWithoutFactoryFacts() throws Exception {
+        String id = submittedForInitialApproval();
+        var input = initialDecision();
+        input.putNull("allowedMethod");
+        assertEquals(
+                400, post(fixture.admin, "/" + id + "/decision", 0, key(), input).statusCode());
+        assertEquals("PENDING_ADMIN_DECISION", root(fixture.admin, id).path("status").asText());
+        assertEquals(
+                0L,
+                db.queryForObject("SELECT COUNT(*) FROM fams_repair_factory_scope", Long.class));
+    }
+
+    private String submittedForInitialApproval() throws Exception {
+        var input = JSON.createObjectNode();
+        input.put("assetId", "951020");
+        input.put("assetVersion", 0);
+        input.put("fault", "Actual original fault checked for a single initial factory approval");
+        input.put("impact", "HIGH");
+        input.put("occurredAt", now());
+        return ok(post(fixture.employee, "", 0, key(), input)).path("id").asText();
+    }
+
+    private ObjectNode initialDecision() {
+        var input = JSON.createObjectNode();
+        input.put("result", "APPROVE");
+        input.put("allowedMethod", "INTERNAL_OR_FACTORY");
+        input.put(
+                "reason",
+                "PRIVATE-INITIAL-SCOPE checked original device and authorized no-cost factory"
+                        + " handling");
+        return input;
     }
 
     @TestConfiguration
