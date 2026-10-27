@@ -22,36 +22,30 @@ async function submit(): Promise<void> {
 
 <template>
   <AppChrome>
-    <div class="breadcrumb">员工身份 / 系统入口</div>
-    <section class="auth-stage" aria-labelledby="login-title">
-      <form class="auth-form" novalidate @submit.prevent="submit">
+    <div class="fams-breadcrumb">员工身份 / 系统入口</div>
+    <section class="fams-auth-stage" aria-labelledby="login-title">
+      <form class="fams-auth-card" novalidate @submit.prevent="submit">
         <h1 id="login-title">登录固定资产管理</h1>
-        <p class="auth-intro">使用企业员工账号继续</p>
-        <label for="username">账号</label>
-        <input
-          id="username"
-          v-model="form.username"
-          name="username"
-          type="text"
-          autocomplete="username"
-          maxlength="128"
-          required
-        />
-        <label for="password">密码</label>
-        <input
-          id="password"
-          v-model="form.password"
-          name="password"
-          type="password"
-          autocomplete="current-password"
-          maxlength="128"
-          required
-        />
-        <p v-if="session.error" class="form-error" role="alert">{{ session.error.message }}</p>
-        <button class="primary-button" type="submit" :disabled="session.isBusy || !form.username || !form.password">
+        <p class="fams-auth-intro">使用企业员工账号继续</p>
+        <div class="fams-field">
+          <label for="username">账号</label>
+          <input id="username" class="fams-control" v-model="form.username" name="username" type="text"
+            autocomplete="username" maxlength="128" required />
+        </div>
+        <div class="fams-field">
+          <label for="password">密码</label>
+          <input id="password" class="fams-control" v-model="form.password" name="password" type="password"
+            autocomplete="current-password" maxlength="128" required />
+        </div>
+        <section v-if="session.error" class="fams-notice" data-state="error" role="alert">
+          <strong>{{ session.error.message }}</strong>
+        </section>
+        <button class="fams-button" data-kind="primary" type="submit" :disabled="session.isBusy || !form.username || !form.password"
+          :data-state="session.isBusy ? 'loading' : null">
+          <span v-if="session.isBusy" class="fams-spinner" aria-hidden="true" />
           {{ session.isBusy ? "登录中…" : "登录" }}
         </button>
-        <p class="auth-note">首次登录将要求修改初始密码。账号停用后无法继续访问。</p>
+        <p class="fams-auth-note">首次登录将要求修改初始密码。账号停用后无法继续访问。</p>
       </form>
     </section>
   </AppChrome>

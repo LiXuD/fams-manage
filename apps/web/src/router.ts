@@ -23,28 +23,38 @@ import InventoryTaskView from "@/views/InventoryTaskView.vue";
 import RepairView from "@/views/RepairView.vue";
 import RepairAssistanceView from "@/views/RepairAssistanceView.vue";
 
+declare module "vue-router" {
+  interface RouteMeta {
+    requiresAuth?: boolean;
+    /** 页头分组，同时用于面包屑；缺省表示该页不使用外壳页头。 */
+    uiGroup?: string;
+    uiTitle?: string;
+    uiDesc?: string;
+  }
+}
+
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: "/repair-assistance/:id?", name: "repair-assistance", component: RepairAssistanceView, meta: { requiresAuth: true } },
-    { path: "/repairs/:id?", name: "repairs", component: RepairView, meta: { requiresAuth: true } },
-    { path: "/inventory-tasks", name: "inventory-tasks", component: InventoryTaskView, meta: { requiresAuth: true } },
-    { path: "/transfer-target-changes", name: "transfer-target-changes", component: TransferTargetChangeView, meta: { requiresAuth: true } },
-    { path: "/requisition-target-changes", name: "requisition-target-changes", component: ItemTargetChangeView, meta: { requiresAuth: true } },
-    { path: "/business-result-reviews", name: "business-result-reviews", component: BusinessResultReviewView, meta: { requiresAuth: true } },
-    { path: "/proxy-confirmations", name: "proxy-confirmations", component: ProxyConfirmationView, meta: { requiresAuth: true } },
-    { path: "/business-result-notices", name: "business-result-notices", component: BusinessResultNoticeView, meta: { requiresAuth: true } },
-    { path: "/", name: "home", component: HomeView, meta: { requiresAuth: true } },
+    { path: "/repair-assistance/:id?", name: "repair-assistance", component: RepairAssistanceView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "我协助的报修", uiDesc: "只显示明确邀请的必要资料。判断和建议保留历史；实际维修、返厂或报废由相应合法业务办理。" } },
+    { path: "/repairs/:id?", name: "repairs", component: RepairView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "报修与维修", uiDesc: "为本人责任资产或本部门公用资产报修。管理员批准处理范围后，由唯一处理库管核实实物并办理。" } },
+    { path: "/inventory-tasks", name: "inventory-tasks", component: InventoryTaskView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "盘点任务", uiDesc: "发布时冻结应盘集合与责任快照。盘点不直接改变资产责任；执行人只查看自己的应盘项。" } },
+    { path: "/transfer-target-changes", name: "transfer-target-changes", component: TransferTargetChangeView, meta: { requiresAuth: true, uiGroup: "异常与核查", uiTitle: "调拨目标变更", uiDesc: "仅修改未完成明细的批准目标。原责任、已交出地点及物理锁保持，新目标仍按原业务实际接收或现场收妥。" } },
+    { path: "/requisition-target-changes", name: "requisition-target-changes", component: ItemTargetChangeView, meta: { requiresAuth: true, uiGroup: "异常与核查", uiTitle: "领用与借用目标变更", uiDesc: "仅变更未完成明细。已交出的实物保持原交出记录和占用锁，批准不会提前转移资产责任。" } },
+    { path: "/business-result-reviews", name: "business-result-reviews", component: BusinessResultReviewView, meta: { requiresAuth: true, uiGroup: "异常与核查", uiTitle: "代确认结果核查", uiDesc: "资产管理员共享查看，不因查看保留审批权。请核验原签收凭证与业务事实，再按现有业务流程处理；核查请求不自动解除责任。" } },
+    { path: "/proxy-confirmations", name: "proxy-confirmations", component: ProxyConfirmationView, meta: { requiresAuth: true, uiGroup: "异常与核查", uiTitle: "异常代确认", uiDesc: "仅用于已经实际交付、原接收人无法操作确认的资产。管理员批准后，当前库管还需明确执行。" } },
+    { path: "/business-result-notices", name: "business-result-notices", component: BusinessResultNoticeView, meta: { requiresAuth: true, uiGroup: "异常与核查", uiTitle: "业务结果通知", uiDesc: "代确认执行后资产责任已生效；如有异议，请从业务单据联系管理员核查。" } },
+    { path: "/", name: "home", component: HomeView, meta: { requiresAuth: true, uiGroup: "总览", uiTitle: "当前身份与权限", uiDesc: "页面只展示服务端当前授权结果；每次业务请求仍由服务端重新校验。" } },
     { path: "/login", name: "login", component: LoginView },
     { path: "/password/change", name: "password-change", component: PasswordChangeView, meta: { requiresAuth: true } },
-    { path: "/assets", name: "assets", component: AssetLedgerView, meta: { requiresAuth: true } },
-    { path: "/asset-imports", name: "asset-import", component: AssetImportView, meta: { requiresAuth: true } },
-    { path: "/asset-import-reviews", name: "asset-import-review", component: AssetImportReviewView, meta: { requiresAuth: true } },
-    { path: "/asset-initialization", name: "asset-initialization", component: AssetInitializationView, meta: { requiresAuth: true } },
-    { path: "/inbound", name: "inbound", component: InboundView, meta: { requiresAuth: true } },
-    { path: "/requisitions", name: "requisitions", component: RequisitionView, meta: { requiresAuth: true } },
-    { path: "/loans", name: "loans", component: LoanView, meta: { requiresAuth: true } },
-    { path: "/transfers", name: "transfers", component: TransferView, meta: { requiresAuth: true } },
+    { path: "/assets", name: "assets", component: AssetLedgerView, meta: { requiresAuth: true, uiGroup: "资产", uiTitle: "资产台账", uiDesc: "查看资产状态、建卡和标签。保管关系由正式业务流程维护。" } },
+    { path: "/asset-imports", name: "asset-import", component: AssetImportView, meta: { requiresAuth: true, uiGroup: "资产", uiTitle: "资产批量导入", uiDesc: "下载模板、上传 XLSX、映射字段并逐行预检。" } },
+    { path: "/asset-import-reviews", name: "asset-import-review", component: AssetImportReviewView, meta: { requiresAuth: true, uiGroup: "资产", uiTitle: "期初导入核验", uiDesc: "核对预检结果与实物抽样，再决定发布或撤销。" } },
+    { path: "/asset-initialization", name: "asset-initialization", component: AssetInitializationView, meta: { requiresAuth: true, uiGroup: "资产", uiTitle: "期初导入窗口", uiDesc: "指定仓库操作员和截止时间。仅窗口内可提交与发布期初资产。" } },
+    { path: "/inbound", name: "inbound", component: InboundView, meta: { requiresAuth: true, uiGroup: "资产", uiTitle: "入库管理", uiDesc: "管理员确认后，由一名库管认领并逐项核对实物。" } },
+    { path: "/requisitions", name: "requisitions", component: RequisitionView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "领用与借用申请", uiDesc: "按数量申请，由一名管理员确认后分配实物。" } },
+    { path: "/loans", name: "loans", component: LoanView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "借用、延期与退还", uiDesc: "借用中的资产可提请延期或归还；退库由库管实物验收后关闭责任。" } },
+    { path: "/transfers", name: "transfers", component: TransferView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "调拨与人员交接", uiDesc: "把资产转移到新的责任模式或位置，并处理人员离职交接。" } },
   ],
 });
 
