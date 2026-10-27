@@ -72,6 +72,39 @@ it("reselects the same file path for a distinct purpose-bound original upload", 
   for (let attempt = 0; attempt < 2; attempt++) { await input.trigger("change"); expect((input.element as HTMLInputElement).value).toBe(""); await click(wrapper, "核对追加部件变更原件"); await click(wrapper, "确认保存本次部件办理"); }
   expect(writes).toHaveLength(2); expect((writes[0]!.body as FormData).get("purpose")).toBe("PARTS_CHANGE"); expect(writes[0]!.headers).not.toEqual(writes[1]!.headers);
 });
+it.each(["round-first", "repair-first"])("unlocks after successful upload and staggered parent refresh: %s", async order => {
+  const state = wire(async () => {
+    state.remote.header.version = 6; state.remote.round.version = 11;
+    return response({});
+  });
+  const wrapper = create(); await click(wrapper, "核对部件变更记录");
+  const input = wrapper.find('input[type="file"]');
+  Object.defineProperty(input.element, "files", { value: [new File(["abc"], "parts.png", { type: "image/png" })] });
+  await input.trigger("change"); await click(wrapper, "核对追加部件变更原件"); await click(wrapper, "确认保存本次部件办理");
+  const reads = state.reads.length;
+  const repairProps = { repair: { ...repair(), version: 6 } }, roundProps = { round: { ...round(), version: 11 } };
+  await wrapper.setProps(order === "round-first" ? roundProps : repairProps);
+  expect(wrapper.findAll("fieldset").every(item => item.attributes("disabled") !== undefined)).toBe(true);
+  await wrapper.setProps(order === "round-first" ? repairProps : roundProps);
+  expect(wrapper.findAll("fieldset").every(item => item.attributes("disabled") === undefined)).toBe(true);
+  expect(state.reads).toHaveLength(reads);
+  await draft(wrapper); await click(wrapper, "核对保存部件变更"); await click(wrapper, "确认保存本次部件办理");
+  expect(state.writes).toHaveLength(2);
+  expect(state.writes[1]!.headers).toMatchObject({ "If-Match-Version": "6" });
+  expect(JSON.parse(state.writes[1]!.body as string).roundVersion).toBe(11);
+});
+it.each([400, 409])("parent versions realigning cannot clear a definitive %s rejection", async status => {
+  const state = wire(async () => response({ code: "REPAIR_VERSION_MISMATCH" }, status));
+  const wrapper = create(); await click(wrapper, "核对部件变更记录"); await draft(wrapper);
+  await click(wrapper, "核对保存部件变更"); await click(wrapper, "确认保存本次部件办理");
+  await wrapper.setProps({ round: { ...round(), version: 11 } });
+  await wrapper.setProps({ round: round() });
+  expect(wrapper.findAll("fieldset").every(item => item.attributes("disabled") !== undefined)).toBe(true);
+  expect(button(wrapper, "重试原部件办理")).toBeUndefined();
+  await click(wrapper, "核对部件变更记录");
+  expect(wrapper.findAll("fieldset").every(item => item.attributes("disabled") === undefined)).toBe(true);
+  expect(state.writes).toHaveLength(1);
+});
 it("rejects calendar rollover and identical before and after facts before confirmation", async () => {
   const { writes } = wire(); const wrapper = create(); await click(wrapper, "核对部件变更记录"); await draft(wrapper);
   await field(wrapper, "部件核实日期和时刻", "2026-02-31T12:30:11"); await click(wrapper, "核对保存部件变更"); expect(wrapper.find('[aria-label="确认本次部件办理"]').exists()).toBe(false);

@@ -135,3 +135,5 @@ C2权限源码核验：AssetController.create及update要求WAREHOUSE_OPERATOR�
 2026-10-27 用户要求交接，停止新增功能修改。2ff8ea9固定完整产品门禁退出0：100份Java报告588项、Web177、mini287，失败/错误/跳过均0，Checkstyle/SpotBugs0，行19488/20967、分支6845/9070，类型/lint/双构建/依赖阻断阈值、应用及同卷MySQL重启、精确清理和干净后检通过。PC实际原机接修/一轮往返及三用途原件经真实ClamAV完成，但专用原件成功后部件表单持续禁用；源码判断版本props分步到达触发stale锁存，尚未新增红例或修复，部件事实/提交JVM强杀恢复/最终实际入库均未执行。PC环境因90分钟运行上限退出并自清理，确认仅原有两周MySQL保留，自有tab6关闭。C1/C/父项继续IN_PROGRESS，C2/D及D21～27未完成，独立/外部验收不代签。主入口及最新交接、固定门禁和未完成PC证据已同步，先修C1再推进后续。
 
 接续入口：[2026-10-27 开发交接](2026-10-27-d6-20c1-handoff.md)。当前没有未提交的功能修复；不要把2ff8ea9完整门禁通过解释为C1实际PC已通过。
+
+2026-10-27 C1接续修复：当前main/origin/main已为455ba00，工作区干净，从此建立codex/d6-20c1-form-recovery。补成功上传后round/repair两种分步props刷新红例，修复前均失败；删除冗余版本watcher，由ready持续比较两项版本，stale仅保留明确拒绝/读取门槛。修复后Web181项及lint通过，400/409后即使props重新对齐也须显式读取，未知结果原键/身份清理保持。全工作区类型检查因packages/api-types/target缺生成契约暂失败，待完整门禁先生成再验；尚未重验实际PC、提交JVM与最终入库。C1/C/父项仍IN_PROGRESS，不代签独立复核。
