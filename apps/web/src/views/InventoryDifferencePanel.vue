@@ -151,38 +151,107 @@ watch(identity, () => { epoch++; clear(); page.value = 1; notice.value = ""; err
 onBeforeUnmount(() => { live = false; epoch++; clear(); });
 </script>
 <template>
-  <section class="panel" aria-label="独立差异处理"><h3>独立差异处理<span v-if="board"> · {{ item.item.snapshot_json.assetCode }}</span></h3>
-    <p>先将原始证据列入复核，再逐项记录明确依据。位置、使用方式和责任变更沿用正式调拨；冲突、时间、盘盈及损坏仍需对应事实或后续业务。</p>
-    <p v-if="error" role="alert" class="form-error">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p>
-    <button :disabled="locked" @click="load">刷新差异与当前资产</button><button :disabled="locked || !observationIds.length" @click="prepare">列入当前页证据的差异</button>
-    <div v-if="confirmation" role="group" aria-label="确认差异操作"><p>{{ confirmation.label }}</p><button :disabled="busy" @click="confirmPrepared">确认保存本次操作</button><button :disabled="busy" @click="confirmation = null">取消本次操作</button></div>
-    <button v-if="pending" :disabled="busy" @click="send(pending.path,pending.body)">重试原差异操作</button>
-    <table><thead><tr><th>选择</th><th>原始证据与维度</th><th>当前处理</th><th>决定及正式关联</th></tr></thead><tbody><tr v-for="row in visible" :key="`${row.observation_id}:${row.dimension}`">
-      <td><input v-model="chosen" type="checkbox" :value="`${row.observation_id}:${row.dimension}`" :disabled="locked || ['CLOSED','TRANSFERRED'].includes(row.subject_status)" :aria-label="`选择证据 ${row.observation_id} 的${dimensions[row.dimension] ?? row.dimension}`"></td>
-      <td>证据 {{ row.observation_id }} · {{ dimensions[row.dimension] ?? row.dimension }}</td>
-      <td>{{ statuses[row.subject_status] }} · 第 {{ row.version }} 版<p v-if="row.method">{{ methods[row.method] }}</p><p v-if="row.reviewer_username">{{ row.reviewer_username }} · {{ new Date(row.reviewed_at!).toLocaleString() }}</p><p>{{ row.reason }}</p><p>依据：{{ row.evidence || '尚未提交' }}</p></td>
-      <td><p v-for="decision in row.decisions" :key="decision.after_version">第 {{ decision.after_version }} 版：{{ methods[decision.method] }} · {{ statuses[decision.subject_status] }}；{{ decision.actor_username }}；{{ decision.reason }}；{{ decision.evidence }}</p><p v-for="link in row.links" :key="link.decision_version"><router-link :to="{path:'/transfers',query:{id:link.transfer_id}}">查看关联调拨 {{ link.transfer_id }}</router-link></p><p v-for="link in row.repairLinks" :key="`repair:${link.decision_version}`"><router-link :to="{path:'/repairs/' + link.repair_id}">查看关联维修 {{ link.repair_id }}</router-link></p></td>
-    </tr></tbody></table>
-    <p v-if="!visible.length">本页暂无此资产的已列入差异；原始证据不会因当前列表为空而被采信。</p><button :disabled="locked || page === 1" @click="pages(-1)">上页差异</button>第 {{ page }} 页<button :disabled="locked || page * 100 >= total" @click="pages(1)">下页差异</button>
-    <fieldset :disabled="locked"><label>处理方式<select v-model="method" @change="targetChoices"><option v-for="(label,value) in methods" :key="value" :value="value">{{ label }}</option></select></label>
-      <template v-if="method === 'FORMAL_TRANSFER'"><label>所属组织<select v-model="owning"><option value="">未指定</option><option v-for="row in organizations" :key="row.id" :value="row.id">{{ row.name }}</option></select></label>
-        <template v-if="stock"><label>目标仓库<select v-model="warehouse" @change="location = ''"><option value="">请选择</option><option v-for="row in warehouses" :key="row.id" :value="row.id">{{ row.name }}</option></select></label></template>
-        <template v-else><label>使用方式<select v-model="custody"><option value="PERSONAL">个人使用</option><option value="SHARED">部门公用</option></select></label><label>目标部门<select v-model="using" @change="people"><option value="">请选择</option><option v-for="row in organizations" :key="row.id" :value="row.id">{{ row.name }}</option></select></label><label>目标责任人<select v-model="employee"><option value="">请选择</option><option v-for="row in employees" :key="row.id" :value="row.id">{{ row.name }}</option></select></label></template>
-        <label>目标位置<select v-model="location"><option value="">请选择</option><option v-for="row in bins" :key="row.id" :value="row.id">{{ row.name }}</option></select></label><p>保存后进入正式审批，库管实际执行及目标人接收仍按原流程处理。</p>
+  <section class="fams-card fams-stack" aria-label="独立差异处理">
+    <div class="fams-panel-head">
+      <div>
+        <h3 class="fams-panel-title">独立差异处理<span v-if="board"> · {{ item.item.snapshot_json.assetCode }}</span></h3>
+        <p class="fams-panel-subtitle">先将原始证据列入复核，再逐项记录明确依据。位置、使用方式和责任变更沿用正式调拨；冲突、时间、盘盈及损坏仍需对应事实或后续业务。</p>
+      </div>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked" @click="load">刷新差异与当前资产</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || !observationIds.length" @click="prepare">列入当前页证据的差异</button>
+      </div>
+    </div>
+
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+    <p v-if="notice" class="fams-notice" data-state="success" role="status"><strong>{{ notice }}</strong></p>
+
+    <div v-if="confirmation" class="fams-notice" role="group" aria-label="确认差异操作">
+      <p>{{ confirmation.label }}</p>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="primary" data-size="sm" type="button" :disabled="busy" @click="confirmPrepared">确认保存本次操作</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="confirmation = null">取消本次操作</button>
+      </div>
+    </div>
+    <button v-if="pending" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="send(pending.path,pending.body)">重试原差异操作</button>
+
+    <div class="fams-table-scroll">
+      <table class="fams-table">
+        <thead><tr><th scope="col">选择</th><th scope="col" data-column-kind="identity">原始证据与维度</th>
+          <th scope="col">当前处理</th><th scope="col">决定及正式关联</th></tr></thead>
+        <tbody>
+          <tr v-for="row in visible" :key="`${row.observation_id}:${row.dimension}`">
+            <td><label class="fams-selection"><input v-model="chosen" type="checkbox" :value="`${row.observation_id}:${row.dimension}`"
+              :disabled="locked || ['CLOSED','TRANSFERRED'].includes(row.subject_status)" :aria-label="`选择证据 ${row.observation_id} 的${dimensions[row.dimension] ?? row.dimension}`" /></label></td>
+            <th scope="row" data-column-kind="identity">证据 {{ row.observation_id }} · {{ dimensions[row.dimension] ?? row.dimension }}</th>
+            <td>{{ statuses[row.subject_status] }} · 第 {{ row.version }} 版<p v-if="row.method">{{ methods[row.method] }}</p><p v-if="row.reviewer_username">{{ row.reviewer_username }} · {{ new Date(row.reviewed_at!).toLocaleString() }}</p><p>{{ row.reason }}</p><p>依据：{{ row.evidence || '尚未提交' }}</p></td>
+            <td><p v-for="decision in row.decisions" :key="decision.after_version">第 {{ decision.after_version }} 版：{{ methods[decision.method] }} · {{ statuses[decision.subject_status] }}；{{ decision.actor_username }}；{{ decision.reason }}；{{ decision.evidence }}</p><p v-for="link in row.links" :key="link.decision_version"><router-link :to="{path:'/transfers',query:{id:link.transfer_id}}">查看关联调拨 {{ link.transfer_id }}</router-link></p><p v-for="link in row.repairLinks" :key="`repair:${link.decision_version}`"><router-link :to="{path:'/repairs/' + link.repair_id}">查看关联维修 {{ link.repair_id }}</router-link></p></td>
+          </tr>
+          <tr v-if="!visible.length" class="fams-table-empty"><td colspan="4"><strong>本页暂无此资产的已列入差异</strong>原始证据不会因当前列表为空而被采信。</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="fams-pagination">
+      <div class="fams-pagination-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page === 1" @click="pages(-1)">上页差异</button>
+        <span class="fams-pagination-page">第 {{ page }} 页</span>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page * 100 >= total" @click="pages(1)">下页差异</button>
+      </div>
+    </div>
+
+    <fieldset class="fams-card fams-stack" :disabled="locked">
+      <label class="fams-field"><span class="fams-field-label">处理方式</span>
+        <select class="fams-control" v-model="method" @change="targetChoices"><option v-for="(label,value) in methods" :key="value" :value="value">{{ label }}</option></select></label>
+      <template v-if="method === 'FORMAL_TRANSFER'">
+        <div class="fams-field-grid">
+          <label class="fams-field"><span class="fams-field-label">所属组织</span>
+            <select class="fams-control" v-model="owning"><option value="">未指定</option><option v-for="row in organizations" :key="row.id" :value="row.id">{{ row.name }}</option></select></label>
+          <label v-if="stock" class="fams-field"><span class="fams-field-label">目标仓库</span>
+            <select class="fams-control" v-model="warehouse" @change="location = ''"><option value="">请选择</option><option v-for="row in warehouses" :key="row.id" :value="row.id">{{ row.name }}</option></select></label>
+          <template v-else>
+            <label class="fams-field"><span class="fams-field-label">使用方式</span>
+              <select class="fams-control" v-model="custody"><option value="PERSONAL">个人使用</option><option value="SHARED">部门公用</option></select></label>
+            <label class="fams-field"><span class="fams-field-label">目标部门</span>
+              <select class="fams-control" v-model="using" @change="people"><option value="">请选择</option><option v-for="row in organizations" :key="row.id" :value="row.id">{{ row.name }}</option></select></label>
+            <label class="fams-field"><span class="fams-field-label">目标责任人</span>
+              <select class="fams-control" v-model="employee"><option value="">请选择</option><option v-for="row in employees" :key="row.id" :value="row.id">{{ row.name }}</option></select></label>
+          </template>
+          <label class="fams-field"><span class="fams-field-label">目标位置</span>
+            <select class="fams-control" v-model="location"><option value="">请选择</option><option v-for="row in bins" :key="row.id" :value="row.id">{{ row.name }}</option></select></label>
+        </div>
+        <p class="fams-panel-subtitle">保存后进入正式审批，库管实际执行及目标人接收仍按原流程处理。</p>
       </template>
-      <template v-if="repairMethod"><p>维修只处理损坏维度。创建或关联后仍须正式审批、库管处理及实际完成；原始照片与时间保留，其他维度分别核实。</p>
+      <template v-if="repairMethod">
+        <p class="fams-panel-subtitle">维修只处理损坏维度。创建或关联后仍须正式审批、库管处理及实际完成；原始照片与时间保留，其他维度分别核实。</p>
         <template v-if="method !== 'REFRESH_REPAIR'">
-          <label>实际发现损坏时间（本机时区）<input v-model="repairDiscovery" type="datetime-local" step="0.001"></label>
-          <label><input v-model="physicalChecked" type="checkbox">已通过实物与原始证据核实损坏</label>
-          <label><input v-model="discoveryChecked" type="checkbox">已独立核实上述发现时间，未直接采信异常设备时间</label>
-          <template v-if="method === 'FORMAL_REPAIR'"><label>实际故障<textarea v-model="repairFault" minlength="3" maxlength="2000" /></label><label>影响程度<select v-model="repairImpact"><option value="LOW">低</option><option value="MEDIUM">中</option><option value="HIGH">高</option></select></label></template>
-          <template v-else><label>已有正式维修单编号<input v-model="repairId" inputmode="numeric" @input="linkedRepair = null"></label><button @click="inspectRepair">核对维修单</button><p v-if="linkedRepair">已核对维修 {{ linkedRepair.id }} · 第 {{ linkedRepair.version }} 版 · {{ linkedRepair.status }}</p></template>
+          <label class="fams-field"><span class="fams-field-label">实际发现损坏时间（本机时区）</span>
+            <input class="fams-control" v-model="repairDiscovery" type="datetime-local" step="0.001" /></label>
+          <label class="fams-selection"><input v-model="physicalChecked" type="checkbox" />已通过实物与原始证据核实损坏</label>
+          <label class="fams-selection"><input v-model="discoveryChecked" type="checkbox" />已独立核实上述发现时间，未直接采信异常设备时间</label>
+          <div v-if="method === 'FORMAL_REPAIR'" class="fams-field-grid">
+            <label class="fams-field"><span class="fams-field-label">实际故障</span>
+              <textarea class="fams-control" v-model="repairFault" minlength="3" maxlength="2000" /></label>
+            <label class="fams-field"><span class="fams-field-label">影响程度</span>
+              <select class="fams-control" v-model="repairImpact"><option value="LOW">低</option><option value="MEDIUM">中</option><option value="HIGH">高</option></select></label>
+          </div>
+          <template v-else>
+            <div class="fams-field-row">
+              <label class="fams-field"><span class="fams-field-label">已有正式维修单编号</span>
+                <input class="fams-control" v-model="repairId" inputmode="numeric" @input="linkedRepair = null" /></label>
+              <button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="inspectRepair">核对维修单</button>
+            </div>
+            <p v-if="linkedRepair" class="fams-panel-subtitle">已核对维修 {{ linkedRepair.id }} · 第 {{ linkedRepair.version }} 版 · {{ linkedRepair.status }}</p>
+          </template>
         </template>
       </template>
-      <label>处理原因<textarea v-model="reason" minlength="3" maxlength="1000" /></label><label>明确采信依据<textarea v-model="evidence" minlength="10" maxlength="2000" placeholder="填写可追溯的实物核验、签字记录或其他明确证据" /></label><button :disabled="!selected.length || reason.trim().length < 3 || evidence.trim().length < 10" @click="decide">共同提交所选差异</button>
+      <div class="fams-field-grid">
+        <label class="fams-field"><span class="fams-field-label">处理原因</span>
+          <textarea class="fams-control" v-model="reason" minlength="3" maxlength="1000" /></label>
+        <label class="fams-field"><span class="fams-field-label">明确采信依据</span>
+          <textarea class="fams-control" v-model="evidence" minlength="10" maxlength="2000" placeholder="填写可追溯的实物核验、签字记录或其他明确证据" /></label>
+      </div>
+      <button class="fams-button" data-kind="primary" type="button" :disabled="!selected.length || reason.trim().length < 3 || evidence.trim().length < 10" @click="decide">共同提交所选差异</button>
     </fieldset>
   </section>
 </template>
-<style scoped>
-table { width: 100%; border-collapse: collapse; } th,td { padding: 12px; border-bottom: 1px solid #e4e7ed; text-align: left; vertical-align: top; } label { display: block; margin: 8px 0; } textarea { display: block; width: 100%; min-height: 64px; } button { margin: 8px; padding: 8px 12px; }
-</style>

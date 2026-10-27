@@ -33,21 +33,31 @@ watch(owner, () => { generation++; rows.value = []; total.value = 0; page.value 
 onBeforeUnmount(() => { live = false; generation++; rows.value = []; });
 </script>
 <template>
-  <section aria-label="执行人同步声明">
-    <h3>执行人同步声明</h3>
-    <p>仅展示执行人的设备声明，不能证明未知离线设备为空。失效身份、旧绑定及缺失证据仍需补证，不会自动排除。</p>
-    <p v-if="error" role="alert">{{ error }}</p>
-    <button :disabled="busy" @click="load">刷新同步声明</button>
-    <article v-for="row in rows" :key="row.accountId">
-      <h4>{{ row.name }} · {{ reasons[row.reason] || '待核实' }}</h4>
-      <p v-for="device in row.devices" :key="`${device.bindingId}:${device.deviceId}`">
-        设备 {{ device.deviceId }} · {{ reasons[device.reason] || '待核实' }}
-        <span v-if="device.declaredAt"> · 声明时间 {{ device.declaredAt }}</span>
-        <span v-if="device.unresolvedCount"> · 缺失提示 {{ device.unresolvedCount }}</span>
-      </p>
+  <section class="fams-card fams-stack" aria-label="执行人同步声明">
+    <div class="fams-panel-head">
+      <div>
+        <h3 class="fams-panel-title">执行人同步声明</h3>
+        <p class="fams-panel-subtitle">仅展示执行人的设备声明，不能证明未知离线设备为空。失效身份、旧绑定及缺失证据仍需补证，不会自动排除。</p>
+      </div>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="load">刷新同步声明</button>
+      </div>
+    </div>
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+    <article v-for="row in rows" :key="row.accountId" class="fams-card fams-stack">
+      <h4 class="fams-panel-title">{{ row.name }} · {{ reasons[row.reason] || '待核实' }}</h4>
+      <ul class="fams-timeline">
+        <li v-for="device in row.devices" :key="`${device.bindingId}:${device.deviceId}`">设备 {{ device.deviceId }} · {{ reasons[device.reason] || '待核实' }}
+          <small v-if="device.declaredAt || device.unresolvedCount"><template v-if="device.declaredAt"> · 声明时间 {{ device.declaredAt }}</template><template v-if="device.unresolvedCount"> · 缺失提示 {{ device.unresolvedCount }}</template></small></li>
+      </ul>
     </article>
-    <button :disabled="busy || page === 1" @click="change(-1)">上页执行人</button>
-    <span>第 {{ page }} 页，共 {{ total }} 人</span>
-    <button :disabled="busy || page * 20 >= total" @click="change(1)">下页执行人</button>
+    <div class="fams-pagination">
+      <span class="fams-pagination-summary">共 {{ total }} 人</span>
+      <div class="fams-pagination-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || page === 1" @click="change(-1)">上页执行人</button>
+        <span class="fams-pagination-page">第 {{ page }} 页</span>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || page * 20 >= total" @click="change(1)">下页执行人</button>
+      </div>
+    </div>
   </section>
 </template>

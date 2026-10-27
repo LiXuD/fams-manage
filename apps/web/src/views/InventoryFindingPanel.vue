@@ -135,38 +135,103 @@ const ownerStates: Record<string, string> = { PENDING_ADMIN_DECISION: "待管理
 const methodLabels: Record<string, string> = { NON_ENTERPRISE: "非企业资产依据", DUPLICATE_ASSET: "已登记资产重复线索", LINK_INBOUND: "关联正式入库", REFRESH_INBOUND: "核对正式入库进度" };
 </script>
 <template>
-  <section class="finding-panel" aria-label="盘盈与任务外线索复核">
-    <h2>盘盈与任务外线索</h2><p>线索不会自动建卡。库管先按正常权限建卡并提交入库，管理员在此关联已提交单据；实际验收后才能关闭盘盈。</p>
-    <button :disabled="locked" @click="load">读取盘盈与任务外线索</button><p v-if="error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p>
-    <section v-if="confirmation" aria-label="确认当前复核"><p>请核对当前选择及依据。重采只解决原时间不确定性，资产归属仍独立处理；原始证据继续保留。</p><button :disabled="busy" @click="confirmSave">确认保存当前复核</button><button :disabled="busy" @click="confirmation = null">返回修改</button></section>
-    <button v-if="pending" :disabled="busy" @click="save()">重试原盘盈复核操作</button>
-    <ul><li v-for="row in rows" :key="row.id"><p>{{ row.facts_json.actual?.description || '原始现场线索' }} · {{ new Date(row.received_at).toLocaleString() }}</p>
-      <button v-if="['FINDING_REVIEW', 'TIME_REVIEW'].includes(row.outcome)" :disabled="locked" @click="open(row)">核对线索 {{ row.id }}</button><p v-else>时间、过期或迟到线索须沿对应复核处理，原始事实继续保留。</p></li></ul>
-    <button :disabled="locked || page === 1" @click="paginate(-1)">上一页线索</button>第 {{ page }} 页 / 共 {{ total }} 条<button :disabled="locked || page * 20 >= total" @click="paginate(1)">下一页线索</button>
-    <section v-if="detail"><h3>当前线索 {{ detail.observation.id }}</h3><p>{{ detail.observation.facts_json.actual?.description }}</p><p>{{ states[detail.subject.subject_status ?? ''] || '尚未列入复核' }}</p>
+  <section class="fams-card fams-stack" aria-label="盘盈与任务外线索复核">
+    <div class="fams-panel-head">
+      <div>
+        <h3 class="fams-panel-title">盘盈与任务外线索</h3>
+        <p class="fams-panel-subtitle">线索不会自动建卡。库管先按正常权限建卡并提交入库，管理员在此关联已提交单据；实际验收后才能关闭盘盈。</p>
+      </div>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="primary" data-size="sm" type="button" :disabled="locked" @click="load">读取盘盈与任务外线索</button>
+      </div>
+    </div>
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+    <p v-if="notice" class="fams-notice" data-state="success" role="status"><strong>{{ notice }}</strong></p>
+    <div v-if="confirmation" class="fams-card fams-stack" role="group" aria-label="确认当前复核">
+      <p>请核对当前选择及依据。重采只解决原时间不确定性，资产归属仍独立处理；原始证据继续保留。</p>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="confirmSave">确认保存当前复核</button>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="confirmation = null">返回修改</button>
+      </div>
+    </div>
+    <button v-if="pending" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="save()">重试原盘盈复核操作</button>
+    <ul class="fams-timeline">
+      <li v-for="row in rows" :key="row.id">
+        <p>{{ row.facts_json.actual?.description || '原始现场线索' }} · {{ new Date(row.received_at).toLocaleString() }}</p>
+        <button v-if="['FINDING_REVIEW', 'TIME_REVIEW'].includes(row.outcome)" class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="locked" @click="open(row)">核对线索 {{ row.id }}</button>
+        <p v-else>时间、过期或迟到线索须沿对应复核处理，原始事实继续保留。</p></li>
+    </ul>
+    <div class="fams-pagination">
+      <span class="fams-pagination-summary">共 {{ total }} 条</span>
+      <div class="fams-pagination-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page === 1" @click="paginate(-1)">上一页线索</button>
+        <span class="fams-pagination-page">第 {{ page }} 页</span>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page * 20 >= total" @click="paginate(1)">下一页线索</button>
+      </div>
+    </div>
+    <div v-if="detail" class="fams-card fams-stack">
+      <h3 class="fams-panel-title">当前线索 {{ detail.observation.id }}</h3>
+      <p>{{ detail.observation.facts_json.actual?.description }}</p>
+      <p>{{ states[detail.subject.subject_status ?? ''] || '尚未列入复核' }}</p>
       <InventoryPhotoEvidence v-if="detail.observation.facts_json.photoIds?.length" :task-id="taskId" :event-id="detail.observation.client_event_id" :photo-ids="detail.observation.facts_json.photoIds" @invalid="clear" />
-      <button v-if="detail.subject.version === undefined" :disabled="locked" @click="save(true)">列入盘盈独立复核</button>
-      <fieldset v-else-if="detail.subject.subject_status !== 'CLOSED'" :disabled="locked"><label>盘盈处理方式<select v-model="method"><option value="NON_ENTERPRISE">有明确依据确认非企业资产</option><option value="DUPLICATE_ASSET">核实为已登记资产的重复线索</option><option value="LINK_INBOUND">关联已提交的正式入库</option><option value="REFRESH_INBOUND">核对既有关联入库进度</option></select></label>
-        <label v-if="method === 'DUPLICATE_ASSET'">权威资产编码<input v-model="assetCode" maxlength="128"></label>
-        <label v-if="method === 'LINK_INBOUND' || method === 'REFRESH_INBOUND'">正式入库单号<input v-model="receiptNumber" maxlength="128"></label>
-        <button v-if="method !== 'NON_ENTERPRISE'" @click="search">查找正式依据</button>
-        <label v-for="asset in assets" :key="asset.id"><input v-model="selectedAsset" type="radio" :value="asset.id">{{ asset.assetCode }} · {{ asset.name }}</label>
-        <div v-for="receipt in receipts" :key="receipt.id"><p>{{ receipt.receiptNumber }} · {{ ownerStates[receipt.status] ?? '状态待核实' }}</p><a :href="`/inbound?receiptId=${encodeURIComponent(receipt.id)}`">查看正式入库单</a>
-          <label v-for="item in receipt.items" :key="item.id"><input type="radio" :checked="selectedReceipt === receipt.id && selectedAsset === item.asset.id" @change="selectedReceipt = receipt.id; selectedAsset = item.asset.id">{{ item.assetSnapshot.assetCode }} · {{ item.assetSnapshot.assetName }} · {{ item.executionStatus === 'ACCEPTED' ? '已实际验收' : '待验收' }}</label></div>
-        <label>盘盈处理原因<textarea v-model="reason" maxlength="1000" /></label><label>明确盘盈核实依据<textarea v-model="evidence" maxlength="2000" /></label><button @click="save()">保存盘盈复核与关联</button>
+      <button v-if="detail.subject.version === undefined" class="fams-button" data-kind="primary" type="button" :disabled="locked" @click="save(true)">列入盘盈独立复核</button>
+      <fieldset v-else-if="detail.subject.subject_status !== 'CLOSED'" class="fams-stack" :disabled="locked">
+        <div class="fams-field-grid">
+          <label class="fams-field"><span class="fams-field-label">盘盈处理方式</span>
+            <select class="fams-control" v-model="method"><option value="NON_ENTERPRISE">有明确依据确认非企业资产</option><option value="DUPLICATE_ASSET">核实为已登记资产的重复线索</option><option value="LINK_INBOUND">关联已提交的正式入库</option><option value="REFRESH_INBOUND">核对既有关联入库进度</option></select></label>
+          <label v-if="method === 'DUPLICATE_ASSET'" class="fams-field"><span class="fams-field-label">权威资产编码</span>
+            <input class="fams-control" v-model="assetCode" maxlength="128" /></label>
+          <label v-if="method === 'LINK_INBOUND' || method === 'REFRESH_INBOUND'" class="fams-field"><span class="fams-field-label">正式入库单号</span>
+            <input class="fams-control" v-model="receiptNumber" maxlength="128" /></label>
+        </div>
+        <button v-if="method !== 'NON_ENTERPRISE'" class="fams-button" data-kind="secondary" type="button" @click="search">查找正式依据</button>
+        <div v-if="assets.length" class="fams-selection-group">
+          <label v-for="asset in assets" :key="asset.id" class="fams-selection"><input v-model="selectedAsset" type="radio" :value="asset.id" />{{ asset.assetCode }} · {{ asset.name }}</label>
+        </div>
+        <div v-for="receipt in receipts" :key="receipt.id" class="fams-card fams-stack">
+          <p>{{ receipt.receiptNumber }} · {{ ownerStates[receipt.status] ?? '状态待核实' }}</p>
+          <a class="fams-button" data-kind="link" :href="`/inbound?receiptId=${encodeURIComponent(receipt.id)}`">查看正式入库单</a>
+          <div class="fams-selection-group">
+            <label v-for="item in receipt.items" :key="item.id" class="fams-selection"><input type="radio" :checked="selectedReceipt === receipt.id && selectedAsset === item.asset.id" @change="selectedReceipt = receipt.id; selectedAsset = item.asset.id" />{{ item.assetSnapshot.assetCode }} · {{ item.assetSnapshot.assetName }} · {{ item.executionStatus === 'ACCEPTED' ? '已实际验收' : '待验收' }}</label>
+          </div>
+        </div>
+        <label class="fams-field"><span class="fams-field-label">盘盈处理原因</span>
+          <textarea class="fams-control" v-model="reason" maxlength="1000" /></label>
+        <label class="fams-field"><span class="fams-field-label">明确盘盈核实依据</span>
+          <textarea class="fams-control" v-model="evidence" maxlength="2000" /></label>
+        <button class="fams-button" data-kind="primary" type="button" @click="save()">保存盘盈复核与关联</button>
       </fieldset>
-      <section v-if="detail.observation.outcome === 'TIME_REVIEW'" aria-label="独立时间核实"><h4>独立时间核实 · {{ states[timeSubject?.subject_status ?? ''] || '尚未列入复核' }}</h4><p>原时间仍不确定。请实际重新采集照片与现场事实，再明确关联同一实物的新线索。盘盈归属不会被重采自动关闭。</p>
-        <button v-if="!timeSubject" :disabled="locked" @click="save(true)">补齐时间与盘盈双项复核</button>
-        <fieldset v-else-if="timeSubject.subject_status !== 'CLOSED'" :disabled="locked"><button @click="loadCounters()">读取有效重采线索</button>
-          <label v-for="counter in counters" :key="counter.id"><input v-model="counterId" type="radio" :value="counter.id">{{ counter.facts_json.actual?.description || '实际重采现场线索' }} · {{ new Date(counter.received_at).toLocaleString() }}</label>
-          <button :disabled="counterPage === 1" @click="loadCounters(-1)">上一页重采线索</button>第 {{ counterPage }} 页 / 共 {{ counterTotal }} 条<button :disabled="counterPage * 20 >= counterTotal" @click="loadCounters(1)">下一页重采线索</button>
-          <label>同一实物核实原因<textarea v-model="reason" maxlength="1000" /></label><label>原线索与重采照片、特征核对依据<textarea v-model="evidence" maxlength="2000" /></label><button @click="save(false, true)">保存独立重采关联</button>
-        </fieldset><ul><li v-for="link in detail.recollections" :key="link.after_version">{{ link.actor_username }} · {{ new Date(link.occurred_at).toLocaleString() }} · 已关联重采线索 {{ link.counterObservationId }} · {{ link.reason }} · {{ link.evidence }}；原时间仍不确定</li></ul>
+      <section v-if="detail.observation.outcome === 'TIME_REVIEW'" class="fams-card fams-stack" aria-label="独立时间核实">
+        <h4 class="fams-panel-title">独立时间核实 · {{ states[timeSubject?.subject_status ?? ''] || '尚未列入复核' }}</h4>
+        <p>原时间仍不确定。请实际重新采集照片与现场事实，再明确关联同一实物的新线索。盘盈归属不会被重采自动关闭。</p>
+        <button v-if="!timeSubject" class="fams-button" data-kind="primary" type="button" :disabled="locked" @click="save(true)">补齐时间与盘盈双项复核</button>
+        <fieldset v-else-if="timeSubject.subject_status !== 'CLOSED'" class="fams-stack" :disabled="locked">
+          <button class="fams-button" data-kind="secondary" type="button" @click="loadCounters()">读取有效重采线索</button>
+          <div v-if="counters.length" class="fams-selection-group">
+            <label v-for="counter in counters" :key="counter.id" class="fams-selection"><input v-model="counterId" type="radio" :value="counter.id" />{{ counter.facts_json.actual?.description || '实际重采现场线索' }} · {{ new Date(counter.received_at).toLocaleString() }}</label>
+          </div>
+          <div class="fams-pagination">
+            <span class="fams-pagination-summary">共 {{ counterTotal }} 条</span>
+            <div class="fams-pagination-actions">
+              <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="counterPage === 1" @click="loadCounters(-1)">上一页重采线索</button>
+              <span class="fams-pagination-page">第 {{ counterPage }} 页</span>
+              <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="counterPage * 20 >= counterTotal" @click="loadCounters(1)">下一页重采线索</button>
+            </div>
+          </div>
+          <label class="fams-field"><span class="fams-field-label">同一实物核实原因</span>
+            <textarea class="fams-control" v-model="reason" maxlength="1000" /></label>
+          <label class="fams-field"><span class="fams-field-label">原线索与重采照片、特征核对依据</span>
+            <textarea class="fams-control" v-model="evidence" maxlength="2000" /></label>
+          <button class="fams-button" data-kind="primary" type="button" @click="save(false, true)">保存独立重采关联</button>
+        </fieldset>
+        <ul class="fams-timeline">
+          <li v-for="link in detail.recollections" :key="link.after_version">{{ link.actor_username }} · {{ new Date(link.occurred_at).toLocaleString() }} · 已关联重采线索 {{ link.counterObservationId }} · {{ link.reason }} · {{ link.evidence }}；原时间仍不确定</li>
+        </ul>
       </section>
-      <h4>最近 100 条处理历史 / 共 {{ detail.historyTotal }} 条</h4><ul><li v-for="history in detail.history" :key="history.after_version">{{ history.actor_username }} · {{ history.occurred_at ? new Date(history.occurred_at).toLocaleString() : '时间待核实' }} · {{ states[history.subject_status] }} · {{ methodLabels[history.method] ?? '历史处理' }} · {{ history.reason }} · {{ history.evidence }}<a v-if="history.inboundReceiptId" :href="`/inbound?receiptId=${encodeURIComponent(history.inboundReceiptId)}`">正式入库</a></li></ul>
-    </section>
+      <h4 class="fams-panel-title">最近 100 条处理历史 / 共 {{ detail.historyTotal }} 条</h4>
+      <ul class="fams-timeline">
+        <li v-for="history in detail.history" :key="history.after_version">{{ history.actor_username }} · {{ history.occurred_at ? new Date(history.occurred_at).toLocaleString() : '时间待核实' }} · {{ states[history.subject_status] }} · {{ methodLabels[history.method] ?? '历史处理' }} · {{ history.reason }} · {{ history.evidence }}<a v-if="history.inboundReceiptId" :href="`/inbound?receiptId=${encodeURIComponent(history.inboundReceiptId)}`">正式入库</a></li>
+      </ul>
+    </div>
   </section>
 </template>
-<style scoped>
-.finding-panel { margin: 24px 0; padding: 20px; border: 1px solid #d8dee8; } label { display: block; margin: 12px 0; } textarea { display: block; width: 100%; } button { margin: 8px; } fieldset { border: 0; padding: 0; }
-</style>

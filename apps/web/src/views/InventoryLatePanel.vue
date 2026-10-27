@@ -81,24 +81,81 @@ const results: Record<string, string> = { OPEN: "待补充核实", INFORMATION: 
 watch(owner, () => { clear(); page.value = 1; void load(); }, { immediate: true }); onBeforeUnmount(() => { live = false; clear(); });
 </script>
 <template>
-  <section aria-label="终态补充证据与关联复盘"><h3>终态补充证据与关联复盘</h3>
-    <p>补传不改变原报告、完成数或最近盘点日期；后续观察不证明封存时的实物状况。时间异常和任务外线索不能凭补充文字自动采信。</p>
-    <p v-if="error" role="alert">{{ error }}</p><button :disabled="busy || confirming || damageBusy" @click="load">刷新补充证据</button>
-    <button :disabled="locked || !board" @click="prepareLegacy">准备既有补充证据</button>
-    <article v-for="entry in board?.items || []" :key="entry.evidence.observation_id"><p>证据 {{ entry.evidence.observation_id }} · {{ kinds[entry.evidence.comparison_kind] }} · {{ results[entry.review.result] }} · {{ entry.todoOpen ? '管理员待办开放' : '没有开放待办' }}</p>
-      <button :disabled="locked" @click="open(entry)">核对原证据与补充历史</button></article>
-    <button :disabled="locked || page === 1" @click="paginate(-1)">上页补充证据</button><span>第 {{ page }} 页 · 共 {{ board?.total || 0 }} 条</span><button :disabled="locked || !board || page * 20 >= board.total" @click="paginate(1)">下页补充证据</button>
-    <template v-if="detail"><InventoryLateDamagePanel v-if="detail.case.damageFollowup?.observation_id" :key="`${taskId}:${detail.case.evidence.observation_id}`" :task-id="taskId" :observation-id="detail.case.evidence.observation_id" :blocked="busy || !!pending" @busy-change="damageBusy = $event" @invalidated="clear" @changed="load" /><p>原观察 {{ detail.case.evidence.snapshot_json.rawObservedAt }} · 原校准时间 {{ detail.case.evidence.snapshot_json.calibratedObservedAt || '尚未核实' }} · 接收 {{ detail.case.evidence.snapshot_json.receivedAt }}</p>
-      <p>原采信观察 {{ detail.case.evidence.snapshot_json.acceptedObservationId || '无' }} · 原冻结报告 {{ detail.case.evidence.report_sha256 || '取消或终止任务未封存' }}</p>
+  <section class="fams-card fams-stack" aria-label="终态补充证据与关联复盘">
+    <div class="fams-panel-head">
+      <div>
+        <h3 class="fams-panel-title">终态补充证据与关联复盘</h3>
+        <p class="fams-panel-subtitle">补传不改变原报告、完成数或最近盘点日期；后续观察不证明封存时的实物状况。时间异常和任务外线索不能凭补充文字自动采信。</p>
+      </div>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || confirming || damageBusy" @click="load">刷新补充证据</button>
+        <button class="fams-button" data-kind="primary" data-size="sm" type="button" :disabled="locked || !board" @click="prepareLegacy">准备既有补充证据</button>
+      </div>
+    </div>
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+    <article v-for="entry in board?.items || []" :key="entry.evidence.observation_id" class="fams-card fams-stack">
+      <p>证据 {{ entry.evidence.observation_id }} · {{ kinds[entry.evidence.comparison_kind] }} · {{ results[entry.review.result] }} · {{ entry.todoOpen ? '管理员待办开放' : '没有开放待办' }}</p>
+      <button class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="locked" @click="open(entry)">核对原证据与补充历史</button>
+    </article>
+    <div class="fams-pagination">
+      <span class="fams-pagination-summary">共 {{ board?.total || 0 }} 条</span>
+      <div class="fams-pagination-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page === 1" @click="paginate(-1)">上页补充证据</button>
+        <span class="fams-pagination-page">第 {{ page }} 页</span>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || !board || page * 20 >= board.total" @click="paginate(1)">下页补充证据</button>
+      </div>
+    </div>
+    <template v-if="detail">
+      <InventoryLateDamagePanel v-if="detail.case.damageFollowup?.observation_id" :key="`${taskId}:${detail.case.evidence.observation_id}`" :task-id="taskId" :observation-id="detail.case.evidence.observation_id" :blocked="busy || !!pending" @busy-change="damageBusy = $event" @invalidated="clear" @changed="load" />
+      <dl class="fams-facts">
+        <div><dt>原观察</dt><dd>{{ detail.case.evidence.snapshot_json.rawObservedAt }}</dd></div>
+        <div><dt>原校准时间</dt><dd>{{ detail.case.evidence.snapshot_json.calibratedObservedAt || '尚未核实' }}</dd></div>
+        <div><dt>接收</dt><dd>{{ detail.case.evidence.snapshot_json.receivedAt }}</dd></div>
+        <div><dt>原采信观察</dt><dd>{{ detail.case.evidence.snapshot_json.acceptedObservationId || '无' }}</dd></div>
+        <div><dt>原冻结报告</dt><dd>{{ detail.case.evidence.report_sha256 || '取消或终止任务未封存' }}</dd></div>
+      </dl>
       <p>现场线索：{{ detail.case.evidence.snapshot_json.facts.actual?.locationHint || detail.case.evidence.snapshot_json.facts.actual?.locationId || '位置未明确' }} · {{ detail.case.evidence.snapshot_json.facts.actual?.condition || '状况未明确' }} · {{ detail.case.evidence.snapshot_json.facts.actual?.unknownReason || detail.case.evidence.snapshot_json.facts.actual?.description }}</p>
-      <article v-for="event in detail.history.items" :key="event.decision_version"><p>{{ event.actor_username }} · {{ event.decided_at }} · {{ methods[event.method || ''] }} · {{ results[event.result] }}</p><p>{{ event.reason }} · {{ event.evidence }}</p><p v-if="event.linked_task_id">关联复盘任务 {{ event.linked_task_id }}</p></article>
-      <button :disabled="locked || detail.history.page === 1" @click="readHistory(-1)">上页补充决定</button><span>补充历史第 {{ detail.history.page }} 页 · 共 {{ detail.history.total }} 条</span><button :disabled="locked || detail.history.page * 20 >= detail.history.total" @click="readHistory(1)">下页补充决定</button>
-      <fieldset :disabled="locked"><label>补充处理<select v-model="method"><option v-for="(label, value) in methods" :key="value" :value="value">{{ label }}</option></select></label>
-        <label>原因<textarea v-model="reason" maxlength="1000" /></label><label>核实依据<textarea v-model="evidence" maxlength="2000" /></label>
-        <template v-if="['LINK_RECHECK', 'REPLACE_RECHECK'].includes(method)"><label>复盘名称<input v-model="draftName" maxlength="128"></label><label>计划开始时间（带时区）<input v-model="startsAt"></label><label>计划截止时间（带时区）<input v-model="dueAt"></label><p>复制原任务范围创建草稿，发布、分配、实盘和封存须另行实际完成。</p></template>
-        <button :disabled="reason.trim().length < 3 || evidence.trim().length < 3" @click="prepareDecision">核对补充处理</button></fieldset>
+      <ul class="fams-timeline">
+        <li v-for="event in detail.history.items" :key="event.decision_version">{{ event.actor_username }} · {{ event.decided_at }} · {{ methods[event.method || ''] }} · {{ results[event.result] }}
+          <small>{{ event.reason }} · {{ event.evidence }}<template v-if="event.linked_task_id"> · 关联复盘任务 {{ event.linked_task_id }}</template></small></li>
+      </ul>
+      <div class="fams-pagination">
+        <span class="fams-pagination-summary">共 {{ detail.history.total }} 条</span>
+        <div class="fams-pagination-actions">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || detail.history.page === 1" @click="readHistory(-1)">上页补充决定</button>
+          <span class="fams-pagination-page">补充历史第 {{ detail.history.page }} 页</span>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || detail.history.page * 20 >= detail.history.total" @click="readHistory(1)">下页补充决定</button>
+        </div>
+      </div>
+      <fieldset class="fams-card fams-stack" :disabled="locked">
+        <div class="fams-field-grid">
+          <label class="fams-field"><span class="fams-field-label">补充处理</span>
+            <select class="fams-control" v-model="method"><option v-for="(label, value) in methods" :key="value" :value="value">{{ label }}</option></select></label>
+          <label class="fams-field"><span class="fams-field-label">原因</span>
+            <textarea class="fams-control" v-model="reason" maxlength="1000" /></label>
+          <label class="fams-field"><span class="fams-field-label">核实依据</span>
+            <textarea class="fams-control" v-model="evidence" maxlength="2000" /></label>
+        </div>
+        <template v-if="['LINK_RECHECK', 'REPLACE_RECHECK'].includes(method)">
+          <div class="fams-field-grid">
+            <label class="fams-field"><span class="fams-field-label">复盘名称</span>
+              <input class="fams-control" v-model="draftName" maxlength="128" /></label>
+            <label class="fams-field"><span class="fams-field-label">计划开始时间（带时区）</span>
+              <input class="fams-control" v-model="startsAt" /></label>
+            <label class="fams-field"><span class="fams-field-label">计划截止时间（带时区）</span>
+              <input class="fams-control" v-model="dueAt" /></label>
+          </div>
+          <p>复制原任务范围创建草稿，发布、分配、实盘和封存须另行实际完成。</p>
+        </template>
+        <button class="fams-button" data-kind="primary" type="button" :disabled="reason.trim().length < 3 || evidence.trim().length < 3" @click="prepareDecision">核对补充处理</button>
+      </fieldset>
     </template>
-    <div v-if="confirming" role="group" aria-label="确认补充处理"><p>{{ confirmation }}</p><button :disabled="busy" @click="send">确认追加补充处理</button><button :disabled="busy" @click="pending = null; confirming = false">返回补充核对</button></div>
-    <button v-if="pending && !confirming" :disabled="busy" @click="send">原键重试未确认补充处理</button>
+    <div v-if="confirming" class="fams-card fams-stack" role="group" aria-label="确认补充处理"><p>{{ confirmation }}</p>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="send">确认追加补充处理</button>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="pending = null; confirming = false">返回补充核对</button>
+      </div>
+    </div>
+    <button v-if="pending && !confirming" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="send">原键重试未确认补充处理</button>
   </section>
 </template>

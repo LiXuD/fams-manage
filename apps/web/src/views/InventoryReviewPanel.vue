@@ -84,29 +84,88 @@ watch(identity, () => { generation++; clear(); error.value = "身份或权限已
 onBeforeUnmount(() => { live = false; generation++; clear(); });
 </script>
 <template>
-  <section class="panel" aria-label="盘点证据复核">
-    <h2>证据复核</h2><p>账面、现场观察与当前资产分别保留。采信不直接改变资产责任，封存前仍须完成差异及同步检查。</p>
-    <p v-if="error" role="alert" class="form-error">{{ error }}</p><button :disabled="busy" @click="load">刷新复核信息</button>
-    <button v-if="pending" :disabled="busy" @click="accept">重试原采信操作</button>
-    <p v-if="board">已采信 {{ board.reviewedCount }} 项 / 应盘 {{ board.total }} 项</p>
-    <p v-if="result" role="status">本次已采信 {{ result.accepted }} 项，冲突或待核实 {{ result.conflicts }} 项。</p>
-    <ul v-if="result"><li v-for="item in result.items" :key="item.itemId">应盘项 {{ item.itemId }}：{{ item.status === 'ACCEPTED' ? '已采信' : reviewProblems[item.code ?? ''] ?? '请核对当前结果' }}<span v-if="item.current?.reviewer_username">；{{ item.current.reviewer_username }} 于 {{ new Date(item.current.reviewed_at!).toLocaleString() }} 已处理</span></li></ul>
-    <table v-if="board"><thead><tr><th>选择</th><th>账面快照</th><th>原始现场观察</th><th>当前资产与复核</th></tr></thead><tbody>
-      <tr v-for="row in board.items" :key="row.item.id">
-        <td><input v-model="selected" :value="row.item.id" type="checkbox" :disabled="locked || !row.canAcceptNormal" :aria-label="`选择 ${row.item.snapshot_json.assetCode}`"></td>
-        <td><strong>{{ row.item.snapshot_json.assetCode }} · {{ row.item.snapshot_json.name }}</strong><p>{{ row.item.snapshot_json.locationName || '未指定位置' }}</p><p>{{ modes[row.item.snapshot_json.custodyType ?? ''] || '待核实' }} · {{ row.item.snapshot_json.responsibleEmployeeName ?? row.item.snapshot_json.departmentResponsibleEmployeeName ?? '仓库保管' }}</p></td>
-        <td><template v-if="row.candidate"><p>{{ outcomes[row.candidate.outcome] ?? '待核实' }} · 第 {{ row.item.recheck_generation + 1 }} 轮</p><p>位置：{{ row.candidate.facts_json.actual?.locationId === row.item.snapshot_json.locationId ? row.item.snapshot_json.locationName : row.candidate.facts_json.actual?.locationHint || row.candidate.facts_json.actual?.locationId || '未知' }}</p><p>{{ modes[row.candidate.facts_json.actual?.custodyType ?? ''] || '未知使用模式' }} · {{ conditions[row.candidate.facts_json.actual?.condition ?? ''] || '状况未知' }}</p><p v-if="row.candidate.facts_json.actual?.unknownReason">未知原因：{{ row.candidate.facts_json.actual.unknownReason }}</p></template><p v-else>尚无本轮观察候选</p><button :disabled="locked" @click="history(row)">查看全部原始证据</button></td>
-        <td><template v-if="row.current"><strong>{{ row.current.name }}</strong><p>{{ row.current.locationName || '位置待核实' }} · {{ modes[row.current.custodyType ?? ''] || '待核实' }}</p></template><p v-else>当前资产不可用</p><p v-if="row.review.reviewer_username">{{ row.review.reviewer_username }} 于 {{ new Date(row.review.reviewed_at!).toLocaleString() }} {{ row.review.review_status === 'SELECTED' ? '已选择待采信证据' : row.review.review_status === 'ACCEPTED' ? '已采信' : '已记录未观察' }}；原因：{{ row.review.reason }}</p><p v-if="row.blockedReason">{{ reviewProblems[row.blockedReason] ?? '须独立复核' }}</p><p v-if="row.movementEvents.length">期间业务事件 {{ row.movementEvents.length }} 条，不能仅凭当前位置相同判正常。</p></td>
-      </tr>
-    </tbody></table>
-    <button :disabled="locked || page === 1" @click="paginate(-1)">上页证据</button>第 {{ page }} 页<button :disabled="locked || !board || page * 20 >= board.total" @click="paginate(1)">下页证据</button>
-    <fieldset v-if="board && ['IN_PROGRESS','WAITING_REVIEW'].includes(board.task.task_status)" :disabled="locked"><label>正常采信原因<textarea v-model="reason" maxlength="1000" /></label><button :disabled="!selected.length || !reason.trim()" @click="accept">逐项采信所选正常观察</button></fieldset>
+  <section class="fams-card fams-stack" aria-label="盘点证据复核">
+    <div class="fams-panel-head">
+      <div>
+        <h3 class="fams-panel-title">证据复核</h3>
+        <p class="fams-panel-subtitle">账面、现场观察与当前资产分别保留。采信不直接改变资产责任，封存前仍须完成差异及同步检查。</p>
+      </div>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="load">刷新复核信息</button>
+        <button v-if="pending" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="accept">重试原采信操作</button>
+      </div>
+    </div>
+
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+    <p v-if="board" class="fams-panel-subtitle">已采信 {{ board.reviewedCount }} 项 / 应盘 {{ board.total }} 项</p>
+    <p v-if="result" class="fams-notice" data-state="success" role="status"><strong>本次已采信 {{ result.accepted }} 项，冲突或待核实 {{ result.conflicts }} 项。</strong></p>
+    <ul v-if="result" class="fams-timeline">
+      <li v-for="item in result.items" :key="item.itemId">应盘项 {{ item.itemId }}：{{ item.status === 'ACCEPTED' ? '已采信' : reviewProblems[item.code ?? ''] ?? '请核对当前结果' }}<small v-if="item.current?.reviewer_username">；{{ item.current.reviewer_username }} 于 {{ new Date(item.current.reviewed_at!).toLocaleString() }} 已处理</small></li>
+    </ul>
+
+    <div v-if="board" class="fams-table-scroll">
+      <table class="fams-table">
+        <thead><tr><th scope="col">选择</th><th scope="col" data-column-kind="identity">账面快照</th>
+          <th scope="col">原始现场观察</th><th scope="col">当前资产与复核</th></tr></thead>
+        <tbody>
+          <tr v-for="row in board.items" :key="row.item.id">
+            <td><label class="fams-selection"><input v-model="selected" :value="row.item.id" type="checkbox"
+              :disabled="locked || !row.canAcceptNormal" :aria-label="`选择 ${row.item.snapshot_json.assetCode}`" /></label></td>
+            <th scope="row" data-column-kind="identity"><strong>{{ row.item.snapshot_json.assetCode }} · {{ row.item.snapshot_json.name }}</strong><p>{{ row.item.snapshot_json.locationName || '未指定位置' }}</p><p>{{ modes[row.item.snapshot_json.custodyType ?? ''] || '待核实' }} · {{ row.item.snapshot_json.responsibleEmployeeName ?? row.item.snapshot_json.departmentResponsibleEmployeeName ?? '仓库保管' }}</p></th>
+            <td>
+              <template v-if="row.candidate">
+                <p>{{ outcomes[row.candidate.outcome] ?? '待核实' }} · 第 {{ row.item.recheck_generation + 1 }} 轮</p>
+                <p>位置：{{ row.candidate.facts_json.actual?.locationId === row.item.snapshot_json.locationId ? row.item.snapshot_json.locationName : row.candidate.facts_json.actual?.locationHint || row.candidate.facts_json.actual?.locationId || '未知' }}</p>
+                <p>{{ modes[row.candidate.facts_json.actual?.custodyType ?? ''] || '未知使用模式' }} · {{ conditions[row.candidate.facts_json.actual?.condition ?? ''] || '状况未知' }}</p>
+                <p v-if="row.candidate.facts_json.actual?.unknownReason">未知原因：{{ row.candidate.facts_json.actual.unknownReason }}</p>
+              </template>
+              <p v-else>尚无本轮观察候选</p>
+              <button class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="locked" @click="history(row)">查看全部原始证据</button>
+            </td>
+            <td>
+              <template v-if="row.current"><strong>{{ row.current.name }}</strong><p>{{ row.current.locationName || '位置待核实' }} · {{ modes[row.current.custodyType ?? ''] || '待核实' }}</p></template>
+              <p v-else>当前资产不可用</p>
+              <p v-if="row.review.reviewer_username">{{ row.review.reviewer_username }} 于 {{ new Date(row.review.reviewed_at!).toLocaleString() }} {{ row.review.review_status === 'SELECTED' ? '已选择待采信证据' : row.review.review_status === 'ACCEPTED' ? '已采信' : '已记录未观察' }}；原因：{{ row.review.reason }}</p>
+              <p v-if="row.blockedReason">{{ reviewProblems[row.blockedReason] ?? '须独立复核' }}</p>
+              <p v-if="row.movementEvents.length">期间业务事件 {{ row.movementEvents.length }} 条，不能仅凭当前位置相同判正常。</p>
+            </td>
+          </tr>
+          <tr v-if="!board.items.length" class="fams-table-empty"><td colspan="4"><strong>本页没有应盘项</strong>翻页或刷新后继续复核。</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="fams-pagination">
+      <div class="fams-pagination-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page === 1" @click="paginate(-1)">上页证据</button>
+        <span class="fams-pagination-page">第 {{ page }} 页</span>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || !board || page * 20 >= board.total" @click="paginate(1)">下页证据</button>
+      </div>
+    </div>
+
+    <fieldset v-if="board && ['IN_PROGRESS','WAITING_REVIEW'].includes(board.task.task_status)" class="fams-card fams-stack" :disabled="locked">
+      <label class="fams-field"><span class="fams-field-label">正常采信原因</span>
+        <textarea class="fams-control" v-model="reason" maxlength="1000" /></label>
+      <button class="fams-button" data-kind="primary" type="button" :disabled="!selected.length || !reason.trim()" @click="accept">逐项采信所选正常观察</button>
+    </fieldset>
+
     <template v-if="observations && board"><InventorySelectionPanel :key="observations.itemId" :task-id="taskId" :item-id="observations.itemId" :item-page="board.page" :observations="observations.rows" @invalid="clear" @changed="load" /></template>
     <template v-if="observations && board"><InventoryEvidenceDecisionPanel :key="observations.itemId" :task-id="taskId" :item-id="observations.itemId" :item-page="board.page" :observations="observations.rows" @invalid="clear" @changed="load" /></template>
     <template v-if="observations && board"><InventoryDifferencePanel v-for="row in board.items.filter(value => value.item.id === observations!.itemId)" :key="row.item.id" :task-id="taskId" :item="row" :item-page="board.page" :observation-ids="observations.rows.map(value => value.id)" @invalid="clear" /></template>
-    <section v-if="observations" class="panel"><h3>应盘项 {{ observations.itemId }} 的原始证据</h3><article v-for="observation in observations.rows" :key="observation.id"><p>证据 {{ observation.id }} · {{ outcomes[observation.outcome] ?? '待核实' }} · 接收于 {{ new Date(observation.received_at).toLocaleString() }}</p><p>观察于 {{ observation.facts_json.rawObservedAt ? new Date(observation.facts_json.rawObservedAt).toLocaleString() : '未保留或待核实' }}；照片 {{ observation.facts_json.photoIds?.length ?? 0 }} 张</p><p>位置 {{ observation.facts_json.actual?.locationHint || observation.facts_json.actual?.locationId || '未知' }}；责任线索 {{ observation.facts_json.actual?.responsibilityHint || observation.facts_json.actual?.responsibleEmployeeId || '待核实或仓库保管' }}</p><p>{{ observation.facts_json.actual?.description }}</p><InventoryPhotoEvidence v-if="observation.facts_json.photoIds?.length" :task-id="taskId" :event-id="observation.client_event_id" :photo-ids="observation.facts_json.photoIds" @invalid="clear" /></article><template v-for="row in board?.items.filter(item => item.item.id === observations!.itemId) ?? []" :key="row.item.id"><button :disabled="locked || observations.page === 1" @click="history(row,-1)">上页原始证据</button><button :disabled="locked || observations.page * 20 >= observations.total" @click="history(row,1)">下页原始证据</button></template></section>
+
+    <section v-if="observations" class="fams-card fams-stack">
+      <h3 class="fams-panel-title">应盘项 {{ observations.itemId }} 的原始证据</h3>
+      <article v-for="observation in observations.rows" :key="observation.id" class="fams-card">
+        <p>证据 {{ observation.id }} · {{ outcomes[observation.outcome] ?? '待核实' }} · 接收于 {{ new Date(observation.received_at).toLocaleString() }}</p>
+        <p>观察于 {{ observation.facts_json.rawObservedAt ? new Date(observation.facts_json.rawObservedAt).toLocaleString() : '未保留或待核实' }}；照片 {{ observation.facts_json.photoIds?.length ?? 0 }} 张</p>
+        <p>位置 {{ observation.facts_json.actual?.locationHint || observation.facts_json.actual?.locationId || '未知' }}；责任线索 {{ observation.facts_json.actual?.responsibilityHint || observation.facts_json.actual?.responsibleEmployeeId || '待核实或仓库保管' }}</p>
+        <p>{{ observation.facts_json.actual?.description }}</p>
+        <InventoryPhotoEvidence v-if="observation.facts_json.photoIds?.length" :task-id="taskId" :event-id="observation.client_event_id" :photo-ids="observation.facts_json.photoIds" @invalid="clear" />
+      </article>
+      <template v-for="row in board?.items.filter(item => item.item.id === observations!.itemId) ?? []" :key="row.item.id">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || observations.page === 1" @click="history(row,-1)">上页原始证据</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || observations.page * 20 >= observations.total" @click="history(row,1)">下页原始证据</button>
+      </template>
+    </section>
   </section>
 </template>
-<style scoped>
-table { width: 100%; border-collapse: collapse; text-align: left; } th, td { padding: 12px; border-bottom: 1px solid #e4e7ed; vertical-align: top; } button { margin: 8px; padding: 8px 12px; } textarea { display: block; width: 100%; min-height: 64px; } article { border-bottom: 1px solid #e4e7ed; padding: 8px; }
-</style>

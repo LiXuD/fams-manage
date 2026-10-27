@@ -72,30 +72,71 @@ watch(owner, () => { clear(); page.value = 1; void load(); }, { immediate: true 
 onBeforeUnmount(() => { live = false; clear(); });
 </script>
 <template>
-  <section aria-label="未盘原因与待复核">
-    <h3>未盘原因与待复核</h3><p>未盘不计正常。实物未找到须保留查找或正式报失义务，不能用原因文字或同步确认代替闭环。</p>
-    <p v-if="error" role="alert">{{ error }}</p><p v-if="notice">{{ notice }}</p>
-    <button :disabled="busy || confirming" @click="load">刷新未盘与就绪情况</button>
+  <section class="fams-card fams-stack" aria-label="未盘原因与待复核">
+    <div class="fams-panel-head">
+      <div>
+        <h3 class="fams-panel-title">未盘原因与待复核</h3>
+        <p class="fams-panel-subtitle">未盘不计正常。实物未找到须保留查找或正式报失义务，不能用原因文字或同步确认代替闭环。</p>
+      </div>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || confirming" @click="load">刷新未盘与就绪情况</button>
+      </div>
+    </div>
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+    <p v-if="notice" class="fams-notice" data-state="success" role="status"><strong>{{ notice }}</strong></p>
     <p v-if="view">尚无结果或明确原因 {{ view.missingCount }} 项；本轮明确未盘 {{ view.notObservedCount }} 项。</p>
-    <article v-for="row in view?.items ?? []" :key="row.item.id">
+    <article v-for="row in view?.items ?? []" :key="row.item.id" class="fams-card fams-stack">
       <p>{{ row.item.snapshot_json.assetCode }} · {{ row.item.snapshot_json.name }} · {{ row.item.review_status === 'NOT_OBSERVED' ? '明确未盘，不计正常' : row.item.review_status === 'ACCEPTED' ? '已采信' : '待核对' }}</p>
       <p v-if="row.item.reason_kind">{{ kinds[row.item.reason_kind] }} · {{ row.item.reason }} · {{ row.item.actor_username }}</p>
       <p v-if="row.physicalMissingOpen">实物未找到：真实查找或报失后续尚待闭环。</p>
-      <button :disabled="locked || !row.canRecord" @click="choose(row)">记录 {{ row.item.snapshot_json.assetCode }} 未盘原因</button>
-      <button :disabled="locked" @click="readHistory(row.item.id)">查看 {{ row.item.snapshot_json.assetCode }} 历次未盘原因</button>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="locked || !row.canRecord" @click="choose(row)">记录 {{ row.item.snapshot_json.assetCode }} 未盘原因</button>
+        <button class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="locked" @click="readHistory(row.item.id)">查看 {{ row.item.snapshot_json.assetCode }} 历次未盘原因</button>
+      </div>
     </article>
-    <fieldset v-if="chosen" :disabled="locked"><legend>明确记录本轮未盘</legend>
-      <label>未盘类型<select v-model="kind"><option v-for="(name, value) in kinds" :key="value" :value="value">{{ name }}</option></select></label>
-      <label>未盘原因<textarea v-model="reason" maxlength="1000" /></label><label>明确依据<textarea v-model="evidence" maxlength="2000" /></label>
-      <button :disabled="reason.trim().length < 3 || evidence.trim().length < 10" @click="prepareRecord">核对未盘记录</button>
+    <fieldset v-if="chosen" class="fams-card fams-stack" :disabled="locked">
+      <legend class="fams-panel-title">明确记录本轮未盘</legend>
+      <div class="fams-field-grid">
+        <label class="fams-field"><span class="fams-field-label">未盘类型</span>
+          <select class="fams-control" v-model="kind"><option v-for="(name, value) in kinds" :key="value" :value="value">{{ name }}</option></select></label>
+        <label class="fams-field"><span class="fams-field-label">未盘原因</span>
+          <textarea class="fams-control" v-model="reason" maxlength="1000" /></label>
+        <label class="fams-field"><span class="fams-field-label">明确依据</span>
+          <textarea class="fams-control" v-model="evidence" maxlength="2000" /></label>
+      </div>
+      <button class="fams-button" data-kind="primary" type="button" :disabled="reason.trim().length < 3 || evidence.trim().length < 10" @click="prepareRecord">核对未盘记录</button>
     </fieldset>
-    <fieldset v-if="view?.task.task_status === 'IN_PROGRESS'" :disabled="locked"><label>进入待复核原因<textarea v-model="waitingReason" maxlength="1000" /></label>
-      <button :disabled="!!view.missingCount || waitingReason.trim().length < 3" @click="prepareWaiting">核对进入待复核</button></fieldset>
-    <div v-if="confirming" role="group" aria-label="确认本次未盘或待复核处理"><p>{{ summary }}</p>
-      <button :disabled="busy" @click="send">确认保存本次处理</button><button :disabled="busy" @click="pending = null; confirming = false; summary = ''">返回核对</button></div>
-    <button v-if="pending && !confirming" :disabled="busy" @click="send">重试原未盘或待复核操作</button>
-    <button :disabled="locked || page === 1" @click="change(-1)">上页未盘检查</button><span>第 {{ page }} 页</span><button :disabled="locked || !view || page * 20 >= view.total" @click="change(1)">下页未盘检查</button>
-    <div v-if="historyItem"><h4>历次未盘原因</h4><p v-for="record in history" :key="record.id">第 {{ record.recheck_generation + 1 }} 轮 · {{ kinds[record.reason_kind] }} · {{ record.reason }} · {{ record.evidence }} · {{ record.actor_username }} · {{ record.recorded_at }}</p>
-      <button :disabled="locked || historyPage === 1" @click="readHistory(historyItem, historyPage - 1)">上页未盘历史</button><button :disabled="locked || historyPage * 20 >= historyTotal" @click="readHistory(historyItem, historyPage + 1)">下页未盘历史</button></div>
+    <fieldset v-if="view?.task.task_status === 'IN_PROGRESS'" class="fams-card fams-stack" :disabled="locked">
+      <label class="fams-field"><span class="fams-field-label">进入待复核原因</span>
+        <textarea class="fams-control" v-model="waitingReason" maxlength="1000" /></label>
+      <button class="fams-button" data-kind="primary" type="button" :disabled="!!view.missingCount || waitingReason.trim().length < 3" @click="prepareWaiting">核对进入待复核</button>
+    </fieldset>
+    <div v-if="confirming" class="fams-card fams-stack" role="group" aria-label="确认本次未盘或待复核处理"><p>{{ summary }}</p>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="send">确认保存本次处理</button>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="pending = null; confirming = false; summary = ''">返回核对</button>
+      </div>
+    </div>
+    <button v-if="pending && !confirming" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="send">重试原未盘或待复核操作</button>
+    <div class="fams-pagination">
+      <div class="fams-pagination-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page === 1" @click="change(-1)">上页未盘检查</button>
+        <span class="fams-pagination-page">第 {{ page }} 页</span>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || !view || page * 20 >= view.total" @click="change(1)">下页未盘检查</button>
+      </div>
+    </div>
+    <div v-if="historyItem" class="fams-card fams-stack">
+      <h4 class="fams-panel-title">历次未盘原因</h4>
+      <ul class="fams-timeline">
+        <li v-for="record in history" :key="record.id">第 {{ record.recheck_generation + 1 }} 轮 · {{ kinds[record.reason_kind] }} · {{ record.reason }}
+          <small>{{ record.evidence }} · {{ record.actor_username }} · {{ record.recorded_at }}</small></li>
+      </ul>
+      <div class="fams-pagination">
+        <div class="fams-pagination-actions">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || historyPage === 1" @click="readHistory(historyItem, historyPage - 1)">上页未盘历史</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || historyPage * 20 >= historyTotal" @click="readHistory(historyItem, historyPage + 1)">下页未盘历史</button>
+        </div>
+      </div>
+    </div>
   </section>
 </template>

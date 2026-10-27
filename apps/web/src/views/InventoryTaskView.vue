@@ -129,44 +129,168 @@ onMounted(async () => {
 });
 </script>
 <template>
-  <AppChrome><section class="panel"><h1>盘点任务</h1>
-    <p>发布时冻结应盘集合与责任快照。盘点不直接改变资产责任；执行人只查看自己的应盘项。</p>
-    <p v-if="error" role="alert" class="form-error">{{ error }}</p><button :disabled="locked" @click="refresh">刷新</button>
-    <button v-if="pending" :disabled="busy" @click="send(pending.path, pending.body, pending.version)">重试原操作</button>
-    <form v-if="admin" @submit.prevent="save"><h2>{{ editing ? "修改草稿" : "创建盘点草稿" }}</h2><fieldset :disabled="locked">
-      <label>任务名称<input v-model="name" required maxlength="128"></label>
-      <label>开始时间<input v-model="start" type="datetime-local" required></label><label>截止时间<input v-model="due" type="datetime-local" required></label>
-      <label v-for="field in ([['usingOrganizationId','使用部门','organization'],['owningOrganizationId','所属组织','organization'],['categoryId','分类','category'],['warehouseId','仓库','warehouse'],['locationId','位置','location']] as const)" :key="field[0]">{{ field[1] }}<select v-model="range[field[0]]"><option :value="null">全部</option><option v-for="c in catalogs[field[2]]" :key="c.id" :value="c.id">{{ c.name }}{{ c.status === "DISABLED" ? "（已停用）" : "" }}</option></select></label>
-      <label>生命周期<select v-model="range.lifecycle"><option :value="null">全部</option><option v-for="(text, value) in lifecycleLabels" :key="value" :value="value">{{ text }}</option></select></label>
-      <label>异常状态<select v-model="range.exception"><option :value="null">全部</option><option value="NORMAL">正常</option><option value="SEARCHING">查找中</option><option value="LOST">遗失</option></select></label>
-      <label>当前责任人<select v-model="range.responsibleEmployeeId"><option :value="null">全部</option><option v-for="c in catalogs.employee" :key="c.id" :value="c.id">{{ c.name }}{{ c.status === "DISABLED" ? "（已停用）" : "" }}</option></select></label><button type="submit">保存草稿</button>
-      <button v-if="editing" type="button" @click="editing = null; name = ''; range = emptyRange()">新建其他任务</button>
-    </fieldset></form>
-    <h2>{{ admin ? "全部任务" : "我的任务" }}</h2><button v-for="t in tasks" :key="t.id" :disabled="locked" @click="choose(t.id)">{{ t.name }} · {{ labels[t.task_status] }}{{ t.overdue ? ' · 逾期' : '' }}</button>
-    <button :disabled="locked || page === 1" @click="pages(-1)">上一页</button>{{ page }} / {{ Math.max(1, Math.ceil(total / 20)) }}<button :disabled="locked || page * 20 >= total" @click="pages(1)">下一页</button>
-    <section v-if="detail" class="panel"><h2>{{ detail.task.name }} · {{ labels[detail.task.task_status] }}</h2>
-      <p>开始 {{ new Date(detail.task.starts_at).toLocaleString() }} · 截止 {{ new Date(detail.task.due_at).toLocaleString() }}{{ detail.task.overdue ? ' · 已逾期，仍可执行' : '' }}</p>
-      <p v-if="detail.task.end_reason">结束原因：{{ detail.task.end_reason }}</p>
-      <fieldset v-if="admin" :disabled="locked"><button @click="copyRange">复制范围创建新草稿</button>
-        <template v-if="detail.task.task_status === 'DRAFT'"><button @click="edit">编辑草稿</button><button @click="previewPublishedRange">预览应盘数量</button><p v-if="preview">预计 {{ preview.count }} 项（待入库和未发布资产已排除）</p><button :disabled="!preview?.count" @click="publish">发布并冻结集合</button></template>
-        <button v-if="detail.task.task_status === 'READY'" @click="action('start')">手动开始</button>
-        <label>操作原因<textarea v-model="reason" maxlength="1000" /></label>
-        <button v-if="detail.task.task_status === 'DRAFT'" :disabled="!reason.trim()" @click="action('delete')">删除草稿</button>
-        <template v-if="['READY','IN_PROGRESS','WAITING_REVIEW'].includes(detail.task.task_status)"><button :disabled="!reason.trim()" @click="action('cancel')">取消无结果任务</button><button :disabled="!reason.trim()" @click="action('terminate')">终止并保留结果</button>
-          <label>主执行人<select v-model="executor"><option value="">请选择</option><option v-for="e in executors" :key="e.id" :value="e.id">{{ e.name }}</option></select></label><label><input v-model="recheck" type="checkbox">明确发起复盘（保留既有结果）</label><button :disabled="!selectedItems.length || !executor || !reason.trim() || detail.task.task_status === 'WAITING_REVIEW' && !recheck" @click="assign">分配所选应盘项</button></template>
+  <AppChrome>
+    <section v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></section>
+
+    <form v-if="admin" class="fams-panel fams-stack" @submit.prevent="save">
+      <div class="fams-panel-head">
+        <h2 class="fams-panel-title">{{ editing ? "修改草稿" : "创建盘点草稿" }}</h2>
+      </div>
+      <fieldset class="fams-stack" :disabled="locked">
+        <div class="fams-field-grid">
+          <label class="fams-field"><span class="fams-field-label">任务名称<span class="fams-field-required">*</span></span>
+            <input class="fams-control" v-model="name" required maxlength="128" /></label>
+          <label class="fams-field"><span class="fams-field-label">开始时间<span class="fams-field-required">*</span></span>
+            <input class="fams-control" v-model="start" type="datetime-local" required /></label>
+          <label class="fams-field"><span class="fams-field-label">截止时间<span class="fams-field-required">*</span></span>
+            <input class="fams-control" v-model="due" type="datetime-local" required /></label>
+          <label v-for="field in ([['usingOrganizationId','使用部门','organization'],['owningOrganizationId','所属组织','organization'],['categoryId','分类','category'],['warehouseId','仓库','warehouse'],['locationId','位置','location']] as const)" :key="field[0]" class="fams-field">
+            <span class="fams-field-label">{{ field[1] }}</span>
+            <select class="fams-control" v-model="range[field[0]]"><option :value="null">全部</option><option v-for="c in catalogs[field[2]]" :key="c.id" :value="c.id">{{ c.name }}{{ c.status === "DISABLED" ? "（已停用）" : "" }}</option></select>
+          </label>
+          <label class="fams-field"><span class="fams-field-label">生命周期</span>
+            <select class="fams-control" v-model="range.lifecycle"><option :value="null">全部</option><option v-for="(text, value) in lifecycleLabels" :key="value" :value="value">{{ text }}</option></select></label>
+          <label class="fams-field"><span class="fams-field-label">异常状态</span>
+            <select class="fams-control" v-model="range.exception"><option :value="null">全部</option><option value="NORMAL">正常</option><option value="SEARCHING">查找中</option><option value="LOST">遗失</option></select></label>
+          <label class="fams-field"><span class="fams-field-label">当前责任人</span>
+            <select class="fams-control" v-model="range.responsibleEmployeeId"><option :value="null">全部</option><option v-for="c in catalogs.employee" :key="c.id" :value="c.id">{{ c.name }}{{ c.status === "DISABLED" ? "（已停用）" : "" }}</option></select></label>
+        </div>
+        <div class="fams-form-actions">
+          <button class="fams-button" data-kind="primary" type="submit" :disabled="locked">保存草稿</button>
+          <button v-if="editing" class="fams-button" data-kind="secondary" type="button"
+            @click="editing = null; name = ''; range = emptyRange()">新建其他任务</button>
+        </div>
       </fieldset>
+    </form>
+
+    <section class="fams-panel fams-stack" aria-label="盘点任务列表">
+      <div class="fams-panel-head">
+        <h2 class="fams-panel-title">{{ admin ? "全部任务" : "我的任务" }}</h2>
+        <div class="fams-panel-actions">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked"
+            @click="refresh">刷新</button>
+          <button v-if="pending" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy"
+            @click="send(pending.path, pending.body, pending.version)">重试原操作</button>
+        </div>
+      </div>
+
+      <div class="fams-table-scroll">
+        <table class="fams-table">
+          <thead><tr><th scope="col" data-column-kind="identity">任务</th><th scope="col">状态</th>
+            <th scope="col">开始时间</th><th scope="col">截止时间</th>
+            <th scope="col" data-column-kind="action">操作</th></tr></thead>
+          <tbody>
+            <tr v-for="t in tasks" :key="t.id">
+              <th scope="row" data-column-kind="identity">{{ t.name }}</th>
+              <td><span class="fams-status" :data-tone="t.overdue ? 'warning' : 'info'">{{ labels[t.task_status] }}{{ t.overdue ? ' · 逾期' : '' }}</span></td>
+              <td>{{ new Date(t.starts_at).toLocaleString() }}</td>
+              <td>{{ new Date(t.due_at).toLocaleString() }}</td>
+              <td data-column-kind="action"><button class="fams-button" data-kind="link" data-size="sm" type="button"
+                :disabled="locked" @click="choose(t.id)">打开</button></td>
+            </tr>
+            <tr v-if="!tasks.length" class="fams-table-empty"><td colspan="5"><strong>当前范围没有盘点任务</strong>{{ admin ? '先在上方创建草稿并预览应盘数量。' : '等待管理员发布盘点任务后在此处理。' }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="fams-pagination">
+        <span class="fams-pagination-summary">共 {{ total }} 条</span>
+        <div class="fams-pagination-actions">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page === 1"
+            @click="pages(-1)">上一页</button>
+          <span class="fams-pagination-page">第 {{ page }} 页</span>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button"
+            :disabled="locked || page * 20 >= total" @click="pages(1)">下一页</button>
+        </div>
+      </div>
+    </section>
+
+    <section v-if="detail" class="fams-panel fams-stack" aria-label="盘点任务详情">
+      <div class="fams-panel-head">
+        <div>
+          <h2 class="fams-panel-title">{{ detail.task.name }}</h2>
+          <p class="fams-panel-subtitle">开始 {{ new Date(detail.task.starts_at).toLocaleString() }} · 截止
+            {{ new Date(detail.task.due_at).toLocaleString() }}{{ detail.task.overdue ? ' · 已逾期，仍可执行' : '' }}</p>
+        </div>
+        <div class="fams-panel-actions">
+          <span class="fams-status" :data-tone="detail.task.overdue ? 'warning' : 'info'">{{ labels[detail.task.task_status] }}</span>
+        </div>
+      </div>
+      <p v-if="detail.task.end_reason" class="fams-panel-subtitle">结束原因：{{ detail.task.end_reason }}</p>
+
+      <fieldset v-if="admin" class="fams-card fams-stack" :disabled="locked">
+        <legend class="fams-panel-title">任务操作</legend>
+        <div class="fams-panel-actions">
+          <button class="fams-button" data-kind="secondary" type="button" @click="copyRange">复制范围创建新草稿</button>
+          <template v-if="detail.task.task_status === 'DRAFT'">
+            <button class="fams-button" data-kind="secondary" type="button" @click="edit">编辑草稿</button>
+            <button class="fams-button" data-kind="secondary" type="button" @click="previewPublishedRange">预览应盘数量</button>
+            <button class="fams-button" data-kind="primary" type="button" :disabled="!preview?.count" @click="publish">发布并冻结集合</button>
+          </template>
+          <button v-if="detail.task.task_status === 'READY'" class="fams-button" data-kind="primary" type="button"
+            @click="action('start')">手动开始</button>
+        </div>
+        <p v-if="preview">预计 {{ preview.count }} 项（待入库和未发布资产已排除）</p>
+        <label class="fams-field"><span class="fams-field-label">操作原因</span>
+          <textarea class="fams-control" v-model="reason" maxlength="1000" /></label>
+        <div class="fams-panel-actions">
+          <button v-if="detail.task.task_status === 'DRAFT'" class="fams-button" data-kind="secondary" type="button"
+            :disabled="!reason.trim()" @click="action('delete')">删除草稿</button>
+          <template v-if="['READY','IN_PROGRESS','WAITING_REVIEW'].includes(detail.task.task_status)">
+            <button class="fams-button" data-kind="secondary" type="button" :disabled="!reason.trim()"
+              @click="action('cancel')">取消无结果任务</button>
+            <button class="fams-button" data-kind="secondary" type="button" :disabled="!reason.trim()"
+              @click="action('terminate')">终止并保留结果</button>
+          </template>
+        </div>
+        <div v-if="['READY','IN_PROGRESS','WAITING_REVIEW'].includes(detail.task.task_status)" class="fams-field-grid">
+          <label class="fams-field"><span class="fams-field-label">主执行人</span>
+            <select class="fams-control" v-model="executor"><option value="">请选择</option><option v-for="e in executors" :key="e.id" :value="e.id">{{ e.name }}</option></select></label>
+          <label class="fams-selection"><input v-model="recheck" type="checkbox" />明确发起复盘（保留既有结果）</label>
+        </div>
+        <div v-if="['READY','IN_PROGRESS','WAITING_REVIEW'].includes(detail.task.task_status)" class="fams-panel-actions">
+          <button class="fams-button" data-kind="primary" type="button"
+            :disabled="!selectedItems.length || !executor || !reason.trim() || detail.task.task_status === 'WAITING_REVIEW' && !recheck"
+            @click="assign">分配所选应盘项</button>
+        </div>
+      </fieldset>
+
       <InventoryReviewPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="detail.task.id" :task-id="detail.task.id" @changed="refresh" />
       <InventoryReadinessPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="`readiness:${detail.task.id}`" :task-id="detail.task.id" @changed="refresh" />
       <InventorySealPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="`seal:${detail.task.id}`" :task-id="detail.task.id" @changed="refresh" />
       <InventoryLatePanel v-if="admin && ['COMPLETED', 'CANCELLED', 'TERMINATED'].includes(detail.task.task_status)" :key="`late:${detail.task.id}`" :task-id="detail.task.id" />
       <InventorySynchronizationPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="`sync:${detail.task.id}`" :task-id="detail.task.id" />
       <InventoryFindingPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="`finding:${detail.task.id}`" :task-id="detail.task.id" @changed="refresh" />
-      <table><thead><tr><th v-if="admin">选择</th><th>资产</th><th>账面位置</th><th>账面责任</th><th>分配版本</th></tr></thead><tbody><tr v-for="i in detail.items" :key="i.id"><td v-if="admin"><input v-model="selectedItems" type="checkbox" :value="i.id" :disabled="locked || !['READY','IN_PROGRESS','WAITING_REVIEW'].includes(detail.task.task_status)"></td><td>{{ i.snapshot_json.assetCode }} · {{ i.snapshot_json.name }}</td><td>{{ i.snapshot_json.locationName }}</td><td>{{ i.snapshot_json.responsibleEmployeeName ?? i.snapshot_json.departmentResponsibleEmployeeName ?? '仓库保管' }}</td><td>{{ i.assignment_version }}</td></tr></tbody></table>
-      <button :disabled="locked || itemPage === 1" @click="pages(-1, true)">上页应盘项</button>{{ itemPage }} / {{ Math.max(1, Math.ceil(detail.total / 20)) }}<button :disabled="locked || itemPage * 20 >= detail.total" @click="pages(1, true)">下页应盘项</button>
+
+      <div class="fams-table-scroll">
+        <table class="fams-table">
+          <thead><tr><th v-if="admin" scope="col">选择</th><th scope="col" data-column-kind="identity">资产</th>
+            <th scope="col">账面位置</th><th scope="col">账面责任</th><th scope="col">分配版本</th></tr></thead>
+          <tbody>
+            <tr v-for="i in detail.items" :key="i.id">
+              <td v-if="admin"><label class="fams-selection"><input v-model="selectedItems" type="checkbox" :value="i.id"
+                :disabled="locked || !['READY','IN_PROGRESS','WAITING_REVIEW'].includes(detail.task.task_status)"
+                :aria-label="`选择 ${i.snapshot_json.assetCode}`" /></label></td>
+              <th scope="row" data-column-kind="identity">{{ i.snapshot_json.assetCode }} · {{ i.snapshot_json.name }}</th>
+              <td>{{ i.snapshot_json.locationName }}</td>
+              <td>{{ i.snapshot_json.responsibleEmployeeName ?? i.snapshot_json.departmentResponsibleEmployeeName ?? '仓库保管' }}</td>
+              <td class="u-number">{{ i.assignment_version }}</td>
+            </tr>
+            <tr v-if="!detail.items.length" class="fams-table-empty"><td :colspan="admin ? 5 : 4"><strong>本页没有应盘项</strong>翻页查看其余应盘集合。</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="fams-pagination">
+        <span class="fams-pagination-summary">共 {{ detail.total }} 项应盘</span>
+        <div class="fams-pagination-actions">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button"
+            :disabled="locked || itemPage === 1" @click="pages(-1, true)">上一页</button>
+          <span class="fams-pagination-page">第 {{ itemPage }} 页</span>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button"
+            :disabled="locked || itemPage * 20 >= detail.total" @click="pages(1, true)">下一页</button>
+        </div>
+      </div>
     </section>
-  </section></AppChrome>
+  </AppChrome>
 </template>
-<style scoped>
-label { display: block; margin: 12px 0; } input:not([type=checkbox]), select, textarea { display: block; padding: 8px; min-width: 260px; }
-button { margin: 8px; padding: 8px 12px; } table { width: 100%; text-align: left; } th, td { padding: 10px; }
-</style>

@@ -79,21 +79,50 @@ watch(identity, () => { epoch++; clear(); error.value = ""; notice.value = ""; p
 onBeforeUnmount(() => { live = false; epoch++; clear(); });
 </script>
 <template>
-  <section class="panel" aria-label="证据选择与时间核实"><h3>证据选择与时间核实</h3>
-    <p>从当前页本轮原始证据中明确选择。选择保留为待采信结论，不替代差异处理或最终采信。</p>
-    <p v-if="error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p>
-    <button :disabled="locked" @click="load">刷新选择与流转依据</button><button v-if="pending" :disabled="busy" @click="save">重试原证据选择</button>
-    <template v-if="data"><p v-if="data.review.review_status">本轮结论：{{ data.review.review_status === 'SELECTED' ? '待采信选择' : data.review.review_status === 'ACCEPTED' ? '已采信' : '未观察' }}，第 {{ data.review.version }} 版</p>
-      <fieldset :disabled="locked || !editable"><label>本轮原始证据<select v-model="choice"><option value="">请选择证据</option><option v-for="row in available" :key="row.id" :value="row.id">证据 {{ row.id }} · {{ outcomes[row.outcome] }} · 位置 {{ row.facts_json.actual?.locationHint || row.facts_json.actual?.locationId || '待核实' }} · 接收于 {{ new Date(row.received_at).toLocaleString() }}</option></select></label>
-        <label v-if="needsTime">核实后的现场观察时间（{{ localZone }}）<input v-model="time" type="datetime-local" step="0.001"></label>
-        <label>选择原因<textarea v-model="reason" minlength="3" maxlength="1000" /></label><label>明确核实依据<textarea v-model="evidence" minlength="10" maxlength="2000" /></label>
-        <button :disabled="!choice || reason.trim().length < 3 || evidence.trim().length < 10" @click="save">保存待采信选择</button>
+  <section class="fams-card fams-stack" aria-label="证据选择与时间核实">
+    <div class="fams-panel-head">
+      <div>
+        <h3 class="fams-panel-title">证据选择与时间核实</h3>
+        <p class="fams-panel-subtitle">从当前页本轮原始证据中明确选择。选择保留为待采信结论，不替代差异处理或最终采信。</p>
+      </div>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked" @click="load">刷新选择与流转依据</button>
+        <button v-if="pending" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="save">重试原证据选择</button>
+      </div>
+    </div>
+
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+    <p v-if="notice" class="fams-notice" data-state="success" role="status"><strong>{{ notice }}</strong></p>
+
+    <template v-if="data">
+      <p v-if="data.review.review_status" class="fams-panel-subtitle">本轮结论：{{ data.review.review_status === 'SELECTED' ? '待采信选择' : data.review.review_status === 'ACCEPTED' ? '已采信' : '未观察' }}，第 {{ data.review.version }} 版</p>
+      <fieldset class="fams-card fams-stack" :disabled="locked || !editable">
+        <label class="fams-field"><span class="fams-field-label">本轮原始证据</span>
+          <select class="fams-control" v-model="choice"><option value="">请选择证据</option><option v-for="row in available" :key="row.id" :value="row.id">证据 {{ row.id }} · {{ outcomes[row.outcome] }} · 位置 {{ row.facts_json.actual?.locationHint || row.facts_json.actual?.locationId || '待核实' }} · 接收于 {{ new Date(row.received_at).toLocaleString() }}</option></select></label>
+        <label v-if="needsTime" class="fams-field"><span class="fams-field-label">核实后的现场观察时间（{{ localZone }}）</span>
+          <input class="fams-control" v-model="time" type="datetime-local" step="0.001" /></label>
+        <div class="fams-field-grid">
+          <label class="fams-field"><span class="fams-field-label">选择原因</span>
+            <textarea class="fams-control" v-model="reason" minlength="3" maxlength="1000" /></label>
+          <label class="fams-field"><span class="fams-field-label">明确核实依据</span>
+            <textarea class="fams-control" v-model="evidence" minlength="10" maxlength="2000" /></label>
+        </div>
+        <button class="fams-button" data-kind="primary" type="button" :disabled="!choice || reason.trim().length < 3 || evidence.trim().length < 10" @click="save">保存待采信选择</button>
       </fieldset>
-      <h4>历次选择</h4><p v-if="!data.total">尚无显式选择记录。</p><article v-for="row in data.history" :key="row.review_version"><p>第 {{ row.review_version }} 版 · 证据 {{ row.observation_id }} · {{ row.actor_username }} · {{ new Date(row.recorded_at).toLocaleString() }}</p><p>观察时间：{{ new Date(row.verified_observed_at).toLocaleString() }}（{{ row.time_source === 'ADMIN_VERIFIED' ? '管理员核实' : '采集校准' }}）</p><p>{{ row.reason }}；依据：{{ row.evidence }}</p></article>
-      <button :disabled="locked || page === 1" @click="pages(-1)">上页选择记录</button>第 {{ page }} 页<button :disabled="locked || page * 20 >= data.total" @click="pages(1)">下页选择记录</button>
+
+      <h4 class="fams-panel-title">历次选择</h4>
+      <p v-if="!data.total" class="fams-panel-subtitle">尚无显式选择记录。</p>
+      <ul class="fams-timeline">
+        <li v-for="row in data.history" :key="row.review_version">第 {{ row.review_version }} 版 · 证据 {{ row.observation_id }} · {{ row.actor_username }} · {{ new Date(row.recorded_at).toLocaleString() }}<small>观察时间：{{ new Date(row.verified_observed_at).toLocaleString() }}（{{ row.time_source === 'ADMIN_VERIFIED' ? '管理员核实' : '采集校准' }}）</small><small>{{ row.reason }}；依据：{{ row.evidence }}</small></li>
+      </ul>
+
+      <div class="fams-pagination">
+        <div class="fams-pagination-actions">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page === 1" @click="pages(-1)">上页选择记录</button>
+          <span class="fams-pagination-page">第 {{ page }} 页</span>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page * 20 >= data.total" @click="pages(1)">下页选择记录</button>
+        </div>
+      </div>
     </template>
   </section>
 </template>
-<style scoped>
-label { display: block; margin: 8px 0; } textarea { display: block; width: 100%; min-height: 64px; } button { margin: 8px; padding: 8px 12px; } article { border-bottom: 1px solid #e4e7ed; }
-</style>

@@ -49,19 +49,22 @@ watch(scope, clear, { flush: "sync" });
 onBeforeUnmount(() => { live = false; clear(); });
 </script>
 <template>
-  <section aria-label="原始观察照片" class="photo-evidence">
-    <p>原始引用 {{ photoIds.length }} 张；未使用的上传不计入本次观察。</p>
-    <button :disabled="busy" @click="load">{{ loaded ? '刷新原始照片资料' : '查看原始照片资料' }}</button>
-    <p v-if="error" role="alert">{{ error }}</p>
-    <ul><li v-for="(row, index) in references" :key="`${index}:${row.objectId}`">
-      <template v-if="row.photo"><span>{{ row.photo.filename }}</span>
-        <button v-if="readablePhoto(row.photo)" :disabled="busy" @click="open(row)">读取照片 {{ index + 1 }}</button>
-        <span v-else>尚未通过扫描或格式不可读取，原始引用仍保留。</span>
-      </template><span v-else>照片 {{ index + 1 }} 元数据暂不可读取，原始引用 {{ row.objectId }} 仍保留。</span>
-    </li></ul>
-    <figure v-if="preview"><img :src="preview" :alt="`原始观察照片：${filename}`"><figcaption>{{ filename }}</figcaption><button @click="closePreview">关闭照片</button></figure>
+  <section class="fams-card fams-stack" aria-label="原始观察照片">
+    <p class="fams-panel-subtitle">原始引用 {{ photoIds.length }} 张；未使用的上传不计入本次观察。</p>
+    <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="load">{{ loaded ? '刷新原始照片资料' : '查看原始照片资料' }}</button>
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+    <ul class="fams-timeline">
+      <li v-for="(row, index) in references" :key="`${index}:${row.objectId}`">
+        <template v-if="row.photo"><span>{{ row.photo.filename }}</span>
+          <button v-if="readablePhoto(row.photo)" class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="busy" @click="open(row)">读取照片 {{ index + 1 }}</button>
+          <span v-else>尚未通过扫描或格式不可读取，原始引用仍保留。</span>
+        </template><span v-else>照片 {{ index + 1 }} 元数据暂不可读取，原始引用 {{ row.objectId }} 仍保留。</span>
+      </li>
+    </ul>
+    <figure v-if="preview" class="fams-card">
+      <img :src="preview" :alt="`原始观察照片：${filename}`">
+      <figcaption>{{ filename }}</figcaption>
+      <button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="closePreview">关闭照片</button>
+    </figure>
   </section>
 </template>
-<style scoped>
-.photo-evidence { padding: 12px; background: #f5f7fa; } img { max-width: 100%; max-height: 600px; object-fit: contain; } figure { margin: 12px 0; } button { margin: 8px; }
-</style>

@@ -75,18 +75,74 @@ watch([busy, pending], () => emit("busyChange", busy.value || !!pending.value), 
 watch(owner, () => { clear(); page.value = 1; error.value = ""; notice.value = ""; void load(); }, { immediate: true, flush: "sync" });
 onBeforeUnmount(() => { live = false; clear(); emit("busyChange", false); });
 </script>
-<template><section aria-label="迟到损坏独立维修"><h4>迟到损坏独立维修</h4><p>维修和原补充复核各有独立版本与待办。维修实际完成只关闭损坏义务；新复盘不会替代实际维修，原封存报告不改。</p>
-  <p v-if="error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p><button :disabled="busy || blocked || confirming" @click="load()">刷新独立损坏与当前资产</button>
-  <template v-if="context"><p>{{ context.currentAsset?.assetCode || context.assetId }} · {{ states[context.damage.damage_status] }} · 独立损坏第 {{ context.damage.version }} 版</p><p>原观察 {{ context.originalEvidence.rawObservedAt }} · 补充复核 {{ context.recheckResult }} · {{ context.todoOpen ? '仍有开放待办' : '两项待办均已结束' }}</p>
-    <router-link v-if="context.damage.repair_id" :to="'/repairs/' + context.damage.repair_id">查看正式维修 {{ context.damage.repair_id }}（上次核对 {{ context.damage.repair_status }}）</router-link>
-    <p v-for="row in context.history.items" :key="row.after_version">第 {{ row.after_version }} 版 · {{ methods[row.method] }} · {{ states[row.damage_status] }} · {{ row.actor_username }} · {{ row.reason }} · {{ row.evidence }} · 维修 {{ row.repair_id }}</p>
-    <button :disabled="locked || page === 1" @click="load(-1)">上页损坏历史</button><span>第 {{ page }} 页 · 共 {{ context.history.total }} 条</span><button :disabled="locked || page * 20 >= context.history.total" @click="load(1)">下页损坏历史</button>
-    <fieldset :disabled="locked || context.damage.damage_status === 'CLOSED'"><label>损坏处理<select v-model="method"><option v-for="(label,value) in methods" :key="value" :value="value">{{ label }}</option></select></label>
-      <template v-if="method !== 'REFRESH_REPAIR'"><label>实际发现损坏时间（本机时区）<input v-model="discoveredAt" type="datetime-local" step="0.001"></label><label><input v-model="checked" type="checkbox">已按实物和原始证据核实损坏</label><label><input v-model="timeChecked" type="checkbox">已独立核实发现时间，未直接采用异常设备时间</label>
-        <template v-if="method === 'FORMAL_REPAIR'"><label>实际故障<textarea v-model="fault" minlength="3" maxlength="2000" /></label><label>影响程度<select v-model="impact"><option value="LOW">低</option><option value="MEDIUM">中</option><option value="HIGH">高</option></select></label></template>
-        <template v-else><label>已有维修编号<input v-model="repairId" inputmode="numeric" @input="linked = null"></label><button @click="inspect">核对同资产维修</button><p v-if="linked">维修 {{ linked.id }} · 第 {{ linked.version }} 版 · {{ linked.status }}</p></template>
-      </template><label>处理原因<textarea v-model="reason" minlength="3" maxlength="1000" /></label><label>核实依据<textarea v-model="evidence" minlength="10" maxlength="2000" /></label><button @click="prepare">核对独立损坏处理</button>
-    </fieldset>
-  </template><div v-if="confirming" role="group" aria-label="确认独立损坏处理"><p>确认{{ methods[method] }}？本次仅追加损坏决定，其他待办及原报告不改。</p><button :disabled="busy || blocked" @click="send">确认保存独立损坏处理</button><button :disabled="busy" @click="pending = null; confirming = false">取消本次损坏处理</button></div><button v-if="pending && !confirming" :disabled="busy || blocked" @click="send">原键重试独立损坏处理</button>
-</section></template>
-<style scoped>label { display: block; margin: 8px 0; } textarea { display: block; width: min(100%, 720px); min-height: 64px; } button { margin: 6px; }</style>
+<template>
+  <section class="fams-card fams-stack" aria-label="迟到损坏独立维修">
+    <div class="fams-panel-head">
+      <div>
+        <h3 class="fams-panel-title">迟到损坏独立维修</h3>
+        <p class="fams-panel-subtitle">维修和原补充复核各有独立版本与待办。维修实际完成只关闭损坏义务；新复盘不会替代实际维修，原封存报告不改。</p>
+      </div>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || blocked || confirming" @click="load()">刷新独立损坏与当前资产</button>
+      </div>
+    </div>
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+    <p v-if="notice" class="fams-notice" data-state="success" role="status"><strong>{{ notice }}</strong></p>
+    <template v-if="context">
+      <p>{{ context.currentAsset?.assetCode || context.assetId }} · {{ states[context.damage.damage_status] }} · 独立损坏第 {{ context.damage.version }} 版</p>
+      <p>原观察 {{ context.originalEvidence.rawObservedAt }} · 补充复核 {{ context.recheckResult }} · {{ context.todoOpen ? '仍有开放待办' : '两项待办均已结束' }}</p>
+      <router-link v-if="context.damage.repair_id" class="fams-button" data-kind="link" :to="'/repairs/' + context.damage.repair_id">查看正式维修 {{ context.damage.repair_id }}（上次核对 {{ context.damage.repair_status }}）</router-link>
+      <ul class="fams-timeline">
+        <li v-for="row in context.history.items" :key="row.after_version">第 {{ row.after_version }} 版 · {{ methods[row.method] }} · {{ states[row.damage_status] }} · {{ row.actor_username }}
+          <small>{{ row.reason }} · {{ row.evidence }} · 维修 {{ row.repair_id }}</small></li>
+      </ul>
+      <div class="fams-pagination">
+        <span class="fams-pagination-summary">共 {{ context.history.total }} 条</span>
+        <div class="fams-pagination-actions">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page === 1" @click="load(-1)">上页损坏历史</button>
+          <span class="fams-pagination-page">第 {{ page }} 页</span>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page * 20 >= context.history.total" @click="load(1)">下页损坏历史</button>
+        </div>
+      </div>
+      <fieldset class="fams-card fams-stack" :disabled="locked || context.damage.damage_status === 'CLOSED'">
+        <label class="fams-field"><span class="fams-field-label">损坏处理</span>
+          <select class="fams-control" v-model="method"><option v-for="(label,value) in methods" :key="value" :value="value">{{ label }}</option></select></label>
+        <template v-if="method !== 'REFRESH_REPAIR'">
+          <label class="fams-field"><span class="fams-field-label">实际发现损坏时间（本机时区）</span>
+            <input class="fams-control" v-model="discoveredAt" type="datetime-local" step="0.001" /></label>
+          <div class="fams-selection-group">
+            <label class="fams-selection"><input v-model="checked" type="checkbox" />已按实物和原始证据核实损坏</label>
+            <label class="fams-selection"><input v-model="timeChecked" type="checkbox" />已独立核实发现时间，未直接采用异常设备时间</label>
+          </div>
+          <template v-if="method === 'FORMAL_REPAIR'">
+            <label class="fams-field"><span class="fams-field-label">实际故障</span>
+              <textarea class="fams-control" v-model="fault" minlength="3" maxlength="2000" /></label>
+            <label class="fams-field"><span class="fams-field-label">影响程度</span>
+              <select class="fams-control" v-model="impact"><option value="LOW">低</option><option value="MEDIUM">中</option><option value="HIGH">高</option></select></label>
+          </template>
+          <template v-else>
+            <div class="fams-field-row">
+              <label class="fams-field"><span class="fams-field-label">已有维修编号</span>
+                <input class="fams-control" v-model="repairId" inputmode="numeric" @input="linked = null" /></label>
+              <button class="fams-button" data-kind="secondary" type="button" @click="inspect">核对同资产维修</button>
+            </div>
+            <p v-if="linked">维修 {{ linked.id }} · 第 {{ linked.version }} 版 · {{ linked.status }}</p>
+          </template>
+        </template>
+        <label class="fams-field"><span class="fams-field-label">处理原因</span>
+          <textarea class="fams-control" v-model="reason" minlength="3" maxlength="1000" /></label>
+        <label class="fams-field"><span class="fams-field-label">核实依据</span>
+          <textarea class="fams-control" v-model="evidence" minlength="10" maxlength="2000" /></label>
+        <button class="fams-button" data-kind="primary" type="button" @click="prepare">核对独立损坏处理</button>
+      </fieldset>
+    </template>
+    <div v-if="confirming" class="fams-card fams-stack" role="group" aria-label="确认独立损坏处理">
+      <p>确认{{ methods[method] }}？本次仅追加损坏决定，其他待办及原报告不改。</p>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="primary" type="button" :disabled="busy || blocked" @click="send">确认保存独立损坏处理</button>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="pending = null; confirming = false">取消本次损坏处理</button>
+      </div>
+    </div>
+    <button v-if="pending && !confirming" class="fams-button" data-kind="secondary" type="button" :disabled="busy || blocked" @click="send">原键重试独立损坏处理</button>
+  </section>
+</template>

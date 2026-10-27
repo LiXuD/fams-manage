@@ -100,21 +100,57 @@ watch(identity, () => { epoch++; clear(); error.value = ""; page.value = 1; if (
 onBeforeUnmount(() => { live = false; epoch++; clear(); });
 </script>
 <template>
-  <section class="panel" aria-label="证据处置与最终采信"><h3>证据处置与最终采信</h3><p>原始事件全部保留。反证须明确说明事实为何不成立；补充线索不能代替真实差异闭环。</p>
-    <p v-if="error" role="alert">{{ error }}</p><button :disabled="locked" @click="load">刷新证据处置</button><button v-if="pending" :disabled="busy" @click="send()">重试原证据处置</button>
-    <template v-if="selection"><p v-if="selection.review.observation_id">当前选择：证据 {{ selection.review.observation_id }} · {{ selection.review.review_status === 'ACCEPTED' ? '已采信' : '待采信' }}</p><p v-else>请先明确选择本轮证据。</p>
-      <fieldset :disabled="locked || !active || !selection.review.observation_id"><label>待处理原始证据<select v-model="target" @change="readSubjects"><option value="">请选择</option><option v-for="row in available" :key="row.id" :value="row.id">证据 {{ row.id }} · {{ row.id === selection.review.observation_id ? '当前所选' : '未选证据' }} · 位置 {{ row.facts_json.actual?.locationHint || row.facts_json.actual?.locationId || '待核实' }}</option></select></label>
-        <p v-for="row in subjects" :key="row.dimension">{{ dimensions[row.dimension] || row.dimension }}：{{ statuses[row.subject_status] }} · 第 {{ row.version }} 版<span v-if="row.reviewer_username"> · {{ row.reviewer_username }}</span></p>
-        <label>处理方式<select v-model="method"><option v-if="chosen" value="VERIFY_SELECTED">核实所选证据的冲突、旧分配或时间依据</option><template v-else><option value="REJECT_EVIDENCE">以明确反证拒绝这条未选证据</option><option value="SUPPLEMENTAL">保留为补充线索，物理差异继续处理</option></template></select></label>
-        <label>处理原因<textarea v-model="reason" minlength="3" maxlength="1000" /></label><label>明确反证或核实依据<textarea v-model="evidence" minlength="10" maxlength="2000" /></label>
-        <button :disabled="!target || chosen && !references.length || reason.trim().length < 3 || evidence.trim().length < 10" @click="send(false)">共同提交证据处置</button>
-        <button :disabled="selection.review.review_status !== 'SELECTED' || reason.trim().length < 3 || evidence.trim().length < 10" @click="send(true)">最终采信所选证据</button>
+  <section class="fams-card fams-stack" aria-label="证据处置与最终采信">
+    <div class="fams-panel-head">
+      <div>
+        <h3 class="fams-panel-title">证据处置与最终采信</h3>
+        <p class="fams-panel-subtitle">原始事件全部保留。反证须明确说明事实为何不成立；补充线索不能代替真实差异闭环。</p>
+      </div>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked" @click="load">刷新证据处置</button>
+        <button v-if="pending" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="send()">重试原证据处置</button>
+      </div>
+    </div>
+
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+
+    <template v-if="selection">
+      <p v-if="selection.review.observation_id" class="fams-panel-subtitle">当前选择：证据 {{ selection.review.observation_id }} · {{ selection.review.review_status === 'ACCEPTED' ? '已采信' : '待采信' }}</p>
+      <p v-else class="fams-panel-subtitle">请先明确选择本轮证据。</p>
+
+      <fieldset class="fams-card fams-stack" :disabled="locked || !active || !selection.review.observation_id">
+        <label class="fams-field"><span class="fams-field-label">待处理原始证据</span>
+          <select class="fams-control" v-model="target" @change="readSubjects"><option value="">请选择</option><option v-for="row in available" :key="row.id" :value="row.id">证据 {{ row.id }} · {{ row.id === selection.review.observation_id ? '当前所选' : '未选证据' }} · 位置 {{ row.facts_json.actual?.locationHint || row.facts_json.actual?.locationId || '待核实' }}</option></select></label>
+        <ul v-if="subjects.length" class="fams-timeline">
+          <li v-for="row in subjects" :key="row.dimension">{{ dimensions[row.dimension] || row.dimension }}：{{ statuses[row.subject_status] }} · 第 {{ row.version }} 版<span v-if="row.reviewer_username"> · {{ row.reviewer_username }}</span></li>
+        </ul>
+        <label class="fams-field"><span class="fams-field-label">处理方式</span>
+          <select class="fams-control" v-model="method"><option v-if="chosen" value="VERIFY_SELECTED">核实所选证据的冲突、旧分配或时间依据</option><template v-else><option value="REJECT_EVIDENCE">以明确反证拒绝这条未选证据</option><option value="SUPPLEMENTAL">保留为补充线索，物理差异继续处理</option></template></select></label>
+        <div class="fams-field-grid">
+          <label class="fams-field"><span class="fams-field-label">处理原因</span>
+            <textarea class="fams-control" v-model="reason" minlength="3" maxlength="1000" /></label>
+          <label class="fams-field"><span class="fams-field-label">明确反证或核实依据</span>
+            <textarea class="fams-control" v-model="evidence" minlength="10" maxlength="2000" /></label>
+        </div>
+        <div class="fams-panel-actions">
+          <button class="fams-button" data-kind="primary" type="button" :disabled="!target || chosen && !references.length || reason.trim().length < 3 || evidence.trim().length < 10" @click="send(false)">共同提交证据处置</button>
+          <button class="fams-button" data-kind="secondary" type="button" :disabled="selection.review.review_status !== 'SELECTED' || reason.trim().length < 3 || evidence.trim().length < 10" @click="send(true)">最终采信所选证据</button>
+        </div>
       </fieldset>
-      <h4>未选证据处置记录</h4><p v-if="!total">尚无反证或补充处置。</p><article v-for="row in dispositions" :key="row.observation_id"><p>证据 {{ row.observation_id }} · {{ row.disposition === 'REJECTED' ? '有反证拒绝' : '补充线索' }}；反证依据选择 {{ row.counter_observation_id }} 第 {{ row.counter_review_version }} 版</p><p>{{ row.actor_username }} · {{ new Date(row.recorded_at).toLocaleString() }}；{{ row.reason }}；{{ row.evidence }}</p></article>
-      <button :disabled="locked || page === 1" @click="pages(-1)">上页处置记录</button>第 {{ page }} 页<button :disabled="locked || page * 20 >= total" @click="pages(1)">下页处置记录</button>
+
+      <h4 class="fams-panel-title">未选证据处置记录</h4>
+      <p v-if="!total" class="fams-panel-subtitle">尚无反证或补充处置。</p>
+      <ul class="fams-timeline">
+        <li v-for="row in dispositions" :key="row.observation_id">证据 {{ row.observation_id }} · {{ row.disposition === 'REJECTED' ? '有反证拒绝' : '补充线索' }}；反证依据选择 {{ row.counter_observation_id }} 第 {{ row.counter_review_version }} 版<small>{{ row.actor_username }} · {{ new Date(row.recorded_at).toLocaleString() }}；{{ row.reason }}；{{ row.evidence }}</small></li>
+      </ul>
+
+      <div class="fams-pagination">
+        <div class="fams-pagination-actions">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page === 1" @click="pages(-1)">上页处置记录</button>
+          <span class="fams-pagination-page">第 {{ page }} 页</span>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page * 20 >= total" @click="pages(1)">下页处置记录</button>
+        </div>
+      </div>
     </template>
   </section>
 </template>
-<style scoped>
-label { display: block; margin: 8px 0; } textarea { display: block; width: 100%; min-height: 64px; } button { margin: 8px; padding: 8px 12px; } article { border-bottom: 1px solid #e4e7ed; }
-</style>

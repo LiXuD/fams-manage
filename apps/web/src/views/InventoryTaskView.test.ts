@@ -21,7 +21,7 @@ describe("inventory task management", () => {
   });
   const wrapper = mount(InventoryTaskView); await flushPromises();
   const button = (text: string) => wrapper.findAll("button").find(row => row.text() === text)!;
-  await button("固定范围 · 草稿").trigger("click"); await flushPromises();
+  await button("打开").trigger("click"); await flushPromises();
   expect(button("发布并冻结集合").attributes("disabled")).toBeDefined();
   await button("预览应盘数量").trigger("click"); await flushPromises();
   expect(wrapper.text()).toContain("预计 2 项");
