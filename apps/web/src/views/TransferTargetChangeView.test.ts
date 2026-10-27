@@ -2,8 +2,13 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import TransferTargetChangeView from "./TransferTargetChangeView.vue";
 const state = vi.hoisted(() => ({ request: vi.fn(), roles: ["ASSET_ADMIN"] }));
-vi.mock("@/components/AppChrome.vue", () => ({ default: { template: "<main><slot /></main>" } }));
-vi.mock("vue-router", () => ({ useRoute: () => ({ query: {} }) }));
+vi.mock("@/components/AppChrome.vue", async () => {
+  const { useRoute } = await import("vue-router");
+  return { default: { template: '<main><header><h1>{{ m.uiTitle }}</h1><p>{{ m.uiDesc }}</p><slot name="actions" /></header><slot /></main>',
+    setup: () => ({ m: useRoute().meta }) } };
+});
+vi.mock("vue-router", () => ({ useRoute: () => ({ query: {}, meta: { uiTitle: "调拨目标变更",
+  uiDesc: "仅修改未完成明细的批准目标。原责任、已交出地点及物理锁保持，新目标仍按原业务实际接收或现场收妥。" } }) }));
 vi.mock("@/auth/sessionStore", () => ({ useSessionStore: () => ({ user: { roles: state.roles } }) }));
 vi.mock("@/loan/api", () => ({ loanRequest: state.request, loanMessage: () => "结果尚未确认" }));
 vi.mock("@/requisition/api", () => ({ requisitionRequest: async () => ({ items: [] }) }));

@@ -28,7 +28,7 @@ async function fixture() {
   const wrapper = mount(TransferView, { global: { plugins: [pinia, router], stubs: { AppChrome: { template: "<main><slot /></main>" } } } });
   await flushPromises();
   const button = (text: string) => wrapper.findAll("button").find(b => b.text() === text)!;
-  await button("A2 · 电脑 · 二楼").trigger("click"); await flushPromises();
+  await button("核对并接收").trigger("click"); await flushPromises();
   return { wrapper, writes, button };
 }
 

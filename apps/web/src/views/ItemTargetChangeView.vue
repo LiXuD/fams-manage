@@ -80,42 +80,66 @@ onMounted(async () => {
 </script>
 
 <template>
-  <AppChrome><main class="target-page"><h1>领用与借用目标变更</h1>
-    <p>仅变更未完成明细。已交出的实物保持原交出记录和占用锁，批准不会提前转移资产责任。</p>
-    <p v-if="error" role="alert">{{ error }}</p>
-    <button :disabled="busy" @click="refresh">刷新</button>
-    <button v-if="pending" :disabled="busy" @click="send(pending.path, pending.body, pending.version)">重试原操作</button>
-    <form v-if="snapshot && target && warehouse" @submit.prevent="propose">
-      <h2>提请目标变更 · {{ snapshot.assetCode }}</h2>
-      <p>原目标：{{ name('organization', snapshot.target.organizationId) }} / {{ name('employee', snapshot.target.employeeId) }} / {{ name('location', snapshot.target.locationId) }}</p>
-      <p v-for="handover in snapshot.handover" :key="handover.deliveredAt">已交出地点：{{ handover.destinationText }} · {{ handover.deliveredAt }}</p>
-      <fieldset :disabled="locked"><label>使用方式<select v-model="target.custodyType"><option value="PERSONAL">个人使用</option><option value="SHARED">部门公用（借用不适用）</option></select></label>
-        <label>新使用组织<select :value="target.organizationId" @change="setReference('organization', $event)"><option v-for="c in catalogs.organization" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
-        <label>新责任人员<select required :value="target.employeeId" @change="setReference('employee', $event)"><option value="" disabled>请选择</option><option v-for="c in catalogs.employee?.filter(c => c.organizationId === target!.organizationId)" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
-        <label>新固定位置<select :value="target.locationId" @change="setReference('location', $event)"><option v-for="c in catalogs.location" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
-        <label>变更原因<textarea v-model="reason" required maxlength="1000" /></label>
-        <label>实物资产编码<input v-model="observedCode" required maxlength="128"></label>
-        <label>实物去向与核对记录<textarea v-model="physicalVerification" required maxlength="1000" /></label>
-        <label><input v-model="physicalChecked" type="checkbox" required>已核对实物及去向，未将已交出资产自动退回库存</label>
-        <button type="submit">提交目标变更</button></fieldset>
-    </form>
-    <h2>变更记录</h2>
-    <button v-for="row in rows" :key="row.id" :disabled="locked" @click="selected = row">{{ row.source_snapshot_json.assetCode }} · {{ labels[row.change_status] }}</button>
-    <div><button :disabled="locked || page === 1" @click="page--; refresh()">上一页</button> {{ page }} / {{ Math.max(1, Math.ceil(total / 20)) }} <button :disabled="locked || page * 20 >= total" @click="page++; refresh()">下一页</button></div>
-    <section v-if="selected"><h2>目标变更 #{{ selected.id }} · {{ labels[selected.change_status] }}</h2>
-      <p>原目标：{{ name('organization', selected.source_snapshot_json.target.organizationId) }} / {{ name('employee', selected.source_snapshot_json.target.employeeId) }} / {{ name('location', selected.source_snapshot_json.target.locationId) }}</p>
-      <p>新目标：{{ selected.proposed_target_json.custodyType === 'PERSONAL' ? '个人使用' : '部门公用' }} · {{ name('organization', selected.proposed_target_json.organizationId) }} / {{ name('employee', selected.proposed_target_json.employeeId) }} / {{ name('location', selected.proposed_target_json.locationId) }}</p>
-      <p>原因：{{ selected.reason }}</p><p>实物核对：{{ selected.physical_verification }}</p>
-      <p v-for="h in selected.source_snapshot_json.handover" :key="h.deliveredAt">原交出地点：{{ h.destinationText }}</p>
-      <p v-if="selected.decision_reason">管理员意见：{{ selected.decision_reason }}</p>
-      <router-link :to="{ path: '/requisitions', query: { id: selected.business_id } }">查看原申请</router-link>
-      <fieldset v-if="admin && selected.change_status === 'PENDING'" :disabled="locked"><label>核验意见<textarea v-model="decisionReason" maxlength="1000" /></label><button :disabled="!decisionReason.trim()" @click="decide('APPROVED')">批准目标变更</button><button :disabled="!decisionReason.trim()" @click="decide('REJECTED')">驳回</button></fieldset>
+  <AppChrome>
+    <template #actions>
+      <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="refresh">刷新</button>
+    </template>
+    <section class="fams-panel fams-stack" aria-label="领用与借用目标变更">
+      <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+      <button v-if="pending" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="send(pending.path, pending.body, pending.version)">重试原操作</button>
+      <form v-if="snapshot && target && warehouse" class="fams-card fams-stack" @submit.prevent="propose">
+        <div class="fams-panel-head">
+          <div>
+            <h3 class="fams-panel-title">提请目标变更 · {{ snapshot.assetCode }}</h3>
+            <p class="fams-panel-subtitle">原目标：{{ name('organization', snapshot.target.organizationId) }} / {{ name('employee', snapshot.target.employeeId) }} / {{ name('location', snapshot.target.locationId) }}</p>
+          </div>
+        </div>
+        <ul v-if="snapshot.handover.length" class="fams-timeline">
+          <li v-for="handover in snapshot.handover" :key="handover.deliveredAt">已交出地点：{{ handover.destinationText }}<small>{{ handover.deliveredAt }}</small></li>
+        </ul>
+        <fieldset class="fams-stack" :disabled="locked">
+          <div class="fams-field-grid">
+            <label class="fams-field"><span class="fams-field-label">使用方式</span><select class="fams-control" v-model="target.custodyType"><option value="PERSONAL">个人使用</option><option value="SHARED">部门公用（借用不适用）</option></select></label>
+            <label class="fams-field"><span class="fams-field-label">新使用组织</span><select class="fams-control" :value="target.organizationId" @change="setReference('organization', $event)"><option v-for="c in catalogs.organization" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
+            <label class="fams-field"><span class="fams-field-label">新责任人员</span><select class="fams-control" required :value="target.employeeId" @change="setReference('employee', $event)"><option value="" disabled>请选择</option><option v-for="c in catalogs.employee?.filter(c => c.organizationId === target!.organizationId)" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
+            <label class="fams-field"><span class="fams-field-label">新固定位置</span><select class="fams-control" :value="target.locationId" @change="setReference('location', $event)"><option v-for="c in catalogs.location" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
+            <label class="fams-field fams-field-wide"><span class="fams-field-label">变更原因</span><textarea class="fams-control" v-model="reason" required maxlength="1000" /></label>
+            <label class="fams-field"><span class="fams-field-label">实物资产编码</span><input class="fams-control" v-model="observedCode" required maxlength="128"></label>
+            <label class="fams-field fams-field-wide"><span class="fams-field-label">实物去向与核对记录</span><textarea class="fams-control" v-model="physicalVerification" required maxlength="1000" /></label>
+          </div>
+          <label class="fams-selection"><input v-model="physicalChecked" type="checkbox" required>已核对实物及去向，未将已交出资产自动退回库存</label>
+          <div class="fams-form-actions"><button class="fams-button" data-kind="primary" type="submit">提交目标变更</button></div>
+        </fieldset>
+      </form>
+      <div class="fams-panel-head"><h3 class="fams-panel-title">变更记录</h3></div>
+      <ul class="fams-timeline">
+        <li v-for="row in rows" :key="row.id"><button class="fams-button" data-size="sm" type="button" :disabled="locked" @click="selected = row">{{ row.source_snapshot_json.assetCode }} · {{ labels[row.change_status] }}</button></li>
+      </ul>
+      <div class="fams-pagination">
+        <span class="fams-pagination-page">{{ page }} / {{ Math.max(1, Math.ceil(total / 20)) }}</span>
+        <div class="fams-pagination-actions">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page === 1" @click="page--; refresh()">上一页</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page * 20 >= total" @click="page++; refresh()">下一页</button>
+        </div>
+      </div>
+      <section v-if="selected" class="fams-card fams-stack">
+        <div class="fams-panel-head"><h3 class="fams-panel-title">目标变更 #{{ selected.id }} · {{ labels[selected.change_status] }}</h3></div>
+        <p>原目标：{{ name('organization', selected.source_snapshot_json.target.organizationId) }} / {{ name('employee', selected.source_snapshot_json.target.employeeId) }} / {{ name('location', selected.source_snapshot_json.target.locationId) }}</p>
+        <p>新目标：{{ selected.proposed_target_json.custodyType === 'PERSONAL' ? '个人使用' : '部门公用' }} · {{ name('organization', selected.proposed_target_json.organizationId) }} / {{ name('employee', selected.proposed_target_json.employeeId) }} / {{ name('location', selected.proposed_target_json.locationId) }}</p>
+        <p>原因：{{ selected.reason }}</p><p>实物核对：{{ selected.physical_verification }}</p>
+        <ul v-if="selected.source_snapshot_json.handover.length" class="fams-timeline">
+          <li v-for="h in selected.source_snapshot_json.handover" :key="h.deliveredAt">原交出地点：{{ h.destinationText }}</li>
+        </ul>
+        <p v-if="selected.decision_reason">管理员意见：{{ selected.decision_reason }}</p>
+        <router-link class="fams-button" data-kind="link" :to="{ path: '/requisitions', query: { id: selected.business_id } }">查看原申请</router-link>
+        <fieldset v-if="admin && selected.change_status === 'PENDING'" class="fams-stack" :disabled="locked">
+          <label class="fams-field fams-field-wide"><span class="fams-field-label">核验意见</span><textarea class="fams-control" v-model="decisionReason" maxlength="1000" /></label>
+          <div class="fams-inline">
+            <button class="fams-button" data-kind="primary" type="button" :disabled="!decisionReason.trim()" @click="decide('APPROVED')">批准目标变更</button>
+            <button class="fams-button" data-kind="danger" type="button" :disabled="!decisionReason.trim()" @click="decide('REJECTED')">驳回</button>
+          </div>
+        </fieldset>
+      </section>
     </section>
-  </main></AppChrome>
+  </AppChrome>
 </template>
-<style scoped>
-.target-page { max-width: 1100px; margin: auto; padding: 24px; }
-label { display: block; margin: 12px 0; } input:not([type=checkbox]), select, textarea { display: block; min-width: 320px; padding: 8px; }
-button { margin: 8px; padding: 8px 14px; } form, section { margin: 20px 0; padding: 20px; border: 1px solid #d7dee8; }
-[role=alert] { color: #b42318; }
-</style>

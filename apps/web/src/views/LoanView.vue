@@ -131,70 +131,169 @@ onMounted(async () => {
 </script>
 
 <template>
-  <AppChrome><section class="panel">
-    <h1>借用、延期与退还</h1>
-    <p v-if="error" class="form-error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p>
-    <button :disabled="busy" @click="refresh">刷新</button>
-    <button v-if="retryable" :disabled="busy" @click="retry">重试上次操作</button>
-    <label>操作原因 / 验收说明 <textarea v-model="reason" :disabled="busy || retryable" maxlength="1000" /></label>
-    <h2>借用记录</h2>
-    <table><thead><tr><th>资产</th><th>预计归还日</th><th>状态</th><th>操作</th></tr></thead><tbody>
-      <tr v-for="row in loans" :key="row.id"><td>{{ row.assetCode }} · {{ row.name }}</td><td>{{ row.expectedReturnDate }}</td>
-        <td>{{ labels[row.relationStatus] }}{{ row.overdue ? ' · 已逾期' : '' }}</td>
-        <td><button :disabled="busy || retryable" @click="choose(row.id)">查看 / 延期 / 归还</button></td></tr>
-    </tbody></table><p v-if="!loans.length">当前范围没有借用记录。</p>
-    <div v-if="selected" class="panel">
-      <h3>{{ selected.assetCode }} · {{ selected.name }}</h3>
-      <p>借出日 {{ selected.borrowedDate }}；原归还日 {{ selected.originalReturnDate }}；当前归还日 {{ selected.expectedReturnDate }}</p>
-      <p v-if="selected.lostLiability">资产已确认遗失，保留责任追踪。</p>
-      <p v-for="reminder in selected.reminders" :key="reminder.id">{{ reminder.reminderBusinessDate }} · {{ reminder.reminderType }}
-        <span v-if="reminder.overdueFrom"> · 逾期起始 {{ reminder.overdueFrom }}</span></p>
-      <p v-for="history in selected.extensions" :key="history.id">延期至 {{ history.requestedDueDate }} · {{ labels[history.extensionStatus] }}
-        <span v-if="history.overdueFrom"> · 历史逾期 {{ history.overdueFrom }} 至 {{ history.overdueThrough }}</span></p>
-      <label>新的预计归还日 <input v-model="due" type="date" :disabled="busy || retryable" /></label>
-      <button v-if="selected.relationStatus === 'OPEN'" :disabled="busy || retryable" @click="extend()">提请延期</button>
-      <button v-if="selected.relationStatus === 'OPEN'" :disabled="busy || retryable" @click="proposeReturn">申请归还</button>
-    </div>
-    <details><summary>接收前借用延期</summary><p>选择待交接的借用申请；管理员批准后，实际接收时重新校验日期。</p>
-      <label>借用申请 <select v-model="requestId" :disabled="busy || retryable" @change="chooseBorrowRequest"><option value="">请选择</option>
-        <option v-for="request in borrowRequests" :key="request.id" :value="request.id">借用 {{ request.id }} · {{ request.expectedReturnDate }}</option></select></label>
-      <label>预计归还日 <input v-model="due" type="date" :disabled="busy || retryable" /></label>
-      <button :disabled="busy || retryable" @click="extend(true)">提请接收前延期</button>
-    </details>
-    <h2>延期审批与历史</h2>
-    <div v-for="row in extensions" :key="row.id" class="panel"><p>{{ row.id }} · {{ row.originalDueDate }} → {{ row.requestedDueDate }} · {{ labels[row.extensionStatus] }} · {{ row.reason }}</p>
-      <template v-if="admin && row.extensionStatus === 'PENDING'"><button :disabled="busy || retryable" @click="decide(row.id, row.version, true)">批准延期</button>
-        <button :disabled="busy || retryable" @click="decide(row.id, row.version, false)">驳回延期</button></template>
-    </div>
-    <h2>退还与退库</h2>
-    <details><summary>在用资产退库 / 停用人员代办</summary>
-      <label>退库资产 <select v-model="assetId" :disabled="busy || retryable" @change="chooseReturnAsset">
-        <option value="">请选择当前可退库资产</option><option v-for="asset in returnAssets" :key="asset.id" :value="asset.id">{{ asset.assetCode }} · {{ asset.name }}</option>
-      </select></label>
-      <button :disabled="busy || retryable" @click="proposeReturn">提请退库</button>
-    </details>
-    <div v-for="row in returns" :key="row.id"><button :disabled="busy || retryable" @click="choose(row.id, true)">退还 {{ row.id }} · {{ labels[row.returnStatus] }}</button></div>
-    <div v-if="selectedReturn" class="panel">
-      <h3>退还 {{ selectedReturn.id }} · {{ selectedReturn.asset?.assetCode }} · {{ labels[selectedReturn.returnStatus] }}</h3><p>{{ selectedReturn.reason }}</p>
-      <template v-if="admin && selectedReturn.returnStatus === 'PENDING_APPROVAL'"><button :disabled="busy || retryable" @click="decide(selectedReturn.id, selectedReturn.version, true, true)">批准退还</button>
-        <button :disabled="busy || retryable" @click="decide(selectedReturn.id, selectedReturn.version, false, true)">驳回退还</button></template>
-      <button v-if="warehouse && selectedReturn.returnStatus === 'WAITING_WAREHOUSE_CLAIM'" :disabled="busy || retryable"
-        @click="mutate(`/asset-returns/${selectedReturn.id}/claim`, selectedReturn.version)">领取整单验收</button>
-      <AssetReturnReassignment v-if="admin && selectedReturn.returnStatus === 'WAREHOUSE_PROCESSING'"
-        :id="selectedReturn.id" :version="selectedReturn.version" @saved="refresh" />
-      <div v-if="canInspect">
-        <label>验收结果 <select v-model="result" :disabled="busy || retryable"><option value="NORMAL">正常入库</option><option value="DAMAGED">损坏转报修</option><option value="MISSING">实物缺失转报失</option></select></label>
-        <template v-if="result !== 'MISSING'">
-          <label>实物编码 / 当前二维码 <input v-model="observed" :disabled="busy || retryable" /></label>
-          <label>仓库 <select v-model="warehouseId" :disabled="busy || retryable" @change="locationId = ''"><option value="">请选择</option><option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select></label>
-          <label>仓位 <select v-model="locationId" :disabled="busy || retryable"><option value="">请选择</option><option v-for="l in bins" :key="l.id" :value="l.id">{{ l.name }}</option></select></label>
-        </template>
-        <p v-else>实物缺失将保留借用责任，进入报失处理。</p><button :disabled="busy || retryable" @click="inspect">提交实物验收</button>
+  <AppChrome>
+    <section v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></section>
+    <section v-if="notice" class="fams-notice" data-state="success" role="status"><strong>{{ notice }}</strong></section>
+
+    <section class="fams-panel fams-stack" aria-label="借用记录">
+      <div class="fams-panel-head">
+        <div>
+          <h2 class="fams-panel-title">借用记录</h2>
+        </div>
+        <div class="fams-panel-actions">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="refresh">刷新</button>
+          <button v-if="retryable" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="retry">重试上次操作</button>
+        </div>
       </div>
-      <p v-if="selectedReturn.inspectionResult">验收结果 {{ selectedReturn.inspectionResult }} · {{ selectedReturn.inspectionReason }}</p>
-      <p v-for="followup in selectedReturn.followups" :key="followup.id">后续 {{ followup.id }} · {{ followup.businessType === 'REPAIR' ? '损坏维修' : '报失处理' }} · {{ followup.followupStatus === 'CLOSED' ? '已实际完成' : followup.followupStatus === 'ACCEPTED' ? '正式处理中' : '待继续处理' }}<span v-if="followup.linkedRepairId || followup.lastRepairId"> · 正式维修 {{ followup.linkedRepairId || followup.lastRepairId }}（{{ followup.repairStatus === 'COMPLETED' ? '已验收入库' : followup.repairStatus === 'REJECTED' || followup.repairStatus === 'CANCELLED' ? '原维修未执行，源义务仍待处理' : '尚未实际完成' }}）</span></p>
-    </div>
-    <div><button :disabled="busy || retryable || page === 1" @click="page--; refresh()">上一页</button> {{ page }}
-      <button :disabled="busy || retryable || page * 20 >= total" @click="page++; refresh()">下一页</button></div>
-  </section></AppChrome>
+
+      <label class="fams-field">
+        <span class="fams-field-label">操作原因 / 验收说明</span>
+        <textarea class="fams-control" v-model="reason" :disabled="busy || retryable" maxlength="1000" />
+      </label>
+
+      <div class="fams-table-scroll">
+        <table class="fams-table">
+          <thead><tr><th scope="col" data-column-kind="identity">资产</th><th scope="col">预计归还日</th><th scope="col">状态</th>
+            <th scope="col" data-column-kind="action">操作</th></tr></thead>
+          <tbody>
+            <tr v-for="row in loans" :key="row.id">
+              <th scope="row" data-column-kind="identity">{{ row.assetCode }} · {{ row.name }}</th>
+              <td>{{ row.expectedReturnDate }}</td>
+              <td><span class="fams-status" :data-tone="row.overdue ? 'warning' : 'info'">{{ labels[row.relationStatus] }}{{ row.overdue ? ' · 已逾期' : '' }}</span></td>
+              <td data-column-kind="action"><button class="fams-button" data-kind="link" data-size="sm" type="button"
+                :disabled="busy || retryable" @click="choose(row.id)">查看 / 延期 / 归还</button></td>
+            </tr>
+            <tr v-if="!loans.length" class="fams-table-empty"><td colspan="4"><strong>当前范围没有借用记录</strong>领用与借用申请批准后才会生成借用关系。</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div v-if="selected" class="fams-card fams-stack">
+        <h3>{{ selected.assetCode }} · {{ selected.name }}</h3>
+        <dl class="fams-facts">
+          <div><dt>借出日</dt><dd>{{ selected.borrowedDate }}</dd></div>
+          <div><dt>原归还日</dt><dd>{{ selected.originalReturnDate }}</dd></div>
+          <div><dt>当前归还日</dt><dd>{{ selected.expectedReturnDate }}</dd></div>
+        </dl>
+        <p v-if="selected.lostLiability" class="fams-notice" data-state="warning">资产已确认遗失，保留责任追踪。</p>
+        <ul v-if="selected.reminders?.length" class="fams-timeline">
+          <li v-for="reminder in selected.reminders" :key="reminder.id">{{ reminder.reminderBusinessDate }} · {{ reminder.reminderType }}<small v-if="reminder.overdueFrom">逾期起始 {{ reminder.overdueFrom }}</small></li>
+        </ul>
+        <ul v-if="selected.extensions?.length" class="fams-timeline">
+          <li v-for="history in selected.extensions" :key="history.id">延期至 {{ history.requestedDueDate }} · {{ labels[history.extensionStatus] }}<small v-if="history.overdueFrom">历史逾期 {{ history.overdueFrom }} 至 {{ history.overdueThrough }}</small></li>
+        </ul>
+        <label class="fams-field">
+          <span class="fams-field-label">新的预计归还日</span>
+          <input class="fams-control" v-model="due" type="date" :disabled="busy || retryable" />
+        </label>
+        <div v-if="selected.relationStatus === 'OPEN'" class="fams-panel-actions">
+          <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || retryable" @click="extend()">提请延期</button>
+          <button class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable" @click="proposeReturn">申请归还</button>
+        </div>
+      </div>
+
+      <details class="fams-card">
+        <summary class="fams-panel-title">接收前借用延期</summary>
+        <div class="fams-stack">
+          <p class="fams-panel-subtitle">选择待交接的借用申请；管理员批准后，实际接收时重新校验日期。</p>
+          <label class="fams-field"><span class="fams-field-label">借用申请</span>
+            <select class="fams-control" v-model="requestId" :disabled="busy || retryable" @change="chooseBorrowRequest"><option value="">请选择</option>
+              <option v-for="request in borrowRequests" :key="request.id" :value="request.id">借用 {{ request.id }} · {{ request.expectedReturnDate }}</option></select></label>
+          <label class="fams-field"><span class="fams-field-label">预计归还日</span>
+            <input class="fams-control" v-model="due" type="date" :disabled="busy || retryable" /></label>
+          <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || retryable" @click="extend(true)">提请接收前延期</button>
+        </div>
+      </details>
+
+      <div class="fams-pagination">
+        <span class="fams-pagination-summary">共 {{ total }} 条</span>
+        <div class="fams-pagination-actions">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || retryable || page === 1"
+            @click="page--; refresh()">上一页</button>
+          <span class="fams-pagination-page">第 {{ page }} 页</span>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || retryable || page * 20 >= total"
+            @click="page++; refresh()">下一页</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="fams-panel fams-stack" aria-labelledby="extension-title">
+      <div class="fams-panel-head">
+        <h2 id="extension-title" class="fams-panel-title">延期审批与历史</h2>
+      </div>
+      <article v-for="row in extensions" :key="row.id" class="fams-card fams-stack">
+        <p>{{ row.id }} · {{ row.originalDueDate }} → {{ row.requestedDueDate }} · {{ labels[row.extensionStatus] }} · {{ row.reason }}</p>
+        <div v-if="admin && row.extensionStatus === 'PENDING'" class="fams-panel-actions">
+          <button class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable" @click="decide(row.id, row.version, true)">批准延期</button>
+          <button class="fams-button" data-kind="danger" type="button" :disabled="busy || retryable" @click="decide(row.id, row.version, false)">驳回延期</button>
+        </div>
+      </article>
+      <p v-if="!extensions.length" class="fams-panel-subtitle">当前没有延期申请。</p>
+    </section>
+
+    <section class="fams-panel fams-stack" aria-labelledby="return-title">
+      <div class="fams-panel-head">
+        <h2 id="return-title" class="fams-panel-title">退还与退库</h2>
+      </div>
+
+      <details class="fams-card">
+        <summary class="fams-panel-title">在用资产退库 / 停用人员代办</summary>
+        <div class="fams-stack">
+          <label class="fams-field"><span class="fams-field-label">退库资产</span>
+            <select class="fams-control" v-model="assetId" :disabled="busy || retryable" @change="chooseReturnAsset">
+              <option value="">请选择当前可退库资产</option><option v-for="asset in returnAssets" :key="asset.id" :value="asset.id">{{ asset.assetCode }} · {{ asset.name }}</option>
+            </select></label>
+          <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || retryable" @click="proposeReturn">提请退库</button>
+        </div>
+      </details>
+
+      <div class="fams-table-scroll">
+        <table class="fams-table">
+          <thead><tr><th scope="col" data-column-kind="identity">退还单</th><th scope="col">状态</th><th scope="col" data-column-kind="action">操作</th></tr></thead>
+          <tbody>
+            <tr v-for="row in returns" :key="row.id">
+              <th scope="row" data-column-kind="identity">{{ row.id }}</th>
+              <td><span class="fams-status">{{ labels[row.returnStatus] }}</span></td>
+              <td data-column-kind="action"><button class="fams-button" data-kind="link" data-size="sm" type="button"
+                :disabled="busy || retryable" @click="choose(row.id, true)">查看 / 审批 / 验收</button></td>
+            </tr>
+            <tr v-if="!returns.length" class="fams-table-empty"><td colspan="3"><strong>当前没有退还单</strong>借用归还或在用资产退库提交后会出现在这里。</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div v-if="selectedReturn" class="fams-card fams-stack">
+        <h3>退还 {{ selectedReturn.id }} · {{ selectedReturn.asset?.assetCode }} · {{ labels[selectedReturn.returnStatus] }}</h3>
+        <p>{{ selectedReturn.reason }}</p>
+        <div class="fams-panel-actions">
+          <template v-if="admin && selectedReturn.returnStatus === 'PENDING_APPROVAL'">
+            <button class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable" @click="decide(selectedReturn.id, selectedReturn.version, true, true)">批准退还</button>
+            <button class="fams-button" data-kind="danger" type="button" :disabled="busy || retryable" @click="decide(selectedReturn.id, selectedReturn.version, false, true)">驳回退还</button>
+          </template>
+          <button v-if="warehouse && selectedReturn.returnStatus === 'WAITING_WAREHOUSE_CLAIM'" class="fams-button" data-kind="primary" type="button"
+            :disabled="busy || retryable" @click="mutate(`/asset-returns/${selectedReturn.id}/claim`, selectedReturn.version)">领取整单验收</button>
+        </div>
+        <AssetReturnReassignment v-if="admin && selectedReturn.returnStatus === 'WAREHOUSE_PROCESSING'"
+          :id="selectedReturn.id" :version="selectedReturn.version" @saved="refresh" />
+        <div v-if="canInspect" class="fams-stack">
+          <div class="fams-field-grid">
+            <label class="fams-field"><span class="fams-field-label">验收结果</span>
+              <select class="fams-control" v-model="result" :disabled="busy || retryable"><option value="NORMAL">正常入库</option><option value="DAMAGED">损坏转报修</option><option value="MISSING">实物缺失转报失</option></select></label>
+            <template v-if="result !== 'MISSING'">
+              <label class="fams-field"><span class="fams-field-label">实物编码 / 当前二维码</span>
+                <input class="fams-control" v-model="observed" :disabled="busy || retryable" /></label>
+              <label class="fams-field"><span class="fams-field-label">仓库</span>
+                <select class="fams-control" v-model="warehouseId" :disabled="busy || retryable" @change="locationId = ''"><option value="">请选择</option><option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select></label>
+              <label class="fams-field"><span class="fams-field-label">仓位</span>
+                <select class="fams-control" v-model="locationId" :disabled="busy || retryable"><option value="">请选择</option><option v-for="l in bins" :key="l.id" :value="l.id">{{ l.name }}</option></select></label>
+            </template>
+          </div>
+          <p v-if="result === 'MISSING'" class="fams-panel-subtitle">实物缺失将保留借用责任，进入报失处理。</p>
+          <button class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable" @click="inspect">提交实物验收</button>
+        </div>
+        <p v-if="selectedReturn.inspectionResult">验收结果 {{ selectedReturn.inspectionResult }} · {{ selectedReturn.inspectionReason }}</p>
+        <p v-for="followup in selectedReturn.followups" :key="followup.id">后续 {{ followup.id }} · {{ followup.businessType === 'REPAIR' ? '损坏维修' : '报失处理' }} · {{ followup.followupStatus === 'CLOSED' ? '已实际完成' : followup.followupStatus === 'ACCEPTED' ? '正式处理中' : '待继续处理' }}<span v-if="followup.linkedRepairId || followup.lastRepairId"> · 正式维修 {{ followup.linkedRepairId || followup.lastRepairId }}（{{ followup.repairStatus === 'COMPLETED' ? '已验收入库' : followup.repairStatus === 'REJECTED' || followup.repairStatus === 'CANCELLED' ? '原维修未执行，源义务仍待处理' : '尚未实际完成' }}）</span></p>
+      </div>
+    </section>
+  </AppChrome>
 </template>

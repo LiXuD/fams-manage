@@ -155,55 +155,200 @@ onMounted(async () => {
 </script>
 
 <template>
-  <AppChrome><section class="panel"><h1>调拨与人员交接</h1>
-    <p v-if="error" role="alert" class="form-error">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p>
-    <button :disabled="busy" @click="refresh">刷新</button><button v-if="retryable" :disabled="busy" @click="retry">重试上次操作</button>
-    <label>申请 / 决定原因 <textarea v-model="reason" maxlength="1000" :disabled="busy || retryable" /></label>
-    <h2>新建调拨</h2>
-    <label>来源资产 <select v-model="assetId" :disabled="busy || retryable" @change="chooseAsset"><option value="">请选择当前有操作权的资产</option><option v-for="asset in assets" :key="asset.id" :value="asset.id">{{ asset.assetCode }} · {{ asset.name }}</option></select></label>
-    <p v-if="currentAsset">原责任模式 {{ custodyName(currentAsset.custodyType) }} · 原使用组织 {{ organization(currentAsset.usingOrganizationId) }} · 原位置 {{ place(currentAsset.currentLocationId) }}</p>
-    <label>目标所属组织 <select v-model="owning" :disabled="busy || retryable"><option value="">未指定</option><option v-for="org in organizations" :key="org.id" :value="org.id">{{ org.name }}</option></select></label>
-    <template v-if="!stock">
-      <label>目标使用组织 <select v-model="using" :disabled="busy || retryable" @change="chooseOrganization()"><option value="">请选择</option><option v-for="org in organizations" :key="org.id" :value="org.id">{{ org.name }}</option></select></label>
-      <label>目标责任模式 <select v-model="custody" :disabled="busy || retryable"><option value="PERSONAL">个人</option><option value="SHARED">部门公用</option></select></label>
-      <label>实际目标责任人 <select v-model="employee" :disabled="busy || retryable"><option value="">请选择</option><option v-for="person in employees.filter(p => custody !== 'SHARED' || p.sharedEligible)" :key="person.id" :value="person.id">{{ person.name }}</option></select></label>
-    </template>
-    <label v-else>目标仓库 <select v-model="warehouse" :disabled="busy || retryable" @change="location = ''"><option value="">请选择</option><option v-for="wh in warehouses" :key="wh.id" :value="wh.id">{{ wh.name }}</option></select></label>
-    <label>目标位置 <select v-model="location" :disabled="busy || retryable"><option value="">请选择</option><option v-for="loc in bins" :key="loc.id" :value="loc.id">{{ loc.name }}</option></select></label>
-    <button :disabled="busy || retryable" @click="addItem">添加调拨明细</button>
-    <div v-for="(item, index) in draftItems" :key="item.asset.id"><p>{{ item.asset.assetCode }}：{{ place(item.asset.currentLocationId) }} → {{ place(item.target.locationId) }}；{{ custodyName(item.asset.custodyType) }} → {{ custodyName(item.target.custodyType) }}；{{ organization(item.target.usingOrganizationId) }}</p><button :disabled="busy || retryable" @click="draftItems.splice(index, 1)">移除此明细</button></div>
-    <p v-if="draftItems.length">本单 {{ draftItems.length }} 项，由一名库管记录全部执行；需要多名库管分别负责时，建议按来源/目标位置分组分别提交。</p>
-    <button :disabled="busy || retryable || !draftItems.length" @click="create">保存调拨草稿</button>
-    <h2>申请与执行</h2><button v-for="row in rows" :key="row.id" :disabled="busy || retryable" @click="open(row.id)">调拨 {{ row.id }} · {{ labels[row.requestStatus] }}</button>
-    <div v-if="selected" class="panel"><h3>调拨 {{ selected.id }} · {{ labels[selected.requestStatus] }}</h3><p>{{ selected.reason }}</p>
-      <p>{{ selected.totalQuantity }} 项；完成 {{ selected.completedQuantity }}，取消 {{ selected.cancelledQuantity }}，待处理 {{ selected.pendingQuantity }}。来源位置 {{ selected.sourceGroups }} 组，目标 {{ selected.targetGroups }} 组。</p>
-      <p>整单由一名库管记录全部执行；如需多人负责，批准前建议按分组分别提交。</p>
-      <TransferReassignment v-if="admin && ['PROCESSING','WAITING_HANDOVER'].includes(selected.requestStatus)" :key="selected.id" :id="selected.id" :version="selected.version" @saved="refresh" />
-      <button v-if="selected.creatorAccountId === session.user?.id && selected.requestStatus === 'DRAFT'" :disabled="busy || retryable" @click="mutate(`/transfers/${selected.id}/submit`, selected.version)">提交调拨</button>
-      <button v-if="selected.creatorAccountId === session.user?.id && ['DRAFT', 'PENDING_APPROVAL'].includes(selected.requestStatus)" :disabled="busy || retryable" @click="mutate(`/transfers/${selected.id}/cancel`, selected.version)">取消申请</button>
-      <template v-if="admin && selected.requestStatus === 'PENDING_APPROVAL'"><button :disabled="busy || retryable" @click="decide(true)">批准调拨</button><button :disabled="busy || retryable" @click="decide(false)">驳回调拨</button></template>
-      <button v-if="operator && selected.requestStatus === 'WAITING_WAREHOUSE_CLAIM'" :disabled="busy || retryable" @click="mutate(`/transfers/${selected.id}/claim`, selected.version)">领取整单调拨</button>
-      <div v-if="operator && selected.processorAccountId === session.user?.id && ['PROCESSING','WAITING_HANDOVER'].includes(selected.requestStatus)">
-        <label>实物编码 / 当前二维码 <input v-model="code" :disabled="busy || retryable" /></label><label>实际去向 <input v-model="destination" :disabled="busy || retryable" maxlength="500" /></label>
-        <label>现场交接 / 收回依据 <textarea v-model="evidence" :disabled="busy || retryable" maxlength="1000" /></label>
-        <label>目标现场实际签收人 <input v-model="signer" :disabled="busy || retryable" maxlength="200" /></label><label>现场收妥时间 <input v-model="receivedAt" type="datetime-local" :disabled="busy || retryable" /></label>
-        <label><input v-model="checked" type="checkbox" :disabled="busy || retryable" />已实际收回并核对实物</label>
+  <AppChrome>
+    <section v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></section>
+    <section v-if="notice" class="fams-notice" data-state="success" role="status"><strong>{{ notice }}</strong></section>
+
+    <section class="fams-panel fams-stack" aria-labelledby="create-title">
+      <div class="fams-panel-head">
+        <div>
+          <h2 id="create-title" class="fams-panel-title">新建调拨</h2>
+          <p class="fams-panel-subtitle">先添加调拨明细再保存草稿；一名库管记录整单执行，多人负责时按分组分别提交。</p>
+        </div>
+        <div class="fams-panel-actions">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="refresh">刷新</button>
+          <button v-if="retryable" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="retry">重试上次操作</button>
+        </div>
       </div>
-      <div v-for="item in selected.items" :key="item.id" class="panel"><h4>{{ item.sourceSnapshot.asset_code }} · {{ labels[item.itemStatus] }}</h4>
-        <p>来源：{{ custodyName(item.sourceSnapshot.custody_type) }} / {{ organization(item.sourceSnapshot.using_organization_id) }} / {{ personName(item.sourceSnapshot.responsible_employee_id ?? item.sourceSnapshot.department_responsible_employee_id) }} / {{ place(item.sourceSnapshot.current_location_id) }}</p>
-        <p>目标：{{ custodyName(item.targetSnapshot.custodyType) }} / {{ organization(item.targetSnapshot.usingOrganizationId) }} / {{ personName(item.targetSnapshot.employeeId) }} / {{ place(item.targetSnapshot.locationId) }}</p>
-        <p v-if="item.destination">实际去向 {{ item.destination }} · {{ item.deliveryEvidence }}</p>
-        <template v-if="operator && selected.processorAccountId === session.user?.id">
-          <router-link v-if="item.itemStatus === 'DELIVERED' && item.receiptRequired" :to="{ path: '/proxy-confirmations', query: { businessType: 'TRANSFER', businessId: selected.id, itemId: item.id } }">申请异常代确认</router-link>
-          <router-link v-if="['READY', 'DELIVERED', 'REFUSED'].includes(item.itemStatus)" :to="{ path: '/transfer-target-changes', query: { businessId: selected.id, itemId: item.id } }">申请目标变更</router-link>
-          <template v-if="item.itemStatus === 'READY'"><button :disabled="busy || retryable" @click="physical(item, item.receiptRequired ? 'deliver' : 'verify')">{{ item.receiptRequired ? '记录交出，等待目标人接收' : '记录现场收妥并完成' }}</button><button :disabled="busy || retryable" @click="physical(item, 'cancel')">未交出取消</button></template>
-          <button v-if="['DELIVERED','REFUSED'].includes(item.itemStatus)" :disabled="busy || retryable" @click="physical(item, 'recovery')">开始实物收回</button><button v-if="item.itemStatus === 'RECOVERY_PENDING'" :disabled="busy || retryable" @click="physical(item, 'recover')">确认实物收回后取消</button>
-        </template><p v-if="item.itemStatus === 'COMPLETED'">正式目标已更新，原责任和交接证据保留。</p>
+
+      <label class="fams-field">
+        <span class="fams-field-label">申请 / 决定原因</span>
+        <textarea class="fams-control" v-model="reason" maxlength="1000" :disabled="busy || retryable" />
+      </label>
+
+      <div class="fams-field-grid">
+        <label class="fams-field"><span class="fams-field-label">来源资产</span>
+          <select class="fams-control" v-model="assetId" :disabled="busy || retryable" @change="chooseAsset"><option value="">请选择当前有操作权的资产</option><option v-for="asset in assets" :key="asset.id" :value="asset.id">{{ asset.assetCode }} · {{ asset.name }}</option></select></label>
+        <label class="fams-field"><span class="fams-field-label">目标所属组织</span>
+          <select class="fams-control" v-model="owning" :disabled="busy || retryable"><option value="">未指定</option><option v-for="org in organizations" :key="org.id" :value="org.id">{{ org.name }}</option></select></label>
+        <template v-if="!stock">
+          <label class="fams-field"><span class="fams-field-label">目标使用组织</span>
+            <select class="fams-control" v-model="using" :disabled="busy || retryable" @change="chooseOrganization()"><option value="">请选择</option><option v-for="org in organizations" :key="org.id" :value="org.id">{{ org.name }}</option></select></label>
+          <label class="fams-field"><span class="fams-field-label">目标责任模式</span>
+            <select class="fams-control" v-model="custody" :disabled="busy || retryable"><option value="PERSONAL">个人</option><option value="SHARED">部门公用</option></select></label>
+          <label class="fams-field"><span class="fams-field-label">实际目标责任人</span>
+            <select class="fams-control" v-model="employee" :disabled="busy || retryable"><option value="">请选择</option><option v-for="person in employees.filter(p => custody !== 'SHARED' || p.sharedEligible)" :key="person.id" :value="person.id">{{ person.name }}</option></select></label>
+        </template>
+        <label v-else class="fams-field"><span class="fams-field-label">目标仓库</span>
+          <select class="fams-control" v-model="warehouse" :disabled="busy || retryable" @change="location = ''"><option value="">请选择</option><option v-for="wh in warehouses" :key="wh.id" :value="wh.id">{{ wh.name }}</option></select></label>
+        <label class="fams-field"><span class="fams-field-label">目标位置</span>
+          <select class="fams-control" v-model="location" :disabled="busy || retryable"><option value="">请选择</option><option v-for="loc in bins" :key="loc.id" :value="loc.id">{{ loc.name }}</option></select></label>
       </div>
-    </div>
-    <h2>本人待接收</h2><button v-for="row in receipts" :key="row.id" :disabled="busy || retryable" @click="openReceipt(row)">{{ row.assetCode }} · {{ row.name }} · {{ row.destination }}</button>
-    <div v-if="receipt"><p>{{ receipt.assetCode }} · {{ receipt.name }}；请核对实际收到的实物。</p><label>实物编码 <input v-model="code" :disabled="busy || retryable" /></label><label><input v-model="checked" type="checkbox" :disabled="busy || retryable" />已实际收到并核对</label><button :disabled="busy || retryable" @click="receive(false)">确认调拨接收</button><button :disabled="busy || retryable" @click="receive(true)">反馈实物不符</button></div>
-    <details v-if="admin"><summary>人员责任交接清单</summary><button :disabled="busy" @click="loadPersonnelChoices">加载原责任人员</button><label>原责任人员 <select v-model="personId" :disabled="busy"><option value="">请选择（含已停用人员）</option><option v-for="person in personnelChoices" :key="person.id" :value="person.id">{{ person.name }}</option></select></label><button :disabled="busy" @click="personnel">查询未交接责任</button><p>{{ personNotice }}</p><p>{{ personTasks }}</p><p v-for="asset in personAssets" :key="asset.id">{{ asset.assetCode }} · {{ asset.name }} · {{ asset.lifecycleStatus }}；在用资产通过上方调拨交接，借出资产通过归还关闭责任。</p></details>
-    <button :disabled="busy || retryable || page === 1" @click="page--; refresh()">上一页</button> {{ page }} <button :disabled="busy || retryable || page * 20 >= total" @click="page++; refresh()">下一页</button>
-  </section></AppChrome>
+      <p v-if="currentAsset" class="fams-panel-subtitle">原责任模式 {{ custodyName(currentAsset.custodyType) }} · 原使用组织 {{ organization(currentAsset.usingOrganizationId) }} · 原位置 {{ place(currentAsset.currentLocationId) }}</p>
+      <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || retryable" @click="addItem">添加调拨明细</button>
+
+      <article v-for="(item, index) in draftItems" :key="item.asset.id" class="fams-card fams-stack">
+        <p>{{ item.asset.assetCode }}：{{ place(item.asset.currentLocationId) }} → {{ place(item.target.locationId) }}；{{ custodyName(item.asset.custodyType) }} → {{ custodyName(item.target.custodyType) }}；{{ organization(item.target.usingOrganizationId) }}</p>
+        <button class="fams-button" data-kind="danger" data-size="sm" type="button" :disabled="busy || retryable" @click="draftItems.splice(index, 1)">移除此明细</button>
+      </article>
+      <p v-if="draftItems.length" class="fams-panel-subtitle">本单 {{ draftItems.length }} 项，由一名库管记录全部执行；需要多名库管分别负责时，建议按来源/目标位置分组分别提交。</p>
+
+      <div class="fams-form-actions">
+        <button class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable || !draftItems.length" @click="create">保存调拨草稿</button>
+      </div>
+    </section>
+
+    <section class="fams-panel fams-stack" aria-labelledby="request-title">
+      <div class="fams-panel-head">
+        <h2 id="request-title" class="fams-panel-title">申请与执行</h2>
+      </div>
+      <div class="fams-table-scroll">
+        <table class="fams-table">
+          <thead><tr><th scope="col" data-column-kind="identity">调拨单</th><th scope="col">状态</th><th scope="col" data-column-kind="action">操作</th></tr></thead>
+          <tbody>
+            <tr v-for="row in rows" :key="row.id">
+              <th scope="row" data-column-kind="identity">{{ row.id }}</th>
+              <td><span class="fams-status">{{ labels[row.requestStatus] }}</span></td>
+              <td data-column-kind="action"><button class="fams-button" data-kind="link" data-size="sm" type="button"
+                :disabled="busy || retryable" @click="open(row.id)">查看 / 执行</button></td>
+            </tr>
+            <tr v-if="!rows.length" class="fams-table-empty"><td colspan="3"><strong>当前没有调拨申请</strong>从上方新建调拨开始。</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div v-if="selected" class="fams-card fams-stack">
+        <h3>调拨 {{ selected.id }} · {{ labels[selected.requestStatus] }}</h3>
+        <p>{{ selected.reason }}</p>
+        <dl class="fams-facts">
+          <div><dt>总项数</dt><dd>{{ selected.totalQuantity }}</dd></div>
+          <div><dt>完成</dt><dd>{{ selected.completedQuantity }}</dd></div>
+          <div><dt>取消</dt><dd>{{ selected.cancelledQuantity }}</dd></div>
+          <div><dt>待处理</dt><dd>{{ selected.pendingQuantity }}</dd></div>
+          <div><dt>来源分组</dt><dd>{{ selected.sourceGroups }}</dd></div>
+          <div><dt>目标分组</dt><dd>{{ selected.targetGroups }}</dd></div>
+        </dl>
+        <p class="fams-panel-subtitle">整单由一名库管记录全部执行；如需多人负责，批准前建议按分组分别提交。</p>
+        <TransferReassignment v-if="admin && ['PROCESSING','WAITING_HANDOVER'].includes(selected.requestStatus)" :key="selected.id" :id="selected.id" :version="selected.version" @saved="refresh" />
+        <div class="fams-panel-actions">
+          <button v-if="selected.creatorAccountId === session.user?.id && selected.requestStatus === 'DRAFT'" class="fams-button" data-kind="primary" type="button"
+            :disabled="busy || retryable" @click="mutate(`/transfers/${selected.id}/submit`, selected.version)">提交调拨</button>
+          <button v-if="selected.creatorAccountId === session.user?.id && ['DRAFT', 'PENDING_APPROVAL'].includes(selected.requestStatus)" class="fams-button" data-kind="danger" type="button"
+            :disabled="busy || retryable" @click="mutate(`/transfers/${selected.id}/cancel`, selected.version)">取消申请</button>
+          <template v-if="admin && selected.requestStatus === 'PENDING_APPROVAL'">
+            <button class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable" @click="decide(true)">批准调拨</button>
+            <button class="fams-button" data-kind="danger" type="button" :disabled="busy || retryable" @click="decide(false)">驳回调拨</button>
+          </template>
+          <button v-if="operator && selected.requestStatus === 'WAITING_WAREHOUSE_CLAIM'" class="fams-button" data-kind="primary" type="button"
+            :disabled="busy || retryable" @click="mutate(`/transfers/${selected.id}/claim`, selected.version)">领取整单调拨</button>
+        </div>
+
+        <div v-if="operator && selected.processorAccountId === session.user?.id && ['PROCESSING','WAITING_HANDOVER'].includes(selected.requestStatus)" class="fams-field-grid">
+          <label class="fams-field"><span class="fams-field-label">实物编码 / 当前二维码</span>
+            <input class="fams-control" v-model="code" :disabled="busy || retryable" /></label>
+          <label class="fams-field"><span class="fams-field-label">实际去向</span>
+            <input class="fams-control" v-model="destination" :disabled="busy || retryable" maxlength="500" /></label>
+          <label class="fams-field"><span class="fams-field-label">目标现场实际签收人</span>
+            <input class="fams-control" v-model="signer" :disabled="busy || retryable" maxlength="200" /></label>
+          <label class="fams-field"><span class="fams-field-label">现场收妥时间</span>
+            <input class="fams-control" v-model="receivedAt" type="datetime-local" :disabled="busy || retryable" /></label>
+          <label class="fams-field fams-field-wide"><span class="fams-field-label">现场交接 / 收回依据</span>
+            <textarea class="fams-control" v-model="evidence" :disabled="busy || retryable" maxlength="1000" /></label>
+          <label class="fams-selection fams-field-wide"><input v-model="checked" type="checkbox" :disabled="busy || retryable" />已实际收回并核对实物</label>
+        </div>
+
+        <article v-for="item in selected.items" :key="item.id" class="fams-card fams-stack">
+          <h4>{{ item.sourceSnapshot.asset_code }} · {{ labels[item.itemStatus] }}</h4>
+          <p>来源：{{ custodyName(item.sourceSnapshot.custody_type) }} / {{ organization(item.sourceSnapshot.using_organization_id) }} / {{ personName(item.sourceSnapshot.responsible_employee_id ?? item.sourceSnapshot.department_responsible_employee_id) }} / {{ place(item.sourceSnapshot.current_location_id) }}</p>
+          <p>目标：{{ custodyName(item.targetSnapshot.custodyType) }} / {{ organization(item.targetSnapshot.usingOrganizationId) }} / {{ personName(item.targetSnapshot.employeeId) }} / {{ place(item.targetSnapshot.locationId) }}</p>
+          <p v-if="item.destination" class="u-secondary">实际去向 {{ item.destination }} · {{ item.deliveryEvidence }}</p>
+          <div v-if="operator && selected.processorAccountId === session.user?.id" class="fams-panel-actions">
+            <template v-if="item.itemStatus === 'READY'">
+              <button class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable"
+                @click="physical(item, item.receiptRequired ? 'deliver' : 'verify')">{{ item.receiptRequired ? '记录交出，等待目标人接收' : '记录现场收妥并完成' }}</button>
+              <button class="fams-button" data-kind="danger" type="button" :disabled="busy || retryable" @click="physical(item, 'cancel')">未交出取消</button>
+            </template>
+            <button v-if="['DELIVERED','REFUSED'].includes(item.itemStatus)" class="fams-button" data-kind="secondary" type="button"
+              :disabled="busy || retryable" @click="physical(item, 'recovery')">开始实物收回</button>
+            <button v-if="item.itemStatus === 'RECOVERY_PENDING'" class="fams-button" data-kind="primary" type="button"
+              :disabled="busy || retryable" @click="physical(item, 'recover')">确认实物收回后取消</button>
+            <router-link v-if="item.itemStatus === 'DELIVERED' && item.receiptRequired" class="fams-button" data-kind="link" data-size="sm"
+              :to="{ path: '/proxy-confirmations', query: { businessType: 'TRANSFER', businessId: selected.id, itemId: item.id } }">申请异常代确认</router-link>
+            <router-link v-if="['READY', 'DELIVERED', 'REFUSED'].includes(item.itemStatus)" class="fams-button" data-kind="link" data-size="sm"
+              :to="{ path: '/transfer-target-changes', query: { businessId: selected.id, itemId: item.id } }">申请目标变更</router-link>
+          </div>
+          <p v-if="item.itemStatus === 'COMPLETED'" class="fams-panel-subtitle">正式目标已更新，原责任和交接证据保留。</p>
+        </article>
+      </div>
+
+      <div class="fams-pagination">
+        <span class="fams-pagination-summary">共 {{ total }} 条</span>
+        <div class="fams-pagination-actions">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || retryable || page === 1"
+            @click="page--; refresh()">上一页</button>
+          <span class="fams-pagination-page">第 {{ page }} 页</span>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || retryable || page * 20 >= total"
+            @click="page++; refresh()">下一页</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="fams-panel fams-stack" aria-labelledby="receipt-title">
+      <div class="fams-panel-head">
+        <h2 id="receipt-title" class="fams-panel-title">本人待接收</h2>
+        <span class="fams-status" data-tone="info">{{ receipts.length }} 项</span>
+      </div>
+      <div class="fams-table-scroll">
+        <table class="fams-table">
+          <thead><tr><th scope="col" data-column-kind="identity">资产</th><th scope="col">名称</th><th scope="col">实际去向</th>
+            <th scope="col" data-column-kind="action">操作</th></tr></thead>
+          <tbody>
+            <tr v-for="row in receipts" :key="row.id">
+              <th scope="row" data-column-kind="identity">{{ row.assetCode }}</th>
+              <td>{{ row.name }}</td><td>{{ row.destination }}</td>
+              <td data-column-kind="action"><button class="fams-button" data-kind="link" data-size="sm" type="button"
+                :disabled="busy || retryable" @click="openReceipt(row)">核对并接收</button></td>
+            </tr>
+            <tr v-if="!receipts.length" class="fams-table-empty"><td colspan="4"><strong>没有待接收的调拨</strong>库管记录实物交出后会出现在这里。</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-if="receipt" class="fams-card fams-stack">
+        <h3>{{ receipt.assetCode }} · {{ receipt.name }}</h3>
+        <p>请核对实际收到的实物。</p>
+        <label class="fams-field"><span class="fams-field-label">实物编码</span>
+          <input class="fams-control" v-model="code" :disabled="busy || retryable" /></label>
+        <label class="fams-selection"><input v-model="checked" type="checkbox" :disabled="busy || retryable" />已实际收到并核对</label>
+        <div class="fams-panel-actions">
+          <button class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable" @click="receive(false)">确认调拨接收</button>
+          <button class="fams-button" data-kind="danger" type="button" :disabled="busy || retryable" @click="receive(true)">反馈实物不符</button>
+        </div>
+      </div>
+    </section>
+
+    <details v-if="admin" class="fams-panel fams-stack">
+      <summary class="fams-panel-title">人员责任交接清单</summary>
+      <div class="fams-stack">
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="loadPersonnelChoices">加载原责任人员</button>
+        <label class="fams-field"><span class="fams-field-label">原责任人员</span>
+          <select class="fams-control" v-model="personId" :disabled="busy"><option value="">请选择（含已停用人员）</option><option v-for="person in personnelChoices" :key="person.id" :value="person.id">{{ person.name }}</option></select></label>
+        <div class="fams-panel-actions">
+          <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="personnel">查询未交接责任</button>
+        </div>
+        <p>{{ personNotice }}</p>
+        <p class="fams-panel-subtitle">{{ personTasks }}</p>
+        <p v-for="asset in personAssets" :key="asset.id">{{ asset.assetCode }} · {{ asset.name }} · {{ asset.lifecycleStatus }}；在用资产通过上方调拨交接，借出资产通过归还关闭责任。</p>
+      </div>
+    </details>
+  </AppChrome>
 </template>
