@@ -51,5 +51,10 @@ async function read() {
 watch(identity, () => { clear(); error.value = ""; }, { flush: "sync" });
 onBeforeUnmount(() => { live = false; clear(); });
 </script>
-<template><div><button :disabled="busy || blocked" @click="read">读取盘点原图 {{ objectId }}</button><p v-if="error" role="alert">{{ error }}</p><figure v-if="preview"><img :src="preview" alt="维修关联的原始盘点损坏照片"><button @click="clear">关闭原图并清理</button></figure></div></template>
-<style scoped>img { display: block; max-width: min(100%, 720px); max-height: 480px; } button { margin: 6px; }</style>
+<template>
+  <div class="fams-inline">
+    <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || blocked" @click="read">读取盘点原图 {{ objectId }}</button>
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+    <figure v-if="preview"><img :src="preview" alt="维修关联的原始盘点损坏照片"><button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="clear">关闭原图并清理</button></figure>
+  </div>
+</template>

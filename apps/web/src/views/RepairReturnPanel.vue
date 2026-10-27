@@ -67,18 +67,59 @@ watch(locked, value => emit("busyChange", value), { immediate: true, flush: "syn
 onBeforeUnmount(() => { live = false; clear(); emit("busyChange", false); });
 const states: Record<string, string> = { WAITING_RECEIPT: "已交出，待实际接收", REFUSED: "原目标拒收，待实际收回", RECEIVED: "本次目标已实际接收", RECOLLECTED: "库管已实际收回" };
 </script>
-<template><section aria-label="维修实际返还"><h3>维修实际返还</h3>
-<p>交出后继续维修中并持锁，只有本次有效目标的个人或公用责任人实际接收才恢复使用；批准新目标不会代替实际接收。逾期借用须先在借用台账获批延期；拒收或目标失效可由库管实际收回后验收入库。</p>
-<p v-if="repair.loanExpectedReturnDate">当前原借用预计归还日：{{ repair.loanExpectedReturnDate }}</p>
-<p v-for="row in repair.returnHandovers" :key="row.id">{{ states[row.handover_status] }} · {{ row.target_snapshot_json.employeeName }} · {{ row.target_snapshot_json.organizationName }} · {{ row.target_snapshot_json.locationName }} · 交出 {{ new Date(row.delivered_at).toLocaleString() }} · {{ row.delivery_evidence }}<span v-if="row.receipt_at"> · 接收决定 {{ new Date(row.receipt_at).toLocaleString() }} · {{ row.receipt_evidence }}</span></p>
-<p v-for="row in repair.returnRecollections" :key="row.handover_id">实际收回 {{ new Date(row.occurred_at).toLocaleString() }} · {{ row.evidence }}</p>
-<router-link v-if="repair.actions?.proxyReturn && !locked && !blocked" :to="{ path: '/proxy-confirmations', query: { businessType: 'REPAIR', businessId: repair.id, itemId: repair.assetId } }">已实际签收但无法在线确认：申请异常代确认</router-link>
-<p v-if="error" role="alert">{{ error }}</p><button v-if="pending" :disabled="busy || blocked" @click="send">重试原返还办理</button>
-<section v-if="prepared" aria-label="确认实际返还办理"><p>请按实物事实确认：交出保留维修和锁；接收后按本次有效目标恢复责任，原借用保持原身份；拒收继续持锁，实际收回才可回库。</p><button :disabled="busy || blocked" @click="confirm">确认保存实际返还办理</button><button :disabled="busy" @click="prepared=null">返回修改返还依据</button></section>
-<fieldset v-if="allowed('delivery') || allowed('receipt') || allowed('refusal') || allowed('recollection')" :disabled="locked || blocked"><legend>按实物事实选择办理</legend>
-<button v-if="allowed('delivery')" @click="select('delivery')">{{ repair.approvedReturnTargets?.length ? "核实已批准目标并记录实际交出" : "核实原目标并记录实际交出" }}</button><button v-if="allowed('receipt')" @click="select('receipt')">我已实际接收修复设备</button><button v-if="allowed('refusal')" @click="select('refusal')">记录实际拒收及原因</button><button v-if="allowed('recollection')" @click="select('recollection')">核实库管已实际收回</button>
-<p v-if="mode==='delivery' && target">本次有效返还目标：{{ target.employeeName }} · {{ target.organizationName }} · {{ target.locationName }}。请确认已经修复并实际交出，不能代替接收人确认。</p>
-<template v-if="mode==='recollection'"><button @click="catalog()">查询实际收回位置</button><label>实际收回位置<select v-model="location"><option value="">请选择当前页有效位置</option><option v-for="row in locations" :key="row.id" :value="row.id">{{ row.name }}</option></select></label><button :disabled="page===1" @click="catalog(-1)">上一页收回位置</button>共{{ total }}项<button :disabled="page*20>=total" @click="catalog(1)">下一页收回位置</button></template>
-<label>本次实物编码<input v-model="observed" maxlength="2048"></label><label>本次实际时间<input v-model="actual" type="datetime-local" step="0.001"></label><label v-if="mode==='receipt' || mode==='refusal'"><input v-model="checked" type="checkbox">我已亲自核实本次实物及接收决定</label><label>本次实际交接或拒收依据<textarea v-model="evidence" maxlength="2000"/></label><button @click="prepare">核对本次返还办理</button></fieldset>
-</section></template>
-<style scoped>section{margin:18px 0;}fieldset{border:1px solid #d9e0e8;padding:16px;}label{display:block;margin:12px 0;}textarea{display:block;width:min(100%,720px);min-height:70px;}button{margin:6px;}</style>
+<template>
+  <section class="fams-card fams-stack" aria-label="维修实际返还">
+    <div class="fams-panel-head">
+      <h3 class="fams-panel-title">维修实际返还</h3>
+      <div v-if="pending" class="fams-panel-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || blocked" @click="send">重试原返还办理</button>
+      </div>
+    </div>
+    <p>交出后继续维修中并持锁，只有本次有效目标的个人或公用责任人实际接收才恢复使用；批准新目标不会代替实际接收。逾期借用须先在借用台账获批延期；拒收或目标失效可由库管实际收回后验收入库。</p>
+    <p v-if="repair.loanExpectedReturnDate">当前原借用预计归还日：{{ repair.loanExpectedReturnDate }}</p>
+    <ul v-if="repair.returnHandovers?.length || repair.returnRecollections?.length" class="fams-timeline">
+      <li v-for="row in repair.returnHandovers" :key="row.id">{{ states[row.handover_status] }}<small>{{ row.target_snapshot_json.employeeName }} · {{ row.target_snapshot_json.organizationName }} · {{ row.target_snapshot_json.locationName }} · 交出 {{ new Date(row.delivered_at).toLocaleString() }} · {{ row.delivery_evidence }}<span v-if="row.receipt_at"> · 接收决定 {{ new Date(row.receipt_at).toLocaleString() }} · {{ row.receipt_evidence }}</span></small></li>
+      <li v-for="row in repair.returnRecollections" :key="row.handover_id">实际收回 {{ new Date(row.occurred_at).toLocaleString() }}<small>{{ row.evidence }}</small></li>
+    </ul>
+    <router-link v-if="repair.actions?.proxyReturn && !locked && !blocked" :to="{ path: '/proxy-confirmations', query: { businessType: 'REPAIR', businessId: repair.id, itemId: repair.assetId } }">已实际签收但无法在线确认：申请异常代确认</router-link>
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+    <div v-if="prepared" class="fams-card fams-stack" role="group" aria-label="确认实际返还办理">
+      <p>请按实物事实确认：交出保留维修和锁；接收后按本次有效目标恢复责任，原借用保持原身份；拒收继续持锁，实际收回才可回库。</p>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="primary" type="button" :disabled="busy || blocked" @click="confirm">确认保存实际返还办理</button>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="prepared=null">返回修改返还依据</button>
+      </div>
+    </div>
+    <fieldset v-if="allowed('delivery') || allowed('receipt') || allowed('refusal') || allowed('recollection')" class="fams-card fams-stack" :disabled="locked || blocked">
+      <legend class="fams-panel-title">按实物事实选择办理</legend>
+      <div class="fams-inline">
+        <button v-if="allowed('delivery')" class="fams-button" data-kind="secondary" type="button" @click="select('delivery')">{{ repair.approvedReturnTargets?.length ? "核实已批准目标并记录实际交出" : "核实原目标并记录实际交出" }}</button>
+        <button v-if="allowed('receipt')" class="fams-button" data-kind="secondary" type="button" @click="select('receipt')">我已实际接收修复设备</button>
+        <button v-if="allowed('refusal')" class="fams-button" data-kind="secondary" type="button" @click="select('refusal')">记录实际拒收及原因</button>
+        <button v-if="allowed('recollection')" class="fams-button" data-kind="secondary" type="button" @click="select('recollection')">核实库管已实际收回</button>
+      </div>
+      <p v-if="mode==='delivery' && target">本次有效返还目标：{{ target.employeeName }} · {{ target.organizationName }} · {{ target.locationName }}。请确认已经修复并实际交出，不能代替接收人确认。</p>
+      <template v-if="mode==='recollection'">
+        <button class="fams-button" data-kind="secondary" type="button" @click="catalog()">查询实际收回位置</button>
+        <div class="fams-field-grid">
+          <label class="fams-field"><span class="fams-field-label">实际收回位置</span>
+            <select class="fams-control" v-model="location"><option value="">请选择当前页有效位置</option><option v-for="row in locations" :key="row.id" :value="row.id">{{ row.name }}</option></select></label>
+        </div>
+        <div class="fams-pagination">
+          <span class="fams-pagination-summary">共{{ total }}项</span>
+          <div class="fams-pagination-actions">
+            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="page===1" @click="catalog(-1)">上一页收回位置</button>
+            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="page*20>=total" @click="catalog(1)">下一页收回位置</button>
+          </div>
+        </div>
+      </template>
+      <div class="fams-field-grid">
+        <label class="fams-field"><span class="fams-field-label">本次实物编码</span><input class="fams-control" v-model="observed" maxlength="2048"></label>
+        <label class="fams-field"><span class="fams-field-label">本次实际时间</span><input class="fams-control" v-model="actual" type="datetime-local" step="0.001"></label>
+        <label v-if="mode==='receipt' || mode==='refusal'" class="fams-selection"><input v-model="checked" type="checkbox">我已亲自核实本次实物及接收决定</label>
+        <label class="fams-field fams-field-wide"><span class="fams-field-label">本次实际交接或拒收依据</span><textarea class="fams-control" v-model="evidence" maxlength="2000"/></label>
+      </div>
+      <div class="fams-form-actions"><button class="fams-button" data-kind="primary" type="button" @click="prepare">核对本次返还办理</button></div>
+    </fieldset>
+  </section>
+</template>

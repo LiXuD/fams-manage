@@ -57,16 +57,49 @@ watch(identity, () => { clear(); error.value = ""; }, { immediate: true, flush: 
 watch(locked, value => emit("busyChange", value), { immediate: true, flush: "sync" });
 onBeforeUnmount(() => { live = false; clear(); emit("busyChange", false); });
 </script>
-<template><section aria-label="损坏归还接续维修"><h2>损坏归还接续维修</h2>
-<p>保留原归还及已关闭借用。新维修继承原库管与同一资产锁，仍需管理员批准范围和库管实际接修、验收入库。</p>
-<p v-if="error" role="alert">{{ error }}</p><button :disabled="busy || blocked" @click="refresh()">查询损坏归还后续</button>
-<button v-if="pending" :disabled="busy || blocked" @click="send">重试原接续申请</button>
-<article v-for="row in rows" :key="row.id"><p>归还 {{ row.return_id }} · 资产 {{ row.asset_id }} · {{ row.reason }} · {{ row.followup_status === 'PENDING' ? '待接续' : row.followup_status === 'CLOSED' ? '已实际完成' : '维修处理中' }}</p>
-<button v-if="row.followup_status === 'PENDING'" :disabled="locked || blocked" @click="select(row.id)">核对损坏来源 {{ row.id }}</button>
-<router-link v-if="row.linked_repair_id || row.last_repair_id" :to="'/repairs/' + (row.linked_repair_id || row.last_repair_id)">查看{{ repairStates[row.repair_status || ''] || '原维修' }}</router-link></article>
-<button :disabled="locked || blocked || page <= 1" @click="refresh(-1)">上一页损坏后续</button>第{{ page }}页 / 共{{ total }}项<button :disabled="locked || blocked || page * 20 >= total" @click="refresh(1)">下一页损坏后续</button>
-<fieldset v-if="source" :disabled="locked || blocked"><legend>核对原损坏验收</legend><p>{{ source.asset.assetCode }} · {{ source.asset.name }} · 原归还 {{ source.returnId }} · 原库管 {{ source.processorAccountId }}</p>
-<p>实际损坏验收 {{ new Date(source.inspectedAt).toLocaleString() }} · {{ source.inspectionReason }}。原借用 {{ source.closedLoanId || '无' }} 不会重新打开。</p>
-<label>维修故障依据<textarea v-model="fault" maxlength="2000" /></label><label>影响程度<select v-model="impact"><option value="LOW">轻度</option><option value="MEDIUM">中度</option><option value="HIGH">严重</option></select></label><button @click="prepare">核对接续申请</button></fieldset>
-<section v-if="prepared" aria-label="确认损坏接续"><p>将创建待批准的正式维修并继承同一资产锁；不会自动批准、虚构接修或重开借用。</p><button :disabled="busy || blocked" @click="confirm">确认提交损坏接续</button><button :disabled="busy" @click="prepared=null">返回修改接续</button></section>
-</section></template>
+<template>
+  <section class="fams-card fams-stack" aria-label="损坏归还接续维修">
+    <div class="fams-panel-head">
+      <h3 class="fams-panel-title">损坏归还接续维修</h3>
+      <div v-if="pending" class="fams-panel-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || blocked" @click="send">重试原接续申请</button>
+      </div>
+    </div>
+    <p>保留原归还及已关闭借用。新维修继承原库管与同一资产锁，仍需管理员批准范围和库管实际接修、验收入库。</p>
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+    <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || blocked" @click="refresh()">查询损坏归还后续</button>
+    <article v-for="row in rows" :key="row.id" class="fams-card">
+      <p>归还 {{ row.return_id }} · 资产 {{ row.asset_id }} · {{ row.reason }} · {{ row.followup_status === 'PENDING' ? '待接续' : row.followup_status === 'CLOSED' ? '已实际完成' : '维修处理中' }}</p>
+      <div class="fams-inline">
+        <button v-if="row.followup_status === 'PENDING'" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || blocked" @click="select(row.id)">核对损坏来源 {{ row.id }}</button>
+        <router-link v-if="row.linked_repair_id || row.last_repair_id" :to="'/repairs/' + (row.linked_repair_id || row.last_repair_id)">查看{{ repairStates[row.repair_status || ''] || '原维修' }}</router-link>
+      </div>
+    </article>
+    <div class="fams-pagination">
+      <span class="fams-pagination-summary">共{{ total }}项</span>
+      <div class="fams-pagination-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || blocked || page <= 1" @click="refresh(-1)">上一页损坏后续</button>
+        <span class="fams-pagination-page">第{{ page }}页</span>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || blocked || page * 20 >= total" @click="refresh(1)">下一页损坏后续</button>
+      </div>
+    </div>
+    <fieldset v-if="source" class="fams-card fams-stack" :disabled="locked || blocked">
+      <legend class="fams-panel-title">核对原损坏验收</legend>
+      <p>{{ source.asset.assetCode }} · {{ source.asset.name }} · 原归还 {{ source.returnId }} · 原库管 {{ source.processorAccountId }}</p>
+      <p>实际损坏验收 {{ new Date(source.inspectedAt).toLocaleString() }} · {{ source.inspectionReason }}。原借用 {{ source.closedLoanId || '无' }} 不会重新打开。</p>
+      <div class="fams-field-grid">
+        <label class="fams-field fams-field-wide"><span class="fams-field-label">维修故障依据</span><textarea class="fams-control" v-model="fault" maxlength="2000" /></label>
+        <label class="fams-field"><span class="fams-field-label">影响程度</span>
+          <select class="fams-control" v-model="impact"><option value="LOW">轻度</option><option value="MEDIUM">中度</option><option value="HIGH">严重</option></select></label>
+      </div>
+      <div class="fams-form-actions"><button class="fams-button" data-kind="primary" type="button" @click="prepare">核对接续申请</button></div>
+    </fieldset>
+    <div v-if="prepared" class="fams-card fams-stack" role="group" aria-label="确认损坏接续">
+      <p>将创建待批准的正式维修并继承同一资产锁；不会自动批准、虚构接修或重开借用。</p>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="primary" type="button" :disabled="busy || blocked" @click="confirm">确认提交损坏接续</button>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="prepared=null">返回修改接续</button>
+      </div>
+    </div>
+  </section>
+</template>

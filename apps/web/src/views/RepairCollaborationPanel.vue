@@ -50,10 +50,53 @@ watch(()=>props.requestVersion,()=>{if(!busy.value && !prepared.value)void read(
 watch(locked,value=>emit("busyChange",value),{immediate:true,flush:"sync"});
 onBeforeUnmount(()=>{live=false;clear();emit("busyChange",false);});
 </script>
-<template><section aria-label="受邀科技协助"><h3>受邀科技协助</h3><p>科技意见只提供判断和建议，由合法处理库管核实实物后办理；返厂和报废需要相应真实后续。</p>
-<p v-if="error" role="alert">{{error}}</p><button :disabled="busy || !!prepared || blocked" @click="read">刷新协助记录</button><button v-if="pending" :disabled="busy || blocked" @click="send">用原请求重试协助操作</button>
-<div v-if="prepared" aria-label="确认邀请或撤销"><p>确认本次人员和原因，仅开放此维修必要资料；邀请不授予库管处理权，撤销后不能继续读取或提交。</p><button :disabled="busy || blocked" @click="confirm">确认保存协助操作</button><button :disabled="busy" @click="prepared=null">返回修改协助操作</button></div>
-<template v-if="board"><fieldset v-if="board.canInvite" :disabled="locked || blocked"><legend>邀请或撤销</legend><button @click="candidates()">查找可邀请科技人员</button><label>科技人员<select v-model="technician"><option value="">请选择</option><option v-for="row in technicians" :key="row.id" :value="row.id">{{row.username}} · {{row.name}}</option></select></label><button :disabled="techPage===1" @click="candidates(-1)">上一页科技人员</button>共{{techTotal}}人<button :disabled="techPage*20>=techTotal" @click="candidates(1)">下一页科技人员</button><label>邀请或撤销原因<textarea v-model="reason" maxlength="1000"/></label><button @click="prepare()">核对邀请科技协助</button></fieldset>
-<p>最近100条邀请，共{{board.invitationTotal}}条</p><ul><li v-for="row in board.invitations" :key="row.id">{{row.technician_username}} · {{row.invitation_status==='ACTIVE'?'有效邀请':row.invitation_status==='REVOKED'?'已撤销':'已结束'}} · {{row.reason}}<button v-if="board.canInvite && row.invitation_status==='ACTIVE'" :disabled="locked || blocked" @click="prepare(row.id)">撤销 {{row.technician_username}} 的协助邀请</button></li></ul>
-<p>最近100条意见，共{{board.opinionTotal}}条</p><ul><li v-for="row in board.opinions" :key="row.id">{{row.actor_username}} · {{new Date(row.occurred_at).toLocaleString()}} · {{opinionResults[row.opinion_result] || '待核实意见'}}<p>{{row.judgement}}</p><p>{{row.method}}</p><RepairTechnicalEvidence v-for="id in row.attachment_ids_json" :key="id" :invitation-id="row.invitation_id" :object-id="id" kind="staff-attachments" :blocked="locked || blocked" @invalidated="emit('invalidated')"/></li></ul></template>
-</section></template>
+<template>
+  <section class="fams-card fams-stack" aria-label="受邀科技协助">
+    <div class="fams-panel-head">
+      <div>
+        <h3 class="fams-panel-title">受邀科技协助</h3>
+        <p class="fams-panel-subtitle">科技意见只提供判断和建议，由合法处理库管核实实物后办理；返厂和报废需要相应真实后续。</p>
+      </div>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || !!prepared || blocked" @click="read">刷新协助记录</button>
+        <button v-if="pending" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || blocked" @click="send">用原请求重试协助操作</button>
+      </div>
+    </div>
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{error}}</strong></p>
+    <div v-if="prepared" class="fams-card fams-stack" role="group" aria-label="确认邀请或撤销">
+      <p>确认本次人员和原因，仅开放此维修必要资料；邀请不授予库管处理权，撤销后不能继续读取或提交。</p>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="primary" type="button" :disabled="busy || blocked" @click="confirm">确认保存协助操作</button>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="prepared=null">返回修改协助操作</button>
+      </div>
+    </div>
+    <template v-if="board">
+      <fieldset v-if="board.canInvite" class="fams-card fams-stack" :disabled="locked || blocked">
+        <legend class="fams-panel-title">邀请或撤销</legend>
+        <button class="fams-button" data-kind="secondary" type="button" @click="candidates()">查找可邀请科技人员</button>
+        <div class="fams-field-grid">
+          <label class="fams-field"><span class="fams-field-label">科技人员</span><select class="fams-control" v-model="technician"><option value="">请选择</option><option v-for="row in technicians" :key="row.id" :value="row.id">{{row.username}} · {{row.name}}</option></select></label>
+        </div>
+        <div class="fams-pagination">
+          <span class="fams-pagination-summary">共{{techTotal}}人</span>
+          <div class="fams-pagination-actions">
+            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="techPage===1" @click="candidates(-1)">上一页科技人员</button>
+            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="techPage*20>=techTotal" @click="candidates(1)">下一页科技人员</button>
+          </div>
+        </div>
+        <div class="fams-field-grid">
+          <label class="fams-field fams-field-wide"><span class="fams-field-label">邀请或撤销原因</span><textarea class="fams-control" v-model="reason" maxlength="1000"/></label>
+        </div>
+        <div class="fams-form-actions"><button class="fams-button" data-kind="primary" type="button" @click="prepare()">核对邀请科技协助</button></div>
+      </fieldset>
+      <p>最近100条邀请，共{{board.invitationTotal}}条</p>
+      <ul class="fams-timeline">
+        <li v-for="row in board.invitations" :key="row.id">{{row.technician_username}} · {{row.invitation_status==='ACTIVE'?'有效邀请':row.invitation_status==='REVOKED'?'已撤销':'已结束'}}<small>{{row.reason}}</small><button v-if="board.canInvite && row.invitation_status==='ACTIVE'" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || blocked" @click="prepare(row.id)">撤销 {{row.technician_username}} 的协助邀请</button></li>
+      </ul>
+      <p>最近100条意见，共{{board.opinionTotal}}条</p>
+      <ul class="fams-timeline">
+        <li v-for="row in board.opinions" :key="row.id">{{row.actor_username}} · {{new Date(row.occurred_at).toLocaleString()}} · {{opinionResults[row.opinion_result] || '待核实意见'}}<small>{{row.judgement}}</small><small>{{row.method}}</small><RepairTechnicalEvidence v-for="id in row.attachment_ids_json" :key="id" :invitation-id="row.invitation_id" :object-id="id" kind="staff-attachments" :blocked="locked || blocked" @invalidated="emit('invalidated')"/></li>
+      </ul>
+    </template>
+  </section>
+</template>

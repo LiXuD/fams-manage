@@ -7,7 +7,7 @@ vi.mock("@/auth/sessionStore",()=>({useSessionStore:()=>state.session}));
 vi.mock("vue-router",()=>({useRoute:()=>({params:{id:"9007199254740993"}})}));
 const data=()=>({invitationId:"9007199254740993",repairId:"9007199254740995",version:3,invitedAt:"2026-10-22T00:00:00Z",asset:{assetCode:"REPAIR-1",name:"受邀实物"},fault:"实际故障需判断",impact:"HIGH",faultOccurredAt:"2026-10-22T00:00:00Z",status:"WAREHOUSE_PROCESSING",opinions:[],opinionTotal:0,faultPhotos:[],attachments:[],photosAvailable:true});
 const response=(body:unknown,status=200)=>({ok:status===200,status,json:async()=>structuredClone(body)}) as Response;
-const mountPage=()=>mount(RepairAssistanceView,{global:{stubs:{AppChrome:{template:"<main><slot /></main>"}}}});
+const mountPage=()=>mount(RepairAssistanceView,{global:{stubs:{AppChrome:{template:`<main><slot name="actions" /><slot /></main>`}}}});
 const button=(wrapper:ReturnType<typeof mountPage>,name:string)=>wrapper.findAll("button").find(item=>item.text()===name)!;
 async function fill(wrapper:ReturnType<typeof mountPage>){await wrapper.findAll("textarea")[0]!.setValue("实际检查电源连接导致无法启动");await wrapper.findAll("textarea")[1]!.setValue("不拆机检查电源接触并记录判断，待库管核实");await wrapper.find("input[type='datetime-local']").setValue("2026-10-22T07:00");}
 beforeEach(()=>{state.session=reactive({user:{id:"1",roles:["TECH_ASSISTANT"]},csrfToken:"csrf"});});afterEach(()=>{vi.unstubAllGlobals();vi.restoreAllMocks();});

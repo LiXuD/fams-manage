@@ -7,7 +7,7 @@ vi.mock("@/auth/sessionStore",()=>({useSessionStore:()=>state.session}));
 vi.mock("vue-router",()=>({useRoute:()=>({params:{id:"9"}})}));
 const record=()=>({id:"9",source:{id:"9007199254740993",assetCode:"R-001",name:"实际故障实物",locationId:"8",locationName:"原办公室",version:6},fault:"实物无法正常启动",occurredAt:"2026-10-21T00:00:00Z",status:"PENDING_ADMIN_DECISION",version:3,assetVersion:6,ownershipVersion:1,lockVersion:2,actions:{approve:true,cancel:true},photosAvailable:true,photos:[],history:[],historyTotal:0});
 const response=(body:unknown,status=200)=>({ok:status===200,status,json:async()=>structuredClone(body)}) as Response;
-const mountPage=()=>mount(RepairView,{global:{stubs:{AppChrome:{template:"<main><slot /></main>"}}}});
+const mountPage=()=>mount(RepairView,{global:{stubs:{AppChrome:{template:`<main><slot name="actions" /><slot /></main>`}}}});
 const button=(wrapper:ReturnType<typeof mountPage>,text:string)=>wrapper.findAll("button").find(item=>item.text()===text)!;
 beforeEach(()=>{state.session=reactive({user:{id:"1",roles:["ASSET_ADMIN"]},csrfToken:"csrf"});});
 afterEach(()=>{vi.unstubAllGlobals();vi.restoreAllMocks();});

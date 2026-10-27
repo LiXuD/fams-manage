@@ -47,16 +47,35 @@ watch(identity, () => { clear(); error.value = ""; }, { immediate: true, flush: 
 watch(locked, value => emit("busyChange", value), { immediate: true, flush: "sync" });
 onBeforeUnmount(() => { live = false; clear(); emit("busyChange", false); });
 </script>
-<template><section v-if="admin && repair.status === 'WAREHOUSE_PROCESSING' || pending || prepared" aria-label="维修受控转派">
-<h3>维修受控转派</h3><p>原库管无法继续时，由管理员核对交接后明确转派。实物去向、原审批、接收人待办及资产锁继续保留。</p>
-<p v-if="error" role="alert">{{ error }}</p><button :disabled="locked || blocked" @click="inspect">核对实物阶段及接任库管</button>
-<button v-if="pending" :disabled="busy || blocked" @click="send">重试原维修转派</button>
-<section v-if="prepared" aria-label="确认维修转派"><p>确认按当前核实结果移交唯一处理权。已交出设备仍须实际接收或收回。</p>
-<button :disabled="busy || blocked" @click="confirm">确认保存维修转派</button><button :disabled="busy" @click="prepared=null">返回修改转派</button></section>
-<fieldset v-if="context" :disabled="locked || blocked"><legend>实物与未同步结果核对</legend>
-<p>当前实物阶段：{{ context.snapshot.outstandingReturn ? context.snapshot.outstandingReturn.handover_status === 'REFUSED' ? '已拒收，等待实际收回' : '已交出，等待实际接收' : context.snapshot.physicalHandling.length ? '已离开原保管人，当前库管处理' : context.snapshot.acceptedAt ? '已原地接修' : '尚未接修' }}。</p>
-<label>接任库管<select v-model="target"><option value="">请选择</option><option v-for="row in context.operators" :key="row.id" :value="row.id">{{ row.name }}</option></select></label>
-<label>转派原因<textarea v-model="reason" maxlength="1000" /></label><label>实际交接凭证<textarea v-model="evidence" maxlength="2000" /></label>
-<label><input v-model="checked" type="checkbox">已核对未交出、已交出、待收回、未同步结果和资产锁</label><button @click="prepare">核对本次维修转派</button></fieldset>
-</section></template>
-<style scoped>section{margin:18px 0}fieldset{border:1px solid #d9e0e8;padding:16px}label{display:block;margin:12px 0}textarea{display:block;width:min(100%,720px);min-height:70px}button{margin:6px}</style>
+<template>
+  <section v-if="admin && repair.status === 'WAREHOUSE_PROCESSING' || pending || prepared" class="fams-card fams-stack" aria-label="维修受控转派">
+    <div class="fams-panel-head">
+      <h3 class="fams-panel-title">维修受控转派</h3>
+      <div v-if="pending" class="fams-panel-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || blocked" @click="send">重试原维修转派</button>
+      </div>
+    </div>
+    <p>原库管无法继续时，由管理员核对交接后明确转派。实物去向、原审批、接收人待办及资产锁继续保留。</p>
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+    <button class="fams-button" data-kind="secondary" type="button" :disabled="locked || blocked" @click="inspect">核对实物阶段及接任库管</button>
+    <div v-if="prepared" class="fams-card fams-stack" role="group" aria-label="确认维修转派">
+      <p>确认按当前核实结果移交唯一处理权。已交出设备仍须实际接收或收回。</p>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="primary" type="button" :disabled="busy || blocked" @click="confirm">确认保存维修转派</button>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="prepared=null">返回修改转派</button>
+      </div>
+    </div>
+    <fieldset v-if="context" class="fams-card fams-stack" :disabled="locked || blocked">
+      <legend class="fams-panel-title">实物与未同步结果核对</legend>
+      <p>当前实物阶段：{{ context.snapshot.outstandingReturn ? context.snapshot.outstandingReturn.handover_status === 'REFUSED' ? '已拒收，等待实际收回' : '已交出，等待实际接收' : context.snapshot.physicalHandling.length ? '已离开原保管人，当前库管处理' : context.snapshot.acceptedAt ? '已原地接修' : '尚未接修' }}。</p>
+      <div class="fams-field-grid">
+        <label class="fams-field"><span class="fams-field-label">接任库管</span>
+          <select class="fams-control" v-model="target"><option value="">请选择</option><option v-for="row in context.operators" :key="row.id" :value="row.id">{{ row.name }}</option></select></label>
+        <label class="fams-field fams-field-wide"><span class="fams-field-label">转派原因</span><textarea class="fams-control" v-model="reason" maxlength="1000" /></label>
+        <label class="fams-field fams-field-wide"><span class="fams-field-label">实际交接凭证</span><textarea class="fams-control" v-model="evidence" maxlength="2000" /></label>
+      </div>
+      <label class="fams-selection"><input v-model="checked" type="checkbox">已核对未交出、已交出、待收回、未同步结果和资产锁</label>
+      <div class="fams-form-actions"><button class="fams-button" data-kind="primary" type="button" @click="prepare">核对本次维修转派</button></div>
+    </fieldset>
+  </section>
+</template>

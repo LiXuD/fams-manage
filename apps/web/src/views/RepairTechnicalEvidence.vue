@@ -20,5 +20,10 @@ async function read(){if(busy.value || props.blocked)return;clear();const epoch=
 }
 watch(identity,()=>{clear();error.value="";},{flush:"sync"});onBeforeUnmount(()=>{live=false;clear();});
 </script>
-<template><div class="technical-evidence"><button :disabled="busy || blocked" @click="read">读取依据 {{filename || objectId}}</button><span v-if="error" role="alert">{{error}}</span><figure v-if="url"><img v-if="mime.startsWith('image/')" :src="url" :alt="filename || '科技协助依据'"><a :href="url" :download="filename || (mime==='application/pdf'?'科技意见依据.pdf':'科技意见依据')">保存已授权依据</a><button @click="clear">关闭依据并清理</button></figure></div></template>
-<style scoped>img{display:block;max-width:min(100%,720px);max-height:400px;}button{margin:6px;}a{margin:8px;}</style>
+<template>
+  <div class="fams-inline">
+    <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || blocked" @click="read">读取依据 {{filename || objectId}}</button>
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{error}}</strong></p>
+    <figure v-if="url"><img v-if="mime.startsWith('image/')" :src="url" :alt="filename || '科技协助依据'"><a :href="url" :download="filename || (mime==='application/pdf'?'科技意见依据.pdf':'科技意见依据')">保存已授权依据</a><button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="clear">关闭依据并清理</button></figure>
+  </div>
+</template>

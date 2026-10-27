@@ -38,17 +38,70 @@ watch(warehouse,()=>{if(!locked.value)location.value="";});
 watch(locked,value=>emit("busyChange",value),{immediate:true,flush:"sync"});
 onBeforeUnmount(()=>{live=false;clear();emit("busyChange",false);});
 </script>
-<template><section aria-label="实物接修与验收入库"><h3>实物接修与验收入库</h3>
-<p v-if="repair.physicalHandling?.length">已记录实物离开原保管人的实际接收。原地关闭不可用，修复后须实际返还接收或验收入库。</p>
-<p v-for="row in repair.physicalHandling" :key="row.occurred_at">实物接收 {{new Date(row.occurred_at).toLocaleString()}} · {{row.evidence}}</p>
-<p v-for="row in repair.inbound" :key="row.occurred_at">已验收入库 {{new Date(row.occurred_at).toLocaleString()}} · {{row.evidence}}</p>
-<p v-if="error" role="alert">{{error}}</p><button v-if="pending" :disabled="busy||blocked" @click="send">重试原实物办理</button>
-<section v-if="prepared" aria-label="核对本次实物办理"><p>接修只记录实际接收，不结束维修。验收入库须确认实物及修复结果，同步结束原未结借用和维修，不能用科技建议代替实物。</p><button :disabled="busy||blocked" @click="confirm">确认保存实物办理</button><button :disabled="busy" @click="prepared=null">返回修改实物依据</button></section>
-<fieldset v-if="repair.actions?.acceptAway||repair.actions?.closeInbound" :disabled="locked||blocked"><legend>按实际去向办理</legend>
-<button v-if="repair.actions.acceptAway" @click="selectMode('away')">记录离开原保管人的实际接修</button><button v-if="repair.actions.closeInbound" @click="selectMode('inbound')">核对已修复并验收入库</button>
-<p>{{mode==='away'?'当前：实际接修，维修与资产锁继续保留。':'当前：验收入库，并原子关闭原未结借用及维修。'}}</p>
-<template v-if="mode==='inbound'"><button @click="catalog('warehouse')">查询回库仓库</button><label>回库仓库<select v-model="warehouse"><option value="">请选择</option><option v-for="row in warehouses" :key="row.id" :value="row.id">{{row.name}}</option></select></label><button :disabled="warehousePage===1" @click="catalog('warehouse',-1)">上一页回库仓库</button>共{{warehouseTotal}}个<button :disabled="warehousePage*20>=warehouseTotal" @click="catalog('warehouse',1)">下一页回库仓库</button></template>
-<button @click="catalog('location')">查询实物位置</button><label>实际位置<select v-model="location"><option value="">请选择当前页有效位置</option><option v-for="row in visibleLocations" :key="row.id" :value="row.id">{{row.name}}</option></select></label><p v-if="mode==='inbound'">仅显示已选仓库的库位；当前页没有时请翻页核对。</p><button :disabled="locationPage===1" @click="catalog('location',-1)">上一页实物位置</button>共{{locationTotal}}个<button :disabled="locationPage*20>=locationTotal" @click="catalog('location',1)">下一页实物位置</button>
-<label>实物资产编码<input v-model="observed" maxlength="2048"></label><label>实际接收时间<input v-model="actual" type="datetime-local" step="0.001"></label><label>实物接收及修复依据<textarea v-model="evidence" maxlength="2000"/></label><button @click="prepare">核对本次实物办理</button></fieldset>
-</section></template>
-<style scoped>section{margin:18px 0;}fieldset{border:1px solid #d9e0e8;padding:16px;}label{display:block;margin:12px 0;}textarea{display:block;width:min(100%,720px);min-height:70px;}button{margin:6px;}</style>
+<template>
+  <section class="fams-card fams-stack" aria-label="实物接修与验收入库">
+    <div class="fams-panel-head">
+      <h3 class="fams-panel-title">实物接修与验收入库</h3>
+      <div v-if="pending" class="fams-panel-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy||blocked" @click="send">重试原实物办理</button>
+      </div>
+    </div>
+    <p v-if="repair.physicalHandling?.length">已记录实物离开原保管人的实际接收。原地关闭不可用，修复后须实际返还接收或验收入库。</p>
+    <ul v-if="repair.physicalHandling?.length||repair.inbound?.length" class="fams-timeline">
+      <li v-for="row in repair.physicalHandling" :key="row.occurred_at">实物接收 {{new Date(row.occurred_at).toLocaleString()}}<small>{{row.evidence}}</small></li>
+      <li v-for="row in repair.inbound" :key="row.occurred_at">已验收入库 {{new Date(row.occurred_at).toLocaleString()}}<small>{{row.evidence}}</small></li>
+    </ul>
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{error}}</strong></p>
+    <div v-if="prepared" class="fams-card fams-stack" role="group" aria-label="核对本次实物办理">
+      <p>接修只记录实际接收，不结束维修。验收入库须确认实物及修复结果，同步结束原未结借用和维修，不能用科技建议代替实物。</p>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="primary" type="button" :disabled="busy||blocked" @click="confirm">确认保存实物办理</button>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="prepared=null">返回修改实物依据</button>
+      </div>
+    </div>
+    <fieldset v-if="repair.actions?.acceptAway||repair.actions?.closeInbound" class="fams-card fams-stack" :disabled="locked||blocked">
+      <legend class="fams-panel-title">按实际去向办理</legend>
+      <div class="fams-inline">
+        <button v-if="repair.actions.acceptAway" class="fams-button" data-kind="secondary" type="button" @click="selectMode('away')">记录离开原保管人的实际接修</button>
+        <button v-if="repair.actions.closeInbound" class="fams-button" data-kind="secondary" type="button" @click="selectMode('inbound')">核对已修复并验收入库</button>
+      </div>
+      <p>{{mode==='away'?'当前：实际接修，维修与资产锁继续保留。':'当前：验收入库，并原子关闭原未结借用及维修。'}}</p>
+      <template v-if="mode==='inbound'">
+        <button class="fams-button" data-kind="secondary" type="button" @click="catalog('warehouse')">查询回库仓库</button>
+        <div class="fams-field-grid">
+          <label class="fams-field"><span class="fams-field-label">回库仓库</span>
+            <select class="fams-control" v-model="warehouse"><option value="">请选择</option><option v-for="row in warehouses" :key="row.id" :value="row.id">{{row.name}}</option></select></label>
+        </div>
+        <div class="fams-pagination">
+          <span class="fams-pagination-summary">共{{warehouseTotal}}个</span>
+          <div class="fams-pagination-actions">
+            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="warehousePage===1" @click="catalog('warehouse',-1)">上一页回库仓库</button>
+            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="warehousePage*20>=warehouseTotal" @click="catalog('warehouse',1)">下一页回库仓库</button>
+          </div>
+        </div>
+      </template>
+      <button class="fams-button" data-kind="secondary" type="button" @click="catalog('location')">查询实物位置</button>
+      <div class="fams-field-grid">
+        <label class="fams-field"><span class="fams-field-label">实际位置</span>
+          <select class="fams-control" v-model="location"><option value="">请选择当前页有效位置</option><option v-for="row in visibleLocations" :key="row.id" :value="row.id">{{row.name}}</option></select></label>
+      </div>
+      <p v-if="mode==='inbound'">仅显示已选仓库的库位；当前页没有时请翻页核对。</p>
+      <div class="fams-pagination">
+        <span class="fams-pagination-summary">共{{locationTotal}}个</span>
+        <div class="fams-pagination-actions">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locationPage===1" @click="catalog('location',-1)">上一页实物位置</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locationPage*20>=locationTotal" @click="catalog('location',1)">下一页实物位置</button>
+        </div>
+      </div>
+      <div class="fams-field-grid">
+        <label class="fams-field"><span class="fams-field-label">实物资产编码</span>
+          <input class="fams-control" v-model="observed" maxlength="2048"></label>
+        <label class="fams-field"><span class="fams-field-label">实际接收时间</span>
+          <input class="fams-control" v-model="actual" type="datetime-local" step="0.001"></label>
+        <label class="fams-field fams-field-wide"><span class="fams-field-label">实物接收及修复依据</span>
+          <textarea class="fams-control" v-model="evidence" maxlength="2000"/></label>
+      </div>
+      <button class="fams-button" data-kind="primary" type="button" @click="prepare">核对本次实物办理</button>
+    </fieldset>
+  </section>
+</template>

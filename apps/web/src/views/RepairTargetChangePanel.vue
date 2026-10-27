@@ -107,26 +107,78 @@ const states: Record<string, string> = { PENDING: "待管理员决定", APPROVED
 const approved = computed(() => props.repair.approvedReturnTargets ?? []);
 const targetText = (target: RepairReturnTarget) => [target.employeeName, target.organizationName, target.locationName].join(" · ");
 </script>
-<template><section v-if="admin || repair.actions?.changeReturnTarget || approved.length || pending || prepared || snapshot" aria-label="维修返还目标变更">
-<h3>维修返还目标变更</h3><p>原目标失效或拒收时，先核对实物去向；已交出的设备必须实际收回。管理员批准后，仍由库管实际交出、新责任人实际接收。借用不得在此变更借用人或机构。</p>
-<p v-for="row in approved" :key="row.id">已批准返还目标：{{ targetText(row.target_json) }} · {{ new Date(row.approved_at).toLocaleString() }}</p>
-<p v-if="error" role="alert">{{ error }}</p><button v-if="pending" :disabled="busy || blocked" @click="send">重试原目标变更操作</button>
-<section v-if="prepared" aria-label="确认维修目标变更"><p>核对新目标和实物依据。批准只决定返还目标，当前维修和资产锁继续保留。</p><button :disabled="busy || blocked" @click="confirm">确认保存目标变更操作</button><button :disabled="busy" @click="prepared=null">返回修改目标变更</button></section>
-<button v-if="repair.actions?.changeReturnTarget" :disabled="locked || blocked" @click="begin">核实本单并提请新返还目标</button>
-<fieldset v-if="snapshot" :disabled="locked || blocked"><legend>本次实际新目标</legend>
-<label>新保管方式<select v-model="custody"><option value="PERSONAL">个人使用</option><option value="SHARED">部门公用</option></select></label>
-<p>已选组织：{{ organization?.name || '未选择' }} · 责任人：{{ employee?.name || '未选择' }} · 位置：{{ location?.name || '未选择' }}</p>
-<button @click="catalog('organization')">查询新使用组织</button><button :disabled="!organization" @click="catalog('employee')">查询新责任人员</button><button @click="catalog('location')">查询新固定位置</button>
-<label>当前页新目标选项<select @change="choose"><option value="">请选择当前有效选项</option><option v-for="row in choices" :key="kind+row.id" :value="row.id">{{ row.name }}</option></select></label>
-<button :disabled="catalogPage===1" @click="catalog(kind,-1)">上一页目标选项</button>当前页{{ choices.length }}项<button :disabled="!catalogMore" @click="catalog(kind,1)">下一页目标选项</button>
-<label>目标变更原因<textarea v-model="reason" maxlength="1000"/></label><label>目标变更实物编码<input v-model="code" maxlength="128"></label>
-<label>目标变更实物核对依据<textarea v-model="evidence" maxlength="1000"/></label><label><input v-model="checked" type="checkbox">我已核实实物与新接收人及位置，批准不会提前转移责任</label>
-<button @click="propose">核对提请目标变更</button></fieldset>
-<button v-if="admin || repair.actions?.changeReturnTarget" :disabled="locked || blocked" @click="list()">查询维修目标变更申请</button>
-<p>本单维修变更申请第{{ page }}页，共{{ total }}条。</p>
-<article v-for="row in rows.filter(row=>row.business_id===repair.id)" :key="row.id"><h4>{{ states[row.change_status] }}</h4><p>{{ row.reason }} · {{ row.physical_verification }}</p>
-<p>新组织 {{ row.targetDisplay?.organizationName || "待核实" }} · 新责任人 {{ row.targetDisplay?.employeeName || "待核实" }} · 新位置 {{ row.targetDisplay?.locationName || "待核实" }}</p>
-<p v-if="row.decision_reason">{{ row.decision_reason }}</p><fieldset v-if="admin && row.change_status==='PENDING'" :disabled="locked || blocked"><label>新目标决定原因<textarea v-model="decision" maxlength="1000"/></label><button @click="decide(row,'APPROVED')">核对批准本单新目标</button><button @click="decide(row,'REJECTED')">核对驳回本单新目标</button></fieldset></article>
-<button :disabled="locked || blocked || page===1" @click="list(-1)">上一页变更申请</button><button :disabled="locked || blocked || page*20>=total" @click="list(1)">下一页变更申请</button>
-</section></template>
-<style scoped>section{margin:18px 0}fieldset{border:1px solid #d9e0e8;padding:16px}label{display:block;margin:12px 0}textarea{display:block;width:min(100%,720px);min-height:70px}button{margin:6px}</style>
+<template>
+  <section v-if="admin || repair.actions?.changeReturnTarget || approved.length || pending || prepared || snapshot" class="fams-card fams-stack" aria-label="维修返还目标变更">
+    <div class="fams-panel-head">
+      <div>
+        <h3 class="fams-panel-title">维修返还目标变更</h3>
+        <p class="fams-panel-subtitle">原目标失效或拒收时，先核对实物去向；已交出的设备必须实际收回。管理员批准后，仍由库管实际交出、新责任人实际接收。借用不得在此变更借用人或机构。</p>
+      </div>
+      <div v-if="pending" class="fams-panel-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || blocked" @click="send">重试原目标变更操作</button>
+      </div>
+    </div>
+    <ul v-if="approved.length" class="fams-timeline">
+      <li v-for="row in approved" :key="row.id">已批准返还目标：{{ targetText(row.target_json) }}<small>{{ new Date(row.approved_at).toLocaleString() }}</small></li>
+    </ul>
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+    <div v-if="prepared" class="fams-card fams-stack" role="group" aria-label="确认维修目标变更">
+      <p>核对新目标和实物依据。批准只决定返还目标，当前维修和资产锁继续保留。</p>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="primary" type="button" :disabled="busy || blocked" @click="confirm">确认保存目标变更操作</button>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="prepared=null">返回修改目标变更</button>
+      </div>
+    </div>
+    <button v-if="repair.actions?.changeReturnTarget" class="fams-button" data-kind="secondary" type="button" :disabled="locked || blocked" @click="begin">核实本单并提请新返还目标</button>
+    <fieldset v-if="snapshot" class="fams-card fams-stack" :disabled="locked || blocked">
+      <legend class="fams-panel-title">本次实际新目标</legend>
+      <div class="fams-field-grid">
+        <label class="fams-field"><span class="fams-field-label">新保管方式</span><select class="fams-control" v-model="custody"><option value="PERSONAL">个人使用</option><option value="SHARED">部门公用</option></select></label>
+      </div>
+      <p>已选组织：{{ organization?.name || '未选择' }} · 责任人：{{ employee?.name || '未选择' }} · 位置：{{ location?.name || '未选择' }}</p>
+      <div class="fams-inline">
+        <button class="fams-button" data-kind="secondary" type="button" @click="catalog('organization')">查询新使用组织</button>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="!organization" @click="catalog('employee')">查询新责任人员</button>
+        <button class="fams-button" data-kind="secondary" type="button" @click="catalog('location')">查询新固定位置</button>
+      </div>
+      <div class="fams-field-grid">
+        <label class="fams-field"><span class="fams-field-label">当前页新目标选项</span><select class="fams-control" @change="choose"><option value="">请选择当前有效选项</option><option v-for="row in choices" :key="kind+row.id" :value="row.id">{{ row.name }}</option></select></label>
+      </div>
+      <div class="fams-pagination">
+        <span class="fams-pagination-summary">当前页{{ choices.length }}项</span>
+        <div class="fams-pagination-actions">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="catalogPage===1" @click="catalog(kind,-1)">上一页目标选项</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="!catalogMore" @click="catalog(kind,1)">下一页目标选项</button>
+        </div>
+      </div>
+      <div class="fams-field-grid">
+        <label class="fams-field fams-field-wide"><span class="fams-field-label">目标变更原因</span><textarea class="fams-control" v-model="reason" maxlength="1000"/></label>
+        <label class="fams-field"><span class="fams-field-label">目标变更实物编码</span><input class="fams-control" v-model="code" maxlength="128"></label>
+        <label class="fams-field fams-field-wide"><span class="fams-field-label">目标变更实物核对依据</span><textarea class="fams-control" v-model="evidence" maxlength="1000"/></label>
+      </div>
+      <label class="fams-selection"><input v-model="checked" type="checkbox">我已核实实物与新接收人及位置，批准不会提前转移责任</label>
+      <div class="fams-form-actions"><button class="fams-button" data-kind="primary" type="button" @click="propose">核对提请目标变更</button></div>
+    </fieldset>
+    <button v-if="admin || repair.actions?.changeReturnTarget" class="fams-button" data-kind="secondary" type="button" :disabled="locked || blocked" @click="list()">查询维修目标变更申请</button>
+    <article v-for="row in rows.filter(row=>row.business_id===repair.id)" :key="row.id" class="fams-card fams-stack">
+      <h4 class="fams-panel-title">{{ states[row.change_status] }}</h4>
+      <p>{{ row.reason }} · {{ row.physical_verification }}</p>
+      <p>新组织 {{ row.targetDisplay?.organizationName || "待核实" }} · 新责任人 {{ row.targetDisplay?.employeeName || "待核实" }} · 新位置 {{ row.targetDisplay?.locationName || "待核实" }}</p>
+      <p v-if="row.decision_reason">{{ row.decision_reason }}</p>
+      <fieldset v-if="admin && row.change_status==='PENDING'" class="fams-card fams-stack" :disabled="locked || blocked">
+        <label class="fams-field fams-field-wide"><span class="fams-field-label">新目标决定原因</span><textarea class="fams-control" v-model="decision" maxlength="1000"/></label>
+        <div class="fams-inline">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="decide(row,'APPROVED')">核对批准本单新目标</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="decide(row,'REJECTED')">核对驳回本单新目标</button>
+        </div>
+      </fieldset>
+    </article>
+    <div class="fams-pagination">
+      <span class="fams-pagination-summary">本单维修变更申请第{{ page }}页，共{{ total }}条。</span>
+      <div class="fams-pagination-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || blocked || page===1" @click="list(-1)">上一页变更申请</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || blocked || page*20>=total" @click="list(1)">下一页变更申请</button>
+      </div>
+    </div>
+  </section>
+</template>
