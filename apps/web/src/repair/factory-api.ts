@@ -38,10 +38,15 @@ export const factoryEventNames: Record<string, string> = {
   FACTORY_QUOTE_RECORDED: "已登记本轮报价", FACTORY_COST_RECORDED: "已确认本轮最终费用", FACTORY_FOLLOWUP_RECORDED: "已登记返厂后续资料",
   FACTORY_EVIDENCE_ADDED: "已追加厂家凭证", FACTORY_CONFLICT_REJECTED: "过期办理已拒绝",
   FACTORY_PARTS_OBSERVED: "已核实原机部件变更",
+  FACTORY_REPLACEMENT_RECORDED: "已登记整机换新，新机须独立入库",
 };
 export function factoryProblem(cause: unknown): string {
   if (cause instanceof RepairApiError) {
     const messages: Record<string, string> = {
+      ASSET_REPLACEMENT_NEW_SERIAL_REQUIRED: "请核实并填写新实物独立序列号，不能沿用旧机序列号。",
+      ASSET_REPLACEMENT_IDENTITY_CONFLICT: "新机身份已存在，请先核对资产台账，不能重复建卡。",
+      REPAIR_FACTORY_REPLACEMENT_PHASE_INVALID: "当前轮次不能重复登记换机，请刷新核对原记录。",
+      REPAIR_FACTORY_REPLACEMENT_DISPOSITION_INVALID: "原机已收回时只能登记继续留修，请核对旧机实际去向。",
       REPAIR_FACTORY_FOLLOWUP_OPEN: "返厂实物或费用仍有未结事项，请先核对当前进度；维修锁继续保留。",
       REPAIR_FACTORY_COST_POLICY_INVALID: "请选择明确费用约束：无费用、累计正限额或不限费用。",
       REPAIR_FACTORY_QUOTE_REQUIRED: "累计限额返厂须先登记本轮报价并选用报价原件。",

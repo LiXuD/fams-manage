@@ -45,6 +45,8 @@ public class RepairFactoryService {
     private final RepairFactoryGuard factory;
     private final ObjectProvider<AttachmentEvidencePort> evidence;
     private final ObjectProvider<AttachmentRegistry> attachments;
+    private final com.fams.asset.AssetFactoryReplacementPort replacements;
+    private final com.fams.inbound.FactoryReplacementInboundPort replacementInbound;
 
     public RepairFactoryService(
             JdbcTemplate db,
@@ -54,7 +56,9 @@ public class RepairFactoryService {
             AssetFactoryRepairPort assets,
             RepairFactoryGuard factory,
             ObjectProvider<AttachmentEvidencePort> evidence,
-            ObjectProvider<AttachmentRegistry> attachments) {
+            ObjectProvider<AttachmentRegistry> attachments,
+            com.fams.asset.AssetFactoryReplacementPort replacements,
+            com.fams.inbound.FactoryReplacementInboundPort replacementInbound) {
         this.db = db;
         this.json = json;
         this.clock = clock;
@@ -63,6 +67,8 @@ public class RepairFactoryService {
         this.factory = factory;
         this.evidence = evidence;
         this.attachments = attachments;
+        this.replacements = replacements;
+        this.replacementInbound = replacementInbound;
     }
 
     /** Joins the original single administrator decision; it does not perform a second approval. */
@@ -734,6 +740,101 @@ public class RepairFactoryService {
                 current, operation, key, fingerprint, id, number(round, "scope_id"), roundId);
     }
 
+    private boolean replacementPhase(long id, Map<String, Object> round) {
+        if (!List.of("DISPATCHED", "RECEIVED").contains(round.get("round_status"))
+                || !db.queryForList("SELECT id FROM fams_repair_factory_replacement"
+                        + " WHERE round_id=?", round.get("id")).isEmpty()) {
+            return false;
+        }
+        var latest = db.queryForList("SELECT id FROM fams_repair_factory_round WHERE repair_id=?"
+                + " ORDER BY id DESC LIMIT 1 FOR UPDATE", id);
+        return !latest.isEmpty() && number(latest.getFirst(), "id") == number(round, "id");
+    }
+
+    public Map<String, Object> replacements(Actor actor, long id, long roundId) {
+        var current = reader(actor);
+        var row = header(id);
+        readable(current, row);
+        var round = round(id, roundId);
+        var items = db.queryForList("SELECT * FROM fams_repair_factory_replacement"
+                + " WHERE repair_id=? AND round_id=?", id, roundId);
+        return Map.of("items", items.stream().map(item -> replacementView(actor, item)).toList(),
+                "canRecord", owner(current, row)
+                        && "WAREHOUSE_PROCESSING".equals(row.get("repair_status"))
+                        && replacementPhase(id, round));
+    }
+
+    private Map<String, Object> replacementView(Actor actor, Map<String, Object> item) {
+        var result = new LinkedHashMap<String, Object>();
+        result.put("id", item.get("id").toString());
+        result.put("sourceId", item.get("source_id"));
+        result.put("originalAssetId", item.get("original_asset_id").toString());
+        result.put("originalDisposition", item.get("original_disposition"));
+        result.put("observedAt", instant(item.get("observed_at")).toString());
+        result.put("recordedAt", instant(item.get("recorded_at")).toString());
+        result.put("evidenceIds", json.readTree(item.get("evidence_ids_json").toString()));
+        var inbound = replacementInbound.context(actor, item.get("source_id").toString());
+        result.put("inbound", inbound);
+        result.put("replacementAssetId", inbound == null ? null
+                : item.get("replacement_asset_id").toString());
+        return result;
+    }
+
+    public Map<String, Object> recordReplacement(Actor actor, long id, long roundId, long version,
+            UUID key, RepairFactoryInput.ReplacementFact input) {
+        var current = warehouse(actor);
+        var row = header(id);
+        requireOwner(current, row);
+        String operation = "FACTORY_REPLACEMENT:" + id + ":" + roundId;
+        String fingerprint = hash(operation, version, input);
+        var prior = replay(actor, current, row, operation, key, fingerprint);
+        if (prior != null) { return prior; }
+        if (!Boolean.TRUE.equals(input.replacementPhysicalIdentityChecked())) {
+            throw new RepairFailure(400, "REPAIR_FACTORY_REPLACEMENT_IDENTITY_REQUIRED");
+        }
+        guard(actor, current, row, version, input.assetVersion(), input.ownershipVersion(), input.lockVersion());
+        var round = round(id, roundId);
+        if (number(round, "version") != input.roundVersion() || !replacementPhase(id, round)) {
+            throw new RepairFailure(409, "REPAIR_FACTORY_REPLACEMENT_PHASE_INVALID");
+        }
+        if (!List.of("FACTORY_RETAINED", "FACTORY_DESTROYED", "CONTINUES_REPAIR")
+                    .contains(input.originalDisposition())
+                || "RECEIVED".equals(round.get("round_status"))
+                    && !"CONTINUES_REPAIR".equals(input.originalDisposition())) {
+            throw new RepairFailure(400, "REPAIR_FACTORY_REPLACEMENT_DISPOSITION_INVALID");
+        }
+        physicalTime(input.observedAt(), instant(round.get("dispatched_at")));
+        if (input.observedAt().isAfter(now())) {
+            throw new RepairFailure(400, "REPAIR_FACTORY_REPLACEMENT_TIME_INVALID");
+        }
+        selected(current, id, roundId, input.evidenceIds(), "REPLACEMENT");
+        UUID source = UUID.randomUUID();
+        var created = replacements.create(actor, source, number(row, "asset_id"), input.assetVersion(),
+                id, roundId, input.newAsset());
+        long asset = Long.parseLong(created.get("id").toString());
+        var inbound = replacementInbound.create(actor, source, number(row, "asset_id"), asset,
+                ((Number) created.get("version")).longValue(), id, roundId, input.businessDate(),
+                input.warehouseId(), input.warehouseVersion(), input.locationId(), input.locationVersion());
+        db.update("INSERT INTO fams_repair_factory_replacement(source_id,repair_id,round_id,"
+                        + "original_asset_id,replacement_asset_id,inbound_receipt_id,original_disposition,"
+                        + "observed_at,evidence_ids_json,snapshot_json,recorded_by,recorded_at)"
+                        + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", source.toString(), id, roundId,
+                row.get("asset_id"), asset, inbound.get("id"), input.originalDisposition(),
+                input.observedAt(), json.writeValueAsString(input.evidenceIds()),
+                json.writeValueAsString(input), current.id(), now());
+        long replacement = Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
+        db.update("UPDATE fams_repair_factory_round SET version=version+1 WHERE id=?", roundId);
+        advance(actor, current, row, "FACTORY_REPLACEMENT_RECORDED", number(round, "scope_id"), roundId,
+                Map.of("input", input, "replacementId", Long.toString(replacement)), Role.WAREHOUSE_OPERATOR);
+        var result = reply(header(id), number(round, "scope_id"), roundId);
+        result.put("replacementId", Long.toString(replacement));
+        result.put("sourceId", source.toString());
+        result.put("replacementAssetId", created.get("id"));
+        result.put("inboundReceiptId", inbound.get("id"));
+        save(current, operation, key, fingerprint, id, result);
+        return result;
+    }
+
     public Map<String, Object> parts(Actor actor, long id, long roundId, int page, int size) {
         var current = reader(actor);
         var row = header(id);
@@ -1111,11 +1212,16 @@ public class RepairFactoryService {
         }
         boolean financial = "QUOTE".equals(purpose) || "COST_RECEIPT".equals(purpose);
         boolean parts = "PARTS_CHANGE".equals(purpose);
+        boolean replacement = "REPLACEMENT".equals(purpose);
+        if (replacement && !replacementPhase(id, round)) {
+            throw new RepairFailure(409, "REPAIR_FACTORY_REPLACEMENT_PHASE_INVALID");
+        }
         if (parts && !partsPhase(id, round)) {
             throw new RepairFailure(409, "REPAIR_FACTORY_PARTS_PHASE_INVALID");
         }
         if (!financial
                 && !parts
+                && !replacement
                 && (!List.of("PENDING_DISPATCH", "DISPATCHED").contains(round.get("round_status"))
                         || !List.of("FAULT", "FACTORY_ACK", "RECEIPT").contains(purpose)
                         || "RECEIPT".equals(purpose)

@@ -88,6 +88,10 @@ class InboundService {
         int claimDays = days(snapshot, "warehouseClaimDeadlineWorkdays");
         int executeDays = days(snapshot, "warehouseFirstExecutionDeadlineWorkdays");
         List<Map<String, Object>> resolved = resolve(actor, inputs, body);
+        Map<String, Object> replacement = replacementOrigin(resolved);
+        if (replacement != null && resolved.size() != 1) {
+            throw InboundFailure.conflict("INBOUND_REPLACEMENT_SINGLE_ASSET_REQUIRED");
+        }
         InboundNumberPort.Reservation allocation = numbers.reserve();
         Instant now = now();
         db.update("INSERT INTO fams_inbound_receipt (receipt_no,creator_account_id,"
@@ -100,6 +104,13 @@ class InboundService {
                 now, now, actor.id(), actor.id());
         long receiptId = lastId();
         insertItems(receiptId, resolved, now);
+        if (replacement != null) {
+            db.update("INSERT INTO fams_inbound_factory_replacement_origin(receipt_id,source_id,"
+                            + "asset_id,original_asset_id,repair_id,round_id,recorded_by,recorded_at)"
+                            + " VALUES (?,?,?,?,?,?,?,?)", receiptId, replacement.get("source_id"),
+                    replacement.get("asset_id"), replacement.get("original_asset_id"),
+                    replacement.get("repair_id"), replacement.get("round_id"), actor.id(), now);
+        }
         numbers.markUsed(allocation.id());
         audit(actor, "INBOUND_DRAFT_CREATED", receiptId, null, 0L, now);
         Map<String, Object> result = receipt(receiptId);
@@ -125,6 +136,15 @@ class InboundService {
                 || body.containsKey("defaultTargetLocation")) {
             List<Map<String, Object>> inputs = items(body);
             List<Map<String, Object>> resolved = resolve(actor, inputs, body);
+            Map<String, Object> origin = one("SELECT asset_id FROM fams_inbound_factory_replacement_origin"
+                    + " WHERE receipt_id=?", receiptId);
+            if (origin != null && (resolved.size() != 1
+                    || id(object(resolved.getFirst().get("asset"))) != number(origin, "asset_id"))) {
+                throw InboundFailure.conflict("INBOUND_REPLACEMENT_ORIGIN_IMMUTABLE");
+            }
+            if (origin == null && replacementOrigin(resolved) != null) {
+                throw InboundFailure.conflict("INBOUND_REPLACEMENT_ORIGIN_IMMUTABLE");
+            }
             db.update("DELETE FROM fams_inbound_receipt_item WHERE receipt_id = ?", receiptId);
             insertItems(receiptId, resolved, now);
         }
@@ -399,6 +419,15 @@ class InboundService {
                 "warehouseFirstExecutionDeadlineWorkdays",
                 number(row, "warehouse_first_execution_deadline_workdays")));
         result.put("items", lines(receiptId).stream().map(this::item).toList());
+        Map<String, Object> origin = one("SELECT source_id,original_asset_id,asset_id,repair_id,round_id"
+                + " FROM fams_inbound_factory_replacement_origin WHERE receipt_id=?", receiptId);
+        if (origin != null) {
+            result.put("factoryReplacement", Map.of("sourceId", origin.get("source_id"),
+                    "originalAssetId", origin.get("original_asset_id").toString(),
+                    "replacementAssetId", origin.get("asset_id").toString(),
+                    "repairId", origin.get("repair_id").toString(),
+                    "roundId", origin.get("round_id").toString()));
+        }
         putTime(result, row, "submittedAt", "submitted_at");
         putTime(result, row, "adminDecisionDueAt", "admin_decision_due_at");
         putTime(result, row, "warehouseClaimDueAt", "warehouse_claim_due_at");
@@ -522,6 +551,15 @@ class InboundService {
             long location, long locationVersion) {
         return Map.of("custodyType", "STORAGE", "warehouse", ref(warehouse, warehouseVersion),
                 "location", ref(location, locationVersion));
+    }
+
+    private Map<String, Object> replacementOrigin(List<Map<String, Object>> resolved) {
+        for (var row : resolved) {
+            var origin = one("SELECT * FROM fams_inbound_factory_replacement_origin WHERE asset_id=?"
+                    + " ORDER BY receipt_id DESC LIMIT 1", id(object(row.get("asset"))));
+            if (origin != null) { return origin; }
+        }
+        return null;
     }
 
     private List<Map<String, Object>> resolve(Actor actor, List<Map<String, Object>> inputs,

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
+import AssetFactoryReplacementTrace from "@/components/AssetFactoryReplacementTrace.vue";
 import QRCode from "qrcode";
 import { useSessionStore } from "@/auth/sessionStore";
 import {
@@ -217,6 +218,7 @@ onMounted(load);
     <section v-if="selected" class="asset-panel" aria-labelledby="detail-title">
       <div class="asset-heading"><div><h2 id="detail-title">{{ selected.name }}</h2><p>{{ selected.assetCode }} · {{ selected.cardStage }} · 版本 {{ selected.version }}</p></div><button class="secondary-button" type="button" @click="selected = null">关闭</button></div>
       <p v-if="selected.physicalDestination">实物去向：{{ selected.physicalDestination.destination }} · {{ selected.physicalDestination.status }}；正式保管仍以上方资产事实为准。</p>
+      <AssetFactoryReplacementTrace :asset-id="selected.id" @open-card="openCard" />
       <dl class="asset-facts"><div><dt>分类</dt><dd>{{ selected.category?.id ?? "—" }}</dd></div><div><dt>型号</dt><dd>{{ selected.model ?? "—" }}</dd></div><div><dt>所属组织</dt><dd>{{ selected.organization?.id ?? "—" }}</dd></div><div><dt>当前保管</dt><dd>{{ custodyLabel(selected) }}</dd></div></dl>
       <div class="asset-actions">
         <button v-if="canWrite" class="secondary-button" :disabled="busy" type="button" @click="copyCurrent">复制建卡</button>

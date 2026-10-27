@@ -1,6 +1,6 @@
 <wxs module="labels">
 var states={PENDING:'待管理员确认范围',APPROVED:'返厂范围已批准',REJECTED:'范围已驳回',WITHDRAWN:'范围已撤回',PENDING_DISPATCH:'待寄出',DISPATCHED:'已寄出，待原机收回',RECEIVED:'原机已实际收回',CANCELLED:'待寄出轮次已取消',WAREHOUSE_PROCESSING:'库管处理中',COMPLETED:'维修已实际结束'};
-var events={FACTORY_SCOPE_REQUESTED:'已申请返厂范围',FACTORY_SCOPE_APPROVED:'已批准返厂范围',FACTORY_SCOPE_REJECTED:'已驳回范围',FACTORY_SCOPE_WITHDRAWN:'已撤回范围',FACTORY_ROUND_CREATED:'已新建待寄出轮次',FACTORY_ROUND_CANCELLED:'已取消待寄出轮次',FACTORY_ROUND_DISPATCHED:'原机已实际寄出',FACTORY_ROUND_RECEIVED:'原机已实际收回',FACTORY_EVIDENCE_ADDED:'已追加本轮原件',FACTORY_QUOTE_RECORDED:'已登记本轮报价',FACTORY_COST_RECORDED:'已确认本轮最终费用',FACTORY_PARTS_OBSERVED:'已核实原机部件变更'};
+var events={FACTORY_SCOPE_REQUESTED:'已申请返厂范围',FACTORY_SCOPE_APPROVED:'已批准返厂范围',FACTORY_SCOPE_REJECTED:'已驳回范围',FACTORY_SCOPE_WITHDRAWN:'已撤回范围',FACTORY_ROUND_CREATED:'已新建待寄出轮次',FACTORY_ROUND_CANCELLED:'已取消待寄出轮次',FACTORY_ROUND_DISPATCHED:'原机已实际寄出',FACTORY_ROUND_RECEIVED:'原机已实际收回',FACTORY_EVIDENCE_ADDED:'已追加本轮原件',FACTORY_QUOTE_RECORDED:'已登记本轮报价',FACTORY_COST_RECORDED:'已确认本轮最终费用',FACTORY_PARTS_OBSERVED:'已核实原机部件变更',FACTORY_REPLACEMENT_RECORDED:'已登记整机换新，新机独立入库'};
 module.exports={state:function(s){return states[s]||'历史阶段';},event:function(s){return events[s]||'历史办理';}};
 </wxs>
 <view class="page">
@@ -92,5 +92,5 @@ module.exports={state:function(s){return states[s]||'历史阶段';},event:funct
 <view wx:if="{{previewPath}}" class="card"><view>{{previewName}}</view><image wx:if="{{previewMime !== 'application/pdf'}}" src="{{previewPath}}" mode="widthFix"/><button bindtap="onViewFile" disabled="{{busy || retry || confirmation || stale}}">打开这份原件</button><button bindtap="onCloseFile">关闭并清理原件</button></view>
 <view class="card"><view class="title">独立办理历史 · 共{{historyTotal}}条</view><view wx:for="{{history}}" wx:key="id">{{item.actor_username}} · {{item.recorded_at}} · {{labels.event(item.action)}}</view>
 <button wx:if="{{historyPage > 1}}" data-kind="history" data-delta="-1" bindtap="onPage" disabled="{{busy || retry || confirmation || stale}}">上一页返厂历史</button><view>历史第{{historyPage}}页</view><button wx:if="{{historyPage * 20 &lt; historyTotal}}" data-kind="history" data-delta="1" bindtap="onPage" disabled="{{busy || retry || confirmation || stale}}">下一页返厂历史</button></view>
-</view><button bindtap="onBack" disabled="{{busy || retry || confirmation}}">返回维修单</button>
+</view><button wx:if="{{selected.roundStatus === 'DISPATCHED' || selected.roundStatus === 'RECEIVED'}}" bindtap="onReplacement" disabled="{{busy || retry || confirmation || stale}}">核对整机换新与独立入库</button><button bindtap="onBack" disabled="{{busy || retry || confirmation}}">返回维修单</button>
 </view>

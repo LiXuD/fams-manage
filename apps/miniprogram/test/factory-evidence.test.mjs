@@ -129,9 +129,9 @@ test("unsafe selected names and oversized media fail before private files or own
     assert.equal(f.disk.has("fams.factory-evidence-owners"), false); assert.equal(fs.existsSync(f.source), true);
 });
 
-test("financial originals use the factory route and retain private opaque credentials", async t => {
+test("financial and replacement originals use the factory route and retain private opaque credentials", async t => {
     const f = fixture(t), file = f.client.stageFactoryEvidence(f.selected);
-    for (const purpose of ["QUOTE", "COST_RECEIPT"]) {
+    for (const purpose of ["QUOTE", "COST_RECEIPT", "PARTS_CHANGE", "REPLACEMENT"]) {
         await f.client.uploadFactoryEvidence(route, file, { ...mutation, purpose });
         const upload = f.uploads.at(-1); assert.equal(upload.formData.purpose, purpose);
         assert.deepEqual(upload.header, { "X-FAMS-Mini-Session": saved.sessionToken, "Idempotency-Key": mutation.key, "If-Match-Version": "3" });

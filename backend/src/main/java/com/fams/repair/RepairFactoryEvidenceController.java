@@ -57,7 +57,7 @@ public class RepairFactoryEvidenceController {
             @RequestParam @PositiveOrZero long lockVersion,
             @RequestParam
                     @NotBlank
-                    @Pattern(regexp = "FAULT|FACTORY_ACK|RECEIPT|QUOTE|COST_RECEIPT|PARTS_CHANGE")
+                    @Pattern(regexp = "FAULT|FACTORY_ACK|RECEIPT|QUOTE|COST_RECEIPT|PARTS_CHANGE|REPLACEMENT")
                     String purpose,
             @RequestParam(required = false) String originalFilename,
             @RequestParam(required = false) String declaredContentType,

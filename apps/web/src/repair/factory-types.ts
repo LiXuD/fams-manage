@@ -40,7 +40,7 @@ export interface FactoryFile {
 }
 export interface FactoryRoundDetail extends FactoryRound {
     actions?: Record<string, boolean>;
-  evidence: { object_id: string; purpose: "FAULT" | "FACTORY_ACK" | "RECEIPT" | "QUOTE" | "COST_RECEIPT" | "PARTS_CHANGE"; content_sha256: string; uploader_account_id: number; recorded_at: string }[];
+  evidence: { object_id: string; purpose: "FAULT" | "FACTORY_ACK" | "RECEIPT" | "QUOTE" | "COST_RECEIPT" | "PARTS_CHANGE" | "REPLACEMENT"; content_sha256: string; uploader_account_id: number; recorded_at: string }[];
   files: FactoryFile[];
 }
 export interface FactoryHistory {

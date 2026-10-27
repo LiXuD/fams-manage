@@ -25,10 +25,17 @@ import java.util.UUID;
             RepairPhotoController.class,
             RepairFactoryController.class,
             RepairFactoryEvidenceController.class,
+            RepairFactoryReplacementReferenceController.class,
             RepairCollaborationController.class,
             RepairCollaborationPhotoController.class
         })
 public class RepairErrorHandler {
+    @ExceptionHandler(com.fams.inbound.FactoryReplacementInboundPort.Failure.class)
+    ResponseEntity<ErrorResponse> replacementInbound(
+            com.fams.inbound.FactoryReplacementInboundPort.Failure failure, HttpServletRequest request) {
+        return response(failure.status(), failure.getMessage(), Map.of(), request);
+    }
+
     @ExceptionHandler(RepairFailure.class)
     ResponseEntity<ErrorResponse> failure(RepairFailure failure, HttpServletRequest request) {
         return response(

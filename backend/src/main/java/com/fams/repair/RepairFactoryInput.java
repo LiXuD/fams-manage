@@ -142,6 +142,29 @@ public final class RepairFactoryInput {
         }
     }
 
+    public record ReplacementFact(
+            @NotNull @PositiveOrZero Long roundVersion,
+            @NotNull @PositiveOrZero Long assetVersion,
+            @NotNull @PositiveOrZero Long ownershipVersion,
+            @NotNull @PositiveOrZero Long lockVersion,
+            @NotBlank @Pattern(regexp = "FACTORY_RETAINED|FACTORY_DESTROYED|CONTINUES_REPAIR")
+                    String originalDisposition,
+            @NotNull Instant observedAt,
+            @NotNull @Size(min = 1, max = 14) List<@NotNull UUID> evidenceIds,
+            @NotBlank @Size(min = 10, max = 1000) String reason,
+            @NotNull @jakarta.validation.Valid
+                    com.fams.product.contract.model.AssetCreateRequest newAsset,
+            @NotNull LocalDate businessDate,
+            @NotNull @Positive Long warehouseId,
+            @NotNull @PositiveOrZero Long warehouseVersion,
+            @NotNull @Positive Long locationId,
+            @NotNull @PositiveOrZero Long locationVersion,
+            @NotNull @jakarta.validation.constraints.AssertTrue Boolean replacementPhysicalIdentityChecked) {
+        public ReplacementFact {
+            evidenceIds = evidenceIds == null ? null : List.copyOf(evidenceIds);
+        }
+    }
+
     public record MoneyFact(
             @NotNull @PositiveOrZero Long roundVersion,
             @NotNull @PositiveOrZero Long assetVersion,
