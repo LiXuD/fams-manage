@@ -516,6 +516,10 @@ class RepairFactoryHttpRuntimeCase {
         var hidden = ok(get(fixture.admin, operation)).path("items").get(0);
         assertTrue(hidden.path("replacementAssetId").isNull());
         assertTrue(hidden.path("inbound").isNull());
+        var privateHistory = ok(get(fixture.admin, path(id, "/history?page=1&pageSize=20")));
+        assertFalse(privateHistory.toString().contains(input.path("newAsset").path("serialNumber").asText()),
+                "Unsubmitted new-card serial escaped through private factory history");
+        assertFalse(privateHistory.toString().contains("Independent replacement unit"));
         assertEquals(404, ownerCall(fixture.admin, "GET", "/assets/" + asset, null, 0).statusCode());
         assertEquals(404, ownerCall(fixture.admin, "GET", "/assets/" + asset + "/factory-replacements", null, 0).statusCode());
         assertEquals(0, ownerOk(ownerCall(fixture.admin, "GET", "/assets/951020/factory-replacements", null, 0)).path("items").size());

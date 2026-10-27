@@ -825,7 +825,8 @@ public class RepairFactoryService {
         long replacement = Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
         db.update("UPDATE fams_repair_factory_round SET version=version+1 WHERE id=?", roundId);
         advance(actor, current, row, "FACTORY_REPLACEMENT_RECORDED", number(round, "scope_id"), roundId,
-                Map.of("input", input, "replacementId", Long.toString(replacement)), Role.WAREHOUSE_OPERATOR);
+                Map.of("replacementId", Long.toString(replacement),
+                        "originalDisposition", input.originalDisposition()), Role.WAREHOUSE_OPERATOR);
         var result = reply(header(id), number(round, "scope_id"), roundId);
         result.put("replacementId", Long.toString(replacement));
         result.put("sourceId", source.toString());

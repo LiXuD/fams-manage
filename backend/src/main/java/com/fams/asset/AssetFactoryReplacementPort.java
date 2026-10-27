@@ -93,6 +93,7 @@ public class AssetFactoryReplacementPort {
                 "assetCode", created.getAssetCode());
     }
 
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
     public Map<String, Object> trace(AssetActorContext.Actor actor, long asset) {
         service.get(actor, asset);
         var rows = db.queryForList("SELECT o.*,a.asset_code AS replacement_code FROM fams_asset_factory_replacement_origin o"
