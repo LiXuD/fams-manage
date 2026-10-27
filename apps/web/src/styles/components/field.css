@@ -1,0 +1,120 @@
+/* 字段族：label + 原生控件 + hint，错误态由 data-state=error 与 aria-invalid 驱动。
+   保留 input / select / textarea 原生标签，业务测试依赖这些元素定位。 */
+.fams-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fams-space-8);
+  min-width: 0;
+  width: 100%;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.fams-field > label,
+.fams-field-label {
+  font-weight: 500;
+  color: var(--fams-text-primary);
+}
+
+.fams-field-label { display: block; }
+
+.fams-field-required {
+  color: var(--fams-status-danger);
+  margin-inline-start: var(--fams-space-4);
+}
+
+.fams-control {
+  width: 100%;
+  min-height: var(--fams-size-44);
+  padding: 9px var(--fams-space-12);
+  border: 1px solid var(--fams-border-strong);
+  border-radius: var(--fams-radius-8);
+  background: var(--fams-bg-surface);
+  color: var(--fams-text-primary);
+  line-height: 22px;
+  transition: border-color var(--fams-motion-feedback) var(--fams-motion-ease);
+}
+
+.fams-control:hover:not(:disabled) {
+  border-color: var(--fams-text-muted);
+}
+
+.fams-control::placeholder {
+  color: var(--fams-text-secondary);
+  opacity: 1;
+}
+
+.fams-control:not(textarea) {
+  min-height: var(--fams-size-44);
+}
+
+.fams-field textarea.fams-control {
+  resize: vertical;
+  min-height: 88px;
+}
+
+.fams-control:disabled,
+.fams-control[readonly],
+.fams-readonly {
+  background: var(--fams-bg-subtle);
+  color: var(--fams-text-secondary);
+}
+
+.fams-control:disabled {
+  cursor: not-allowed;
+}
+
+.fams-readonly {
+  min-height: var(--fams-size-44);
+  padding: 9px var(--fams-space-12);
+  border: 1px solid var(--fams-border-default);
+  border-radius: var(--fams-radius-8);
+  line-height: 22px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.fams-field-hint {
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--fams-text-secondary);
+}
+
+.fams-field[data-state="error"] > label,
+.fams-field[data-state="error"] .fams-field-label,
+.fams-field[data-state="error"] .fams-field-hint {
+  color: var(--fams-status-danger);
+}
+
+.fams-field[data-state="error"] .fams-control,
+.fams-control[aria-invalid="true"] {
+  border-color: var(--fams-status-danger);
+}
+
+/* 表单级布局：栅格由页面骨架给出，字段本身不猜列数。 */
+.fams-field-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--fams-space-16);
+}
+
+.fams-field-grid > .fams-field-wide {
+  grid-column: 1 / -1;
+}
+
+.fams-field-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--fams-space-12);
+}
+
+.fams-field-row .fams-field {
+  flex: 1 1 200px;
+}
+
+@media (max-width: 900px) {
+  .fams-field-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

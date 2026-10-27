@@ -1,0 +1,110 @@
+/* 进度、步骤与时间线：区分已发生、当前和待执行，待上传单独计数。 */
+.fams-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fams-space-8);
+}
+
+.fams-progress progress {
+  width: 100%;
+  height: 10px;
+  border: 0;
+  border-radius: var(--fams-radius-8);
+  accent-color: var(--fams-action-primary);
+  overflow: hidden;
+}
+
+.fams-progress progress::-webkit-progress-bar { background: var(--fams-bg-subtle); }
+.fams-progress progress::-webkit-progress-value { background: var(--fams-action-primary); }
+.fams-progress progress::-moz-progress-bar { background: var(--fams-action-primary); }
+
+.fams-progress small { color: var(--fams-text-secondary); font-size: 12px; line-height: 20px; }
+
+.fams-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fams-space-8);
+  list-style: none;
+}
+
+.fams-steps li {
+  flex: 1 1 150px;
+  min-width: 150px;
+  padding: var(--fams-space-12);
+  border: 1px solid var(--fams-border-default);
+  border-radius: var(--fams-radius-8);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.fams-steps li small {
+  display: block;
+  margin-top: var(--fams-space-4);
+  color: var(--fams-text-secondary);
+}
+
+.fams-steps li[aria-current="step"],
+.fams-steps li[data-state="current"] {
+  border-color: var(--fams-action-primary);
+  background: var(--fams-action-subtle);
+  color: var(--fams-action-primary);
+}
+
+.fams-steps li[data-state="complete"] {
+  background: var(--fams-status-success-bg);
+  color: var(--fams-status-success);
+}
+
+.fams-timeline {
+  padding-inline-start: var(--fams-space-12);
+  list-style: none;
+}
+
+.fams-timeline li {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--fams-space-4);
+  padding: 0 0 var(--fams-space-24) var(--fams-space-24);
+  border-left: 1px solid var(--fams-border-default);
+}
+
+.fams-timeline li::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: -6px;
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  border: 2px solid var(--fams-border-strong);
+  border-radius: 50%;
+  background: var(--fams-bg-surface);
+}
+
+.fams-timeline li[data-state="complete"]::before {
+  background: var(--fams-status-success);
+  border-color: var(--fams-status-success);
+}
+
+.fams-timeline li[data-state="current"]::before {
+  border-color: var(--fams-action-primary);
+  box-shadow: 0 0 0 3px var(--fams-action-subtle);
+}
+
+.fams-timeline span,
+.fams-timeline small {
+  color: var(--fams-text-secondary);
+  font-size: 13px;
+}
+
+/* 时间轴条目同样是纵向 flex，条目内的按钮收回到内容宽度。
+   条目按钮的文案是数据（资产编码 + 故障描述），必须允许折行：
+   按钮族的 nowrap 会把 390 视口的文档撑到 866px。 */
+.fams-timeline li > .fams-button {
+  align-self: flex-start;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+  overflow-wrap: anywhere;
+}

@@ -1,0 +1,17 @@
+/* 状态标签族：状态必须有文字，颜色只是加速识别，不承担唯一语义。 */
+.fams-status {
+  display: inline-block;
+  padding: 3px var(--fams-space-8);
+  border-radius: var(--fams-radius-4);
+  background: var(--fams-bg-subtle);
+  color: var(--fams-text-secondary);
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.fams-status[data-tone="info"] { color: var(--fams-action-primary); background: var(--fams-action-subtle); }
+.fams-status[data-tone="success"] { color: var(--fams-status-success); background: var(--fams-status-success-bg); }
+.fams-status[data-tone="warning"] { color: var(--fams-status-warning); background: var(--fams-status-warning-bg); }
+.fams-status[data-tone="danger"] { color: var(--fams-status-danger); background: var(--fams-status-danger-bg); }

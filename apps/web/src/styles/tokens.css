@@ -1,0 +1,102 @@
+/* 设计令牌：唯一的颜色、尺寸与动效来源。组件层只允许引用变量，不允许出现字面色值。
+   色板对齐 D0.4 视觉基线（docs/superpowers/designs/2026-09-06-fams-ui/tokens.css）。 */
+:root {
+  /* 色板 */
+  --fams-palette-white: #ffffff;
+  --fams-palette-gray25: #f7f9fc;
+  --fams-palette-gray50: #f0f3f8;
+  --fams-palette-gray100: #e3e8f0;
+  --fams-palette-gray300: #9aa8ba;
+  --fams-palette-gray500: #53657d;
+  --fams-palette-gray700: #33445d;
+  --fams-palette-gray900: #18263d;
+  --fams-palette-blue50: #eaf0ff;
+  --fams-palette-blue600: #2457d6;
+  --fams-palette-blue700: #1943ae;
+  --fams-palette-blue800: #153580;
+  --fams-palette-green50: #e8f5ee;
+  --fams-palette-green700: #206a45;
+  --fams-palette-amber50: #fff4de;
+  --fams-palette-amber700: #8a5300;
+  --fams-palette-red50: #fff0ef;
+  --fams-palette-red700: #b4232e;
+
+  /* 语义色 */
+  --fams-bg-canvas: var(--fams-palette-gray25);
+  --fams-bg-surface: var(--fams-palette-white);
+  --fams-bg-subtle: var(--fams-palette-gray50);
+  --fams-bg-muted: var(--fams-palette-gray100);
+  --fams-text-primary: var(--fams-palette-gray900);
+  --fams-text-secondary: var(--fams-palette-gray500);
+  --fams-text-muted: var(--fams-palette-gray700);
+  --fams-text-inverse: var(--fams-palette-white);
+  --fams-border-default: var(--fams-palette-gray100);
+  --fams-border-strong: var(--fams-palette-gray500);
+  --fams-action-primary: var(--fams-palette-blue600);
+  --fams-action-hover: var(--fams-palette-blue700);
+  --fams-action-pressed: var(--fams-palette-blue800);
+  --fams-action-subtle: var(--fams-palette-blue50);
+  --fams-status-success: var(--fams-palette-green700);
+  --fams-status-success-bg: var(--fams-palette-green50);
+  --fams-status-warning: var(--fams-palette-amber700);
+  --fams-status-warning-bg: var(--fams-palette-amber50);
+  --fams-status-danger: var(--fams-palette-red700);
+  --fams-status-danger-bg: var(--fams-palette-red50);
+  --fams-focus-ring: var(--fams-palette-blue600);
+  --fams-backdrop: rgba(24, 38, 61, 0.4);
+
+  /* 间距：4 的倍数，8 级刻度 */
+  --fams-space-0: 0px;
+  --fams-space-4: 4px;
+  --fams-space-8: 8px;
+  --fams-space-12: 12px;
+  --fams-space-16: 16px;
+  --fams-space-24: 24px;
+  --fams-space-32: 32px;
+  --fams-space-48: 48px;
+
+  /* 圆角：控件 8、卡片 12、状态标签 4 */
+  --fams-radius-0: 0px;
+  --fams-radius-4: 4px;
+  --fams-radius-8: 8px;
+  --fams-radius-12: 12px;
+  --fams-radius-16: 16px;
+
+  /* 尺寸与触控目标 */
+  --fams-size-24: 24px;
+  --fams-size-32: 32px;
+  --fams-size-40: 40px;
+  --fams-size-44: 44px;
+  --fams-size-48: 48px;
+  --fams-size-56: 56px;
+  --fams-size-64: 64px;
+
+  /* 排版：字号/行高/字重成对出现，避免单值漂移 */
+  --fams-font-stack: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --fams-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --fams-tracking-tight: -0.02em;
+
+  /* 阴影：仅表面层与浮层两档 */
+  --fams-shadow-surface: 0 8px 28px rgba(24, 38, 61, 0.035);
+  --fams-shadow-dialog: 0 8px 40px rgba(24, 38, 61, 0.14);
+
+  /* 动效：反馈 120ms、折叠 200ms、加载 800ms 一圈 */
+  --fams-motion-feedback: 120ms;
+  --fams-motion-collapse: 200ms;
+  --fams-motion-ease: ease;
+
+  /* 布局常量 */
+  --fams-topbar-height: var(--fams-size-64);
+  --fams-tabbar-height: var(--fams-size-48);
+  --fams-sidebar-width: 190px;
+  --fams-content-padding: var(--fams-space-32);
+  --fams-table-min-width: 640px;
+  --fams-table-column-min-width: 160px;
+
+  /* 层叠：下拉 < 对话框 < 轻提示 */
+  --fams-z-dropdown: 100;
+  --fams-z-dialog: 200;
+  --fams-z-toast: 300;
+}
+
+/* 断点无法用变量表达，集中在此登记：1180 双列收单列、900 侧栏转标签栏、560 移动端密度。 */

@@ -1,0 +1,128 @@
+/* 表格族：正文行 14/22，纵向 padding 12；标识列左对齐、数值列右对齐且等宽数字。
+   外层滚动容器保证窄屏横滚而不是压垮列宽。 */
+.fams-table-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid var(--fams-border-default);
+  border-radius: var(--fams-radius-12);
+  background: var(--fams-bg-surface);
+}
+
+.fams-table {
+  width: 100%;
+  min-width: var(--fams-table-min-width);
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.fams-table caption {
+  padding: var(--fams-space-12) var(--fams-space-16);
+  text-align: left;
+  font-weight: 600;
+}
+
+.fams-table th,
+.fams-table td {
+  padding: var(--fams-space-12) var(--fams-space-16);
+  border-bottom: 1px solid var(--fams-border-default);
+  font-weight: 400;
+  vertical-align: middle;
+}
+
+.fams-table tbody tr:last-child th,
+.fams-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.fams-table thead th {
+  padding: 10px var(--fams-space-16);
+  background: var(--fams-bg-subtle);
+  color: var(--fams-text-secondary);
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.fams-table tbody tr:hover {
+  background: var(--fams-bg-canvas);
+}
+
+/* 说明列在横向滚动容器里保持可读宽度，避免被压成一两个字一行。 */
+.fams-table td:not([data-column-kind]) {
+  min-width: var(--fams-table-column-min-width);
+}
+
+.fams-table tr[aria-selected="true"],
+.fams-table tr[data-state="selected"] {
+  background: var(--fams-action-subtle);
+  box-shadow: inset 3px 0 var(--fams-action-primary);
+}
+
+.fams-table tr[data-state="readonly"] {
+  color: var(--fams-text-secondary);
+}
+
+.fams-table [data-column-kind="identity"] {
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.fams-table [data-column-kind="numeric"] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.fams-table [data-column-kind="action"] {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* 空态与加载态：表格缺口在 D0.4 组件清单里没有定义，按同一令牌补齐。 */
+.fams-table-empty td {
+  padding: var(--fams-space-32) var(--fams-space-16);
+  text-align: center;
+  color: var(--fams-text-secondary);
+  font-size: 14px;
+}
+
+.fams-table-empty td strong {
+  display: block;
+  margin-bottom: var(--fams-space-4);
+  color: var(--fams-text-primary);
+  font-weight: 500;
+}
+
+/* 分页控件：同样是基线缺口，与按钮族共用尺寸。 */
+.fams-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--fams-space-12);
+  margin-top: var(--fams-space-16);
+  font-size: 13px;
+  color: var(--fams-text-secondary);
+}
+
+.fams-pagination-summary {
+  margin-inline-end: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.fams-pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--fams-space-8);
+}
+
+.fams-pagination-page {
+  min-width: var(--fams-size-40);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}

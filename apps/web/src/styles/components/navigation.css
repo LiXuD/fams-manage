@@ -1,0 +1,158 @@
+/* 导航族：sidebar 用于 PC 侧栏，tabs 用于窄屏降级，选中态用 aria-current。 */
+.fams-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fams-space-8);
+  min-width: 0;
+}
+
+.fams-navigation .fams-button {
+  justify-content: flex-start;
+  border-color: transparent;
+  background: transparent;
+  color: var(--fams-text-secondary);
+  text-align: left;
+}
+
+.fams-navigation .fams-button:hover:not(:disabled) {
+  background: var(--fams-bg-subtle);
+  color: var(--fams-text-primary);
+}
+
+.fams-navigation .fams-button[aria-current] {
+  background: var(--fams-action-subtle);
+  color: var(--fams-action-primary);
+  box-shadow: inset 0 -3px var(--fams-action-primary);
+}
+
+.fams-navigation[data-mode="sidebar"] {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: var(--fams-space-12);
+}
+
+.fams-navigation[data-mode="sidebar"] .fams-button {
+  min-height: var(--fams-size-40);
+  padding: var(--fams-space-8) var(--fams-space-12);
+  font-size: 14px;
+}
+
+.fams-navigation[data-mode="sidebar"] .fams-button[aria-current] {
+  box-shadow: inset 3px 0 var(--fams-action-primary);
+}
+
+/* 分组：一级标题是可折叠按钮，二级条目缩进一档，层级靠字号、色阶与缩进区分。
+   标题规则与侧栏条目按钮规则同特异（0,2,1）并写在其后，否则字号与高度会被条目规则顶掉。 */
+.fams-navigation-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fams-space-4);
+}
+
+.fams-navigation[data-mode="sidebar"] .fams-navigation-toggle {
+  min-height: var(--fams-size-32);
+  padding: var(--fams-space-4) var(--fams-space-8);
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--fams-text-muted);
+}
+
+.fams-navigation[data-mode="sidebar"] .fams-navigation-toggle:hover:not(:disabled) {
+  background: transparent;
+  color: var(--fams-text-primary);
+}
+
+/* 当前页所在分组不折叠，标题保持可读的弱化态而不是禁用样式。 */
+.fams-navigation[data-mode="sidebar"] .fams-navigation-toggle:disabled {
+  background: transparent;
+  color: var(--fams-text-muted);
+  cursor: default;
+}
+
+.fams-navigation .fams-navigation-toggle .fams-nav-chevron {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  transform: rotate(45deg);
+  transition: transform var(--fams-motion-collapse) var(--fams-motion-ease);
+}
+
+.fams-navigation .fams-navigation-toggle[aria-expanded="false"] .fams-nav-chevron {
+  transform: rotate(0deg);
+}
+
+/* 折叠用 0fr/1fr 栅格轨道过渡：外层只有一条轨道，条目收在内层单一容器里，
+   否则多条目会落到隐式行上、0fr 只压得住第一行。 */
+.fams-navigation-items {
+  display: grid;
+  grid-template-rows: 1fr;
+  padding-left: var(--fams-space-12);
+  opacity: 1;
+  transition: grid-template-rows var(--fams-motion-collapse) var(--fams-motion-ease),
+    opacity var(--fams-motion-collapse) var(--fams-motion-ease);
+}
+
+.fams-navigation-items[data-collapsed="true"] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.fams-navigation-items-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fams-space-4);
+  min-height: 0;
+}
+
+.fams-navigation-note {
+  padding: var(--fams-space-8) var(--fams-space-12);
+  color: var(--fams-text-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.fams-navigation[data-mode="mobile"] {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--fams-space-4);
+  border-top: 1px solid var(--fams-border-default);
+  padding-top: var(--fams-space-8);
+}
+
+.fams-navigation[data-mode="mobile"] .fams-button {
+  position: relative;
+  flex-direction: column;
+  gap: 2px;
+  min-height: var(--fams-size-56);
+  padding: var(--fams-space-8) var(--fams-space-4);
+  justify-content: center;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.fams-navigation[data-mode="mobile"] .fams-button[aria-current] {
+  box-shadow: none;
+}
+
+.fams-navigation[data-mode="mobile"] .fams-button[aria-current]::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: calc(50% - 10px);
+  width: 20px;
+  height: 3px;
+  border-radius: var(--fams-radius-4);
+  background: currentColor;
+}
+
+.fams-nav-icon {
+  display: block;
+  flex: 0 0 var(--fams-size-24);
+  width: var(--fams-size-24);
+  height: var(--fams-size-24);
+}
+
+.fams-nav-label { display: block; }

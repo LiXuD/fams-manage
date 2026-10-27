@@ -1,0 +1,32 @@
+/* 提示带族：info / success / warning / error / empty / noaccess / conflict 七态。 */
+.fams-notice {
+  padding: var(--fams-space-16);
+  border: 1px solid var(--fams-border-default);
+  border-left: 3px solid var(--fams-action-primary);
+  border-radius: var(--fams-radius-8);
+  background: var(--fams-action-subtle);
+  color: var(--fams-text-primary);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.fams-notice strong { display: block; font-weight: 500; }
+.fams-notice p { margin-top: 6px; line-height: 1.7; }
+.fams-notice .fams-button { margin-top: var(--fams-space-12); }
+
+.fams-notice[data-state="success"] { background: var(--fams-status-success-bg); border-left-color: var(--fams-status-success); color: var(--fams-status-success); }
+.fams-notice[data-state="warning"],
+.fams-notice[data-state="conflict"] { background: var(--fams-status-warning-bg); border-left-color: var(--fams-status-warning); color: var(--fams-status-warning); }
+.fams-notice[data-state="error"] { background: var(--fams-status-danger-bg); border-left-color: var(--fams-status-danger); color: var(--fams-status-danger); }
+.fams-notice[data-state="empty"],
+.fams-notice[data-state="noaccess"] { background: var(--fams-bg-canvas); border-left-color: var(--fams-border-strong); color: var(--fams-text-secondary); }
+
+/* 行内消息：紧贴字段或表单底部的短提示，复用状态色但不占整块版面。 */
+.fams-message {
+  margin-top: var(--fams-space-8);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.fams-message[data-state="error"] { color: var(--fams-status-danger); }
+.fams-message[data-state="success"] { color: var(--fams-status-success); }

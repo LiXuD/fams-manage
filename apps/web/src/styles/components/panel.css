@@ -1,0 +1,208 @@
+/* 面板、指标与对象卡片：卡片圆角 12，表面阴影只在浮起层使用，不再叠第二圈边框。 */
+.fams-panel {
+  margin-top: var(--fams-space-24);
+  padding: var(--fams-space-24);
+  border: 1px solid var(--fams-border-default);
+  border-radius: var(--fams-radius-12);
+  background: var(--fams-bg-surface);
+  box-shadow: var(--fams-shadow-surface);
+}
+
+.fams-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--fams-space-16);
+  margin-bottom: var(--fams-space-16);
+}
+
+.fams-panel-title {
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 500;
+}
+
+.fams-panel-subtitle {
+  margin-top: var(--fams-space-4);
+  color: var(--fams-text-secondary);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.fams-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fams-space-8);
+}
+
+/* 折叠区：summary 承担区块标题，标题字号沿用 .fams-panel-title，这里只补可点提示。 */
+.fams-card > summary,
+.fams-panel > summary {
+  cursor: pointer;
+}
+
+/* 表单提交行：与字段栅格之间留出一个区块间距。 */
+.fams-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fams-space-12);
+  margin-top: var(--fams-space-24);
+}
+
+.fams-panel-divider {
+  margin: var(--fams-space-24) calc(var(--fams-space-24) * -1);
+  border: 0;
+  border-top: 1px solid var(--fams-border-default);
+}
+
+/* 指标块：加载与未知分开表达，未知值统一用 — 而不是 0。 */
+.fams-metric {
+  min-width: 0;
+  padding: var(--fams-space-16);
+  border: 1px solid var(--fams-border-default);
+  border-radius: var(--fams-radius-12);
+  background: var(--fams-bg-surface);
+}
+
+.fams-metric > span,
+.fams-metric small {
+  display: block;
+  color: var(--fams-text-secondary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.fams-metric strong {
+  display: block;
+  margin: var(--fams-space-4) 0;
+  font-size: 32px;
+  line-height: 44px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.fams-metric[aria-busy="true"] strong,
+.fams-metric[data-state="loading"] strong {
+  font-size: 18px;
+  line-height: 28px;
+  color: var(--fams-text-secondary);
+}
+
+.fams-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--fams-space-16);
+}
+
+/* 事实清单：dt/dd 两列，供详情区展示对象字段。 */
+.fams-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--fams-space-16);
+  margin: var(--fams-space-16) 0;
+  font-size: 14px;
+}
+
+.fams-facts > div {
+  min-width: 0;
+}
+
+.fams-facts dt {
+  color: var(--fams-text-secondary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.fams-facts dd {
+  margin-top: var(--fams-space-4);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+/* 对象卡片：可选中的资产卡，选中态用主色边框表达，不加第二次阴影。 */
+.fams-card {
+  min-width: 0;
+  padding: var(--fams-space-24);
+  border: 1px solid var(--fams-border-default);
+  border-radius: var(--fams-radius-12);
+  background: var(--fams-bg-surface);
+}
+
+.fams-card[data-state="selected"] {
+  border-color: var(--fams-action-primary);
+  box-shadow: inset 0 0 0 1px var(--fams-action-primary);
+}
+
+/* 卡片内再套卡片时收紧一档，避免逐层叠加 24px 内边距把内容挤成窄列。 */
+.fams-card .fams-card {
+  padding: var(--fams-space-16);
+}
+
+.fams-card h3 {
+  margin: var(--fams-space-4) 0 var(--fams-space-12);
+  font-size: 16px;
+  line-height: 26px;
+  font-weight: 500;
+}
+
+.fams-card small {
+  color: var(--fams-text-secondary);
+  font-size: 12px;
+}
+
+/* 纵向堆叠：面板与卡片内的多个区块由 gap 统一给出间距，子块自带 margin 归零，避免逐页手调。 */
+.fams-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fams-space-16);
+}
+
+.fams-stack > * {
+  margin-block: 0;
+}
+
+/* 纵向 flex 默认拉伸子项，按钮会被拉成整行；单独收回到内容宽度。 */
+.fams-stack > .fams-button {
+  align-self: flex-start;
+}
+
+/* 原生 fieldset 只用于整组禁用；外观由所在面板承担，不再重复画边框。 */
+.fams-stack > fieldset:not(.fams-card) {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fams-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--fams-space-8);
+}
+
+/* 并排动作里也有承载数据的按钮（原件文件名、UUID），折行才不会撑破窄屏。 */
+.fams-inline > .fams-button {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* 标签样张：资产二维码预览，打印时单独保留边框。 */
+.fams-tag-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fams-space-8);
+  width: 260px;
+  margin-top: var(--fams-space-16);
+  padding: var(--fams-space-16);
+  border: 1px dashed var(--fams-border-strong);
+  border-radius: var(--fams-radius-8);
+  background: var(--fams-bg-surface);
+}
+
+.fams-tag-preview span { color: var(--fams-text-secondary); font-size: 12px; }
+.fams-tag-preview strong { font-size: 16px; line-height: 26px; font-weight: 500; }
+.fams-tag-preview code { font-size: 12px; overflow-wrap: anywhere; }
+.fams-tag-preview img { width: 160px; height: 160px; }
+.fams-tag-preview small { color: var(--fams-text-secondary); font-size: 12px; line-height: 20px; }

@@ -1,0 +1,281 @@
+/* 应用外壳与页面骨架：顶栏 64、侧栏 190（窄屏转定高 48 标签条）、内容上边距 16、区块间距 16。
+   页头条由外壳按路由 meta 渲染，视图不再自带标题，保证不同菜单的标题落在同一垂直位置。 */
+.fams-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.fams-topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--fams-z-dropdown);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fams-space-16);
+  height: var(--fams-topbar-height);
+  padding: 0 var(--fams-space-24);
+  border-bottom: 1px solid var(--fams-border-default);
+  background: var(--fams-bg-surface);
+}
+
+.fams-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--fams-space-12);
+  min-width: 0;
+  font-size: 16px;
+  line-height: 26px;
+  font-weight: 500;
+  color: var(--fams-text-primary);
+}
+
+.fams-brand-mark {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: var(--fams-size-32);
+  height: var(--fams-size-32);
+  border-radius: var(--fams-radius-8);
+  background: var(--fams-action-primary);
+  color: var(--fams-text-inverse);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.fams-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--fams-space-12);
+}
+
+.fams-account {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 20px;
+}
+
+.fams-account-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.fams-account-role {
+  color: var(--fams-text-secondary);
+  font-size: 12px;
+}
+
+.fams-layout {
+  display: grid;
+  grid-template-columns: var(--fams-sidebar-width) minmax(0, 1fr);
+  flex: 1;
+  align-items: start;
+  /* 内容不足一屏时不拉伸轨道，否则剩余高度会把主区整体下移，各菜单空白不一致。 */
+  align-content: start;
+}
+
+.fams-layout[data-mode="anonymous"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.fams-sidebar {
+  position: sticky;
+  top: var(--fams-topbar-height);
+  align-self: start;
+  max-height: calc(100vh - var(--fams-topbar-height));
+  overflow-y: auto;
+  padding: var(--fams-space-16) var(--fams-space-8) var(--fams-space-24);
+  border-right: 1px solid var(--fams-border-default);
+  background: var(--fams-bg-surface);
+}
+
+.fams-main {
+  min-width: 0;
+  padding: var(--fams-space-16) var(--fams-content-padding) var(--fams-content-padding);
+  display: flex;
+  flex-direction: column;
+  gap: var(--fams-space-16);
+}
+
+.fams-main > .fams-panel:first-of-type {
+  margin-top: 0;
+}
+
+.fams-breadcrumb {
+  margin: 0;
+  color: var(--fams-text-secondary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+/* 页头条：由外壳按路由 meta 渲染，定高结构使所有菜单的标题落在同一位置。 */
+.fams-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--fams-space-16);
+}
+
+.fams-page-head-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fams-space-4);
+  min-width: 0;
+}
+
+.fams-page-head h1 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 36px;
+  font-weight: 700;
+  letter-spacing: var(--fams-tracking-tight);
+}
+
+.fams-page-head p {
+  margin: 0;
+  color: var(--fams-text-secondary);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+/* 登录与改密：单列卡片，宽度收敛到 420，避免输入框被拉成长条。 */
+.fams-auth-stage {
+  display: grid;
+  place-items: start center;
+  padding: var(--fams-space-48) var(--fams-space-16);
+}
+
+.fams-auth-card {
+  width: min(420px, 100%);
+  padding: var(--fams-space-32);
+  border: 1px solid var(--fams-border-default);
+  border-radius: var(--fams-radius-12);
+  background: var(--fams-bg-surface);
+  box-shadow: var(--fams-shadow-surface);
+  display: flex;
+  flex-direction: column;
+  gap: var(--fams-space-16);
+}
+
+.fams-auth-card h1 {
+  font-size: 24px;
+  line-height: 36px;
+  font-weight: 700;
+  letter-spacing: var(--fams-tracking-tight);
+}
+
+.fams-auth-card .fams-auth-intro {
+  margin-top: calc(var(--fams-space-8) * -1);
+  color: var(--fams-text-secondary);
+  font-size: 14px;
+}
+
+.fams-auth-note {
+  color: var(--fams-text-secondary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+@media (max-width: 900px) {
+  .fams-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fams-sidebar {
+    /* 窄屏标签条随页面滚动：网格轨道不再拉伸后，sticky 在定高轨道内没有可粘行程。 */
+    display: flex;
+    align-items: center;
+    height: var(--fams-tabbar-height);
+    max-height: none;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--fams-border-default);
+    padding: 0 var(--fams-space-8);
+  }
+
+  /* 侧栏在窄屏转为定高、可横滚的顶部标签条，导航不因为断点而消失。 */
+  .fams-sidebar .fams-navigation[data-mode="sidebar"] {
+    flex: 1;
+    min-width: 0;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .fams-sidebar .fams-navigation[data-mode="sidebar"] .fams-button {
+    flex: 0 0 auto;
+  }
+
+  .fams-sidebar .fams-navigation[data-mode="sidebar"] .fams-button[aria-current] {
+    box-shadow: inset 0 -3px var(--fams-action-primary);
+  }
+
+  /* 标签条模式没有折叠交互：只隐藏分组标题，条目拉平进同一条横向流。 */
+  .fams-sidebar .fams-navigation-group {
+    display: contents;
+  }
+
+  .fams-sidebar .fams-navigation-toggle,
+  .fams-sidebar .fams-navigation-note {
+    display: none;
+  }
+
+  .fams-sidebar .fams-navigation-items {
+    display: flex;
+    flex: 0 0 auto;
+    padding-left: 0;
+  }
+
+  .fams-sidebar .fams-navigation-items-inner {
+    display: contents;
+  }
+
+  .fams-main {
+    padding: var(--fams-space-12) var(--fams-space-16) var(--fams-space-24);
+  }
+}
+
+@media (max-width: 560px) {
+  .fams-topbar {
+    padding: 0 var(--fams-space-16);
+  }
+
+  .fams-account {
+    display: none;
+  }
+
+  .fams-auth-stage {
+    padding: var(--fams-space-24) var(--fams-space-8);
+  }
+
+  .fams-auth-card {
+    padding: var(--fams-space-24);
+  }
+}
+
+/* 打印：只保留正文与标签样张，隐藏外壳、分页与卡片装饰。 */
+@media print {
+  .fams-topbar,
+  .fams-sidebar,
+  .fams-pagination {
+    display: none !important;
+  }
+
+  .fams-layout {
+    display: block;
+  }
+
+  .fams-panel {
+    border: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  .fams-tag-preview {
+    border: 1px solid var(--fams-text-primary);
+  }
+}

@@ -1,0 +1,75 @@
+/* 选择族：勾选与单选，保留原生 input[type=checkbox|radio] 语义与键盘行为。 */
+.fams-selection {
+  display: flex;
+  align-items: center;
+  gap: var(--fams-space-12);
+  min-height: var(--fams-size-48);
+  font-size: 14px;
+  line-height: 22px;
+  cursor: pointer;
+}
+
+.fams-selection input {
+  flex-shrink: 0;
+  width: var(--fams-size-24);
+  height: var(--fams-size-24);
+  margin: 0;
+  accent-color: var(--fams-action-primary);
+  cursor: inherit;
+}
+
+.fams-selection:has(:disabled) {
+  color: var(--fams-text-secondary);
+  cursor: not-allowed;
+}
+
+.fams-selection:has(:disabled) input {
+  cursor: not-allowed;
+}
+
+/* 选项组：同组标签垂直堆叠，供地点、原件等清单选择使用。 */
+.fams-selection-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fams-space-4);
+  margin: var(--fams-space-8) 0;
+}
+
+.fams-selection-group .fams-selection {
+  min-height: var(--fams-size-40);
+}
+
+.fams-file {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fams-space-8);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.fams-file input[type="file"] {
+  width: 100%;
+  min-height: var(--fams-size-44);
+  padding: var(--fams-space-8) var(--fams-space-12);
+  border: 1px dashed var(--fams-border-strong);
+  border-radius: var(--fams-radius-8);
+  background: var(--fams-bg-surface);
+  cursor: pointer;
+}
+
+.fams-file input[type="file"]:hover {
+  border-color: var(--fams-action-primary);
+  background: var(--fams-action-subtle);
+}
+
+.fams-file input[type="file"]::file-selector-button {
+  min-height: var(--fams-size-32);
+  margin-inline-end: var(--fams-space-12);
+  padding: var(--fams-space-4) var(--fams-space-12);
+  border: 1px solid var(--fams-border-strong);
+  border-radius: var(--fams-radius-8);
+  background: var(--fams-bg-surface);
+  color: var(--fams-text-primary);
+  font-weight: 500;
+  cursor: pointer;
+}

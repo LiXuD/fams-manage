@@ -1,0 +1,60 @@
+/* 对话框：使用原生 dialog 与 showModal，破坏性动作必须在正文列出对象、动作与后果。 */
+.fams-dialog {
+  width: 520px;
+  max-width: calc(100vw - 32px);
+  padding: var(--fams-space-32);
+  border: 1px solid var(--fams-border-default);
+  border-radius: var(--fams-radius-16);
+  background: var(--fams-bg-surface);
+  color: var(--fams-text-primary);
+  font: 400 14px/1.7 var(--fams-font-stack);
+  box-shadow: var(--fams-shadow-dialog);
+}
+
+.fams-dialog::backdrop {
+  background: var(--fams-backdrop);
+}
+
+.fams-dialog h2 {
+  margin-bottom: var(--fams-space-16);
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 500;
+}
+
+.fams-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--fams-space-12);
+  margin-top: var(--fams-space-24);
+}
+
+/* 轻提示：基线未定义组件，按同一令牌补齐，用于不打断当前办理的结果反馈。 */
+.fams-toast-region {
+  position: fixed;
+  z-index: var(--fams-z-toast);
+  bottom: var(--fams-space-24);
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--fams-space-8);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.fams-toast {
+  max-width: min(520px, calc(100vw - 32px));
+  padding: var(--fams-space-12) var(--fams-space-16);
+  border-radius: var(--fams-radius-8);
+  background: var(--fams-text-primary);
+  color: var(--fams-text-inverse);
+  font-size: 14px;
+  line-height: 22px;
+  box-shadow: var(--fams-shadow-dialog);
+}
+
+.fams-toast[data-state="error"] {
+  background: var(--fams-status-danger);
+}

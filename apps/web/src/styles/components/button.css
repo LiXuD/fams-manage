@@ -1,0 +1,121 @@
+/* 按钮族：primary / secondary / danger / link 四种语义，PC 与 mobile 两种密度。
+   data-kind=link 是应用层补齐：表格行内动作需要文字态，D0.4 组件清单未定义该变体。 */
+.fams-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--fams-space-8);
+  min-height: var(--fams-size-40);
+  padding: var(--fams-space-8) var(--fams-space-16);
+  border: 1px solid var(--fams-border-strong);
+  border-radius: var(--fams-radius-8);
+  background: var(--fams-bg-surface);
+  color: var(--fams-text-primary);
+  font: 500 14px/22px var(--fams-font-stack);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--fams-motion-feedback) var(--fams-motion-ease),
+    border-color var(--fams-motion-feedback) var(--fams-motion-ease),
+    color var(--fams-motion-feedback) var(--fams-motion-ease);
+}
+
+.fams-button[data-size="mobile"] {
+  min-height: var(--fams-size-48);
+  min-width: var(--fams-size-44);
+  font-size: 16px;
+}
+
+.fams-button[data-size="sm"] {
+  min-height: var(--fams-size-32);
+  padding: var(--fams-space-4) var(--fams-space-12);
+  font-size: 14px;
+}
+
+.fams-button[data-kind="primary"] {
+  background: var(--fams-action-primary);
+  border-color: var(--fams-action-primary);
+  color: var(--fams-text-inverse);
+}
+
+.fams-button[data-kind="primary"]:hover:not(:disabled) {
+  background: var(--fams-action-hover);
+  border-color: var(--fams-action-hover);
+}
+
+.fams-button[data-kind="primary"]:active:not(:disabled) {
+  background: var(--fams-action-pressed);
+  border-color: var(--fams-action-pressed);
+}
+
+.fams-button[data-kind="secondary"]:hover:not(:disabled) {
+  background: var(--fams-bg-subtle);
+}
+
+.fams-button[data-kind="secondary"]:active:not(:disabled) {
+  background: var(--fams-action-subtle);
+}
+
+.fams-button[data-kind="danger"] {
+  color: var(--fams-status-danger);
+  border-color: var(--fams-status-danger);
+}
+
+.fams-button[data-kind="danger"]:hover:not(:disabled) {
+  background: var(--fams-status-danger-bg);
+}
+
+.fams-button[data-kind="danger"]:active:not(:disabled) {
+  background: var(--fams-status-danger);
+  color: var(--fams-text-inverse);
+}
+
+.fams-button[data-kind="link"] {
+  min-height: var(--fams-size-32);
+  padding: var(--fams-space-4) var(--fams-space-8);
+  border-color: transparent;
+  background: transparent;
+  color: var(--fams-action-primary);
+}
+
+.fams-button[data-kind="link"]:hover:not(:disabled) {
+  background: var(--fams-action-subtle);
+  color: var(--fams-action-hover);
+}
+
+.fams-button:disabled {
+  background: var(--fams-bg-subtle);
+  border-color: var(--fams-border-default);
+  color: var(--fams-text-secondary);
+  cursor: not-allowed;
+}
+
+/* 加载中保留原语义色，避免误读为“已禁用”。 */
+.fams-button:disabled[data-state="loading"] {
+  cursor: wait;
+  color: var(--fams-text-inverse);
+  background: var(--fams-action-primary);
+  border-color: var(--fams-action-primary);
+}
+
+.fams-button[data-kind="secondary"]:disabled[data-state="loading"],
+.fams-button[data-kind="danger"]:disabled[data-state="loading"],
+.fams-button[data-kind="link"]:disabled[data-state="loading"] {
+  background: var(--fams-bg-surface);
+  color: var(--fams-text-primary);
+}
+
+.fams-spinner {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: fams-spin 800ms linear infinite;
+}
+
+@keyframes fams-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
