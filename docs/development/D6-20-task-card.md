@@ -145,3 +145,6 @@ C2权限源码核验：AssetController.create及update要求WAREHOUSE_OPERATOR�
 2026-10-27 C2工作树局部验证：独立新卡/新序列/新编码、厂家换机专用原件、资产和入库所有者不可变来源、来源入库草稿、取消重提与双向资产追溯已实现。V54有数据备份恢复140个表/视图及全部行事实一致，V55升级1/重复0、所有旧列事实不变；V55已实际应用并冻结SHA e3cce62cd6e4f4c90038360c46576730f86c64915953be4b8752c509fa4001fd。HTTP41、Web192、mini295局部通过，含实际Page→opaque→Spring/MySQL专用原件字节、上传和建卡已提交响应丢失的原键恢复、管理员草稿隔离及员工私有信息隔离；正常独立提交/批准/认领/实际验收使新机IN_STOCK，旧机完整行/维修锁/未收回日期保持。首轮控制器及原生客户端用途白名单遗漏、夹具入库参数缺失均保留失败后修正；自有运行容器已清理。固定完整门禁、实际PC/ClamAV及提交JVM恢复尚待，C2/C/父项仍IN_PROGRESS，独立和外部验收不代签。
 
 2026-10-27 C2固定3bcbcf6未通过完整门禁：101份Java报告593项中1个架构用例失败（两个新增Controller持有事务），故未生成可执行验收包，PC自有MySQL/ClamAV已自动清理。另在实现者复查中发现私有返厂历史包含未提交newAsset；新增管理员真实HTTP红例1项在旧实现失败，保留history-privacy-red.xml。修正将完整typed输入只保留在不可变换机事实snapshot_json，事件仅保留安全摘要；资产查询端口自持只读事务，参考资料应用服务持有授权及查询事务，Controller不持有事务。修正工作树HTTP41及FamsArchitectureTest3全部无失败错误跳过，含真实opaque历史隔离；V55原字节冻结不改。3bcbcf6不得作为通过候选；修正候选完整门禁、实际PC/ClamAV/提交JVM仍待执行，C2/C及父项保持IN_PROGRESS，独立复核不代签。
+
+
+2026-10-27 C2固定b9bf3f8完整门禁未通过：101份Java报告593项全部零失败错误跳过，行19727/21221、分支6939/9187，但SpotBugs12项阻断后续门禁；Boot包仅诊断留存，PC未执行业务并已清理。明细中2项为ReplacementFact对可变AssetCreateRequest的构造/访问别名，已通过深拷贝固定完整输入并保留日期与高精度金额，原旧请求Schema不改；另10项仅Spring共享依赖，按现有类/字段/构造器精确白名单处理，不抑制请求或返回数据。修正工作树HTTP41、架构3、快照2全部通过，Checkstyle0/SpotBugs0，原件opaque与原键重放仍通过；失败及修正XML和日志保留。下一固定新候选完整门禁、实际PC/ClamAV/提交JVM；V55原字节不改，C2/C及父项继续IN_PROGRESS，独立复核不代签。

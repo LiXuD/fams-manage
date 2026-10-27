@@ -160,8 +160,22 @@ public final class RepairFactoryInput {
             @NotNull @Positive Long locationId,
             @NotNull @PositiveOrZero Long locationVersion,
             @NotNull @jakarta.validation.constraints.AssertTrue Boolean replacementPhysicalIdentityChecked) {
+        private static final tools.jackson.databind.ObjectMapper SNAPSHOT_JSON =
+                new tools.jackson.databind.ObjectMapper();
+
         public ReplacementFact {
             evidenceIds = evidenceIds == null ? null : List.copyOf(evidenceIds);
+            newAsset = copyAsset(newAsset);
+        }
+
+        public com.fams.product.contract.model.AssetCreateRequest newAsset() {
+            return copyAsset(newAsset);
+        }
+
+        private static com.fams.product.contract.model.AssetCreateRequest copyAsset(
+                com.fams.product.contract.model.AssetCreateRequest value) {
+            return value == null ? null : SNAPSHOT_JSON.convertValue(
+                    value, com.fams.product.contract.model.AssetCreateRequest.class);
         }
     }
 
