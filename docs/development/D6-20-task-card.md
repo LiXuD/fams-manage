@@ -1,6 +1,6 @@
 # D6-20 返厂与换机
 
-依据PRD V1.5 §7.4/7.5/7.6、8.8 REPAIR-002/004/005及AC-27。基线3804097，固定D6-19C候选cd2ba8b完整本地门禁通过；D6-19独立复核仍开放，不代签。当前分支codex/d6-20-factory，实施Codex；非实施者独立复核与真实外部验收另行执行。
+依据PRD V1.5 §7.4/7.5/7.6、8.8 REPAIR-002/004/005及AC-27。基线3804097，固定D6-19C候选cd2ba8b完整本地门禁通过；D6-19独立复核仍开放，不代签。当前分支codex/d6-20c1-form-recovery，实施Codex；非实施者独立复核与真实外部验收另行执行。
 
 ## 必需子项与可验证边界
 
@@ -137,3 +137,5 @@ C2权限源码核验：AssetController.create及update要求WAREHOUSE_OPERATOR�
 接续入口：[2026-10-27 开发交接](2026-10-27-d6-20c1-handoff.md)。当前没有未提交的功能修复；不要把2ff8ea9完整门禁通过解释为C1实际PC已通过。
 
 2026-10-27 C1接续修复：当前main/origin/main已为455ba00，工作区干净，从此建立codex/d6-20c1-form-recovery。补成功上传后round/repair两种分步props刷新红例，修复前均失败；删除冗余版本watcher，由ready持续比较两项版本，stale仅保留明确拒绝/读取门槛。修复后Web181项及lint通过，400/409后即使props重新对齐也须显式读取，未知结果原键/身份清理保持。全工作区类型检查因packages/api-types/target缺生成契约暂失败，待完整门禁先生成再验；尚未重验实际PC、提交JVM与最终入库。C1/C/父项仍IN_PROGRESS，不代签独立复核。
+
+2026-10-27 C1固定885dc46修复及送审：双顺序props红例旧实现均失败，删除冗余锁存后Web181及400/409刷新门槛、未知原键/身份清理通过。完整门禁Java100报告588/Web181/mini287、静态0、行19488/20967、分支6844/9070、类型lint双构建、依赖HIGH阈值、应用/同卷MySQL恢复与干净后检全部通过。PC三角色完成一轮寄出/原机收回、三用途原件真实ClamAV、上传后无手动刷新直接录入及两条独立观察保留首条。实际提交JVM59571强杀→同包重启，完整typed PartsFact按原键重放全部业务完整行不变；独立实际入库COMPLETED/IN_STOCK/锁0，原机身份/轮次/部件/业务日期保持。员工私有信息不可见，PC控制台0，自有应用/Vite/MySQL/ClamAV/原件目录及标签页清理。初次类型缺生成物及观察脚本过早取得普通JAR的启动失败均留证，校正可执行Boot包后新环境重跑通过；旧2ff8ea9失败不覆盖。C1转IN_REVIEW，非实施者未签；C及D6-20父项仍IN_PROGRESS，下一C2后D及D21～27，外部/CI/QA/生产另验。见evidence/d6-20/product-gate-885dc46.json、c1-pc-jvm-885dc46.json及2026-10-27-d6-20c1-review-handoff.md。
