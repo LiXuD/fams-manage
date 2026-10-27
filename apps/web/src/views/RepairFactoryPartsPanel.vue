@@ -99,32 +99,74 @@ watch([() => props.repair.version, () => props.round.version], () => { if (heade
 onBeforeUnmount(() => { live = false; reset(); emit("busy-change", false); });
 </script>
 <template>
-  <section v-if="canRead" aria-label="原机部件变更" class="parts-panel">
-    <h4>同一原机的部件变更</h4><p>核实部件前后资料并保留原记录。整机换新须另建独立资产卡；本次核实不结束维修。</p>
-    <button :disabled="props.blocked || busy || !!confirmation" @click="load()">核对部件变更记录</button>
+  <section v-if="canRead" class="fams-card fams-stack" aria-label="原机部件变更">
+    <div class="fams-panel-head">
+      <div>
+        <h4 class="fams-panel-title">同一原机的部件变更</h4>
+        <p class="fams-panel-subtitle">核实部件前后资料并保留原记录。整机换新须另建独立资产卡；本次核实不结束维修。</p>
+      </div>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="props.blocked || busy || !!confirmation" @click="load()">核对部件变更记录</button>
+      </div>
+    </div>
     <template v-if="opened">
-      <p v-if="error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p>
-      <p v-if="pending">本次结果尚待核对，重试将沿用本次原请求。</p><button v-if="pending" :disabled="busy || props.blocked" @click="perform">重试原部件办理</button>
-      <section v-if="confirmation" aria-label="确认本次部件办理"><p>{{ confirmation.label }}</p><button :disabled="busy || props.blocked" @click="confirm">确认保存本次部件办理</button><button :disabled="busy || props.blocked" @click="confirmation = null">返回修改部件办理</button></section>
+      <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+      <p v-if="notice" class="fams-notice" data-state="success" role="status"><strong>{{ notice }}</strong></p>
+      <p v-if="pending">本次结果尚待核对，重试将沿用本次原请求。</p>
+      <button v-if="pending" class="fams-button" data-kind="secondary" type="button" :disabled="busy || props.blocked" @click="perform">重试原部件办理</button>
+      <div v-if="confirmation" class="fams-card fams-stack" role="group" aria-label="确认本次部件办理">
+        <p>{{ confirmation.label }}</p>
+        <div class="fams-panel-actions">
+          <button class="fams-button" data-kind="primary" type="button" :disabled="busy || props.blocked" @click="confirm">确认保存本次部件办理</button>
+          <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || props.blocked" @click="confirmation = null">返回修改部件办理</button>
+        </div>
+      </div>
       <template v-if="records && header && roundData">
-        <p>本轮部件核实记录共 {{ records.total }} 条。</p><article v-for="item in records.items" :key="item.id"><h5>{{ item.partName }}</h5><p>变更前：{{ item.beforeInfo }}</p><p>变更后：{{ item.afterInfo }}</p><p>核实于 {{ new Date(item.observedAt).toLocaleString() }}；记录于 {{ new Date(item.recordedAt).toLocaleString() }}。</p></article>
-        <button :disabled="locked || page === 1" @click="load(-1)">上一页部件记录</button><button :disabled="locked || page * 20 >= records.total" @click="load(1)">下一页部件记录</button>
+        <p>本轮部件核实记录共 {{ records.total }} 条。</p>
+        <article v-for="item in records.items" :key="item.id" class="fams-card fams-stack">
+          <h5 class="fams-panel-title">{{ item.partName }}</h5>
+          <p>变更前：{{ item.beforeInfo }}</p>
+          <p>变更后：{{ item.afterInfo }}</p>
+          <p>核实于 {{ new Date(item.observedAt).toLocaleString() }}；记录于 {{ new Date(item.recordedAt).toLocaleString() }}。</p>
+        </article>
+        <div class="fams-pagination">
+          <div class="fams-pagination-actions">
+            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page === 1" @click="load(-1)">上一页部件记录</button>
+            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page * 20 >= records.total" @click="load(1)">下一页部件记录</button>
+          </div>
+        </div>
         <p v-if="!records.canRecord">当前仅可核对原记录；须由当前处理库管在最新原机收回且实物仍待办理时核实部件。</p>
         <template v-else>
           <p v-if="!header.photosAvailable">原件服务暂不可用，请保留部件变更原件。</p>
-          <fieldset :disabled="locked || !ready || !header.photosAvailable"><legend>本轮部件变更原件</legend><label>选择部件变更图片或PDF原件<input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" @change="fileChosen"></label><p v-if="file">已选部件原件：{{ file.name }}</p><button @click="prepare(true)">核对追加部件变更原件</button></fieldset>
-          <fieldset :disabled="locked || !ready || !header.photosAvailable"><legend>核实同一原机部件</legend><p>本轮原机 {{ roundData.originalIdentity.assetCode }}{{ roundData.originalIdentity.serialNumber ? ` · 序列号 ${roundData.originalIdentity.serialNumber}` : '' }}。</p>
-            <label>核实的部件名称<input v-model="part" maxlength="100"></label><label>变更前部件或身份资料<textarea v-model="before" maxlength="2000" /></label><label>变更后部件或身份资料<textarea v-model="after" maxlength="2000" /></label>
-            <label>部件核实的原机资产编码<input v-model="code" maxlength="2048"></label><label v-if="roundData.originalIdentity.serialNumber">部件核实的原机序列号<input v-model="serial" maxlength="128"></label><label>部件核实日期和时刻（本机时区，含秒）<input v-model="dateTime" type="datetime-local" step="1"></label><label>部件变更核实依据<textarea v-model="reason" maxlength="1000" /></label>
-            <label v-for="item in originals" :key="item.object_id"><input v-model="evidenceIds" type="checkbox" :value="item.object_id">选用部件变更原件 {{ roundData.files.find(f => f.objectId === item.object_id)?.filename }}</label>
-            <button v-for="item in originals" :key="`read-${item.object_id}`" @click="emit('read-file', roundData.files.find(f => f.objectId === item.object_id)!)">读取部件变更原件 {{ roundData.files.find(f => f.objectId === item.object_id)?.filename }}</button>
-            <label><input v-model="checked" type="checkbox">已亲自核实仍为原实物，部件前后资料与所选原件相符</label><button @click="prepare(false)">核对保存部件变更</button>
+          <fieldset class="fams-card fams-stack" :disabled="locked || !ready || !header.photosAvailable">
+            <legend class="fams-panel-title">本轮部件变更原件</legend>
+            <label class="fams-file"><span class="fams-field-label">选择部件变更图片或PDF原件</span><input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" @change="fileChosen"></label>
+            <p v-if="file">已选部件原件：{{ file.name }}</p>
+            <button class="fams-button" data-kind="secondary" type="button" @click="prepare(true)">核对追加部件变更原件</button>
+          </fieldset>
+          <fieldset class="fams-card fams-stack" :disabled="locked || !ready || !header.photosAvailable">
+            <legend class="fams-panel-title">核实同一原机部件</legend>
+            <p>本轮原机 {{ roundData.originalIdentity.assetCode }}{{ roundData.originalIdentity.serialNumber ? ` · 序列号 ${roundData.originalIdentity.serialNumber}` : '' }}。</p>
+            <div class="fams-field-grid">
+              <label class="fams-field"><span class="fams-field-label">核实的部件名称</span><input class="fams-control" v-model="part" maxlength="100"></label>
+              <label class="fams-field fams-field-wide"><span class="fams-field-label">变更前部件或身份资料</span><textarea class="fams-control" v-model="before" maxlength="2000" /></label>
+              <label class="fams-field fams-field-wide"><span class="fams-field-label">变更后部件或身份资料</span><textarea class="fams-control" v-model="after" maxlength="2000" /></label>
+              <label class="fams-field"><span class="fams-field-label">部件核实的原机资产编码</span><input class="fams-control" v-model="code" maxlength="2048"></label>
+              <label v-if="roundData.originalIdentity.serialNumber" class="fams-field"><span class="fams-field-label">部件核实的原机序列号</span><input class="fams-control" v-model="serial" maxlength="128"></label>
+              <label class="fams-field"><span class="fams-field-label">部件核实日期和时刻（本机时区，含秒）</span><input class="fams-control" v-model="dateTime" type="datetime-local" step="1"></label>
+              <label class="fams-field fams-field-wide"><span class="fams-field-label">部件变更核实依据</span><textarea class="fams-control" v-model="reason" maxlength="1000" /></label>
+            </div>
+            <div class="fams-selection-group">
+              <label v-for="item in originals" :key="item.object_id" class="fams-selection"><input v-model="evidenceIds" type="checkbox" :value="item.object_id">选用部件变更原件 {{ roundData.files.find(f => f.objectId === item.object_id)?.filename }}</label>
+            </div>
+            <div class="fams-inline">
+              <button v-for="item in originals" :key="`read-${item.object_id}`" class="fams-button" data-kind="link" data-size="sm" type="button" @click="emit('read-file', roundData.files.find(f => f.objectId === item.object_id)!)">读取部件变更原件 {{ roundData.files.find(f => f.objectId === item.object_id)?.filename }}</button>
+            </div>
+            <label class="fams-selection"><input v-model="checked" type="checkbox">已亲自核实仍为原实物，部件前后资料与所选原件相符</label>
+            <button class="fams-button" data-kind="primary" type="button" @click="prepare(false)">核对保存部件变更</button>
           </fieldset>
         </template>
       </template>
     </template>
   </section>
 </template>
-<style scoped>
-.parts-panel { border-top: 1px solid #d9e0e8; margin-top: 16px; padding-top: 12px; } fieldset { border: 1px solid #d9e0e8; margin: 16px 0; padding: 16px; } label { display: block; margin: 12px 0; } textarea { display: block; width: min(100%, 720px); min-height: 70px; } button { margin: 6px; }
-</style>
