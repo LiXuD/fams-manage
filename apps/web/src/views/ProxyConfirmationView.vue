@@ -107,65 +107,88 @@ onBeforeUnmount(() => { live = false; clear(); });
 
 <template>
   <AppChrome>
-    <h1>异常代确认</h1>
-    <p>仅用于已经实际交付、原接收人无法操作确认的资产。管理员批准后，当前库管还需明确执行。</p>
-    <p v-if="error" role="alert" class="form-error">{{ error }}</p>
-    <button :disabled="busy" @click="refresh">刷新当前记录</button>
-    <button v-if="pending" :disabled="busy" @click="send(pending.path)">重试上次操作</button>
-    <button v-if="pendingUpload" :disabled="busy" @click="upload">重试上次凭证上传</button>
-    <p v-if="pending || pendingUpload">上次操作结果尚未确认，请保持本页并使用原请求重试。</p>
-    <form v-if="snapshot" @submit.prevent="create">
-      <h2>申请代确认</h2>
-      <p>实物 {{ snapshot.assetCode }} · 责任人员 {{ snapshot.targetEmployeeId }} · 单据 {{ snapshot.businessId }}</p>
-      <fieldset :disabled="locked">
-        <label>核对实物编码<input v-model="form.observedAssetCode" required maxlength="128"></label>
-        <label>实际签收人<input v-model="form.actualSigner" required maxlength="200"></label>
-        <label>实际签收时间<input v-model="form.actualReceivedAt" type="datetime-local" step="0.001" required></label>
-        <label>不能在线确认的原因<textarea v-model="form.cannotConfirmReason" required maxlength="1000" /></label>
-        <label>联系记录<textarea v-model="form.contactRecord" required maxlength="1000" /></label>
-        <label><input v-model="form.delegatedReceipt" type="checkbox">授权代理人签收</label>
-        <template v-if="form.delegatedReceipt">
-          <label>代理关系<textarea v-model="form.delegationRelationship" required maxlength="1000" /></label>
-          <label>授权依据<textarea v-model="form.delegationBasis" required maxlength="1000" /></label>
-        </template>
-        <label>凭证类别<select v-model="form.evidenceKind"><option value="SIGNED_RECEIPT">签收单</option><option value="LOGISTICS_RECEIPT">物流签收</option><option value="AUTHORIZED_PROXY">授权代收</option></select></label>
-        <label>编码采集方式<select v-model="form.collectionMethod"><option value="CODE_CONFIRMED">核对编码</option><option value="SCAN_CONFIRMED">扫描核对</option><option value="MANUAL_RECORD">手工记录</option></select></label>
-        <label v-if="form.collectionMethod === 'MANUAL_RECORD'">手工记录原因<textarea v-model="form.manualReason" required maxlength="1000" /></label>
-        <label><input v-model="form.targetOrAuthorizedProxyReceived" type="checkbox" required>已确认本人或其授权代理人实际收到，且无实物或责任争议</label>
-        <button type="submit">保存凭证草稿</button>
-      </fieldset>
-    </form>
-    <h2>代确认记录</h2>
-    <ul><li v-for="row in rows" :key="row.id"><button :disabled="locked" @click="open(row.id)">代确认 {{ row.id }} · {{ labels[row.confirmationStatus] }}</button></li></ul>
-    <button :disabled="locked || page <= 1" @click="paginate(-1)">上一页</button>
-    <span>{{ page }} 页 / 共 {{ total }} 条</span>
-    <button :disabled="locked || page * 20 >= total" @click="paginate(1)">下一页</button>
-    <section v-if="selected">
-      <h2>代确认 {{ selected.id }} · {{ labels[selected.confirmationStatus] }}</h2>
-      <p>{{ businessLabels[selected.businessType] || '业务' }}单据 {{ selected.businessId }} / 明细 {{ selected.itemId }} · 实物 {{ selected.businessSnapshotJson.assetCode }} · 责任人员 {{ selected.businessSnapshotJson.targetEmployeeId }}</p>
-      <p>实际签收人：{{ selected.actualSigner }} · 时间：{{ formatProxyTime(selected.actualReceivedAt) }}</p>
-      <p>无法确认原因：{{ selected.cannotConfirmReason }}；联系记录：{{ selected.contactRecord }}</p>
-      <p v-if="selected.delegatedReceipt">代理关系：{{ selected.delegationRelationship }}；授权依据：{{ selected.delegationBasis }}</p>
-      <p>凭证 {{ selected.evidenceKind }} · 采集 {{ selected.collectionMethod }} {{ selected.manualReason }}</p>
-      <p>提交账号 {{ selected.creatorAccountId }} · 批准账号 {{ selected.approverAccountId ?? '待批准' }} · 执行账号 {{ selected.executorAccountId ?? '待执行' }}</p>
-      <p v-if="selected.decisionReason">决定说明：{{ selected.decisionReason }}</p>
-      <router-link :to="businessLink(selected.businessType, selected.businessId)">查看业务单据与核查入口</router-link>
-      <ul><li v-for="attachment in attachments" :key="attachment.objectId">{{ attachment.filename }} · {{ attachment.scanStatus }}
-        <button :disabled="busy || attachment.scanStatus !== 'CLEAN'" @click="download(attachment)">下载凭证</button></li></ul>
-      <fieldset v-if="warehouse && selected.confirmationStatus === 'DRAFT'" :disabled="locked">
-        <label>签收凭证<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" @change="file = ($event.target as HTMLInputElement).files?.[0] ?? null"></label>
-        <button :disabled="!file" @click="upload">上传凭证</button>
-        <button :disabled="!attachments.some(a => a.scanStatus === 'CLEAN')" @click="send(`/proxy-confirmations/${selected.id}/submit`)">冻结凭证并提交批准</button>
-      </fieldset>
-      <fieldset v-if="admin && selected.confirmationStatus === 'SUBMITTED'" :disabled="locked">
-        <label>审批说明<textarea v-model="decision.reason" required maxlength="1000" /></label>
-        <label><input v-model="decision.physicalEvidenceChecked" type="checkbox">已下载核验实际签收凭证及授权依据</label>
-        <label><input v-model="decision.noDisputeChecked" type="checkbox">已确认资产、人员与签收事实无争议</label>
-        <button :disabled="!decision.reason.trim() || !decision.physicalEvidenceChecked || !decision.noDisputeChecked" @click="send(`/proxy-confirmations/${selected.id}/decision`, { ...decision, approved: true })">批准本次代确认</button>
-        <button :disabled="!decision.reason.trim()" @click="send(`/proxy-confirmations/${selected.id}/decision`, { ...decision, approved: false })">驳回</button>
-      </fieldset>
-      <button v-if="warehouse && selected.confirmationStatus === 'APPROVED'" :disabled="locked" @click="send(`/proxy-confirmations/${selected.id}/execute`)">执行已批准代确认并通知责任人员</button>
-      <p v-if="selected.confirmationStatus === 'EXECUTED'">代确认已执行。责任人员收到结果通知；未读通知不会撤销资产责任。</p>
+    <template #actions>
+      <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="refresh">刷新当前记录</button>
+    </template>
+    <section class="fams-panel fams-stack" aria-label="异常代确认">
+      <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+      <button v-if="pending" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="send(pending.path)">重试上次操作</button>
+      <button v-if="pendingUpload" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="upload">重试上次凭证上传</button>
+      <p v-if="pending || pendingUpload">上次操作结果尚未确认，请保持本页并使用原请求重试。</p>
+      <form v-if="snapshot" class="fams-card fams-stack" @submit.prevent="create">
+        <div class="fams-panel-head"><h2 class="fams-panel-title">申请代确认</h2></div>
+        <p>实物 {{ snapshot.assetCode }} · 责任人员 {{ snapshot.targetEmployeeId }} · 单据 {{ snapshot.businessId }}</p>
+        <fieldset class="fams-stack" :disabled="locked">
+          <div class="fams-field-grid">
+            <label class="fams-field"><span class="fams-field-label">核对实物编码</span><input class="fams-control" v-model="form.observedAssetCode" required maxlength="128"></label>
+            <label class="fams-field"><span class="fams-field-label">实际签收人</span><input class="fams-control" v-model="form.actualSigner" required maxlength="200"></label>
+            <label class="fams-field"><span class="fams-field-label">实际签收时间</span><input class="fams-control" v-model="form.actualReceivedAt" type="datetime-local" step="0.001" required></label>
+          </div>
+          <label class="fams-field fams-field-wide"><span class="fams-field-label">不能在线确认的原因</span><textarea class="fams-control" v-model="form.cannotConfirmReason" required maxlength="1000" /></label>
+          <label class="fams-field fams-field-wide"><span class="fams-field-label">联系记录</span><textarea class="fams-control" v-model="form.contactRecord" required maxlength="1000" /></label>
+          <label class="fams-selection"><input v-model="form.delegatedReceipt" type="checkbox">授权代理人签收</label>
+          <template v-if="form.delegatedReceipt">
+            <label class="fams-field fams-field-wide"><span class="fams-field-label">代理关系</span><textarea class="fams-control" v-model="form.delegationRelationship" required maxlength="1000" /></label>
+            <label class="fams-field fams-field-wide"><span class="fams-field-label">授权依据</span><textarea class="fams-control" v-model="form.delegationBasis" required maxlength="1000" /></label>
+          </template>
+          <div class="fams-field-grid">
+            <label class="fams-field"><span class="fams-field-label">凭证类别</span><select class="fams-control" v-model="form.evidenceKind"><option value="SIGNED_RECEIPT">签收单</option><option value="LOGISTICS_RECEIPT">物流签收</option><option value="AUTHORIZED_PROXY">授权代收</option></select></label>
+            <label class="fams-field"><span class="fams-field-label">编码采集方式</span><select class="fams-control" v-model="form.collectionMethod"><option value="CODE_CONFIRMED">核对编码</option><option value="SCAN_CONFIRMED">扫描核对</option><option value="MANUAL_RECORD">手工记录</option></select></label>
+          </div>
+          <label v-if="form.collectionMethod === 'MANUAL_RECORD'" class="fams-field fams-field-wide"><span class="fams-field-label">手工记录原因</span><textarea class="fams-control" v-model="form.manualReason" required maxlength="1000" /></label>
+          <label class="fams-selection"><input v-model="form.targetOrAuthorizedProxyReceived" type="checkbox" required>已确认本人或其授权代理人实际收到，且无实物或责任争议</label>
+          <div class="fams-form-actions"><button class="fams-button" data-kind="primary" type="submit">保存凭证草稿</button></div>
+        </fieldset>
+      </form>
+      <div class="fams-panel-head"><h2 class="fams-panel-title">代确认记录</h2></div>
+      <ul class="fams-timeline">
+        <li v-for="row in rows" :key="row.id"><button class="fams-button" data-size="sm" type="button" :disabled="locked" @click="open(row.id)">代确认 {{ row.id }} · {{ labels[row.confirmationStatus] }}</button></li>
+      </ul>
+      <div class="fams-pagination">
+        <span class="fams-pagination-summary">{{ page }} 页 / 共 {{ total }} 条</span>
+        <div class="fams-pagination-actions">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page <= 1" @click="paginate(-1)">上一页</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page * 20 >= total" @click="paginate(1)">下一页</button>
+        </div>
+      </div>
+      <section v-if="selected" class="fams-card fams-stack">
+        <div class="fams-panel-head">
+          <div>
+            <h2 class="fams-panel-title">代确认 {{ selected.id }} · {{ labels[selected.confirmationStatus] }}</h2>
+            <p class="fams-panel-subtitle">{{ businessLabels[selected.businessType] || '业务' }}单据 {{ selected.businessId }} / 明细 {{ selected.itemId }} · 实物 {{ selected.businessSnapshotJson.assetCode }} · 责任人员 {{ selected.businessSnapshotJson.targetEmployeeId }}</p>
+          </div>
+        </div>
+        <p>实际签收人：{{ selected.actualSigner }} · 时间：{{ formatProxyTime(selected.actualReceivedAt) }}</p>
+        <p>无法确认原因：{{ selected.cannotConfirmReason }}；联系记录：{{ selected.contactRecord }}</p>
+        <p v-if="selected.delegatedReceipt">代理关系：{{ selected.delegationRelationship }}；授权依据：{{ selected.delegationBasis }}</p>
+        <p>凭证 {{ selected.evidenceKind }} · 采集 {{ selected.collectionMethod }} {{ selected.manualReason }}</p>
+        <p>提交账号 {{ selected.creatorAccountId }} · 批准账号 {{ selected.approverAccountId ?? '待批准' }} · 执行账号 {{ selected.executorAccountId ?? '待执行' }}</p>
+        <p v-if="selected.decisionReason">决定说明：{{ selected.decisionReason }}</p>
+        <router-link :to="businessLink(selected.businessType, selected.businessId)">查看业务单据与核查入口</router-link>
+        <ul class="fams-timeline">
+          <li v-for="attachment in attachments" :key="attachment.objectId">{{ attachment.filename }}<small>{{ attachment.scanStatus }}</small><button class="fams-button" data-size="sm" type="button" :disabled="busy || attachment.scanStatus !== 'CLEAN'" @click="download(attachment)">下载凭证</button></li>
+        </ul>
+        <fieldset v-if="warehouse && selected.confirmationStatus === 'DRAFT'" class="fams-stack" :disabled="locked">
+          <label class="fams-file"><span class="fams-field-label">签收凭证</span><input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" @change="file = ($event.target as HTMLInputElement).files?.[0] ?? null"></label>
+          <div class="fams-inline">
+            <button class="fams-button" data-kind="secondary" type="button" :disabled="!file" @click="upload">上传凭证</button>
+            <button class="fams-button" data-kind="primary" type="button" :disabled="!attachments.some(a => a.scanStatus === 'CLEAN')" @click="send(`/proxy-confirmations/${selected.id}/submit`)">冻结凭证并提交批准</button>
+          </div>
+        </fieldset>
+        <fieldset v-if="admin && selected.confirmationStatus === 'SUBMITTED'" class="fams-stack" :disabled="locked">
+          <label class="fams-field fams-field-wide"><span class="fams-field-label">审批说明</span><textarea class="fams-control" v-model="decision.reason" required maxlength="1000" /></label>
+          <div class="fams-selection-group">
+            <label class="fams-selection"><input v-model="decision.physicalEvidenceChecked" type="checkbox">已下载核验实际签收凭证及授权依据</label>
+            <label class="fams-selection"><input v-model="decision.noDisputeChecked" type="checkbox">已确认资产、人员与签收事实无争议</label>
+          </div>
+          <div class="fams-inline">
+            <button class="fams-button" data-kind="primary" type="button" :disabled="!decision.reason.trim() || !decision.physicalEvidenceChecked || !decision.noDisputeChecked" @click="send(`/proxy-confirmations/${selected.id}/decision`, { ...decision, approved: true })">批准本次代确认</button>
+            <button class="fams-button" data-kind="secondary" type="button" :disabled="!decision.reason.trim()" @click="send(`/proxy-confirmations/${selected.id}/decision`, { ...decision, approved: false })">驳回</button>
+          </div>
+        </fieldset>
+        <button v-if="warehouse && selected.confirmationStatus === 'APPROVED'" class="fams-button" data-kind="primary" type="button" :disabled="locked" @click="send(`/proxy-confirmations/${selected.id}/execute`)">执行已批准代确认并通知责任人员</button>
+        <p v-if="selected.confirmationStatus === 'EXECUTED'">代确认已执行。责任人员收到结果通知；未读通知不会撤销资产责任。</p>
+      </section>
     </section>
   </AppChrome>
 </template>

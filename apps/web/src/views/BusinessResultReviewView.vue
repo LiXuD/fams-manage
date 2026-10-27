@@ -32,19 +32,29 @@ onBeforeUnmount(() => { live = false; clear(); });
 </script>
 <template>
   <AppChrome>
-    <h1>代确认结果核查</h1>
-    <p>资产管理员共享查看，不因查看保留审批权。请核验原签收凭证与业务事实，再按现有业务流程处理；核查请求不自动解除责任。</p>
-    <p v-if="error" role="alert" class="form-error">{{ error }}</p>
-    <button :disabled="busy" @click="refresh()">刷新核查列表</button>
-    <article v-for="review in rows" :key="review.noticeId">
-      <h2>通知 {{ review.noticeId }} · {{ review.recipient }}</h2>
-      <p>{{ review.reason }} · {{ formatProxyTime(review.createdAt) }}</p>
-      <router-link :to="{ path: '/proxy-confirmations', query: { id: review.executionId } }">查看代确认与签收凭证</router-link>
-      <router-link :to="review.businessType === 'REPAIR' ? { path: '/repairs/' + review.businessId } : { path: review.businessType === 'TRANSFER' ? '/transfers' : '/requisitions', query: { id: review.businessId } }">查看业务单据</router-link>
-    </article>
-    <p v-if="!rows.length">暂无待核查请求。</p>
-    <button :disabled="busy || page <= 1" @click="refresh(-1)">上一页</button>
-    <span>{{ page }} 页 / 共 {{ total }} 条</span>
-    <button :disabled="busy || page * 20 >= total" @click="refresh(1)">下一页</button>
+    <template #actions>
+      <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="refresh()">刷新核查列表</button>
+    </template>
+    <section class="fams-panel fams-stack" aria-label="代确认结果核查">
+      <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+      <article v-for="review in rows" :key="review.noticeId" class="fams-card fams-stack">
+        <div class="fams-panel-head">
+          <div>
+            <h2 class="fams-panel-title">通知 {{ review.noticeId }} · {{ review.recipient }}</h2>
+            <p class="fams-panel-subtitle">{{ review.reason }} · {{ formatProxyTime(review.createdAt) }}</p>
+          </div>
+        </div>
+        <router-link :to="{ path: '/proxy-confirmations', query: { id: review.executionId } }">查看代确认与签收凭证</router-link>
+        <router-link :to="review.businessType === 'REPAIR' ? { path: '/repairs/' + review.businessId } : { path: review.businessType === 'TRANSFER' ? '/transfers' : '/requisitions', query: { id: review.businessId } }">查看业务单据</router-link>
+      </article>
+      <p v-if="!rows.length">暂无待核查请求。</p>
+      <div class="fams-pagination">
+        <span class="fams-pagination-summary">{{ page }} 页 / 共 {{ total }} 条</span>
+        <div class="fams-pagination-actions">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || page <= 1" @click="refresh(-1)">上一页</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || page * 20 >= total" @click="refresh(1)">下一页</button>
+        </div>
+      </div>
+    </section>
   </AppChrome>
 </template>

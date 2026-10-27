@@ -5,7 +5,7 @@ import { reactive } from "vue";
 import ProxyConfirmationView from "./ProxyConfirmationView.vue";
 
 const state = vi.hoisted(() => ({ request: vi.fn(), session: { user: { id: "2", roles: ["ASSET_ADMIN"] } as { id: string; roles: string[] } | null, csrfToken: "csrf" } }));
-vi.mock("@/components/AppChrome.vue", () => ({ default: { template: "<main><slot /></main>" } }));
+vi.mock("@/components/AppChrome.vue", () => ({ default: { template: "<main><slot name=\"actions\" /><slot /></main>" } }));
 vi.mock("vue-router", () => ({ useRoute: () => ({ query: { id: "41" } }),
   useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock("@/auth/sessionStore", () => ({ useSessionStore: () => state.session }));

@@ -30,19 +30,25 @@ async function submit(): Promise<void> {
 
 <template>
   <AppChrome>
-    <div class="breadcrumb">员工身份 / 首次登录</div>
-    <section class="auth-stage" aria-labelledby="password-title">
-      <form class="auth-form" novalidate @submit.prevent="submit">
+    <div class="fams-breadcrumb">员工身份 / 首次登录</div>
+    <section class="fams-auth-stage" aria-labelledby="password-title">
+      <form class="fams-auth-card" novalidate @submit.prevent="submit">
         <h1 id="password-title">修改初始密码</h1>
-        <p class="auth-intro">完成密码修改后才能进入系统。</p>
-        <label for="current-password">当前密码</label>
-        <input id="current-password" v-model="form.currentPassword" type="password" autocomplete="current-password" required />
-        <label for="new-password">新密码</label>
-        <input id="new-password" v-model="form.newPassword" type="password" autocomplete="new-password" minlength="12" required />
-        <label for="confirm-password">确认新密码</label>
-        <input id="confirm-password" v-model="form.confirmPassword" type="password" autocomplete="new-password" minlength="12" required />
-        <p v-if="localError || session.error" class="form-error" role="alert">{{ localError || session.error?.message }}</p>
-        <button class="primary-button" type="submit" :disabled="session.isBusy">{{ session.isBusy ? "提交中…" : "保存并继续" }}</button>
+        <p class="fams-auth-intro">完成密码修改后才能进入系统。</p>
+        <div class="fams-field">
+          <label for="current-password">当前密码</label>
+          <input id="current-password" class="fams-control" v-model="form.currentPassword" type="password" autocomplete="current-password" required />
+        </div>
+        <div class="fams-field">
+          <label for="new-password">新密码</label>
+          <input id="new-password" class="fams-control" v-model="form.newPassword" type="password" autocomplete="new-password" minlength="12" required />
+        </div>
+        <div class="fams-field">
+          <label for="confirm-password">确认新密码</label>
+          <input id="confirm-password" class="fams-control" v-model="form.confirmPassword" type="password" autocomplete="new-password" minlength="12" required />
+        </div>
+        <p v-if="localError || session.error" class="fams-notice" data-state="error" role="alert"><strong>{{ localError || session.error?.message }}</strong></p>
+        <button class="fams-button" data-kind="primary" type="submit" :disabled="session.isBusy">{{ session.isBusy ? "提交中…" : "保存并继续" }}</button>
       </form>
     </section>
   </AppChrome>
