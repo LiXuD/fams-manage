@@ -50,29 +50,48 @@ onMounted(refresh);
 
 <template>
   <AppChrome>
-    <div class="breadcrumb">工作台 / 资产台账 / 期初窗口</div>
-    <div class="asset-heading"><div><h1>期初导入窗口</h1><p>指定仓库操作员和截止时间。仅窗口内可提交与发布期初资产。</p></div>
-      <button class="secondary-button" type="button" @click="refresh">刷新状态</button></div>
-    <p v-if="error" class="form-error" role="alert">{{ error }}</p>
-    <p v-if="notice" class="asset-notice" role="status">{{ notice }}</p>
-    <section v-if="current" class="asset-panel">
-      <h2>当前开放窗口</h2>
-      <p>窗口 {{ current.id }} · 操作员 {{ operators.find((item) => item.id === current?.assignedOperatorId)?.username
-        ?? current.assignedOperatorId }} · 截止 {{ current.expiresAt }}</p>
-      <button class="secondary-button" type="button" :disabled="busy" @click="close">关闭窗口</button>
-    </section>
-    <section v-else class="asset-panel">
-      <h2>开放期初窗口</h2>
-      <div class="asset-filters">
-        <label>仓库操作员 <select v-model="operatorId"><option value="">请选择</option>
-          <option v-for="item in operators" :key="item.id" :value="item.id">{{ item.username }}</option>
-        </select></label>
-        <label>截止时间 <input v-model="expiresAt" type="datetime-local" /></label>
-        <label>开放原因 <input v-model="reason" maxlength="500" /></label>
+    <template #actions>
+      <button class="fams-button" data-kind="secondary" type="button" @click="refresh">刷新状态</button>
+    </template>
+
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+    <p v-if="notice" class="fams-notice" data-state="success" role="status"><strong>{{ notice }}</strong></p>
+
+    <section v-if="current" class="fams-panel fams-stack" aria-label="当前开放窗口">
+      <div class="fams-panel-head">
+        <h2 class="fams-panel-title">当前开放窗口</h2>
       </div>
-      <p>窗口最长 30 天；到期后需重新开放。</p>
-      <button class="primary-button" type="button"
-        :disabled="busy || !operatorId || !expiresAt || !reason.trim()" @click="open">开放窗口</button>
+      <dl class="fams-facts">
+        <div><dt>窗口编号</dt><dd>{{ current.id }}</dd></div>
+        <div><dt>仓库操作员</dt><dd>{{ operators.find((item) => item.id === current?.assignedOperatorId)?.username
+          ?? current.assignedOperatorId }}</dd></div>
+        <div><dt>截止时间</dt><dd>{{ current.expiresAt }}</dd></div>
+      </dl>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="close">关闭窗口</button>
+      </div>
+    </section>
+    <section v-else class="fams-panel fams-stack" aria-label="开放期初窗口">
+      <div class="fams-panel-head">
+        <div>
+          <h2 class="fams-panel-title">开放期初窗口</h2>
+          <p class="fams-panel-subtitle">窗口最长 30 天；到期后需重新开放。</p>
+        </div>
+      </div>
+      <div class="fams-field-grid">
+        <label class="fams-field"><span class="fams-field-label">仓库操作员</span>
+          <select class="fams-control" v-model="operatorId"><option value="">请选择</option>
+            <option v-for="item in operators" :key="item.id" :value="item.id">{{ item.username }}</option>
+          </select></label>
+        <label class="fams-field"><span class="fams-field-label">截止时间</span>
+          <input class="fams-control" v-model="expiresAt" type="datetime-local" /></label>
+        <label class="fams-field"><span class="fams-field-label">开放原因</span>
+          <input class="fams-control" v-model="reason" maxlength="500" /></label>
+      </div>
+      <div class="fams-form-actions">
+        <button class="fams-button" data-kind="primary" type="button"
+          :disabled="busy || !operatorId || !expiresAt || !reason.trim()" @click="open">开放窗口</button>
+      </div>
     </section>
   </AppChrome>
 </template>

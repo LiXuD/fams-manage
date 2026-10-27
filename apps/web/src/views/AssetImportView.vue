@@ -186,87 +186,110 @@ onMounted(async () => {
 
 <template>
   <AppChrome>
-    <div class="breadcrumb">工作台 / 资产台账 / 批量导入</div>
-    <div class="asset-heading">
-      <div><h1>资产批量导入</h1><p>下载模板、上传 XLSX、映射字段并逐行预检。</p></div>
-      <button class="secondary-button" type="button" @click="template">下载 Excel 模板</button>
-    </div>
-    <p v-if="error" class="form-error" role="alert">{{ error }}</p>
-    <p v-if="notice" class="asset-notice" role="status">{{ notice }}</p>
-    <section class="asset-panel" aria-label="上传资产文件">
-      <h2>1. 上传文件</h2>
-      <p>单个文件最多 20 MB、20,000 行。批次保存后可用页面地址重新打开。</p>
-      <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        aria-label="选择资产 XLSX 文件" @change="selectedFile" />
-      <button class="primary-button" type="button" :disabled="busy || !file" @click="upload">上传并保存批次</button>
+    <template #actions>
+      <button class="fams-button" data-kind="secondary" type="button" @click="template">下载 Excel 模板</button>
+    </template>
+
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+    <p v-if="notice" class="fams-notice" data-state="success" role="status"><strong>{{ notice }}</strong></p>
+
+    <section class="fams-panel fams-stack" aria-label="上传资产文件">
+      <div class="fams-panel-head">
+        <div>
+          <h2 class="fams-panel-title">1. 上传文件</h2>
+          <p class="fams-panel-subtitle">单个文件最多 20 MB、20,000 行。批次保存后可用页面地址重新打开。</p>
+        </div>
+      </div>
+      <label class="fams-file"><input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        aria-label="选择资产 XLSX 文件" @change="selectedFile" /></label>
+      <div class="fams-form-actions">
+        <button class="fams-button" data-kind="primary" type="button" :disabled="busy || !file" @click="upload">上传并保存批次</button>
+      </div>
     </section>
-    <section v-if="ticket" class="asset-panel" aria-label="字段映射">
-      <h2>2. 字段映射</h2>
-      <p>批次 {{ ticket.id }} · 预检版本 {{ ticket.previewVersion }}。编码优先匹配；名称仅在目标范围唯一时采用。</p>
-      <div class="asset-filters">
-        <label v-for="field in fields" :key="field.key">{{ field.label }}
-          <select v-model="mapping[field.key]">
+
+    <section v-if="ticket" class="fams-panel fams-stack" aria-label="字段映射">
+      <div class="fams-panel-head">
+        <div>
+          <h2 class="fams-panel-title">2. 字段映射</h2>
+          <p class="fams-panel-subtitle">批次 {{ ticket.id }} · 预检版本 {{ ticket.previewVersion }}。编码优先匹配；名称仅在目标范围唯一时采用。</p>
+        </div>
+      </div>
+      <div class="fams-field-grid">
+        <label v-for="field in fields" :key="field.key" class="fams-field"><span class="fams-field-label">{{ field.label }}</span>
+          <select class="fams-control" v-model="mapping[field.key]">
             <option value="">未映射</option>
             <option v-for="column in columns" :key="column" :value="column">{{ column }}</option>
-          </select>
-        </label>
+          </select></label>
       </div>
-      <button class="primary-button" type="button"
-        :disabled="busy || !!review && review.status !== 'REJECTED' || !['UPLOADED', 'PREVIEWED'].includes(ticket.status)"
-        @click="preview">运行预检</button>
+      <div class="fams-form-actions">
+        <button class="fams-button" data-kind="primary" type="button"
+          :disabled="busy || !!review && review.status !== 'REJECTED' || !['UPLOADED', 'PREVIEWED'].includes(ticket.status)"
+          @click="preview">运行预检</button>
+      </div>
     </section>
-    <section v-if="ticket && ticket.status !== 'UPLOADED'" class="asset-panel" aria-label="预检结果">
-      <h2>3. 预检结果</h2>
+
+    <section v-if="ticket && ticket.status !== 'UPLOADED'" class="fams-panel fams-stack" aria-label="预检结果">
+      <div class="fams-panel-head">
+        <div>
+          <h2 class="fams-panel-title">3. 预检结果</h2>
+        </div>
+        <div class="fams-panel-actions">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="report">下载预检结果 CSV</button>
+          <button v-if="['PUBLISHED', 'ROLLED_BACK'].includes(ticket.status)"
+            class="fams-button" data-kind="secondary" data-size="sm" type="button"
+            @click="resultReport">下载导入结果 CSV</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="refresh">刷新状态</button>
+        </div>
+      </div>
       <p>正确 {{ readyRows }} 行 · 错误 {{ errorRows }} 行。
         {{ ticket.status === 'PUBLISHED' ? '资产已发布。'
           : ticket.status === 'ROLLED_BACK' ? '批次已撤销，资产编码永久保留为废号。'
           : ticket.status === 'QUEUED' ? '管理员已批准，后台发布排队中。'
             : ticket.status === 'FAILED' ? '后台发布失败，请联系管理员处理。'
               : '当前仅保存预检结果，尚未发布资产。' }}</p>
-      <button class="secondary-button" type="button" @click="report">下载预检结果 CSV</button>
-      <button v-if="['PUBLISHED', 'ROLLED_BACK'].includes(ticket.status)"
-        class="secondary-button" type="button"
-        @click="resultReport">下载导入结果 CSV</button>
-      <button class="secondary-button" type="button" :disabled="busy" @click="refresh">刷新状态</button>
-      <div v-if="ticket.status === 'PREVIEWED'" class="asset-filters">
+      <div v-if="ticket.status === 'PREVIEWED'" class="fams-form-actions">
         <p v-if="review">核验状态：{{ review.status }}。{{ review.status === 'REJECTED' ? '可修正后重新预检。' : '' }}</p>
         <button v-if="readyRows > 0 && (!review || review.status === 'REJECTED')"
-          class="primary-button" type="button" :disabled="busy" @click="submitReview">提交管理员核验</button>
+          class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="submitReview">提交管理员核验</button>
       </div>
-      <div v-if="ticket.status === 'PUBLISHED'" class="asset-filters">
+      <div v-if="ticket.status === 'PUBLISHED'" class="fams-field-row">
         <p v-if="rollback">整批撤销：{{ rollback.status }}。</p>
         <template v-if="!rollback || rollback.status === 'REJECTED'">
-          <label>撤销原因 <input v-model="rollbackReason" maxlength="500" /></label>
-          <button class="secondary-button" type="button" :disabled="busy || !rollbackReason.trim()"
+          <label class="fams-field"><span class="fams-field-label">撤销原因</span>
+            <input class="fams-control" v-model="rollbackReason" maxlength="500" /></label>
+          <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || !rollbackReason.trim()"
             @click="submitRollback">申请整批撤销</button>
         </template>
-        <button v-if="rollback?.status === 'APPROVED'" class="primary-button" type="button"
+        <button v-if="rollback?.status === 'APPROVED'" class="fams-button" data-kind="primary" type="button"
           :disabled="busy" @click="executeRollback">执行已批准的撤销</button>
       </div>
-      <div class="asset-filters">
-        <button class="secondary-button" type="button" @click="selectRows('ERROR')">错误行</button>
-        <button class="secondary-button" type="button" @click="selectRows('READY')">正确行</button>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="selectRows('ERROR')">错误行</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="selectRows('READY')">正确行</button>
       </div>
-      <div class="asset-table-wrap"><table class="asset-table">
-        <thead><tr><th>Excel 行</th><th>名称</th><th>资产编码</th><th>状态</th><th>错误列 / 原值 / 原因</th></tr></thead>
+      <div class="fams-table-scroll"><table class="fams-table">
+        <thead><tr><th scope="col" data-column-kind="identity">Excel 行</th><th scope="col">名称</th><th scope="col">资产编码</th><th scope="col">状态</th><th scope="col">错误列 / 原值 / 原因</th></tr></thead>
         <tbody>
           <tr v-for="row in rows" :key="row.sheetRow">
-            <td>{{ row.sheetRow }}</td>
+            <th scope="row" data-column-kind="identity">{{ row.sheetRow }}</th>
             <td>{{ row.source[mapping.name] ?? '—' }}</td>
             <td>{{ row.source[mapping.assetCode] ?? '—' }}</td>
-            <td>{{ row.status === 'READY' ? '可导入' : '需修正' }}</td>
+            <td><span class="fams-status" :data-tone="row.status === 'READY' ? 'success' : 'warning'">{{ row.status === 'READY' ? '可导入' : '需修正' }}</span></td>
             <td><div v-for="item in row.errors ?? []" :key="item.column + item.reason">
               {{ item.sheet }} / {{ item.column }}：{{ item.original || '（空）' }} · {{ item.reason }}
             </div></td>
           </tr>
-          <tr v-if="rows.length === 0"><td colspan="5">当前没有{{ rowFilter === 'ERROR' ? '错误' : '正确' }}行</td></tr>
+          <tr v-if="rows.length === 0" class="fams-table-empty"><td colspan="5"><strong>当前没有{{ rowFilter === 'ERROR' ? '错误' : '正确' }}行</strong>切换上方筛选或翻页查看其余行。</td></tr>
         </tbody>
       </table></div>
-      <div class="asset-filters">
-        <button class="secondary-button" type="button" :disabled="page <= 1" @click="page--; loadRows()">上一页</button>
-        <span>第 {{ page }} 页 · 共 {{ total }} 行</span>
-        <button class="secondary-button" type="button" :disabled="page * 50 >= total"
-          @click="page++; loadRows()">下一页</button>
+      <div class="fams-pagination">
+        <span class="fams-pagination-summary">共 {{ total }} 行</span>
+        <div class="fams-pagination-actions">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="page <= 1" @click="page--; loadRows()">上一页</button>
+          <span class="fams-pagination-page">第 {{ page }} 页</span>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="page * 50 >= total"
+            @click="page++; loadRows()">下一页</button>
+        </div>
       </div>
     </section>
   </AppChrome>

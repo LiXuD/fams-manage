@@ -125,57 +125,76 @@ onMounted(load);
 
 <template>
   <AppChrome>
-    <div class="breadcrumb">工作台 / 入库管理</div>
-    <div class="asset-heading"><div><h1>入库管理</h1>
-      <p>管理员确认后，由一名库管认领并逐项核对实物。</p></div></div>
-    <p v-if="error" class="form-error" role="alert">{{ error }}</p>
-    <p v-if="notice" class="asset-notice" role="status">{{ notice }}</p>
-    <section v-if="warehouseRole" class="asset-panel asset-form" aria-label="建立入库单">
-      <h2>{{ editing ? `修订草稿 ${editing.receiptNumber}` : '建立入库单' }}</h2>
-      <form @submit.prevent="create">
-        <label>业务日期<input v-model="businessDate" type="date" required /></label>
-        <label>待入库资产（可多选）<select v-model="assetIds" multiple required>
-          <option v-for="item in assets" :key="item.id" :value="item.id">{{ item.assetCode }} · {{ item.name }}</option>
-        </select></label>
-        <label>目标仓库<select v-model="warehouseId" required><option value="">请选择</option>
-          <option v-for="item in warehouses" :key="item.id" :value="item.id">{{ item.name ?? item.code }}</option>
-        </select></label>
-        <label>目标位置<select v-model="locationId" required><option value="">请选择</option>
-          <option v-for="item in locations.filter((value) => value.warehouse?.id === warehouseId)" :key="item.id" :value="item.id">{{ item.name ?? item.code }}</option>
-        </select></label>
-        <button class="primary-button" type="submit" :disabled="busy">{{ editing ? '保存修订' : '保存草稿' }}</button>
-        <button v-if="editing" class="secondary-button" type="button" :disabled="busy" @click="editing = null; assetIds = []">退出修订</button>
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+    <p v-if="notice" class="fams-notice" data-state="success" role="status"><strong>{{ notice }}</strong></p>
+    <section v-if="warehouseRole" class="fams-panel fams-stack" aria-label="建立入库单">
+      <div class="fams-panel-head">
+        <div>
+          <h2 class="fams-panel-title">{{ editing ? `修订草稿 ${editing.receiptNumber}` : '建立入库单' }}</h2>
+        </div>
+      </div>
+      <form class="fams-stack" @submit.prevent="create">
+        <div class="fams-field-grid">
+          <label class="fams-field"><span class="fams-field-label">业务日期</span>
+            <input class="fams-control" v-model="businessDate" type="date" required /></label>
+          <label class="fams-field"><span class="fams-field-label">待入库资产（可多选）</span>
+            <select class="fams-control" v-model="assetIds" multiple required size="8">
+              <option v-for="item in assets" :key="item.id" :value="item.id">{{ item.assetCode }} · {{ item.name }}</option>
+            </select></label>
+          <label class="fams-field"><span class="fams-field-label">目标仓库</span>
+            <select class="fams-control" v-model="warehouseId" required><option value="">请选择</option>
+              <option v-for="item in warehouses" :key="item.id" :value="item.id">{{ item.name ?? item.code }}</option>
+            </select></label>
+          <label class="fams-field"><span class="fams-field-label">目标位置</span>
+            <select class="fams-control" v-model="locationId" required><option value="">请选择</option>
+              <option v-for="item in locations.filter((value) => value.warehouse?.id === warehouseId)" :key="item.id" :value="item.id">{{ item.name ?? item.code }}</option>
+            </select></label>
+        </div>
+        <div class="fams-form-actions">
+          <button class="fams-button" data-kind="primary" type="submit" :disabled="busy">{{ editing ? '保存修订' : '保存草稿' }}</button>
+          <button v-if="editing" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="editing = null; assetIds = []">退出修订</button>
+        </div>
       </form>
     </section>
-    <section class="asset-panel" aria-label="入库单列表">
-      <h2>入库单</h2>
-      <div class="asset-table-wrap"><table class="asset-table">
-        <thead><tr><th>单号</th><th>业务日期</th><th>状态</th><th>资产数</th><th>操作</th></tr></thead>
+    <section class="fams-panel fams-stack" aria-label="入库单列表">
+      <div class="fams-panel-head">
+        <div>
+          <h2 class="fams-panel-title">入库单</h2>
+        </div>
+      </div>
+      <div class="fams-table-scroll"><table class="fams-table">
+        <thead><tr><th scope="col" data-column-kind="identity">单号</th><th scope="col">业务日期</th><th scope="col">状态</th>
+          <th scope="col" data-column-kind="numeric">资产数</th><th scope="col" data-column-kind="action">操作</th></tr></thead>
         <tbody><tr v-for="value in receipts" :key="value.id">
-          <td>{{ value.receiptNumber }}</td><td>{{ value.businessDate }}</td>
-          <td>{{ value.status }}</td><td>{{ value.items.length }}</td>
-          <td><button class="text-button" type="button" :disabled="busy" @click="open(value.id)">详情</button></td>
-        </tr><tr v-if="!receipts.length"><td colspan="5">暂无入库单</td></tr></tbody>
+          <th scope="row" data-column-kind="identity">{{ value.receiptNumber }}</th><td>{{ value.businessDate }}</td>
+          <td><span class="fams-status">{{ value.status }}</span></td><td data-column-kind="numeric">{{ value.items.length }}</td>
+          <td data-column-kind="action"><button class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="busy" @click="open(value.id)">详情</button></td>
+        </tr><tr v-if="!receipts.length" class="fams-table-empty"><td colspan="5"><strong>暂无入库单</strong>由库管新建入库草稿后在此查看。</td></tr></tbody>
       </table></div>
     </section>
-    <section v-if="selected" class="asset-panel" aria-label="入库单详情">
-      <h2>{{ selected.receiptNumber }} · {{ selected.status }}</h2>
+    <section v-if="selected" class="fams-panel fams-stack" aria-label="入库单详情">
+      <div class="fams-panel-head">
+        <div>
+          <h2 class="fams-panel-title">{{ selected.receiptNumber }} · {{ selected.status }}</h2>
+        </div>
+      </div>
       <p v-if="selected.currentProcessor">当前处理人：{{ selected.currentProcessor.processor.username }}</p>
       <p v-if="selected.decision">管理员决定：{{ selected.decision.result }}</p>
-      <div class="asset-actions">
-        <button v-if="warehouseRole && selected.status === 'DRAFT' && selected.createdBy.id === session.user?.id" class="secondary-button" type="button" :disabled="busy" @click="editDraft">修订草稿</button>
-        <button v-if="warehouseRole && selected.status === 'DRAFT'" class="primary-button" type="button" :disabled="busy" @click="act('submit')">提交审批</button>
-        <button v-if="warehouseRole && ['DRAFT', 'PENDING_ADMIN_DECISION'].includes(selected.status)" class="secondary-button" type="button" :disabled="busy" @click="act('cancel')">取消</button>
-        <button v-if="adminRole && selected.status === 'PENDING_ADMIN_DECISION'" class="primary-button" type="button" :disabled="busy" @click="act('approve')">批准</button>
-        <button v-if="adminRole && selected.status === 'PENDING_ADMIN_DECISION'" class="secondary-button" type="button" :disabled="busy" @click="act('reject')">驳回</button>
-        <button v-if="warehouseRole && selected.status === 'WAITING_WAREHOUSE_CLAIM'" class="primary-button" type="button" :disabled="busy" @click="act('claim')">认领整单</button>
+      <div class="fams-panel-actions">
+        <button v-if="warehouseRole && selected.status === 'DRAFT' && selected.createdBy.id === session.user?.id" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="editDraft">修订草稿</button>
+        <button v-if="warehouseRole && selected.status === 'DRAFT'" class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="act('submit')">提交审批</button>
+        <button v-if="warehouseRole && ['DRAFT', 'PENDING_ADMIN_DECISION'].includes(selected.status)" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="act('cancel')">取消</button>
+        <button v-if="adminRole && selected.status === 'PENDING_ADMIN_DECISION'" class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="act('approve')">批准</button>
+        <button v-if="adminRole && selected.status === 'PENDING_ADMIN_DECISION'" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="act('reject')">驳回</button>
+        <button v-if="warehouseRole && selected.status === 'WAITING_WAREHOUSE_CLAIM'" class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="act('claim')">认领整单</button>
       </div>
-      <div class="asset-table-wrap"><table class="asset-table">
-        <thead><tr><th>资产编码</th><th>资产名称</th><th>执行状态</th><th>操作</th></tr></thead>
+      <div class="fams-table-scroll"><table class="fams-table">
+        <thead><tr><th scope="col" data-column-kind="identity">资产编码</th><th scope="col">资产名称</th><th scope="col">执行状态</th>
+          <th scope="col" data-column-kind="action">操作</th></tr></thead>
         <tbody><tr v-for="item in selected.items" :key="item.id">
-          <td>{{ item.assetSnapshot.assetCode }}</td><td>{{ item.assetSnapshot.assetName }}</td>
-          <td>{{ item.executionStatus }}</td>
-          <td><button v-if="warehouseRole && selected.status === 'WAREHOUSE_PROCESSING' && item.executionStatus === 'PENDING' && selected.currentProcessor?.processor.id === session.user?.id" class="text-button" type="button" :disabled="busy" @click="accept(item)">验收入库</button></td>
+          <th scope="row" data-column-kind="identity">{{ item.assetSnapshot.assetCode }}</th><td>{{ item.assetSnapshot.assetName }}</td>
+          <td><span class="fams-status">{{ item.executionStatus }}</span></td>
+          <td data-column-kind="action"><button v-if="warehouseRole && selected.status === 'WAREHOUSE_PROCESSING' && item.executionStatus === 'PENDING' && selected.currentProcessor?.processor.id === session.user?.id" class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="busy" @click="accept(item)">验收入库</button></td>
         </tr></tbody>
       </table></div>
       <InboundReassignment v-if="adminRole && selected.status === 'WAREHOUSE_PROCESSING'"
