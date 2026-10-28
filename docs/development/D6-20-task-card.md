@@ -148,3 +148,6 @@ C2权限源码核验：AssetController.create及update要求WAREHOUSE_OPERATOR�
 
 
 2026-10-27 C2固定b9bf3f8完整门禁未通过：101份Java报告593项全部零失败错误跳过，行19727/21221、分支6939/9187，但SpotBugs12项阻断后续门禁；Boot包仅诊断留存，PC未执行业务并已清理。明细中2项为ReplacementFact对可变AssetCreateRequest的构造/访问别名，已通过深拷贝固定完整输入并保留日期与高精度金额，原旧请求Schema不改；另10项仅Spring共享依赖，按现有类/字段/构造器精确白名单处理，不抑制请求或返回数据。修正工作树HTTP41、架构3、快照2全部通过，Checkstyle0/SpotBugs0，原件opaque与原键重放仍通过；失败及修正XML和日志保留。下一固定新候选完整门禁、实际PC/ClamAV/提交JVM；V55原字节不改，C2/C及父项继续IN_PROGRESS，独立复核不代签。
+
+
+2026-10-28 C2固定56e0b67完整门禁通过：Java102报告595项零失败错误跳过，Web192/mini295、Checkstyle0/SpotBugs0、行19724/21225、分支6929/9189，类型lint双构建、依赖HIGH阈值、应用/同卷MySQL恢复及干净后检通过。同包实际PC完成三角色报修/批准/接修、实际寄出和两用途原件真实ClamAV；上传后无手动刷新建立独立新卡与换机来源草稿。提交JVM69498/进程组69497强杀后同包重启，完整typed ReplacementFact原键回执一致，所有者业务完整行及两原件字节不变。PC已单独提交/批准/认领新机入库，最后实际验收因IAB不支持prompt改用Chrome，随后原生工具明确Mac锁定，需用户手动解锁；尚非COMPLETED，不计完整PC通过。旧机完整行/FACTORY_REPAIR/维修锁/received_at=NULL保留。初次脚本把草稿WAITING_INBOUND误判为IN_STOCK的失败已保留，修正断言后新环境重跑，生产代码未改；接修时刻早于已记录事实正常拒绝后已补正。见product-gate-56e0b67.json、c2-pc-jvm-recovery-56e0b67.json、c2-pc-final-inbound-pending-56e0b67.json及2026-10-28-d6-20c2-handoff.md。C2/C/父项继续IN_PROGRESS，最终PC与独立复核不代签；后续具体D6-21/22转换再回接D6-20D，V1～V55冻结。
