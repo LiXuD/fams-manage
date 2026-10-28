@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
+import FamsMediaPreview from "@/components/FamsMediaPreview.vue";
 import RepairCollaborationPanel from "./RepairCollaborationPanel.vue";
 import RepairPhysicalPanel from "./RepairPhysicalPanel.vue";
 import RepairReturnPanel from "./RepairReturnPanel.vue";
@@ -217,7 +218,9 @@ onBeforeUnmount(() => { live = false; reset(); });
           <div class="fams-form-actions"><button class="fams-button" data-kind="primary" type="button" @click="prepare('photo')">核对上传故障照片</button></div>
           <p>管理员决定后保留批准时的照片依据，不能覆盖原记录。</p>
         </fieldset>
-        <figure v-if="preview" class="fams-card"><img :src="preview" :alt="`故障照片：${previewName}`"><figcaption>{{ previewName }}</figcaption><button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="clearPhoto">关闭故障照片</button></figure>
+        <FamsMediaPreview v-if="preview" @dismiss="clearPhoto">
+          <figure><img :src="preview" :alt="`故障照片：${previewName}`"><figcaption>{{ previewName }}</figcaption><button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="clearPhoto">关闭故障照片</button></figure>
+        </FamsMediaPreview>
       </section>
       <fieldset v-if="detail.actions?.approve || detail.actions?.cancel" class="fams-card fams-stack" :disabled="locked">
         <div class="fams-field-grid">
@@ -264,7 +267,7 @@ onBeforeUnmount(() => { live = false; reset(); });
             <p class="fams-panel-subtitle">保留原始事件照片；损坏核实和发现时间以盘点复核记录为准。</p>
           </div>
         </div>
-        <div v-for="origin in detail.inventoryEvidence" :key="origin.observationId">
+        <div v-for="origin in detail.inventoryEvidence" :key="origin.observationId" class="fams-stack">
           <p>盘点 {{ origin.taskId }} · 原始证据 {{ origin.observationId }}</p>
           <RepairInventoryPhoto v-for="photo in origin.photoIds" :key="`${detail.id}:${detail.version}:${origin.observationId}:${photo}`" :repair-id="detail.id" :observation-id="origin.observationId" :object-id="photo" :blocked="locked" @invalidated="reset" />
         </div>

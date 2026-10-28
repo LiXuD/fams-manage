@@ -13,6 +13,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--fams-bg-canvas);
   color: var(--fams-text-primary);
   font: 400 14px/22px var(--fams-font-stack);

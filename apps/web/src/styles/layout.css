@@ -1,9 +1,11 @@
-/* 应用外壳与页面骨架：顶栏 64、侧栏 190（窄屏转定高 48 标签条）、内容上边距 16、区块间距 16。
-   页头条由外壳按路由 meta 渲染，视图不再自带标题，保证不同菜单的标题落在同一垂直位置。 */
+/* 应用外壳与页面骨架：顶栏 64、侧栏 190（窄屏转定高 48 标签栏）、内容上边距 16、区块间距 24。
+   页头条由外壳按路由 meta 渲染，视图不再自带标题，保证不同菜单的标题落在同一垂直位置。
+   区块间距只由 .fams-main 的 gap 给出（D0.4 的 20—24 档取 24），面板不再自带 margin-top。 */
 .fams-shell {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .fams-topbar {
@@ -85,6 +87,7 @@
   top: var(--fams-topbar-height);
   align-self: start;
   max-height: calc(100vh - var(--fams-topbar-height));
+  max-height: calc(100dvh - var(--fams-topbar-height));
   overflow-y: auto;
   padding: var(--fams-space-16) var(--fams-space-8) var(--fams-space-24);
   border-right: 1px solid var(--fams-border-default);
@@ -96,11 +99,7 @@
   padding: var(--fams-space-16) var(--fams-content-padding) var(--fams-content-padding);
   display: flex;
   flex-direction: column;
-  gap: var(--fams-space-16);
-}
-
-.fams-main > .fams-panel:first-of-type {
-  margin-top: 0;
+  gap: var(--fams-space-24);
 }
 
 .fams-breadcrumb {
@@ -207,7 +206,10 @@
   }
 
   .fams-sidebar .fams-navigation[data-mode="sidebar"] .fams-button {
+    /* 标签条模式是触控入口，条目高度收进 44 档（定高 48 的标签条容得下）。
+       特异 0,4,0 且晚于 navigation.css 的条目规则，才能顶掉那档 min-height。 */
     flex: 0 0 auto;
+    min-height: var(--fams-size-44);
   }
 
   .fams-sidebar .fams-navigation[data-mode="sidebar"] .fams-button[aria-current] {

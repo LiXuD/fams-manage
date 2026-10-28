@@ -1,7 +1,9 @@
-/* 面板、指标与对象卡片：卡片圆角 12，表面阴影只在浮起层使用，不再叠第二圈边框。 */
+/* 面板、指标与对象卡片：卡片圆角 12，表面阴影只在浮起层使用，不再叠第二圈边框。
+   内边距走 --fams-pad（外层 24 → 嵌套 16 → 窄屏 12），块的纵向节奏统一由容器 gap 给出，
+   面板不再自带 margin-top，否则与 .fams-main 的 gap 叠加成 40px，比 D0.4 区块间距 20—24 大一档。 */
 .fams-panel {
-  margin-top: var(--fams-space-24);
-  padding: var(--fams-space-24);
+  --fams-pad: var(--fams-space-24);
+  padding: var(--fams-pad);
   border: 1px solid var(--fams-border-default);
   border-radius: var(--fams-radius-12);
   background: var(--fams-bg-surface);
@@ -42,6 +44,11 @@
   cursor: pointer;
 }
 
+/* 展开后的摘要与正文之间给出一档区块间距；收起时不留空底。 */
+details[open] > summary {
+  margin-bottom: var(--fams-space-16);
+}
+
 /* 表单提交行：与字段栅格之间留出一个区块间距。 */
 .fams-form-actions {
   display: flex;
@@ -51,7 +58,7 @@
 }
 
 .fams-panel-divider {
-  margin: var(--fams-space-24) calc(var(--fams-space-24) * -1);
+  margin: var(--fams-space-24) calc(var(--fams-pad, var(--fams-space-24)) * -1);
   border: 0;
   border-top: 1px solid var(--fams-border-default);
 }
@@ -122,8 +129,9 @@
 
 /* 对象卡片：可选中的资产卡，选中态用主色边框表达，不加第二次阴影。 */
 .fams-card {
+  --fams-pad: var(--fams-space-24);
   min-width: 0;
-  padding: var(--fams-space-24);
+  padding: var(--fams-pad);
   border: 1px solid var(--fams-border-default);
   border-radius: var(--fams-radius-12);
   background: var(--fams-bg-surface);
@@ -134,9 +142,35 @@
   box-shadow: inset 0 0 0 1px var(--fams-action-primary);
 }
 
+/* 行内确认块（16 处 role="group" 全部是「确认/核对…」块）：用主色左描边把「即将写入」
+   从同一卡片的内容区里分出来；动作区在窄屏纵向堆叠，避免两个动作互相误点。 */
+.fams-card[role="group"] {
+  border-left: 3px solid var(--fams-action-primary);
+  background: var(--fams-bg-subtle);
+}
+
 /* 卡片内再套卡片时收紧一档，避免逐层叠加 24px 内边距把内容挤成窄列。 */
 .fams-card .fams-card {
-  padding: var(--fams-space-16);
+  --fams-pad: var(--fams-space-16);
+}
+
+@media (max-width: 900px) {
+  .fams-card .fams-card {
+    --fams-pad: var(--fams-space-12);
+  }
+}
+
+@media (max-width: 560px) {
+  /* D0.4 E01：小程序口径的内容卡片内边距 16，窄屏按同一档位收一档。 */
+  .fams-panel,
+  .fams-card {
+    --fams-pad: var(--fams-space-16);
+  }
+
+  .fams-card[role="group"] .fams-panel-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .fams-card h3 {

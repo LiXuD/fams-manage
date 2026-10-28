@@ -104,6 +104,16 @@
   color: var(--fams-text-primary);
 }
 
+/* 窄屏触控档：D0.4 E01 要求最小触控区 44×44，PC 密度保持 40/32，只在 560 以下整档抬升。
+   表格行内承担动作的 link 按钮一并进档，行高随之变高是这档密度的代价。 */
+@media (max-width: 560px) {
+  .fams-button,
+  .fams-button[data-size="sm"],
+  .fams-button[data-kind="link"] {
+    min-height: var(--fams-size-44);
+  }
+}
+
 .fams-spinner {
   flex-shrink: 0;
   width: 16px;
