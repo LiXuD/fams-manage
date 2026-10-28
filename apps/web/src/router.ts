@@ -20,12 +20,14 @@ import ItemTargetChangeView from "@/views/ItemTargetChangeView.vue";
 import TransferTargetChangeView from "@/views/TransferTargetChangeView.vue";
 
 import InventoryTaskView from "@/views/InventoryTaskView.vue";
+import LossView from "@/views/LossView.vue";
 import RepairView from "@/views/RepairView.vue";
 import RepairAssistanceView from "@/views/RepairAssistanceView.vue";
 
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
+    { path: "/loss-reports/:id?", name: "loss-reports", component: LossView, meta: { requiresAuth: true } },
     { path: "/repair-assistance/:id?", name: "repair-assistance", component: RepairAssistanceView, meta: { requiresAuth: true } },
     { path: "/repairs/:id?", name: "repairs", component: RepairView, meta: { requiresAuth: true } },
     { path: "/inventory-tasks", name: "inventory-tasks", component: InventoryTaskView, meta: { requiresAuth: true } },
