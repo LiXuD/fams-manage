@@ -1,0 +1,151 @@
+{
+  "functionalBase": "eb1c09f21be1abc324ae8f609aa3ef8ee6deef6e",
+  "frontendFix": "29f0b304dcaa097a4863d4802fb46b39b0d688a6",
+  "fullGate": {
+    "candidate": "eb1c09f",
+    "exit": 0,
+    "javaReports": 104,
+    "javaAllXml": {
+      "tests": 602,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "javaRequiredSetTests": 481,
+    "webComponentTestsExit": 0,
+    "webExactCountNotRetainedSeparately": true,
+    "miniTests": 295,
+    "checkstyle": 0,
+    "spotbugs": 0,
+    "lineCoverage": {
+      "covered": 20245,
+      "missed": 1560
+    },
+    "branchCoverage": {
+      "covered": 7065,
+      "missed": 2322
+    },
+    "runtimeRecovery": true,
+    "sameVolumeMysqlRecovery": true,
+    "cleanPostflight": true,
+    "dependencyAuditHighThreshold": true,
+    "existingModerateToolchainAdvisories": 2
+  },
+  "clientVerification": {
+    "candidate": "29f0b30",
+    "tests": 198,
+    "failures": 0,
+    "skipped": 0,
+    "lint": true,
+    "typecheckAndBuild": true,
+    "crossRecordRegressionFirstFailed": true,
+    "originalPendingIntentPreserved": true
+  },
+  "sourceEquivalence": {
+    "fixedGateCandidate": "eb1c09f21be1abc324ae8f609aa3ef8ee6deef6e",
+    "frontendCandidate": "29f0b304dcaa097a4863d4802fb46b39b0d688a6",
+    "identicalGitTrees": {
+      "backend": "ee2a630248ba7adaeef84f71ec9d9e41cd44edf9",
+      "contracts": "cfac66ffc6a70f950f5cc296679763eb06c51b3f",
+      "config": "7d83224182164f959f1a62dfa8d40f91e34a9d36",
+      "scripts": "6d0c22e614311baaf2c98b56009ff60978d330e1",
+      "packages": "c63f2d31e5b7b7c3c285b07fc71258b1647ca2e0"
+    },
+    "v56Sha256": "9612f11bda4149717218de73826a46a70de0ff06c59dedd94d991569b78017e9"
+  },
+  "jar": {
+    "candidate": "eb1c09f",
+    "sha256": "63973b099ff787da56eaf3c1ff0ad7c92e0d39379ff2c9a521630bb452572cf5",
+    "bytes": 59255025
+  },
+  "actualPC": {
+    "candidate": "eb1c09f",
+    "artifactSha256": "63973b099ff787da56eaf3c1ff0ad7c92e0d39379ff2c9a521630bb452572cf5",
+    "actualPC": true,
+    "frontendCandidate": "29f0b30",
+    "container": "fams-d6-21a-fixed-browser-8c38bec8c678d6af",
+    "scanner": "ClamAV 1.4.6/28129/Sun Sep 20 06:26:26 2026",
+    "final": {
+      "events": 5,
+      "photos": 1,
+      "status": "SEARCHING",
+      "reports": 1,
+      "exception": "SEARCHING",
+      "lifecycle": "IN_USE",
+      "openTodos": 1,
+      "processor": 983003,
+      "activeLocks": 1,
+      "responsible": 983002
+    },
+    "datesUnchanged": true,
+    "custodyUnchanged": true,
+    "originalHashes": [
+      "99d173da5a0e7017f01aeb932b66e27489c1b656460856dcd205d08e72eee75e"
+    ]
+  },
+  "afterApproval": {
+    "locks": 1,
+    "exception": "NORMAL",
+    "lifecycle": "IN_USE",
+    "responsible": 983002,
+    "reportStatus": "WAITING_WAREHOUSE_CLAIM",
+    "container": "fams-d6-21a-fixed-browser-8c38bec8c678d6af"
+  },
+  "jvmRecovery": {
+    "candidate": "eb1c09f",
+    "artifactSha256": "63973b099ff787da56eaf3c1ff0ad7c92e0d39379ff2c9a521630bb452572cf5",
+    "committingJvm": 15432,
+    "killedGroup": 15431,
+    "restartedGroup": 16547,
+    "originalSubmissionReplay": {
+      "creatorAccountId": "983002",
+      "id": "1",
+      "assetId": "983010",
+      "ownershipVersion": 0,
+      "processorAccountId": null,
+      "nextReviewDate": null,
+      "version": 0,
+      "lastLocation": "自有验收办公室抽屉，合成数据",
+      "lastSeenAt": "2026-10-28T01:00:00Z",
+      "status": "PENDING_ADMIN_DECISION",
+      "circumstances": "自有软件验收场景：离开办公室后未在原保管位置找到实物，申请核实查找。",
+      "assetVersion": 0,
+      "source": {
+        "custodyType": "PERSONAL",
+        "version": 0,
+        "locationId": "983099",
+        "responsibleEmployeeId": "983002",
+        "departmentResponsibleEmployeeId": null,
+        "id": "983010",
+        "assetCode": "OWNED21-983010",
+        "lifecycle": "IN_USE",
+        "usingOrganizationId": "983000",
+        "name": "报失验收原机",
+        "warehouseId": null
+      }
+    },
+    "allOwnerBusinessRowsUnchanged": true
+  },
+  "pageConsole": [],
+  "cleanup": {
+    "portsStopped": {
+      "52268": true,
+      "52270": true
+    },
+    "ownedRuntimeExit": 0,
+    "ownedMysqlAndClamavRemoved": true,
+    "ownedTabClosed": true,
+    "sharedMysqlPreserved": "fams-d6-03a-625409ba1409fdb7-mysql-1"
+  },
+  "limitations": {
+    "independentReview": "PENDING",
+    "nativePage": "NOT_STARTED",
+    "confirmedLossAndRecovery": "NOT_STARTED",
+    "linkedConversions": "NOT_STARTED",
+    "formalQA": "NOT_STARTED",
+    "production": "NOT_STARTED",
+    "databaseBackupRestoreNotSeparatelyValidated": true,
+    "rawTransportLossNotClaimedByJvmReplay": true,
+    "screenshot": "output/d6-21a-pc-searching.png"
+  }
+}
