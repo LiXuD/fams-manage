@@ -27,6 +27,10 @@ function failure(cause: unknown) { if (cause instanceof LossApiError && [401, 40
 async function load(id = detail.value?.id ?? String(route.params.id ?? ""), delta = 0) {
   if (busy.value || confirmation.value) return;
   const next = page.value + delta; if (next < 1 || delta > 0 && (next - 1) * 20 >= total.value) return;
+  clearPreview();
+  if (id !== detail.value?.id) {
+    file.value = null; reason.value = ""; custodian.value = ""; searchedScope.value = ""; searchedAt.value = ""; nextReviewDate.value = "";
+  }
   const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
   try {
     const result = await lossRequest<{ items: LossReport[]; total: number }>(`?page=${next}&pageSize=20`);

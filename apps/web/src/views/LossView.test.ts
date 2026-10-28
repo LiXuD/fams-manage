@@ -70,3 +70,21 @@ it("late response for previous identity never repopulates private report", async
   const wrapper = mountPage(); await flushPromises(); state.session.user.id = "2"; await flushPromises(); release(response({ items: [record()], total: 1 })); await flushPromises();
   expect(wrapper.text()).not.toContain("私有报失资产"); wrapper.unmount();
 });
+
+it("switching reports discards the previous original preview and verification inputs", async () => {
+  const first = { ...record(), status: "VERIFYING", processorAccountId: "1", actions: { search: true }, photos: [{ objectId: "original", filename: "previous-original.png" }] };
+  const second = { ...first, id: "10", source: { ...first.source, assetCode: "LOSS-002", name: "另一个独立资产" }, photos: [] };
+  const revoke = vi.fn(); vi.stubGlobal("URL", { createObjectURL: vi.fn(() => "blob:owned-original"), revokeObjectURL: revoke });
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    if (url.includes("content?grant=")) return { ok: true, status: 200, blob: async () => new Blob(["original bytes"], { type: "image/png" }) } as Response;
+    if (url.endsWith("download-grant")) return response({ url: "/api/v1/loss-reports/9/photos/original/content?grant=owned" });
+    return response(url.endsWith("/9") ? first : url.endsWith("/10") ? second : { items: [first, second], total: 2 });
+  }));
+  const wrapper = mountPage(); await flushPromises();
+  await wrapper.findAll("textarea")[1]!.setValue("上一单的保管人核实结果必须清除"); await wrapper.findAll("textarea")[2]!.setValue("上一单的查找范围与原件不能带入新单");
+  await button(wrapper,"查看原件").trigger("click"); await flushPromises(); expect(wrapper.find("img").exists()).toBe(true);
+  await wrapper.findAll("button").filter(item => item.text() === "查看")[1]!.trigger("click"); await flushPromises();
+  expect(wrapper.find("img").exists()).toBe(false); expect(revoke).toHaveBeenCalledWith("blob:owned-original");
+  expect((wrapper.findAll("textarea")[1]!.element as HTMLTextAreaElement).value).toBe("");
+  expect((wrapper.findAll("textarea")[2]!.element as HTMLTextAreaElement).value).toBe(""); wrapper.unmount();
+});
