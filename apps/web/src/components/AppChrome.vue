@@ -34,6 +34,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { label: "报修与维修", path: "/repairs", roles: FIELD_ROLES },
       { label: "我协助的报修", path: "/repair-assistance", roles: ["TECH_ASSISTANT"] },
       { label: "借用、延期与退还", path: "/loans", roles: FIELD_ROLES },
+      { label: "退还与退库", path: "/asset-returns", roles: FIELD_ROLES },
       { label: "调拨与人员交接", path: "/transfers", roles: FIELD_ROLES },
     ],
   },
@@ -109,6 +110,11 @@ function visible(item: NavItem): boolean {
   return true;
 }
 
+/** 详情页是独立路由记录，router-link 的激活类不会命中列表条目，因此按路径前缀判定。 */
+function isCurrent(path: string): boolean {
+  return path === "/" ? route.path === "/" : route.path === path || route.path.startsWith(`${path}/`);
+}
+
 /** 可见条目为空的分组整组不渲染。 */
 const navGroups = computed(() => NAV_GROUPS
   .map((group) => ({ ...group, items: group.items.filter(visible) }))
@@ -159,7 +165,8 @@ async function handleLogout(): Promise<void> {
             </button>
             <div :id="`nav-group-${group.label}`" class="fams-navigation-items" :data-collapsed="collapsed.has(group.label) ? 'true' : 'false'">
               <div class="fams-navigation-items-inner">
-                <router-link v-for="item in group.items" :key="item.path" :to="item.path" class="fams-button">{{ item.label }}</router-link>
+                <router-link v-for="item in group.items" :key="item.path" :to="item.path" class="fams-button"
+                  :aria-current="isCurrent(item.path) ? 'page' : undefined">{{ item.label }}</router-link>
               </div>
             </div>
           </div>

@@ -190,7 +190,7 @@ const methodLabels: Record<string, string> = { NON_ENTERPRISE: "非企业资产�
         </div>
         <div v-for="receipt in receipts" :key="receipt.id" class="fams-card fams-stack">
           <p>{{ receipt.receiptNumber }} · {{ ownerStates[receipt.status] ?? '状态待核实' }}</p>
-          <a class="fams-button" data-kind="link" :href="`/inbound?receiptId=${encodeURIComponent(receipt.id)}`">查看正式入库单</a>
+          <a class="fams-button" data-kind="link" :href="`/inbound/${encodeURIComponent(receipt.id)}`">查看正式入库单</a>
           <div class="fams-selection-group">
             <label v-for="item in receipt.items" :key="item.id" class="fams-selection"><input type="radio" :checked="selectedReceipt === receipt.id && selectedAsset === item.asset.id" @change="selectedReceipt = receipt.id; selectedAsset = item.asset.id" />{{ item.assetSnapshot.assetCode }} · {{ item.assetSnapshot.assetName }} · {{ item.executionStatus === 'ACCEPTED' ? '已实际验收' : '待验收' }}</label>
           </div>
@@ -230,7 +230,7 @@ const methodLabels: Record<string, string> = { NON_ENTERPRISE: "非企业资产�
       </section>
       <h4 class="fams-panel-title">最近 100 条处理历史 / 共 {{ detail.historyTotal }} 条</h4>
       <ul class="fams-timeline">
-        <li v-for="history in detail.history" :key="history.after_version">{{ history.actor_username }} · {{ history.occurred_at ? new Date(history.occurred_at).toLocaleString() : '时间待核实' }} · {{ states[history.subject_status] }} · {{ methodLabels[history.method] ?? '历史处理' }} · {{ history.reason }} · {{ history.evidence }}<a v-if="history.inboundReceiptId" :href="`/inbound?receiptId=${encodeURIComponent(history.inboundReceiptId)}`">正式入库</a></li>
+        <li v-for="history in detail.history" :key="history.after_version">{{ history.actor_username }} · {{ history.occurred_at ? new Date(history.occurred_at).toLocaleString() : '时间待核实' }} · {{ states[history.subject_status] }} · {{ methodLabels[history.method] ?? '历史处理' }} · {{ history.reason }} · {{ history.evidence }}<a v-if="history.inboundReceiptId" :href="`/inbound/${encodeURIComponent(history.inboundReceiptId)}`">正式入库</a></li>
       </ul>
     </div>
   </section>

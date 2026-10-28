@@ -1,6 +1,10 @@
 import { useSessionStore } from "@/auth/sessionStore";
 
 export interface LoanMutation { path: string; key: string; version: number; body?: unknown }
+export const loanLabels: Record<string, string> = { OPEN: "借用中", RETURNED: "已归还", VOID: "期初已撤销", PENDING: "待审批",
+  APPROVED: "已批准", REJECTED: "已驳回", PENDING_APPROVAL: "待管理员确认", WAITING_WAREHOUSE_CLAIM: "待库管领取",
+  WAREHOUSE_PROCESSING: "待实物验收", COMPLETED: "验收完成", TRANSFERRED: "已转后续处理" };
+
 export class LoanApiError extends Error {
   constructor(readonly status: number, readonly code: string) { super(code); }
 }

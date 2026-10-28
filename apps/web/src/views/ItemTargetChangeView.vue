@@ -131,7 +131,7 @@ onMounted(async () => {
           <li v-for="h in selected.source_snapshot_json.handover" :key="h.deliveredAt">原交出地点：{{ h.destinationText }}</li>
         </ul>
         <p v-if="selected.decision_reason">管理员意见：{{ selected.decision_reason }}</p>
-        <router-link class="fams-button" data-kind="link" :to="{ path: '/requisitions', query: { id: selected.business_id } }">查看原申请</router-link>
+        <router-link class="fams-button" data-kind="link" :to="`/requisitions/${selected.business_id}`">查看原申请</router-link>
         <fieldset v-if="admin && selected.change_status === 'PENDING'" class="fams-stack" :disabled="locked">
           <label class="fams-field fams-field-wide"><span class="fams-field-label">核验意见</span><textarea class="fams-control" v-model="decisionReason" maxlength="1000" /></label>
           <div class="fams-inline">

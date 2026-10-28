@@ -22,7 +22,8 @@ const emptyForm = () => ({ observedAssetCode: "", actualSigner: "", actualSigner
 const form = ref(emptyForm()), decision = ref({ reason: "", physicalEvidenceChecked: false, noDisputeChecked: false });
 const labels: Record<string, string> = { DRAFT: "凭证草稿", SUBMITTED: "待管理员批准", APPROVED: "已批准，待库管执行", REJECTED: "已驳回", EXECUTED: "已执行", WITHDRAWN: "已撤回" };
 const businessLabels: Record<string, string> = { REQUISITION: "领用/借用", TRANSFER: "调拨", REPAIR: "维修返还" };
-const businessLink = (type: string, id: string) => type === "REPAIR" ? { path: "/repairs/" + id } : { path: type === "TRANSFER" ? "/transfers" : "/requisitions", query: { id } };
+const businessLink = (type: string, id: string) => type === "TRANSFER" ? { path: "/transfers", query: { id } }
+  : { path: (type === "REPAIR" ? "/repairs/" : "/requisitions/") + id };
 let generation = 0, live = true;
 const current = (epoch: number, owner: string) => live && epoch === generation && owner === identity.value;
 function clear() { generation++; rows.value = []; selected.value = null; attachments.value = []; snapshot.value = null; pending.value = null; pendingUpload.value = null;

@@ -64,8 +64,15 @@ describe("AppChrome", () => {
     expect(home.find("main > .fams-page-head").exists()).toBe(false);
   });
 
-  it("places the view's primary action inside the page head", async () => {
-    const wrapper = await mountChrome(["ASSET_LEDGER_READ"], LEDGER_ROUTES, "/assets", {
+  it("marks the sidebar entry of the current page including its detail routes", async () => {
+    const routes: RouteRecordRaw[] = [...LEDGER_ROUTES, { path: "/assets/:id", name: "asset-detail", component: Blank }];
+    const detail = await mountChrome(["ASSET_LEDGER_READ"], routes, "/assets/12");
+    expect(detail.findAll(".fams-navigation a").filter(a => a.attributes("aria-current")).map(a => a.text())).toEqual(["资产台账"]);
+    const home = await mountChrome(["ASSET_LEDGER_READ"], routes, "/");
+    expect(home.findAll(".fams-navigation a").filter(a => a.attributes("aria-current")).map(a => a.text())).toEqual(["工作台"]);
+  });
+
+  it("places the view's primary action inside the page head", async () => {    const wrapper = await mountChrome(["ASSET_LEDGER_READ"], LEDGER_ROUTES, "/assets", {
       actions: '<button class="fams-button" type="button">单个建卡</button>',
     });
     expect(wrapper.find("main > .fams-page-head button").text()).toBe("单个建卡");

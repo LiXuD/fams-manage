@@ -1,4 +1,22 @@
 import { useSessionStore } from "@/auth/sessionStore";
+import type { RequisitionCatalog, RequisitionChoice } from "../../../../packages/api-types/src/requisition";
+
+export const requisitionLabels: Record<string, string> = { DRAFT: "草稿", PENDING_ADMIN_DECISION: "待管理员确认", REJECTED: "已驳回",
+  WAITING_WAREHOUSE_CLAIM: "待库管领取", WAREHOUSE_PROCESSING: "库管处理中", WAITING_HANDOVER: "待交接",
+  PARTIALLY_COMPLETED: "部分完成", COMPLETED: "已完成", UNFULFILLABLE: "无法满足", CANCELLED: "已取消" };
+
+export async function loadRequisitionCatalogs(): Promise<{ catalogs: Record<string, RequisitionChoice[]>;
+  canShared: boolean; employeeId: string; organizationId: string }> {
+  const catalogs: Record<string, RequisitionChoice[]> = {};
+  let canShared = false; let employeeId = ""; let organizationId = "";
+  for (const kind of ["category", "organization", "employee", "location"]) {
+    const items: RequisitionChoice[] = []; let catalogPage = 1; let result: RequisitionCatalog;
+    do { result = await requisitionRequest<RequisitionCatalog>(`/catalog/${kind}?page=${catalogPage++}&pageSize=200`);
+      items.push(...result.items); } while (result.items.length === 200);
+    catalogs[kind] = items; canShared = result.canApplyShared; employeeId = result.employeeId; organizationId = result.organizationId;
+  }
+  return { catalogs, canShared, employeeId, organizationId };
+}
 
 export class RequisitionApiError extends Error {
   constructor(readonly status: number, readonly code: string) { super(code); }

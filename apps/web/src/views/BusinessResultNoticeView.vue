@@ -86,7 +86,7 @@ onBeforeUnmount(() => { live = false; clear(); });
           </div>
         </div>
         <p>签收已完成，责任归属为本次有效目标责任人员。</p>
-        <router-link v-if="notice.businessType === 'REQUISITION'" :to="{ path: '/requisitions', query: { id: notice.businessId } }">查看业务单据并核查</router-link>
+        <router-link v-if="notice.businessType === 'REQUISITION'" :to="`/requisitions/${notice.businessId}`">查看业务单据并核查</router-link>
         <router-link v-if="notice.businessType === 'REPAIR'" :to="{ path: '/repairs/' + notice.businessId }">查看维修单据并核查</router-link>
         <details v-if="notice.businessType === 'TRANSFER'" class="fams-card fams-stack">
           <summary class="fams-panel-title">查看本次调拨签收结果与核查依据</summary>
