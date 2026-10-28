@@ -2,6 +2,8 @@
 .fams-dialog {
   width: 520px;
   max-width: calc(100vw - 32px);
+  /* base.css 的 * 重置会清掉 UA 的 margin: auto，弹窗层自己声明居中。 */
+  margin: auto;
   padding: var(--fams-space-32);
   border: 1px solid var(--fams-border-default);
   border-radius: var(--fams-radius-16);
@@ -13,6 +15,42 @@
 
 .fams-dialog::backdrop {
   background: var(--fams-backdrop);
+}
+
+/* 媒体预览：图片与凭证走原生 dialog，遮罩保证阅读时只剩证据本身。
+   宽度给到 880 档（原语 520 会把照片压成缩略图），高度收进视口，超长文件名在弹窗内换行。 */
+.fams-media-preview {
+  width: min(880px, calc(100vw - 32px));
+  max-height: calc(100dvh - 64px);
+  padding: var(--fams-space-24);
+  overflow: auto;
+}
+
+.fams-media-preview figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fams-space-12);
+}
+
+.fams-media-preview img {
+  display: block;
+  max-height: calc(100dvh - 216px);
+  margin-inline: auto;
+  object-fit: contain;
+  border-radius: var(--fams-radius-8);
+  background: var(--fams-bg-subtle);
+}
+
+.fams-media-preview figcaption {
+  color: var(--fams-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+
+/* flex 纵向容器会把按钮拉成整行宽；关闭动作按内容宽度左对齐，与 .fams-stack 同一口径。 */
+.fams-media-preview .fams-button {
+  align-self: flex-start;
 }
 
 .fams-dialog h2 {

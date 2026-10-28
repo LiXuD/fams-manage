@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import RepairFactoryPartsPanel from "./RepairFactoryPartsPanel.vue";
+import FamsMediaPreview from "@/components/FamsMediaPreview.vue";
 import { RepairApiError, repairRequest, type Repair } from "@/repair/api";
 import { factoryEventNames, factoryProblem, factoryRequest, factoryRoundStates, factoryScopeStates, type FactoryMutation } from "@/repair/factory-api";
 import type { FactoryDetail, FactoryFile, FactoryHistory, FactoryPage, FactoryReply, FactoryRound, FactoryRoundDetail } from "@/repair/factory-types";
@@ -337,7 +338,8 @@ onBeforeUnmount(() => { live = false; reset(); emit("busy-change", false); });
             </div>
           </fieldset>
           <RepairFactoryPartsPanel v-if="selected.roundStatus === 'RECEIVED'" :key="`${identity}:${selected.id}`" :repair="props.repair" :round="selected" :blocked="props.blocked || busy || !!pending || !!confirmation || stale" @busy-change="partsBusy = $event" @changed="load" @invalidated="reset();emit('invalidated')" @read-file="readFile" />
-          <figure v-if="preview" class="fams-card">
+          <FamsMediaPreview v-if="preview" @dismiss="clearPreview">
+            <figure>
             <img v-if="previewMime !== 'application/pdf'" :src="preview" :alt="`厂家凭证：${previewName}`">
             <p v-else>PDF原件已读取，可保存查看。</p>
             <figcaption>{{ previewName }}</figcaption>
@@ -345,7 +347,8 @@ onBeforeUnmount(() => { live = false; reset(); emit("busy-change", false); });
               <a :href="preview" :download="previewName">保存这份厂家原件</a>
               <button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="clearPreview">关闭厂家凭证</button>
             </div>
-          </figure>
+            </figure>
+          </FamsMediaPreview>
         </section>
         <h4 class="fams-panel-title">独立办理历史 / 共 {{ historyTotal }} 条</h4>
         <ul class="fams-timeline">

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { ReviewApiError } from "@/inventory-review/api";
 import { InventoryPhotoUnavailable, listInventoryPhotos, readInventoryPhoto, readablePhoto, type PhotoReference } from "@/inventory-review/photos";
+import FamsMediaPreview from "@/components/FamsMediaPreview.vue";
 const props = defineProps<{ taskId: string; eventId: string; photoIds: string[] }>();
 const emit = defineEmits<{ invalid: [] }>();
 const session = useSessionStore();
@@ -61,10 +62,12 @@ onBeforeUnmount(() => { live = false; clear(); });
         </template><span v-else>照片 {{ index + 1 }} 元数据暂不可读取，原始引用 {{ row.objectId }} 仍保留。</span>
       </li>
     </ul>
-    <figure v-if="preview" class="fams-card">
+    <FamsMediaPreview v-if="preview" @dismiss="closePreview">
+      <figure>
       <img :src="preview" :alt="`原始观察照片：${filename}`">
       <figcaption>{{ filename }}</figcaption>
       <button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="closePreview">关闭照片</button>
-    </figure>
+      </figure>
+    </FamsMediaPreview>
   </section>
 </template>

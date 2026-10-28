@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { RepairApiError, repairProblem } from "@/repair/api";
 import { collaborationRequest } from "@/repair/collaboration";
+import FamsMediaPreview from "@/components/FamsMediaPreview.vue";
 const props=defineProps<{invitationId:string;objectId:string;kind:"fault-photos"|"attachments"|"opinion-attachments"|"staff-attachments";filename?:string;blocked?:boolean}>();
 const emit=defineEmits<{invalidated:[]}>(),session=useSessionStore();
 const identity=computed(()=>JSON.stringify([session.user?.id,session.user?.roles,session.csrfToken,props.invitationId,props.objectId,props.kind]));
@@ -24,6 +25,8 @@ watch(identity,()=>{clear();error.value="";},{flush:"sync"});onBeforeUnmount(()=
   <div class="fams-inline">
     <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || blocked" @click="read">读取依据 {{filename || objectId}}</button>
     <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{error}}</strong></p>
-    <figure v-if="url"><img v-if="mime.startsWith('image/')" :src="url" :alt="filename || '科技协助依据'"><a :href="url" :download="filename || (mime==='application/pdf'?'科技意见依据.pdf':'科技意见依据')">保存已授权依据</a><button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="clear">关闭依据并清理</button></figure>
+    <FamsMediaPreview v-if="url" @dismiss="clear">
+      <figure><img v-if="mime.startsWith('image/')" :src="url" :alt="filename || '科技协助依据'"><a :href="url" :download="filename || (mime==='application/pdf'?'科技意见依据.pdf':'科技意见依据')">保存已授权依据</a><button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="clear">关闭依据并清理</button></figure>
+    </FamsMediaPreview>
   </div>
 </template>

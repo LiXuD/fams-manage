@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { reviewRequest, ReviewApiError } from "@/inventory-review/api";
 import { readablePhoto, type InventoryPhoto } from "@/inventory-review/photos";
+import FamsMediaPreview from "@/components/FamsMediaPreview.vue";
 const props = defineProps<{ repairId: string; observationId: string; objectId: string; blocked?: boolean }>();
 const emit = defineEmits<{ invalidated: [] }>();
 const session = useSessionStore();
@@ -55,6 +56,8 @@ onBeforeUnmount(() => { live = false; clear(); });
   <div class="fams-inline">
     <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || blocked" @click="read">读取盘点原图 {{ objectId }}</button>
     <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
-    <figure v-if="preview"><img :src="preview" alt="维修关联的原始盘点损坏照片"><button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="clear">关闭原图并清理</button></figure>
+    <FamsMediaPreview v-if="preview" @dismiss="clear">
+      <figure><img :src="preview" alt="维修关联的原始盘点损坏照片"><button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="clear">关闭原图并清理</button></figure>
+    </FamsMediaPreview>
   </div>
 </template>
