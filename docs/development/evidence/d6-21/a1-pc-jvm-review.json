@@ -138,7 +138,7 @@
     "sharedMysqlPreserved": "fams-d6-03a-625409ba1409fdb7-mysql-1"
   },
   "limitations": {
-    "independentReview": "PENDING",
+    "independentReview": "PASS_BY_USER",
     "nativePage": "NOT_STARTED",
     "confirmedLossAndRecovery": "NOT_STARTED",
     "linkedConversions": "NOT_STARTED",
@@ -147,5 +147,16 @@
     "databaseBackupRestoreNotSeparatelyValidated": true,
     "rawTransportLossNotClaimedByJvmReplay": true,
     "screenshot": "output/d6-21a-pc-searching.png"
+  },
+  "userReview": {
+    "date": "2026-10-28",
+    "reviewer": "用户本人",
+    "result": "PASS",
+    "reviewedDeliveryCommit": "ebb8aa3d3e302dbc0fdb89121eb85e24ef51b0f2",
+    "confirmedScope": "D6-21A1",
+    "localStatus": "DEV_VERIFIED",
+    "parentStatus": "IN_PROGRESS",
+    "pushAuthorized": true,
+    "mainMergeAuthorized": false
   }
 }
