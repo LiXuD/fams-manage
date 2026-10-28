@@ -73,3 +73,51 @@
   font-weight: 500;
   cursor: pointer;
 }
+
+/* 多选栅格：复选项整行可点并按列铺开，高度由容器封顶、列表内部滚动，
+   选项数量变化不会撑破所在表单行。 */
+.fams-selection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  /* 容器封顶后 auto 行轨会收缩到条目的 min-height，长名称因此叠行；按内容取最小高度。 */
+  grid-auto-rows: min-content;
+  gap: var(--fams-space-4) var(--fams-space-16);
+  align-content: start;
+  min-height: calc(var(--fams-size-40) * 3);
+  max-height: calc(var(--fams-size-40) * 8);
+  padding: var(--fams-space-8) var(--fams-space-12);
+  border: 1px solid var(--fams-border-strong);
+  border-radius: var(--fams-radius-8);
+  background: var(--fams-bg-surface);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.fams-selection-grid .fams-selection {
+  min-height: var(--fams-size-40);
+  padding-inline: var(--fams-space-8);
+  border-radius: var(--fams-radius-8);
+}
+
+.fams-selection-grid .fams-selection:hover {
+  background: var(--fams-bg-subtle);
+}
+
+.fams-selection-grid .fams-selection:has(:checked) {
+  background: var(--fams-action-subtle);
+}
+
+.fams-selection-grid .fams-selection span {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .fams-selection-grid {
+    grid-template-columns: minmax(0, 1fr);
+    max-height: calc(var(--fams-size-44) * 6);
+  }
+
+  .fams-selection-grid .fams-selection {
+    min-height: var(--fams-size-44);
+  }
+}

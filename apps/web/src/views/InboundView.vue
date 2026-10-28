@@ -137,10 +137,6 @@ onMounted(load);
         <div class="fams-field-grid">
           <label class="fams-field"><span class="fams-field-label">业务日期</span>
             <input class="fams-control" v-model="businessDate" type="date" required /></label>
-          <label class="fams-field"><span class="fams-field-label">待入库资产（可多选）</span>
-            <select class="fams-control" v-model="assetIds" multiple required size="8">
-              <option v-for="item in assets" :key="item.id" :value="item.id">{{ item.assetCode }} · {{ item.name }}</option>
-            </select></label>
           <label class="fams-field"><span class="fams-field-label">目标仓库</span>
             <select class="fams-control" v-model="warehouseId" required><option value="">请选择</option>
               <option v-for="item in warehouses" :key="item.id" :value="item.id">{{ item.name ?? item.code }}</option>
@@ -149,6 +145,12 @@ onMounted(load);
             <select class="fams-control" v-model="locationId" required><option value="">请选择</option>
               <option v-for="item in locations.filter((value) => value.warehouse?.id === warehouseId)" :key="item.id" :value="item.id">{{ item.name ?? item.code }}</option>
             </select></label>
+          <div class="fams-field fams-field-wide"><span class="fams-field-label">待入库资产（可多选）</span>
+            <div class="fams-selection-grid" role="group" aria-label="待入库资产（可多选）">
+              <label v-for="item in assets" :key="item.id" class="fams-selection">
+                <input v-model="assetIds" type="checkbox" :value="item.id" />
+                <span>{{ item.assetCode }} · {{ item.name }}</span></label>
+            </div></div>
         </div>
         <div class="fams-form-actions">
           <button class="fams-button" data-kind="primary" type="submit" :disabled="busy">{{ editing ? '保存修订' : '保存草稿' }}</button>
