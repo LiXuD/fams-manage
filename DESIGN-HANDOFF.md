@@ -1,9 +1,9 @@
 # FAMS 项目阶段与交接入口
 
 > 唯一现役进度入口 · 更新于 2026-10-30
-> 当前结论：第1～5步已完成，第6阶段进行中。当前分支codex/d6-21-loss；用户本人本轮确认D6-20C2固定56e0b67复核通过，本地DEV_VERIFIED，D6-20父项仍开放。D6-21A1独立报失至查找中的后端/PC、真实图证与提交JVM恢复已获用户本人审核通过，本地DEV_VERIFIED；A2原生报失及图证候选482756e已送IN_REVIEW，继续收集A2独立复核；B1确认遗失及30日跟进固定248621a已送IN_REVIEW，B2a原责任、原地、完好找回开发中：22项HTTP/MySQL、Web205、小程序319及静态检查通过，待固定候选完整门禁、PC/JVM验收和独立复核；B2b/C等仍必需。独立复核、真实外部、远端CI、第七阶段QA及生产仍按各自台账开放，唯一明细见现役开发计划。
+> 当前结论：第1～5步已完成，第6阶段进行中。当前分支codex/d6-21-loss；D6-20C2和D6-21A1已获用户复核，本地DEV_VERIFIED。D6-21A2/B1/B2a均为IN_REVIEW，独立复核仍开放；B2a固定256159e已完成原责任原地完好找回的本地门禁与PC/JVM验证，下一内部开发项B2b/C实际变化去向及原子转锁。D6-20、D6-21父项不关闭，真实外部、远端CI、正式QA与生产仍按台账开放。
 
-> 本次接续材料：[D6-21B1确认遗失及跟进复核交接](docs/development/2026-10-29-d6-21b1-review-handoff.md)，功能候选248621a。A1已审核、本地DEV_VERIFIED；A2/B1为IN_REVIEW，A/B及D6-21父项继续IN_PROGRESS；B2找回及C/D仍必需。完整门禁、PC/JVM、包身份及全量XML未归档限制见交接。
+> 本次接续材料：[D6-21B2a原责任完好找回复核交接](docs/development/2026-10-30-d6-21b2a-review-handoff.md)，功能候选256159e。必需Java499/完整XML620、Web207/小程序319通过；两条PC/JVM路径、在库/公用HTTP补核与完整报告摘要见交接。唯一进度明细仍为现役开发计划，继续开发不等于独立复核通过。
 ## 1. 八步开发流程与当前进度
 
 | 步骤 | 阶段 | 英文 | 阶段目标 | 当前状态 | 依据 / 下一步 |
@@ -13,7 +13,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | D6-20C2本轮复核通过；D6-21A1已审核、A2/B1送IN_REVIEW，下一独立复核及B2找回/实际去向。各父项、真实外部/CI/独立复核以[现役开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)为准 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | D6-20C2本轮复核通过；D6-21A1已审核、A2/B1/B2a送IN_REVIEW，下一独立复核及B2b/C实际变化去向。各父项、真实外部/CI/独立复核以[现役开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)为准 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
