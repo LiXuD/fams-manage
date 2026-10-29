@@ -29,4 +29,27 @@ public class LoanLossPort {
             reminders.refresh(id);
         }
     }
+
+    public static final class Failure extends RuntimeException {
+        public Failure(String code) {
+            super(code);
+        }
+    }
+
+    public void requireRecovery(long asset, String lifecycle, Long borrower, Long organization) {
+        var rows =
+                db.queryForList(
+                        "SELECT borrower_employee_id,using_organization_id FROM fams_loan WHERE"
+                                + " asset_id=? AND relation_status='OPEN' FOR UPDATE",
+                        asset);
+        if ("BORROWED".equals(lifecycle)
+                ? rows.size() != 1
+                        || !java.util.Objects.equals(
+                                rows.getFirst().get("borrower_employee_id"), borrower)
+                        || !java.util.Objects.equals(
+                                rows.getFirst().get("using_organization_id"), organization)
+                : !rows.isEmpty()) {
+            throw new Failure("LOSS_LOAN_IDENTITY_CHANGED");
+        }
+    }
 }

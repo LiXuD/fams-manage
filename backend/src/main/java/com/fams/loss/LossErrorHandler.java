@@ -31,6 +31,12 @@ public class LossErrorHandler {
         return response(failure.status(), failure.getMessage(), Map.of(), request);
     }
 
+    @ExceptionHandler(com.fams.loan.LoanLossPort.Failure.class)
+    ResponseEntity<ErrorResponse> recoveryLoan(
+            com.fams.loan.LoanLossPort.Failure failure, HttpServletRequest request) {
+        return response(409, failure.getMessage(), Map.of(), request);
+    }
+
     @ExceptionHandler(LoanRepairPort.Failure.class)
     ResponseEntity<ErrorResponse> loan(LoanRepairPort.Failure failure, HttpServletRequest request) {
         return response(409, failure.getMessage(), Map.of(), request);

@@ -2,15 +2,17 @@ import type { MiniServices } from "./pages.ts";
 import { MiniRequestError, type FactoryEvidenceFile } from "./session.ts";
 interface Asset { id: string; assetCode: string; name: string; version: number; responsibleEmployeeId?: string; departmentResponsibleEmployeeId?: string }
 interface Photo { objectId: string; filename: string; contentType: string }
+interface Recovery { id: string; version: number; assetVersion: number; ownershipVersion: number; status: string; processorAccountId: string | null; actions: Record<string,boolean> }
+interface RecoveryAsset { version: number; serialNumber: string | null; locationId: string | null; locationVersion: number | null; locationName: string | null }
 interface Report { id: string; source: Asset; status: string; version: number; assetVersion: number; ownershipVersion: number; lockVersion: number;
-    confirmedLostAt?: string; lastFollowUpAt?: string; lastSeenAt: string; lastLocation: string; circumstances: string; processorAccountId: string | null; nextReviewDate: string | null;
+    recoveredAt?: string; recoveryAsset?: RecoveryAsset | null; recoveries?: Recovery[]; recoveriesTotal?: number; confirmedLostAt?: string; lastFollowUpAt?: string; lastSeenAt: string; lastLocation: string; circumstances: string; processorAccountId: string | null; nextReviewDate: string | null;
     actions?: Record<string, boolean>; photos?: Photo[]; history?: { id: string; action: string; actor_username: string; occurred_at: string }[] }
 interface Intent { readonly path: string; readonly key: string; readonly version: number; readonly body?: string; readonly file?: FactoryEvidenceFile; readonly label: string }
 interface Data { rows: Report[]; assets: Asset[]; detail: Report | null; page: number; total: number; assetPage: number; assetTotal: number; selectedAsset: string;
-    followUpOnly: boolean; relatedClues: string; inabilityReason: string; responsibilityEvidence: string; findings: string; confirmDate: string; confirmTime: string; reviewDate: string; reviewTime: string; busy: boolean; stale: boolean; retry: boolean; confirmation: string; pendingLabel: string; error: string; notice: string; lastDate: string; lastTime: string; lastLocation: string; circumstances: string;
+    observedAssetCode: string; observedSerialNumber: string; foundDate: string; foundTime: string; recoveryEvidence: string; recoveryChecked: boolean; followUpOnly: boolean; relatedClues: string; inabilityReason: string; responsibilityEvidence: string; findings: string; confirmDate: string; confirmTime: string; reviewDate: string; reviewTime: string; busy: boolean; stale: boolean; retry: boolean; confirmation: string; pendingLabel: string; error: string; notice: string; lastDate: string; lastTime: string; lastLocation: string; circumstances: string;
     reason: string; custodianVerification: string; searchedScope: string; searchDate: string; searchTime: string; nextReviewDate: string; photoPath: string; photoName: string }
 interface Context { data: Data; setData(update: Partial<Data>): void }
-const blank = (): Data => ({ rows: [], assets: [], detail: null, page: 1, total: 0, assetPage: 1, assetTotal: 0, selectedAsset: "", followUpOnly: false, relatedClues: "", inabilityReason: "", responsibilityEvidence: "", findings: "", confirmDate: "", confirmTime: "", reviewDate: "", reviewTime: "", busy: false, stale: true, retry: false, confirmation: "", pendingLabel: "", error: "", notice: "", lastDate: "", lastTime: "", lastLocation: "", circumstances: "", reason: "", custodianVerification: "", searchedScope: "", searchDate: "", searchTime: "", nextReviewDate: "", photoPath: "", photoName: "" });
+const blank = (): Data => ({ rows: [], assets: [], detail: null, page: 1, total: 0, assetPage: 1, assetTotal: 0, selectedAsset: "", followUpOnly: false, observedAssetCode: "", observedSerialNumber: "", foundDate: "", foundTime: "", recoveryEvidence: "", recoveryChecked: false, relatedClues: "", inabilityReason: "", responsibilityEvidence: "", findings: "", confirmDate: "", confirmTime: "", reviewDate: "", reviewTime: "", busy: false, stale: true, retry: false, confirmation: "", pendingLabel: "", error: "", notice: "", lastDate: "", lastTime: "", lastLocation: "", circumstances: "", reason: "", custodianVerification: "", searchedScope: "", searchDate: "", searchTime: "", nextReviewDate: "", photoPath: "", photoName: "" });
 const day = (date: Date) => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
 const time = (date: Date) => [date.getHours(), date.getMinutes()].map(value => String(value).padStart(2, "0")).join(":");
 function actual(date: string, clock: string, original?: string) {
@@ -35,7 +37,7 @@ export function createLossPage(getServices: () => MiniServices) {
     const editable = (page: Context) => ensure(page) && !page.data.busy && !page.data.stale && !pending && !prepared;
     const failure = (page: Context, error: unknown) => {
         if (error instanceof MiniRequestError && [401,403,404].includes(error.status)) { wipe(page); page.setData({ error: "身份、权限或记录失效，原资料已隐藏。" }); }
-        else if (error instanceof MiniRequestError && [400,409,413,422].includes(error.status)) { const file = pending?.file; pending = null; discard(file); page.setData({ stale: true, retry: false, pendingLabel: "", error: error.code === "LOSS_PHOTO_REQUIRED" ? "批准前须由报告人上传本次情况图片。" : "办理被拒绝，请刷新核对版本、处理权、实际日期及原件。" }); }
+        else if (error instanceof MiniRequestError && [400,409,413,422].includes(error.status)) { const file = pending?.file; pending = null; discard(file); page.setData({ stale: true, retry: false, pendingLabel: "", error: error.code === "LOSS_LINKED_RECOVERY_REQUIRED" ? "责任、位置或状况变化需要关联处理，不能直接恢复正常。" : ["LOSS_PHYSICAL_IDENTITY_MISMATCH","LOSS_CUSTODIAN_CHANGED","LOSS_LOCATION_CHANGED","LOSS_LOAN_IDENTITY_CHANGED"].includes(error.code) ? "原机身份、登记位置或原责任不匹配，当前未恢复正常。" : error.code === "LOSS_PHOTO_REQUIRED" ? "批准前须由报告人上传本次情况图片。" : "办理被拒绝，请刷新核对版本、处理权、实际日期及原件。" }); }
         else page.setData({ stale: true, retry: !!pending, error: pending ? "结果尚未确认，请只读刷新后使用原操作重试。" : "读取或原件处理未完成，请重试。" });
     };
     const finish = (page: Context, epoch: number) => { if (!live || generation !== epoch) return; if (owner() !== identity) { wipe(page); page.setData({ error: "身份已变化，原资料已隐藏。" }); } else page.setData({ busy: false }); };
@@ -63,7 +65,7 @@ export function createLossPage(getServices: () => MiniServices) {
                 : await services.sessions.request("POST", operation.path, operation.body === undefined ? undefined : JSON.parse(operation.body), operation)) as { id: string };
             if (!current(epoch)) return; selectedId = result.id;
             if (!await readState(page,epoch) || !current(epoch)) return;
-            pending = null; discard(operation.file); clearPhoto(); delete instants.last; delete instants.search; page.setData({ relatedClues: "", inabilityReason: "", responsibilityEvidence: "", findings: "", confirmDate: "", confirmTime: "", reviewDate: "", reviewTime: "", retry: false, pendingLabel: "", lastDate: "", lastTime: "", lastLocation: "", circumstances: "", selectedAsset: "", reason: "", custodianVerification: "", searchedScope: "", searchDate: "", searchTime: "", nextReviewDate: "", photoPath: "", photoName: "", notice: "本次办理已记录。" });
+            pending = null; discard(operation.file); clearPhoto(); delete instants.last; delete instants.search; delete instants.found; page.setData({ observedAssetCode: "", observedSerialNumber: "", foundDate: "", foundTime: "", recoveryEvidence: "", recoveryChecked: false, relatedClues: "", inabilityReason: "", responsibilityEvidence: "", findings: "", confirmDate: "", confirmTime: "", reviewDate: "", reviewTime: "", retry: false, pendingLabel: "", lastDate: "", lastTime: "", lastLocation: "", circumstances: "", selectedAsset: "", reason: "", custodianVerification: "", searchedScope: "", searchDate: "", searchTime: "", nextReviewDate: "", photoPath: "", photoName: "", notice: "本次办理已记录。" });
         } catch (error) { if (current(epoch)) failure(page,error); } finally { finish(page,epoch); }
     };
     const prepare = (page: Context, action: string) => {
@@ -106,6 +108,34 @@ export function createLossPage(getServices: () => MiniServices) {
             page.setData({ confirmation: label, error: "" });
         } catch { page.setData({ error: "请填写完整实际情况、日期时刻、核实证据、复核日及本次原因。" }); }
     };
+    const prepareRecovery = (page: Context, action: string, id?: string) => {
+        if (!editable(page)) return;
+        const row = page.data.detail, data = page.data;
+        if (!row) return;
+        const attempt = id ? row.recoveries?.find(item => item.id === id) : undefined;
+        const capability = ({approve:"decide",reject:"decide",cancel:"cancel",claim:"claim",execute:"execute"} as Record<string,string>)[action];
+        if (id ? !attempt || !capability || !attempt.actions[capability] : !["recoverOriginal","requestRecovery"].includes(action) || !row.actions?.[action]) return;
+        try {
+            let body: unknown, label: string;
+            if (["recoverOriginal","requestRecovery","execute"].includes(action)) {
+                const source = row.recoveryAsset;
+                if (!source || !source.locationId || source.locationVersion == null || !data.recoveryChecked || !data.observedAssetCode.trim() || source.serialNumber && !data.observedSerialNumber.trim() || data.recoveryEvidence.trim().length < 10) throw Error("Missing original recovery evidence");
+                const facts = {foundAt:actual(data.foundDate,data.foundTime,instants.found), observedAssetCode:data.observedAssetCode.trim(), observedSerialNumber:data.observedSerialNumber.trim(), locationId:source.locationId, locationVersion:source.locationVersion, physicalIdentityVerified:true, condition:"INTACT", stillOriginalCustodian:true, evidence:data.recoveryEvidence.trim()};
+                body = action === "requestRecovery" ? {assetVersion:source.version,facts} : {assetVersion:attempt?.assetVersion ?? row.assetVersion,ownershipVersion:attempt?.ownershipVersion ?? row.ownershipVersion,lockVersion:row.lockVersion,facts};
+                label = `${action === "requestRecovery" ? "新建找回申请，批准认领后才能恢复" : "核实原机后恢复原责任"}：${facts.observedAssetCode}，序列号${facts.observedSerialNumber || "未登记"}；实际找回${facts.foundAt}，登记位置${source.locationName}；${facts.evidence}。历史遗失保留，原借用不改期。`;
+            } else {
+                if (action !== "claim") {
+                    if (data.reason.trim().length < 3) throw Error("Missing reason");
+                    body = action === "cancel" ? {reason:data.reason.trim()} : {result:action === "approve" ? "APPROVE" : "REJECT",reason:data.reason.trim()};
+                }
+                label = ({approve:"批准新找回申请，仍须库管重新认领核实。",reject:"驳回找回申请，原遗失责任跟进保留。",cancel:"撤回新找回申请，原遗失责任跟进保留。",claim:"取得新的唯一找回处理权，尚未恢复正常。"} as Record<string,string>)[action]!;
+                if (action !== "claim") label += data.reason.trim();
+            }
+            const path = attempt ? `${base}/recoveries/${attempt.id}/${["approve","reject"].includes(action) ? "decision" : action}` : `${base}/${row.id}/${action === "recoverOriginal" ? "recover-original" : "recovery-requests"}`;
+            prepared = Object.freeze({path, key:services.createKey(),version:attempt?.version ?? row.version,body:body === undefined ? undefined : JSON.stringify(body),label});
+            page.setData({confirmation:label,error:""});
+        } catch { page.setData({error:"请填写原机编码/序列号、实际找回时间、至少10字证据及本次原因，并确认完好、原保管与登记位置。"}); }
+    };
     return {
         data: blank(),
         onLoad(options: { id?: string }) { selectedId = /^[1-9][0-9]{0,18}$/.test(options.id ?? "") ? options.id! : ""; },
@@ -116,8 +146,10 @@ export function createLossPage(getServices: () => MiniServices) {
         async onRefresh(this: Context) { await read(this); },
         async onOpen(this: Context, event: { currentTarget: { dataset: { id: string } } }) { if (!editable(this) || !this.data.rows.some(row => row.id === event.currentTarget.dataset.id)) return; selectedId = event.currentTarget.dataset.id; await read(this); },
         onAsset(this: Context, event: { currentTarget: { dataset: { id: string } } }) { if (editable(this) && this.data.assets.some(row => row.id === event.currentTarget.dataset.id)) this.setData({ selectedAsset: event.currentTarget.dataset.id }); },
-        onField(this: Context, event: { currentTarget: { dataset: { field: string } }; detail: { value: string } }) { const field = event.currentTarget.dataset.field; if (!editable(this) || !["lastDate","lastTime","lastLocation","circumstances","reason","custodianVerification","searchedScope","searchDate","searchTime","nextReviewDate","relatedClues","inabilityReason","responsibilityEvidence","findings","confirmDate","confirmTime","reviewDate","reviewTime"].includes(field)) return; if (["lastDate","lastTime"].includes(field)) delete instants.last; if (["searchDate","searchTime"].includes(field)) delete instants.search; if (["confirmDate","confirmTime"].includes(field)) delete instants.confirm; if (["reviewDate","reviewTime"].includes(field)) delete instants.review; this.setData({ [field]: event.detail.value }); },
-        onNow(this: Context, event: { currentTarget: { dataset: { kind: string } } }) { const kind = event.currentTarget.dataset.kind; if (!editable(this) || !["last","search","confirm","review"].includes(kind)) return; const now = new Date(); instants[kind] = now.toISOString(); this.setData(kind === "last" ? { lastDate: day(now), lastTime: time(now) } : kind === "search" ? { searchDate: day(now), searchTime: time(now) } : kind === "confirm" ? { confirmDate: day(now), confirmTime: time(now) } : { reviewDate: day(now), reviewTime: time(now) }); },
+        onField(this: Context, event: { currentTarget: { dataset: { field: string } }; detail: { value: string } }) { const field = event.currentTarget.dataset.field; if (!editable(this) || !["lastDate","lastTime","lastLocation","circumstances","reason","custodianVerification","searchedScope","searchDate","searchTime","nextReviewDate","relatedClues","inabilityReason","responsibilityEvidence","findings","confirmDate","confirmTime","reviewDate","reviewTime","observedAssetCode","observedSerialNumber","foundDate","foundTime","recoveryEvidence"].includes(field)) return; if (["lastDate","lastTime"].includes(field)) delete instants.last; if (["searchDate","searchTime"].includes(field)) delete instants.search; if (["confirmDate","confirmTime"].includes(field)) delete instants.confirm; if (["reviewDate","reviewTime"].includes(field)) delete instants.review; if (["foundDate","foundTime"].includes(field)) delete instants.found; this.setData({ [field]: event.detail.value }); },
+        onNow(this: Context, event: { currentTarget: { dataset: { kind: string } } }) { const kind = event.currentTarget.dataset.kind; if (!editable(this) || !["last","search","confirm","review","found"].includes(kind)) return; const now = new Date(); instants[kind] = now.toISOString(); this.setData(kind === "last" ? { lastDate: day(now), lastTime: time(now) } : kind === "search" ? { searchDate: day(now), searchTime: time(now) } : kind === "confirm" ? { confirmDate: day(now), confirmTime: time(now) } : kind === "review" ? { reviewDate: day(now), reviewTime: time(now) } : { foundDate: day(now), foundTime: time(now) }); },
+        onRecoveryPrepare(this: Context, event: { currentTarget: { dataset: { action: string; id?: string } } }) { prepareRecovery(this,event.currentTarget.dataset.action,event.currentTarget.dataset.id); },
+        onRecoveryChecked(this: Context, event: { detail: { value: boolean } }) { if (editable(this)) this.setData({recoveryChecked:event.detail.value}); },
         onPrepare(this: Context, event: { currentTarget: { dataset: { action: string } } }) { prepare(this,event.currentTarget.dataset.action); },
         async onConfirm(this: Context) { if (!ensure(this) || this.data.busy || pending || !prepared) return; pending = prepared; prepared = null; this.setData({ confirmation: "", retry: true, pendingLabel: pending.label }); await send(this); },
         onCancel(this: Context) { if (!ensure(this) || this.data.busy || pending || !prepared) return; const file = prepared.file; prepared = null; discard(file); this.setData({ confirmation: "" }); },

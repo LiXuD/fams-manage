@@ -128,6 +128,65 @@ public class LossController {
         return retry(() -> reports.followUp(actor, id, version, key, input));
     }
 
+    @PostMapping("/{id}/recover-original")
+    Map<String, Object> recoverOriginal(
+            @PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.RecoveryExecution input) {
+        var actor = actors.capture();
+        return retry(() -> reports.recoverSearching(actor, id, version, key, input));
+    }
+
+    @PostMapping("/{id}/recovery-requests")
+    Map<String, Object> requestRecovery(
+            @PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.RecoveryRequest input) {
+        var actor = actors.capture();
+        return retry(() -> reports.requestRecovery(actor, id, version, key, input));
+    }
+
+    @PostMapping("/recoveries/{id}/decision")
+    Map<String, Object> decideRecovery(
+            @PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.Decision input) {
+        var actor = actors.capture();
+        return retry(() -> reports.decideRecovery(actor, id, version, key, input));
+    }
+
+    @PostMapping("/recoveries/{id}/cancel")
+    Map<String, Object> cancelRecovery(
+            @PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.Reason input) {
+        var actor = actors.capture();
+        return retry(() -> reports.cancelRecovery(actor, id, version, key, input));
+    }
+
+    @PostMapping("/recoveries/{id}/claim")
+    Map<String, Object> claimRecovery(
+            @PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key) {
+        var actor = actors.capture();
+        return retry(() -> reports.claimRecovery(actor, id, version, key));
+    }
+
+    @PostMapping("/recoveries/{id}/execute")
+    Map<String, Object> executeRecovery(
+            @PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.RecoveryExecution input) {
+        var actor = actors.capture();
+        return retry(() -> reports.executeRecovery(actor, id, version, key, input));
+    }
+
     private Map<String, Object> retry(Supplier<Map<String, Object>> operation) {
         for (int attempt = 0; ; attempt++) {
             try {

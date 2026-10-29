@@ -124,7 +124,7 @@ public class LossService {
                 wire(
                         db.queryForList(
                                 "SELECT * FROM fams_loss_event WHERE report_id=? ORDER BY id DESC"
-                                    + " LIMIT 100",
+                                        + " LIMIT 100",
                                 id)));
         result.put(
                 "historyTotal",
@@ -136,9 +136,40 @@ public class LossService {
                 row.get("confirmation_snapshot_json") == null
                         ? null
                         : json.readTree(row.get("confirmation_snapshot_json").toString()));
+        boolean recoveryOpen =
+                row.get("recovered_at") == null
+                        && List.of("SEARCHING", "CONFIRMED_LOST")
+                                .contains(row.get("report_status"));
+        var recoveryAsset = recoveryOpen ? assets.recoveryView(number(row, "asset_id")) : null;
+        result.put("recoveryAsset", recoveryAsset);
+        var recoveries =
+                db.queryForList(
+                        "SELECT * FROM fams_loss_recovery WHERE report_id=?"
+                                + " ORDER BY (active_guard IS NOT NULL) DESC,id DESC LIMIT 20",
+                        id);
+        result.put(
+                "recoveries",
+                recoveries.stream().map(item -> recoveryView(current, item)).toList());
+        result.put(
+                "recoveriesTotal",
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_loss_recovery WHERE report_id=?",
+                        Long.class,
+                        id));
         result.put(
                 "actions",
                 Map.of(
+                        "recoverOriginal",
+                        "SEARCHING".equals(row.get("report_status"))
+                                && current.has(Role.WAREHOUSE_OPERATOR)
+                                && java.util.Objects.equals(
+                                        current.id(), row.get("processor_account_id")),
+                        "requestRecovery",
+                        "CONFIRMED_LOST".equals(row.get("report_status"))
+                                && recoveryOpen
+                                && applicant(current)
+                                && Boolean.TRUE.equals(recoveryAsset.get("eligible"))
+                                && !Boolean.TRUE.equals(recoveryAsset.get("locked")),
                         "confirmLost",
                         "SEARCHING".equals(row.get("report_status"))
                                 && current.has(Role.WAREHOUSE_OPERATOR)
@@ -146,6 +177,7 @@ public class LossService {
                                         current.id(), row.get("processor_account_id")),
                         "followUp",
                         "CONFIRMED_LOST".equals(row.get("report_status"))
+                                && row.get("recovered_at") == null
                                 && current.has(Role.WAREHOUSE_OPERATOR)
                                 && java.util.Objects.equals(
                                         current.id(), row.get("processor_account_id")),
@@ -242,8 +274,8 @@ public class LossService {
         }
         db.update(
                 "UPDATE fams_loss_report SET"
-                    + " report_status=?,approval_snapshot_json=?,version=version+1,updated_at=?"
-                    + " WHERE id=?",
+                        + " report_status=?,approval_snapshot_json=?,version=version+1,updated_at=?"
+                        + " WHERE id=?",
                 approve ? "WAITING_WAREHOUSE_CLAIM" : "REJECTED",
                 approve ? json.writeValueAsString(frozen) : null,
                 now(),
@@ -277,7 +309,7 @@ public class LossService {
         closeTodos(id);
         db.update(
                 "UPDATE fams_loss_report SET"
-                    + " report_status='CANCELLED',version=version+1,updated_at=? WHERE id=?",
+                        + " report_status='CANCELLED',version=version+1,updated_at=? WHERE id=?",
                 now(),
                 id);
         audit(actor, current, row, "LOSS_CANCELLED", version + 1, input);
@@ -494,6 +526,476 @@ public class LossService {
         }
     }
 
+    public Map<String, Object> recoverSearching(
+            Actor actor, long id, long version, UUID key, LossInput.RecoveryExecution input) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.WAREHOUSE_OPERATOR);
+        String operation = "RECOVER_ORIGINAL:" + id,
+                hash = LossPayloads.fingerprint(json, operation, version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var row = header(id);
+        guard(row, version, "SEARCHING");
+        processor(current, row, input.ownershipVersion());
+        if (input.assetVersion() != number(row, "asset_version")) {
+            throw new LossFailure(409, "LOSS_PROCESSOR_OR_ASSET_CHANGED");
+        }
+        lock(row, input.lockVersion());
+        recoveryFacts(row, input.facts());
+        long next = restoreOriginal(row, input.assetVersion(), "SEARCHING", current, input.facts());
+        db.update(
+                "UPDATE fams_loss_report SET"
+                    + " report_status='RECOVERED',asset_version=?,recovered_at=?,recovery_snapshot_json=?,version=version+1,updated_at=?"
+                    + " WHERE id=?",
+                next,
+                input.facts().foundAt(),
+                json.writeValueAsString(input),
+                now(),
+                id);
+        release(row, "LOSS_RECOVERED");
+        closeTodos(id);
+        audit(actor, current, row, "LOSS_RECOVERED", version + 1, input);
+        return remember(current, operation, key, hash, header(id));
+    }
+
+    public Map<String, Object> requestRecovery(
+            Actor actor, long id, long version, UUID key, LossInput.RecoveryRequest input) {
+        var current = actors.revalidateLocked(actor);
+        if (!applicant(current)) {
+            throw new LossFailure(403, "LOSS_ROLE_REQUIRED");
+        }
+        String operation = "RECOVERY_REQUEST:" + id,
+                hash = LossPayloads.fingerprint(json, operation, version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var row = header(id);
+        visible(current, row);
+        guard(row, version, "CONFIRMED_LOST");
+        if (row.get("recovered_at") != null) {
+            throw new LossFailure(409, "LOSS_ALREADY_RECOVERED");
+        }
+        recoveryFacts(row, input.facts());
+        var asset =
+                assets.validateOriginalRecovery(
+                        number(row, "asset_id"),
+                        input.assetVersion(),
+                        "LOST",
+                        row.get("source_snapshot_json").toString(),
+                        input.facts().observedAssetCode(),
+                        input.facts().observedSerialNumber(),
+                        input.facts().locationId(),
+                        input.facts().locationVersion());
+        loans.requireRecovery(
+                number(row, "asset_id"),
+                asset.get("lifecycle_status").toString(),
+                (Long) asset.get("responsible_employee_id"),
+                (Long) asset.get("using_organization_id"));
+        if (!db.queryForList(
+                        "SELECT id FROM fams_asset_business_lock WHERE asset_id=? AND released_at"
+                                + " IS NULL FOR UPDATE",
+                        row.get("asset_id"))
+                .isEmpty()) {
+            throw new LossFailure(409, "LOSS_ASSET_LOCKED");
+        }
+        db.update(
+                "INSERT INTO"
+                    + " fams_loss_recovery(report_id,asset_id,creator_account_id,asset_version,request_snapshot_json,created_at,updated_at)"
+                    + " VALUES (?,?,?,?,?,?,?)",
+                id,
+                row.get("asset_id"),
+                current.id(),
+                input.assetVersion(),
+                json.writeValueAsString(input),
+                now(),
+                now());
+        long recovery =
+                java.util.Objects.requireNonNull(
+                        db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
+        db.update(
+                "INSERT INTO"
+                    + " fams_asset_business_lock(asset_id,business_type,business_id,business_item_id,acquired_at)"
+                    + " VALUES (?,'LOST_REPORT',?,?,?)",
+                row.get("asset_id"),
+                id,
+                recovery,
+                now());
+        advanceRecoveryReport(
+                actor,
+                current,
+                row,
+                "LOSS_RECOVERY_REQUESTED",
+                Map.of("recoveryId", Long.toString(recovery), "facts", input));
+        todo(id, "RECOVERY_DECIDE", "ASSET_ADMIN", null);
+        return rememberRecovery(current, operation, key, hash, id, recovery);
+    }
+
+    public Map<String, Object> decideRecovery(
+            Actor actor, long recovery, long version, UUID key, LossInput.Decision input) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.ASSET_ADMIN);
+        String operation = "RECOVERY_DECIDE:" + recovery,
+                hash = LossPayloads.fingerprint(json, operation, version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var row = recoveryParent(recovery);
+        var request = recoveryHeader(recovery);
+        recoveryGuard(request, version, "PENDING_ADMIN_DECISION");
+        recoveryLock(row, recovery, null);
+        boolean approve = "APPROVE".equals(input.result());
+        if (!approve && !"REJECT".equals(input.result())) {
+            throw new LossFailure(400, "LOSS_DECISION_INVALID");
+        }
+        if (approve) {
+            assets.requireOriginalRecovery(
+                    number(row, "asset_id"),
+                    number(request, "asset_version"),
+                    "LOST",
+                    row.get("source_snapshot_json").toString());
+        }
+        db.update(
+                "UPDATE fams_loss_recovery SET"
+                    + " recovery_status=?,approval_snapshot_json=?,version=version+1,updated_at=?"
+                    + " WHERE id=?",
+                approve ? "WAITING_WAREHOUSE_CLAIM" : "REJECTED",
+                json.writeValueAsString(
+                        Map.of(
+                                "actorAccountId",
+                                Long.toString(current.id()),
+                                "reason",
+                                input.reason().strip(),
+                                "request",
+                                json.readTree(request.get("request_snapshot_json").toString()),
+                                "recordedAt",
+                                now().toString())),
+                now(),
+                recovery);
+        closeRecoveryTodos(number(row, "id"));
+        if (approve) {
+            todo(number(row, "id"), "RECOVERY_CLAIM", "WAREHOUSE_OPERATOR", null);
+        } else {
+            release(row, "LOSS_RECOVERY_REJECTED");
+        }
+        advanceRecoveryReport(
+                actor,
+                current,
+                row,
+                "LOSS_RECOVERY_DECIDED",
+                Map.of("recoveryId", Long.toString(recovery), "decision", input));
+        return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
+    }
+
+    public Map<String, Object> cancelRecovery(
+            Actor actor, long recovery, long version, UUID key, LossInput.Reason input) {
+        var current = actors.revalidateLocked(actor);
+        String operation = "RECOVERY_CANCEL:" + recovery,
+                hash = LossPayloads.fingerprint(json, operation, version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var row = recoveryParent(recovery);
+        var request = recoveryHeader(recovery);
+        visible(current, row);
+        if (current.id() != number(request, "creator_account_id")
+                && !current.has(Role.ASSET_ADMIN)) {
+            throw new LossFailure(403, "LOSS_CREATOR_REQUIRED");
+        }
+        recoveryGuard(request, version, "PENDING_ADMIN_DECISION");
+        recoveryLock(row, recovery, null);
+        db.update(
+                "UPDATE fams_loss_recovery SET"
+                        + " recovery_status='CANCELLED',version=version+1,updated_at=? WHERE id=?",
+                now(),
+                recovery);
+        release(row, "LOSS_RECOVERY_CANCELLED");
+        closeRecoveryTodos(number(row, "id"));
+        advanceRecoveryReport(
+                actor,
+                current,
+                row,
+                "LOSS_RECOVERY_CANCELLED",
+                Map.of("recoveryId", Long.toString(recovery), "reason", input.reason()));
+        return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
+    }
+
+    public Map<String, Object> claimRecovery(Actor actor, long recovery, long version, UUID key) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.WAREHOUSE_OPERATOR);
+        String operation = "RECOVERY_CLAIM:" + recovery,
+                hash = LossPayloads.fingerprint(json, operation, version, null);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var row = recoveryParent(recovery);
+        var request = recoveryHeader(recovery);
+        recoveryGuard(request, version, "WAITING_WAREHOUSE_CLAIM");
+        recoveryLock(row, recovery, null);
+        assets.requireOriginalRecovery(
+                number(row, "asset_id"),
+                number(request, "asset_version"),
+                "LOST",
+                row.get("source_snapshot_json").toString());
+        db.update(
+                "UPDATE fams_loss_recovery SET"
+                    + " recovery_status='VERIFYING',processor_account_id=?,ownership_version=ownership_version+1,version=version+1,updated_at=?"
+                    + " WHERE id=?",
+                current.id(),
+                now(),
+                recovery);
+        closeRecoveryTodos(number(row, "id"));
+        todo(number(row, "id"), "RECOVERY_VERIFY", "WAREHOUSE_OPERATOR", current.id());
+        advanceRecoveryReport(
+                actor,
+                current,
+                row,
+                "LOSS_RECOVERY_CLAIMED",
+                Map.of(
+                        "recoveryId",
+                        Long.toString(recovery),
+                        "processorAccountId",
+                        Long.toString(current.id())));
+        return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
+    }
+
+    public Map<String, Object> executeRecovery(
+            Actor actor, long recovery, long version, UUID key, LossInput.RecoveryExecution input) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.WAREHOUSE_OPERATOR);
+        String operation = "RECOVERY_EXECUTE:" + recovery,
+                hash = LossPayloads.fingerprint(json, operation, version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var row = recoveryParent(recovery);
+        var request = recoveryHeader(recovery);
+        recoveryGuard(request, version, "VERIFYING");
+        processor(current, request, input.ownershipVersion());
+        if (input.assetVersion() != number(request, "asset_version")) {
+            throw new LossFailure(409, "LOSS_PROCESSOR_OR_ASSET_CHANGED");
+        }
+        recoveryLock(row, recovery, input.lockVersion());
+        recoveryFacts(row, input.facts());
+        long next = restoreOriginal(row, input.assetVersion(), "LOST", current, input.facts());
+        db.update(
+                "UPDATE fams_loss_recovery SET"
+                    + " recovery_status='COMPLETED',execution_snapshot_json=?,version=version+1,updated_at=?"
+                    + " WHERE id=?",
+                json.writeValueAsString(input),
+                now(),
+                recovery);
+        db.update(
+                "UPDATE fams_loss_report SET"
+                        + " asset_version=?,recovered_at=?,recovery_snapshot_json=? WHERE id=?",
+                next,
+                input.facts().foundAt(),
+                json.writeValueAsString(input),
+                row.get("id"));
+        release(row, "LOSS_RECOVERY_COMPLETED");
+        closeTodos(number(row, "id"));
+        advanceRecoveryReport(
+                actor,
+                current,
+                row,
+                "LOSS_RECOVERED_AFTER_CONFIRMATION",
+                Map.of("recoveryId", Long.toString(recovery), "execution", input));
+        return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
+    }
+
+    private boolean applicant(Current current) {
+        return current.has(Role.EMPLOYEE)
+                || current.has(Role.DEPARTMENT_ASSET_MANAGER)
+                || current.has(Role.ASSET_ADMIN)
+                || current.has(Role.WAREHOUSE_OPERATOR);
+    }
+
+    private void recoveryFacts(Map<String, Object> row, LossInput.RecoveryFacts facts) {
+        validTime(facts.foundAt());
+        if (facts.foundAt().isBefore(instant(row.get("last_seen_at")))
+                || row.get("confirmed_lost_at") != null
+                        && facts.foundAt().isBefore(instant(row.get("confirmed_lost_at")))) {
+            throw new LossFailure(400, "LOSS_RECOVERY_TIME_INVALID");
+        }
+        if (!facts.physicalIdentityVerified() || facts.evidence().strip().length() < 10) {
+            throw new LossFailure(400, "LOSS_RECOVERY_EVIDENCE_REQUIRED");
+        }
+        if (!"INTACT".equals(facts.condition()) || !facts.stillOriginalCustodian()) {
+            throw new LossFailure(409, "LOSS_LINKED_RECOVERY_REQUIRED");
+        }
+    }
+
+    private long restoreOriginal(
+            Map<String, Object> row,
+            long version,
+            String exception,
+            Current actor,
+            LossInput.RecoveryFacts facts) {
+        var asset =
+                assets.requireOriginalRecovery(
+                        number(row, "asset_id"),
+                        version,
+                        exception,
+                        row.get("source_snapshot_json").toString());
+        loans.requireRecovery(
+                number(row, "asset_id"),
+                asset.get("lifecycle_status").toString(),
+                (Long) asset.get("responsible_employee_id"),
+                (Long) asset.get("using_organization_id"));
+        long next =
+                assets.recoverOriginal(
+                        number(row, "asset_id"),
+                        version,
+                        exception,
+                        row.get("source_snapshot_json").toString(),
+                        facts.observedAssetCode(),
+                        facts.observedSerialNumber(),
+                        facts.locationId(),
+                        facts.locationVersion(),
+                        number(row, "id"),
+                        actor.id(),
+                        now());
+        loans.refreshLiability(number(row, "asset_id"));
+        return next;
+    }
+
+    private Map<String, Object> recoveryParent(long recovery) {
+        var refs = db.queryForList("SELECT report_id FROM fams_loss_recovery WHERE id=?", recovery);
+        if (refs.isEmpty()) {
+            throw new LossFailure(404, "LOSS_RECOVERY_NOT_FOUND");
+        }
+        var row = header(number(refs.getFirst(), "report_id"));
+        guard(row, number(row, "version"), "CONFIRMED_LOST");
+        if (row.get("recovered_at") != null) {
+            throw new LossFailure(409, "LOSS_ALREADY_RECOVERED");
+        }
+        return row;
+    }
+
+    private Map<String, Object> recoveryHeader(long id) {
+        var rows = db.queryForList("SELECT * FROM fams_loss_recovery WHERE id=? FOR UPDATE", id);
+        if (rows.isEmpty()) {
+            throw new LossFailure(404, "LOSS_RECOVERY_NOT_FOUND");
+        }
+        return rows.getFirst();
+    }
+
+    private void recoveryGuard(Map<String, Object> row, long version, String status) {
+        if (number(row, "version") != version || !status.equals(row.get("recovery_status"))) {
+            throw new LossFailure(409, "LOSS_RECOVERY_CHANGED");
+        }
+    }
+
+    private void recoveryLock(Map<String, Object> row, long recovery, Long version) {
+        var locks =
+                db.queryForList(
+                        "SELECT business_item_id,lock_version FROM fams_asset_business_lock WHERE"
+                            + " asset_id=? AND business_type='LOST_REPORT' AND business_id=? AND"
+                            + " released_at IS NULL FOR UPDATE",
+                        row.get("asset_id"),
+                        row.get("id"));
+        if (locks.size() != 1
+                || number(locks.getFirst(), "business_item_id") != recovery
+                || version != null && number(locks.getFirst(), "lock_version") != version) {
+            throw new LossFailure(409, "LOSS_LOCK_CHANGED");
+        }
+    }
+
+    private void closeRecoveryTodos(long report) {
+        db.update(
+                "UPDATE fams_todo SET todo_status='CLOSED',closed_at=? WHERE"
+                        + " business_type='LOST_REPORT' AND business_id=? AND todo_type IN"
+                        + " ('RECOVERY_DECIDE','RECOVERY_CLAIM','RECOVERY_VERIFY') AND closed_at IS"
+                        + " NULL",
+                now(),
+                report);
+    }
+
+    private void advanceRecoveryReport(
+            Actor actor, Current current, Map<String, Object> row, String action, Object detail) {
+        db.update(
+                "UPDATE fams_loss_report SET version=version+1,updated_at=? WHERE id=?",
+                now(),
+                row.get("id"));
+        audit(actor, current, row, action, number(row, "version") + 1, detail);
+    }
+
+    private Map<String, Object> rememberRecovery(
+            Current current, String operation, UUID key, String hash, long report, long recovery) {
+        var result = new LinkedHashMap<>(view(header(report)));
+        var attempt = recoveryHeader(recovery);
+        result.put("recoveryId", Long.toString(recovery));
+        result.put("recoveryVersion", attempt.get("version"));
+        result.put("recoveryStatus", attempt.get("recovery_status"));
+        saveReceipt(current, operation, key, hash, report, result);
+        return result;
+    }
+
+    private Map<String, Object> recoveryView(Current current, Map<String, Object> row) {
+        var result = new LinkedHashMap<String, Object>();
+        for (String field :
+                List.of(
+                        "id",
+                        "version",
+                        "asset_version",
+                        "recovery_status",
+                        "creator_account_id",
+                        "processor_account_id",
+                        "ownership_version")) {
+            String key =
+                    switch (field) {
+                        case "asset_version" -> "assetVersion";
+                        case "recovery_status" -> "status";
+                        case "creator_account_id" -> "creatorAccountId";
+                        case "processor_account_id" -> "processorAccountId";
+                        case "ownership_version" -> "ownershipVersion";
+                        default -> field;
+                    };
+            Object value = row.get(field);
+            result.put(
+                    key,
+                    field.equals("id") || field.endsWith("_id")
+                            ? value == null ? null : value.toString()
+                            : value);
+        }
+        result.put("request", json.readTree(row.get("request_snapshot_json").toString()));
+        result.put(
+                "approval",
+                row.get("approval_snapshot_json") == null
+                        ? null
+                        : json.readTree(row.get("approval_snapshot_json").toString()));
+        result.put(
+                "execution",
+                row.get("execution_snapshot_json") == null
+                        ? null
+                        : json.readTree(row.get("execution_snapshot_json").toString()));
+        boolean pending = "PENDING_ADMIN_DECISION".equals(row.get("recovery_status"));
+        result.put(
+                "actions",
+                Map.of(
+                        "decide",
+                        pending && current.has(Role.ASSET_ADMIN),
+                        "cancel",
+                        pending
+                                && (current.has(Role.ASSET_ADMIN)
+                                        || current.id() == number(row, "creator_account_id")),
+                        "claim",
+                        "WAITING_WAREHOUSE_CLAIM".equals(row.get("recovery_status"))
+                                && current.has(Role.WAREHOUSE_OPERATOR),
+                        "execute",
+                        "VERIFYING".equals(row.get("recovery_status"))
+                                && current.has(Role.WAREHOUSE_OPERATOR)
+                                && java.util.Objects.equals(
+                                        current.id(), row.get("processor_account_id"))));
+        return result;
+    }
+
     public void photoUploader(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         if (current.id() != number(header(id), "creator_account_id")) {
@@ -583,7 +1085,7 @@ public class LossService {
         var rows =
                 db.queryForList(
                         "SELECT * FROM fams_loss_receipt WHERE actor_account_id=? AND operation=?"
-                            + " AND request_id=? FOR UPDATE",
+                                + " AND request_id=? FOR UPDATE",
                         current.id(),
                         operation,
                         key.toString());
@@ -708,7 +1210,7 @@ public class LossService {
     private void closeTodos(long id) {
         db.update(
                 "UPDATE fams_todo SET todo_status='CLOSED',closed_at=? WHERE"
-                    + " business_type='LOST_REPORT' AND business_id=? AND closed_at IS NULL",
+                        + " business_type='LOST_REPORT' AND business_id=? AND closed_at IS NULL",
                 now(),
                 id);
     }
@@ -765,6 +1267,7 @@ public class LossService {
                                 Map.entry("circumstances", "circumstances"),
                                 Map.entry("processor_account_id", "processorAccountId"),
                                 Map.entry("ownership_version", "ownershipVersion"),
+                                Map.entry("recovered_at", "recoveredAt"),
                                 Map.entry("confirmed_lost_at", "confirmedLostAt"),
                                 Map.entry("last_follow_up_at", "lastFollowUpAt"),
                                 Map.entry("next_review_date", "nextReviewDate"))
@@ -825,8 +1328,8 @@ public class LossService {
         String snapshot =
                 db.queryForObject(
                         "SELECT v.snapshot_json FROM fams_business_parameter_state s JOIN"
-                            + " fams_business_parameter_version v ON v.id=s.current_version_id"
-                            + " WHERE s.singleton_id=1 AND v.status='ACTIVE' FOR SHARE",
+                                + " fams_business_parameter_version v ON v.id=s.current_version_id"
+                                + " WHERE s.singleton_id=1 AND v.status='ACTIVE' FOR SHARE",
                         String.class);
         return LocalDate.now(
                 clock.withZone(ZoneId.of(json.readTree(snapshot).path("timezone").asText())));

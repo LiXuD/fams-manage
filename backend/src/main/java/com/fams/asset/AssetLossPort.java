@@ -82,7 +82,7 @@ public class AssetLossPort {
         }
         if (!db.queryForList(
                         "SELECT id FROM fams_asset_business_lock WHERE asset_id=? AND released_at"
-                            + " IS NULL FOR UPDATE",
+                                + " IS NULL FOR UPDATE",
                         id)
                 .isEmpty()) {
             throw new AssetHandoverPort.Failure("LOSS_ASSET_LOCKED", 409);
@@ -152,6 +152,166 @@ public class AssetLossPort {
                 || "SCRAPPED".equals(rows.getFirst().get("lifecycle_status"))) {
             throw new AssetHandoverPort.Failure("LOSS_ASSET_CHANGED", 409);
         }
+    }
+
+    public Map<String, Object> recoveryView(long id) {
+        var row =
+                db.queryForMap(
+                        "SELECT"
+                            + " a.asset_code,a.serial_number,a.version,a.lifecycle_status,a.exception_status,a.card_stage,a.current_location_id,l.name"
+                            + " location_name,l.version location_version FROM fams_asset a LEFT"
+                            + " JOIN fams_location l ON l.id=a.current_location_id WHERE a.id=?",
+                        id);
+        var view = new LinkedHashMap<String, Object>();
+        view.put("assetCode", row.get("asset_code"));
+        view.put("serialNumber", row.get("serial_number"));
+        view.put("version", row.get("version"));
+        view.put(
+                "locationId",
+                row.get("current_location_id") == null
+                        ? null
+                        : row.get("current_location_id").toString());
+        view.put("locationVersion", row.get("location_version"));
+        view.put("locationName", row.get("location_name"));
+        view.put(
+                "eligible",
+                "ACTIVE".equals(row.get("card_stage"))
+                        && List.of("IN_STOCK", "IN_USE", "BORROWED")
+                                .contains(row.get("lifecycle_status"))
+                        && List.of("SEARCHING", "LOST").contains(row.get("exception_status")));
+        view.put(
+                "locked",
+                !db.queryForList(
+                                "SELECT id FROM fams_asset_business_lock WHERE asset_id=? AND"
+                                        + " released_at IS NULL",
+                                id)
+                        .isEmpty());
+        return view;
+    }
+
+    /** Revalidate the unchanged lawful custodian; other destinations must use a linked workflow. */
+    public Map<String, Object> requireOriginalRecovery(
+            long id, long version, String exception, String original) {
+        var row = locked(id, version, exception);
+        var frozen = json.readTree(original);
+        for (String[] field :
+                new String[][] {
+                    {"lifecycle_status", "lifecycle"},
+                    {"custody_type", "custodyType"},
+                    {"using_organization_id", "usingOrganizationId"},
+                    {"responsible_employee_id", "responsibleEmployeeId"},
+                    {"department_responsible_employee_id", "departmentResponsibleEmployeeId"},
+                    {"storage_warehouse_id", "warehouseId"},
+                    {"current_location_id", "locationId"}
+                }) {
+            Object value = row.get(field[0]);
+            var expected = frozen.path(field[1]);
+            if (!Objects.equals(
+                    value == null ? null : value.toString(),
+                    expected.isNull() || expected.isMissingNode() ? null : expected.asText())) {
+                throw new AssetHandoverPort.Failure("LOSS_LINKED_RECOVERY_REQUIRED", 409);
+            }
+        }
+        Long person =
+                (Long)
+                        ("SHARED".equals(row.get("custody_type"))
+                                ? row.get("department_responsible_employee_id")
+                                : row.get("responsible_employee_id"));
+        if (!"IN_STOCK".equals(row.get("lifecycle_status"))
+                && (person == null
+                        || db.queryForList(
+                                                "SELECT e.id FROM fams_employee e JOIN"
+                                                    + " fams_organization o ON"
+                                                    + " o.id=e.organization_id WHERE e.id=? AND"
+                                                    + " e.status='ACTIVE' AND o.status='ACTIVE' AND"
+                                                    + " e.organization_id=? FOR SHARE",
+                                                person,
+                                                row.get("using_organization_id"))
+                                        .size()
+                                != 1)) {
+            throw new AssetHandoverPort.Failure("LOSS_CUSTODIAN_CHANGED", 409);
+        }
+        if ("IN_STOCK".equals(row.get("lifecycle_status"))
+                && db.queryForList(
+                                        "SELECT id FROM fams_warehouse WHERE id=? AND"
+                                            + " status='ACTIVE' FOR SHARE",
+                                        row.get("storage_warehouse_id"))
+                                .size()
+                        != 1) {
+            throw new AssetHandoverPort.Failure("LOSS_CUSTODIAN_CHANGED", 409);
+        }
+        return row;
+    }
+
+    public Map<String, Object> validateOriginalRecovery(
+            long id,
+            long version,
+            String exception,
+            String original,
+            String observedCode,
+            String observedSerial,
+            long location,
+            long locationVersion) {
+        var row = requireOriginalRecovery(id, version, exception, original);
+        String serial = row.get("serial_number") == null ? "" : row.get("serial_number").toString();
+        if (!row.get("asset_code").equals(observedCode.strip())
+                || !serial.strip()
+                        .equalsIgnoreCase(observedSerial == null ? "" : observedSerial.strip())) {
+            throw new AssetHandoverPort.Failure("LOSS_PHYSICAL_IDENTITY_MISMATCH", 409);
+        }
+        var places = db.queryForList("SELECT * FROM fams_location WHERE id=? FOR SHARE", location);
+        if (!Objects.equals(row.get("current_location_id"), location)
+                || places.size() != 1
+                || !"ACTIVE".equals(places.getFirst().get("status"))
+                || ((Number) places.getFirst().get("version")).longValue() != locationVersion
+                || "IN_STOCK".equals(row.get("lifecycle_status"))
+                        && !Objects.equals(
+                                row.get("storage_warehouse_id"),
+                                places.getFirst().get("warehouse_id"))) {
+            throw new AssetHandoverPort.Failure("LOSS_LOCATION_CHANGED", 409);
+        }
+        return row;
+    }
+
+    public long recoverOriginal(
+            long id,
+            long version,
+            String exception,
+            String original,
+            String observedCode,
+            String observedSerial,
+            long location,
+            long locationVersion,
+            long report,
+            long actor,
+            Instant recordedAt) {
+        validateOriginalRecovery(
+                id,
+                version,
+                exception,
+                original,
+                observedCode,
+                observedSerial,
+                location,
+                locationVersion);
+        if (db.update(
+                        "UPDATE fams_asset SET"
+                            + " exception_status='NORMAL',version=version+1,updated_by=?,updated_at=?"
+                            + " WHERE id=? AND version=?",
+                        actor,
+                        recordedAt,
+                        id,
+                        version)
+                != 1) {
+            throw new AssetHandoverPort.Failure("LOSS_ASSET_CHANGED", 409);
+        }
+        mapper.event(
+                id,
+                "LOSS_RECOVERED",
+                recordedAt,
+                json.writeValueAsString(Map.of("reportId", Long.toString(report))),
+                actor);
+        return version + 1;
     }
 
     private Map<String, Object> locked(long id, long version, String exception) {

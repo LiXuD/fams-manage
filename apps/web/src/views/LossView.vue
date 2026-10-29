@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute } from "vue-router";
+import LossRecoveryPanel from "./LossRecoveryPanel.vue";
 import LossProgressPanel from "./LossProgressPanel.vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
@@ -52,9 +53,15 @@ async function loadAssets(delta = 0) {
 }
 function prepareProgress(intent: LossIntent) {
   const row = detail.value;
-  if (locked.value || readOwner !== identity.value || !row || intent.version !== row.version) return;
-  const action = intent.path === `/${row.id}/confirm-lost` ? "confirmLost" : intent.path === `/${row.id}/follow-up` ? "followUp" : "";
-  if (!action || !row.actions?.[action]) return;
+  if (locked.value || readOwner !== identity.value || !row) return;
+  const attempt = row.recoveries?.find(item => intent.path.startsWith(`/recoveries/${item.id}/`));
+  if (attempt) {
+    const action = ({decision:"decide",cancel:"cancel",claim:"claim",execute:"execute"} as Record<string,string>)[intent.path.slice(intent.path.lastIndexOf("/")+1)];
+    if (!action || intent.version !== attempt.version || !attempt.actions[action]) return;
+  } else {
+    const action = ({[`/${row.id}/confirm-lost`]:"confirmLost",[`/${row.id}/follow-up`]:"followUp",[`/${row.id}/recover-original`]:"recoverOriginal",[`/${row.id}/recovery-requests`]:"requestRecovery"} as Record<string,string>)[intent.path];
+    if (!action || intent.version !== row.version || !row.actions?.[action]) return;
+  }
   confirmation.value = intent;
 }
 function switchMode(followups: boolean) { if (locked.value) return; followUpOnly.value = followups; page.value = 1; void load(""); }
@@ -147,7 +154,8 @@ onBeforeUnmount(() => { live = false; reset(); });
       <p>{{ detail.source.assetCode }} · {{ detail.source.name }}；最后见到 {{ detail.lastSeenAt }}；位置：{{ detail.lastLocation }}</p><p>{{ detail.circumstances }}</p>
       <p>处理库管：{{ detail.processorAccountId ?? '尚未认领' }}；下次复核：{{ detail.nextReviewDate ?? '核实后填写' }}</p>
       <p v-if="detail.status === 'SEARCHING'">已进入查找中，资产继续持锁。本次查找仍在处理中。</p>
-      <p v-if="detail.status === 'CONFIRMED_LOST'">已确认遗失，本次查找单结案，原责任和借用仍在，持续跟进。确认时间：{{ detail.confirmedLostAt }}；最近跟进：{{ detail.lastFollowUpAt ?? '尚未跟进' }}</p>
+      <p v-if="detail.status === 'CONFIRMED_LOST' && !detail.recoveredAt">已确认遗失，本次查找单结案，原责任和借用仍在，持续跟进。确认时间：{{ detail.confirmedLostAt }}；最近跟进：{{ detail.lastFollowUpAt ?? '尚未跟进' }}</p>
+      <LossRecoveryPanel v-if="detail.recoveryAsset || detail.recoveredAt || detail.recoveries?.length" :key="'recovery:' + identity + detail.id + ':' + detail.version" :report="detail" :locked="locked" @prepare="prepareProgress" />
       <LossProgressPanel v-if="detail.actions?.confirmLost || detail.actions?.followUp" :key="identity + detail.id + ':' + detail.version" :report="detail" :locked="locked" @prepare="prepareProgress" />
       <fieldset :disabled="locked"><template v-if="detail.actions?.addPhoto"><label>情况图片<input type="file" accept="image/png,image/jpeg,image/webp" @change="chosen" /></label><button @click="prepare('photo')">上传情况图片</button></template>
         <ul><li v-for="photo in detail.photos" :key="photo.objectId">已保存原件：{{ photo.filename }}<button @click="viewPhoto(photo.objectId, photo.filename)">查看原件</button></li></ul>
