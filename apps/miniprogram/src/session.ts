@@ -210,7 +210,7 @@ export class MiniSessionClient {
     }
 
     async uploadEvidence(path: string, filePath: string, mutation: { key: string; version: number; deviceId?: string }): Promise<unknown> {
-        if (!/^\/api\/v1\/mini\/(repairs\/[1-9][0-9]*\/photos|proxy-confirmations\/[1-9][0-9]*\/attachments|inventory-observations\/tasks\/[1-9][0-9]*\/events\/[0-9a-f-]{36}\/photos)$/.test(path)
+        if (!/^\/api\/v1\/mini\/((?:repairs|loss-reports)\/[1-9][0-9]*\/photos|proxy-confirmations\/[1-9][0-9]*\/attachments|inventory-observations\/tasks\/[1-9][0-9]*\/events\/[0-9a-f-]{36}\/photos)$/.test(path)
             || !filePath || mutation.key.length < 16 || mutation.key.length > 128
             || !Number.isSafeInteger(mutation.version) || mutation.version < 0) {
             throw new Error("Invalid evidence upload identity");
@@ -295,6 +295,28 @@ export class MiniSessionClient {
             if (response.statusCode === 401) this.clear();
             this.checkResponse({ statusCode: response.statusCode, data: null });
             if (!response.filePath) throw new Error("故障照片暂不可读取。");
+            return response.filePath;
+        } catch (error) {
+            if (response.filePath) this.runtime.discardInventoryPhoto(response.filePath);
+            throw error;
+        }
+    }
+
+    async downloadLossPhoto(path: string, contentType: string): Promise<string> {
+        if (!/^\/api\/v1\/mini\/loss-reports\/[1-9][0-9]{0,18}\/photos\/[0-9a-f-]{36}\/content\?grant=[A-Za-z0-9_.-]{1,256}$/i.test(path)
+            || !["image/jpeg", "image/png", "image/webp"].includes(contentType)) throw new Error("Invalid loss photo download");
+        const session = this.current;
+        if (!session) throw new MiniRequestError(401, "AUTH_SESSION_INVALID");
+        if (!this.runtime.downloadInventoryPhoto || !this.runtime.discardInventoryPhoto) throw new Error("当前环境无法安全读取报失照片。");
+        const generation = this.generation;
+        const response = await this.runtime.downloadInventoryPhoto({ url: this.origin + path,
+            header: { "X-FAMS-Mini-Session": session.sessionToken }, contentType,
+            identity: { accountId: session.accountId, bindingId: session.bindingId } });
+        try {
+            this.assertGeneration(generation);
+            if (response.statusCode === 401) this.clear();
+            this.checkResponse({ statusCode: response.statusCode, data: null });
+            if (!response.filePath) throw new Error("报失照片暂不可读取。");
             return response.filePath;
         } catch (error) {
             if (response.filePath) this.runtime.discardInventoryPhoto(response.filePath);

@@ -234,6 +234,99 @@ class LossHttpRuntimeCase {
     }
 
     @Test
+    void actualNativePageRetainsCommittedIntentsAndOriginalBytesThroughSearching()
+            throws Exception {
+        var grants = new java.util.LinkedHashMap<String, Object>();
+        for (var entry :
+                Map.of(
+                                "employee",
+                                951002L,
+                                "admin",
+                                951001L,
+                                "warehouse",
+                                951003L,
+                                "other",
+                                951007L)
+                        .entrySet()) {
+            var identity = new MiniWechatIdentityPort.Identity("owned-loss-native", entry.getKey());
+            db.update(
+                    "INSERT INTO fams_mini_binding(account_id,identity_hash,created_at)"
+                            + " VALUES (?,?,NOW(3))",
+                    entry.getValue(),
+                    miniSessions.identityHash(identity));
+            var grant = miniSessions.start(identity, UUID.randomUUID());
+            grants.put(
+                    entry.getKey(),
+                    Map.of(
+                            "sessionToken",
+                            grant.sessionToken(),
+                            "accountId",
+                            entry.getValue().toString(),
+                            "bindingId",
+                            grant.bindingId()));
+        }
+        var script =
+                java.nio.file.Path.of(System.getProperty("user.dir"))
+                        .getParent()
+                        .resolve("apps/miniprogram/test/runtime-loss-http.mjs");
+        var builder =
+                new ProcessBuilder(
+                                "rtk",
+                                "proxy",
+                                System.getProperty(
+                                        "fams.test.node",
+                                        System.getenv()
+                                                .getOrDefault("FAMS_TEST_NODE_EXECUTABLE", "node")),
+                                script.toString())
+                        .redirectErrorStream(true);
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_LOSS_GRANTS", JSON.writeValueAsString(grants));
+        var process = builder.start();
+        try {
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS));
+        } finally {
+            if (process.isAlive()) {
+                process.destroyForcibly();
+            }
+        }
+        var output =
+                new String(
+                        process.getInputStream().readAllBytes(),
+                        java.nio.charset.StandardCharsets.UTF_8);
+        assertEquals(0, process.exitValue(), output);
+        org.junit.jupiter.api.Assertions.assertTrue(
+                output.contains("\"nativeActualLossSearching\":true"), output);
+        assertEquals(
+                1L,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_loss_report WHERE asset_id=951020 AND"
+                                + " report_status='SEARCHING' AND processor_account_id=951003 AND"
+                                + " next_review_date IS NOT NULL",
+                        Long.class));
+        assertEquals(5L, db.queryForObject("SELECT COUNT(*) FROM fams_loss_event", Long.class));
+        assertEquals(
+                1L,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_asset_business_lock"
+                                + " WHERE asset_id=951020 AND released_at IS NULL",
+                        Long.class));
+        assertEquals(
+                "IN_USE",
+                db.queryForObject(
+                        "SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+        assertEquals(
+                "PERSONAL",
+                db.queryForObject(
+                        "SELECT custody_type FROM fams_asset WHERE id=951020", String.class));
+        assertEquals(
+                951002L,
+                db.queryForObject(
+                        "SELECT responsible_employee_id FROM fams_asset WHERE id=951020",
+                        Long.class));
+    }
+
+    @Test
     void reportingAndApprovalNeverChangeCustodyAndOnlyVerificationStartsSearching()
             throws Exception {
         borrowing(true);
