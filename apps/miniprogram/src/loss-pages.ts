@@ -2,7 +2,7 @@ import type { MiniServices } from "./pages.ts";
 import { MiniRequestError, type FactoryEvidenceFile } from "./session.ts";
 interface Asset { id: string; assetCode: string; name: string; version: number; responsibleEmployeeId?: string; departmentResponsibleEmployeeId?: string }
 interface Photo { objectId: string; filename: string; contentType: string }
-interface Recovery { id: string; version: number; assetVersion: number; ownershipVersion: number; status: string; processorAccountId: string | null; actions: Record<string,boolean> }
+interface Recovery { request?: { facts?: Record<string,unknown> }; id: string; version: number; assetVersion: number; ownershipVersion: number; status: string; processorAccountId: string | null; actions: Record<string,boolean> }
 interface RecoveryAsset { version: number; serialNumber: string | null; locationId: string | null; locationVersion: number | null; locationName: string | null }
 interface Report { id: string; source: Asset; status: string; version: number; assetVersion: number; ownershipVersion: number; lockVersion: number;
     recoveredAt?: string; recoveryAsset?: RecoveryAsset | null; recoveries?: Recovery[]; recoveriesTotal?: number; confirmedLostAt?: string; lastFollowUpAt?: string; lastSeenAt: string; lastLocation: string; circumstances: string; processorAccountId: string | null; nextReviewDate: string | null;
