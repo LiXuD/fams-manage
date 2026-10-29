@@ -1,6 +1,6 @@
 # D6-21 报失与找回
 
-2026-10-28，从af83d20启动，分支codex/d6-21-loss。PRD V1.5 §8.10、§7.6、AC-17/23/33/37为依据。父项IN_PROGRESS；A1后端/PC切片经用户本人审核通过，本地DEV_VERIFIED，A2原生IN_PROGRESS，B/C/D未开始。
+2026-10-28，从af83d20启动，分支codex/d6-21-loss。PRD V1.5 §8.10、§7.6、AC-17/23/33/37为依据。父项IN_PROGRESS；A1后端/PC切片经用户本人审核通过，本地DEV_VERIFIED，A2原生IN_REVIEW，B/C/D未开始。
 
 ## 首片 A1：独立报失至核实查找
 
@@ -38,3 +38,5 @@ B：确认遗失/持续跟进和找回；C：盘点/归还/返厂转换与实际
 | 构建/边界 | 原生页面已注册、菜单可达；SDK/HTTPS/扫描夹具不冒充真机 | 原生构建、静态、契约与限制声明 |
 
 2026-10-29：启动A2，尚无本轮通过声明；A1审核状态不变。
+
+2026-10-29：A2候选 `482756e` 送审；实际 Page/opaque→Spring/MySQL 到 SEARCHING，原提交与原图上传在已提交响应丢失后同原键/版本/字节重试。HTTP7及架构3、Mini312/Web198、Checkstyle/SpotBugs零问题、类型/lint/双构建PASS；独立复核未代签。[A2复核交接](2026-10-29-d6-21a2-review-handoff.md)。父项和A继续IN_PROGRESS，下一功能B，V56冻结，外部真机等边界保持。

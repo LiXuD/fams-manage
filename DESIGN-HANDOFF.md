@@ -1,9 +1,9 @@
 # FAMS 项目阶段与交接入口
 
 > 唯一现役进度入口 · 更新于 2026-10-29
-> 当前结论：第1～5步已完成，第6阶段进行中。当前分支codex/d6-21-loss；用户本人本轮确认D6-20C2固定56e0b67复核通过，本地DEV_VERIFIED，D6-20父项仍开放。D6-21A1独立报失至查找中的后端/PC、真实图证与提交JVM恢复已获用户本人审核通过，本地DEV_VERIFIED；下一A2原生Page及B确认遗失/找回，再关联盘亏/归还/返厂转换。独立复核、真实外部、远端CI、第七阶段QA及生产仍按各自台账开放，唯一明细见现役开发计划。
+> 当前结论：第1～5步已完成，第6阶段进行中。当前分支codex/d6-21-loss；用户本人本轮确认D6-20C2固定56e0b67复核通过，本地DEV_VERIFIED，D6-20父项仍开放。D6-21A1独立报失至查找中的后端/PC、真实图证与提交JVM恢复已获用户本人审核通过，本地DEV_VERIFIED；A2原生报失及图证候选482756e已送IN_REVIEW，下一收集独立复核并推进B确认遗失/找回，再关联盘亏/归还/返厂转换。独立复核、真实外部、远端CI、第七阶段QA及生产仍按各自台账开放，唯一明细见现役开发计划。
 
-> 本次接续材料：[D6-21A1独立报失送审](docs/development/2026-10-28-d6-21a1-review-handoff.md)。固定后端门禁eb1c09f、最终PC29f0b30，分段验证同源范围见送审记录；A1本轮审核通过、本地DEV_VERIFIED，A及D6-21父项继续IN_PROGRESS。
+> 本次接续材料：[D6-21A2原生报失复核交接](docs/development/2026-10-29-d6-21a2-review-handoff.md)，功能候选482756e及机器证据见交接。A1已审核、本地DEV_VERIFIED；A2 IN_REVIEW，A及D6-21父项继续IN_PROGRESS。A1完整后端门禁eb1c09f/PC29f0b30与本轮聚焦检查分开记录。
 ## 1. 八步开发流程与当前进度
 
 | 步骤 | 阶段 | 英文 | 阶段目标 | 当前状态 | 依据 / 下一步 |
@@ -13,7 +13,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | D6-20C2本轮复核通过；D6-21A1后端/PC及实际图证/JVM恢复已获用户审核通过，下一A2原生及确认遗失/找回。各父项、真实外部/CI/独立复核以[现役开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)为准 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | D6-20C2本轮复核通过；D6-21A1已审核、A2原生及图证送IN_REVIEW，下一独立复核及B确认遗失/找回。各父项、真实外部/CI/独立复核以[现役开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)为准 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
@@ -236,3 +236,5 @@ D6-12B 真机验收仍按用户安排后置，父任务保持外部 `BLOCKED`；
 2026-10-28：用户本人确认D6-21A1审核通过并授权按项目规范提交和推送。A1本地DEV_VERIFIED，送审ebb8aa3、后端eb1c09f/PC29f0b30及分段证据不变；A2及后续与父项保持开放，下一原生报失与图证。仅推送当前功能分支，不自动合并主线。
 
 2026-10-29：从已推送d054405推进D6-21A2原生报失与图证链路。A1已审核DEV_VERIFIED保持，A2进行中，随后B确认遗失/找回及C具体关联；状态和证据以现役计划及D6-21任务卡为准。V56冻结，真实外部/真机仍后置。
+
+D6-21A2 功能候选 `482756e` 已完成本轮内部链路验证并送 `IN_REVIEW`，见 [A2复核交接](docs/development/2026-10-29-d6-21a2-review-handoff.md)。后续先收集A2独立复核，再推进D6-21B确认遗失/找回；A和父项仍进行中，B/C/D未开始。原生包与适配器链路不替代真实微信/HTTPS/真机、CI、正式QA或生产。
