@@ -1,9 +1,9 @@
 # FAMS 项目阶段与交接入口
 
 > 唯一现役进度入口 · 更新于 2026-10-29
-> 当前结论：第1～5步已完成，第6阶段进行中。当前分支codex/d6-21-loss；用户本人本轮确认D6-20C2固定56e0b67复核通过，本地DEV_VERIFIED，D6-20父项仍开放。D6-21A1独立报失至查找中的后端/PC、真实图证与提交JVM恢复已获用户本人审核通过，本地DEV_VERIFIED；A2原生报失及图证候选482756e已送IN_REVIEW，继续收集A2独立复核；当前推进B1确认遗失及30日跟进，随后B2找回与C关联转换。独立复核、真实外部、远端CI、第七阶段QA及生产仍按各自台账开放，唯一明细见现役开发计划。
+> 当前结论：第1～5步已完成，第6阶段进行中。当前分支codex/d6-21-loss；用户本人本轮确认D6-20C2固定56e0b67复核通过，本地DEV_VERIFIED，D6-20父项仍开放。D6-21A1独立报失至查找中的后端/PC、真实图证与提交JVM恢复已获用户本人审核通过，本地DEV_VERIFIED；A2原生报失及图证候选482756e已送IN_REVIEW，继续收集A2独立复核；B1确认遗失及30日跟进固定248621a已送IN_REVIEW，下一B2找回与C关联转换。独立复核、真实外部、远端CI、第七阶段QA及生产仍按各自台账开放，唯一明细见现役开发计划。
 
-> 本次接续材料：[D6-21A2原生报失复核交接](docs/development/2026-10-29-d6-21a2-review-handoff.md)，功能候选482756e及机器证据见交接。A1已审核、本地DEV_VERIFIED；A2 IN_REVIEW，A及D6-21父项继续IN_PROGRESS。A1完整后端门禁eb1c09f/PC29f0b30与本轮聚焦检查分开记录。
+> 本次接续材料：[D6-21B1确认遗失及跟进复核交接](docs/development/2026-10-29-d6-21b1-review-handoff.md)，功能候选248621a。A1已审核、本地DEV_VERIFIED；A2/B1为IN_REVIEW，A/B及D6-21父项继续IN_PROGRESS；B2找回及C/D仍必需。完整门禁、PC/JVM、包身份及全量XML未归档限制见交接。
 ## 1. 八步开发流程与当前进度
 
 | 步骤 | 阶段 | 英文 | 阶段目标 | 当前状态 | 依据 / 下一步 |
@@ -13,7 +13,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | D6-20C2本轮复核通过；D6-21A1已审核、A2原生及图证送IN_REVIEW，下一独立复核及B确认遗失/找回。各父项、真实外部/CI/独立复核以[现役开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)为准 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | D6-20C2本轮复核通过；D6-21A1已审核、A2/B1送IN_REVIEW，下一独立复核及B2找回/实际去向。各父项、真实外部/CI/独立复核以[现役开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)为准 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
@@ -63,10 +63,10 @@
 | 设计文档 | `changed-and-verified` | 一期功能覆盖验证已完成并同步 |
 | 开发计划 | `in-progress` | V1.2 顺序调整已获用户授权；D6-04～D6-08 与 D6-09A 本地 `DEV_VERIFIED`；D6-08 全部必需子任务及父任务经用户复核关闭；D6-01B/03B 远端能力尚未完成 |
 | 规则 | `changed-and-verified` | AGENTS 已指向当前阶段 |
-| 产品代码 | `in-progress` | D6-21A1已审核；A2原生待复核；B1确认遗失/持续跟进完成定向链路，固定门禁及实际PC待验；B2找回及C转换仍必需 |
-| 产品运行态 | `local-dev-partial` | A1分段本地门禁与三角色实际PC/图证/JVM恢复通过；不代表完整D6-21、独立外部/CI/QA/生产 |
+| 产品代码 | `in-progress` | D6-21A1已审核；A2原生待复核；B1确认遗失/持续跟进完整门禁及实际PC/JVM通过并送审；B2找回及C转换仍必需 |
+| 产品运行态 | `local-dev-partial` | B1固定完整门禁、三角色实际PC/真实扫描/提交JVM恢复通过；B2/C/D及独立外部/CI/QA/生产开放 |
 | 记忆 | `out-of-scope` | 本次未修改机器生成记忆 |
-| 工作区 | `handoff-recorded` | 当前codex/d6-21-loss，后端门禁eb1c09f、客户端修正29f0b30；未合并或推送，证据绑定见A1送审 |
+| 工作区 | `handoff-recorded` | 当前codex/d6-21-loss，B1功能248621a，本轮本地提交未推送；A1授权推送历史与当前批次分开，见B1送审 |
 
 ## 2026-09-30 续接记录
 
@@ -240,3 +240,5 @@ D6-12B 真机验收仍按用户安排后置，父任务保持外部 `BLOCKED`；
 D6-21A2 功能候选 `482756e` 已完成本轮内部链路验证并送 `IN_REVIEW`，见 [A2复核交接](docs/development/2026-10-29-d6-21a2-review-handoff.md)。后续先收集A2独立复核，再推进D6-21B确认遗失/找回；A和父项仍进行中，B/C/D未开始。原生包与适配器链路不替代真实微信/HTTPS/真机、CI、正式QA或生产。
 
 2026-10-29：B1确认遗失/默认30日跟进已完成两端及定向HTTP13、V57有数据升级/重复和架构3验证；原责任/借用不变、并发与事务回滚、原生未知结果重试已覆盖。正在固定候选完整门禁及三角色实际PC/JVM验证，B1/B/父项保持IN_PROGRESS。A2继续待独立复核，下一B2找回与C关联实际去向。
+
+2026-10-29：B1固定248621a完整产品门禁及实际PC/ClamAV/确认提交JVM恢复通过，送IN_REVIEW，下一B2找回申请/重新批准/合法实际去向，再C/D。A2及B1独立复核未代签，A/B和父项保持进行中；V1～V57冻结，详细证据与限制见B1复核交接。
