@@ -5,7 +5,7 @@ import LossRecoveryPanel from "./LossRecoveryPanel.vue";
 import LossProgressPanel from "./LossProgressPanel.vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { LossApiError, lossProblem, lossRequest, lossStates, type LossAsset, type LossIntent, type LossReport } from "@/loss/api";
+import { LossApiError, lossProblem, lossRequest, lossReportState, type LossAsset, type LossIntent, type LossReport } from "@/loss/api";
 const session = useSessionStore(), route = useRoute();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, route.params.id]));
 const rows = ref<LossReport[]>([]), detail = ref<LossReport | null>(null), total = ref(0), page = ref(1);
@@ -147,10 +147,10 @@ onBeforeUnmount(() => { live = false; reset(); });
       <label>最后位置<input v-model="lastLocation" maxlength="500" /></label>
       <label>找不到的情况<textarea v-model="circumstances" maxlength="2000" /></label><button @click="prepare('submit')">提交报失</button>
     </fieldset></section>
-    <section aria-label="报失记录"><h2>{{ followUpOnly ? '遗失跟进清单' : '报失记录' }}（{{ total }}）</h2><table><thead><tr><th>单号</th><th>资产</th><th>状态</th><th v-if="followUpOnly">原责任 / 跟进库管 / 下次跟进日</th><th>操作</th></tr></thead><tbody><tr v-for="row in rows" :key="row.id"><td>{{ row.id }}</td><td>{{ row.source.assetCode }} · {{ row.source.name }}</td><td>{{ lossStates[row.status] ?? row.status }}</td><td v-if="followUpOnly">{{ row.source.responsibleEmployeeId ?? row.source.departmentResponsibleEmployeeId ?? '在库保管' }} / {{ row.processorAccountId }} / {{ row.nextReviewDate }}</td><td><button :disabled="locked" @click="load(row.id)">查看</button></td></tr></tbody></table>
+    <section aria-label="报失记录"><h2>{{ followUpOnly ? '遗失跟进清单' : '报失记录' }}（{{ total }}）</h2><table><thead><tr><th>单号</th><th>资产</th><th>状态</th><th v-if="followUpOnly">原责任 / 跟进库管 / 下次跟进日</th><th>操作</th></tr></thead><tbody><tr v-for="row in rows" :key="row.id"><td>{{ row.id }}</td><td>{{ row.source.assetCode }} · {{ row.source.name }}</td><td>{{ lossReportState(row) }}</td><td v-if="followUpOnly">{{ row.source.responsibleEmployeeId ?? row.source.departmentResponsibleEmployeeId ?? '在库保管' }} / {{ row.processorAccountId }} / {{ row.nextReviewDate }}</td><td><button :disabled="locked" @click="load(row.id)">查看</button></td></tr></tbody></table>
       <button :disabled="locked || page <= 1" @click="load('', -1)">上一页记录</button><button :disabled="locked || page * 20 >= total" @click="load('', 1)">下一页记录</button>
     </section>
-    <section v-if="detail" aria-label="报失详情"><h2>报失单 {{ detail.id }} · {{ lossStates[detail.status] ?? detail.status }}</h2>
+    <section v-if="detail" aria-label="报失详情"><h2>报失单 {{ detail.id }} · {{ lossReportState(detail) }}</h2>
       <p>{{ detail.source.assetCode }} · {{ detail.source.name }}；最后见到 {{ detail.lastSeenAt }}；位置：{{ detail.lastLocation }}</p><p>{{ detail.circumstances }}</p>
       <p>处理库管：{{ detail.processorAccountId ?? '尚未认领' }}；下次复核：{{ detail.nextReviewDate ?? '核实后填写' }}</p>
       <p v-if="detail.status === 'SEARCHING'">已进入查找中，资产继续持锁。本次查找仍在处理中。</p>

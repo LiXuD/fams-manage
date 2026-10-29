@@ -88,3 +88,5 @@ it("switching reports discards the previous original preview and verification in
   expect((wrapper.findAll("textarea")[1]!.element as HTMLTextAreaElement).value).toBe("");
   expect((wrapper.findAll("textarea")[2]!.element as HTMLTextAreaElement).value).toBe(""); wrapper.unmount();
 });
+
+it("recovered loss shows historical loss and found state without offering liability follow-up",async()=>{const row={...record(),status:"CONFIRMED_LOST",recoveredAt:"2026-10-30T02:20:00Z",actions:{}};vi.stubGlobal("fetch",vi.fn(async(url:string)=>response(url.endsWith("/9")?row:{items:[row],total:1})));const w=mountPage();await flushPromises();expect(w.find('tbody').text()).toContain('遗失事实保留·已找回');expect(w.find('[aria-label="报失详情"] h2').text()).toContain('遗失事实保留·已找回');expect(w.text()).not.toContain('已确认遗失·持续跟进');expect(w.findAll('button').some(item=>item.text()==='记录持续跟进')).toBe(false);expect(row.status).toBe('CONFIRMED_LOST');w.unmount();});

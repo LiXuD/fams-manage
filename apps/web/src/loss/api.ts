@@ -27,6 +27,9 @@ export async function lossRequest<T>(path: string, intent?: LossIntent): Promise
 }
 export const lossStates: Record<string, string> = { PENDING_ADMIN_DECISION: "待管理员确认", WAITING_WAREHOUSE_CLAIM: "待库管领取",
   VERIFYING: "核实中", SEARCHING: "查找中", RECOVERED: "查找中已找回", CONFIRMED_LOST: "已确认遗失·持续跟进", REJECTED: "已驳回", CANCELLED: "已撤回" };
+export function lossReportState(report: Pick<LossReport,"status"|"recoveredAt">): string {
+  return report.status === "CONFIRMED_LOST" && report.recoveredAt ? "遗失事实保留·已找回" : lossStates[report.status] ?? report.status;
+}
 export function lossProblem(error: unknown): string {
   if (error instanceof LossApiError) {
     if ([401, 403, 404].includes(error.status)) return "当前身份、权限或记录已失效，请重新进入。";
