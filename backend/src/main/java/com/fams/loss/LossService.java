@@ -40,6 +40,7 @@ public class LossService {
     private final Clock clock;
     private final RequisitionActorContext actors;
     private final AssetLossPort assets;
+    private final com.fams.loan.LoanLossPort loans;
     private final ObjectProvider<AttachmentRegistry> attachments;
     private final ObjectProvider<AttachmentEvidencePort> evidence;
 
@@ -49,6 +50,7 @@ public class LossService {
             Clock clock,
             RequisitionActorContext actors,
             AssetLossPort assets,
+            com.fams.loan.LoanLossPort loans,
             ObjectProvider<AttachmentRegistry> attachments,
             ObjectProvider<AttachmentEvidencePort> evidence) {
         this.db = db;
@@ -56,6 +58,7 @@ public class LossService {
         this.clock = clock;
         this.actors = actors;
         this.assets = assets;
+        this.loans = loans;
         this.attachments = attachments;
         this.evidence = evidence;
     }
@@ -129,8 +132,23 @@ public class LossService {
                         "SELECT COUNT(*) FROM fams_loss_event WHERE report_id=?", Long.class, id));
         boolean pending = "PENDING_ADMIN_DECISION".equals(row.get("report_status"));
         result.put(
+                "confirmation",
+                row.get("confirmation_snapshot_json") == null
+                        ? null
+                        : json.readTree(row.get("confirmation_snapshot_json").toString()));
+        result.put(
                 "actions",
                 Map.of(
+                        "confirmLost",
+                        "SEARCHING".equals(row.get("report_status"))
+                                && current.has(Role.WAREHOUSE_OPERATOR)
+                                && java.util.Objects.equals(
+                                        current.id(), row.get("processor_account_id")),
+                        "followUp",
+                        "CONFIRMED_LOST".equals(row.get("report_status"))
+                                && current.has(Role.WAREHOUSE_OPERATOR)
+                                && java.util.Objects.equals(
+                                        current.id(), row.get("processor_account_id")),
                         "decide",
                         pending && current.has(Role.ASSET_ADMIN),
                         "cancel",
@@ -336,6 +354,144 @@ public class LossService {
         todo(id, "SEARCH", "WAREHOUSE_OPERATOR", current.id());
         audit(actor, current, row, "LOSS_SEARCH_STARTED", version + 1, input);
         return remember(current, operation, key, hash, header(id));
+    }
+
+    public Map<String, Object> followUps(Actor actor, int page, int size) {
+        var current = actors.revalidateLocked(actor);
+        String where =
+                " FROM fams_loss_report r JOIN fams_asset a ON a.id=r.asset_id"
+                        + " WHERE r.report_status='CONFIRMED_LOST' AND a.exception_status='LOST'"
+                        + " AND a.lifecycle_status<>'SCRAPPED' AND (? OR r.creator_account_id=?"
+                        + " OR r.responsible_employee_id=? OR r.shared_responsible_employee_id=?"
+                        + " OR (? AND r.using_organization_id=?) OR ?)";
+        Object[] scope = {
+            current.has(Role.ASSET_ADMIN),
+            current.id(),
+            current.employeeId(),
+            current.employeeId(),
+            current.has(Role.DEPARTMENT_ASSET_MANAGER),
+            current.organizationId(),
+            current.has(Role.WAREHOUSE_OPERATOR)
+        };
+        var args = new java.util.ArrayList<Object>(java.util.Arrays.asList(scope));
+        args.add(size);
+        args.add(((long) page - 1) * size);
+        return Map.of(
+                "items",
+                db
+                        .queryForList(
+                                "SELECT r.*"
+                                        + where
+                                        + " ORDER BY r.next_review_date,r.id LIMIT ? OFFSET ?",
+                                args.toArray())
+                        .stream()
+                        .map(this::view)
+                        .toList(),
+                "total",
+                java.util.Objects.requireNonNull(
+                        db.queryForObject("SELECT COUNT(*)" + where, Long.class, scope)),
+                "page",
+                page,
+                "pageSize",
+                size);
+    }
+
+    public Map<String, Object> confirmLost(
+            Actor actor, long id, long version, UUID key, LossInput.Confirmation input) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.WAREHOUSE_OPERATOR);
+        String operation = "CONFIRM_LOST:" + id;
+        String hash = LossPayloads.fingerprint(json, operation, version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var row = header(id);
+        guard(row, version, "SEARCHING");
+        processor(current, row, input.ownershipVersion());
+        if (input.assetVersion() != number(row, "asset_version")) {
+            throw new LossFailure(409, "LOSS_PROCESSOR_OR_ASSET_CHANGED");
+        }
+        if (List.of(
+                        input.custodianVerification(),
+                        input.searchedScope(),
+                        input.relatedClues(),
+                        input.inabilityReason(),
+                        input.responsibilityEvidence())
+                .stream()
+                .anyMatch(value -> value.strip().length() < 10)) {
+            throw new LossFailure(400, "LOSS_CONFIRMATION_EVIDENCE_REQUIRED");
+        }
+        lock(row, input.lockVersion());
+        validTime(input.searchedAt());
+        validTime(input.confirmedAt());
+        if (input.searchedAt().isBefore(instant(row.get("last_seen_at")))
+                || input.confirmedAt().isBefore(input.searchedAt())) {
+            throw new LossFailure(400, "LOSS_CONFIRMATION_DATE_INVALID");
+        }
+        long next =
+                assets.confirmedLost(
+                        number(row, "asset_id"), input.assetVersion(), id, current.id(), now());
+        db.update(
+                "UPDATE fams_loss_report SET report_status='CONFIRMED_LOST',asset_version=?,"
+                        + "confirmed_lost_at=?,confirmation_snapshot_json=?,next_review_date=?,"
+                        + "version=version+1,updated_at=? WHERE id=?",
+                next,
+                input.confirmedAt(),
+                json.writeValueAsString(input),
+                today().plusDays(30),
+                now(),
+                id);
+        release(row, "LOSS_CONFIRMED");
+        closeTodos(id);
+        todo(id, "LOST_FOLLOW_UP", "WAREHOUSE_OPERATOR", current.id());
+        loans.refreshLiability(number(row, "asset_id"));
+        audit(actor, current, row, "LOSS_CONFIRMED", version + 1, input);
+        return remember(current, operation, key, hash, header(id));
+    }
+
+    public Map<String, Object> followUp(
+            Actor actor, long id, long version, UUID key, LossInput.FollowUp input) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.WAREHOUSE_OPERATOR);
+        String operation = "FOLLOW_UP:" + id;
+        String hash = LossPayloads.fingerprint(json, operation, version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var row = header(id);
+        guard(row, version, "CONFIRMED_LOST");
+        processor(current, row, input.ownershipVersion());
+        validTime(input.reviewedAt());
+        if (input.findings().strip().length() < 10 || input.reason().strip().length() < 3) {
+            throw new LossFailure(400, "LOSS_FOLLOW_UP_EVIDENCE_REQUIRED");
+        }
+        LocalDate next =
+                input.nextReviewDate() == null ? today().plusDays(30) : input.nextReviewDate();
+        if (input.reviewedAt().isBefore(instant(row.get("confirmed_lost_at")))
+                || row.get("last_follow_up_at") != null
+                        && input.reviewedAt().isBefore(instant(row.get("last_follow_up_at")))
+                || next.isBefore(today())) {
+            throw new LossFailure(400, "LOSS_REVIEW_DATE_INVALID");
+        }
+        assets.requireLost(number(row, "asset_id"));
+        db.update(
+                "UPDATE fams_loss_report SET last_follow_up_at=?,next_review_date=?,"
+                        + "version=version+1,updated_at=? WHERE id=?",
+                input.reviewedAt(),
+                next,
+                now(),
+                id);
+        audit(actor, current, row, "LOSS_FOLLOWED_UP", version + 1, input);
+        return remember(current, operation, key, hash, header(id));
+    }
+
+    private void processor(Current current, Map<String, Object> row, long version) {
+        if (!java.util.Objects.equals(current.id(), row.get("processor_account_id"))
+                || version != number(row, "ownership_version")) {
+            throw new LossFailure(409, "LOSS_PROCESSOR_OR_ASSET_CHANGED");
+        }
     }
 
     public void photoUploader(Actor actor, long id) {
@@ -609,6 +765,8 @@ public class LossService {
                                 Map.entry("circumstances", "circumstances"),
                                 Map.entry("processor_account_id", "processorAccountId"),
                                 Map.entry("ownership_version", "ownershipVersion"),
+                                Map.entry("confirmed_lost_at", "confirmedLostAt"),
+                                Map.entry("last_follow_up_at", "lastFollowUpAt"),
                                 Map.entry("next_review_date", "nextReviewDate"))
                         .entrySet()) {
             var value = row.get(field.getKey());

@@ -56,6 +56,7 @@ class LossHttpRuntimeCase {
 
     @Autowired JdbcTemplate db;
     @Autowired MiniSessionService miniSessions;
+    @Autowired com.fams.loan.LoanReminderService loanReminders;
     Map<String, Object> parameters;
     Session admin, employee, warehouse, otherWarehouse, other, system;
 
@@ -202,6 +203,12 @@ class LossHttpRuntimeCase {
         db.update(
                 "DELETE FROM fams_loss_report WHERE creator_account_id BETWEEN 951001 AND 951010");
         db.update("DELETE FROM fams_asset_timeline_event WHERE asset_id BETWEEN 951020 AND 951023");
+        db.update(
+                "DELETE FROM fams_todo WHERE business_type='LOAN' AND business_id IN"
+                        + " (SELECT id FROM fams_loan WHERE asset_id BETWEEN 951020 AND 951023)");
+        db.update(
+                "DELETE FROM fams_loan_reminder WHERE loan_id IN"
+                        + " (SELECT id FROM fams_loan WHERE asset_id BETWEEN 951020 AND 951023)");
         db.update("DELETE FROM fams_loan WHERE asset_id BETWEEN 951020 AND 951023");
         db.update(
                 "DELETE FROM fams_asset_import_batch WHERE"
@@ -307,6 +314,98 @@ class LossHttpRuntimeCase {
         assertEquals(5L, db.queryForObject("SELECT COUNT(*) FROM fams_loss_event", Long.class));
         assertEquals(
                 1L,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_asset_business_lock"
+                                + " WHERE asset_id=951020 AND released_at IS NULL",
+                        Long.class));
+        assertEquals(
+                "IN_USE",
+                db.queryForObject(
+                        "SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+        assertEquals(
+                "PERSONAL",
+                db.queryForObject(
+                        "SELECT custody_type FROM fams_asset WHERE id=951020", String.class));
+        assertEquals(
+                951002L,
+                db.queryForObject(
+                        "SELECT responsible_employee_id FROM fams_asset WHERE id=951020",
+                        Long.class));
+    }
+
+    @Test
+    void actualNativePageConfirmsLossAndFollowsUpWithOriginalCommittedIntents() throws Exception {
+        var grants = new java.util.LinkedHashMap<String, Object>();
+        for (var entry :
+                Map.of(
+                                "employee",
+                                951002L,
+                                "admin",
+                                951001L,
+                                "warehouse",
+                                951003L,
+                                "other",
+                                951007L)
+                        .entrySet()) {
+            var identity = new MiniWechatIdentityPort.Identity("owned-loss-native", entry.getKey());
+            db.update(
+                    "INSERT INTO fams_mini_binding(account_id,identity_hash,created_at)"
+                            + " VALUES (?,?,NOW(3))",
+                    entry.getValue(),
+                    miniSessions.identityHash(identity));
+            var grant = miniSessions.start(identity, UUID.randomUUID());
+            grants.put(
+                    entry.getKey(),
+                    Map.of(
+                            "sessionToken",
+                            grant.sessionToken(),
+                            "accountId",
+                            entry.getValue().toString(),
+                            "bindingId",
+                            grant.bindingId()));
+        }
+        var script =
+                java.nio.file.Path.of(System.getProperty("user.dir"))
+                        .getParent()
+                        .resolve("apps/miniprogram/test/runtime-loss-confirmation-http.mjs");
+        var builder =
+                new ProcessBuilder(
+                                "rtk",
+                                "proxy",
+                                System.getProperty(
+                                        "fams.test.node",
+                                        System.getenv()
+                                                .getOrDefault("FAMS_TEST_NODE_EXECUTABLE", "node")),
+                                script.toString())
+                        .redirectErrorStream(true);
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_LOSS_GRANTS", JSON.writeValueAsString(grants));
+        var process = builder.start();
+        try {
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS));
+        } finally {
+            if (process.isAlive()) {
+                process.destroyForcibly();
+            }
+        }
+        var output =
+                new String(
+                        process.getInputStream().readAllBytes(),
+                        java.nio.charset.StandardCharsets.UTF_8);
+        assertEquals(0, process.exitValue(), output);
+        org.junit.jupiter.api.Assertions.assertTrue(
+                output.contains("\"nativeActualLossConfirmed\":true"), output);
+        assertEquals(
+                1L,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_loss_report WHERE asset_id=951020 AND"
+                            + " report_status='CONFIRMED_LOST' AND processor_account_id=951003 AND"
+                            + " next_review_date IS NOT NULL",
+                        Long.class));
+        assertEquals(7L, db.queryForObject("SELECT COUNT(*) FROM fams_loss_event", Long.class));
+        assertEquals(
+                0L,
                 db.queryForObject(
                         "SELECT COUNT(*) FROM fams_asset_business_lock"
                                 + " WHERE asset_id=951020 AND released_at IS NULL",
@@ -583,6 +682,391 @@ class LossHttpRuntimeCase {
                                 key())
                         .statusCode());
         assertEquals(400, get(admin, "?pageSize=101").statusCode());
+    }
+
+    @Test
+    void confirmationRetainsExpiredBorrowingAndMovesToThirtyDayResponsibilityFollowUp()
+            throws Exception {
+        borrowing(true);
+        db.update(
+                "UPDATE fams_loan SET parameter_snapshot_json='{\"timezone\":\"Asia/Shanghai\"}'"
+                    + " WHERE asset_id=951020");
+        long loanId =
+                db.queryForObject("SELECT id FROM fams_loan WHERE asset_id=951020", Long.class);
+        loanReminders.refresh(loanId);
+        var loan = db.queryForMap("SELECT * FROM fams_loan WHERE id=?", loanId);
+        var notices =
+                db.queryForList(
+                        "SELECT * FROM fams_loan_reminder WHERE loan_id=? ORDER BY id", loanId);
+        var row = searchingReport();
+        String id = row.path("id").asText();
+        String body = confirmation(row), originalKey = key();
+        long version = row.path("version").asLong();
+        var result = ok(post(warehouse, "/" + id + "/confirm-lost", body, version, originalKey));
+        assertEquals("CONFIRMED_LOST", result.path("status").asText());
+        assertEquals(
+                java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"))
+                        .plusDays(30)
+                        .toString(),
+                result.path("nextReviewDate").asText());
+        assertEquals(loan, db.queryForMap("SELECT * FROM fams_loan WHERE id=?", loanId));
+        assertEquals(
+                "BORROWED",
+                db.queryForObject(
+                        "SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+        assertEquals(
+                "LOST",
+                db.queryForObject(
+                        "SELECT exception_status FROM fams_asset WHERE id=951020", String.class));
+        assertEquals(
+                951002L,
+                db.queryForObject(
+                        "SELECT responsible_employee_id FROM fams_asset WHERE id=951020",
+                        Long.class));
+        assertEquals(
+                0L,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=951020 AND"
+                            + " released_at IS NULL",
+                        Long.class));
+        assertEquals(
+                1L,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_todo WHERE business_type='LOAN' AND"
+                            + " business_id=? AND todo_type='LOST_LIABILITY' AND closed_at IS NULL",
+                        Long.class,
+                        loanId));
+        assertEquals(
+                0L,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_todo WHERE business_type='LOAN' AND"
+                            + " business_id=? AND todo_type<>'LOST_LIABILITY' AND closed_at IS"
+                            + " NULL",
+                        Long.class,
+                        loanId));
+        assertEquals(
+                notices,
+                db.queryForList(
+                        "SELECT * FROM fams_loan_reminder WHERE loan_id=? AND"
+                            + " reminder_type<>'LOST_LIABILITY' ORDER BY id",
+                        loanId));
+        assertEquals(1, ok(get(employee, "/follow-ups")).path("total").asInt());
+        assertEquals(0, ok(get(other, "/follow-ups")).path("total").asInt());
+        assertEquals(400, get(admin, "/follow-ups?pageSize=101").statusCode());
+        assertEquals(
+                409,
+                post(
+                                employee,
+                                "",
+                                submission(951020)
+                                        .replace("\"assetVersion\":0", "\"assetVersion\":2"),
+                                0,
+                                key())
+                        .statusCode());
+        row = ok(get(warehouse, "/" + id));
+        assertFalse(row.path("actions").path("confirmLost").asBoolean());
+        String follow = followUp(row), followKey = key();
+        long followVersion = row.path("version").asLong();
+        var followed =
+                ok(post(warehouse, "/" + id + "/follow-up", follow, followVersion, followKey));
+        assertEquals("CONFIRMED_LOST", followed.path("status").asText());
+        assertFalse(followed.path("lastFollowUpAt").isNull());
+        assertEquals(
+                followed,
+                ok(post(warehouse, "/" + id + "/follow-up", follow, followVersion, followKey)));
+        assertEquals(
+                result,
+                ok(post(warehouse, "/" + id + "/confirm-lost", body, version, originalKey)));
+        assertEquals(loan, db.queryForMap("SELECT * FROM fams_loan WHERE id=?", loanId));
+        assertEquals(
+                1L,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_todo WHERE business_type='LOST_REPORT' AND"
+                            + " business_id=? AND todo_type='LOST_FOLLOW_UP' AND closed_at IS NULL",
+                        Long.class,
+                        Long.parseLong(id)));
+    }
+
+    @Test
+    void confirmationRequiresCurrentHandlerFourVersionsAndCompleteChronologicalEvidence()
+            throws Exception {
+        var row = searchingReport();
+        String id = row.path("id").asText(), body = confirmation(row);
+        long version = row.path("version").asLong();
+        assertEquals(
+                403, post(admin, "/" + id + "/confirm-lost", body, version, key()).statusCode());
+        assertEquals(
+                409,
+                post(otherWarehouse, "/" + id + "/confirm-lost", body, version, key())
+                        .statusCode());
+        assertEquals(
+                409,
+                post(warehouse, "/" + id + "/confirm-lost", body, version - 1, key()).statusCode());
+        for (String field : List.of("assetVersion", "ownershipVersion", "lockVersion")) {
+            var invalid = new java.util.LinkedHashMap<>(JSON.readValue(body, Map.class));
+            invalid.put(field, 999);
+            assertEquals(
+                    409,
+                    post(
+                                    warehouse,
+                                    "/" + id + "/confirm-lost",
+                                    JSON.writeValueAsString(invalid),
+                                    version,
+                                    key())
+                            .statusCode());
+        }
+        for (String field :
+                List.of(
+                        "custodianVerification",
+                        "searchedScope",
+                        "relatedClues",
+                        "inabilityReason",
+                        "responsibilityEvidence")) {
+            var invalid = new java.util.LinkedHashMap<>(JSON.readValue(body, Map.class));
+            invalid.put(field, "一          ");
+            assertEquals(
+                    400,
+                    post(
+                                    warehouse,
+                                    "/" + id + "/confirm-lost",
+                                    JSON.writeValueAsString(invalid),
+                                    version,
+                                    key())
+                            .statusCode());
+        }
+        for (String time : List.of("2000-01-01T00:00:00Z", "2099-01-01T00:00:00Z")) {
+            var invalid = new java.util.LinkedHashMap<>(JSON.readValue(body, Map.class));
+            invalid.put("confirmedAt", time);
+            assertEquals(
+                    400,
+                    post(
+                                    warehouse,
+                                    "/" + id + "/confirm-lost",
+                                    JSON.writeValueAsString(invalid),
+                                    version,
+                                    key())
+                            .statusCode());
+        }
+        assertEquals("SEARCHING", ok(get(warehouse, "/" + id)).path("status").asText());
+        assertEquals(
+                "SEARCHING",
+                db.queryForObject(
+                        "SELECT exception_status FROM fams_asset WHERE id=951020", String.class));
+    }
+
+    @Test
+    void concurrentConfirmationHasOneWinnerAndChangedPayloadCannotReuseOriginalKey()
+            throws Exception {
+        var row = searchingReport();
+        String id = row.path("id").asText(), body = confirmation(row);
+        long version = row.path("version").asLong();
+        var start = new java.util.concurrent.CountDownLatch(1);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var one =
+                    pool.submit(
+                            () -> {
+                                start.await();
+                                return post(
+                                                warehouse,
+                                                "/" + id + "/confirm-lost",
+                                                body,
+                                                version,
+                                                key())
+                                        .statusCode();
+                            });
+            var two =
+                    pool.submit(
+                            () -> {
+                                start.await();
+                                return post(
+                                                warehouse,
+                                                "/" + id + "/confirm-lost",
+                                                body,
+                                                version,
+                                                key())
+                                        .statusCode();
+                            });
+            start.countDown();
+            assertEquals(
+                    List.of(200, 409),
+                    java.util.stream.Stream.of(one.get(), two.get()).sorted().toList());
+        }
+        assertEquals(
+                1L,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_loss_event WHERE action='LOSS_CONFIRMED'",
+                        Long.class));
+        var receipt =
+                db.queryForMap(
+                        "SELECT request_id,response_json FROM fams_loss_receipt WHERE operation=?",
+                        "CONFIRM_LOST:" + id);
+        assertEquals(
+                409,
+                post(
+                                warehouse,
+                                "/" + id + "/confirm-lost",
+                                body.replace("无法找回判断", "改变无法找回判断"),
+                                version,
+                                receipt.get("request_id").toString())
+                        .statusCode());
+    }
+
+    @Test
+    void confirmationAuditFailureRollsBackAssetLockReportReminderAndReceipt() throws Exception {
+        borrowing(true);
+        db.update(
+                "UPDATE fams_loan SET parameter_snapshot_json='{\"timezone\":\"Asia/Shanghai\"}'"
+                    + " WHERE asset_id=951020");
+        long loanId =
+                db.queryForObject("SELECT id FROM fams_loan WHERE asset_id=951020", Long.class);
+        loanReminders.refresh(loanId);
+        var row = searchingReport();
+        String id = row.path("id").asText(), body = confirmation(row), originalKey = key();
+        long version = row.path("version").asLong();
+        var asset = db.queryForMap("SELECT * FROM fams_asset WHERE id=951020");
+        var report =
+                db.queryForMap("SELECT * FROM fams_loss_report WHERE id=?", Long.parseLong(id));
+        var locks =
+                db.queryForList(
+                        "SELECT * FROM fams_asset_business_lock WHERE asset_id=951020 ORDER BY id");
+        var todos = db.queryForList("SELECT * FROM fams_todo ORDER BY id");
+        var reminders = db.queryForList("SELECT * FROM fams_loan_reminder ORDER BY id");
+        db.execute(
+                "CREATE TRIGGER owned_repair_audit_failure BEFORE INSERT ON fams_audit_event FOR"
+                    + " EACH ROW BEGIN IF NEW.action='LOSS_CONFIRMED' THEN SIGNAL SQLSTATE '45000'"
+                    + " SET MESSAGE_TEXT='owned loss confirmation failure'; END IF; END");
+        assertEquals(
+                500,
+                post(warehouse, "/" + id + "/confirm-lost", body, version, originalKey)
+                        .statusCode());
+        assertEquals(asset, db.queryForMap("SELECT * FROM fams_asset WHERE id=951020"));
+        assertEquals(
+                report,
+                db.queryForMap("SELECT * FROM fams_loss_report WHERE id=?", Long.parseLong(id)));
+        assertEquals(
+                locks,
+                db.queryForList(
+                        "SELECT * FROM fams_asset_business_lock WHERE asset_id=951020 ORDER BY"
+                            + " id"));
+        assertEquals(todos, db.queryForList("SELECT * FROM fams_todo ORDER BY id"));
+        assertEquals(reminders, db.queryForList("SELECT * FROM fams_loan_reminder ORDER BY id"));
+        db.execute("DROP TRIGGER owned_repair_audit_failure");
+        assertEquals(
+                "CONFIRMED_LOST",
+                ok(post(warehouse, "/" + id + "/confirm-lost", body, version, originalKey))
+                        .path("status")
+                        .asText());
+    }
+
+    @Test
+    void followUpRejectsOtherHandlerPastDatesAndMissingReasonWithoutReopeningLock()
+            throws Exception {
+        var row = searchingReport();
+        String id = row.path("id").asText();
+        row =
+                ok(
+                        post(
+                                warehouse,
+                                "/" + id + "/confirm-lost",
+                                confirmation(row),
+                                row.path("version").asLong(),
+                                key()));
+        long version = row.path("version").asLong();
+        String body = followUp(row);
+        assertEquals(
+                409,
+                post(otherWarehouse, "/" + id + "/follow-up", body, version, key()).statusCode());
+        for (var invalid :
+                List.of(
+                        Map.of("nextReviewDate", "2000-01-01"),
+                        Map.of("reviewedAt", "2000-01-01T00:00:00Z"),
+                        Map.of("reason", "一"))) {
+            var modified = new java.util.LinkedHashMap<>(JSON.readValue(body, Map.class));
+            modified.putAll(invalid);
+            assertEquals(
+                    400,
+                    post(
+                                    warehouse,
+                                    "/" + id + "/follow-up",
+                                    JSON.writeValueAsString(modified),
+                                    version,
+                                    key())
+                            .statusCode());
+        }
+        var extension = new java.util.LinkedHashMap<>(JSON.readValue(body, Map.class));
+        extension.put(
+                "nextReviewDate",
+                java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"))
+                        .plusDays(45)
+                        .toString());
+        var followed =
+                ok(
+                        post(
+                                warehouse,
+                                "/" + id + "/follow-up",
+                                JSON.writeValueAsString(extension),
+                                version,
+                                key()));
+        assertEquals(extension.get("nextReviewDate"), followed.path("nextReviewDate").asText());
+        assertEquals(
+                0L,
+                db.queryForObject(
+                        "SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=951020 AND"
+                            + " released_at IS NULL",
+                        Long.class));
+    }
+
+    private JsonNode searchingReport() throws Exception {
+        var row = ok(post(employee, "", submission(951020), 0, key()));
+        String id = row.path("id").asText();
+        row = addPhoto(id);
+        row =
+                ok(
+                        post(
+                                admin,
+                                "/" + id + "/decision",
+                                decision(),
+                                row.path("version").asLong(),
+                                key()));
+        row = ok(post(warehouse, "/" + id + "/claim", null, row.path("version").asLong(), key()));
+        row = ok(get(warehouse, "/" + id));
+        ok(post(warehouse, "/" + id + "/search", search(row), row.path("version").asLong(), key()));
+        return ok(get(warehouse, "/" + id));
+    }
+
+    private String confirmation(JsonNode row) {
+        var body = new java.util.LinkedHashMap<String, Object>();
+        body.put("assetVersion", row.path("assetVersion").asLong());
+        body.put("ownershipVersion", row.path("ownershipVersion").asLong());
+        body.put("lockVersion", row.path("lockVersion").asLong());
+        body.put("custodianVerification", "已当面核实最后保管人及原责任事实并保留记录");
+        body.put("searchedScope", "已经逐一核查原办公室及所有登记保管位置");
+        body.put("relatedClues", "已核对交接维修和盘点记录，尚无找到原物线索");
+        body.put("inabilityReason", "无法找回判断依据为现场查找与全部线索均未发现原物");
+        body.put("responsibilityEvidence", "原借用或保管责任与最后持有人核实记录共同作为证据");
+        body.put(
+                "searchedAt",
+                Instant.now()
+                        .minusSeconds(1)
+                        .truncatedTo(java.time.temporal.ChronoUnit.MILLIS)
+                        .toString());
+        body.put(
+                "confirmedAt",
+                Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString());
+        return JSON.writeValueAsString(body);
+    }
+
+    private String followUp(JsonNode row) {
+        return JSON.writeValueAsString(
+                Map.of(
+                        "ownershipVersion",
+                        row.path("ownershipVersion").asLong(),
+                        "reviewedAt",
+                        Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString(),
+                        "findings",
+                        "本轮再次核实原保管人和登记位置仍然没有发现原物",
+                        "reason",
+                        "保留原责任并继续跟进查找"));
     }
 
     private String submission(long id) throws Exception {

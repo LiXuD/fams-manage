@@ -116,6 +116,44 @@ public class AssetLossPort {
         return version + 1;
     }
 
+    public long confirmedLost(long id, long version, long report, long actor, Instant time) {
+        locked(id, version, "SEARCHING");
+        if (db.update(
+                        "UPDATE fams_asset SET exception_status='LOST',version=version+1,"
+                                + "updated_by=?,updated_at=? WHERE id=? AND version=?",
+                        actor,
+                        time,
+                        id,
+                        version)
+                != 1) {
+            throw new AssetHandoverPort.Failure("LOSS_ASSET_CHANGED", 409);
+        }
+        mapper.event(
+                id,
+                "LOSS_CONFIRMED",
+                time,
+                json.writeValueAsString(Map.of("reportId", Long.toString(report))),
+                actor);
+        return version + 1;
+    }
+
+    /**
+     * Follow-up observes an outstanding loss; it never writes custody or overrides another owner.
+     */
+    public void requireLost(long id) {
+        var rows =
+                db.queryForList(
+                        "SELECT card_stage,lifecycle_status,exception_status"
+                                + " FROM fams_asset WHERE id=? FOR UPDATE",
+                        id);
+        if (rows.size() != 1
+                || !"ACTIVE".equals(rows.getFirst().get("card_stage"))
+                || !"LOST".equals(rows.getFirst().get("exception_status"))
+                || "SCRAPPED".equals(rows.getFirst().get("lifecycle_status"))) {
+            throw new AssetHandoverPort.Failure("LOSS_ASSET_CHANGED", 409);
+        }
+    }
+
     private Map<String, Object> locked(long id, long version, String exception) {
         var rows = db.queryForList("SELECT * FROM fams_asset WHERE id=? FOR UPDATE", id);
         if (rows.isEmpty()) {

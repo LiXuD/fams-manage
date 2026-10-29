@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute } from "vue-router";
+import LossProgressPanel from "./LossProgressPanel.vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { LossApiError, lossProblem, lossRequest, lossStates, type LossAsset, type LossIntent, type LossReport } from "@/loss/api";
@@ -15,10 +16,11 @@ const busy = ref(false), error = ref(""), notice = ref("");
 const preview = ref(""), previewName = ref("");
 let download: AbortController | null = null;
 const locked = computed(() => busy.value || !!pending.value || !!confirmation.value);
-let generation = 0, live = true;
+let generation = 0, live = true, readOwner = "";
+const followUpOnly = ref(false);
 const current = (epoch: number, owner: string) => live && epoch === generation && owner === identity.value;
 function reset() {
-  generation++; clearPreview(); rows.value = []; detail.value = null; assets.value = []; assetId.value = ""; file.value = null;
+  generation++; readOwner = ""; followUpOnly.value = false; clearPreview(); rows.value = []; detail.value = null; assets.value = []; assetId.value = ""; file.value = null;
   pending.value = null; confirmation.value = null; busy.value = false; total.value = 0; page.value = 1; assetPage.value = 1; assetTotal.value = 0;
   lastSeenAt.value = ""; lastLocation.value = ""; circumstances.value = ""; reason.value = "";
   custodian.value = ""; searchedScope.value = ""; searchedAt.value = ""; nextReviewDate.value = ""; error.value = ""; notice.value = "";
@@ -33,9 +35,9 @@ async function load(id = detail.value?.id ?? String(route.params.id ?? ""), delt
   }
   const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
   try {
-    const result = await lossRequest<{ items: LossReport[]; total: number }>(`?page=${next}&pageSize=20`);
+    const result = await lossRequest<{ items: LossReport[]; total: number }>(`${followUpOnly.value ? "/follow-ups" : ""}?page=${next}&pageSize=20`);
     const selected = /^[1-9][0-9]{0,18}$/.test(id) ? await lossRequest<LossReport>(`/${id}`) : null;
-    if (current(epoch, owner)) { rows.value = result.items; total.value = result.total; page.value = next; detail.value = selected; }
+    if (current(epoch, owner)) { readOwner = owner; rows.value = result.items; total.value = result.total; page.value = next; detail.value = selected; }
   } catch (cause) { if (current(epoch, owner)) failure(cause); }
   finally { if (current(epoch, owner)) busy.value = false; }
 }
@@ -48,6 +50,14 @@ async function loadAssets(delta = 0) {
   } catch (cause) { if (current(epoch, owner)) failure(cause); }
   finally { if (current(epoch, owner)) busy.value = false; }
 }
+function prepareProgress(intent: LossIntent) {
+  const row = detail.value;
+  if (locked.value || readOwner !== identity.value || !row || intent.version !== row.version) return;
+  const action = intent.path === `/${row.id}/confirm-lost` ? "confirmLost" : intent.path === `/${row.id}/follow-up` ? "followUp" : "";
+  if (!action || !row.actions?.[action]) return;
+  confirmation.value = intent;
+}
+function switchMode(followups: boolean) { if (locked.value) return; followUpOnly.value = followups; page.value = 1; void load(""); }
 function prepare(action: "submit" | "approve" | "reject" | "cancel" | "claim" | "photo" | "search") {
   if (locked.value) return; error.value = "";
   const row = detail.value; let path = "", body: unknown, upload: File | undefined;
@@ -118,10 +128,11 @@ onBeforeUnmount(() => { live = false; reset(); });
   <AppChrome><main class="loss-page">
     <header><h1>报失与查找</h1><p>报告找不到只冻结流转；批准核实后，由处理库管记录实际查找。原责任和借用继续保留。</p></header>
     <p v-if="error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p>
-    <div v-if="confirmation" role="dialog" aria-label="确认报失操作"><p>请确认本次资产、情况、版本及证据，提交后保留操作履历。</p><button @click="confirm">确认提交</button><button @click="confirmation = null">返回修改</button></div>
-    <div v-if="pending"><p>操作结果待核对，当前输入已冻结。</p><button :disabled="busy" @click="send">使用原请求重试</button><button :disabled="busy" @click="load()">只读核对最新结果</button></div>
+    <div v-if="confirmation" role="dialog" aria-label="确认报失操作"><p>{{ confirmation.summary ?? '请确认本次资产、情况、版本及证据，提交后保留操作履历。' }}</p><button @click="confirm">确认提交</button><button @click="confirmation = null">返回修改</button></div>
+    <div v-if="pending"><p>{{ pending.summary ?? '操作结果待核对，当前输入已冻结。' }}</p><button :disabled="busy" @click="send">使用原请求重试</button><button :disabled="busy" @click="load()">只读核对最新结果</button></div>
     <button :disabled="busy || !!confirmation" @click="load()">刷新报失记录</button>
-    <section aria-label="发起报失"><h2>发起报失</h2><fieldset :disabled="locked">
+    <button :disabled="locked" @click="switchMode(false)">全部报失</button><button :disabled="locked" @click="switchMode(true)">遗失跟进清单</button>
+    <section v-if="!followUpOnly" aria-label="发起报失"><h2>发起报失</h2><fieldset :disabled="locked">
       <button @click="loadAssets()">查询可报失资产</button><span>第{{ assetPage }}页，共{{ assetTotal }}项</span>
       <button :disabled="assetPage <= 1" @click="loadAssets(-1)">上一页资产</button><button :disabled="assetPage * 20 >= assetTotal" @click="loadAssets(1)">下一页资产</button>
       <label>资产<select v-model="assetId"><option value="">请选择</option><option v-for="asset in assets" :key="asset.id" :value="asset.id">{{ asset.assetCode }} · {{ asset.name }}</option></select></label>
@@ -129,13 +140,15 @@ onBeforeUnmount(() => { live = false; reset(); });
       <label>最后位置<input v-model="lastLocation" maxlength="500" /></label>
       <label>找不到的情况<textarea v-model="circumstances" maxlength="2000" /></label><button @click="prepare('submit')">提交报失</button>
     </fieldset></section>
-    <section aria-label="报失记录"><h2>报失记录（{{ total }}）</h2><table><thead><tr><th>单号</th><th>资产</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="row in rows" :key="row.id"><td>{{ row.id }}</td><td>{{ row.source.assetCode }} · {{ row.source.name }}</td><td>{{ lossStates[row.status] ?? row.status }}</td><td><button :disabled="locked" @click="load(row.id)">查看</button></td></tr></tbody></table>
+    <section aria-label="报失记录"><h2>{{ followUpOnly ? '遗失跟进清单' : '报失记录' }}（{{ total }}）</h2><table><thead><tr><th>单号</th><th>资产</th><th>状态</th><th v-if="followUpOnly">原责任 / 跟进库管 / 下次跟进日</th><th>操作</th></tr></thead><tbody><tr v-for="row in rows" :key="row.id"><td>{{ row.id }}</td><td>{{ row.source.assetCode }} · {{ row.source.name }}</td><td>{{ lossStates[row.status] ?? row.status }}</td><td v-if="followUpOnly">{{ row.source.responsibleEmployeeId ?? row.source.departmentResponsibleEmployeeId ?? '在库保管' }} / {{ row.processorAccountId }} / {{ row.nextReviewDate }}</td><td><button :disabled="locked" @click="load(row.id)">查看</button></td></tr></tbody></table>
       <button :disabled="locked || page <= 1" @click="load('', -1)">上一页记录</button><button :disabled="locked || page * 20 >= total" @click="load('', 1)">下一页记录</button>
     </section>
     <section v-if="detail" aria-label="报失详情"><h2>报失单 {{ detail.id }} · {{ lossStates[detail.status] ?? detail.status }}</h2>
       <p>{{ detail.source.assetCode }} · {{ detail.source.name }}；最后见到 {{ detail.lastSeenAt }}；位置：{{ detail.lastLocation }}</p><p>{{ detail.circumstances }}</p>
       <p>处理库管：{{ detail.processorAccountId ?? '尚未认领' }}；下次复核：{{ detail.nextReviewDate ?? '核实后填写' }}</p>
       <p v-if="detail.status === 'SEARCHING'">已进入查找中，资产继续持锁。本次查找仍在处理中。</p>
+      <p v-if="detail.status === 'CONFIRMED_LOST'">已确认遗失，本次查找单结案，原责任和借用仍在，持续跟进。确认时间：{{ detail.confirmedLostAt }}；最近跟进：{{ detail.lastFollowUpAt ?? '尚未跟进' }}</p>
+      <LossProgressPanel v-if="detail.actions?.confirmLost || detail.actions?.followUp" :key="identity + detail.id + ':' + detail.version" :report="detail" :locked="locked" @prepare="prepareProgress" />
       <fieldset :disabled="locked"><template v-if="detail.actions?.addPhoto"><label>情况图片<input type="file" accept="image/png,image/jpeg,image/webp" @change="chosen" /></label><button @click="prepare('photo')">上传情况图片</button></template>
         <ul><li v-for="photo in detail.photos" :key="photo.objectId">已保存原件：{{ photo.filename }}<button @click="viewPhoto(photo.objectId, photo.filename)">查看原件</button></li></ul>
         <template v-if="detail.actions?.decide || detail.actions?.cancel"><label>本次原因<textarea v-model="reason" maxlength="1000" /></label></template>

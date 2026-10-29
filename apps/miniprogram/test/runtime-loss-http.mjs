@@ -14,6 +14,8 @@ const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
 const hash = value => createHash("sha256").update(value).digest("hex"), uploads = [], writes = [], clients = new Map();
 const event = dataset => ({ currentTarget: { dataset } }), field = (name, value) => ({ ...event({ field: name }), detail: { value } });
 let dropUpload = true, dropWrite = true, saved;
+const confirmationRun = process.env.FAMS_TEST_LOSS_CONFIRMATION === "true", progressWrites = [];
+const dropped = new Set();
 const target = url => { assert.ok(url.startsWith(origin + "/api/v1/mini/")); return "http://127.0.0.1:" + port + url.slice(origin.length); };
 function service(role) {
     if (clients.has(role)) return clients.get(role);
@@ -26,6 +28,10 @@ function service(role) {
             if (input.method === "POST" && input.url.endsWith("/loss-reports")) {
                 writes.push({ path: input.url, body: structuredClone(input.data), key: input.header["Idempotency-Key"], version: input.header["If-Match-Version"] });
                 if (response.status === 200) { saved = data; if (dropWrite) { dropWrite = false; input.fail(new Error("Owned adapter dropped committed loss")); return; } }
+            }
+            if (confirmationRun && input.method === "POST" && /\/(confirm-lost|follow-up)$/.test(input.url)) {
+                progressWrites.push({path:input.url,body:structuredClone(input.data),key:input.header["Idempotency-Key"],version:input.header["If-Match-Version"]});
+                if (response.status === 200 && !dropped.has(input.url)) { dropped.add(input.url);input.fail(new Error("Owned adapter dropped committed loss progress reply"));return; }
             }
             input.success({ statusCode: response.status, data });
         })().catch(input.fail); },
@@ -59,8 +65,16 @@ try {
     const original=employee.data.detail.photos[0];assert.equal(original.filename,path.basename(upload.path));await employee.onPhoto(event({id:original.objectId}));okay(employee);const preview=employee.data.photoPath;assert.equal(hash(fs.readFileSync(preview)),hash(png));employee.onHide();assert.equal(employee.data.detail,null);assert.equal(fs.existsSync(preview),false);employee.onUnload();
     const admin=await page("admin",id);okay(admin);admin.onField(field("reason","已核对报告与本次情况原件，批准开展核实查找。"));await prepare(admin,"approve");okay(admin);assert.equal(admin.data.detail.status,"WAITING_WAREHOUSE_CLAIM");admin.onUnload();
     const warehouse=await page("warehouse",id);okay(warehouse);await prepare(warehouse,"claim");okay(warehouse);assert.equal(warehouse.data.detail.status,"VERIFYING");
-    warehouse.onField(field("custodianVerification","已经当面核实最后保管人及原办公室，未找到资产。"));warehouse.onField(field("searchedScope","已经查找原办公室、登记保管区及同事交接位置。"));warehouse.onNow(event({kind:"search"}));warehouse.onField(field("nextReviewDate",new Date(Date.now()+7*86400000).toISOString().slice(0,10)));await prepare(warehouse,"search");okay(warehouse);assert.equal(warehouse.data.detail.status,"SEARCHING");assert.equal(warehouse.data.detail.photos.length,1);assert.equal(warehouse.data.detail.history.length,5);warehouse.onUnload();
+    warehouse.onField(field("custodianVerification","已经当面核实最后保管人及原办公室，未找到资产。"));warehouse.onField(field("searchedScope","已经查找原办公室、登记保管区及同事交接位置。"));warehouse.onNow(event({kind:"search"}));warehouse.onField(field("nextReviewDate",new Date(Date.now()+7*86400000).toISOString().slice(0,10)));await prepare(warehouse,"search");okay(warehouse);assert.equal(warehouse.data.detail.status,"SEARCHING");assert.equal(warehouse.data.detail.photos.length,1);assert.equal(warehouse.data.detail.history.length,5);
+    if (confirmationRun) {
+        for(const[name,value]of Object.entries({custodianVerification:"已经与最后保管人当面核实原责任事实并保留记录。",searchedScope:"已经逐一查找办公室和全部登记保管位置仍无实物。",relatedClues:"已经核对交接维修及盘点线索，尚无原物去向。",inabilityReason:"现场查找和各项线索均无原物，凭核实证据判断无法找回。",responsibilityEvidence:"原责任登记及最后保管人核实记录共同作为遗失责任证据。"}))warehouse.onField(field(name,value));
+        warehouse.onNow(event({kind:"search"}));warehouse.onNow(event({kind:"confirm"}));await prepare(warehouse,"confirmLost");assert.equal(warehouse.data.retry,true);
+        const original=structuredClone(progressWrites[0]);await warehouse.onRefresh();warehouse.onHide();await warehouse.onShow();assert.match(warehouse.data.pendingLabel,/确认遗失/);await warehouse.onRetry();okay(warehouse);assert.deepEqual(progressWrites[1],original);assert.equal(warehouse.data.detail.status,"CONFIRMED_LOST");
+        warehouse.onField(field("findings","本轮重新核实原保管人和所有登记位置仍然没有发现原物。"));warehouse.onField(field("reason","继续保留原责任并在下个周期复核。"));warehouse.onNow(event({kind:"review"}));await prepare(warehouse,"followUp");assert.equal(warehouse.data.retry,true);const follow=structuredClone(progressWrites[2]);warehouse.onHide();await warehouse.onShow();await warehouse.onRetry();okay(warehouse);assert.deepEqual(progressWrites[3],follow);assert.equal(warehouse.data.detail.history.length,7);assert.equal(warehouse.data.detail.status,"CONFIRMED_LOST");
+        await warehouse.onMode(event({mode:"followups"}));okay(warehouse);assert.equal(warehouse.data.total,1);assert.equal(warehouse.data.rows[0].source.responsibleEmployeeId,"951002");
+    }
+    warehouse.onUnload();
     const other=await page("other",id);assert.equal(other.data.detail,null);assert.ok(other.data.error);assert.equal(JSON.stringify(other.data).includes("报失情况原件"),false);other.onUnload();
     for(const client of clients.values())client.sessions.clear();
-    console.log(JSON.stringify({nativeActualLossSearching:true,submitOriginalRetry:true,imageOriginalRetry:true,opaqueOriginalBytes:true,foreignIdentityDenied:true,reportId:id,sdk:"adapter",https:"adapter",scanner:"fixture"}));
+    console.log(JSON.stringify({nativeActualLossSearching:true,nativeActualLossConfirmed:confirmationRun,submitOriginalRetry:true,imageOriginalRetry:true,opaqueOriginalBytes:true,foreignIdentityDenied:true,reportId:id,sdk:"adapter",https:"adapter",scanner:"fixture"}));
 } finally { delete globalThis.Page;delete globalThis.getApp;fs.rmSync(root,{recursive:true,force:true}); }

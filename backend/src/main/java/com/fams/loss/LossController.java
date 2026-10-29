@@ -101,6 +101,33 @@ public class LossController {
         return retry(() -> reports.search(actor, id, version, key, input));
     }
 
+    @GetMapping("/follow-ups")
+    Map<String, Object> followUps(
+            @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
+            @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
+        return reports.followUps(actors.capture(), page, pageSize);
+    }
+
+    @PostMapping("/{id}/confirm-lost")
+    Map<String, Object> confirmLost(
+            @PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.Confirmation input) {
+        var actor = actors.capture();
+        return retry(() -> reports.confirmLost(actor, id, version, key, input));
+    }
+
+    @PostMapping("/{id}/follow-up")
+    Map<String, Object> followUp(
+            @PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.FollowUp input) {
+        var actor = actors.capture();
+        return retry(() -> reports.followUp(actor, id, version, key, input));
+    }
+
     private Map<String, Object> retry(Supplier<Map<String, Object>> operation) {
         for (int attempt = 0; ; attempt++) {
             try {

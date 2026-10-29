@@ -32,4 +32,23 @@ public final class LossInput {
             @NotBlank @Size(min = 10, max = 2000) String searchedScope,
             @NotNull Instant searchedAt,
             @NotNull LocalDate nextReviewDate) {}
+
+    public record Confirmation(
+            @PositiveOrZero long assetVersion,
+            @PositiveOrZero long ownershipVersion,
+            @PositiveOrZero long lockVersion,
+            @NotBlank @Size(min = 10, max = 2000) String custodianVerification,
+            @NotBlank @Size(min = 10, max = 2000) String searchedScope,
+            @NotNull Instant searchedAt,
+            @NotBlank @Size(min = 10, max = 2000) String relatedClues,
+            @NotBlank @Size(min = 10, max = 2000) String inabilityReason,
+            @NotBlank @Size(min = 10, max = 2000) String responsibilityEvidence,
+            @NotNull Instant confirmedAt) {}
+
+    public record FollowUp(
+            @PositiveOrZero long ownershipVersion,
+            @NotNull Instant reviewedAt,
+            @NotBlank @Size(min = 10, max = 2000) String findings,
+            @NotBlank @Size(min = 3, max = 1000) String reason,
+            LocalDate nextReviewDate) {}
 }
