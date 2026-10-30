@@ -495,9 +495,21 @@ public class RepairService {
     }
 
     public Map<String, Object> submit(Actor actor, UUID key, RepairInput.Submission input) {
+        return submitSource(actor, key, input, null);
+    }
+
+    Map<String, Object> submitLossRecovery(
+            Actor actor, UUID key, RepairInput.Submission input, LossRepairPort.Source loss) {
+        return submitSource(actor, key, input, loss);
+    }
+
+    private Map<String, Object> submitSource(
+            Actor actor, UUID key, RepairInput.Submission input, LossRepairPort.Source loss) {
         var current = actors.revalidateLocked(actor);
-        String fingerprint = hash("SUBMIT", 0, input);
-        var prior = replay(actor, current, "SUBMIT", key, fingerprint);
+        String operation = loss == null ? "SUBMIT" : "LOSS_RECOVERY:" + loss.reportId();
+        String fingerprint =
+                hash(operation, 0, loss == null ? input : Map.of("input", input, "source", loss));
+        var prior = replay(actor, current, operation, key, fingerprint);
         if (prior != null) {
             return prior;
         }
@@ -506,7 +518,20 @@ public class RepairService {
                 || input.occurredAt().isAfter(clock.instant().plusSeconds(2))) {
             throw new RepairFailure(400, "REPAIR_FAULT_INVALID");
         }
-        String source = assets.submission(current, input.assetId(), input.assetVersion());
+        String source =
+                loss == null
+                        ? assets.submission(current, input.assetId(), input.assetVersion())
+                        : assets.lossRecoverySubmission(
+                                current,
+                                input.assetId(),
+                                input.assetVersion(),
+                                Long.parseLong(loss.reportId()),
+                                loss.lockVersion());
+        if (loss != null) {
+            var linked = (tools.jackson.databind.node.ObjectNode) json.readTree(source);
+            linked.set("lossRecovery", json.valueToTree(loss));
+            source = json.writeValueAsString(linked);
+        }
         var snapshot = json.readTree(source);
         var loan = loans.open(input.assetId());
         boolean borrowed = "BORROWED".equals(snapshot.path("lifecycle").asText());
@@ -559,17 +584,39 @@ public class RepairService {
         long id =
                 java.util.Objects.requireNonNull(
                         db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
-        db.update(
-                "INSERT INTO"
-                    + " fams_asset_business_lock(asset_id,business_type,business_id,business_item_id,acquired_at)"
-                    + " VALUES (?,'REPAIR',?,?,?)",
-                input.assetId(),
-                id,
-                id,
-                now);
+        if (loss == null) {
+            db.update(
+                    "INSERT INTO"
+                        + " fams_asset_business_lock(asset_id,business_type,business_id,business_item_id,acquired_at)"
+                        + " VALUES (?,'REPAIR',?,?,?)",
+                    input.assetId(),
+                    id,
+                    id,
+                    now);
+        } else if (db.update(
+                        "UPDATE fams_asset_business_lock SET"
+                            + " business_type='REPAIR',business_id=?,business_item_id=?,lock_version=lock_version+1"
+                            + " WHERE asset_id=? AND business_type='LOST_REPORT' AND business_id=?"
+                            + " AND lock_version=? AND released_at IS NULL",
+                        id,
+                        id,
+                        input.assetId(),
+                        loss.reportId(),
+                        loss.lockVersion())
+                != 1) {
+            throw new RepairFailure(409, "REPAIR_LOSS_LOCK_CHANGED");
+        }
         todo(id, "APPROVAL", "ASSET_ADMIN", null);
-        audit(actor, current, header(id), "REPAIR_SUBMITTED", 0, 0, input, role(current));
-        return remember(current, "SUBMIT", key, fingerprint, header(id));
+        audit(
+                actor,
+                current,
+                header(id),
+                "REPAIR_SUBMITTED",
+                0,
+                0,
+                loss == null ? input : Map.of("input", input, "source", loss),
+                role(current));
+        return remember(current, operation, key, fingerprint, header(id));
     }
 
     public Map<String, Object> decide(

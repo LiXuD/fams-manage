@@ -59,7 +59,7 @@ function prepareProgress(intent: LossIntent) {
     const action = ({decision:"decide",cancel:"cancel",claim:"claim",execute:"execute"} as Record<string,string>)[intent.path.slice(intent.path.lastIndexOf("/")+1)];
     if (!action || intent.version !== attempt.version || !attempt.actions[action]) return;
   } else {
-    const action = ({[`/${row.id}/confirm-lost`]:"confirmLost",[`/${row.id}/follow-up`]:"followUp",[`/${row.id}/recover-original`]:"recoverOriginal",[`/${row.id}/recovery-requests`]:"requestRecovery"} as Record<string,string>)[intent.path];
+    const action = ({[`/${row.id}/confirm-lost`]:"confirmLost",[`/${row.id}/follow-up`]:"followUp",[`/${row.id}/recover-original`]:"recoverOriginal",[`/${row.id}/recover-to-repair`]:"recoverOriginal",[`/${row.id}/recovery-requests`]:"requestRecovery"} as Record<string,string>)[intent.path];
     if (!action || intent.version !== row.version || !row.actions?.[action]) return;
   }
   confirmation.value = intent;

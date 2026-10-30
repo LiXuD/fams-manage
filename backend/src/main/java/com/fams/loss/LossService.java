@@ -40,6 +40,7 @@ public class LossService {
     private final Clock clock;
     private final RequisitionActorContext actors;
     private final AssetLossPort assets;
+    private final com.fams.repair.LossRepairPort repairs;
     private final com.fams.loan.LoanLossPort loans;
     private final ObjectProvider<AttachmentRegistry> attachments;
     private final ObjectProvider<AttachmentEvidencePort> evidence;
@@ -50,6 +51,7 @@ public class LossService {
             Clock clock,
             RequisitionActorContext actors,
             AssetLossPort assets,
+            com.fams.repair.LossRepairPort repairs,
             com.fams.loan.LoanLossPort loans,
             ObjectProvider<AttachmentRegistry> attachments,
             ObjectProvider<AttachmentEvidencePort> evidence) {
@@ -58,6 +60,7 @@ public class LossService {
         this.clock = clock;
         this.actors = actors;
         this.assets = assets;
+        this.repairs = repairs;
         this.loans = loans;
         this.attachments = attachments;
         this.evidence = evidence;
@@ -558,6 +561,68 @@ public class LossService {
         closeTodos(id);
         audit(actor, current, row, "LOSS_RECOVERED", version + 1, input);
         return remember(current, operation, key, hash, header(id));
+    }
+
+    public Map<String, Object> recoverToRepair(
+            Actor actor, long id, long version, UUID key, LossInput.RepairRecovery input) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.WAREHOUSE_OPERATOR);
+        String operation = "RECOVER_TO_REPAIR:" + id;
+        String hash = LossPayloads.fingerprint(json, operation, version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var row = header(id);
+        guard(row, version, "SEARCHING");
+        var execution = input.recovery();
+        processor(current, row, execution.ownershipVersion());
+        if (execution.assetVersion() != number(row, "asset_version")) {
+            throw new LossFailure(409, "LOSS_PROCESSOR_OR_ASSET_CHANGED");
+        }
+        lock(row, execution.lockVersion());
+        var facts = execution.facts();
+        validTime(facts.foundAt());
+        if (facts.foundAt().isBefore(instant(row.get("last_seen_at")))
+                || !facts.physicalIdentityVerified()
+                || facts.evidence().strip().length() < 10) {
+            throw new LossFailure(400, "LOSS_RECOVERY_EVIDENCE_REQUIRED");
+        }
+        if (!"DAMAGED".equals(facts.condition()) || !facts.stillOriginalCustodian()) {
+            throw new LossFailure(409, "LOSS_LINKED_RECOVERY_REQUIRED");
+        }
+        // The loss lock remains live throughout; repair adopts it before this transaction commits.
+        long next = restoreOriginal(row, execution.assetVersion(), "SEARCHING", current, facts);
+        var repair =
+                repairs.create(
+                        actor,
+                        key,
+                        new com.fams.repair.RepairInput.Submission(
+                                number(row, "asset_id"),
+                                next,
+                                input.fault(),
+                                input.impact(),
+                                facts.foundAt()),
+                        new com.fams.repair.LossRepairPort.Source(
+                                Long.toString(id),
+                                execution.lockVersion(),
+                                json.writeValueAsString(input)));
+        var snapshot = Map.of("execution", input, "repairId", repair.get("id"));
+        db.update(
+                "UPDATE fams_loss_report SET"
+                    + " report_status='RECOVERED',asset_version=?,recovered_at=?,recovery_snapshot_json=?,version=version+1,updated_at=?"
+                    + " WHERE id=?",
+                next,
+                facts.foundAt(),
+                json.writeValueAsString(snapshot),
+                now(),
+                id);
+        closeTodos(id);
+        audit(actor, current, row, "LOSS_RECOVERED_TO_REPAIR", version + 1, snapshot);
+        var result = new LinkedHashMap<>(view(header(id)));
+        result.put("repairId", repair.get("id"));
+        saveReceipt(current, operation, key, hash, id, result);
+        return result;
     }
 
     public Map<String, Object> requestRecovery(
@@ -1280,6 +1345,9 @@ public class LossService {
                             : wire(value));
         }
         result.put("source", json.readTree(row.get("source_snapshot_json").toString()));
+        var recovery = row.get("recovery_snapshot_json");
+        var repair = recovery == null ? null : json.readTree(recovery.toString()).get("repairId");
+        result.put("repairId", repair == null ? null : repair.asText());
         return result;
     }
 

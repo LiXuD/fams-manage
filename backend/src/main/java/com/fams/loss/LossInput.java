@@ -67,6 +67,11 @@ public final class LossInput {
             @PositiveOrZero long assetVersion,
             @NotNull @jakarta.validation.Valid RecoveryFacts facts) {}
 
+    public record RepairRecovery(
+            @NotNull @jakarta.validation.Valid RecoveryExecution recovery,
+            @NotBlank @Size(min = 10, max = 2000) String fault,
+            @NotBlank String impact) {}
+
     public record RecoveryExecution(
             @PositiveOrZero long assetVersion,
             @PositiveOrZero long ownershipVersion,

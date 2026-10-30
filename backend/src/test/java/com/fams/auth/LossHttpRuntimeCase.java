@@ -1393,7 +1393,7 @@ class LossHttpRuntimeCase {
         assertEquals(before, recoveryDatabaseFacts());
         db.update(
                 "UPDATE fams_asset_business_lock SET business_type='REPAIR' WHERE asset_id=951020"
-                    + " AND released_at IS NULL");
+                        + " AND released_at IS NULL");
         before = recoveryDatabaseFacts();
         assertEquals(409, post(warehouse, path, original, version, key()).statusCode());
         assertEquals(before, recoveryDatabaseFacts());
@@ -1495,15 +1495,15 @@ class LossHttpRuntimeCase {
                 0L,
                 db.queryForObject(
                         "SELECT COUNT(*) FROM fams_todo WHERE business_type='LOAN' AND"
-                            + " business_id=? AND todo_type IN ('OVERDUE','LOST_LIABILITY') AND"
-                            + " closed_at IS NULL",
+                                + " business_id=? AND todo_type IN ('OVERDUE','LOST_LIABILITY') AND"
+                                + " closed_at IS NULL",
                         Long.class,
                         loan.get("id")));
         assertEquals(
                 1L,
                 db.queryForObject(
                         "SELECT COUNT(*) FROM fams_loan_reminder WHERE loan_id=? AND"
-                            + " reminder_type='LOST_LIABILITY'",
+                                + " reminder_type='LOST_LIABILITY'",
                         Long.class,
                         loan.get("id")));
     }
@@ -1557,6 +1557,290 @@ class LossHttpRuntimeCase {
                                 + " business_id=? AND closed_at IS NULL",
                         Long.class,
                         id));
+    }
+
+    @Test
+    void damagedRecoveryAdoptsSameLockAndRealRepairCompletesWithoutChangingLoan() throws Exception {
+        borrowing(false);
+        db.update(
+                "UPDATE fams_loan SET parameter_snapshot_json=? WHERE asset_id=951020",
+                JSON.writeValueAsString(Map.of("timezone", "Asia/Shanghai")));
+        var loan = db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020");
+        var row = searchingReport();
+        String path = "/" + row.path("id").asText() + "/recover-to-repair";
+        String body = damagedRecoveryBody(row), request = key();
+        var originalLock =
+                db.queryForMap(
+                        "SELECT * FROM fams_asset_business_lock WHERE asset_id=951020 AND"
+                                + " released_at IS NULL");
+        try {
+            var result = ok(post(warehouse, path, body, row.path("version").asLong(), request));
+            assertEquals(
+                    result, ok(post(warehouse, path, body, row.path("version").asLong(), request)));
+            String repair = result.path("repairId").asText();
+            assertFalse(repair.isBlank());
+            var lock =
+                    db.queryForMap(
+                            "SELECT * FROM fams_asset_business_lock WHERE asset_id=951020 AND"
+                                    + " released_at IS NULL");
+            assertEquals(originalLock.get("id"), lock.get("id"));
+            assertEquals("REPAIR", lock.get("business_type"));
+            assertEquals(repair, lock.get("business_id").toString());
+            assertEquals(
+                    ((Number) originalLock.get("lock_version")).longValue() + 1,
+                    ((Number) lock.get("lock_version")).longValue());
+            assertEquals(
+                    "BORROWED",
+                    db.queryForObject(
+                            "SELECT lifecycle_status FROM fams_asset WHERE id=951020",
+                            String.class));
+            assertEquals(
+                    repair,
+                    ok(get(employee, "/" + row.path("id").asText())).path("repairId").asText());
+            assertEquals(
+                    row.path("id").asText(),
+                    JSON.readTree(
+                                    db.queryForObject(
+                                            "SELECT source_snapshot_json FROM fams_repair_request"
+                                                    + " WHERE id=?",
+                                            String.class,
+                                            repair))
+                            .path("lossRecovery")
+                            .path("reportId")
+                            .asText());
+            assertEquals(
+                    409,
+                    post(warehouse, path, body, row.path("version").asLong(), key()).statusCode());
+            var repairRow =
+                    ok(
+                            repairWrite(
+                                    admin,
+                                    repair + "/decision",
+                                    Map.of(
+                                            "result",
+                                            "APPROVE",
+                                            "allowedMethod",
+                                            "INTERNAL_NO_COST",
+                                            "reason",
+                                            "核实损坏找回来源后批准内部处理"),
+                                    0));
+            repairRow =
+                    ok(
+                            repairWrite(
+                                    warehouse,
+                                    repair + "/claim",
+                                    null,
+                                    repairRow.path("version").asLong()));
+            for (String action : List.of("accept-in-place", "complete-in-place")) {
+                long lockVersion =
+                        db.queryForObject(
+                                "SELECT lock_version FROM fams_asset_business_lock WHERE"
+                                        + " asset_id=951020 AND released_at IS NULL",
+                                Long.class);
+                repairRow =
+                        ok(
+                                repairWrite(
+                                        warehouse,
+                                        repair + "/" + action,
+                                        Map.of(
+                                                "assetVersion",
+                                                repairRow.path("assetVersion").asLong(),
+                                                "ownershipVersion",
+                                                repairRow.path("ownershipVersion").asLong(),
+                                                "lockVersion",
+                                                lockVersion,
+                                                "observedCode",
+                                                row.path("recoveryAsset")
+                                                        .path("assetCode")
+                                                        .asText(),
+                                                "actualLocationId",
+                                                951001,
+                                                "neverLeftCustodian",
+                                                true,
+                                                "evidence",
+                                                "亲见损坏原物在原责任人登记位置完成本次内部维修操作"),
+                                        repairRow.path("version").asLong()));
+            }
+            assertEquals("COMPLETED", repairRow.path("status").asText());
+            assertEquals(loan, db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020"));
+            assertRecovered(row.path("id").asText());
+        } finally {
+            cleanLinkedRepairs();
+        }
+    }
+
+    @Test
+    void lateLossAuditFailureRollsBackCreatedRepairAndLockAndCanRetrySameKey() throws Exception {
+        var row = searchingReport();
+        String path = "/" + row.path("id").asText() + "/recover-to-repair",
+                body = damagedRecoveryBody(row),
+                request = key();
+        var before = linkedRecoveryDatabaseFacts();
+        try {
+            db.execute(
+                    "CREATE TRIGGER owned_loss_link_failure BEFORE INSERT ON fams_loss_event FOR"
+                            + " EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Owned late loss"
+                            + " failure'");
+            assertEquals(
+                    500,
+                    post(warehouse, path, body, row.path("version").asLong(), request)
+                            .statusCode());
+            assertEquals(before, linkedRecoveryDatabaseFacts());
+            db.execute("DROP TRIGGER owned_loss_link_failure");
+            ok(post(warehouse, path, body, row.path("version").asLong(), request));
+        } finally {
+            db.execute("DROP TRIGGER IF EXISTS owned_loss_link_failure");
+            cleanLinkedRepairs();
+        }
+    }
+
+    @Test
+    void damagedRecoveryRejectsWrongHandlerStaleVersionsChangedIdentityAndInvalidImpact()
+            throws Exception {
+        var row = searchingReport();
+        String path = "/" + row.path("id").asText() + "/recover-to-repair",
+                body = damagedRecoveryBody(row);
+        long version = row.path("version").asLong();
+        var before = linkedRecoveryDatabaseFacts();
+        assertEquals(403, post(employee, path, body, version, key()).statusCode());
+        assertEquals(409, post(otherWarehouse, path, body, version, key()).statusCode());
+        assertEquals(409, post(warehouse, path, body, version - 1, key()).statusCode());
+        for (String field : List.of("assetVersion", "ownershipVersion", "lockVersion")) {
+            var changed = JSON.readTree(body);
+            ((tools.jackson.databind.node.ObjectNode) changed.get("recovery")).put(field, 999);
+            assertEquals(
+                    409,
+                    post(warehouse, path, JSON.writeValueAsString(changed), version, key())
+                            .statusCode());
+        }
+        for (var invalid :
+                List.of(
+                        Map.of("condition", "INTACT"),
+                        Map.of("stillOriginalCustodian", false),
+                        Map.of("observedAssetCode", "NOT-THE-ORIGINAL"),
+                        Map.of("locationVersion", 999))) {
+            var changed = JSON.readTree(body);
+            ((tools.jackson.databind.node.ObjectNode) changed.path("recovery").get("facts"))
+                    .setAll((tools.jackson.databind.node.ObjectNode) JSON.valueToTree(invalid));
+            assertEquals(
+                    409,
+                    post(warehouse, path, JSON.writeValueAsString(changed), version, key())
+                            .statusCode());
+        }
+        var invalid = (tools.jackson.databind.node.ObjectNode) JSON.readTree(body);
+        invalid.put("impact", "UNSUPPORTED");
+        assertEquals(
+                400,
+                post(warehouse, path, JSON.writeValueAsString(invalid), version, key())
+                        .statusCode());
+        assertEquals(before, linkedRecoveryDatabaseFacts());
+    }
+
+    @Test
+    void competingDamagedAndOriginalRecoveryCannotCreateTwoDestinations() throws Exception {
+        var row = searchingReport();
+        String path = "/" + row.path("id").asText();
+        String damaged = damagedRecoveryBody(row), original = recoveryBody(row, null);
+        long version = row.path("version").asLong();
+        var start = new java.util.concurrent.CountDownLatch(1);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var a =
+                    pool.submit(
+                            () -> {
+                                start.await();
+                                return post(
+                                        warehouse,
+                                        path + "/recover-to-repair",
+                                        damaged,
+                                        version,
+                                        key());
+                            });
+            var b =
+                    pool.submit(
+                            () -> {
+                                start.await();
+                                return post(
+                                        warehouse,
+                                        path + "/recover-original",
+                                        original,
+                                        version,
+                                        key());
+                            });
+            start.countDown();
+            assertEquals(
+                    List.of(200, 409),
+                    java.util.stream.Stream.of(a.get().statusCode(), b.get().statusCode())
+                            .sorted()
+                            .toList());
+            assertEquals(
+                    1L,
+                    db.queryForObject(
+                            "SELECT COUNT(*) FROM fams_loss_event WHERE report_id=? AND action IN"
+                                    + " ('LOSS_RECOVERED','LOSS_RECOVERED_TO_REPAIR')",
+                            Long.class,
+                            row.path("id").asText()));
+        } finally {
+            cleanLinkedRepairs();
+        }
+    }
+
+    private String damagedRecoveryBody(JsonNode row) {
+        var recovery =
+                (tools.jackson.databind.node.ObjectNode) JSON.readTree(recoveryBody(row, null));
+        ((tools.jackson.databind.node.ObjectNode) recovery.get("facts"))
+                .put("condition", "DAMAGED");
+        return JSON.writeValueAsString(
+                Map.of("recovery", recovery, "fault", "原机在登记位置找到但电源故障无法正常工作", "impact", "MEDIUM"));
+    }
+
+    private HttpResponse<String> repairWrite(
+            Session session, String path, Object body, long version) throws Exception {
+        return http.send(
+                HttpRequest.newBuilder(
+                                URI.create("http://127.0.0.1:" + port + "/api/v1/repairs/" + path))
+                        .header("Cookie", session.cookie())
+                        .header("X-CSRF-Token", session.csrf())
+                        .header("Idempotency-Key", key())
+                        .header("If-Match-Version", Long.toString(version))
+                        .header("Content-Type", "application/json")
+                        .POST(
+                                body == null
+                                        ? HttpRequest.BodyPublishers.noBody()
+                                        : HttpRequest.BodyPublishers.ofString(
+                                                JSON.writeValueAsString(body)))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    private Map<String, Object> linkedRecoveryDatabaseFacts() {
+        var result = new java.util.LinkedHashMap<>(recoveryDatabaseFacts());
+        for (String table :
+                List.of(
+                        "fams_repair_request",
+                        "fams_repair_event",
+                        "fams_repair_receipt",
+                        "fams_audit_event")) {
+            result.put(
+                    table,
+                    db.queryForList("SELECT * FROM " + table).stream()
+                            .map(JSON::writeValueAsString)
+                            .sorted()
+                            .toList());
+        }
+        return result;
+    }
+
+    private void cleanLinkedRepairs() {
+        String ids = "SELECT id FROM fams_repair_request WHERE asset_id BETWEEN 951020 AND 951023";
+        db.update(
+                "DELETE FROM fams_todo WHERE business_type='REPAIR' AND business_id IN ("
+                        + ids
+                        + ")");
+        for (String table :
+                List.of("fams_repair_decision", "fams_repair_receipt", "fams_repair_event")) {
+            db.update("DELETE FROM " + table + " WHERE repair_id IN (" + ids + ")");
+        }
+        db.update("DELETE FROM fams_repair_request WHERE asset_id BETWEEN 951020 AND 951023");
     }
 
     private JsonNode confirmedReport() throws Exception {

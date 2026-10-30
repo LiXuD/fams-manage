@@ -138,6 +138,16 @@ public class LossController {
         return retry(() -> reports.recoverSearching(actor, id, version, key, input));
     }
 
+    @PostMapping("/{id}/recover-to-repair")
+    Map<String, Object> recoverToRepair(
+            @PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.RepairRecovery input) {
+        var actor = actors.capture();
+        return retry(() -> reports.recoverToRepair(actor, id, version, key, input));
+    }
+
     @PostMapping("/{id}/recovery-requests")
     Map<String, Object> requestRecovery(
             @PathVariable @Positive long id,
