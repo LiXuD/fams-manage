@@ -1,6 +1,6 @@
 # D6-21 报失与找回
 
-2026-10-28，从af83d20启动，分支codex/d6-21-loss。PRD V1.5 §8.10、§7.6、AC-17/23/33/37为依据。父项IN_PROGRESS；A1后端/PC切片经用户本人审核通过，本地DEV_VERIFIED，A2原生IN_REVIEW，B进行中，C/D未开始。
+2026-10-28，从af83d20启动，分支codex/d6-21-loss。PRD V1.5 §8.10、§7.6、AC-17/23/33/37为依据。父项IN_PROGRESS；A1后端/PC切片经用户本人审核通过，本地DEV_VERIFIED，A2原生、B1及B2a均IN_REVIEW，B/B2进行中，B2b/C/D必需未完成；已推送但未代签独立复核。
 
 ## 首片 A1：独立报失至核实查找
 
