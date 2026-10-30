@@ -66,8 +66,8 @@
 | 设计文档 | `changed-and-verified` | 一期功能覆盖验证已完成并同步 |
 | 开发计划 | `in-progress` | V1.2 顺序调整已获用户授权；D6-04～D6-08 与 D6-09A 本地 `DEV_VERIFIED`；D6-08 全部必需子任务及父任务经用户复核关闭；D6-01B/03B 远端能力尚未完成 |
 | 规则 | `changed-and-verified` | AGENTS 已指向当前阶段 |
-| 产品代码 | `in-progress` | A/A1/A2/B1/B2a已用户复核；B2b1后端/PC功能07d7172已送审，下一原生B2b2，其他去向/C/D仍必需 |
-| 产品运行态 | `local-dev-partial` | 固定43049d0完整门禁Java503/XML624/Web210/mini319、实际PC/ClamAV/提交JVM恢复通过；新片独立复核及外部/CI/QA/生产仍开放 |
+| 产品代码 | `in-progress` | A/A1/A2/B1/B2a已用户复核；B2b1后端/PC及B2b2原生均已送审，下一B2b3结案后损坏找回，其他去向/C/D仍必需 |
+| 产品运行态 | `local-dev-partial` | B2b1固定43049d0实际PC/ClamAV/提交JVM恢复通过；B2b2固定d9c0eb0完整门禁Java504/XML625/Web210/mini324及真实原生链路通过，独立复核及外部/CI/QA/生产仍开放 |
 | 记忆 | `out-of-scope` | 本次未修改机器生成记忆 |
 | 工作区 | `review-recorded` | codex/d6-21-loss，本轮本地提交未推送，未合并main；隔离运行资源已清理 |
 
