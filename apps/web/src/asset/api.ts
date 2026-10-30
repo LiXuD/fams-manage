@@ -22,6 +22,13 @@ export interface AssetCard {
 export interface Page<T> { page: number; pageSize: number; total: number; items: T[] }
 export interface AssetTag { enterpriseName: string; assetName: string; assetCode: string; qrToken: string; qrCode: string }
 
+export const lifecycleLabels: Record<string, string> = { WAITING_INBOUND: "待入库", IN_STOCK: "在库", IN_USE: "在用",
+  BORROWED: "借出", UNDER_REPAIR: "维修中", FACTORY_REPAIR: "返厂维修", PENDING_SCRAP: "待报废", SCRAPPED: "已报废" };
+export const cardStageLabels: Record<string, string> = { DRAFT: "草稿", PENDING_INBOUND: "待验收入库", ACTIVE: "已生效",
+  CANCELLED: "已取消" };
+export const destinationLabels: Record<string, string> = { DELIVERED_WAITING_RECEIPT: "已交出待接收",
+  RECOVERY_PENDING_CANCEL: "待收回取消" };
+
 export class AssetApiError extends Error {
   constructor(readonly status: number, readonly code: string, message: string) { super(message); }
 }

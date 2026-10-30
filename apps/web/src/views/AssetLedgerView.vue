@@ -2,7 +2,7 @@
 import { onMounted, ref } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { custodyLabel, listAssets, type AssetCard } from "@/asset/api";
+import { cardStageLabels, custodyLabel, lifecycleLabels, listAssets, type AssetCard } from "@/asset/api";
 
 const session = useSessionStore();
 const rows = ref<AssetCard[]>([]);
@@ -66,8 +66,8 @@ onMounted(load);
               <th scope="row" data-column-kind="identity">{{ asset.assetCode }}</th>
               <td>{{ asset.name }}</td>
               <td class="u-secondary">{{ asset.model ?? "—" }}</td>
-              <td><span class="fams-status">{{ asset.lifecycle }}</span></td>
-              <td><span class="fams-status">{{ asset.cardStage }}</span></td>
+              <td><span class="fams-status">{{ lifecycleLabels[asset.lifecycle] }}</span></td>
+              <td><span class="fams-status">{{ cardStageLabels[asset.cardStage] }}</span></td>
               <td>{{ custodyLabel(asset) }}</td>
               <td>{{ asset.physicalDestination?.destination ?? "—" }}</td>
               <td data-column-kind="action">

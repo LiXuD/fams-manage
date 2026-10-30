@@ -15,15 +15,15 @@ vi.mock("qrcode", () => ({ default: { toDataURL: api.qr } }));
 vi.mock("vue-router", () => ({ useRoute: () => ({ query: api.query }) }));
 
 const card = (over: Record<string, unknown> = {}) => ({ id: "21", assetCode: "FA-2026-000101",
-  name: "办公笔记本 ThinkPad T14", model: "T14 Gen 4", lifecycle: "IN_USE", exception: "NONE",
+  name: "办公笔记本 ThinkPad T14", model: "T14 Gen 4", lifecycle: "IN_USE", exception: "NORMAL",
   cardStage: "ACTIVE", version: 7, category: { id: "c1", version: 2 }, organization: { id: "o1", version: 4 },
   currentCustody: { custodyType: "PERSONAL", responsibleEmployee: { id: "9" } },
-  physicalDestination: { destination: "四楼机房", status: "DELIVERED", temporaryEmployeeId: "9",
+  physicalDestination: { destination: "四楼机房", status: "DELIVERED_WAITING_RECEIPT", temporaryEmployeeId: "9",
     deliveredAt: "2026-10-01T02:00:00Z", receiptDeadlineAt: "2026-10-08T02:00:00Z" }, ...over });
 const tag = { enterpriseName: "示例公司", assetName: "办公笔记本 ThinkPad T14", assetCode: "FA-2026-000101",
   qrToken: "token", qrCode: "https://tag.example/FA-2026-000101" };
 
-async function fixture(over: Record<string, unknown> = {}, id = "21", answer: string | null = "同意修正") {
+async function fixture(over: Record<string, unknown> = {}, id = "21") {
   api.asset.mockResolvedValue(structuredClone(card(over)));
   api.tag.mockResolvedValue(structuredClone(tag));
   api.qr.mockResolvedValue("data:image/png;base64,qr");
@@ -32,7 +32,6 @@ async function fixture(over: Record<string, unknown> = {}, id = "21", answer: st
   api.copy.mockResolvedValue({ assets: [card(), card()] });
   api.cancel.mockResolvedValue(structuredClone(card({ ...over, cardStage: "CANCELLED", version: 8 })));
   api.reprint.mockResolvedValue({ jobId: "job-9", tag: { ...tag, assetCode: "FA-2026-000101" } });
-  vi.spyOn(window, "prompt").mockReturnValue(answer);
   vi.spyOn(window, "print").mockImplementation(() => undefined);
   const pinia = createPinia(); const session = useSessionStore(pinia);
   session.state = "authenticated";
@@ -42,6 +41,7 @@ async function fixture(over: Record<string, unknown> = {}, id = "21", answer: st
     RouterLink: { props: ["to"], template: "<a :data-destination=\"to\"><slot /></a>" } } } });
   await flushPromises();
   return { wrapper, button: (text: string) => wrapper.findAll("button").find(b => b.text() === text)!,
+    field: () => wrapper.find("div[role=\"group\"] input"),
     labels: () => wrapper.findAll("button").map(b => b.text()) };
 }
 
@@ -60,14 +60,15 @@ describe("资产详情", () => {
     f.wrapper.unmount();
   });
 
-  it("只取本条资产与标签，返回入口指向台账列表", async () => {
+  it("只取本条资产与标签，阶段与去向用中文，返回入口指向台账列表", async () => {
     const f = await fixture();
     expect(api.asset).toHaveBeenCalledWith("21");
     expect(api.tag).toHaveBeenCalledWith("21");
     expect(api.qr).toHaveBeenCalledWith("https://tag.example/FA-2026-000101", { width: 160, margin: 1 });
-    expect(f.wrapper.text()).toContain("FA-2026-000101 · ACTIVE · 版本 7");
+    expect(f.wrapper.text()).toContain("FA-2026-000101 · 已生效 · 版本 7");
+    expect(f.wrapper.text()).not.toContain("ACTIVE");
     expect(f.wrapper.text()).toContain("个人保管 · 责任人 9");
-    expect(f.wrapper.text()).toContain("实物去向：四楼机房 · DELIVERED；正式保管仍以上方资产事实为准。");
+    expect(f.wrapper.text()).toContain("实物去向：四楼机房 · 已交出待接收；正式保管仍以上方资产事实为准。");
     expect(f.wrapper.find("img[alt=\"资产二维码\"]").attributes("src")).toBe("data:image/png;base64,qr");
     expect(f.wrapper.findAll("a[data-destination]").map(a => [a.text(), a.attributes("data-destination")]))
       .toEqual([["返回台账列表", "/assets"]]);
@@ -94,10 +95,14 @@ describe("资产详情", () => {
     cancelled.wrapper.unmount();
   });
 
-  it("放弃输入框时零写请求", async () => {
-    const f = await fixture({}, "21", null);
+  it("动作只在页内确认块里给出输入，返回修改时零写请求", async () => {
+    const f = await fixture();
     f.button("修正备注").trigger("click"); await flushPromises();
+    expect(f.wrapper.find("div[role=\"group\"]").attributes("aria-label")).toBe("确认修正备注");
+    expect(f.labels()).toEqual(["复制建卡", "修正备注", "打印标签", "确认修正备注", "返回修改"]);
+    f.button("返回修改").trigger("click"); await flushPromises();
     f.button("复制建卡").trigger("click"); await flushPromises();
+    f.button("返回修改").trigger("click"); await flushPromises();
     f.button("打印标签").trigger("click"); await flushPromises();
     expect(api.update).not.toHaveBeenCalled();
     expect(api.copy).not.toHaveBeenCalled();
@@ -105,36 +110,54 @@ describe("资产详情", () => {
     f.wrapper.unmount();
   });
 
-  it("修正备注提交当前版本并播报", async () => {
+  it("确认修正备注提交当前版本并播报", async () => {
     const f = await fixture();
     f.button("修正备注").trigger("click"); await flushPromises();
+    await f.field().setValue("同意修正");
+    f.button("确认修正备注").trigger("click"); await flushPromises();
     expect(api.update).toHaveBeenCalledWith("21", 7, { notes: "同意修正" });
     expect(f.wrapper.text()).toContain("备注已更新");
-    expect(f.wrapper.text()).toContain("FA-2026-000101 · ACTIVE · 版本 8");
+    expect(f.wrapper.text()).toContain("FA-2026-000101 · 已生效 · 版本 8");
+    expect(f.labels()).toEqual(["复制建卡", "修正备注", "打印标签"]);
+    f.wrapper.unmount();
+  });
+
+  it("空备注仍是有效修正", async () => {
+    const f = await fixture();
+    f.button("修正备注").trigger("click"); await flushPromises();
+    f.button("确认修正备注").trigger("click"); await flushPromises();
+    expect(api.update).toHaveBeenCalledWith("21", 7, { notes: "" });
+    expect(f.wrapper.text()).toContain("备注已更新");
     f.wrapper.unmount();
   });
 
   it("复制数量越界时零请求，合法时按当前版本提交", async () => {
     const f = await fixture();
-    for (const answer of ["0", "101", "abc"]) {
-      vi.spyOn(window, "prompt").mockReturnValue(answer);
-      f.button("复制建卡").trigger("click"); await flushPromises();
+    f.button("复制建卡").trigger("click"); await flushPromises();
+    for (const value of ["0", "101", ""]) {
+      await f.field().setValue(value);
+      f.button("确认复制建卡").trigger("click"); await flushPromises();
     }
     expect(api.copy).not.toHaveBeenCalled();
-    vi.spyOn(window, "prompt").mockReturnValue("2");
-    f.button("复制建卡").trigger("click"); await flushPromises();
+    await f.field().setValue("2");
+    f.button("确认复制建卡").trigger("click"); await flushPromises();
     expect(api.copy).toHaveBeenCalledWith("21", 7, 2);
     expect(f.wrapper.text()).toContain("已创建 2 张独立草稿");
     f.wrapper.unmount();
   });
 
   it("取消草稿缺原因时零请求，带原因提交当前版本", async () => {
-    const empty = await fixture({ cardStage: "DRAFT", version: 1 }, "21", "   ");
+    const empty = await fixture({ cardStage: "DRAFT", version: 1 });
     empty.button("取消草稿").trigger("click"); await flushPromises();
+    await empty.field().setValue("   ");
+    empty.button("确认取消草稿").trigger("click"); await flushPromises();
     expect(api.cancel).not.toHaveBeenCalled();
+    expect(empty.wrapper.find("div[role=\"group\"]").exists()).toBe(true);
     empty.wrapper.unmount();
-    const f = await fixture({ cardStage: "DRAFT", version: 1 }, "21", "重复建卡");
+    const f = await fixture({ cardStage: "DRAFT", version: 1 });
     f.button("取消草稿").trigger("click"); await flushPromises();
+    await f.field().setValue("重复建卡");
+    f.button("确认取消草稿").trigger("click"); await flushPromises();
     expect(api.cancel).toHaveBeenCalledWith("21", 1, "重复建卡");
     expect(f.wrapper.text()).toContain("草稿已取消，编码永久保留");
     expect(f.labels()).toEqual(["复制建卡"]);

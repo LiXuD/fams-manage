@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { LoanApiError, loanMessage, loanRequest, type LoanMutation } from "@/loan/api";
+import { lifecycleLabels } from "@/asset/api";
 
 type Range = { usingOrganizationId: string | null; owningOrganizationId: string | null; categoryId: string | null;
   warehouseId: string | null; locationId: string | null; lifecycle: string | null; exception: string | null; responsibleEmployeeId: string | null };
@@ -17,7 +18,6 @@ const range = ref<Range>(emptyRange());
 const catalogs = ref<Record<string, Choice[]>>({}); const version = ref(0);
 const busy = ref(false); const error = ref(""); const pending = ref<LoanMutation | null>(null);
 const locked = computed(() => busy.value || !!pending.value);
-const lifecycleLabels: Record<string, string> = { IN_STOCK: "在库", IN_USE: "在用", BORROWED: "借出", UNDER_REPAIR: "维修中", FACTORY_REPAIR: "返厂维修", PENDING_SCRAP: "待报废", SCRAPPED: "已报废" };
 function toLocal(value: string) {
   const date = new Date(value);
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);

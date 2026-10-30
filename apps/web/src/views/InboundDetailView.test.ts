@@ -53,4 +53,39 @@ describe("入库单详情", () => {
     expect(window.location.search).toBe("");
     wrapper.unmount();
   });
+  it("取消先在页内确认块收原因，缺依据时零请求", async () => {
+    api.getReceipt.mockResolvedValue(draft);
+    api.cancelReceipt.mockResolvedValue({ ...draft, status: "CANCELLED", version: 2 });
+    const wrapper = panel("9007199254740993"); await flushPromises();
+    const cancel = wrapper.findAll("button").find((button) => button.text() === "取消")!;
+    await cancel.trigger("click"); await flushPromises();
+    expect(api.cancelReceipt).not.toHaveBeenCalled();
+    await wrapper.find("div[role=\"group\"] input").setValue("重复单");
+    const confirm = wrapper.findAll("button").find((button) => button.text() === "确认取消")!;
+    await confirm.trigger("click"); await flushPromises();
+    expect(api.cancelReceipt).toHaveBeenCalledExactlyOnceWith(draft, "重复单");
+    expect(wrapper.text()).toContain("入库单状态已更新");
+    wrapper.unmount();
+  });
+  it("验收入库先在页内确认块核对实物编码", async () => {
+    const item = { id: "i1", asset: { id: "21", version: 3 }, executionStatus: "PENDING",
+      assetSnapshot: { assetCode: "FA-2026-000101", assetName: "办公笔记本" } };
+    api.getReceipt.mockResolvedValue({ ...draft, status: "WAREHOUSE_PROCESSING", items: [item],
+      currentProcessor: { processor: { id: "1", username: "warehouse" } } });
+    assetApi.getAsset.mockResolvedValue({ id: "21", version: 3 });
+    api.acceptItem.mockResolvedValue({ receipt: { ...draft, status: "COMPLETED", items: [] } });
+    const wrapper = panel("9007199254740993"); await flushPromises();
+    const accept = wrapper.findAll("button").find((button) => button.text() === "验收入库")!;
+    await accept.trigger("click"); await flushPromises();
+    expect(wrapper.text()).toContain("核对实物编码：FA-2026-000101");
+    expect(api.acceptItem).not.toHaveBeenCalled();
+    await wrapper.find("div[role=\"group\"] input").setValue("FA-2026-000101");
+    const confirm = wrapper.findAll("button").find((button) => button.text() === "确认验收入库")!;
+    await confirm.trigger("click"); await flushPromises();
+    expect(api.acceptItem).toHaveBeenCalledExactlyOnceWith(
+      { ...draft, status: "WAREHOUSE_PROCESSING", items: [item], currentProcessor: { processor: { id: "1", username: "warehouse" } } },
+      item, 3, "FA-2026-000101");
+    expect(wrapper.text()).toContain("FA-2026-000101 已验收入库");
+    wrapper.unmount();
+  });
 });

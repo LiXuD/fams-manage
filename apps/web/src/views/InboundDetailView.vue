@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import InboundReassignment from "@/components/InboundReassignment.vue";
 import AttachmentPanel from "@/components/AttachmentPanel.vue";
@@ -10,14 +10,22 @@ import {
   type InboundItem, type InboundReceipt,
 } from "@/inbound/api";
 
+type Decision = "cancel" | "reject";
 const props = defineProps<{ id: string }>();
 const session = useSessionStore();
 const selected = ref<InboundReceipt | null>(null);
 const error = ref("");
 const notice = ref("");
 const busy = ref(false);
+const decision = ref<Decision | null>(null);
+const reason = ref("");
+const accepting = ref<InboundItem | null>(null);
+const observed = ref("");
 const warehouseRole = session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false;
 const adminRole = session.user?.roles.includes("ASSET_ADMIN") ?? false;
+const locked = computed(() => busy.value || decision.value !== null || accepting.value !== null);
+const decisionLabels: Record<Decision, string> = { cancel: "确认取消", reject: "确认驳回" };
+const reasonLabels: Record<Decision, string> = { cancel: "取消原因", reject: "驳回原因" };
 
 async function open(): Promise<void> {
   if (!/^[1-9][0-9]{0,18}$/.test(props.id)) { error.value = "详情加载失败"; return; }
@@ -25,32 +33,53 @@ async function open(): Promise<void> {
   catch (cause) { error.value = cause instanceof Error ? cause.message : "详情加载失败"; }
 }
 
-async function act(action: "submit" | "cancel" | "approve" | "reject" | "claim"): Promise<void> {
-  if (!selected.value) return;
+async function act(action: "submit" | "approve" | "claim"): Promise<void> {
+  if (!selected.value || locked.value) return;
   const current = selected.value;
-  let reason: string | undefined;
-  if (action === "cancel" || action === "reject") {
-    reason = window.prompt(action === "cancel" ? "取消原因" : "驳回原因")?.trim();
-    if (!reason) return;
-  }
   await execute(async () => {
     if (action === "submit") selected.value = await submitReceipt(current);
-    if (action === "cancel") selected.value = await cancelReceipt(current, reason!);
     if (action === "approve") selected.value = await decideReceipt(current, true);
-    if (action === "reject") selected.value = await decideReceipt(current, false, reason);
     if (action === "claim") selected.value = await claimReceipt(current);
     notice.value = "入库单状态已更新";
   });
 }
 
-async function accept(item: InboundItem): Promise<void> {
-  if (!selected.value) return;
-  const observed = window.prompt(`核对实物编码：${item.assetSnapshot.assetCode}`)?.trim();
-  if (!observed) return;
+function openDecision(action: Decision): void {
+  if (!selected.value || locked.value) return;
+  reason.value = "";
+  decision.value = action;
+}
+
+async function confirmDecision(): Promise<void> {
+  if (!selected.value || busy.value || !decision.value) return;
+  const trimmed = reason.value.trim();
+  if (!trimmed) return;
+  const current = selected.value;
+  const action = decision.value;
+  await execute(async () => {
+    if (action === "cancel") selected.value = await cancelReceipt(current, trimmed);
+    else selected.value = await decideReceipt(current, false, trimmed);
+    decision.value = null;
+    notice.value = "入库单状态已更新";
+  });
+}
+
+function openAccept(item: InboundItem): void {
+  if (!selected.value || locked.value) return;
+  observed.value = "";
+  accepting.value = item;
+}
+
+async function confirmAccept(): Promise<void> {
+  if (!selected.value || busy.value || !accepting.value) return;
+  const value = observed.value.trim();
+  if (!value) return;
+  const item = accepting.value;
   await execute(async () => {
     const asset = await getAsset(item.asset.id);
-    const result = await acceptItem(selected.value!, item, asset.version, observed);
+    const result = await acceptItem(selected.value!, item, asset.version, value);
     selected.value = result.receipt;
+    accepting.value = null;
     notice.value = `${item.assetSnapshot.assetCode} 已验收入库`;
   });
 }
@@ -88,11 +117,29 @@ onMounted(async () => {
       <p v-if="selected.decision">管理员决定：{{ selected.decision.result }}</p>
       <div class="fams-panel-actions">
         <router-link v-if="warehouseRole && selected.status === 'DRAFT' && selected.createdBy.id === session.user?.id" class="fams-button" data-kind="secondary" :to="`/inbound/${selected.id}/edit`">修订草稿</router-link>
-        <button v-if="warehouseRole && selected.status === 'DRAFT'" class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="act('submit')">提交审批</button>
-        <button v-if="warehouseRole && ['DRAFT', 'PENDING_ADMIN_DECISION'].includes(selected.status)" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="act('cancel')">取消</button>
-        <button v-if="adminRole && selected.status === 'PENDING_ADMIN_DECISION'" class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="act('approve')">批准</button>
-        <button v-if="adminRole && selected.status === 'PENDING_ADMIN_DECISION'" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="act('reject')">驳回</button>
-        <button v-if="warehouseRole && selected.status === 'WAITING_WAREHOUSE_CLAIM'" class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="act('claim')">认领整单</button>
+        <button v-if="warehouseRole && selected.status === 'DRAFT'" class="fams-button" data-kind="primary" type="button" :disabled="locked" @click="act('submit')">提交审批</button>
+        <button v-if="warehouseRole && ['DRAFT', 'PENDING_ADMIN_DECISION'].includes(selected.status)" class="fams-button" data-kind="secondary" type="button" :disabled="locked" @click="openDecision('cancel')">取消</button>
+        <button v-if="adminRole && selected.status === 'PENDING_ADMIN_DECISION'" class="fams-button" data-kind="primary" type="button" :disabled="locked" @click="act('approve')">批准</button>
+        <button v-if="adminRole && selected.status === 'PENDING_ADMIN_DECISION'" class="fams-button" data-kind="secondary" type="button" :disabled="locked" @click="openDecision('reject')">驳回</button>
+        <button v-if="warehouseRole && selected.status === 'WAITING_WAREHOUSE_CLAIM'" class="fams-button" data-kind="primary" type="button" :disabled="locked" @click="act('claim')">认领整单</button>
+      </div>
+      <div v-if="decision" class="fams-card fams-stack" role="group" :aria-label="decisionLabels[decision]">
+        <label class="fams-field"><span class="fams-field-label">{{ reasonLabels[decision] }}</span>
+          <input class="fams-control" v-model="reason" />
+        </label>
+        <div class="fams-panel-actions">
+          <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="confirmDecision">{{ decisionLabels[decision] }}</button>
+          <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="decision = null">返回修改</button>
+        </div>
+      </div>
+      <div v-if="accepting" class="fams-card fams-stack" role="group" aria-label="确认验收入库">
+        <label class="fams-field"><span class="fams-field-label">核对实物编码：{{ accepting.assetSnapshot.assetCode }}</span>
+          <input class="fams-control" v-model="observed" />
+        </label>
+        <div class="fams-panel-actions">
+          <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="confirmAccept">确认验收入库</button>
+          <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="accepting = null">返回修改</button>
+        </div>
       </div>
       <div class="fams-table-scroll"><table class="fams-table">
         <thead><tr><th scope="col" data-column-kind="identity">资产编码</th><th scope="col">资产名称</th><th scope="col">执行状态</th>
@@ -100,7 +147,7 @@ onMounted(async () => {
         <tbody><tr v-for="item in selected.items" :key="item.id">
           <th scope="row" data-column-kind="identity">{{ item.assetSnapshot.assetCode }}</th><td>{{ item.assetSnapshot.assetName }}</td>
           <td><span class="fams-status">{{ item.executionStatus }}</span></td>
-          <td data-column-kind="action"><button v-if="warehouseRole && selected.status === 'WAREHOUSE_PROCESSING' && item.executionStatus === 'PENDING' && selected.currentProcessor?.processor.id === session.user?.id" class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="busy" @click="accept(item)">验收入库</button></td>
+          <td data-column-kind="action"><button v-if="warehouseRole && selected.status === 'WAREHOUSE_PROCESSING' && item.executionStatus === 'PENDING' && selected.currentProcessor?.processor.id === session.user?.id" class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="locked" @click="openAccept(item)">验收入库</button></td>
         </tr></tbody>
       </table></div>
       <InboundReassignment v-if="adminRole && selected.status === 'WAREHOUSE_PROCESSING'"
