@@ -91,3 +91,15 @@ export function reprintTag(id: string, version: number): Promise<{ jobId: string
 export function activeReferences(path: string): Promise<Page<AssetReference>> {
   return request<Page<AssetReference>>(path + "/active-references?page=1&pageSize=200");
 }
+
+export function custodyLabel(asset: AssetCard): string {
+  const custody = asset.currentCustody;
+  if (!custody) return "尚未入库";
+  const referenceId = (value: unknown): string => {
+    if (typeof value !== "object" || value === null || !("id" in value)) return "—";
+    return String(value.id);
+  };
+  if (custody.custodyType === "STORAGE") return `在库 · 仓库 ${referenceId(custody.warehouse)}`;
+  if (custody.custodyType === "SHARED") return `部门公用 · 责任人 ${referenceId(custody.departmentResponsibleEmployee)}`;
+  return `个人保管 · 责任人 ${referenceId(custody.responsibleEmployee)}`;
+}

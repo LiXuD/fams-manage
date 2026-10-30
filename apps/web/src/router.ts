@@ -4,6 +4,8 @@ import HomeView from "@/views/HomeView.vue";
 import LoginView from "@/views/LoginView.vue";
 import PasswordChangeView from "@/views/PasswordChangeView.vue";
 import AssetLedgerView from "@/views/AssetLedgerView.vue";
+import AssetDraftView from "@/views/AssetDraftView.vue";
+import AssetDetailView from "@/views/AssetDetailView.vue";
 import AssetImportView from "@/views/AssetImportView.vue";
 import AssetImportReviewView from "@/views/AssetImportReviewView.vue";
 import AssetInitializationView from "@/views/AssetInitializationView.vue";
@@ -67,6 +69,8 @@ export const router = createRouter({
     { path: "/login", name: "login", component: LoginView },
     { path: "/password/change", name: "password-change", component: PasswordChangeView, meta: { requiresAuth: true } },
     { path: "/assets", name: "assets", component: AssetLedgerView, meta: { requiresAuth: true, uiGroup: "资产", uiTitle: "资产台账", uiDesc: "查看资产状态、建卡和标签。保管关系由正式业务流程维护。" } },
+    { path: "/assets/new", name: "asset-new", component: AssetDraftView, props: true, meta: { requiresAuth: true, uiGroup: "资产", uiTitle: "单个建卡", uiDesc: "填写资产名称与可选的型号、单位、分类、组织和计划入库仓库位置；保存后到资产详情继续办理。" } },
+    { path: "/assets/:id", name: "asset-detail", component: AssetDetailView, props: true, meta: { requiresAuth: true, uiGroup: "资产", uiTitle: "资产详情", uiDesc: "复制建卡、修正备注、取消草稿与打印标签只作用于本张资产卡。保管关系由正式业务流程维护。" } },
     { path: "/asset-imports", name: "asset-import", component: AssetImportView, meta: { requiresAuth: true, uiGroup: "资产", uiTitle: "资产批量导入", uiDesc: "下载模板、上传 XLSX、映射字段并逐行预检。" } },
     { path: "/asset-import-reviews", name: "asset-import-review", component: AssetImportReviewView, meta: { requiresAuth: true, uiGroup: "资产", uiTitle: "期初导入核验", uiDesc: "核对预检结果与实物抽样，再决定发布或撤销。" } },
     { path: "/asset-initialization", name: "asset-initialization", component: AssetInitializationView, meta: { requiresAuth: true, uiGroup: "资产", uiTitle: "期初导入窗口", uiDesc: "指定仓库操作员和截止时间。仅窗口内可提交与发布期初资产。" } },
