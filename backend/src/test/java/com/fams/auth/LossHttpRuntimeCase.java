@@ -528,6 +528,103 @@ class LossHttpRuntimeCase {
     }
 
     @Test
+    void actualNativePageHandsDamagedRecoveryToRepairAndReplaysCommittedIntent()
+            throws Exception {
+        try {
+            var grants = new java.util.LinkedHashMap<String, Object>();
+            for (var entry :
+                    Map.of(
+                                    "employee",
+                                    951002L,
+                                    "admin",
+                                    951001L,
+                                    "warehouse",
+                                    951003L,
+                                    "other",
+                                    951007L)
+                            .entrySet()) {
+                var identity = new MiniWechatIdentityPort.Identity("owned-loss-native", entry.getKey());
+                db.update(
+                        "INSERT INTO fams_mini_binding(account_id,identity_hash,created_at)"
+                                + " VALUES (?,?,NOW(3))",
+                        entry.getValue(),
+                        miniSessions.identityHash(identity));
+                var grant = miniSessions.start(identity, UUID.randomUUID());
+                grants.put(
+                        entry.getKey(),
+                        Map.of(
+                                "sessionToken",
+                                grant.sessionToken(),
+                                "accountId",
+                                entry.getValue().toString(),
+                                "bindingId",
+                                grant.bindingId()));
+            }
+            var script =
+                    java.nio.file.Path.of(System.getProperty("user.dir"))
+                            .getParent()
+                            .resolve("apps/miniprogram/test/runtime-loss-damaged-http.mjs");
+            var builder =
+                    new ProcessBuilder(
+                                    "rtk",
+                                    "proxy",
+                                    System.getProperty(
+                                            "fams.test.node",
+                                            System.getenv()
+                                                    .getOrDefault("FAMS_TEST_NODE_EXECUTABLE", "node")),
+                                    script.toString())
+                            .redirectErrorStream(true);
+            builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+            builder.environment().put("FAMS_TEST_LOSS_GRANTS", JSON.writeValueAsString(grants));
+            var process = builder.start();
+            try {
+                org.junit.jupiter.api.Assertions.assertTrue(
+                        process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS));
+            } finally {
+                if (process.isAlive()) {
+                    process.destroyForcibly();
+                }
+            }
+            var output =
+                    new String(
+                            process.getInputStream().readAllBytes(),
+                            java.nio.charset.StandardCharsets.UTF_8);
+            assertEquals(0, process.exitValue(), output);
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    output.contains("\"nativeActualLossDamagedRepair\":true"), output);
+            assertEquals(
+                    "RECOVERED",
+                    db.queryForObject(
+                            "SELECT report_status FROM fams_loss_report WHERE asset_id=951020",
+                            String.class));
+            assertEquals(
+                    1L,
+                    db.queryForObject(
+                            "SELECT COUNT(*) FROM fams_repair_request WHERE asset_id=951020 AND"
+                                    + " repair_status='PENDING_ADMIN_DECISION'",
+                            Long.class));
+            assertEquals(
+                    1L,
+                    db.queryForObject(
+                            "SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=951020"
+                                    + " AND business_type='REPAIR' AND lock_version=1"
+                                    + " AND released_at IS NULL",
+                            Long.class));
+            assertEquals(
+                    "IN_USE",
+                    db.queryForObject(
+                            "SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+            assertEquals(
+                    951002L,
+                    db.queryForObject(
+                            "SELECT responsible_employee_id FROM fams_asset WHERE id=951020",
+                            Long.class));
+        } finally {
+            cleanLinkedRepairs();
+        }
+    }
+
+    @Test
     void reportingAndApprovalNeverChangeCustodyAndOnlyVerificationStartsSearching()
             throws Exception {
         borrowing(true);

@@ -14,6 +14,7 @@ const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
 const hash = value => createHash("sha256").update(value).digest("hex"), uploads = [], writes = [], clients = new Map();
 const event = dataset => ({ currentTarget: { dataset } }), field = (name, value) => ({ ...event({ field: name }), detail: { value } });
 let dropUpload = true, dropWrite = true, saved;
+const damagedRun = process.env.FAMS_TEST_LOSS_DAMAGED === "true";
 const recoveryRun = process.env.FAMS_TEST_LOSS_RECOVERY === "true";
 const confirmationRun = process.env.FAMS_TEST_LOSS_CONFIRMATION === "true", progressWrites = [];
 const dropped = new Set();
@@ -30,7 +31,7 @@ function service(role) {
                 writes.push({ path: input.url, body: structuredClone(input.data), key: input.header["Idempotency-Key"], version: input.header["If-Match-Version"] });
                 if (response.status === 200) { saved = data; if (dropWrite) { dropWrite = false; input.fail(new Error("Owned adapter dropped committed loss")); return; } }
             }
-            if (input.method === "POST" && (confirmationRun && /\/(confirm-lost|follow-up)$/.test(input.url) || recoveryRun && /\/(recovery-requests|recover-original|recoveries\/[^/]+\/(decision|claim|execute|cancel))$/.test(input.url))) {
+            if (input.method === "POST" && (damagedRun && /\/recover-to-repair$/.test(input.url) || confirmationRun && /\/(confirm-lost|follow-up)$/.test(input.url) || recoveryRun && /\/(recovery-requests|recover-original|recoveries\/[^/]+\/(decision|claim|execute|cancel))$/.test(input.url))) {
                 progressWrites.push({path:input.url,body:structuredClone(input.data),key:input.header["Idempotency-Key"],version:input.header["If-Match-Version"]});
                 if (response.status === 200 && !dropped.has(input.url)) { dropped.add(input.url);input.fail(new Error("Owned adapter dropped committed loss progress reply"));return; }
             }
@@ -67,6 +68,16 @@ try {
     const admin=await page("admin",id);okay(admin);admin.onField(field("reason","已核对报告与本次情况原件，批准开展核实查找。"));await prepare(admin,"approve");okay(admin);assert.equal(admin.data.detail.status,"WAITING_WAREHOUSE_CLAIM");admin.onUnload();
     const warehouse=await page("warehouse",id);okay(warehouse);await prepare(warehouse,"claim");okay(warehouse);assert.equal(warehouse.data.detail.status,"VERIFYING");
     warehouse.onField(field("custodianVerification","已经当面核实最后保管人及原办公室，未找到资产。"));warehouse.onField(field("searchedScope","已经查找原办公室、登记保管区及同事交接位置。"));warehouse.onNow(event({kind:"search"}));warehouse.onField(field("nextReviewDate",new Date(Date.now()+7*86400000).toISOString().slice(0,10)));await prepare(warehouse,"search");okay(warehouse);assert.equal(warehouse.data.detail.status,"SEARCHING");assert.equal(warehouse.data.detail.photos.length,1);assert.equal(warehouse.data.detail.history.length,5);
+    if (damagedRun) {
+        const lockVersion=warehouse.data.detail.lockVersion, version=warehouse.data.detail.version;
+        for(const[name,value]of Object.entries({observedAssetCode:warehouse.data.detail.source.assetCode,observedSerialNumber:warehouse.data.detail.recoveryAsset.serialNumber||"",recoveryEvidence:"已当面对照原机编码序列号，损坏实物仍由原责任人在登记位置保管。",repairFault:"原机无法开机且电源指示灯不亮，已经现场核实故障。"}))warehouse.onField(field(name,value));
+        warehouse.onNow(event({kind:"found"}));warehouse.onRepairImpact(event({impact:"HIGH"}));
+        warehouse.onRecoveryChecked({detail:{value:true}});warehouse.onRecoveryPrepare(event({action:"recoverDamaged"}));assert.equal(warehouse.data.confirmation,"");
+        warehouse.onDamagedChecked({detail:{value:true}});warehouse.onRecoveryPrepare(event({action:"recoverDamaged"}));assert.match(warehouse.data.confirmation,/损坏找回并申请正式维修/);await warehouse.onConfirm();assert.equal(warehouse.data.retry,true,warehouse.data.error);
+        const intent=structuredClone(progressWrites[0]);assert.equal(intent.version,String(version));assert.equal(intent.body.recovery.lockVersion,lockVersion);assert.equal(intent.body.recovery.facts.condition,"DAMAGED");assert.equal(intent.body.impact,"HIGH");
+        await warehouse.onRefresh();assert.ok(warehouse.data.detail.repairId);warehouse.onHide();await warehouse.onShow();assert.match(warehouse.data.pendingLabel,/正式维修/);await warehouse.onRetry();okay(warehouse);assert.deepEqual(progressWrites[1],intent);assert.equal(warehouse.data.detail.status,"RECOVERED");assert.ok(warehouse.data.detail.repairId);assert.equal(warehouse.data.detail.actions.recoverOriginal,false);assert.equal(warehouse.data.damagedChecked,false);assert.equal(warehouse.data.repairFault,"");
+        const repair=await service("warehouse").sessions.request("GET","/api/v1/mini/repairs/"+warehouse.data.detail.repairId);assert.equal(repair.status,"PENDING_ADMIN_DECISION");
+    }
     if (confirmationRun) {
         for(const[name,value]of Object.entries({custodianVerification:"已经与最后保管人当面核实原责任事实并保留记录。",searchedScope:"已经逐一查找办公室和全部登记保管位置仍无实物。",relatedClues:"已经核对交接维修及盘点线索，尚无原物去向。",inabilityReason:"现场查找和各项线索均无原物，凭核实证据判断无法找回。",responsibilityEvidence:"原责任登记及最后保管人核实记录共同作为遗失责任证据。"}))warehouse.onField(field(name,value));
         warehouse.onNow(event({kind:"search"}));warehouse.onNow(event({kind:"confirm"}));await prepare(warehouse,"confirmLost");assert.equal(warehouse.data.retry,true);
@@ -86,5 +97,5 @@ try {
     warehouse.onUnload();
     const other=await page("other",id);assert.equal(other.data.detail,null);assert.ok(other.data.error);assert.equal(JSON.stringify(other.data).includes("报失情况原件"),false);other.onUnload();
     for(const client of clients.values())client.sessions.clear();
-    console.log(JSON.stringify({nativeActualLossSearching:true,nativeActualLossConfirmed:confirmationRun,nativeActualLossRecovered:recoveryRun,submitOriginalRetry:true,imageOriginalRetry:true,opaqueOriginalBytes:true,foreignIdentityDenied:true,reportId:id,sdk:"adapter",https:"adapter",scanner:"fixture"}));
+    console.log(JSON.stringify({nativeActualLossSearching:true,nativeActualLossDamagedRepair:damagedRun,nativeActualLossConfirmed:confirmationRun,nativeActualLossRecovered:recoveryRun,submitOriginalRetry:true,imageOriginalRetry:true,opaqueOriginalBytes:true,foreignIdentityDenied:true,reportId:id,sdk:"adapter",https:"adapter",scanner:"fixture"}));
 } finally { delete globalThis.Page;delete globalThis.getApp;fs.rmSync(root,{recursive:true,force:true}); }
