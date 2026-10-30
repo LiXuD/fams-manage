@@ -141,7 +141,7 @@ onMounted(async () => {
         <div class="fams-panel-head"><h3 class="fams-panel-title">目标变更 #{{ selected.id }} · {{ labels[selected.change_status] }}</h3></div>
         <p>原目标：{{ targetText(selected.source_snapshot_json.target) }}</p><p>新目标：{{ targetText(selected.proposed_target_json) }}</p>
         <p>原因：{{ selected.reason }}</p><p>实物核对：{{ selected.physical_verification }}</p><p v-if="selected.source_snapshot_json.physical.destination">原交出地点：{{ selected.source_snapshot_json.physical.destination }}</p>
-        <p v-if="selected.decision_reason">决定意见：{{ selected.decision_reason }}</p><router-link class="fams-button" data-kind="link" :to="{ path: '/transfers', query: { id: selected.business_id } }">查看原调拨单</router-link>
+        <p v-if="selected.decision_reason">决定意见：{{ selected.decision_reason }}</p><router-link class="fams-button" data-kind="link" :to="{ path: '/transfers/' + selected.business_id }">查看原调拨单</router-link>
         <fieldset v-if="admin && selected.change_status === 'PENDING'" class="fams-stack" :disabled="locked">
           <label class="fams-field fams-field-wide"><span class="fams-field-label">核验意见</span><textarea class="fams-control" v-model="decision" maxlength="1000" /></label>
           <div class="fams-inline">

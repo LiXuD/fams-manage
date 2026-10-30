@@ -4,6 +4,10 @@ export interface LoanMutation { path: string; key: string; version: number; body
 export const loanLabels: Record<string, string> = { OPEN: "借用中", RETURNED: "已归还", VOID: "期初已撤销", PENDING: "待审批",
   APPROVED: "已批准", REJECTED: "已驳回", PENDING_APPROVAL: "待管理员确认", WAITING_WAREHOUSE_CLAIM: "待库管领取",
   WAREHOUSE_PROCESSING: "待实物验收", COMPLETED: "验收完成", TRANSFERRED: "已转后续处理" };
+export const transferLabels: Record<string, string> = { DRAFT: "草稿", PENDING_APPROVAL: "待管理员确认", REJECTED: "已驳回",
+  WAITING_WAREHOUSE_CLAIM: "待库管领取", PROCESSING: "库管处理中", WAITING_HANDOVER: "待实际交接", COMPLETED: "已完成",
+  PARTIALLY_COMPLETED: "部分完成", CANCELLED: "已取消", READY: "未交出", DELIVERED: "待目标人接收", REFUSED: "实物不符待核查",
+  RECOVERY_PENDING: "待实物收回" };
 
 export class LoanApiError extends Error {
   constructor(readonly status: number, readonly code: string) { super(code); }

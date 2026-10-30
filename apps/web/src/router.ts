@@ -19,6 +19,8 @@ import AssetReturnView from "@/views/AssetReturnView.vue";
 import AssetReturnDraftView from "@/views/AssetReturnDraftView.vue";
 import AssetReturnDetailView from "@/views/AssetReturnDetailView.vue";
 import TransferView from "@/views/TransferView.vue";
+import TransferDraftView from "@/views/TransferDraftView.vue";
+import TransferDetailView from "@/views/TransferDetailView.vue";
 
 import ProxyConfirmationView from "@/views/ProxyConfirmationView.vue";
 import BusinessResultNoticeView from "@/views/BusinessResultNoticeView.vue";
@@ -31,6 +33,8 @@ import InventoryTaskView from "@/views/InventoryTaskView.vue";
 import InventoryTaskDraftView from "@/views/InventoryTaskDraftView.vue";
 import InventoryTaskDetailView from "@/views/InventoryTaskDetailView.vue";
 import RepairView from "@/views/RepairView.vue";
+import RepairDraftView from "@/views/RepairDraftView.vue";
+import RepairDetailView from "@/views/RepairDetailView.vue";
 import RepairAssistanceView from "@/views/RepairAssistanceView.vue";
 
 declare module "vue-router" {
@@ -47,7 +51,9 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: "/repair-assistance/:id?", name: "repair-assistance", component: RepairAssistanceView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "我协助的报修", uiDesc: "只显示明确邀请的必要资料。判断和建议保留历史；实际维修、返厂或报废由相应合法业务办理。" } },
-    { path: "/repairs/:id?", name: "repairs", component: RepairView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "报修与维修", uiDesc: "为本人责任资产或本部门公用资产报修。管理员批准处理范围后，由唯一处理库管核实实物并办理。" } },
+    { path: "/repairs", name: "repairs", component: RepairView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "报修与维修", uiDesc: "为本人责任资产或本部门公用资产报修。管理员批准处理范围后，由唯一处理库管核实实物并办理。" } },
+    { path: "/repairs/new", name: "repair-new", component: RepairDraftView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "新建报修", uiDesc: "选择可报修资产并填写实际故障、影响程度和发生时间。提交后到报修详情等待管理员决定。" } },
+    { path: "/repairs/:id", name: "repair-detail", component: RepairDetailView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "报修详情", uiDesc: "决定、领取、原地维修、返厂、返还与协作只作用于本报修单。实物证据和历史保留在原记录上。" } },
     { path: "/inventory-tasks", name: "inventory-tasks", component: InventoryTaskView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "盘点任务", uiDesc: "发布时冻结应盘集合与责任快照。盘点不直接改变资产责任；执行人只查看自己的应盘项。" } },
     { path: "/inventory-tasks/new", name: "inventory-task-new", component: InventoryTaskDraftView, props: true, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "新建盘点草稿", uiDesc: "先划定盘点范围并保存草稿。到任务详情页预览应盘数量后再发布冻结。" } },
     { path: "/inventory-tasks/:id/edit", name: "inventory-task-edit", component: InventoryTaskDraftView, props: true, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "修改盘点草稿", uiDesc: "草稿发布前可调整范围与时间。已发布任务保留原快照，请新建任务。" } },
@@ -78,6 +84,8 @@ export const router = createRouter({
     { path: "/asset-returns/new", name: "asset-return-new", component: AssetReturnDraftView, props: true, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "提请退库", uiDesc: "选择当前可退库资产并填写原因；提交后到退还单详情审批与验收。" } },
     { path: "/asset-returns/:id", name: "asset-return-detail", component: AssetReturnDetailView, props: true, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "退还单详情", uiDesc: "批准、领取、实物验收与转派只作用于本单。" } },
     { path: "/transfers", name: "transfers", component: TransferView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "调拨与人员交接", uiDesc: "把资产转移到新的责任模式或位置，并处理人员离职交接。" } },
+    { path: "/transfers/new", name: "transfer-new", component: TransferDraftView, props: true, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "新建调拨", uiDesc: "先选定来源资产与目标部门、责任人或仓库仓位并添加明细。保存后到调拨详情提交管理员确认。" } },
+    { path: "/transfers/:id", name: "transfer-detail", component: TransferDetailView, props: true, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "调拨详情", uiDesc: "提交、批准、领取与逐项实物交接只作用于本单。目标变更请在调拨目标变更页提请。" } },
   ],
 });
 

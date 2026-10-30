@@ -45,7 +45,7 @@ onBeforeUnmount(() => { live = false; clear(); });
           </div>
         </div>
         <router-link :to="{ path: '/proxy-confirmations', query: { id: review.executionId } }">查看代确认与签收凭证</router-link>
-        <router-link :to="review.businessType === 'TRANSFER' ? { path: '/transfers', query: { id: review.businessId } } : { path: (review.businessType === 'REPAIR' ? '/repairs/' : '/requisitions/') + review.businessId }">查看业务单据</router-link>
+        <router-link :to="{ path: (review.businessType === 'TRANSFER' ? '/transfers/' : review.businessType === 'REPAIR' ? '/repairs/' : '/requisitions/') + review.businessId }">查看业务单据</router-link>
       </article>
       <p v-if="!rows.length">暂无待核查请求。</p>
       <div class="fams-pagination">
