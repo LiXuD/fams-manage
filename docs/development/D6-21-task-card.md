@@ -85,3 +85,8 @@ B2a不关闭B2、B及父项；B2b/C/D仍为必需。
 既有V1～V58不改，本片不需DDL：关联repairId与执行证据追加保存在原有recovery_snapshot_json，维修source_snapshot_json保存lossRecovery来源，永久回执及双向编号保留。回退只停新入口，保留已创建单据、锁和事实，不能删除历史。结案后损坏找回、责任/位置变化、返厂/报废仍属后续；小程序此动作只有服务端契约，原生入口后续必需。当前尚未完成固定门禁及独立复核。
 
 2026-10-30 B2b1后端/PC工作树定向验证：LossHttpRuntimeCase 26/26（含4个新增转锁、真实维修完成、回滚及并发场景），RepairHttpRuntimeCase 14/14，FamsArchitectureTest 3/3；Checkstyle/SpotBugs0，PC定向8/8、类型与构建通过。首轮新增借用夹具缺少timezone导致1项失败，补齐隔离夹具后通过，失败日志留存在output/d6-21b2b1-r1-failed-runtime.log。父页面新增路径的确认白名单与已提交响应丢失原键重试已补联合组件验证。下一固定候选完整门禁及真实PC/提交JVM恢复，尚无本片通过或独立复核结论。
+
+
+## B2b1 后端/PC固定候选送审
+
+固定43049d0完整产品门禁退出0：Java必需503、106XML共624零失败错误跳过，行93.0389%/分支75.5705%，静态0/Web210/mini319，依赖及双恢复/清理通过。真实三角色PC/ClamAV、原锁id1版本0→1转REPAIR、实际提交JVM51782强杀原键回放及业务行保持通过；页面刷新保留关联维修1，维修仍待管理员决定。源功能07d7172不变，当前B2b1为IN_REVIEW，新代码未获独立签署；B2b/C/D和父项继续IN_PROGRESS。下一原生B2b2，剩余按计划新增B2b3～5细分原有必需范围。[本片送审](2026-10-30-d6-21b2b1-review-handoff.md)及[机器证据](evidence/d6-21/b2b1-linked-repair-review.json)保存精确包身份、失败过程和边界。
