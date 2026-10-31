@@ -49,6 +49,13 @@ public class LossController {
         return reports.list(actors.capture(), page, pageSize);
     }
 
+    @GetMapping("/recovery-locations")
+    Map<String, Object> recoveryLocations(
+            @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
+            @RequestParam(defaultValue = "100") @Positive @Max(100) int pageSize) {
+        return reports.recoveryLocations(actors.capture(), page, pageSize);
+    }
+
     @GetMapping("/{id}")
     Map<String, Object> get(@PathVariable @Positive long id) {
         return reports.get(actors.capture(), id);
@@ -215,6 +222,33 @@ public class LossController {
             @Valid @RequestBody LossInput.RecoveryExecution input) {
         var actor = actors.capture();
         return retry(() -> reports.executeRecovery(actor, id, version, key, input));
+    }
+
+    @PostMapping("/{id}/recover-to-return")
+    Map<String, Object> recoverToReturn(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.ExplicitRecoveryExecution input) {
+        var actor = actors.capture();
+        return retry(() -> reports.recoverToReturn(actor, id, version, key, input));
+    }
+
+    @PostMapping("/{id}/return-recovery-requests")
+    Map<String, Object> requestReturnRecovery(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.ReturnRecoveryRequest input) {
+        var actor = actors.capture();
+        return retry(() -> reports.requestReturnRecovery(actor, id, version, key, input));
+    }
+
+    @PostMapping("/recoveries/{id}/execute-to-return")
+    Map<String, Object> executeRecoveryToReturn(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.ExplicitRecoveryExecution input) {
+        var actor = actors.capture();
+        return retry(() -> reports.executeRecoveryToReturn(actor, id, version, key, input));
     }
 
     private Map<String, Object> retry(Supplier<Map<String, Object>> operation) {

@@ -2,11 +2,11 @@ import { useSessionStore } from "@/auth/sessionStore";
 export interface LossAsset { id: string; assetCode: string; name: string; version: number; lifecycle: string; responsibleEmployeeId?: string; departmentResponsibleEmployeeId?: string }
 export interface LossReport { id: string; assetId: string; status: string; source: LossAsset; version: number; assetVersion: number;
   ownershipVersion: number; lockVersion?: number; processorAccountId: string | null; lastSeenAt: string; lastLocation: string;
-  circumstances: string; repairId?: string | null; recoveredAt?: string; recoveryAsset?: LossRecoveryAsset | null; recoveries?: LossRecovery[]; recoveriesTotal?: number; confirmedLostAt?: string; lastFollowUpAt?: string; nextReviewDate: string | null; photosAvailable?: boolean;
+  circumstances: string; returnId?: string | null; repairId?: string | null; recoveredAt?: string; recoveryAsset?: LossRecoveryAsset | null; recoveries?: LossRecovery[]; recoveriesTotal?: number; confirmedLostAt?: string; lastFollowUpAt?: string; nextReviewDate: string | null; photosAvailable?: boolean;
   photos?: { objectId: string; filename: string; contentType?: string }[]; actions?: Record<string, boolean>;
   history?: { id: string; action: string; actor_username: string; occurred_at: string }[] }
 export interface LossRecoveryAsset { assetCode: string; serialNumber: string | null; version: number; locationId: string | null; locationName: string | null; locationVersion: number | null; eligible: boolean }
-export interface LossRecovery { id: string; version: number; assetVersion: number; ownershipVersion: number; status: string; creatorAccountId: string; processorAccountId: string | null; actions: Record<string,boolean>; request?: { facts?: Record<string,unknown> } }
+export interface LossRecovery { id: string; version: number; assetVersion: number; ownershipVersion: number; status: string; creatorAccountId: string; processorAccountId: string | null; actions: Record<string,boolean>; request?: { destination?: string; facts?: Record<string,unknown> } }
 export interface LossIntent { path: string; key: string; version: number; body?: unknown; file?: File; summary?: string }
 export class LossApiError extends Error { constructor(readonly status: number, readonly code: string) { super(code); } }
 export async function lossRequest<T>(path: string, intent?: LossIntent): Promise<T> {

@@ -176,6 +176,8 @@ onMounted(async () => {
     <div v-for="row in returns" :key="row.id"><button :disabled="busy || retryable" @click="choose(row.id, true)">退还 {{ row.id }} · {{ labels[row.returnStatus] }}</button></div>
     <div v-if="selectedReturn" class="panel">
       <h3>退还 {{ selectedReturn.id }} · {{ selectedReturn.asset?.assetCode }} · {{ labels[selectedReturn.returnStatus] }}</h3><p>{{ selectedReturn.reason }}</p>
+      <p v-if="selectedReturn.lossRecovery">找回关联退库：历史报失 {{selectedReturn.lossRecovery.reportId}}。原责任和借用保留至实物验收；驳回仍保留资产锁。</p>
+      <button v-if="admin &amp;&amp; selectedReturn.lossRecovery &amp;&amp; selectedReturn.returnStatus==='REJECTED'" :disabled="busy || retryable || !reason.trim()" @click="mutate(`/asset-returns/${selectedReturn.id}/resubmit-loss`,selectedReturn.version,{approved:false,reason:reason.trim()})">补充说明并重新送审退库</button>
       <template v-if="admin && selectedReturn.returnStatus === 'PENDING_APPROVAL'"><button :disabled="busy || retryable" @click="decide(selectedReturn.id, selectedReturn.version, true, true)">批准退还</button>
         <button :disabled="busy || retryable" @click="decide(selectedReturn.id, selectedReturn.version, false, true)">驳回退还</button></template>
       <button v-if="warehouse && selectedReturn.returnStatus === 'WAITING_WAREHOUSE_CLAIM'" :disabled="busy || retryable"

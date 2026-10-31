@@ -56,10 +56,10 @@ function prepareProgress(intent: LossIntent) {
   if (locked.value || readOwner !== identity.value || !row) return;
   const attempt = row.recoveries?.find(item => intent.path.startsWith(`/recoveries/${item.id}/`));
   if (attempt) {
-    const action = ({decision:"decide",cancel:"cancel",claim:"claim",execute:"execute","execute-to-repair":"execute"} as Record<string,string>)[intent.path.slice(intent.path.lastIndexOf("/")+1)];
+    const action = ({decision:"decide",cancel:"cancel",claim:"claim",execute:"execute","execute-to-repair":"execute","execute-to-return":"execute"} as Record<string,string>)[intent.path.slice(intent.path.lastIndexOf("/")+1)];
     if (!action || intent.version !== attempt.version || !attempt.actions[action]) return;
   } else {
-    const action = ({[`/${row.id}/confirm-lost`]:"confirmLost",[`/${row.id}/follow-up`]:"followUp",[`/${row.id}/recover-original`]:"recoverOriginal",[`/${row.id}/recover-to-repair`]:"recoverOriginal",[`/${row.id}/recovery-requests`]:"requestRecovery",[`/${row.id}/repair-recovery-requests`]:"requestRecovery"} as Record<string,string>)[intent.path];
+    const action = ({[`/${row.id}/confirm-lost`]:"confirmLost",[`/${row.id}/follow-up`]:"followUp",[`/${row.id}/recover-original`]:"recoverOriginal",[`/${row.id}/recover-to-repair`]:"recoverOriginal",[`/${row.id}/recovery-requests`]:"requestRecovery",[`/${row.id}/repair-recovery-requests`]:"requestRecovery",[`/${row.id}/return-recovery-requests`]:"requestRecovery",[`/${row.id}/recover-to-return`]:"recoverOriginal"} as Record<string,string>)[intent.path];
     if (!action || intent.version !== row.version || !row.actions?.[action]) return;
   }
   confirmation.value = intent;

@@ -185,6 +185,7 @@ class LossHttpRuntimeCase {
                 "DELETE FROM fams_todo WHERE business_type='LOST_REPORT' AND business_id IN (SELECT"
                         + " id FROM fams_loss_report WHERE creator_account_id BETWEEN 951001 AND"
                         + " 951010)");
+        cleanLinkedReturns();
         db.update("DELETE FROM fams_asset_business_lock WHERE asset_id BETWEEN 951020 AND 951023");
         for (String table : List.of("fams_loss_recovery", "fams_loss_receipt", "fams_loss_event")) {
             db.update(
@@ -718,6 +719,103 @@ class LossHttpRuntimeCase {
                             Long.class));
         } finally {
             cleanLinkedRepairs();
+        }
+    }
+
+    @Test
+    void actualNativePageRecoversClosedLossThroughNewApprovalAndFormalReturn()
+            throws Exception {
+        try {
+            var grants = new java.util.LinkedHashMap<String, Object>();
+            for (var entry :
+                    Map.of(
+                                    "employee",
+                                    951002L,
+                                    "admin",
+                                    951001L,
+                                    "warehouse",
+                                    951003L,
+                                    "other",
+                                    951007L)
+                            .entrySet()) {
+                var identity = new MiniWechatIdentityPort.Identity("owned-loss-native", entry.getKey());
+                db.update(
+                        "INSERT INTO fams_mini_binding(account_id,identity_hash,created_at)"
+                                + " VALUES (?,?,NOW(3))",
+                        entry.getValue(),
+                        miniSessions.identityHash(identity));
+                var grant = miniSessions.start(identity, UUID.randomUUID());
+                grants.put(
+                        entry.getKey(),
+                        Map.of(
+                                "sessionToken",
+                                grant.sessionToken(),
+                                "accountId",
+                                entry.getValue().toString(),
+                                "bindingId",
+                                grant.bindingId()));
+            }
+            var script =
+                    java.nio.file.Path.of(System.getProperty("user.dir"))
+                            .getParent()
+                            .resolve("apps/miniprogram/test/runtime-loss-closed-return-http.mjs");
+            var builder =
+                    new ProcessBuilder(
+                                    "rtk",
+                                    "proxy",
+                                    System.getProperty(
+                                            "fams.test.node",
+                                            System.getenv()
+                                                    .getOrDefault("FAMS_TEST_NODE_EXECUTABLE", "node")),
+                                    script.toString())
+                            .redirectErrorStream(true);
+            builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+            builder.environment().put("FAMS_TEST_LOSS_GRANTS", JSON.writeValueAsString(grants));
+            var process = builder.start();
+            try {
+                org.junit.jupiter.api.Assertions.assertTrue(
+                        process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS));
+            } finally {
+                if (process.isAlive()) {
+                    process.destroyForcibly();
+                }
+            }
+            var output =
+                    new String(
+                            process.getInputStream().readAllBytes(),
+                            java.nio.charset.StandardCharsets.UTF_8);
+            assertEquals(0, process.exitValue(), output);
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    output.contains("\"nativeActualLossClosedReturn\":true"), output);
+            assertEquals(
+                    "CONFIRMED_LOST",
+                    db.queryForObject(
+                            "SELECT report_status FROM fams_loss_report WHERE asset_id=951020",
+                            String.class));
+            assertEquals(
+                    1L,
+                    db.queryForObject(
+                            "SELECT COUNT(*) FROM fams_asset_return WHERE asset_id=951020 AND"
+                                    + " return_status='PENDING_APPROVAL'",
+                            Long.class));
+            assertEquals(
+                    1L,
+                    db.queryForObject(
+                            "SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=951020"
+                                    + " AND business_type='ASSET_RETURN' AND lock_version=1"
+                                    + " AND released_at IS NULL",
+                            Long.class));
+            assertEquals(
+                    "IN_USE",
+                    db.queryForObject(
+                            "SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+            assertEquals(
+                    951002L,
+                    db.queryForObject(
+                            "SELECT responsible_employee_id FROM fams_asset WHERE id=951020",
+                            Long.class));
+        } finally {
+            cleanLinkedReturns();
         }
     }
 
@@ -2114,6 +2212,166 @@ class LossHttpRuntimeCase {
         ((tools.jackson.databind.node.ObjectNode) input.get("facts")).put("condition", "DAMAGED");
         return JSON.writeValueAsString(Map.of("recovery", input,
                 "fault", "原机电源损坏无法工作，已经现场核实实物故障", "impact", "HIGH"));
+    }
+
+    @Test
+    void changedCustodyRecoveryReturnsBorrowedAssetOnlyAfterApprovalAndActualAcceptance() throws Exception {
+        borrowing(true);
+        db.update("UPDATE fams_loan SET parameter_snapshot_json=? WHERE asset_id=951020",
+                JSON.writeValueAsString(Map.of("timezone", "Asia/Shanghai")));
+        long loanId = db.queryForObject("SELECT id FROM fams_loan WHERE asset_id=951020", Long.class);
+        loanReminders.refresh(loanId);
+        var historicalReminders = db.queryForList("SELECT * FROM fams_loan_reminder WHERE loan_id=?", loanId);
+        var row = searchingReport();
+        var loan = db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020");
+        var originalLock = db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020 AND released_at IS NULL");
+        db.update("UPDATE fams_employee SET status='DISABLED' WHERE id=951002");
+        String path = "/" + row.path("id").asText() + "/recover-to-return", body = returnBody(row, null), request = key();
+        var result = ok(post(warehouse, path, body, row.path("version").asLong(), request));
+        assertEquals(result, ok(post(warehouse, path, body, row.path("version").asLong(), request)));
+        String id = result.path("returnId").asText();
+        assertFalse(id.isBlank());
+        assertEquals(loan, db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020"));
+        assertEquals("BORROWED", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+        assertEquals(951002L, db.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=951020", Long.class));
+        var lock = db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020 AND released_at IS NULL");
+        assertEquals(originalLock.get("id"), lock.get("id"));
+        assertEquals("ASSET_RETURN", lock.get("business_type"));
+        assertEquals(1L, ((Number) lock.get("lock_version")).longValue());
+        assertEquals("ASSET_RETURN", JSON.readTree(db.queryForObject("SELECT recovery_snapshot_json FROM fams_loss_report WHERE id=?", String.class, row.path("id").asText())).path("destination").asText());
+        assertEquals(403, returnWrite(other, id + "/decision", Map.of("approved", true, "reason", "无权批准"), 0).statusCode());
+        ok(returnWrite(admin, id + "/decision", Map.of("approved", false, "reason", "补充移交证据后重送"), 0));
+        assertEquals(lock, db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020 AND released_at IS NULL"));
+        assertEquals(409, returnWrite(warehouse, id + "/claim", null, 1).statusCode());
+        ok(returnWrite(admin, id + "/resubmit-loss", Map.of("approved", false, "reason", "补充证据完整，重新送审"), 1));
+        ok(returnWrite(admin, id + "/decision", Map.of("approved", true, "reason", "核对找回事实批准归还退库"), 2));
+        ok(returnWrite(warehouse, id + "/claim", null, 3));
+        var accepted = ok(returnWrite(warehouse, id + "/inspect", Map.of("result", "NORMAL", "reason", "已接收完好原机并当场验收入库",
+                "observedCode", "REP-ASSET-951020", "warehouseId", 951000, "warehouseVersion", 0,
+                "locationId", 951000, "locationVersion", 0, "assetVersion", result.path("assetVersion").asLong(), "lockVersion", 1), 4));
+        assertEquals("COMPLETED", accepted.path("returnStatus").asText());
+        assertEquals(historicalReminders, db.queryForList("SELECT * FROM fams_loan_reminder WHERE loan_id=?", loanId));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_todo WHERE business_type='LOAN' AND business_id=? AND closed_at IS NULL", Long.class, loanId));
+        assertEquals("RETURNED", db.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=951020", String.class));
+        var after = db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020");
+        for (String date : List.of("borrowed_date", "original_return_date", "expected_return_date")) { assertEquals(loan.get(date), after.get(date)); }
+        assertEquals("IN_STOCK", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=951020 AND released_at IS NULL", Long.class));
+    }
+
+    @Test
+    void closedReturnRecoveryRequiresFreshPurposeApprovalAndAdoptsNewItemWithoutErasingLoss() throws Exception {
+        var row = confirmedReport();
+        String id = row.path("id").asText();
+        var history = db.queryForMap("SELECT confirmation_snapshot_json,confirmed_lost_at,source_snapshot_json FROM fams_loss_report WHERE id=?", id);
+        db.execute("ALTER TABLE fams_loss_recovery AUTO_INCREMENT=951100");
+        var request = ok(post(employee, "/" + id + "/return-recovery-requests", returnRequest(row), row.path("version").asLong(), key()));
+        String rid = request.path("recoveryId").asText(), base = "/recoveries/" + rid;
+        assertFalse(id.equals(rid));
+        assertEquals(409, post(warehouse, base + "/claim", null, 0, key()).statusCode());
+        ok(post(admin, base + "/decision", decision(), 0, key()));
+        ok(post(otherWarehouse, base + "/claim", null, 1, key()));
+        row = ok(get(otherWarehouse, "/" + id));
+        var attempt = row.path("recoveries").get(0);
+        assertEquals("ASSET_RETURN", attempt.path("request").path("destination").asText());
+        assertEquals(409, post(otherWarehouse, base + "/execute", recoveryBody(row, attempt), 2, key()).statusCode());
+        assertEquals(409, post(warehouse, base + "/execute-to-return", returnBody(row, attempt), 2, key()).statusCode());
+        var result = ok(post(otherWarehouse, base + "/execute-to-return", returnBody(row, attempt), 2, key()));
+        assertEquals("COMPLETED", result.path("recoveryStatus").asText());
+        assertEquals("CONFIRMED_LOST", result.path("status").asText());
+        assertEquals(history, db.queryForMap("SELECT confirmation_snapshot_json,confirmed_lost_at,source_snapshot_json FROM fams_loss_report WHERE id=?", id));
+        assertEquals("PENDING_APPROVAL", db.queryForObject("SELECT return_status FROM fams_asset_return WHERE id=?", String.class, result.path("returnId").asText()));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_loan WHERE asset_id=951020", Long.class));
+    }
+
+    @Test
+    void returnRecoveryRejectsMissingVersionsIdentityDriftAndRollsBackEveryOwnerOnLateAuditFailure() throws Exception {
+        var row = searchingReport();
+        String path = "/" + row.path("id").asText() + "/recover-to-return", body = returnBody(row, null), request = key();
+        var before = returnDatabaseFacts();
+        var missing = (tools.jackson.databind.node.ObjectNode) JSON.readTree(body);
+        missing.remove("assetVersion");
+        assertEquals(400, post(warehouse, path, JSON.writeValueAsString(missing), row.path("version").asLong(), key()).statusCode());
+        for (String field : List.of("assetVersion", "ownershipVersion", "lockVersion")) {
+            var stale = (tools.jackson.databind.node.ObjectNode) JSON.readTree(body);
+            stale.put(field, stale.path(field).asLong() + 1);
+            assertEquals(409, post(warehouse, path, JSON.writeValueAsString(stale), row.path("version").asLong(), key()).statusCode());
+        }
+        var wrong = (tools.jackson.databind.node.ObjectNode) JSON.readTree(body);
+        ((tools.jackson.databind.node.ObjectNode) wrong.get("facts")).put("observedAssetCode", "WRONG");
+        assertEquals(409, post(warehouse, path, JSON.writeValueAsString(wrong), row.path("version").asLong(), key()).statusCode());
+        assertEquals(before, returnDatabaseFacts());
+        try {
+            db.execute("CREATE TRIGGER owned_loss_return_failure BEFORE INSERT ON fams_loss_event FOR EACH ROW"
+                    + " SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Owned late loss return failure'");
+            assertEquals(500, post(warehouse, path, body, row.path("version").asLong(), request).statusCode());
+            assertEquals(before, returnDatabaseFacts());
+        } finally { db.execute("DROP TRIGGER IF EXISTS owned_loss_return_failure"); }
+        ok(post(warehouse, path, body, row.path("version").asLong(), request));
+    }
+
+    @Test
+    void concurrentReturnHandoffHasOneWinnerAndRejectedReturnCannotExposeAvailableStock() throws Exception {
+        var row = searchingReport();
+        String path = "/" + row.path("id").asText() + "/recover-to-return", body = returnBody(row, null);
+        try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var start = new java.util.concurrent.CountDownLatch(1);
+            var first = executor.submit(() -> {
+                start.await();
+                return post(warehouse, path, body, row.path("version").asLong(), key());
+            });
+            var second = executor.submit(() -> {
+                start.await();
+                return post(warehouse, path, body, row.path("version").asLong(), key());
+            });
+            start.countDown();
+            assertEquals(List.of(200, 409), java.util.stream.Stream.of(first.get().statusCode(), second.get().statusCode()).sorted().toList());
+        }
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_return WHERE asset_id=951020", Long.class));
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=951020 AND released_at IS NULL AND business_type='ASSET_RETURN'", Long.class));
+        String id = db.queryForObject("SELECT CAST(id AS CHAR) FROM fams_asset_return WHERE asset_id=951020", String.class);
+        ok(returnWrite(admin, id + "/decision", Map.of("approved", false, "reason", "核对补充证据后重新送审"), 0));
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=951020 AND released_at IS NULL", Long.class));
+        assertEquals("IN_USE", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+    }
+
+    private String returnBody(JsonNode row, JsonNode recovery) {
+        var body = (tools.jackson.databind.node.ObjectNode) JSON.readTree(recoveryBody(row, recovery));
+        var facts = (tools.jackson.databind.node.ObjectNode) body.get("facts");
+        facts.put("stillOriginalCustodian", false);
+        facts.put("locationId", "951000");
+        facts.put("locationVersion", 0);
+        facts.put("evidence", "原机实物已找回，在不同实际位置由库管暂管并核对完好，需要关联归还退库。");
+        return JSON.writeValueAsString(body);
+    }
+
+    private String returnRequest(JsonNode row) {
+        return JSON.writeValueAsString(Map.of("assetVersion", row.path("recoveryAsset").path("version").asLong(),
+                "facts", JSON.readTree(returnBody(row, null)).get("facts")));
+    }
+
+    private HttpResponse<String> returnWrite(Session s, String path, Object body, long version) throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/asset-returns/" + path))
+                .header("Cookie", s.cookie()).header("X-CSRF-Token", s.csrf()).header("Idempotency-Key", key())
+                .header("If-Match-Version", Long.toString(version)).header("Content-Type", "application/json")
+                .POST(body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body)))
+                .build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private Map<String, Object> returnDatabaseFacts() {
+        var result = new java.util.LinkedHashMap<>(linkedRecoveryDatabaseFacts());
+        for (String table : List.of("fams_asset_return", "fams_return_followup", "fams_idempotency_record")) {
+            result.put(table, db.queryForList("SELECT * FROM " + table).stream().map(JSON::writeValueAsString).sorted().toList());
+        }
+        return result;
+    }
+
+    private void cleanLinkedReturns() {
+        String ids = "SELECT id FROM fams_asset_return WHERE asset_id BETWEEN 951020 AND 951023";
+        db.update("DELETE FROM fams_todo WHERE business_type='ASSET_RETURN' AND business_id IN (" + ids + ")");
+        db.update("DELETE FROM fams_return_followup WHERE return_id IN (" + ids + ")");
+        db.update("DELETE FROM fams_idempotency_record WHERE actor_account_id BETWEEN 951001 AND 951010");
+        db.update("DELETE FROM fams_asset_return WHERE asset_id BETWEEN 951020 AND 951023");
     }
 
     private String damagedRecoveryBody(JsonNode row) {

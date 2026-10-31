@@ -76,6 +76,14 @@ class AssetReturnController {
         return service.decide(actors.capture(), id, version, key, input);
     }
 
+    @PostMapping("/{id}/resubmit-loss")
+    Map<String, Object> resubmitLoss(@PathVariable long id,
+            @RequestHeader("If-Match-Version") @Min(0) long version,
+            @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
+            @Valid @RequestBody Decision input) {
+        return service.resubmitLossRecovery(actors.capture(), id, version, key, input.reason());
+    }
+
     @PostMapping("/{id}/claim")
     Map<String, Object> claim(@PathVariable long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,

@@ -314,6 +314,67 @@ public class AssetLossPort {
         return version + 1;
     }
 
+    /** Recovery to a formal return preserves recorded custody, even when its person is inactive. */
+    public Map<String, Object> requireReturnRecovery(
+            long id, long version, String exception, String original) {
+        var row = locked(id, version, exception);
+        if (!List.of("IN_USE", "BORROWED").contains(row.get("lifecycle_status"))) {
+            throw new AssetHandoverPort.Failure("LOSS_RETURN_SOURCE_REQUIRED", 409);
+        }
+        var frozen = json.readTree(original);
+        var current = snapshot(row);
+        for (String field : List.of("lifecycle", "custodyType", "usingOrganizationId",
+                "responsibleEmployeeId", "departmentResponsibleEmployeeId", "warehouseId", "locationId")) {
+            Object value = current.get(field);
+            var expected = frozen.path(field);
+            if (!Objects.equals(value == null ? null : value.toString(),
+                    expected.isNull() || expected.isMissingNode() ? null : expected.asText())) {
+                throw new AssetHandoverPort.Failure("LOSS_RETURN_SOURCE_CHANGED", 409);
+            }
+        }
+        return row;
+    }
+
+    public Map<String, Object> validateReturnRecovery(long id, long version, String exception,
+            String original, String observedCode, String observedSerial, long location, long locationVersion) {
+        var row = requireReturnRecovery(id, version, exception, original);
+        String serial = row.get("serial_number") == null ? "" : row.get("serial_number").toString();
+        if (!row.get("asset_code").equals(observedCode.strip())
+                || !serial.strip().equalsIgnoreCase(observedSerial == null ? "" : observedSerial.strip())) {
+            throw new AssetHandoverPort.Failure("LOSS_PHYSICAL_IDENTITY_MISMATCH", 409);
+        }
+        var places = db.queryForList("SELECT id FROM fams_location WHERE id=? AND version=?"
+                + " AND status='ACTIVE' FOR SHARE", location, locationVersion);
+        if (places.size() != 1) {
+            throw new AssetHandoverPort.Failure("LOSS_LOCATION_CHANGED", 409);
+        }
+        return row;
+    }
+
+    public Map<String, Object> recoveryLocations(int page, int size) {
+        var items = db.queryForList("SELECT id,name,version FROM fams_location WHERE status='ACTIVE'"
+                + " ORDER BY id LIMIT ? OFFSET ?", size, ((long) page - 1) * size);
+        return Map.of("items", items.stream().map(r -> Map.of("id", r.get("id").toString(),
+                "name", r.get("name"), "version", r.get("version"))).toList(), "total",
+                Objects.requireNonNull(db.queryForObject("SELECT COUNT(*) FROM fams_location WHERE status='ACTIVE'", Long.class)),
+                "page", page, "pageSize", size);
+    }
+
+    public long recoverForReturn(long id, long version, String exception, String original,
+            String observedCode, String observedSerial, long location, long locationVersion,
+            long report, long actor, Instant time) {
+        validateReturnRecovery(id, version, exception, original, observedCode, observedSerial,
+                location, locationVersion);
+        if (db.update("UPDATE fams_asset SET exception_status='NORMAL',version=version+1,"
+                + "updated_by=?,updated_at=? WHERE id=? AND version=?", actor, time, id, version) != 1) {
+            throw new AssetHandoverPort.Failure("LOSS_ASSET_CHANGED", 409);
+        }
+        mapper.event(id, "LOSS_RECOVERED_FOR_RETURN", time,
+                json.writeValueAsString(Map.of("reportId", Long.toString(report),
+                        "observedLocationId", Long.toString(location))), actor);
+        return version + 1;
+    }
+
     private Map<String, Object> locked(long id, long version, String exception) {
         var rows = db.queryForList("SELECT * FROM fams_asset WHERE id=? FOR UPDATE", id);
         if (rows.isEmpty()) {
