@@ -621,7 +621,7 @@ public class RepairService {
                         id,
                         input.assetId(),
                         loss.reportId(),
-                        recoveryId == null ? Long.parseLong(loss.reportId()) : recoveryId,
+                        recoveryId == null ? Long.valueOf(loss.reportId()) : recoveryId,
                         loss.lockVersion())
                 != 1) {
             throw new RepairFailure(409, "REPAIR_LOSS_LOCK_CHANGED");
