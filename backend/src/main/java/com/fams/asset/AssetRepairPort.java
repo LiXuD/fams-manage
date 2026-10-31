@@ -111,6 +111,12 @@ public class AssetRepairPort {
     /** A loss owner has verified the recovered original; adopt its still-active lock atomically. */
     public String lossRecoverySubmission(
             Current actor, long assetId, long version, long report, long lockVersion) {
+        return lossRecoverySubmission(actor, assetId, version, report, report, lockVersion);
+    }
+
+    public String lossRecoverySubmission(
+            Current actor, long assetId, long version, long report, long recoveryItem,
+            long lockVersion) {
         if (!actor.has(Role.WAREHOUSE_OPERATOR)) {
             throw new AssetHandoverPort.Failure("REPAIR_ROLE_REQUIRED", 403);
         }
@@ -123,7 +129,7 @@ public class AssetRepairPort {
                                             + " released_at IS NULL FOR UPDATE",
                                         assetId,
                                         report,
-                                        report,
+                                        recoveryItem,
                                         lockVersion)
                                 .size()
                         != 1) {

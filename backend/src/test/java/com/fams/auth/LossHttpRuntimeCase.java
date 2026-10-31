@@ -625,6 +625,103 @@ class LossHttpRuntimeCase {
     }
 
     @Test
+    void actualNativePageRecoversClosedDamagedLossThroughNewApprovalAndRepair()
+            throws Exception {
+        try {
+            var grants = new java.util.LinkedHashMap<String, Object>();
+            for (var entry :
+                    Map.of(
+                                    "employee",
+                                    951002L,
+                                    "admin",
+                                    951001L,
+                                    "warehouse",
+                                    951003L,
+                                    "other",
+                                    951007L)
+                            .entrySet()) {
+                var identity = new MiniWechatIdentityPort.Identity("owned-loss-native", entry.getKey());
+                db.update(
+                        "INSERT INTO fams_mini_binding(account_id,identity_hash,created_at)"
+                                + " VALUES (?,?,NOW(3))",
+                        entry.getValue(),
+                        miniSessions.identityHash(identity));
+                var grant = miniSessions.start(identity, UUID.randomUUID());
+                grants.put(
+                        entry.getKey(),
+                        Map.of(
+                                "sessionToken",
+                                grant.sessionToken(),
+                                "accountId",
+                                entry.getValue().toString(),
+                                "bindingId",
+                                grant.bindingId()));
+            }
+            var script =
+                    java.nio.file.Path.of(System.getProperty("user.dir"))
+                            .getParent()
+                            .resolve("apps/miniprogram/test/runtime-loss-closed-damaged-http.mjs");
+            var builder =
+                    new ProcessBuilder(
+                                    "rtk",
+                                    "proxy",
+                                    System.getProperty(
+                                            "fams.test.node",
+                                            System.getenv()
+                                                    .getOrDefault("FAMS_TEST_NODE_EXECUTABLE", "node")),
+                                    script.toString())
+                            .redirectErrorStream(true);
+            builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+            builder.environment().put("FAMS_TEST_LOSS_GRANTS", JSON.writeValueAsString(grants));
+            var process = builder.start();
+            try {
+                org.junit.jupiter.api.Assertions.assertTrue(
+                        process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS));
+            } finally {
+                if (process.isAlive()) {
+                    process.destroyForcibly();
+                }
+            }
+            var output =
+                    new String(
+                            process.getInputStream().readAllBytes(),
+                            java.nio.charset.StandardCharsets.UTF_8);
+            assertEquals(0, process.exitValue(), output);
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    output.contains("\"nativeActualLossClosedDamagedRepair\":true"), output);
+            assertEquals(
+                    "CONFIRMED_LOST",
+                    db.queryForObject(
+                            "SELECT report_status FROM fams_loss_report WHERE asset_id=951020",
+                            String.class));
+            assertEquals(
+                    1L,
+                    db.queryForObject(
+                            "SELECT COUNT(*) FROM fams_repair_request WHERE asset_id=951020 AND"
+                                    + " repair_status='PENDING_ADMIN_DECISION'",
+                            Long.class));
+            assertEquals(
+                    1L,
+                    db.queryForObject(
+                            "SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=951020"
+                                    + " AND business_type='REPAIR' AND lock_version=1"
+                                    + " AND released_at IS NULL",
+                            Long.class));
+            assertEquals(
+                    "IN_USE",
+                    db.queryForObject(
+                            "SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+            assertEquals(
+                    951002L,
+                    db.queryForObject(
+                            "SELECT responsible_employee_id FROM fams_asset WHERE id=951020",
+                            Long.class));
+        } finally {
+            cleanLinkedRepairs();
+        }
+    }
+
+    @Test
     void reportingAndApprovalNeverChangeCustodyAndOnlyVerificationStartsSearching()
             throws Exception {
         borrowing(true);
@@ -1879,6 +1976,144 @@ class LossHttpRuntimeCase {
         } finally {
             cleanLinkedRepairs();
         }
+    }
+
+    @Test
+    void closedDamagedRecoveryNeedsNewApprovalAndAdoptsItsOwnItemLock() throws Exception {
+        borrowing(false);
+        db.update("UPDATE fams_loan SET parameter_snapshot_json=? WHERE asset_id=951020",
+                JSON.writeValueAsString(Map.of("timezone", "Asia/Shanghai")));
+        var loan = db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020");
+        var row = confirmedReport();
+        String id = row.path("id").asText();
+        var history = db.queryForMap("SELECT confirmation_snapshot_json,confirmed_lost_at,"
+                + "source_snapshot_json FROM fams_loss_report WHERE id=?", id);
+        try {
+            assertEquals(409, post(warehouse, "/" + id + "/recover-to-repair",
+                    damagedRecoveryBody(row), row.path("version").asLong(), key()).statusCode());
+            db.execute("ALTER TABLE fams_loss_recovery AUTO_INCREMENT=951100");
+            var requested = ok(post(employee, "/" + id + "/repair-recovery-requests",
+                    damagedRequest(row), row.path("version").asLong(), key()));
+            String recovery = requested.path("recoveryId").asText(), base = "/recoveries/" + recovery;
+            assertFalse(id.equals(recovery));
+            assertEquals(409, post(warehouse, base + "/claim", null, 0, key()).statusCode());
+            assertEquals(403, post(employee, base + "/decision", decision(), 0, key()).statusCode());
+            ok(post(admin, base + "/decision", decision(), 0, key()));
+            ok(post(otherWarehouse, base + "/claim", null, 1, key()));
+            row = ok(get(otherWarehouse, "/" + id));
+            var attempt = row.path("recoveries").get(0);
+            String body = damagedExecution(row, attempt);
+            long version = attempt.path("version").asLong();
+            assertEquals(409, post(warehouse, base + "/execute-to-repair", body, version, key()).statusCode());
+            assertEquals(409, post(otherWarehouse, base + "/execute", recoveryBody(row, attempt),
+                    version, key()).statusCode());
+            var originalLock = db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE"
+                    + " asset_id=951020 AND released_at IS NULL");
+            assertEquals(Long.parseLong(recovery), ((Number) originalLock.get("business_item_id")).longValue());
+            String request = key();
+            var result = ok(post(otherWarehouse, base + "/execute-to-repair", body, version, request));
+            assertEquals(result, ok(post(otherWarehouse, base + "/execute-to-repair", body, version, request)));
+            assertEquals("CONFIRMED_LOST", result.path("status").asText());
+            assertEquals("COMPLETED", result.path("recoveryStatus").asText());
+            String repair = result.path("repairId").asText();
+            assertFalse(repair.isBlank());
+            var lock = db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE"
+                    + " asset_id=951020 AND released_at IS NULL");
+            assertEquals(originalLock.get("id"), lock.get("id"));
+            assertEquals("REPAIR", lock.get("business_type"));
+            assertEquals(repair, lock.get("business_id").toString());
+            assertEquals(1L, ((Number) lock.get("lock_version")).longValue());
+            var source = JSON.readTree(db.queryForObject("SELECT source_snapshot_json FROM"
+                    + " fams_repair_request WHERE id=?", String.class, repair));
+            assertEquals(recovery, source.path("lossRecovery").path("recoveryId").asText());
+            assertEquals("PENDING_ADMIN_DECISION", db.queryForObject("SELECT repair_status FROM"
+                    + " fams_repair_request WHERE id=?", String.class, repair));
+            assertEquals(history, db.queryForMap("SELECT confirmation_snapshot_json,confirmed_lost_at,"
+                    + "source_snapshot_json FROM fams_loss_report WHERE id=?", id));
+            assertEquals(loan, db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020"));
+            assertEquals("NORMAL", db.queryForObject("SELECT exception_status FROM fams_asset WHERE id=951020", String.class));
+            assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_todo WHERE business_type='LOST_REPORT' AND business_id=? AND closed_at IS NULL", Long.class, id));
+        } finally {
+            cleanLinkedRepairs();
+        }
+    }
+
+    @Test
+    void intactApprovalCannotAuthorizeDamageAndDamageRequestCannotUseOrdinaryEntry() throws Exception {
+        var row = confirmedReport();
+        String id = row.path("id").asText();
+        assertEquals(409, post(employee, "/" + id + "/recovery-requests", damagedRequest(row),
+                row.path("version").asLong(), key()).statusCode());
+        var requested = ok(post(employee, "/" + id + "/recovery-requests", recoveryRequest(row),
+                row.path("version").asLong(), key()));
+        String base = "/recoveries/" + requested.path("recoveryId").asText();
+        ok(post(admin, base + "/decision", decision(), 0, key()));
+        ok(post(warehouse, base + "/claim", null, 1, key()));
+        row = ok(get(warehouse, "/" + id));
+        var before = linkedRecoveryDatabaseFacts();
+        assertEquals(409, post(warehouse, base + "/execute-to-repair",
+                damagedExecution(row, row.path("recoveries").get(0)), 2, key()).statusCode());
+        assertEquals(before, linkedRecoveryDatabaseFacts());
+    }
+
+    @Test
+    void closedDamagedRecoveryChecksEveryVersionRollsBackLateFailureAndHasOneWinner() throws Exception {
+        var row = confirmedReport();
+        String id = row.path("id").asText();
+        var requested = ok(post(employee, "/" + id + "/repair-recovery-requests",
+                damagedRequest(row), row.path("version").asLong(), key()));
+        String base = "/recoveries/" + requested.path("recoveryId").asText();
+        ok(post(admin, base + "/decision", decision(), 0, key()));
+        ok(post(warehouse, base + "/claim", null, 1, key()));
+        row = ok(get(warehouse, "/" + id));
+        String body = damagedExecution(row, row.path("recoveries").get(0));
+        var before = linkedRecoveryDatabaseFacts();
+        try {
+            for (String field : List.of("assetVersion", "ownershipVersion", "lockVersion")) {
+                var invalid = (tools.jackson.databind.node.ObjectNode) JSON.readTree(body);
+                ((tools.jackson.databind.node.ObjectNode) invalid.get("recovery")).put(field, 999);
+                assertEquals(409, post(warehouse, base + "/execute-to-repair",
+                        JSON.writeValueAsString(invalid), 2, key()).statusCode());
+                assertEquals(before, linkedRecoveryDatabaseFacts());
+            }
+            for (String field : List.of("assetVersion", "ownershipVersion", "lockVersion")) {
+                var missing = (tools.jackson.databind.node.ObjectNode) JSON.readTree(body);
+                ((tools.jackson.databind.node.ObjectNode) missing.get("recovery")).remove(field);
+                assertEquals(400, post(warehouse, base + "/execute-to-repair",
+                        JSON.writeValueAsString(missing), 2, key()).statusCode());
+                assertEquals(before, linkedRecoveryDatabaseFacts());
+            }
+            assertEquals(409, post(warehouse, base + "/execute-to-repair", body, 1, key()).statusCode());
+            assertEquals(before, linkedRecoveryDatabaseFacts());
+            String request = key();
+            db.execute("CREATE TRIGGER owned_loss_link_failure BEFORE INSERT ON fams_loss_event FOR"
+                    + " EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Owned late closed loss failure'");
+            assertEquals(500, post(warehouse, base + "/execute-to-repair", body, 2, request).statusCode());
+            assertEquals(before, linkedRecoveryDatabaseFacts());
+            db.execute("DROP TRIGGER owned_loss_link_failure");
+            try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+                var one = pool.submit(() -> post(warehouse, base + "/execute-to-repair", body, 2, request).statusCode());
+                var two = pool.submit(() -> post(warehouse, base + "/execute-to-repair", body, 2, key()).statusCode());
+                assertEquals(List.of(200, 409), java.util.stream.Stream.of(one.get(), two.get()).sorted().toList());
+            }
+            assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_repair_request WHERE asset_id=951020", Long.class));
+        } finally {
+            db.execute("DROP TRIGGER IF EXISTS owned_loss_link_failure");
+            cleanLinkedRepairs();
+        }
+    }
+
+    private String damagedRequest(JsonNode row) {
+        var input = (tools.jackson.databind.node.ObjectNode) JSON.readTree(recoveryRequest(row));
+        ((tools.jackson.databind.node.ObjectNode) input.get("facts")).put("condition", "DAMAGED");
+        return JSON.writeValueAsString(input);
+    }
+
+    private String damagedExecution(JsonNode row, JsonNode recovery) {
+        var input = (tools.jackson.databind.node.ObjectNode) JSON.readTree(recoveryBody(row, recovery));
+        ((tools.jackson.databind.node.ObjectNode) input.get("facts")).put("condition", "DAMAGED");
+        return JSON.writeValueAsString(Map.of("recovery", input,
+                "fault", "原机电源损坏无法工作，已经现场核实实物故障", "impact", "HIGH"));
     }
 
     private String damagedRecoveryBody(JsonNode row) {

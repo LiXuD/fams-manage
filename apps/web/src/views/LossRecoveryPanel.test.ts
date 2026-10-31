@@ -12,3 +12,18 @@ it("approver sees immutable original machine and physical evidence independently
 
 it("damaged recovery needs a separate physical attestation and creates a linked repair intent",async()=>{const w=mount(LossRecoveryPanel,{props:{report:row(),locked:false}});await fill(w);const section=w.find('[aria-label="损坏找回转维修"]');await section.find('textarea').setValue('原机在原位置发现电源损坏不能工作');await section.find('button').trigger('click');expect(w.emitted('prepare')).toBeUndefined();await section.find('input[type="checkbox"]').setValue(true);await section.find('button').trigger('click');expect(w.emitted('prepare')![0]![0]).toMatchObject({path:'/9/recover-to-repair',version:12,body:{impact:'MEDIUM',recovery:{assetVersion:3,ownershipVersion:4,lockVersion:5,facts:{condition:'DAMAGED',stillOriginalCustodian:true,locationId:'9007199254740993'}}}});w.unmount();});
 it("recovered linked repair remains discoverable after refresh",()=>{const report={...row(),recoveryAsset:null,actions:{},recoveredAt:'2026-10-30T10:00:00Z',repairId:'9007199254740993'};const w=mount(LossRecoveryPanel,{props:{report,locked:false}});expect(w.text()).toContain('已关联正式维修 9007199254740993');expect(w.find('[aria-label="损坏找回转维修"]').exists()).toBe(false);w.unmount();});
+
+it("closed damaged request is explicitly separate and execution uses only its new approved attempt",async()=>{
+ const report=row();report.actions={requestRecovery:true};
+ const w=mount(LossRecoveryPanel,{props:{report,locked:false}});await fill(w);
+ const damage=w.find('[aria-label="损坏找回转维修"]');await damage.find('input[type="checkbox"]').setValue(true);
+ await damage.find('button').trigger('click');
+ expect(w.emitted('prepare')![0]![0]).toMatchObject({path:'/9/repair-recovery-requests',version:12,body:{assetVersion:3,facts:{condition:'DAMAGED'}}});
+ await w.setProps({report:{...report,actions:{},recoveries:[{id:'44',version:7,assetVersion:3,ownershipVersion:6,status:'VERIFYING',creatorAccountId:'2',processorAccountId:'4',actions:{execute:true},request:{facts:{condition:'DAMAGED'}}}]}});
+ expect(w.find('article').text()).toContain('损坏，批准后转正式维修');
+ expect(w.find('article').text()).not.toContain('核实原机并完成找回');
+ await w.find('[aria-label="损坏找回转维修"] textarea').setValue('实际核实电源故障不能开机需要正式维修');
+ await w.find('article button').trigger('click');
+ expect(w.emitted('prepare')![1]![0]).toMatchObject({path:'/recoveries/44/execute-to-repair',version:7,body:{recovery:{ownershipVersion:6,lockVersion:5,facts:{condition:'DAMAGED'}},impact:'MEDIUM'}});
+ w.unmount();
+});

@@ -505,10 +505,24 @@ public class RepairService {
 
     private Map<String, Object> submitSource(
             Actor actor, UUID key, RepairInput.Submission input, LossRepairPort.Source loss) {
+        return submitSource(actor, key, input, loss, null);
+    }
+
+    Map<String, Object> submitClosedLossRecovery(
+            Actor actor, UUID key, RepairInput.Submission input, LossRepairPort.Source loss,
+            long recoveryId) {
+        return submitSource(actor, key, input, loss, recoveryId);
+    }
+
+    private Map<String, Object> submitSource(
+            Actor actor, UUID key, RepairInput.Submission input, LossRepairPort.Source loss,
+            Long recoveryId) {
         var current = actors.revalidateLocked(actor);
         String operation = loss == null ? "SUBMIT" : "LOSS_RECOVERY:" + loss.reportId();
         String fingerprint =
-                hash(operation, 0, loss == null ? input : Map.of("input", input, "source", loss));
+                hash(operation, 0, loss == null ? input : recoveryId == null
+                        ? Map.of("input", input, "source", loss)
+                        : Map.of("input", input, "source", loss, "recoveryId", recoveryId));
         var prior = replay(actor, current, operation, key, fingerprint);
         if (prior != null) {
             return prior;
@@ -526,10 +540,15 @@ public class RepairService {
                                 input.assetId(),
                                 input.assetVersion(),
                                 Long.parseLong(loss.reportId()),
+                                recoveryId == null ? Long.parseLong(loss.reportId()) : recoveryId,
                                 loss.lockVersion());
         if (loss != null) {
             var linked = (tools.jackson.databind.node.ObjectNode) json.readTree(source);
             linked.set("lossRecovery", json.valueToTree(loss));
+            if (recoveryId != null) {
+                ((tools.jackson.databind.node.ObjectNode) linked.get("lossRecovery"))
+                        .put("recoveryId", Long.toString(recoveryId));
+            }
             source = json.writeValueAsString(linked);
         }
         var snapshot = json.readTree(source);
@@ -597,11 +616,12 @@ public class RepairService {
                         "UPDATE fams_asset_business_lock SET"
                             + " business_type='REPAIR',business_id=?,business_item_id=?,lock_version=lock_version+1"
                             + " WHERE asset_id=? AND business_type='LOST_REPORT' AND business_id=?"
-                            + " AND lock_version=? AND released_at IS NULL",
+                            + " AND business_item_id=? AND lock_version=? AND released_at IS NULL",
                         id,
                         id,
                         input.assetId(),
                         loss.reportId(),
+                        recoveryId == null ? Long.parseLong(loss.reportId()) : recoveryId,
                         loss.lockVersion())
                 != 1) {
             throw new RepairFailure(409, "REPAIR_LOSS_LOCK_CHANGED");

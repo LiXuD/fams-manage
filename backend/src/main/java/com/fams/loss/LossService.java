@@ -627,11 +627,22 @@ public class LossService {
 
     public Map<String, Object> requestRecovery(
             Actor actor, long id, long version, UUID key, LossInput.RecoveryRequest input) {
+        return requestRecovery(actor, id, version, key, input, false);
+    }
+
+    public Map<String, Object> requestRepairRecovery(
+            Actor actor, long id, long version, UUID key, LossInput.DamagedRecoveryRequest input) {
+        return requestRecovery(actor, id, version, key, new LossInput.RecoveryRequest(input.assetVersion(), input.facts()), true);
+    }
+
+    private Map<String, Object> requestRecovery(
+            Actor actor, long id, long version, UUID key, LossInput.RecoveryRequest input,
+            boolean damaged) {
         var current = actors.revalidateLocked(actor);
         if (!applicant(current)) {
             throw new LossFailure(403, "LOSS_ROLE_REQUIRED");
         }
-        String operation = "RECOVERY_REQUEST:" + id,
+        String operation = (damaged ? "RECOVERY_REPAIR_REQUEST:" : "RECOVERY_REQUEST:") + id,
                 hash = LossPayloads.fingerprint(json, operation, version, input);
         var prior = replay(current, operation, key, hash);
         if (prior != null) {
@@ -643,7 +654,11 @@ public class LossService {
         if (row.get("recovered_at") != null) {
             throw new LossFailure(409, "LOSS_ALREADY_RECOVERED");
         }
-        recoveryFacts(row, input.facts());
+        if (damaged) {
+            damagedRecoveryFacts(row, input.facts());
+        } else {
+            recoveryFacts(row, input.facts());
+        }
         var asset =
                 assets.validateOriginalRecovery(
                         number(row, "asset_id"),
@@ -842,6 +857,7 @@ public class LossService {
         var row = recoveryParent(recovery);
         var request = recoveryHeader(recovery);
         recoveryGuard(request, version, "VERIFYING");
+        requireRecoveryCondition(request, "INTACT");
         processor(current, request, input.ownershipVersion());
         if (input.assetVersion() != number(request, "asset_version")) {
             throw new LossFailure(409, "LOSS_PROCESSOR_OR_ASSET_CHANGED");
@@ -872,6 +888,69 @@ public class LossService {
                 "LOSS_RECOVERED_AFTER_CONFIRMATION",
                 Map.of("recoveryId", Long.toString(recovery), "execution", input));
         return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
+    }
+
+    public Map<String, Object> executeRecoveryToRepair(
+            Actor actor, long recovery, long version, UUID key, LossInput.ClosedRepairRecovery input) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.WAREHOUSE_OPERATOR);
+        String operation = "RECOVERY_EXECUTE_TO_REPAIR:" + recovery;
+        String hash = LossPayloads.fingerprint(json, operation, version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var row = recoveryParent(recovery);
+        var request = recoveryHeader(recovery);
+        recoveryGuard(request, version, "VERIFYING");
+        requireRecoveryCondition(request, "DAMAGED");
+        var execution = input.recovery();
+        processor(current, request, execution.ownershipVersion());
+        if (execution.assetVersion() != number(request, "asset_version")) {
+            throw new LossFailure(409, "LOSS_PROCESSOR_OR_ASSET_CHANGED");
+        }
+        recoveryLock(row, recovery, execution.lockVersion());
+        damagedRecoveryFacts(row, execution.facts());
+        long next = restoreOriginal(row, execution.assetVersion(), "LOST", current, execution.facts());
+        var repair = repairs.createAfterConfirmation(actor, key,
+                new com.fams.repair.RepairInput.Submission(number(row, "asset_id"), next,
+                        input.fault(), input.impact(), execution.facts().foundAt()),
+                new com.fams.repair.LossRepairPort.Source(Long.toString(number(row, "id")),
+                        execution.lockVersion(), json.writeValueAsString(input)), recovery);
+        var snapshot = Map.of("execution", input, "repairId", repair.get("id"),
+                "recoveryId", Long.toString(recovery));
+        db.update("UPDATE fams_loss_recovery SET recovery_status='COMPLETED',"
+                        + "execution_snapshot_json=?,version=version+1,updated_at=? WHERE id=?",
+                json.writeValueAsString(snapshot), now(), recovery);
+        db.update("UPDATE fams_loss_report SET asset_version=?,recovered_at=?,"
+                        + "recovery_snapshot_json=? WHERE id=?", next, execution.facts().foundAt(),
+                json.writeValueAsString(snapshot), row.get("id"));
+        closeTodos(number(row, "id"));
+        advanceRecoveryReport(actor, current, row, "LOSS_RECOVERED_AFTER_CONFIRMATION_TO_REPAIR",
+                snapshot);
+        return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
+    }
+
+    private void requireRecoveryCondition(Map<String, Object> request, String condition) {
+        if (!condition.equals(json.readTree(request.get("request_snapshot_json").toString())
+                .path("facts").path("condition").asText())) {
+            throw new LossFailure(409, "LOSS_RECOVERY_PURPOSE_CHANGED");
+        }
+    }
+
+    private void damagedRecoveryFacts(Map<String, Object> row, LossInput.RecoveryFacts facts) {
+        validTime(facts.foundAt());
+        if (facts.foundAt().isBefore(instant(row.get("last_seen_at")))
+                || row.get("confirmed_lost_at") != null
+                        && facts.foundAt().isBefore(instant(row.get("confirmed_lost_at")))) {
+            throw new LossFailure(400, "LOSS_RECOVERY_TIME_INVALID");
+        }
+        if (!facts.physicalIdentityVerified() || facts.evidence().strip().length() < 10) {
+            throw new LossFailure(400, "LOSS_RECOVERY_EVIDENCE_REQUIRED");
+        }
+        if (!"DAMAGED".equals(facts.condition()) || !facts.stillOriginalCustodian()) {
+            throw new LossFailure(409, "LOSS_LINKED_RECOVERY_REQUIRED");
+        }
     }
 
     private boolean applicant(Current current) {

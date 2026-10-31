@@ -32,3 +32,22 @@ test("identity change discards prepared and pending damage evidence without anot
 test("native template exposes damage handlers and linked repair number",()=>{
  const wxml=fs.readFileSync(new URL("../native/pages/loss-reports/index.wxml",import.meta.url),"utf8");for(const value of ['data-action="recoverDamaged"','bindchange="onDamagedChecked"','bindtap="onRepairImpact"','{{detail.repairId}}'])assert.ok(wxml.includes(value));
 });
+
+
+test("closed damage request uses a separate route and does not masquerade as completed recovery",async()=>{
+ const f=fixture();Object.assign(f.row,{status:"CONFIRMED_LOST",actions:{requestRecovery:true}});
+ await proof(f);f.page.onField(field("repairFault",""));
+ f.page.onRecoveryPrepare(event({action:"requestDamaged"}));assert.match(f.page.data.confirmation,/新建损坏找回申请/);
+ await f.page.onConfirm();const write=writes(f)[0];assert.match(write.path,/repair-recovery-requests$/);
+ assert.equal(write.body.assetVersion,2);assert.equal(write.body.facts.condition,"DAMAGED");
+ assert.equal(write.body.recovery,undefined);
+});
+test("closed damage execution freezes the new recovery versions and cannot use an intact approval",async()=>{
+ const f=fixture();Object.assign(f.row,{status:"CONFIRMED_LOST",actions:{},recoveries:[{id:"22",version:7,assetVersion:2,ownershipVersion:6,actions:{execute:true},request:{facts:{condition:"DAMAGED"}}}]});
+ await proof(f);f.page.onRecoveryPrepare(event({action:"execute",id:"22"}));assert.equal(f.page.data.confirmation,"");
+ f.page.onRecoveryPrepare(event({action:"executeDamaged",id:"22"}));assert.ok(f.page.data.confirmation);await f.page.onConfirm();
+ const write=writes(f)[0];assert.match(write.path,/recoveries\/22\/execute-to-repair$/);assert.equal(write.mutation.version,7);assert.equal(write.body.recovery.ownershipVersion,6);
+ const g=fixture();Object.assign(g.row,{actions:{},recoveries:[{id:"22",version:7,assetVersion:2,ownershipVersion:6,actions:{execute:true},request:{facts:{condition:"INTACT"}}}]});await proof(g);
+ g.page.onRecoveryPrepare(event({action:"executeDamaged",id:"22"}));assert.equal(g.page.data.confirmation,"");
+ assert.equal(writes(g).length,0);
+});

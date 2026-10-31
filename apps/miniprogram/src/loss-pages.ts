@@ -113,21 +113,22 @@ export function createLossPage(getServices: () => MiniServices) {
         const row = page.data.detail, data = page.data;
         if (!row) return;
         const attempt = id ? row.recoveries?.find(item => item.id === id) : undefined;
-        const capability = ({approve:"decide",reject:"decide",cancel:"cancel",claim:"claim",execute:"execute"} as Record<string,string>)[action];
-        if (id ? !attempt || !capability || !attempt.actions[capability] : !["recoverOriginal","recoverDamaged","requestRecovery"].includes(action) || !row.actions?.[action === "recoverDamaged" ? "recoverOriginal" : action]) return;
+        const capability = ({approve:"decide",reject:"decide",cancel:"cancel",claim:"claim",execute:"execute",executeDamaged:"execute"} as Record<string,string>)[action];
+        if (id ? !attempt || !capability || !attempt.actions[capability] : !["recoverOriginal","recoverDamaged","requestRecovery","requestDamaged"].includes(action) || !row.actions?.[action === "recoverDamaged" ? "recoverOriginal" : action === "requestDamaged" ? "requestRecovery" : action]) return;
+        if (attempt && ["execute","executeDamaged"].includes(action) && ((attempt.request?.facts?.condition === "DAMAGED") !== (action === "executeDamaged"))) return;
         try {
             let body: unknown, label: string;
-            if (["recoverOriginal","recoverDamaged","requestRecovery","execute"].includes(action)) {
-                const source = row.recoveryAsset, damaged = action === "recoverDamaged";
+            if (["recoverOriginal","recoverDamaged","requestRecovery","requestDamaged","execute","executeDamaged"].includes(action)) {
+                const source = row.recoveryAsset, damaged = ["recoverDamaged","requestDamaged","executeDamaged"].includes(action), requesting = ["requestRecovery","requestDamaged"].includes(action);
                 if (!source || !source.locationId || source.locationVersion == null || !(damaged ? data.damagedChecked : data.recoveryChecked) || !data.observedAssetCode.trim() || source.serialNumber && !data.observedSerialNumber.trim() || data.recoveryEvidence.trim().length < 10) throw Error("Missing original recovery evidence");
                 const facts = {foundAt:actual(data.foundDate,data.foundTime,instants.found), observedAssetCode:data.observedAssetCode.trim(), observedSerialNumber:data.observedSerialNumber.trim(), locationId:source.locationId, locationVersion:source.locationVersion, physicalIdentityVerified:true, condition:damaged ? "DAMAGED" : "INTACT", stillOriginalCustodian:true, evidence:data.recoveryEvidence.trim()};
-                body = action === "requestRecovery" ? {assetVersion:source.version,facts} : {assetVersion:attempt?.assetVersion ?? row.assetVersion,ownershipVersion:attempt?.ownershipVersion ?? row.ownershipVersion,lockVersion:row.lockVersion,facts};
-                if (damaged) {
+                body = requesting ? {assetVersion:source.version,facts} : {assetVersion:attempt?.assetVersion ?? row.assetVersion,ownershipVersion:attempt?.ownershipVersion ?? row.ownershipVersion,lockVersion:row.lockVersion,facts};
+                if (damaged && !requesting) {
                     if (data.repairFault.trim().length < 10 || !["LOW","MEDIUM","HIGH"].includes(data.repairImpact) || !Number.isSafeInteger(row.lockVersion)) throw Error("Missing damage facts");
                     body = {recovery:body,fault:data.repairFault.trim(),impact:data.repairImpact};
                 }
-                label = `${action === "requestRecovery" ? "新建找回申请，批准认领后才能恢复" : damaged ? "损坏找回并申请正式维修" : "核实原机后恢复原责任"}：${facts.observedAssetCode}，序列号${facts.observedSerialNumber || "未登记"}；实际找回${facts.foundAt}，登记位置${source.locationName}；${facts.evidence}。历史遗失保留，原借用不改期。`;
-                if (damaged) label += ` 故障：${data.repairFault.trim()}；使用影响：${({LOW:"较低",MEDIUM:"中等",HIGH:"较高"} as Record<string,string>)[data.repairImpact]}。原锁转入维修，须管理员批准及库管实际办理。`;
+                label = `${requesting ? (damaged ? "新建损坏找回申请，批准并重新认领核实后转正式维修" : "新建找回申请，批准认领后才能恢复") : damaged ? "损坏找回并申请正式维修" : "核实原机后恢复原责任"}：${facts.observedAssetCode}，序列号${facts.observedSerialNumber || "未登记"}；实际找回${facts.foundAt}，登记位置${source.locationName}；${facts.evidence}。历史遗失保留，原借用不改期。`;
+                if (damaged && !requesting) label += ` 故障：${data.repairFault.trim()}；使用影响：${({LOW:"较低",MEDIUM:"中等",HIGH:"较高"} as Record<string,string>)[data.repairImpact]}。原锁转入维修，须管理员批准及库管实际办理。`;
             } else {
                 if (action !== "claim") {
                     if (data.reason.trim().length < 3) throw Error("Missing reason");
@@ -136,7 +137,7 @@ export function createLossPage(getServices: () => MiniServices) {
                 label = ({approve:"批准新找回申请，仍须库管重新认领核实。",reject:"驳回找回申请，原遗失责任跟进保留。",cancel:"撤回新找回申请，原遗失责任跟进保留。",claim:"取得新的唯一找回处理权，尚未恢复正常。"} as Record<string,string>)[action]!;
                 if (action !== "claim") label += data.reason.trim();
             }
-            const path = attempt ? `${base}/recoveries/${attempt.id}/${["approve","reject"].includes(action) ? "decision" : action}` : `${base}/${row.id}/${action === "recoverOriginal" ? "recover-original" : action === "recoverDamaged" ? "recover-to-repair" : "recovery-requests"}`;
+            const path = attempt ? `${base}/recoveries/${attempt.id}/${["approve","reject"].includes(action) ? "decision" : action === "executeDamaged" ? "execute-to-repair" : action}` : `${base}/${row.id}/${action === "recoverOriginal" ? "recover-original" : action === "recoverDamaged" ? "recover-to-repair" : action === "requestDamaged" ? "repair-recovery-requests" : "recovery-requests"}`;
             prepared = Object.freeze({path, key:services.createKey(),version:attempt?.version ?? row.version,body:body === undefined ? undefined : JSON.stringify(body),label});
             page.setData({confirmation:label,error:""});
         } catch { page.setData({error:"请填写原机编码/序列号、实际找回时间、至少10字证据及本次原因，并确认对应状况、原保管与登记位置；损坏找回还须至少10字故障及使用影响。"}); }

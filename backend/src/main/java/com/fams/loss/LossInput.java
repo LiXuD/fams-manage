@@ -67,6 +67,21 @@ public final class LossInput {
             @PositiveOrZero long assetVersion,
             @NotNull @jakarta.validation.Valid RecoveryFacts facts) {}
 
+    public record DamagedRecoveryRequest(
+            @NotNull @PositiveOrZero Long assetVersion,
+            @NotNull @jakarta.validation.Valid RecoveryFacts facts) {}
+
+    public record ExplicitRecoveryExecution(
+            @NotNull @PositiveOrZero Long assetVersion,
+            @NotNull @PositiveOrZero Long ownershipVersion,
+            @NotNull @PositiveOrZero Long lockVersion,
+            @NotNull @jakarta.validation.Valid RecoveryFacts facts) {}
+
+    public record ClosedRepairRecovery(
+            @NotNull @jakarta.validation.Valid ExplicitRecoveryExecution recovery,
+            @NotBlank @Size(min = 10, max = 2000) String fault,
+            @NotBlank String impact) {}
+
     public record RepairRecovery(
             @NotNull @jakarta.validation.Valid RecoveryExecution recovery,
             @NotBlank @Size(min = 10, max = 2000) String fault,

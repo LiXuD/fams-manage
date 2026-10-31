@@ -32,6 +32,15 @@ public class LossRepairPort {
 
     private final RepairService repairs;
 
+    public Map<String, Object> createAfterConfirmation(
+            Actor actor, UUID key, RepairInput.Submission input, Source source, long recoveryId) {
+        try {
+            return repairs.submitClosedLossRecovery(actor, key, input, source, recoveryId);
+        } catch (RepairFailure failure) {
+            throw new Failure(failure.status(), failure.getMessage());
+        }
+    }
+
     public LossRepairPort(RepairService repairs) {
         this.repairs = repairs;
     }
