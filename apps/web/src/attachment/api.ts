@@ -1,4 +1,4 @@
-import { useSessionStore } from "@/auth/sessionStore";
+import { apiUrl, mutationHeaders, sessionCsrfToken } from "@/api/http";
 import { AuthApiError } from "@/auth/api";
 
 export interface Attachment {
@@ -40,14 +40,14 @@ async function failure(response: Response): Promise<AuthApiError> {
   return new AuthApiError(response.status, body.code ?? "ATTACHMENT_REQUEST_FAILED", message, body.requestId);
 }
 
-function csrfHeaders(): Record<string, string> {
-  const token = useSessionStore().csrfToken;
+function csrfToken(): string {
+  const token = sessionCsrfToken();
   if (!token) throw new AuthApiError(401, "AUTH_SESSION_INVALID", messages.AUTH_SESSION_INVALID);
-  return { "X-CSRF-Token": token };
+  return token;
 }
 
 export async function listAttachments(receiptId: string): Promise<Attachment[]> {
-  const response = await fetch(`/api/v1/inbound-receipts/${encodeURIComponent(receiptId)}/attachments`,
+  const response = await fetch(apiUrl(`/inbound-receipts/${encodeURIComponent(receiptId)}/attachments`),
     { credentials: "include" });
   if (!response.ok) throw await failure(response);
   return (await response.json() as { items: Attachment[] }).items;
@@ -57,9 +57,9 @@ export async function uploadAttachment(receiptId: string, version: number, file:
   key: string): Promise<Attachment> {
   const body = new FormData();
   body.append("file", file);
-  const response = await fetch(`/api/v1/inbound-receipts/${encodeURIComponent(receiptId)}/attachments`, {
+  const response = await fetch(apiUrl(`/inbound-receipts/${encodeURIComponent(receiptId)}/attachments`), {
     method: "POST", credentials: "include", body,
-    headers: { ...csrfHeaders(), "Idempotency-Key": key, "If-Match-Version": String(version) },
+    headers: mutationHeaders({ token: csrfToken(), key, version }),
   });
   if (!response.ok) throw await failure(response);
   return await response.json() as Attachment;
@@ -70,9 +70,9 @@ export async function correctAttachment(receiptId: string, version: number, prev
   const body = new FormData();
   body.append("file", file);
   body.append("reason", reason);
-  const response = await fetch(`/api/v1/inbound-receipts/${encodeURIComponent(receiptId)}/attachments/${encodeURIComponent(previousObjectId)}/corrections`, {
+  const response = await fetch(apiUrl(`/inbound-receipts/${encodeURIComponent(receiptId)}/attachments/${encodeURIComponent(previousObjectId)}/corrections`), {
     method: "POST", credentials: "include", body,
-    headers: { ...csrfHeaders(), "Idempotency-Key": key, "If-Match-Version": String(version) },
+    headers: mutationHeaders({ token: csrfToken(), key, version }),
   });
   if (!response.ok) throw await failure(response);
   return await response.json() as Attachment;
@@ -81,8 +81,8 @@ export async function correctAttachment(receiptId: string, version: number, prev
 export async function downloadAttachment(attachment: Attachment, isCurrent: () => boolean = () => true): Promise<void> {
   if (attachment.scanStatus !== "CLEAN") throw new Error(messages.ATTACHMENT_NOT_CLEAN);
   const id = encodeURIComponent(attachment.objectId);
-  const issued = await fetch(`/api/v1/attachments/${id}/download-grant`, {
-    method: "POST", credentials: "include", headers: csrfHeaders(),
+  const issued = await fetch(apiUrl(`/attachments/${id}/download-grant`), {
+    method: "POST", credentials: "include", headers: { "X-CSRF-Token": csrfToken() },
   });
   if (!isCurrent()) return;
   if (!issued.ok) throw await failure(issued);

@@ -1,5 +1,5 @@
+import { apiUrl, fileForm, mutationHeaders, sessionCsrfToken } from "@/api/http";
 import { AuthApiError } from "@/auth/api";
-import { useSessionStore } from "@/auth/sessionStore";
 
 export interface ImportTicket {
   id: string; status: string; previewVersion: number; mapping?: Record<string, string> | null
@@ -61,6 +61,8 @@ const messages: Record<string, string> = {
   ASSET_IMPORT_DECISION_INVALID: "请核对正确行、错误行数量并确认抽样核验。",
 };
 
+// 本域错误类是 auth 的 AuthApiError，其第四参 requestId 必须由响应体直接取；底座的 Failure 三元组不承载
+// requestId，故失败体留在域内读取，错误构造与文案映射逐字保持原样。
 async function failure(response: Response): Promise<AuthApiError> {
   const body = await response.json().catch(() => ({})) as { code?: string; requestId?: string };
   const code = body.code ?? "ASSET_IMPORT_REQUEST_FAILED";
@@ -68,116 +70,98 @@ async function failure(response: Response): Promise<AuthApiError> {
     messages[code] ?? "资产导入操作未完成，请稍后重试。", body.requestId);
 }
 
-function csrfHeaders(): Record<string, string> {
-  const token = useSessionStore().csrfToken;
+function csrfToken(): string {
+  const token = sessionCsrfToken();
   if (!token) throw new AuthApiError(401, "AUTH_SESSION_INVALID", messages.AUTH_SESSION_INVALID);
-  return { "X-CSRF-Token": token };
+  return token;
 }
 
-async function jsonResult<T>(response: Response): Promise<T> {
+async function getJson<T>(path: string): Promise<T> {
+  const response = await fetch(apiUrl(path), { credentials: "include" });
   if (!response.ok) throw await failure(response);
   return await response.json() as T;
 }
 
-export async function downloadImportTemplate(): Promise<void> {
-  const response = await fetch("/api/v1/asset-import-batches/template", { credentials: "include" });
+// 本域只有上传端点声明了 @RequestHeader("Idempotency-Key")，预检、核验、撤销与期初窗口等写操作历史上不发幂等键，
+// 因此不走 mutationHeaders 的默认新建，请求头集合按既有口径逐字保留。
+async function postJson<T>(path: string, body?: unknown, version?: number): Promise<T> {
+  const headers: Record<string, string> = { "X-CSRF-Token": csrfToken() };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (version !== undefined) headers["If-Match-Version"] = String(version);
+  const response = await fetch(apiUrl(path), {
+    method: "POST", credentials: "include", headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!response.ok) throw await failure(response);
+  return await response.json() as T;
+}
+
+const batchPath = (id: string): string => `/asset-import-batches/${encodeURIComponent(id)}`;
+
+async function downloadBlob(path: string, filename: string): Promise<void> {
+  const response = await fetch(apiUrl(path), { credentials: "include" });
   if (!response.ok) throw await failure(response);
   const url = URL.createObjectURL(await response.blob());
   const link = document.createElement("a");
   link.href = url;
-  link.download = "fams-assets.xlsx";
+  link.download = filename;
   document.body.append(link);
   try { link.click(); }
   finally { link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000); }
 }
 
+export async function downloadImportTemplate(): Promise<void> {
+  await downloadBlob("/asset-import-batches/template", "fams-assets.xlsx");
+}
+
 export async function uploadImport(file: File, key: string): Promise<ImportTicket> {
-  const body = new FormData();
-  body.append("file", file);
-  return jsonResult<ImportTicket>(await fetch("/api/v1/asset-import-batches", {
-    method: "POST", credentials: "include", body,
-    headers: { ...csrfHeaders(), "Idempotency-Key": key },
-  }));
+  const headers = mutationHeaders({ token: csrfToken(), key });
+  const response = await fetch(apiUrl("/asset-import-batches"), {
+    method: "POST", credentials: "include", body: fileForm(file), headers,
+  });
+  if (!response.ok) throw await failure(response);
+  return await response.json() as ImportTicket;
 }
 
 export async function getImport(id: string): Promise<ImportTicket> {
-  return jsonResult<ImportTicket>(await fetch(`/api/v1/asset-import-batches/${encodeURIComponent(id)}`,
-    { credentials: "include" }));
+  return getJson<ImportTicket>(batchPath(id));
 }
 
 export async function importColumns(id: string): Promise<string[]> {
-  const result = await jsonResult<{ columns: string[] }>(await fetch(
-    `/api/v1/asset-import-batches/${encodeURIComponent(id)}/columns`, { credentials: "include" }));
+  const result = await getJson<{ columns: string[] }>(`${batchPath(id)}/columns`);
   return result.columns;
 }
 
 export async function previewImport(id: string, version: number,
   mapping: Record<string, string>): Promise<ImportPreview> {
-  return jsonResult<ImportPreview>(await fetch(
-    `/api/v1/asset-import-batches/${encodeURIComponent(id)}/preview`, {
-      method: "POST", credentials: "include", body: JSON.stringify({ mapping }),
-      headers: { ...csrfHeaders(), "Content-Type": "application/json", "If-Match-Version": String(version) },
-    }));
+  return postJson<ImportPreview>(`${batchPath(id)}/preview`, { mapping }, version);
 }
 
 export async function importRows(id: string, status: "READY" | "ERROR",
   page: number): Promise<ImportRowPage> {
   const query = new URLSearchParams({ status, page: String(page), pageSize: "50" });
-  return jsonResult<ImportRowPage>(await fetch(
-    `/api/v1/asset-import-batches/${encodeURIComponent(id)}/rows?${query}`, { credentials: "include" }));
+  return getJson<ImportRowPage>(`${batchPath(id)}/rows?${query}`);
 }
 
 export async function downloadPreflightReport(id: string): Promise<void> {
-  const response = await fetch(
-    `/api/v1/asset-import-batches/${encodeURIComponent(id)}/preflight-report`,
-    { credentials: "include" });
-  if (!response.ok) throw await failure(response);
-  const url = URL.createObjectURL(await response.blob());
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `fams-asset-preflight-${id}.csv`;
-  document.body.append(link);
-  try { link.click(); }
-  finally { link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000); }
+  await downloadBlob(`${batchPath(id)}/preflight-report`, `fams-asset-preflight-${id}.csv`);
 }
 
 export async function downloadImportResult(id: string): Promise<void> {
-  const response = await fetch(`/api/v1/asset-import-batches/${encodeURIComponent(id)}/result`,
-    { credentials: "include" });
-  if (!response.ok) throw await failure(response);
-  const url = URL.createObjectURL(await response.blob());
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `fams-asset-result-${id}.csv`;
-  document.body.append(link);
-  try { link.click(); }
-  finally { link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000); }
-}
-
-const batchPath = (id: string): string => `/api/v1/asset-import-batches/${encodeURIComponent(id)}`;
-
-async function postJson<T>(path: string, body: unknown, extraHeaders = {}): Promise<T> {
-  return jsonResult<T>(await fetch(path, { method: "POST", credentials: "include",
-    headers: { ...csrfHeaders(), "Content-Type": "application/json", ...extraHeaders },
-    body: JSON.stringify(body) }));
+  await downloadBlob(`${batchPath(id)}/result`, `fams-asset-result-${id}.csv`);
 }
 
 export async function requestImportReview(id: string, version: number): Promise<ImportReview> {
-  return jsonResult<ImportReview>(await fetch(`${batchPath(id)}/review`, {
-    method: "POST", credentials: "include",
-    headers: { ...csrfHeaders(), "If-Match-Version": String(version) },
-  }));
+  return postJson<ImportReview>(`${batchPath(id)}/review`, undefined, version);
 }
 export async function ownImportReview(id: string): Promise<ImportReview> {
-  return jsonResult<ImportReview>(await fetch(`${batchPath(id)}/review`, { credentials: "include" }));
+  return getJson<ImportReview>(`${batchPath(id)}/review`);
 }
 export async function pendingImportReviews(page = 1): Promise<PendingImportReview[]> {
-  return jsonResult<PendingImportReview[]>(await fetch(
-    `/api/v1/asset-import-batches/reviews/pending?page=${page}`, { credentials: "include" }));
+  return getJson<PendingImportReview[]>(`/asset-import-batches/reviews/pending?page=${page}`);
 }
 export async function reviewImportRows(id: string, status: "READY" | "ERROR", page: number): Promise<ImportRowPage> {
-  return jsonResult<ImportRowPage>(await fetch(
-    `${batchPath(id)}/review-rows?status=${status}&page=${page}`, { credentials: "include" }));
+  return getJson<ImportRowPage>(`${batchPath(id)}/review-rows?status=${status}&page=${page}`);
 }
 export async function decideImportReview(id: string, approved: boolean, reason: string,
   readyRows: number, errorRows: number, sampleVerified: boolean): Promise<ImportReview> {
@@ -189,36 +173,28 @@ export async function requestImportRollback(id: string, reason: string): Promise
   return postJson<ImportRollback>(`${batchPath(id)}/rollback`, { reason });
 }
 export async function ownImportRollback(id: string): Promise<ImportRollback> {
-  return jsonResult<ImportRollback>(await fetch(`${batchPath(id)}/rollback`, { credentials: "include" }));
+  return getJson<ImportRollback>(`${batchPath(id)}/rollback`);
 }
 export async function pendingImportRollbacks(page = 1): Promise<PendingImportRollback[]> {
-  return jsonResult<PendingImportRollback[]>(await fetch(
-    `/api/v1/asset-import-batches/rollbacks/pending?page=${page}`, { credentials: "include" }));
+  return getJson<PendingImportRollback[]>(`/asset-import-batches/rollbacks/pending?page=${page}`);
 }
 export async function decideImportRollback(id: string, approved: boolean, reason: string): Promise<ImportRollback> {
   return postJson<ImportRollback>(`${batchPath(id)}/rollback-decision`, { approved, reason });
 }
 export async function queueImportRollback(id: string): Promise<ImportRollback> {
-  return jsonResult<ImportRollback>(await fetch(`${batchPath(id)}/rollback-execute`, {
-    method: "POST", credentials: "include", headers: csrfHeaders(),
-  }));
+  return postJson<ImportRollback>(`${batchPath(id)}/rollback-execute`);
 }
 export async function eligibleImportOperators(): Promise<EligibleOperator[]> {
-  return jsonResult<EligibleOperator[]>(await fetch("/api/v1/asset-initialization-windows/operators",
-    { credentials: "include" }));
+  return getJson<EligibleOperator[]>("/asset-initialization-windows/operators");
 }
 export async function currentImportWindow(): Promise<InitializationWindow> {
-  return jsonResult<InitializationWindow>(await fetch("/api/v1/asset-initialization-windows/current",
-    { credentials: "include" }));
+  return getJson<InitializationWindow>("/asset-initialization-windows/current");
 }
 export async function openImportWindow(operatorId: string, reason: string, expiresAt: string): Promise<InitializationWindow> {
-  return postJson<InitializationWindow>("/api/v1/asset-initialization-windows", {
+  return postJson<InitializationWindow>("/asset-initialization-windows", {
     assignedOperatorId: operatorId, reason, expiresAt,
   });
 }
 export async function closeImportWindow(id: string): Promise<InitializationWindow> {
-  return jsonResult<InitializationWindow>(await fetch(
-    `/api/v1/asset-initialization-windows/${encodeURIComponent(id)}/close`, {
-      method: "POST", credentials: "include", headers: csrfHeaders(),
-    }));
+  return postJson<InitializationWindow>(`/asset-initialization-windows/${encodeURIComponent(id)}/close`);
 }

@@ -1,4 +1,4 @@
-import { useSessionStore } from "@/auth/sessionStore";
+import { fileForm, requestBlob, requestJson, type Profile } from "@/api/http";
 import type { FactorySummary } from "./factory-types";
 export interface RepairAsset { id: string; assetCode: string; name: string; version: number; lifecycle: string;
   custodyType: string; locationId: string | null; locationName: string | null }
@@ -23,21 +23,25 @@ export interface RepairMutation { path: string; key: string; version: number; bo
 export class RepairApiError extends Error {
   constructor(readonly status: number, readonly code: string, readonly fields: Record<string, string>) { super(code); }
 }
+const profile: Profile<RepairApiError> = {
+  codeFallback: "REPAIR_REQUEST_FAILED",
+  failure: ({ status, code, fields }) => new RepairApiError(status, code, fields),
+  csrfMissing: () => new RepairApiError(401, "AUTH_SESSION_INVALID", {}),
+};
 export async function repairRequest<T>(path: string, mutation?: RepairMutation): Promise<T> {
-  const headers: Record<string, string> = {}; let body: BodyInit | undefined;
-  if (mutation) {
-    const token = useSessionStore().csrfToken; if (!token) throw new RepairApiError(401, "AUTH_SESSION_INVALID", {});
-    headers["X-CSRF-Token"] = token; headers["Idempotency-Key"] = mutation.key; headers["If-Match-Version"] = String(mutation.version);
-    if (mutation.file) { const form = new FormData(); form.append("file", mutation.file, mutation.file.name); body = form; }
-    else if (mutation.body !== undefined) { headers["Content-Type"] = "application/json"; body = JSON.stringify(mutation.body); }
-  }
-  const response = await fetch("/api/v1/repairs" + path, { credentials: "include", method: mutation ? "POST" : "GET", headers, body });
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({})) as { code?: unknown; fieldErrors?: Record<string, unknown> };
-    throw new RepairApiError(response.status, typeof data.code === "string" ? data.code : "REPAIR_REQUEST_FAILED",
-      Object.fromEntries(Object.entries(data.fieldErrors ?? {}).filter((pair): pair is [string, string] => typeof pair[1] === "string")));
-  }
-  return await response.json() as T;
+  if (!mutation) return requestJson<T, RepairApiError>(path, profile, { prefix: "/repairs" });
+  return requestJson<T, RepairApiError>(path, profile, {
+    method: "POST",
+    prefix: "/repairs",
+    key: mutation.key,
+    version: mutation.version,
+    json: mutation.file ? undefined : mutation.body,
+    form: mutation.file ? fileForm(mutation.file) : undefined,
+  });
+}
+/** 报修照片原件内容：授权地址已由调用方按前缀原样校验，这里只负责同源会话、无缓存与错误形状。 */
+export function repairPhotoContent(url: string, signal?: AbortSignal): Promise<Blob> {
+  return requestBlob(url, (status) => new RepairApiError(status, "REPAIR_PHOTO_READ_FAILED", {}), signal);
 }
 export const repairStates: Record<string, string> = { PENDING_ADMIN_DECISION: "待管理员确认", WAITING_WAREHOUSE_CLAIM: "待库管领取",
   WAREHOUSE_PROCESSING: "库管处理中", COMPLETED: "维修已完成", REJECTED: "已驳回", CANCELLED: "已取消" };

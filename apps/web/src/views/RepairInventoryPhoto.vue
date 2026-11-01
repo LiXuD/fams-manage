@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { reviewRequest, ReviewApiError } from "@/inventory-review/api";
-import { readablePhoto, type InventoryPhoto } from "@/inventory-review/photos";
+import { readablePhoto, repairEvidencePhotoContent, type InventoryPhoto } from "@/inventory-review/photos";
 import FamsMediaPreview from "@/components/FamsMediaPreview.vue";
 const props = defineProps<{ repairId: string; observationId: string; objectId: string; blocked?: boolean }>();
 const emit = defineEmits<{ invalidated: [] }>();
@@ -35,10 +35,7 @@ async function read() {
     if (url.origin !== window.location.origin || url.pathname !== "/api/v1" + path + "/content" || url.hash || url.username || url.password
       || [...url.searchParams.keys()].length !== 1 || !value || !/^[A-Za-z0-9_.-]{1,256}$/.test(value)) throw new Error("Invalid photo grant");
     abort = new AbortController();
-    const response = await fetch(url.toString(), { credentials: "include", cache: "no-store", signal: abort.signal });
-    if (!current()) return;
-    if (!response.ok) throw new ReviewApiError(response.status, "INVENTORY_REPAIR_PHOTO_READ_FAILED", {});
-    const blob = await response.blob();
+    const blob = await repairEvidencePhotoContent(url.toString(), abort.signal);
     if (!current()) return;
     if (blob.type !== photo.contentType || blob.size !== photo.sizeBytes) throw new Error("Photo metadata mismatch");
     preview.value = URL.createObjectURL(blob);

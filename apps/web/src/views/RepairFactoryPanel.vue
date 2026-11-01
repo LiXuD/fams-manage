@@ -4,7 +4,7 @@ import { useSessionStore } from "@/auth/sessionStore";
 import RepairFactoryPartsPanel from "./RepairFactoryPartsPanel.vue";
 import FamsMediaPreview from "@/components/FamsMediaPreview.vue";
 import { RepairApiError, repairRequest, type Repair } from "@/repair/api";
-import { factoryEventNames, factoryProblem, factoryRequest, factoryRoundStates, factoryScopeStates, type FactoryMutation } from "@/repair/factory-api";
+import { factoryEventNames, factoryEvidenceContent, factoryProblem, factoryRequest, factoryRoundStates, factoryScopeStates, type FactoryMutation } from "@/repair/factory-api";
 import type { FactoryDetail, FactoryFile, FactoryHistory, FactoryPage, FactoryReply, FactoryRound, FactoryRoundDetail } from "@/repair/factory-types";
 const props = defineProps<{ repair: Repair; blocked: boolean }>();
 const emit = defineEmits<{ "busy-change": [boolean]; changed: []; invalidated: [] }>();
@@ -178,10 +178,7 @@ async function readFile(item: FactoryFile) {
     const grant = await factoryRequest<{ token: string; expiresAtEpochSecond: number }>(repair, `/rounds/${round}/evidence/${item.objectId}/grant`);
     if (!current(epoch, owner)) return;
     download = new AbortController();
-    const url = `/api/v1/repairs/${encodeURIComponent(repair)}/factory/rounds/${encodeURIComponent(round)}/evidence/${encodeURIComponent(item.objectId)}/content?token=${encodeURIComponent(grant.token)}`;
-    const response = await fetch(url, { credentials: "include", cache: "no-store", signal: download.signal });
-    if (!response.ok) throw new RepairApiError(response.status, "REPAIR_FACTORY_EVIDENCE_READ_FAILED", {});
-    const blob = await response.blob(); if (!current(epoch, owner)) return;
+    const blob = await factoryEvidenceContent(repair, round, item.objectId, grant.token, download.signal); if (!current(epoch, owner)) return;
     if (blob.size !== item.sizeBytes || blob.size > 20 * 1024 * 1024 || blob.type !== item.contentType || !["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(blob.type)) throw new Error("Invalid evidence bytes");
     preview.value = URL.createObjectURL(blob); previewName.value = item.filename; previewMime.value = blob.type;
   } catch (cause) { if (current(epoch, owner)) failure(cause); }

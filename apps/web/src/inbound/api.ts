@@ -1,4 +1,4 @@
-import { useSessionStore } from "@/auth/sessionStore";
+import { requestJson, type Failure, type HttpMethod, type Page, type Profile } from "@/api/http";
 
 export interface Reference { id: string; version: number; code?: string; name?: string }
 export interface InboundItem {
@@ -27,27 +27,16 @@ export const inboundStatusLabels: Record<string, string> = { DRAFT: "草稿", PE
 export const inboundDecisionLabels: Record<string, string> = { APPROVED: "已批准", REJECTED: "已驳回" };
 export const inboundItemLabels: Record<string, string> = { PENDING: "待验收", ACCEPTED: "已验收入库" };
 
-interface Page<T> { page: number; pageSize: number; total: number; items: T[] }
+const profile: Profile<Error> = {
+  codeFallback: "INBOUND_REQUEST_FAILED",
+  // 服务端未给 message 时沿用本域既有口径展示错误码，本批不改用户可见文案。
+  failure: ({ serverCode, message }: Failure) =>
+    new Error(message ?? serverCode ?? "操作失败，请刷新后重试"),
+  csrfMissing: () => new Error("会话已失效，请重新登录"),
+};
 
-async function request<T>(path: string, method = "GET", body?: unknown, version?: number): Promise<T> {
-  const session = useSessionStore();
-  const headers: Record<string, string> = {};
-  if (method !== "GET") {
-    if (!session.csrfToken) throw new Error("会话已失效，请重新登录");
-    headers["X-CSRF-Token"] = session.csrfToken;
-    headers["Idempotency-Key"] = crypto.randomUUID();
-    if (version !== undefined) headers["If-Match-Version"] = String(version);
-  }
-  if (body !== undefined) headers["Content-Type"] = "application/json";
-  const response = await fetch("/api/v1" + path, {
-    method, credentials: "include", headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({})) as { message?: string; code?: string };
-    throw new Error(error.message ?? error.code ?? "操作失败，请刷新后重试");
-  }
-  return await response.json() as T;
+function request<T>(path: string, method: HttpMethod = "GET", body?: unknown, version?: number): Promise<T> {
+  return requestJson<T, Error>(path, profile, { method, json: body, version });
 }
 
 export function listReceipts(): Promise<Page<InboundReceipt>> {

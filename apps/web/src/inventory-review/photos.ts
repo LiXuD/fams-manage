@@ -1,4 +1,5 @@
 import { useSessionStore } from "@/auth/sessionStore";
+import { newIdempotencyKey, requestBlob } from "@/api/http";
 import { reviewRequest, ReviewApiError } from "./api";
 
 export interface InventoryPhoto {
@@ -50,7 +51,7 @@ export async function readInventoryPhoto(task: string, event: string, photo: Inv
   if (!readablePhoto(photo)) throw new Error("照片未通过扫描或格式不可读取，原始引用仍保留。");
   const path = `${scope(task, event)}/${photo.objectId}`;
   const grantPath = path + "/download-grant";
-  const grant = await reviewRequest<{ url: string }>(grantPath, { path: grantPath, key: crypto.randomUUID(), version: 0 })
+  const grant = await reviewRequest<{ url: string }>(grantPath, { path: grantPath, key: newIdempotencyKey(), version: 0 })
     .catch(async cause => { await revalidateMissing(task, cause, check); throw new InventoryPhotoUnavailable(); });
   check();
   const url = new URL(grant.url, window.location.origin);
@@ -71,4 +72,9 @@ export async function readInventoryPhoto(task: string, event: string, photo: Inv
   check();
   if (blob.size !== photo.sizeBytes) throw new Error("照片内容容量不一致，请重新核对原始证据。");
   return blob;
+}
+
+/** 维修关联的盘点原图内容：授权地址由调用方校验后原样传入，这里只负责同源会话、无缓存与错误形状。 */
+export function repairEvidencePhotoContent(url: string, signal?: AbortSignal): Promise<Blob> {
+  return requestBlob(url, (status) => new ReviewApiError(status, "INVENTORY_REPAIR_PHOTO_READ_FAILED", {}), signal);
 }

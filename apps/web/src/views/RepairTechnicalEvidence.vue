@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { RepairApiError, repairProblem } from "@/repair/api";
-import { collaborationRequest } from "@/repair/collaboration";
+import { collaborationEvidenceContent, collaborationRequest } from "@/repair/collaboration";
 import FamsMediaPreview from "@/components/FamsMediaPreview.vue";
 const props=defineProps<{invitationId:string;objectId:string;kind:"fault-photos"|"attachments"|"opinion-attachments"|"staff-attachments";filename?:string;blocked?:boolean}>();
 const emit=defineEmits<{invalidated:[]}>(),session=useSessionStore();
@@ -14,8 +14,8 @@ async function read(){if(busy.value || props.blocked)return;clear();const epoch=
   try{const prefix=`/api/v1/repair-collaborations/${props.invitationId}/${props.kind}/${props.objectId}/content?grant=`;
     const grant=await collaborationRequest<{url:string}>(`/repair-collaborations/${props.invitationId}/${props.kind}/${props.objectId}/download-grant`,{path:"",key:crypto.randomUUID(),version:0});if(!current())return;
     if(!grant.url.startsWith(prefix)||!/^[-A-Za-z0-9_.]{1,256}$/.test(grant.url.slice(prefix.length)))throw new Error("Invalid private evidence grant");
-    abort=new AbortController();const response=await fetch(grant.url,{credentials:"include",cache:"no-store",signal:abort.signal});if(!response.ok)throw new RepairApiError(response.status,"REPAIR_EVIDENCE_READ_FAILED",{});
-    const blob=await response.blob();if(!current())return;if(!["image/png","image/jpeg","image/webp","application/pdf"].includes(blob.type)||blob.size<=0||blob.size>(blob.type==="application/pdf"?20:10)*1024*1024)throw new Error("Invalid evidence bytes");mime.value=blob.type;url.value=URL.createObjectURL(blob);
+    abort=new AbortController();const blob=await collaborationEvidenceContent(props.invitationId,props.kind,props.objectId,grant.url.slice(prefix.length),abort.signal);
+    if(!current())return;if(!["image/png","image/jpeg","image/webp","application/pdf"].includes(blob.type)||blob.size<=0||blob.size>(blob.type==="application/pdf"?20:10)*1024*1024)throw new Error("Invalid evidence bytes");mime.value=blob.type;url.value=URL.createObjectURL(blob);
   }catch(cause){if(current()){if(cause instanceof RepairApiError && [401,403,404].includes(cause.status)){clear();emit("invalidated");}error.value=repairProblem(cause);}}
   finally{if(current())busy.value=false;}
 }

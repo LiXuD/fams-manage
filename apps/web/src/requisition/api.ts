@@ -1,4 +1,4 @@
-import { useSessionStore } from "@/auth/sessionStore";
+import { requestJson, type HttpMethod, type Profile } from "@/api/http";
 import type { RequisitionCatalog, RequisitionChoice } from "../../../../packages/api-types/src/requisition";
 
 export const requisitionLabels: Record<string, string> = { DRAFT: "草稿", PENDING_ADMIN_DECISION: "待管理员确认", REJECTED: "已驳回",
@@ -35,24 +35,16 @@ export function requisitionMessage(error: unknown): string {
   }
   return "操作结果尚未确认，请使用重试按钮或刷新查询结果。";
 }
+const profile: Profile<RequisitionApiError> = {
+  codeFallback: "REQUISITION_REQUEST_FAILED",
+  failure: ({ status, code }) => new RequisitionApiError(status, code),
+  csrfMissing: () => new RequisitionApiError(401, "AUTH_SESSION_INVALID"),
+};
 export async function requisitionRequest<T>(path: string, method = "GET",
   mutation?: { key: string; version: number; body?: unknown }): Promise<T> {
-  const session = useSessionStore();
-  const headers: Record<string, string> = {};
-  if (mutation) {
-    if (!session.csrfToken) throw new RequisitionApiError(401, "AUTH_SESSION_INVALID");
-    headers["X-CSRF-Token"] = session.csrfToken;
-    headers["Idempotency-Key"] = mutation.key;
-    headers["If-Match-Version"] = String(mutation.version);
-    if (mutation.body !== undefined) headers["Content-Type"] = "application/json";
-  }
-  const reply = await fetch("/api/v1/requisitions" + path, { method, credentials: "include", headers,
-    body: mutation?.body === undefined ? undefined : JSON.stringify(mutation.body) });
-  if (!reply.ok) {
-    const data = await reply.json().catch(() => ({})) as { code?: unknown };
-    const code = typeof data.code === "string" && /^[A-Z][A-Z0-9_]{0,63}$/.test(data.code)
-      ? data.code : "REQUISITION_REQUEST_FAILED";
-    throw new RequisitionApiError(reply.status, code);
-  }
-  return await reply.json() as T;
+  // 幂等键与乐观版本始终取自调用方的待重放对象，丢失应答后按同一请求原样重试。
+  return requestJson<T, RequisitionApiError>(path, profile, mutation
+    ? { method: method as HttpMethod, prefix: "/requisitions", key: mutation.key,
+        version: mutation.version, json: mutation.body }
+    : { method: method as HttpMethod, prefix: "/requisitions" });
 }

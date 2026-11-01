@@ -1,4 +1,4 @@
-import { useSessionStore } from "@/auth/sessionStore";
+import { apiUrl, mutationHeaders, parseFailure, readJson, sessionCsrfToken } from "@/api/http";
 import type { LoanMutation } from "@/loan/api";
 export interface Snapshot {
   assetCode: string; name: string; version: number; locationId: string | null; locationName?: string;
@@ -30,21 +30,20 @@ export class ReviewApiError extends Error {
   constructor(readonly status: number, readonly code: string, readonly fields: Record<string, string>) { super(code); }
 }
 export async function reviewRequest<T>(path: string, mutation?: LoanMutation): Promise<T> {
-  const session = useSessionStore();
+  // 本域的写操作即使没有请求体也声明 JSON，故直接组合底座原语，不走 requestJson 的按需 Content-Type。
   const headers: Record<string, string> = {};
   if (mutation) {
-    if (!session.csrfToken) throw new ReviewApiError(401, "AUTH_SESSION_INVALID", {});
-    headers["X-CSRF-Token"] = session.csrfToken; headers["Idempotency-Key"] = mutation.key;
-    headers["If-Match-Version"] = String(mutation.version); headers["Content-Type"] = "application/json";
+    const token = sessionCsrfToken();
+    if (!token) throw new ReviewApiError(401, "AUTH_SESSION_INVALID", {});
+    Object.assign(headers, mutationHeaders({ token, key: mutation.key, version: mutation.version, json: true }));
   }
-  const response = await fetch("/api/v1" + path, { credentials: "include", method: mutation ? "POST" : "GET",
+  const response = await fetch(apiUrl(path), { credentials: "include", method: mutation ? "POST" : "GET",
     headers, body: mutation ? JSON.stringify(mutation.body) : undefined });
   if (!response.ok) {
-    const body = await response.json().catch(() => ({})) as { code?: unknown; fieldErrors?: Record<string, unknown> };
-    const fields = Object.fromEntries(Object.entries(body.fieldErrors ?? {}).filter((row): row is [string, string] => typeof row[1] === "string"));
-    throw new ReviewApiError(response.status, typeof body.code === "string" ? body.code : "INVENTORY_REVIEW_REQUEST_FAILED", fields);
+    const failure = await parseFailure(response, "INVENTORY_REVIEW_REQUEST_FAILED");
+    throw new ReviewApiError(failure.status, failure.code, failure.fields);
   }
-  return await response.json() as T;
+  return await readJson<T>(response);
 }
 export const reviewProblems: Record<string, string> = {
   ALREADY_REVIEWED: "本轮已有复核结论", INVENTORY_REVIEW_VERSION_CONFLICT: "该项已有处理结果或复盘版本已变更",

@@ -1,4 +1,7 @@
-import { useSessionStore } from "@/auth/sessionStore";
+import { requestJson, type HttpMethod, type Page, type Profile } from "@/api/http";
+
+/** 分页形状统一由共享底座定义；此处仅重导出，保持既有 `import type { Page } from "@/asset/api"` 口径。 */
+export type { Page };
 
 export interface AssetReference { id: string; version: number; code?: string; name?: string; warehouse?: { id: string; version: number } }
 export interface AssetCard {
@@ -19,7 +22,6 @@ export interface AssetCard {
   physicalDestination?: { destination: string; status: string; temporaryEmployeeId: string; deliveredAt: string; receiptDeadlineAt: string } | null;
 }
 
-export interface Page<T> { page: number; pageSize: number; total: number; items: T[] }
 export interface AssetTag { enterpriseName: string; assetName: string; assetCode: string; qrToken: string; qrCode: string }
 
 export const lifecycleLabels: Record<string, string> = { WAITING_INBOUND: "待入库", IN_STOCK: "在库", IN_USE: "在用",
@@ -34,28 +36,16 @@ export class AssetApiError extends Error {
   constructor(readonly status: number, readonly code: string, message: string) { super(message); }
 }
 
-async function request<T>(path: string, method = "GET", body?: unknown, version?: number): Promise<T> {
-  const session = useSessionStore();
-  const headers: Record<string, string> = {};
-  if (body !== undefined) headers["Content-Type"] = "application/json";
-  if (method !== "GET") {
-    if (!session.csrfToken) throw new AssetApiError(403, "AUTH_CSRF_REQUIRED", "请重新登录后操作。");
-    headers["X-CSRF-Token"] = session.csrfToken;
-    headers["Idempotency-Key"] = crypto.randomUUID();
-    if (version !== undefined) headers["If-Match-Version"] = String(version);
-  }
-  const response = await fetch("/api/v1" + path, {
-    method,
-    credentials: "include",
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({})) as { code?: string; message?: string };
-    throw new AssetApiError(response.status, error.code ?? "ASSET_REQUEST_FAILED",
-      error.message ?? "请求未完成，请稍后重试。");
-  }
-  return await response.json() as T;
+const profile: Profile<AssetApiError> = {
+  codeFallback: "ASSET_REQUEST_FAILED",
+  // 服务端未给 message 时沿用本域既有兜底文案，本批不动用户可见文案。
+  failure: ({ status, code, message }) => new AssetApiError(status, code, message ?? "请求未完成，请稍后重试。"),
+  csrfMissing: () => new AssetApiError(403, "AUTH_CSRF_REQUIRED", "请重新登录后操作。"),
+};
+
+/** 本域写操作历史上每次新建幂等键（无跨请求复用语义），交到底座按缺省新建。 */
+function request<T>(path: string, method: HttpMethod = "GET", body?: unknown, version?: number): Promise<T> {
+  return requestJson<T, AssetApiError>(path, profile, { method, json: body, version });
 }
 
 export function listAssets(page = 1, code = "", name = ""): Promise<Page<AssetCard>> {

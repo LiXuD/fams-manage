@@ -1,5 +1,5 @@
-import { useSessionStore } from "@/auth/sessionStore";
 import { LoanApiError } from "@/loan/api";
+import { requestJson, type Profile } from "@/api/http";
 import type { Attachment } from "@/attachment/api";
 
 export interface ProxyConfirmation {
@@ -16,17 +16,15 @@ export const proxyEvidenceLabels: Record<string, string> = { SIGNED_RECEIPT: "�
   LOGISTICS_RECEIPT: "物流签收", AUTHORIZED_PROXY: "授权代收" };
 export const proxyCollectionLabels: Record<string, string> = { SCAN_CONFIRMED: "扫描核对",
   CODE_CONFIRMED: "核对编码", MANUAL_RECORD: "手工记录" };
+const profile: Profile<LoanApiError> = {
+  // 本域沿用 LoanApiError 与附件兜底码，不在本批修正跨域错误类复用。
+  codeFallback: "ATTACHMENT_REQUEST_FAILED",
+  failure: ({ status, code }) => new LoanApiError(status, code),
+  csrfMissing: () => new LoanApiError(401, "AUTH_SESSION_INVALID"),
+};
 export async function uploadProxyEvidence(id: string, version: number, file: File, key: string): Promise<Attachment> {
-  const token = useSessionStore().csrfToken;
-  if (!token) throw new LoanApiError(401, "AUTH_SESSION_INVALID");
-  const body = new FormData(); body.append("file", file);
-  const reply = await fetch(`/api/v1/proxy-confirmations/${id}/attachments`, {
-    credentials: "include", method: "POST", body,
-    headers: { "X-CSRF-Token": token, "Idempotency-Key": key, "If-Match-Version": String(version) },
-  });
-  if (!reply.ok) {
-    const error = await reply.json().catch(() => ({})) as { code?: string };
-    throw new LoanApiError(reply.status, error.code ?? "ATTACHMENT_REQUEST_FAILED");
-  }
-  return await reply.json() as Attachment;
+  const body = new FormData();
+  body.append("file", file);
+  return requestJson<Attachment, LoanApiError>(`/proxy-confirmations/${id}/attachments`, profile,
+    { method: "POST", form: body, key, version });
 }

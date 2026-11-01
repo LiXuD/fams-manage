@@ -1,28 +1,30 @@
-import { useSessionStore } from "@/auth/sessionStore";
+import { apiUrl, fileForm, requestBlob, requestJson, type Profile } from "@/api/http";
 import { RepairApiError, repairProblem, repairRequest, type RepairMutation } from "./api";
 export interface FactoryMutation extends RepairMutation {
   repairId: string;
   form?: Readonly<Record<string, string>>;
   label: string;
 }
+const uploadProfile: Profile<RepairApiError> = {
+  codeFallback: "REPAIR_FACTORY_UPLOAD_FAILED",
+  failure: ({ status, code, fields }) => new RepairApiError(status, code, fields),
+  csrfMissing: () => new RepairApiError(401, "AUTH_SESSION_INVALID", {}),
+};
 export async function factoryRequest<T>(repair: string, path = "", mutation?: FactoryMutation): Promise<T> {
   const route = `/${repair}/factory${path}`;
   if (!mutation?.file) return repairRequest<T>(route, mutation);
-  const token = useSessionStore().csrfToken;
-  if (!token) throw new RepairApiError(401, "AUTH_SESSION_INVALID", {});
-  const body = new FormData();
-  body.append("file", mutation.file, mutation.file.name);
-  for (const [key, value] of Object.entries(mutation.form ?? {})) body.append(key, value);
-  const response = await fetch("/api/v1/repairs" + route, {
-    credentials: "include", method: "POST", body,
-    headers: { "X-CSRF-Token": token, "Idempotency-Key": mutation.key, "If-Match-Version": String(mutation.version) },
+  return requestJson<T, RepairApiError>(route, uploadProfile, {
+    method: "POST",
+    prefix: "/repairs",
+    key: mutation.key,
+    version: mutation.version,
+    form: fileForm(mutation.file, mutation.form ?? {}),
   });
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({})) as { code?: unknown; fieldErrors?: Record<string, unknown> };
-    throw new RepairApiError(response.status, typeof data.code === "string" ? data.code : "REPAIR_FACTORY_UPLOAD_FAILED",
-      Object.fromEntries(Object.entries(data.fieldErrors ?? {}).filter((pair): pair is [string, string] => typeof pair[1] === "string")));
-  }
-  return await response.json() as T;
+}
+/** 授权令牌在原样校验过的下载位置内；原件内容仍走同源会话下载，不进入 JSON 门面。 */
+export function factoryEvidenceContent(repair: string, round: string, objectId: string, token: string, signal?: AbortSignal): Promise<Blob> {
+  const url = apiUrl(`/repairs/${encodeURIComponent(repair)}/factory/rounds/${encodeURIComponent(round)}/evidence/${encodeURIComponent(objectId)}/content?token=${encodeURIComponent(token)}`);
+  return requestBlob(url, (status) => new RepairApiError(status, "REPAIR_FACTORY_EVIDENCE_READ_FAILED", {}), signal);
 }
 export const factoryRoundStates: Record<string, string> = {
   PENDING_DISPATCH: "待寄出", DISPATCHED: "已寄出，待原机收回", RECEIVED: "原机已实际收回", CANCELLED: "待寄出轮次已取消",
