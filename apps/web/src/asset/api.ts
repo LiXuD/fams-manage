@@ -28,6 +28,7 @@ export const cardStageLabels: Record<string, string> = { DRAFT: "草稿", PENDIN
   CANCELLED: "已取消" };
 export const destinationLabels: Record<string, string> = { DELIVERED_WAITING_RECEIPT: "已交出待接收",
   RECOVERY_PENDING_CANCEL: "待收回取消" };
+export const exceptionLabels: Record<string, string> = { NORMAL: "正常", SEARCHING: "查找中", LOST: "已遗失" };
 
 export class AssetApiError extends Error {
   constructor(readonly status: number, readonly code: string, message: string) { super(message); }

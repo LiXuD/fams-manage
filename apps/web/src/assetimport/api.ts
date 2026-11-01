@@ -38,6 +38,10 @@ export interface InitializationWindow {
 }
 export interface EligibleOperator { id: string; username: string }
 
+export const importReviewLabels: Record<string, string> = { PENDING: "待管理员核验", APPROVED: "已批准发布", REJECTED: "已驳回核验" };
+export const importRollbackLabels: Record<string, string> = { PENDING: "待管理员批准", APPROVED: "已批准，待执行",
+  REJECTED: "已驳回", QUEUED: "撤销任务排队中", COMPLETED: "已撤销", FAILED: "撤销执行失败" };
+
 const messages: Record<string, string> = {
   AUTH_SESSION_INVALID: "会话已失效，请重新登录。",
   AUTH_FORBIDDEN: "当前账号没有资产导入权限。",

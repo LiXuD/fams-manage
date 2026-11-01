@@ -52,3 +52,5 @@ export const reviewProblems: Record<string, string> = {
   INVENTORY_REVIEW_EVIDENCE_CONFLICT: "存在冲突、旧分配或待核实证据", INVENTORY_REVIEW_OBSERVATION_REQUIRED: "尚无可正常采信的本轮观察",
   INVENTORY_REVIEW_ASSET_UNAVAILABLE: "当前资产不可用于正常复核", INVENTORY_ITEM_NOT_FOUND: "该项不属于当前任务",
 };
+export const inventoryLateResultLabels: Record<string, string> = { OPEN: "待补充核实", INFORMATION: "补充线索",
+  FOLLOWUP_OPEN: "关联复盘尚待实际完成", REVIEWED: "已记录补充结论" };

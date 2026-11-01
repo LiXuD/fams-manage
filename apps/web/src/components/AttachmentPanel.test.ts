@@ -6,7 +6,8 @@ import { listAttachments, uploadAttachment, correctAttachment, downloadAttachmen
 import type { InboundReceipt } from "@/inbound/api";
 import AttachmentPanel from "./AttachmentPanel.vue";
 
-vi.mock("@/attachment/api", () => ({ listAttachments: vi.fn(), uploadAttachment: vi.fn(), correctAttachment: vi.fn(), downloadAttachment: vi.fn() }));
+vi.mock("@/attachment/api", async importOriginal => ({ ...await importOriginal<typeof import("@/attachment/api")>(),
+  listAttachments: vi.fn(), uploadAttachment: vi.fn(), correctAttachment: vi.fn(), downloadAttachment: vi.fn() }));
 const receipt: InboundReceipt = {
   id: "10", version: 4, receiptNumber: "IN10", status: "DRAFT", businessDate: "2026-09-27",
   createdBy: { id: "7", username: "warehouse" }, items: [],

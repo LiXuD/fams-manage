@@ -7,6 +7,7 @@ import {
   getImport, importColumns, importRows,
   ownImportReview, ownImportRollback, previewImport, queueImportRollback,
   requestImportReview, requestImportRollback, uploadImport,
+  importReviewLabels, importRollbackLabels,
   type ImportReview, type ImportRollback, type ImportRow, type ImportTicket,
 } from "@/assetimport/api";
 
@@ -248,12 +249,12 @@ onMounted(async () => {
             : ticket.status === 'FAILED' ? '后台发布失败，请联系管理员处理。'
               : '当前仅保存预检结果，尚未发布资产。' }}</p>
       <div v-if="ticket.status === 'PREVIEWED'" class="fams-form-actions">
-        <p v-if="review">核验状态：{{ review.status }}。{{ review.status === 'REJECTED' ? '可修正后重新预检。' : '' }}</p>
+        <p v-if="review">核验状态：{{ importReviewLabels[review.status] }}。{{ review.status === 'REJECTED' ? '可修正后重新预检。' : '' }}</p>
         <button v-if="readyRows > 0 && (!review || review.status === 'REJECTED')"
           class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="submitReview">提交管理员核验</button>
       </div>
       <div v-if="ticket.status === 'PUBLISHED'" class="fams-field-row">
-        <p v-if="rollback">整批撤销：{{ rollback.status }}。</p>
+        <p v-if="rollback">整批撤销：{{ importRollbackLabels[rollback.status] }}。</p>
         <template v-if="!rollback || rollback.status === 'REJECTED'">
           <label class="fams-field"><span class="fams-field-label">撤销原因</span>
             <input class="fams-control" v-model="rollbackReason" maxlength="500" /></label>

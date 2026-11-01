@@ -7,6 +7,7 @@ import { useSessionStore } from "@/auth/sessionStore";
 import { getAsset } from "@/asset/api";
 import {
   acceptItem, cancelReceipt, claimReceipt, decideReceipt, getReceipt, submitReceipt,
+  inboundDecisionLabels, inboundItemLabels, inboundStatusLabels,
   type InboundItem, type InboundReceipt,
 } from "@/inbound/api";
 
@@ -110,11 +111,11 @@ onMounted(async () => {
     <section v-if="selected" class="fams-panel fams-stack" aria-label="入库单详情">
       <div class="fams-panel-head">
         <div>
-          <h2 class="fams-panel-title">{{ selected.receiptNumber }} · {{ selected.status }}</h2>
+          <h2 class="fams-panel-title">{{ selected.receiptNumber }} · {{ inboundStatusLabels[selected.status] }}</h2>
         </div>
       </div>
       <p v-if="selected.currentProcessor">当前处理人：{{ selected.currentProcessor.processor.username }}</p>
-      <p v-if="selected.decision">管理员决定：{{ selected.decision.result }}</p>
+      <p v-if="selected.decision">管理员决定：{{ inboundDecisionLabels[selected.decision.result] }}</p>
       <div class="fams-panel-actions">
         <router-link v-if="warehouseRole && selected.status === 'DRAFT' && selected.createdBy.id === session.user?.id" class="fams-button" data-kind="secondary" :to="`/inbound/${selected.id}/edit`">修订草稿</router-link>
         <button v-if="warehouseRole && selected.status === 'DRAFT'" class="fams-button" data-kind="primary" type="button" :disabled="locked" @click="act('submit')">提交审批</button>
@@ -146,7 +147,7 @@ onMounted(async () => {
           <th scope="col" data-column-kind="action">操作</th></tr></thead>
         <tbody><tr v-for="item in selected.items" :key="item.id">
           <th scope="row" data-column-kind="identity">{{ item.assetSnapshot.assetCode }}</th><td>{{ item.assetSnapshot.assetName }}</td>
-          <td><span class="fams-status">{{ item.executionStatus }}</span></td>
+          <td><span class="fams-status">{{ inboundItemLabels[item.executionStatus] }}</span></td>
           <td data-column-kind="action"><button v-if="warehouseRole && selected.status === 'WAREHOUSE_PROCESSING' && item.executionStatus === 'PENDING' && selected.currentProcessor?.processor.id === session.user?.id" class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="locked" @click="openAccept(item)">验收入库</button></td>
         </tr></tbody>
       </table></div>

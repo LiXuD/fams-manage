@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { LoanApiError, loanMessage, loanRequest, type LoanMutation } from "@/loan/api";
-import { lifecycleLabels } from "@/asset/api";
+import { exceptionLabels, lifecycleLabels } from "@/asset/api";
 
 type Range = { usingOrganizationId: string | null; owningOrganizationId: string | null; categoryId: string | null;
   warehouseId: string | null; locationId: string | null; lifecycle: string | null; exception: string | null; responsibleEmployeeId: string | null };
@@ -87,7 +87,7 @@ onMounted(async () => {
           <label class="fams-field"><span class="fams-field-label">生命周期</span>
             <select class="fams-control" v-model="range.lifecycle"><option :value="null">全部</option><option v-for="(text, value) in lifecycleLabels" :key="value" :value="value">{{ text }}</option></select></label>
           <label class="fams-field"><span class="fams-field-label">异常状态</span>
-            <select class="fams-control" v-model="range.exception"><option :value="null">全部</option><option value="NORMAL">正常</option><option value="SEARCHING">查找中</option><option value="LOST">遗失</option></select></label>
+            <select class="fams-control" v-model="range.exception"><option :value="null">全部</option><option v-for="(text, value) in exceptionLabels" :key="value" :value="value">{{ text }}</option></select></label>
           <label class="fams-field"><span class="fams-field-label">当前责任人</span>
             <select class="fams-control" v-model="range.responsibleEmployeeId"><option :value="null">全部</option><option v-for="c in catalogs.employee" :key="c.id" :value="c.id">{{ c.name }}{{ c.status === "DISABLED" ? "（已停用）" : "" }}</option></select></label>
         </div>

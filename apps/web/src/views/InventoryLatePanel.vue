@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { reviewRequest, ReviewApiError } from "@/inventory-review/api";
+import { inventoryLateResultLabels as results, reviewRequest, ReviewApiError } from "@/inventory-review/api";
 import InventoryLateDamagePanel from "./InventoryLateDamagePanel.vue";
 import type { LoanMutation } from "@/loan/api";
 interface Evidence { observation_id: string; comparison_kind: string; report_sha256: string | null;
@@ -77,7 +77,6 @@ async function send() {
 async function paginate(delta: number) { if (locked.value || !board.value || page.value + delta < 1 || (page.value + delta - 1) * 20 >= board.value.total) return; page.value += delta; await load(); }
 const kinds: Record<string, string> = { FROZEN_CONFLICT: "与原采信事实冲突", NO_ACCEPTED: "原项没有有效采信", TIME_UNVERIFIED: "原时间仍待核实", FINDING: "任务外实物线索", FACTS_MATCH: "事实一致的补充线索" };
 const methods: Record<string, string> = { NOTE: "记录补充结论", LINK_RECHECK: "创建关联复盘草稿", REPLACE_RECHECK: "已结束复盘后另建一轮", CONFIRM_RECHECK: "核对实际完成的关联复盘" };
-const results: Record<string, string> = { OPEN: "待补充核实", INFORMATION: "补充线索", FOLLOWUP_OPEN: "关联复盘尚待实际完成", REVIEWED: "已记录补充结论" };
 watch(owner, () => { clear(); page.value = 1; void load(); }, { immediate: true }); onBeforeUnmount(() => { live = false; clear(); });
 </script>
 <template>

@@ -5,7 +5,7 @@ const api = vi.hoisted(() => ({ listReceipts: vi.fn(), getReceipt: vi.fn() }));
 const assetApi = vi.hoisted(() => ({ listAssets: vi.fn(), activeReferences: vi.fn(), getAsset: vi.fn() }));
 const session = vi.hoisted(() => ({ roles: ["ASSET_ADMIN"] as string[] }));
 vi.mock("@/auth/sessionStore", () => ({ useSessionStore: () => ({ user: { roles: session.roles, id: "1" } }) }));
-vi.mock("@/inbound/api", () => ({ ...api, acceptItem: vi.fn(), cancelReceipt: vi.fn(), claimReceipt: vi.fn(), createReceipt: vi.fn(),
+vi.mock("@/inbound/api", async importOriginal => ({ ...await importOriginal<typeof import("@/inbound/api")>(), ...api, acceptItem: vi.fn(), cancelReceipt: vi.fn(), claimReceipt: vi.fn(), createReceipt: vi.fn(),
   decideReceipt: vi.fn(), submitReceipt: vi.fn(), updateReceipt: vi.fn() }));
 vi.mock("@/asset/api", () => assetApi);
 const links = (wrapper: ReturnType<typeof mount>) => wrapper.findAll("a[data-destination]").map((link) =>

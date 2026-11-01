@@ -10,8 +10,8 @@ vi.mock("vue-router", () => ({ useRoute: () => ({ query: { id: "41" } }),
   useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock("@/auth/sessionStore", () => ({ useSessionStore: () => state.session }));
 vi.mock("@/loan/api", async importOriginal => ({ ...await importOriginal<typeof import("@/loan/api")>(), loanRequest: state.request, loanMessage: () => "结果尚未确认" }));
-vi.mock("@/attachment/api", () => ({ downloadAttachment: vi.fn() }));
-vi.mock("@/proxy/api", () => ({ uploadProxyEvidence: vi.fn() }));
+vi.mock("@/attachment/api", async importOriginal => ({ ...await importOriginal<typeof import("@/attachment/api")>(), downloadAttachment: vi.fn() }));
+vi.mock("@/proxy/api", async importOriginal => ({ ...await importOriginal<typeof import("@/proxy/api")>(), uploadProxyEvidence: vi.fn() }));
 
 describe("proxy confirmation approval", () => {
   beforeEach(() => { state.session = reactive({ user: { id: "2", roles: ["ASSET_ADMIN"] }, csrfToken: "csrf" }); state.request.mockReset(); });

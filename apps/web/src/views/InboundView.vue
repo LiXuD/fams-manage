@@ -2,7 +2,7 @@
 import { onMounted, ref } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { listReceipts, type InboundReceipt } from "@/inbound/api";
+import { inboundStatusLabels, listReceipts, type InboundReceipt } from "@/inbound/api";
 
 const session = useSessionStore();
 const warehouseRole = session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false;
@@ -36,7 +36,7 @@ onMounted(load);
           <th scope="col" data-column-kind="numeric">资产数</th><th scope="col" data-column-kind="action">操作</th></tr></thead>
         <tbody><tr v-for="value in receipts" :key="value.id">
           <th scope="row" data-column-kind="identity">{{ value.receiptNumber }}</th><td>{{ value.businessDate }}</td>
-          <td><span class="fams-status">{{ value.status }}</span></td><td data-column-kind="numeric">{{ value.items.length }}</td>
+          <td><span class="fams-status">{{ inboundStatusLabels[value.status] }}</span></td><td data-column-kind="numeric">{{ value.items.length }}</td>
           <td data-column-kind="action"><router-link class="fams-button" data-kind="link" data-size="sm"
             :to="`/inbound/${value.id}`">详情</router-link></td>
         </tr><tr v-if="!receipts.length" class="fams-table-empty"><td colspan="5"><strong>暂无入库单</strong>由库管新建入库草稿后在此查看。</td></tr></tbody>

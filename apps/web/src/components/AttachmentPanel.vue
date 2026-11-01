@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { listAttachments, uploadAttachment, correctAttachment, downloadAttachment, type Attachment } from "@/attachment/api";
+import { listAttachments, uploadAttachment, correctAttachment, downloadAttachment, scanStatusLabels as scanText, type Attachment } from "@/attachment/api";
 import type { InboundReceipt } from "@/inbound/api";
 
 const props = defineProps<{ receipt: InboundReceipt; disabled?: boolean }>();
@@ -30,7 +30,6 @@ const writable = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR
   && ((props.receipt.status === "DRAFT" && props.receipt.createdBy.id === session.user.id)
     || (props.receipt.status === "WAREHOUSE_PROCESSING"
       && props.receipt.currentProcessor?.processor.id === session.user.id)));
-const scanText = { CLEAN: "可下载", INFECTED: "感染文件 · 已隔离", UNAVAILABLE: "扫描不可用 · 已隔离" };
 
 async function refresh(): Promise<void> {
   const current = ++generation;

@@ -2,7 +2,7 @@
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
-import { loanLabels as labels, loanMessage, loanRequest } from "@/loan/api";
+import { loanLabels as labels, loanMessage, loanRequest, reminderLabels } from "@/loan/api";
 import type { LoanMutation } from "@/loan/api";
 import type { BorrowRequestChoice, BusinessPage, Loan } from "../../../../packages/api-types/src/loan";
 
@@ -94,7 +94,7 @@ onMounted(async () => {
       </dl>
       <p v-if="selected.lostLiability" class="fams-notice" data-state="warning">资产已确认遗失，保留责任追踪。</p>
       <ul v-if="selected.reminders?.length" class="fams-timeline">
-        <li v-for="reminder in selected.reminders" :key="reminder.id">{{ reminder.reminderBusinessDate }} · {{ reminder.reminderType }}<small v-if="reminder.overdueFrom">逾期起始 {{ reminder.overdueFrom }}</small></li>
+        <li v-for="reminder in selected.reminders" :key="reminder.id">{{ reminder.reminderBusinessDate }} · {{ reminderLabels[reminder.reminderType] }}<small v-if="reminder.overdueFrom">逾期起始 {{ reminder.overdueFrom }}</small></li>
       </ul>
       <ul v-if="selected.extensions?.length" class="fams-timeline">
         <li v-for="history in selected.extensions" :key="history.id">延期至 {{ history.requestedDueDate }} · {{ labels[history.extensionStatus] }}<small v-if="history.overdueFrom">历史逾期 {{ history.overdueFrom }} 至 {{ history.overdueThrough }}</small></li>

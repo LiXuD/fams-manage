@@ -5,9 +5,9 @@ import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { AuthApiError } from "@/auth/api";
 import { LoanApiError, loanMessage, loanRequest, type LoanMutation } from "@/loan/api";
-import { downloadAttachment, type Attachment } from "@/attachment/api";
+import { downloadAttachment, scanStatusLabels, type Attachment } from "@/attachment/api";
 import { formatProxyTime } from "@/proxy/time";
-import { uploadProxyEvidence, type ProxyConfirmation, type ProxyPage } from "@/proxy/api";
+import { proxyCollectionLabels, proxyEvidenceLabels, uploadProxyEvidence, type ProxyConfirmation, type ProxyPage } from "@/proxy/api";
 const route = useRoute(), router = useRouter(), session = useSessionStore();
 const rows = ref<ProxyConfirmation[]>([]), selected = ref<ProxyConfirmation | null>(null);
 const attachments = ref<Attachment[]>([]), snapshot = ref<Record<string, unknown> | null>(null);
@@ -161,12 +161,12 @@ onBeforeUnmount(() => { live = false; clear(); });
         <p>实际签收人：{{ selected.actualSigner }} · 时间：{{ formatProxyTime(selected.actualReceivedAt) }}</p>
         <p>无法确认原因：{{ selected.cannotConfirmReason }}；联系记录：{{ selected.contactRecord }}</p>
         <p v-if="selected.delegatedReceipt">代理关系：{{ selected.delegationRelationship }}；授权依据：{{ selected.delegationBasis }}</p>
-        <p>凭证 {{ selected.evidenceKind }} · 采集 {{ selected.collectionMethod }} {{ selected.manualReason }}</p>
+        <p>凭证 {{ proxyEvidenceLabels[selected.evidenceKind] }} · 采集 {{ proxyCollectionLabels[selected.collectionMethod] }} {{ selected.manualReason }}</p>
         <p>提交账号 {{ selected.creatorAccountId }} · 批准账号 {{ selected.approverAccountId ?? '待批准' }} · 执行账号 {{ selected.executorAccountId ?? '待执行' }}</p>
         <p v-if="selected.decisionReason">决定说明：{{ selected.decisionReason }}</p>
         <router-link :to="businessLink(selected.businessType, selected.businessId)">查看业务单据与核查入口</router-link>
         <ul class="fams-timeline">
-          <li v-for="attachment in attachments" :key="attachment.objectId">{{ attachment.filename }}<small>{{ attachment.scanStatus }}</small><button class="fams-button" data-size="sm" type="button" :disabled="busy || attachment.scanStatus !== 'CLEAN'" @click="download(attachment)">下载凭证</button></li>
+          <li v-for="attachment in attachments" :key="attachment.objectId">{{ attachment.filename }}<small>{{ scanStatusLabels[attachment.scanStatus] }}</small><button class="fams-button" data-size="sm" type="button" :disabled="busy || attachment.scanStatus !== 'CLEAN'" @click="download(attachment)">下载凭证</button></li>
         </ul>
         <fieldset v-if="warehouse && selected.confirmationStatus === 'DRAFT'" class="fams-stack" :disabled="locked">
           <label class="fams-file"><span class="fams-field-label">签收凭证</span><input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" @change="file = ($event.target as HTMLInputElement).files?.[0] ?? null"></label>

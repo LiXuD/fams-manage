@@ -12,6 +12,10 @@ export interface ProxyConfirmation {
   executorAccountId?: string; decisionReason?: string;
 }
 export interface ProxyPage { items: ProxyConfirmation[]; total: number }
+export const proxyEvidenceLabels: Record<string, string> = { SIGNED_RECEIPT: "签收单",
+  LOGISTICS_RECEIPT: "物流签收", AUTHORIZED_PROXY: "授权代收" };
+export const proxyCollectionLabels: Record<string, string> = { SCAN_CONFIRMED: "扫描核对",
+  CODE_CONFIRMED: "核对编码", MANUAL_RECORD: "手工记录" };
 export async function uploadProxyEvidence(id: string, version: number, file: File, key: string): Promise<Attachment> {
   const token = useSessionStore().csrfToken;
   if (!token) throw new LoanApiError(401, "AUTH_SESSION_INVALID");

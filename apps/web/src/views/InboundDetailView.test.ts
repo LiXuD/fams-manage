@@ -6,7 +6,7 @@ const api = vi.hoisted(() => ({ listReceipts: vi.fn(), getReceipt: vi.fn(), subm
 const assetApi = vi.hoisted(() => ({ listAssets: vi.fn(), activeReferences: vi.fn(), getAsset: vi.fn() }));
 const session = vi.hoisted(() => ({ roles: ["WAREHOUSE_OPERATOR"] as string[] }));
 vi.mock("@/auth/sessionStore", () => ({ useSessionStore: () => ({ user: { roles: session.roles, id: "1" } }) }));
-vi.mock("@/inbound/api", () => ({ ...api, createReceipt: vi.fn(), updateReceipt: vi.fn() }));
+vi.mock("@/inbound/api", async importOriginal => ({ ...await importOriginal<typeof import("@/inbound/api")>(), ...api, createReceipt: vi.fn(), updateReceipt: vi.fn() }));
 vi.mock("@/asset/api", () => assetApi);
 const draft = { id: "9007199254740993", receiptNumber: "RK-FIND-001", status: "DRAFT", businessDate: "2026-10-19",
   version: 1, items: [], createdBy: { id: "1", username: "warehouse" } };
@@ -21,7 +21,7 @@ describe("入库单详情", () => {
     api.getReceipt.mockResolvedValue(draft);
     const wrapper = panel("9007199254740993"); await flushPromises();
     expect(api.getReceipt).toHaveBeenCalledExactlyOnceWith("9007199254740993");
-    expect(wrapper.text()).toContain("RK-FIND-001 · DRAFT");
+    expect(wrapper.text()).toContain("RK-FIND-001 · 草稿");
     expect(wrapper.text()).not.toContain("待入库资产");
     wrapper.unmount();
   });
@@ -42,7 +42,7 @@ describe("入库单详情", () => {
     await submit?.trigger("click"); await flushPromises();
     expect(api.submitReceipt).toHaveBeenCalledExactlyOnceWith(draft);
     expect(wrapper.text()).toContain("入库单状态已更新");
-    expect(wrapper.text()).toContain("RK-FIND-001 · PENDING_ADMIN_DECISION");
+    expect(wrapper.text()).toContain("RK-FIND-001 · 待管理员确认");
     wrapper.unmount();
   });
   it("保存草稿跳转来的地址栏标记只播报一次", async () => {

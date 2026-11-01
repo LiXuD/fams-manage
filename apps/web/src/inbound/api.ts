@@ -21,6 +21,12 @@ export interface InboundReceipt {
   currentProcessor?: { processor: { id: string; username: string } };
   decision?: { result: string; comment?: string };
 }
+export const inboundStatusLabels: Record<string, string> = { DRAFT: "草稿", PENDING_ADMIN_DECISION: "待管理员确认",
+  REJECTED: "已驳回", WAITING_WAREHOUSE_CLAIM: "待库管领取", WAREHOUSE_PROCESSING: "库管处理中", COMPLETED: "已完成",
+  CANCELLED: "已取消" };
+export const inboundDecisionLabels: Record<string, string> = { APPROVED: "已批准", REJECTED: "已驳回" };
+export const inboundItemLabels: Record<string, string> = { PENDING: "待验收", ACCEPTED: "已验收入库" };
+
 interface Page<T> { page: number; pageSize: number; total: number; items: T[] }
 
 async function request<T>(path: string, method = "GET", body?: unknown, version?: number): Promise<T> {

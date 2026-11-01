@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import AssetReturnReassignment from "@/components/AssetReturnReassignment.vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { loanLabels as labels, loanMessage, loanRequest } from "@/loan/api";
+import { inspectionLabels, loanLabels as labels, loanMessage, loanRequest } from "@/loan/api";
 import type { LoanMutation } from "@/loan/api";
 import type { AssetReturn, ReturnChoice } from "../../../../packages/api-types/src/loan";
 
@@ -133,7 +133,7 @@ onMounted(async () => {
         <button class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable" @click="inspect">提交实物验收</button>
       </div>
 
-      <p v-if="selected.inspectionResult">验收结果 {{ selected.inspectionResult }} · {{ selected.inspectionReason }}</p>
+      <p v-if="selected.inspectionResult">验收结果 {{ inspectionLabels[selected.inspectionResult] }} · {{ selected.inspectionReason }}</p>
       <p v-for="followup in selected.followups" :key="followup.id">后续 {{ followup.id }} · {{ followup.businessType === 'REPAIR' ? '损坏维修' : '报失处理' }} · {{ followup.followupStatus === 'CLOSED' ? '已实际完成' : followup.followupStatus === 'ACCEPTED' ? '正式处理中' : '待继续处理' }}<span v-if="followup.linkedRepairId || followup.lastRepairId"> · 正式维修 {{ followup.linkedRepairId || followup.lastRepairId }}（{{ followup.repairStatus === 'COMPLETED' ? '已验收入库' : followup.repairStatus === 'REJECTED' || followup.repairStatus === 'CANCELLED' ? '原维修未执行，源义务仍待处理' : '尚未实际完成' }}）</span></p>
     </section>
   </AppChrome>

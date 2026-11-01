@@ -15,6 +15,9 @@ export interface Attachment {
   correctionReason?: string | null;
 }
 
+export const scanStatusLabels: Record<string, string> = { CLEAN: "可下载",
+  INFECTED: "感染文件 · 已隔离", UNAVAILABLE: "扫描不可用 · 已隔离" };
+
 const messages: Record<string, string> = {
   AUTH_SESSION_INVALID: "会话已失效，请重新登录。",
   AUTH_FORBIDDEN: "当前账号没有附件操作权限。",

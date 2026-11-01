@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { lifecycleLabels } from "@/asset/api";
 import { loanMessage, loanRequest, transferLabels as labels } from "@/loan/api";
 import type { LoanMutation } from "@/loan/api";
 import type { Transfer, TransferAsset, TransferChoice, TransferReceipt } from "../../../../packages/api-types/src/transfer";
@@ -168,7 +169,7 @@ onMounted(refresh);
         </div>
         <p>{{ personNotice }}</p>
         <p class="fams-panel-subtitle">{{ personTasks }}</p>
-        <p v-for="asset in personAssets" :key="asset.id">{{ asset.assetCode }} · {{ asset.name }} · {{ asset.lifecycleStatus }}；在用资产通过上方调拨交接，借出资产通过归还关闭责任。</p>
+        <p v-for="asset in personAssets" :key="asset.id">{{ asset.assetCode }} · {{ asset.name }} · {{ lifecycleLabels[asset.lifecycleStatus] }}；在用资产通过上方调拨交接，借出资产通过归还关闭责任。</p>
       </div>
     </details>
   </AppChrome>

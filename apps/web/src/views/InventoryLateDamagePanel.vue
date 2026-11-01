@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { reviewRequest, ReviewApiError } from "@/inventory-review/api";
+import { inventoryLateResultLabels, reviewRequest, ReviewApiError } from "@/inventory-review/api";
+import { repairStates } from "@/repair/api";
 import type { LoanMutation } from "@/loan/api";
 interface Damage { observation_id: string; version: number; damage_status: string; repair_id: string | null; repair_status: string | null }
 interface Context { assetId: string; currentAsset: { version: number; assetCode?: string; name?: string } | null; damage: Damage;
@@ -90,8 +91,8 @@ onBeforeUnmount(() => { live = false; clear(); emit("busyChange", false); });
     <p v-if="notice" class="fams-notice" data-state="success" role="status"><strong>{{ notice }}</strong></p>
     <template v-if="context">
       <p>{{ context.currentAsset?.assetCode || context.assetId }} · {{ states[context.damage.damage_status] }} · 独立损坏第 {{ context.damage.version }} 版</p>
-      <p>原观察 {{ context.originalEvidence.rawObservedAt }} · 补充复核 {{ context.recheckResult }} · {{ context.todoOpen ? '仍有开放待办' : '两项待办均已结束' }}</p>
-      <router-link v-if="context.damage.repair_id" class="fams-button" data-kind="link" :to="'/repairs/' + context.damage.repair_id">查看正式维修 {{ context.damage.repair_id }}（上次核对 {{ context.damage.repair_status }}）</router-link>
+      <p>原观察 {{ context.originalEvidence.rawObservedAt }} · 补充复核 {{ inventoryLateResultLabels[context.recheckResult] }} · {{ context.todoOpen ? '仍有开放待办' : '两项待办均已结束' }}</p>
+      <router-link v-if="context.damage.repair_id" class="fams-button" data-kind="link" :to="'/repairs/' + context.damage.repair_id">查看正式维修 {{ context.damage.repair_id }}（上次核对 {{ repairStates[context.damage.repair_status ?? ''] }}）</router-link>
       <ul class="fams-timeline">
         <li v-for="row in context.history.items" :key="row.after_version">第 {{ row.after_version }} 版 · {{ methods[row.method] }} · {{ states[row.damage_status] }} · {{ row.actor_username }}
           <small>{{ row.reason }} · {{ row.evidence }} · 维修 {{ row.repair_id }}</small></li>
@@ -126,7 +127,7 @@ onBeforeUnmount(() => { live = false; clear(); emit("busyChange", false); });
                 <input class="fams-control" v-model="repairId" inputmode="numeric" @input="linked = null" /></label>
               <button class="fams-button" data-kind="secondary" type="button" @click="inspect">核对同资产维修</button>
             </div>
-            <p v-if="linked">维修 {{ linked.id }} · 第 {{ linked.version }} 版 · {{ linked.status }}</p>
+            <p v-if="linked">维修 {{ linked.id }} · 第 {{ linked.version }} 版 · {{ repairStates[linked.status] }}</p>
           </template>
         </template>
         <label class="fams-field"><span class="fams-field-label">处理原因</span>

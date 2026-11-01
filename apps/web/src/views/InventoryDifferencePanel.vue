@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import type { LoanMutation } from "@/loan/api";
 import { reviewRequest, ReviewApiError, type Board, type ReviewItem } from "@/inventory-review/api";
+import { repairStates } from "@/repair/api";
 import type { TransferChoice, TransferTarget } from "../../../../packages/api-types/src/transfer";
 const props = defineProps<{ taskId: string; item: ReviewItem; itemPage: number; observationIds: string[] }>();
 const emit = defineEmits<{ invalid: [] }>();
@@ -241,7 +242,7 @@ onBeforeUnmount(() => { live = false; epoch++; clear(); });
                 <input class="fams-control" v-model="repairId" inputmode="numeric" @input="linkedRepair = null" /></label>
               <button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="inspectRepair">核对维修单</button>
             </div>
-            <p v-if="linkedRepair" class="fams-panel-subtitle">已核对维修 {{ linkedRepair.id }} · 第 {{ linkedRepair.version }} 版 · {{ linkedRepair.status }}</p>
+            <p v-if="linkedRepair" class="fams-panel-subtitle">已核对维修 {{ linkedRepair.id }} · 第 {{ linkedRepair.version }} 版 · {{ repairStates[linkedRepair.status] }}</p>
           </template>
         </template>
       </template>
