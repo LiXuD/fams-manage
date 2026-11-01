@@ -1,27 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { loanMessage, loanRequest } from "@/loan/api";
 import { inventoryTaskStatusLabels as labels } from "@/inventory-review/api";
+import { usePagedResourceList } from "@/composables/usePagedResourceList";
 import { useSessionStore } from "@/auth/sessionStore";
 
 type Task = { id: string; name: string; task_status: string; starts_at: string; due_at: string; overdue?: boolean };
 const session = useSessionStore();
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
-const tasks = ref<Task[]>([]); const total = ref(0); const page = ref(1);
-const busy = ref(false); const error = ref("");
-async function list() {
-  const result = await loanRequest<{ items: Task[]; total: number }>(`/inventory-tasks?page=${page.value}&pageSize=20`);
-  tasks.value = result.items; total.value = result.total;
-}
-async function refresh() {
-  busy.value = true; error.value = "";
-  try { await list(); } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
-}
-async function pages(delta: number) {
-  page.value += delta; await refresh();
-}
-onMounted(refresh);
+const { rows: tasks, total, page, busy, error, refresh, pages } = usePagedResourceList<Task>(
+  (page) => loanRequest<{ items: Task[]; total: number }>(`/inventory-tasks?page=${page}&pageSize=20`),
+  { problem: loanMessage });
 </script>
 <template>
   <AppChrome>

@@ -1,29 +1,19 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { ref } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { usePagedResourceList } from "@/composables/usePagedResourceList";
 import { cardStageLabels, custodyLabel, lifecycleLabels, listAssets, type AssetCard } from "@/asset/api";
 
 const session = useSessionStore();
-const rows = ref<AssetCard[]>([]);
-const total = ref(0);
-const page = ref(1);
 const code = ref("");
 const nameFilter = ref("");
-const error = ref("");
 
 const canWrite = session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false;
 
-async function load(): Promise<void> {
-  error.value = "";
-  try {
-    const result = await listAssets(page.value, code.value, nameFilter.value);
-    rows.value = result.items;
-    total.value = result.total;
-  } catch (cause) { error.value = cause instanceof Error ? cause.message : "台账加载失败"; }
-}
-
-onMounted(load);
+const { rows, total, page, error, refresh: load } = usePagedResourceList<AssetCard>(
+  (page) => listAssets(page, code.value, nameFilter.value),
+  { problem: (cause) => cause instanceof Error ? cause.message : "台账加载失败" });
 </script>
 
 <template>

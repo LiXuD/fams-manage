@@ -1,23 +1,16 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { ref } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
+import { usePagedResourceList } from "@/composables/usePagedResourceList";
 import { requisitionLabels as labels, requisitionMessage, requisitionRequest } from "@/requisition/api";
 import type { RequisitionPage, RequisitionSummary } from "../../../../packages/api-types/src/requisition";
 
-const rows = ref<RequisitionSummary[]>([]);
-const busy = ref(false); const error = ref(""); const page = ref(1); const total = ref(0);
 const status = ref("");
 
-async function load() {
-  const result = await requisitionRequest<RequisitionPage>(`?page=${page.value}&pageSize=20${status.value ? "&status=" + status.value : ""}`);
-  rows.value = result.items; total.value = result.total;
-}
-async function refresh() {
-  if (busy.value) return; busy.value = true; error.value = "";
-  try { await load(); }
-  catch (e) { error.value = requisitionMessage(e); } finally { busy.value = false; }
-}
-onMounted(refresh);
+const { rows, busy, error, page, total, refresh } = usePagedResourceList<RequisitionSummary>(
+  (page) => requisitionRequest<RequisitionPage>(
+    `?page=${page}&pageSize=20${status.value ? "&status=" + status.value : ""}`),
+  { problem: requisitionMessage });
 </script>
 
 <template>

@@ -1,20 +1,12 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
+import { usePagedResourceList } from "@/composables/usePagedResourceList";
 import { loanLabels as labels, loanMessage, loanRequest } from "@/loan/api";
 import type { AssetReturn, BusinessPage } from "../../../../packages/api-types/src/loan";
 
-const returns = ref<AssetReturn[]>([]);
-const busy = ref(false); const error = ref(""); const page = ref(1); const total = ref(0);
-
-async function refresh() {
-  if (busy.value) return; busy.value = true; error.value = "";
-  try {
-    const result = await loanRequest<BusinessPage<AssetReturn>>(`/asset-returns?page=${page.value}&pageSize=20`);
-    returns.value = result.items; total.value = result.total;
-  } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
-}
-onMounted(refresh);
+const { rows: returns, busy, error, page, total, refresh } = usePagedResourceList<AssetReturn>(
+  (page) => loanRequest<BusinessPage<AssetReturn>>(`/asset-returns?page=${page}&pageSize=20`),
+  { problem: loanMessage });
 </script>
 
 <template>

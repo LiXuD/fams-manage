@@ -1,22 +1,17 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useResourceLoad } from "@/composables/useResourceLoad";
 import { inboundStatusLabels, listReceipts, type InboundReceipt } from "@/inbound/api";
 
 const session = useSessionStore();
 const warehouseRole = session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false;
-const receipts = ref<InboundReceipt[]>([]);
-const error = ref("");
-
-async function load(): Promise<void> {
-  try {
-    const result = await listReceipts();
-    receipts.value = result.items;
-  } catch (cause) { error.value = cause instanceof Error ? cause.message : "入库单加载失败"; }
-}
-
-onMounted(load);
+const { data, error } = useResourceLoad<InboundReceipt[]>({
+  load: async () => (await listReceipts()).items,
+  problem: (cause) => cause instanceof Error ? cause.message : "入库单加载失败",
+});
+const receipts = computed(() => data.value ?? []);
 </script>
 
 <template>
