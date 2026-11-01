@@ -29,6 +29,8 @@ describe("inventory task detail", () => {
   await button("预览应盘数量").trigger("click"); await flushPromises();
   expect(wrapper.text()).toContain("预计 2 项");
   await button("发布并冻结集合").trigger("click"); await flushPromises();
+  expect(wrapper.text()).toContain("发布并冻结 2 项应盘集合？后续资产流转不会改写快照。");
+  await button("确认发布并冻结集合").trigger("click"); await flushPromises();
   expect(writes).toHaveLength(1); await button("重试原操作").trigger("click"); await flushPromises();
   expect(writes[1]).toEqual(writes[0]); expect(writes[0]).toMatchObject({ path: "/inventory-tasks/9007199254740993/publication", version: 0,
    body: { expectedCount: 2, previewDigest: "a".repeat(64) } }); expect(wrapper.text()).toContain("待开始");
@@ -42,6 +44,7 @@ describe("inventory task detail", () => {
   });
   const wrapper = detailWrapper(); await flushPromises();
   await wrapper.findAll("button").find(row => row.text() === "复制范围创建新草稿")!.trigger("click"); await flushPromises();
+  await wrapper.findAll("button").find(row => row.text() === "确认复制范围创建新草稿")!.trigger("click"); await flushPromises();
   expect(state.push).toHaveBeenCalledWith("/inventory-tasks/9007199254740994"); wrapper.unmount();
  });
  it("management actions and edit entry stay off the executor detail page", async () => {

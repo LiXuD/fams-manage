@@ -36,6 +36,7 @@ describe("inventory review panel", () => {
     expect(wrapper.text()).toContain("Original room");
     for (const checkbox of wrapper.findAll("input[type=checkbox]")) await checkbox.setValue(true);
     await action(wrapper, "逐项采信所选正常观察").trigger("click"); await flushPromises();
+    await action(wrapper, "确认采信所选正常观察").trigger("click"); await flushPromises();
     expect(writes).toHaveLength(1);
     expect(writes[0]?.body).toMatchObject({ items: [{ itemId: "10", recheckGeneration: 0, reviewVersion: 0, assetVersion: 0 }, { itemId: "11" }] });
     expect(writes[0]?.headers).toMatchObject({ "If-Match-Version": "5", "X-CSRF-Token": "csrf-one" });
@@ -52,6 +53,7 @@ describe("inventory review panel", () => {
     }));
     const wrapper = mount(InventoryReviewPanel, { props: { taskId: "9" } }); await flushPromises();
     await wrapper.find("input[type=checkbox]").setValue(true); await action(wrapper, "逐项采信所选正常观察").trigger("click"); await flushPromises();
+    await action(wrapper, "确认采信所选正常观察").trigger("click"); await flushPromises();
     expect(wrapper.text()).toContain("结果尚未确认"); expect(wrapper.find("textarea").element.matches(":disabled")).toBe(true);
     await action(wrapper, "重试原采信操作").trigger("click"); await flushPromises();
     expect(writes[1]).toEqual(writes[0]); expect(wrapper.text()).toContain("本次已采信 1 项"); wrapper.unmount();
@@ -65,6 +67,7 @@ describe("inventory review panel", () => {
     }));
     const wrapper = mount(InventoryReviewPanel, { props: { taskId: "9" } }); await flushPromises();
     await wrapper.find("input[type=checkbox]").setValue(true); await action(wrapper, "逐项采信所选正常观察").trigger("click"); await flushPromises();
+    await action(wrapper, "确认采信所选正常观察").trigger("click"); await flushPromises();
     expect(wrapper.text()).toContain("Winner"); expect(wrapper.text()).not.toContain("重试原采信操作");
     denied = true; await action(wrapper, "刷新复核信息").trigger("click"); await flushPromises();
     expect(wrapper.text()).not.toContain("Private asset"); expect(wrapper.text()).toContain("已隐藏原资料"); wrapper.unmount();

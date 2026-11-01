@@ -37,6 +37,8 @@ describe("approved transfer target change", () => {
     expect(button("批准调拨目标变更").attributes("disabled")).toBeDefined();
     await wrapper.find("textarea").setValue("已核对实物和新目标");
     await button("批准调拨目标变更").trigger("click"); await flushPromises();
+    expect(wrapper.text()).toContain("批准本次新目标？这不会完成接收或解除实物锁。");
+    await button("确认批准调拨目标变更").trigger("click"); await flushPromises();
     expect(writes).toHaveLength(1); expect(wrapper.find("fieldset").attributes("disabled")).toBeDefined();
     await button("重试原操作").trigger("click"); await flushPromises();
     expect(writes).toHaveLength(2); expect(writes[1]).toEqual(writes[0]);

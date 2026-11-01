@@ -13,6 +13,9 @@ const identity = computed(() => JSON.stringify([props.taskId, props.itemId, sess
 const data = ref<SelectionView | null>(null), board = ref<Board | null>(null), page = ref(1);
 const choice = ref(""), time = ref(""), reason = ref(""), evidence = ref(""), error = ref(""), notice = ref("");
 const busy = ref(false), pending = ref<LoanMutation | null>(null);
+const stage = ref<LoanMutation | null>(null), confirmOpen = ref(false);
+const confirmLabel = "确认保存待采信选择";
+const confirmHint = "保存这条证据及核实依据作为待采信选择？独立差异仍需处理，不会增加已采信数量。";
 const locked = computed(() => busy.value || !!pending.value);
 const item = computed(() => board.value?.items.find(row => row.item.id === props.itemId));
 const available = computed(() => props.observations.filter(row => row.recheck_generation === data.value?.recheckGeneration &&
@@ -25,7 +28,7 @@ const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 let epoch = 0, live = true;
 const valid = (token: number, who: string) => live && token === epoch && who === identity.value;
 function clear() { data.value = null; board.value = null; choice.value = ""; time.value = ""; reason.value = "";
-  evidence.value = ""; pending.value = null; busy.value = false; }
+  evidence.value = ""; pending.value = null; busy.value = false; stage.value = null; confirmOpen.value = false; }
 function failure(cause: unknown) {
   if (cause instanceof ReviewApiError) {
     if ([401,403,404].includes(cause.status)) { clear(); emit("invalid"); error.value = "当前身份、权限或记录已失效，已隐藏原资料。"; return; }
@@ -46,22 +49,29 @@ async function load() {
   } catch (cause) { if (valid(token, who)) failure(cause); }
   finally { if (valid(token, who)) busy.value = false; }
 }
-async function save() {
-  if (busy.value || !data.value || !item.value?.current) return;
-  if (!pending.value) {
-    if (!editable.value || !available.value.some(row => row.id === choice.value) || reason.value.trim().length < 3 || evidence.value.trim().length < 10) return;
-    let verifiedObservedAt: string | undefined;
-    if (needsTime.value) {
-      const instant = new Date(time.value);
-      if (!time.value || !Number.isFinite(instant.getTime())) { error.value = "请填写核实后的现场观察时间。"; return; }
-      verifiedObservedAt = instant.toISOString();
-    }
-    if (!window.confirm("保存这条证据及核实依据作为待采信选择？独立差异仍需处理，不会增加已采信数量。")) return;
-    pending.value = { path: `/inventory-reviews/tasks/${props.taskId}/items/${props.itemId}/selection`, key: crypto.randomUUID(),
-      version: data.value.taskVersion, body: { observationId: choice.value, recheckGeneration: data.value.recheckGeneration,
-        reviewVersion: data.value.review.version ?? 0, assetVersion: item.value.current.version, contextDigest: data.value.contextDigest,
-        ...(verifiedObservedAt ? { verifiedObservedAt } : {}), reason: reason.value.trim(), evidence: evidence.value.trim() } };
+function openSave() {
+  if (busy.value || pending.value || !data.value || !item.value?.current) return;
+  if (!editable.value || !available.value.some(row => row.id === choice.value) || reason.value.trim().length < 3 || evidence.value.trim().length < 10) return;
+  let verifiedObservedAt: string | undefined;
+  if (needsTime.value) {
+    const instant = new Date(time.value);
+    if (!time.value || !Number.isFinite(instant.getTime())) { error.value = "请填写核实后的现场观察时间。"; return; }
+    verifiedObservedAt = instant.toISOString();
   }
+  stage.value = { path: `/inventory-reviews/tasks/${props.taskId}/items/${props.itemId}/selection`, key: crypto.randomUUID(),
+    version: data.value.taskVersion, body: { observationId: choice.value, recheckGeneration: data.value.recheckGeneration,
+      reviewVersion: data.value.review.version ?? 0, assetVersion: item.value.current.version, contextDigest: data.value.contextDigest,
+      ...(verifiedObservedAt ? { verifiedObservedAt } : {}), reason: reason.value.trim(), evidence: evidence.value.trim() } };
+  confirmOpen.value = true;
+}
+function runSave() {
+  if (busy.value || !stage.value) return;
+  pending.value = stage.value; stage.value = null; confirmOpen.value = false;
+  void save();
+}
+function closeConfirm() { stage.value = null; confirmOpen.value = false; }
+async function save() {
+  if (busy.value || !data.value || !item.value?.current || !pending.value) return;
   const original = pending.value, token = ++epoch, who = identity.value; busy.value = true; error.value = "";
   try {
     await reviewRequest(original.path, original);
@@ -107,7 +117,14 @@ onBeforeUnmount(() => { live = false; epoch++; clear(); });
           <label class="fams-field"><span class="fams-field-label">明确核实依据</span>
             <textarea class="fams-control" v-model="evidence" minlength="10" maxlength="2000" /></label>
         </div>
-        <button class="fams-button" data-kind="primary" type="button" :disabled="!choice || reason.trim().length < 3 || evidence.trim().length < 10" @click="save">保存待采信选择</button>
+        <button class="fams-button" data-kind="primary" type="button" :disabled="!choice || reason.trim().length < 3 || evidence.trim().length < 10" @click="openSave">保存待采信选择</button>
+        <div v-if="confirmOpen" class="fams-card fams-stack" role="group" :aria-label="confirmLabel">
+          <p>{{ confirmHint }}</p>
+          <div class="fams-panel-actions">
+            <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="runSave">{{ confirmLabel }}</button>
+            <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="closeConfirm">返回修改</button>
+          </div>
+        </div>
       </fieldset>
 
       <h4 class="fams-panel-title">历次选择</h4>

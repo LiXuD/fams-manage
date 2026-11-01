@@ -13,6 +13,8 @@ const identity = computed(() => JSON.stringify([props.taskId, props.itemId, sess
 const selection = ref<Selection | null>(null), board = ref<Board | null>(null), subjects = ref<Subject[]>([]), dispositions = ref<Disposition[]>([]);
 const target = ref(""), method = ref("REJECT_EVIDENCE"), reason = ref(""), evidence = ref(""), page = ref(1), total = ref(0);
 const busy = ref(false), error = ref(""), pending = ref<LoanMutation | null>(null);
+const stage = ref<LoanMutation | null>(null), confirmKind = ref<"decision" | "acceptance" | null>(null), confirmHint = ref("");
+const confirmLabels: Record<"decision" | "acceptance", string> = { decision: "确认共同提交证据处置", acceptance: "确认最终采信所选证据" };
 const locked = computed(() => busy.value || !!pending.value);
 const currentItem = computed(() => board.value?.items.find(row => row.item.id === props.itemId));
 const chosen = computed(() => target.value === selection.value?.review.observation_id);
@@ -26,7 +28,7 @@ const statuses: Record<string, string> = { OPEN: "待处理", PROCESSING: "处�
 let epoch = 0, live = true;
 const valid = (token: number, who: string) => live && token === epoch && who === identity.value;
 function clear() { selection.value = null; board.value = null; subjects.value = []; dispositions.value = []; target.value = "";
-  reason.value = ""; evidence.value = ""; pending.value = null; busy.value = false; }
+  reason.value = ""; evidence.value = ""; pending.value = null; busy.value = false; stage.value = null; confirmKind.value = null; }
 function failure(cause: unknown) {
   if (cause instanceof ReviewApiError) {
     if ([401,403,404].includes(cause.status)) { clear(); emit("invalid"); error.value = "当前身份、权限或记录已失效，已隐藏原资料。"; return; }
@@ -74,22 +76,29 @@ function snapshot() {
     assetVersion: currentItem.value.current.version, contextDigest: selection.value.contextDigest,
     reason: reason.value.trim(), evidence: evidence.value.trim() };
 }
-async function send(acceptance = false) {
-  if (busy.value) return;
-  if (!pending.value) {
-    const data = snapshot();
-    if (!active.value || !data || data.reviewVersion < 1 || data.reason.length < 3 || data.evidence.length < 10) return;
-    if (acceptance ? selection.value?.review.review_status !== "SELECTED" : !available.value.some(row => row.id === target.value)) return;
-    if (chosen.value && !acceptance && !references.value.length) return;
-    const message = acceptance ? "最终采信所选证据？服务端将重新核对全部本轮证据、独立差异、当前流转和原始离线期限。" :
-      chosen.value ? `共同核实所选证据的 ${references.value.length} 个异常维度？位置、责任和状况等仍须独立闭环。` :
-      method.value === "REJECT_EVIDENCE" ? `以明确反证拒绝证据 ${target.value}，并对所列 ${references.value.length} 个维度共同记录决定？已有正式关联不得覆盖。` :
-      `将证据 ${target.value} 保留为补充线索？位置、责任、状况和期间流转不会因此关闭。`;
-    if (!window.confirm(message)) return;
-    pending.value = { path: `/inventory-reviews/tasks/${props.taskId}/items/${props.itemId}/${acceptance ? "acceptance" : "evidence-decisions"}`,
-      key: crypto.randomUUID(), version: selection.value!.taskVersion, body: acceptance ? data : { ...data, observationId: target.value,
-        method: method.value, subjects: references.value.map(row => ({ dimension: row.dimension, version: row.version })) } };
-  }
+function openConfirm(acceptance: boolean) {
+  if (busy.value || pending.value) return;
+  const data = snapshot();
+  if (!active.value || !data || data.reviewVersion < 1 || data.reason.length < 3 || data.evidence.length < 10) return;
+  if (acceptance ? selection.value?.review.review_status !== "SELECTED" : !available.value.some(row => row.id === target.value)) return;
+  if (chosen.value && !acceptance && !references.value.length) return;
+  confirmHint.value = acceptance ? "最终采信所选证据？服务端将重新核对全部本轮证据、独立差异、当前流转和原始离线期限。" :
+    chosen.value ? `共同核实所选证据的 ${references.value.length} 个异常维度？位置、责任和状况等仍须独立闭环。` :
+    method.value === "REJECT_EVIDENCE" ? `以明确反证拒绝证据 ${target.value}，并对所列 ${references.value.length} 个维度共同记录决定？已有正式关联不得覆盖。` :
+    `将证据 ${target.value} 保留为补充线索？位置、责任、状况和期间流转不会因此关闭。`;
+  stage.value = { path: `/inventory-reviews/tasks/${props.taskId}/items/${props.itemId}/${acceptance ? "acceptance" : "evidence-decisions"}`,
+    key: crypto.randomUUID(), version: selection.value!.taskVersion, body: acceptance ? data : { ...data, observationId: target.value,
+      method: method.value, subjects: references.value.map(row => ({ dimension: row.dimension, version: row.version })) } };
+  confirmKind.value = acceptance ? "acceptance" : "decision";
+}
+function runConfirm() {
+  if (busy.value || !stage.value) return;
+  pending.value = stage.value; stage.value = null; confirmKind.value = null;
+  void send();
+}
+function closeConfirm() { stage.value = null; confirmKind.value = null; }
+async function send() {
+  if (busy.value || !pending.value) return;
   const original = pending.value, token = ++epoch, who = identity.value; busy.value = true; error.value = "";
   try { await reviewRequest(original.path, original); if (!valid(token, who)) return; pending.value = null; emit("changed"); await load(); }
   catch (cause) { if (!valid(token, who)) return; if (cause instanceof ReviewApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
@@ -133,8 +142,15 @@ onBeforeUnmount(() => { live = false; epoch++; clear(); });
             <textarea class="fams-control" v-model="evidence" minlength="10" maxlength="2000" /></label>
         </div>
         <div class="fams-panel-actions">
-          <button class="fams-button" data-kind="primary" type="button" :disabled="!target || chosen && !references.length || reason.trim().length < 3 || evidence.trim().length < 10" @click="send(false)">共同提交证据处置</button>
-          <button class="fams-button" data-kind="secondary" type="button" :disabled="selection.review.review_status !== 'SELECTED' || reason.trim().length < 3 || evidence.trim().length < 10" @click="send(true)">最终采信所选证据</button>
+          <button class="fams-button" data-kind="primary" type="button" :disabled="!target || chosen && !references.length || reason.trim().length < 3 || evidence.trim().length < 10" @click="openConfirm(false)">共同提交证据处置</button>
+          <button class="fams-button" data-kind="secondary" type="button" :disabled="selection.review.review_status !== 'SELECTED' || reason.trim().length < 3 || evidence.trim().length < 10" @click="openConfirm(true)">最终采信所选证据</button>
+        </div>
+        <div v-if="confirmKind" class="fams-card fams-stack" role="group" :aria-label="confirmLabels[confirmKind]">
+          <p>{{ confirmHint }}</p>
+          <div class="fams-panel-actions">
+            <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="runConfirm">{{ confirmLabels[confirmKind] }}</button>
+            <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="closeConfirm">返回修改</button>
+          </div>
         </div>
       </fieldset>
 

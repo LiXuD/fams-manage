@@ -23,6 +23,14 @@ const locked = computed(() => busy.value || !!pending.value); const stock = comp
 const places = computed(() => catalogs.value.location?.filter(row => stock.value
   ? row.locationType === "BIN" && row.warehouseId === target.value?.warehouseId : row.locationType !== "BIN") ?? []);
 const labels: Record<string, string> = { PENDING: "待管理员批准", APPROVED: "已批准", REJECTED: "已驳回" };
+type Confirm = "propose" | "APPROVED" | "REJECTED";
+const confirmKind = ref<Confirm | null>(null);
+const decisionConfirm = computed(() => confirmKind.value === "APPROVED" || confirmKind.value === "REJECTED"
+  ? confirmKind.value : null);
+const confirmLabels: Record<Confirm, string> = { propose: "确认提交调拨目标变更", APPROVED: "确认批准调拨目标变更",
+  REJECTED: "确认驳回调拨目标变更" };
+const confirmHints: Record<Confirm, string> = { propose: "提请调拨目标变更？已交出实物和原责任保持，批准后新目标仍需按原业务实际接收。",
+  APPROVED: "批准本次新目标？这不会完成接收或解除实物锁。", REJECTED: "驳回此目标变更？" };
 const base = "/item-target-changes";
 async function catalog(kind: string, organization?: string) {
   const all: Choice[] = []; let p = 1; let items: Choice[];
@@ -74,16 +82,29 @@ async function send(path: string, body?: unknown, version = selected.value?.vers
   try { const result = await loanRequest<Change>(pending.value.path, pending.value); await list(); selected.value = result; pending.value = null; snapshot.value = null; }
   catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
 }
-function propose() {
-  const proposed = captureTarget(); if (!snapshot.value || !proposed || !checked.value || !reason.value.trim() || !code.value.trim() || !physical.value.trim()) return;
-  if (!window.confirm("提请调拨目标变更？已交出实物和原责任保持，批准后新目标仍需按原业务实际接收。")) return;
-  void send(`${base}?businessType=TRANSFER`, { businessId: snapshot.value.businessId, itemId: snapshot.value.itemId,
-    snapshot: snapshot.value, target: proposed, reason: reason.value.trim(), observedAssetCode: code.value.trim(),
-    physicalVerification: physical.value.trim(), physicalChecked: true }, snapshot.value.version);
+function openConfirm(kind: Confirm): void {
+  if (locked.value) return;
+  if (kind === "propose") {
+    const proposed = captureTarget();
+    if (!snapshot.value || !proposed || !checked.value || !reason.value.trim() || !code.value.trim() || !physical.value.trim()) return;
+  } else if (!selected.value || !decision.value.trim()) return;
+  confirmKind.value = kind;
 }
-function decide(result: string) {
-  if (!selected.value || !decision.value.trim() || !window.confirm(result === "APPROVED" ? "批准本次新目标？这不会完成接收或解除实物锁。" : "驳回此目标变更？")) return;
-  void send(`${base}/${selected.value.id}/decision?businessType=TRANSFER`, { result, reason: decision.value.trim() }, selected.value.version);
+function runConfirm(): void {
+  const kind = confirmKind.value;
+  if (!kind || busy.value) return;
+  confirmKind.value = null;
+  if (kind === "propose") {
+    const proposed = captureTarget(); const source = snapshot.value;
+    if (!source || !proposed) return;
+    void send(`${base}?businessType=TRANSFER`, { businessId: source.businessId, itemId: source.itemId,
+      snapshot: source, target: proposed, reason: reason.value.trim(), observedAssetCode: code.value.trim(),
+      physicalVerification: physical.value.trim(), physicalChecked: true }, source.version);
+    return;
+  }
+  const change = selected.value;
+  if (!change) return;
+  void send(`${base}/${change.id}/decision?businessType=TRANSFER`, { result: kind, reason: decision.value.trim() }, change.version);
 }
 async function paginate(delta: number) { if (!locked.value) { page.value += delta; selected.value = null; await refresh(); } }
 onMounted(async () => {
@@ -107,7 +128,7 @@ onMounted(async () => {
     <section class="fams-panel fams-stack" aria-label="调拨目标变更">
       <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
       <button v-if="pending" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="send(pending.path)">重试原操作</button>
-      <form v-if="snapshot && target && operator" class="fams-card fams-stack" @submit.prevent="propose">
+      <form v-if="snapshot && target && operator" class="fams-card fams-stack" @submit.prevent="openConfirm('propose')">
         <div class="fams-panel-head">
           <div>
             <h3 class="fams-panel-title">提请目标变更 · {{ snapshot.assetCode }}</h3>
@@ -132,6 +153,13 @@ onMounted(async () => {
           <label class="fams-selection"><input v-model="checked" type="checkbox" required>已核对实物及去向，未自动收回或解除业务锁</label>
           <div class="fams-form-actions"><button class="fams-button" data-kind="primary" type="submit">提交调拨目标变更</button></div>
         </fieldset>
+        <div v-if="confirmKind === 'propose'" class="fams-card fams-stack" role="group" :aria-label="confirmLabels.propose">
+          <p>{{ confirmHints.propose }}</p>
+          <div class="fams-panel-actions">
+            <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="runConfirm">{{ confirmLabels.propose }}</button>
+            <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="confirmKind = null">返回修改</button>
+          </div>
+        </div>
       </form>
       <div class="fams-panel-head"><h3 class="fams-panel-title">调拨目标变更记录</h3></div>
       <ul class="fams-timeline">
@@ -145,8 +173,15 @@ onMounted(async () => {
         <fieldset v-if="admin && selected.change_status === 'PENDING'" class="fams-stack" :disabled="locked">
           <label class="fams-field fams-field-wide"><span class="fams-field-label">核验意见</span><textarea class="fams-control" v-model="decision" maxlength="1000" /></label>
           <div class="fams-inline">
-            <button class="fams-button" data-kind="primary" type="button" :disabled="!decision.trim()" @click="decide('APPROVED')">批准调拨目标变更</button>
-            <button class="fams-button" data-kind="danger" type="button" :disabled="!decision.trim()" @click="decide('REJECTED')">驳回</button>
+            <button class="fams-button" data-kind="primary" type="button" :disabled="!decision.trim()" @click="openConfirm('APPROVED')">批准调拨目标变更</button>
+            <button class="fams-button" data-kind="danger" type="button" :disabled="!decision.trim()" @click="openConfirm('REJECTED')">驳回</button>
+          </div>
+          <div v-if="decisionConfirm" class="fams-card fams-stack" role="group" :aria-label="confirmLabels[decisionConfirm]">
+            <p>{{ confirmHints[decisionConfirm] }}</p>
+            <div class="fams-panel-actions">
+              <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="runConfirm">{{ confirmLabels[decisionConfirm] }}</button>
+              <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="confirmKind = null">返回修改</button>
+            </div>
           </div>
         </fieldset>
       </section>

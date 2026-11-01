@@ -26,6 +26,7 @@ describe("inventory evidence disposition and final acceptance", () => {
     }));
     const wrapper = panel(); await flushPromises(); await wrapper.find("select").setValue("30"); await flushPromises(); await explain(wrapper);
     await action(wrapper, "共同提交证据处置").trigger("click"); await flushPromises();
+    await action(wrapper, "确认共同提交证据处置").trigger("click"); await flushPromises();
     expect(JSON.parse(writes[0]!.body as string)).toMatchObject({ observationId: "30", reviewVersion: 3, recheckGeneration: 2, assetVersion: 7,
       contextDigest: "b".repeat(64), method: "REJECT_EVIDENCE", subjects: [{ dimension: "LOCATION", version: 4 }, { dimension: "CONFLICT", version: 5 }] });
     expect(writes[0]!.headers).toMatchObject({ "If-Match-Version": "8" }); expect(wrapper.emitted("changed")).toHaveLength(1); wrapper.unmount();
@@ -37,6 +38,7 @@ describe("inventory evidence disposition and final acceptance", () => {
     }));
     const wrapper = panel(); await flushPromises(); await wrapper.find("select").setValue("31"); await flushPromises(); await explain(wrapper);
     await action(wrapper, "共同提交证据处置").trigger("click"); await flushPromises();
+    await action(wrapper, "确认共同提交证据处置").trigger("click"); await flushPromises();
     expect(body).toMatchObject({ method: "VERIFY_SELECTED", subjects: [{ dimension: "CONFLICT", version: 5 }] }); wrapper.unmount();
   });
   it("a lost final acceptance reply retries the exact original acceptance request", async () => {
@@ -46,6 +48,7 @@ describe("inventory evidence disposition and final acceptance", () => {
     }));
     const wrapper = panel(); await flushPromises(); await explain(wrapper);
     await action(wrapper, "最终采信所选证据").trigger("click"); await flushPromises();
+    await action(wrapper, "确认最终采信所选证据").trigger("click"); await flushPromises();
     expect(writes[0]!.path).toContain("/acceptance"); expect(wrapper.find("fieldset").element.matches(":disabled")).toBe(true);
     await action(wrapper, "重试原证据处置").trigger("click"); await flushPromises(); expect(writes[1]).toEqual(writes[0]); wrapper.unmount();
   });

@@ -27,6 +27,7 @@ describe("inventory evidence selection", () => {
     }));
     const wrapper = panel(); await flushPromises(); await fill(wrapper);
     await action(wrapper, "保存待采信选择").trigger("click"); await flushPromises();
+    await action(wrapper, "确认保存待采信选择").trigger("click"); await flushPromises();
     expect(writes).toHaveLength(1);
     expect(JSON.parse(writes[0]!.body as string)).toMatchObject({ observationId: "30", recheckGeneration: 0, reviewVersion: 0,
       assetVersion: 7, contextDigest: "a".repeat(64), verifiedObservedAt: new Date("2026-10-17T09:30:00.123").toISOString() });
@@ -41,6 +42,7 @@ describe("inventory evidence selection", () => {
     }));
     const wrapper = panel(); await flushPromises(); await fill(wrapper);
     await action(wrapper, "保存待采信选择").trigger("click"); await flushPromises();
+    await action(wrapper, "确认保存待采信选择").trigger("click"); await flushPromises();
     expect(wrapper.find("fieldset").element.matches(":disabled")).toBe(true);
     await action(wrapper, "重试原证据选择").trigger("click"); await flushPromises();
     expect(writes[1]).toEqual(writes[0]); wrapper.unmount();

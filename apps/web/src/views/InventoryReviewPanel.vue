@@ -14,11 +14,14 @@ const board = ref<Board | null>(null); const page = ref(1); const selected = ref
 const reason = ref("已核对本轮现场正常观察"); const busy = ref(false); const error = ref("");
 const pending = ref<LoanMutation | null>(null); const result = ref<BatchResult | null>(null);
 const observations = ref<{ itemId: string; rows: Observation[]; total: number; page: number } | null>(null);
+const stage = ref<LoanMutation | null>(null); const confirmOpen = ref(false); const confirmCount = ref(0);
+const confirmLabel = "确认采信所选正常观察";
+const confirmHint = computed(() => `采信所选 ${confirmCount.value} 项正常观察？存在差异或冲突的项目不会自动采信。`);
 const identity = computed(() => JSON.stringify([session.user?.id, session.csrfToken, session.user?.roles]));
 const locked = computed(() => busy.value || !!pending.value);
 let generation = 0, live = true;
 const current = (epoch: number, owner: string, task: string) => live && epoch === generation && owner === identity.value && props.taskId === task;
-const clear = () => { generation++; board.value = null; selected.value = []; observations.value = null; result.value = null; pending.value = null; busy.value = false; };
+const clear = () => { generation++; board.value = null; selected.value = []; observations.value = null; result.value = null; pending.value = null; busy.value = false; stage.value = null; confirmOpen.value = false; };
 function failure(cause: unknown) {
   if (cause instanceof ReviewApiError) {
     if ([401, 403, 404].includes(cause.status)) { clear(); error.value = "登录、权限或当前记录已失效，已隐藏原资料，请重新登录或核对授权。"; return; }
@@ -40,15 +43,24 @@ async function load() {
   } catch (cause) { if (current(epoch, owner, task)) failure(cause); }
   finally { if (current(epoch, owner, task)) busy.value = false; }
 }
+function openAccept() {
+  if (busy.value || pending.value || !board.value) return;
+  const items = board.value.items.filter(row => selected.value.includes(row.item.id) && row.canAcceptNormal);
+  if (!items.length || !reason.value.trim()) return;
+  confirmCount.value = items.length;
+  stage.value = { path: `/inventory-reviews/tasks/${props.taskId}/normal-acceptance`, key: crypto.randomUUID(),
+    version: board.value.task.version, body: { reason: reason.value.trim(), items: items.map(row => ({ itemId: row.item.id,
+      recheckGeneration: row.item.recheck_generation, reviewVersion: row.review.version, assetVersion: row.current!.version })) } };
+  confirmOpen.value = true;
+}
+function runAccept() {
+  if (busy.value || !stage.value) return;
+  pending.value = stage.value; stage.value = null; confirmOpen.value = false;
+  void accept();
+}
+function closeConfirm() { stage.value = null; confirmOpen.value = false; }
 async function accept() {
-  if (busy.value || !board.value) return;
-  if (!pending.value) {
-    const items = board.value.items.filter(row => selected.value.includes(row.item.id) && row.canAcceptNormal);
-    if (!items.length || !reason.value.trim() || !window.confirm(`采信所选 ${items.length} 项正常观察？存在差异或冲突的项目不会自动采信。`)) return;
-    pending.value = { path: `/inventory-reviews/tasks/${props.taskId}/normal-acceptance`, key: crypto.randomUUID(),
-      version: board.value.task.version, body: { reason: reason.value.trim(), items: items.map(row => ({ itemId: row.item.id,
-        recheckGeneration: row.item.recheck_generation, reviewVersion: row.review.version, assetVersion: row.current!.version })) } };
-  }
+  if (busy.value || !board.value || !pending.value) return;
   const epoch = ++generation, owner = identity.value, task = props.taskId;
   const original = pending.value; busy.value = true; error.value = "";
   try {
@@ -146,7 +158,14 @@ onBeforeUnmount(() => { live = false; generation++; clear(); });
     <fieldset v-if="board && ['IN_PROGRESS','WAITING_REVIEW'].includes(board.task.task_status)" class="fams-card fams-stack" :disabled="locked">
       <label class="fams-field"><span class="fams-field-label">正常采信原因</span>
         <textarea class="fams-control" v-model="reason" maxlength="1000" /></label>
-      <button class="fams-button" data-kind="primary" type="button" :disabled="!selected.length || !reason.trim()" @click="accept">逐项采信所选正常观察</button>
+      <button class="fams-button" data-kind="primary" type="button" :disabled="!selected.length || !reason.trim()" @click="openAccept">逐项采信所选正常观察</button>
+      <div v-if="confirmOpen" class="fams-card fams-stack" role="group" :aria-label="confirmLabel">
+        <p>{{ confirmHint }}</p>
+        <div class="fams-panel-actions">
+          <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="runAccept">{{ confirmLabel }}</button>
+          <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="closeConfirm">返回修改</button>
+        </div>
+      </div>
     </fieldset>
 
     <template v-if="observations && board"><InventorySelectionPanel :key="observations.itemId" :task-id="taskId" :item-id="observations.itemId" :item-page="board.page" :observations="observations.rows" @invalid="clear" @changed="load" /></template>
