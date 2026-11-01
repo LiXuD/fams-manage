@@ -3,41 +3,43 @@ import { useSessionStore } from "@/auth/sessionStore";
 import HomeView from "@/views/HomeView.vue";
 import LoginView from "@/views/LoginView.vue";
 import PasswordChangeView from "@/views/PasswordChangeView.vue";
-import AssetLedgerView from "@/views/AssetLedgerView.vue";
-import AssetDraftView from "@/views/AssetDraftView.vue";
-import AssetDetailView from "@/views/AssetDetailView.vue";
-import AssetImportView from "@/views/AssetImportView.vue";
-import AssetImportReviewView from "@/views/AssetImportReviewView.vue";
-import AssetInitializationView from "@/views/AssetInitializationView.vue";
-import InboundView from "@/views/InboundView.vue";
-import InboundDraftView from "@/views/InboundDraftView.vue";
-import InboundDetailView from "@/views/InboundDetailView.vue";
-import RequisitionView from "@/views/RequisitionView.vue";
-import RequisitionDraftView from "@/views/RequisitionDraftView.vue";
-import RequisitionDetailView from "@/views/RequisitionDetailView.vue";
-import LoanView from "@/views/LoanView.vue";
-import LoanDetailView from "@/views/LoanDetailView.vue";
-import AssetReturnView from "@/views/AssetReturnView.vue";
-import AssetReturnDraftView from "@/views/AssetReturnDraftView.vue";
-import AssetReturnDetailView from "@/views/AssetReturnDetailView.vue";
-import TransferView from "@/views/TransferView.vue";
-import TransferDraftView from "@/views/TransferDraftView.vue";
-import TransferDetailView from "@/views/TransferDetailView.vue";
 
-import ProxyConfirmationView from "@/views/ProxyConfirmationView.vue";
-import BusinessResultNoticeView from "@/views/BusinessResultNoticeView.vue";
-import BusinessResultReviewView from "@/views/BusinessResultReviewView.vue";
+// 入口三页保持同步加载，其余视图按路由切分，避免 35 个视图进首屏 chunk。
+const AssetLedgerView = () => import("@/views/AssetLedgerView.vue");
+const AssetDraftView = () => import("@/views/AssetDraftView.vue");
+const AssetDetailView = () => import("@/views/AssetDetailView.vue");
+const AssetImportView = () => import("@/views/AssetImportView.vue");
+const AssetImportReviewView = () => import("@/views/AssetImportReviewView.vue");
+const AssetInitializationView = () => import("@/views/AssetInitializationView.vue");
+const InboundView = () => import("@/views/InboundView.vue");
+const InboundDraftView = () => import("@/views/InboundDraftView.vue");
+const InboundDetailView = () => import("@/views/InboundDetailView.vue");
+const RequisitionView = () => import("@/views/RequisitionView.vue");
+const RequisitionDraftView = () => import("@/views/RequisitionDraftView.vue");
+const RequisitionDetailView = () => import("@/views/RequisitionDetailView.vue");
+const LoanView = () => import("@/views/LoanView.vue");
+const LoanDetailView = () => import("@/views/LoanDetailView.vue");
+const AssetReturnView = () => import("@/views/AssetReturnView.vue");
+const AssetReturnDraftView = () => import("@/views/AssetReturnDraftView.vue");
+const AssetReturnDetailView = () => import("@/views/AssetReturnDetailView.vue");
+const TransferView = () => import("@/views/TransferView.vue");
+const TransferDraftView = () => import("@/views/TransferDraftView.vue");
+const TransferDetailView = () => import("@/views/TransferDetailView.vue");
 
-import ItemTargetChangeView from "@/views/ItemTargetChangeView.vue";
-import TransferTargetChangeView from "@/views/TransferTargetChangeView.vue";
+const ProxyConfirmationView = () => import("@/views/ProxyConfirmationView.vue");
+const BusinessResultNoticeView = () => import("@/views/BusinessResultNoticeView.vue");
+const BusinessResultReviewView = () => import("@/views/BusinessResultReviewView.vue");
 
-import InventoryTaskView from "@/views/InventoryTaskView.vue";
-import InventoryTaskDraftView from "@/views/InventoryTaskDraftView.vue";
-import InventoryTaskDetailView from "@/views/InventoryTaskDetailView.vue";
-import RepairView from "@/views/RepairView.vue";
-import RepairDraftView from "@/views/RepairDraftView.vue";
-import RepairDetailView from "@/views/RepairDetailView.vue";
-import RepairAssistanceView from "@/views/RepairAssistanceView.vue";
+const ItemTargetChangeView = () => import("@/views/ItemTargetChangeView.vue");
+const TransferTargetChangeView = () => import("@/views/TransferTargetChangeView.vue");
+
+const InventoryTaskView = () => import("@/views/InventoryTaskView.vue");
+const InventoryTaskDraftView = () => import("@/views/InventoryTaskDraftView.vue");
+const InventoryTaskDetailView = () => import("@/views/InventoryTaskDetailView.vue");
+const RepairView = () => import("@/views/RepairView.vue");
+const RepairDraftView = () => import("@/views/RepairDraftView.vue");
+const RepairDetailView = () => import("@/views/RepairDetailView.vue");
+const RepairAssistanceView = () => import("@/views/RepairAssistanceView.vue");
 
 declare module "vue-router" {
   interface RouteMeta {
