@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import type { LoanMutation } from "@/loan/api";
-import { reviewRequest, ReviewApiError, type Board, type ReviewItem } from "@/inventory-review/api";
+import { reviewRequest, ReviewApiError, subjectStatusLabels as statuses, type Board, type ReviewItem } from "@/inventory-review/api";
 import { repairStates } from "@/repair/api";
 import type { TransferChoice, TransferTarget } from "../../../../packages/api-types/src/transfer";
 const props = defineProps<{ taskId: string; item: ReviewItem; itemPage: number; observationIds: string[] }>();
@@ -32,7 +32,6 @@ const locked = computed(() => busy.value || !!pending.value || !!confirmation.va
 const visible = computed(() => subjects.value.filter(row => row.item_id === props.item.item.id));
 const selected = computed(() => visible.value.filter(row => chosen.value.includes(`${row.observation_id}:${row.dimension}`)));
 const dimensions: Record<string, string> = { NORMAL: "正常", LOCATION: "位置不符", USAGE_MODE: "使用方式不符", RESPONSIBILITY: "责任不符", CONDITION: "状况待核实", UNKNOWN: "未知事实", PERIOD_MOVEMENT: "期间流转", CONFLICT: "观察冲突", OLD_ASSIGNMENT: "旧分配证据", TIME: "时间异常", FINDING: "任务外线索", LATE: "迟到线索" };
-const statuses: Record<string, string> = { OPEN: "待处理", PROCESSING: "处理中", CLOSED: "已关闭", TRANSFERRED: "已转后续业务" };
 const methods: Record<string, string> = { BOOK_CORRECT: "有明确证据确认账面正确", CONTINUE_SEARCH: "继续查找与核实", FORMAL_TRANSFER: "转正式调拨", REFRESH_TRANSFER: "核对关联调拨进度", FORMAL_REPAIR: "转正式维修", LINK_REPAIR: "关联已有维修单", REFRESH_REPAIR: "核对关联维修进度" };
 let epoch = 0, live = true;
 const valid = (token: number, who: string) => live && token === epoch && who === identity.value;
@@ -183,8 +182,8 @@ onBeforeUnmount(() => { live = false; epoch++; clear(); });
         <tbody>
           <tr v-for="row in visible" :key="`${row.observation_id}:${row.dimension}`">
             <td><label class="fams-selection"><input v-model="chosen" type="checkbox" :value="`${row.observation_id}:${row.dimension}`"
-              :disabled="locked || ['CLOSED','TRANSFERRED'].includes(row.subject_status)" :aria-label="`选择证据 ${row.observation_id} 的${dimensions[row.dimension] ?? row.dimension}`" /></label></td>
-            <th scope="row" data-column-kind="identity">证据 {{ row.observation_id }} · {{ dimensions[row.dimension] ?? row.dimension }}</th>
+              :disabled="locked || ['CLOSED','TRANSFERRED'].includes(row.subject_status)" :aria-label="`选择证据 ${row.observation_id} 的${dimensions[row.dimension]}`" /></label></td>
+            <th scope="row" data-column-kind="identity">证据 {{ row.observation_id }} · {{ dimensions[row.dimension] }}</th>
             <td>{{ statuses[row.subject_status] }} · 第 {{ row.version }} 版<p v-if="row.method">{{ methods[row.method] }}</p><p v-if="row.reviewer_username">{{ row.reviewer_username }} · {{ new Date(row.reviewed_at!).toLocaleString() }}</p><p>{{ row.reason }}</p><p>依据：{{ row.evidence || '尚未提交' }}</p></td>
             <td><p v-for="decision in row.decisions" :key="decision.after_version">第 {{ decision.after_version }} 版：{{ methods[decision.method] }} · {{ statuses[decision.subject_status] }}；{{ decision.actor_username }}；{{ decision.reason }}；{{ decision.evidence }}</p><p v-for="link in row.links" :key="link.decision_version"><router-link :to="{path:'/transfers',query:{id:link.transfer_id}}">查看关联调拨 {{ link.transfer_id }}</router-link></p><p v-for="link in row.repairLinks" :key="`repair:${link.decision_version}`"><router-link :to="{path:'/repairs/' + link.repair_id}">查看关联维修 {{ link.repair_id }}</router-link></p></td>
           </tr>

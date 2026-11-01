@@ -2,6 +2,7 @@
 import { ref, watch } from "vue";
 import { loanRequest, loanMessage } from "@/loan/api";
 import type { LoanMutation } from "@/loan/api";
+import { allocationStatusLabels as labels } from "@/requisition/api";
 
 const props = defineProps<{ id: string; version: number }>();
 const emit = defineEmits<{ saved: [] }>();
@@ -13,7 +14,6 @@ interface Snapshot {
 const snapshot = ref<Snapshot | null>(null), target = ref(""), reason = ref(""), evidence = ref("");
 const checked = ref(false), busy = ref(false), error = ref(""), retryable = ref(false);
 let pending: LoanMutation | null = null, generation = 0;
-const labels: Record<string, string> = { WAITING_DELIVERY: "待交出", DELIVERED_WAITING_RECEIPT: "已交出待接收", RECOVERY_PENDING_CANCEL: "待收回取消", RECEIVED: "已接收", CANCELLED: "已取消" };
 watch(() => [props.id, props.version], () => {
   generation++; snapshot.value = null; pending = null; retryable.value = false;
   target.value = ""; reason.value = ""; evidence.value = ""; checked.value = false;

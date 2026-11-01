@@ -2,12 +2,14 @@
 const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const text = (value: unknown) => typeof value === "string" || typeof value === "number" ? String(value) : "未记录";
 const list = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
+const enumText = (map: Record<string, string>, value: unknown) => map[text(value)] ?? "未记录";
 const synchronizationReasons: Record<string, string> = {
     DECLARED: "当前已声明", PARTICIPATION_REVOKED: "参与关系已撤销", IDENTITY_DISABLED: "身份已停用或失效", BINDING_MISSING: "当前没有有效绑定",
     NO_DEVICE_DECLARATION: "尚无设备声明", DEVICE_CONFIRMATION_MISSING: "仍有设备缺少确认", UNBOUND_OBSERVATION: "原观察没有绑定依据",
     BINDING_CHANGED: "绑定已变化", NO_DECLARATION: "尚未声明", ASSIGNMENT_CHANGED: "任务分配已变化", NEW_OBSERVATION: "声明后有新上传", LOCAL_EVIDENCE_MISSING: "本机有缺失证据"
 };
-export const synchronizationReasonText = (value: string) => synchronizationReasons[value] || value;
+export const synchronizationReasonText = (value: string) => synchronizationReasons[value] ?? "未记录";
+const conditions: Record<string, string> = { GOOD: "正常", DAMAGED: "损坏", UNKNOWN: "未知" };
 const dimensions: Record<string, string> = { NORMAL: "正常复核", LOCATION: "位置", USAGE_MODE: "使用模式", RESPONSIBILITY: "责任", CONDITION: "实物状况",
     UNKNOWN: "未知信息", PERIOD_MOVEMENT: "期间流转", CONFLICT: "证据冲突", OLD_ASSIGNMENT: "旧分配", TIME: "时间异常", FINDING: "盘盈或任务外线索", LATE: "迟到" };
 const states: Record<string, string> = { ACCEPTED: "已采信", NOT_OBSERVED: "明确未盘，不计正常", SELECTED: "待采信", OPEN: "待处理", PROCESSING: "处理中", CLOSED: "已闭环", TRANSFERRED: "已转后续业务" };
@@ -18,24 +20,24 @@ export function sealedRecordLines(value: unknown): string[] {
     const row = record(value), item = record(row.item), observation = record(row.observation), lines: string[] = [];
     if (item.id) {
         const snapshot = record(item.snapshot_json), review = record(row.review), date = record(row.dateChange);
-        lines.push(`${text(snapshot.assetCode)} · ${text(snapshot.name)}`, `冻结复核：${states[text(review.review_status)] || text(review.review_status)}`,
+        lines.push(`${text(snapshot.assetCode)} · ${text(snapshot.name)}`, `冻结复核：${enumText(states, review.review_status)}`,
             `处理人：${text(review.reviewer_username)} · ${text(review.reviewed_at)}`, `原因：${text(review.reason)}`, `依据：${text(review.evidence)}`);
         if (date.observedAt) lines.push(`已采信观察时间：${text(date.observedAt)}`, `本次观察业务日期：${text(date.businessDate)} · 最终最近盘点日期：${text(date.effectiveDate)}`);
         for (const prior of list(row.unobservedHistory)) {
             const history = record(prior);
-            lines.push(`未盘历史：${unobserved[text(history.reason_kind)] || text(history.reason_kind)} · ${text(history.reason)} · ${text(history.actor_username)} · ${text(history.recorded_at)}`);
+            lines.push(`未盘历史：${enumText(unobserved, history.reason_kind)} · ${text(history.reason)} · ${text(history.actor_username)} · ${text(history.recorded_at)}`);
         }
         return lines;
     }
     if (observation.id) {
         const facts = record(observation.facts_json), actual = record(facts.actual);
-        lines.push(`原始证据 ${text(observation.id)} · ${outcomes[text(observation.outcome)] || text(observation.outcome)}`,
+        lines.push(`原始证据 ${text(observation.id)} · ${enumText(outcomes, observation.outcome)}`,
             `原观察时间：${text(observation.raw_observed_at)} · 接收时间：${text(observation.received_at)}`);
-        if (actual.condition) lines.push(`现场位置：${text(actual.locationHint || actual.locationId)} · 状况：${({ GOOD: "正常", DAMAGED: "损坏", UNKNOWN: "未知" } as Record<string, string>)[text(actual.condition)] || text(actual.condition)}`);
+        if (actual.condition) lines.push(`现场位置：${text(actual.locationHint || actual.locationId)} · 状况：${enumText(conditions, actual.condition)}`);
         if (actual.unknownReason) lines.push(`未知原因：${text(actual.unknownReason)}`);
         for (const value of list(row.subjects)) {
             const subject = record(value);
-            lines.push(`${dimensions[text(subject.dimension)] || text(subject.dimension)}：${states[text(subject.subject_status)] || text(subject.subject_status)} · ${text(subject.reviewer_username)}`,
+            lines.push(`${enumText(dimensions, subject.dimension)}：${enumText(states, subject.subject_status)} · ${text(subject.reviewer_username)}`,
                 `处理依据：${text(subject.reason)} · ${text(subject.evidence)}`);
         }
         for (const value of list(row.transfers)) {

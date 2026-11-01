@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { loanMessage, loanRequest } from "@/loan/api";
+import { inventoryTaskStatusLabels as labels } from "@/inventory-review/api";
 import { useSessionStore } from "@/auth/sessionStore";
 
 type Task = { id: string; name: string; task_status: string; starts_at: string; due_at: string; overdue?: boolean };
@@ -9,7 +10,6 @@ const session = useSessionStore();
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 const tasks = ref<Task[]>([]); const total = ref(0); const page = ref(1);
 const busy = ref(false); const error = ref("");
-const labels: Record<string, string> = { DRAFT: "草稿", READY: "待开始", IN_PROGRESS: "进行中", WAITING_REVIEW: "待复核", COMPLETED: "已完成", CANCELLED: "已取消", TERMINATED: "已终止" };
 async function list() {
   const result = await loanRequest<{ items: Task[]; total: number }>(`/inventory-tasks?page=${page.value}&pageSize=20`);
   tasks.value = result.items; total.value = result.total;

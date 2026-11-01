@@ -4,7 +4,7 @@ import { useSessionStore } from "@/auth/sessionStore";
 import type { LoanMutation } from "@/loan/api";
 import type { AssetCard } from "@/asset/api";
 import type { InboundReceipt } from "@/inbound/api";
-import { ReviewApiError, reviewRequest, type Observation } from "@/inventory-review/api";
+import { ReviewApiError, reviewRequest, subjectStatusLabels as states, type Observation } from "@/inventory-review/api";
 import InventoryPhotoEvidence from "./InventoryPhotoEvidence.vue";
 interface FindingView { taskVersion: number; observation: Observation;
   subject: { version?: number; subject_status?: string; method?: string };
@@ -130,7 +130,6 @@ async function paginate(delta: number) { if (locked.value || page.value + delta 
 watch(owner, () => { clear(); page.value = 1; error.value = ""; }, { flush: "sync" });
 watch(method, () => { assets.value = []; receipts.value = []; selectedAsset.value = ""; selectedReceipt.value = ""; });
 onBeforeUnmount(() => { live = false; clear(); });
-const states: Record<string, string> = { OPEN: "待处理", PROCESSING: "处理中", CLOSED: "已关闭" };
 const ownerStates: Record<string, string> = { PENDING_ADMIN_DECISION: "待管理员审批", WAITING_WAREHOUSE_CLAIM: "待库管领取", WAREHOUSE_PROCESSING: "库管处理中", COMPLETED: "已完成", REJECTED: "已驳回", CANCELLED: "已取消" };
 const methodLabels: Record<string, string> = { NON_ENTERPRISE: "非企业资产依据", DUPLICATE_ASSET: "已登记资产重复线索", LINK_INBOUND: "关联正式入库", REFRESH_INBOUND: "核对正式入库进度" };
 </script>

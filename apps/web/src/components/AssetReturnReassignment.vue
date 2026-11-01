@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import { loanRequest, loanMessage } from "@/loan/api";
+import { loanRequest, loanMessage, loanLabels as labels } from "@/loan/api";
 import type { LoanMutation } from "@/loan/api";
 
 const props = defineProps<{ id: string; version: number }>();
@@ -13,7 +13,6 @@ interface Snapshot {
 const snapshot = ref<Snapshot | null>(null), target = ref(""), reason = ref(""), evidence = ref("");
 const checked = ref(false), busy = ref(false), error = ref(""), retryable = ref(false);
 let pending: LoanMutation | null = null, generation = 0;
-const labels: Record<string, string> = { WAREHOUSE_PROCESSING: "待实物验收" };
 watch(() => [props.id, props.version], () => {
   generation++; snapshot.value = null; pending = null; retryable.value = false;
   target.value = ""; reason.value = ""; evidence.value = ""; checked.value = false;

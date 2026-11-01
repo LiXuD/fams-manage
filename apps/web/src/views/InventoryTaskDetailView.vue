@@ -9,6 +9,7 @@ import InventorySynchronizationPanel from "@/views/InventorySynchronizationPanel
 import InventoryFindingPanel from "@/views/InventoryFindingPanel.vue";
 import InventoryReviewPanel from "@/views/InventoryReviewPanel.vue";
 import { LoanApiError, loanMessage, loanRequest, type LoanMutation } from "@/loan/api";
+import { inventoryTaskStatusLabels as labels } from "@/inventory-review/api";
 import { useSessionStore } from "@/auth/sessionStore";
 
 type Range = { usingOrganizationId: string | null; owningOrganizationId: string | null; categoryId: string | null;
@@ -29,7 +30,6 @@ const locked = computed(() => busy.value || !!pending.value);
 const executors = ref<Choice[]>([]);
 const selectedItems = ref<string[]>([]); const executor = ref(""); const reason = ref(""); const recheck = ref(false);
 const preview = ref<{ count: number; digest: string } | null>(null);
-const labels: Record<string, string> = { DRAFT: "草稿", READY: "待开始", IN_PROGRESS: "进行中", WAITING_REVIEW: "待复核", COMPLETED: "已完成", CANCELLED: "已取消", TERMINATED: "已终止" };
 const manageable = computed(() => !!detail.value && ["READY", "IN_PROGRESS", "WAITING_REVIEW"].includes(detail.value.task.task_status));
 type Confirm = "publish" | "copy" | "start" | "cancel" | "terminate" | "delete" | "assign";
 const confirmKind = ref<Confirm | null>(null);

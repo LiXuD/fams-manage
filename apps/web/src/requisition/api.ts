@@ -4,6 +4,11 @@ import type { RequisitionCatalog, RequisitionChoice } from "../../../../packages
 export const requisitionLabels: Record<string, string> = { DRAFT: "草稿", PENDING_ADMIN_DECISION: "待管理员确认", REJECTED: "已驳回",
   WAITING_WAREHOUSE_CLAIM: "待库管领取", WAREHOUSE_PROCESSING: "库管处理中", WAITING_HANDOVER: "待交接",
   PARTIALLY_COMPLETED: "部分完成", COMPLETED: "已完成", UNFULFILLABLE: "无法满足", CANCELLED: "已取消" };
+export const allocationStatusLabels: Record<string, string> = { WAITING_DELIVERY: "待交出",
+  DELIVERED_WAITING_RECEIPT: "已交出待接收", RECEIVED: "已接收", RECOVERY_PENDING_CANCEL: "待收回取消", CANCELLED: "已取消" };
+export const handoverEventLabels: Record<string, string> = { DELIVERED: "已交出", RECEIVED: "已接收",
+  REFUSED: "接收人反馈不符", RECOVERY_REQUESTED: "已登记收回", RECOVERED: "已收回验收", CANCELLED: "已取消",
+  PROXY_RECEIVED: "代确认签收", TARGET_CHANGED: "已批准目标变更" };
 
 export async function loadRequisitionCatalogs(): Promise<{ catalogs: Record<string, RequisitionChoice[]>;
   canShared: boolean; employeeId: string; organizationId: string }> {

@@ -54,3 +54,7 @@ export const reviewProblems: Record<string, string> = {
 };
 export const inventoryLateResultLabels: Record<string, string> = { OPEN: "待补充核实", INFORMATION: "补充线索",
   FOLLOWUP_OPEN: "关联复盘尚待实际完成", REVIEWED: "已记录补充结论" };
+export const inventoryTaskStatusLabels: Record<string, string> = { DRAFT: "草稿", READY: "待开始", IN_PROGRESS: "进行中",
+  WAITING_REVIEW: "待复核", COMPLETED: "已完成", CANCELLED: "已取消", TERMINATED: "已终止", DELETED: "已删除" };
+export const subjectStatusLabels: Record<string, string> = { OPEN: "待处理", PROCESSING: "处理中", CLOSED: "已关闭",
+  TRANSFERRED: "已转后续业务" };

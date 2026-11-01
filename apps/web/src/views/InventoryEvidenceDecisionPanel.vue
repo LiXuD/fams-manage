@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { reviewRequest, ReviewApiError, type Board, type Observation, type Review } from "@/inventory-review/api";
+import { reviewRequest, ReviewApiError, subjectStatusLabels as statuses, type Board, type Observation, type Review } from "@/inventory-review/api";
 import type { LoanMutation } from "@/loan/api";
 const props = defineProps<{ taskId: string; itemId: string; itemPage: number; observations: Observation[] }>();
 const emit = defineEmits<{ invalid: []; changed: [] }>();
@@ -24,7 +24,6 @@ const available = computed(() => props.observations.filter(row => row.recheck_ge
   ["ACCEPTED", "DIFFERENCE_REVIEW", "CONFLICT_REVIEW", "OLD_ASSIGNMENT_REVIEW", "TIME_REVIEW"].includes(row.outcome)));
 const active = computed(() => board.value && ["IN_PROGRESS", "WAITING_REVIEW"].includes(board.value.task.task_status));
 const dimensions: Record<string, string> = { NORMAL: "正常", LOCATION: "位置", USAGE_MODE: "使用方式", RESPONSIBILITY: "责任", CONDITION: "状况", UNKNOWN: "未知事实", PERIOD_MOVEMENT: "期间流转", CONFLICT: "观察冲突", OLD_ASSIGNMENT: "旧分配", TIME: "时间异常", FINDING: "任务外线索", LATE: "迟到线索" };
-const statuses: Record<string, string> = { OPEN: "待处理", PROCESSING: "处理中", CLOSED: "已关闭", TRANSFERRED: "已转后续业务" };
 let epoch = 0, live = true;
 const valid = (token: number, who: string) => live && token === epoch && who === identity.value;
 function clear() { selection.value = null; board.value = null; subjects.value = []; dispositions.value = []; target.value = "";
@@ -131,7 +130,7 @@ onBeforeUnmount(() => { live = false; epoch++; clear(); });
         <label class="fams-field"><span class="fams-field-label">待处理原始证据</span>
           <select class="fams-control" v-model="target" @change="readSubjects"><option value="">请选择</option><option v-for="row in available" :key="row.id" :value="row.id">证据 {{ row.id }} · {{ row.id === selection.review.observation_id ? '当前所选' : '未选证据' }} · 位置 {{ row.facts_json.actual?.locationHint || row.facts_json.actual?.locationId || '待核实' }}</option></select></label>
         <ul v-if="subjects.length" class="fams-timeline">
-          <li v-for="row in subjects" :key="row.dimension">{{ dimensions[row.dimension] || row.dimension }}：{{ statuses[row.subject_status] }} · 第 {{ row.version }} 版<span v-if="row.reviewer_username"> · {{ row.reviewer_username }}</span></li>
+          <li v-for="row in subjects" :key="row.dimension">{{ dimensions[row.dimension] }}：{{ statuses[row.subject_status] }} · 第 {{ row.version }} 版<span v-if="row.reviewer_username"> · {{ row.reviewer_username }}</span></li>
         </ul>
         <label class="fams-field"><span class="fams-field-label">处理方式</span>
           <select class="fams-control" v-model="method"><option v-if="chosen" value="VERIFY_SELECTED">核实所选证据的冲突、旧分配或时间依据</option><template v-else><option value="REJECT_EVIDENCE">以明确反证拒绝这条未选证据</option><option value="SUPPLEMENTAL">保留为补充线索，物理差异继续处理</option></template></select></label>

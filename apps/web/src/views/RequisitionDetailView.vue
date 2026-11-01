@@ -4,7 +4,7 @@ import RequisitionReassignment from "@/components/RequisitionReassignment.vue";
 import AppChrome from "@/components/AppChrome.vue";
 import RequisitionDemandForm from "./RequisitionDemandForm.vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { loadRequisitionCatalogs, requisitionLabels as labels, requisitionMessage, requisitionRequest } from "@/requisition/api";
+import { allocationStatusLabels, handoverEventLabels, loadRequisitionCatalogs, requisitionLabels as labels, requisitionMessage, requisitionRequest } from "@/requisition/api";
 import type { Requisition, RequisitionAllocation, RequisitionChoice, RequisitionDemand, RequisitionDemandInput,
   RequisitionInventory } from "../../../../packages/api-types/src/requisition";
 
@@ -29,9 +29,6 @@ const canExecute = computed(() => warehouse.value && (!owner.value || owner.valu
   && ["WAITING_WAREHOUSE_CLAIM", "WAREHOUSE_PROCESSING", "WAITING_HANDOVER"].includes(selected.value?.requestStatus ?? ""));
 const reasonLabels: Record<string, string> = { STOCK_SHORTAGE: "库存不足", SPECIFICATION_MISMATCH: "规格不匹配",
   TEMPORARILY_UNAVAILABLE: "暂不可用", OTHER: "其他" };
-const handoverLabels: Record<string, string> = { WAITING_DELIVERY: "待交出", DELIVERED_WAITING_RECEIPT: "已交出待接收",
-  RECOVERY_PENDING_CANCEL: "待收回取消", RECEIVED: "已接收", REFUSED: "接收人反馈不符", CANCELLED: "已取消",
-  DELIVERED: "已交出", RECOVERY_REQUESTED: "已登记收回", RECOVERED: "已收回验收" };
 
 async function open() {
   if (!/^[1-9][0-9]{0,18}$/.test(props.id)) { error.value = "没有此申请或操作的当前权限。"; return; }
@@ -182,7 +179,7 @@ onMounted(async () => {
       <p v-for="record in selected.unfulfillable" :key="record.id" class="fams-panel-subtitle">无法满足 {{ record.quantity }} 件：{{ reasonLabels[record.reasonCode] }} {{ record.reasonDescription }}；当时可用 {{ record.inventoryQuerySummaryJson.availableCount }} 件，查询于 {{ record.inventoryQuerySummaryJson.queriedAt }}</p>
 
       <article v-for="allocation in selected.allocations" :key="allocation.id" class="fams-card fams-stack">
-        <h3>{{ allocation.assetSnapshotJson.assetCode }} · {{ allocation.assetSnapshotJson.name }} · {{ handoverLabels[allocation.allocationStatus] ?? allocation.allocationStatus }}</h3>
+        <h3>{{ allocation.assetSnapshotJson.assetCode }} · {{ allocation.assetSnapshotJson.name }} · {{ allocationStatusLabels[allocation.allocationStatus] }}</h3>
         <p v-if="allocation.approvedTargetJson">批准变更后的责任人员：{{ catalogs.employee?.find(c => c.id === allocation.approvedTargetJson!.employeeId)?.name ?? allocation.approvedTargetJson.employeeId }} · 固定位置：{{ catalogs.location?.find(c => c.id === allocation.approvedTargetJson!.locationId)?.name ?? allocation.approvedTargetJson.locationId }}</p>
         <div class="fams-panel-actions">
           <router-link v-if="canExecute && ['WAITING_DELIVERY', 'DELIVERED_WAITING_RECEIPT'].includes(allocation.allocationStatus)" class="fams-button" data-kind="link" data-size="sm"
@@ -220,7 +217,7 @@ onMounted(async () => {
 
       <p v-for="h in selected.handovers" :key="h.allocationId" class="fams-panel-subtitle">交出 {{ h.deliveredAt }} · 截止 {{ h.receiptDeadlineAt }} · 实物去向 {{ h.destinationText }}</p>
       <ul v-if="selected.handoverEvents?.length" class="fams-timeline">
-        <li v-for="e in selected.handoverEvents" :key="e.id">{{ handoverLabels[e.eventType] ?? e.eventType }} · {{ e.evidenceText }}<small>{{ e.occurredAt }}</small></li>
+        <li v-for="e in selected.handoverEvents" :key="e.id">{{ handoverEventLabels[e.eventType] }} · {{ e.evidenceText }}<small>{{ e.occurredAt }}</small></li>
       </ul>
       <p class="fams-field-hint">交出后仍保留正式在库事实和锁；接收人从小程序“待接收”核对实物，成功后更新正式责任。</p>
     </section>
