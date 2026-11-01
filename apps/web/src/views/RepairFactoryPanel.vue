@@ -103,7 +103,7 @@ function prepare(action: Action) {
     : action === "upload" && financialPurpose ? row?.actions?.uploadFinancialEvidence : state.actions[permission as keyof typeof state.actions];
   if (!permitted) return;
   const guards = { assetVersion: state.assetVersion, ownershipVersion: state.ownershipVersion, lockVersion: state.lockVersion };
-  let path = "", body: unknown, chosen: File | undefined, form: Record<string, string> | undefined, label = "";
+  let path: string, body: unknown, chosen: File | undefined, form: Record<string, string> | undefined, label: string;
   if (["requestScope", "requestCostScope", "approveScope", "rejectScope", "withdrawScope", "cancelRound"].includes(action) && reason.value.trim().length < 3) { error.value = "请填写本次办理的明确原因。"; return; }
   if (action === "requestCostScope") {
     const limit = costLimit.value.trim();
