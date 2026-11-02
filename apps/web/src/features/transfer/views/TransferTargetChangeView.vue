@@ -3,6 +3,7 @@ import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
 import { buildTransferTarget, loadCatalogPages, resolveReference } from "@/features/transfer/references";
@@ -19,7 +20,9 @@ const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 const operator = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR"));
 const rows = ref<Change[]>([]); const selected = ref<Change | null>(null); const snapshot = ref<Snapshot | null>(null);
 const target = ref<Target | null>(null); const catalogs = ref<Record<string, Choice[]>>({}); const employees = ref<Choice[]>([]);
-const page = shallowRef(1); const total = shallowRef(0); const busy = shallowRef(false); const error = shallowRef(""); const pending = ref<BusinessMutation | null>(null);
+const page = shallowRef(1); const total = shallowRef(0); const busy = shallowRef(false); const error = shallowRef("");
+/** 确认式幂等提交：在途意图槽与幂等键簿记归底座；busy/locked、URL、confirmKind 两页确认流与文案留在本视图。 */
+const { pending, prepare: draft, confirm: adopt, settle } = useConfirmedSubmit<Omit<BusinessMutation, "key">>();
 const reason = shallowRef(""); const code = shallowRef(""); const physical = shallowRef(""); const checked = shallowRef(false); const decision = shallowRef("");
 const locked = computed(() => busy.value || !!pending.value); const stock = computed(() => snapshot.value?.source.lifecycleStatus === "IN_STOCK");
 const places = computed(() => catalogs.value.location?.filter(row => stock.value
@@ -88,10 +91,13 @@ function captureTarget(): Target | null {
   return buildTransferTarget({ stock: stock.value, custodyType: value.custodyType, location, owner, warehouse, usingOrganization: organization, employee });
 }
 async function send(path: string, body?: unknown, version = selected.value?.version ?? 0) {
-  if (busy.value || pending.value && pending.value.path !== path) return;
-  pending.value ??= { path, key: crypto.randomUUID(), version, body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown };
+  if (busy.value) return;
+  let operation = pending.value;
+  if (operation && operation.payload.path !== path) return;
+  if (!operation) { draft(() => ({ path, version, body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown })); operation = adopt(); }
+  if (!operation) return;
   busy.value = true; error.value = "";
-  try { const result = await businessRequest<Change>(pending.value.path, pending.value); await list(); selected.value = result; pending.value = null; snapshot.value = null; }
+  try { const result = await businessRequest<Change>(operation.payload.path, { ...operation.payload, key: operation.key }); await list(); selected.value = result; settle(); snapshot.value = null; }
   catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 function openConfirm(kind: Confirm): void {
@@ -147,7 +153,7 @@ onMounted(async () => {
     </template>
     <section class="fams-panel fams-stack" aria-label="调拨目标变更">
       <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
-      <button v-if="pending" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="send(pending.path)">重试原操作</button>
+      <button v-if="pending" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="send(pending.payload.path)">重试原操作</button>
       <form v-if="snapshot && target && operator" class="fams-card fams-stack" @submit.prevent="openConfirm('propose')">
         <div class="fams-panel-head">
           <div>

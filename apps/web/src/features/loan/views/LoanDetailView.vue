@@ -3,6 +3,7 @@ import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { businessMessage, businessRequest } from "@/api/business";
 import { loanLabels as labels, reminderLabels } from "@/features/loan/api";
 import type { BusinessMutation } from "@/api/business";
@@ -19,7 +20,8 @@ const assetId = shallowRef(""); const assetVersion = shallowRef(0);
 const borrowRequests = ref<BorrowRequestChoice[]>([]);
 const formDisabled = computed(() => busy.value || retryable.value);
 const actionsShown = computed(() => !!selected.value && selected.value.relationStatus === "OPEN");
-let pending: BusinessMutation | null = null;
+/** 确认式幂等提交：在途意图槽与幂等键簿记归底座；busy/retryable、URL、body 与文案留在本视图。 */
+const { pending, prepare: draft, confirm: adopt, settle, reset } = useConfirmedSubmit<Omit<BusinessMutation, "key">>();
 
 async function open() {
   const turn = liveness.begin();
@@ -38,23 +40,25 @@ async function refresh() {
   if (busy.value) return; busy.value = true; error.value = "";
   try {
     await open(); await loadRequests();
-    pending = null; retryable.value = false;
+    reset(); retryable.value = false;
   } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 async function mutate(path: string, version: number, body?: unknown) {
   if (busy.value) return;
-  if (pending && pending.path !== path) { error.value = "请先重试上次操作或刷新查询。"; return; }
-  pending ??= { path, version, key: crypto.randomUUID(), body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown };
+  let operation = pending.value;
+  if (operation && operation.payload.path !== path) { error.value = "请先重试上次操作或刷新查询。"; return; }
+  if (!operation) { draft(() => ({ path, version, body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown })); operation = adopt(); }
+  if (!operation) return;
   busy.value = true; error.value = "";
   try {
-    const value = await businessRequest<{ id: string }>(pending.path, pending);
-    const completedPath = pending.path; pending = null; retryable.value = false; notice.value = "操作已保存。";
+    const value = await businessRequest<{ id: string }>(operation.payload.path, { ...operation.payload, key: operation.key });
+    const completedPath = operation.payload.path; settle(); retryable.value = false; notice.value = "操作已保存。";
     if (completedPath === "/asset-returns") { await router.push(`/asset-returns/${encodeURIComponent(value.id)}?saved=1`); return; }
     await open(); await loadRequests();
-  } catch (e) { error.value = businessMessage(e); retryable.value = pending !== null; }
+  } catch (e) { error.value = businessMessage(e); retryable.value = pending.value !== null; }
   finally { busy.value = false; }
 }
-function retry() { if (pending) void mutate(pending.path, pending.version); }
+function retry() { const operation = pending.value; if (operation) void mutate(operation.payload.path, operation.payload.version); }
 function extend(beforeReceipt = false) {
   const id = beforeReceipt ? requestId.value.trim() : selected.value?.id;
   if (!id || !due.value || !reason.value.trim()) { error.value = "请填写归还日期及延期原因。"; return; }

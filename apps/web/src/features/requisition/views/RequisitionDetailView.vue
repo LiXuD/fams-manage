@@ -4,6 +4,7 @@ import RequisitionReassignment from "@/features/requisition/panels/RequisitionRe
 import AppChrome from "@/components/AppChrome.vue";
 import RequisitionDemandForm from "./../panels/RequisitionDemandForm.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { allocationStatusLabels, handoverEventLabels, loadRequisitionCatalogs, requisitionLabels as labels, requisitionMessage, requisitionRequest } from "@/features/requisition/api";
 import type { Requisition, RequisitionAllocation, RequisitionChoice, RequisitionDemand, RequisitionDemandInput,
@@ -21,7 +22,9 @@ const observedCode = shallowRef(""); const destination = shallowRef(""); const e
 const reason = shallowRef(""); const shortageReason = shallowRef("STOCK_SHORTAGE"); const shortageQuantity = shallowRef(1);
 const inventory = ref<RequisitionInventory | null>(null); const inventoryDemand = ref<RequisitionDemand | null>(null);
 const inventoryPage = shallowRef(1); const replacementId = shallowRef("");
-let pending: { path: string; method: string; key: string; version: number; body?: unknown } | null = null;
+interface RequisitionMutation { path: string; method: string; key: string; version: number; body?: unknown }
+/** 确认式幂等提交：在途意图槽与幂等键簿记归底座；busy/retryable、URL、method 与文案留在本视图。 */
+const { pending, prepare: draft, confirm: adopt, settle, reset } = useConfirmedSubmit<Omit<RequisitionMutation, "key">>();
 const retryable = shallowRef(false);
 const warehouse = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR"));
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
@@ -118,18 +121,20 @@ async function open() {
 }
 async function refresh() {
   if (busy.value) return; busy.value = true; error.value = "";
-  try { await open(); pending = null; retryable.value = false; }
+  try { await open(); reset(); retryable.value = false; }
   catch (e) { error.value = requisitionMessage(e); } finally { busy.value = false; }
 }
 async function mutate(path: string, body?: unknown, method = "POST") {
   if (busy.value) return;
-  if (pending && pending.path !== path) { error.value = "上次操作结果尚未确认，请先重试或刷新。"; return; }
-  pending ??= { path, method, key: crypto.randomUUID(), version: selected.value?.version ?? 0,
-    body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown };
+  let operation = pending.value;
+  if (operation && operation.payload.path !== path) { error.value = "上次操作结果尚未确认，请先重试或刷新。"; return; }
+  if (!operation) { draft(() => ({ path, method, version: selected.value?.version ?? 0,
+    body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown })); operation = adopt(); }
+  if (!operation) return;
   busy.value = true; error.value = ""; notice.value = "";
   try {
-    const result = await requisitionRequest<Requisition>(pending.path, pending.method, pending);
-    pending = null; retryable.value = false; selected.value = result; changeVisible.value = false; inventory.value = null;
+    const result = await requisitionRequest<Requisition>(operation.payload.path, operation.payload.method, { ...operation.payload, key: operation.key });
+    settle(); retryable.value = false; selected.value = result; changeVisible.value = false; inventory.value = null;
     notice.value = "操作已保存。";
   } catch (e) { error.value = requisitionMessage(e); retryable.value = true; }
   finally { busy.value = false; }
@@ -139,7 +144,7 @@ function submitChange(payload: { demands: RequisitionDemandInput[]; requestType:
   expectedReturnDate: string | null }) {
   void mutate("/" + selected.value!.id + "/changes", payload);
 }
-async function retry() { if (pending) await mutate(pending.path); }
+async function retry() { if (pending.value) await mutate(pending.value.payload.path); }
 async function findInventory(demand: RequisitionDemand, nextPage = 1) {
   if (busy.value) return; busy.value = true; error.value = "";
   const turn = liveness.begin();

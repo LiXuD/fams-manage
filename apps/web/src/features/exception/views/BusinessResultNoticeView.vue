@@ -5,6 +5,7 @@ import { AuthApiError } from "@/auth/api";
 import { formatProxyTime } from "@/features/exception/time";
 import AppChrome from "@/components/AppChrome.vue";
 import { useRequestLiveness, type LivenessToken } from "@/composables/useRequestLiveness";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { BusinessApiError, businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
 
 interface Notice { id: string; businessType: string; businessId: string; itemId: string;
@@ -17,8 +18,13 @@ const identity = computed(() => JSON.stringify([session.user?.id, session.user?.
 const rows = ref<Notice[]>([]); const page = shallowRef(1); const total = shallowRef(0);
 const unread = shallowRef(0); const busy = shallowRef(false); const error = shallowRef("");
 const reasons = ref<Record<string, string>>({}); const info = shallowRef("");
-const pendingObjection = ref<(BusinessMutation & { id: string }) | null>(null);
-const pendingRead = ref<(BusinessMutation & { id: string }) | null>(null);
+/** 确认式幂等提交：已读与核查两条在途意图槽及幂等键簿记归底座，4xx 确定性失败才清键；busy、URL、body 与文案留在本视图。 */
+const deterministic = (cause: unknown): boolean => (cause instanceof BusinessApiError || cause instanceof AuthApiError)
+  && cause.status >= 400 && cause.status < 500;
+const { pending: pendingObjection, prepare: draftObjection, confirm: adoptObjection, settle: settleObjection, fail: failObjection, reset: resetObjection } =
+  useConfirmedSubmit<Omit<BusinessMutation, "key"> & { id: string }>({ failure: deterministic });
+const { pending: pendingRead, prepare: draftRead, confirm: adoptRead, settle: settleRead, fail: failRead, reset: resetRead } =
+  useConfirmedSubmit<Omit<BusinessMutation, "key"> & { id: string }>({ failure: deterministic });
 interface NoticeRow extends Notice { readText: string; createdAtText: string; receivedAtText: string;
   isRequisition: boolean; isRepair: boolean; isTransfer: boolean; objectionDisabled: boolean }
 const noticeRows = computed<NoticeRow[]>(() => rows.value.map((notice) => ({ ...notice,
@@ -32,12 +38,12 @@ const noticeRows = computed<NoticeRow[]>(() => rows.value.map((notice) => ({ ...
 const prevDisabled = computed(() => busy.value || page.value <= 1);
 const nextDisabled = computed(() => busy.value || page.value * 20 >= total.value);
 const liveness = useRequestLiveness(() => [identity.value]);
-function clear() { liveness.invalidate(); rows.value = []; reasons.value = {}; pendingObjection.value = null; pendingRead.value = null;
+function clear() { liveness.invalidate(); rows.value = []; reasons.value = {}; resetObjection(); resetRead();
   page.value = 1; total.value = 0; unread.value = 0; info.value = ""; busy.value = false; }
 function failure(cause: unknown, mutation = false) {
   if (cause instanceof BusinessApiError || cause instanceof AuthApiError) {
     if ([401, 403, 404].includes(cause.status)) clear();
-    else if (mutation && cause.status >= 400 && cause.status < 500) { pendingObjection.value = null; pendingRead.value = null; }
+    else if (mutation) { failObjection(cause); failRead(cause); }
   }
   error.value = businessMessage(cause);
 }
@@ -53,26 +59,30 @@ async function refresh(delta = 0) {
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function read(id: string) {
-  if (busy.value || pendingObjection.value || pendingRead.value && pendingRead.value.id !== id) return;
-  pendingRead.value ??= { id, path: `/business-result-notices/${id}/read`, key: crypto.randomUUID(), version: 0 };
-  const operation = pendingRead.value, turn = liveness.begin();
+  if (busy.value || pendingObjection.value || pendingRead.value && pendingRead.value.payload.id !== id) return;
+  let operation = pendingRead.value;
+  if (!operation) { draftRead(() => ({ id, path: `/business-result-notices/${id}/read`, version: 0 })); operation = adoptRead(); }
+  if (!operation) return;
+  const turn = liveness.begin();
   busy.value = true; error.value = "";
   try {
-    await businessRequest(operation.path, operation); if (!liveness.isCurrent(turn)) return;
-    pendingRead.value = null; await load(turn);
+    await businessRequest(operation.payload.path, { ...operation.payload, key: operation.key }); if (!liveness.isCurrent(turn)) return;
+    settleRead(); await load(turn);
   } catch (cause) { if (liveness.isCurrent(turn)) failure(cause, true); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function object(id: string) {
   if (busy.value || pendingRead.value) return;
-  if (pendingObjection.value && pendingObjection.value.id !== id) return;
-  if (!pendingObjection.value && !reasons.value[id]?.trim()) return;
-  pendingObjection.value ??= { id, path: `/business-result-notices/${id}/objection`,
-    key: crypto.randomUUID(), version: 0, body: { reason: reasons.value[id].trim() } };
-  const operation = pendingObjection.value, turn = liveness.begin();
+  let operation = pendingObjection.value;
+  if (operation && operation.payload.id !== id) return;
+  if (!operation && !reasons.value[id]?.trim()) return;
+  if (!operation) { draftObjection(() => ({ id, path: `/business-result-notices/${id}/objection`, version: 0,
+    body: { reason: reasons.value[id].trim() } })); operation = adoptObjection(); }
+  if (!operation) return;
+  const turn = liveness.begin();
   busy.value = true; error.value = ""; info.value = "";
   try {
-    await businessRequest(operation.path, operation); if (!liveness.isCurrent(turn)) return;
-    pendingObjection.value = null; await load(turn);
+    await businessRequest(operation.payload.path, { ...operation.payload, key: operation.key }); if (!liveness.isCurrent(turn)) return;
+    settleObjection(); await load(turn);
     if (liveness.isCurrent(turn)) info.value = "已登记管理员核查。核查期间资产责任仍保持，请勿重复办理接收或自行解除责任。";
   } catch (cause) { if (liveness.isCurrent(turn)) failure(cause, true); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
@@ -88,8 +98,8 @@ onBeforeUnmount(() => { clear(); });
       <p role="status">未读 {{ unread }} 条</p>
       <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
       <p v-if="info" class="fams-notice" data-state="success" role="status"><strong>{{ info }}</strong></p>
-      <button v-if="pendingRead" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="read(pendingRead.id)">原请求重试已读登记</button>
-      <button v-if="pendingObjection" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="object(pendingObjection.id)">原请求重试核查登记</button>
+      <button v-if="pendingRead" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="read(pendingRead.payload.id)">原请求重试已读登记</button>
+      <button v-if="pendingObjection" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="object(pendingObjection.payload.id)">原请求重试核查登记</button>
       <article v-for="notice in noticeRows" :key="notice.id" class="fams-card fams-stack">
         <div class="fams-panel-head">
           <div>

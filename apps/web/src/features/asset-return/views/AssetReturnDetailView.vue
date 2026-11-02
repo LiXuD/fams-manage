@@ -3,6 +3,7 @@ import { computed, onMounted, ref, shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import AssetReturnReassignment from "@/features/asset-return/panels/AssetReturnReassignment.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness, type LivenessToken } from "@/composables/useRequestLiveness";
 import { businessMessage, businessRequest } from "@/api/business";
 import { inspectionLabels } from "@/features/asset-return/api";
@@ -37,7 +38,8 @@ const followupRows = computed(() => (selected.value?.followups ?? []).map((follo
   repairStatusText: followup.repairStatus === "COMPLETED" ? "已验收入库"
     : followup.repairStatus === "REJECTED" || followup.repairStatus === "CANCELLED" ? "原维修未执行，源义务仍待处理" : "尚未实际完成",
 })));
-let pending: BusinessMutation | null = null;
+/** 确认式幂等提交：在途意图槽与幂等键簿记归底座；busy/retryable、URL 与文案留在本视图。 */
+const { pending, prepare: draft, confirm: adopt, settle, reset } = useConfirmedSubmit<Omit<BusinessMutation, "key">>();
 const identity = computed(() => JSON.stringify([props.id, session.user?.id, session.user?.roles, session.csrfToken]));
 const liveness = useRequestLiveness(() => [identity.value]);
 
@@ -50,22 +52,24 @@ async function refresh() {
   if (busy.value) return; const turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     await open(turn);
-    if (liveness.isCurrent(turn)) { pending = null; retryable.value = false; }
+    if (liveness.isCurrent(turn)) { reset(); retryable.value = false; }
   } catch (e) { if (liveness.isCurrent(turn)) error.value = businessMessage(e); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function mutate(path: string, version: number, body?: unknown) {
   if (busy.value) return;
-  if (pending && pending.path !== path) { error.value = "请先重试上次操作或刷新查询。"; return; }
-  pending ??= { path, version, key: crypto.randomUUID(), body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown };
+  let operation = pending.value;
+  if (operation && operation.payload.path !== path) { error.value = "请先重试上次操作或刷新查询。"; return; }
+  if (!operation) { draft(() => ({ path, version, body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown })); operation = adopt(); }
+  if (!operation) return;
   busy.value = true; error.value = "";
   try {
-    await businessRequest(pending.path, pending);
-    pending = null; retryable.value = false; notice.value = "操作已保存。";
+    await businessRequest(operation.payload.path, { ...operation.payload, key: operation.key });
+    settle(); retryable.value = false; notice.value = "操作已保存。";
     await open();
-  } catch (e) { error.value = businessMessage(e); retryable.value = pending !== null; }
+  } catch (e) { error.value = businessMessage(e); retryable.value = pending.value !== null; }
   finally { busy.value = false; }
 }
-function retry() { if (pending) void mutate(pending.path, pending.version); }
+function retry() { const operation = pending.value; if (operation) void mutate(operation.payload.path, operation.payload.version); }
 function decide(id: string, version: number, approved: boolean) {
   if (!reason.value.trim()) { error.value = "请填写决定原因。"; return; }
   void mutate(`/asset-returns/${id}/decision`, version, { approved, reason: reason.value.trim() });

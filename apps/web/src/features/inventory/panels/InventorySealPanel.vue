@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import type { BusinessMutation } from "@/api/business";
 import { ReviewApiError, reviewRequest } from "@/features/inventory/api";
@@ -15,9 +16,12 @@ interface Page { items: { snapshot_json: unknown; snapshot_sha256: string }[]; t
 const props = defineProps<{ taskId: string }>(); const emit = defineEmits<{ changed: [] }>();
 const session = useSessionStore(); const owner = computed(() => JSON.stringify([props.taskId, session.user?.id, session.user?.roles, session.csrfToken]));
 const view = ref<Preflight | null>(null), busy = shallowRef(false), error = shallowRef(""), notice = shallowRef("");
-const reason = shallowRef(""), waiver = shallowRef(""), confirming = shallowRef(false), pending = ref<BusinessMutation | null>(null);
+const reason = shallowRef(""), waiver = shallowRef("");
+/** 确认式幂等提交：草稿/在途两槽与幂等键簿记归底座；busy/locked、URL 与文案留在本面板。 */
+const { prepared, pending, prepare: draft, confirm: adopt, abandon, fail, cancel, reset } = useConfirmedSubmit<Omit<BusinessMutation, "key">>({ failure: (cause) => cause instanceof ReviewApiError && [400, 409].includes(cause.status) });
+const confirming = computed(() => !!prepared.value);
 const section = shallowRef("items"), page = shallowRef(1), rows = ref<Page | null>(null);
-const locked = computed(() => busy.value || !!pending.value);
+const locked = computed(() => busy.value || !!prepared.value || !!pending.value);
 interface BlockerRow { key: string; text: string; target: string }
 interface SynchronizationRow { accountId: string; name: string; statusText: string; devices: { deviceId: string; statusText: string }[] }
 interface ReportLine { key: string; text: string }
@@ -39,16 +43,16 @@ const sealDisabled = computed(() => { const state = view.value;
   return !state || state.task.task_status !== 'WAITING_REVIEW' || !!state.blockerCount || reason.value.trim().length < 3
     || ((state.missingSynchronizationCount ?? 0) > 0 && waiver.value.trim().length < 10); });
 const liveness = useRequestLiveness(() => [owner.value]);
-function clear() { liveness.invalidate(); view.value = null; rows.value = null; reason.value = ""; waiver.value = ""; pending.value = null;
-  confirming.value = false; busy.value = false; notice.value = ""; }
+function clear() { liveness.invalidate(); view.value = null; rows.value = null; reason.value = ""; waiver.value = ""; reset();
+  busy.value = false; notice.value = ""; }
 function failure(cause: unknown) {
   if (cause instanceof ReviewApiError && [401, 403, 404].includes(cause.status)) { clear(); error.value = "身份、权限或任务已失效，已隐藏冻结报告和原操作。"; return; }
   if (cause instanceof ReviewApiError && [400, 409].includes(cause.status)) {
-    pending.value = null; confirming.value = false;
+    fail(cause);
     error.value = cause.fields.processedBy ? `已由 ${cause.fields.processedBy} 于 ${cause.fields.processedAt || '已记录时间'} 处理，请刷新核对。`
       : "封存条件、任务或同步名单已变化，请刷新后逐项核对。"; return;
   }
-  error.value = pending.value ? "封存结果尚未确认，请保留原操作重试。" : "读取未完成，请重试。";
+  error.value = pending.value || prepared.value ? "封存结果尚未确认，请保留原操作重试。" : "读取未完成，请重试。";
 }
 async function load() {
   const turn = liveness.begin(); busy.value = true; error.value = ""; view.value = null; rows.value = null;
@@ -62,19 +66,21 @@ function prepare() {
   if (locked.value || !state || state.sealed || state.task.task_status !== "WAITING_REVIEW" || state.blockerCount
     || !state.synchronizationDigest || reason.value.trim().length < 3
     || ((state.missingSynchronizationCount ?? 0) > 0 && waiver.value.trim().length < 10)) return;
-  pending.value = { path: `/inventory-sealing/tasks/${props.taskId}/seal`, key: crypto.randomUUID(), version: state.task.version,
+  draft(() => ({ path: `/inventory-sealing/tasks/${props.taskId}/seal`, version: state.task.version,
     body: { reason: reason.value.trim(), synchronizationDigest: state.synchronizationDigest,
-      missingSynchronizationReason: (state.missingSynchronizationCount ?? 0) > 0 ? waiver.value.trim() : null } };
-  confirming.value = true;
+      missingSynchronizationReason: (state.missingSynchronizationCount ?? 0) > 0 ? waiver.value.trim() : null } }));
 }
 async function send() {
   if (busy.value || !pending.value) return;
-  const turn = liveness.begin(), original = pending.value; busy.value = true; confirming.value = false; error.value = "";
+  const turn = liveness.begin(), operation = pending.value;
+  const original: BusinessMutation = { path: operation.payload.path, key: operation.key, version: operation.payload.version, body: operation.payload.body };
+  busy.value = true; error.value = "";
   try { await reviewRequest(original.path, original);
-    if (liveness.isCurrent(turn)) { pending.value = null; busy.value = false; notice.value = "已封存，报告与已采信日期已在同一事务保存。"; await load(); emit("changed"); }
+    if (liveness.isCurrent(turn)) { abandon(); busy.value = false; notice.value = "已封存，报告与已采信日期已在同一事务保存。"; await load(); emit("changed"); }
   } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
+async function confirm() { if (busy.value || !adopt()) return; await send(); }
 async function readRows(next = 1) {
   if (locked.value || !view.value?.sealed) return;
   const turn = liveness.begin(); busy.value = true; rows.value = null; error.value = "";
@@ -142,8 +148,8 @@ onBeforeUnmount(() => { clear(); });
       <div v-if="confirming" class="fams-card fams-stack" role="group" aria-label="确认冻结报告与待补证名单">
         <p>{{ reason }}。缺少同步确认 {{ view.missingSynchronizationCount }} 人，依据：{{ waiver || '无需豁免' }}。未盘不计正常，封存后仅追加迟到或关联复盘，不改原报告。</p>
         <div class="fams-panel-actions">
-          <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="send">确认封存本任务</button>
-          <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="pending = null; confirming = false">返回封存核对</button>
+          <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="confirm">确认封存本任务</button>
+          <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="cancel()">返回封存核对</button>
         </div>
       </div>
     </template>

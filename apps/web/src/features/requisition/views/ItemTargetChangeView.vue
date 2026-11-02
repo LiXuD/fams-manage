@@ -3,6 +3,7 @@ import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
 import { requisitionRequest } from "@/features/requisition/api";
@@ -23,7 +24,9 @@ const rows = ref<Proposal[]>([]); const selected = ref<Proposal | null>(null); c
 const target = ref<Target | null>(null); const catalogs = ref<Record<string, Choice[]>>({});
 const page = shallowRef(1); const total = shallowRef(0); const error = shallowRef(""); const busy = shallowRef(false);
 const reason = shallowRef(""); const physicalVerification = shallowRef(""); const physicalChecked = shallowRef(false); const observedCode = shallowRef("");
-const decisionReason = shallowRef(""); const pending = ref<BusinessMutation | null>(null);
+const decisionReason = shallowRef("");
+/** 确认式幂等提交：在途意图槽与幂等键簿记归底座；busy/locked、URL、confirmKind 两页确认流与文案留在本视图。 */
+const { pending, prepare: draft, confirm: adopt, settle } = useConfirmedSubmit<Omit<BusinessMutation, "key">>();
 type Confirm = "propose" | "APPROVED" | "REJECTED";
 const confirmKind = ref<Confirm | null>(null);
 const decisionConfirm = computed(() => confirmKind.value === "APPROVED" || confirmKind.value === "REJECTED"
@@ -71,12 +74,15 @@ function setReference(kind: "organization" | "employee" | "location", event: Eve
   if (kind === "organization") { target.value.employeeId = ""; target.value.employeeVersion = 0; }
 }
 async function send(path: string, body: unknown, version: number) {
-  if (busy.value || pending.value && pending.value.path !== path) return;
-  pending.value ??= { path, key: crypto.randomUUID(), version, body: JSON.parse(JSON.stringify(body)) as unknown };
+  if (busy.value) return;
+  let operation = pending.value;
+  if (operation && operation.payload.path !== path) return;
+  if (!operation) { draft(() => ({ path, version, body: JSON.parse(JSON.stringify(body)) as unknown })); operation = adopt(); }
+  if (!operation) return;
   busy.value = true; error.value = "";
   try {
-    const result = await businessRequest<Proposal>(pending.value.path, pending.value);
-    await list(); selected.value = result; snapshot.value = null; pending.value = null;
+    const result = await businessRequest<Proposal>(operation.payload.path, { ...operation.payload, key: operation.key });
+    await list(); selected.value = result; snapshot.value = null; settle();
   } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 function openConfirm(kind: Confirm): void {
@@ -130,7 +136,7 @@ onMounted(async () => {
     </template>
     <section class="fams-panel fams-stack" aria-label="领用与借用目标变更">
       <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
-      <button v-if="pending" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="send(pending.path, pending.body, pending.version)">重试原操作</button>
+      <button v-if="pending" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="send(pending.payload.path, pending.payload.body, pending.payload.version)">重试原操作</button>
       <form v-if="snapshot && target && warehouse" class="fams-card fams-stack" @submit.prevent="openConfirm('propose')">
         <div class="fams-panel-head">
           <div>

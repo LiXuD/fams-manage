@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import type { BusinessMutation } from "@/api/business";
 import { reviewRequest, ReviewApiError, subjectStatusLabels as statuses, type Board, type ReviewItem } from "@/features/inventory/api";
@@ -19,13 +20,14 @@ const owner = computed(() => JSON.stringify([session.user?.id, session.csrfToken
 const identity = computed(() => `${props.taskId}:${props.item.item.id}:${owner.value}`);
 const board = ref<Board | null>(null), subjects = ref<Subject[]>([]), chosen = ref<string[]>([]);
 const page = shallowRef(1), total = shallowRef(0), busy = shallowRef(false), error = shallowRef(""), notice = shallowRef("");
-const method = shallowRef("BOOK_CORRECT"), reason = shallowRef(""), evidence = shallowRef(""), pending = ref<BusinessMutation | null>(null);
+const method = shallowRef("BOOK_CORRECT"), reason = shallowRef(""), evidence = shallowRef("");
 const organizations = ref<TransferChoice[]>([]), warehouses = ref<TransferChoice[]>([]), locations = ref<TransferChoice[]>([]), employees = ref<TransferChoice[]>([]);
 const owning = shallowRef(""), using = shallowRef(""), employee = shallowRef(""), warehouse = shallowRef(""), location = shallowRef(""), custody = ref("PERSONAL");
 const currentItem = computed(() => board.value?.items.find(row => row.item.id === props.item.item.id));
 const stock = computed(() => currentItem.value?.current?.custodyType === "STORAGE");
 const bins = computed(() => locations.value.filter(row => stock.value ? row.locationType === "BIN" && row.warehouseId === warehouse.value : row.locationType !== "BIN"));
-const confirmation = ref<{ path: string; body: unknown; label: string } | null>(null);
+/** 确认式幂等提交：草稿/在途两槽与幂等键簿记归底座；busy/locked、URL 与文案留在本面板。 */
+const { prepared: confirmation, pending, prepare: draft, confirm: adopt, abandon, fail, cancel, reset } = useConfirmedSubmit<{ path: string; version: number; body: unknown; label: string }>({ failure: (cause) => cause instanceof ReviewApiError && cause.status >= 400 && cause.status < 500 });
 const repairFault = shallowRef(""), repairImpact = ref("HIGH"), repairDiscovery = shallowRef(""), repairId = shallowRef("");
 const physicalChecked = shallowRef(false), discoveryChecked = shallowRef(false);
 const linkedRepair = ref<{ id: string; assetId: string; version: number; status: string } | null>(null);
@@ -51,9 +53,9 @@ const prevDisabled = computed(() => locked.value || page.value === 1);
 const nextDisabled = computed(() => locked.value || page.value * 100 >= total.value);
 const decideDisabled = computed(() => !selected.value.length || reason.value.trim().length < 3 || evidence.value.trim().length < 10);
 const liveness = useRequestLiveness(() => [identity.value]);
-function clear() { board.value = null; subjects.value = []; chosen.value = []; pending.value = null;
+function clear() { board.value = null; subjects.value = []; chosen.value = []; reset();
   organizations.value = []; warehouses.value = []; locations.value = []; employees.value = [];
-  confirmation.value = null; linkedRepair.value = null; repairFault.value = ""; repairDiscovery.value = ""; repairId.value = ""; physicalChecked.value = false; discoveryChecked.value = false; reason.value = ""; evidence.value = ""; owning.value = ""; using.value = ""; employee.value = ""; warehouse.value = ""; location.value = ""; busy.value = false; }
+  linkedRepair.value = null; repairFault.value = ""; repairDiscovery.value = ""; repairId.value = ""; physicalChecked.value = false; discoveryChecked.value = false; reason.value = ""; evidence.value = ""; owning.value = ""; using.value = ""; employee.value = ""; warehouse.value = ""; location.value = ""; busy.value = false; }
 function failure(cause: unknown) {
   if (cause instanceof ReviewApiError) {
     if ([401,403,404].includes(cause.status)) { clear(); emit("invalid"); error.value = "当前身份、权限或记录已失效，原资料已隐藏。"; return; }
@@ -73,23 +75,23 @@ async function load() {
   } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
-async function send(path: string, body: unknown) {
-  if (busy.value || !board.value) return;
-  pending.value ??= { path, key: crypto.randomUUID(), version: board.value.task.version, body: JSON.parse(JSON.stringify(body)) as unknown };
-  const original = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
+async function send() {
+  if (busy.value || !board.value || !pending.value) return;
+  const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
+  const original: BusinessMutation = { path: operation.payload.path, key: operation.key, version: operation.payload.version, body: operation.payload.body };
   try {
     await reviewRequest(original.path, original);
     if (!liveness.isCurrent(turn)) return;
-    pending.value = null; notice.value = "本次处理已保存。独立差异仍须逐项闭环，关联调拨或维修以实际业务进度为准。"; await load();
+    abandon(); notice.value = "本次处理已保存。独立差异仍须逐项闭环，关联调拨或维修以实际业务进度为准。"; await load();
   } catch (cause) {
     if (!liveness.isCurrent(turn)) return;
-    if (cause instanceof ReviewApiError && cause.status >= 400 && cause.status < 500) pending.value = null;
+    fail(cause);
     failure(cause);
   } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function prepare() {
-  if (locked.value || !props.observationIds.length) return;
-  confirmation.value = { path: `/inventory-reviews/tasks/${props.taskId}/differences/preparation`, body: { observationIds: [...props.observationIds] }, label: "将当前页原始证据中的差异列入独立复核；本次不采信现场事实。" };
+  if (locked.value || !props.observationIds.length || !board.value) return;
+  draft(() => ({ path: `/inventory-reviews/tasks/${props.taskId}/differences/preparation`, version: board.value!.task.version, body: JSON.parse(JSON.stringify({ observationIds: [...props.observationIds] })) as unknown, label: "将当前页原始证据中的差异列入独立复核；本次不采信现场事实。" }));
 }
 async function catalog(kind: string, organization?: string) {
   return loadCatalogPages<TransferChoice>(reviewRequest, "/transfers/catalog", kind, organization);
@@ -119,7 +121,7 @@ function target(): TransferTarget | null {
   return buildTransferTarget({ stock: stock.value, custodyType: custody.value, location: loc, owner, warehouse: wh, usingOrganization: org, employee: person });
 }
 function decide() {
-  if (locked.value || !selected.value.length || !currentItem.value?.current || reason.value.trim().length < 3 || evidence.value.trim().length < 10) return;
+  if (locked.value || !selected.value.length || !currentItem.value?.current || !board.value || reason.value.trim().length < 3 || evidence.value.trim().length < 10) return;
   const transferTarget = method.value === "FORMAL_TRANSFER" ? target() : undefined;
   if (method.value === "FORMAL_TRANSFER" && !transferTarget) { error.value = "请核对有效目标位置、部门、责任人及仓库。"; return; }
   let repair: unknown;
@@ -134,13 +136,12 @@ function decide() {
         ...(method.value === "FORMAL_REPAIR" ? { fault: repairFault.value.trim(), impact: repairImpact.value } : { repairId: linkedRepair.value!.id, repairVersion: linkedRepair.value!.version }) };
     }
   }
-  confirmation.value = { path: `/inventory-reviews/tasks/${props.taskId}/differences/decisions`, body: { subjects: selected.value.map(row => ({ observationId: row.observation_id, dimension: row.dimension, version: row.version })), assetVersion: currentItem.value.current.version, method: method.value, reason: reason.value.trim(), evidence: evidence.value.trim(), ...(transferTarget ? { transferTarget } : {}), ...(repair ? { repair } : {}) }, label: `${methods[method.value]}：共同提交 ${selected.value.length} 个差异；任一版本变化均不保存。` };
+  draft(() => ({ path: `/inventory-reviews/tasks/${props.taskId}/differences/decisions`, version: board.value!.task.version, body: JSON.parse(JSON.stringify({ subjects: selected.value.map(row => ({ observationId: row.observation_id, dimension: row.dimension, version: row.version })), assetVersion: currentItem.value!.current!.version, method: method.value, reason: reason.value.trim(), evidence: evidence.value.trim(), ...(transferTarget ? { transferTarget } : {}), ...(repair ? { repair } : {}) })) as unknown, label: `${methods[method.value]}：共同提交 ${selected.value.length} 个差异；任一版本变化均不保存。` }));
 }
 function confirmPrepared() {
-  const prepared = confirmation.value;
+  const prepared = adopt();
   if (!prepared || busy.value) return;
-  confirmation.value = null;
-  void send(prepared.path, prepared.body);
+  void send();
 }
 async function inspectRepair() {
   if (locked.value || !/^[1-9][0-9]*$/.test(repairId.value.trim())) return;
@@ -175,13 +176,13 @@ onBeforeUnmount(() => { clear(); });
     <p v-if="notice" class="fams-notice" data-state="success" role="status"><strong>{{ notice }}</strong></p>
 
     <div v-if="confirmation" class="fams-notice" role="group" aria-label="确认差异操作">
-      <p>{{ confirmation.label }}</p>
+      <p>{{ confirmation.payload.label }}</p>
       <div class="fams-panel-actions">
         <button class="fams-button" data-kind="primary" data-size="sm" type="button" :disabled="busy" @click="confirmPrepared">确认保存本次操作</button>
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="confirmation = null">取消本次操作</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="cancel()">取消本次操作</button>
       </div>
     </div>
-    <button v-if="pending" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="send(pending.path,pending.body)">重试原差异操作</button>
+    <button v-if="pending" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="send">重试原差异操作</button>
 
     <div class="fams-table-scroll">
       <table class="fams-table">

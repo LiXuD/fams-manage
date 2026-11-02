@@ -5,6 +5,7 @@ import InventorySelectionPanel from "@/features/inventory/panels/InventorySelect
 import InventoryDifferencePanel from "@/features/inventory/panels/InventoryDifferencePanel.vue";
 import InventoryPhotoEvidence from "@/features/inventory/panels/InventoryPhotoEvidence.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import type { BusinessMutation } from "@/api/business";
 import { ReviewApiError, reviewProblems, reviewRequest, type BatchResult, type Board, type Observation, type ReviewItem } from "@/features/inventory/api";
@@ -13,15 +14,17 @@ const emit = defineEmits<{ changed: [] }>();
 const session = useSessionStore();
 const board = ref<Board | null>(null); const page = shallowRef(1); const selected = ref<string[]>([]);
 const reason = shallowRef("已核对本轮现场正常观察"); const busy = shallowRef(false); const error = shallowRef("");
-const pending = ref<BusinessMutation | null>(null); const result = ref<BatchResult | null>(null);
+const result = ref<BatchResult | null>(null);
 const observations = ref<{ itemId: string; rows: Observation[]; total: number; page: number } | null>(null);
-const stage = ref<BusinessMutation | null>(null); const confirmOpen = shallowRef(false); const confirmCount = shallowRef(0);
+/** 确认式幂等提交：草稿/在途两槽与幂等键簿记归底座；busy/locked、URL 与文案留在本面板。 */
+const { prepared: stage, pending, prepare: draft, confirm: adopt, abandon, fail, cancel, reset } = useConfirmedSubmit<Omit<BusinessMutation, "key">>({ failure: (cause) => cause instanceof ReviewApiError && cause.status >= 400 && cause.status < 500 });
+const confirmOpen = computed(() => !!stage.value); const confirmCount = shallowRef(0);
 const confirmLabel = "确认采信所选正常观察";
 const confirmHint = computed(() => `采信所选 ${confirmCount.value} 项正常观察？存在差异或冲突的项目不会自动采信。`);
 const identity = computed(() => JSON.stringify([session.user?.id, session.csrfToken, session.user?.roles]));
 const locked = computed(() => busy.value || !!pending.value);
 const liveness = useRequestLiveness(() => [identity.value, props.taskId]);
-const clear = () => { liveness.invalidate(); board.value = null; selected.value = []; observations.value = null; result.value = null; pending.value = null; busy.value = false; stage.value = null; confirmOpen.value = false; };
+const clear = () => { liveness.invalidate(); board.value = null; selected.value = []; observations.value = null; result.value = null; busy.value = false; reset(); };
 function failure(cause: unknown) {
   if (cause instanceof ReviewApiError) {
     if ([401, 403, 404].includes(cause.status)) { clear(); error.value = "登录、权限或当前记录已失效，已隐藏原资料，请重新登录或核对授权。"; return; }
@@ -48,28 +51,28 @@ function openAccept() {
   const items = board.value.items.filter(row => selected.value.includes(row.item.id) && row.canAcceptNormal);
   if (!items.length || !reason.value.trim()) return;
   confirmCount.value = items.length;
-  stage.value = { path: `/inventory-reviews/tasks/${props.taskId}/normal-acceptance`, key: crypto.randomUUID(),
-    version: board.value.task.version, body: { reason: reason.value.trim(), items: items.map(row => ({ itemId: row.item.id,
-      recheckGeneration: row.item.recheck_generation, reviewVersion: row.review.version, assetVersion: row.current!.version })) } };
-  confirmOpen.value = true;
+  draft(() => ({ path: `/inventory-reviews/tasks/${props.taskId}/normal-acceptance`,
+    version: board.value!.task.version, body: { reason: reason.value.trim(), items: items.map(row => ({ itemId: row.item.id,
+      recheckGeneration: row.item.recheck_generation, reviewVersion: row.review.version, assetVersion: row.current!.version })) } }));
 }
 function runAccept() {
-  if (busy.value || !stage.value) return;
-  pending.value = stage.value; stage.value = null; confirmOpen.value = false;
+  if (busy.value || !adopt()) return;
   void accept();
 }
-function closeConfirm() { stage.value = null; confirmOpen.value = false; }
+function closeConfirm() { cancel(); }
 async function accept() {
   if (busy.value || !board.value || !pending.value) return;
   const turn = liveness.begin();
-  const original = pending.value; busy.value = true; error.value = "";
+  const operation = pending.value;
+  const original: BusinessMutation = { path: operation.payload.path, key: operation.key, version: operation.payload.version, body: operation.payload.body };
+  busy.value = true; error.value = "";
   try {
     const reply = await reviewRequest<BatchResult>(original.path, original);
     if (!liveness.isCurrent(turn)) return;
-    result.value = reply; pending.value = null; emit("changed"); await load();
+    result.value = reply; abandon(); emit("changed"); await load();
   } catch (cause) {
     if (!liveness.isCurrent(turn)) return;
-    if (cause instanceof ReviewApiError && cause.status >= 400 && cause.status < 500) pending.value = null;
+    fail(cause);
     failure(cause);
   } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }

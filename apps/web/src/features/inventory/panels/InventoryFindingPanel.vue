@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import type { BusinessMutation } from "@/api/business";
 import type { AssetCard } from "@/features/asset/api";
@@ -18,17 +19,18 @@ const emit = defineEmits<{ changed: [] }>();
 const session = useSessionStore();
 const owner = computed(() => JSON.stringify([props.taskId, session.user?.id, session.csrfToken, session.user?.roles]));
 const rows = ref<Observation[]>([]), total = shallowRef(0), page = shallowRef(1), detail = ref<FindingView | null>(null);
-const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef(""), pending = ref<BusinessMutation | null>(null);
+const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef("");
 const method = shallowRef("NON_ENTERPRISE"), reason = shallowRef(""), evidence = shallowRef("");
 const assetCode = shallowRef(""), receiptNumber = shallowRef(""), assets = ref<AssetCard[]>([]), receipts = ref<InboundReceipt[]>([]);
 const selectedAsset = shallowRef(""), selectedReceipt = shallowRef("");
-const confirmation = ref<BusinessMutation | null>(null);
+/** 确认式幂等提交：草稿/在途两槽与幂等键簿记归底座；busy/locked、URL 与文案留在本面板。 */
+const { prepared: confirmation, pending, prepare: draft, confirm: adopt, abandon, fail, cancel, reset } = useConfirmedSubmit<Omit<BusinessMutation, "key">>({ failure: (cause) => cause instanceof ReviewApiError && cause.status >= 400 && cause.status < 500 });
 const counters = ref<Observation[]>([]), counterTotal = shallowRef(0), counterPage = shallowRef(1), counterId = shallowRef("");
 const timeSubject = computed(() => detail.value?.timeSubject?.[0]);
 const locked = computed(() => busy.value || !!pending.value || !!confirmation.value);
 const liveness = useRequestLiveness(() => [owner.value]);
 function clear() { liveness.invalidate(); rows.value = []; total.value = 0; detail.value = null; assets.value = []; receipts.value = [];
-  selectedAsset.value = ""; selectedReceipt.value = ""; pending.value = null; confirmation.value = null; counters.value = []; counterId.value = ""; busy.value = false; notice.value = ""; }
+  selectedAsset.value = ""; selectedReceipt.value = ""; reset(); counters.value = []; counterId.value = ""; busy.value = false; notice.value = ""; }
 function failure(cause: unknown) {
   if (cause instanceof ReviewApiError && [401, 403, 404].includes(cause.status)) { clear(); error.value = "身份、权限或线索已失效，已隐藏原资料。"; return; }
   if (cause instanceof ReviewApiError && cause.status === 409) {
@@ -98,22 +100,22 @@ async function save(prepare = false, time = false) {
           ? { assetId: item.asset.id, inboundReceiptId: receipt.id, ownerVersion: receipt.version } : {}) };
     }
     // Preserve the exact request before entering the confirmation and before any unknown reply.
-    const original = { path, key: crypto.randomUUID(), version: detail.value.taskVersion, body };
-    confirmation.value = original;
+    draft(() => ({ path, version: detail.value!.taskVersion, body }));
     return;
   }
-  const turn = liveness.begin(), original = pending.value;
+  const operation = pending.value, turn = liveness.begin();
+  const original: BusinessMutation = { path: operation.payload.path, key: operation.key, version: operation.payload.version, body: operation.payload.body };
   busy.value = true; error.value = "";
   try { await reviewRequest(original.path, original);
-    if (liveness.isCurrent(turn)) { pending.value = null; notice.value = "已保存，请读取当前处理及历史；入库未实际验收不会提前关闭。"; emit("changed"); }
+    if (liveness.isCurrent(turn)) { abandon(); notice.value = "已保存，请读取当前处理及历史；入库未实际验收不会提前关闭。"; emit("changed"); }
   } catch (cause) {
-    if (liveness.isCurrent(turn)) { if (cause instanceof ReviewApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
+    if (liveness.isCurrent(turn)) { fail(cause); failure(cause); }
   } finally { if (liveness.isCurrent(turn)) busy.value = false; }
   if (liveness.isCurrent(turn) && !pending.value) await open(row);
 }
 async function confirmSave() {
-  if (busy.value || !confirmation.value) return;
-  pending.value = confirmation.value; confirmation.value = null; await save();
+  if (busy.value || !adopt()) return;
+  await save();
 }
 async function loadCounters(delta = 0) {
   if (locked.value || !detail.value) return;
@@ -182,7 +184,7 @@ const counterNextDisabled = computed(() => counterPage.value * 20 >= counterTota
       <p>请核对当前选择及依据。重采只解决原时间不确定性，资产归属仍独立处理；原始证据继续保留。</p>
       <div class="fams-panel-actions">
         <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="confirmSave">确认保存当前复核</button>
-        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="confirmation = null">返回修改</button>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="cancel()">返回修改</button>
       </div>
     </div>
     <button v-if="pending" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="save()">重试原盘盈复核操作</button>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import type { BusinessMutation } from "@/api/business";
 import { ReviewApiError, reviewRequest } from "@/features/inventory/api";
@@ -14,8 +15,10 @@ const session = useSessionStore(); const owner = computed(() => JSON.stringify([
 const view = ref<View | null>(null), page = shallowRef(1), busy = shallowRef(false), error = shallowRef(""), notice = shallowRef("");
 const chosen = shallowRef(""), kind = ref("UNABLE_TO_OBSERVE"), reason = shallowRef(""), evidence = shallowRef(""), waitingReason = shallowRef("");
 const history = ref<History[]>([]), historyTotal = shallowRef(0), historyItem = shallowRef(""), historyPage = shallowRef(1);
-const pending = ref<BusinessMutation | null>(null), confirming = shallowRef(false), summary = shallowRef("");
-const locked = computed(() => busy.value || !!pending.value);
+/** 确认式幂等提交：草稿/在途两槽与幂等键簿记归底座；busy/locked、URL 与文案留在本面板。 */
+const { prepared, pending, prepare: draft, confirm: adopt, abandon, fail, cancel, reset } = useConfirmedSubmit<Omit<BusinessMutation, "key">>({ failure: (cause) => cause instanceof ReviewApiError && (cause.status === 409 || cause.status === 400) });
+const confirming = computed(() => !!prepared.value), summary = shallowRef("");
+const locked = computed(() => busy.value || !!prepared.value || !!pending.value);
 interface ReadinessRow extends Row { statusText: string }
 interface HistoryRow extends History { roundText: string }
 const rows = computed<ReadinessRow[]>(() => (view.value?.items ?? []).map(row => ({ ...row,
@@ -31,16 +34,16 @@ const nextHistoryDisabled = computed(() => locked.value || historyPage.value * 2
 const kinds: Record<string, string> = { UNABLE_TO_OBSERVE: "无法实盘（如现场无法进入）", EVIDENCE_UNAVAILABLE: "原证据失效或无法使用，需补盘", ASSET_NOT_FOUND: "实物未找到，继续查找或正式报失" };
 const liveness = useRequestLiveness(() => [owner.value]);
 function clear() { liveness.invalidate(); view.value = null; chosen.value = ""; reason.value = ""; evidence.value = ""; waitingReason.value = "";
-  history.value = []; historyTotal.value = 0; historyItem.value = ""; pending.value = null; confirming.value = false; summary.value = ""; busy.value = false; notice.value = ""; }
+  history.value = []; historyTotal.value = 0; historyItem.value = ""; reset(); busy.value = false; notice.value = ""; }
 function failure(cause: unknown) {
   if (cause instanceof ReviewApiError && [401, 403, 404].includes(cause.status)) { clear(); error.value = "身份、权限或任务已失效，已隐藏原资料。"; return; }
   if (cause instanceof ReviewApiError && cause.status === 409) {
-    pending.value = null; confirming.value = false;
+    fail(cause);
     error.value = cause.fields.processedBy ? `该项已由 ${cause.fields.processedBy} 于 ${cause.fields.processedAt || '已记录时间'} 处理，请刷新核对。`
       : "任务、实盘证据或复核已变化，请刷新核对后继续。"; return;
   }
-  if (cause instanceof ReviewApiError && cause.status === 400) { pending.value = null; confirming.value = false; error.value = "请核对原因类型、原因及明确依据。"; return; }
-  error.value = pending.value ? "提交结果尚未确认，请保留原操作重试。" : "读取未完成，请重试。";
+  if (cause instanceof ReviewApiError && cause.status === 400) { fail(cause); error.value = "请核对原因类型、原因及明确依据。"; return; }
+  error.value = pending.value || prepared.value ? "提交结果尚未确认，请保留原操作重试。" : "读取未完成，请重试。";
 }
 async function load() {
   const turn = liveness.begin(); busy.value = true; error.value = ""; view.value = null; chosen.value = "";
@@ -53,24 +56,26 @@ function choose(row: Row) { if (locked.value || !row.canRecord) return; chosen.v
 function prepareRecord() {
   const row = view.value?.items.find(item => item.item.id === chosen.value);
   if (locked.value || !view.value || !row?.canRecord || !row.current || reason.value.trim().length < 3 || evidence.value.trim().length < 10) return;
-  pending.value = { path: `/inventory-readiness/tasks/${props.taskId}/items/${row.item.id}/unobserved`, key: crypto.randomUUID(), version: view.value.task.version,
-    body: { recheckGeneration: row.item.recheck_generation, assetVersion: row.current.version, kind: kind.value, reason: reason.value.trim(), evidence: evidence.value.trim() } };
+  draft(() => ({ path: `/inventory-readiness/tasks/${props.taskId}/items/${row.item.id}/unobserved`, version: view.value!.task.version,
+    body: { recheckGeneration: row.item.recheck_generation, assetVersion: row.current!.version, kind: kind.value, reason: reason.value.trim(), evidence: evidence.value.trim() } }));
   summary.value = `${row.item.snapshot_json.assetCode} · ${kinds[kind.value]}。${reason.value.trim()}。依据：${evidence.value.trim()}。未盘不计正常；实物未找到仍须真实后续闭环。`;
-  confirming.value = true;
 }
 function prepareWaiting() {
   if (locked.value || !view.value || view.value.task.task_status !== "IN_PROGRESS" || view.value.missingCount || waitingReason.value.trim().length < 3) return;
-  pending.value = { path: `/inventory-readiness/tasks/${props.taskId}/waiting-review`, key: crypto.randomUUID(), version: view.value.task.version, body: { reason: waitingReason.value.trim() } };
-  summary.value = `进入待复核。${waitingReason.value.trim()}。未盘 ${view.value.notObservedCount} 项不计正常；差异、同步与封存仍须分别核实。`; confirming.value = true;
+  draft(() => ({ path: `/inventory-readiness/tasks/${props.taskId}/waiting-review`, version: view.value!.task.version, body: { reason: waitingReason.value.trim() } }));
+  summary.value = `进入待复核。${waitingReason.value.trim()}。未盘 ${view.value.notObservedCount} 项不计正常；差异、同步与封存仍须分别核实。`;
 }
 async function send() {
   if (busy.value || !pending.value) return;
-  const turn = liveness.begin(), operation = pending.value; busy.value = true; error.value = ""; confirming.value = false;
-  try { await reviewRequest(operation.path, operation);
-    if (liveness.isCurrent(turn)) { pending.value = null; busy.value = false; notice.value = "本次处理已保存，原始观察保持不变。"; await load(); emit("changed"); }
+  const turn = liveness.begin(), operation = pending.value;
+  const original: BusinessMutation = { path: operation.payload.path, key: operation.key, version: operation.payload.version, body: operation.payload.body };
+  busy.value = true; error.value = "";
+  try { await reviewRequest(original.path, original);
+    if (liveness.isCurrent(turn)) { abandon(); busy.value = false; notice.value = "本次处理已保存，原始观察保持不变。"; await load(); emit("changed"); }
   } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
+async function confirm() { if (busy.value || !adopt()) return; await send(); }
 async function readHistory(item: string, next = 1) {
   if (locked.value || !view.value?.items.some(row => row.item.id === item)) return;
   const turn = liveness.begin(); busy.value = true; error.value = ""; history.value = [];
@@ -125,8 +130,8 @@ onBeforeUnmount(() => { clear(); });
     </fieldset>
     <div v-if="confirming" class="fams-card fams-stack" role="group" aria-label="确认本次未盘或待复核处理"><p>{{ summary }}</p>
       <div class="fams-panel-actions">
-        <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="send">确认保存本次处理</button>
-        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="pending = null; confirming = false; summary = ''">返回核对</button>
+        <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="confirm">确认保存本次处理</button>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="cancel()">返回核对</button>
       </div>
     </div>
     <button v-if="pending && !confirming" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="send">重试原未盘或待复核操作</button>

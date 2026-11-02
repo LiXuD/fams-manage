@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { reviewRequest, ReviewApiError, subjectStatusLabels as statuses, type Board, type Observation, type Review } from "@/features/inventory/api";
 import type { BusinessMutation } from "@/api/business";
@@ -13,8 +14,12 @@ const session = useSessionStore();
 const identity = computed(() => JSON.stringify([props.taskId, props.itemId, session.user?.id, session.csrfToken, session.user?.roles]));
 const selection = ref<Selection | null>(null), board = ref<Board | null>(null), subjects = ref<Subject[]>([]), dispositions = ref<Disposition[]>([]);
 const target = shallowRef(""), method = ref("REJECT_EVIDENCE"), reason = shallowRef(""), evidence = shallowRef(""), page = shallowRef(1), total = shallowRef(0);
-const busy = shallowRef(false), error = shallowRef(""), pending = ref<BusinessMutation | null>(null);
-const stage = ref<BusinessMutation | null>(null), confirmKind = ref<"decision" | "acceptance" | null>(null), confirmHint = shallowRef("");
+const busy = shallowRef(false), error = shallowRef("");
+/** 确认式幂等提交：草稿/在途两槽与幂等键簿记归底座；busy/locked、URL 与文案留在本面板。 */
+interface Stage { kind: "decision" | "acceptance"; path: string; version: number; body: Record<string, unknown> }
+const { prepared: stage, pending, prepare: draft, confirm: adopt, abandon, fail, cancel, reset } = useConfirmedSubmit<Stage>({ failure: (cause) => cause instanceof ReviewApiError && cause.status >= 400 && cause.status < 500 });
+const confirmKind = computed(() => stage.value?.payload.kind ?? null);
+const confirmHint = shallowRef("");
 const confirmLabels: Record<"decision" | "acceptance", string> = { decision: "确认共同提交证据处置", acceptance: "确认最终采信所选证据" };
 const locked = computed(() => busy.value || !!pending.value);
 const currentItem = computed(() => board.value?.items.find(row => row.item.id === props.itemId));
@@ -39,7 +44,7 @@ const historyPrevDisabled = computed(() => locked.value || page.value === 1);
 const historyNextDisabled = computed(() => locked.value || page.value * 20 >= total.value);
 const liveness = useRequestLiveness(() => [identity.value]);
 function clear() { selection.value = null; board.value = null; subjects.value = []; dispositions.value = []; target.value = "";
-  reason.value = ""; evidence.value = ""; pending.value = null; busy.value = false; stage.value = null; confirmKind.value = null; }
+  reason.value = ""; evidence.value = ""; busy.value = false; reset(); }
 function failure(cause: unknown) {
   if (cause instanceof ReviewApiError) {
     if ([401,403,404].includes(cause.status)) { clear(); emit("invalid"); error.value = "当前身份、权限或记录已失效，已隐藏原资料。"; return; }
@@ -97,22 +102,21 @@ function openConfirm(acceptance: boolean) {
     chosen.value ? `共同核实所选证据的 ${references.value.length} 个异常维度？位置、责任和状况等仍须独立闭环。` :
     method.value === "REJECT_EVIDENCE" ? `以明确反证拒绝证据 ${target.value}，并对所列 ${references.value.length} 个维度共同记录决定？已有正式关联不得覆盖。` :
     `将证据 ${target.value} 保留为补充线索？位置、责任、状况和期间流转不会因此关闭。`;
-  stage.value = { path: `/inventory-reviews/tasks/${props.taskId}/items/${props.itemId}/${acceptance ? "acceptance" : "evidence-decisions"}`,
-    key: crypto.randomUUID(), version: selection.value!.taskVersion, body: acceptance ? data : { ...data, observationId: target.value,
-      method: method.value, subjects: references.value.map(row => ({ dimension: row.dimension, version: row.version })) } };
-  confirmKind.value = acceptance ? "acceptance" : "decision";
+  draft(() => ({ kind: acceptance ? "acceptance" as const : "decision" as const, path: `/inventory-reviews/tasks/${props.taskId}/items/${props.itemId}/${acceptance ? "acceptance" : "evidence-decisions"}`,
+    version: selection.value!.taskVersion, body: acceptance ? data : { ...data, observationId: target.value,
+      method: method.value, subjects: references.value.map(row => ({ dimension: row.dimension, version: row.version })) } }));
 }
 function runConfirm() {
-  if (busy.value || !stage.value) return;
-  pending.value = stage.value; stage.value = null; confirmKind.value = null;
+  if (busy.value || !adopt()) return;
   void send();
 }
-function closeConfirm() { stage.value = null; confirmKind.value = null; }
+function closeConfirm() { cancel(); }
 async function send() {
   if (busy.value || !pending.value) return;
-  const original = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
-  try { await reviewRequest(original.path, original); if (!liveness.isCurrent(turn)) return; pending.value = null; emit("changed"); await load(); }
-  catch (cause) { if (!liveness.isCurrent(turn)) return; if (cause instanceof ReviewApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
+  const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
+  const original: BusinessMutation = { path: operation.payload.path, key: operation.key, version: operation.payload.version, body: operation.payload.body };
+  try { await reviewRequest(original.path, original); if (!liveness.isCurrent(turn)) return; abandon(); emit("changed"); await load(); }
+  catch (cause) { if (!liveness.isCurrent(turn)) return; fail(cause); failure(cause); }
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function pages(delta: number) { if (locked.value || page.value + delta < 1 || (page.value + delta - 1) * 20 >= total.value) return; page.value += delta; await load(); }

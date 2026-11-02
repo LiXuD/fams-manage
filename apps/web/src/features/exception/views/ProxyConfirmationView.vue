@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useRequestLiveness, type LivenessToken } from "@/composables/useRequestLiveness";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useSessionStore } from "@/auth/sessionStore";
 import { AuthApiError } from "@/auth/api";
 import { BusinessApiError, businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
@@ -13,7 +14,12 @@ const route = useRoute(), router = useRouter(), session = useSessionStore();
 const rows = ref<ProxyConfirmation[]>([]), selected = ref<ProxyConfirmation | null>(null);
 const attachments = ref<Attachment[]>([]), snapshot = ref<Record<string, unknown> | null>(null);
 const page = shallowRef(1), total = shallowRef(0), busy = shallowRef(false), error = shallowRef("");
-const pending = ref<BusinessMutation | null>(null), pendingUpload = ref<{ id: string; version: number; file: File; key: string } | null>(null);
+/** 确认式幂等提交：两域在途意图槽与幂等键簿记归底座，4xx 确定性失败才清键；busy/locked、URL、body 与文案留在本视图。 */
+const deterministic = (cause: unknown): boolean => (cause instanceof BusinessApiError || cause instanceof AuthApiError)
+  && cause.status >= 400 && cause.status < 500;
+const { pending, prepare: draft, confirm: adopt, settle, fail, reset } = useConfirmedSubmit<Omit<BusinessMutation, "key">>({ failure: deterministic });
+const { pending: pendingUpload, prepare: draftUpload, confirm: adoptUpload, settle: settleUpload, fail: failUpload, reset: resetUpload } =
+  useConfirmedSubmit<{ id: string; version: number; file: File }>({ failure: deterministic });
 const file = ref<File | null>(null);
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN")), warehouse = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR"));
 const locked = computed(() => busy.value || !!pending.value || !!pendingUpload.value);
@@ -40,12 +46,12 @@ const decisionDisabled = computed(() => !decision.value.reason.trim() || !decisi
 const executeShown = computed(() => !!warehouse.value && !!selected.value && selected.value.confirmationStatus === "APPROVED");
 const executedNoticeShown = computed(() => !!selected.value && selected.value.confirmationStatus === "EXECUTED");
 const liveness = useRequestLiveness(() => [identity.value]);
-function clear() { liveness.invalidate(); rows.value = []; selected.value = null; attachments.value = []; snapshot.value = null; pending.value = null; pendingUpload.value = null;
+function clear() { liveness.invalidate(); rows.value = []; selected.value = null; attachments.value = []; snapshot.value = null; reset(); resetUpload();
   file.value = null; form.value = emptyForm(); decision.value = { reason: "", physicalEvidenceChecked: false, noDisputeChecked: false }; page.value = 1; total.value = 0; busy.value = false; }
 function failure(cause: unknown, mutation = false) {
   if (cause instanceof BusinessApiError || cause instanceof AuthApiError) {
     if ([401, 403, 404].includes(cause.status)) clear();
-    else if (mutation && cause.status >= 400 && cause.status < 500) { pending.value = null; pendingUpload.value = null; }
+    else if (mutation) { fail(cause); failUpload(cause); }
   }
   error.value = businessMessage(cause);
 }
@@ -73,11 +79,13 @@ async function refresh() {
   catch (cause) { if (liveness.isCurrent(turn)) failure(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function send(path: string, body?: unknown, version = selected.value?.version ?? 0) {
-  if (busy.value || pendingUpload.value || pending.value && pending.value.path !== path) return;
-  pending.value ??= { path, key: crypto.randomUUID(), version, body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown };
-  const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
-  try { const result = await businessRequest<ProxyConfirmation>(operation.path, operation);
-    if (!liveness.isCurrent(turn)) return; pending.value = null; snapshot.value = null;
+  if (busy.value || pendingUpload.value || pending.value && pending.value.payload.path !== path) return;
+  let operation = pending.value;
+  if (!operation) { draft(() => ({ path, version, body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown })); operation = adopt(); }
+  if (!operation) return;
+  const turn = liveness.begin(); busy.value = true; error.value = "";
+  try { const result = await businessRequest<ProxyConfirmation>(operation.payload.path, { ...operation.payload, key: operation.key });
+    if (!liveness.isCurrent(turn)) return; settle(); snapshot.value = null;
     await detail(result.id, turn); if (liveness.isCurrent(turn)) await list(turn);
   } catch (cause) { if (liveness.isCurrent(turn)) failure(cause, true); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
@@ -89,11 +97,13 @@ function create() {
 }
 async function upload() {
   if (busy.value || pending.value || !selected.value || !pendingUpload.value && !file.value) return;
-  pendingUpload.value ??= { id: selected.value.id, version: selected.value.version, file: file.value!, key: crypto.randomUUID() };
-  const operation = pendingUpload.value, turn = liveness.begin(); busy.value = true; error.value = "";
-  try { await uploadProxyEvidence(operation.id, operation.version, operation.file, operation.key);
-    if (!liveness.isCurrent(turn)) return; pendingUpload.value = null; file.value = null;
-    await detail(operation.id, turn); if (liveness.isCurrent(turn)) await list(turn);
+  let operation = pendingUpload.value;
+  if (!operation) { draftUpload(() => ({ id: selected.value!.id, version: selected.value!.version, file: file.value! })); operation = adoptUpload(); }
+  if (!operation) return;
+  const turn = liveness.begin(); busy.value = true; error.value = "";
+  try { await uploadProxyEvidence(operation.payload.id, operation.payload.version, operation.payload.file, operation.key);
+    if (!liveness.isCurrent(turn)) return; settleUpload(); file.value = null;
+    await detail(operation.payload.id, turn); if (liveness.isCurrent(turn)) await list(turn);
   } catch (cause) { if (liveness.isCurrent(turn)) failure(cause, true); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function download(item: Attachment) {
@@ -127,7 +137,7 @@ onBeforeUnmount(() => { clear(); });
     </template>
     <section class="fams-panel fams-stack" aria-label="异常代确认">
       <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
-      <button v-if="pending" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="send(pending.path)">重试上次操作</button>
+      <button v-if="pending" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="send(pending.payload.path)">重试上次操作</button>
       <button v-if="pendingUpload" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="upload">重试上次凭证上传</button>
       <p v-if="pending || pendingUpload">上次操作结果尚未确认，请保持本页并使用原请求重试。</p>
       <form v-if="snapshot" class="fams-card fams-stack" @submit.prevent="create">

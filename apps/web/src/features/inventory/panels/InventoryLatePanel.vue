@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { inventoryLateResultLabels as results, reviewRequest, ReviewApiError } from "@/features/inventory/api";
 import InventoryLateDamagePanel from "./InventoryLateDamagePanel.vue";
@@ -16,31 +17,33 @@ interface Detail { case: Entry; history: { items: Decision[]; page: number; page
 const props = defineProps<{ taskId: string }>(); const session = useSessionStore();
 const owner = computed(() => JSON.stringify([props.taskId, session.user?.id, session.user?.roles, session.csrfToken]));
 const board = ref<Board | null>(null), detail = ref<Detail | null>(null), page = shallowRef(1), busy = shallowRef(false), error = shallowRef("");
-const pending = ref<BusinessMutation | null>(null), confirming = shallowRef(false), confirmation = shallowRef("");
+/** 确认式幂等提交：草稿/在途两槽与幂等键簿记归底座；busy/locked、URL 与文案留在本面板。 */
+const { prepared, pending, prepare: draft, confirm: adopt, abandon, fail, cancel, reset } = useConfirmedSubmit<Omit<BusinessMutation, "key">>({ failure: (cause) => cause instanceof ReviewApiError && [400, 409].includes(cause.status) });
+const confirming = computed(() => !!prepared.value), confirmation = shallowRef("");
 const reason = shallowRef(""), evidence = shallowRef(""), method = ref("NOTE"), draftName = shallowRef("");
 const startsAt = ref(new Date(Date.now() + 3600000).toISOString()), dueAt = ref(new Date(Date.now() + 7 * 86400000).toISOString());
 const damageBusy = shallowRef(false);
-const locked = computed(() => busy.value || !!pending.value || damageBusy.value); const liveness = useRequestLiveness(() => [owner.value]);
-function clear() { liveness.invalidate(); damageBusy.value = false; board.value = null; detail.value = null; pending.value = null; confirming.value = false; busy.value = false; reason.value = ""; evidence.value = ""; confirmation.value = ""; }
-function fail(cause: unknown) {
+const locked = computed(() => busy.value || !!prepared.value || !!pending.value || damageBusy.value); const liveness = useRequestLiveness(() => [owner.value]);
+function clear() { liveness.invalidate(); damageBusy.value = false; board.value = null; detail.value = null; reset(); busy.value = false; reason.value = ""; evidence.value = ""; confirmation.value = ""; }
+function failure(cause: unknown) {
   if (cause instanceof ReviewApiError && [401, 403, 404].includes(cause.status)) { clear(); error.value = "当前身份、权限或记录失效，已隐藏原资料与操作。"; return; }
   if (cause instanceof ReviewApiError && [400, 409].includes(cause.status)) {
-    pending.value = null; confirming.value = false;
+    fail(cause);
     error.value = cause.fields.processedBy ? `已由 ${cause.fields.processedBy} 于 ${cause.fields.processedAt || '已记录时间'} 处理，请刷新核对。`
       : "条件或补充决定版本已变化，请刷新核对；复盘须实际完成对应资产采信，不能凭创建草稿关闭。"; return;
   }
-  error.value = pending.value ? "处理结果尚未确认，请保留原操作重试。" : "读取未完成，请重试。";
+  error.value = pending.value || prepared.value ? "处理结果尚未确认，请保留原操作重试。" : "读取未完成，请重试。";
 }
 async function load() {
   const turn = liveness.begin(); busy.value = true; error.value = ""; board.value = null; detail.value = null;
   try { const result = await reviewRequest<Board>(`/inventory-late/tasks/${props.taskId}?page=${page.value}&pageSize=20`); if (liveness.isCurrent(turn)) board.value = result; }
-  catch (cause) { if (liveness.isCurrent(turn)) fail(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
+  catch (cause) { if (liveness.isCurrent(turn)) failure(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function open(entry: Entry) {
   if (locked.value) return; const turn = liveness.begin(); busy.value = true; detail.value = null; error.value = "";
   try { const result = await reviewRequest<Detail>(`/inventory-late/tasks/${props.taskId}/observations/${entry.evidence.observation_id}`);
     if (liveness.isCurrent(turn)) { detail.value = result; reason.value = ""; evidence.value = ""; method.value = "NOTE"; draftName.value = `${board.value?.task.name || '盘点'} 关联复盘`.slice(0, 128); } }
-  catch (cause) { if (liveness.isCurrent(turn)) fail(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
+  catch (cause) { if (liveness.isCurrent(turn)) failure(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function readHistory(delta: number) {
   if (locked.value || !detail.value) return;
@@ -48,12 +51,12 @@ async function readHistory(delta: number) {
   if (next < 1 || (next - 1) * 20 >= detail.value.history.total) return;
   const turn = liveness.begin(), id = detail.value.case.evidence.observation_id; busy.value = true; error.value = "";
   try { const result = await reviewRequest<Detail>(`/inventory-late/tasks/${props.taskId}/observations/${id}?page=${next}&pageSize=20`); if (liveness.isCurrent(turn)) detail.value = result; }
-  catch (cause) { if (liveness.isCurrent(turn)) fail(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
+  catch (cause) { if (liveness.isCurrent(turn)) failure(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function prepareLegacy() {
   if (locked.value || !board.value) return;
-  pending.value = { path: `/inventory-late/tasks/${props.taskId}/prepare`, key: crypto.randomUUID(), version: board.value.task.version };
-  confirmation.value = "把既有合法补充或未核时证据纳入清单，每批最多100条；保留原始分类与回执，不改变原报告和日期。"; confirming.value = true;
+  draft(() => ({ path: `/inventory-late/tasks/${props.taskId}/prepare`, version: board.value!.task.version }));
+  confirmation.value = "把既有合法补充或未核时证据纳入清单，每批最多100条；保留原始分类与回执，不改变原报告和日期。";
 }
 function prepareDecision() {
   if (locked.value || !board.value || !detail.value || reason.value.trim().length < 3 || evidence.value.trim().length < 3) return;
@@ -64,16 +67,17 @@ function prepareDecision() {
     if (!draftName.value.trim() || !Number.isFinite(start.getTime()) || !Number.isFinite(due.getTime()) || due <= start) { error.value = "请核对复盘名称及起止时间。"; return; }
     body.recheck = { name: draftName.value.trim(), range: structuredClone(JSON.parse(JSON.stringify(board.value.task.range_json))), startsAt: start.toISOString(), dueAt: due.toISOString() };
   }
-  pending.value = { path: `/inventory-late/tasks/${props.taskId}/observations/${row.evidence.observation_id}/decisions`, key: crypto.randomUUID(), version: row.review.decision_version, body };
+  draft(() => ({ path: `/inventory-late/tasks/${props.taskId}/observations/${row.evidence.observation_id}/decisions`, version: row.review.decision_version, body }));
   confirmation.value = `${methods[method.value]}：${body.reason}；依据：${body.evidence}。仅追加补充决定，不覆盖原报告、完成数或最近盘点日期。`;
-  confirming.value = true;
 }
 async function send() {
-  if (busy.value || !pending.value) return; const turn = liveness.begin(), original = pending.value;
-  busy.value = true; confirming.value = false; error.value = "";
-  try { await reviewRequest(original.path, original); if (liveness.isCurrent(turn)) { pending.value = null; await load(); } }
-  catch (cause) { if (liveness.isCurrent(turn)) fail(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
+  if (busy.value || !pending.value) return; const turn = liveness.begin(), operation = pending.value;
+  const original: BusinessMutation = { path: operation.payload.path, key: operation.key, version: operation.payload.version, body: operation.payload.body };
+  busy.value = true; error.value = "";
+  try { await reviewRequest(original.path, original); if (liveness.isCurrent(turn)) { abandon(); await load(); } }
+  catch (cause) { if (liveness.isCurrent(turn)) failure(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
+async function confirm() { if (busy.value || !adopt()) return; await send(); }
 async function paginate(delta: number) { if (locked.value || !board.value || page.value + delta < 1 || (page.value + delta - 1) * 20 >= board.value.total) return; page.value += delta; await load(); }
 const kinds: Record<string, string> = { FROZEN_CONFLICT: "与原采信事实冲突", NO_ACCEPTED: "原项没有有效采信", TIME_UNVERIFIED: "原时间仍待核实", FINDING: "任务外实物线索", FACTS_MATCH: "事实一致的补充线索" };
 const methods: Record<string, string> = { NOTE: "记录补充结论", LINK_RECHECK: "创建关联复盘草稿", REPLACE_RECHECK: "已结束复盘后另建一轮", CONFIRM_RECHECK: "核对实际完成的关联复盘" };
@@ -85,7 +89,7 @@ const prepareDisabled = computed(() => locked.value || !board.value);
 const prevDisabled = computed(() => locked.value || page.value === 1);
 const nextDisabled = computed(() => locked.value || !board.value || page.value * 20 >= board.value.total);
 const damagePanelKey = computed(() => detail.value ? `${props.taskId}:${detail.value.case.evidence.observation_id}` : "");
-const damageBlocked = computed(() => busy.value || !!pending.value);
+const damageBlocked = computed(() => busy.value || !!prepared.value || !!pending.value);
 const historyPrevDisabled = computed(() => locked.value || detail.value?.history.page === 1);
 const historyNextDisabled = computed(() => { const history = detail.value?.history; return locked.value || !history || history.page * 20 >= history.total; });
 const sceneLocationText = computed(() => { const actual = detail.value?.case.evidence.snapshot_json.facts.actual; return actual?.locationHint || actual?.locationId || "位置未明确"; });
@@ -168,8 +172,8 @@ watch(owner, () => { clear(); page.value = 1; void load(); }, { immediate: true 
     </template>
     <div v-if="confirming" class="fams-card fams-stack" role="group" aria-label="确认补充处理"><p>{{ confirmation }}</p>
       <div class="fams-panel-actions">
-        <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="send">确认追加补充处理</button>
-        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="pending = null; confirming = false">返回补充核对</button>
+        <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="confirm">确认追加补充处理</button>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="cancel()">返回补充核对</button>
       </div>
     </div>
     <button v-if="pending && !confirming" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="send">原键重试未确认补充处理</button>

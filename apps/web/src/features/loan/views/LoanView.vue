@@ -3,6 +3,7 @@ import { computed, onMounted, ref, shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { businessMessage, businessRequest } from "@/api/business";
 import { loanLabels as labels } from "@/features/loan/api";
 import type { BusinessMutation } from "@/api/business";
@@ -14,7 +15,8 @@ const busy = shallowRef(false); const error = shallowRef(""); const notice = sha
 const page = shallowRef(1); const total = shallowRef(0); const reason = shallowRef("");
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 const liveness = useRequestLiveness();
-let pending: BusinessMutation | null = null;
+/** 确认式幂等提交：在途意图槽与幂等键簿记归底座；busy/retryable、URL、body 与文案留在本视图。 */
+const { pending, prepare: draft, confirm: adopt, settle, reset } = useConfirmedSubmit<Omit<BusinessMutation, "key">>();
 
 const loanRows = computed(() => loans.value.map((row) => ({
   ...row, statusTone: row.overdue ? "warning" : "info", overdueText: row.overdue ? " · 已逾期" : "",
@@ -39,22 +41,24 @@ async function refresh() {
   if (busy.value) return; busy.value = true; error.value = "";
   try {
     await load();
-    pending = null; retryable.value = false;
+    reset(); retryable.value = false;
   } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 async function mutate(path: string, version: number, body?: unknown) {
   if (busy.value) return;
-  if (pending && pending.path !== path) { error.value = "请先重试上次操作或刷新查询。"; return; }
-  pending ??= { path, version, key: crypto.randomUUID(), body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown };
+  let operation = pending.value;
+  if (operation && operation.payload.path !== path) { error.value = "请先重试上次操作或刷新查询。"; return; }
+  if (!operation) { draft(() => ({ path, version, body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown })); operation = adopt(); }
+  if (!operation) return;
   busy.value = true; error.value = "";
   try {
-    await businessRequest(pending.path, pending);
-    pending = null; retryable.value = false; notice.value = "操作已保存。";
+    await businessRequest(operation.payload.path, { ...operation.payload, key: operation.key });
+    settle(); retryable.value = false; notice.value = "操作已保存。";
     await load();
-  } catch (e) { error.value = businessMessage(e); retryable.value = pending !== null; }
+  } catch (e) { error.value = businessMessage(e); retryable.value = pending.value !== null; }
   finally { busy.value = false; }
 }
-function retry() { if (pending) void mutate(pending.path, pending.version); }
+function retry() { const operation = pending.value; if (operation) void mutate(operation.payload.path, operation.payload.version); }
 function decide(id: string, version: number, approved: boolean) {
   if (!reason.value.trim()) { error.value = "请填写决定原因。"; return; }
   void mutate(`/loans/extensions/${id}/decision`, version, { approved, reason: reason.value.trim() });

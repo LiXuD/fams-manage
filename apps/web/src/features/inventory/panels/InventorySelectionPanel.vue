@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { reviewRequest, ReviewApiError, type Board, type Observation, type Review } from "@/features/inventory/api";
 import type { BusinessMutation } from "@/api/business";
@@ -16,8 +17,10 @@ const session = useSessionStore();
 const identity = computed(() => JSON.stringify([props.taskId, props.itemId, session.user?.id, session.csrfToken, session.user?.roles]));
 const data = ref<SelectionView | null>(null), board = ref<Board | null>(null), page = shallowRef(1);
 const choice = shallowRef(""), time = shallowRef(""), reason = shallowRef(""), evidence = shallowRef(""), error = shallowRef(""), notice = shallowRef("");
-const busy = shallowRef(false), pending = ref<BusinessMutation | null>(null);
-const stage = ref<BusinessMutation | null>(null), confirmOpen = shallowRef(false);
+const busy = shallowRef(false);
+/** 确认式幂等提交：草稿/在途两槽与幂等键簿记归底座；busy/locked、URL 与文案留在本面板。 */
+const { prepared: stage, pending, prepare: draft, confirm: adopt, abandon, fail, cancel, reset } = useConfirmedSubmit<Omit<BusinessMutation, "key">>({ failure: (cause) => cause instanceof ReviewApiError && cause.status >= 400 && cause.status < 500 });
+const confirmOpen = computed(() => !!stage.value);
 const confirmLabel = "确认保存待采信选择";
 const confirmHint = "保存这条证据及核实依据作为待采信选择？独立差异仍需处理，不会增加已采信数量。";
 const locked = computed(() => busy.value || !!pending.value);
@@ -41,7 +44,7 @@ const outcomes: Record<string, string> = { ACCEPTED: "正常观察候选", DIFFE
 const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const liveness = useRequestLiveness(() => [identity.value]);
 function clear() { data.value = null; board.value = null; choice.value = ""; time.value = ""; reason.value = "";
-  evidence.value = ""; pending.value = null; busy.value = false; stage.value = null; confirmOpen.value = false; }
+  evidence.value = ""; busy.value = false; reset(); }
 function failure(cause: unknown) {
   if (cause instanceof ReviewApiError) {
     if ([401,403,404].includes(cause.status)) { clear(); emit("invalid"); error.value = "当前身份、权限或记录已失效，已隐藏原资料。"; return; }
@@ -71,28 +74,27 @@ function openSave() {
     if (!time.value || !Number.isFinite(instant.getTime())) { error.value = "请填写核实后的现场观察时间。"; return; }
     verifiedObservedAt = instant.toISOString();
   }
-  stage.value = { path: `/inventory-reviews/tasks/${props.taskId}/items/${props.itemId}/selection`, key: crypto.randomUUID(),
-    version: data.value.taskVersion, body: { observationId: choice.value, recheckGeneration: data.value.recheckGeneration,
-      reviewVersion: data.value.review.version ?? 0, assetVersion: item.value.current.version, contextDigest: data.value.contextDigest,
-      ...(verifiedObservedAt ? { verifiedObservedAt } : {}), reason: reason.value.trim(), evidence: evidence.value.trim() } };
-  confirmOpen.value = true;
+  draft(() => ({ path: `/inventory-reviews/tasks/${props.taskId}/items/${props.itemId}/selection`,
+    version: data.value!.taskVersion, body: { observationId: choice.value, recheckGeneration: data.value!.recheckGeneration,
+      reviewVersion: data.value!.review.version ?? 0, assetVersion: item.value!.current!.version, contextDigest: data.value!.contextDigest,
+      ...(verifiedObservedAt ? { verifiedObservedAt } : {}), reason: reason.value.trim(), evidence: evidence.value.trim() } }));
 }
 function runSave() {
-  if (busy.value || !stage.value) return;
-  pending.value = stage.value; stage.value = null; confirmOpen.value = false;
+  if (busy.value || !adopt()) return;
   void save();
 }
-function closeConfirm() { stage.value = null; confirmOpen.value = false; }
+function closeConfirm() { cancel(); }
 async function save() {
   if (busy.value || !data.value || !item.value?.current || !pending.value) return;
-  const original = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
+  const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
+  const original: BusinessMutation = { path: operation.payload.path, key: operation.key, version: operation.payload.version, body: operation.payload.body };
   try {
     await reviewRequest(original.path, original);
     if (!liveness.isCurrent(turn)) return;
-    pending.value = null; notice.value = "已保存待采信选择；原始证据及历次选择均保留，差异尚须独立闭环。"; emit("changed"); await load();
+    abandon(); notice.value = "已保存待采信选择；原始证据及历次选择均保留，差异尚须独立闭环。"; emit("changed"); await load();
   } catch (cause) {
     if (!liveness.isCurrent(turn)) return;
-    if (cause instanceof ReviewApiError && cause.status >= 400 && cause.status < 500) pending.value = null;
+    fail(cause);
     failure(cause);
   } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }

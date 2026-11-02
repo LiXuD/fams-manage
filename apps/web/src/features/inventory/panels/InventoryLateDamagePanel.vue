@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { inventoryLateResultLabels, reviewRequest, ReviewApiError } from "@/features/inventory/api";
 import { repairStates } from "@/features/repair/api";
@@ -14,10 +15,12 @@ const props = defineProps<{ taskId: string; observationId: string; blocked?: boo
 const emit = defineEmits<{ changed: []; invalidated: []; busyChange: [value: boolean] }>();
 const session = useSessionStore(), owner = computed(() => JSON.stringify([props.taskId, props.observationId, session.user?.id, session.user?.roles, session.csrfToken]));
 const context = ref<Context | null>(null), busy = shallowRef(false), error = shallowRef(""), notice = shallowRef(""), page = shallowRef(1);
-const pending = ref<BusinessMutation | null>(null), confirming = shallowRef(false), method = ref("FORMAL_REPAIR");
+/** 确认式幂等提交：草稿/在途两槽与幂等键簿记归底座；busy/locked、URL 与文案留在本面板。 */
+const { prepared, pending, prepare: draft, confirm: adopt, abandon, fail, cancel, reset } = useConfirmedSubmit<Omit<BusinessMutation, "key">>({ failure: (cause) => cause instanceof ReviewApiError && cause.status >= 400 && cause.status < 500 });
+const confirming = computed(() => !!prepared.value), method = ref("FORMAL_REPAIR");
 const reason = shallowRef(""), evidence = shallowRef(""), fault = shallowRef(""), impact = ref("HIGH"), discoveredAt = shallowRef(""), checked = shallowRef(false), timeChecked = shallowRef(false);
 const repairId = shallowRef(""), linked = ref<Linked | null>(null);
-const locked = computed(() => busy.value || !!pending.value || !!props.blocked), states: Record<string, string> = { OPEN: "待实际处理", PROCESSING: "正式维修处理中", CLOSED: "实际维修已完成" };
+const locked = computed(() => busy.value || !!prepared.value || !!pending.value || !!props.blocked), states: Record<string, string> = { OPEN: "待实际处理", PROCESSING: "正式维修处理中", CLOSED: "实际维修已完成" };
 const methods: Record<string, string> = { FORMAL_REPAIR: "创建正式维修", LINK_REPAIR: "关联已有正式维修", REFRESH_REPAIR: "核对正式维修实际进度" };
 const refreshDisabled = computed(() => busy.value || !!props.blocked || confirming.value);
 const sendDisabled = computed(() => busy.value || !!props.blocked);
@@ -33,12 +36,11 @@ const damageFieldsetDisabled = computed(() => locked.value || context.value?.dam
 const liveness = useRequestLiveness(() => [owner.value]);
 let live = true;
 const path = () => `/inventory-late/tasks/${props.taskId}/observations/${props.observationId}/damage-repair`;
-function clear() { liveness.invalidate(); context.value = null; pending.value = null; confirming.value = false; busy.value = false; reason.value = ""; evidence.value = ""; fault.value = ""; discoveredAt.value = ""; repairId.value = ""; linked.value = null; checked.value = false; timeChecked.value = false; }
-function fail(cause: unknown, write = false) {
+function clear() { liveness.invalidate(); context.value = null; reset(); busy.value = false; reason.value = ""; evidence.value = ""; fault.value = ""; discoveredAt.value = ""; repairId.value = ""; linked.value = null; checked.value = false; timeChecked.value = false; }
+function failure(cause: unknown) {
   if (cause instanceof ReviewApiError && [401, 403, 404].includes(cause.status)) { clear(); emit("invalidated"); error.value = "当前身份、权限或原证据已失效，已隐藏资料。"; return; }
-  if (write && cause instanceof ReviewApiError && cause.status >= 400 && cause.status < 500) { pending.value = null; confirming.value = false; }
   error.value = cause instanceof ReviewApiError && cause.fields.processedBy ? `已由 ${cause.fields.processedBy} 处理，请刷新核对独立损坏版本。`
-    : pending.value ? "结果尚未确认，请保留原键载荷并重试。" : "读取或核实未完成，请刷新当前损坏义务、资产和正式维修。";
+    : pending.value || prepared.value ? "结果尚未确认，请保留原键载荷并重试。" : "读取或核实未完成，请刷新当前损坏义务、资产和正式维修。";
 }
 async function load(delta = 0) {
   if (busy.value || props.blocked || confirming.value || page.value + delta < 1 || delta > 0 && context.value && page.value * 20 >= context.value.history.total) return;
@@ -46,8 +48,8 @@ async function load(delta = 0) {
   try {
     const result = await reviewRequest<Context>(path() + `?page=${page.value + delta}&pageSize=20`);
     if (liveness.isCurrent(turn)) { context.value = result; page.value += delta;
-      if (!pending.value) { method.value = result.damage.damage_status === "PROCESSING" ? "REFRESH_REPAIR" : "FORMAL_REPAIR"; checked.value = false; timeChecked.value = false; } }
-  } catch (cause) { if (liveness.isCurrent(turn)) fail(cause); }
+      if (!pending.value && !prepared.value) { method.value = result.damage.damage_status === "PROCESSING" ? "REFRESH_REPAIR" : "FORMAL_REPAIR"; checked.value = false; timeChecked.value = false; } }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function inspect() {
@@ -58,7 +60,7 @@ async function inspect() {
       if (result.id !== requested || result.assetId !== context.value?.assetId || !["PENDING_ADMIN_DECISION", "WAITING_WAREHOUSE_CLAIM", "WAREHOUSE_PROCESSING"].includes(result.status)) error.value = "请选择同一资产的有效正式维修单。";
       else linked.value = result;
     }
-  } catch (cause) { if (liveness.isCurrent(turn)) fail(cause); }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function prepare() {
@@ -74,17 +76,20 @@ function prepare() {
       ...(method.value === "FORMAL_REPAIR" ? { fault: fault.value.trim(), impact: impact.value } : { repairId: linked.value!.id, repairVersion: linked.value!.version }) };
   } else if (!context.value.damage.repair_id) { error.value = "本条损坏尚未关联正式维修。"; return; }
   const body = { method: method.value, assetVersion: context.value.currentAsset?.version ?? 0, reason: reason.value.trim(), evidence: evidence.value.trim(), ...(repair ? { repair } : {}) };
-  pending.value = { path: path(), key: crypto.randomUUID(), version: context.value.damage.version, body: JSON.parse(JSON.stringify(body)) as unknown }; confirming.value = true;
+  draft(() => ({ path: path(), version: context.value!.damage.version, body: JSON.parse(JSON.stringify(body)) as unknown }));
 }
 async function send() {
   if (busy.value || props.blocked || !pending.value) return;
-  const original = pending.value, turn = liveness.begin(), who = owner.value; busy.value = true; confirming.value = false; error.value = ""; let saved = false;
-  try { await reviewRequest(original.path, original); if (liveness.isCurrent(turn)) { pending.value = null; saved = true; reason.value = ""; evidence.value = ""; notice.value = "损坏处理已追加；复盘和其他义务仍须分别完成。"; } }
-  catch (cause) { if (liveness.isCurrent(turn)) fail(cause, true); }
+  const operation = pending.value, turn = liveness.begin(), who = owner.value;
+  const original: BusinessMutation = { path: operation.payload.path, key: operation.key, version: operation.payload.version, body: operation.payload.body };
+  busy.value = true; error.value = ""; let saved = false;
+  try { await reviewRequest(original.path, original); if (liveness.isCurrent(turn)) { abandon(); saved = true; reason.value = ""; evidence.value = ""; notice.value = "损坏处理已追加；复盘和其他义务仍须分别完成。"; } }
+  catch (cause) { if (liveness.isCurrent(turn)) { fail(cause); failure(cause); } }
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
   if (saved && liveness.isCurrent(turn)) { await load(); if (live && who === owner.value) emit("changed"); }
 }
-watch([busy, pending], () => emit("busyChange", busy.value || !!pending.value), { flush: "sync" });
+async function confirm() { if (busy.value || props.blocked || !adopt()) return; await send(); }
+watch([busy, prepared, pending], () => emit("busyChange", busy.value || !!prepared.value || !!pending.value), { flush: "sync" });
 watch(owner, () => { clear(); page.value = 1; error.value = ""; notice.value = ""; void load(); }, { immediate: true, flush: "sync" });
 onBeforeUnmount(() => { live = false; clear(); emit("busyChange", false); });
 </script>
@@ -152,8 +157,8 @@ onBeforeUnmount(() => { live = false; clear(); emit("busyChange", false); });
     <div v-if="confirming" class="fams-card fams-stack" role="group" aria-label="确认独立损坏处理">
       <p>确认{{ methods[method] }}？本次仅追加损坏决定，其他待办及原报告不改。</p>
       <div class="fams-panel-actions">
-        <button class="fams-button" data-kind="primary" type="button" :disabled="sendDisabled" @click="send">确认保存独立损坏处理</button>
-        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="pending = null; confirming = false">取消本次损坏处理</button>
+        <button class="fams-button" data-kind="primary" type="button" :disabled="sendDisabled" @click="confirm">确认保存独立损坏处理</button>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="cancel()">取消本次损坏处理</button>
       </div>
     </div>
     <button v-if="pending && !confirming" class="fams-button" data-kind="secondary" type="button" :disabled="sendDisabled" @click="send">原键重试独立损坏处理</button>

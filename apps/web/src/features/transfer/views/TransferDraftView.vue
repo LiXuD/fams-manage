@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { businessMessage, businessRequest } from "@/api/business";
 import type { BusinessMutation } from "@/api/business";
@@ -23,9 +24,9 @@ const previewOrganization = computed(() => organization(currentAsset.value?.usin
 const previewPlace = computed(() => place(currentAsset.value?.currentLocationId));
 const draftRows = computed(() => draftItems.value.map(item => ({ ...item,
   line: `${item.asset.assetCode}：${place(item.asset.currentLocationId)} → ${place(item.target.locationId)}；${custodyName(item.asset.custodyType)} → ${custodyName(item.target.custodyType)}；${organization(item.target.usingOrganizationId)}` })));
-let pending: BusinessMutation | null = null;
+/** 确认式幂等提交：在途意图槽与幂等键簿记归底座；busy/retryable、URL 与文案留在本视图。 */
+const { pending, prepare: draft, confirm: adopt, settle, reset } = useConfirmedSubmit<Omit<BusinessMutation, "key">>();
 const liveness = useRequestLiveness(() => [using.value]);
-
 async function catalog(kind: string, org?: string) {
   const result: TransferChoice[] = []; let p = 1, part: TransferChoice[];
   do { part = (await businessRequest<{ items: TransferChoice[] }>(`/transfers/catalog/${kind}?page=${p++}&pageSize=200${org ? `&organizationId=${org}` : ""}`)).items; result.push(...part); }
@@ -44,23 +45,25 @@ async function refresh() {
     const turn = liveness.begin();
     const [orgs, whs, locs] = await Promise.all([catalog("organization"), catalog("warehouse"), catalog("location")]);
     if (liveness.isCurrent(turn)) { organizations.value = orgs; warehouses.value = whs; locations.value = locs; }
-    pending = null; retryable.value = false;
+    reset(); retryable.value = false;
   } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 async function mutate(path: string, version: number, body?: unknown) {
   if (busy.value) return;
-  if (pending && pending.path !== path) { error.value = "请先重试上次操作或刷新核对。"; return; }
-  pending ??= { path, version, key: crypto.randomUUID(), body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown };
+  let operation = pending.value;
+  if (operation && operation.payload.path !== path) { error.value = "请先重试上次操作或刷新核对。"; return; }
+  if (!operation) { draft(() => ({ path, version, body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown })); operation = adopt(); }
+  if (!operation) return;
   busy.value = true; error.value = "";
   try {
-    const result = await businessRequest<{ id: string }>(pending.path, pending);
-    pending = null; retryable.value = false; notice.value = "操作已保存。";
+    const result = await businessRequest<{ id: string }>(operation.payload.path, { ...operation.payload, key: operation.key });
+    settle(); retryable.value = false; notice.value = "操作已保存。";
     draftItems.value = [];
     await router.push(`/transfers/${encodeURIComponent(result.id)}?saved=1`);
-  } catch (e) { error.value = businessMessage(e); retryable.value = pending !== null; }
+  } catch (e) { error.value = businessMessage(e); retryable.value = pending.value !== null; }
   finally { busy.value = false; }
 }
-function retry() { const operation = pending; if (operation) void mutate(operation.path, operation.version); }
+function retry() { const operation = pending.value; if (operation) void mutate(operation.payload.path, operation.payload.version); }
 function place(id: unknown) { return locations.value.find(row => row.id === String(id))?.name ?? "原登记位置"; }
 function organization(id: unknown) { return organizations.value.find(row => row.id === String(id))?.name ?? "未指定组织"; }
 function custodyName(value: unknown) { return value === "PERSONAL" ? "个人" : value === "SHARED" ? "部门公用" : "仓库保管"; }
