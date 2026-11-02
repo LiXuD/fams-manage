@@ -5,7 +5,7 @@ import AssetReturnReassignment from "@/components/AssetReturnReassignment.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { inspectionLabels, loanLabels as labels, loanMessage, loanRequest } from "@/loan/api";
 import type { LoanMutation } from "@/loan/api";
-import type { AssetReturn, ReturnChoice } from "../../../../packages/api-types/src/loan";
+import type { AssetReturn, ReturnChoice } from "@fams/api-types/loan";
 
 const props = defineProps<{ id: string }>();
 const session = useSessionStore();

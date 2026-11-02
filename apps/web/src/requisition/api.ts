@@ -1,5 +1,5 @@
 import { requestJson, type HttpMethod, type Profile } from "@/api/http";
-import type { RequisitionCatalog, RequisitionChoice } from "../../../../packages/api-types/src/requisition";
+import type { RequisitionCatalog, RequisitionChoice } from "@fams/api-types/requisition";
 
 export const requisitionLabels: Record<string, string> = { DRAFT: "草稿", PENDING_ADMIN_DECISION: "待管理员确认", REJECTED: "已驳回",
   WAITING_WAREHOUSE_CLAIM: "待库管领取", WAREHOUSE_PROCESSING: "库管处理中", WAITING_HANDOVER: "待交接",

@@ -4,7 +4,7 @@ import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { loanLabels as labels, loanMessage, loanRequest, reminderLabels } from "@/loan/api";
 import type { LoanMutation } from "@/loan/api";
-import type { BorrowRequestChoice, BusinessPage, Loan } from "../../../../packages/api-types/src/loan";
+import type { BorrowRequestChoice, BusinessPage, Loan } from "@fams/api-types/loan";
 
 const props = defineProps<{ id: string }>();
 const router = useRouter();

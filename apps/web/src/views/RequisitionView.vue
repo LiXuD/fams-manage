@@ -3,7 +3,7 @@ import { shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { usePagedResourceList } from "@/composables/usePagedResourceList";
 import { requisitionLabels as labels, requisitionMessage, requisitionRequest } from "@/requisition/api";
-import type { RequisitionPage, RequisitionSummary } from "../../../../packages/api-types/src/requisition";
+import type { RequisitionPage, RequisitionSummary } from "@fams/api-types/requisition";
 
 const status = shallowRef("");
 

@@ -6,7 +6,7 @@ import RequisitionDemandForm from "./RequisitionDemandForm.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { allocationStatusLabels, handoverEventLabels, loadRequisitionCatalogs, requisitionLabels as labels, requisitionMessage, requisitionRequest } from "@/requisition/api";
 import type { Requisition, RequisitionAllocation, RequisitionChoice, RequisitionDemand, RequisitionDemandInput,
-  RequisitionInventory } from "../../../../packages/api-types/src/requisition";
+  RequisitionInventory } from "@fams/api-types/requisition";
 
 const props = defineProps<{ id: string }>();
 const session = useSessionStore();

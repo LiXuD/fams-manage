@@ -6,7 +6,7 @@ import TransferReassignment from "@/components/TransferReassignment.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { loanMessage, loanRequest, transferLabels as labels } from "@/loan/api";
 import type { LoanMutation } from "@/loan/api";
-import type { Transfer, TransferChoice, TransferItem } from "../../../../packages/api-types/src/transfer";
+import type { Transfer, TransferChoice, TransferItem } from "@fams/api-types/transfer";
 
 const props = defineProps<{ id: string }>();
 const session = useSessionStore(), route = useRoute();

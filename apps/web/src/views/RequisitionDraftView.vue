@@ -5,7 +5,7 @@ import AppChrome from "@/components/AppChrome.vue";
 import RequisitionDemandForm from "./RequisitionDemandForm.vue";
 import { loadRequisitionCatalogs, requisitionMessage, requisitionRequest } from "@/requisition/api";
 import type { Requisition, RequisitionChoice, RequisitionDemand, RequisitionDemandInput }
-  from "../../../../packages/api-types/src/requisition";
+  from "@fams/api-types/requisition";
 
 const props = defineProps<{ id?: string }>();
 const router = useRouter();

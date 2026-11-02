@@ -5,7 +5,7 @@ import { useSessionStore } from "@/auth/sessionStore";
 import { lifecycleLabels } from "@/asset/api";
 import { loanMessage, loanRequest, transferLabels as labels } from "@/loan/api";
 import type { LoanMutation } from "@/loan/api";
-import type { Transfer, TransferAsset, TransferChoice, TransferReceipt } from "../../../../packages/api-types/src/transfer";
+import type { Transfer, TransferAsset, TransferChoice, TransferReceipt } from "@fams/api-types/transfer";
 
 const session = useSessionStore();
 const rows = ref<Transfer[]>([]);

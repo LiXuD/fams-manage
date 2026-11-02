@@ -4,7 +4,7 @@ import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { loanMessage, loanRequest } from "@/loan/api";
 import type { LoanMutation } from "@/loan/api";
-import type { BusinessPage, ReturnAssetChoice } from "../../../../packages/api-types/src/loan";
+import type { BusinessPage, ReturnAssetChoice } from "@fams/api-types/loan";
 
 const router = useRouter();
 const returnAssets = ref<ReturnAssetChoice[]>([]);

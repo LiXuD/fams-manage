@@ -4,7 +4,7 @@ import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { loanMessage, loanRequest } from "@/loan/api";
 import type { LoanMutation } from "@/loan/api";
-import type { TransferAsset, TransferChoice, TransferTarget } from "../../../../packages/api-types/src/transfer";
+import type { TransferAsset, TransferChoice, TransferTarget } from "@fams/api-types/transfer";
 
 const router = useRouter();
 const assets = ref<TransferAsset[]>([]);

@@ -4,7 +4,7 @@ import { useSessionStore } from "@/auth/sessionStore";
 import type { LoanMutation } from "@/loan/api";
 import { reviewRequest, ReviewApiError, subjectStatusLabels as statuses, type Board, type ReviewItem } from "@/inventory-review/api";
 import { repairStates } from "@/repair/api";
-import type { TransferChoice, TransferTarget } from "../../../../packages/api-types/src/transfer";
+import type { TransferChoice, TransferTarget } from "@fams/api-types/transfer";
 const props = defineProps<{ taskId: string; item: ReviewItem; itemPage: number; observationIds: string[] }>();
 const emit = defineEmits<{ invalid: [] }>();
 interface Subject { observation_id: string; item_id: string | null; dimension: string; version: number;

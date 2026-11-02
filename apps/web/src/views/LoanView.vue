@@ -4,7 +4,7 @@ import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { loanLabels as labels, loanMessage, loanRequest } from "@/loan/api";
 import type { LoanMutation } from "@/loan/api";
-import type { BusinessPage, Loan, LoanExtension } from "../../../../packages/api-types/src/loan";
+import type { BusinessPage, Loan, LoanExtension } from "@fams/api-types/loan";
 
 const session = useSessionStore();
 const loans = ref<Loan[]>([]); const extensions = ref<LoanExtension[]>([]);

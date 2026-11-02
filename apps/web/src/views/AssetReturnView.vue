@@ -2,7 +2,7 @@
 import AppChrome from "@/components/AppChrome.vue";
 import { usePagedResourceList } from "@/composables/usePagedResourceList";
 import { loanLabels as labels, loanMessage, loanRequest } from "@/loan/api";
-import type { AssetReturn, BusinessPage } from "../../../../packages/api-types/src/loan";
+import type { AssetReturn, BusinessPage } from "@fams/api-types/loan";
 
 const { rows: returns, busy, error, page, total, refresh } = usePagedResourceList<AssetReturn>(
   (page) => loanRequest<BusinessPage<AssetReturn>>(`/asset-returns?page=${page}&pageSize=20`),

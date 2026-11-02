@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import type { RequisitionChoice, RequisitionDemand, RequisitionDemandInput } from "../../../../packages/api-types/src/requisition";
+import type { RequisitionChoice, RequisitionDemand, RequisitionDemandInput } from "@fams/api-types/requisition";
 
 const props = defineProps<{
   mode: "new" | "revise" | "change";

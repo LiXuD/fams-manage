@@ -4,6 +4,13 @@
   "version": "0.1.0",
   "description": "Generated shared TypeScript model surface for the D6-02A probe",
   "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./loan": "./src/loan.d.ts",
+    "./requisition": "./src/requisition.d.ts",
+    "./transfer": "./src/transfer.d.ts",
+    "./package.json": "./package.json"
+  },
   "engines": {
     "node": "24.18.0",
     "npm": "11.16.0"
