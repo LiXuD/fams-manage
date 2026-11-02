@@ -7,7 +7,7 @@
 >
 > 原接续材料：[2026-10-30进度交接](docs/development/2026-10-30-current-progress-handoff.md)。其中待审状态以本轮用户签署和现役计划更新为准；旧候选和机器证据不改写。真实外部/真机、远端CI、正式QA、生产仍另验。
 >
-> 前端架构批：ARCH-01～ARCH-11 在分支 `codex/d6-20-factory-ui` 完成（代码批 14 个提交至 `46bb20a`，另有实测与记录批），是用户指定的第6步内前端结构调整，不进入 D6-01～D6-27 台账、不占用其状态；ARCH-08～11 四批的运行时等价性已用真实浏览器逐路由实测收口（117/117 一致，见 `ARCH-11` 记录）。本分支把该系列与 D6-21 报失功能线合并，并按同一标准改造报失新增前端。逐批指标与遗留项只在 `docs/development/ARCH-*.md` 维护。
+> 前端架构批：ARCH-01～ARCH-12 在本分支完成（代码批 14 个提交至 `46bb20a`，另有实测与记录批与 ARCH-12 两提交），是用户指定的第6步内前端结构调整，不进入 D6-01～D6-27 台账、不占用其状态；ARCH-08～12 各批的运行时等价性已用真实浏览器逐路由实测收口（ARCH-11 为 117/117 一致，ARCH-12 为 129 单元中 117 一致、12 条报失单元只改形状与文本，见各批记录）。本分支已把该系列与 D6-21 报失功能线合并，并按同一标准改造报失新增前端。逐批指标与遗留项只在 `docs/development/ARCH-*.md` 维护。
 ## 1. 八步开发流程与当前进度
 
 | 步骤 | 阶段 | 英文 | 阶段目标 | 当前状态 | 依据 / 下一步 |
@@ -17,7 +17,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | 接续前所有待复核已获用户PASS；下一B2b4责任/位置实际变化去向。前端架构批 ARCH-01～ARCH-11 已合入本分支（含真实浏览器逐路由实测），入口见 §4。各父项、真实外部/CI/独立复核以[现役开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)为准 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | 接续前所有待复核已获用户PASS；下一B2b4责任/位置实际变化去向。前端架构批 ARCH-01～ARCH-12 已合入本分支（含报失新增前端收口与真实浏览器逐路由实测），入口见 §4。各父项、真实外部/CI/独立复核以[现役开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)为准 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
@@ -57,7 +57,7 @@
 | D0.4 设计证据 | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 第5步验证结果 | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md) |
 | 第6步计划、Git/CI 规范、任务进度与执行记录 | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md) |
-| 前端架构批 ARCH-01～ARCH-11 的规格、指标、偏差与遗留项 | `docs/development/ARCH-*.md`（在 `codex/d6-20-factory-ui` 分支；本文只记阶段与下一步，不复制第二套任务状态） |
+| 前端架构批 ARCH-01～ARCH-12 的规格、指标、偏差与遗留项 | `docs/development/ARCH-*.md`（在当前分支；本文只记阶段与下一步，不复制第二套任务状态） |
 
 `FIXED_ASSET_SYSTEM_DESIGN.md` 是早期系统设计参考，不能替代 PRD V1.5。旧评审、D0.3验证和D0.4执行台账只作为历史证据。
 
@@ -70,7 +70,7 @@
 | 规则 | `changed-and-verified` | AGENTS 已指向当前阶段 |
 | 产品代码 | `in-progress` | A/A1/A2/B1/B2a已用户复核；B2b1/2/3均已送审，下一B2b4责任/位置真实去向，B2b5/C/D仍必需 |
 | 产品运行态 | `local-dev-partial` | B2b3固定3e3e01c完整门禁Java508/XML629/Web213/mini326及实际PC/ClamAV/提交JVM恢复通过，独立复核及外部/CI/QA/生产仍开放 |
-| 前端架构批 | `local-committed-unpushed` | ARCH-01～ARCH-11 的代码批 14 个提交（至 `46bb20a`）+ 实测与记录批已合入本分支 `codex/d6-21-loss-ui`，四道本地门禁通过，且 ARCH-08～11 有真实浏览器逐路由实测（39 路由 × 3 角色 = 117 单元全一致）；只调整结构、加载形态与内部底座，不改变任何 D6 任务的开放状态 |
+| 前端架构批 | `local-committed-unpushed` | ARCH-01～ARCH-12 的代码批 14 个提交（至 `46bb20a`）+ 实测与记录批 + ARCH-12 两提交（`d8c55ac`/`78a09ca`）已合入本分支 `codex/d6-21-loss-ui`，四道本地门禁通过，且 ARCH-08～12 有真实浏览器逐路由实测（ARCH-12 为 43 路由 × 3 角色 = 129 单元，117 全一致、12 条报失单元只改形状与文本）；只调整结构、加载形态与内部底座，不改变任何 D6 任务的开放状态 |
 | 记忆 | `out-of-scope` | 本次未修改机器生成记忆 |
 | 工作区 | `review-recorded` | codex/d6-21-loss，本轮本地提交未推送，未合并main；隔离运行资源已清理 |
 
@@ -262,3 +262,11 @@ D6-21A2 功能候选 `482756e` 已完成本轮内部链路验证并送 `IN_REVIE
 `ARCH-11` 补齐了三次批次都记为局限的一项：真实浏览器逐路由实测。自建一次性栈（MySQL 8.4.11 固定 digest + `fams-product` jar + 两份 vite dev），把 ARCH-08 前的 `bdb6eb0` 以 worktree 与 HEAD 并排跑同一后端、同一库状态、同一份 39 条路由清单 × 3 角色 = 117 个渲染单元，比对最终 URL、DOM 结构签名、掩码后文本指纹、控件总数/禁用数、翻页探针与 console/异常/HTTP≥400 事件集合，结果 **117/117 全一致**（两侧文本总长同为 39,622 字符）。实测只覆盖读路径，写入交互、loan/异常/导入三域的行级渲染与附件接口 500（栈未配 `fams.attachments.quarantine-root`）作为遗留项写在 `ARCH-11` 记录里；判据与脚本为 `scripts/arch-ui-cdp-sweep.mjs`、`scripts/run-arch-ui-stack.py`、`scripts/seed-arch-ui-docs.py`、`scripts/arch-ui-routes.py`。
 
 边界与状态：ARCH-08～11 同样不改接口契约、权限、事务与用户可见文案来源；仍未推送，未经远端 CI、第七阶段 QA、真实外部联调与独立复核，不改变 D6-19/D6-20 各任务开放状态。功能开发的下一步仍是现役计划的 D6-20C1 PC 缺陷修复与重验、C2 整机新卡与换机入库、D 及 D6-21～27；前端侧是否推送本分支由用户决定。
+
+## 2026-11-02 报失线合入与新增前端收口（ARCH-12，续 ARCH-08～11）
+
+把 `codex/d6-21-loss` 的报失功能线（B2b1～B2b4a）合入架构线，合并提交 `39be3bb` 只做目录归位：冲突一律以 `features/<域>/{api,views,panels}` 形状落地，换机追溯挂到 `AssetDetailView`、换机面板挂到 `RepairFactoryPanel`、报失重提挂到 `AssetReturnDetailView`，同批把懒路由计数与既有断言补齐，四道门禁当场回绿（79 文件/349 用例）。随后两提交完成标准收口：`d8c55ac` 把报失三文件与换机两文件推到 ARCH-08/09/10 底座与 fams-* 词表（草稿/确认两型分离使幂等键只归视图底座、`useRequestLiveness`/`useObjectUrlPreview`/`requestBlob` 采纳、19 处模板派生归位、四个文件的 1813 字节裸色值 scoped CSS 归零、`.vue` 内裸 `fetch(` 命中数归零），`78a09ca` 落 `ARCH-12` 记录并给实测底座补 `--attachments`（真实启用扫描根与 clamd，收掉 ARCH-11 的「附件接口 500」遗留）、报失线造单与 `LABEL_DIFF` 判据。
+
+判据与实测：`audit-web-template-derivations.py` 与 `audit-web-state-ownership.py` 对 `apps/web/src` 全量为 `sites=0` / `hard_violations=0`（E 类 13 文件沿用原保留清单）；根 lint 退出 0、`vue-tsc` 0 错误、`vitest run` 79 文件/349 用例全绿且既有断言一字未改、`vite build` 主 CSS 文件名与字节未变而 per-view CSS 产物从两份归零。真实浏览器把 `39be3bb`（改前）与当前工作树（改后）并排跑同一栈同一库同一份 43 条路由 × 3 角色 = 129 单元：117 单元逐字节一致，12 条报失单元只有结构签名与文本差异，控件总数/禁用数、按钮与字段文案集合、翻页探针与运行时事件集合四项全等。
+
+边界与遗留：ARCH-12 同样不改接口契约、权限、事务、并发与用户可见文案来源，可见变化只有报失视图的自带页头去重（标题与描述已由路由 meta 经 `AppChrome` 单点渲染）和分页空格口径统一；换机面板与换机追溯所需的返厂轮次、换机记录卡未在一次性栈造出，两者的浏览器渲染留作下一批；仍未推送，未经远端 CI、第七阶段 QA、真实外部联调与独立复核，不改变 D6-19/D6-20/D6-21 各任务开放状态。功能开发下一步仍是现役计划的 D6-20C1 PC 缺陷修复与重验、C2 整机新卡与换机入库、D 及 D6-21～27；前端侧是否推送本分支由用户决定。
