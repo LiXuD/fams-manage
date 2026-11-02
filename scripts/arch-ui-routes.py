@@ -34,7 +34,11 @@ DOMAIN_BY_ROUTE = {
     "loan-detail": "loan",
     "asset-return-detail": "assetReturn",
     "transfer-detail": "transfer",
+    "loss-reports": "loss",
 }
+
+# 同一个域里要多渲染几张单据时按 ids 的键补详情路由；名字带后缀，避免和 expand 生成的重名。
+EXTRA_DETAIL = {"loss-reports": {"lossPending": "loss-pending", "lossSearching": "loss-searching"}}
 
 PARAM = re.compile(r"^(\s*)(?:\{ path: \")(/[^\"]*)\"(?:, name: \"([^\"]+)\")?")
 
@@ -42,7 +46,7 @@ PARAM = re.compile(r"^(\s*)(?:\{ path: \")(/[^\"]*)\"(?:, name: \"([^\"]+)\")?")
 PROBED = {
     "assets", "asset-import", "asset-import-review", "asset-returns",
     "business-result-notices", "business-result-reviews", "inventory-task-detail",
-    "inventory-tasks", "loans", "proxy-confirmations", "requisition-target-changes",
+    "inventory-tasks", "loans", "loss-reports", "proxy-confirmations", "requisition-target-changes",
     "requisitions", "repair-assistance", "repairs", "transfer-target-changes", "transfers",
 }
 
@@ -67,6 +71,9 @@ def main() -> int:
             if name in PROBED:
                 row["probe"] = "next-page"
             rows.append(row)
+        for key, extra_name in EXTRA_DETAIL.get(name, {}).items():
+            if ids.get(key):
+                rows.append({"name": extra_name, "path": f"{template.replace(':id?', ':id')}".replace(":id", str(ids[key]))})
 
     args.out.write_text(json.dumps(rows, indent=2, ensure_ascii=False))
     missing = sorted({row["name"] for row in rows if ":id" in row["path"]})

@@ -30,6 +30,9 @@ const { values: options } = parseArgs({
     roles: { type: "string", default: "admin,warehouse,employee" },
     port: { type: "string", default: "9411" },
     label: { type: "string", default: "run" },
+    filter: { type: "string", default: "" },
+    shotDir: { type: "string", default: "" },
+    viewport: { type: "string", default: "" },
     settle: { type: "string", default: "450" },
   },
 });
@@ -232,7 +235,10 @@ async function runProbe(connection, sessionId, kind, settleMs) {
 }
 
 async function sweep() {
-  const routes = JSON.parse(readFileSync(options.routes, "utf8"));
+  const all = JSON.parse(readFileSync(options.routes, "utf8"));
+  const routes = options.filter
+    ? all.filter((route) => route.name.includes(options.filter) || route.path.includes(options.filter))
+    : all;
   const roles = options.roles.split(",").filter(Boolean);
   const userData = mkdtempSync(`${tmpdir()}/fams-arch-chrome-${options.label}-`);
   const chrome = spawn(CHROME, [
@@ -250,6 +256,11 @@ async function sweep() {
       await connection.send("Runtime.enable", {}, page.sessionId);
       await connection.send("Network.enable", {}, page.sessionId);
       await connection.send("Log.enable", {}, page.sessionId);
+      if (options.viewport) {
+        // 截图口径由视口决定：1440 与 390 两档分别核对桌面与窄屏的令牌排版。
+        const [width, height] = options.viewport.split("x").map(Number);
+        await connection.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false }, page.sessionId);
+      }
 
       let capture = null;
       const events = [];
@@ -296,6 +307,11 @@ async function sweep() {
         // favicon 缺失是本地栈的环境噪声，与视图渲染无关，不计入路由问题。
         const issues = collected.filter((line) => !line.includes("/favicon.ico"));
         const probe = await runProbe(connection, page.sessionId, route.probe, Number(options.settle));
+        if (options.shotDir) {
+          // 截图在探针之后落盘：探针会翻页，人工要核对的是探针后的稳定态。
+          const shot = await connection.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true }, page.sessionId);
+          writeFileSync(`${options.shotDir}/${options.label}__${role}__${route.path.replace(/[^a-z0-9]+/gi, "-")}.png`, Buffer.from(shot.data, "base64"));
+        }
         rows.push({
           role, name: route.name, path: route.path, finalUrl,
           chars: masked.text.length,
@@ -333,12 +349,18 @@ function hash(text) {
   return `${a.toString(36)}${b.toString(36)}`;
 }
 
+/** 按钮与链接文案集合：词表迁移只该改样式与 DOM 形状，可点文案必须逐字一致。 */
+const sameLabels = (before, after) => {
+  const key = (list) => [...(list || [])].sort().join("|");
+  return key(before.buttons) === key(after.buttons) && key(before.fields) === key(after.fields);
+};
+
 function diff() {
   const left = JSON.parse(readFileSync(options.left, "utf8"));
   const right = JSON.parse(readFileSync(options.right, "utf8"));
   const key = (row) => `${row.role} ${row.path}`;
   const byKey = new Map(right.rows.map((row) => [key(row), row]));
-  const verdicts = { SAME: 0, STATUS_DIFF: 0, STRUCT_DIFF: 0, TEXT_DIFF: 0, CONTROL_DIFF: 0, ISSUE_DIFF: 0, PROBE_DIFF: 0, MISSING: 0 };
+  const verdicts = { SAME: 0, STATUS_DIFF: 0, STRUCT_DIFF: 0, TEXT_DIFF: 0, CONTROL_DIFF: 0, LABEL_DIFF: 0, ISSUE_DIFF: 0, PROBE_DIFF: 0, MISSING: 0 };
   const lines = [];
   for (const before of left.rows) {
     const after = byKey.get(key(before));
@@ -350,6 +372,7 @@ function diff() {
     if (before.controls.total !== after.controls.total || before.controls.disabled !== after.controls.disabled) {
       tags.push(["CONTROL_DIFF", `controls ${before.controls.total}/${before.controls.disabled} -> ${after.controls.total}/${after.controls.disabled}`]);
     }
+    if (!sameLabels(before, after)) tags.push(["LABEL_DIFF", "clickable labels or field types differ"]);
     if (before.issues.length !== after.issues.length) tags.push(["ISSUE_DIFF", `runtime issues ${before.issues.length} -> ${after.issues.length}`]);
     const probeOf = (row) => (row.probe ? `${row.probe.action}|${row.probe.pageLabel}|${row.probe.textHash || ""}` : "none");
     if (probeOf(before) !== probeOf(after)) tags.push(["PROBE_DIFF", `pagination probe ${probeOf(before)} -> ${probeOf(after)}`]);
@@ -367,6 +390,11 @@ function diff() {
     if (tags.some(([tag]) => tag === "CONTROL_DIFF")) {
       lines.push(`   buttons left : ${before.buttons.join(" | ").slice(0, 240)}`);
       lines.push(`   buttons right: ${after.buttons.join(" | ").slice(0, 240)}`);
+    }
+    if (tags.some(([tag]) => tag === "LABEL_DIFF")) {
+      const has = (list, label) => (list || []).includes(label);
+      lines.push(`   labels only on left : ${(before.buttons || []).filter((l) => !has(after.buttons, l)).join(" | ")}`);
+      lines.push(`   labels only on right: ${(after.buttons || []).filter((l) => !has(before.buttons, l)).join(" | ")}`);
     }
     if (after.issues.length) lines.push(`   issues on right: ${after.issues.slice(0, 5).join(" | ")}`);
     if (before.issues.length) lines.push(`   issues on left : ${before.issues.slice(0, 5).join(" | ")}`);

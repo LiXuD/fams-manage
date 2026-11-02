@@ -29,6 +29,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 IMAGE = "mysql:8.4.11@sha256:3466ba4a4828aa8d46fb7c3bc16b67b781c98413cf4ea0fac6feaa6e881faa26"
+CLAMAV_IMAGE = "clamav/clamav:1.4.6"
 JAR = ROOT / "backend/target/contract-generation-probe-0.1.0-SNAPSHOT.jar"
 JAVA_HOME = "/Users/lixd/Library/Java/JavaVirtualMachines/graalvm-jdk-21.0.7/Contents/Home"
 NODE_BIN = "/Users/lixd/.nvm/versions/node/v24.18.0/bin"
@@ -166,6 +167,8 @@ def main() -> int:
     parser.add_argument("--info-file", type=Path, default=Path("/tmp/fams-arch-stack.json"))
     parser.add_argument("--sql", action="store_true", help="read SQL from stdin, print result, exit")
     parser.add_argument("--from-info", type=Path, default=None)
+    parser.add_argument("--attachments", action=argparse.BooleanOptionalAction, default=True,
+                        help="配 fams.attachments.quarantine-root，并起一个 clamd 让附件扫描真的出 CLEAN")
     args = parser.parse_args()
 
     if args.sql:
@@ -183,6 +186,7 @@ def main() -> int:
 
     suffix = secrets.token_hex(6)
     container = f"fams-arch-ui-mysql-{suffix}"
+    scanner = f"fams-arch-ui-clamd-{suffix}"
     database = f"fams_arch_ui_{suffix}"
     root_password = secrets.token_hex(24)
     user_password = secrets.token_hex(24)
@@ -202,6 +206,10 @@ def main() -> int:
             except subprocess.TimeoutExpired:
                 process.kill()
         subprocess.run(["rtk", "docker", "rm", "-f", container], capture_output=True, check=False)
+        if args.attachments:
+            subprocess.run(["rtk", "docker", "rm", "-f", scanner], capture_output=True, check=False)
+        for path in (directory / "attachments",):
+            subprocess.run(["rtk", "rm", "-rf", str(path)], capture_output=True, check=False)
         for log in logs:
             if log.is_file():
                 text = log.read_text(errors="replace")
@@ -252,6 +260,26 @@ def main() -> int:
             if failure:
                 print(failure, end="", flush=True)
 
+        scanner_port = ""
+        if args.attachments:
+            launched = subprocess.run(
+                ["rtk", "docker", "run", "-d", "--name", scanner, "-p", "127.0.0.1::3310", CLAMAV_IMAGE],
+                capture_output=True, text=True, check=False)
+            if launched.returncode:
+                raise RuntimeError(f"clamd run failed: {launched.stderr[-500:]}")
+
+            def clamd_ready() -> bool:
+                try:
+                    with socket.create_connection(("127.0.0.1", int(scanner_port)), timeout=2) as pipe:
+                        pipe.sendall(b"PING\n")
+                        return pipe.recv(16) == b"PONG\n"
+                except (OSError, ValueError):
+                    return False
+
+            scanner_port = checked(["rtk", "docker", "port", scanner, "3310/tcp"]).stdout.strip().rsplit(":", 1)[-1]
+            wait_for(clamd_ready, "clamd", 240)
+            (directory / "attachments").mkdir(exist_ok=True)
+
         environment = os.environ.copy()
         environment.update({
             "JAVA_HOME": JAVA_HOME,
@@ -262,12 +290,16 @@ def main() -> int:
             "SPRING_DATASOURCE_PASSWORD": user_password,
             "FAMS_SECURITY_IDEMPOTENCY_HMAC_KEY": secrets.token_hex(32),
         })
+        # 附件与扫描只在显式开启时配置：报失批准要求至少一张 CLEAN 原件，缺它就只能渲染到待批准为止。
+        attachment_args = ([] if not args.attachments else
+                           [f"--fams.attachments.quarantine-root={directory / 'attachments'}",
+                            f"--fams.attachments.clamd-port={scanner_port}"])
         backend_log = directory / "backend.log"
         logs.append(backend_log)
         with backend_log.open("wb") as handle:
             backend = subprocess.Popen(
                 ["rtk", "java", "-jar", str(JAR), "--spring.profiles.active=fams-product",
-                 "--server.address=127.0.0.1", "--server.port=8080"],
+                 "--server.address=127.0.0.1", "--server.port=8080", *attachment_args],
                 cwd=ROOT, env=environment, stdout=handle, stderr=subprocess.STDOUT, start_new_session=True)
         processes.append(backend)
         # Flyway runs at startup, so seeding only has a schema once the backend is ready.
