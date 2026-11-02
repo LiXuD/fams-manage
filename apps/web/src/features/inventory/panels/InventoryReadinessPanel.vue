@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import type { BusinessMutation } from "@/api/business";
 import { ReviewApiError, reviewRequest } from "@/features/inventory/api";
 interface Row { item: { id: string; recheck_generation: number; review_status?: string; reason_kind?: string; reason?: string;
@@ -28,9 +29,8 @@ const historyPrevDisabled = computed(() => locked.value || historyPage.value ===
 const nextPageDisabled = computed(() => locked.value || !view.value || page.value * 20 >= view.value.total);
 const nextHistoryDisabled = computed(() => locked.value || historyPage.value * 20 >= historyTotal.value);
 const kinds: Record<string, string> = { UNABLE_TO_OBSERVE: "无法实盘（如现场无法进入）", EVIDENCE_UNAVAILABLE: "原证据失效或无法使用，需补盘", ASSET_NOT_FOUND: "实物未找到，继续查找或正式报失" };
-let generation = 0, live = true;
-const current = (epoch: number, identity: string) => live && epoch === generation && owner.value === identity;
-function clear() { generation++; view.value = null; chosen.value = ""; reason.value = ""; evidence.value = ""; waitingReason.value = "";
+const liveness = useRequestLiveness(() => [owner.value]);
+function clear() { liveness.invalidate(); view.value = null; chosen.value = ""; reason.value = ""; evidence.value = ""; waitingReason.value = "";
   history.value = []; historyTotal.value = 0; historyItem.value = ""; pending.value = null; confirming.value = false; summary.value = ""; busy.value = false; notice.value = ""; }
 function failure(cause: unknown) {
   if (cause instanceof ReviewApiError && [401, 403, 404].includes(cause.status)) { clear(); error.value = "身份、权限或任务已失效，已隐藏原资料。"; return; }
@@ -43,11 +43,11 @@ function failure(cause: unknown) {
   error.value = pending.value ? "提交结果尚未确认，请保留原操作重试。" : "读取未完成，请重试。";
 }
 async function load() {
-  const epoch = ++generation, identity = owner.value; busy.value = true; error.value = ""; view.value = null; chosen.value = "";
+  const turn = liveness.begin(); busy.value = true; error.value = ""; view.value = null; chosen.value = "";
   try { const result = await reviewRequest<View>(`/inventory-readiness/tasks/${props.taskId}?page=${page.value}&pageSize=20`);
-    if (current(epoch, identity)) view.value = result;
-  } catch (cause) { if (current(epoch, identity)) failure(cause); }
-  finally { if (current(epoch, identity)) busy.value = false; }
+    if (liveness.isCurrent(turn)) view.value = result;
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function choose(row: Row) { if (locked.value || !row.canRecord) return; chosen.value = row.item.id; reason.value = ""; evidence.value = ""; notice.value = ""; }
 function prepareRecord() {
@@ -65,23 +65,23 @@ function prepareWaiting() {
 }
 async function send() {
   if (busy.value || !pending.value) return;
-  const epoch = generation, identity = owner.value, operation = pending.value; busy.value = true; error.value = ""; confirming.value = false;
+  const turn = liveness.begin(), operation = pending.value; busy.value = true; error.value = ""; confirming.value = false;
   try { await reviewRequest(operation.path, operation);
-    if (current(epoch, identity)) { pending.value = null; busy.value = false; notice.value = "本次处理已保存，原始观察保持不变。"; await load(); emit("changed"); }
-  } catch (cause) { if (current(epoch, identity)) failure(cause); }
-  finally { if (current(epoch, identity)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { pending.value = null; busy.value = false; notice.value = "本次处理已保存，原始观察保持不变。"; await load(); emit("changed"); }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function readHistory(item: string, next = 1) {
   if (locked.value || !view.value?.items.some(row => row.item.id === item)) return;
-  const epoch = ++generation, identity = owner.value; busy.value = true; error.value = ""; history.value = [];
+  const turn = liveness.begin(); busy.value = true; error.value = ""; history.value = [];
   try { const result = await reviewRequest<{ items: History[]; total: number }>(`/inventory-readiness/tasks/${props.taskId}/items/${item}/unobserved-history?page=${next}&pageSize=20`);
-    if (current(epoch, identity)) { history.value = result.items; historyTotal.value = result.total; historyItem.value = item; historyPage.value = next; }
-  } catch (cause) { if (current(epoch, identity)) failure(cause); }
-  finally { if (current(epoch, identity)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { history.value = result.items; historyTotal.value = result.total; historyItem.value = item; historyPage.value = next; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function change(delta: number) { if (locked.value) return; page.value += delta; void load(); }
 watch(owner, () => { clear(); page.value = 1; void load(); }, { immediate: true });
-onBeforeUnmount(() => { live = false; clear(); });
+onBeforeUnmount(() => { clear(); });
 </script>
 <template>
   <section class="fams-card fams-stack" aria-label="未盘原因与待复核">

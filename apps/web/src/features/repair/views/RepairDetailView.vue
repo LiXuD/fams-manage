@@ -12,12 +12,13 @@ import RepairInventoryPhoto from "./../panels/RepairInventoryPhoto.vue";
 import RepairFactoryPanel from "./../panels/RepairFactoryPanel.vue";
 import { factoryEventNames, factoryRoundStates, factoryScopeStates } from "@/features/repair/factory-api";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { RepairApiError, repairPhotoContent, repairProblem, repairRequest, repairStates, type Repair, type RepairMutation, type RepairPhoto } from "@/features/repair/api";
 const session = useSessionStore(), route = useRoute();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, route.params.id]));
 const detail = ref<Repair | null>(null);
-const approvalMethod = ref("INTERNAL_NO_COST"), reason = shallowRef("");
-const factoryCostPolicy = ref("NO_COST"), factoryCostLimit = shallowRef("");
+const approvalMethod = shallowRef("INTERNAL_NO_COST"), reason = shallowRef("");
+const factoryCostPolicy = shallowRef("NO_COST"), factoryCostLimit = shallowRef("");
 const moneyPattern = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/;
 const observedCode = shallowRef(""), evidence = shallowRef(""), confirmedPlace = shallowRef(false), neverLeft = shallowRef(false);
 const selectedFile = ref<File | null>(null), preview = shallowRef(""), previewName = shallowRef("");
@@ -51,11 +52,11 @@ const historyRows = computed(() => (detail.value?.history ?? []).map((event) => 
 const eventNames: Record<string, string> = { REPAIR_SUBMITTED: "已提交报修", REPAIR_DECIDED: "管理员已决定", REPAIR_CLAIMED: "库管已领取", REPAIR_CONTROLLED_REASSIGNMENT: "管理员已受控转派",
   REPAIR_ACCEPTED_IN_PLACE: "已受理原地维修", REPAIR_COMPLETED_IN_PLACE: "已核对原地恢复", REPAIR_CANCELLED: "已取消", REPAIR_FAULT_PHOTO_ADDED: "已补充故障照片", REPAIR_CONFLICT_REJECTED: "旧操作已拒绝",
   ...Object.fromEntries(Object.entries(factoryEventNames).map(([action, label]) => [`REPAIR_${action}`, label])) };
-let generation = 0, live = true, download: AbortController | null = null;
-const current = (epoch: number, owner: string) => live && generation === epoch && identity.value === owner;
+const liveness = useRequestLiveness(() => [identity.value]);
+let download: AbortController | null = null;
 function clearPhoto() { download?.abort(); download = null; if (preview.value) URL.revokeObjectURL(preview.value); preview.value = ""; previewName.value = ""; }
 function reset() {
-  generation++; clearPhoto(); detail.value = null; pending.value = null; confirmation.value = null; selectedFile.value = null;
+  liveness.invalidate(); clearPhoto(); detail.value = null; pending.value = null; confirmation.value = null; selectedFile.value = null;
   reason.value = ""; approvalMethod.value = "INTERNAL_NO_COST"; factoryCostPolicy.value = "NO_COST"; factoryCostLimit.value = ""; evidence.value = ""; observedCode.value = ""; neverLeft.value = false; confirmedPlace.value = false;
   busy.value = false; factoryLocked.value = false;
 }
@@ -65,14 +66,14 @@ function failure(cause: unknown) {
 }
 async function load() {
   if (busy.value || confirmation.value) return;
-  const epoch = ++generation, owner = identity.value, selected = /^[1-9][0-9]{0,18}$/.test(String(route.params.id ?? "")) ? String(route.params.id) : "";
+  const turn = liveness.begin(), selected = /^[1-9][0-9]{0,18}$/.test(String(route.params.id ?? "")) ? String(route.params.id) : "";
   if (!selected) return;
   busy.value = true; error.value = "";
   try {
     const selectedResult = await repairRequest<Repair>(`/${selected}`);
-    if (current(epoch, owner)) detail.value = selectedResult;
-  } catch (cause) { if (current(epoch, owner)) failure(cause); }
-  finally { if (current(epoch, owner)) busy.value = false; }
+    if (liveness.isCurrent(turn)) detail.value = selectedResult;
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function fileChosen(event: Event) { if (!locked.value) selectedFile.value = (event.target as HTMLInputElement).files?.[0] ?? null; }
 function prepare(action: "approve" | "reject" | "cancel" | "claim" | "accept" | "complete" | "photo") {
@@ -104,32 +105,32 @@ function prepare(action: "approve" | "reject" | "cancel" | "claim" | "accept" | 
 }
 async function perform() {
   if (busy.value || !pending.value) return;
-  const operation = pending.value, epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     const result = await repairRequest<Repair & { repairId?: string }>(operation.path, operation);
     const id = result.repairId ?? result.id;
     const selected = await repairRequest<Repair>(`/${id}`);
-    if (current(epoch, owner)) { pending.value = null; detail.value = selected;
+    if (liveness.isCurrent(turn)) { pending.value = null; detail.value = selected;
       selectedFile.value = null; confirmedPlace.value = false; neverLeft.value = false; evidence.value = ""; observedCode.value = "";
       notice.value = "本次结果已保存。批准、库管受理和实际修复分别留痕。"; clearPhoto(); }
   } catch (cause) {
-    if (current(epoch, owner)) { if (cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
-  } finally { if (current(epoch, owner)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { if (cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
+  } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function confirm() { if (!confirmation.value || busy.value) return; pending.value = confirmation.value; confirmation.value = null; await perform(); }
 async function readPhoto(photo: RepairPhoto) {
   if (locked.value || !detail.value) return; clearPhoto();
-  const id = detail.value.id, epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  const id = detail.value.id, turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     const grant = await repairRequest<{ url: string }>(`/${id}/photos/${photo.objectId}/download-grant`, { path: "", key: crypto.randomUUID(), version: detail.value.version, body: {} });
-    if (!current(epoch, owner)) return;
+    if (!liveness.isCurrent(turn)) return;
     if (!grant.url.startsWith(`/api/v1/repairs/${id}/photos/${photo.objectId}/content?grant=`)) throw new Error("Invalid photo location");
     download = new AbortController(); const blob = await repairPhotoContent(grant.url, download.signal);
-    if (!current(epoch, owner)) return;
+    if (!liveness.isCurrent(turn)) return;
     if (blob.size !== photo.sizeBytes || blob.size > 10 * 1024 * 1024 || !["image/jpeg", "image/png", "image/webp"].includes(blob.type)) throw new Error("Invalid photo bytes");
     preview.value = URL.createObjectURL(blob); previewName.value = photo.filename;
-  } catch (cause) { if (current(epoch, owner)) failure(cause); }
-  finally { if (current(epoch, owner)) busy.value = false; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 watch(identity, () => {
   reset(); error.value = "";
@@ -137,7 +138,7 @@ watch(identity, () => {
   else notice.value = "";
   void load();
 }, { immediate: true, flush: "sync" });
-onBeforeUnmount(() => { live = false; reset(); });
+onBeforeUnmount(() => { reset(); });
 </script>
 <template>
   <AppChrome>

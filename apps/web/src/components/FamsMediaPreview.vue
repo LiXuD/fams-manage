@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, useTemplateRef } from "vue";
 
 const emit = defineEmits<{ dismiss: [] }>();
-const dialog = ref<HTMLDialogElement | null>(null);
+const dialog = useTemplateRef<HTMLDialogElement>("dialog");
 
 onMounted(() => {
   const element = dialog.value;

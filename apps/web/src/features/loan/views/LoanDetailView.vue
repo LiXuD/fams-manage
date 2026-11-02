@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { businessMessage, businessRequest } from "@/api/business";
 import { loanLabels as labels, reminderLabels } from "@/features/loan/api";
 import type { BusinessMutation } from "@/api/business";
@@ -9,6 +10,7 @@ import type { BorrowRequestChoice, BusinessPage, Loan } from "@fams/api-types/lo
 
 const props = defineProps<{ id: string }>();
 const router = useRouter();
+const liveness = useRequestLiveness(() => [props.id]);
 const selected = ref<Loan | null>(null);
 const busy = shallowRef(false); const error = shallowRef(""); const notice = shallowRef(""); const retryable = shallowRef(false);
 const due = shallowRef(""); const reason = shallowRef("");
@@ -20,11 +22,16 @@ const actionsShown = computed(() => !!selected.value && selected.value.relationS
 let pending: BusinessMutation | null = null;
 
 async function open() {
-  selected.value = await businessRequest<Loan>("/loans/" + props.id);
-  assetId.value = selected.value.assetId; assetVersion.value = selected.value.currentAssetVersion;
+  const turn = liveness.begin();
+  const loan = await businessRequest<Loan>("/loans/" + props.id);
+  if (!liveness.isCurrent(turn)) return;
+  selected.value = loan;
+  assetId.value = loan.assetId; assetVersion.value = loan.currentAssetVersion;
 }
 async function loadRequests() {
+  const turn = liveness.begin();
   const requestPage = await businessRequest<BusinessPage<BorrowRequestChoice>>("/loans/borrow-requests?page=1&pageSize=20");
+  if (!liveness.isCurrent(turn)) return;
   borrowRequests.value = requestPage.items;
 }
 async function refresh() {

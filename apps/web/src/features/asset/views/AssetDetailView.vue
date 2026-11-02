@@ -4,6 +4,7 @@ import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import QRCode from "qrcode";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness, type LivenessToken } from "@/composables/useRequestLiveness";
 import {
   cancelAsset, cardStageLabels, copyAsset, custodyLabel, destinationLabels, getAsset, getTag,
   reprintTag, updateAsset, type AssetCard, type AssetTag,
@@ -21,7 +22,7 @@ const notice = shallowRef("");
 const busy = shallowRef(false);
 const pending = ref<Action | null>(null);
 const notes = shallowRef("");
-const quantity = ref("1");
+const quantity = shallowRef("1");
 const reason = shallowRef("");
 
 const canWrite = session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false;
@@ -35,16 +36,23 @@ const canCancelDraft = computed(() => canWrite && selected.value?.cardStage === 
 const canPrintTag = computed(() => canWrite && selected.value?.cardStage === "ACTIVE");
 const pendingIsNotes = computed(() => pending.value === "notes");
 const pendingIsCopy = computed(() => pending.value === "copy");
+const identity = computed(() => JSON.stringify([props.id, session.user?.id, session.user?.roles, session.csrfToken]));
+const liveness = useRequestLiveness(() => [identity.value]);
 
-async function open(): Promise<void> {
+async function open(turn: LivenessToken = liveness.begin()): Promise<void> {
   error.value = "";
   tag.value = null;
   qrImage.value = "";
   try {
-    selected.value = await getAsset(props.id);
-    tag.value = await getTag(props.id);
-    qrImage.value = await QRCode.toDataURL(tag.value.qrCode, { width: 160, margin: 1 });
-  } catch (cause) { error.value = cause instanceof Error ? cause.message : "资产详情加载失败"; }
+    const asset = await getAsset(props.id);
+    if (!liveness.isCurrent(turn)) return;
+    selected.value = asset;
+    const nextTag = await getTag(props.id);
+    if (!liveness.isCurrent(turn)) return;
+    tag.value = nextTag;
+    const image = await QRCode.toDataURL(nextTag.qrCode, { width: 160, margin: 1 });
+    if (liveness.isCurrent(turn)) qrImage.value = image;
+  } catch (cause) { if (liveness.isCurrent(turn)) error.value = cause instanceof Error ? cause.message : "资产详情加载失败"; }
 }
 
 function openAction(action: Action): void {
@@ -120,9 +128,10 @@ async function printCurrent(): Promise<void> {
 }
 
 onMounted(async () => {
+  const turn = liveness.begin();
   if (!/^[1-9][0-9]{0,18}$/.test(props.id)) { error.value = "资产详情加载失败"; return; }
-  await open();
-  if (selected.value && route.query.saved) {
+  await open(turn);
+  if (liveness.isCurrent(turn) && selected.value && route.query.saved) {
     notice.value = `草稿 ${selected.value.assetCode} 已保存`;
     window.history.replaceState({}, "", window.location.pathname);
   }

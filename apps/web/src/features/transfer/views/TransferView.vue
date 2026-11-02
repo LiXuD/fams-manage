@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { lifecycleLabels } from "@/features/asset/api";
 import { businessMessage, businessRequest } from "@/api/business";
 import { transferLabels as labels } from "@/features/transfer/api";
@@ -20,6 +21,7 @@ const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 const prevDisabled = computed(() => busy.value || retryable.value || page.value === 1);
 const nextDisabled = computed(() => busy.value || retryable.value || page.value * 20 >= total.value);
 let pending: BusinessMutation | null = null, grant: string | null = null;
+const liveness = useRequestLiveness(() => [page.value]);
 
 async function catalog(kind: string, org?: string) {
   const result: TransferChoice[] = []; let p = 1, part: TransferChoice[];
@@ -28,10 +30,11 @@ async function catalog(kind: string, org?: string) {
   return result;
 }
 async function load() {
+  const turn = liveness.begin();
   const [list, waiting] = await Promise.all([
     businessRequest<{ items: Transfer[]; total: number }>(`/transfers?page=${page.value}&pageSize=20`),
     businessRequest<{ items: TransferReceipt[] }>("/transfers/receipts/pending")]);
-  rows.value = list.items; total.value = list.total; receipts.value = waiting.items;
+  if (liveness.isCurrent(turn)) { rows.value = list.items; total.value = list.total; receipts.value = waiting.items; }
 }
 async function refresh() {
   if (busy.value) return; busy.value = true; error.value = "";
@@ -54,8 +57,11 @@ async function mutate(path: string, version: number, body?: unknown) {
 function retry() { const operation = pending; if (operation) void mutate(operation.path, operation.version); }
 async function openReceipt(row: TransferReceipt) {
   if (busy.value || pending) return; busy.value = true; error.value = ""; grant = null;
+  const turn = liveness.begin();
   try { const credential = await businessRequest<{ grant: string; requestVersion: number }>(`/transfers/receipts/${row.id}/grant`, { path: "", version: 0, key: crypto.randomUUID() });
-    grant = credential.grant; receipt.value = { ...row, requestVersion: credential.requestVersion }; code.value = ""; checked.value = false;
+    if (liveness.isCurrent(turn)) {
+      grant = credential.grant; receipt.value = { ...row, requestVersion: credential.requestVersion }; code.value = ""; checked.value = false;
+    }
   } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 function receive(refuse: boolean) {
@@ -66,14 +72,18 @@ function receive(refuse: boolean) {
 async function loadPersonnelChoices() {
   if (!admin.value || busy.value) return;
   busy.value = true;
-  try { personnelChoices.value = await catalog("personnel"); }
+  const turn = liveness.begin();
+  try { const result = await catalog("personnel"); if (liveness.isCurrent(turn)) personnelChoices.value = result; }
   catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 async function personnel() {
   if (!personId.value || busy.value) return; busy.value = true; error.value = "";
+  const turn = liveness.begin();
   try { const value = await businessRequest<{ employee: { name: string; status: string }; assets: TransferAsset[]; pendingReceipts: unknown[]; processingTransfers: unknown[]; openLoans: unknown[]; openReturns: unknown[]; openRequisitions: unknown[] }>(`/transfers/personnel-handover?employeeId=${personId.value}`);
-    personAssets.value = value.assets; personNotice.value = `${value.employee.name} · ${value.employee.status === "ACTIVE" ? "有效" : "已停用"}；未交接前保留原责任。`;
-    personTasks.value = `待接收调拨 ${value.pendingReceipts.length}，处理中调拨 ${value.processingTransfers.length}，未关闭借用 ${value.openLoans.length}，待归还 ${value.openReturns.length}，领用/借用待办 ${value.openRequisitions.length}。请通过对应业务完成交接；停用不会自动关闭。`;
+    if (liveness.isCurrent(turn)) {
+      personAssets.value = value.assets; personNotice.value = `${value.employee.name} · ${value.employee.status === "ACTIVE" ? "有效" : "已停用"}；未交接前保留原责任。`;
+      personTasks.value = `待接收调拨 ${value.pendingReceipts.length}，处理中调拨 ${value.processingTransfers.length}，未关闭借用 ${value.openLoans.length}，待归还 ${value.openReturns.length}，领用/借用待办 ${value.openRequisitions.length}。请通过对应业务完成交接；停用不会自动关闭。`;
+    }
   } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 onMounted(refresh);

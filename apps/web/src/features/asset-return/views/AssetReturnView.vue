@@ -6,7 +6,7 @@ import { businessMessage, businessRequest } from "@/api/business";
 import { loanLabels as labels } from "@/features/loan/api";
 import type { AssetReturn, BusinessPage } from "@fams/api-types/loan";
 
-const { rows: returns, busy, error, page, total, refresh } = usePagedResourceList<AssetReturn>(
+const { rows: returns, busy, error, page, total, refresh, pages } = usePagedResourceList<AssetReturn>(
   (page) => businessRequest<BusinessPage<AssetReturn>>(`/asset-returns?page=${page}&pageSize=20`),
   { problem: businessMessage });
 const prevDisabled = computed(() => busy.value || page.value === 1);
@@ -45,10 +45,10 @@ const nextDisabled = computed(() => busy.value || page.value * 20 >= total.value
         <span class="fams-pagination-summary">共 {{ total }} 条</span>
         <div class="fams-pagination-actions">
           <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled"
-            @click="page--; refresh()">上一页</button>
+            @click="pages(-1)">上一页</button>
           <span class="fams-pagination-page">第 {{ page }} 页</span>
           <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextDisabled"
-            @click="page++; refresh()">下一页</button>
+            @click="pages(1)">下一页</button>
         </div>
       </div>
     </section>

@@ -3,6 +3,7 @@ import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
 
 type Choice = { id: string; name: string; version: number; locationType?: string; warehouseId?: string; sharedEligible?: boolean };
@@ -42,6 +43,7 @@ const confirmLabels: Record<Confirm, string> = { propose: "确认提交调拨目
 const confirmHints: Record<Confirm, string> = { propose: "提请调拨目标变更？已交出实物和原责任保持，批准后新目标仍需按原业务实际接收。",
   APPROVED: "批准本次新目标？这不会完成接收或解除实物锁。", REJECTED: "驳回此目标变更？" };
 const base = "/item-target-changes";
+const liveness = useRequestLiveness(() => [page.value]);
 async function catalog(kind: string, organization?: string) {
   const all: Choice[] = []; let p = 1; let items: Choice[];
   do { items = (await businessRequest<{ items: Choice[] }>(`/transfers/catalog/${kind}?page=${p++}&pageSize=200${organization ? `&organizationId=${organization}` : ""}`)).items; all.push(...items); }
@@ -52,9 +54,12 @@ function targetText(value: Target) {
   return `${value.custodyType === "STORAGE" ? "仓库保管" : value.custodyType === "SHARED" ? "部门公用" : "个人使用"} / ${name("organization", value.usingOrganizationId)} / ${value.employeeId ?? name("warehouse", value.warehouseId)} / ${name("location", value.locationId)}`;
 }
 async function list() {
+  const turn = liveness.begin();
   const value = await businessRequest<{ items: Change[]; total: number }>(`${base}?businessType=TRANSFER&page=${page.value}&pageSize=20`);
-  rows.value = value.items; total.value = value.total;
-  if (selected.value) selected.value = rows.value.find(row => row.id === selected.value?.id) ?? null;
+  if (liveness.isCurrent(turn)) {
+    rows.value = value.items; total.value = value.total;
+    if (selected.value) selected.value = rows.value.find(row => row.id === selected.value?.id) ?? null;
+  }
 }
 async function refresh() {
   if (busy.value) return; busy.value = true; error.value = "";
@@ -63,7 +68,11 @@ async function refresh() {
 async function chooseOrganization() {
   if (!target.value || locked.value) return;
   target.value.employeeId = null; busy.value = true; error.value = "";
-  try { employees.value = target.value.usingOrganizationId ? await catalog("employee", target.value.usingOrganizationId) : []; }
+  const turn = liveness.begin();
+  try {
+    const result = target.value.usingOrganizationId ? await catalog("employee", target.value.usingOrganizationId) : [];
+    if (liveness.isCurrent(turn)) employees.value = result;
+  }
   catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 function captureTarget(): Target | null {
@@ -119,13 +128,21 @@ function runConfirm(): void {
 async function paginate(delta: number) { if (!locked.value) { page.value += delta; selected.value = null; await refresh(); } }
 onMounted(async () => {
   busy.value = true;
+  const turn = liveness.begin();
   try {
-    for (const kind of ["organization", "warehouse", "location"]) catalogs.value[kind] = await catalog(kind);
+    for (const kind of ["organization", "warehouse", "location"]) {
+      const result = await catalog(kind);
+      if (liveness.isCurrent(turn)) catalogs.value[kind] = result;
+    }
     await list();
     if (operator.value && route.query.businessId && route.query.itemId) {
-      snapshot.value = await businessRequest<Snapshot>(`${base}/context?businessType=TRANSFER&businessId=${encodeURIComponent(String(route.query.businessId))}&itemId=${encodeURIComponent(String(route.query.itemId))}`);
-      target.value = { ...snapshot.value.target, referenceVersions: { ...snapshot.value.target.referenceVersions } };
-      if (target.value.usingOrganizationId) employees.value = await catalog("employee", target.value.usingOrganizationId);
+      const contextTurn = liveness.begin();
+      const context = await businessRequest<Snapshot>(`${base}/context?businessType=TRANSFER&businessId=${encodeURIComponent(String(route.query.businessId))}&itemId=${encodeURIComponent(String(route.query.itemId))}`);
+      if (liveness.isCurrent(contextTurn)) {
+        snapshot.value = context;
+        target.value = { ...snapshot.value.target, referenceVersions: { ...snapshot.value.target.referenceVersions } };
+        if (target.value.usingOrganizationId) employees.value = await catalog("employee", target.value.usingOrganizationId);
+      }
     }
   } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 });

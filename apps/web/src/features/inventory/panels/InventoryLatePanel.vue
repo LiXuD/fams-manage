@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { inventoryLateResultLabels as results, reviewRequest, ReviewApiError } from "@/features/inventory/api";
 import InventoryLateDamagePanel from "./InventoryLateDamagePanel.vue";
 import type { BusinessMutation } from "@/api/business";
@@ -19,9 +20,8 @@ const pending = ref<BusinessMutation | null>(null), confirming = shallowRef(fals
 const reason = shallowRef(""), evidence = shallowRef(""), method = ref("NOTE"), draftName = shallowRef("");
 const startsAt = ref(new Date(Date.now() + 3600000).toISOString()), dueAt = ref(new Date(Date.now() + 7 * 86400000).toISOString());
 const damageBusy = shallowRef(false);
-const locked = computed(() => busy.value || !!pending.value || damageBusy.value); let generation = 0, live = true;
-const current = (epoch: number, identity: string) => live && epoch === generation && identity === owner.value;
-function clear() { generation++; damageBusy.value = false; board.value = null; detail.value = null; pending.value = null; confirming.value = false; busy.value = false; reason.value = ""; evidence.value = ""; confirmation.value = ""; }
+const locked = computed(() => busy.value || !!pending.value || damageBusy.value); const liveness = useRequestLiveness(() => [owner.value]);
+function clear() { liveness.invalidate(); damageBusy.value = false; board.value = null; detail.value = null; pending.value = null; confirming.value = false; busy.value = false; reason.value = ""; evidence.value = ""; confirmation.value = ""; }
 function fail(cause: unknown) {
   if (cause instanceof ReviewApiError && [401, 403, 404].includes(cause.status)) { clear(); error.value = "当前身份、权限或记录失效，已隐藏原资料与操作。"; return; }
   if (cause instanceof ReviewApiError && [400, 409].includes(cause.status)) {
@@ -32,23 +32,23 @@ function fail(cause: unknown) {
   error.value = pending.value ? "处理结果尚未确认，请保留原操作重试。" : "读取未完成，请重试。";
 }
 async function load() {
-  const epoch = ++generation, identity = owner.value; busy.value = true; error.value = ""; board.value = null; detail.value = null;
-  try { const result = await reviewRequest<Board>(`/inventory-late/tasks/${props.taskId}?page=${page.value}&pageSize=20`); if (current(epoch, identity)) board.value = result; }
-  catch (cause) { if (current(epoch, identity)) fail(cause); } finally { if (current(epoch, identity)) busy.value = false; }
+  const turn = liveness.begin(); busy.value = true; error.value = ""; board.value = null; detail.value = null;
+  try { const result = await reviewRequest<Board>(`/inventory-late/tasks/${props.taskId}?page=${page.value}&pageSize=20`); if (liveness.isCurrent(turn)) board.value = result; }
+  catch (cause) { if (liveness.isCurrent(turn)) fail(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function open(entry: Entry) {
-  if (locked.value) return; const epoch = ++generation, identity = owner.value; busy.value = true; detail.value = null; error.value = "";
+  if (locked.value) return; const turn = liveness.begin(); busy.value = true; detail.value = null; error.value = "";
   try { const result = await reviewRequest<Detail>(`/inventory-late/tasks/${props.taskId}/observations/${entry.evidence.observation_id}`);
-    if (current(epoch, identity)) { detail.value = result; reason.value = ""; evidence.value = ""; method.value = "NOTE"; draftName.value = `${board.value?.task.name || '盘点'} 关联复盘`.slice(0, 128); } }
-  catch (cause) { if (current(epoch, identity)) fail(cause); } finally { if (current(epoch, identity)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { detail.value = result; reason.value = ""; evidence.value = ""; method.value = "NOTE"; draftName.value = `${board.value?.task.name || '盘点'} 关联复盘`.slice(0, 128); } }
+  catch (cause) { if (liveness.isCurrent(turn)) fail(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function readHistory(delta: number) {
   if (locked.value || !detail.value) return;
   const next = detail.value.history.page + delta;
   if (next < 1 || (next - 1) * 20 >= detail.value.history.total) return;
-  const epoch = ++generation, identity = owner.value, id = detail.value.case.evidence.observation_id; busy.value = true; error.value = "";
-  try { const result = await reviewRequest<Detail>(`/inventory-late/tasks/${props.taskId}/observations/${id}?page=${next}&pageSize=20`); if (current(epoch, identity)) detail.value = result; }
-  catch (cause) { if (current(epoch, identity)) fail(cause); } finally { if (current(epoch, identity)) busy.value = false; }
+  const turn = liveness.begin(), id = detail.value.case.evidence.observation_id; busy.value = true; error.value = "";
+  try { const result = await reviewRequest<Detail>(`/inventory-late/tasks/${props.taskId}/observations/${id}?page=${next}&pageSize=20`); if (liveness.isCurrent(turn)) detail.value = result; }
+  catch (cause) { if (liveness.isCurrent(turn)) fail(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function prepareLegacy() {
   if (locked.value || !board.value) return;
@@ -69,10 +69,10 @@ function prepareDecision() {
   confirming.value = true;
 }
 async function send() {
-  if (busy.value || !pending.value) return; const epoch = generation, identity = owner.value, original = pending.value;
+  if (busy.value || !pending.value) return; const turn = liveness.begin(), original = pending.value;
   busy.value = true; confirming.value = false; error.value = "";
-  try { await reviewRequest(original.path, original); if (current(epoch, identity)) { pending.value = null; await load(); } }
-  catch (cause) { if (current(epoch, identity)) fail(cause); } finally { if (current(epoch, identity)) busy.value = false; }
+  try { await reviewRequest(original.path, original); if (liveness.isCurrent(turn)) { pending.value = null; await load(); } }
+  catch (cause) { if (liveness.isCurrent(turn)) fail(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function paginate(delta: number) { if (locked.value || !board.value || page.value + delta < 1 || (page.value + delta - 1) * 20 >= board.value.total) return; page.value += delta; await load(); }
 const kinds: Record<string, string> = { FROZEN_CONFLICT: "与原采信事实冲突", NO_ACCEPTED: "原项没有有效采信", TIME_UNVERIFIED: "原时间仍待核实", FINDING: "任务外实物线索", FACTS_MATCH: "事实一致的补充线索" };
@@ -94,7 +94,7 @@ const sceneFactText = computed(() => { const actual = detail.value?.case.evidenc
 const decisionRows = computed(() => (detail.value?.history.items || []).map(event => ({ ...event, methodText: methods[event.method || ""] })));
 const recheckDraftVisible = computed(() => ["LINK_RECHECK", "REPLACE_RECHECK"].includes(method.value));
 const decisionDisabled = computed(() => reason.value.trim().length < 3 || evidence.value.trim().length < 3);
-watch(owner, () => { clear(); page.value = 1; void load(); }, { immediate: true }); onBeforeUnmount(() => { live = false; clear(); });
+watch(owner, () => { clear(); page.value = 1; void load(); }, { immediate: true }); onBeforeUnmount(() => { clear(); });
 </script>
 <template>
   <section class="fams-card fams-stack" aria-label="终态补充证据与关联复盘">

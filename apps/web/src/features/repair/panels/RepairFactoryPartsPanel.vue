@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness, type LivenessToken } from "@/composables/useRequestLiveness";
 import { RepairApiError, type Repair } from "@/features/repair/api";
 import { factoryProblem, factoryRequest, type FactoryMutation } from "@/features/repair/factory-api";
 import type { FactoryDetail, FactoryFile, FactoryPartsPage, FactoryReply, FactoryRoundDetail } from "@/features/repair/factory-types";
@@ -15,8 +16,7 @@ const header = ref<FactoryDetail | null>(null), roundData = ref<FactoryRoundDeta
 const confirmation = ref<FactoryMutation | null>(null), pending = ref<FactoryMutation | null>(null);
 const part = shallowRef(""), before = shallowRef(""), after = shallowRef(""), code = shallowRef(""), serial = shallowRef(""), dateTime = shallowRef(""), reason = shallowRef("");
 const checked = shallowRef(false), evidenceIds = ref<string[]>([]), file = ref<File | null>(null);
-let generation = 0, live = true;
-const current = (epoch: number, owner: string) => live && epoch === generation && owner === identity.value && canRead.value;
+const liveness = useRequestLiveness(() => [identity.value, canRead.value]);
 const locked = computed(() => props.blocked || busy.value || !!pending.value || !!confirmation.value);
 const ready = computed(() => !stale.value && header.value?.version === props.repair.version && roundData.value?.version === props.round.version);
 const originals = computed(() => roundData.value?.evidence.filter(item => item.purpose === "PARTS_CHANGE" && roundData.value?.files.some(f => f.objectId === item.object_id && f.scanStatus === "CLEAN")) ?? []);
@@ -35,31 +35,31 @@ const originalsRows = computed(() => originals.value.map(item => {
 }));
 watch([busy, pending, confirmation], () => emit("busy-change", busy.value || !!pending.value || !!confirmation.value), { flush: "sync" });
 function clearDraft() { part.value = ""; before.value = ""; after.value = ""; code.value = ""; serial.value = ""; dateTime.value = ""; reason.value = ""; checked.value = false; evidenceIds.value = []; file.value = null; }
-function reset() { generation++; opened.value = false; busy.value = false; stale.value = true; header.value = null; roundData.value = null; records.value = null; page.value = 1; confirmation.value = null; pending.value = null; clearDraft(); }
+function reset() { liveness.invalidate(); opened.value = false; busy.value = false; stale.value = true; header.value = null; roundData.value = null; records.value = null; page.value = 1; confirmation.value = null; pending.value = null; clearDraft(); }
 function failure(cause: unknown) {
   if (cause instanceof RepairApiError && [401, 403, 404].includes(cause.status)) { reset(); emit("invalidated"); }
   if (cause instanceof RepairApiError && [400, 409, 413, 422].includes(cause.status)) stale.value = true;
   error.value = factoryProblem(cause);
 }
-async function fetchState(epoch: number, owner: string) {
+async function fetchState(turn: LivenessToken) {
   const id = props.repair.id, round = props.round.id;
   const nextHeader = await factoryRequest<FactoryDetail>(id);
-  if (!current(epoch, owner)) return;
+  if (!liveness.isCurrent(turn)) return;
   const nextRound = await factoryRequest<FactoryRoundDetail>(id, `/rounds/${round}`);
-  if (!current(epoch, owner)) return;
+  if (!liveness.isCurrent(turn)) return;
   const nextRecords = await factoryRequest<FactoryPartsPage>(id, `/rounds/${round}/parts?page=${page.value}&pageSize=20`);
-  if (!current(epoch, owner)) return;
+  if (!liveness.isCurrent(turn)) return;
   header.value = nextHeader; roundData.value = nextRound; records.value = nextRecords; stale.value = false;
 }
 async function load(delta = 0) {
   if (busy.value || props.blocked || confirmation.value || !canRead.value) return;
   const next = page.value + delta;
   if (next < 1 || delta > 0 && (next - 1) * 20 >= (records.value?.total ?? 0)) return;
-  page.value = next; opened.value = true; const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
-  try { await fetchState(epoch, owner); }
-  catch (cause) { if (current(epoch, owner)) failure(cause); }
-  finally { if (current(epoch, owner)) busy.value = false; }
-  if (current(epoch, owner) && header.value?.version !== props.repair.version) emit("changed");
+  page.value = next; opened.value = true; const turn = liveness.begin(); busy.value = true; error.value = "";
+  try { await fetchState(turn); }
+  catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
+  if (liveness.isCurrent(turn) && header.value?.version !== props.repair.version) emit("changed");
 }
 function observationTime() {
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(dateTime.value);
@@ -94,22 +94,22 @@ function prepare(upload: boolean) {
 }
 async function perform() {
   if (!pending.value || busy.value || props.blocked) return;
-  const operation = pending.value, epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     await factoryRequest<FactoryReply>(operation.repairId, operation.path, operation);
-    if (!current(epoch, owner)) return;
+    if (!liveness.isCurrent(turn)) return;
     pending.value = null; clearDraft(); stale.value = true; notice.value = "本次部件资料已保存，原记录保留。维修仍须按实际去向办理结束。";
-    await fetchState(epoch, owner);
+    await fetchState(turn);
   } catch (cause) {
-    if (current(epoch, owner)) { if (cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
-  } finally { if (current(epoch, owner)) busy.value = false; }
-  if (current(epoch, owner) && !pending.value) emit("changed");
+    if (liveness.isCurrent(turn)) { if (cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
+  } finally { if (liveness.isCurrent(turn)) busy.value = false; }
+  if (liveness.isCurrent(turn) && !pending.value) emit("changed");
 }
 async function confirm() { if (busy.value || props.blocked || pending.value || !confirmation.value) return; pending.value = confirmation.value; confirmation.value = null; await perform(); }
 watch(identity, () => { reset(); error.value = ""; notice.value = ""; }, { immediate: true, flush: "sync" });
 watch(canRead, value => { if (!value) { reset(); error.value = ""; notice.value = ""; } }, { flush: "sync" });
 watch([() => props.repair.version, () => props.round.version], () => { if (header.value?.version !== props.repair.version || roundData.value?.version !== props.round.version) stale.value = true; });
-onBeforeUnmount(() => { live = false; reset(); emit("busy-change", false); });
+onBeforeUnmount(() => { reset(); emit("busy-change", false); });
 </script>
 <template>
   <section v-if="canRead" class="fams-card fams-stack" aria-label="原机部件变更">

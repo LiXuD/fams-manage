@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { activeReferences, createAsset, type AssetReference } from "@/features/asset/api";
 
 const router = useRouter();
@@ -20,23 +21,26 @@ const warehouses = ref<AssetReference[]>([]);
 const locations = ref<AssetReference[]>([]);
 
 const dataState = computed<string | null>(() => (busy.value ? "loading" : null));
+const liveness = useRequestLiveness();
 
 function selectedReference(items: AssetReference[], id: string): AssetReference | undefined {
   return items.find((item) => item.id === id);
 }
 
 async function load(): Promise<void> {
+  const turn = liveness.begin();
   error.value = "";
   try {
     const [categoryPage, organizationPage, warehousePage, locationPage] = await Promise.all([
       activeReferences("/asset-categories"), activeReferences("/organizations"),
       activeReferences("/warehouses"), activeReferences("/locations"),
     ]);
+    if (!liveness.isCurrent(turn)) return;
     categories.value = categoryPage.items;
     organizations.value = organizationPage.items;
     warehouses.value = warehousePage.items;
     locations.value = locationPage.items;
-  } catch (cause) { error.value = cause instanceof Error ? cause.message : "基础资料加载失败"; }
+  } catch (cause) { if (liveness.isCurrent(turn)) error.value = cause instanceof Error ? cause.message : "基础资料加载失败"; }
 }
 
 async function submit(): Promise<void> {

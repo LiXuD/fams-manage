@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { RepairApiError, repairProblem, repairRequest, repairStates, type Repair } from "@/features/repair/api";
 const session = useSessionStore();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken]));
@@ -9,26 +10,25 @@ const rows = ref<Repair[]>([]), total = shallowRef(0), page = shallowRef(1);
 const busy = shallowRef(false), error = shallowRef("");
 const prevDisabled = computed(() => busy.value || page.value === 1);
 const nextDisabled = computed(() => busy.value || page.value * 20 >= total.value);
-let generation = 0, live = true;
-const current = (epoch: number, owner: string) => live && generation === epoch && identity.value === owner;
-function reset() { generation++; rows.value = []; total.value = 0; page.value = 1; busy.value = false; }
+const liveness = useRequestLiveness(() => [identity.value]);
+function reset() { liveness.invalidate(); rows.value = []; total.value = 0; page.value = 1; busy.value = false; }
 function failure(cause: unknown) {
   if (cause instanceof RepairApiError && [401, 403, 404].includes(cause.status)) reset();
   error.value = repairProblem(cause);
 }
 async function load() {
   if (busy.value) return;
-  const epoch = ++generation, owner = identity.value;
+  const turn = liveness.begin();
   busy.value = true; error.value = "";
   try {
     const result = await repairRequest<{ items: Repair[]; total: number }>(`?page=${page.value}&pageSize=20`);
-    if (current(epoch, owner)) { rows.value = result.items; total.value = result.total; }
-  } catch (cause) { if (current(epoch, owner)) failure(cause); }
-  finally { if (current(epoch, owner)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { rows.value = result.items; total.value = result.total; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function paginate(delta: number) { if (busy.value || page.value + delta < 1 || (page.value + delta - 1) * 20 >= total.value) return; page.value += delta; await load(); }
 watch(identity, () => { reset(); error.value = ""; void load(); }, { immediate: true, flush: "sync" });
-onBeforeUnmount(() => { live = false; reset(); });
+onBeforeUnmount(() => { reset(); });
 </script>
 <template>
   <AppChrome>

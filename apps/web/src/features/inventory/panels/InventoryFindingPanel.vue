@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import type { BusinessMutation } from "@/api/business";
 import type { AssetCard } from "@/features/asset/api";
 import type { InboundReceipt } from "@/features/inbound/api";
@@ -18,16 +19,15 @@ const session = useSessionStore();
 const owner = computed(() => JSON.stringify([props.taskId, session.user?.id, session.csrfToken, session.user?.roles]));
 const rows = ref<Observation[]>([]), total = shallowRef(0), page = shallowRef(1), detail = ref<FindingView | null>(null);
 const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef(""), pending = ref<BusinessMutation | null>(null);
-const method = ref("NON_ENTERPRISE"), reason = shallowRef(""), evidence = shallowRef("");
+const method = shallowRef("NON_ENTERPRISE"), reason = shallowRef(""), evidence = shallowRef("");
 const assetCode = shallowRef(""), receiptNumber = shallowRef(""), assets = ref<AssetCard[]>([]), receipts = ref<InboundReceipt[]>([]);
 const selectedAsset = shallowRef(""), selectedReceipt = shallowRef("");
 const confirmation = ref<BusinessMutation | null>(null);
 const counters = ref<Observation[]>([]), counterTotal = shallowRef(0), counterPage = shallowRef(1), counterId = shallowRef("");
 const timeSubject = computed(() => detail.value?.timeSubject?.[0]);
 const locked = computed(() => busy.value || !!pending.value || !!confirmation.value);
-let generation = 0, live = true;
-const current = (epoch: number, identity: string) => live && generation === epoch && owner.value === identity;
-function clear() { generation++; rows.value = []; total.value = 0; detail.value = null; assets.value = []; receipts.value = [];
+const liveness = useRequestLiveness(() => [owner.value]);
+function clear() { liveness.invalidate(); rows.value = []; total.value = 0; detail.value = null; assets.value = []; receipts.value = [];
   selectedAsset.value = ""; selectedReceipt.value = ""; pending.value = null; confirmation.value = null; counters.value = []; counterId.value = ""; busy.value = false; notice.value = ""; }
 function failure(cause: unknown) {
   if (cause instanceof ReviewApiError && [401, 403, 404].includes(cause.status)) { clear(); error.value = "身份、权限或线索已失效，已隐藏原资料。"; return; }
@@ -38,38 +38,38 @@ function failure(cause: unknown) {
 }
 async function load() {
   if (locked.value) return;
-  const epoch = ++generation, identity = owner.value; busy.value = true; error.value = ""; detail.value = null;
+  const turn = liveness.begin(); busy.value = true; error.value = ""; detail.value = null;
   try { const result = await reviewRequest<{ items: Observation[]; total: number }>(`/inventory-reviews/tasks/${props.taskId}/findings?page=${page.value}&pageSize=20`);
-    if (current(epoch, identity)) { rows.value = result.items; total.value = result.total; }
-  } catch (cause) { if (current(epoch, identity)) failure(cause); }
-  finally { if (current(epoch, identity)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { rows.value = result.items; total.value = result.total; } }
+  catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function open(row: Observation) {
   if (locked.value || !["FINDING_REVIEW", "TIME_REVIEW"].includes(row.outcome)) return;
   const previous = detail.value?.observation.id;
-  const epoch = ++generation, identity = owner.value; busy.value = true; error.value = ""; detail.value = null;
+  const turn = liveness.begin(); busy.value = true; error.value = ""; detail.value = null;
   if (previous !== row.id) { reason.value = ""; evidence.value = ""; assetCode.value = ""; receiptNumber.value = ""; }
   assets.value = []; receipts.value = []; selectedAsset.value = ""; selectedReceipt.value = ""; counters.value = []; counterId.value = ""; counterPage.value = 1;
   try { const result = await reviewRequest<FindingView>(`/inventory-reviews/tasks/${props.taskId}/findings/${row.id}`);
-    if (current(epoch, identity)) { detail.value = result; method.value = result.subject.subject_status === "PROCESSING" ? "REFRESH_INBOUND" : "NON_ENTERPRISE"; }
-  } catch (cause) { if (current(epoch, identity)) failure(cause); }
-  finally { if (current(epoch, identity)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { detail.value = result; method.value = result.subject.subject_status === "PROCESSING" ? "REFRESH_INBOUND" : "NON_ENTERPRISE"; } }
+  catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function search() {
   if (locked.value || !detail.value || method.value === "NON_ENTERPRISE") return;
   if (method.value === "DUPLICATE_ASSET" ? !assetCode.value.trim() : !receiptNumber.value.trim()) return;
-  const epoch = ++generation, identity = owner.value; busy.value = true; error.value = "";
+  const turn = liveness.begin(); busy.value = true; error.value = "";
   assets.value = []; receipts.value = []; selectedAsset.value = ""; selectedReceipt.value = "";
   try {
     if (method.value === "DUPLICATE_ASSET") {
       const result = await reviewRequest<{ items: AssetCard[] }>(`/assets?page=1&pageSize=20&assetCode=${encodeURIComponent(assetCode.value.trim())}`);
-      if (current(epoch, identity)) assets.value = result.items.filter(row => row.cardStage === "ACTIVE" && row.assetCode === assetCode.value.trim());
+      if (liveness.isCurrent(turn)) assets.value = result.items.filter(row => row.cardStage === "ACTIVE" && row.assetCode === assetCode.value.trim());
     } else {
       const result = await reviewRequest<{ items: InboundReceipt[] }>(`/inbound-receipts?page=1&pageSize=20&receiptNumber=${encodeURIComponent(receiptNumber.value.trim())}`);
-      if (current(epoch, identity)) receipts.value = result.items.filter(row => row.status !== "DRAFT" && row.receiptNumber === receiptNumber.value.trim());
+      if (liveness.isCurrent(turn)) receipts.value = result.items.filter(row => row.status !== "DRAFT" && row.receiptNumber === receiptNumber.value.trim());
     }
-  } catch (cause) { if (current(epoch, identity)) failure(cause); }
-  finally { if (current(epoch, identity)) busy.value = false; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function save(prepare = false, time = false) {
   if (busy.value || !detail.value) return;
@@ -102,14 +102,14 @@ async function save(prepare = false, time = false) {
     confirmation.value = original;
     return;
   }
-  const epoch = ++generation, identity = owner.value, original = pending.value;
+  const turn = liveness.begin(), original = pending.value;
   busy.value = true; error.value = "";
   try { await reviewRequest(original.path, original);
-    if (current(epoch, identity)) { pending.value = null; notice.value = "已保存，请读取当前处理及历史；入库未实际验收不会提前关闭。"; emit("changed"); }
+    if (liveness.isCurrent(turn)) { pending.value = null; notice.value = "已保存，请读取当前处理及历史；入库未实际验收不会提前关闭。"; emit("changed"); }
   } catch (cause) {
-    if (current(epoch, identity)) { if (cause instanceof ReviewApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
-  } finally { if (current(epoch, identity)) busy.value = false; }
-  if (current(epoch, identity) && !pending.value) await open(row);
+    if (liveness.isCurrent(turn)) { if (cause instanceof ReviewApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
+  } finally { if (liveness.isCurrent(turn)) busy.value = false; }
+  if (liveness.isCurrent(turn) && !pending.value) await open(row);
 }
 async function confirmSave() {
   if (busy.value || !confirmation.value) return;
@@ -119,17 +119,17 @@ async function loadCounters(delta = 0) {
   if (locked.value || !detail.value) return;
   const next = counterPage.value + delta;
   if (next < 1 || delta > 0 && (next - 1) * 20 >= counterTotal.value) return;
-  const epoch = ++generation, identity = owner.value; busy.value = true; error.value = "";
+  const turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     const result = await reviewRequest<{ items: Observation[]; total: number }>(`/inventory-reviews/tasks/${props.taskId}/findings/${detail.value.observation.id}/recollection-targets?page=${next}&pageSize=20`);
-    if (current(epoch, identity)) { counters.value = result.items; counterTotal.value = result.total; counterPage.value = next; counterId.value = ""; }
-  } catch (cause) { if (current(epoch, identity)) failure(cause); }
-  finally { if (current(epoch, identity)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { counters.value = result.items; counterTotal.value = result.total; counterPage.value = next; counterId.value = ""; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function paginate(delta: number) { if (locked.value || page.value + delta < 1 || (page.value + delta - 1) * 20 >= total.value) return; page.value += delta; await load(); }
 watch(owner, () => { clear(); page.value = 1; error.value = ""; }, { flush: "sync" });
 watch(method, () => { assets.value = []; receipts.value = []; selectedAsset.value = ""; selectedReceipt.value = ""; });
-onBeforeUnmount(() => { live = false; clear(); });
+onBeforeUnmount(() => { clear(); });
 const ownerStates: Record<string, string> = { PENDING_ADMIN_DECISION: "待管理员审批", WAITING_WAREHOUSE_CLAIM: "待库管领取", WAREHOUSE_PROCESSING: "库管处理中", COMPLETED: "已完成", REJECTED: "已驳回", CANCELLED: "已取消" };
 const methodLabels: Record<string, string> = { NON_ENTERPRISE: "非企业资产依据", DUPLICATE_ASSET: "已登记资产重复线索", LINK_INBOUND: "关联正式入库", REFRESH_INBOUND: "核对正式入库进度" };
 const findingRows = computed(() => rows.value.map(row => ({ ...row,

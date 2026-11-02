@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import {
   closeImportWindow, currentImportWindow, eligibleImportOperators, openImportWindow,
   type EligibleOperator, type InitializationWindow,
@@ -14,6 +15,7 @@ const expiresAt = shallowRef("");
 const error = shallowRef("");
 const notice = shallowRef("");
 const busy = shallowRef(false);
+const liveness = useRequestLiveness();
 
 const currentOperatorLabel = computed(() => {
   const activeWindow = current.value;
@@ -25,13 +27,17 @@ const openDisabled = computed(() =>
   busy.value || !operatorId.value || !expiresAt.value || !reason.value.trim());
 
 async function refresh(): Promise<void> {
+  const turn = liveness.begin();
   error.value = "";
   try {
-    operators.value = await eligibleImportOperators();
-    current.value = await currentImportWindow().catch((cause: unknown) => {
+    const eligible = await eligibleImportOperators();
+    const activeWindow = await currentImportWindow().catch((cause: unknown) => {
       if (cause instanceof Error && "code" in cause && cause.code === "ASSET_IMPORT_WINDOW_NOT_FOUND") return null;
       throw cause;
     });
+    if (!liveness.isCurrent(turn)) return;
+    operators.value = eligible;
+    current.value = activeWindow;
   } catch (cause) { error.value = cause instanceof Error ? cause.message : "窗口状态加载失败"; }
 }
 async function open(): Promise<void> {

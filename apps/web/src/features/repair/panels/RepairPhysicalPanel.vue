@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { repairRequest, repairProblem, RepairApiError, type Repair, type RepairMutation } from "@/features/repair/api";
 
 interface Place { id: string; name: string; version: number; warehouse_id?: string | null; location_type?: string }
@@ -29,29 +30,28 @@ const warehousePrevDisabled=computed(()=>warehousePage.value===1);
 const warehouseNextDisabled=computed(()=>warehousePage.value*20>=warehouseTotal.value);
 const locationPrevDisabled=computed(()=>locationPage.value===1);
 const locationNextDisabled=computed(()=>locationPage.value*20>=locationTotal.value);
-let generation=0,live=true;
-const current=(epoch:number,owner:string)=>live&&epoch===generation&&identity.value===owner;
-function clear(){generation++;warehouses.value=[];locations.value=[];warehouse.value="";location.value="";warehousePage.value=1;locationPage.value=1;warehouseTotal.value=0;locationTotal.value=0;observed.value="";actual.value="";evidence.value="";prepared.value=null;pending.value=null;busy.value=false;}
+const liveness=useRequestLiveness(()=>[identity.value]);
+function clear(){liveness.invalidate();warehouses.value=[];locations.value=[];warehouse.value="";location.value="";warehousePage.value=1;locationPage.value=1;warehouseTotal.value=0;locationTotal.value=0;observed.value="";actual.value="";evidence.value="";prepared.value=null;pending.value=null;busy.value=false;}
 function failure(cause:unknown){if(cause instanceof RepairApiError&&[401,403,404].includes(cause.status)){clear();emit("invalidated");}error.value=repairProblem(cause);}
 function selectMode(value:"away"|"inbound"){if(locked.value||props.blocked)return;mode.value=value;location.value="";const time=new Date();actual.value=new Date(time.getTime()-time.getTimezoneOffset()*60000).toISOString().slice(0,23);error.value="";}
 async function catalog(kind:"warehouse"|"location",delta=0){if(locked.value||props.blocked)return;const page=kind==="warehouse"?warehousePage:locationPage,total=kind==="warehouse"?warehouseTotal:locationTotal,next=page.value+delta;if(next<1||delta>0&&(next-1)*20>=total.value)return;
- const epoch=++generation,owner=identity.value;busy.value=true;error.value="";
- try{const result=await repairRequest<{items:Place[];total:number}>(`/physical-catalog/${kind}?page=${next}&pageSize=20`);if(current(epoch,owner)){page.value=next;total.value=result.total;if(kind==="warehouse"){warehouses.value=result.items;warehouse.value="";}else locations.value=result.items;location.value="";}}
- catch(cause){if(current(epoch,owner))failure(cause);}finally{if(current(epoch,owner))busy.value=false;}}
+ const turn=liveness.begin();busy.value=true;error.value="";
+ try{const result=await repairRequest<{items:Place[];total:number}>(`/physical-catalog/${kind}?page=${next}&pageSize=20`);if(liveness.isCurrent(turn)){page.value=next;total.value=result.total;if(kind==="warehouse"){warehouses.value=result.items;warehouse.value="";}else locations.value=result.items;location.value="";}}
+ catch(cause){if(liveness.isCurrent(turn))failure(cause);}finally{if(liveness.isCurrent(turn))busy.value=false;}}
 function prepare(){if(locked.value||props.blocked)return;error.value="";const row=props.repair,place=visibleLocations.value.find(row=>row.id===location.value),store=warehouses.value.find(row=>row.id===warehouse.value),time=new Date(actual.value);
  if(!place||!Number.isFinite(time.getTime())||!observed.value.trim()||evidence.value.trim().length<10||row.lockVersion==null||mode.value==="inbound"&&!store){error.value="请核对实物编码、实际时间、位置及至少10字依据；回库须选择有效仓库和所属库位。";return;}
  if(mode.value==="away"&&!row.actions?.acceptAway||mode.value==="inbound"&&!row.actions?.closeInbound){error.value="当前阶段不能办理此动作，请刷新核对。";return;}
  const body:Record<string,unknown>={assetVersion:row.assetVersion,ownershipVersion:row.ownershipVersion,lockVersion:row.lockVersion,loanVersion:row.loanVersion??null,observedCode:observed.value.trim(),occurredAt:time.toISOString(),evidence:evidence.value.trim(),locationVersion:place.version};
  if(mode.value==="away")body.actualLocationId=place.id;else{body.warehouseId=store!.id;body.warehouseVersion=store!.version;body.locationId=place.id;}
  prepared.value={path:`/${row.id}/${mode.value==="away"?"accept-away":"close-inbound"}`,key:crypto.randomUUID(),version:row.version,body};}
-async function send(){if(busy.value||!pending.value||props.blocked)return;const operation=pending.value,epoch=++generation,owner=identity.value;busy.value=true;error.value="";
- try{await repairRequest(operation.path,operation);await repairRequest<Repair>(`/${props.repair.id}`);if(current(epoch,owner)){pending.value=null;observed.value="";actual.value="";evidence.value="";location.value="";emit("changed");}}
- catch(cause){if(current(epoch,owner)){if(cause instanceof RepairApiError&&cause.status>=400&&cause.status<500)pending.value=null;failure(cause);}}finally{if(current(epoch,owner))busy.value=false;}}
+async function send(){if(busy.value||!pending.value||props.blocked)return;const operation=pending.value,turn=liveness.begin();busy.value=true;error.value="";
+ try{await repairRequest(operation.path,operation);await repairRequest<Repair>(`/${props.repair.id}`);if(liveness.isCurrent(turn)){pending.value=null;observed.value="";actual.value="";evidence.value="";location.value="";emit("changed");}}
+ catch(cause){if(liveness.isCurrent(turn)){if(cause instanceof RepairApiError&&cause.status>=400&&cause.status<500)pending.value=null;failure(cause);}}finally{if(liveness.isCurrent(turn))busy.value=false;}}
 async function confirm(){if(!prepared.value||busy.value||props.blocked)return;pending.value=prepared.value;prepared.value=null;await send();}
 watch(identity,()=>{clear();error.value="";},{immediate:true,flush:"sync"});
 watch(warehouse,()=>{if(!locked.value)location.value="";});
 watch(locked,value=>emit("busyChange",value),{immediate:true,flush:"sync"});
-onBeforeUnmount(()=>{live=false;clear();emit("busyChange",false);});
+onBeforeUnmount(()=>{clear();emit("busyChange",false);});
 </script>
 <template>
   <section class="fams-card fams-stack" aria-label="实物接修与验收入库">

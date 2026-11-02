@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness, type LivenessToken } from "@/composables/useRequestLiveness";
 import RepairFactoryPartsPanel from "./RepairFactoryPartsPanel.vue";
 import FamsMediaPreview from "@/components/FamsMediaPreview.vue";
 import { RepairApiError, repairRequest, type Repair } from "@/features/repair/api";
@@ -18,15 +19,15 @@ const history = ref<FactoryHistory[]>([]), total = shallowRef(0), page = shallow
 const confirmation = ref<FactoryMutation | null>(null), pending = ref<FactoryMutation | null>(null);
 const reason = shallowRef(""), provider = shallowRef(""), contact = shallowRef(""), phone = shallowRef(""), due = shallowRef(""), fault = shallowRef("");
 const observedCode = shallowRef(""), serial = shallowRef(""), actualDate = shallowRef(""), actualTime = shallowRef(""), evidence = shallowRef("");
-const costPolicy = ref("NO_COST"), costLimit = shallowRef(""), moneyAmount = shallowRef(""), moneyReason = shallowRef(""), moneyChecked = shallowRef(false), moneyEvidence = ref<string[]>([]), costUnassessed = shallowRef(false);
+const costPolicy = shallowRef("NO_COST"), costLimit = shallowRef(""), moneyAmount = shallowRef(""), moneyReason = shallowRef(""), moneyChecked = shallowRef(false), moneyEvidence = ref<string[]>([]), costUnassessed = shallowRef(false);
 const moneyPattern = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/;
 const costText = (policy?: string, limit?: string | null) => policy === "UNLIMITED" ? "费用不限" : policy === "LIMITED" ? `所有轮次累计限额 ${limit ?? "待核对"} 元` : "无费用";
 const originalChecked = shallowRef(false), noCostChecked = shallowRef(false), condition = ref("RESTORED");
 const locationId = shallowRef(""), locations = ref<{ id: string; name: string; version: number }[]>([]), locationPage = shallowRef(1), locationTotal = shallowRef(0);
 const file = ref<File | null>(null), purpose = ref("FACTORY_ACK"), selectedEvidence = ref<string[]>([]);
 const preview = shallowRef(""), previewName = shallowRef(""), previewMime = shallowRef("");
-let generation = 0, live = true, download: AbortController | null = null;
-const current = (epoch: number, owner: string) => live && epoch === generation && identity.value === owner;
+const liveness = useRequestLiveness(() => [identity.value]);
+let download: AbortController | null = null;
 const locked = computed(() => props.blocked || busy.value || partsBusy.value || !!pending.value || !!confirmation.value);
 const activeSelected = computed(() => !!selected.value && selected.value.id === data.value?.activeRound?.id);
 const evidencePurpose = computed(() => data.value?.activeRound?.roundStatus === "DISPATCHED" ? "RECEIPT" : "FACTORY_ACK");
@@ -80,7 +81,7 @@ function clearPreview() { download?.abort(); download = null; if (preview.value)
 function clearPhysical() { clearMoney(); observedCode.value = ""; serial.value = ""; actualDate.value = ""; actualTime.value = ""; evidence.value = ""; originalChecked.value = false; noCostChecked.value = false; selectedEvidence.value = []; locationId.value = ""; }
 function reset() {
   partsBusy.value = false;
-  generation++; clearPreview(); opened.value = false; busy.value = false; stale.value = true; data.value = null; roundRows.value = []; history.value = []; selected.value = null; selectedId.value = "";
+  liveness.invalidate(); clearPreview(); opened.value = false; busy.value = false; stale.value = true; data.value = null; roundRows.value = []; history.value = []; selected.value = null; selectedId.value = "";
   confirmation.value = null; pending.value = null; file.value = null; locations.value = []; total.value = 0; historyTotal.value = 0; page.value = 1; historyPage.value = 1;
   costPolicy.value = "NO_COST"; costLimit.value = ""; reason.value = ""; provider.value = ""; contact.value = ""; phone.value = ""; due.value = ""; fault.value = ""; purpose.value = "FACTORY_ACK"; clearPhysical();
 }
@@ -89,25 +90,25 @@ function failure(cause: unknown) {
   if (cause instanceof RepairApiError && [400, 409, 413, 422].includes(cause.status)) stale.value = true;
   error.value = factoryProblem(cause);
 }
-async function fetchState(epoch: number, owner: string) {
+async function fetchState(turn: LivenessToken) {
   const id = props.repair.id;
   const detail = await factoryRequest<FactoryDetail>(id);
   const list = await factoryRequest<FactoryPage<FactoryRound>>(id, `/rounds?page=${page.value}&pageSize=20`);
   const events = await factoryRequest<FactoryPage<FactoryHistory>>(id, `/history?page=${historyPage.value}&pageSize=20`);
-  if (!current(epoch, owner)) return;
+  if (!liveness.isCurrent(turn)) return;
   const nextId = selectedId.value || detail.activeRound?.id || list.items[0]?.id || "";
   const next = nextId ? await factoryRequest<FactoryRoundDetail>(id, `/rounds/${nextId}`) : null;
-  if (!current(epoch, owner)) return;
+  if (!liveness.isCurrent(turn)) return;
   data.value = detail; roundRows.value = list.items; total.value = list.total; history.value = events.items; historyTotal.value = events.total;
   selected.value = next; selectedId.value = nextId; stale.value = false;
 }
 async function load() {
   if (busy.value || props.blocked || confirmation.value || !canRead.value) return;
-  opened.value = true; const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
-  try { await fetchState(epoch, owner); }
-  catch (cause) { if (current(epoch, owner)) { stale.value = true; failure(cause); } }
-  finally { if (current(epoch, owner)) busy.value = false; }
-  if (current(epoch, owner) && data.value?.version !== props.repair.version) emit("changed");
+  opened.value = true; const turn = liveness.begin(); busy.value = true; error.value = "";
+  try { await fetchState(turn); }
+  catch (cause) { if (liveness.isCurrent(turn)) { stale.value = true; failure(cause); } }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
+  if (liveness.isCurrent(turn) && data.value?.version !== props.repair.version) emit("changed");
 }
 async function selectRound(row: FactoryRound) {
   if (locked.value) return; selectedId.value = row.id; clearPhysical(); clearPreview(); await load();
@@ -120,12 +121,12 @@ async function paginate(delta: number, events = false) {
 }
 async function loadLocations(delta = 0) {
   if (locked.value) return; const next = locationPage.value + delta; if (next < 1 || delta > 0 && (next - 1) * 20 >= locationTotal.value) return;
-  const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  const turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     const result = await repairRequest<FactoryPage<{ id: string; name: string; version: number }>>(`/physical-catalog/location?page=${next}&pageSize=20`);
-    if (current(epoch, owner)) { locations.value = result.items; locationTotal.value = result.total; locationPage.value = next; locationId.value = ""; }
-  } catch (cause) { if (current(epoch, owner)) failure(cause); }
-  finally { if (current(epoch, owner)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { locations.value = result.items; locationTotal.value = result.total; locationPage.value = next; locationId.value = ""; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function physicalTime() {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(actualDate.value) || !/^\d{2}:\d{2}(?::\d{2})?$/.test(actualTime.value)) throw new Error("physical time required");
@@ -192,19 +193,19 @@ function prepare(action: Action) {
 }
 async function perform() {
   if (!pending.value || busy.value || props.blocked) return;
-  const operation = pending.value, epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     await factoryRequest<FactoryReply>(operation.repairId, operation.path, operation);
-    if (!current(epoch, owner)) return;
+    if (!liveness.isCurrent(turn)) return;
     pending.value = null; stale.value = true; file.value = null; clearPhysical(); clearPreview(); reason.value = "";
     if (operation.path === "/rounds") { selectedId.value = ""; purpose.value = "FACTORY_ACK"; }
     if (operation.path.endsWith("/dispatch")) purpose.value = "RECEIPT";
     notice.value = "本次办理已保存。轮次收回不等于整单维修完成，仍需核实后续实际去向。";
-    await fetchState(epoch, owner);
+    await fetchState(turn);
   } catch (cause) {
-    if (current(epoch, owner)) { if (cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
-  } finally { if (current(epoch, owner)) busy.value = false; }
-  if (current(epoch, owner) && !pending.value) emit("changed");
+    if (liveness.isCurrent(turn)) { if (cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
+  } finally { if (liveness.isCurrent(turn)) busy.value = false; }
+  if (liveness.isCurrent(turn) && !pending.value) emit("changed");
 }
 async function confirm() { if (busy.value || props.blocked || pending.value || !confirmation.value) return; pending.value = confirmation.value; confirmation.value = null; await perform(); }
 function fileChosen(event: Event) {
@@ -215,21 +216,21 @@ function fileChosen(event: Event) {
 }
 async function readFile(item: FactoryFile) {
   if (locked.value || !selected.value || item.scanStatus !== "CLEAN") return; clearPreview();
-  const repair = props.repair.id, round = selected.value.id, epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  const repair = props.repair.id, round = selected.value.id, turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     const grant = await factoryRequest<{ token: string; expiresAtEpochSecond: number }>(repair, `/rounds/${round}/evidence/${item.objectId}/grant`);
-    if (!current(epoch, owner)) return;
+    if (!liveness.isCurrent(turn)) return;
     download = new AbortController();
-    const blob = await factoryEvidenceContent(repair, round, item.objectId, grant.token, download.signal); if (!current(epoch, owner)) return;
+    const blob = await factoryEvidenceContent(repair, round, item.objectId, grant.token, download.signal); if (!liveness.isCurrent(turn)) return;
     if (blob.size !== item.sizeBytes || blob.size > 20 * 1024 * 1024 || blob.type !== item.contentType || !["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(blob.type)) throw new Error("Invalid evidence bytes");
     preview.value = URL.createObjectURL(blob); previewName.value = item.filename; previewMime.value = blob.type;
-  } catch (cause) { if (current(epoch, owner)) failure(cause); }
-  finally { if (current(epoch, owner)) busy.value = false; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 watch(identity, () => { reset(); error.value = ""; notice.value = ""; opened.value = !!props.repair.factorySummary; if (opened.value && canRead.value) void load(); }, { immediate: true, flush: "sync" });
 watch(() => props.blocked, value => { if (!value && opened.value && canRead.value && !data.value && !pending.value && !confirmation.value) void load(); });
 watch(() => props.repair.version, () => { if (opened.value && !pending.value && !confirmation.value && data.value?.version !== props.repair.version) void load(); });
-onBeforeUnmount(() => { live = false; reset(); emit("busy-change", false); });
+onBeforeUnmount(() => { reset(); emit("busy-change", false); });
 </script>
 <template>
   <section v-if="canRead" class="fams-card fams-stack" aria-label="返厂轮次与费用">

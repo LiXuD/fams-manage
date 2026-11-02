@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import type { BusinessMutation } from "@/api/business";
 import { ReviewApiError, reviewRequest } from "@/features/inventory/api";
 import { sealedRecordLines, synchronizationReasonText, sealBlockerText } from "@/features/inventory/sealing-display";
@@ -15,7 +16,7 @@ const props = defineProps<{ taskId: string }>(); const emit = defineEmits<{ chan
 const session = useSessionStore(); const owner = computed(() => JSON.stringify([props.taskId, session.user?.id, session.user?.roles, session.csrfToken]));
 const view = ref<Preflight | null>(null), busy = shallowRef(false), error = shallowRef(""), notice = shallowRef("");
 const reason = shallowRef(""), waiver = shallowRef(""), confirming = shallowRef(false), pending = ref<BusinessMutation | null>(null);
-const section = ref("items"), page = shallowRef(1), rows = ref<Page | null>(null);
+const section = shallowRef("items"), page = shallowRef(1), rows = ref<Page | null>(null);
 const locked = computed(() => busy.value || !!pending.value);
 interface BlockerRow { key: string; text: string; target: string }
 interface SynchronizationRow { accountId: string; name: string; statusText: string; devices: { deviceId: string; statusText: string }[] }
@@ -37,9 +38,8 @@ const nextReportDisabled = computed(() => locked.value || !rows.value || page.va
 const sealDisabled = computed(() => { const state = view.value;
   return !state || state.task.task_status !== 'WAITING_REVIEW' || !!state.blockerCount || reason.value.trim().length < 3
     || ((state.missingSynchronizationCount ?? 0) > 0 && waiver.value.trim().length < 10); });
-let epoch = 0, live = true;
-const current = (stamp: number, identity: string) => live && stamp === epoch && owner.value === identity;
-function clear() { epoch++; view.value = null; rows.value = null; reason.value = ""; waiver.value = ""; pending.value = null;
+const liveness = useRequestLiveness(() => [owner.value]);
+function clear() { liveness.invalidate(); view.value = null; rows.value = null; reason.value = ""; waiver.value = ""; pending.value = null;
   confirming.value = false; busy.value = false; notice.value = ""; }
 function failure(cause: unknown) {
   if (cause instanceof ReviewApiError && [401, 403, 404].includes(cause.status)) { clear(); error.value = "身份、权限或任务已失效，已隐藏冻结报告和原操作。"; return; }
@@ -51,11 +51,11 @@ function failure(cause: unknown) {
   error.value = pending.value ? "封存结果尚未确认，请保留原操作重试。" : "读取未完成，请重试。";
 }
 async function load() {
-  const stamp = ++epoch, identity = owner.value; busy.value = true; error.value = ""; view.value = null; rows.value = null;
+  const turn = liveness.begin(); busy.value = true; error.value = ""; view.value = null; rows.value = null;
   try { const result = await reviewRequest<Preflight>(`/inventory-sealing/tasks/${props.taskId}`);
-    if (current(stamp, identity)) view.value = result;
-  } catch (cause) { if (current(stamp, identity)) failure(cause); }
-  finally { if (current(stamp, identity)) busy.value = false; }
+    if (liveness.isCurrent(turn)) view.value = result;
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function prepare() {
   const state = view.value;
@@ -69,42 +69,42 @@ function prepare() {
 }
 async function send() {
   if (busy.value || !pending.value) return;
-  const stamp = epoch, identity = owner.value, original = pending.value; busy.value = true; confirming.value = false; error.value = "";
+  const turn = liveness.begin(), original = pending.value; busy.value = true; confirming.value = false; error.value = "";
   try { await reviewRequest(original.path, original);
-    if (current(stamp, identity)) { pending.value = null; busy.value = false; notice.value = "已封存，报告与已采信日期已在同一事务保存。"; await load(); emit("changed"); }
-  } catch (cause) { if (current(stamp, identity)) failure(cause); }
-  finally { if (current(stamp, identity)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { pending.value = null; busy.value = false; notice.value = "已封存，报告与已采信日期已在同一事务保存。"; await load(); emit("changed"); }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function readRows(next = 1) {
   if (locked.value || !view.value?.sealed) return;
-  const stamp = ++epoch, identity = owner.value; busy.value = true; rows.value = null; error.value = "";
+  const turn = liveness.begin(); busy.value = true; rows.value = null; error.value = "";
   try { const result = await reviewRequest<Page>(`/inventory-sealing/tasks/${props.taskId}/report/${section.value}?page=${next}&pageSize=20`);
-    if (current(stamp, identity)) { rows.value = result; page.value = next; }
-  } catch (cause) { if (current(stamp, identity)) failure(cause); }
-  finally { if (current(stamp, identity)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { rows.value = result; page.value = next; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function exportReport() {
   if (locked.value || !view.value?.sealed || !view.value.report) return;
-  const stamp = ++epoch, identity = owner.value, header = view.value.report; busy.value = true; error.value = "";
+  const turn = liveness.begin(), header = view.value.report; busy.value = true; error.value = "";
   try { const sections: Record<string, Page['items']> = {};
     for (const name of ["items", "evidence", "synchronization"]) {
       const saved: Page['items'] = []; let next = 1;
       while (true) { const result = await reviewRequest<Page>(`/inventory-sealing/tasks/${props.taskId}/report/${name}?page=${next++}&pageSize=100`);
-        if (!current(stamp, identity)) return; saved.push(...result.items);
+        if (!liveness.isCurrent(turn)) return; saved.push(...result.items);
         if (saved.length >= result.total) break;
         if (!result.items.length) throw new Error("Incomplete frozen report page");
       }
       sections[name] = saved;
     }
-    if (!current(stamp, identity)) return;
+    if (!liveness.isCurrent(turn)) return;
     const url = URL.createObjectURL(new Blob([JSON.stringify({ header, sections }, null, 2)], { type: "application/json;charset=utf-8" }));
     try { const link = document.createElement("a"); link.href = url; link.download = `inventory-report-${props.taskId}.json`; link.click(); }
     finally { URL.revokeObjectURL(url); }
-  } catch (cause) { if (current(stamp, identity)) failure(cause); }
-  finally { if (current(stamp, identity)) busy.value = false; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 watch(owner, () => { clear(); page.value = 1; void load(); }, { immediate: true });
-onBeforeUnmount(() => { live = false; clear(); });
+onBeforeUnmount(() => { clear(); });
 </script>
 <template>
   <section class="fams-card fams-stack" aria-label="封存检查与冻结报告">

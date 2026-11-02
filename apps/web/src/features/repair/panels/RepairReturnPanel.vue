@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { RepairApiError, repairProblem, repairRequest, type Repair, type RepairMutation, type RepairReturnTarget } from "@/features/repair/api";
 const props = defineProps<{ repair: Repair; blocked?: boolean }>();
 const emit = defineEmits<{ changed: []; invalidated: []; busyChange: [value: boolean] }>();
@@ -15,26 +16,25 @@ const prepared = ref<RepairMutation | null>(null), pending = ref<RepairMutation 
 const locked = computed(() => busy.value || !!prepared.value || !!pending.value);
 const handover = computed(() => props.repair.returnHandovers?.find(row => ["WAITING_RECEIPT", "REFUSED"].includes(row.handover_status)));
 const allowed = (value: Mode) => !!props.repair.actions?.[({ delivery: "deliverReturn", receipt: "receiveReturn", refusal: "refuseReturn", recollection: "recollectReturn" } as const)[value]];
-let generation = 0, live = true;
-const current = (epoch: number, owner: string) => live && epoch === generation && owner === identity.value;
-function clear() { generation++; target.value = null; locations.value = []; location.value = ""; page.value = 1; total.value = 0; observed.value = ""; actual.value = ""; evidence.value = ""; checked.value = false; prepared.value = null; pending.value = null; busy.value = false; }
+const liveness = useRequestLiveness(() => [identity.value]);
+function clear() { liveness.invalidate(); target.value = null; locations.value = []; location.value = ""; page.value = 1; total.value = 0; observed.value = ""; actual.value = ""; evidence.value = ""; checked.value = false; prepared.value = null; pending.value = null; busy.value = false; }
 function failure(cause: unknown) { if (cause instanceof RepairApiError && [401, 403, 404].includes(cause.status)) { clear(); emit("invalidated"); } error.value = repairProblem(cause); }
 async function select(value: Mode) {
   if (locked.value || props.blocked || !allowed(value)) return;
   mode.value = value; target.value = null; checked.value = false; location.value = ""; error.value = "";
   const now = new Date(); actual.value = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 23);
   if (value !== "delivery") return;
-  const epoch = ++generation, owner = identity.value; busy.value = true;
-  try { const result = await repairRequest<RepairReturnTarget>(`/${props.repair.id}/return-target`); if (current(epoch, owner)) target.value = result; }
-  catch (cause) { if (current(epoch, owner)) failure(cause); } finally { if (current(epoch, owner)) busy.value = false; }
+  const turn = liveness.begin(); busy.value = true;
+  try { const result = await repairRequest<RepairReturnTarget>(`/${props.repair.id}/return-target`); if (liveness.isCurrent(turn)) target.value = result; }
+  catch (cause) { if (liveness.isCurrent(turn)) failure(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function catalog(delta = 0) {
   const next = page.value + delta;
   if (locked.value || props.blocked || next < 1 || delta > 0 && (next - 1) * 20 >= total.value) return;
-  const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  const turn = liveness.begin(); busy.value = true; error.value = "";
   try { const result = await repairRequest<{ items: Location[]; total: number }>(`/physical-catalog/location?page=${next}&pageSize=20`);
-    if (current(epoch, owner)) { locations.value = result.items; total.value = result.total; page.value = next; location.value = ""; }
-  } catch (cause) { if (current(epoch, owner)) failure(cause); } finally { if (current(epoch, owner)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { locations.value = result.items; total.value = result.total; page.value = next; location.value = ""; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function prepare() {
   if (locked.value || props.blocked || !allowed(mode.value)) return;
@@ -55,16 +55,16 @@ function prepare() {
 }
 async function send() {
   if (busy.value || props.blocked || !pending.value) return;
-  const operation = pending.value, epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
   try { await repairRequest(operation.path, operation); await repairRequest<Repair>(`/${props.repair.id}`);
-    if (current(epoch, owner)) { pending.value = null; target.value = null; checked.value = false; observed.value = ""; evidence.value = ""; emit("changed"); }
-  } catch (cause) { if (current(epoch, owner)) { if (cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); } }
-  finally { if (current(epoch, owner)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { pending.value = null; target.value = null; checked.value = false; observed.value = ""; evidence.value = ""; emit("changed"); }
+  } catch (cause) { if (liveness.isCurrent(turn)) { if (cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); } }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function confirm() { if (!prepared.value || busy.value || props.blocked) return; pending.value = prepared.value; prepared.value = null; await send(); }
 watch(identity, () => { clear(); error.value = ""; }, { immediate: true, flush: "sync" });
 watch(locked, value => emit("busyChange", value), { immediate: true, flush: "sync" });
-onBeforeUnmount(() => { live = false; clear(); emit("busyChange", false); });
+onBeforeUnmount(() => { clear(); emit("busyChange", false); });
 const deliveryAllowed = computed(() => allowed("delivery"));
 const receiptAllowed = computed(() => allowed("receipt"));
 const refusalAllowed = computed(() => allowed("refusal"));

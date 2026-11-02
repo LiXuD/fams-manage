@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { businessMessage, businessRequest } from "@/api/business";
 import { loanLabels as labels } from "@/features/loan/api";
 import type { BusinessMutation } from "@/api/business";
@@ -12,6 +13,7 @@ const loans = ref<Loan[]>([]); const extensions = ref<LoanExtension[]>([]);
 const busy = shallowRef(false); const error = shallowRef(""); const notice = shallowRef(""); const retryable = shallowRef(false);
 const page = shallowRef(1); const total = shallowRef(0); const reason = shallowRef("");
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
+const liveness = useRequestLiveness();
 let pending: BusinessMutation | null = null;
 
 const loanRows = computed(() => loans.value.map((row) => ({
@@ -25,9 +27,11 @@ const extensionRows = computed<ExtensionRow[]>(() => extensions.value.map((row) 
   decisionShown: !!admin.value && row.extensionStatus === "PENDING" })));
 
 async function load() {
+  const turn = liveness.begin();
   const [loanPage, extensionPage] = await Promise.all([
     businessRequest<BusinessPage<Loan>>(`/loans?page=${page.value}&pageSize=20`),
     businessRequest<BusinessPage<LoanExtension>>(`/loans/extensions?page=${page.value}&pageSize=20`)]);
+  if (!liveness.isCurrent(turn)) return;
   loans.value = loanPage.items; extensions.value = extensionPage.items;
   total.value = Math.max(loanPage.total, extensionPage.total);
 }

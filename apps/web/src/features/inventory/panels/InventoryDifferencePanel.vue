@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import type { BusinessMutation } from "@/api/business";
 import { reviewRequest, ReviewApiError, subjectStatusLabels as statuses, type Board, type ReviewItem } from "@/features/inventory/api";
 import { repairStates } from "@/features/repair/api";
@@ -17,7 +18,7 @@ const owner = computed(() => JSON.stringify([session.user?.id, session.csrfToken
 const identity = computed(() => `${props.taskId}:${props.item.item.id}:${owner.value}`);
 const board = ref<Board | null>(null), subjects = ref<Subject[]>([]), chosen = ref<string[]>([]);
 const page = shallowRef(1), total = shallowRef(0), busy = shallowRef(false), error = shallowRef(""), notice = shallowRef("");
-const method = ref("BOOK_CORRECT"), reason = shallowRef(""), evidence = shallowRef(""), pending = ref<BusinessMutation | null>(null);
+const method = shallowRef("BOOK_CORRECT"), reason = shallowRef(""), evidence = shallowRef(""), pending = ref<BusinessMutation | null>(null);
 const organizations = ref<TransferChoice[]>([]), warehouses = ref<TransferChoice[]>([]), locations = ref<TransferChoice[]>([]), employees = ref<TransferChoice[]>([]);
 const owning = shallowRef(""), using = shallowRef(""), employee = shallowRef(""), warehouse = shallowRef(""), location = shallowRef(""), custody = ref("PERSONAL");
 const currentItem = computed(() => board.value?.items.find(row => row.item.id === props.item.item.id));
@@ -48,8 +49,7 @@ const prepareDisabled = computed(() => locked.value || !props.observationIds.len
 const prevDisabled = computed(() => locked.value || page.value === 1);
 const nextDisabled = computed(() => locked.value || page.value * 100 >= total.value);
 const decideDisabled = computed(() => !selected.value.length || reason.value.trim().length < 3 || evidence.value.trim().length < 10);
-let epoch = 0, live = true;
-const valid = (token: number, who: string) => live && token === epoch && who === identity.value;
+const liveness = useRequestLiveness(() => [identity.value]);
 function clear() { board.value = null; subjects.value = []; chosen.value = []; pending.value = null;
   organizations.value = []; warehouses.value = []; locations.value = []; employees.value = [];
   confirmation.value = null; linkedRepair.value = null; repairFault.value = ""; repairDiscovery.value = ""; repairId.value = ""; physicalChecked.value = false; discoveryChecked.value = false; reason.value = ""; evidence.value = ""; owning.value = ""; using.value = ""; employee.value = ""; warehouse.value = ""; location.value = ""; busy.value = false; }
@@ -63,28 +63,28 @@ function failure(cause: unknown) {
   error.value = pending.value ? "操作结果尚未确认，请保留原操作并重试。" : "读取失败，请重新刷新。";
 }
 async function load() {
-  const token = ++epoch, who = identity.value; busy.value = true; error.value = "";
+  const turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     const [task, data] = await Promise.all([
       reviewRequest<Board>(`/inventory-reviews/tasks/${props.taskId}?page=${props.itemPage}&pageSize=20`),
       reviewRequest<{ items: Subject[]; total: number }>(`/inventory-reviews/tasks/${props.taskId}/differences?page=${page.value}&pageSize=100`)]);
-    if (valid(token, who)) { board.value = task; subjects.value = data.items; total.value = data.total; chosen.value = []; }
-  } catch (cause) { if (valid(token, who)) failure(cause); }
-  finally { if (valid(token, who)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { board.value = task; subjects.value = data.items; total.value = data.total; chosen.value = []; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function send(path: string, body: unknown) {
   if (busy.value || !board.value) return;
   pending.value ??= { path, key: crypto.randomUUID(), version: board.value.task.version, body: JSON.parse(JSON.stringify(body)) as unknown };
-  const original = pending.value, token = ++epoch, who = identity.value; busy.value = true; error.value = "";
+  const original = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     await reviewRequest(original.path, original);
-    if (!valid(token, who)) return;
+    if (!liveness.isCurrent(turn)) return;
     pending.value = null; notice.value = "本次处理已保存。独立差异仍须逐项闭环，关联调拨或维修以实际业务进度为准。"; await load();
   } catch (cause) {
-    if (!valid(token, who)) return;
+    if (!liveness.isCurrent(turn)) return;
     if (cause instanceof ReviewApiError && cause.status >= 400 && cause.status < 500) pending.value = null;
     failure(cause);
-  } finally { if (valid(token, who)) busy.value = false; }
+  } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function prepare() {
   if (locked.value || !props.observationIds.length) return;
@@ -97,21 +97,21 @@ async function catalog(kind: string, organization?: string) {
 }
 async function targetChoices() {
   if (locked.value || method.value !== "FORMAL_TRANSFER") return;
-  const token = ++epoch, who = identity.value; busy.value = true;
+  const turn = liveness.begin(); busy.value = true;
   try {
     const [orgs, stores, places] = await Promise.all([catalog("organization"), catalog("warehouse"), catalog("location")]);
-    if (valid(token, who)) { organizations.value = orgs; warehouses.value = stores; locations.value = places;
+    if (liveness.isCurrent(turn)) { organizations.value = orgs; warehouses.value = stores; locations.value = places;
       owning.value = (currentItem.value?.current as { owningOrganizationId?: string | null } | null)?.owningOrganizationId ?? ""; }
-  } catch (cause) { if (valid(token, who)) failure(cause); }
-  finally { if (valid(token, who)) busy.value = false; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function people() {
   employee.value = ""; employees.value = [];
   if (!using.value || locked.value) return;
-  const token = ++epoch, who = identity.value, org = using.value; busy.value = true;
-  try { const rows = await catalog("employee", org); if (valid(token, who) && using.value === org) employees.value = rows; }
-  catch (cause) { if (valid(token, who)) failure(cause); }
-  finally { if (valid(token, who)) busy.value = false; }
+  const turn = liveness.begin(), org = using.value; busy.value = true;
+  try { const rows = await catalog("employee", org); if (liveness.isCurrent(turn) && using.value === org) employees.value = rows; }
+  catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function target(): TransferTarget | null {
   const loc = bins.value.find(row => row.id === location.value), owner = organizations.value.find(row => row.id === owning.value);
@@ -151,19 +151,19 @@ function confirmPrepared() {
 }
 async function inspectRepair() {
   if (locked.value || !/^[1-9][0-9]*$/.test(repairId.value.trim())) return;
-  const token = ++epoch, who = identity.value, id = repairId.value.trim(); busy.value = true; linkedRepair.value = null;
+  const turn = liveness.begin(), id = repairId.value.trim(); busy.value = true; linkedRepair.value = null;
   try {
     const row = await reviewRequest<{ id: string; assetId: string; version: number; status: string }>(`/repairs/${id}`);
-    if (valid(token, who) && repairId.value.trim() === id) {
+    if (liveness.isCurrent(turn) && repairId.value.trim() === id) {
       if (row.assetId !== currentItem.value?.item.asset_id || !["PENDING_ADMIN_DECISION", "WAITING_WAREHOUSE_CLAIM", "WAREHOUSE_PROCESSING"].includes(row.status)) error.value = "请选择同一资产的有效维修单。";
       else linkedRepair.value = row;
     }
-  } catch (cause) { if (valid(token, who)) failure(cause); }
-  finally { if (valid(token, who)) busy.value = false; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function pages(delta: number) { if (locked.value || page.value + delta < 1 || (page.value + delta - 1) * 100 >= total.value) return; page.value += delta; await load(); }
-watch(identity, () => { epoch++; clear(); page.value = 1; notice.value = ""; error.value = ""; if (session.user?.roles.includes("ASSET_ADMIN")) void load(); }, { immediate: true, flush: "sync" });
-onBeforeUnmount(() => { live = false; epoch++; clear(); });
+watch(identity, () => { liveness.invalidate(); clear(); page.value = 1; notice.value = ""; error.value = ""; if (session.user?.roles.includes("ASSET_ADMIN")) void load(); }, { immediate: true, flush: "sync" });
+onBeforeUnmount(() => { clear(); });
 </script>
 <template>
   <section class="fams-card fams-stack" aria-label="独立差异处理">

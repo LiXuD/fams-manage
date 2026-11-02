@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { reviewRequest, ReviewApiError, subjectStatusLabels as statuses, type Board, type Observation, type Review } from "@/features/inventory/api";
 import type { BusinessMutation } from "@/api/business";
 const props = defineProps<{ taskId: string; itemId: string; itemPage: number; observations: Observation[] }>();
@@ -36,8 +37,7 @@ const decisionDisabled = computed(() => !target.value || chosen.value && !refere
 const acceptanceDisabled = computed(() => selection.value?.review.review_status !== "SELECTED" || reason.value.trim().length < 3 || evidence.value.trim().length < 10);
 const historyPrevDisabled = computed(() => locked.value || page.value === 1);
 const historyNextDisabled = computed(() => locked.value || page.value * 20 >= total.value);
-let epoch = 0, live = true;
-const valid = (token: number, who: string) => live && token === epoch && who === identity.value;
+const liveness = useRequestLiveness(() => [identity.value]);
 function clear() { selection.value = null; board.value = null; subjects.value = []; dispositions.value = []; target.value = "";
   reason.value = ""; evidence.value = ""; pending.value = null; busy.value = false; stage.value = null; confirmKind.value = null; }
 function failure(cause: unknown) {
@@ -61,25 +61,25 @@ function failure(cause: unknown) {
 }
 async function load() {
   if (pending.value) return;
-  const token = ++epoch, who = identity.value; busy.value = true; error.value = "";
+  const turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     const base = `/inventory-reviews/tasks/${props.taskId}/items/${props.itemId}`;
     const [value, task, records] = await Promise.all([reviewRequest<Selection>(base + "/selection"),
       reviewRequest<Board>(`/inventory-reviews/tasks/${props.taskId}?page=${props.itemPage}&pageSize=20`),
       reviewRequest<{ items: Disposition[]; total: number }>(base + `/evidence-dispositions?page=${page.value}&pageSize=20`)]);
-    if (valid(token, who)) { selection.value = value; board.value = task; dispositions.value = records.items; total.value = records.total; subjects.value = []; target.value = ""; }
-  } catch (cause) { if (valid(token, who)) failure(cause); }
-  finally { if (valid(token, who)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { selection.value = value; board.value = task; dispositions.value = records.items; total.value = records.total; subjects.value = []; target.value = ""; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function readSubjects() {
   if (locked.value || !target.value) return;
-  const token = ++epoch, who = identity.value, observation = target.value; busy.value = true; subjects.value = [];
+  const turn = liveness.begin(), observation = target.value; busy.value = true; subjects.value = [];
   method.value = chosen.value ? "VERIFY_SELECTED" : "REJECT_EVIDENCE";
   try {
     const data = await reviewRequest<{ items: Subject[] }>(`/inventory-reviews/tasks/${props.taskId}/items/${props.itemId}/evidence-subjects?observationId=${observation}`);
-    if (valid(token, who) && target.value === observation) subjects.value = data.items;
-  } catch (cause) { if (valid(token, who)) failure(cause); }
-  finally { if (valid(token, who)) busy.value = false; }
+    if (liveness.isCurrent(turn) && target.value === observation) subjects.value = data.items;
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function snapshot() {
   if (!selection.value || !currentItem.value?.current) return null;
@@ -110,14 +110,14 @@ function runConfirm() {
 function closeConfirm() { stage.value = null; confirmKind.value = null; }
 async function send() {
   if (busy.value || !pending.value) return;
-  const original = pending.value, token = ++epoch, who = identity.value; busy.value = true; error.value = "";
-  try { await reviewRequest(original.path, original); if (!valid(token, who)) return; pending.value = null; emit("changed"); await load(); }
-  catch (cause) { if (!valid(token, who)) return; if (cause instanceof ReviewApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
-  finally { if (valid(token, who)) busy.value = false; }
+  const original = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
+  try { await reviewRequest(original.path, original); if (!liveness.isCurrent(turn)) return; pending.value = null; emit("changed"); await load(); }
+  catch (cause) { if (!liveness.isCurrent(turn)) return; if (cause instanceof ReviewApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function pages(delta: number) { if (locked.value || page.value + delta < 1 || (page.value + delta - 1) * 20 >= total.value) return; page.value += delta; await load(); }
-watch(identity, () => { epoch++; clear(); error.value = ""; page.value = 1; if (session.user?.roles.includes("ASSET_ADMIN")) void load(); }, { immediate: true, flush: "sync" });
-onBeforeUnmount(() => { live = false; epoch++; clear(); });
+watch(identity, () => { liveness.invalidate(); clear(); error.value = ""; page.value = 1; if (session.user?.roles.includes("ASSET_ADMIN")) void load(); }, { immediate: true, flush: "sync" });
+onBeforeUnmount(() => { clear(); });
 </script>
 <template>
   <section class="fams-card fams-stack" aria-label="证据处置与最终采信">

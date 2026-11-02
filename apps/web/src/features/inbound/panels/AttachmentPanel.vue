@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, shallowRef, watch } from "vue";
+import { computed, ref, shallowRef, useTemplateRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { listAttachments, uploadAttachment, correctAttachment, downloadAttachment, scanStatusLabels as scanText, type Attachment } from "@/api/attachment";
 import type { InboundReceipt } from "@/features/inbound/api";
 
@@ -13,11 +14,12 @@ const notice = shallowRef("");
 const noticeGood = shallowRef(false);
 const busy = shallowRef(false);
 const loading = shallowRef(false);
-const fileInput = ref<HTMLInputElement | null>(null);
+const fileInput = useTemplateRef<HTMLInputElement>("fileInput");
 const correction = ref<Attachment | null>(null);
 const correctionReason = shallowRef("");
 const pending = ref<{ receiptId: string; version: number; file: File; key: string;
   previousObjectId?: string; reason?: string } | null>(null);
+const liveness = useRequestLiveness(() => [props.receipt.id]);
 
 function chooseCorrection(item: Attachment | null): void {
   if (busy.value || props.disabled) return;
@@ -25,7 +27,6 @@ function chooseCorrection(item: Attachment | null): void {
   error.value = ""; notice.value = "";
   if (fileInput.value) fileInput.value.value = "";
 }
-let generation = 0;
 const writable = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR")
   && ((props.receipt.status === "DRAFT" && props.receipt.createdBy.id === session.user.id)
     || (props.receipt.status === "WAREHOUSE_PROCESSING"
@@ -50,15 +51,15 @@ const rows = computed(() => items.value.map((item) => ({
 })));
 
 async function refresh(): Promise<void> {
-  const current = ++generation;
+  const turn = liveness.begin();
   const id = props.receipt.id;
   loading.value = true; error.value = "";
   try {
     const result = await listAttachments(id);
-    if (generation === current && props.receipt.id === id) items.value = result;
+    if (liveness.isCurrent(turn)) items.value = result;
   } catch (cause) {
-    if (generation === current) error.value = cause instanceof Error ? cause.message : "附件列表加载失败";
-  } finally { if (generation === current) loading.value = false; }
+    if (liveness.isCurrent(turn)) error.value = cause instanceof Error ? cause.message : "附件列表加载失败";
+  } finally { if (liveness.isCurrent(turn)) loading.value = false; }
 }
 
 function selectFile(event: Event): void {

@@ -11,6 +11,7 @@ import InventoryReviewPanel from "@/features/inventory/panels/InventoryReviewPan
 import { BusinessApiError, businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
 import { inventoryTaskStatusLabels as labels } from "@/features/inventory/api";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness, type LivenessToken } from "@/composables/useRequestLiveness";
 
 type Range = { usingOrganizationId: string | null; owningOrganizationId: string | null; categoryId: string | null;
   warehouseId: string | null; locationId: string | null; lifecycle: string | null; exception: string | null; responsibleEmployeeId: string | null };
@@ -30,6 +31,8 @@ const locked = computed(() => busy.value || !!pending.value);
 const executors = ref<Choice[]>([]);
 const selectedItems = ref<string[]>([]); const executor = shallowRef(""); const reason = shallowRef(""); const recheck = shallowRef(false);
 const preview = ref<{ count: number; digest: string } | null>(null);
+const identity = computed(() => JSON.stringify([props.id, session.user?.id, session.user?.roles, session.csrfToken]));
+const liveness = useRequestLiveness(() => [identity.value]);
 const manageable = computed(() => !!detail.value && ["READY", "IN_PROGRESS", "WAITING_REVIEW"].includes(detail.value.task.task_status));
 const startsAtText = computed(() => (detail.value ? new Date(detail.value.task.starts_at).toLocaleString() : ""));
 const dueAtText = computed(() => (detail.value ? new Date(detail.value.task.due_at).toLocaleString() : ""));
@@ -57,35 +60,41 @@ const confirmHints: Record<Exclude<Confirm, "publish">, string> = { copy: "复�
 const confirmHint = computed(() => confirmKind.value === "publish"
   ? `发布并冻结 ${preview.value?.count ?? 0} 项应盘集合？后续资产流转不会改写快照。`
   : confirmHints[confirmKind.value ?? "copy"]);
-async function open() {
-  detail.value = await businessRequest<Detail>(`/inventory-tasks/${encodeURIComponent(props.id)}?page=${itemPage.value}&pageSize=20`);
+async function open(turn: LivenessToken) {
+  const result = await businessRequest<Detail>(`/inventory-tasks/${encodeURIComponent(props.id)}?page=${itemPage.value}&pageSize=20`);
+  if (!liveness.isCurrent(turn)) return;
+  detail.value = result;
   selectedItems.value = []; preview.value = null;
 }
 async function refresh() {
-  if (busy.value) return; busy.value = true; error.value = "";
-  try { await open(); }
-  catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
+  if (busy.value) return; const turn = liveness.begin(); busy.value = true; error.value = "";
+  try { await open(turn); }
+  catch (e) { if (liveness.isCurrent(turn)) error.value = businessMessage(e); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function send(path: string, body: unknown, version: number) {
   if (busy.value || pending.value && pending.value.path !== path) return;
   pending.value ??= { path, key: crypto.randomUUID(), version, body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown };
+  const turn = liveness.begin();
   busy.value = true; error.value = "";
   try {
     const result = await businessRequest<Task>(pending.value.path, pending.value);
+    if (!liveness.isCurrent(turn)) return;
     pending.value = null;
     if (result.task_status === "DELETED") await router.push("/inventory-tasks");
     else if (result.id !== props.id) { itemPage.value = 1; await router.push(`/inventory-tasks/${encodeURIComponent(result.id)}`); }
-    else await open();
+    else await open(turn);
   } catch (e) {
+    if (!liveness.isCurrent(turn)) return;
     error.value = businessMessage(e);
     if (e instanceof BusinessApiError && e.status >= 400 && e.status < 500) pending.value = null;
-  } finally { busy.value = false; }
+  } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function previewPublishedRange() {
   const task = detail.value?.task; if (!task?.range_json || locked.value) return;
-  busy.value = true; error.value = "";
-  try { preview.value = await businessRequest<{ count: number; digest: string }>("/inventory-tasks/preview", { path: "/inventory-tasks/preview", key: crypto.randomUUID(), version: 0, body: task.range_json }); }
-  catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
+  const turn = liveness.begin(); busy.value = true; error.value = "";
+  try { const result = await businessRequest<{ count: number; digest: string }>("/inventory-tasks/preview", { path: "/inventory-tasks/preview", key: crypto.randomUUID(), version: 0, body: task.range_json });
+    if (liveness.isCurrent(turn)) preview.value = result; }
+  catch (e) { if (liveness.isCurrent(turn)) error.value = businessMessage(e); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function openConfirm(kind: Confirm): void {
   const task = detail.value?.task;
@@ -121,19 +130,22 @@ function runConfirm(): void {
 }
 async function pages(delta: number) {
   if (locked.value) return;
+  const turn = liveness.begin();
   itemPage.value += delta; busy.value = true;
-  try { await open(); } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
+  try { await open(turn); } catch (e) { if (liveness.isCurrent(turn)) error.value = businessMessage(e); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 watch(() => props.id, () => { itemPage.value = 1; void refresh(); });
 onMounted(async () => {
+  const turn = liveness.begin();
   busy.value = true;
   try {
-    await open();
+    await open(turn);
     if (admin.value) {
       let p = 1; let rows: Choice[];
-      do { rows = await businessRequest<Choice[]>(`/inventory-tasks/executors?page=${p++}&pageSize=100`); executors.value.push(...rows); } while (rows.length === 100);
+      do { rows = await businessRequest<Choice[]>(`/inventory-tasks/executors?page=${p++}&pageSize=100`);
+        if (liveness.isCurrent(turn)) executors.value.push(...rows); } while (rows.length === 100);
     }
-  } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
+  } catch (e) { if (liveness.isCurrent(turn)) error.value = businessMessage(e); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 });
 </script>
 <template>

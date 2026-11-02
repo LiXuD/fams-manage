@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { businessMessage, businessRequest } from "@/api/business";
 import type { BusinessMutation } from "@/api/business";
 import type { TransferAsset, TransferChoice, TransferTarget } from "@fams/api-types/transfer";
@@ -23,6 +24,7 @@ const previewPlace = computed(() => place(currentAsset.value?.currentLocationId)
 const draftRows = computed(() => draftItems.value.map(item => ({ ...item,
   line: `${item.asset.assetCode}：${place(item.asset.currentLocationId)} → ${place(item.target.locationId)}；${custodyName(item.asset.custodyType)} → ${custodyName(item.target.custodyType)}；${organization(item.target.usingOrganizationId)}` })));
 let pending: BusinessMutation | null = null;
+const liveness = useRequestLiveness(() => [using.value]);
 
 async function catalog(kind: string, org?: string) {
   const result: TransferChoice[] = []; let p = 1, part: TransferChoice[];
@@ -31,13 +33,17 @@ async function catalog(kind: string, org?: string) {
   return result;
 }
 async function load() {
-  assets.value = (await businessRequest<{ items: TransferAsset[] }>("/transfers/eligible-assets?page=1&pageSize=20")).items;
+  const turn = liveness.begin();
+  const result = await businessRequest<{ items: TransferAsset[] }>("/transfers/eligible-assets?page=1&pageSize=20");
+  if (liveness.isCurrent(turn)) assets.value = result.items;
 }
 async function refresh() {
   if (busy.value) return; busy.value = true; error.value = "";
   try {
     await load();
-    [organizations.value, warehouses.value, locations.value] = await Promise.all([catalog("organization"), catalog("warehouse"), catalog("location")]);
+    const turn = liveness.begin();
+    const [orgs, whs, locs] = await Promise.all([catalog("organization"), catalog("warehouse"), catalog("location")]);
+    if (liveness.isCurrent(turn)) { organizations.value = orgs; warehouses.value = whs; locations.value = locs; }
     pending = null; retryable.value = false;
   } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
@@ -68,7 +74,11 @@ async function chooseAsset() {
 async function chooseOrganization(reset = true) {
   if (reset) employee.value = ""; employees.value = []; if (!using.value) return;
   busy.value = true;
-  try { employees.value = await catalog("employee", using.value); }
+  const turn = liveness.begin();
+  try {
+    const result = await catalog("employee", using.value);
+    if (liveness.isCurrent(turn)) employees.value = result;
+  }
   catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 function addItem() {

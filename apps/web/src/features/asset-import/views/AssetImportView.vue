@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import {
   downloadImportResult, downloadImportTemplate, downloadPreflightReport,
   getImport, importColumns, importRows,
@@ -39,6 +40,7 @@ const busy = shallowRef(false);
 const review = ref<ImportReview | null>(null);
 const rollback = ref<ImportRollback | null>(null);
 const rollbackReason = shallowRef("");
+const liveness = useRequestLiveness();
 
 const previewableStatuses = ["UPLOADED", "PREVIEWED"];
 const resultDownloadableStatuses = ["PUBLISHED", "ROLLED_BACK"];
@@ -88,16 +90,25 @@ function selectedFile(event: Event): void {
 }
 
 async function loadBatch(id: string): Promise<void> {
-  ticket.value = await getImport(id);
-  review.value = await ownImportReview(id).catch((cause: unknown) => {
+  const turn = liveness.begin();
+  const loaded = await getImport(id);
+  if (!liveness.isCurrent(turn)) return;
+  ticket.value = loaded;
+  const loadedReview = await ownImportReview(id).catch((cause: unknown) => {
     if (cause instanceof Error && "code" in cause && cause.code === "ASSET_IMPORT_REVIEW_NOT_FOUND") return null;
     throw cause;
   });
-  rollback.value = await ownImportRollback(id).catch((cause: unknown) => {
+  if (!liveness.isCurrent(turn)) return;
+  review.value = loadedReview;
+  const loadedRollback = await ownImportRollback(id).catch((cause: unknown) => {
     if (cause instanceof Error && "code" in cause && cause.code === "ASSET_IMPORT_ROLLBACK_NOT_FOUND") return null;
     throw cause;
   });
-  columns.value = await importColumns(id);
+  if (!liveness.isCurrent(turn)) return;
+  rollback.value = loadedRollback;
+  const loadedColumns = await importColumns(id);
+  if (!liveness.isCurrent(turn)) return;
+  columns.value = loadedColumns;
   mapping.value = Object.fromEntries(fields.map((field) =>
     [field.key, ticket.value?.mapping?.[field.key] ??
       (columns.value.includes(field.label) ? field.label : "")]));
@@ -105,6 +116,7 @@ async function loadBatch(id: string): Promise<void> {
     const [ready, errors] = await Promise.all([
       importRows(id, "READY", 1), importRows(id, "ERROR", 1),
     ]);
+    if (!liveness.isCurrent(turn)) return;
     readyRows.value = ready.total;
     errorRows.value = errors.total;
     rowFilter.value = errors.total > 0 ? "ERROR" : "READY";
@@ -185,10 +197,10 @@ async function preview(): Promise<void> {
 
 async function loadRows(): Promise<void> {
   if (!ticket.value) return;
+  const turn = liveness.begin();
   try {
     const result = await importRows(ticket.value.id, rowFilter.value, page.value);
-    rows.value = result.items;
-    total.value = result.total;
+    if (liveness.isCurrent(turn)) { rows.value = result.items; total.value = result.total; }
   } catch (cause) { error.value = cause instanceof Error ? cause.message : "行结果加载失败"; }
 }
 

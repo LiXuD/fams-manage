@@ -11,7 +11,7 @@ const nameFilter = shallowRef("");
 
 const canWrite = session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false;
 
-const { rows, total, page, error, refresh: load } = usePagedResourceList<AssetCard>(
+const { rows, total, page, error, restart, pages } = usePagedResourceList<AssetCard>(
   (page) => listAssets(page, code.value, nameFilter.value),
   { problem: (cause) => cause instanceof Error ? cause.message : "台账加载失败" });
 
@@ -33,7 +33,7 @@ const nextDisabled = computed(() => page.value * 20 >= total.value);
     <section v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></section>
 
     <section class="fams-panel fams-stack" aria-label="台账筛选与列表">
-      <form class="fams-field-row" @submit.prevent="page = 1; load()">
+      <form class="fams-field-row" @submit.prevent="restart()">
         <div class="fams-field">
           <label for="ledger-code">资产编码</label>
           <input id="ledger-code" class="fams-control" v-model="code" placeholder="编码包含" />
@@ -83,10 +83,10 @@ const nextDisabled = computed(() => page.value * 20 >= total.value);
         <span class="fams-pagination-summary">共 {{ total }} 项</span>
         <div class="fams-pagination-actions">
           <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled"
-            @click="page--; load()">上一页</button>
+            @click="pages(-1)">上一页</button>
           <span class="fams-pagination-page">第 {{ page }} 页</span>
           <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextDisabled"
-            @click="page++; load()">下一页</button>
+            @click="pages(1)">下一页</button>
         </div>
       </div>
     </section>

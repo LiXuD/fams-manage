@@ -4,15 +4,15 @@ import { useSessionStore } from "@/auth/sessionStore";
 import { AuthApiError } from "@/auth/api";
 import { formatProxyTime } from "@/features/exception/time";
 import AppChrome from "@/components/AppChrome.vue";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { BusinessApiError, businessMessage, businessRequest } from "@/api/business";
 
 interface Review { noticeId: string; executionId: string; businessId: string; businessType: string;
   recipient: string; reason: string; createdAt: string }
 const session = useSessionStore();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken]));
-let generation = 0, live = true;
-const current = (epoch: number, owner: string) => live && epoch === generation && owner === identity.value;
-function clear() { generation++; rows.value = []; page.value = 1; total.value = 0; busy.value = false; }
+const liveness = useRequestLiveness(() => [identity.value]);
+function clear() { liveness.invalidate(); rows.value = []; page.value = 1; total.value = 0; busy.value = false; }
 const rows = ref<Review[]>([]); const busy = shallowRef(false); const error = shallowRef("");
 const page = shallowRef(1); const total = shallowRef(0);
 interface ReviewRow extends Review { createdAtText: string; businessPath: string }
@@ -23,18 +23,18 @@ const prevDisabled = computed(() => busy.value || page.value <= 1);
 const nextDisabled = computed(() => busy.value || page.value * 20 >= total.value);
 async function refresh(delta = 0) {
   if (busy.value) return;
-  const epoch = ++generation, owner = identity.value;
+  const turn = liveness.begin();
   busy.value = true; error.value = ""; page.value += delta;
   try {
     const result = await businessRequest<{ items: Review[]; total: number }>(`/business-result-notices/review-requests?page=${page.value}&pageSize=20`);
-    if (current(epoch, owner)) { rows.value = result.items; total.value = result.total; }
-  } catch (e) { if (current(epoch, owner)) {
+    if (liveness.isCurrent(turn)) { rows.value = result.items; total.value = result.total; }
+  } catch (e) { if (liveness.isCurrent(turn)) {
     if ((e instanceof BusinessApiError || e instanceof AuthApiError) && [401, 403, 404].includes(e.status)) clear();
     error.value = businessMessage(e);
-  } } finally { if (current(epoch, owner)) busy.value = false; }
+  } } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 watch(identity, () => { clear(); error.value = ""; if (session.user?.roles.includes("ASSET_ADMIN")) void refresh(); }, { immediate: true, flush: "sync" });
-onBeforeUnmount(() => { live = false; clear(); });
+onBeforeUnmount(() => { clear(); });
 </script>
 <template>
   <AppChrome>

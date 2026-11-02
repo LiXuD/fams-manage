@@ -3,12 +3,14 @@ import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { activeReferences, listAssets, type AssetCard, type AssetReference } from "@/features/asset/api";
 import { createReceipt, getReceipt, updateReceipt, type InboundReceipt } from "@/features/inbound/api";
 
 const props = defineProps<{ id?: string }>();
 const router = useRouter();
 const session = useSessionStore();
+const liveness = useRequestLiveness(() => [props.id]);
 const warehouseRole = session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false;
 const editing = ref<InboundReceipt | null>(null);
 const assets = ref<AssetCard[]>([]);
@@ -52,16 +54,19 @@ async function create(): Promise<void> {
 
 onMounted(async () => {
   if (!warehouseRole) return;
+  const turn = liveness.begin();
   busy.value = true;
   try {
     const [assetPage, warehousePage, locationPage] = await Promise.all([
       listAssets(), activeReferences("/warehouses"), activeReferences("/locations"),
     ]);
+    if (!liveness.isCurrent(turn)) return;
     assets.value = assetPage.items.filter((item) => item.cardStage === "DRAFT");
     warehouses.value = warehousePage.items;
     locations.value = locationPage.items;
     if (props.id && /^[1-9][0-9]{0,18}$/.test(props.id)) {
       const receipt = await getReceipt(props.id);
+      if (!liveness.isCurrent(turn)) return;
       editing.value = receipt;
       businessDate.value = receipt.businessDate;
       assetIds.value = receipt.items.map((item) => item.asset.id);

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { RepairApiError, repairProblem, repairRequest, repairStates, type Repair, type RepairAsset, type RepairMutation } from "@/features/repair/api";
 const props = defineProps<{ blocked?: boolean }>();
 const emit = defineEmits<{ created: [repair: Repair]; busyChange: [value: boolean] }>();
@@ -14,9 +15,8 @@ const rows = ref<SourceRow[]>([]), total = shallowRef(0), page = shallowRef(1), 
 const fault = shallowRef(""), impact = ref("MEDIUM"), error = shallowRef(""), busy = shallowRef(false);
 const prepared = ref<RepairMutation | null>(null), pending = ref<RepairMutation | null>(null);
 const locked = computed(() => busy.value || !!prepared.value || !!pending.value);
-let generation = 0, live = true;
-const current = (epoch: number, owner: string) => live && generation === epoch && identity.value === owner;
-function clear() { generation++; rows.value = []; total.value = 0; page.value = 1; source.value = null; fault.value = "";
+const liveness = useRequestLiveness(() => [identity.value]);
+function clear() { liveness.invalidate(); rows.value = []; total.value = 0; page.value = 1; source.value = null; fault.value = "";
   prepared.value = null; pending.value = null; busy.value = false; }
 function failure(cause: unknown, mutation = false) {
   if (cause instanceof RepairApiError) {
@@ -27,17 +27,17 @@ function failure(cause: unknown, mutation = false) {
 }
 async function refresh(delta = 0) {
   if (busy.value || props.blocked || delta && locked.value || page.value + delta < 1) return;
-  const epoch = ++generation, owner = identity.value; busy.value = true; error.value = ""; page.value += delta;
+  const turn = liveness.begin(); busy.value = true; error.value = ""; page.value += delta;
   try { const value = await repairRequest<{ items: SourceRow[]; total: number }>(`/return-sources?page=${page.value}&pageSize=20`);
-    if (current(epoch, owner)) { rows.value = value.items; total.value = value.total; if (!pending.value && !prepared.value) source.value = null; }
-  } catch (cause) { if (current(epoch, owner)) failure(cause); } finally { if (current(epoch, owner)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { rows.value = value.items; total.value = value.total; if (!pending.value && !prepared.value) source.value = null; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function select(id: string) {
   if (locked.value || props.blocked) return;
-  const epoch = ++generation, owner = identity.value; busy.value = true; source.value = null; error.value = "";
+  const turn = liveness.begin(); busy.value = true; source.value = null; error.value = "";
   try { const value = await repairRequest<Source>(`/return-sources/${id}`);
-    if (current(epoch, owner)) { source.value = value; fault.value = value.inspectionReason; }
-  } catch (cause) { if (current(epoch, owner)) failure(cause); } finally { if (current(epoch, owner)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { source.value = value; fault.value = value.inspectionReason; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function prepare() {
   if (locked.value || props.blocked || !source.value || fault.value.trim().length < 3) return;
@@ -47,15 +47,15 @@ function prepare() {
 }
 async function send() {
   if (busy.value || props.blocked || !pending.value) return;
-  const epoch = ++generation, owner = identity.value, operation = pending.value; busy.value = true; error.value = "";
+  const turn = liveness.begin(), operation = pending.value; busy.value = true; error.value = "";
   try { const result = await repairRequest<Repair>(operation.path, operation);
-    if (current(epoch, owner)) { pending.value = null; source.value = null; emit("created", result); }
-  } catch (cause) { if (current(epoch, owner)) failure(cause, true); } finally { if (current(epoch, owner)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { pending.value = null; source.value = null; emit("created", result); }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause, true); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function confirm() { if (busy.value || props.blocked || !prepared.value) return; pending.value = prepared.value; prepared.value = null; await send(); }
 watch(identity, () => { clear(); error.value = ""; }, { immediate: true, flush: "sync" });
 watch(locked, value => emit("busyChange", value), { immediate: true, flush: "sync" });
-onBeforeUnmount(() => { live = false; clear(); emit("busyChange", false); });
+onBeforeUnmount(() => { clear(); emit("busyChange", false); });
 const sourceRows = computed(() => rows.value.map(row => ({ ...row,
   followupStatusText: row.followup_status === 'PENDING' ? '待接续' : row.followup_status === 'CLOSED' ? '已实际完成' : '维修处理中',
   repairStateText: repairStates[row.repair_status || ''] || '原维修',

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import {
   decideImportReview, decideImportRollback, pendingImportReviews, pendingImportRollbacks,
   reviewImportRows, type ImportRow, type PendingImportReview, type PendingImportRollback,
@@ -21,6 +22,7 @@ const rollbackReason = shallowRef("");
 const error = shallowRef("");
 const notice = shallowRef("");
 const busy = shallowRef(false);
+const liveness = useRequestLiveness();
 
 const REVIEW_PAGE_SIZE = 50;
 
@@ -46,9 +48,11 @@ const rollbackPrevDisabled = computed(() => rollbackPage.value <= 1);
 const rollbackNextDisabled = computed(() => rollbacks.value.length < REVIEW_PAGE_SIZE);
 
 async function loadPending(): Promise<void> {
+  const turn = liveness.begin();
   const [r, b] = await Promise.all([
     pendingImportReviews(reviewPage.value), pendingImportRollbacks(rollbackPage.value),
   ]);
+  if (!liveness.isCurrent(turn)) return;
   reviews.value = r;
   rollbacks.value = b;
 }
@@ -61,11 +65,11 @@ async function inspect(item: PendingImportReview): Promise<void> {
 }
 async function loadRows(): Promise<void> {
   if (!selected.value) return;
+  const turn = liveness.begin();
   error.value = "";
   try {
     const result = await reviewImportRows(selected.value.batchId, rowStatus.value, rowPage.value);
-    rows.value = result.items;
-    rowTotal.value = result.total;
+    if (liveness.isCurrent(turn)) { rows.value = result.items; rowTotal.value = result.total; }
   } catch (cause) { error.value = cause instanceof Error ? cause.message : "行数据加载失败"; }
 }
 async function chooseRows(status: "READY" | "ERROR"): Promise<void> {

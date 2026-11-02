@@ -3,6 +3,7 @@ import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { BusinessApiError, businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { exceptionLabels, lifecycleLabels } from "@/features/asset/api";
 
 type Range = { usingOrganizationId: string | null; owningOrganizationId: string | null; categoryId: string | null;
@@ -18,6 +19,7 @@ const range = ref<Range>(emptyRange());
 const catalogs = ref<Record<string, Choice[]>>({}); const version = shallowRef(0);
 const busy = shallowRef(false); const error = shallowRef(""); const pending = ref<BusinessMutation | null>(null);
 const locked = computed(() => busy.value || !!pending.value);
+const liveness = useRequestLiveness(() => [props.id]);
 type ChoiceRow = { id: string; name: string; suffixText: string };
 const catalogRows = computed<Record<string, ChoiceRow[]>>(() => Object.fromEntries(
   Object.entries(catalogs.value).map(([kind, rows]): [string, ChoiceRow[]] => [kind, rows.map((c) => ({
@@ -51,13 +53,16 @@ function save() {
   void send(props.id ? `/inventory-tasks/${props.id}/revision` : "/inventory-tasks", body, props.id ? version.value : 0);
 }
 onMounted(async () => {
+  const turn = liveness.begin();
   busy.value = true;
   try {
     if (props.id) {
       const result = await businessRequest<{ task: Task }>(`/inventory-tasks/${encodeURIComponent(props.id)}?page=1&pageSize=1`);
-      version.value = result.task.version; name.value = result.task.name;
-      start.value = toLocal(result.task.starts_at); due.value = toLocal(result.task.due_at);
-      range.value = { ...emptyRange(), ...result.task.range_json };
+      if (liveness.isCurrent(turn)) {
+        version.value = result.task.version; name.value = result.task.name;
+        start.value = toLocal(result.task.starts_at); due.value = toLocal(result.task.due_at);
+        range.value = { ...emptyRange(), ...result.task.range_json };
+      }
     }
     for (const kind of ["organization", "category", "warehouse", "location", "employee"]) {
       const all: Choice[] = []; let p = 1; let rows: Choice[];
@@ -65,9 +70,9 @@ onMounted(async () => {
         const path = `/inventory-tasks/catalog/${kind}?page=${p++}&pageSize=200`;
         rows = (await businessRequest<{ items: Choice[] }>(path)).items; all.push(...rows);
       } while (rows.length === 200);
-      catalogs.value[kind] = all;
+      if (liveness.isCurrent(turn)) catalogs.value[kind] = all;
     }
-  } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
+  } catch (e) { if (liveness.isCurrent(turn)) error.value = businessMessage(e); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 });
 </script>
 <template>

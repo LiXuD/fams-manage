@@ -3,6 +3,7 @@ import { computed, onMounted, ref, shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import AssetReturnReassignment from "@/features/asset-return/panels/AssetReturnReassignment.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness, type LivenessToken } from "@/composables/useRequestLiveness";
 import { businessMessage, businessRequest } from "@/api/business";
 import { inspectionLabels } from "@/features/asset-return/api";
 import { loanLabels as labels } from "@/features/loan/api";
@@ -37,14 +38,20 @@ const followupRows = computed(() => (selected.value?.followups ?? []).map((follo
     : followup.repairStatus === "REJECTED" || followup.repairStatus === "CANCELLED" ? "原维修未执行，源义务仍待处理" : "尚未实际完成",
 })));
 let pending: BusinessMutation | null = null;
+const identity = computed(() => JSON.stringify([props.id, session.user?.id, session.user?.roles, session.csrfToken]));
+const liveness = useRequestLiveness(() => [identity.value]);
 
-async function open() { selected.value = await businessRequest<AssetReturn>("/asset-returns/" + props.id); }
+async function open(turn: LivenessToken = liveness.begin()) {
+  const result = await businessRequest<AssetReturn>("/asset-returns/" + props.id);
+  if (!liveness.isCurrent(turn)) return;
+  selected.value = result;
+}
 async function refresh() {
-  if (busy.value) return; busy.value = true; error.value = "";
+  if (busy.value) return; const turn = liveness.begin(); busy.value = true; error.value = "";
   try {
-    await open();
-    pending = null; retryable.value = false;
-  } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
+    await open(turn);
+    if (liveness.isCurrent(turn)) { pending = null; retryable.value = false; }
+  } catch (e) { if (liveness.isCurrent(turn)) error.value = businessMessage(e); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function mutate(path: string, version: number, body?: unknown) {
   if (busy.value) return;
@@ -83,16 +90,20 @@ async function catalog(kind: string) {
   return rows;
 }
 onMounted(async () => {
+  const turn = liveness.begin();
   busy.value = true;
   try {
     if (!/^[1-9][0-9]{0,18}$/.test(props.id)) { error.value = "没有当前记录或操作的权限。"; return; }
-    await open();
-    if (warehouse.value) { [warehouses.value, locations.value] = await Promise.all([catalog("warehouse"), catalog("location")]); }
-    if (selected.value && new URLSearchParams(window.location.search).get("saved")) {
+    await open(turn);
+    if (warehouse.value) {
+      const [nextWarehouses, nextLocations] = await Promise.all([catalog("warehouse"), catalog("location")]);
+      if (liveness.isCurrent(turn)) { warehouses.value = nextWarehouses; locations.value = nextLocations; }
+    }
+    if (liveness.isCurrent(turn) && selected.value && new URLSearchParams(window.location.search).get("saved")) {
       notice.value = "操作已保存。";
       window.history.replaceState(null, "", window.location.pathname);
     }
-  } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
+  } catch (e) { if (liveness.isCurrent(turn)) error.value = businessMessage(e); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 });
 </script>
 

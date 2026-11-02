@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { ReviewApiError } from "@/features/inventory/api";
 import { InventoryPhotoUnavailable, listInventoryPhotos, readInventoryPhoto, readablePhoto, type PhotoReference } from "@/features/inventory/photos";
 import FamsMediaPreview from "@/components/FamsMediaPreview.vue";
@@ -15,10 +16,9 @@ const actionText = computed(() => loaded.value ? "刷新原始照片资料" : "�
 const previewAlt = computed(() => `原始观察照片：${filename.value}`);
 const photoRows = computed(() => references.value.map((row, index) => ({ objectId: row.objectId, source: row,
   order: index + 1, readable: !!row.photo && readablePhoto(row.photo) })));
-let live = true, generation = 0;
-const current = (epoch: number, captured: string) => live && epoch === generation && captured === scope.value;
+const liveness = useRequestLiveness(() => [scope.value]);
 function closePreview() { if (preview.value) URL.revokeObjectURL(preview.value); preview.value = ""; filename.value = ""; }
-function clear() { generation++; closePreview(); references.value = []; loaded.value = false; busy.value = false; error.value = ""; }
+function clear() { liveness.invalidate(); closePreview(); references.value = []; loaded.value = false; busy.value = false; error.value = ""; }
 function failed(cause: unknown) {
   if (cause instanceof InventoryPhotoUnavailable) {
     references.value = props.photoIds.map(objectId => ({ objectId, photo: null })); loaded.value = true; error.value = cause.message; return;
@@ -32,26 +32,26 @@ function failed(cause: unknown) {
 }
 async function load() {
   if (busy.value) return;
-  const epoch = ++generation, captured = scope.value;
+  const turn = liveness.begin();
   closePreview(); references.value = []; loaded.value = false; busy.value = true; error.value = "";
   try {
-    const rows = await listInventoryPhotos(props.taskId, props.eventId, props.photoIds, () => current(epoch, captured));
-    if (current(epoch, captured)) { references.value = rows; loaded.value = true; }
-  } catch (cause) { if (current(epoch, captured)) failed(cause); }
-  finally { if (current(epoch, captured)) busy.value = false; }
+    const rows = await listInventoryPhotos(props.taskId, props.eventId, props.photoIds, () => liveness.isCurrent(turn));
+    if (liveness.isCurrent(turn)) { references.value = rows; loaded.value = true; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failed(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function open(row: PhotoReference) {
   if (busy.value || !row.photo || !readablePhoto(row.photo) || !references.value.includes(row)) return;
-  const epoch = ++generation, captured = scope.value, photo = row.photo;
+  const turn = liveness.begin(), photo = row.photo;
   busy.value = true; error.value = ""; closePreview();
   try {
-    const blob = await readInventoryPhoto(props.taskId, props.eventId, photo, () => current(epoch, captured));
-    if (current(epoch, captured)) { preview.value = URL.createObjectURL(blob); filename.value = photo.filename; }
-  } catch (cause) { if (current(epoch, captured)) failed(cause); }
-  finally { if (current(epoch, captured)) busy.value = false; }
+    const blob = await readInventoryPhoto(props.taskId, props.eventId, photo, () => liveness.isCurrent(turn));
+    if (liveness.isCurrent(turn)) { preview.value = URL.createObjectURL(blob); filename.value = photo.filename; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failed(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 watch(scope, clear, { flush: "sync" });
-onBeforeUnmount(() => { live = false; clear(); });
+onBeforeUnmount(() => { clear(); });
 </script>
 <template>
   <section class="fams-card fams-stack" aria-label="原始观察照片">

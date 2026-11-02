@@ -4,19 +4,21 @@ import RequisitionReassignment from "@/features/requisition/panels/RequisitionRe
 import AppChrome from "@/components/AppChrome.vue";
 import RequisitionDemandForm from "./../panels/RequisitionDemandForm.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { allocationStatusLabels, handoverEventLabels, loadRequisitionCatalogs, requisitionLabels as labels, requisitionMessage, requisitionRequest } from "@/features/requisition/api";
 import type { Requisition, RequisitionAllocation, RequisitionChoice, RequisitionDemand, RequisitionDemandInput,
   RequisitionInventory } from "@fams/api-types/requisition";
 
 const props = defineProps<{ id: string }>();
 const session = useSessionStore();
+const liveness = useRequestLiveness(() => [props.id]);
 const selected = ref<Requisition | null>(null);
 const busy = shallowRef(false); const error = shallowRef(""); const notice = shallowRef("");
 const catalogs = ref<Record<string, RequisitionChoice[]>>({});
 const canShared = shallowRef(false); const selfEmployee = shallowRef(""); const selfOrg = shallowRef("");
 const changeVisible = shallowRef(false);
 const observedCode = shallowRef(""); const destination = shallowRef(""); const evidence = shallowRef(""); const returned = shallowRef(false);
-const reason = shallowRef(""); const shortageReason = ref("STOCK_SHORTAGE"); const shortageQuantity = shallowRef(1);
+const reason = shallowRef(""); const shortageReason = shallowRef("STOCK_SHORTAGE"); const shortageQuantity = shallowRef(1);
 const inventory = ref<RequisitionInventory | null>(null); const inventoryDemand = ref<RequisitionDemand | null>(null);
 const inventoryPage = shallowRef(1); const replacementId = shallowRef("");
 let pending: { path: string; method: string; key: string; version: number; body?: unknown } | null = null;
@@ -108,7 +110,10 @@ const allocationRows = computed<AllocationRow[]>(() => (selected.value?.allocati
 
 async function open() {
   if (!/^[1-9][0-9]{0,18}$/.test(props.id)) { error.value = "没有此申请或操作的当前权限。"; return; }
-  selected.value = await requisitionRequest<Requisition>("/" + props.id);
+  const turn = liveness.begin();
+  const result = await requisitionRequest<Requisition>("/" + props.id);
+  if (!liveness.isCurrent(turn)) return;
+  selected.value = result;
   inventory.value = null;
 }
 async function refresh() {
@@ -137,9 +142,13 @@ function submitChange(payload: { demands: RequisitionDemandInput[]; requestType:
 async function retry() { if (pending) await mutate(pending.path); }
 async function findInventory(demand: RequisitionDemand, nextPage = 1) {
   if (busy.value) return; busy.value = true; error.value = "";
+  const turn = liveness.begin();
   try {
-    inventory.value = await requisitionRequest<RequisitionInventory>(`/${selected.value!.id}/demands/${demand.id}/inventory?page=${nextPage}&pageSize=20`);
-    inventoryDemand.value = demand; inventoryPage.value = nextPage;
+    const result = await requisitionRequest<RequisitionInventory>(`/${selected.value!.id}/demands/${demand.id}/inventory?page=${nextPage}&pageSize=20`);
+    if (liveness.isCurrent(turn)) {
+      inventory.value = result;
+      inventoryDemand.value = demand; inventoryPage.value = nextPage;
+    }
   } catch (e) { error.value = requisitionMessage(e); } finally { busy.value = false; }
 }
 function openInventory(demand: RequisitionDemand): void {
@@ -165,10 +174,13 @@ async function handover(allocation: RequisitionAllocation, action: "deliver" | "
 }
 onMounted(async () => {
   busy.value = true;
+  const turn = liveness.begin();
   try {
     const loaded = await loadRequisitionCatalogs();
-    catalogs.value = loaded.catalogs; canShared.value = loaded.canShared;
-    selfEmployee.value = loaded.employeeId; selfOrg.value = loaded.organizationId;
+    if (liveness.isCurrent(turn)) {
+      catalogs.value = loaded.catalogs; canShared.value = loaded.canShared;
+      selfEmployee.value = loaded.employeeId; selfOrg.value = loaded.organizationId;
+    }
     await open();
     if (selected.value && new URLSearchParams(window.location.search).get("saved")) {
       notice.value = "操作已保存。";

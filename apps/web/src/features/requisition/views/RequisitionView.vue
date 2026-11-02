@@ -7,7 +7,7 @@ import type { RequisitionPage, RequisitionSummary } from "@fams/api-types/requis
 
 const status = shallowRef("");
 
-const { rows, busy, error, page, total, refresh } = usePagedResourceList<RequisitionSummary>(
+const { rows, busy, error, page, total, refresh, restart, pages } = usePagedResourceList<RequisitionSummary>(
   (page) => requisitionRequest<RequisitionPage>(
     `?page=${page}&pageSize=20${status.value ? "&status=" + status.value : ""}`),
   { problem: requisitionMessage });
@@ -29,7 +29,7 @@ const nextPageDisabled = computed<boolean>(() => busy.value || page.value * 20 >
         <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="refresh">刷新结果</button>
         <label class="fams-field">
           <span class="fams-field-label">状态筛选</span>
-          <select class="fams-control" v-model="status" :disabled="busy" @change="page = 1; refresh()">
+          <select class="fams-control" v-model="status" :disabled="busy" @change="restart()">
             <option value="">全部</option><option v-for="(label, code) in labels" :key="code" :value="code">{{ label }}</option></select>
         </label>
       </div>
@@ -57,10 +57,10 @@ const nextPageDisabled = computed<boolean>(() => busy.value || page.value * 20 >
         <span class="fams-pagination-summary">共 {{ total }} 条</span>
         <div class="fams-pagination-actions">
           <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevPageDisabled"
-            @click="page--; refresh()">上一页</button>
+            @click="pages(-1)">上一页</button>
           <span class="fams-pagination-page">第 {{ page }} 页</span>
           <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextPageDisabled"
-            @click="page++; refresh()">下一页</button>
+            @click="pages(1)">下一页</button>
         </div>
       </div>
     </section>

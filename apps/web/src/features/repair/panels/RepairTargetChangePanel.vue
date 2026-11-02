@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { BusinessApiError, businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
 import type { Repair, RepairReturnTarget } from "@/features/repair/api";
 const props = defineProps<{ repair: Repair; blocked?: boolean }>();
@@ -18,13 +19,12 @@ const page = shallowRef(1), total = shallowRef(0), busy = shallowRef(false), err
 const choices = ref<Choice[]>([]), kind = ref<"organization" | "employee" | "location">("organization");
 const catalogPage = shallowRef(1), catalogMore = shallowRef(false);
 const organization = ref<Choice | null>(null), employee = ref<Choice | null>(null), location = ref<Choice | null>(null);
-const custody = ref("PERSONAL"), reason = shallowRef(""), code = shallowRef(""), evidence = shallowRef(""), checked = shallowRef(false), decision = shallowRef("");
+const custody = shallowRef("PERSONAL"), reason = shallowRef(""), code = shallowRef(""), evidence = shallowRef(""), checked = shallowRef(false), decision = shallowRef("");
 const prepared = ref<BusinessMutation | null>(null), pending = ref<BusinessMutation | null>(null);
 const locked = computed(() => busy.value || !!prepared.value || !!pending.value);
-let generation = 0, live = true;
-const current = (epoch: number, owner: string) => live && epoch === generation && owner === identity.value;
+const liveness = useRequestLiveness(() => [identity.value]);
 function clear() {
-  generation++; rows.value = []; snapshot.value = null; choices.value = []; organization.value = null;
+  liveness.invalidate(); rows.value = []; snapshot.value = null; choices.value = []; organization.value = null;
   employee.value = null; location.value = null; checked.value = false; reason.value = ""; code.value = "";
   evidence.value = ""; decision.value = ""; prepared.value = null; pending.value = null;
   busy.value = false; page.value = 1; total.value = 0; catalogPage.value = 1; catalogMore.value = false;
@@ -36,35 +36,35 @@ function failure(cause: unknown) {
 async function list(delta = 0) {
   const next = page.value + delta;
   if (locked.value || props.blocked || next < 1 || delta > 0 && (next - 1) * 20 >= total.value) return;
-  const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  const turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     const result = await businessRequest<{ items: Proposal[]; total: number }>(base + "?" + type + "&businessId=" + props.repair.id + "&page=" + next + "&pageSize=20");
-    if (current(epoch, owner)) { rows.value = result.items; total.value = result.total; page.value = next; }
-  } catch (cause) { if (current(epoch, owner)) failure(cause); }
-  finally { if (current(epoch, owner)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { rows.value = result.items; total.value = result.total; page.value = next; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function begin() {
   if (locked.value || props.blocked || !props.repair.actions?.changeReturnTarget) return;
-  const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  const turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     const result = await businessRequest<Snapshot>(base + "/context?" + type + "&businessId=" + props.repair.id + "&itemId=" + props.repair.assetId);
-    if (current(epoch, owner)) { snapshot.value = result; organization.value = null; employee.value = null; location.value = null; checked.value = false; }
-  } catch (cause) { if (current(epoch, owner)) failure(cause); }
-  finally { if (current(epoch, owner)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { snapshot.value = result; organization.value = null; employee.value = null; location.value = null; checked.value = false; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function catalog(value: typeof kind.value, delta = 0) {
   const next = value === kind.value ? catalogPage.value + delta : 1;
   if (locked.value || props.blocked || next < 1 || value === "employee" && !organization.value) return;
   if (value === kind.value && delta > 0 && !catalogMore.value) return;
-  const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  const turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     const result = await businessRequest<{ items: Choice[] }>("/transfers/catalog/" + value
       + "?page=" + next + "&pageSize=20" + (value === "employee" ? "&organizationId=" + organization.value!.id : ""));
-    if (current(epoch, owner)) { kind.value = value; choices.value = result.items.filter(row => value === "location" ? row.locationType !== "BIN"
+    if (liveness.isCurrent(turn)) { kind.value = value; choices.value = result.items.filter(row => value === "location" ? row.locationType !== "BIN"
       : value !== "employee" || custody.value !== "SHARED" || row.sharedEligible);
       catalogPage.value = next; catalogMore.value = result.items.length === 20; }
-  } catch (cause) { if (current(epoch, owner)) failure(cause); }
-  finally { if (current(epoch, owner)) busy.value = false; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function choose(event: Event) {
   if (locked.value || props.blocked) return;
@@ -91,18 +91,18 @@ function decide(row: Proposal, result: "APPROVED" | "REJECTED") {
 }
 async function send() {
   if (busy.value || props.blocked || !pending.value) return;
-  const operation = pending.value, epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     await businessRequest(operation.path, operation);
-    if (current(epoch, owner)) { pending.value = null; snapshot.value = null; checked.value = false; rows.value = []; emit("changed"); }
+    if (liveness.isCurrent(turn)) { pending.value = null; snapshot.value = null; checked.value = false; rows.value = []; emit("changed"); }
   } catch (cause) {
-    if (current(epoch, owner)) { if (cause instanceof BusinessApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
-  } finally { if (current(epoch, owner)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { if (cause instanceof BusinessApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
+  } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function confirm() { if (!prepared.value || busy.value || props.blocked) return; pending.value = prepared.value; prepared.value = null; await send(); }
 watch(identity, () => { clear(); error.value = ""; }, { immediate: true, flush: "sync" });
 watch(locked, value => emit("busyChange", value), { immediate: true, flush: "sync" });
-onBeforeUnmount(() => { live = false; clear(); emit("busyChange", false); });
+onBeforeUnmount(() => { clear(); emit("busyChange", false); });
 const states: Record<string, string> = { PENDING: "待管理员决定", APPROVED: "已批准新目标", REJECTED: "已驳回" };
 const approved = computed(() => props.repair.approvedReturnTargets ?? []);
 const targetText = (target: RepairReturnTarget) => [target.employeeName, target.organizationName, target.locationName].join(" · ");

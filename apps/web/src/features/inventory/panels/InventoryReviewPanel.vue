@@ -5,13 +5,14 @@ import InventorySelectionPanel from "@/features/inventory/panels/InventorySelect
 import InventoryDifferencePanel from "@/features/inventory/panels/InventoryDifferencePanel.vue";
 import InventoryPhotoEvidence from "@/features/inventory/panels/InventoryPhotoEvidence.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import type { BusinessMutation } from "@/api/business";
 import { ReviewApiError, reviewProblems, reviewRequest, type BatchResult, type Board, type Observation, type ReviewItem } from "@/features/inventory/api";
 const props = defineProps<{ taskId: string }>();
 const emit = defineEmits<{ changed: [] }>();
 const session = useSessionStore();
 const board = ref<Board | null>(null); const page = shallowRef(1); const selected = ref<string[]>([]);
-const reason = ref("已核对本轮现场正常观察"); const busy = shallowRef(false); const error = shallowRef("");
+const reason = shallowRef("已核对本轮现场正常观察"); const busy = shallowRef(false); const error = shallowRef("");
 const pending = ref<BusinessMutation | null>(null); const result = ref<BatchResult | null>(null);
 const observations = ref<{ itemId: string; rows: Observation[]; total: number; page: number } | null>(null);
 const stage = ref<BusinessMutation | null>(null); const confirmOpen = shallowRef(false); const confirmCount = shallowRef(0);
@@ -19,9 +20,8 @@ const confirmLabel = "确认采信所选正常观察";
 const confirmHint = computed(() => `采信所选 ${confirmCount.value} 项正常观察？存在差异或冲突的项目不会自动采信。`);
 const identity = computed(() => JSON.stringify([session.user?.id, session.csrfToken, session.user?.roles]));
 const locked = computed(() => busy.value || !!pending.value);
-let generation = 0, live = true;
-const current = (epoch: number, owner: string, task: string) => live && epoch === generation && owner === identity.value && props.taskId === task;
-const clear = () => { generation++; board.value = null; selected.value = []; observations.value = null; result.value = null; pending.value = null; busy.value = false; stage.value = null; confirmOpen.value = false; };
+const liveness = useRequestLiveness(() => [identity.value, props.taskId]);
+const clear = () => { liveness.invalidate(); board.value = null; selected.value = []; observations.value = null; result.value = null; pending.value = null; busy.value = false; stage.value = null; confirmOpen.value = false; };
 function failure(cause: unknown) {
   if (cause instanceof ReviewApiError) {
     if ([401, 403, 404].includes(cause.status)) { clear(); error.value = "登录、权限或当前记录已失效，已隐藏原资料，请重新登录或核对授权。"; return; }
@@ -35,13 +35,13 @@ function failure(cause: unknown) {
 }
 async function load() {
   if (!/^[1-9][0-9]*$/.test(props.taskId)) return;
-  const epoch = ++generation, owner = identity.value, task = props.taskId;
+  const turn = liveness.begin(), task = props.taskId;
   busy.value = true; error.value = "";
   try {
     const value = await reviewRequest<Board>(`/inventory-reviews/tasks/${task}?page=${page.value}&pageSize=20`);
-    if (current(epoch, owner, task)) { board.value = value; selected.value = []; observations.value = null; }
-  } catch (cause) { if (current(epoch, owner, task)) failure(cause); }
-  finally { if (current(epoch, owner, task)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { board.value = value; selected.value = []; observations.value = null; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function openAccept() {
   if (busy.value || pending.value || !board.value) return;
@@ -61,28 +61,28 @@ function runAccept() {
 function closeConfirm() { stage.value = null; confirmOpen.value = false; }
 async function accept() {
   if (busy.value || !board.value || !pending.value) return;
-  const epoch = ++generation, owner = identity.value, task = props.taskId;
+  const turn = liveness.begin();
   const original = pending.value; busy.value = true; error.value = "";
   try {
     const reply = await reviewRequest<BatchResult>(original.path, original);
-    if (!current(epoch, owner, task)) return;
+    if (!liveness.isCurrent(turn)) return;
     result.value = reply; pending.value = null; emit("changed"); await load();
   } catch (cause) {
-    if (!current(epoch, owner, task)) return;
+    if (!liveness.isCurrent(turn)) return;
     if (cause instanceof ReviewApiError && cause.status >= 400 && cause.status < 500) pending.value = null;
     failure(cause);
-  } finally { if (current(epoch, owner, task)) busy.value = false; }
+  } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function history(row: ReviewItem, delta = 0) {
   if (locked.value) return;
   const next = observations.value?.itemId === row.item.id ? observations.value.page + delta : 1;
   if (next < 1) return;
-  const epoch = ++generation, owner = identity.value, task = props.taskId; busy.value = true;
+  const turn = liveness.begin(), task = props.taskId; busy.value = true;
   try {
     const data = await reviewRequest<{ items: Observation[]; total: number }>(`/inventory-reviews/tasks/${task}/items/${row.item.id}/observations?page=${next}&pageSize=20`);
-    if (current(epoch, owner, task)) observations.value = { itemId: row.item.id, rows: data.items, total: data.total, page: next };
-  } catch (cause) { if (current(epoch, owner, task)) failure(cause); }
-  finally { if (current(epoch, owner, task)) busy.value = false; }
+    if (liveness.isCurrent(turn)) observations.value = { itemId: row.item.id, rows: data.items, total: data.total, page: next };
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function paginate(delta: number) {
   if (locked.value || !board.value || page.value + delta < 1 || (page.value + delta - 1) * 20 >= board.value.total) return;
@@ -140,9 +140,9 @@ const prevObservationDisabled = computed(() => { const seen = observations.value
 const nextBoardDisabled = computed(() => locked.value || !board.value || page.value * 20 >= board.value.total);
 const prevBoardDisabled = computed(() => locked.value || page.value === 1);
 const acceptDisabled = computed(() => !selected.value.length || !reason.value.trim());
-watch(() => props.taskId, () => { generation++; clear(); page.value = 1; void load(); }, { immediate: true });
-watch(identity, () => { generation++; clear(); error.value = "身份或权限已变化，请重新进入复核任务。"; }, { flush: "sync" });
-onBeforeUnmount(() => { live = false; generation++; clear(); });
+watch(() => props.taskId, () => { liveness.invalidate(); clear(); page.value = 1; void load(); }, { immediate: true });
+watch(identity, () => { liveness.invalidate(); clear(); error.value = "身份或权限已变化，请重新进入复核任务。"; }, { flush: "sync" });
+onBeforeUnmount(() => { liveness.invalidate(); clear(); });
 </script>
 <template>
   <section class="fams-card fams-stack" aria-label="盘点证据复核">

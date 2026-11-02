@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { ReviewApiError, reviewRequest } from "@/features/inventory/api";
 interface Device { deviceId: string; bindingId: string | null; declarationId?: string; current: boolean; reason: string; declaredAt?: string; unresolvedCount?: number }
 interface Participant { accountId: string; name: string; current: boolean; reason: string; devices: Device[] }
@@ -13,26 +14,25 @@ const reasons: Record<string, string> = { DECLARED: "声明仍有效", PARTICIPA
   DEVICE_CONFIRMATION_MISSING: "部分设备待确认或补证", UNBOUND_OBSERVATION: "原证据来自无绑定通道，待核实",
   BINDING_CHANGED: "原绑定已失效，待补证", NO_DECLARATION: "尚未声明", ASSIGNMENT_CHANGED: "分配已变化，需重新确认",
   NEW_OBSERVATION: "声明后有新证据，需重新确认", LOCAL_EVIDENCE_MISSING: "本机报告缺失或拒绝，待补证" };
-let generation = 0, live = true;
-const current = (epoch: number, identity: string) => live && generation === epoch && owner.value === identity;
+const liveness = useRequestLiveness(() => [owner.value]);
 async function load() {
-  const epoch = ++generation, identity = owner.value; busy.value = true; error.value = ""; rows.value = [];
+  const turn = liveness.begin(); busy.value = true; error.value = ""; rows.value = [];
   try {
     const result = await reviewRequest<{ items: Participant[]; total: number }>(`/inventory-synchronization/tasks/${props.taskId}?page=${page.value}&pageSize=20`);
-    if (current(epoch, identity)) { rows.value = result.items; total.value = result.total; }
+    if (liveness.isCurrent(turn)) { rows.value = result.items; total.value = result.total; }
   } catch (cause) {
-    if (current(epoch, identity)) {
+    if (liveness.isCurrent(turn)) {
       total.value = 0;
       error.value = cause instanceof ReviewApiError && [401, 403, 404].includes(cause.status)
         ? "身份、权限或任务已失效，已隐藏原资料。" : "同步声明读取未完成，请重试。";
     }
-  } finally { if (current(epoch, identity)) busy.value = false; }
+  } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function change(delta: number) { page.value += delta; void load(); }
 const prevDisabled = computed(() => busy.value || page.value === 1);
 const nextDisabled = computed(() => busy.value || page.value * 20 >= total.value);
-watch(owner, () => { generation++; rows.value = []; total.value = 0; page.value = 1; void load(); }, { immediate: true });
-onBeforeUnmount(() => { live = false; generation++; rows.value = []; });
+watch(owner, () => { liveness.invalidate(); rows.value = []; total.value = 0; page.value = 1; void load(); }, { immediate: true });
+onBeforeUnmount(() => { liveness.invalidate(); rows.value = []; });
 </script>
 <template>
   <section class="fams-card fams-stack" aria-label="执行人同步声明">

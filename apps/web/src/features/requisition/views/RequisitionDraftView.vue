@@ -3,6 +3,7 @@ import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import RequisitionDemandForm from "./../panels/RequisitionDemandForm.vue";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { loadRequisitionCatalogs, requisitionMessage, requisitionRequest } from "@/features/requisition/api";
 import type { Requisition, RequisitionChoice, RequisitionDemand, RequisitionDemandInput }
   from "@fams/api-types/requisition";
@@ -19,6 +20,7 @@ const version = shallowRef(0); const ready = shallowRef(false);
 const busy = shallowRef(false); const error = shallowRef("");
 let pending: { path: string; method: string; key: string; version: number; body?: unknown } | null = null;
 const retryable = shallowRef(false);
+const liveness = useRequestLiveness(() => [props.id]);
 
 async function send(path: string, body?: unknown, method = "POST", expectedVersion = 0) {
   if (busy.value) return;
@@ -40,17 +42,22 @@ function submit(payload: { demands: RequisitionDemandInput[]; requestType: "REQU
 async function retry() { if (pending) await send(pending.path); }
 onMounted(async () => {
   busy.value = true;
+  const turn = liveness.begin();
   try {
     if (props.id && !/^[1-9][0-9]{0,18}$/.test(props.id)) { error.value = "没有此申请或操作的当前权限。"; return; }
     const loaded = await loadRequisitionCatalogs();
-    catalogs.value = loaded.catalogs; canShared.value = loaded.canShared;
-    selfEmployee.value = loaded.employeeId; selfOrg.value = loaded.organizationId;
+    if (liveness.isCurrent(turn)) {
+      catalogs.value = loaded.catalogs; canShared.value = loaded.canShared;
+      selfEmployee.value = loaded.employeeId; selfOrg.value = loaded.organizationId;
+    }
     if (props.id) {
       const result = await requisitionRequest<Requisition>("/" + props.id);
-      version.value = result.version; demands.value = result.demands;
-      requestType.value = result.requestType ?? "REQUISITION"; expectedReturnDate.value = result.expectedReturnDate ?? null;
+      if (liveness.isCurrent(turn)) {
+        version.value = result.version; demands.value = result.demands;
+        requestType.value = result.requestType ?? "REQUISITION"; expectedReturnDate.value = result.expectedReturnDate ?? null;
+      }
     }
-    ready.value = true;
+    if (liveness.isCurrent(turn)) ready.value = true;
   } catch (e) { error.value = requisitionMessage(e); } finally { busy.value = false; }
 });
 </script>

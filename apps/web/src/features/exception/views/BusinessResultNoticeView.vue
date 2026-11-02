@@ -4,6 +4,7 @@ import { useSessionStore } from "@/auth/sessionStore";
 import { AuthApiError } from "@/auth/api";
 import { formatProxyTime } from "@/features/exception/time";
 import AppChrome from "@/components/AppChrome.vue";
+import { useRequestLiveness, type LivenessToken } from "@/composables/useRequestLiveness";
 import { BusinessApiError, businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
 
 interface Notice { id: string; businessType: string; businessId: string; itemId: string;
@@ -30,9 +31,8 @@ const noticeRows = computed<NoticeRow[]>(() => rows.value.map((notice) => ({ ...
   objectionDisabled: busy.value || !!pendingObjection.value || !!pendingRead.value || !reasons.value[notice.id]?.trim() })));
 const prevDisabled = computed(() => busy.value || page.value <= 1);
 const nextDisabled = computed(() => busy.value || page.value * 20 >= total.value);
-let generation = 0, live = true;
-const current = (epoch: number, owner: string) => live && epoch === generation && owner === identity.value;
-function clear() { generation++; rows.value = []; reasons.value = {}; pendingObjection.value = null; pendingRead.value = null;
+const liveness = useRequestLiveness(() => [identity.value]);
+function clear() { liveness.invalidate(); rows.value = []; reasons.value = {}; pendingObjection.value = null; pendingRead.value = null;
   page.value = 1; total.value = 0; unread.value = 0; info.value = ""; busy.value = false; }
 function failure(cause: unknown, mutation = false) {
   if (cause instanceof BusinessApiError || cause instanceof AuthApiError) {
@@ -41,26 +41,26 @@ function failure(cause: unknown, mutation = false) {
   }
   error.value = businessMessage(cause);
 }
-async function load(epoch: number, owner: string) {
+async function load(turn: LivenessToken) {
   const result = await businessRequest<Page>(`/business-result-notices?page=${page.value}&pageSize=20`);
-  if (current(epoch, owner)) { rows.value = result.items; total.value = result.total; unread.value = result.unread; }
+  if (liveness.isCurrent(turn)) { rows.value = result.items; total.value = result.total; unread.value = result.unread; }
 }
 async function refresh(delta = 0) {
   if (busy.value || page.value + delta < 1 || delta && (pendingObjection.value || pendingRead.value)) return;
-  const epoch = ++generation, owner = identity.value;
+  const turn = liveness.begin();
   busy.value = true; error.value = ""; page.value += delta;
-  try { await load(epoch, owner); } catch (cause) { if (current(epoch, owner)) failure(cause); }
-  finally { if (current(epoch, owner)) busy.value = false; }
+  try { await load(turn); } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function read(id: string) {
   if (busy.value || pendingObjection.value || pendingRead.value && pendingRead.value.id !== id) return;
   pendingRead.value ??= { id, path: `/business-result-notices/${id}/read`, key: crypto.randomUUID(), version: 0 };
-  const operation = pendingRead.value, epoch = ++generation, owner = identity.value;
+  const operation = pendingRead.value, turn = liveness.begin();
   busy.value = true; error.value = "";
   try {
-    await businessRequest(operation.path, operation); if (!current(epoch, owner)) return;
-    pendingRead.value = null; await load(epoch, owner);
-  } catch (cause) { if (current(epoch, owner)) failure(cause, true); } finally { if (current(epoch, owner)) busy.value = false; }
+    await businessRequest(operation.path, operation); if (!liveness.isCurrent(turn)) return;
+    pendingRead.value = null; await load(turn);
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause, true); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function object(id: string) {
   if (busy.value || pendingRead.value) return;
@@ -68,16 +68,16 @@ async function object(id: string) {
   if (!pendingObjection.value && !reasons.value[id]?.trim()) return;
   pendingObjection.value ??= { id, path: `/business-result-notices/${id}/objection`,
     key: crypto.randomUUID(), version: 0, body: { reason: reasons.value[id].trim() } };
-  const operation = pendingObjection.value, epoch = ++generation, owner = identity.value;
+  const operation = pendingObjection.value, turn = liveness.begin();
   busy.value = true; error.value = ""; info.value = "";
   try {
-    await businessRequest(operation.path, operation); if (!current(epoch, owner)) return;
-    pendingObjection.value = null; await load(epoch, owner);
-    if (current(epoch, owner)) info.value = "已登记管理员核查。核查期间资产责任仍保持，请勿重复办理接收或自行解除责任。";
-  } catch (cause) { if (current(epoch, owner)) failure(cause, true); } finally { if (current(epoch, owner)) busy.value = false; }
+    await businessRequest(operation.path, operation); if (!liveness.isCurrent(turn)) return;
+    pendingObjection.value = null; await load(turn);
+    if (liveness.isCurrent(turn)) info.value = "已登记管理员核查。核查期间资产责任仍保持，请勿重复办理接收或自行解除责任。";
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause, true); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 watch(identity, () => { clear(); error.value = ""; if (session.user) void refresh(); }, { immediate: true, flush: "sync" });
-onBeforeUnmount(() => { live = false; clear(); });
+onBeforeUnmount(() => { clear(); });
 </script>
 <template>
   <AppChrome>

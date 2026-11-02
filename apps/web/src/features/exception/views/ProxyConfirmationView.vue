@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
+import { useRequestLiveness, type LivenessToken } from "@/composables/useRequestLiveness";
 import { useSessionStore } from "@/auth/sessionStore";
 import { AuthApiError } from "@/auth/api";
 import { BusinessApiError, businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
@@ -38,9 +39,8 @@ const reasonMissing = computed(() => !decision.value.reason.trim());
 const decisionDisabled = computed(() => !decision.value.reason.trim() || !decision.value.physicalEvidenceChecked || !decision.value.noDisputeChecked);
 const executeShown = computed(() => !!warehouse.value && !!selected.value && selected.value.confirmationStatus === "APPROVED");
 const executedNoticeShown = computed(() => !!selected.value && selected.value.confirmationStatus === "EXECUTED");
-let generation = 0, live = true;
-const current = (epoch: number, owner: string) => live && epoch === generation && owner === identity.value;
-function clear() { generation++; rows.value = []; selected.value = null; attachments.value = []; snapshot.value = null; pending.value = null; pendingUpload.value = null;
+const liveness = useRequestLiveness(() => [identity.value]);
+function clear() { liveness.invalidate(); rows.value = []; selected.value = null; attachments.value = []; snapshot.value = null; pending.value = null; pendingUpload.value = null;
   file.value = null; form.value = emptyForm(); decision.value = { reason: "", physicalEvidenceChecked: false, noDisputeChecked: false }; page.value = 1; total.value = 0; busy.value = false; }
 function failure(cause: unknown, mutation = false) {
   if (cause instanceof BusinessApiError || cause instanceof AuthApiError) {
@@ -49,37 +49,37 @@ function failure(cause: unknown, mutation = false) {
   }
   error.value = businessMessage(cause);
 }
-async function list(epoch: number, owner: string) {
+async function list(turn: LivenessToken) {
   const result = await businessRequest<ProxyPage>(`/proxy-confirmations?page=${page.value}&pageSize=20`);
-  if (current(epoch, owner)) { rows.value = result.items; total.value = result.total; }
+  if (liveness.isCurrent(turn)) { rows.value = result.items; total.value = result.total; }
 }
-async function detail(id: string, epoch: number, owner: string) {
+async function detail(id: string, turn: LivenessToken) {
   const record = await businessRequest<ProxyConfirmation>(`/proxy-confirmations/${id}`);
-  if (!current(epoch, owner)) return;
+  if (!liveness.isCurrent(turn)) return;
   const files = await businessRequest<{ items: Attachment[] }>(`/proxy-confirmations/${id}/attachments`);
-  if (!current(epoch, owner)) return;
+  if (!liveness.isCurrent(turn)) return;
   selected.value = record; attachments.value = files.items; await router.replace({ query: { id } });
 }
 async function open(id: string) {
   if (locked.value) return;
-  const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
-  try { await detail(id, epoch, owner); if (current(epoch, owner)) { snapshot.value = null; decision.value = { reason: "", physicalEvidenceChecked: false, noDisputeChecked: false }; } }
-  catch (cause) { if (current(epoch, owner)) failure(cause); } finally { if (current(epoch, owner)) busy.value = false; }
+  const turn = liveness.begin(); busy.value = true; error.value = "";
+  try { await detail(id, turn); if (liveness.isCurrent(turn)) { snapshot.value = null; decision.value = { reason: "", physicalEvidenceChecked: false, noDisputeChecked: false }; } }
+  catch (cause) { if (liveness.isCurrent(turn)) failure(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function refresh() {
   if (busy.value) return;
-  const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
-  try { await list(epoch, owner); if (current(epoch, owner) && selected.value) await detail(selected.value.id, epoch, owner); }
-  catch (cause) { if (current(epoch, owner)) failure(cause); } finally { if (current(epoch, owner)) busy.value = false; }
+  const turn = liveness.begin(); busy.value = true; error.value = "";
+  try { await list(turn); if (liveness.isCurrent(turn) && selected.value) await detail(selected.value.id, turn); }
+  catch (cause) { if (liveness.isCurrent(turn)) failure(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function send(path: string, body?: unknown, version = selected.value?.version ?? 0) {
   if (busy.value || pendingUpload.value || pending.value && pending.value.path !== path) return;
   pending.value ??= { path, key: crypto.randomUUID(), version, body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown };
-  const operation = pending.value, epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
   try { const result = await businessRequest<ProxyConfirmation>(operation.path, operation);
-    if (!current(epoch, owner)) return; pending.value = null; snapshot.value = null;
-    await detail(result.id, epoch, owner); if (current(epoch, owner)) await list(epoch, owner);
-  } catch (cause) { if (current(epoch, owner)) failure(cause, true); } finally { if (current(epoch, owner)) busy.value = false; }
+    if (!liveness.isCurrent(turn)) return; pending.value = null; snapshot.value = null;
+    await detail(result.id, turn); if (liveness.isCurrent(turn)) await list(turn);
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause, true); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function create() {
   if (!warehouse.value || !snapshot.value || !form.value.actualReceivedAt) return;
@@ -90,34 +90,34 @@ function create() {
 async function upload() {
   if (busy.value || pending.value || !selected.value || !pendingUpload.value && !file.value) return;
   pendingUpload.value ??= { id: selected.value.id, version: selected.value.version, file: file.value!, key: crypto.randomUUID() };
-  const operation = pendingUpload.value, epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  const operation = pendingUpload.value, turn = liveness.begin(); busy.value = true; error.value = "";
   try { await uploadProxyEvidence(operation.id, operation.version, operation.file, operation.key);
-    if (!current(epoch, owner)) return; pendingUpload.value = null; file.value = null;
-    await detail(operation.id, epoch, owner); if (current(epoch, owner)) await list(epoch, owner);
-  } catch (cause) { if (current(epoch, owner)) failure(cause, true); } finally { if (current(epoch, owner)) busy.value = false; }
+    if (!liveness.isCurrent(turn)) return; pendingUpload.value = null; file.value = null;
+    await detail(operation.id, turn); if (liveness.isCurrent(turn)) await list(turn);
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause, true); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function download(item: Attachment) {
   if (busy.value) return;
-  const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
-  try { await downloadAttachment(item, () => current(epoch, owner)); }
-  catch (cause) { if (current(epoch, owner)) failure(cause); } finally { if (current(epoch, owner)) busy.value = false; }
+  const turn = liveness.begin(); busy.value = true; error.value = "";
+  try { await downloadAttachment(item, () => liveness.isCurrent(turn)); }
+  catch (cause) { if (liveness.isCurrent(turn)) failure(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function paginate(delta: number) {
   if (locked.value || page.value + delta < 1 || (page.value + delta - 1) * 20 >= total.value) return;
   page.value += delta; await refresh();
 }
 async function initialize() {
-  clear(); error.value = ""; const epoch = generation, owner = identity.value; busy.value = true;
-  try { await list(epoch, owner); if (!current(epoch, owner)) return;
-    if (route.query.id && /^[1-9][0-9]*$/.test(String(route.query.id))) await detail(String(route.query.id), epoch, owner);
+  clear(); error.value = ""; const turn = liveness.begin(); busy.value = true;
+  try { await list(turn); if (!liveness.isCurrent(turn)) return;
+    if (route.query.id && /^[1-9][0-9]*$/.test(String(route.query.id))) await detail(String(route.query.id), turn);
     else if (warehouse.value && route.query.businessId && route.query.itemId) {
       const result = await businessRequest<Record<string, unknown>>(`/proxy-confirmations/context?businessType=${encodeURIComponent(String(route.query.businessType ?? "REQUISITION"))}&businessId=${encodeURIComponent(String(route.query.businessId))}&itemId=${encodeURIComponent(String(route.query.itemId))}`);
-      if (current(epoch, owner)) { snapshot.value = result; form.value.actualSignerEmployeeId = String(result.targetEmployeeId); form.value.observedAssetCode = String(result.assetCode); }
+      if (liveness.isCurrent(turn)) { snapshot.value = result; form.value.actualSignerEmployeeId = String(result.targetEmployeeId); form.value.observedAssetCode = String(result.assetCode); }
     }
-  } catch (cause) { if (current(epoch, owner)) failure(cause); } finally { if (current(epoch, owner)) busy.value = false; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 watch(identity, () => { if (session.user) void initialize(); else { clear(); error.value = ""; } }, { immediate: true, flush: "sync" });
-onBeforeUnmount(() => { live = false; clear(); });
+onBeforeUnmount(() => { clear(); });
 </script>
 
 <template>

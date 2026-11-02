@@ -3,6 +3,7 @@ import { onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { businessMessage, businessRequest } from "@/api/business";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import type { BusinessMutation } from "@/api/business";
 import type { BusinessPage, ReturnAssetChoice } from "@fams/api-types/loan";
 
@@ -11,6 +12,7 @@ const returnAssets = ref<ReturnAssetChoice[]>([]);
 const assetId = shallowRef(""); const assetVersion = shallowRef(0); const reason = shallowRef("");
 const busy = shallowRef(false); const error = shallowRef(""); const retryable = shallowRef(false);
 let pending: BusinessMutation | null = null;
+const liveness = useRequestLiveness();
 
 function chooseReturnAsset() {
   const asset = returnAssets.value.find(row => row.id === assetId.value);
@@ -34,11 +36,12 @@ async function send(path: string, version: number, body?: unknown) {
 }
 function retry() { if (pending) void send(pending.path, pending.version); }
 onMounted(async () => {
+  const turn = liveness.begin();
   busy.value = true;
   try {
     const assetPage = await businessRequest<BusinessPage<ReturnAssetChoice>>("/asset-returns/eligible-assets?page=1&pageSize=20");
-    returnAssets.value = assetPage.items;
-  } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
+    if (liveness.isCurrent(turn)) returnAssets.value = assetPage.items;
+  } catch (e) { if (liveness.isCurrent(turn)) error.value = businessMessage(e); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 });
 </script>
 

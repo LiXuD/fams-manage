@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { RepairApiError, repairProblem, repairStates, type RepairMutation } from "@/features/repair/api";
 import { collaborationRequest, opinionResults, type AssistedRepair } from "@/features/repair/collaboration";
 import RepairTechnicalEvidence from "./../panels/RepairTechnicalEvidence.vue";
@@ -15,26 +16,25 @@ const prevDisabled=computed(()=>locked.value||page.value===1);
 const nextDisabled=computed(()=>locked.value||page.value*20>=total.value);
 const faultOccurredAtText=computed(()=>detail.value?new Date(detail.value.faultOccurredAt).toLocaleString():"");
 const opinionRows=computed(()=>(detail.value?.opinions??[]).map(row=>({...row,occurredAtText:new Date(row.occurred_at).toLocaleString()})));
-let generation=0,live=true;
-const current=(epoch:number,owner:string)=>live&&generation===epoch&&identity.value===owner;
-function reset(){generation++;rows.value=[];detail.value=null;total.value=0;page.value=1;judgement.value="";method.value="";result.value="NEEDS_WORK";occurredAt.value="";file.value=null;attachmentIds.value=[];prepared.value=null;pending.value=null;busy.value=false;}
+const liveness=useRequestLiveness(()=>[identity.value]);
+function reset(){liveness.invalidate();rows.value=[];detail.value=null;total.value=0;page.value=1;judgement.value="";method.value="";result.value="NEEDS_WORK";occurredAt.value="";file.value=null;attachmentIds.value=[];prepared.value=null;pending.value=null;busy.value=false;}
 function failure(cause:unknown){if(cause instanceof RepairApiError&&[401,403,404].includes(cause.status))reset();error.value=repairProblem(cause);}
-async function read(){if(busy.value||prepared.value)return;const epoch=++generation,owner=identity.value,selected=detail.value?.invitationId ?? (/^[1-9][0-9]*$/.test(String(route.params.id ?? ""))?String(route.params.id):"");busy.value=true;error.value="";
- try{const board=await collaborationRequest<{items:AssistedRepair[];total:number}>(`/repair-collaborations?page=${page.value}&pageSize=20`);const item=selected?await collaborationRequest<AssistedRepair>(`/repair-collaborations/${selected}`):null;if(current(epoch,owner)){rows.value=board.items;total.value=board.total;detail.value=item;}}
- catch(cause){if(current(epoch,owner))failure(cause);}finally{if(current(epoch,owner))busy.value=false;}}
-async function open(row:AssistedRepair){if(locked.value)return;const epoch=++generation,owner=identity.value;busy.value=true;error.value="";detail.value=null;judgement.value="";method.value="";occurredAt.value="";attachmentIds.value=[];file.value=null;
- try{const value=await collaborationRequest<AssistedRepair>(`/repair-collaborations/${row.invitationId}`);if(current(epoch,owner))detail.value=value;}catch(cause){if(current(epoch,owner))failure(cause);}finally{if(current(epoch,owner))busy.value=false;}}
+async function read(){if(busy.value||prepared.value)return;const turn=liveness.begin(),selected=detail.value?.invitationId ?? (/^[1-9][0-9]*$/.test(String(route.params.id ?? ""))?String(route.params.id):"");busy.value=true;error.value="";
+ try{const board=await collaborationRequest<{items:AssistedRepair[];total:number}>(`/repair-collaborations?page=${page.value}&pageSize=20`);const item=selected?await collaborationRequest<AssistedRepair>(`/repair-collaborations/${selected}`):null;if(liveness.isCurrent(turn)){rows.value=board.items;total.value=board.total;detail.value=item;}}
+ catch(cause){if(liveness.isCurrent(turn))failure(cause);}finally{if(liveness.isCurrent(turn))busy.value=false;}}
+async function open(row:AssistedRepair){if(locked.value)return;const turn=liveness.begin();busy.value=true;error.value="";detail.value=null;judgement.value="";method.value="";occurredAt.value="";attachmentIds.value=[];file.value=null;
+ try{const value=await collaborationRequest<AssistedRepair>(`/repair-collaborations/${row.invitationId}`);if(liveness.isCurrent(turn))detail.value=value;}catch(cause){if(liveness.isCurrent(turn))failure(cause);}finally{if(liveness.isCurrent(turn))busy.value=false;}}
 function choose(event:Event){if(!locked.value)file.value=(event.target as HTMLInputElement).files?.[0] ?? null;}
 function prepare(upload=false){if(locked.value||!detail.value)return;error.value="";let body:unknown,selectedFile:File|undefined;
  if(upload){const chosen=file.value;if(!chosen||chosen.size<=0||!(/\.(png|jpe?g|webp|pdf)$/i.test(chosen.name))||chosen.size>(/\.pdf$/i.test(chosen.name)?20:10)*1024*1024){error.value="请选PNG、JPEG、WebP图片（10MB以内）或PDF依据（20MB以内）。";return;}selectedFile=chosen;}
  else{const at=new Date(occurredAt.value);if(judgement.value.trim().length<3||method.value.trim().length<3||!Number.isFinite(at.getTime())){error.value="请填写实际判断、处理方式和发生时间。";return;}body={judgement:judgement.value.trim(),method:method.value.trim(),result:result.value,occurredAt:at.toISOString(),attachmentIds:[...attachmentIds.value]};}
  prepared.value={path:`/repair-collaborations/${detail.value.invitationId}/${upload?'attachments':'opinions'}`,key:crypto.randomUUID(),version:detail.value.version,body,file:selectedFile};}
-async function send(){if(busy.value||!pending.value||!detail.value)return;const operation=pending.value,id=detail.value.invitationId,epoch=++generation,owner=identity.value;busy.value=true;error.value="";
- try{const reply=await collaborationRequest<{objectId?:string}>(operation.path,operation);const item=await collaborationRequest<AssistedRepair>(`/repair-collaborations/${id}`);if(current(epoch,owner)){detail.value=item;pending.value=null;file.value=null;if(!reply.objectId){attachmentIds.value=[];judgement.value="";method.value="";occurredAt.value="";}notice.value=reply.objectId?"依据已保存，请在本次意见中明确选用。":"意见已追加，维修仍由合法处理库管实际办理。";}}
- catch(cause){if(current(epoch,owner)){if(cause instanceof RepairApiError&&cause.status>=400&&cause.status<500)pending.value=null;failure(cause);}}finally{if(current(epoch,owner))busy.value=false;}}
+async function send(){if(busy.value||!pending.value||!detail.value)return;const operation=pending.value,id=detail.value.invitationId,turn=liveness.begin();busy.value=true;error.value="";
+ try{const reply=await collaborationRequest<{objectId?:string}>(operation.path,operation);const item=await collaborationRequest<AssistedRepair>(`/repair-collaborations/${id}`);if(liveness.isCurrent(turn)){detail.value=item;pending.value=null;file.value=null;if(!reply.objectId){attachmentIds.value=[];judgement.value="";method.value="";occurredAt.value="";}notice.value=reply.objectId?"依据已保存，请在本次意见中明确选用。":"意见已追加，维修仍由合法处理库管实际办理。";}}
+ catch(cause){if(liveness.isCurrent(turn)){if(cause instanceof RepairApiError&&cause.status>=400&&cause.status<500)pending.value=null;failure(cause);}}finally{if(liveness.isCurrent(turn))busy.value=false;}}
 async function confirm(){if(!prepared.value||busy.value)return;pending.value=prepared.value;prepared.value=null;await send();}
 async function paginate(delta:number){const next=page.value+delta;if(locked.value||next<1||(next-1)*20>=total.value)return;page.value=next;await read();}
-watch(identity,()=>{reset();error.value="";notice.value="";void read();},{immediate:true,flush:"sync"});onBeforeUnmount(()=>{live=false;reset();});
+watch(identity,()=>{reset();error.value="";notice.value="";void read();},{immediate:true,flush:"sync"});onBeforeUnmount(()=>{reset();});
 </script>
 <template>
   <AppChrome>

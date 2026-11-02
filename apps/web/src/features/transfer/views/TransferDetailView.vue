@@ -4,6 +4,7 @@ import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import TransferReassignment from "@/features/transfer/panels/TransferReassignment.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { businessMessage, businessRequest } from "@/api/business";
 import { transferLabels as labels } from "@/features/transfer/api";
 import type { BusinessMutation } from "@/api/business";
@@ -18,6 +19,7 @@ const reason = shallowRef(""), code = shallowRef(""), destination = shallowRef("
 const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef(""), retryable = shallowRef(false), checked = shallowRef(false);
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 const operator = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR"));
+const liveness = useRequestLiveness(() => [props.id]);
 let pending: BusinessMutation | null = null;
 
 async function catalog(kind: string, org?: string) {
@@ -27,7 +29,10 @@ async function catalog(kind: string, org?: string) {
   return result;
 }
 async function open() {
-  selected.value = await businessRequest<Transfer>("/transfers/" + props.id);
+  const turn = liveness.begin();
+  const result = await businessRequest<Transfer>("/transfers/" + props.id);
+  if (!liveness.isCurrent(turn)) return;
+  selected.value = result;
   await loadPeople(selected.value);
 }
 async function refresh() {
@@ -92,8 +97,9 @@ const rows = computed<TransferRow[]>(() => (selected.value?.items ?? []).map((it
 })));
 async function loadPeople(value: Transfer) {
   const ids = new Set(value.items.flatMap(item => [item.targetSnapshot.usingOrganizationId, item.sourceSnapshot.using_organization_id]).filter(Boolean).map(String));
+  const turn = liveness.begin();
   const choices = await Promise.all([...ids].map(id => catalog("employee", id)));
-  peopleNames.value = Object.fromEntries(choices.flat().map(person => [person.id, person.name]));
+  if (liveness.isCurrent(turn)) peopleNames.value = Object.fromEntries(choices.flat().map(person => [person.id, person.name]));
 }
 function decide(approved: boolean) { if (selected.value && reason.value.trim()) void mutate(`/transfers/${selected.value.id}/decision`, selected.value.version, { approved, reason: reason.value.trim() }); }
 function physical(item: TransferItem, action: string) {
@@ -104,9 +110,11 @@ function physical(item: TransferItem, action: string) {
 }
 onMounted(async () => {
   busy.value = true;
+  const turn = liveness.begin();
   try {
     if (!/^[1-9][0-9]{0,18}$/.test(props.id)) { error.value = "没有当前记录或操作的权限。"; return; }
-    [organizations.value, locations.value] = await Promise.all([catalog("organization"), catalog("location")]);
+    const [orgs, locs] = await Promise.all([catalog("organization"), catalog("location")]);
+    if (liveness.isCurrent(turn)) { organizations.value = orgs; locations.value = locs; }
     await open();
     if (route.query.saved) { notice.value = "操作已保存。"; window.history.replaceState({}, "", window.location.pathname); }
   } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }

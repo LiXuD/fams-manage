@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { inventoryLateResultLabels, reviewRequest, ReviewApiError } from "@/features/inventory/api";
 import { repairStates } from "@/features/repair/api";
 import type { BusinessMutation } from "@/api/business";
@@ -29,10 +30,10 @@ const repairCaptureVisible = computed(() => method.value !== "REFRESH_REPAIR");
 const formalRepair = computed(() => method.value === "FORMAL_REPAIR");
 const nextDisabled = computed(() => locked.value || !context.value || page.value * 20 >= context.value.history.total);
 const damageFieldsetDisabled = computed(() => locked.value || context.value?.damage.damage_status === "CLOSED");
-let generation = 0, live = true;
-const current = (epoch: number, who: string) => live && generation === epoch && owner.value === who;
+const liveness = useRequestLiveness(() => [owner.value]);
+let live = true;
 const path = () => `/inventory-late/tasks/${props.taskId}/observations/${props.observationId}/damage-repair`;
-function clear() { generation++; context.value = null; pending.value = null; confirming.value = false; busy.value = false; reason.value = ""; evidence.value = ""; fault.value = ""; discoveredAt.value = ""; repairId.value = ""; linked.value = null; checked.value = false; timeChecked.value = false; }
+function clear() { liveness.invalidate(); context.value = null; pending.value = null; confirming.value = false; busy.value = false; reason.value = ""; evidence.value = ""; fault.value = ""; discoveredAt.value = ""; repairId.value = ""; linked.value = null; checked.value = false; timeChecked.value = false; }
 function fail(cause: unknown, write = false) {
   if (cause instanceof ReviewApiError && [401, 403, 404].includes(cause.status)) { clear(); emit("invalidated"); error.value = "当前身份、权限或原证据已失效，已隐藏资料。"; return; }
   if (write && cause instanceof ReviewApiError && cause.status >= 400 && cause.status < 500) { pending.value = null; confirming.value = false; }
@@ -41,24 +42,24 @@ function fail(cause: unknown, write = false) {
 }
 async function load(delta = 0) {
   if (busy.value || props.blocked || confirming.value || page.value + delta < 1 || delta > 0 && context.value && page.value * 20 >= context.value.history.total) return;
-  const epoch = ++generation, who = owner.value; busy.value = true; error.value = "";
+  const turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     const result = await reviewRequest<Context>(path() + `?page=${page.value + delta}&pageSize=20`);
-    if (current(epoch, who)) { context.value = result; page.value += delta;
+    if (liveness.isCurrent(turn)) { context.value = result; page.value += delta;
       if (!pending.value) { method.value = result.damage.damage_status === "PROCESSING" ? "REFRESH_REPAIR" : "FORMAL_REPAIR"; checked.value = false; timeChecked.value = false; } }
-  } catch (cause) { if (current(epoch, who)) fail(cause); }
-  finally { if (current(epoch, who)) busy.value = false; }
+  } catch (cause) { if (liveness.isCurrent(turn)) fail(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function inspect() {
   if (locked.value || !/^[1-9][0-9]{0,18}$/.test(repairId.value.trim())) return;
-  const epoch = ++generation, who = owner.value, requested = repairId.value.trim(); busy.value = true; linked.value = null; error.value = "";
+  const turn = liveness.begin(), requested = repairId.value.trim(); busy.value = true; linked.value = null; error.value = "";
   try { const result = await reviewRequest<Linked>(`/repairs/${requested}`);
-    if (current(epoch, who) && requested === repairId.value.trim()) {
+    if (liveness.isCurrent(turn) && requested === repairId.value.trim()) {
       if (result.id !== requested || result.assetId !== context.value?.assetId || !["PENDING_ADMIN_DECISION", "WAITING_WAREHOUSE_CLAIM", "WAREHOUSE_PROCESSING"].includes(result.status)) error.value = "请选择同一资产的有效正式维修单。";
       else linked.value = result;
     }
-  } catch (cause) { if (current(epoch, who)) fail(cause); }
-  finally { if (current(epoch, who)) busy.value = false; }
+  } catch (cause) { if (liveness.isCurrent(turn)) fail(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function prepare() {
   if (locked.value || !context.value || context.value.damage.damage_status === "CLOSED" || reason.value.trim().length < 3 || evidence.value.trim().length < 10) return;
@@ -77,11 +78,11 @@ function prepare() {
 }
 async function send() {
   if (busy.value || props.blocked || !pending.value) return;
-  const original = pending.value, epoch = ++generation, who = owner.value; busy.value = true; confirming.value = false; error.value = ""; let saved = false;
-  try { await reviewRequest(original.path, original); if (current(epoch, who)) { pending.value = null; saved = true; reason.value = ""; evidence.value = ""; notice.value = "损坏处理已追加；复盘和其他义务仍须分别完成。"; } }
-  catch (cause) { if (current(epoch, who)) fail(cause, true); }
-  finally { if (current(epoch, who)) busy.value = false; }
-  if (saved && current(epoch, who)) { await load(); if (live && who === owner.value) emit("changed"); }
+  const original = pending.value, turn = liveness.begin(), who = owner.value; busy.value = true; confirming.value = false; error.value = ""; let saved = false;
+  try { await reviewRequest(original.path, original); if (liveness.isCurrent(turn)) { pending.value = null; saved = true; reason.value = ""; evidence.value = ""; notice.value = "损坏处理已追加；复盘和其他义务仍须分别完成。"; } }
+  catch (cause) { if (liveness.isCurrent(turn)) fail(cause, true); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
+  if (saved && liveness.isCurrent(turn)) { await load(); if (live && who === owner.value) emit("changed"); }
 }
 watch([busy, pending], () => emit("busyChange", busy.value || !!pending.value), { flush: "sync" });
 watch(owner, () => { clear(); page.value = 1; error.value = ""; notice.value = ""; void load(); }, { immediate: true, flush: "sync" });

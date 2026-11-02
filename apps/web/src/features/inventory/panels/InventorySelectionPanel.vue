@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { reviewRequest, ReviewApiError, type Board, type Observation, type Review } from "@/features/inventory/api";
 import type { BusinessMutation } from "@/api/business";
 const props = defineProps<{ taskId: string; itemId: string; itemPage: number; observations: Observation[] }>();
@@ -38,8 +39,7 @@ const editable = computed(() => board.value && ["IN_PROGRESS", "WAITING_REVIEW"]
   (!data.value?.review.review_status || data.value.review.review_status === "SELECTED"));
 const outcomes: Record<string, string> = { ACCEPTED: "正常观察候选", DIFFERENCE_REVIEW: "差异证据", CONFLICT_REVIEW: "冲突证据", OLD_ASSIGNMENT_REVIEW: "旧分配证据", TIME_REVIEW: "时间待核实" };
 const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-let epoch = 0, live = true;
-const valid = (token: number, who: string) => live && token === epoch && who === identity.value;
+const liveness = useRequestLiveness(() => [identity.value]);
 function clear() { data.value = null; board.value = null; choice.value = ""; time.value = ""; reason.value = "";
   evidence.value = ""; pending.value = null; busy.value = false; stage.value = null; confirmOpen.value = false; }
 function failure(cause: unknown) {
@@ -53,14 +53,14 @@ function failure(cause: unknown) {
 }
 async function load() {
   if (pending.value) return;
-  const token = ++epoch, who = identity.value; busy.value = true; error.value = "";
+  const turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     const [selection, task] = await Promise.all([
       reviewRequest<SelectionView>(`/inventory-reviews/tasks/${props.taskId}/items/${props.itemId}/selection?page=${page.value}&pageSize=20`),
       reviewRequest<Board>(`/inventory-reviews/tasks/${props.taskId}?page=${props.itemPage}&pageSize=20`)]);
-    if (valid(token, who)) { data.value = selection; board.value = task; }
-  } catch (cause) { if (valid(token, who)) failure(cause); }
-  finally { if (valid(token, who)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { data.value = selection; board.value = task; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function openSave() {
   if (busy.value || pending.value || !data.value || !item.value?.current) return;
@@ -85,21 +85,21 @@ function runSave() {
 function closeConfirm() { stage.value = null; confirmOpen.value = false; }
 async function save() {
   if (busy.value || !data.value || !item.value?.current || !pending.value) return;
-  const original = pending.value, token = ++epoch, who = identity.value; busy.value = true; error.value = "";
+  const original = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     await reviewRequest(original.path, original);
-    if (!valid(token, who)) return;
+    if (!liveness.isCurrent(turn)) return;
     pending.value = null; notice.value = "已保存待采信选择；原始证据及历次选择均保留，差异尚须独立闭环。"; emit("changed"); await load();
   } catch (cause) {
-    if (!valid(token, who)) return;
+    if (!liveness.isCurrent(turn)) return;
     if (cause instanceof ReviewApiError && cause.status >= 400 && cause.status < 500) pending.value = null;
     failure(cause);
-  } finally { if (valid(token, who)) busy.value = false; }
+  } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function pages(delta: number) { if (locked.value || !data.value || page.value + delta < 1 || (page.value + delta - 1) * 20 >= data.value.total) return; page.value += delta; await load(); }
-watch(identity, () => { epoch++; clear(); error.value = ""; notice.value = ""; page.value = 1;
+watch(identity, () => { liveness.invalidate(); clear(); error.value = ""; notice.value = ""; page.value = 1;
   if (session.user?.roles.includes("ASSET_ADMIN")) void load(); }, { immediate: true, flush: "sync" });
-onBeforeUnmount(() => { live = false; epoch++; clear(); });
+onBeforeUnmount(() => { liveness.invalidate(); clear(); });
 </script>
 <template>
   <section class="fams-card fams-stack" aria-label="证据选择与时间核实">

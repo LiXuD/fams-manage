@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { RepairApiError, repairProblem, repairRequest, type Repair, type RepairMutation } from "@/features/repair/api";
 const props = defineProps<{ repair: Repair; blocked?: boolean }>();
 const emit = defineEmits<{ changed: []; invalidated: []; busyChange: [value: boolean] }>();
@@ -12,18 +13,17 @@ const admin = computed(() => !!session.user?.roles.includes("ASSET_ADMIN"));
 const context = ref<Context | null>(null), target = shallowRef(""), reason = shallowRef(""), evidence = shallowRef(""), checked = shallowRef(false), error = shallowRef("");
 const busy = shallowRef(false), prepared = ref<RepairMutation | null>(null), pending = ref<RepairMutation | null>(null);
 const locked = computed(() => busy.value || !!prepared.value || !!pending.value);
-let generation = 0, live = true;
-const current = (epoch: number, owner: string) => live && generation === epoch && identity.value === owner;
-function clear() { generation++; context.value = null; target.value = ""; reason.value = ""; evidence.value = ""; checked.value = false;
+const liveness = useRequestLiveness(() => [identity.value]);
+function clear() { liveness.invalidate(); context.value = null; target.value = ""; reason.value = ""; evidence.value = ""; checked.value = false;
   prepared.value = null; pending.value = null; busy.value = false; }
 function failure(cause: unknown) { if (cause instanceof RepairApiError && [401, 403, 404].includes(cause.status)) { clear(); emit("invalidated"); } error.value = repairProblem(cause); }
 async function inspect() {
   if (locked.value || props.blocked || !admin.value) return;
-  const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  const turn = liveness.begin(); busy.value = true; error.value = "";
   try { const result = await repairRequest<Context>(`/${props.repair.id}/reassignment`);
-    if (current(epoch, owner)) { context.value = result; target.value = ""; checked.value = false; }
-  } catch (cause) { if (current(epoch, owner)) failure(cause); }
-  finally { if (current(epoch, owner)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { context.value = result; target.value = ""; checked.value = false; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function prepare() {
   if (locked.value || props.blocked || !admin.value || !context.value) return;
@@ -36,16 +36,16 @@ function prepare() {
 }
 async function send() {
   if (busy.value || props.blocked || !pending.value) return;
-  const operation = pending.value, epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
   try { await repairRequest(operation.path, operation);
-    if (current(epoch, owner)) { pending.value = null; context.value = null; checked.value = false; emit("changed"); }
-  } catch (cause) { if (current(epoch, owner)) { if (cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); } }
-  finally { if (current(epoch, owner)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { pending.value = null; context.value = null; checked.value = false; emit("changed"); }
+  } catch (cause) { if (liveness.isCurrent(turn)) { if (cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); } }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function confirm() { if (!prepared.value || busy.value || props.blocked) return; pending.value = prepared.value; prepared.value = null; await send(); }
 watch(identity, () => { clear(); error.value = ""; }, { immediate: true, flush: "sync" });
 watch(locked, value => emit("busyChange", value), { immediate: true, flush: "sync" });
-onBeforeUnmount(() => { live = false; clear(); emit("busyChange", false); });
+onBeforeUnmount(() => { clear(); emit("busyChange", false); });
 const physicalStageText = computed(() => { const snapshot = context.value?.snapshot; if (!snapshot) return "";
   return snapshot.outstandingReturn ? snapshot.outstandingReturn.handover_status === 'REFUSED' ? '已拒收，等待实际收回' : '已交出，等待实际接收'
     : snapshot.physicalHandling.length ? '已离开原保管人，当前库管处理' : snapshot.acceptedAt ? '已原地接修' : '尚未接修'; });

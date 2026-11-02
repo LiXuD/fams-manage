@@ -4,6 +4,7 @@ import AppChrome from "@/components/AppChrome.vue";
 import InboundReassignment from "@/features/inbound/panels/InboundReassignment.vue";
 import AttachmentPanel from "@/features/inbound/panels/AttachmentPanel.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { getAsset } from "@/features/asset/api";
 import {
   acceptItem, cancelReceipt, claimReceipt, decideReceipt, getReceipt, submitReceipt,
@@ -14,6 +15,7 @@ import {
 type Decision = "cancel" | "reject";
 const props = defineProps<{ id: string }>();
 const session = useSessionStore();
+const liveness = useRequestLiveness(() => [props.id]);
 const selected = ref<InboundReceipt | null>(null);
 const error = shallowRef("");
 const notice = shallowRef("");
@@ -48,7 +50,12 @@ const reasonLabels: Record<Decision, string> = { cancel: "取消原因", reject:
 
 async function open(): Promise<void> {
   if (!/^[1-9][0-9]{0,18}$/.test(props.id)) { error.value = "详情加载失败"; return; }
-  try { selected.value = await getReceipt(props.id); error.value = ""; }
+  const turn = liveness.begin();
+  try {
+    const receipt = await getReceipt(props.id);
+    if (!liveness.isCurrent(turn)) return;
+    selected.value = receipt; error.value = "";
+  }
   catch (cause) { error.value = cause instanceof Error ? cause.message : "详情加载失败"; }
 }
 

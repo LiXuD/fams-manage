@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { RepairApiError, repairProblem, type RepairMutation } from "@/features/repair/api";
 import { collaborationRequest, opinionResults, type CollaborationBoard } from "@/features/repair/collaboration";
 import RepairTechnicalEvidence from "./RepairTechnicalEvidence.vue";
@@ -19,23 +20,22 @@ const techPrevDisabled = computed(()=>techPage.value===1);
 const techNextDisabled = computed(()=>techPage.value*20>=techTotal.value);
 const invitationRows = computed(()=>(board.value?.invitations ?? []).map(row=>({...row,statusText:row.invitation_status==='ACTIVE'?'有效邀请':row.invitation_status==='REVOKED'?'已撤销':'已结束',revocable:!!board.value?.canInvite && row.invitation_status==='ACTIVE',revokeText:`撤销 ${row.technician_username} 的协助邀请`})));
 const opinionRows = computed(()=>(board.value?.opinions ?? []).map(row=>({...row,occurredText:new Date(row.occurred_at).toLocaleString(),resultText:opinionResults[row.opinion_result] || '待核实意见'})));
-let generation = 0, live = true;
-const current = (epoch:number,owner:string)=>live && generation===epoch && identity.value===owner;
-function clear() { generation++;board.value=null;technicians.value=[];techPage.value=1;techTotal.value=0;technician.value="";reason.value="";prepared.value=null;pending.value=null;busy.value=false; }
+const liveness = useRequestLiveness(()=>[identity.value]);
+function clear() { liveness.invalidate();board.value=null;technicians.value=[];techPage.value=1;techTotal.value=0;technician.value="";reason.value="";prepared.value=null;pending.value=null;busy.value=false; }
 function failure(cause:unknown) { if (cause instanceof RepairApiError && [401,403,404].includes(cause.status)) { clear(); emit("invalidated"); } error.value=repairProblem(cause); }
 async function read() {
   if (busy.value || prepared.value) return;
-  const epoch=++generation,owner=identity.value;busy.value=true;error.value="";
-  try { const value=await collaborationRequest<CollaborationBoard>(`/repairs/${props.repairId}/collaborations`);if(current(epoch,owner))board.value=value; }
-  catch(cause){if(current(epoch,owner))failure(cause);}finally{if(current(epoch,owner))busy.value=false;}
+  const turn = liveness.begin();busy.value=true;error.value="";
+  try { const value=await collaborationRequest<CollaborationBoard>(`/repairs/${props.repairId}/collaborations`);if(liveness.isCurrent(turn))board.value=value; }
+  catch(cause){if(liveness.isCurrent(turn))failure(cause);}finally{if(liveness.isCurrent(turn))busy.value=false;}
 }
 async function candidates(delta=0) {
   if(locked.value || props.blocked || !board.value?.canInvite)return;
   const next=techPage.value+delta;if(next<1 || delta>0 && (next-1)*20>=techTotal.value)return;
-  const epoch=++generation,owner=identity.value;busy.value=true;error.value="";
+  const turn = liveness.begin();busy.value=true;error.value="";
   try { const value=await collaborationRequest<{items:{id:string;username:string;name:string}[];total:number}>(`/repairs/${props.repairId}/eligible-technicians?page=${next}&pageSize=20`);
-    if(current(epoch,owner)){technicians.value=value.items;techTotal.value=value.total;techPage.value=next;technician.value="";}
-  }catch(cause){if(current(epoch,owner))failure(cause);}finally{if(current(epoch,owner))busy.value=false;}
+    if(liveness.isCurrent(turn)){technicians.value=value.items;techTotal.value=value.total;techPage.value=next;technician.value="";}
+  }catch(cause){if(liveness.isCurrent(turn))failure(cause);}finally{if(liveness.isCurrent(turn))busy.value=false;}
 }
 function prepare(invitation?:string) {
   if(locked.value || props.blocked || !board.value?.canInvite)return;
@@ -46,17 +46,17 @@ function prepare(invitation?:string) {
 }
 async function send() {
   if(busy.value || !pending.value || props.blocked)return;
-  const operation=pending.value,epoch=++generation,owner=identity.value;busy.value=true;error.value="";
+  const operation=pending.value,turn = liveness.begin();busy.value=true;error.value="";
   try { await collaborationRequest(operation.path,operation);const result=await collaborationRequest<CollaborationBoard>(`/repairs/${props.repairId}/collaborations`);
-    if(current(epoch,owner)){board.value=result;pending.value=null;reason.value="";technician.value="";emit("changed");}
-  }catch(cause){if(current(epoch,owner)){if(cause instanceof RepairApiError && cause.status>=400 && cause.status<500)pending.value=null;failure(cause);}}
-  finally{if(current(epoch,owner))busy.value=false;}
+    if(liveness.isCurrent(turn)){board.value=result;pending.value=null;reason.value="";technician.value="";emit("changed");}
+  }catch(cause){if(liveness.isCurrent(turn)){if(cause instanceof RepairApiError && cause.status>=400 && cause.status<500)pending.value=null;failure(cause);}}
+  finally{if(liveness.isCurrent(turn))busy.value=false;}
 }
 async function confirm(){if(!prepared.value || busy.value || props.blocked)return;pending.value=prepared.value;prepared.value=null;await send();}
 watch(identity,()=>{clear();error.value="";void read();},{immediate:true,flush:"sync"});
 watch(()=>props.requestVersion,()=>{if(!busy.value && !prepared.value)void read();});
 watch(locked,value=>emit("busyChange",value),{immediate:true,flush:"sync"});
-onBeforeUnmount(()=>{live=false;clear();emit("busyChange",false);});
+onBeforeUnmount(()=>{clear();emit("busyChange",false);});
 </script>
 <template>
   <section class="fams-card fams-stack" aria-label="受邀科技协助">

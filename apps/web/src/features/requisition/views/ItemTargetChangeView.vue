@@ -3,6 +3,7 @@ import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
 import { requisitionRequest } from "@/features/requisition/api";
 
@@ -46,10 +47,14 @@ const selectedSourceText = computed(() => { const t = selected.value?.source_sna
   return t ? `${name("organization", t.organizationId)} / ${name("employee", t.employeeId)} / ${name("location", t.locationId)}` : ""; });
 const selectedProposedText = computed(() => { const t = selected.value?.proposed_target_json;
   return t ? `${t.custodyType === "PERSONAL" ? "个人使用" : "部门公用"} · ${name("organization", t.organizationId)} / ${name("employee", t.employeeId)} / ${name("location", t.locationId)}` : ""; });
+const liveness = useRequestLiveness(() => [page.value]);
 async function list() {
+  const turn = liveness.begin();
   const result = await businessRequest<{ items: Proposal[]; total: number }>(`/requisition-target-changes?page=${page.value}&pageSize=20`);
-  rows.value = result.items; total.value = result.total;
-  if (selected.value) selected.value = rows.value.find(row => row.id === selected.value?.id) ?? selected.value;
+  if (liveness.isCurrent(turn)) {
+    rows.value = result.items; total.value = result.total;
+    if (selected.value) selected.value = rows.value.find(row => row.id === selected.value?.id) ?? selected.value;
+  }
 }
 async function refresh() {
   if (busy.value) return;
@@ -98,16 +103,22 @@ function runConfirm(): void {
 }
 onMounted(async () => {
   busy.value = true;
+  const turn = liveness.begin();
   try {
     for (const kind of ["organization", "employee", "location"]) {
       const choices: Choice[] = []; let p = 1; let result: { items: Choice[]; total: number };
       do { result = await requisitionRequest(`/catalog/${kind}?page=${p++}&pageSize=200`); choices.push(...result.items); }
-      while (result.items.length === 200); catalogs.value[kind] = choices;
+      while (result.items.length === 200);
+      if (liveness.isCurrent(turn)) catalogs.value[kind] = choices;
     }
     await list();
     if (warehouse.value && route.query.businessId && route.query.itemId) {
-      snapshot.value = await businessRequest<Snapshot>(`/requisition-target-changes/context?businessId=${encodeURIComponent(String(route.query.businessId))}&itemId=${encodeURIComponent(String(route.query.itemId))}`);
-      target.value = { ...snapshot.value.target };
+      const contextTurn = liveness.begin();
+      const context = await businessRequest<Snapshot>(`/requisition-target-changes/context?businessId=${encodeURIComponent(String(route.query.businessId))}&itemId=${encodeURIComponent(String(route.query.itemId))}`);
+      if (liveness.isCurrent(contextTurn)) {
+        snapshot.value = context;
+        target.value = { ...snapshot.value.target };
+      }
     }
   } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 });

@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import RepairReturnSourcePanel from "./../panels/RepairReturnSourcePanel.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { RepairApiError, repairProblem, repairRequest, type Repair, type RepairAsset, type RepairMutation } from "@/features/repair/api";
 const session = useSessionStore(), router = useRouter();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken]));
@@ -16,10 +17,9 @@ const locked = computed(() => busy.value || !!pending.value || !!confirmation.va
 const adminRole = computed(() => session.user?.roles.includes("ASSET_ADMIN") ?? false);
 const assetPrevDisabled = computed(() => locked.value || assetPage.value === 1);
 const assetNextDisabled = computed(() => locked.value || assetPage.value * 20 >= assetTotal.value);
-let generation = 0, live = true;
-const current = (epoch: number, owner: string) => live && generation === epoch && identity.value === owner;
+const liveness = useRequestLiveness(() => [identity.value]);
 function reset() {
-  generation++; assets.value = []; assetTotal.value = 0; assetPage.value = 1; assetId.value = ""; fault.value = ""; occurredAt.value = "";
+  liveness.invalidate(); assets.value = []; assetTotal.value = 0; assetPage.value = 1; assetId.value = ""; fault.value = ""; occurredAt.value = "";
   pending.value = null; confirmation.value = null; busy.value = false;
 }
 function failure(cause: unknown) {
@@ -29,11 +29,11 @@ function failure(cause: unknown) {
 async function loadAssets(delta = 0) {
   if (locked.value) return; const next = assetPage.value + delta;
   if (next < 1 || delta > 0 && (next - 1) * 20 >= assetTotal.value) return;
-  const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  const turn = liveness.begin(); busy.value = true; error.value = "";
   try { const result = await repairRequest<{ items: RepairAsset[]; total: number }>(`/eligible?page=${next}&pageSize=20`);
-    if (current(epoch, owner)) { assets.value = result.items; assetTotal.value = result.total; assetPage.value = next; assetId.value = ""; }
-  } catch (cause) { if (current(epoch, owner)) failure(cause); }
-  finally { if (current(epoch, owner)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { assets.value = result.items; assetTotal.value = result.total; assetPage.value = next; assetId.value = ""; }
+  } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
+  finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function prepare() {
   if (locked.value) return;
@@ -45,18 +45,18 @@ function prepare() {
 }
 async function perform() {
   if (busy.value || !pending.value) return;
-  const operation = pending.value, epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     const result = await repairRequest<Repair & { repairId?: string }>(operation.path, operation);
     const id = result.repairId ?? result.id;
-    if (current(epoch, owner)) { pending.value = null; await router.push(`/repairs/${encodeURIComponent(id)}?saved=1`); }
+    if (liveness.isCurrent(turn)) { pending.value = null; await router.push(`/repairs/${encodeURIComponent(id)}?saved=1`); }
   } catch (cause) {
-    if (current(epoch, owner)) { if (cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
-  } finally { if (current(epoch, owner)) busy.value = false; }
+    if (liveness.isCurrent(turn)) { if (cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
+  } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function confirm() { if (!confirmation.value || busy.value) return; pending.value = confirmation.value; confirmation.value = null; await perform(); }
 watch(identity, () => { reset(); error.value = ""; }, { immediate: true, flush: "sync" });
-onBeforeUnmount(() => { live = false; reset(); });
+onBeforeUnmount(() => { reset(); });
 </script>
 <template>
   <AppChrome>
