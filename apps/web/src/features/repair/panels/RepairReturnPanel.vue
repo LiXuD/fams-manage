@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { RepairApiError, repairProblem, repairRequest, type Repair, type RepairMutation, type RepairReturnTarget } from "@/features/repair/api";
 import { useBusy } from "@/features/repair/busyRegistry";
@@ -15,12 +16,13 @@ interface Location { id: string; name: string; version: number }
 const mode = ref<Mode>("delivery"), target = ref<RepairReturnTarget | null>(null);
 const observed = shallowRef(""), actual = shallowRef(""), evidence = shallowRef(""), checked = shallowRef(false), error = shallowRef(""), busy = shallowRef(false);
 const locations = ref<Location[]>([]), location = shallowRef(""), page = shallowRef(1), total = shallowRef(0);
-const prepared = ref<RepairMutation | null>(null), pending = ref<RepairMutation | null>(null);
+/** 确认式幂等提交：草稿/在途两槽与幂等键簿记归底座；busy/locked、URL 与文案留在本面板。 */
+const { prepared, pending, prepare: draft, confirm: adopt, settle, fail, cancel, reset } = useConfirmedSubmit<Omit<RepairMutation, "key">>({ failure: (cause) => cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500 });
 const locked = computed(() => busy.value || !!prepared.value || !!pending.value);
 const handover = computed(() => props.repair.returnHandovers?.find(row => ["WAITING_RECEIPT", "REFUSED"].includes(row.handover_status)));
 const allowed = (value: Mode) => !!props.repair.actions?.[({ delivery: "deliverReturn", receipt: "receiveReturn", refusal: "refuseReturn", recollection: "recollectReturn" } as const)[value]];
 const liveness = useRequestLiveness(() => [identity.value]);
-function clear() { liveness.invalidate(); target.value = null; locations.value = []; location.value = ""; page.value = 1; total.value = 0; observed.value = ""; actual.value = ""; evidence.value = ""; checked.value = false; prepared.value = null; pending.value = null; busy.value = false; }
+function clear() { liveness.invalidate(); target.value = null; locations.value = []; location.value = ""; page.value = 1; total.value = 0; observed.value = ""; actual.value = ""; evidence.value = ""; checked.value = false; reset(); busy.value = false; }
 function failure(cause: unknown) { if (cause instanceof RepairApiError && [401, 403, 404].includes(cause.status)) { clear(); emit("invalidated"); } error.value = repairProblem(cause); }
 async function select(value: Mode) {
   if (locked.value || blocked.value || !allowed(value)) return;
@@ -54,17 +56,17 @@ function prepare() {
     if (mode.value === "recollection") Object.assign(body, { ownershipVersion: row.ownershipVersion, actualLocationId: place!.id, locationVersion: place!.version });
     else Object.assign(body, { loanVersion: row.loanVersion ?? null, physicalChecked: true });
   }
-  prepared.value = { path: `/${row.id}/return-${mode.value}`, key: crypto.randomUUID(), version: row.version, body }; error.value = "";
+  draft(() => ({ path: `/${row.id}/return-${mode.value}`, version: row.version, body })); error.value = "";
 }
 async function send() {
   if (busy.value || blocked.value || !pending.value) return;
   const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
-  try { await repairRequest(operation.path, operation); await repairRequest<Repair>(`/${props.repair.id}`);
-    if (liveness.isCurrent(turn)) { pending.value = null; target.value = null; checked.value = false; observed.value = ""; evidence.value = ""; emit("changed"); }
-  } catch (cause) { if (liveness.isCurrent(turn)) { if (cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); } }
+  try { await repairRequest(operation.payload.path, { ...operation.payload, key: operation.key }); await repairRequest<Repair>(`/${props.repair.id}`);
+    if (liveness.isCurrent(turn)) { settle(); target.value = null; checked.value = false; observed.value = ""; evidence.value = ""; emit("changed"); }
+  } catch (cause) { if (liveness.isCurrent(turn)) { fail(cause); failure(cause); } }
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
-async function confirm() { if (!prepared.value || busy.value || blocked.value) return; pending.value = prepared.value; prepared.value = null; await send(); }
+async function confirm() { if (busy.value || blocked.value || !adopt()) return; await send(); }
 watch(identity, () => { clear(); error.value = ""; }, { immediate: true, flush: "sync" });
 watch(locked, value => { claimed.value = value; }, { immediate: true, flush: "sync" });
 onBeforeUnmount(() => { clear(); });
@@ -106,7 +108,7 @@ const recollectionRows = computed(() => (props.repair.returnRecollections ?? [])
       <p>请按实物事实确认：交出保留维修和锁；接收后按本次有效目标恢复责任，原借用保持原身份；拒收继续持锁，实际收回才可回库。</p>
       <div class="fams-panel-actions">
         <button class="fams-button" data-kind="primary" type="button" :disabled="busy || blocked" @click="confirm">确认保存实际返还办理</button>
-        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="prepared=null">返回修改返还依据</button>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="cancel()">返回修改返还依据</button>
       </div>
     </div>
     <fieldset v-if="anyActionAllowed" class="fams-card fams-stack" :disabled="locked || blocked">

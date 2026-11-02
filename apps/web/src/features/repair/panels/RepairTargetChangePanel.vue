@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { BusinessApiError, businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
 import { resolveReference } from "@/features/transfer/references";
@@ -24,13 +25,14 @@ const choices = ref<Choice[]>([]), kind = ref<"organization" | "employee" | "loc
 const catalogPage = shallowRef(1), catalogMore = shallowRef(false);
 const organization = ref<Choice | null>(null), employee = ref<Choice | null>(null), location = ref<Choice | null>(null);
 const custody = shallowRef("PERSONAL"), reason = shallowRef(""), code = shallowRef(""), evidence = shallowRef(""), checked = shallowRef(false), decision = shallowRef("");
-const prepared = ref<BusinessMutation | null>(null), pending = ref<BusinessMutation | null>(null);
+/** 确认式幂等提交：草稿/在途两槽与幂等键簿记归底座；busy/locked、URL 与文案留在本面板。 */
+const { prepared, pending, prepare: draft, confirm: adopt, settle, fail, cancel, reset } = useConfirmedSubmit<Omit<BusinessMutation, "key">>({ failure: (cause) => cause instanceof BusinessApiError && cause.status >= 400 && cause.status < 500 });
 const locked = computed(() => busy.value || !!prepared.value || !!pending.value);
 const liveness = useRequestLiveness(() => [identity.value]);
 function clear() {
   liveness.invalidate(); rows.value = []; snapshot.value = null; choices.value = []; organization.value = null;
   employee.value = null; location.value = null; checked.value = false; reason.value = ""; code.value = "";
-  evidence.value = ""; decision.value = ""; prepared.value = null; pending.value = null;
+  evidence.value = ""; decision.value = ""; reset();
   busy.value = false; page.value = 1; total.value = 0; catalogPage.value = 1; catalogMore.value = false;
 }
 function failure(cause: unknown) {
@@ -84,26 +86,26 @@ function propose() {
     || evidence.value.trim().length < 10 || !code.value.trim()) { error.value = "请选择有效新组织、责任人和位置，并明确实物核实及变更原因。"; return; }
   const target = { custodyType: custody.value, organizationId: organization.value.id, organizationVersion: organization.value.version,
     employeeId: employee.value.id, employeeVersion: employee.value.version, locationId: location.value.id, locationVersion: location.value.version };
-  prepared.value = { path: base + "?" + type, key: crypto.randomUUID(), version: snapshot.value.version,
-    body: structuredClone({ businessId: props.repair.id, itemId: props.repair.assetId, snapshot: JSON.parse(JSON.stringify(snapshot.value)) as unknown,
-      target, reason: reason.value.trim(), observedAssetCode: code.value.trim(), physicalVerification: evidence.value.trim(), physicalChecked: true }) };
+  draft(() => ({ path: base + "?" + type, version: snapshot.value!.version,
+    body: structuredClone({ businessId: props.repair.id, itemId: props.repair.assetId, snapshot: JSON.parse(JSON.stringify(snapshot.value!)) as unknown,
+      target, reason: reason.value.trim(), observedAssetCode: code.value.trim(), physicalVerification: evidence.value.trim(), physicalChecked: true }) }));
 }
 function decide(row: Proposal, result: "APPROVED" | "REJECTED") {
   if (locked.value || blocked.value || !admin.value || row.business_id !== props.repair.id || decision.value.trim().length < 3) return;
-  prepared.value = { path: base + "/" + row.id + "/decision?" + type, key: crypto.randomUUID(), version: row.version,
-    body: { result, reason: decision.value.trim() } };
+  draft(() => ({ path: base + "/" + row.id + "/decision?" + type, version: row.version,
+    body: { result, reason: decision.value.trim() } }));
 }
 async function send() {
   if (busy.value || blocked.value || !pending.value) return;
   const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
   try {
-    await businessRequest(operation.path, operation);
-    if (liveness.isCurrent(turn)) { pending.value = null; snapshot.value = null; checked.value = false; rows.value = []; emit("changed"); }
+    await businessRequest(operation.payload.path, { ...operation.payload, key: operation.key });
+    if (liveness.isCurrent(turn)) { settle(); snapshot.value = null; checked.value = false; rows.value = []; emit("changed"); }
   } catch (cause) {
-    if (liveness.isCurrent(turn)) { if (cause instanceof BusinessApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
+    if (liveness.isCurrent(turn)) { fail(cause); failure(cause); }
   } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
-async function confirm() { if (!prepared.value || busy.value || blocked.value) return; pending.value = prepared.value; prepared.value = null; await send(); }
+async function confirm() { if (busy.value || blocked.value || !adopt()) return; await send(); }
 watch(identity, () => { clear(); error.value = ""; }, { immediate: true, flush: "sync" });
 watch(locked, value => { claimed.value = value; }, { immediate: true, flush: "sync" });
 onBeforeUnmount(() => { clear(); });
@@ -141,7 +143,7 @@ const nextDisabled = computed(() => locked.value || blocked.value || page.value 
       <p>核对新目标和实物依据。批准只决定返还目标，当前维修和资产锁继续保留。</p>
       <div class="fams-panel-actions">
         <button class="fams-button" data-kind="primary" type="button" :disabled="busy || blocked" @click="confirm">确认保存目标变更操作</button>
-        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="prepared=null">返回修改目标变更</button>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="cancel()">返回修改目标变更</button>
       </div>
     </div>
     <button v-if="repair.actions?.changeReturnTarget" class="fams-button" data-kind="secondary" type="button" :disabled="locked || blocked" @click="begin">核实本单并提请新返还目标</button>

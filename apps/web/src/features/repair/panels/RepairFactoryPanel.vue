@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness, type LivenessToken } from "@/composables/useRequestLiveness";
 import { useObjectUrlPreview } from "@/composables/useObjectUrlPreview";
 import RepairFactoryPartsPanel from "./RepairFactoryPartsPanel.vue";
@@ -20,7 +21,8 @@ const opened = shallowRef(false), busy = shallowRef(false), stale = shallowRef(t
 const partsBusy = shallowRef(false);
 const data = ref<FactoryDetail | null>(null), roundRows = ref<FactoryRound[]>([]), selected = ref<FactoryRoundDetail | null>(null), selectedId = shallowRef("");
 const history = ref<FactoryHistory[]>([]), total = shallowRef(0), page = shallowRef(1), historyTotal = shallowRef(0), historyPage = shallowRef(1);
-const confirmation = ref<FactoryMutation | null>(null), pending = ref<FactoryMutation | null>(null);
+/** 确认式幂等提交：草稿/在途两槽与幂等键簿记归底座；busy/locked、URL、文件与文案留在本面板。 */
+const { prepared: confirmation, pending, prepare: draft, confirm: adopt, settle, fail, cancel, reset: resetSubmit } = useConfirmedSubmit<Omit<FactoryMutation, "key">>({ failure: (cause) => cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500 });
 const reason = shallowRef(""), provider = shallowRef(""), contact = shallowRef(""), phone = shallowRef(""), due = shallowRef(""), fault = shallowRef("");
 const observedCode = shallowRef(""), serial = shallowRef(""), actualDate = shallowRef(""), actualTime = shallowRef(""), evidence = shallowRef("");
 const costPolicy = shallowRef("NO_COST"), costLimit = shallowRef(""), moneyAmount = shallowRef(""), moneyReason = shallowRef(""), moneyChecked = shallowRef(false), moneyEvidence = ref<string[]>([]), costUnassessed = shallowRef(false);
@@ -84,7 +86,7 @@ function clearPhysical() { clearMoney(); observedCode.value = ""; serial.value =
 function reset() {
   partsBusy.value = false;
   liveness.invalidate(); preview.close(); opened.value = false; busy.value = false; stale.value = true; data.value = null; roundRows.value = []; history.value = []; selected.value = null; selectedId.value = "";
-  confirmation.value = null; pending.value = null; file.value = null; locations.value = []; total.value = 0; historyTotal.value = 0; page.value = 1; historyPage.value = 1;
+  resetSubmit(); file.value = null; locations.value = []; total.value = 0; historyTotal.value = 0; page.value = 1; historyPage.value = 1;
   costPolicy.value = "NO_COST"; costLimit.value = ""; reason.value = ""; provider.value = ""; contact.value = ""; phone.value = ""; due.value = ""; fault.value = ""; purpose.value = "FACTORY_ACK"; clearPhysical();
 }
 function failure(cause: unknown) {
@@ -191,25 +193,25 @@ function prepare(action: Action) {
       }
     }
   }
-  confirmation.value = { repairId: props.repair.id, path, key: crypto.randomUUID(), version: state.version, body, file: chosen, form, label };
+  draft(() => ({ repairId: props.repair.id, path, version: state.version, body, file: chosen, form, label }));
 }
 async function perform() {
   if (!pending.value || busy.value || blocked.value) return;
   const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
   try {
-    await factoryRequest<FactoryReply>(operation.repairId, operation.path, operation);
+    await factoryRequest<FactoryReply>(operation.payload.repairId, operation.payload.path, { ...operation.payload, key: operation.key });
     if (!liveness.isCurrent(turn)) return;
-    pending.value = null; stale.value = true; file.value = null; clearPhysical(); preview.close(); reason.value = "";
-    if (operation.path === "/rounds") { selectedId.value = ""; purpose.value = "FACTORY_ACK"; }
-    if (operation.path.endsWith("/dispatch")) purpose.value = "RECEIPT";
+    settle(); stale.value = true; file.value = null; clearPhysical(); preview.close(); reason.value = "";
+    if (operation.payload.path === "/rounds") { selectedId.value = ""; purpose.value = "FACTORY_ACK"; }
+    if (operation.payload.path.endsWith("/dispatch")) purpose.value = "RECEIPT";
     notice.value = "本次办理已保存。轮次收回不等于整单维修完成，仍需核实后续实际去向。";
     await fetchState(turn);
   } catch (cause) {
-    if (liveness.isCurrent(turn)) { if (cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
+    if (liveness.isCurrent(turn)) { fail(cause); failure(cause); }
   } finally { if (liveness.isCurrent(turn)) busy.value = false; }
   if (liveness.isCurrent(turn) && !pending.value) emit("changed");
 }
-async function confirm() { if (busy.value || blocked.value || pending.value || !confirmation.value) return; pending.value = confirmation.value; confirmation.value = null; await perform(); }
+async function confirm() { if (busy.value || blocked.value || pending.value || !adopt()) return; await perform(); }
 function fileChosen(event: Event) {
   if (locked.value) return;
   const input = event.target as HTMLInputElement;
@@ -250,10 +252,10 @@ onBeforeUnmount(() => { reset(); });
       <p v-if="notice" class="fams-notice" data-state="success" role="status"><strong>{{ notice }}</strong></p>
       <button v-if="pending" class="fams-button" data-kind="secondary" type="button" :disabled="retryDisabled" @click="perform">重试原返厂办理</button>
       <div v-if="confirmation" class="fams-card fams-stack" role="group" aria-label="确认本次返厂办理">
-        <p>{{ confirmation.label }}。请核对本次已填写的实物、厂家及实际依据；登记后保留原记录。</p>
+        <p>{{ confirmation.payload.label }}。请核对本次已填写的实物、厂家及实际依据；登记后保留原记录。</p>
         <div class="fams-panel-actions">
           <button class="fams-button" data-kind="primary" type="button" :disabled="confirmDisabled" @click="confirm">确认保存本次返厂办理</button>
-          <button class="fams-button" data-kind="secondary" type="button" :disabled="confirmDisabled" @click="confirmation = null">返回修改返厂办理</button>
+          <button class="fams-button" data-kind="secondary" type="button" :disabled="confirmDisabled" @click="cancel()">返回修改返厂办理</button>
         </div>
       </div>
       <template v-if="data">

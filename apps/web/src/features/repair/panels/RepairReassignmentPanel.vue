@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { RepairApiError, repairProblem, repairRequest, type Repair, type RepairMutation } from "@/features/repair/api";
 import { useBusy } from "@/features/repair/busyRegistry";
@@ -14,11 +15,13 @@ interface Context { snapshot: { version: number; processorAccountId: string; own
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, props.repair.id]));
 const admin = computed(() => !!session.user?.roles.includes("ASSET_ADMIN"));
 const context = ref<Context | null>(null), target = shallowRef(""), reason = shallowRef(""), evidence = shallowRef(""), checked = shallowRef(false), error = shallowRef("");
-const busy = shallowRef(false), prepared = ref<RepairMutation | null>(null), pending = ref<RepairMutation | null>(null);
+const busy = shallowRef(false);
+/** 确认式幂等提交：草稿/在途两槽与幂等键簿记归底座；busy/locked、URL 与文案留在本面板。 */
+const { prepared, pending, prepare: draft, confirm: adopt, settle, fail, cancel, reset } = useConfirmedSubmit<Omit<RepairMutation, "key">>({ failure: (cause) => cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500 });
 const locked = computed(() => busy.value || !!prepared.value || !!pending.value);
 const liveness = useRequestLiveness(() => [identity.value]);
 function clear() { liveness.invalidate(); context.value = null; target.value = ""; reason.value = ""; evidence.value = ""; checked.value = false;
-  prepared.value = null; pending.value = null; busy.value = false; }
+  reset(); busy.value = false; }
 function failure(cause: unknown) { if (cause instanceof RepairApiError && [401, 403, 404].includes(cause.status)) { clear(); emit("invalidated"); } error.value = repairProblem(cause); }
 async function inspect() {
   if (locked.value || blocked.value || !admin.value) return;
@@ -33,19 +36,19 @@ function prepare() {
   if (!context.value.operators.some(row => row.id === target.value) || !checked.value || reason.value.trim().length < 3 || evidence.value.trim().length < 10) {
     error.value = "请选择有效接任库管，核对未同步结果并填写原因及实际交接凭证。"; return;
   }
-  prepared.value = { path: `/${props.repair.id}/reassignment`, key: crypto.randomUUID(), version: context.value.snapshot.version,
-    body: { processorAccountId: target.value, snapshot: JSON.parse(JSON.stringify(context.value.snapshot)) as unknown,
-      unsynchronizedResultsChecked: true, reason: reason.value.trim(), evidence: evidence.value.trim() } };
+  draft(() => ({ path: `/${props.repair.id}/reassignment`, version: context.value!.snapshot.version,
+    body: { processorAccountId: target.value, snapshot: JSON.parse(JSON.stringify(context.value!.snapshot)) as unknown,
+      unsynchronizedResultsChecked: true, reason: reason.value.trim(), evidence: evidence.value.trim() } }));
 }
 async function send() {
   if (busy.value || blocked.value || !pending.value) return;
   const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
-  try { await repairRequest(operation.path, operation);
-    if (liveness.isCurrent(turn)) { pending.value = null; context.value = null; checked.value = false; emit("changed"); }
-  } catch (cause) { if (liveness.isCurrent(turn)) { if (cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); } }
+  try { await repairRequest(operation.payload.path, { ...operation.payload, key: operation.key });
+    if (liveness.isCurrent(turn)) { settle(); context.value = null; checked.value = false; emit("changed"); }
+  } catch (cause) { if (liveness.isCurrent(turn)) { fail(cause); failure(cause); } }
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
-async function confirm() { if (!prepared.value || busy.value || blocked.value) return; pending.value = prepared.value; prepared.value = null; await send(); }
+async function confirm() { if (busy.value || blocked.value || !adopt()) return; await send(); }
 watch(identity, () => { clear(); error.value = ""; }, { immediate: true, flush: "sync" });
 watch(locked, value => { claimed.value = value; }, { immediate: true, flush: "sync" });
 onBeforeUnmount(() => { clear(); });
@@ -69,7 +72,7 @@ const sectionShown = computed(() => admin.value && props.repair.status === "WARE
       <p>确认按当前核实结果移交唯一处理权。已交出设备仍须实际接收或收回。</p>
       <div class="fams-panel-actions">
         <button class="fams-button" data-kind="primary" type="button" :disabled="busy || blocked" @click="confirm">确认保存维修转派</button>
-        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="prepared=null">返回修改转派</button>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="cancel()">返回修改转派</button>
       </div>
     </div>
     <fieldset v-if="context" class="fams-card fams-stack" :disabled="locked || blocked">

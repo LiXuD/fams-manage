@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { RepairApiError, repairProblem, repairRequest, repairStates, type Repair, type RepairAsset, type RepairMutation } from "@/features/repair/api";
 import { useBusy } from "@/features/repair/busyRegistry";
@@ -15,15 +16,16 @@ const session = useSessionStore();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken]));
 const rows = ref<SourceRow[]>([]), total = shallowRef(0), page = shallowRef(1), source = ref<Source | null>(null);
 const fault = shallowRef(""), impact = ref("MEDIUM"), error = shallowRef(""), busy = shallowRef(false);
-const prepared = ref<RepairMutation | null>(null), pending = ref<RepairMutation | null>(null);
+/** 确认式幂等提交：草稿/在途两槽与幂等键簿记归底座；busy/locked、URL 与文案留在本面板。 */
+const { prepared, pending, prepare: draft, confirm: adopt, settle, fail, cancel, reset } = useConfirmedSubmit<Omit<RepairMutation, "key">>({ failure: (cause) => cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500 });
 const locked = computed(() => busy.value || !!prepared.value || !!pending.value);
 const liveness = useRequestLiveness(() => [identity.value]);
 function clear() { liveness.invalidate(); rows.value = []; total.value = 0; page.value = 1; source.value = null; fault.value = "";
-  prepared.value = null; pending.value = null; busy.value = false; }
+  reset(); busy.value = false; }
 function failure(cause: unknown, mutation = false) {
   if (cause instanceof RepairApiError) {
     if ([401, 403, 404].includes(cause.status)) clear();
-    else if (mutation && cause.status >= 400 && cause.status < 500) { pending.value = null; source.value = null; }
+    else if (mutation && fail(cause)) source.value = null;
   }
   error.value = repairProblem(cause);
 }
@@ -44,17 +46,17 @@ async function select(id: string) {
 function prepare() {
   if (locked.value || blocked.value || !source.value || fault.value.trim().length < 3) return;
   const row = source.value;
-  prepared.value = { path: `/return-sources/${row.followupId}`, version: row.version, key: crypto.randomUUID(),
-    body: { assetVersion: row.asset.version, lockVersion: row.lockVersion, fault: fault.value.trim(), impact: impact.value } };
+  draft(() => ({ path: `/return-sources/${row.followupId}`, version: row.version,
+    body: { assetVersion: row.asset.version, lockVersion: row.lockVersion, fault: fault.value.trim(), impact: impact.value } }));
 }
 async function send() {
   if (busy.value || blocked.value || !pending.value) return;
   const turn = liveness.begin(), operation = pending.value; busy.value = true; error.value = "";
-  try { const result = await repairRequest<Repair>(operation.path, operation);
-    if (liveness.isCurrent(turn)) { pending.value = null; source.value = null; emit("created", result); }
+  try { const result = await repairRequest<Repair>(operation.payload.path, { ...operation.payload, key: operation.key });
+    if (liveness.isCurrent(turn)) { settle(); source.value = null; emit("created", result); }
   } catch (cause) { if (liveness.isCurrent(turn)) failure(cause, true); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
-async function confirm() { if (busy.value || blocked.value || !prepared.value) return; pending.value = prepared.value; prepared.value = null; await send(); }
+async function confirm() { if (busy.value || blocked.value || !adopt()) return; await send(); }
 watch(identity, () => { clear(); error.value = ""; }, { immediate: true, flush: "sync" });
 watch(locked, value => { claimed.value = value; }, { immediate: true, flush: "sync" });
 onBeforeUnmount(() => { clear(); });
@@ -107,7 +109,7 @@ const inspectedAtText = computed(() => source.value ? new Date(source.value.insp
       <p>将创建待批准的正式维修并继承同一资产锁；不会自动批准、虚构接修或重开借用。</p>
       <div class="fams-panel-actions">
         <button class="fams-button" data-kind="primary" type="button" :disabled="busy || blocked" @click="confirm">确认提交损坏接续</button>
-        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="prepared=null">返回修改接续</button>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="cancel()">返回修改接续</button>
       </div>
     </div>
   </section>

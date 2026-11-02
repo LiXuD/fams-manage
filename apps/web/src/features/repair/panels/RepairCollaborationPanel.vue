@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { RepairApiError, repairProblem, type RepairMutation } from "@/features/repair/api";
 import { collaborationRequest, opinionResults, type CollaborationBoard } from "@/features/repair/collaboration";
@@ -12,7 +13,8 @@ const emit = defineEmits<{ changed: []; invalidated: [] }>();
 const { busy: claimed, blocked } = useBusy("collaboration");
 const session = useSessionStore(), board = ref<CollaborationBoard | null>(null), technicians = ref<{id:string; username:string; name:string}[]>([]);
 const techPage = shallowRef(1), techTotal = shallowRef(0), technician = shallowRef(""), reason = shallowRef(""), error = shallowRef(""), busy = shallowRef(false);
-const prepared = ref<RepairMutation | null>(null), pending = ref<RepairMutation | null>(null);
+/** 确认式幂等提交：草稿/在途两槽与幂等键簿记归底座；busy/locked、URL 与文案留在本面板。 */
+const { prepared,pending,prepare:draft,confirm:adopt,settle,fail,cancel,reset }=useConfirmedSubmit<Omit<RepairMutation,"key">>({failure:(cause)=>cause instanceof RepairApiError&&cause.status>=400&&cause.status<500});
 const identity = computed(()=>JSON.stringify([session.user?.id,session.user?.roles,session.csrfToken,props.repairId]));
 const locked = computed(()=>busy.value || !!prepared.value || !!pending.value);
 const refreshDisabled = computed(()=>busy.value || !!prepared.value || !!blocked.value);
@@ -24,7 +26,7 @@ const techNextDisabled = computed(()=>techPage.value*20>=techTotal.value);
 const invitationRows = computed(()=>(board.value?.invitations ?? []).map(row=>({...row,statusText:row.invitation_status==='ACTIVE'?'有效邀请':row.invitation_status==='REVOKED'?'已撤销':'已结束',revocable:!!board.value?.canInvite && row.invitation_status==='ACTIVE',revokeText:`撤销 ${row.technician_username} 的协助邀请`})));
 const opinionRows = computed(()=>(board.value?.opinions ?? []).map(row=>({...row,occurredText:new Date(row.occurred_at).toLocaleString(),resultText:opinionResults[row.opinion_result] || '待核实意见'})));
 const liveness = useRequestLiveness(()=>[identity.value]);
-function clear() { liveness.invalidate();board.value=null;technicians.value=[];techPage.value=1;techTotal.value=0;technician.value="";reason.value="";prepared.value=null;pending.value=null;busy.value=false; }
+function clear() { liveness.invalidate();board.value=null;technicians.value=[];techPage.value=1;techTotal.value=0;technician.value="";reason.value="";reset();busy.value=false; }
 function failure(cause:unknown) { if (cause instanceof RepairApiError && [401,403,404].includes(cause.status)) { clear(); emit("invalidated"); } error.value=repairProblem(cause); }
 async function read() {
   if (busy.value || prepared.value) return;
@@ -44,18 +46,18 @@ function prepare(invitation?:string) {
   if(locked.value || blocked.value || !board.value?.canInvite)return;
   if(reason.value.trim().length<3){error.value="请填写邀请或撤销的明确原因。";return;}
   if(!invitation && !technicians.value.some(row=>row.id===technician.value)){error.value="请选择当前启用且有科技协助角色的人员。";return;}
-  prepared.value={path:invitation?`/repair-collaborations/${invitation}/revoke`:`/repairs/${props.repairId}/collaborations`,key:crypto.randomUUID(),version:board.value.requestVersion,
-    body:invitation?{reason:reason.value.trim()}:{technicianAccountId:technician.value,reason:reason.value.trim()}};
+  draft(()=>({path:invitation?`/repair-collaborations/${invitation}/revoke`:`/repairs/${props.repairId}/collaborations`,version:board.value!.requestVersion,
+    body:invitation?{reason:reason.value.trim()}:{technicianAccountId:technician.value,reason:reason.value.trim()}}));
 }
 async function send() {
   if(busy.value || !pending.value || blocked.value)return;
   const operation=pending.value,turn = liveness.begin();busy.value=true;error.value="";
-  try { await collaborationRequest(operation.path,operation);const result=await collaborationRequest<CollaborationBoard>(`/repairs/${props.repairId}/collaborations`);
-    if(liveness.isCurrent(turn)){board.value=result;pending.value=null;reason.value="";technician.value="";emit("changed");}
-  }catch(cause){if(liveness.isCurrent(turn)){if(cause instanceof RepairApiError && cause.status>=400 && cause.status<500)pending.value=null;failure(cause);}}
+  try { await collaborationRequest(operation.payload.path,{...operation.payload,key:operation.key});const result=await collaborationRequest<CollaborationBoard>(`/repairs/${props.repairId}/collaborations`);
+    if(liveness.isCurrent(turn)){board.value=result;settle();reason.value="";technician.value="";emit("changed");}
+  }catch(cause){if(liveness.isCurrent(turn)){fail(cause);failure(cause);}}
   finally{if(liveness.isCurrent(turn))busy.value=false;}
 }
-async function confirm(){if(!prepared.value || busy.value || blocked.value)return;pending.value=prepared.value;prepared.value=null;await send();}
+async function confirm(){if(busy.value || blocked.value || !adopt())return;await send();}
 watch(identity,()=>{clear();error.value="";void read();},{immediate:true,flush:"sync"});
 watch(()=>props.requestVersion,()=>{if(!busy.value && !prepared.value)void read();});
 watch(locked,value=>{claimed.value=value;},{immediate:true,flush:"sync"});
@@ -78,7 +80,7 @@ onBeforeUnmount(()=>{clear();});
       <p>确认本次人员和原因，仅开放此维修必要资料；邀请不授予库管处理权，撤销后不能继续读取或提交。</p>
       <div class="fams-panel-actions">
         <button class="fams-button" data-kind="primary" type="button" :disabled="confirmDisabled" @click="confirm">确认保存协助操作</button>
-        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="prepared=null">返回修改协助操作</button>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="cancel()">返回修改协助操作</button>
       </div>
     </div>
     <template v-if="board">

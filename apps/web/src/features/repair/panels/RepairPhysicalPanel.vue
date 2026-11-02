@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { repairRequest, repairProblem, RepairApiError, type Repair, type RepairMutation } from "@/features/repair/api";
 import { useBusy } from "@/features/repair/busyRegistry";
@@ -15,7 +16,8 @@ const identity=computed(()=>JSON.stringify([session.user?.id,session.user?.roles
 const warehouses=ref<Place[]>([]),locations=ref<Place[]>([]),warehouse=shallowRef(""),location=shallowRef("");
 const warehousePage=shallowRef(1),locationPage=shallowRef(1),warehouseTotal=shallowRef(0),locationTotal=shallowRef(0);
 const mode=ref<"away"|"inbound">("away"),observed=shallowRef(""),actual=shallowRef(""),evidence=shallowRef(""),error=shallowRef(""),busy=shallowRef(false);
-const prepared=ref<RepairMutation|null>(null),pending=ref<RepairMutation|null>(null);
+/** 确认式幂等提交：草稿/在途两槽与幂等键簿记归底座；busy/locked、URL 与文案留在本面板。 */
+const { prepared,pending,prepare:draft,confirm:adopt,settle,fail,cancel,reset }=useConfirmedSubmit<Omit<RepairMutation,"key">>({failure:(cause)=>cause instanceof RepairApiError&&cause.status>=400&&cause.status<500});
 const locked=computed(()=>busy.value||!!prepared.value||!!pending.value);
 const visibleLocations=computed(()=>mode.value==="away"?locations.value:locations.value.filter(row=>row.location_type==="BIN"&&row.warehouse_id===warehouse.value));
 const handlingRows=computed(()=>(props.repair.physicalHandling??[]).map(row=>({...row,occurredText:new Date(row.occurred_at).toLocaleString()})));
@@ -34,7 +36,7 @@ const warehouseNextDisabled=computed(()=>warehousePage.value*20>=warehouseTotal.
 const locationPrevDisabled=computed(()=>locationPage.value===1);
 const locationNextDisabled=computed(()=>locationPage.value*20>=locationTotal.value);
 const liveness=useRequestLiveness(()=>[identity.value]);
-function clear(){liveness.invalidate();warehouses.value=[];locations.value=[];warehouse.value="";location.value="";warehousePage.value=1;locationPage.value=1;warehouseTotal.value=0;locationTotal.value=0;observed.value="";actual.value="";evidence.value="";prepared.value=null;pending.value=null;busy.value=false;}
+function clear(){liveness.invalidate();warehouses.value=[];locations.value=[];warehouse.value="";location.value="";warehousePage.value=1;locationPage.value=1;warehouseTotal.value=0;locationTotal.value=0;observed.value="";actual.value="";evidence.value="";reset();busy.value=false;}
 function failure(cause:unknown){if(cause instanceof RepairApiError&&[401,403,404].includes(cause.status)){clear();emit("invalidated");}error.value=repairProblem(cause);}
 function selectMode(value:"away"|"inbound"){if(locked.value||blocked.value)return;mode.value=value;location.value="";const time=new Date();actual.value=new Date(time.getTime()-time.getTimezoneOffset()*60000).toISOString().slice(0,23);error.value="";}
 async function catalog(kind:"warehouse"|"location",delta=0){if(locked.value||blocked.value)return;const page=kind==="warehouse"?warehousePage:locationPage,total=kind==="warehouse"?warehouseTotal:locationTotal,next=page.value+delta;if(next<1||delta>0&&(next-1)*20>=total.value)return;
@@ -46,11 +48,11 @@ function prepare(){if(locked.value||blocked.value)return;error.value="";const ro
  if(mode.value==="away"&&!row.actions?.acceptAway||mode.value==="inbound"&&!row.actions?.closeInbound){error.value="当前阶段不能办理此动作，请刷新核对。";return;}
  const body:Record<string,unknown>={assetVersion:row.assetVersion,ownershipVersion:row.ownershipVersion,lockVersion:row.lockVersion,loanVersion:row.loanVersion??null,observedCode:observed.value.trim(),occurredAt:time.toISOString(),evidence:evidence.value.trim(),locationVersion:place.version};
  if(mode.value==="away")body.actualLocationId=place.id;else{body.warehouseId=store!.id;body.warehouseVersion=store!.version;body.locationId=place.id;}
- prepared.value={path:`/${row.id}/${mode.value==="away"?"accept-away":"close-inbound"}`,key:crypto.randomUUID(),version:row.version,body};}
+ draft(()=>({path:`/${row.id}/${mode.value==="away"?"accept-away":"close-inbound"}`,version:row.version,body}));}
 async function send(){if(busy.value||!pending.value||blocked.value)return;const operation=pending.value,turn=liveness.begin();busy.value=true;error.value="";
- try{await repairRequest(operation.path,operation);await repairRequest<Repair>(`/${props.repair.id}`);if(liveness.isCurrent(turn)){pending.value=null;observed.value="";actual.value="";evidence.value="";location.value="";emit("changed");}}
- catch(cause){if(liveness.isCurrent(turn)){if(cause instanceof RepairApiError&&cause.status>=400&&cause.status<500)pending.value=null;failure(cause);}}finally{if(liveness.isCurrent(turn))busy.value=false;}}
-async function confirm(){if(!prepared.value||busy.value||blocked.value)return;pending.value=prepared.value;prepared.value=null;await send();}
+ try{await repairRequest(operation.payload.path,{...operation.payload,key:operation.key});await repairRequest<Repair>(`/${props.repair.id}`);if(liveness.isCurrent(turn)){settle();observed.value="";actual.value="";evidence.value="";location.value="";emit("changed");}}
+ catch(cause){if(liveness.isCurrent(turn)){fail(cause);failure(cause);}}finally{if(liveness.isCurrent(turn))busy.value=false;}}
+async function confirm(){if(busy.value||blocked.value||!adopt())return;await send();}
 watch(identity,()=>{clear();error.value="";},{immediate:true,flush:"sync"});
 watch(warehouse,()=>{if(!locked.value)location.value="";});
 watch(locked,value=>{claimed.value=value;},{immediate:true,flush:"sync"});
@@ -74,7 +76,7 @@ onBeforeUnmount(()=>{clear();});
       <p>接修只记录实际接收，不结束维修。验收入库须确认实物及修复结果，同步结束原未结借用和维修，不能用科技建议代替实物。</p>
       <div class="fams-panel-actions">
         <button class="fams-button" data-kind="primary" type="button" :disabled="confirmDisabled" @click="confirm">确认保存实物办理</button>
-        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="prepared=null">返回修改实物依据</button>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="cancel()">返回修改实物依据</button>
       </div>
     </div>
     <fieldset v-if="showActions" class="fams-card fams-stack" :disabled="locked||blocked">
