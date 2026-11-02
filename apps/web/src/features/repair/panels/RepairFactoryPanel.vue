@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { useRequestLiveness, type LivenessToken } from "@/composables/useRequestLiveness";
+import { useObjectUrlPreview } from "@/composables/useObjectUrlPreview";
 import RepairFactoryPartsPanel from "./RepairFactoryPartsPanel.vue";
 import FamsMediaPreview from "@/components/FamsMediaPreview.vue";
 import { RepairApiError, repairRequest, type Repair } from "@/features/repair/api";
@@ -25,9 +26,8 @@ const costText = (policy?: string, limit?: string | null) => policy === "UNLIMIT
 const originalChecked = shallowRef(false), noCostChecked = shallowRef(false), condition = ref("RESTORED");
 const locationId = shallowRef(""), locations = ref<{ id: string; name: string; version: number }[]>([]), locationPage = shallowRef(1), locationTotal = shallowRef(0);
 const file = ref<File | null>(null), purpose = ref("FACTORY_ACK"), selectedEvidence = ref<string[]>([]);
-const preview = shallowRef(""), previewName = shallowRef(""), previewMime = shallowRef("");
+const preview = useObjectUrlPreview();
 const liveness = useRequestLiveness(() => [identity.value]);
-let download: AbortController | null = null;
 const locked = computed(() => props.blocked || busy.value || partsBusy.value || !!pending.value || !!confirmation.value);
 const activeSelected = computed(() => !!selected.value && selected.value.id === data.value?.activeRound?.id);
 const evidencePurpose = computed(() => data.value?.activeRound?.roundStatus === "DISPATCHED" ? "RECEIPT" : "FACTORY_ACK");
@@ -69,7 +69,7 @@ const noEligibleEvidence = computed(() => evidenceRows.value.length === 0);
 const noCostLabel = computed(() => { const cost = selected.value?.actualCost; return cost === null || cost === undefined ? "已核实本轮实际没有费用" : `已核对本轮已记录最终费用 ${cost} 元`; });
 const costUnassessedShown = computed(() => selected.value?.actualCost === null);
 const receiveFieldLabel = computed(() => data.value?.actions.receive ? "实际收回状况与处理结果" : "实物寄出与厂家接收依据");
-const previewImageShown = computed(() => previewMime.value !== "application/pdf");
+const previewImageShown = computed(() => preview.mime !== "application/pdf");
 const historyRows = computed(() => history.value.map(item => ({ ...item, recordedText: new Date(item.recorded_at).toLocaleString() })));
 const costLimitFieldShown = computed(() => costPolicy.value === "LIMITED");
 const fileRows = computed(() => (selected.value?.files ?? []).map(item => ({ ...item, readable: item.scanStatus === "CLEAN" })));
@@ -77,11 +77,10 @@ const finalCostShown = computed(() => selected.value?.actualCost !== null);
 const partsPanelShown = computed(() => selected.value?.roundStatus === "RECEIVED");
 function clearMoney() { moneyAmount.value = ""; moneyReason.value = ""; moneyChecked.value = false; moneyEvidence.value = []; costUnassessed.value = false; }
 watch([busy, pending, confirmation, partsBusy], () => emit("busy-change", busy.value || !!pending.value || !!confirmation.value || partsBusy.value), { flush: "sync" });
-function clearPreview() { download?.abort(); download = null; if (preview.value) URL.revokeObjectURL(preview.value); preview.value = ""; previewName.value = ""; previewMime.value = ""; }
 function clearPhysical() { clearMoney(); observedCode.value = ""; serial.value = ""; actualDate.value = ""; actualTime.value = ""; evidence.value = ""; originalChecked.value = false; noCostChecked.value = false; selectedEvidence.value = []; locationId.value = ""; }
 function reset() {
   partsBusy.value = false;
-  liveness.invalidate(); clearPreview(); opened.value = false; busy.value = false; stale.value = true; data.value = null; roundRows.value = []; history.value = []; selected.value = null; selectedId.value = "";
+  liveness.invalidate(); preview.close(); opened.value = false; busy.value = false; stale.value = true; data.value = null; roundRows.value = []; history.value = []; selected.value = null; selectedId.value = "";
   confirmation.value = null; pending.value = null; file.value = null; locations.value = []; total.value = 0; historyTotal.value = 0; page.value = 1; historyPage.value = 1;
   costPolicy.value = "NO_COST"; costLimit.value = ""; reason.value = ""; provider.value = ""; contact.value = ""; phone.value = ""; due.value = ""; fault.value = ""; purpose.value = "FACTORY_ACK"; clearPhysical();
 }
@@ -111,12 +110,12 @@ async function load() {
   if (liveness.isCurrent(turn) && data.value?.version !== props.repair.version) emit("changed");
 }
 async function selectRound(row: FactoryRound) {
-  if (locked.value) return; selectedId.value = row.id; clearPhysical(); clearPreview(); await load();
+  if (locked.value) return; selectedId.value = row.id; clearPhysical(); preview.close(); await load();
 }
 async function paginate(delta: number, events = false) {
   if (locked.value) return; const n = (events ? historyPage.value : page.value) + delta, count = events ? historyTotal.value : total.value;
   if (n < 1 || (n - 1) * 20 >= count) return;
-  if (events) historyPage.value = n; else { page.value = n; selectedId.value = ""; clearPhysical(); clearPreview(); }
+  if (events) historyPage.value = n; else { page.value = n; selectedId.value = ""; clearPhysical(); preview.close(); }
   await load();
 }
 async function loadLocations(delta = 0) {
@@ -197,7 +196,7 @@ async function perform() {
   try {
     await factoryRequest<FactoryReply>(operation.repairId, operation.path, operation);
     if (!liveness.isCurrent(turn)) return;
-    pending.value = null; stale.value = true; file.value = null; clearPhysical(); clearPreview(); reason.value = "";
+    pending.value = null; stale.value = true; file.value = null; clearPhysical(); preview.close(); reason.value = "";
     if (operation.path === "/rounds") { selectedId.value = ""; purpose.value = "FACTORY_ACK"; }
     if (operation.path.endsWith("/dispatch")) purpose.value = "RECEIPT";
     notice.value = "本次办理已保存。轮次收回不等于整单维修完成，仍需核实后续实际去向。";
@@ -215,15 +214,15 @@ function fileChosen(event: Event) {
   input.value = "";
 }
 async function readFile(item: FactoryFile) {
-  if (locked.value || !selected.value || item.scanStatus !== "CLEAN") return; clearPreview();
+  if (locked.value || !selected.value || item.scanStatus !== "CLEAN") return; preview.close();
   const repair = props.repair.id, round = selected.value.id, turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     const grant = await factoryRequest<{ token: string; expiresAtEpochSecond: number }>(repair, `/rounds/${round}/evidence/${item.objectId}/grant`);
     if (!liveness.isCurrent(turn)) return;
-    download = new AbortController();
-    const blob = await factoryEvidenceContent(repair, round, item.objectId, grant.token, download.signal); if (!liveness.isCurrent(turn)) return;
+    const signal = preview.beginDownload();
+    const blob = await factoryEvidenceContent(repair, round, item.objectId, grant.token, signal); if (!liveness.isCurrent(turn)) return;
     if (blob.size !== item.sizeBytes || blob.size > 20 * 1024 * 1024 || blob.type !== item.contentType || !["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(blob.type)) throw new Error("Invalid evidence bytes");
-    preview.value = URL.createObjectURL(blob); previewName.value = item.filename; previewMime.value = blob.type;
+    preview.show(blob, item.filename);
   } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
@@ -378,14 +377,14 @@ onBeforeUnmount(() => { reset(); emit("busy-change", false); });
             </div>
           </fieldset>
           <RepairFactoryPartsPanel v-if="partsPanelShown" :key="`${identity}:${selected.id}`" :repair="props.repair" :round="selected" :blocked="props.blocked || busy || !!pending || !!confirmation || stale" @busy-change="partsBusy = $event" @changed="load" @invalidated="reset();emit('invalidated')" @read-file="readFile" />
-          <FamsMediaPreview v-if="preview" @dismiss="clearPreview">
+          <FamsMediaPreview v-if="preview.url" @dismiss="preview.close()">
             <figure>
-            <img v-if="previewImageShown" :src="preview" :alt="`厂家凭证：${previewName}`">
+            <img v-if="previewImageShown" :src="preview.url" :alt="`厂家凭证：${preview.name}`">
             <p v-else>PDF原件已读取，可保存查看。</p>
-            <figcaption>{{ previewName }}</figcaption>
+            <figcaption>{{ preview.name }}</figcaption>
             <div class="fams-inline">
-              <a :href="preview" :download="previewName">保存这份厂家原件</a>
-              <button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="clearPreview">关闭厂家凭证</button>
+              <a :href="preview.url" :download="preview.name">保存这份厂家原件</a>
+              <button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="preview.close()">关闭厂家凭证</button>
             </div>
             </figure>
           </FamsMediaPreview>

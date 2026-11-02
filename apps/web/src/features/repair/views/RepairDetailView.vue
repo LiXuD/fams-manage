@@ -13,6 +13,7 @@ import RepairFactoryPanel from "./../panels/RepairFactoryPanel.vue";
 import { factoryEventNames, factoryRoundStates, factoryScopeStates } from "@/features/repair/factory-api";
 import { useSessionStore } from "@/auth/sessionStore";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
+import { useObjectUrlPreview } from "@/composables/useObjectUrlPreview";
 import { RepairApiError, repairPhotoContent, repairProblem, repairRequest, repairStates, type Repair, type RepairMutation, type RepairPhoto } from "@/features/repair/api";
 const session = useSessionStore(), route = useRoute();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, route.params.id]));
@@ -21,7 +22,7 @@ const approvalMethod = shallowRef("INTERNAL_NO_COST"), reason = shallowRef("");
 const factoryCostPolicy = shallowRef("NO_COST"), factoryCostLimit = shallowRef("");
 const moneyPattern = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/;
 const observedCode = shallowRef(""), evidence = shallowRef(""), confirmedPlace = shallowRef(false), neverLeft = shallowRef(false);
-const selectedFile = ref<File | null>(null), preview = shallowRef(""), previewName = shallowRef("");
+const selectedFile = ref<File | null>(null), preview = useObjectUrlPreview();
 const pending = ref<RepairMutation | null>(null), confirmation = ref<RepairMutation | null>(null);
 const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef("");
 const collaborationLocked = shallowRef(false);
@@ -53,10 +54,8 @@ const eventNames: Record<string, string> = { REPAIR_SUBMITTED: "已提交报修"
   REPAIR_ACCEPTED_IN_PLACE: "已受理原地维修", REPAIR_COMPLETED_IN_PLACE: "已核对原地恢复", REPAIR_CANCELLED: "已取消", REPAIR_FAULT_PHOTO_ADDED: "已补充故障照片", REPAIR_CONFLICT_REJECTED: "旧操作已拒绝",
   ...Object.fromEntries(Object.entries(factoryEventNames).map(([action, label]) => [`REPAIR_${action}`, label])) };
 const liveness = useRequestLiveness(() => [identity.value]);
-let download: AbortController | null = null;
-function clearPhoto() { download?.abort(); download = null; if (preview.value) URL.revokeObjectURL(preview.value); preview.value = ""; previewName.value = ""; }
 function reset() {
-  liveness.invalidate(); clearPhoto(); detail.value = null; pending.value = null; confirmation.value = null; selectedFile.value = null;
+  liveness.invalidate(); preview.close(); detail.value = null; pending.value = null; confirmation.value = null; selectedFile.value = null;
   reason.value = ""; approvalMethod.value = "INTERNAL_NO_COST"; factoryCostPolicy.value = "NO_COST"; factoryCostLimit.value = ""; evidence.value = ""; observedCode.value = ""; neverLeft.value = false; confirmedPlace.value = false;
   busy.value = false; factoryLocked.value = false;
 }
@@ -112,23 +111,23 @@ async function perform() {
     const selected = await repairRequest<Repair>(`/${id}`);
     if (liveness.isCurrent(turn)) { pending.value = null; detail.value = selected;
       selectedFile.value = null; confirmedPlace.value = false; neverLeft.value = false; evidence.value = ""; observedCode.value = "";
-      notice.value = "本次结果已保存。批准、库管受理和实际修复分别留痕。"; clearPhoto(); }
+      notice.value = "本次结果已保存。批准、库管受理和实际修复分别留痕。"; preview.close(); }
   } catch (cause) {
     if (liveness.isCurrent(turn)) { if (cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
   } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function confirm() { if (!confirmation.value || busy.value) return; pending.value = confirmation.value; confirmation.value = null; await perform(); }
 async function readPhoto(photo: RepairPhoto) {
-  if (locked.value || !detail.value) return; clearPhoto();
+  if (locked.value || !detail.value) return; preview.close();
   const id = detail.value.id, turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     const grant = await repairRequest<{ url: string }>(`/${id}/photos/${photo.objectId}/download-grant`, { path: "", key: crypto.randomUUID(), version: detail.value.version, body: {} });
     if (!liveness.isCurrent(turn)) return;
     if (!grant.url.startsWith(`/api/v1/repairs/${id}/photos/${photo.objectId}/content?grant=`)) throw new Error("Invalid photo location");
-    download = new AbortController(); const blob = await repairPhotoContent(grant.url, download.signal);
+    const signal = preview.beginDownload(); const blob = await repairPhotoContent(grant.url, signal);
     if (!liveness.isCurrent(turn)) return;
     if (blob.size !== photo.sizeBytes || blob.size > 10 * 1024 * 1024 || !["image/jpeg", "image/png", "image/webp"].includes(blob.type)) throw new Error("Invalid photo bytes");
-    preview.value = URL.createObjectURL(blob); previewName.value = photo.filename;
+    preview.show(blob, photo.filename);
   } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
@@ -175,8 +174,8 @@ onBeforeUnmount(() => { reset(); });
           <div class="fams-form-actions"><button class="fams-button" data-kind="primary" type="button" @click="prepare('photo')">核对上传故障照片</button></div>
           <p>管理员决定后保留批准时的照片依据，不能覆盖原记录。</p>
         </fieldset>
-        <FamsMediaPreview v-if="preview" @dismiss="clearPhoto">
-          <figure><img :src="preview" :alt="`故障照片：${previewName}`"><figcaption>{{ previewName }}</figcaption><button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="clearPhoto">关闭故障照片</button></figure>
+        <FamsMediaPreview v-if="preview.url" @dismiss="preview.close()">
+          <figure><img :src="preview.url" :alt="`故障照片：${preview.name}`"><figcaption>{{ preview.name }}</figcaption><button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="preview.close()">关闭故障照片</button></figure>
         </FamsMediaPreview>
       </section>
       <fieldset v-if="detail.actions?.approve || detail.actions?.cancel" class="fams-card fams-stack" :disabled="locked">

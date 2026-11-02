@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
+import { useObjectUrlPreview } from "@/composables/useObjectUrlPreview";
 import { reviewRequest, ReviewApiError } from "@/features/inventory/api";
 import { readablePhoto, repairEvidencePhotoContent, type InventoryPhoto } from "@/features/inventory/photos";
 import FamsMediaPreview from "@/components/FamsMediaPreview.vue";
@@ -9,13 +10,11 @@ const props = defineProps<{ repairId: string; observationId: string; objectId: s
 const emit = defineEmits<{ invalidated: [] }>();
 const session = useSessionStore();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, props.repairId, props.observationId, props.objectId]));
-const busy = shallowRef(false), error = shallowRef(""), preview = shallowRef("");
+const busy = shallowRef(false), error = shallowRef("");
 const liveness = useRequestLiveness(() => [identity.value]);
-let abort: AbortController | null = null;
+const preview = useObjectUrlPreview();
 function clear() {
-  liveness.invalidate(); abort?.abort(); abort = null;
-  if (preview.value) URL.revokeObjectURL(preview.value);
-  preview.value = ""; busy.value = false;
+  liveness.invalidate(); preview.close(); busy.value = false;
 }
 async function read() {
   if (busy.value || props.blocked) return;
@@ -35,11 +34,11 @@ async function read() {
     const url = new URL(grant.url, window.location.origin), value = url.searchParams.get("grant");
     if (url.origin !== window.location.origin || url.pathname !== "/api/v1" + path + "/content" || url.hash || url.username || url.password
       || [...url.searchParams.keys()].length !== 1 || !value || !/^[A-Za-z0-9_.-]{1,256}$/.test(value)) throw new Error("Invalid photo grant");
-    abort = new AbortController();
-    const blob = await repairEvidencePhotoContent(url.toString(), abort.signal);
+    const signal = preview.beginDownload();
+    const blob = await repairEvidencePhotoContent(url.toString(), signal);
     if (!liveness.isCurrent(turn)) return;
     if (blob.type !== photo.contentType || blob.size !== photo.sizeBytes) throw new Error("Photo metadata mismatch");
-    preview.value = URL.createObjectURL(blob);
+    preview.show(blob);
   } catch (cause) {
     if (liveness.isCurrent(turn)) {
       if (cause instanceof ReviewApiError && [401, 403, 404].includes(cause.status)) { clear(); emit("invalidated"); }
@@ -54,8 +53,8 @@ onBeforeUnmount(() => { clear(); });
   <div class="fams-inline">
     <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || blocked" @click="read">读取盘点原图 {{ objectId }}</button>
     <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
-    <FamsMediaPreview v-if="preview" @dismiss="clear">
-      <figure><img :src="preview" alt="维修关联的原始盘点损坏照片"><button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="clear">关闭原图并清理</button></figure>
+    <FamsMediaPreview v-if="preview.url" @dismiss="clear">
+      <figure><img :src="preview.url" alt="维修关联的原始盘点损坏照片"><button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="clear">关闭原图并清理</button></figure>
     </FamsMediaPreview>
   </div>
 </template>

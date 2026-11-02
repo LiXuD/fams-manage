@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
+import { useObjectUrlPreview } from "@/composables/useObjectUrlPreview";
 import { ReviewApiError } from "@/features/inventory/api";
 import { InventoryPhotoUnavailable, listInventoryPhotos, readInventoryPhoto, readablePhoto, type PhotoReference } from "@/features/inventory/photos";
 import FamsMediaPreview from "@/components/FamsMediaPreview.vue";
@@ -11,14 +12,13 @@ const session = useSessionStore();
 const identity = computed(() => JSON.stringify([session.user?.id, session.csrfToken, session.user?.roles]));
 const scope = computed(() => JSON.stringify([props.taskId, props.eventId, props.photoIds, identity.value]));
 const references = ref<PhotoReference[]>([]), busy = shallowRef(false), loaded = shallowRef(false), error = shallowRef("");
-const preview = shallowRef(""), filename = shallowRef("");
+const preview = useObjectUrlPreview();
 const actionText = computed(() => loaded.value ? "刷新原始照片资料" : "查看原始照片资料");
-const previewAlt = computed(() => `原始观察照片：${filename.value}`);
+const previewAlt = computed(() => `原始观察照片：${preview.name}`);
 const photoRows = computed(() => references.value.map((row, index) => ({ objectId: row.objectId, source: row,
   order: index + 1, readable: !!row.photo && readablePhoto(row.photo) })));
 const liveness = useRequestLiveness(() => [scope.value]);
-function closePreview() { if (preview.value) URL.revokeObjectURL(preview.value); preview.value = ""; filename.value = ""; }
-function clear() { liveness.invalidate(); closePreview(); references.value = []; loaded.value = false; busy.value = false; error.value = ""; }
+function clear() { liveness.invalidate(); preview.close(); references.value = []; loaded.value = false; busy.value = false; error.value = ""; }
 function failed(cause: unknown) {
   if (cause instanceof InventoryPhotoUnavailable) {
     references.value = props.photoIds.map(objectId => ({ objectId, photo: null })); loaded.value = true; error.value = cause.message; return;
@@ -33,7 +33,7 @@ function failed(cause: unknown) {
 async function load() {
   if (busy.value) return;
   const turn = liveness.begin();
-  closePreview(); references.value = []; loaded.value = false; busy.value = true; error.value = "";
+  preview.close(); references.value = []; loaded.value = false; busy.value = true; error.value = "";
   try {
     const rows = await listInventoryPhotos(props.taskId, props.eventId, props.photoIds, () => liveness.isCurrent(turn));
     if (liveness.isCurrent(turn)) { references.value = rows; loaded.value = true; }
@@ -43,10 +43,10 @@ async function load() {
 async function open(row: PhotoReference) {
   if (busy.value || !row.photo || !readablePhoto(row.photo) || !references.value.includes(row)) return;
   const turn = liveness.begin(), photo = row.photo;
-  busy.value = true; error.value = ""; closePreview();
+  busy.value = true; error.value = ""; preview.close();
   try {
     const blob = await readInventoryPhoto(props.taskId, props.eventId, photo, () => liveness.isCurrent(turn));
-    if (liveness.isCurrent(turn)) { preview.value = URL.createObjectURL(blob); filename.value = photo.filename; }
+    if (liveness.isCurrent(turn)) preview.show(blob, photo.filename);
   } catch (cause) { if (liveness.isCurrent(turn)) failed(cause); }
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
@@ -66,11 +66,11 @@ onBeforeUnmount(() => { clear(); });
         </template><span v-else>照片 {{ row.order }} 元数据暂不可读取，原始引用 {{ row.source.objectId }} 仍保留。</span>
       </li>
     </ul>
-    <FamsMediaPreview v-if="preview" @dismiss="closePreview">
+    <FamsMediaPreview v-if="preview.url" @dismiss="preview.close()">
       <figure>
-      <img :src="preview" :alt="previewAlt">
-      <figcaption>{{ filename }}</figcaption>
-      <button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="closePreview">关闭照片</button>
+      <img :src="preview.url" :alt="previewAlt">
+      <figcaption>{{ preview.name }}</figcaption>
+      <button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="preview.close()">关闭照片</button>
       </figure>
     </FamsMediaPreview>
   </section>
