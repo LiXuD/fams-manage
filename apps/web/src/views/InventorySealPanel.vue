@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import type { LoanMutation } from "@/loan/api";
 import { ReviewApiError, reviewRequest } from "@/inventory-review/api";
@@ -13,9 +13,9 @@ interface Preflight { task: { id: string; version: number; task_status: string }
 interface Page { items: { snapshot_json: unknown; snapshot_sha256: string }[]; total: number }
 const props = defineProps<{ taskId: string }>(); const emit = defineEmits<{ changed: [] }>();
 const session = useSessionStore(); const owner = computed(() => JSON.stringify([props.taskId, session.user?.id, session.user?.roles, session.csrfToken]));
-const view = ref<Preflight | null>(null), busy = ref(false), error = ref(""), notice = ref("");
-const reason = ref(""), waiver = ref(""), confirming = ref(false), pending = ref<LoanMutation | null>(null);
-const section = ref("items"), page = ref(1), rows = ref<Page | null>(null);
+const view = ref<Preflight | null>(null), busy = shallowRef(false), error = shallowRef(""), notice = shallowRef("");
+const reason = shallowRef(""), waiver = shallowRef(""), confirming = shallowRef(false), pending = ref<LoanMutation | null>(null);
+const section = ref("items"), page = shallowRef(1), rows = ref<Page | null>(null);
 const locked = computed(() => busy.value || !!pending.value);
 let epoch = 0, live = true;
 const current = (stamp: number, identity: string) => live && stamp === epoch && owner.value === identity;

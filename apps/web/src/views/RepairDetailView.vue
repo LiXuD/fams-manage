@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import FamsMediaPreview from "@/components/FamsMediaPreview.vue";
@@ -16,19 +16,19 @@ import { RepairApiError, repairPhotoContent, repairProblem, repairRequest, repai
 const session = useSessionStore(), route = useRoute();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, route.params.id]));
 const detail = ref<Repair | null>(null);
-const approvalMethod = ref("INTERNAL_NO_COST"), reason = ref("");
-const factoryCostPolicy = ref("NO_COST"), factoryCostLimit = ref("");
+const approvalMethod = ref("INTERNAL_NO_COST"), reason = shallowRef("");
+const factoryCostPolicy = ref("NO_COST"), factoryCostLimit = shallowRef("");
 const moneyPattern = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/;
-const observedCode = ref(""), evidence = ref(""), confirmedPlace = ref(false), neverLeft = ref(false);
-const selectedFile = ref<File | null>(null), preview = ref(""), previewName = ref("");
+const observedCode = shallowRef(""), evidence = shallowRef(""), confirmedPlace = shallowRef(false), neverLeft = shallowRef(false);
+const selectedFile = ref<File | null>(null), preview = shallowRef(""), previewName = shallowRef("");
 const pending = ref<RepairMutation | null>(null), confirmation = ref<RepairMutation | null>(null);
-const busy = ref(false), error = ref(""), notice = ref("");
-const collaborationLocked = ref(false);
-const physicalLocked = ref(false);
-const returnLocked = ref(false);
-const targetChangeLocked = ref(false);
-const reassignmentLocked = ref(false);
-const factoryLocked = ref(false);
+const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef("");
+const collaborationLocked = shallowRef(false);
+const physicalLocked = shallowRef(false);
+const returnLocked = shallowRef(false);
+const targetChangeLocked = shallowRef(false);
+const reassignmentLocked = shallowRef(false);
+const factoryLocked = shallowRef(false);
 const locked = computed(() => busy.value || !!pending.value || !!confirmation.value || collaborationLocked.value || physicalLocked.value || returnLocked.value || targetChangeLocked.value || reassignmentLocked.value || factoryLocked.value);
 const eventNames: Record<string, string> = { REPAIR_SUBMITTED: "已提交报修", REPAIR_DECIDED: "管理员已决定", REPAIR_CLAIMED: "库管已领取", REPAIR_CONTROLLED_REASSIGNMENT: "管理员已受控转派",
   REPAIR_ACCEPTED_IN_PLACE: "已受理原地维修", REPAIR_COMPLETED_IN_PLACE: "已核对原地恢复", REPAIR_CANCELLED: "已取消", REPAIR_FAULT_PHOTO_ADDED: "已补充故障照片", REPAIR_CONFLICT_REJECTED: "旧操作已拒绝",

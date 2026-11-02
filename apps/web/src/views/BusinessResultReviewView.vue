@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { AuthApiError } from "@/auth/api";
 import { formatProxyTime } from "@/proxy/time";
@@ -13,8 +13,8 @@ const identity = computed(() => JSON.stringify([session.user?.id, session.user?.
 let generation = 0, live = true;
 const current = (epoch: number, owner: string) => live && epoch === generation && owner === identity.value;
 function clear() { generation++; rows.value = []; page.value = 1; total.value = 0; busy.value = false; }
-const rows = ref<Review[]>([]); const busy = ref(false); const error = ref("");
-const page = ref(1); const total = ref(0);
+const rows = ref<Review[]>([]); const busy = shallowRef(false); const error = shallowRef("");
+const page = shallowRef(1); const total = shallowRef(0);
 async function refresh(delta = 0) {
   if (busy.value) return;
   const epoch = ++generation, owner = identity.value;

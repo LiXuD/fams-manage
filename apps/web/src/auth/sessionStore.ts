@@ -1,4 +1,4 @@
-import { computed, ref } from "vue";
+import { computed, ref, shallowRef } from "vue";
 import { defineStore } from "pinia";
 import {
   AuthApiError,
@@ -32,7 +32,7 @@ export const useSessionStore = defineStore("session", () => {
   const permissions = ref<PermissionSnapshot | null>(null);
   const csrfToken = ref<string | null>(loadCsrfToken());
   const error = ref<AuthApiError | null>(null);
-  const isBusy = ref(false);
+  const isBusy = shallowRef(false);
 
   const isAuthenticated = computed(() =>
     state.value === "authenticated" || state.value === "password-change-required");

@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { RepairApiError, repairProblem, repairRequest, repairStates, type Repair } from "@/repair/api";
 const session = useSessionStore();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken]));
-const rows = ref<Repair[]>([]), total = ref(0), page = ref(1);
-const busy = ref(false), error = ref("");
+const rows = ref<Repair[]>([]), total = shallowRef(0), page = shallowRef(1);
+const busy = shallowRef(false), error = shallowRef("");
 let generation = 0, live = true;
 const current = (epoch: number, owner: string) => live && generation === epoch && identity.value === owner;
 function reset() { generation++; rows.value = []; total.value = 0; page.value = 1; busy.value = false; }

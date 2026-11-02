@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, shallowRef } from "vue";
 import RequisitionReassignment from "@/components/RequisitionReassignment.vue";
 import AppChrome from "@/components/AppChrome.vue";
 import RequisitionDemandForm from "./RequisitionDemandForm.vue";
@@ -11,16 +11,16 @@ import type { Requisition, RequisitionAllocation, RequisitionChoice, Requisition
 const props = defineProps<{ id: string }>();
 const session = useSessionStore();
 const selected = ref<Requisition | null>(null);
-const busy = ref(false); const error = ref(""); const notice = ref("");
+const busy = shallowRef(false); const error = shallowRef(""); const notice = shallowRef("");
 const catalogs = ref<Record<string, RequisitionChoice[]>>({});
-const canShared = ref(false); const selfEmployee = ref(""); const selfOrg = ref("");
-const changeVisible = ref(false);
-const observedCode = ref(""); const destination = ref(""); const evidence = ref(""); const returned = ref(false);
-const reason = ref(""); const shortageReason = ref("STOCK_SHORTAGE"); const shortageQuantity = ref(1);
+const canShared = shallowRef(false); const selfEmployee = shallowRef(""); const selfOrg = shallowRef("");
+const changeVisible = shallowRef(false);
+const observedCode = shallowRef(""); const destination = shallowRef(""); const evidence = shallowRef(""); const returned = shallowRef(false);
+const reason = shallowRef(""); const shortageReason = ref("STOCK_SHORTAGE"); const shortageQuantity = shallowRef(1);
 const inventory = ref<RequisitionInventory | null>(null); const inventoryDemand = ref<RequisitionDemand | null>(null);
-const inventoryPage = ref(1); const replacementId = ref("");
+const inventoryPage = shallowRef(1); const replacementId = shallowRef("");
 let pending: { path: string; method: string; key: string; version: number; body?: unknown } | null = null;
-const retryable = ref(false);
+const retryable = shallowRef(false);
 const warehouse = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR"));
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 const creator = computed(() => selected.value?.creatorAccountId === session.user?.id);

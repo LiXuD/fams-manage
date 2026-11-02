@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { RepairApiError, repairProblem, repairRequest, type Repair, type RepairMutation, type RepairReturnTarget } from "@/repair/api";
 const props = defineProps<{ repair: Repair; blocked?: boolean }>();
@@ -9,8 +9,8 @@ const identity = computed(() => JSON.stringify([session.user?.id, session.user?.
 type Mode = "delivery" | "receipt" | "refusal" | "recollection";
 interface Location { id: string; name: string; version: number }
 const mode = ref<Mode>("delivery"), target = ref<RepairReturnTarget | null>(null);
-const observed = ref(""), actual = ref(""), evidence = ref(""), checked = ref(false), error = ref(""), busy = ref(false);
-const locations = ref<Location[]>([]), location = ref(""), page = ref(1), total = ref(0);
+const observed = shallowRef(""), actual = shallowRef(""), evidence = shallowRef(""), checked = shallowRef(false), error = shallowRef(""), busy = shallowRef(false);
+const locations = ref<Location[]>([]), location = shallowRef(""), page = shallowRef(1), total = shallowRef(0);
 const prepared = ref<RepairMutation | null>(null), pending = ref<RepairMutation | null>(null);
 const locked = computed(() => busy.value || !!prepared.value || !!pending.value);
 const handover = computed(() => props.repair.returnHandovers?.find(row => ["WAITING_RECEIPT", "REFUSED"].includes(row.handover_status)));

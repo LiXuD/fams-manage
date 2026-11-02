@@ -1,19 +1,19 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { activeReferences, createAsset, type AssetReference } from "@/asset/api";
 
 const router = useRouter();
-const busy = ref(false);
-const error = ref("");
-const name = ref("");
-const model = ref("");
-const unit = ref("");
-const categoryId = ref("");
-const organizationId = ref("");
-const warehouseId = ref("");
-const locationId = ref("");
+const busy = shallowRef(false);
+const error = shallowRef("");
+const name = shallowRef("");
+const model = shallowRef("");
+const unit = shallowRef("");
+const categoryId = shallowRef("");
+const organizationId = shallowRef("");
+const warehouseId = shallowRef("");
+const locationId = shallowRef("");
 const categories = ref<AssetReference[]>([]);
 const organizations = ref<AssetReference[]>([]);
 const warehouses = ref<AssetReference[]>([]);

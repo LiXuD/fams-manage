@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { loanLabels as labels, loanMessage, loanRequest, reminderLabels } from "@/loan/api";
@@ -9,10 +9,10 @@ import type { BorrowRequestChoice, BusinessPage, Loan } from "../../../../packag
 const props = defineProps<{ id: string }>();
 const router = useRouter();
 const selected = ref<Loan | null>(null);
-const busy = ref(false); const error = ref(""); const notice = ref(""); const retryable = ref(false);
-const due = ref(""); const reason = ref("");
-const requestId = ref(""); const requestVersion = ref(0);
-const assetId = ref(""); const assetVersion = ref(0);
+const busy = shallowRef(false); const error = shallowRef(""); const notice = shallowRef(""); const retryable = shallowRef(false);
+const due = shallowRef(""); const reason = shallowRef("");
+const requestId = shallowRef(""); const requestVersion = shallowRef(0);
+const assetId = shallowRef(""); const assetVersion = shallowRef(0);
 const borrowRequests = ref<BorrowRequestChoice[]>([]);
 let pending: LoanMutation | null = null;
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import InventoryEvidenceDecisionPanel from "@/views/InventoryEvidenceDecisionPanel.vue";
 import InventorySelectionPanel from "@/views/InventorySelectionPanel.vue";
 import InventoryDifferencePanel from "@/views/InventoryDifferencePanel.vue";
@@ -10,11 +10,11 @@ import { ReviewApiError, reviewProblems, reviewRequest, type BatchResult, type B
 const props = defineProps<{ taskId: string }>();
 const emit = defineEmits<{ changed: [] }>();
 const session = useSessionStore();
-const board = ref<Board | null>(null); const page = ref(1); const selected = ref<string[]>([]);
-const reason = ref("已核对本轮现场正常观察"); const busy = ref(false); const error = ref("");
+const board = ref<Board | null>(null); const page = shallowRef(1); const selected = ref<string[]>([]);
+const reason = ref("已核对本轮现场正常观察"); const busy = shallowRef(false); const error = shallowRef("");
 const pending = ref<LoanMutation | null>(null); const result = ref<BatchResult | null>(null);
 const observations = ref<{ itemId: string; rows: Observation[]; total: number; page: number } | null>(null);
-const stage = ref<LoanMutation | null>(null); const confirmOpen = ref(false); const confirmCount = ref(0);
+const stage = ref<LoanMutation | null>(null); const confirmOpen = shallowRef(false); const confirmCount = shallowRef(0);
 const confirmLabel = "确认采信所选正常观察";
 const confirmHint = computed(() => `采信所选 ${confirmCount.value} 项正常观察？存在差异或冲突的项目不会自动采信。`);
 const identity = computed(() => JSON.stringify([session.user?.id, session.csrfToken, session.user?.roles]));

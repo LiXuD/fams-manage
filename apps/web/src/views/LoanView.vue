@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { loanLabels as labels, loanMessage, loanRequest } from "@/loan/api";
@@ -8,8 +8,8 @@ import type { BusinessPage, Loan, LoanExtension } from "../../../../packages/api
 
 const session = useSessionStore();
 const loans = ref<Loan[]>([]); const extensions = ref<LoanExtension[]>([]);
-const busy = ref(false); const error = ref(""); const notice = ref(""); const retryable = ref(false);
-const page = ref(1); const total = ref(0); const reason = ref("");
+const busy = shallowRef(false); const error = shallowRef(""); const notice = shallowRef(""); const retryable = shallowRef(false);
+const page = shallowRef(1); const total = shallowRef(0); const reason = shallowRef("");
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 let pending: LoanMutation | null = null;
 

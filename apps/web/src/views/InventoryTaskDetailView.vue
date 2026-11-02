@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, shallowRef, watch } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import InventoryReadinessPanel from "@/views/InventoryReadinessPanel.vue";
@@ -24,11 +24,11 @@ const props = defineProps<{ id: string }>();
 const router = useRouter();
 const session = useSessionStore();
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
-const detail = ref<Detail | null>(null); const itemPage = ref(1);
-const busy = ref(false); const error = ref(""); const pending = ref<LoanMutation | null>(null);
+const detail = ref<Detail | null>(null); const itemPage = shallowRef(1);
+const busy = shallowRef(false); const error = shallowRef(""); const pending = ref<LoanMutation | null>(null);
 const locked = computed(() => busy.value || !!pending.value);
 const executors = ref<Choice[]>([]);
-const selectedItems = ref<string[]>([]); const executor = ref(""); const reason = ref(""); const recheck = ref(false);
+const selectedItems = ref<string[]>([]); const executor = shallowRef(""); const reason = shallowRef(""); const recheck = shallowRef(false);
 const preview = ref<{ count: number; digest: string } | null>(null);
 const manageable = computed(() => !!detail.value && ["READY", "IN_PROGRESS", "WAITING_REVIEW"].includes(detail.value.task.task_status));
 type Confirm = "publish" | "copy" | "start" | "cancel" | "terminate" | "delete" | "assign";

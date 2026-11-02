@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { inventoryLateResultLabels, reviewRequest, ReviewApiError } from "@/inventory-review/api";
 import { repairStates } from "@/repair/api";
@@ -12,10 +12,10 @@ interface Linked { id: string; assetId: string; version: number; status: string 
 const props = defineProps<{ taskId: string; observationId: string; blocked?: boolean }>();
 const emit = defineEmits<{ changed: []; invalidated: []; busyChange: [value: boolean] }>();
 const session = useSessionStore(), owner = computed(() => JSON.stringify([props.taskId, props.observationId, session.user?.id, session.user?.roles, session.csrfToken]));
-const context = ref<Context | null>(null), busy = ref(false), error = ref(""), notice = ref(""), page = ref(1);
-const pending = ref<LoanMutation | null>(null), confirming = ref(false), method = ref("FORMAL_REPAIR");
-const reason = ref(""), evidence = ref(""), fault = ref(""), impact = ref("HIGH"), discoveredAt = ref(""), checked = ref(false), timeChecked = ref(false);
-const repairId = ref(""), linked = ref<Linked | null>(null);
+const context = ref<Context | null>(null), busy = shallowRef(false), error = shallowRef(""), notice = shallowRef(""), page = shallowRef(1);
+const pending = ref<LoanMutation | null>(null), confirming = shallowRef(false), method = ref("FORMAL_REPAIR");
+const reason = shallowRef(""), evidence = shallowRef(""), fault = shallowRef(""), impact = ref("HIGH"), discoveredAt = shallowRef(""), checked = shallowRef(false), timeChecked = shallowRef(false);
+const repairId = shallowRef(""), linked = ref<Linked | null>(null);
 const locked = computed(() => busy.value || !!pending.value || !!props.blocked), states: Record<string, string> = { OPEN: "待实际处理", PROCESSING: "正式维修处理中", CLOSED: "实际维修已完成" };
 const methods: Record<string, string> = { FORMAL_REPAIR: "创建正式维修", LINK_REPAIR: "关联已有正式维修", REFRESH_REPAIR: "核对正式维修实际进度" };
 let generation = 0, live = true;

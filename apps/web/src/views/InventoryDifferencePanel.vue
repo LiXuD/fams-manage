@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import type { LoanMutation } from "@/loan/api";
 import { reviewRequest, ReviewApiError, subjectStatusLabels as statuses, type Board, type ReviewItem } from "@/inventory-review/api";
@@ -16,16 +16,16 @@ const session = useSessionStore();
 const owner = computed(() => JSON.stringify([session.user?.id, session.csrfToken, session.user?.roles]));
 const identity = computed(() => `${props.taskId}:${props.item.item.id}:${owner.value}`);
 const board = ref<Board | null>(null), subjects = ref<Subject[]>([]), chosen = ref<string[]>([]);
-const page = ref(1), total = ref(0), busy = ref(false), error = ref(""), notice = ref("");
-const method = ref("BOOK_CORRECT"), reason = ref(""), evidence = ref(""), pending = ref<LoanMutation | null>(null);
+const page = shallowRef(1), total = shallowRef(0), busy = shallowRef(false), error = shallowRef(""), notice = shallowRef("");
+const method = ref("BOOK_CORRECT"), reason = shallowRef(""), evidence = shallowRef(""), pending = ref<LoanMutation | null>(null);
 const organizations = ref<TransferChoice[]>([]), warehouses = ref<TransferChoice[]>([]), locations = ref<TransferChoice[]>([]), employees = ref<TransferChoice[]>([]);
-const owning = ref(""), using = ref(""), employee = ref(""), warehouse = ref(""), location = ref(""), custody = ref("PERSONAL");
+const owning = shallowRef(""), using = shallowRef(""), employee = shallowRef(""), warehouse = shallowRef(""), location = shallowRef(""), custody = ref("PERSONAL");
 const currentItem = computed(() => board.value?.items.find(row => row.item.id === props.item.item.id));
 const stock = computed(() => currentItem.value?.current?.custodyType === "STORAGE");
 const bins = computed(() => locations.value.filter(row => stock.value ? row.locationType === "BIN" && row.warehouseId === warehouse.value : row.locationType !== "BIN"));
 const confirmation = ref<{ path: string; body: unknown; label: string } | null>(null);
-const repairFault = ref(""), repairImpact = ref("HIGH"), repairDiscovery = ref(""), repairId = ref("");
-const physicalChecked = ref(false), discoveryChecked = ref(false);
+const repairFault = shallowRef(""), repairImpact = ref("HIGH"), repairDiscovery = shallowRef(""), repairId = shallowRef("");
+const physicalChecked = shallowRef(false), discoveryChecked = shallowRef(false);
 const linkedRepair = ref<{ id: string; assetId: string; version: number; status: string } | null>(null);
 const repairMethod = computed(() => ["FORMAL_REPAIR", "LINK_REPAIR", "REFRESH_REPAIR"].includes(method.value));
 const locked = computed(() => busy.value || !!pending.value || !!confirmation.value);

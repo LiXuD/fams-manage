@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import RepairFactoryPartsPanel from "./RepairFactoryPartsPanel.vue";
 import FamsMediaPreview from "@/components/FamsMediaPreview.vue";
@@ -11,20 +11,20 @@ const emit = defineEmits<{ "busy-change": [boolean]; changed: []; invalidated: [
 const session = useSessionStore();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, props.repair.id]));
 const canRead = computed(() => !!session.user?.roles.includes("ASSET_ADMIN") || !!session.user?.roles.includes("WAREHOUSE_OPERATOR") && String(session.user.id) === props.repair.processorAccountId);
-const opened = ref(false), busy = ref(false), stale = ref(true), error = ref(""), notice = ref("");
-const partsBusy = ref(false);
-const data = ref<FactoryDetail | null>(null), rows = ref<FactoryRound[]>([]), selected = ref<FactoryRoundDetail | null>(null), selectedId = ref("");
-const history = ref<FactoryHistory[]>([]), total = ref(0), page = ref(1), historyTotal = ref(0), historyPage = ref(1);
+const opened = shallowRef(false), busy = shallowRef(false), stale = shallowRef(true), error = shallowRef(""), notice = shallowRef("");
+const partsBusy = shallowRef(false);
+const data = ref<FactoryDetail | null>(null), rows = ref<FactoryRound[]>([]), selected = ref<FactoryRoundDetail | null>(null), selectedId = shallowRef("");
+const history = ref<FactoryHistory[]>([]), total = shallowRef(0), page = shallowRef(1), historyTotal = shallowRef(0), historyPage = shallowRef(1);
 const confirmation = ref<FactoryMutation | null>(null), pending = ref<FactoryMutation | null>(null);
-const reason = ref(""), provider = ref(""), contact = ref(""), phone = ref(""), due = ref(""), fault = ref("");
-const observedCode = ref(""), serial = ref(""), actualDate = ref(""), actualTime = ref(""), evidence = ref("");
-const costPolicy = ref("NO_COST"), costLimit = ref(""), moneyAmount = ref(""), moneyReason = ref(""), moneyChecked = ref(false), moneyEvidence = ref<string[]>([]), costUnassessed = ref(false);
+const reason = shallowRef(""), provider = shallowRef(""), contact = shallowRef(""), phone = shallowRef(""), due = shallowRef(""), fault = shallowRef("");
+const observedCode = shallowRef(""), serial = shallowRef(""), actualDate = shallowRef(""), actualTime = shallowRef(""), evidence = shallowRef("");
+const costPolicy = ref("NO_COST"), costLimit = shallowRef(""), moneyAmount = shallowRef(""), moneyReason = shallowRef(""), moneyChecked = shallowRef(false), moneyEvidence = ref<string[]>([]), costUnassessed = shallowRef(false);
 const moneyPattern = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/;
 const costText = (policy?: string, limit?: string | null) => policy === "UNLIMITED" ? "费用不限" : policy === "LIMITED" ? `所有轮次累计限额 ${limit ?? "待核对"} 元` : "无费用";
-const originalChecked = ref(false), noCostChecked = ref(false), condition = ref("RESTORED");
-const locationId = ref(""), locations = ref<{ id: string; name: string; version: number }[]>([]), locationPage = ref(1), locationTotal = ref(0);
+const originalChecked = shallowRef(false), noCostChecked = shallowRef(false), condition = ref("RESTORED");
+const locationId = shallowRef(""), locations = ref<{ id: string; name: string; version: number }[]>([]), locationPage = shallowRef(1), locationTotal = shallowRef(0);
 const file = ref<File | null>(null), purpose = ref("FACTORY_ACK"), selectedEvidence = ref<string[]>([]);
-const preview = ref(""), previewName = ref(""), previewMime = ref("");
+const preview = shallowRef(""), previewName = shallowRef(""), previewMime = shallowRef("");
 let generation = 0, live = true, download: AbortController | null = null;
 const current = (epoch: number, owner: string) => live && epoch === generation && identity.value === owner;
 const locked = computed(() => props.blocked || busy.value || partsBusy.value || !!pending.value || !!confirmation.value);

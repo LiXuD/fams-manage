@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
@@ -11,7 +11,7 @@ import { proxyCollectionLabels, proxyEvidenceLabels, uploadProxyEvidence, type P
 const route = useRoute(), router = useRouter(), session = useSessionStore();
 const rows = ref<ProxyConfirmation[]>([]), selected = ref<ProxyConfirmation | null>(null);
 const attachments = ref<Attachment[]>([]), snapshot = ref<Record<string, unknown> | null>(null);
-const page = ref(1), total = ref(0), busy = ref(false), error = ref("");
+const page = shallowRef(1), total = shallowRef(0), busy = shallowRef(false), error = shallowRef("");
 const pending = ref<LoanMutation | null>(null), pendingUpload = ref<{ id: string; version: number; file: File; key: string } | null>(null);
 const file = ref<File | null>(null);
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN")), warehouse = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR"));

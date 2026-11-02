@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { RepairApiError, repairProblem, repairRequest, type Repair, type RepairMutation } from "@/repair/api";
 const props = defineProps<{ repair: Repair; blocked?: boolean }>();
@@ -9,8 +9,8 @@ interface Context { snapshot: { version: number; processorAccountId: string; own
   physicalHandling: unknown[]; outstandingReturn: { handover_status: string } | null }; operators: { id: string; name: string }[] }
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, props.repair.id]));
 const admin = computed(() => !!session.user?.roles.includes("ASSET_ADMIN"));
-const context = ref<Context | null>(null), target = ref(""), reason = ref(""), evidence = ref(""), checked = ref(false), error = ref("");
-const busy = ref(false), prepared = ref<RepairMutation | null>(null), pending = ref<RepairMutation | null>(null);
+const context = ref<Context | null>(null), target = shallowRef(""), reason = shallowRef(""), evidence = shallowRef(""), checked = shallowRef(false), error = shallowRef("");
+const busy = shallowRef(false), prepared = ref<RepairMutation | null>(null), pending = ref<RepairMutation | null>(null);
 const locked = computed(() => busy.value || !!prepared.value || !!pending.value);
 let generation = 0, live = true;
 const current = (epoch: number, owner: string) => live && generation === epoch && identity.value === owner;

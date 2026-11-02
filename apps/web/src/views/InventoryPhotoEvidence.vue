@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { ReviewApiError } from "@/inventory-review/api";
 import { InventoryPhotoUnavailable, listInventoryPhotos, readInventoryPhoto, readablePhoto, type PhotoReference } from "@/inventory-review/photos";
@@ -9,8 +9,8 @@ const emit = defineEmits<{ invalid: [] }>();
 const session = useSessionStore();
 const identity = computed(() => JSON.stringify([session.user?.id, session.csrfToken, session.user?.roles]));
 const scope = computed(() => JSON.stringify([props.taskId, props.eventId, props.photoIds, identity.value]));
-const references = ref<PhotoReference[]>([]), busy = ref(false), loaded = ref(false), error = ref("");
-const preview = ref(""), filename = ref("");
+const references = ref<PhotoReference[]>([]), busy = shallowRef(false), loaded = shallowRef(false), error = shallowRef("");
+const preview = shallowRef(""), filename = shallowRef("");
 let live = true, generation = 0;
 const current = (epoch: number, captured: string) => live && epoch === generation && captured === scope.value;
 function closePreview() { if (preview.value) URL.revokeObjectURL(preview.value); preview.value = ""; filename.value = ""; }

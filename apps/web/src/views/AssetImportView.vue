@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, shallowRef } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import {
@@ -28,17 +28,17 @@ const ticket = ref<ImportTicket | null>(null);
 const columns = ref<string[]>([]);
 const mapping = ref<Record<string, string>>({});
 const rows = ref<ImportRow[]>([]);
-const total = ref(0);
-const page = ref(1);
+const total = shallowRef(0);
+const page = shallowRef(1);
 const rowFilter = ref<"READY" | "ERROR">("ERROR");
-const readyRows = ref(0);
-const errorRows = ref(0);
-const error = ref("");
-const notice = ref("");
-const busy = ref(false);
+const readyRows = shallowRef(0);
+const errorRows = shallowRef(0);
+const error = shallowRef("");
+const notice = shallowRef("");
+const busy = shallowRef(false);
 const review = ref<ImportReview | null>(null);
 const rollback = ref<ImportRollback | null>(null);
-const rollbackReason = ref("");
+const rollbackReason = shallowRef("");
 
 function selectedFile(event: Event): void {
   file.value = (event.target as HTMLInputElement).files?.[0] ?? null;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { ReviewApiError, reviewRequest } from "@/inventory-review/api";
 interface Device { deviceId: string; bindingId: string | null; declarationId?: string; current: boolean; reason: string; declaredAt?: string; unresolvedCount?: number }
@@ -7,7 +7,7 @@ interface Participant { accountId: string; name: string; current: boolean; reaso
 const props = defineProps<{ taskId: string }>();
 const session = useSessionStore();
 const owner = computed(() => JSON.stringify([props.taskId, session.user?.id, session.user?.roles, session.csrfToken]));
-const rows = ref<Participant[]>([]), total = ref(0), page = ref(1), busy = ref(false), error = ref("");
+const rows = ref<Participant[]>([]), total = shallowRef(0), page = shallowRef(1), busy = shallowRef(false), error = shallowRef("");
 const reasons: Record<string, string> = { DECLARED: "声明仍有效", PARTICIPATION_REVOKED: "参与关系已撤销，仍待补证",
   IDENTITY_DISABLED: "身份已失效，仍待补证", BINDING_MISSING: "当前没有有效绑定", NO_DEVICE_DECLARATION: "尚无设备声明",
   DEVICE_CONFIRMATION_MISSING: "部分设备待确认或补证", UNBOUND_OBSERVATION: "原证据来自无绑定通道，待核实",

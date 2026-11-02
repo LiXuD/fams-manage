@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import type { LoanMutation } from "@/loan/api";
 import { ReviewApiError, reviewRequest } from "@/inventory-review/api";
@@ -10,10 +10,10 @@ interface View { task: { id: string; version: number; task_status: string }; ite
 interface History { id: string; recheck_generation: number; reason_kind: string; reason: string; evidence: string; actor_username: string; recorded_at: string }
 const props = defineProps<{ taskId: string }>(); const emit = defineEmits<{ changed: [] }>();
 const session = useSessionStore(); const owner = computed(() => JSON.stringify([props.taskId, session.user?.id, session.user?.roles, session.csrfToken]));
-const view = ref<View | null>(null), page = ref(1), busy = ref(false), error = ref(""), notice = ref("");
-const chosen = ref(""), kind = ref("UNABLE_TO_OBSERVE"), reason = ref(""), evidence = ref(""), waitingReason = ref("");
-const history = ref<History[]>([]), historyTotal = ref(0), historyItem = ref(""), historyPage = ref(1);
-const pending = ref<LoanMutation | null>(null), confirming = ref(false), summary = ref("");
+const view = ref<View | null>(null), page = shallowRef(1), busy = shallowRef(false), error = shallowRef(""), notice = shallowRef("");
+const chosen = shallowRef(""), kind = ref("UNABLE_TO_OBSERVE"), reason = shallowRef(""), evidence = shallowRef(""), waitingReason = shallowRef("");
+const history = ref<History[]>([]), historyTotal = shallowRef(0), historyItem = shallowRef(""), historyPage = shallowRef(1);
+const pending = ref<LoanMutation | null>(null), confirming = shallowRef(false), summary = shallowRef("");
 const locked = computed(() => busy.value || !!pending.value);
 const kinds: Record<string, string> = { UNABLE_TO_OBSERVE: "无法实盘（如现场无法进入）", EVIDENCE_UNAVAILABLE: "原证据失效或无法使用，需补盘", ASSET_NOT_FOUND: "实物未找到，继续查找或正式报失" };
 let generation = 0, live = true;

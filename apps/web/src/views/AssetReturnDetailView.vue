@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import AssetReturnReassignment from "@/components/AssetReturnReassignment.vue";
 import { useSessionStore } from "@/auth/sessionStore";
@@ -10,9 +10,9 @@ import type { AssetReturn, ReturnChoice } from "../../../../packages/api-types/s
 const props = defineProps<{ id: string }>();
 const session = useSessionStore();
 const selected = ref<AssetReturn | null>(null);
-const busy = ref(false); const error = ref(""); const notice = ref(""); const retryable = ref(false);
-const reason = ref(""); const observed = ref(""); const result = ref<"NORMAL" | "DAMAGED" | "MISSING">("NORMAL");
-const warehouseId = ref(""); const locationId = ref(""); const warehouses = ref<ReturnChoice[]>([]); const locations = ref<ReturnChoice[]>([]);
+const busy = shallowRef(false); const error = shallowRef(""); const notice = shallowRef(""); const retryable = shallowRef(false);
+const reason = shallowRef(""); const observed = shallowRef(""); const result = ref<"NORMAL" | "DAMAGED" | "MISSING">("NORMAL");
+const warehouseId = shallowRef(""); const locationId = shallowRef(""); const warehouses = ref<ReturnChoice[]>([]); const locations = ref<ReturnChoice[]>([]);
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 const warehouse = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR"));
 const bins = computed(() => locations.value.filter(l => l.warehouseId === warehouseId.value));

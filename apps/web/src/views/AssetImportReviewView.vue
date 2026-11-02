@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import {
   decideImportReview, decideImportRollback, pendingImportReviews, pendingImportRollbacks,
@@ -11,16 +11,16 @@ const rollbacks = ref<PendingImportRollback[]>([]);
 const selected = ref<PendingImportReview | null>(null);
 const rows = ref<ImportRow[]>([]);
 const rowStatus = ref<"READY" | "ERROR">("ERROR");
-const rowPage = ref(1);
-const rowTotal = ref(0);
-const reviewPage = ref(1);
-const rollbackPage = ref(1);
-const sampleVerified = ref(false);
-const reason = ref("");
-const rollbackReason = ref("");
-const error = ref("");
-const notice = ref("");
-const busy = ref(false);
+const rowPage = shallowRef(1);
+const rowTotal = shallowRef(0);
+const reviewPage = shallowRef(1);
+const rollbackPage = shallowRef(1);
+const sampleVerified = shallowRef(false);
+const reason = shallowRef("");
+const rollbackReason = shallowRef("");
+const error = shallowRef("");
+const notice = shallowRef("");
+const busy = shallowRef(false);
 
 async function loadPending(): Promise<void> {
   const [r, b] = await Promise.all([

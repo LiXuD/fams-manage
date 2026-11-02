@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import InboundReassignment from "@/components/InboundReassignment.vue";
 import AttachmentPanel from "@/components/AttachmentPanel.vue";
@@ -15,13 +15,13 @@ type Decision = "cancel" | "reject";
 const props = defineProps<{ id: string }>();
 const session = useSessionStore();
 const selected = ref<InboundReceipt | null>(null);
-const error = ref("");
-const notice = ref("");
-const busy = ref(false);
+const error = shallowRef("");
+const notice = shallowRef("");
+const busy = shallowRef(false);
 const decision = ref<Decision | null>(null);
-const reason = ref("");
+const reason = shallowRef("");
 const accepting = ref<InboundItem | null>(null);
-const observed = ref("");
+const observed = shallowRef("");
 const warehouseRole = session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false;
 const adminRole = session.user?.roles.includes("ASSET_ADMIN") ?? false;
 const locked = computed(() => busy.value || decision.value !== null || accepting.value !== null);

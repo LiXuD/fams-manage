@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { AuthApiError } from "@/auth/api";
 import { formatProxyTime } from "@/proxy/time";
@@ -13,9 +13,9 @@ interface Notice { id: string; businessType: string; businessId: string; itemId:
 interface Page { items: Notice[]; total: number; unread: number }
 const session = useSessionStore();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken]));
-const rows = ref<Notice[]>([]); const page = ref(1); const total = ref(0);
-const unread = ref(0); const busy = ref(false); const error = ref("");
-const reasons = ref<Record<string, string>>({}); const info = ref("");
+const rows = ref<Notice[]>([]); const page = shallowRef(1); const total = shallowRef(0);
+const unread = shallowRef(0); const busy = shallowRef(false); const error = shallowRef("");
+const reasons = ref<Record<string, string>>({}); const info = shallowRef("");
 const pendingObjection = ref<(LoanMutation & { id: string }) | null>(null);
 const pendingRead = ref<(LoanMutation & { id: string }) | null>(null);
 let generation = 0, live = true;

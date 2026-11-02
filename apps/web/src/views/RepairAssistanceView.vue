@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
@@ -8,8 +8,8 @@ import { collaborationRequest, opinionResults, type AssistedRepair } from "@/rep
 import RepairTechnicalEvidence from "./RepairTechnicalEvidence.vue";
 const session=useSessionStore(),route=useRoute();
 const identity=computed(()=>JSON.stringify([session.user?.id,session.user?.roles,session.csrfToken,route.params.id]));
-const rows=ref<AssistedRepair[]>([]),total=ref(0),page=ref(1),detail=ref<AssistedRepair|null>(null),busy=ref(false),error=ref(""),notice=ref("");
-const judgement=ref(""),method=ref(""),result=ref("NEEDS_WORK"),occurredAt=ref(""),file=ref<File|null>(null),attachmentIds=ref<string[]>([]);
+const rows=ref<AssistedRepair[]>([]),total=shallowRef(0),page=shallowRef(1),detail=ref<AssistedRepair|null>(null),busy=shallowRef(false),error=shallowRef(""),notice=shallowRef("");
+const judgement=shallowRef(""),method=shallowRef(""),result=ref("NEEDS_WORK"),occurredAt=shallowRef(""),file=ref<File|null>(null),attachmentIds=ref<string[]>([]);
 const prepared=ref<RepairMutation|null>(null),pending=ref<RepairMutation|null>(null),locked=computed(()=>busy.value||!!prepared.value||!!pending.value);
 let generation=0,live=true;
 const current=(epoch:number,owner:string)=>live&&generation===epoch&&identity.value===owner;

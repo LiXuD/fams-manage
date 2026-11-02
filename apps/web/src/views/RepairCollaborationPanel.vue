@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { RepairApiError, repairProblem, type RepairMutation } from "@/repair/api";
 import { collaborationRequest, opinionResults, type CollaborationBoard } from "@/repair/collaboration";
@@ -7,7 +7,7 @@ import RepairTechnicalEvidence from "./RepairTechnicalEvidence.vue";
 const props = defineProps<{ repairId: string; requestVersion: number; blocked?: boolean }>();
 const emit = defineEmits<{ changed: []; invalidated: []; busyChange: [value: boolean] }>();
 const session = useSessionStore(), board = ref<CollaborationBoard | null>(null), technicians = ref<{id:string; username:string; name:string}[]>([]);
-const techPage = ref(1), techTotal = ref(0), technician = ref(""), reason = ref(""), error = ref(""), busy = ref(false);
+const techPage = shallowRef(1), techTotal = shallowRef(0), technician = shallowRef(""), reason = shallowRef(""), error = shallowRef(""), busy = shallowRef(false);
 const prepared = ref<RepairMutation | null>(null), pending = ref<RepairMutation | null>(null);
 const identity = computed(()=>JSON.stringify([session.user?.id,session.user?.roles,session.csrfToken,props.repairId]));
 const locked = computed(()=>busy.value || !!prepared.value || !!pending.value);

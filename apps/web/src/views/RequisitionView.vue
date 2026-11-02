@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { usePagedResourceList } from "@/composables/usePagedResourceList";
 import { requisitionLabels as labels, requisitionMessage, requisitionRequest } from "@/requisition/api";
 import type { RequisitionPage, RequisitionSummary } from "../../../../packages/api-types/src/requisition";
 
-const status = ref("");
+const status = shallowRef("");
 
 const { rows, busy, error, page, total, refresh } = usePagedResourceList<RequisitionSummary>(
   (page) => requisitionRequest<RequisitionPage>(

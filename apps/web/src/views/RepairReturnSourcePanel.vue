@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { RepairApiError, repairProblem, repairRequest, repairStates, type Repair, type RepairAsset, type RepairMutation } from "@/repair/api";
 const props = defineProps<{ blocked?: boolean }>();
@@ -10,8 +10,8 @@ interface Source { followupId: string; version: number; returnId: string; closed
   inspectedAt: string; inspectionReason: string; lockVersion: number; asset: RepairAsset }
 const session = useSessionStore();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken]));
-const rows = ref<SourceRow[]>([]), total = ref(0), page = ref(1), source = ref<Source | null>(null);
-const fault = ref(""), impact = ref("MEDIUM"), error = ref(""), busy = ref(false);
+const rows = ref<SourceRow[]>([]), total = shallowRef(0), page = shallowRef(1), source = ref<Source | null>(null);
+const fault = shallowRef(""), impact = ref("MEDIUM"), error = shallowRef(""), busy = shallowRef(false);
 const prepared = ref<RepairMutation | null>(null), pending = ref<RepairMutation | null>(null);
 const locked = computed(() => busy.value || !!prepared.value || !!pending.value);
 let generation = 0, live = true;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
@@ -17,8 +17,8 @@ const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 const operator = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR"));
 const rows = ref<Change[]>([]); const selected = ref<Change | null>(null); const snapshot = ref<Snapshot | null>(null);
 const target = ref<Target | null>(null); const catalogs = ref<Record<string, Choice[]>>({}); const employees = ref<Choice[]>([]);
-const page = ref(1); const total = ref(0); const busy = ref(false); const error = ref(""); const pending = ref<LoanMutation | null>(null);
-const reason = ref(""); const code = ref(""); const physical = ref(""); const checked = ref(false); const decision = ref("");
+const page = shallowRef(1); const total = shallowRef(0); const busy = shallowRef(false); const error = shallowRef(""); const pending = ref<LoanMutation | null>(null);
+const reason = shallowRef(""); const code = shallowRef(""); const physical = shallowRef(""); const checked = shallowRef(false); const decision = shallowRef("");
 const locked = computed(() => busy.value || !!pending.value); const stock = computed(() => snapshot.value?.source.lifecycleStatus === "IN_STOCK");
 const places = computed(() => catalogs.value.location?.filter(row => stock.value
   ? row.locationType === "BIN" && row.warehouseId === target.value?.warehouseId : row.locationType !== "BIN") ?? []);

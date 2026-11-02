@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import type { LoanMutation } from "@/loan/api";
 import type { AssetCard } from "@/asset/api";
@@ -16,13 +16,13 @@ const props = defineProps<{ taskId: string }>();
 const emit = defineEmits<{ changed: [] }>();
 const session = useSessionStore();
 const owner = computed(() => JSON.stringify([props.taskId, session.user?.id, session.csrfToken, session.user?.roles]));
-const rows = ref<Observation[]>([]), total = ref(0), page = ref(1), detail = ref<FindingView | null>(null);
-const busy = ref(false), error = ref(""), notice = ref(""), pending = ref<LoanMutation | null>(null);
-const method = ref("NON_ENTERPRISE"), reason = ref(""), evidence = ref("");
-const assetCode = ref(""), receiptNumber = ref(""), assets = ref<AssetCard[]>([]), receipts = ref<InboundReceipt[]>([]);
-const selectedAsset = ref(""), selectedReceipt = ref("");
+const rows = ref<Observation[]>([]), total = shallowRef(0), page = shallowRef(1), detail = ref<FindingView | null>(null);
+const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef(""), pending = ref<LoanMutation | null>(null);
+const method = ref("NON_ENTERPRISE"), reason = shallowRef(""), evidence = shallowRef("");
+const assetCode = shallowRef(""), receiptNumber = shallowRef(""), assets = ref<AssetCard[]>([]), receipts = ref<InboundReceipt[]>([]);
+const selectedAsset = shallowRef(""), selectedReceipt = shallowRef("");
 const confirmation = ref<LoanMutation | null>(null);
-const counters = ref<Observation[]>([]), counterTotal = ref(0), counterPage = ref(1), counterId = ref("");
+const counters = ref<Observation[]>([]), counterTotal = shallowRef(0), counterPage = shallowRef(1), counterId = shallowRef("");
 const timeSubject = computed(() => detail.value?.timeSubject?.[0]);
 const locked = computed(() => busy.value || !!pending.value || !!confirmation.value);
 let generation = 0, live = true;

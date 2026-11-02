@@ -1,4 +1,4 @@
-import { onBeforeUnmount, onMounted, readonly, ref, shallowRef, type Ref } from "vue";
+import { onBeforeUnmount, onMounted, readonly, shallowRef, type Ref } from "vue";
 
 /**
  * 一次性「读取—失败—再读取」的加载生命周期。
@@ -26,8 +26,8 @@ export interface ResourceLoad<T> {
 
 export function useResourceLoad<T>(options: ResourceLoadOptions<T>): ResourceLoad<T> {
   const data = shallowRef<T | null>(null);
-  const busy = ref(false);
-  const error = ref("");
+  const busy = shallowRef(false);
+  const error = shallowRef("");
   let epoch = 0;
   let live = true;
 

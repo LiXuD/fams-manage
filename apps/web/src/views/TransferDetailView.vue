@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import TransferReassignment from "@/components/TransferReassignment.vue";
@@ -13,8 +13,8 @@ const session = useSessionStore(), route = useRoute();
 const selected = ref<Transfer | null>(null);
 const organizations = ref<TransferChoice[]>([]), locations = ref<TransferChoice[]>([]);
 const peopleNames = ref<Record<string, string>>({});
-const reason = ref(""), code = ref(""), destination = ref(""), evidence = ref(""), signer = ref(""), receivedAt = ref("");
-const busy = ref(false), error = ref(""), notice = ref(""), retryable = ref(false), checked = ref(false);
+const reason = shallowRef(""), code = shallowRef(""), destination = shallowRef(""), evidence = shallowRef(""), signer = shallowRef(""), receivedAt = shallowRef("");
+const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef(""), retryable = shallowRef(false), checked = shallowRef(false);
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 const operator = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR"));
 let pending: LoanMutation | null = null;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { LoanApiError, loanMessage, loanRequest, type LoanMutation } from "@/loan/api";
@@ -11,12 +11,12 @@ type Task = { id: string; name: string; version: number; starts_at: string; due_
 type Choice = { id: string; name: string; status?: string };
 const props = defineProps<{ id?: string }>();
 const router = useRouter();
-const name = ref(""); const start = ref(""); const due = ref("");
+const name = shallowRef(""); const start = shallowRef(""); const due = shallowRef("");
 const emptyRange = (): Range => ({ usingOrganizationId: null, owningOrganizationId: null, categoryId: null, warehouseId: null,
   locationId: null, lifecycle: null, exception: null, responsibleEmployeeId: null });
 const range = ref<Range>(emptyRange());
-const catalogs = ref<Record<string, Choice[]>>({}); const version = ref(0);
-const busy = ref(false); const error = ref(""); const pending = ref<LoanMutation | null>(null);
+const catalogs = ref<Record<string, Choice[]>>({}); const version = shallowRef(0);
+const busy = shallowRef(false); const error = shallowRef(""); const pending = ref<LoanMutation | null>(null);
 const locked = computed(() => busy.value || !!pending.value);
 function toLocal(value: string) {
   const date = new Date(value);

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import QRCode from "qrcode";
@@ -15,14 +15,14 @@ const route = useRoute();
 const session = useSessionStore();
 const selected = ref<AssetCard | null>(null);
 const tag = ref<AssetTag | null>(null);
-const qrImage = ref("");
-const error = ref("");
-const notice = ref("");
-const busy = ref(false);
+const qrImage = shallowRef("");
+const error = shallowRef("");
+const notice = shallowRef("");
+const busy = shallowRef(false);
 const pending = ref<Action | null>(null);
-const notes = ref("");
+const notes = shallowRef("");
 const quantity = ref("1");
-const reason = ref("");
+const reason = shallowRef("");
 
 const canWrite = session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false;
 const locked = computed(() => busy.value || pending.value !== null);

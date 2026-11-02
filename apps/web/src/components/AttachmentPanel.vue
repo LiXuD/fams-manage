@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { listAttachments, uploadAttachment, correctAttachment, downloadAttachment, scanStatusLabels as scanText, type Attachment } from "@/attachment/api";
 import type { InboundReceipt } from "@/inbound/api";
@@ -8,14 +8,14 @@ const props = defineProps<{ receipt: InboundReceipt; disabled?: boolean }>();
 const emit = defineEmits<{ uploaded: [version: number]; busy: [value: boolean] }>();
 const session = useSessionStore();
 const items = ref<Attachment[]>([]);
-const error = ref("");
-const notice = ref("");
-const noticeGood = ref(false);
-const busy = ref(false);
-const loading = ref(false);
+const error = shallowRef("");
+const notice = shallowRef("");
+const noticeGood = shallowRef(false);
+const busy = shallowRef(false);
+const loading = shallowRef(false);
 const fileInput = ref<HTMLInputElement | null>(null);
 const correction = ref<Attachment | null>(null);
-const correctionReason = ref("");
+const correctionReason = shallowRef("");
 const pending = ref<{ receiptId: string; version: number; file: File; key: string;
   previousObjectId?: string; reason?: string } | null>(null);
 

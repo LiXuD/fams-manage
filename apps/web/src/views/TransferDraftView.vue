@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { loanMessage, loanRequest } from "@/loan/api";
@@ -10,9 +10,9 @@ const router = useRouter();
 const assets = ref<TransferAsset[]>([]);
 const organizations = ref<TransferChoice[]>([]), employees = ref<TransferChoice[]>([]), warehouses = ref<TransferChoice[]>([]), locations = ref<TransferChoice[]>([]);
 const draftItems = ref<{ asset: TransferAsset; target: TransferTarget }[]>([]);
-const assetId = ref(""), owning = ref(""), using = ref(""), custody = ref("PERSONAL"), employee = ref(""), warehouse = ref(""), location = ref("");
-const reason = ref("");
-const busy = ref(false), error = ref(""), notice = ref(""), retryable = ref(false);
+const assetId = shallowRef(""), owning = shallowRef(""), using = shallowRef(""), custody = ref("PERSONAL"), employee = shallowRef(""), warehouse = shallowRef(""), location = shallowRef("");
+const reason = shallowRef("");
+const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef(""), retryable = shallowRef(false);
 const currentAsset = computed(() => assets.value.find(a => a.id === assetId.value));
 const stock = computed(() => currentAsset.value?.lifecycleStatus === "IN_STOCK");
 const bins = computed(() => locations.value.filter(l => stock.value ? l.locationType === "BIN" && l.warehouseId === warehouse.value : l.locationType !== "BIN"));

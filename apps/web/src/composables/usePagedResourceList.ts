@@ -1,4 +1,4 @@
-import { computed, ref, type ComputedRef, type Ref } from "vue";
+import { computed, shallowRef, type ComputedRef, type Ref } from "vue";
 import { useResourceLoad } from "./useResourceLoad";
 
 /** 后端分页响应在本项目里的共同形状。 */
@@ -23,7 +23,7 @@ export function usePagedResourceList<T>(fetchPage: (page: number) => Promise<Pag
   problem: (cause: unknown) => string;
   immediate?: boolean;
 }): PagedResourceList<T> {
-  const page = ref(1);
+  const page = shallowRef(1);
   const load = useResourceLoad<PagedResult<T>>({
     load: () => fetchPage(page.value),
     problem: options.problem,

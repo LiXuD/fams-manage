@@ -1,50 +1,17 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
-import { loanRequest, loanMessage } from "@/loan/api";
-import type { LoanMutation } from "@/loan/api";
+import { useReassignmentFlow } from "@/composables/useReassignmentFlow";
 
 const props = defineProps<{ id: string; version: number }>();
 const emit = defineEmits<{ saved: [] }>();
-interface Snapshot {
-  id: string; version: number; ownershipVersion: number; processorAccountId: string;
-  operators: { id: string; name: string }[];
-  items: { id: string; version: number; itemStatus: string; lockVersion: number; destination?: string; deliveryEvidence?: string }[];
-}
-const snapshot = ref<Snapshot | null>(null), target = ref(""), reason = ref(""), evidence = ref("");
-const checked = ref(false), busy = ref(false), error = ref(""), retryable = ref(false);
-let pending: LoanMutation | null = null, generation = 0;
+interface Item { id: string; version: number; itemStatus: string; lockVersion: number; destination?: string; deliveryEvidence?: string }
 const labels: Record<string, string> = { READY: "未交出", DELIVERED: "已交出待接收", REFUSED: "实物不符待核查", RECOVERY_PENDING: "待收回" };
-watch(() => [props.id, props.version], () => {
-  generation++; snapshot.value = null; pending = null; retryable.value = false;
-  target.value = ""; reason.value = ""; evidence.value = ""; checked.value = false;
-});
-async function inspect() {
-  if (busy.value) return;
-  const turn = ++generation; busy.value = true; error.value = "";
-  try {
-    const result = await loanRequest<Snapshot>(`/transfers/${props.id}/reassignment`);
-    if (turn !== generation) return;
-    snapshot.value = result; pending = null; retryable.value = false; checked.value = false;
-  } catch (e) { if (turn === generation) error.value = loanMessage(e); }
-  finally { busy.value = false; }
-}
-async function submit() {
-  if (busy.value || !snapshot.value) return;
-  if (!pending && (!target.value || !reason.value.trim() || !evidence.value.trim() || !checked.value)) {
-    error.value = "请选择接任库管，填写原因及交接凭证，并核对未同步结果。"; return;
-  }
-  pending ??= { path: `/transfers/${snapshot.value.id}/reassignment`, version: snapshot.value.version,
-    key: crypto.randomUUID(), body: { processorAccountId: target.value, ownershipVersion: snapshot.value.ownershipVersion,
-      reason: reason.value.trim(), evidence: evidence.value.trim(), unsynchronizedResultsChecked: true,
-      items: snapshot.value.items.map(i => ({ id: i.id, version: i.version, status: i.itemStatus, lockVersion: i.lockVersion })) } };
-  busy.value = true; error.value = ""; const turn = generation;
-  try {
-    await loanRequest(pending.path, pending);
-    if (turn !== generation) return;
-    pending = null; retryable.value = false; snapshot.value = null; emit("saved");
-  } catch (e) { if (turn === generation) { error.value = loanMessage(e); retryable.value = true; } }
-  finally { busy.value = false; }
-}
+
+const { snapshot, target, reason, evidence, checked, busy, error, retryable, inspect, submit } =
+  useReassignmentFlow<Item>(props, {
+    collection: "transfers",
+    mapItems: (item) => ({ id: item.id, version: item.version, status: item.itemStatus, lockVersion: item.lockVersion }),
+    onSaved: () => emit("saved"),
+  });
 </script>
 
 <template>

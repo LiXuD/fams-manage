@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { RepairApiError, repairProblem } from "@/repair/api";
 import { collaborationEvidenceContent, collaborationRequest } from "@/repair/collaboration";
@@ -7,7 +7,7 @@ import FamsMediaPreview from "@/components/FamsMediaPreview.vue";
 const props=defineProps<{invitationId:string;objectId:string;kind:"fault-photos"|"attachments"|"opinion-attachments"|"staff-attachments";filename?:string;blocked?:boolean}>();
 const emit=defineEmits<{invalidated:[]}>(),session=useSessionStore();
 const identity=computed(()=>JSON.stringify([session.user?.id,session.user?.roles,session.csrfToken,props.invitationId,props.objectId,props.kind]));
-const busy=ref(false),error=ref(""),url=ref(""),mime=ref("");let generation=0,live=true,abort:AbortController|null=null;
+const busy=shallowRef(false),error=shallowRef(""),url=shallowRef(""),mime=shallowRef("");let generation=0,live=true,abort:AbortController|null=null;
 function clear(){generation++;abort?.abort();abort=null;if(url.value)URL.revokeObjectURL(url.value);url.value="";mime.value="";busy.value=false;}
 async function read(){if(busy.value || props.blocked)return;clear();const epoch=generation,owner=identity.value;busy.value=true;error.value="";
   const current=()=>live && generation===epoch && identity.value===owner;

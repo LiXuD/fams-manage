@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { reviewRequest, ReviewApiError, subjectStatusLabels as statuses, type Board, type Observation, type Review } from "@/inventory-review/api";
 import type { LoanMutation } from "@/loan/api";
@@ -11,9 +11,9 @@ interface Disposition { observation_id: string; counter_observation_id: string; 
 const session = useSessionStore();
 const identity = computed(() => JSON.stringify([props.taskId, props.itemId, session.user?.id, session.csrfToken, session.user?.roles]));
 const selection = ref<Selection | null>(null), board = ref<Board | null>(null), subjects = ref<Subject[]>([]), dispositions = ref<Disposition[]>([]);
-const target = ref(""), method = ref("REJECT_EVIDENCE"), reason = ref(""), evidence = ref(""), page = ref(1), total = ref(0);
-const busy = ref(false), error = ref(""), pending = ref<LoanMutation | null>(null);
-const stage = ref<LoanMutation | null>(null), confirmKind = ref<"decision" | "acceptance" | null>(null), confirmHint = ref("");
+const target = shallowRef(""), method = ref("REJECT_EVIDENCE"), reason = shallowRef(""), evidence = shallowRef(""), page = shallowRef(1), total = shallowRef(0);
+const busy = shallowRef(false), error = shallowRef(""), pending = ref<LoanMutation | null>(null);
+const stage = ref<LoanMutation | null>(null), confirmKind = ref<"decision" | "acceptance" | null>(null), confirmHint = shallowRef("");
 const confirmLabels: Record<"decision" | "acceptance", string> = { decision: "确认共同提交证据处置", acceptance: "确认最终采信所选证据" };
 const locked = computed(() => busy.value || !!pending.value);
 const currentItem = computed(() => board.value?.items.find(row => row.item.id === props.itemId));

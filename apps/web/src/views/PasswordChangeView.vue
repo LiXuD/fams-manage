@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from "vue";
+import { reactive, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
@@ -7,7 +7,7 @@ import { useSessionStore } from "@/auth/sessionStore";
 const router = useRouter();
 const session = useSessionStore();
 const form = reactive({ currentPassword: "", newPassword: "", confirmPassword: "" });
-const localError = ref("");
+const localError = shallowRef("");
 
 async function submit(): Promise<void> {
   localError.value = "";

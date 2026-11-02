@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { LoanApiError, loanMessage, loanRequest, type LoanMutation } from "@/loan/api";
 import type { Repair, RepairReturnTarget } from "@/repair/api";
@@ -14,11 +14,11 @@ interface Proposal { id: string; business_id: string; version: number; change_st
   physical_verification: string; targetDisplay?: { employeeName: string; organizationName: string; locationName: string }; proposed_target_json: Record<string, unknown>; decision_reason: string | null }
 const base = "/item-target-changes", type = "businessType=REPAIR";
 const rows = ref<Proposal[]>([]), snapshot = ref<Snapshot | null>(null);
-const page = ref(1), total = ref(0), busy = ref(false), error = ref("");
+const page = shallowRef(1), total = shallowRef(0), busy = shallowRef(false), error = shallowRef("");
 const choices = ref<Choice[]>([]), kind = ref<"organization" | "employee" | "location">("organization");
-const catalogPage = ref(1), catalogMore = ref(false);
+const catalogPage = shallowRef(1), catalogMore = shallowRef(false);
 const organization = ref<Choice | null>(null), employee = ref<Choice | null>(null), location = ref<Choice | null>(null);
-const custody = ref("PERSONAL"), reason = ref(""), code = ref(""), evidence = ref(""), checked = ref(false), decision = ref("");
+const custody = ref("PERSONAL"), reason = shallowRef(""), code = shallowRef(""), evidence = shallowRef(""), checked = shallowRef(false), decision = shallowRef("");
 const prepared = ref<LoanMutation | null>(null), pending = ref<LoanMutation | null>(null);
 const locked = computed(() => busy.value || !!prepared.value || !!pending.value);
 let generation = 0, live = true;

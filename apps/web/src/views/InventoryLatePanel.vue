@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { inventoryLateResultLabels as results, reviewRequest, ReviewApiError } from "@/inventory-review/api";
 import InventoryLateDamagePanel from "./InventoryLateDamagePanel.vue";
@@ -14,11 +14,11 @@ interface Board { task: { version: number; name: string; range_json: unknown }; 
 interface Detail { case: Entry; history: { items: Decision[]; page: number; pageSize: number; total: number } }
 const props = defineProps<{ taskId: string }>(); const session = useSessionStore();
 const owner = computed(() => JSON.stringify([props.taskId, session.user?.id, session.user?.roles, session.csrfToken]));
-const board = ref<Board | null>(null), detail = ref<Detail | null>(null), page = ref(1), busy = ref(false), error = ref("");
-const pending = ref<LoanMutation | null>(null), confirming = ref(false), confirmation = ref("");
-const reason = ref(""), evidence = ref(""), method = ref("NOTE"), draftName = ref("");
+const board = ref<Board | null>(null), detail = ref<Detail | null>(null), page = shallowRef(1), busy = shallowRef(false), error = shallowRef("");
+const pending = ref<LoanMutation | null>(null), confirming = shallowRef(false), confirmation = shallowRef("");
+const reason = shallowRef(""), evidence = shallowRef(""), method = ref("NOTE"), draftName = shallowRef("");
 const startsAt = ref(new Date(Date.now() + 3600000).toISOString()), dueAt = ref(new Date(Date.now() + 7 * 86400000).toISOString());
-const damageBusy = ref(false);
+const damageBusy = shallowRef(false);
 const locked = computed(() => busy.value || !!pending.value || damageBusy.value); let generation = 0, live = true;
 const current = (epoch: number, identity: string) => live && epoch === generation && identity === owner.value;
 function clear() { generation++; damageBusy.value = false; board.value = null; detail.value = null; pending.value = null; confirming.value = false; busy.value = false; reason.value = ""; evidence.value = ""; confirmation.value = ""; }

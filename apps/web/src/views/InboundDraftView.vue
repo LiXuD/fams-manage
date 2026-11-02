@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
@@ -15,11 +15,11 @@ const assets = ref<AssetCard[]>([]);
 const warehouses = ref<AssetReference[]>([]);
 const locations = ref<AssetReference[]>([]);
 const assetIds = ref<string[]>([]);
-const warehouseId = ref("");
-const locationId = ref("");
+const warehouseId = shallowRef("");
+const locationId = shallowRef("");
 const businessDate = ref(new Date().toISOString().slice(0, 10));
-const error = ref("");
-const busy = ref(false);
+const error = shallowRef("");
+const busy = shallowRef(false);
 
 function selectedRef(items: AssetReference[], id: string): AssetReference | undefined {
   return items.find((item) => item.id === id);

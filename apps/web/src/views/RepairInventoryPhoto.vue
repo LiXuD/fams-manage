@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { reviewRequest, ReviewApiError } from "@/inventory-review/api";
 import { readablePhoto, repairEvidencePhotoContent, type InventoryPhoto } from "@/inventory-review/photos";
@@ -8,7 +8,7 @@ const props = defineProps<{ repairId: string; observationId: string; objectId: s
 const emit = defineEmits<{ invalidated: [] }>();
 const session = useSessionStore();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, props.repairId, props.observationId, props.objectId]));
-const busy = ref(false), error = ref(""), preview = ref("");
+const busy = shallowRef(false), error = shallowRef(""), preview = shallowRef("");
 let epoch = 0, live = true, abort: AbortController | null = null;
 function clear() {
   epoch++; abort?.abort(); abort = null;

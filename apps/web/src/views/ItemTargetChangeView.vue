@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
@@ -19,9 +19,9 @@ const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 const warehouse = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR"));
 const rows = ref<Proposal[]>([]); const selected = ref<Proposal | null>(null); const snapshot = ref<Snapshot | null>(null);
 const target = ref<Target | null>(null); const catalogs = ref<Record<string, Choice[]>>({});
-const page = ref(1); const total = ref(0); const error = ref(""); const busy = ref(false);
-const reason = ref(""); const physicalVerification = ref(""); const physicalChecked = ref(false); const observedCode = ref("");
-const decisionReason = ref(""); const pending = ref<LoanMutation | null>(null);
+const page = shallowRef(1); const total = shallowRef(0); const error = shallowRef(""); const busy = shallowRef(false);
+const reason = shallowRef(""); const physicalVerification = shallowRef(""); const physicalChecked = shallowRef(false); const observedCode = shallowRef("");
+const decisionReason = shallowRef(""); const pending = ref<LoanMutation | null>(null);
 type Confirm = "propose" | "APPROVED" | "REJECTED";
 const confirmKind = ref<Confirm | null>(null);
 const decisionConfirm = computed(() => confirmKind.value === "APPROVED" || confirmKind.value === "REJECTED"

@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { usePagedResourceList } from "@/composables/usePagedResourceList";
 import { cardStageLabels, custodyLabel, lifecycleLabels, listAssets, type AssetCard } from "@/asset/api";
 
 const session = useSessionStore();
-const code = ref("");
-const nameFilter = ref("");
+const code = shallowRef("");
+const nameFilter = shallowRef("");
 
 const canWrite = session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false;
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { reviewRequest, ReviewApiError, type Board, type Observation, type Review } from "@/inventory-review/api";
 import type { LoanMutation } from "@/loan/api";
@@ -10,10 +10,10 @@ interface SelectionView { taskVersion: number; recheckGeneration: number; contex
     verified_observed_at: string; time_source: string; reason: string; evidence: string }[]; total: number }
 const session = useSessionStore();
 const identity = computed(() => JSON.stringify([props.taskId, props.itemId, session.user?.id, session.csrfToken, session.user?.roles]));
-const data = ref<SelectionView | null>(null), board = ref<Board | null>(null), page = ref(1);
-const choice = ref(""), time = ref(""), reason = ref(""), evidence = ref(""), error = ref(""), notice = ref("");
-const busy = ref(false), pending = ref<LoanMutation | null>(null);
-const stage = ref<LoanMutation | null>(null), confirmOpen = ref(false);
+const data = ref<SelectionView | null>(null), board = ref<Board | null>(null), page = shallowRef(1);
+const choice = shallowRef(""), time = shallowRef(""), reason = shallowRef(""), evidence = shallowRef(""), error = shallowRef(""), notice = shallowRef("");
+const busy = shallowRef(false), pending = ref<LoanMutation | null>(null);
+const stage = ref<LoanMutation | null>(null), confirmOpen = shallowRef(false);
 const confirmLabel = "确认保存待采信选择";
 const confirmHint = "保存这条证据及核实依据作为待采信选择？独立差异仍需处理，不会增加已采信数量。";
 const locked = computed(() => busy.value || !!pending.value);

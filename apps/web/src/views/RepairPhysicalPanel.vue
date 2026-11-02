@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { repairRequest, repairProblem, RepairApiError, type Repair, type RepairMutation } from "@/repair/api";
 
@@ -8,9 +8,9 @@ const props=defineProps<{repair:Repair;blocked?:boolean}>();
 const emit=defineEmits<{changed:[];invalidated:[];busyChange:[value:boolean]}>();
 const session=useSessionStore();
 const identity=computed(()=>JSON.stringify([session.user?.id,session.user?.roles,session.csrfToken,props.repair.id]));
-const warehouses=ref<Place[]>([]),locations=ref<Place[]>([]),warehouse=ref(""),location=ref("");
-const warehousePage=ref(1),locationPage=ref(1),warehouseTotal=ref(0),locationTotal=ref(0);
-const mode=ref<"away"|"inbound">("away"),observed=ref(""),actual=ref(""),evidence=ref(""),error=ref(""),busy=ref(false);
+const warehouses=ref<Place[]>([]),locations=ref<Place[]>([]),warehouse=shallowRef(""),location=shallowRef("");
+const warehousePage=shallowRef(1),locationPage=shallowRef(1),warehouseTotal=shallowRef(0),locationTotal=shallowRef(0);
+const mode=ref<"away"|"inbound">("away"),observed=shallowRef(""),actual=shallowRef(""),evidence=shallowRef(""),error=shallowRef(""),busy=shallowRef(false);
 const prepared=ref<RepairMutation|null>(null),pending=ref<RepairMutation|null>(null);
 const locked=computed(()=>busy.value||!!prepared.value||!!pending.value);
 const visibleLocations=computed(()=>mode.value==="away"?locations.value:locations.value.filter(row=>row.location_type==="BIN"&&row.warehouse_id===warehouse.value));

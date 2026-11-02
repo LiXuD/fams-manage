@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import RequisitionDemandForm from "./RequisitionDemandForm.vue";
@@ -13,11 +13,11 @@ const catalogs = ref<Record<string, RequisitionChoice[]>>({});
 const demands = ref<RequisitionDemand[] | null>(null);
 const requestType = ref<"REQUISITION" | "BORROW">("REQUISITION");
 const expectedReturnDate = ref<string | null>(null);
-const canShared = ref(false); const selfEmployee = ref(""); const selfOrg = ref("");
-const version = ref(0); const ready = ref(false);
-const busy = ref(false); const error = ref("");
+const canShared = shallowRef(false); const selfEmployee = shallowRef(""); const selfOrg = shallowRef("");
+const version = shallowRef(0); const ready = shallowRef(false);
+const busy = shallowRef(false); const error = shallowRef("");
 let pending: { path: string; method: string; key: string; version: number; body?: unknown } | null = null;
-const retryable = ref(false);
+const retryable = shallowRef(false);
 
 async function send(path: string, body?: unknown, method = "POST", expectedVersion = 0) {
   if (busy.value) return;

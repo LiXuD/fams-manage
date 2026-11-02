@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { RepairApiError, type Repair } from "@/repair/api";
 import { factoryProblem, factoryRequest, type FactoryMutation } from "@/repair/factory-api";
@@ -10,11 +10,11 @@ const emit = defineEmits<{ "busy-change": [boolean]; changed: []; invalidated: [
 const session = useSessionStore();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, props.repair.id, props.round.id]));
 const canRead = computed(() => !!session.user?.roles.includes("ASSET_ADMIN") || !!session.user?.roles.includes("WAREHOUSE_OPERATOR") && String(session.user.id) === props.repair.processorAccountId);
-const opened = ref(false), busy = ref(false), stale = ref(true), error = ref(""), notice = ref("");
-const header = ref<FactoryDetail | null>(null), roundData = ref<FactoryRoundDetail | null>(null), records = ref<FactoryPartsPage | null>(null), page = ref(1);
+const opened = shallowRef(false), busy = shallowRef(false), stale = shallowRef(true), error = shallowRef(""), notice = shallowRef("");
+const header = ref<FactoryDetail | null>(null), roundData = ref<FactoryRoundDetail | null>(null), records = ref<FactoryPartsPage | null>(null), page = shallowRef(1);
 const confirmation = ref<FactoryMutation | null>(null), pending = ref<FactoryMutation | null>(null);
-const part = ref(""), before = ref(""), after = ref(""), code = ref(""), serial = ref(""), dateTime = ref(""), reason = ref("");
-const checked = ref(false), evidenceIds = ref<string[]>([]), file = ref<File | null>(null);
+const part = shallowRef(""), before = shallowRef(""), after = shallowRef(""), code = shallowRef(""), serial = shallowRef(""), dateTime = shallowRef(""), reason = shallowRef("");
+const checked = shallowRef(false), evidenceIds = ref<string[]>([]), file = ref<File | null>(null);
 let generation = 0, live = true;
 const current = (epoch: number, owner: string) => live && epoch === generation && owner === identity.value && canRead.value;
 const locked = computed(() => props.blocked || busy.value || !!pending.value || !!confirmation.value);

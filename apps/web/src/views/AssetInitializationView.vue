@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import {
   closeImportWindow, currentImportWindow, eligibleImportOperators, openImportWindow,
@@ -8,12 +8,12 @@ import {
 
 const operators = ref<EligibleOperator[]>([]);
 const current = ref<InitializationWindow | null>(null);
-const operatorId = ref("");
-const reason = ref("");
-const expiresAt = ref("");
-const error = ref("");
-const notice = ref("");
-const busy = ref(false);
+const operatorId = shallowRef("");
+const reason = shallowRef("");
+const expiresAt = shallowRef("");
+const error = shallowRef("");
+const notice = shallowRef("");
+const busy = shallowRef(false);
 
 async function refresh(): Promise<void> {
   error.value = "";

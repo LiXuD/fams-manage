@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import RepairReturnSourcePanel from "./RepairReturnSourcePanel.vue";
@@ -7,11 +7,11 @@ import { useSessionStore } from "@/auth/sessionStore";
 import { RepairApiError, repairProblem, repairRequest, type Repair, type RepairAsset, type RepairMutation } from "@/repair/api";
 const session = useSessionStore(), router = useRouter();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken]));
-const assets = ref<RepairAsset[]>([]), assetTotal = ref(0), assetPage = ref(1), assetId = ref("");
-const fault = ref(""), impact = ref("MEDIUM"), occurredAt = ref("");
+const assets = ref<RepairAsset[]>([]), assetTotal = shallowRef(0), assetPage = shallowRef(1), assetId = shallowRef("");
+const fault = shallowRef(""), impact = ref("MEDIUM"), occurredAt = shallowRef("");
 const pending = ref<RepairMutation | null>(null), confirmation = ref<RepairMutation | null>(null);
-const busy = ref(false), error = ref("");
-const sourceLocked = ref(false);
+const busy = shallowRef(false), error = shallowRef("");
+const sourceLocked = shallowRef(false);
 const locked = computed(() => busy.value || !!pending.value || !!confirmation.value || sourceLocked.value);
 let generation = 0, live = true;
 const current = (epoch: number, owner: string) => live && generation === epoch && identity.value === owner;

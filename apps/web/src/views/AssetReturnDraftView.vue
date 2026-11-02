@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { loanMessage, loanRequest } from "@/loan/api";
@@ -8,8 +8,8 @@ import type { BusinessPage, ReturnAssetChoice } from "../../../../packages/api-t
 
 const router = useRouter();
 const returnAssets = ref<ReturnAssetChoice[]>([]);
-const assetId = ref(""); const assetVersion = ref(0); const reason = ref("");
-const busy = ref(false); const error = ref(""); const retryable = ref(false);
+const assetId = shallowRef(""); const assetVersion = shallowRef(0); const reason = shallowRef("");
+const busy = shallowRef(false); const error = shallowRef(""); const retryable = shallowRef(false);
 let pending: LoanMutation | null = null;
 
 function chooseReturnAsset() {

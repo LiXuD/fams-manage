@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { lifecycleLabels } from "@/asset/api";
@@ -10,11 +10,11 @@ import type { Transfer, TransferAsset, TransferChoice, TransferReceipt } from ".
 const session = useSessionStore();
 const rows = ref<Transfer[]>([]);
 const receipts = ref<TransferReceipt[]>([]), receipt = ref<TransferReceipt | null>(null);
-const reason = ref(""), code = ref("");
-const personId = ref(""), personAssets = ref<TransferAsset[]>([]), personNotice = ref("");
+const reason = shallowRef(""), code = shallowRef("");
+const personId = shallowRef(""), personAssets = ref<TransferAsset[]>([]), personNotice = shallowRef("");
 const personnelChoices = ref<TransferChoice[]>([]);
-const personTasks = ref("");
-const busy = ref(false), error = ref(""), notice = ref(""), retryable = ref(false), page = ref(1), total = ref(0), checked = ref(false);
+const personTasks = shallowRef("");
+const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef(""), retryable = shallowRef(false), page = shallowRef(1), total = shallowRef(0), checked = shallowRef(false);
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 let pending: LoanMutation | null = null, grant: string | null = null;
 
