@@ -7,6 +7,7 @@ import { useSessionStore } from "@/auth/sessionStore";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { businessMessage, businessRequest } from "@/api/business";
 import { transferLabels as labels } from "@/features/transfer/api";
+import { loadCatalogPages } from "@/features/transfer/references";
 import type { BusinessMutation } from "@/api/business";
 import type { Transfer, TransferChoice, TransferItem } from "@fams/api-types/transfer";
 
@@ -23,10 +24,7 @@ const liveness = useRequestLiveness(() => [props.id]);
 let pending: BusinessMutation | null = null;
 
 async function catalog(kind: string, org?: string) {
-  const result: TransferChoice[] = []; let p = 1, part: TransferChoice[];
-  do { part = (await businessRequest<{ items: TransferChoice[] }>(`/transfers/catalog/${kind}?page=${p++}&pageSize=200${org ? `&organizationId=${org}` : ""}`)).items; result.push(...part); }
-  while (part.length === 200);
-  return result;
+  return loadCatalogPages<TransferChoice>(businessRequest, "/transfers/catalog", kind, org);
 }
 async function open() {
   const turn = liveness.begin();

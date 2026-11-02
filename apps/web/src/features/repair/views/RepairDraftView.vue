@@ -5,6 +5,7 @@ import AppChrome from "@/components/AppChrome.vue";
 import RepairReturnSourcePanel from "./../panels/RepairReturnSourcePanel.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
+import { provideBusyRegistry } from "@/features/repair/busyRegistry";
 import { RepairApiError, repairProblem, repairRequest, type Repair, type RepairAsset, type RepairMutation } from "@/features/repair/api";
 const session = useSessionStore(), router = useRouter();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken]));
@@ -12,8 +13,11 @@ const assets = ref<RepairAsset[]>([]), assetTotal = shallowRef(0), assetPage = s
 const fault = shallowRef(""), impact = ref("MEDIUM"), occurredAt = shallowRef("");
 const pending = ref<RepairMutation | null>(null), confirmation = ref<RepairMutation | null>(null);
 const busy = shallowRef(false), error = shallowRef("");
-const sourceLocked = shallowRef(false);
-const locked = computed(() => busy.value || !!pending.value || !!confirmation.value || sourceLocked.value);
+/** 页内互斥：视图占 host 一位（读取、待确认、在途办理），面板各占一位，不再逐条转发。 */
+const host = provideBusyRegistry().register("host");
+const hostOccupied = computed(() => busy.value || !!pending.value || !!confirmation.value);
+const locked = computed(() => hostOccupied.value || host.blocked.value);
+watch(hostOccupied, value => { host.busy.value = value; }, { immediate: true, flush: "sync" });
 const adminRole = computed(() => session.user?.roles.includes("ASSET_ADMIN") ?? false);
 const assetPrevDisabled = computed(() => locked.value || assetPage.value === 1);
 const assetNextDisabled = computed(() => locked.value || assetPage.value * 20 >= assetTotal.value);
@@ -72,7 +76,7 @@ onBeforeUnmount(() => { reset(); });
         <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="confirmation = null">返回修改</button>
       </div>
     </div>
-    <RepairReturnSourcePanel v-if="adminRole" :blocked="busy || !!pending || !!confirmation" @created="router.push(`/repairs/${encodeURIComponent($event.id)}?saved=1`)" @busy-change="sourceLocked=$event" />
+    <RepairReturnSourcePanel v-if="adminRole" @created="router.push(`/repairs/${encodeURIComponent($event.id)}?saved=1`)" />
     <section class="fams-panel fams-stack">
       <div class="fams-panel-head"><h2 class="fams-panel-title">提交报修</h2></div>
       <button class="fams-button" data-kind="secondary" type="button" :disabled="locked" @click="loadAssets()">查找可报修资产</button>

@@ -5,6 +5,7 @@ import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
+import { buildTransferTarget, loadCatalogPages, resolveReference } from "@/features/transfer/references";
 
 type Choice = { id: string; name: string; version: number; locationType?: string; warehouseId?: string; sharedEligible?: boolean };
 type Target = { owningOrganizationId: string | null; custodyType: string; usingOrganizationId: string | null;
@@ -45,11 +46,9 @@ const confirmHints: Record<Confirm, string> = { propose: "提请调拨目标变�
 const base = "/item-target-changes";
 const liveness = useRequestLiveness(() => [page.value]);
 async function catalog(kind: string, organization?: string) {
-  const all: Choice[] = []; let p = 1; let items: Choice[];
-  do { items = (await businessRequest<{ items: Choice[] }>(`/transfers/catalog/${kind}?page=${p++}&pageSize=200${organization ? `&organizationId=${organization}` : ""}`)).items; all.push(...items); }
-  while (items.length === 200); return all;
+  return loadCatalogPages<Choice>(businessRequest, "/transfers/catalog", kind, organization);
 }
-function name(kind: string, id: string | null) { return id ? catalogs.value[kind]?.find(row => row.id === id)?.name ?? id : "未指定"; }
+function name(kind: string, id: string | null) { return id ? resolveReference(catalogs.value[kind], id)?.name ?? id : "未指定"; }
 function targetText(value: Target) {
   return `${value.custodyType === "STORAGE" ? "仓库保管" : value.custodyType === "SHARED" ? "部门公用" : "个人使用"} / ${name("organization", value.usingOrganizationId)} / ${value.employeeId ?? name("warehouse", value.warehouseId)} / ${name("location", value.locationId)}`;
 }
@@ -77,22 +76,16 @@ async function chooseOrganization() {
 }
 function captureTarget(): Target | null {
   const value = target.value; if (!value) return null;
-  const location = places.value.find(row => row.id === value.locationId);
-  const owner = catalogs.value.organization?.find(row => row.id === value.owningOrganizationId);
-  const organization = catalogs.value.organization?.find(row => row.id === value.usingOrganizationId);
-  const employee = employees.value.find(row => row.id === value.employeeId);
-  const warehouse = catalogs.value.warehouse?.find(row => row.id === value.warehouseId);
+  const location = resolveReference(places.value, value.locationId);
+  const owner = resolveReference(catalogs.value.organization, value.owningOrganizationId);
+  const organization = resolveReference(catalogs.value.organization, value.usingOrganizationId);
+  const employee = resolveReference(employees.value, value.employeeId);
+  const warehouse = resolveReference(catalogs.value.warehouse, value.warehouseId);
   if (!location || value.owningOrganizationId && !owner || stock.value && !warehouse
     || !stock.value && (!organization || !employee || value.custodyType === "SHARED" && !employee.sharedEligible)) {
     error.value = "请选择有效目标组织、责任人或仓库及位置；部门公用责任人须为有效部门资产员。"; return null;
   }
-  const versions: Record<string, number> = { location: location.version };
-  if (owner) versions.owningOrganization = owner.version;
-  if (stock.value) versions.warehouse = warehouse!.version;
-  else { versions.usingOrganization = organization!.version; versions.employee = employee!.version; }
-  return { owningOrganizationId: owner?.id ?? null, custodyType: stock.value ? "STORAGE" : value.custodyType,
-    usingOrganizationId: stock.value ? null : organization!.id, employeeId: stock.value ? null : employee!.id,
-    warehouseId: stock.value ? warehouse!.id : null, locationId: location.id, referenceVersions: versions };
+  return buildTransferTarget({ stock: stock.value, custodyType: value.custodyType, location, owner, warehouse, usingOrganization: organization, employee });
 }
 async function send(path: string, body?: unknown, version = selected.value?.version ?? 0) {
   if (busy.value || pending.value && pending.value.path !== path) return;

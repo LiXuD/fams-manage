@@ -14,6 +14,7 @@ import { factoryEventNames, factoryRoundStates, factoryScopeStates } from "@/fea
 import { useSessionStore } from "@/auth/sessionStore";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { useObjectUrlPreview } from "@/composables/useObjectUrlPreview";
+import { provideBusyRegistry } from "@/features/repair/busyRegistry";
 import { RepairApiError, repairPhotoContent, repairProblem, repairRequest, repairStates, type Repair, type RepairMutation, type RepairPhoto } from "@/features/repair/api";
 const session = useSessionStore(), route = useRoute();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, route.params.id]));
@@ -25,13 +26,11 @@ const observedCode = shallowRef(""), evidence = shallowRef(""), confirmedPlace =
 const selectedFile = ref<File | null>(null), preview = useObjectUrlPreview();
 const pending = ref<RepairMutation | null>(null), confirmation = ref<RepairMutation | null>(null);
 const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef("");
-const collaborationLocked = shallowRef(false);
-const physicalLocked = shallowRef(false);
-const returnLocked = shallowRef(false);
-const targetChangeLocked = shallowRef(false);
-const reassignmentLocked = shallowRef(false);
-const factoryLocked = shallowRef(false);
-const locked = computed(() => busy.value || !!pending.value || !!confirmation.value || collaborationLocked.value || physicalLocked.value || returnLocked.value || targetChangeLocked.value || reassignmentLocked.value || factoryLocked.value);
+/** 页内互斥：视图占 host 一位（读取、待确认、在途办理），各面板各占一位，互不逐条转发。 */
+const registry = provideBusyRegistry(), host = registry.register("host"), factoryBusy = registry.occupied("factory");
+const hostOccupied = computed(() => busy.value || !!pending.value || !!confirmation.value);
+const locked = computed(() => hostOccupied.value || host.blocked.value);
+watch(hostOccupied, value => { host.busy.value = value; }, { immediate: true, flush: "sync" });
 const confirmationFactoryScope = computed(() => (confirmation.value?.body as Record<string, unknown> | undefined)?.allowedMethod === "INTERNAL_OR_FACTORY");
 const confirmationCostScopeText = computed(() => {
   const body = confirmation.value?.body as Record<string, unknown> | undefined;
@@ -57,7 +56,7 @@ const liveness = useRequestLiveness(() => [identity.value]);
 function reset() {
   liveness.invalidate(); preview.close(); detail.value = null; pending.value = null; confirmation.value = null; selectedFile.value = null;
   reason.value = ""; approvalMethod.value = "INTERNAL_NO_COST"; factoryCostPolicy.value = "NO_COST"; factoryCostLimit.value = ""; evidence.value = ""; observedCode.value = ""; neverLeft.value = false; confirmedPlace.value = false;
-  busy.value = false; factoryLocked.value = false;
+  busy.value = false;
 }
 function failure(cause: unknown) {
   if (cause instanceof RepairApiError && [401, 403, 404].includes(cause.status)) reset();
@@ -142,7 +141,7 @@ onBeforeUnmount(() => { reset(); });
 <template>
   <AppChrome>
     <template #actions>
-      <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || !!confirmation || factoryLocked" @click="load">刷新并核对当前结果</button>
+      <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || !!confirmation || factoryBusy" @click="load">刷新并核对当前结果</button>
       <router-link class="fams-button" data-kind="secondary" data-size="sm" to="/repairs">返回报修列表</router-link>
     </template>
     <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
@@ -234,12 +233,12 @@ onBeforeUnmount(() => { reset(); });
         <p>实际寄出 {{ detail.factorySummary.actualDispatchCount }} 次</p>
         <p v-if="detail.factorySummary.round">第 {{ detail.factorySummary.round.roundNumber }} 轮 · {{ factoryRoundStates[detail.factorySummary.round.roundStatus] }} · 预计收回 {{ detail.factorySummary.round.expectedReturnDate }}<span v-if="detail.factorySummary.round.dispatchedAt"> · 实际寄出 {{ factoryDispatchedAtText }}</span><span v-if="detail.factorySummary.round.receivedAt"> · 实际收回 {{ factoryReceivedAtText }}</span></p>
       </section>
-      <RepairFactoryPanel v-if="factoryPanelVisible" :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || physicalLocked || returnLocked || targetChangeLocked || reassignmentLocked" @changed="load" @invalidated="reset" @busy-change="factoryLocked=$event" />
-      <RepairReassignmentPanel :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || physicalLocked || returnLocked || targetChangeLocked || factoryLocked" @changed="load" @invalidated="reset" @busy-change="reassignmentLocked = $event" />
-      <RepairPhysicalPanel :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || returnLocked || targetChangeLocked || reassignmentLocked || factoryLocked" @changed="load" @invalidated="reset" @busy-change="physicalLocked = $event" />
-      <RepairReturnPanel :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || physicalLocked || targetChangeLocked || reassignmentLocked || factoryLocked" @changed="load" @invalidated="reset" @busy-change="returnLocked = $event" />
-      <RepairTargetChangePanel :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || physicalLocked || returnLocked || reassignmentLocked || factoryLocked" @changed="load" @invalidated="reset" @busy-change="targetChangeLocked = $event" />
-      <RepairCollaborationPanel :repair-id="detail.id" :request-version="detail.version" :blocked="busy || !!pending || !!confirmation || physicalLocked || returnLocked || targetChangeLocked || reassignmentLocked || factoryLocked" @changed="load" @invalidated="reset" @busy-change="collaborationLocked = $event" />
+      <RepairFactoryPanel v-if="factoryPanelVisible" :repair="detail" @changed="load" @invalidated="reset" />
+      <RepairReassignmentPanel :repair="detail" @changed="load" @invalidated="reset" />
+      <RepairPhysicalPanel :repair="detail" @changed="load" @invalidated="reset" />
+      <RepairReturnPanel :repair="detail" @changed="load" @invalidated="reset" />
+      <RepairTargetChangePanel :repair="detail" @changed="load" @invalidated="reset" />
+      <RepairCollaborationPanel :repair-id="detail.id" :request-version="detail.version" @changed="load" @invalidated="reset" />
       <div class="fams-panel-head"><h3 class="fams-panel-title">最近100条处理历史 / 共 {{ detail.historyTotal || 0 }} 条</h3></div>
       <ul class="fams-timeline"><li v-for="event in historyRows" :key="event.id">{{ event.actor_username }} · {{ eventNames[event.action] || '历史处理' }}<small>{{ event.occurredAtText }} · {{ event.detail_json.reason || event.detail_json.evidence || event.detail_json.fault || '' }}</small></li></ul>
     </section>

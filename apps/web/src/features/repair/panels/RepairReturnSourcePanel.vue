@@ -3,8 +3,10 @@ import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { RepairApiError, repairProblem, repairRequest, repairStates, type Repair, type RepairAsset, type RepairMutation } from "@/features/repair/api";
-const props = defineProps<{ blocked?: boolean }>();
-const emit = defineEmits<{ created: [repair: Repair]; busyChange: [value: boolean] }>();
+import { useBusy } from "@/features/repair/busyRegistry";
+const emit = defineEmits<{ created: [repair: Repair] }>();
+/** 页内互斥：claimed 写本面板自身的占用位，blocked 读「任一其它面板在忙」。 */
+const { busy: claimed, blocked } = useBusy("returnSource");
 interface SourceRow { id: string; return_id: string; asset_id: string; followup_status: string; processor_account_id: string; reason: string;
   linked_repair_id: string | null; last_repair_id: string | null; repair_status: string | null }
 interface Source { followupId: string; version: number; returnId: string; closedLoanId: string | null; processorAccountId: string;
@@ -26,42 +28,42 @@ function failure(cause: unknown, mutation = false) {
   error.value = repairProblem(cause);
 }
 async function refresh(delta = 0) {
-  if (busy.value || props.blocked || delta && locked.value || page.value + delta < 1) return;
+  if (busy.value || blocked.value || delta && locked.value || page.value + delta < 1) return;
   const turn = liveness.begin(); busy.value = true; error.value = ""; page.value += delta;
   try { const value = await repairRequest<{ items: SourceRow[]; total: number }>(`/return-sources?page=${page.value}&pageSize=20`);
     if (liveness.isCurrent(turn)) { rows.value = value.items; total.value = value.total; if (!pending.value && !prepared.value) source.value = null; }
   } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function select(id: string) {
-  if (locked.value || props.blocked) return;
+  if (locked.value || blocked.value) return;
   const turn = liveness.begin(); busy.value = true; source.value = null; error.value = "";
   try { const value = await repairRequest<Source>(`/return-sources/${id}`);
     if (liveness.isCurrent(turn)) { source.value = value; fault.value = value.inspectionReason; }
   } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function prepare() {
-  if (locked.value || props.blocked || !source.value || fault.value.trim().length < 3) return;
+  if (locked.value || blocked.value || !source.value || fault.value.trim().length < 3) return;
   const row = source.value;
   prepared.value = { path: `/return-sources/${row.followupId}`, version: row.version, key: crypto.randomUUID(),
     body: { assetVersion: row.asset.version, lockVersion: row.lockVersion, fault: fault.value.trim(), impact: impact.value } };
 }
 async function send() {
-  if (busy.value || props.blocked || !pending.value) return;
+  if (busy.value || blocked.value || !pending.value) return;
   const turn = liveness.begin(), operation = pending.value; busy.value = true; error.value = "";
   try { const result = await repairRequest<Repair>(operation.path, operation);
     if (liveness.isCurrent(turn)) { pending.value = null; source.value = null; emit("created", result); }
   } catch (cause) { if (liveness.isCurrent(turn)) failure(cause, true); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
-async function confirm() { if (busy.value || props.blocked || !prepared.value) return; pending.value = prepared.value; prepared.value = null; await send(); }
+async function confirm() { if (busy.value || blocked.value || !prepared.value) return; pending.value = prepared.value; prepared.value = null; await send(); }
 watch(identity, () => { clear(); error.value = ""; }, { immediate: true, flush: "sync" });
-watch(locked, value => emit("busyChange", value), { immediate: true, flush: "sync" });
-onBeforeUnmount(() => { clear(); emit("busyChange", false); });
+watch(locked, value => { claimed.value = value; }, { immediate: true, flush: "sync" });
+onBeforeUnmount(() => { clear(); });
 const sourceRows = computed(() => rows.value.map(row => ({ ...row,
   followupStatusText: row.followup_status === 'PENDING' ? '待接续' : row.followup_status === 'CLOSED' ? '已实际完成' : '维修处理中',
   repairStateText: repairStates[row.repair_status || ''] || '原维修',
   selectable: row.followup_status === 'PENDING' })));
-const prevDisabled = computed(() => locked.value || props.blocked || page.value <= 1);
-const nextDisabled = computed(() => locked.value || props.blocked || page.value * 20 >= total.value);
+const prevDisabled = computed(() => locked.value || blocked.value || page.value <= 1);
+const nextDisabled = computed(() => locked.value || blocked.value || page.value * 20 >= total.value);
 const inspectedAtText = computed(() => source.value ? new Date(source.value.inspectedAt).toLocaleString() : '');
 </script>
 <template>

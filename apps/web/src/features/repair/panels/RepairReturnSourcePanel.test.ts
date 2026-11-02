@@ -3,11 +3,12 @@ import { reactive } from "vue";
 import { beforeEach, expect, it, vi } from "vitest";
 import { RepairApiError } from "@/features/repair/api";
 import RepairReturnSourcePanel from "./RepairReturnSourcePanel.vue";
+import { busyRegistryKey, createBusyRegistry } from "@/features/repair/busyRegistry";
 const state = vi.hoisted(() => ({ request: vi.fn(), session: { user: { id: "1", roles: ["ASSET_ADMIN"] }, csrfToken: "csrf" } }));
 vi.mock("@/auth/sessionStore", () => ({ useSessionStore: () => state.session }));
 vi.mock("@/features/repair/api", async original => ({ ...await original<typeof import("@/features/repair/api")>(), repairRequest: state.request }));
 const source = { followupId: "9007199254740993", version: 3, returnId: "8", closedLoanId: "7", processorAccountId: "4", inspectedAt: "2026-10-24T00:00:00Z", inspectionReason: "Actual damaged receipt", lockVersion: 2, asset: { id: "9", assetCode: "PRIVATE-DAMAGED", name: "Actual asset", version: 6 } };
-const page = () => mount(RepairReturnSourcePanel, { global: { stubs: { RouterLink: true } } });
+const page = () => mount(RepairReturnSourcePanel, { global: { stubs: { RouterLink: true }, provide: { [busyRegistryKey]: createBusyRegistry() } } });
 const button = (wrapper: ReturnType<typeof page>, text: string) => wrapper.findAll("button").find(item => item.text() === text)!;
 beforeEach(() => { state.request.mockReset(); state.session = reactive({ user: { id: "1", roles: ["ASSET_ADMIN"] }, csrfToken: "csrf" }); });
 async function select(wrapper: ReturnType<typeof page>) {

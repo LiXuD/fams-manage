@@ -4,17 +4,20 @@ import { useSessionStore } from "@/auth/sessionStore";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { RepairApiError, repairProblem, type RepairMutation } from "@/features/repair/api";
 import { collaborationRequest, opinionResults, type CollaborationBoard } from "@/features/repair/collaboration";
+import { useBusy } from "@/features/repair/busyRegistry";
 import RepairTechnicalEvidence from "./RepairTechnicalEvidence.vue";
-const props = defineProps<{ repairId: string; requestVersion: number; blocked?: boolean }>();
-const emit = defineEmits<{ changed: []; invalidated: []; busyChange: [value: boolean] }>();
+const props = defineProps<{ repairId: string; requestVersion: number }>();
+const emit = defineEmits<{ changed: []; invalidated: [] }>();
+/** 页内互斥：claimed 写本面板自身的占用位，blocked 读「任一其它面板在忙」。 */
+const { busy: claimed, blocked } = useBusy("collaboration");
 const session = useSessionStore(), board = ref<CollaborationBoard | null>(null), technicians = ref<{id:string; username:string; name:string}[]>([]);
 const techPage = shallowRef(1), techTotal = shallowRef(0), technician = shallowRef(""), reason = shallowRef(""), error = shallowRef(""), busy = shallowRef(false);
 const prepared = ref<RepairMutation | null>(null), pending = ref<RepairMutation | null>(null);
 const identity = computed(()=>JSON.stringify([session.user?.id,session.user?.roles,session.csrfToken,props.repairId]));
 const locked = computed(()=>busy.value || !!prepared.value || !!pending.value);
-const refreshDisabled = computed(()=>busy.value || !!prepared.value || !!props.blocked);
-const retryDisabled = computed(()=>busy.value || !!props.blocked);
-const confirmDisabled = computed(()=>busy.value || !!props.blocked);
+const refreshDisabled = computed(()=>busy.value || !!prepared.value || !!blocked.value);
+const retryDisabled = computed(()=>busy.value || !!blocked.value);
+const confirmDisabled = computed(()=>busy.value || !!blocked.value);
 const inviteFieldsetShown = computed(()=>!!board.value?.canInvite);
 const techPrevDisabled = computed(()=>techPage.value===1);
 const techNextDisabled = computed(()=>techPage.value*20>=techTotal.value);
@@ -30,7 +33,7 @@ async function read() {
   catch(cause){if(liveness.isCurrent(turn))failure(cause);}finally{if(liveness.isCurrent(turn))busy.value=false;}
 }
 async function candidates(delta=0) {
-  if(locked.value || props.blocked || !board.value?.canInvite)return;
+  if(locked.value || blocked.value || !board.value?.canInvite)return;
   const next=techPage.value+delta;if(next<1 || delta>0 && (next-1)*20>=techTotal.value)return;
   const turn = liveness.begin();busy.value=true;error.value="";
   try { const value=await collaborationRequest<{items:{id:string;username:string;name:string}[];total:number}>(`/repairs/${props.repairId}/eligible-technicians?page=${next}&pageSize=20`);
@@ -38,25 +41,25 @@ async function candidates(delta=0) {
   }catch(cause){if(liveness.isCurrent(turn))failure(cause);}finally{if(liveness.isCurrent(turn))busy.value=false;}
 }
 function prepare(invitation?:string) {
-  if(locked.value || props.blocked || !board.value?.canInvite)return;
+  if(locked.value || blocked.value || !board.value?.canInvite)return;
   if(reason.value.trim().length<3){error.value="请填写邀请或撤销的明确原因。";return;}
   if(!invitation && !technicians.value.some(row=>row.id===technician.value)){error.value="请选择当前启用且有科技协助角色的人员。";return;}
   prepared.value={path:invitation?`/repair-collaborations/${invitation}/revoke`:`/repairs/${props.repairId}/collaborations`,key:crypto.randomUUID(),version:board.value.requestVersion,
     body:invitation?{reason:reason.value.trim()}:{technicianAccountId:technician.value,reason:reason.value.trim()}};
 }
 async function send() {
-  if(busy.value || !pending.value || props.blocked)return;
+  if(busy.value || !pending.value || blocked.value)return;
   const operation=pending.value,turn = liveness.begin();busy.value=true;error.value="";
   try { await collaborationRequest(operation.path,operation);const result=await collaborationRequest<CollaborationBoard>(`/repairs/${props.repairId}/collaborations`);
     if(liveness.isCurrent(turn)){board.value=result;pending.value=null;reason.value="";technician.value="";emit("changed");}
   }catch(cause){if(liveness.isCurrent(turn)){if(cause instanceof RepairApiError && cause.status>=400 && cause.status<500)pending.value=null;failure(cause);}}
   finally{if(liveness.isCurrent(turn))busy.value=false;}
 }
-async function confirm(){if(!prepared.value || busy.value || props.blocked)return;pending.value=prepared.value;prepared.value=null;await send();}
+async function confirm(){if(!prepared.value || busy.value || blocked.value)return;pending.value=prepared.value;prepared.value=null;await send();}
 watch(identity,()=>{clear();error.value="";void read();},{immediate:true,flush:"sync"});
 watch(()=>props.requestVersion,()=>{if(!busy.value && !prepared.value)void read();});
-watch(locked,value=>emit("busyChange",value),{immediate:true,flush:"sync"});
-onBeforeUnmount(()=>{clear();emit("busyChange",false);});
+watch(locked,value=>{claimed.value=value;},{immediate:true,flush:"sync"});
+onBeforeUnmount(()=>{clear();});
 </script>
 <template>
   <section class="fams-card fams-stack" aria-label="受邀科技协助">

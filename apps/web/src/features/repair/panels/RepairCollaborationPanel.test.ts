@@ -2,10 +2,11 @@ import { mount,flushPromises } from "@vue/test-utils";
 import { reactive } from "vue";
 import { beforeEach,afterEach,it,expect,vi } from "vitest";
 import RepairCollaborationPanel from "./RepairCollaborationPanel.vue";
+import { busyRegistryKey, createBusyRegistry } from "@/features/repair/busyRegistry";
 const state=vi.hoisted(()=>({session:{user:{id:"1",roles:["ASSET_ADMIN"]},csrfToken:"csrf"}}));vi.mock("@/auth/sessionStore",()=>({useSessionStore:()=>state.session}));
 const response=(body:unknown,status=200)=>({ok:status===200,status,json:async()=>structuredClone(body)}) as Response;
 const board=()=>({repairId:"9",requestVersion:1,canInvite:true,invitations:[],invitationTotal:0,opinions:[],opinionTotal:0});
-const page=()=>mount(RepairCollaborationPanel,{props:{repairId:"9",requestVersion:1}});
+const page=()=>mount(RepairCollaborationPanel,{props:{repairId:"9",requestVersion:1},global:{provide:{[busyRegistryKey]:createBusyRegistry()}}});
 const button=(wrapper:ReturnType<typeof page>,name:string)=>wrapper.findAll("button").find(item=>item.text()===name)!;
 async function prepare(wrapper:ReturnType<typeof page>){await button(wrapper,"查找可邀请科技人员").trigger("click");await flushPromises();await wrapper.find("select").setValue("9007199254740993");await wrapper.find("textarea").setValue("仅邀请核对实际故障及必要图片");await button(wrapper,"核对邀请科技协助").trigger("click");}
 beforeEach(()=>{state.session=reactive({user:{id:"1",roles:["ASSET_ADMIN"]},csrfToken:"csrf"});});afterEach(()=>{vi.unstubAllGlobals();vi.restoreAllMocks();});

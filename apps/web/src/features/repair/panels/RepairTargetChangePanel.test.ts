@@ -2,6 +2,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { reactive } from "vue";
 import { beforeEach, afterEach, it, expect, vi } from "vitest";
 import RepairTargetChangePanel from "./RepairTargetChangePanel.vue";
+import { busyRegistryKey, createBusyRegistry } from "@/features/repair/busyRegistry";
 import type { Repair } from "@/features/repair/api";
 const state = vi.hoisted(() => ({ session: { user: { id: "1", roles: ["WAREHOUSE_OPERATOR"] }, csrfToken: "csrf" } }));
 vi.mock("@/auth/sessionStore", () => ({ useSessionStore: () => state.session }));
@@ -12,7 +13,7 @@ const repair = (): Repair => ({ id: "19", assetId: "20", creatorAccountId: "2",
   version: 4, assetVersion: 1, ownershipVersion: 1, processorAccountId: "1", acceptedAt: "2026-10-23T01:00:00Z",
   completedAt: null, lockVersion: 0, actions: { approve: false, claim: false, acceptInPlace: false, completeInPlace: false, addFaultPhoto: false, cancel: false, changeReturnTarget: true } });
 const response = (body: unknown, status = 200) => ({ ok: status === 200, status, json: async () => structuredClone(body) }) as Response;
-const page = () => mount(RepairTargetChangePanel, { props: { repair: repair() } });
+const page = () => mount(RepairTargetChangePanel, { props: { repair: repair() }, global: { provide: { [busyRegistryKey]: createBusyRegistry() } } });
 const button = (wrapper: ReturnType<typeof page>, name: string) => wrapper.findAll("button").find(item => item.text() === name)!;
 function wire(write: (input: RequestInit) => Promise<Response>, proposal = false) {
   vi.stubGlobal("fetch", vi.fn(async (url: string, input: RequestInit) => {

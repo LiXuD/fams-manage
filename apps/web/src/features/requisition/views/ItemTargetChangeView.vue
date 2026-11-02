@@ -6,6 +6,7 @@ import { useSessionStore } from "@/auth/sessionStore";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
 import { requisitionRequest } from "@/features/requisition/api";
+import { loadCatalogPages, resolveReference } from "@/features/transfer/references";
 
 type Target = { custodyType: string; organizationId: string; organizationVersion: number;
   employeeId: string; employeeVersion: number; locationId: string; locationVersion: number };
@@ -38,7 +39,7 @@ const prevPageDisabled = computed<boolean>(() => locked.value || page.value === 
 const nextPageDisabled = computed<boolean>(() => locked.value || page.value * 20 >= total.value);
 const decisionReasonMissing = computed<boolean>(() => !decisionReason.value.trim());
 const labels: Record<string, string> = { PENDING: "待管理员批准", APPROVED: "已批准", REJECTED: "已驳回" };
-function name(kind: string, id: string) { return catalogs.value[kind]?.find(row => row.id === id)?.name ?? id; }
+function name(kind: string, id: string) { return resolveReference(catalogs.value[kind], id)?.name ?? id; }
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / 20)));
 const employeeChoices = computed(() => catalogs.value.employee?.filter(c => c.organizationId === target.value?.organizationId) ?? []);
 const snapshotTargetText = computed(() => { const t = snapshot.value?.target;
@@ -64,7 +65,7 @@ async function refresh() {
 function setReference(kind: "organization" | "employee" | "location", event: Event) {
   if (!target.value) return;
   const id = (event.target as HTMLSelectElement).value;
-  const choice = catalogs.value[kind]?.find(row => row.id === id);
+  const choice = resolveReference(catalogs.value[kind], id);
   if (!choice) return;
   target.value[`${kind}Id`] = choice.id; target.value[`${kind}Version`] = choice.version;
   if (kind === "organization") { target.value.employeeId = ""; target.value.employeeVersion = 0; }
@@ -106,9 +107,7 @@ onMounted(async () => {
   const turn = liveness.begin();
   try {
     for (const kind of ["organization", "employee", "location"]) {
-      const choices: Choice[] = []; let p = 1; let result: { items: Choice[]; total: number };
-      do { result = await requisitionRequest(`/catalog/${kind}?page=${p++}&pageSize=200`); choices.push(...result.items); }
-      while (result.items.length === 200);
+      const choices = await loadCatalogPages<Choice>(requisitionRequest, "/catalog", kind);
       if (liveness.isCurrent(turn)) catalogs.value[kind] = choices;
     }
     await list();

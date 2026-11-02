@@ -5,6 +5,7 @@ import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import type { BusinessMutation } from "@/api/business";
 import { reviewRequest, ReviewApiError, subjectStatusLabels as statuses, type Board, type ReviewItem } from "@/features/inventory/api";
 import { repairStates } from "@/features/repair/api";
+import { buildTransferTarget, loadCatalogPages, resolveReference } from "@/features/transfer/references";
 import type { TransferChoice, TransferTarget } from "@fams/api-types/transfer";
 const props = defineProps<{ taskId: string; item: ReviewItem; itemPage: number; observationIds: string[] }>();
 const emit = defineEmits<{ invalid: [] }>();
@@ -91,9 +92,7 @@ function prepare() {
   confirmation.value = { path: `/inventory-reviews/tasks/${props.taskId}/differences/preparation`, body: { observationIds: [...props.observationIds] }, label: "将当前页原始证据中的差异列入独立复核；本次不采信现场事实。" };
 }
 async function catalog(kind: string, organization?: string) {
-  const rows: TransferChoice[] = []; let number = 1, part: TransferChoice[];
-  do { part = (await reviewRequest<{ items: TransferChoice[] }>(`/transfers/catalog/${kind}?page=${number++}&pageSize=200${organization ? `&organizationId=${organization}` : ""}`)).items; rows.push(...part); } while (part.length === 200);
-  return rows;
+  return loadCatalogPages<TransferChoice>(reviewRequest, "/transfers/catalog", kind, organization);
 }
 async function targetChoices() {
   if (locked.value || method.value !== "FORMAL_TRANSFER") return;
@@ -114,16 +113,10 @@ async function people() {
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function target(): TransferTarget | null {
-  const loc = bins.value.find(row => row.id === location.value), owner = organizations.value.find(row => row.id === owning.value);
-  const wh = warehouses.value.find(row => row.id === warehouse.value), org = organizations.value.find(row => row.id === using.value), person = employees.value.find(row => row.id === employee.value);
+  const loc = resolveReference(bins.value, location.value), owner = resolveReference(organizations.value, owning.value);
+  const wh = resolveReference(warehouses.value, warehouse.value), org = resolveReference(organizations.value, using.value), person = resolveReference(employees.value, employee.value);
   if (!loc || stock.value && !wh || !stock.value && (!org || !person || custody.value === "SHARED" && !person.sharedEligible)) return null;
-  const versions: Record<string, number> = { location: loc.version };
-  if (owner) versions.owningOrganization = owner.version;
-  if (stock.value) versions.warehouse = wh!.version;
-  else { versions.usingOrganization = org!.version; versions.employee = person!.version; }
-  return { owningOrganizationId: owner?.id ?? null, custodyType: stock.value ? "STORAGE" : custody.value,
-    usingOrganizationId: stock.value ? null : org!.id, employeeId: stock.value ? null : person!.id,
-    warehouseId: stock.value ? wh!.id : null, locationId: loc.id, referenceVersions: versions };
+  return buildTransferTarget({ stock: stock.value, custodyType: custody.value, location: loc, owner, warehouse: wh, usingOrganization: org, employee: person });
 }
 function decide() {
   if (locked.value || !selected.value.length || !currentItem.value?.current || reason.value.trim().length < 3 || evidence.value.trim().length < 10) return;

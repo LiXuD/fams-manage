@@ -2,6 +2,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { reactive } from "vue";
 import { beforeEach, afterEach, it, expect, vi } from "vitest";
 import RepairReturnPanel from "./RepairReturnPanel.vue";
+import { busyRegistryKey, createBusyRegistry } from "@/features/repair/busyRegistry";
 import type { Repair, RepairReturnTarget } from "@/features/repair/api";
 const state = vi.hoisted(() => ({ session: { user: { id: "1", roles: ["WAREHOUSE_OPERATOR"] }, csrfToken: "csrf" } }));
 vi.mock("@/auth/sessionStore", () => ({ useSessionStore: () => state.session }));
@@ -13,7 +14,7 @@ const row = (): Repair => ({ id: "19", assetId: "20", creatorAccountId: "2", sou
   returnHandovers: [{ id: "9007199254740993", handover_status: "WAITING_RECEIPT", target_snapshot_json: target, delivered_at: "2026-10-22T01:00:00Z", delivery_evidence: "实际交出设备等待本人接收", receipt_at: null, receipt_evidence: null }],
   actions: { approve: false, claim: false, acceptInPlace: false, completeInPlace: false, addFaultPhoto: false, cancel: false, deliverReturn: true, receiveReturn: true, refuseReturn: true, recollectReturn: true } });
 const response = (body: unknown, status = 200) => ({ ok: status === 200, status, json: async () => structuredClone(body) }) as Response;
-const page = () => mount(RepairReturnPanel, { props: { repair: row() } });
+const page = () => mount(RepairReturnPanel, { props: { repair: row() }, global: { provide: { [busyRegistryKey]: createBusyRegistry() } } });
 const button = (wrapper: ReturnType<typeof page>, name: string) => wrapper.findAll("button").find(item => item.text() === name)!;
 function wire(write: (input: RequestInit) => Promise<Response>) { vi.stubGlobal("fetch", vi.fn(async (url: string, input: RequestInit) => {
   if (input.method === "POST") return await write(input);

@@ -2,6 +2,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { reactive } from "vue";
 import { beforeEach, afterEach, it, expect, vi } from "vitest";
 import RepairReassignmentPanel from "./RepairReassignmentPanel.vue";
+import { busyRegistryKey, createBusyRegistry } from "@/features/repair/busyRegistry";
 import type { Repair } from "@/features/repair/api";
 const state = vi.hoisted(() => ({ session: { user: { id: "1", roles: ["ASSET_ADMIN"] }, csrfToken: "csrf" } }));
 vi.mock("@/auth/sessionStore", () => ({ useSessionStore: () => state.session }));
@@ -10,7 +11,7 @@ const repair = { id: "19", status: "WAREHOUSE_PROCESSING" } as Repair;
 const response = (body: unknown, status = 200) => ({ ok: status === 200, status, json: async () => structuredClone(body) }) as Response;
 const context = { snapshot: { id: "19", version: 4, ownershipVersion: 2, processorAccountId: "3", assetVersion: 1, lockVersion: 8,
   acceptedAt: "2026-10-23T00:00:00Z", physicalHandling: [{}], outstandingReturn: { id: "7", handover_status: "REFUSED" }, approvedTargetId: null, loan: null }, operators: [{ id: large, name: "接任库管" }] };
-const page = () => mount(RepairReassignmentPanel, { props: { repair } });
+const page = () => mount(RepairReassignmentPanel, { props: { repair }, global: { provide: { [busyRegistryKey]: createBusyRegistry() } } });
 const button = (wrapper: ReturnType<typeof page>, name: string) => wrapper.findAll("button").find(item => item.text() === name)!;
 function wire(write: (input: RequestInit) => Promise<Response>) { vi.stubGlobal("fetch", vi.fn(async (_url: string, input: RequestInit) => input.method === "POST" ? write(input) : response(context))); }
 async function fill(wrapper: ReturnType<typeof page>) { await button(wrapper,"核对实物阶段及接任库管").trigger("click"); await flushPromises();

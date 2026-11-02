@@ -3,8 +3,11 @@ import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { RepairApiError, repairProblem, repairRequest, type Repair, type RepairMutation } from "@/features/repair/api";
-const props = defineProps<{ repair: Repair; blocked?: boolean }>();
-const emit = defineEmits<{ changed: []; invalidated: []; busyChange: [value: boolean] }>();
+import { useBusy } from "@/features/repair/busyRegistry";
+const props = defineProps<{ repair: Repair }>();
+const emit = defineEmits<{ changed: []; invalidated: [] }>();
+/** 页内互斥：claimed 写本面板自身的占用位，blocked 读「任一其它面板在忙」。 */
+const { busy: claimed, blocked } = useBusy("reassignment");
 const session = useSessionStore();
 interface Context { snapshot: { version: number; processorAccountId: string; ownershipVersion: number; acceptedAt: string | null;
   physicalHandling: unknown[]; outstandingReturn: { handover_status: string } | null }; operators: { id: string; name: string }[] }
@@ -18,7 +21,7 @@ function clear() { liveness.invalidate(); context.value = null; target.value = "
   prepared.value = null; pending.value = null; busy.value = false; }
 function failure(cause: unknown) { if (cause instanceof RepairApiError && [401, 403, 404].includes(cause.status)) { clear(); emit("invalidated"); } error.value = repairProblem(cause); }
 async function inspect() {
-  if (locked.value || props.blocked || !admin.value) return;
+  if (locked.value || blocked.value || !admin.value) return;
   const turn = liveness.begin(); busy.value = true; error.value = "";
   try { const result = await repairRequest<Context>(`/${props.repair.id}/reassignment`);
     if (liveness.isCurrent(turn)) { context.value = result; target.value = ""; checked.value = false; }
@@ -26,7 +29,7 @@ async function inspect() {
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function prepare() {
-  if (locked.value || props.blocked || !admin.value || !context.value) return;
+  if (locked.value || blocked.value || !admin.value || !context.value) return;
   if (!context.value.operators.some(row => row.id === target.value) || !checked.value || reason.value.trim().length < 3 || evidence.value.trim().length < 10) {
     error.value = "请选择有效接任库管，核对未同步结果并填写原因及实际交接凭证。"; return;
   }
@@ -35,17 +38,17 @@ function prepare() {
       unsynchronizedResultsChecked: true, reason: reason.value.trim(), evidence: evidence.value.trim() } };
 }
 async function send() {
-  if (busy.value || props.blocked || !pending.value) return;
+  if (busy.value || blocked.value || !pending.value) return;
   const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
   try { await repairRequest(operation.path, operation);
     if (liveness.isCurrent(turn)) { pending.value = null; context.value = null; checked.value = false; emit("changed"); }
   } catch (cause) { if (liveness.isCurrent(turn)) { if (cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); } }
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
-async function confirm() { if (!prepared.value || busy.value || props.blocked) return; pending.value = prepared.value; prepared.value = null; await send(); }
+async function confirm() { if (!prepared.value || busy.value || blocked.value) return; pending.value = prepared.value; prepared.value = null; await send(); }
 watch(identity, () => { clear(); error.value = ""; }, { immediate: true, flush: "sync" });
-watch(locked, value => emit("busyChange", value), { immediate: true, flush: "sync" });
-onBeforeUnmount(() => { clear(); emit("busyChange", false); });
+watch(locked, value => { claimed.value = value; }, { immediate: true, flush: "sync" });
+onBeforeUnmount(() => { clear(); });
 const physicalStageText = computed(() => { const snapshot = context.value?.snapshot; if (!snapshot) return "";
   return snapshot.outstandingReturn ? snapshot.outstandingReturn.handover_status === 'REFUSED' ? '已拒收，等待实际收回' : '已交出，等待实际接收'
     : snapshot.physicalHandling.length ? '已离开原保管人，当前库管处理' : snapshot.acceptedAt ? '已原地接修' : '尚未接修'; });

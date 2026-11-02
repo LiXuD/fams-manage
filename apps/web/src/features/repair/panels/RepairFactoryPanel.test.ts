@@ -2,6 +2,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { reactive } from "vue";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import RepairFactoryPanel from "./RepairFactoryPanel.vue";
+import { busyRegistryKey, createBusyRegistry, type BusyRegistry } from "@/features/repair/busyRegistry";
 import type { Repair } from "@/features/repair/api";
 import type { FactoryDetail, FactoryRoundDetail, FactoryScope } from "@/features/repair/factory-types";
 
@@ -13,7 +14,9 @@ const scope = (): FactoryScope => ({ id: "27", repairId: "19", scopeStatus: "APP
 const round = (received = false): FactoryRoundDetail => ({ id, repairId: "19", assetId: "20", scopeId: "27", roundNumber: 2, roundStatus: received ? "DISPATCHED" : "PENDING_DISPATCH", providerName: "私有厂家", serviceContact: "私有联系人", servicePhone: "13800001111", expectedReturnDate: "2026-11-01", fault: "厂家检查无法启动", createdBy: "1", createdAt: "2026-10-01T04:00:00Z", dispatchedAt: received ? "2026-10-02T04:00:00Z" : null, dispatchedBy: received ? "1" : null, dispatchEvidence: received ? "实际寄出依据" : null, receivedAt: null, receivedBy: null, receiveLocationId: null, receiveLocationVersion: null, conditionResult: null, treatmentResult: null, actualCost: null, cancelReason: null, version: 10, originalIdentity: { assetId: "20", assetCode: "FACTORY-ORIGINAL", name: "原机", serialNumber: "SERIAL-OLD", version: 7, lifecycle: "UNDER_REPAIR" }, evidence: [{ object_id: "file-1", purpose: received ? "RECEIPT" : "FACTORY_ACK", content_sha256: "a".repeat(64), uploader_account_id: 1, recorded_at: "2026-10-02T00:00:00Z" }], files: [{ objectId: "file-1", filename: "厂家原件.png", contentType: "image/png", sizeBytes: 3, scanStatus: "CLEAN", businessVersion: 5, createdAt: "2026-10-02T00:00:00Z" }] });
 const detail = (actions: Partial<FactoryDetail["actions"]> = {}, activeRound: FactoryRoundDetail | null = null): FactoryDetail => ({ repairId: "19", version: 5, assetVersion: 7, ownershipVersion: 2, status: "WAREHOUSE_PROCESSING", processorAccountId: "1", lockVersion: 3, pendingScope: null, approvedScope: activeRound ? scope() : null, activeRound, summary: null, photosAvailable: true, actions: { requestScope: false, decideScope: false, withdrawScope: false, createRound: false, dispatch: false, cancelRound: false, receive: false, uploadEvidence: false, ...actions } });
 const response = (body: unknown, status = 200): Response => ({ ok: status === 200, status, json: async () => structuredClone(body), blob: async () => new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" }) }) as Response;
-const page = () => mount(RepairFactoryPanel, { props: { repair: repair(), blocked: false } });
+/** 每次挂载一份全新的页内互斥簿记，用 occupied 断言面板对页内的占用位。 */
+let registry: BusyRegistry = createBusyRegistry();
+const page = () => { registry = createBusyRegistry(); return mount(RepairFactoryPanel, { props: { repair: repair() }, global: { provide: { [busyRegistryKey]: registry } } }); };
 type Page = ReturnType<typeof page>;
 const button = (wrapper: Page, name: string) => wrapper.findAll("button").find(item => item.text() === name)!;
 async function field(wrapper: Page, label: string, value: string | boolean) { await wrapper.findAll("label").find(item => item.text().includes(label))!.find("input,textarea,select").setValue(value); }
@@ -57,7 +60,7 @@ it("completed repair retains rounds without asking users to finish the repair ag
 it("scope changes require inline confirmation and freeze all independent versions", async () => {
   const writes: RequestInit[] = []; wire(() => detail({ requestScope: true }), () => null, async input => { writes.push(input); return response({}); });
   const wrapper = page(); await open(wrapper); await field(wrapper, "本次范围或取消原因", "实际接修后仍无法内部修复，申请必要返厂。"); await button(wrapper, "申请必要的无费用返厂").trigger("click");
-  expect(writes).toHaveLength(0); expect(wrapper.emitted("busy-change")?.at(-1)).toEqual([true]);
+  expect(writes).toHaveLength(0); expect(registry.occupied("factory").value).toBe(true);
   await button(wrapper, "确认保存本次返厂办理").trigger("click"); await flushPromises();
   expect(JSON.parse(writes[0]!.body as string)).toMatchObject({ assetVersion: 7, ownershipVersion: 2, lockVersion: 3 });
   expect(writes[0]!.headers).toMatchObject({ "If-Match-Version": "5", "X-CSRF-Token": "csrf" }); expect(wrapper.emitted("changed")).toHaveLength(1); wrapper.unmount();

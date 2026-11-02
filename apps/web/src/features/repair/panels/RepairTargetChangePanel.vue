@@ -3,9 +3,13 @@ import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { BusinessApiError, businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
+import { resolveReference } from "@/features/transfer/references";
 import type { Repair, RepairReturnTarget } from "@/features/repair/api";
-const props = defineProps<{ repair: Repair; blocked?: boolean }>();
-const emit = defineEmits<{ changed: []; invalidated: []; busyChange: [value: boolean] }>();
+import { useBusy } from "@/features/repair/busyRegistry";
+const props = defineProps<{ repair: Repair }>();
+const emit = defineEmits<{ changed: []; invalidated: [] }>();
+/** 页内互斥：claimed 写本面板自身的占用位，blocked 读「任一其它面板在忙」。 */
+const { busy: claimed, blocked } = useBusy("targetChange");
 const session = useSessionStore();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, props.repair.id]));
 const admin = computed(() => !!session.user?.roles.includes("ASSET_ADMIN"));
@@ -35,7 +39,7 @@ function failure(cause: unknown) {
 }
 async function list(delta = 0) {
   const next = page.value + delta;
-  if (locked.value || props.blocked || next < 1 || delta > 0 && (next - 1) * 20 >= total.value) return;
+  if (locked.value || blocked.value || next < 1 || delta > 0 && (next - 1) * 20 >= total.value) return;
   const turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     const result = await businessRequest<{ items: Proposal[]; total: number }>(base + "?" + type + "&businessId=" + props.repair.id + "&page=" + next + "&pageSize=20");
@@ -44,7 +48,7 @@ async function list(delta = 0) {
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function begin() {
-  if (locked.value || props.blocked || !props.repair.actions?.changeReturnTarget) return;
+  if (locked.value || blocked.value || !props.repair.actions?.changeReturnTarget) return;
   const turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     const result = await businessRequest<Snapshot>(base + "/context?" + type + "&businessId=" + props.repair.id + "&itemId=" + props.repair.assetId);
@@ -54,7 +58,7 @@ async function begin() {
 }
 async function catalog(value: typeof kind.value, delta = 0) {
   const next = value === kind.value ? catalogPage.value + delta : 1;
-  if (locked.value || props.blocked || next < 1 || value === "employee" && !organization.value) return;
+  if (locked.value || blocked.value || next < 1 || value === "employee" && !organization.value) return;
   if (value === kind.value && delta > 0 && !catalogMore.value) return;
   const turn = liveness.begin(); busy.value = true; error.value = "";
   try {
@@ -67,15 +71,15 @@ async function catalog(value: typeof kind.value, delta = 0) {
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function choose(event: Event) {
-  if (locked.value || props.blocked) return;
-  const row = choices.value.find(row => row.id === (event.target as HTMLSelectElement).value);
+  if (locked.value || blocked.value) return;
+  const row = resolveReference(choices.value, (event.target as HTMLSelectElement).value);
   if (!row) return;
   if (kind.value === "organization") { organization.value = row; employee.value = null; }
   else if (kind.value === "employee") employee.value = row;
   else location.value = row;
 }
 function propose() {
-  if (locked.value || props.blocked || !props.repair.actions?.changeReturnTarget || !snapshot.value) return;
+  if (locked.value || blocked.value || !props.repair.actions?.changeReturnTarget || !snapshot.value) return;
   if (!organization.value || !employee.value || !location.value || !checked.value || reason.value.trim().length < 3
     || evidence.value.trim().length < 10 || !code.value.trim()) { error.value = "请选择有效新组织、责任人和位置，并明确实物核实及变更原因。"; return; }
   const target = { custodyType: custody.value, organizationId: organization.value.id, organizationVersion: organization.value.version,
@@ -85,12 +89,12 @@ function propose() {
       target, reason: reason.value.trim(), observedAssetCode: code.value.trim(), physicalVerification: evidence.value.trim(), physicalChecked: true }) };
 }
 function decide(row: Proposal, result: "APPROVED" | "REJECTED") {
-  if (locked.value || props.blocked || !admin.value || row.business_id !== props.repair.id || decision.value.trim().length < 3) return;
+  if (locked.value || blocked.value || !admin.value || row.business_id !== props.repair.id || decision.value.trim().length < 3) return;
   prepared.value = { path: base + "/" + row.id + "/decision?" + type, key: crypto.randomUUID(), version: row.version,
     body: { result, reason: decision.value.trim() } };
 }
 async function send() {
-  if (busy.value || props.blocked || !pending.value) return;
+  if (busy.value || blocked.value || !pending.value) return;
   const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     await businessRequest(operation.path, operation);
@@ -99,10 +103,10 @@ async function send() {
     if (liveness.isCurrent(turn)) { if (cause instanceof BusinessApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
   } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
-async function confirm() { if (!prepared.value || busy.value || props.blocked) return; pending.value = prepared.value; prepared.value = null; await send(); }
+async function confirm() { if (!prepared.value || busy.value || blocked.value) return; pending.value = prepared.value; prepared.value = null; await send(); }
 watch(identity, () => { clear(); error.value = ""; }, { immediate: true, flush: "sync" });
-watch(locked, value => emit("busyChange", value), { immediate: true, flush: "sync" });
-onBeforeUnmount(() => { clear(); emit("busyChange", false); });
+watch(locked, value => { claimed.value = value; }, { immediate: true, flush: "sync" });
+onBeforeUnmount(() => { clear(); });
 const states: Record<string, string> = { PENDING: "待管理员决定", APPROVED: "已批准新目标", REJECTED: "已驳回" };
 const approved = computed(() => props.repair.approvedReturnTargets ?? []);
 const targetText = (target: RepairReturnTarget) => [target.employeeName, target.organizationName, target.locationName].join(" · ");
@@ -115,8 +119,8 @@ const proposalRows = computed(() => rows.value.filter(row => row.business_id ===
   locationNameText: row.targetDisplay?.locationName || "待核实",
   decidable: admin.value && row.change_status === 'PENDING' })));
 const catalogPrevDisabled = computed(() => catalogPage.value === 1);
-const prevDisabled = computed(() => locked.value || props.blocked || page.value === 1);
-const nextDisabled = computed(() => locked.value || props.blocked || page.value * 20 >= total.value);
+const prevDisabled = computed(() => locked.value || blocked.value || page.value === 1);
+const nextDisabled = computed(() => locked.value || blocked.value || page.value * 20 >= total.value);
 </script>
 <template>
   <section v-if="admin || repair.actions?.changeReturnTarget || approved.length || pending || prepared || snapshot" class="fams-card fams-stack" aria-label="维修返还目标变更">

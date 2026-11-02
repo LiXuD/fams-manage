@@ -3,11 +3,14 @@ import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { repairRequest, repairProblem, RepairApiError, type Repair, type RepairMutation } from "@/features/repair/api";
+import { useBusy } from "@/features/repair/busyRegistry";
 
 interface Place { id: string; name: string; version: number; warehouse_id?: string | null; location_type?: string }
-const props=defineProps<{repair:Repair;blocked?:boolean}>();
-const emit=defineEmits<{changed:[];invalidated:[];busyChange:[value:boolean]}>();
+const props=defineProps<{repair:Repair}>();
+const emit=defineEmits<{changed:[];invalidated:[]}>();
 const session=useSessionStore();
+/** 页内互斥：claimed 写本面板自身的占用位，blocked 读「任一其它面板在忙」。 */
+const { busy: claimed, blocked } = useBusy("physical");
 const identity=computed(()=>JSON.stringify([session.user?.id,session.user?.roles,session.csrfToken,props.repair.id]));
 const warehouses=ref<Place[]>([]),locations=ref<Place[]>([]),warehouse=shallowRef(""),location=shallowRef("");
 const warehousePage=shallowRef(1),locationPage=shallowRef(1),warehouseTotal=shallowRef(0),locationTotal=shallowRef(0);
@@ -19,8 +22,8 @@ const handlingRows=computed(()=>(props.repair.physicalHandling??[]).map(row=>({.
 const inboundRows=computed(()=>(props.repair.inbound??[]).map(row=>({...row,occurredText:new Date(row.occurred_at).toLocaleString()})));
 const hasHandling=computed(()=>!!props.repair.physicalHandling?.length);
 const hasTimeline=computed(()=>!!props.repair.physicalHandling?.length||!!props.repair.inbound?.length);
-const retryDisabled=computed(()=>busy.value||!!props.blocked);
-const confirmDisabled=computed(()=>busy.value||!!props.blocked);
+const retryDisabled=computed(()=>busy.value||!!blocked.value);
+const confirmDisabled=computed(()=>busy.value||!!blocked.value);
 const modeText=computed(()=>mode.value==="away"?"当前：实际接修，维修与资产锁继续保留。":"当前：验收入库，并原子关闭原未结借用及维修。");
 const inboundMode=computed(()=>mode.value==="inbound");
 const acceptAwayAction=computed(()=>!!props.repair.actions?.acceptAway);
@@ -33,25 +36,25 @@ const locationNextDisabled=computed(()=>locationPage.value*20>=locationTotal.val
 const liveness=useRequestLiveness(()=>[identity.value]);
 function clear(){liveness.invalidate();warehouses.value=[];locations.value=[];warehouse.value="";location.value="";warehousePage.value=1;locationPage.value=1;warehouseTotal.value=0;locationTotal.value=0;observed.value="";actual.value="";evidence.value="";prepared.value=null;pending.value=null;busy.value=false;}
 function failure(cause:unknown){if(cause instanceof RepairApiError&&[401,403,404].includes(cause.status)){clear();emit("invalidated");}error.value=repairProblem(cause);}
-function selectMode(value:"away"|"inbound"){if(locked.value||props.blocked)return;mode.value=value;location.value="";const time=new Date();actual.value=new Date(time.getTime()-time.getTimezoneOffset()*60000).toISOString().slice(0,23);error.value="";}
-async function catalog(kind:"warehouse"|"location",delta=0){if(locked.value||props.blocked)return;const page=kind==="warehouse"?warehousePage:locationPage,total=kind==="warehouse"?warehouseTotal:locationTotal,next=page.value+delta;if(next<1||delta>0&&(next-1)*20>=total.value)return;
+function selectMode(value:"away"|"inbound"){if(locked.value||blocked.value)return;mode.value=value;location.value="";const time=new Date();actual.value=new Date(time.getTime()-time.getTimezoneOffset()*60000).toISOString().slice(0,23);error.value="";}
+async function catalog(kind:"warehouse"|"location",delta=0){if(locked.value||blocked.value)return;const page=kind==="warehouse"?warehousePage:locationPage,total=kind==="warehouse"?warehouseTotal:locationTotal,next=page.value+delta;if(next<1||delta>0&&(next-1)*20>=total.value)return;
  const turn=liveness.begin();busy.value=true;error.value="";
  try{const result=await repairRequest<{items:Place[];total:number}>(`/physical-catalog/${kind}?page=${next}&pageSize=20`);if(liveness.isCurrent(turn)){page.value=next;total.value=result.total;if(kind==="warehouse"){warehouses.value=result.items;warehouse.value="";}else locations.value=result.items;location.value="";}}
  catch(cause){if(liveness.isCurrent(turn))failure(cause);}finally{if(liveness.isCurrent(turn))busy.value=false;}}
-function prepare(){if(locked.value||props.blocked)return;error.value="";const row=props.repair,place=visibleLocations.value.find(row=>row.id===location.value),store=warehouses.value.find(row=>row.id===warehouse.value),time=new Date(actual.value);
+function prepare(){if(locked.value||blocked.value)return;error.value="";const row=props.repair,place=visibleLocations.value.find(row=>row.id===location.value),store=warehouses.value.find(row=>row.id===warehouse.value),time=new Date(actual.value);
  if(!place||!Number.isFinite(time.getTime())||!observed.value.trim()||evidence.value.trim().length<10||row.lockVersion==null||mode.value==="inbound"&&!store){error.value="请核对实物编码、实际时间、位置及至少10字依据；回库须选择有效仓库和所属库位。";return;}
  if(mode.value==="away"&&!row.actions?.acceptAway||mode.value==="inbound"&&!row.actions?.closeInbound){error.value="当前阶段不能办理此动作，请刷新核对。";return;}
  const body:Record<string,unknown>={assetVersion:row.assetVersion,ownershipVersion:row.ownershipVersion,lockVersion:row.lockVersion,loanVersion:row.loanVersion??null,observedCode:observed.value.trim(),occurredAt:time.toISOString(),evidence:evidence.value.trim(),locationVersion:place.version};
  if(mode.value==="away")body.actualLocationId=place.id;else{body.warehouseId=store!.id;body.warehouseVersion=store!.version;body.locationId=place.id;}
  prepared.value={path:`/${row.id}/${mode.value==="away"?"accept-away":"close-inbound"}`,key:crypto.randomUUID(),version:row.version,body};}
-async function send(){if(busy.value||!pending.value||props.blocked)return;const operation=pending.value,turn=liveness.begin();busy.value=true;error.value="";
+async function send(){if(busy.value||!pending.value||blocked.value)return;const operation=pending.value,turn=liveness.begin();busy.value=true;error.value="";
  try{await repairRequest(operation.path,operation);await repairRequest<Repair>(`/${props.repair.id}`);if(liveness.isCurrent(turn)){pending.value=null;observed.value="";actual.value="";evidence.value="";location.value="";emit("changed");}}
  catch(cause){if(liveness.isCurrent(turn)){if(cause instanceof RepairApiError&&cause.status>=400&&cause.status<500)pending.value=null;failure(cause);}}finally{if(liveness.isCurrent(turn))busy.value=false;}}
-async function confirm(){if(!prepared.value||busy.value||props.blocked)return;pending.value=prepared.value;prepared.value=null;await send();}
+async function confirm(){if(!prepared.value||busy.value||blocked.value)return;pending.value=prepared.value;prepared.value=null;await send();}
 watch(identity,()=>{clear();error.value="";},{immediate:true,flush:"sync"});
 watch(warehouse,()=>{if(!locked.value)location.value="";});
-watch(locked,value=>emit("busyChange",value),{immediate:true,flush:"sync"});
-onBeforeUnmount(()=>{clear();emit("busyChange",false);});
+watch(locked,value=>{claimed.value=value;},{immediate:true,flush:"sync"});
+onBeforeUnmount(()=>{clear();});
 </script>
 <template>
   <section class="fams-card fams-stack" aria-label="实物接修与验收入库">

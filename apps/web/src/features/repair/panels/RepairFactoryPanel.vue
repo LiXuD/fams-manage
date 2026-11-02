@@ -8,8 +8,11 @@ import FamsMediaPreview from "@/components/FamsMediaPreview.vue";
 import { RepairApiError, repairRequest, type Repair } from "@/features/repair/api";
 import { factoryEventNames, factoryEvidenceContent, factoryProblem, factoryRequest, factoryRoundStates, factoryScopeStates, type FactoryMutation } from "@/features/repair/factory-api";
 import type { FactoryDetail, FactoryFile, FactoryHistory, FactoryPage, FactoryReply, FactoryRound, FactoryRoundDetail } from "@/features/repair/factory-types";
-const props = defineProps<{ repair: Repair; blocked: boolean }>();
-const emit = defineEmits<{ "busy-change": [boolean]; changed: []; invalidated: [] }>();
+import { useBusy } from "@/features/repair/busyRegistry";
+const props = defineProps<{ repair: Repair }>();
+const emit = defineEmits<{ changed: []; invalidated: [] }>();
+/** 页内互斥：claimed 写本面板（含部件子面板）的占用位，blocked 读「任一其它面板在忙」。 */
+const { busy: claimed, blocked } = useBusy("factory");
 const session = useSessionStore();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, props.repair.id]));
 const canRead = computed(() => !!session.user?.roles.includes("ASSET_ADMIN") || !!session.user?.roles.includes("WAREHOUSE_OPERATOR") && String(session.user.id) === props.repair.processorAccountId);
@@ -28,14 +31,14 @@ const locationId = shallowRef(""), locations = ref<{ id: string; name: string; v
 const file = ref<File | null>(null), purpose = ref("FACTORY_ACK"), selectedEvidence = ref<string[]>([]);
 const preview = useObjectUrlPreview();
 const liveness = useRequestLiveness(() => [identity.value]);
-const locked = computed(() => props.blocked || busy.value || partsBusy.value || !!pending.value || !!confirmation.value);
+const locked = computed(() => blocked.value || busy.value || partsBusy.value || !!pending.value || !!confirmation.value);
 const activeSelected = computed(() => !!selected.value && selected.value.id === data.value?.activeRound?.id);
 const evidencePurpose = computed(() => data.value?.activeRound?.roundStatus === "DISPATCHED" ? "RECEIPT" : "FACTORY_ACK");
 const eligibleEvidence = computed(() => selected.value?.evidence.filter(item => item.purpose === evidencePurpose.value) ?? []);
 const financialEvidence = computed(() => selected.value?.evidence.filter(item => ["QUOTE", "COST_RECEIPT"].includes(item.purpose) && selected.value?.files.some(entry => entry.objectId === item.object_id && entry.scanStatus === "CLEAN")) ?? []);
-const headerRefreshDisabled = computed(() => props.blocked || busy.value || !!confirmation.value);
-const retryDisabled = computed(() => busy.value || props.blocked);
-const confirmDisabled = computed(() => busy.value || props.blocked);
+const headerRefreshDisabled = computed(() => blocked.value || busy.value || !!confirmation.value);
+const retryDisabled = computed(() => busy.value || blocked.value);
+const confirmDisabled = computed(() => busy.value || blocked.value);
 const pendingScopeCostText = computed(() => { const scope = data.value?.pendingScope; return scope ? costText(scope.costPolicy, scope.costLimit) : ""; });
 const approvedScopeCostText = computed(() => { const scope = data.value?.approvedScope; return scope ? costText(scope.costPolicy, scope.costLimit) : ""; });
 const overrunNotice = computed(() => data.value?.costSummary?.overrun ? "累计费用超出现批准范围，普通结束继续保留，请申请明确新范围。" : "");
@@ -76,7 +79,7 @@ const fileRows = computed(() => (selected.value?.files ?? []).map(item => ({ ...
 const finalCostShown = computed(() => selected.value?.actualCost !== null);
 const partsPanelShown = computed(() => selected.value?.roundStatus === "RECEIVED");
 function clearMoney() { moneyAmount.value = ""; moneyReason.value = ""; moneyChecked.value = false; moneyEvidence.value = []; costUnassessed.value = false; }
-watch([busy, pending, confirmation, partsBusy], () => emit("busy-change", busy.value || !!pending.value || !!confirmation.value || partsBusy.value), { flush: "sync" });
+watch([busy, pending, confirmation, partsBusy], () => { claimed.value = busy.value || !!pending.value || !!confirmation.value || partsBusy.value; }, { flush: "sync" });
 function clearPhysical() { clearMoney(); observedCode.value = ""; serial.value = ""; actualDate.value = ""; actualTime.value = ""; evidence.value = ""; originalChecked.value = false; noCostChecked.value = false; selectedEvidence.value = []; locationId.value = ""; }
 function reset() {
   partsBusy.value = false;
@@ -102,7 +105,7 @@ async function fetchState(turn: LivenessToken) {
   selected.value = next; selectedId.value = nextId; stale.value = false;
 }
 async function load() {
-  if (busy.value || props.blocked || confirmation.value || !canRead.value) return;
+  if (busy.value || blocked.value || confirmation.value || !canRead.value) return;
   opened.value = true; const turn = liveness.begin(); busy.value = true; error.value = "";
   try { await fetchState(turn); }
   catch (cause) { if (liveness.isCurrent(turn)) { stale.value = true; failure(cause); } }
@@ -191,7 +194,7 @@ function prepare(action: Action) {
   confirmation.value = { repairId: props.repair.id, path, key: crypto.randomUUID(), version: state.version, body, file: chosen, form, label };
 }
 async function perform() {
-  if (!pending.value || busy.value || props.blocked) return;
+  if (!pending.value || busy.value || blocked.value) return;
   const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
   try {
     await factoryRequest<FactoryReply>(operation.repairId, operation.path, operation);
@@ -206,7 +209,7 @@ async function perform() {
   } finally { if (liveness.isCurrent(turn)) busy.value = false; }
   if (liveness.isCurrent(turn) && !pending.value) emit("changed");
 }
-async function confirm() { if (busy.value || props.blocked || pending.value || !confirmation.value) return; pending.value = confirmation.value; confirmation.value = null; await perform(); }
+async function confirm() { if (busy.value || blocked.value || pending.value || !confirmation.value) return; pending.value = confirmation.value; confirmation.value = null; await perform(); }
 function fileChosen(event: Event) {
   if (locked.value) return;
   const input = event.target as HTMLInputElement;
@@ -227,9 +230,9 @@ async function readFile(item: FactoryFile) {
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 watch(identity, () => { reset(); error.value = ""; notice.value = ""; opened.value = !!props.repair.factorySummary; if (opened.value && canRead.value) void load(); }, { immediate: true, flush: "sync" });
-watch(() => props.blocked, value => { if (!value && opened.value && canRead.value && !data.value && !pending.value && !confirmation.value) void load(); });
+watch(blocked, value => { if (!value && opened.value && canRead.value && !data.value && !pending.value && !confirmation.value) void load(); });
 watch(() => props.repair.version, () => { if (opened.value && !pending.value && !confirmation.value && data.value?.version !== props.repair.version) void load(); });
-onBeforeUnmount(() => { reset(); emit("busy-change", false); });
+onBeforeUnmount(() => { reset(); });
 </script>
 <template>
   <section v-if="canRead" class="fams-card fams-stack" aria-label="返厂轮次与费用">
@@ -376,7 +379,7 @@ onBeforeUnmount(() => { reset(); emit("busy-change", false); });
               <button v-if="data.actions.receive" class="fams-button" data-kind="primary" type="button" @click="prepare('receive')">核对原实物已实际收回</button>
             </div>
           </fieldset>
-          <RepairFactoryPartsPanel v-if="partsPanelShown" :key="`${identity}:${selected.id}`" :repair="props.repair" :round="selected" :blocked="props.blocked || busy || !!pending || !!confirmation || stale" @busy-change="partsBusy = $event" @changed="load" @invalidated="reset();emit('invalidated')" @read-file="readFile" />
+          <RepairFactoryPartsPanel v-if="partsPanelShown" :key="`${identity}:${selected.id}`" :repair="props.repair" :round="selected" :blocked="blocked || busy || !!pending || !!confirmation || stale" @busy-change="partsBusy = $event" @changed="load" @invalidated="reset();emit('invalidated')" @read-file="readFile" />
           <FamsMediaPreview v-if="preview.url" @dismiss="preview.close()">
             <figure>
             <img v-if="previewImageShown" :src="preview.url" :alt="`厂家凭证：${preview.name}`">

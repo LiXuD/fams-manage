@@ -3,8 +3,11 @@ import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { RepairApiError, repairProblem, repairRequest, type Repair, type RepairMutation, type RepairReturnTarget } from "@/features/repair/api";
-const props = defineProps<{ repair: Repair; blocked?: boolean }>();
-const emit = defineEmits<{ changed: []; invalidated: []; busyChange: [value: boolean] }>();
+import { useBusy } from "@/features/repair/busyRegistry";
+const props = defineProps<{ repair: Repair }>();
+const emit = defineEmits<{ changed: []; invalidated: [] }>();
+/** 页内互斥：claimed 写本面板自身的占用位，blocked 读「任一其它面板在忙」。 */
+const { busy: claimed, blocked } = useBusy("return");
 const session = useSessionStore();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, props.repair.id]));
 type Mode = "delivery" | "receipt" | "refusal" | "recollection";
@@ -20,7 +23,7 @@ const liveness = useRequestLiveness(() => [identity.value]);
 function clear() { liveness.invalidate(); target.value = null; locations.value = []; location.value = ""; page.value = 1; total.value = 0; observed.value = ""; actual.value = ""; evidence.value = ""; checked.value = false; prepared.value = null; pending.value = null; busy.value = false; }
 function failure(cause: unknown) { if (cause instanceof RepairApiError && [401, 403, 404].includes(cause.status)) { clear(); emit("invalidated"); } error.value = repairProblem(cause); }
 async function select(value: Mode) {
-  if (locked.value || props.blocked || !allowed(value)) return;
+  if (locked.value || blocked.value || !allowed(value)) return;
   mode.value = value; target.value = null; checked.value = false; location.value = ""; error.value = "";
   const now = new Date(); actual.value = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 23);
   if (value !== "delivery") return;
@@ -30,14 +33,14 @@ async function select(value: Mode) {
 }
 async function catalog(delta = 0) {
   const next = page.value + delta;
-  if (locked.value || props.blocked || next < 1 || delta > 0 && (next - 1) * 20 >= total.value) return;
+  if (locked.value || blocked.value || next < 1 || delta > 0 && (next - 1) * 20 >= total.value) return;
   const turn = liveness.begin(); busy.value = true; error.value = "";
   try { const result = await repairRequest<{ items: Location[]; total: number }>(`/physical-catalog/location?page=${next}&pageSize=20`);
     if (liveness.isCurrent(turn)) { locations.value = result.items; total.value = result.total; page.value = next; location.value = ""; }
   } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 function prepare() {
-  if (locked.value || props.blocked || !allowed(mode.value)) return;
+  if (locked.value || blocked.value || !allowed(mode.value)) return;
   const row = props.repair, time = new Date(actual.value), place = locations.value.find(row => row.id === location.value);
   if (!observed.value.trim() || !Number.isFinite(time.getTime()) || evidence.value.trim().length < 10 || row.lockVersion == null
     || mode.value === "delivery" && !target.value || mode.value !== "delivery" && !handover.value
@@ -54,17 +57,17 @@ function prepare() {
   prepared.value = { path: `/${row.id}/return-${mode.value}`, key: crypto.randomUUID(), version: row.version, body }; error.value = "";
 }
 async function send() {
-  if (busy.value || props.blocked || !pending.value) return;
+  if (busy.value || blocked.value || !pending.value) return;
   const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
   try { await repairRequest(operation.path, operation); await repairRequest<Repair>(`/${props.repair.id}`);
     if (liveness.isCurrent(turn)) { pending.value = null; target.value = null; checked.value = false; observed.value = ""; evidence.value = ""; emit("changed"); }
   } catch (cause) { if (liveness.isCurrent(turn)) { if (cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); } }
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
-async function confirm() { if (!prepared.value || busy.value || props.blocked) return; pending.value = prepared.value; prepared.value = null; await send(); }
+async function confirm() { if (!prepared.value || busy.value || blocked.value) return; pending.value = prepared.value; prepared.value = null; await send(); }
 watch(identity, () => { clear(); error.value = ""; }, { immediate: true, flush: "sync" });
-watch(locked, value => emit("busyChange", value), { immediate: true, flush: "sync" });
-onBeforeUnmount(() => { clear(); emit("busyChange", false); });
+watch(locked, value => { claimed.value = value; }, { immediate: true, flush: "sync" });
+onBeforeUnmount(() => { clear(); });
 const deliveryAllowed = computed(() => allowed("delivery"));
 const receiptAllowed = computed(() => allowed("receipt"));
 const refusalAllowed = computed(() => allowed("refusal"));

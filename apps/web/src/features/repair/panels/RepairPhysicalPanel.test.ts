@@ -2,6 +2,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { reactive } from "vue";
 import { beforeEach, afterEach, it, expect, vi } from "vitest";
 import RepairPhysicalPanel from "./RepairPhysicalPanel.vue";
+import { busyRegistryKey, createBusyRegistry } from "@/features/repair/busyRegistry";
 import type { Repair } from "@/features/repair/api";
 
 const state=vi.hoisted(()=>({session:{user:{id:"1",roles:["WAREHOUSE_OPERATOR"]},csrfToken:"csrf"}}));
@@ -9,7 +10,7 @@ vi.mock("@/auth/sessionStore",()=>({useSessionStore:()=>state.session}));
 const warehouse="9007199254740993",location="9007199254740995";
 const row=():Repair=>({id:"19",assetId:"20",creatorAccountId:"2",source:{id:"20",assetCode:"PHYSICAL-1",name:"实物设备",version:0,lifecycle:"BORROWED",custodyType:"PERSONAL",locationId:"21",locationName:"原地点"},fault:"实际故障",impact:"HIGH",occurredAt:"2026-10-22T00:00:00Z",status:"WAREHOUSE_PROCESSING",version:3,assetVersion:1,ownershipVersion:1,loanVersion:7,processorAccountId:"1",acceptedAt:"2026-10-22T01:00:00Z",completedAt:null,lockVersion:0,actions:{approve:false,claim:false,acceptInPlace:false,completeInPlace:false,addFaultPhoto:false,cancel:false,acceptAway:true,closeInbound:true}});
 const response=(body:unknown,status=200)=>({ok:status===200,status,json:async()=>structuredClone(body)}) as Response;
-const page=()=>mount(RepairPhysicalPanel,{props:{repair:row()}});
+const page=()=>mount(RepairPhysicalPanel,{props:{repair:row()},global:{provide:{[busyRegistryKey]:createBusyRegistry()}}});
 const button=(wrapper:ReturnType<typeof page>,name:string)=>wrapper.findAll("button").find(item=>item.text()===name)!;
 function wire(write:(input:RequestInit)=>Promise<Response>){vi.stubGlobal("fetch",vi.fn(async(url:string,input:RequestInit)=>{
  if(input.method==="POST")return await write(input);
