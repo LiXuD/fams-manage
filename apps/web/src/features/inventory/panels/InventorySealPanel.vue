@@ -17,6 +17,26 @@ const view = ref<Preflight | null>(null), busy = shallowRef(false), error = shal
 const reason = shallowRef(""), waiver = shallowRef(""), confirming = shallowRef(false), pending = ref<BusinessMutation | null>(null);
 const section = ref("items"), page = shallowRef(1), rows = ref<Page | null>(null);
 const locked = computed(() => busy.value || !!pending.value);
+interface BlockerRow { key: string; text: string; target: string }
+interface SynchronizationRow { accountId: string; name: string; statusText: string; devices: { deviceId: string; statusText: string }[] }
+interface ReportLine { key: string; text: string }
+interface ReportRow { key: string; snapshot_sha256: string; lines: ReportLine[] }
+const blockerRows = computed<BlockerRow[]>(() => (view.value?.blockers ?? []).map(blocker => {
+  const target = blocker.itemId || blocker.observationId || '任务';
+  return { key: `${blocker.code}:${target}`, text: sealBlockerText(blocker.code), target };
+}));
+const synchronizationRows = computed<SynchronizationRow[]>(() => (view.value?.synchronization ?? []).map(row => ({
+  accountId: row.accountId, name: row.name, statusText: row.current ? '当前已声明' : synchronizationReasonText(row.reason),
+  devices: row.devices.map(device => ({ deviceId: device.deviceId, statusText: device.current ? '当前已声明' : synchronizationReasonText(device.reason) })),
+})));
+const reportRows = computed<ReportRow[]>(() => (rows.value?.items ?? []).map(row => ({ key: row.snapshot_sha256, snapshot_sha256: row.snapshot_sha256,
+  lines: sealedRecordLines(row.snapshot_json).map((line, index) => ({ key: `${row.snapshot_sha256}:${index}:${line}`, text: line })) })));
+const needsWaiver = computed(() => (view.value?.missingSynchronizationCount ?? 0) > 0);
+const prevReportDisabled = computed(() => locked.value || !rows.value || page.value === 1);
+const nextReportDisabled = computed(() => locked.value || !rows.value || page.value * 20 >= rows.value.total);
+const sealDisabled = computed(() => { const state = view.value;
+  return !state || state.task.task_status !== 'WAITING_REVIEW' || !!state.blockerCount || reason.value.trim().length < 3
+    || ((state.missingSynchronizationCount ?? 0) > 0 && waiver.value.trim().length < 10); });
 let epoch = 0, live = true;
 const current = (stamp: number, identity: string) => live && stamp === epoch && owner.value === identity;
 function clear() { epoch++; view.value = null; rows.value = null; reason.value = ""; waiver.value = ""; pending.value = null;
@@ -102,22 +122,22 @@ onBeforeUnmount(() => { live = false; clear(); });
     <template v-if="view && !view.sealed">
       <p>封存阻断 {{ view.blockerCount }} 项；缺少同步确认 {{ view.missingSynchronizationCount }} 人。</p>
       <ul class="fams-timeline">
-        <li v-for="(blocker, index) in view.blockers" :key="index">{{ sealBlockerText(blocker.code) }} · {{ blocker.itemId || blocker.observationId || '任务' }}</li>
+        <li v-for="blocker in blockerRows" :key="blocker.key">{{ blocker.text }} · {{ blocker.target }}</li>
       </ul>
-      <article v-for="row in view.synchronization" :key="row.accountId" class="fams-card fams-stack">
-        <p>{{ row.name }} · {{ row.current ? '当前已声明' : synchronizationReasonText(row.reason) }}</p>
+      <article v-for="row in synchronizationRows" :key="row.accountId" class="fams-card fams-stack">
+        <p>{{ row.name }} · {{ row.statusText }}</p>
         <ul v-if="row.devices.length" class="fams-timeline">
-          <li v-for="device in row.devices" :key="device.deviceId">{{ device.deviceId }} · {{ device.current ? '当前已声明' : synchronizationReasonText(device.reason) }}</li>
+          <li v-for="device in row.devices" :key="device.deviceId">{{ device.deviceId }} · {{ device.statusText }}</li>
         </ul>
       </article>
       <fieldset class="fams-card fams-stack" :disabled="locked">
         <div class="fams-field-grid">
           <label class="fams-field"><span class="fams-field-label">封存原因</span>
             <textarea class="fams-control" v-model="reason" maxlength="1000" /></label>
-          <label v-if="(view.missingSynchronizationCount ?? 0) > 0" class="fams-field"><span class="fams-field-label">缺少同步确认的封存依据</span>
+          <label v-if="needsWaiver" class="fams-field"><span class="fams-field-label">缺少同步确认的封存依据</span>
             <textarea class="fams-control" v-model="waiver" maxlength="2000" /></label>
         </div>
-        <button class="fams-button" data-kind="primary" type="button" :disabled="view.task.task_status !== 'WAITING_REVIEW' || !!view.blockerCount || reason.trim().length < 3 || ((view.missingSynchronizationCount ?? 0) > 0 && waiver.trim().length < 10)" @click="prepare">核对本次封存</button>
+        <button class="fams-button" data-kind="primary" type="button" :disabled="sealDisabled" @click="prepare">核对本次封存</button>
       </fieldset>
       <div v-if="confirming" class="fams-card fams-stack" role="group" aria-label="确认冻结报告与待补证名单">
         <p>{{ reason }}。缺少同步确认 {{ view.missingSynchronizationCount }} 人，依据：{{ waiver || '无需豁免' }}。未盘不计正常，封存后仅追加迟到或关联复盘，不改原报告。</p>
@@ -142,17 +162,17 @@ onBeforeUnmount(() => { live = false; clear(); });
         <button class="fams-button" data-kind="secondary" type="button" :disabled="locked" @click="readRows(1)">读取本部分冻结记录</button>
         <button class="fams-button" data-kind="primary" type="button" :disabled="locked" @click="exportReport">导出完整冻结报告 JSON</button>
       </div>
-      <article v-for="(row, index) in rows?.items ?? []" :key="index" class="fams-card fams-stack">
+      <article v-for="row in reportRows" :key="row.key" class="fams-card fams-stack">
         <ul class="fams-timeline">
-          <li v-for="(line, lineIndex) in sealedRecordLines(row.snapshot_json)" :key="lineIndex">{{ line }}</li>
+          <li v-for="line in row.lines" :key="line.key">{{ line.text }}</li>
         </ul>
         <small>冻结校验 {{ row.snapshot_sha256 }}</small>
       </article>
       <div class="fams-pagination">
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || !rows || page === 1" @click="readRows(page - 1)">上页冻结报告</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevReportDisabled" @click="readRows(page - 1)">上页冻结报告</button>
           <span class="fams-pagination-page">第 {{ page }} 页</span>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || !rows || page * 20 >= rows.total" @click="readRows(page + 1)">下页冻结报告</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextReportDisabled" @click="readRows(page + 1)">下页冻结报告</button>
         </div>
       </div>
     </template>

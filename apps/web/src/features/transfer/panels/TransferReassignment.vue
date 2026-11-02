@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { useReassignmentFlow } from "@/composables/useReassignmentFlow";
 
 const props = defineProps<{ id: string; version: number }>();
@@ -12,6 +13,7 @@ const { snapshot, target, reason, evidence, checked, busy, error, retryable, ins
     mapItems: (item) => ({ id: item.id, version: item.version, status: item.itemStatus, lockVersion: item.lockVersion }),
     onSaved: () => emit("saved"),
   });
+const submitText = computed(() => retryable.value ? "原请求重试转派" : "确认转派整单");
 </script>
 
 <template>
@@ -39,7 +41,7 @@ const { snapshot, target, reason, evidence, checked, busy, error, retryable, ins
       </div>
       <label class="fams-selection"><input v-model="checked" type="checkbox" :disabled="busy || retryable" />已与处理人或交接记录核对未同步结果</label>
       <div class="fams-panel-actions">
-        <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="submit">{{ retryable ? '原请求重试转派' : '确认转派整单' }}</button>
+        <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="submit">{{ submitText }}</button>
       </div>
     </template>
   </section>

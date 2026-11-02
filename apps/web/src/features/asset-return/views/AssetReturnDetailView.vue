@@ -20,6 +20,22 @@ const warehouse = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATO
 const bins = computed(() => locations.value.filter(l => l.warehouseId === warehouseId.value));
 const canInspect = computed(() => warehouse.value && selected.value?.returnStatus === "WAREHOUSE_PROCESSING"
   && selected.value.processorAccountId === session.user?.id);
+const canDecide = computed(() => admin.value && selected.value?.returnStatus === "PENDING_APPROVAL");
+const canClaim = computed(() => warehouse.value && selected.value?.returnStatus === "WAITING_WAREHOUSE_CLAIM");
+const canReassign = computed(() => admin.value && selected.value?.returnStatus === "WAREHOUSE_PROCESSING");
+const inspectionNeedsBin = computed(() => result.value !== "MISSING");
+const inspectionIsMissing = computed(() => result.value === "MISSING");
+const formDisabled = computed(() => busy.value || retryable.value);
+const followupRows = computed(() => (selected.value?.followups ?? []).map((followup) => ({
+  ...followup,
+  businessTypeText: followup.businessType === "REPAIR" ? "损坏维修" : "报失处理",
+  followupStatusText: followup.followupStatus === "CLOSED" ? "已实际完成"
+    : followup.followupStatus === "ACCEPTED" ? "正式处理中" : "待继续处理",
+  hasRepair: !!(followup.linkedRepairId || followup.lastRepairId),
+  repairTarget: followup.linkedRepairId || followup.lastRepairId || "",
+  repairStatusText: followup.repairStatus === "COMPLETED" ? "已验收入库"
+    : followup.repairStatus === "REJECTED" || followup.repairStatus === "CANCELLED" ? "原维修未执行，源义务仍待处理" : "尚未实际完成",
+})));
 let pending: BusinessMutation | null = null;
 
 async function open() { selected.value = await businessRequest<AssetReturn>("/asset-returns/" + props.id); }
@@ -103,40 +119,40 @@ onMounted(async () => {
 
       <label class="fams-field">
         <span class="fams-field-label">操作原因 / 验收说明</span>
-        <textarea class="fams-control" v-model="reason" :disabled="busy || retryable" maxlength="1000" />
+        <textarea class="fams-control" v-model="reason" :disabled="formDisabled" maxlength="1000" />
       </label>
 
       <div class="fams-panel-actions">
-        <template v-if="admin && selected.returnStatus === 'PENDING_APPROVAL'">
-          <button class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable" @click="decide(selected.id, selected.version, true)">批准退还</button>
-          <button class="fams-button" data-kind="danger" type="button" :disabled="busy || retryable" @click="decide(selected.id, selected.version, false)">驳回退还</button>
+        <template v-if="canDecide">
+          <button class="fams-button" data-kind="primary" type="button" :disabled="formDisabled" @click="decide(selected.id, selected.version, true)">批准退还</button>
+          <button class="fams-button" data-kind="danger" type="button" :disabled="formDisabled" @click="decide(selected.id, selected.version, false)">驳回退还</button>
         </template>
-        <button v-if="warehouse && selected.returnStatus === 'WAITING_WAREHOUSE_CLAIM'" class="fams-button" data-kind="primary" type="button"
-          :disabled="busy || retryable" @click="mutate(`/asset-returns/${selected.id}/claim`, selected.version)">领取整单验收</button>
+        <button v-if="canClaim" class="fams-button" data-kind="primary" type="button"
+          :disabled="formDisabled" @click="mutate(`/asset-returns/${selected.id}/claim`, selected.version)">领取整单验收</button>
       </div>
 
-      <AssetReturnReassignment v-if="admin && selected.returnStatus === 'WAREHOUSE_PROCESSING'"
+      <AssetReturnReassignment v-if="canReassign"
         :id="selected.id" :version="selected.version" @saved="refresh" />
 
       <div v-if="canInspect" class="fams-stack">
         <div class="fams-field-grid">
           <label class="fams-field"><span class="fams-field-label">验收结果</span>
-            <select class="fams-control" v-model="result" :disabled="busy || retryable"><option value="NORMAL">正常入库</option><option value="DAMAGED">损坏转报修</option><option value="MISSING">实物缺失转报失</option></select></label>
-          <template v-if="result !== 'MISSING'">
+            <select class="fams-control" v-model="result" :disabled="formDisabled"><option value="NORMAL">正常入库</option><option value="DAMAGED">损坏转报修</option><option value="MISSING">实物缺失转报失</option></select></label>
+          <template v-if="inspectionNeedsBin">
             <label class="fams-field"><span class="fams-field-label">实物编码 / 当前二维码</span>
-              <input class="fams-control" v-model="observed" :disabled="busy || retryable" /></label>
+              <input class="fams-control" v-model="observed" :disabled="formDisabled" /></label>
             <label class="fams-field"><span class="fams-field-label">仓库</span>
-              <select class="fams-control" v-model="warehouseId" :disabled="busy || retryable" @change="locationId = ''"><option value="">请选择</option><option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select></label>
+              <select class="fams-control" v-model="warehouseId" :disabled="formDisabled" @change="locationId = ''"><option value="">请选择</option><option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select></label>
             <label class="fams-field"><span class="fams-field-label">仓位</span>
-              <select class="fams-control" v-model="locationId" :disabled="busy || retryable"><option value="">请选择</option><option v-for="l in bins" :key="l.id" :value="l.id">{{ l.name }}</option></select></label>
+              <select class="fams-control" v-model="locationId" :disabled="formDisabled"><option value="">请选择</option><option v-for="l in bins" :key="l.id" :value="l.id">{{ l.name }}</option></select></label>
           </template>
         </div>
-        <p v-if="result === 'MISSING'" class="fams-panel-subtitle">实物缺失将保留借用责任，进入报失处理。</p>
-        <button class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable" @click="inspect">提交实物验收</button>
+        <p v-if="inspectionIsMissing" class="fams-panel-subtitle">实物缺失将保留借用责任，进入报失处理。</p>
+        <button class="fams-button" data-kind="primary" type="button" :disabled="formDisabled" @click="inspect">提交实物验收</button>
       </div>
 
       <p v-if="selected.inspectionResult">验收结果 {{ inspectionLabels[selected.inspectionResult] }} · {{ selected.inspectionReason }}</p>
-      <p v-for="followup in selected.followups" :key="followup.id">后续 {{ followup.id }} · {{ followup.businessType === 'REPAIR' ? '损坏维修' : '报失处理' }} · {{ followup.followupStatus === 'CLOSED' ? '已实际完成' : followup.followupStatus === 'ACCEPTED' ? '正式处理中' : '待继续处理' }}<span v-if="followup.linkedRepairId || followup.lastRepairId"> · 正式维修 {{ followup.linkedRepairId || followup.lastRepairId }}（{{ followup.repairStatus === 'COMPLETED' ? '已验收入库' : followup.repairStatus === 'REJECTED' || followup.repairStatus === 'CANCELLED' ? '原维修未执行，源义务仍待处理' : '尚未实际完成' }}）</span></p>
+      <p v-for="row in followupRows" :key="row.id">后续 {{ row.id }} · {{ row.businessTypeText }} · {{ row.followupStatusText }}<span v-if="row.hasRepair"> · 正式维修 {{ row.repairTarget }}（{{ row.repairStatusText }}）</span></p>
     </section>
   </AppChrome>
 </template>

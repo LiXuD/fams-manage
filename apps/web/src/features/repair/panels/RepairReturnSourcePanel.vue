@@ -56,6 +56,13 @@ async function confirm() { if (busy.value || props.blocked || !prepared.value) r
 watch(identity, () => { clear(); error.value = ""; }, { immediate: true, flush: "sync" });
 watch(locked, value => emit("busyChange", value), { immediate: true, flush: "sync" });
 onBeforeUnmount(() => { live = false; clear(); emit("busyChange", false); });
+const sourceRows = computed(() => rows.value.map(row => ({ ...row,
+  followupStatusText: row.followup_status === 'PENDING' ? '待接续' : row.followup_status === 'CLOSED' ? '已实际完成' : '维修处理中',
+  repairStateText: repairStates[row.repair_status || ''] || '原维修',
+  selectable: row.followup_status === 'PENDING' })));
+const prevDisabled = computed(() => locked.value || props.blocked || page.value <= 1);
+const nextDisabled = computed(() => locked.value || props.blocked || page.value * 20 >= total.value);
+const inspectedAtText = computed(() => source.value ? new Date(source.value.inspectedAt).toLocaleString() : '');
 </script>
 <template>
   <section class="fams-card fams-stack" aria-label="损坏归还接续维修">
@@ -68,25 +75,25 @@ onBeforeUnmount(() => { live = false; clear(); emit("busyChange", false); });
     <p>保留原归还及已关闭借用。新维修继承原库管与同一资产锁，仍需管理员批准范围和库管实际接修、验收入库。</p>
     <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
     <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || blocked" @click="refresh()">查询损坏归还后续</button>
-    <article v-for="row in rows" :key="row.id" class="fams-card">
-      <p>归还 {{ row.return_id }} · 资产 {{ row.asset_id }} · {{ row.reason }} · {{ row.followup_status === 'PENDING' ? '待接续' : row.followup_status === 'CLOSED' ? '已实际完成' : '维修处理中' }}</p>
+    <article v-for="row in sourceRows" :key="row.id" class="fams-card">
+      <p>归还 {{ row.return_id }} · 资产 {{ row.asset_id }} · {{ row.reason }} · {{ row.followupStatusText }}</p>
       <div class="fams-inline">
-        <button v-if="row.followup_status === 'PENDING'" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || blocked" @click="select(row.id)">核对损坏来源 {{ row.id }}</button>
-        <router-link v-if="row.linked_repair_id || row.last_repair_id" :to="'/repairs/' + (row.linked_repair_id || row.last_repair_id)">查看{{ repairStates[row.repair_status || ''] || '原维修' }}</router-link>
+        <button v-if="row.selectable" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || blocked" @click="select(row.id)">核对损坏来源 {{ row.id }}</button>
+        <router-link v-if="row.linked_repair_id || row.last_repair_id" :to="'/repairs/' + (row.linked_repair_id || row.last_repair_id)">查看{{ row.repairStateText }}</router-link>
       </div>
     </article>
     <div class="fams-pagination">
       <span class="fams-pagination-summary">共{{ total }}项</span>
       <div class="fams-pagination-actions">
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || blocked || page <= 1" @click="refresh(-1)">上一页损坏后续</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled" @click="refresh(-1)">上一页损坏后续</button>
         <span class="fams-pagination-page">第{{ page }}页</span>
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || blocked || page * 20 >= total" @click="refresh(1)">下一页损坏后续</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextDisabled" @click="refresh(1)">下一页损坏后续</button>
       </div>
     </div>
     <fieldset v-if="source" class="fams-card fams-stack" :disabled="locked || blocked">
       <legend class="fams-panel-title">核对原损坏验收</legend>
       <p>{{ source.asset.assetCode }} · {{ source.asset.name }} · 原归还 {{ source.returnId }} · 原库管 {{ source.processorAccountId }}</p>
-      <p>实际损坏验收 {{ new Date(source.inspectedAt).toLocaleString() }} · {{ source.inspectionReason }}。原借用 {{ source.closedLoanId || '无' }} 不会重新打开。</p>
+      <p>实际损坏验收 {{ inspectedAtText }} · {{ source.inspectionReason }}。原借用 {{ source.closedLoanId || '无' }} 不会重新打开。</p>
       <div class="fams-field-grid">
         <label class="fams-field fams-field-wide"><span class="fams-field-label">维修故障依据</span><textarea class="fams-control" v-model="fault" maxlength="2000" /></label>
         <label class="fams-field"><span class="fams-field-label">影响程度</span>

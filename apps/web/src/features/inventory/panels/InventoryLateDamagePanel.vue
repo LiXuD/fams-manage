@@ -18,6 +18,17 @@ const reason = shallowRef(""), evidence = shallowRef(""), fault = shallowRef("")
 const repairId = shallowRef(""), linked = ref<Linked | null>(null);
 const locked = computed(() => busy.value || !!pending.value || !!props.blocked), states: Record<string, string> = { OPEN: "待实际处理", PROCESSING: "正式维修处理中", CLOSED: "实际维修已完成" };
 const methods: Record<string, string> = { FORMAL_REPAIR: "创建正式维修", LINK_REPAIR: "关联已有正式维修", REFRESH_REPAIR: "核对正式维修实际进度" };
+const refreshDisabled = computed(() => busy.value || !!props.blocked || confirming.value);
+const sendDisabled = computed(() => busy.value || !!props.blocked);
+const assetText = computed(() => context.value?.currentAsset?.assetCode || context.value?.assetId || "");
+const todoText = computed(() => context.value?.todoOpen ? "仍有开放待办" : "两项待办均已结束");
+const repairTo = computed(() => `/repairs/${context.value?.damage.repair_id}`);
+const lastRepairStateText = computed(() => repairStates[context.value?.damage.repair_status ?? ""]);
+const prevDisabled = computed(() => locked.value || page.value === 1);
+const repairCaptureVisible = computed(() => method.value !== "REFRESH_REPAIR");
+const formalRepair = computed(() => method.value === "FORMAL_REPAIR");
+const nextDisabled = computed(() => locked.value || !context.value || page.value * 20 >= context.value.history.total);
+const damageFieldsetDisabled = computed(() => locked.value || context.value?.damage.damage_status === "CLOSED");
 let generation = 0, live = true;
 const current = (epoch: number, who: string) => live && generation === epoch && owner.value === who;
 const path = () => `/inventory-late/tasks/${props.taskId}/observations/${props.observationId}/damage-repair`;
@@ -84,15 +95,15 @@ onBeforeUnmount(() => { live = false; clear(); emit("busyChange", false); });
         <p class="fams-panel-subtitle">维修和原补充复核各有独立版本与待办。维修实际完成只关闭损坏义务；新复盘不会替代实际维修，原封存报告不改。</p>
       </div>
       <div class="fams-panel-actions">
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || blocked || confirming" @click="load()">刷新独立损坏与当前资产</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="refreshDisabled" @click="load()">刷新独立损坏与当前资产</button>
       </div>
     </div>
     <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
     <p v-if="notice" class="fams-notice" data-state="success" role="status"><strong>{{ notice }}</strong></p>
     <template v-if="context">
-      <p>{{ context.currentAsset?.assetCode || context.assetId }} · {{ states[context.damage.damage_status] }} · 独立损坏第 {{ context.damage.version }} 版</p>
-      <p>原观察 {{ context.originalEvidence.rawObservedAt }} · 补充复核 {{ inventoryLateResultLabels[context.recheckResult] }} · {{ context.todoOpen ? '仍有开放待办' : '两项待办均已结束' }}</p>
-      <router-link v-if="context.damage.repair_id" class="fams-button" data-kind="link" :to="'/repairs/' + context.damage.repair_id">查看正式维修 {{ context.damage.repair_id }}（上次核对 {{ repairStates[context.damage.repair_status ?? ''] }}）</router-link>
+      <p>{{ assetText }} · {{ states[context.damage.damage_status] }} · 独立损坏第 {{ context.damage.version }} 版</p>
+      <p>原观察 {{ context.originalEvidence.rawObservedAt }} · 补充复核 {{ inventoryLateResultLabels[context.recheckResult] }} · {{ todoText }}</p>
+      <router-link v-if="context.damage.repair_id" class="fams-button" data-kind="link" :to="repairTo">查看正式维修 {{ context.damage.repair_id }}（上次核对 {{ lastRepairStateText }}）</router-link>
       <ul class="fams-timeline">
         <li v-for="row in context.history.items" :key="row.after_version">第 {{ row.after_version }} 版 · {{ methods[row.method] }} · {{ states[row.damage_status] }} · {{ row.actor_username }}
           <small>{{ row.reason }} · {{ row.evidence }} · 维修 {{ row.repair_id }}</small></li>
@@ -100,22 +111,22 @@ onBeforeUnmount(() => { live = false; clear(); emit("busyChange", false); });
       <div class="fams-pagination">
         <span class="fams-pagination-summary">共 {{ context.history.total }} 条</span>
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page === 1" @click="load(-1)">上页损坏历史</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled" @click="load(-1)">上页损坏历史</button>
           <span class="fams-pagination-page">第 {{ page }} 页</span>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page * 20 >= context.history.total" @click="load(1)">下页损坏历史</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextDisabled" @click="load(1)">下页损坏历史</button>
         </div>
       </div>
-      <fieldset class="fams-card fams-stack" :disabled="locked || context.damage.damage_status === 'CLOSED'">
+      <fieldset class="fams-card fams-stack" :disabled="damageFieldsetDisabled">
         <label class="fams-field"><span class="fams-field-label">损坏处理</span>
           <select class="fams-control" v-model="method"><option v-for="(label,value) in methods" :key="value" :value="value">{{ label }}</option></select></label>
-        <template v-if="method !== 'REFRESH_REPAIR'">
+        <template v-if="repairCaptureVisible">
           <label class="fams-field"><span class="fams-field-label">实际发现损坏时间（本机时区）</span>
             <input class="fams-control" v-model="discoveredAt" type="datetime-local" step="0.001" /></label>
           <div class="fams-selection-group">
             <label class="fams-selection"><input v-model="checked" type="checkbox" />已按实物和原始证据核实损坏</label>
             <label class="fams-selection"><input v-model="timeChecked" type="checkbox" />已独立核实发现时间，未直接采用异常设备时间</label>
           </div>
-          <template v-if="method === 'FORMAL_REPAIR'">
+          <template v-if="formalRepair">
             <label class="fams-field"><span class="fams-field-label">实际故障</span>
               <textarea class="fams-control" v-model="fault" minlength="3" maxlength="2000" /></label>
             <label class="fams-field"><span class="fams-field-label">影响程度</span>
@@ -140,10 +151,10 @@ onBeforeUnmount(() => { live = false; clear(); emit("busyChange", false); });
     <div v-if="confirming" class="fams-card fams-stack" role="group" aria-label="确认独立损坏处理">
       <p>确认{{ methods[method] }}？本次仅追加损坏决定，其他待办及原报告不改。</p>
       <div class="fams-panel-actions">
-        <button class="fams-button" data-kind="primary" type="button" :disabled="busy || blocked" @click="send">确认保存独立损坏处理</button>
+        <button class="fams-button" data-kind="primary" type="button" :disabled="sendDisabled" @click="send">确认保存独立损坏处理</button>
         <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="pending = null; confirming = false">取消本次损坏处理</button>
       </div>
     </div>
-    <button v-if="pending && !confirming" class="fams-button" data-kind="secondary" type="button" :disabled="busy || blocked" @click="send">原键重试独立损坏处理</button>
+    <button v-if="pending && !confirming" class="fams-button" data-kind="secondary" type="button" :disabled="sendDisabled" @click="send">原键重试独立损坏处理</button>
   </section>
 </template>

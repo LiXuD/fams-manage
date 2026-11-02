@@ -12,6 +12,20 @@ const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 const { rows: tasks, total, page, busy, error, refresh, pages } = usePagedResourceList<Task>(
   (page) => businessRequest<{ items: Task[]; total: number }>(`/inventory-tasks?page=${page}&pageSize=20`),
   { problem: businessMessage });
+type TaskRow = Task & { startsAtText: string; dueAtText: string; statusTone: string; overdueText: string };
+const taskRows = computed<TaskRow[]>(() => tasks.value.map((t) => ({
+  ...t,
+  startsAtText: new Date(t.starts_at).toLocaleString(),
+  dueAtText: new Date(t.due_at).toLocaleString(),
+  statusTone: t.overdue ? "warning" : "info",
+  overdueText: t.overdue ? " · 逾期" : "",
+})));
+const scopeTitle = computed(() => (admin.value ? "全部任务" : "我的任务"));
+const emptyHintText = computed(() => admin.value
+  ? "新建盘点草稿设置范围，保存后到详情页预览并发布。"
+  : "等待管理员发布盘点任务后在此处理。");
+const prevDisabled = computed(() => busy.value || page.value === 1);
+const nextDisabled = computed(() => busy.value || page.value * 20 >= total.value);
 </script>
 <template>
   <AppChrome>
@@ -22,7 +36,7 @@ const { rows: tasks, total, page, busy, error, refresh, pages } = usePagedResour
 
     <section class="fams-panel fams-stack" aria-label="盘点任务列表">
       <div class="fams-panel-head">
-        <h2 class="fams-panel-title">{{ admin ? "全部任务" : "我的任务" }}</h2>
+        <h2 class="fams-panel-title">{{ scopeTitle }}</h2>
         <div class="fams-panel-actions">
           <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy"
             @click="refresh">刷新</button>
@@ -35,15 +49,15 @@ const { rows: tasks, total, page, busy, error, refresh, pages } = usePagedResour
             <th scope="col">开始时间</th><th scope="col">截止时间</th>
             <th scope="col" data-column-kind="action">操作</th></tr></thead>
           <tbody>
-            <tr v-for="t in tasks" :key="t.id">
+            <tr v-for="t in taskRows" :key="t.id">
               <th scope="row" data-column-kind="identity">{{ t.name }}</th>
-              <td><span class="fams-status" :data-tone="t.overdue ? 'warning' : 'info'">{{ labels[t.task_status] }}{{ t.overdue ? ' · 逾期' : '' }}</span></td>
-              <td>{{ new Date(t.starts_at).toLocaleString() }}</td>
-              <td>{{ new Date(t.due_at).toLocaleString() }}</td>
+              <td><span class="fams-status" :data-tone="t.statusTone">{{ labels[t.task_status] }}{{ t.overdueText }}</span></td>
+              <td>{{ t.startsAtText }}</td>
+              <td>{{ t.dueAtText }}</td>
               <td data-column-kind="action"><router-link class="fams-button" data-kind="link" data-size="sm"
                 :to="`/inventory-tasks/${t.id}`">打开</router-link></td>
             </tr>
-            <tr v-if="!tasks.length" class="fams-table-empty"><td colspan="5"><strong>当前范围没有盘点任务</strong>{{ admin ? '新建盘点草稿设置范围，保存后到详情页预览并发布。' : '等待管理员发布盘点任务后在此处理。' }}</td></tr>
+            <tr v-if="!tasks.length" class="fams-table-empty"><td colspan="5"><strong>当前范围没有盘点任务</strong>{{ emptyHintText }}</td></tr>
           </tbody>
         </table>
       </div>
@@ -51,11 +65,11 @@ const { rows: tasks, total, page, busy, error, refresh, pages } = usePagedResour
       <div class="fams-pagination">
         <span class="fams-pagination-summary">共 {{ total }} 条</span>
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || page === 1"
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled"
             @click="pages(-1)">上一页</button>
           <span class="fams-pagination-page">第 {{ page }} 页</span>
           <button class="fams-button" data-kind="secondary" data-size="sm" type="button"
-            :disabled="busy || page * 20 >= total" @click="pages(1)">下一页</button>
+            :disabled="nextDisabled" @click="pages(1)">下一页</button>
         </div>
       </div>
     </section>

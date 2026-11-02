@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, shallowRef } from "vue";
+import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
@@ -20,6 +20,12 @@ const locationId = shallowRef("");
 const businessDate = ref(new Date().toISOString().slice(0, 10));
 const error = shallowRef("");
 const busy = shallowRef(false);
+
+interface LocationOption extends AssetReference { label: string }
+const locationOptions = computed<LocationOption[]>(() => locations.value
+  .filter((item) => item.warehouse?.id === warehouseId.value)
+  .map((item) => ({ ...item, label: item.name ?? item.code ?? "" })));
+const submitText = computed(() => (editing.value ? "保存修订" : "保存草稿"));
 
 function selectedRef(items: AssetReference[], id: string): AssetReference | undefined {
   return items.find((item) => item.id === id);
@@ -89,7 +95,7 @@ onMounted(async () => {
             </select></label>
           <label class="fams-field"><span class="fams-field-label">目标位置</span>
             <select class="fams-control" v-model="locationId" required><option value="">请选择</option>
-              <option v-for="item in locations.filter((value) => value.warehouse?.id === warehouseId)" :key="item.id" :value="item.id">{{ item.name ?? item.code }}</option>
+              <option v-for="item in locationOptions" :key="item.id" :value="item.id">{{ item.label }}</option>
             </select></label>
           <div class="fams-field fams-field-wide"><span class="fams-field-label">待入库资产（可多选）</span>
             <div class="fams-selection-grid" role="group" aria-label="待入库资产（可多选）">
@@ -100,7 +106,7 @@ onMounted(async () => {
         </div>
         <p v-if="editing" class="fams-panel-subtitle">修改下方草稿内容后保存；所选资产使用同一目标仓库和位置</p>
         <div class="fams-form-actions">
-          <button class="fams-button" data-kind="primary" type="submit" :disabled="busy">{{ editing ? '保存修订' : '保存草稿' }}</button>
+          <button class="fams-button" data-kind="primary" type="submit" :disabled="busy">{{ submitText }}</button>
           <router-link v-if="editing" class="fams-button" data-kind="secondary" :to="`/inbound/${editing.id}`">退出修订</router-link>
         </div>
       </form>

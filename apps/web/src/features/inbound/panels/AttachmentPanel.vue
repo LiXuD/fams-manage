@@ -30,6 +30,24 @@ const writable = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR
   && ((props.receipt.status === "DRAFT" && props.receipt.createdBy.id === session.user.id)
     || (props.receipt.status === "WAREHOUSE_PROCESSING"
       && props.receipt.currentProcessor?.processor.id === session.user.id)));
+const noticeTone = computed(() => (noticeGood.value ? "success" : "warning"));
+const correctionLocked = computed(() => busy.value || props.disabled || !!pending.value?.reason);
+const pickerDisabled = computed(() => busy.value || props.disabled);
+const refreshDisabled = computed(() => busy.value || props.disabled || loading.value);
+const submitDisabled = computed(() => !pending.value || busy.value || props.disabled);
+const submitText = computed(() => {
+  if (busy.value) return "上传中…";
+  return correction.value ? "提交纠错 / 重试" : "上传附件 / 重试";
+});
+const rows = computed(() => items.value.map((item) => ({
+  ...item,
+  revisionText: `第 ${item.revisionNumber ?? 1} 版`,
+  supersededText: item.nextObjectId ? " · 已有新版" : "",
+  sizeText: `${(item.sizeBytes / 1024).toFixed(1)} KB`,
+  scanTone: item.scanStatus === "CLEAN" ? "success" : "warning",
+  downloadable: item.scanStatus === "CLEAN",
+  correctable: writable.value && !item.nextObjectId,
+})));
 
 async function refresh(): Promise<void> {
   const current = ++generation;
@@ -110,21 +128,21 @@ watch(() => props.receipt.id, () => {
         <p class="fams-panel-subtitle">支持 JPG、PNG、WEBP、PDF；每单最多 9 张图片、5 个 PDF，总量 50 MB。</p>
       </div>
       <div class="fams-panel-actions">
-        <button class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="busy || disabled || loading" @click="refresh">刷新附件</button>
+        <button class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="refreshDisabled" @click="refresh">刷新附件</button>
       </div>
     </div>
     <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
-    <p v-if="notice" class="fams-notice" :data-state="noticeGood ? 'success' : 'warning'" role="status"><strong>{{ notice }}</strong></p>
+    <p v-if="notice" class="fams-notice" :data-state="noticeTone" role="status"><strong>{{ notice }}</strong></p>
     <form v-if="writable" class="fams-stack" @submit.prevent="upload">
       <p v-if="correction">纠错：{{ correction.filename }} · 原件将保留</p>
       <label v-if="correction" class="fams-field"><span class="fams-field-label">纠错原因</span><input class="fams-control" v-model="correctionReason" maxlength="500"
-        :disabled="busy || disabled || !!pending?.reason" /></label>
-      <button v-if="correction" class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="busy || disabled"
+        :disabled="correctionLocked" /></label>
+      <button v-if="correction" class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="pickerDisabled"
         @click="chooseCorrection(null)">取消纠错</button>
       <label class="fams-file"><span class="fams-field-label">选择附件</span><input ref="fileInput" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf"
-        :disabled="busy || disabled" @change="selectFile" /></label>
-      <button class="fams-button" data-kind="secondary" type="submit" :disabled="!pending || busy || disabled">
-        {{ busy ? '上传中…' : correction ? '提交纠错 / 重试' : '上传附件 / 重试' }}
+        :disabled="pickerDisabled" @change="selectFile" /></label>
+      <button class="fams-button" data-kind="secondary" type="submit" :disabled="submitDisabled">
+        {{ submitText }}
       </button>
     </form>
     <p v-else>当前单据只读，可查看已登记附件。</p>
@@ -133,14 +151,14 @@ watch(() => props.receipt.id, () => {
       <thead><tr><th scope="col" data-column-kind="identity">文件</th><th scope="col" data-column-kind="numeric">大小</th>
         <th scope="col">扫描状态</th><th scope="col" data-column-kind="action">操作</th></tr></thead>
       <tbody>
-        <tr v-for="item in items" :key="item.objectId">
-          <th scope="row" data-column-kind="identity">{{ item.filename }} <span>· 第 {{ item.revisionNumber ?? 1 }} 版{{ item.nextObjectId ? ' · 已有新版' : '' }}</span>
-            <p v-if="item.correctionReason">纠错原因：{{ item.correctionReason }}</p></th><td data-column-kind="numeric">{{ (item.sizeBytes / 1024).toFixed(1) }} KB</td>
-          <td><span class="fams-status" :data-tone="item.scanStatus === 'CLEAN' ? 'success' : 'warning'">{{ scanText[item.scanStatus] }}</span></td>
+        <tr v-for="item in rows" :key="item.objectId">
+          <th scope="row" data-column-kind="identity">{{ item.filename }} <span>· {{ item.revisionText }}{{ item.supersededText }}</span>
+            <p v-if="item.correctionReason">纠错原因：{{ item.correctionReason }}</p></th><td data-column-kind="numeric">{{ item.sizeText }}</td>
+          <td><span class="fams-status" :data-tone="item.scanTone">{{ scanText[item.scanStatus] }}</span></td>
           <td data-column-kind="action"><button class="fams-button" data-kind="link" data-size="sm" type="button"
-            :disabled="busy || disabled || item.scanStatus !== 'CLEAN'" @click="download(item)">下载</button>
-            <button v-if="writable && !item.nextObjectId" class="fams-button" data-kind="link" data-size="sm" type="button"
-              :disabled="busy || disabled" @click="chooseCorrection(item)">追加纠错版本</button></td>
+            :disabled="pickerDisabled || !item.downloadable" @click="download(item)">下载</button>
+            <button v-if="item.correctable" class="fams-button" data-kind="link" data-size="sm" type="button"
+              :disabled="pickerDisabled" @click="chooseCorrection(item)">追加纠错版本</button></td>
         </tr>
         <tr v-if="!loading && !items.length" class="fams-table-empty"><td colspan="4"><strong>暂无附件</strong>上传并扫描通过后在此查看与下载。</td></tr>
       </tbody>

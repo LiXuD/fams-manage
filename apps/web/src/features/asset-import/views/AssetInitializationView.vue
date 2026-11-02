@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, shallowRef } from "vue";
+import { computed, onMounted, ref, shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import {
   closeImportWindow, currentImportWindow, eligibleImportOperators, openImportWindow,
@@ -14,6 +14,15 @@ const expiresAt = shallowRef("");
 const error = shallowRef("");
 const notice = shallowRef("");
 const busy = shallowRef(false);
+
+const currentOperatorLabel = computed(() => {
+  const activeWindow = current.value;
+  if (!activeWindow) return "";
+  return operators.value.find((item) => item.id === activeWindow.assignedOperatorId)?.username
+    ?? activeWindow.assignedOperatorId;
+});
+const openDisabled = computed(() =>
+  busy.value || !operatorId.value || !expiresAt.value || !reason.value.trim());
 
 async function refresh(): Promise<void> {
   error.value = "";
@@ -63,8 +72,7 @@ onMounted(refresh);
       </div>
       <dl class="fams-facts">
         <div><dt>窗口编号</dt><dd>{{ current.id }}</dd></div>
-        <div><dt>仓库操作员</dt><dd>{{ operators.find((item) => item.id === current?.assignedOperatorId)?.username
-          ?? current.assignedOperatorId }}</dd></div>
+        <div><dt>仓库操作员</dt><dd>{{ currentOperatorLabel }}</dd></div>
         <div><dt>截止时间</dt><dd>{{ current.expiresAt }}</dd></div>
       </dl>
       <div class="fams-panel-actions">
@@ -90,7 +98,7 @@ onMounted(refresh);
       </div>
       <div class="fams-form-actions">
         <button class="fams-button" data-kind="primary" type="button"
-          :disabled="busy || !operatorId || !expiresAt || !reason.trim()" @click="open">开放窗口</button>
+          :disabled="openDisabled" @click="open">开放窗口</button>
       </div>
     </section>
   </AppChrome>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, shallowRef } from "vue";
+import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import RequisitionDemandForm from "./../panels/RequisitionDemandForm.vue";
@@ -8,6 +8,7 @@ import type { Requisition, RequisitionChoice, RequisitionDemand, RequisitionDema
   from "@fams/api-types/requisition";
 
 const props = defineProps<{ id?: string }>();
+const formMode = computed<"new" | "revise">(() => (props.id ? "revise" : "new"));
 const router = useRouter();
 const catalogs = ref<Record<string, RequisitionChoice[]>>({});
 const demands = ref<RequisitionDemand[] | null>(null);
@@ -61,7 +62,7 @@ onMounted(async () => {
     </template>
     <section v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></section>
 
-    <RequisitionDemandForm v-if="ready" :mode="id ? 'revise' : 'new'" :catalogs="catalogs" :can-shared="canShared"
+    <RequisitionDemandForm v-if="ready" :mode="formMode" :catalogs="catalogs" :can-shared="canShared"
       :self-employee-id="selfEmployee" :self-organization-id="selfOrg" :demands="demands" :request-type="requestType"
       :expected-return-date="expectedReturnDate" :disabled="busy || retryable" @submit="submit" />
     <div v-if="retryable" class="fams-form-actions">

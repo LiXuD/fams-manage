@@ -52,6 +52,44 @@ function place(id: unknown) { return locations.value.find(row => row.id === Stri
 function organization(id: unknown) { return organizations.value.find(row => row.id === String(id))?.name ?? "未指定组织"; }
 function custodyName(value: unknown) { return value === "PERSONAL" ? "个人" : value === "SHARED" ? "部门公用" : "仓库保管"; }
 function personName(id: unknown) { return id ? peopleNames.value[String(id)] ?? "原登记责任人员" : "仓库保管"; }
+const canSubmit = computed(() => { const s = selected.value;
+  return !!s && s.creatorAccountId === session.user?.id && s.requestStatus === "DRAFT"; });
+const canCancel = computed(() => { const s = selected.value;
+  return !!s && s.creatorAccountId === session.user?.id && ["DRAFT", "PENDING_APPROVAL"].includes(s.requestStatus); });
+const canDecide = computed(() => !!admin.value && selected.value?.requestStatus === "PENDING_APPROVAL");
+const canClaim = computed(() => !!operator.value && selected.value?.requestStatus === "WAITING_WAREHOUSE_CLAIM");
+const isProcessor = computed(() => { const s = selected.value;
+  return !!operator.value && !!s && s.processorAccountId === session.user?.id; });
+const showExecuteFields = computed(() => { const s = selected.value;
+  return !!operator.value && !!s && s.processorAccountId === session.user?.id
+    && ["PROCESSING", "WAITING_HANDOVER"].includes(s.requestStatus); });
+const showReassignment = computed(() => { const s = selected.value;
+  return !!admin.value && !!s && ["PROCESSING", "WAITING_HANDOVER"].includes(s.requestStatus); });
+type TransferRow = TransferItem & {
+  sourceCustodyText: string; sourceOrgText: string; sourcePersonText: string; sourcePlaceText: string;
+  targetCustodyText: string; targetOrgText: string; targetPersonText: string; targetPlaceText: string;
+  isReady: boolean; verifyText: string; action: "deliver" | "verify"; canRecovery: boolean; isRecoveryPending: boolean;
+  canProxyConfirm: boolean; canTargetChange: boolean; isCompleted: boolean;
+};
+const rows = computed<TransferRow[]>(() => (selected.value?.items ?? []).map((item) => ({
+  ...item,
+  sourceCustodyText: custodyName(item.sourceSnapshot.custody_type),
+  sourceOrgText: organization(item.sourceSnapshot.using_organization_id),
+  sourcePersonText: personName(item.sourceSnapshot.responsible_employee_id ?? item.sourceSnapshot.department_responsible_employee_id),
+  sourcePlaceText: place(item.sourceSnapshot.current_location_id),
+  targetCustodyText: custodyName(item.targetSnapshot.custodyType),
+  targetOrgText: organization(item.targetSnapshot.usingOrganizationId),
+  targetPersonText: personName(item.targetSnapshot.employeeId),
+  targetPlaceText: place(item.targetSnapshot.locationId),
+  isReady: item.itemStatus === "READY",
+  verifyText: item.receiptRequired ? "记录交出，等待目标人接收" : "记录现场收妥并完成",
+  action: item.receiptRequired ? "deliver" : "verify",
+  canRecovery: ["DELIVERED", "REFUSED"].includes(item.itemStatus),
+  isRecoveryPending: item.itemStatus === "RECOVERY_PENDING",
+  canProxyConfirm: item.itemStatus === "DELIVERED" && !!item.receiptRequired,
+  canTargetChange: ["READY", "DELIVERED", "REFUSED"].includes(item.itemStatus),
+  isCompleted: item.itemStatus === "COMPLETED",
+})));
 async function loadPeople(value: Transfer) {
   const ids = new Set(value.items.flatMap(item => [item.targetSnapshot.usingOrganizationId, item.sourceSnapshot.using_organization_id]).filter(Boolean).map(String));
   const choices = await Promise.all([...ids].map(id => catalog("employee", id)));
@@ -108,21 +146,21 @@ onMounted(async () => {
         <span class="fams-field-label">申请 / 决定原因</span>
         <textarea class="fams-control" v-model="reason" maxlength="1000" :disabled="busy || retryable" />
       </label>
-      <TransferReassignment v-if="admin && ['PROCESSING','WAITING_HANDOVER'].includes(selected.requestStatus)" :key="selected.id" :id="selected.id" :version="selected.version" @saved="refresh" />
+      <TransferReassignment v-if="showReassignment" :key="selected.id" :id="selected.id" :version="selected.version" @saved="refresh" />
       <div class="fams-panel-actions">
-        <button v-if="selected.creatorAccountId === session.user?.id && selected.requestStatus === 'DRAFT'" class="fams-button" data-kind="primary" type="button"
+        <button v-if="canSubmit" class="fams-button" data-kind="primary" type="button"
           :disabled="busy || retryable" @click="mutate(`/transfers/${selected.id}/submit`, selected.version)">提交调拨</button>
-        <button v-if="selected.creatorAccountId === session.user?.id && ['DRAFT', 'PENDING_APPROVAL'].includes(selected.requestStatus)" class="fams-button" data-kind="danger" type="button"
+        <button v-if="canCancel" class="fams-button" data-kind="danger" type="button"
           :disabled="busy || retryable" @click="mutate(`/transfers/${selected.id}/cancel`, selected.version)">取消申请</button>
-        <template v-if="admin && selected.requestStatus === 'PENDING_APPROVAL'">
+        <template v-if="canDecide">
           <button class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable" @click="decide(true)">批准调拨</button>
           <button class="fams-button" data-kind="danger" type="button" :disabled="busy || retryable" @click="decide(false)">驳回调拨</button>
         </template>
-        <button v-if="operator && selected.requestStatus === 'WAITING_WAREHOUSE_CLAIM'" class="fams-button" data-kind="primary" type="button"
+        <button v-if="canClaim" class="fams-button" data-kind="primary" type="button"
           :disabled="busy || retryable" @click="mutate(`/transfers/${selected.id}/claim`, selected.version)">领取整单调拨</button>
       </div>
 
-      <div v-if="operator && selected.processorAccountId === session.user?.id && ['PROCESSING','WAITING_HANDOVER'].includes(selected.requestStatus)" class="fams-field-grid">
+      <div v-if="showExecuteFields" class="fams-field-grid">
         <label class="fams-field"><span class="fams-field-label">实物编码 / 当前二维码</span>
           <input class="fams-control" v-model="code" :disabled="busy || retryable" /></label>
         <label class="fams-field"><span class="fams-field-label">实际去向</span>
@@ -136,27 +174,27 @@ onMounted(async () => {
         <label class="fams-selection fams-field-wide"><input v-model="checked" type="checkbox" :disabled="busy || retryable" />已实际收回并核对实物</label>
       </div>
 
-      <article v-for="item in selected.items" :key="item.id" class="fams-card fams-stack">
+      <article v-for="item in rows" :key="item.id" class="fams-card fams-stack">
         <h3>{{ item.sourceSnapshot.asset_code }} · {{ labels[item.itemStatus] }}</h3>
-        <p>来源：{{ custodyName(item.sourceSnapshot.custody_type) }} / {{ organization(item.sourceSnapshot.using_organization_id) }} / {{ personName(item.sourceSnapshot.responsible_employee_id ?? item.sourceSnapshot.department_responsible_employee_id) }} / {{ place(item.sourceSnapshot.current_location_id) }}</p>
-        <p>目标：{{ custodyName(item.targetSnapshot.custodyType) }} / {{ organization(item.targetSnapshot.usingOrganizationId) }} / {{ personName(item.targetSnapshot.employeeId) }} / {{ place(item.targetSnapshot.locationId) }}</p>
+        <p>来源：{{ item.sourceCustodyText }} / {{ item.sourceOrgText }} / {{ item.sourcePersonText }} / {{ item.sourcePlaceText }}</p>
+        <p>目标：{{ item.targetCustodyText }} / {{ item.targetOrgText }} / {{ item.targetPersonText }} / {{ item.targetPlaceText }}</p>
         <p v-if="item.destination" class="u-secondary">实际去向 {{ item.destination }} · {{ item.deliveryEvidence }}</p>
-        <div v-if="operator && selected.processorAccountId === session.user?.id" class="fams-panel-actions">
-          <template v-if="item.itemStatus === 'READY'">
+        <div v-if="isProcessor" class="fams-panel-actions">
+          <template v-if="item.isReady">
             <button class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable"
-              @click="physical(item, item.receiptRequired ? 'deliver' : 'verify')">{{ item.receiptRequired ? '记录交出，等待目标人接收' : '记录现场收妥并完成' }}</button>
+              @click="physical(item, item.action)">{{ item.verifyText }}</button>
             <button class="fams-button" data-kind="danger" type="button" :disabled="busy || retryable" @click="physical(item, 'cancel')">未交出取消</button>
           </template>
-          <button v-if="['DELIVERED','REFUSED'].includes(item.itemStatus)" class="fams-button" data-kind="secondary" type="button"
+          <button v-if="item.canRecovery" class="fams-button" data-kind="secondary" type="button"
             :disabled="busy || retryable" @click="physical(item, 'recovery')">开始实物收回</button>
-          <button v-if="item.itemStatus === 'RECOVERY_PENDING'" class="fams-button" data-kind="primary" type="button"
+          <button v-if="item.isRecoveryPending" class="fams-button" data-kind="primary" type="button"
             :disabled="busy || retryable" @click="physical(item, 'recover')">确认实物收回后取消</button>
-          <router-link v-if="item.itemStatus === 'DELIVERED' && item.receiptRequired" class="fams-button" data-kind="link" data-size="sm"
+          <router-link v-if="item.canProxyConfirm" class="fams-button" data-kind="link" data-size="sm"
             :to="{ path: '/proxy-confirmations', query: { businessType: 'TRANSFER', businessId: selected.id, itemId: item.id } }">申请异常代确认</router-link>
-          <router-link v-if="['READY', 'DELIVERED', 'REFUSED'].includes(item.itemStatus)" class="fams-button" data-kind="link" data-size="sm"
+          <router-link v-if="item.canTargetChange" class="fams-button" data-kind="link" data-size="sm"
             :to="{ path: '/transfer-target-changes', query: { businessId: selected.id, itemId: item.id } }">申请目标变更</router-link>
         </div>
-        <p v-if="item.itemStatus === 'COMPLETED'" class="fams-panel-subtitle">正式目标已更新，原责任和交接证据保留。</p>
+        <p v-if="item.isCompleted" class="fams-panel-subtitle">正式目标已更新，原责任和交接证据保留。</p>
       </article>
     </section>
   </AppChrome>

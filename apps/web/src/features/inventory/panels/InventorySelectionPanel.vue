@@ -5,9 +5,12 @@ import { reviewRequest, ReviewApiError, type Board, type Observation, type Revie
 import type { BusinessMutation } from "@/api/business";
 const props = defineProps<{ taskId: string; itemId: string; itemPage: number; observations: Observation[] }>();
 const emit = defineEmits<{ invalid: []; changed: [] }>();
+interface SelectionHistory { review_version: number; observation_id: string; actor_username: string; recorded_at: string;
+  verified_observed_at: string; time_source: string; reason: string; evidence: string }
 interface SelectionView { taskVersion: number; recheckGeneration: number; contextDigest: string; review: Review;
-  history: { review_version: number; observation_id: string; actor_username: string; recorded_at: string;
-    verified_observed_at: string; time_source: string; reason: string; evidence: string }[]; total: number }
+  history: SelectionHistory[]; total: number }
+interface SelectionHistoryRow extends SelectionHistory { recordedAtText: string; verifiedAtText: string; timeSourceText: string }
+interface AvailableRow extends Observation { locationText: string; receivedAtText: string }
 const session = useSessionStore();
 const identity = computed(() => JSON.stringify([props.taskId, props.itemId, session.user?.id, session.csrfToken, session.user?.roles]));
 const data = ref<SelectionView | null>(null), board = ref<Board | null>(null), page = shallowRef(1);
@@ -18,8 +21,18 @@ const confirmLabel = "确认保存待采信选择";
 const confirmHint = "保存这条证据及核实依据作为待采信选择？独立差异仍需处理，不会增加已采信数量。";
 const locked = computed(() => busy.value || !!pending.value);
 const item = computed(() => board.value?.items.find(row => row.item.id === props.itemId));
-const available = computed(() => props.observations.filter(row => row.recheck_generation === data.value?.recheckGeneration &&
-  ["ACCEPTED", "DIFFERENCE_REVIEW", "CONFLICT_REVIEW", "OLD_ASSIGNMENT_REVIEW", "TIME_REVIEW"].includes(row.outcome)));
+const available = computed<AvailableRow[]>(() => props.observations.filter(row => row.recheck_generation === data.value?.recheckGeneration &&
+  ["ACCEPTED", "DIFFERENCE_REVIEW", "CONFLICT_REVIEW", "OLD_ASSIGNMENT_REVIEW", "TIME_REVIEW"].includes(row.outcome)).map(row => ({ ...row,
+    locationText: row.facts_json.actual?.locationHint || row.facts_json.actual?.locationId || '待核实',
+    receivedAtText: new Date(row.received_at).toLocaleString() })));
+const conclusionText = computed(() => { const status = data.value?.review.review_status;
+  return status === 'SELECTED' ? '待采信选择' : status === 'ACCEPTED' ? '已采信' : '未观察'; });
+const saveDisabled = computed(() => !choice.value || reason.value.trim().length < 3 || evidence.value.trim().length < 10);
+const historyRows = computed<SelectionHistoryRow[]>(() => (data.value?.history ?? []).map(row => ({ ...row,
+  recordedAtText: new Date(row.recorded_at).toLocaleString(), verifiedAtText: new Date(row.verified_observed_at).toLocaleString(),
+  timeSourceText: row.time_source === 'ADMIN_VERIFIED' ? '管理员核实' : '采集校准' })));
+const nextSelectionDisabled = computed(() => locked.value || page.value * 20 >= (data.value?.total ?? 0));
+const prevSelectionDisabled = computed(() => locked.value || page.value === 1);
 const needsTime = computed(() => available.value.find(row => row.id === choice.value)?.outcome === "TIME_REVIEW");
 const editable = computed(() => board.value && ["IN_PROGRESS", "WAITING_REVIEW"].includes(board.value.task.task_status) &&
   (!data.value?.review.review_status || data.value.review.review_status === "SELECTED"));
@@ -105,10 +118,10 @@ onBeforeUnmount(() => { live = false; epoch++; clear(); });
     <p v-if="notice" class="fams-notice" data-state="success" role="status"><strong>{{ notice }}</strong></p>
 
     <template v-if="data">
-      <p v-if="data.review.review_status" class="fams-panel-subtitle">本轮结论：{{ data.review.review_status === 'SELECTED' ? '待采信选择' : data.review.review_status === 'ACCEPTED' ? '已采信' : '未观察' }}，第 {{ data.review.version }} 版</p>
+      <p v-if="data.review.review_status" class="fams-panel-subtitle">本轮结论：{{ conclusionText }}，第 {{ data.review.version }} 版</p>
       <fieldset class="fams-card fams-stack" :disabled="locked || !editable">
         <label class="fams-field"><span class="fams-field-label">本轮原始证据</span>
-          <select class="fams-control" v-model="choice"><option value="">请选择证据</option><option v-for="row in available" :key="row.id" :value="row.id">证据 {{ row.id }} · {{ outcomes[row.outcome] }} · 位置 {{ row.facts_json.actual?.locationHint || row.facts_json.actual?.locationId || '待核实' }} · 接收于 {{ new Date(row.received_at).toLocaleString() }}</option></select></label>
+          <select class="fams-control" v-model="choice"><option value="">请选择证据</option><option v-for="row in available" :key="row.id" :value="row.id">证据 {{ row.id }} · {{ outcomes[row.outcome] }} · 位置 {{ row.locationText }} · 接收于 {{ row.receivedAtText }}</option></select></label>
         <label v-if="needsTime" class="fams-field"><span class="fams-field-label">核实后的现场观察时间（{{ localZone }}）</span>
           <input class="fams-control" v-model="time" type="datetime-local" step="0.001" /></label>
         <div class="fams-field-grid">
@@ -117,7 +130,7 @@ onBeforeUnmount(() => { live = false; epoch++; clear(); });
           <label class="fams-field"><span class="fams-field-label">明确核实依据</span>
             <textarea class="fams-control" v-model="evidence" minlength="10" maxlength="2000" /></label>
         </div>
-        <button class="fams-button" data-kind="primary" type="button" :disabled="!choice || reason.trim().length < 3 || evidence.trim().length < 10" @click="openSave">保存待采信选择</button>
+        <button class="fams-button" data-kind="primary" type="button" :disabled="saveDisabled" @click="openSave">保存待采信选择</button>
         <div v-if="confirmOpen" class="fams-card fams-stack" role="group" :aria-label="confirmLabel">
           <p>{{ confirmHint }}</p>
           <div class="fams-panel-actions">
@@ -130,14 +143,14 @@ onBeforeUnmount(() => { live = false; epoch++; clear(); });
       <h4 class="fams-panel-title">历次选择</h4>
       <p v-if="!data.total" class="fams-panel-subtitle">尚无显式选择记录。</p>
       <ul class="fams-timeline">
-        <li v-for="row in data.history" :key="row.review_version">第 {{ row.review_version }} 版 · 证据 {{ row.observation_id }} · {{ row.actor_username }} · {{ new Date(row.recorded_at).toLocaleString() }}<small>观察时间：{{ new Date(row.verified_observed_at).toLocaleString() }}（{{ row.time_source === 'ADMIN_VERIFIED' ? '管理员核实' : '采集校准' }}）</small><small>{{ row.reason }}；依据：{{ row.evidence }}</small></li>
+        <li v-for="row in historyRows" :key="row.review_version">第 {{ row.review_version }} 版 · 证据 {{ row.observation_id }} · {{ row.actor_username }} · {{ row.recordedAtText }}<small>观察时间：{{ row.verifiedAtText }}（{{ row.timeSourceText }}）</small><small>{{ row.reason }}；依据：{{ row.evidence }}</small></li>
       </ul>
 
       <div class="fams-pagination">
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page === 1" @click="pages(-1)">上页选择记录</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevSelectionDisabled" @click="pages(-1)">上页选择记录</button>
           <span class="fams-pagination-page">第 {{ page }} 页</span>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page * 20 >= data.total" @click="pages(1)">下页选择记录</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextSelectionDisabled" @click="pages(1)">下页选择记录</button>
         </div>
       </div>
     </template>

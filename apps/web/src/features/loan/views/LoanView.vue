@@ -14,6 +14,16 @@ const page = shallowRef(1); const total = shallowRef(0); const reason = shallowR
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 let pending: BusinessMutation | null = null;
 
+const loanRows = computed(() => loans.value.map((row) => ({
+  ...row, statusTone: row.overdue ? "warning" : "info", overdueText: row.overdue ? " · 已逾期" : "",
+})));
+const formDisabled = computed(() => busy.value || retryable.value);
+const prevDisabled = computed(() => formDisabled.value || page.value === 1);
+const nextDisabled = computed(() => formDisabled.value || page.value * 20 >= total.value);
+interface ExtensionRow extends LoanExtension { decisionShown: boolean }
+const extensionRows = computed<ExtensionRow[]>(() => extensions.value.map((row) => ({ ...row,
+  decisionShown: !!admin.value && row.extensionStatus === "PENDING" })));
+
 async function load() {
   const [loanPage, extensionPage] = await Promise.all([
     businessRequest<BusinessPage<Loan>>(`/loans?page=${page.value}&pageSize=20`),
@@ -69,10 +79,10 @@ onMounted(refresh);
           <thead><tr><th scope="col" data-column-kind="identity">资产</th><th scope="col">预计归还日</th><th scope="col">状态</th>
             <th scope="col" data-column-kind="action">操作</th></tr></thead>
           <tbody>
-            <tr v-for="row in loans" :key="row.id">
+            <tr v-for="row in loanRows" :key="row.id">
               <th scope="row" data-column-kind="identity">{{ row.assetCode }} · {{ row.name }}</th>
               <td>{{ row.expectedReturnDate }}</td>
-              <td><span class="fams-status" :data-tone="row.overdue ? 'warning' : 'info'">{{ labels[row.relationStatus] }}{{ row.overdue ? ' · 已逾期' : '' }}</span></td>
+              <td><span class="fams-status" :data-tone="row.statusTone">{{ labels[row.relationStatus] }}{{ row.overdueText }}</span></td>
               <td data-column-kind="action"><router-link class="fams-button" data-kind="link" data-size="sm"
                 :to="`/loans/${row.id}`">查看 / 延期 / 归还</router-link></td>
             </tr>
@@ -84,10 +94,10 @@ onMounted(refresh);
       <div class="fams-pagination">
         <span class="fams-pagination-summary">共 {{ total }} 条</span>
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || retryable || page === 1"
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled"
             @click="page--; refresh()">上一页</button>
           <span class="fams-pagination-page">第 {{ page }} 页</span>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || retryable || page * 20 >= total"
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextDisabled"
             @click="page++; refresh()">下一页</button>
         </div>
       </div>
@@ -99,13 +109,13 @@ onMounted(refresh);
       </div>
       <label class="fams-field">
         <span class="fams-field-label">操作原因 / 验收说明</span>
-        <textarea class="fams-control" v-model="reason" :disabled="busy || retryable" maxlength="1000" />
+        <textarea class="fams-control" v-model="reason" :disabled="formDisabled" maxlength="1000" />
       </label>
-      <article v-for="row in extensions" :key="row.id" class="fams-card fams-stack">
+      <article v-for="row in extensionRows" :key="row.id" class="fams-card fams-stack">
         <p>{{ row.id }} · {{ row.originalDueDate }} → {{ row.requestedDueDate }} · {{ labels[row.extensionStatus] }} · {{ row.reason }}</p>
-        <div v-if="admin && row.extensionStatus === 'PENDING'" class="fams-panel-actions">
-          <button class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable" @click="decide(row.id, row.version, true)">批准延期</button>
-          <button class="fams-button" data-kind="danger" type="button" :disabled="busy || retryable" @click="decide(row.id, row.version, false)">驳回延期</button>
+        <div v-if="row.decisionShown" class="fams-panel-actions">
+          <button class="fams-button" data-kind="primary" type="button" :disabled="formDisabled" @click="decide(row.id, row.version, true)">批准延期</button>
+          <button class="fams-button" data-kind="danger" type="button" :disabled="formDisabled" @click="decide(row.id, row.version, false)">驳回延期</button>
         </div>
       </article>
       <p v-if="!extensions.length" class="fams-panel-subtitle">当前没有延期申请。</p>

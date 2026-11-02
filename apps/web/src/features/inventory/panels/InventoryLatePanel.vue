@@ -77,6 +77,23 @@ async function send() {
 async function paginate(delta: number) { if (locked.value || !board.value || page.value + delta < 1 || (page.value + delta - 1) * 20 >= board.value.total) return; page.value += delta; await load(); }
 const kinds: Record<string, string> = { FROZEN_CONFLICT: "与原采信事实冲突", NO_ACCEPTED: "原项没有有效采信", TIME_UNVERIFIED: "原时间仍待核实", FINDING: "任务外实物线索", FACTS_MATCH: "事实一致的补充线索" };
 const methods: Record<string, string> = { NOTE: "记录补充结论", LINK_RECHECK: "创建关联复盘草稿", REPLACE_RECHECK: "已结束复盘后另建一轮", CONFIRM_RECHECK: "核对实际完成的关联复盘" };
+const entryRows = computed(() => (board.value?.items || []).map(entry => ({ ...entry,
+  openTaskText: entry.todoOpen ? "管理员待办开放" : "没有开放待办" })));
+const boardTotal = computed(() => board.value?.total || 0);
+const refreshDisabled = computed(() => busy.value || confirming.value || damageBusy.value);
+const prepareDisabled = computed(() => locked.value || !board.value);
+const prevDisabled = computed(() => locked.value || page.value === 1);
+const nextDisabled = computed(() => locked.value || !board.value || page.value * 20 >= board.value.total);
+const damagePanelKey = computed(() => detail.value ? `${props.taskId}:${detail.value.case.evidence.observation_id}` : "");
+const damageBlocked = computed(() => busy.value || !!pending.value);
+const historyPrevDisabled = computed(() => locked.value || detail.value?.history.page === 1);
+const historyNextDisabled = computed(() => { const history = detail.value?.history; return locked.value || !history || history.page * 20 >= history.total; });
+const sceneLocationText = computed(() => { const actual = detail.value?.case.evidence.snapshot_json.facts.actual; return actual?.locationHint || actual?.locationId || "位置未明确"; });
+const sceneConditionText = computed(() => detail.value?.case.evidence.snapshot_json.facts.actual?.condition || "状况未明确");
+const sceneFactText = computed(() => { const actual = detail.value?.case.evidence.snapshot_json.facts.actual; return actual?.unknownReason || actual?.description; });
+const decisionRows = computed(() => (detail.value?.history.items || []).map(event => ({ ...event, methodText: methods[event.method || ""] })));
+const recheckDraftVisible = computed(() => ["LINK_RECHECK", "REPLACE_RECHECK"].includes(method.value));
+const decisionDisabled = computed(() => reason.value.trim().length < 3 || evidence.value.trim().length < 3);
 watch(owner, () => { clear(); page.value = 1; void load(); }, { immediate: true }); onBeforeUnmount(() => { live = false; clear(); });
 </script>
 <template>
@@ -87,25 +104,25 @@ watch(owner, () => { clear(); page.value = 1; void load(); }, { immediate: true 
         <p class="fams-panel-subtitle">补传不改变原报告、完成数或最近盘点日期；后续观察不证明封存时的实物状况。时间异常和任务外线索不能凭补充文字自动采信。</p>
       </div>
       <div class="fams-panel-actions">
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || confirming || damageBusy" @click="load">刷新补充证据</button>
-        <button class="fams-button" data-kind="primary" data-size="sm" type="button" :disabled="locked || !board" @click="prepareLegacy">准备既有补充证据</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="refreshDisabled" @click="load">刷新补充证据</button>
+        <button class="fams-button" data-kind="primary" data-size="sm" type="button" :disabled="prepareDisabled" @click="prepareLegacy">准备既有补充证据</button>
       </div>
     </div>
     <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
-    <article v-for="entry in board?.items || []" :key="entry.evidence.observation_id" class="fams-card fams-stack">
-      <p>证据 {{ entry.evidence.observation_id }} · {{ kinds[entry.evidence.comparison_kind] }} · {{ results[entry.review.result] }} · {{ entry.todoOpen ? '管理员待办开放' : '没有开放待办' }}</p>
+    <article v-for="entry in entryRows" :key="entry.evidence.observation_id" class="fams-card fams-stack">
+      <p>证据 {{ entry.evidence.observation_id }} · {{ kinds[entry.evidence.comparison_kind] }} · {{ results[entry.review.result] }} · {{ entry.openTaskText }}</p>
       <button class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="locked" @click="open(entry)">核对原证据与补充历史</button>
     </article>
     <div class="fams-pagination">
-      <span class="fams-pagination-summary">共 {{ board?.total || 0 }} 条</span>
+      <span class="fams-pagination-summary">共 {{ boardTotal }} 条</span>
       <div class="fams-pagination-actions">
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page === 1" @click="paginate(-1)">上页补充证据</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled" @click="paginate(-1)">上页补充证据</button>
         <span class="fams-pagination-page">第 {{ page }} 页</span>
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || !board || page * 20 >= board.total" @click="paginate(1)">下页补充证据</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextDisabled" @click="paginate(1)">下页补充证据</button>
       </div>
     </div>
     <template v-if="detail">
-      <InventoryLateDamagePanel v-if="detail.case.damageFollowup?.observation_id" :key="`${taskId}:${detail.case.evidence.observation_id}`" :task-id="taskId" :observation-id="detail.case.evidence.observation_id" :blocked="busy || !!pending" @busy-change="damageBusy = $event" @invalidated="clear" @changed="load" />
+      <InventoryLateDamagePanel v-if="detail.case.damageFollowup?.observation_id" :key="damagePanelKey" :task-id="taskId" :observation-id="detail.case.evidence.observation_id" :blocked="damageBlocked" @busy-change="damageBusy = $event" @invalidated="clear" @changed="load" />
       <dl class="fams-facts">
         <div><dt>原观察</dt><dd>{{ detail.case.evidence.snapshot_json.rawObservedAt }}</dd></div>
         <div><dt>原校准时间</dt><dd>{{ detail.case.evidence.snapshot_json.calibratedObservedAt || '尚未核实' }}</dd></div>
@@ -113,17 +130,17 @@ watch(owner, () => { clear(); page.value = 1; void load(); }, { immediate: true 
         <div><dt>原采信观察</dt><dd>{{ detail.case.evidence.snapshot_json.acceptedObservationId || '无' }}</dd></div>
         <div><dt>原冻结报告</dt><dd>{{ detail.case.evidence.report_sha256 || '取消或终止任务未封存' }}</dd></div>
       </dl>
-      <p>现场线索：{{ detail.case.evidence.snapshot_json.facts.actual?.locationHint || detail.case.evidence.snapshot_json.facts.actual?.locationId || '位置未明确' }} · {{ detail.case.evidence.snapshot_json.facts.actual?.condition || '状况未明确' }} · {{ detail.case.evidence.snapshot_json.facts.actual?.unknownReason || detail.case.evidence.snapshot_json.facts.actual?.description }}</p>
+      <p>现场线索：{{ sceneLocationText }} · {{ sceneConditionText }} · {{ sceneFactText }}</p>
       <ul class="fams-timeline">
-        <li v-for="event in detail.history.items" :key="event.decision_version">{{ event.actor_username }} · {{ event.decided_at }} · {{ methods[event.method || ''] }} · {{ results[event.result] }}
+        <li v-for="event in decisionRows" :key="event.decision_version">{{ event.actor_username }} · {{ event.decided_at }} · {{ event.methodText }} · {{ results[event.result] }}
           <small>{{ event.reason }} · {{ event.evidence }}<template v-if="event.linked_task_id"> · 关联复盘任务 {{ event.linked_task_id }}</template></small></li>
       </ul>
       <div class="fams-pagination">
         <span class="fams-pagination-summary">共 {{ detail.history.total }} 条</span>
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || detail.history.page === 1" @click="readHistory(-1)">上页补充决定</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="historyPrevDisabled" @click="readHistory(-1)">上页补充决定</button>
           <span class="fams-pagination-page">补充历史第 {{ detail.history.page }} 页</span>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || detail.history.page * 20 >= detail.history.total" @click="readHistory(1)">下页补充决定</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="historyNextDisabled" @click="readHistory(1)">下页补充决定</button>
         </div>
       </div>
       <fieldset class="fams-card fams-stack" :disabled="locked">
@@ -135,7 +152,7 @@ watch(owner, () => { clear(); page.value = 1; void load(); }, { immediate: true 
           <label class="fams-field"><span class="fams-field-label">核实依据</span>
             <textarea class="fams-control" v-model="evidence" maxlength="2000" /></label>
         </div>
-        <template v-if="['LINK_RECHECK', 'REPLACE_RECHECK'].includes(method)">
+        <template v-if="recheckDraftVisible">
           <div class="fams-field-grid">
             <label class="fams-field"><span class="fams-field-label">复盘名称</span>
               <input class="fams-control" v-model="draftName" maxlength="128" /></label>
@@ -146,7 +163,7 @@ watch(owner, () => { clear(); page.value = 1; void load(); }, { immediate: true 
           </div>
           <p>复制原任务范围创建草稿，发布、分配、实盘和封存须另行实际完成。</p>
         </template>
-        <button class="fams-button" data-kind="primary" type="button" :disabled="reason.trim().length < 3 || evidence.trim().length < 3" @click="prepareDecision">核对补充处理</button>
+        <button class="fams-button" data-kind="primary" type="button" :disabled="decisionDisabled" @click="prepareDecision">核对补充处理</button>
       </fieldset>
     </template>
     <div v-if="confirming" class="fams-card fams-stack" role="group" aria-label="确认补充处理"><p>{{ confirmation }}</p>

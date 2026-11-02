@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, shallowRef } from "vue";
+import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { activeReferences, createAsset, type AssetReference } from "@/features/asset/api";
@@ -18,6 +18,8 @@ const categories = ref<AssetReference[]>([]);
 const organizations = ref<AssetReference[]>([]);
 const warehouses = ref<AssetReference[]>([]);
 const locations = ref<AssetReference[]>([]);
+
+const dataState = computed<string | null>(() => (busy.value ? "loading" : null));
 
 function selectedReference(items: AssetReference[], id: string): AssetReference | undefined {
   return items.find((item) => item.id === id);
@@ -119,7 +121,7 @@ onMounted(load);
         </div>
         <div class="fams-form-actions">
           <button class="fams-button" data-kind="primary" type="submit" :disabled="busy"
-            :data-state="busy ? 'loading' : null">保存草稿</button>
+            :data-state="dataState">保存草稿</button>
         </div>
       </form>
     </section>

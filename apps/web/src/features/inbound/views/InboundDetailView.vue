@@ -25,6 +25,24 @@ const observed = shallowRef("");
 const warehouseRole = session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false;
 const adminRole = session.user?.roles.includes("ASSET_ADMIN") ?? false;
 const locked = computed(() => busy.value || decision.value !== null || accepting.value !== null);
+const cancellableStatuses = ["DRAFT", "PENDING_ADMIN_DECISION"];
+const canEditDraft = computed(() => warehouseRole && !!selected.value
+  && selected.value.status === "DRAFT"
+  && selected.value.createdBy.id === session.user?.id);
+const canSubmit = computed(() => warehouseRole && selected.value?.status === "DRAFT");
+const canCancel = computed(() => warehouseRole && !!selected.value && cancellableStatuses.includes(selected.value.status));
+const canApprove = computed(() => adminRole && selected.value?.status === "PENDING_ADMIN_DECISION");
+const canReject = computed(() => adminRole && selected.value?.status === "PENDING_ADMIN_DECISION");
+const canClaim = computed(() => warehouseRole && selected.value?.status === "WAITING_WAREHOUSE_CLAIM");
+const canReceiveGoods = computed(() => warehouseRole && !!selected.value
+  && selected.value.status === "WAREHOUSE_PROCESSING"
+  && selected.value.currentProcessor?.processor.id === session.user?.id);
+const canReassign = computed(() => adminRole && selected.value?.status === "WAREHOUSE_PROCESSING");
+const itemRows = computed(() => (selected.value?.items ?? []).map((source) => ({
+  ...source,
+  source,
+  acceptable: canReceiveGoods.value && source.executionStatus === "PENDING",
+})));
 const decisionLabels: Record<Decision, string> = { cancel: "确认取消", reject: "确认驳回" };
 const reasonLabels: Record<Decision, string> = { cancel: "取消原因", reject: "驳回原因" };
 
@@ -117,12 +135,12 @@ onMounted(async () => {
       <p v-if="selected.currentProcessor">当前处理人：{{ selected.currentProcessor.processor.username }}</p>
       <p v-if="selected.decision">管理员决定：{{ inboundDecisionLabels[selected.decision.result] }}</p>
       <div class="fams-panel-actions">
-        <router-link v-if="warehouseRole && selected.status === 'DRAFT' && selected.createdBy.id === session.user?.id" class="fams-button" data-kind="secondary" :to="`/inbound/${selected.id}/edit`">修订草稿</router-link>
-        <button v-if="warehouseRole && selected.status === 'DRAFT'" class="fams-button" data-kind="primary" type="button" :disabled="locked" @click="act('submit')">提交审批</button>
-        <button v-if="warehouseRole && ['DRAFT', 'PENDING_ADMIN_DECISION'].includes(selected.status)" class="fams-button" data-kind="secondary" type="button" :disabled="locked" @click="openDecision('cancel')">取消</button>
-        <button v-if="adminRole && selected.status === 'PENDING_ADMIN_DECISION'" class="fams-button" data-kind="primary" type="button" :disabled="locked" @click="act('approve')">批准</button>
-        <button v-if="adminRole && selected.status === 'PENDING_ADMIN_DECISION'" class="fams-button" data-kind="secondary" type="button" :disabled="locked" @click="openDecision('reject')">驳回</button>
-        <button v-if="warehouseRole && selected.status === 'WAITING_WAREHOUSE_CLAIM'" class="fams-button" data-kind="primary" type="button" :disabled="locked" @click="act('claim')">认领整单</button>
+        <router-link v-if="canEditDraft" class="fams-button" data-kind="secondary" :to="`/inbound/${selected.id}/edit`">修订草稿</router-link>
+        <button v-if="canSubmit" class="fams-button" data-kind="primary" type="button" :disabled="locked" @click="act('submit')">提交审批</button>
+        <button v-if="canCancel" class="fams-button" data-kind="secondary" type="button" :disabled="locked" @click="openDecision('cancel')">取消</button>
+        <button v-if="canApprove" class="fams-button" data-kind="primary" type="button" :disabled="locked" @click="act('approve')">批准</button>
+        <button v-if="canReject" class="fams-button" data-kind="secondary" type="button" :disabled="locked" @click="openDecision('reject')">驳回</button>
+        <button v-if="canClaim" class="fams-button" data-kind="primary" type="button" :disabled="locked" @click="act('claim')">认领整单</button>
       </div>
       <div v-if="decision" class="fams-card fams-stack" role="group" :aria-label="decisionLabels[decision]">
         <label class="fams-field"><span class="fams-field-label">{{ reasonLabels[decision] }}</span>
@@ -145,13 +163,13 @@ onMounted(async () => {
       <div class="fams-table-scroll"><table class="fams-table">
         <thead><tr><th scope="col" data-column-kind="identity">资产编码</th><th scope="col">资产名称</th><th scope="col">执行状态</th>
           <th scope="col" data-column-kind="action">操作</th></tr></thead>
-        <tbody><tr v-for="item in selected.items" :key="item.id">
+        <tbody><tr v-for="item in itemRows" :key="item.id">
           <th scope="row" data-column-kind="identity">{{ item.assetSnapshot.assetCode }}</th><td>{{ item.assetSnapshot.assetName }}</td>
           <td><span class="fams-status">{{ inboundItemLabels[item.executionStatus] }}</span></td>
-          <td data-column-kind="action"><button v-if="warehouseRole && selected.status === 'WAREHOUSE_PROCESSING' && item.executionStatus === 'PENDING' && selected.currentProcessor?.processor.id === session.user?.id" class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="locked" @click="openAccept(item)">验收入库</button></td>
+          <td data-column-kind="action"><button v-if="item.acceptable" class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="locked" @click="openAccept(item.source)">验收入库</button></td>
         </tr></tbody>
       </table></div>
-      <InboundReassignment v-if="adminRole && selected.status === 'WAREHOUSE_PROCESSING'"
+      <InboundReassignment v-if="canReassign"
         :id="selected.id" :version="selected.version" @saved="open()" />
       <AttachmentPanel :key="selected.id" :receipt="selected" :disabled="busy"
         @busy="busy = $event" @uploaded="selected.version = $event" />

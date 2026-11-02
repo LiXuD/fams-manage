@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, shallowRef } from "vue";
+import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import {
@@ -39,6 +39,47 @@ const busy = shallowRef(false);
 const review = ref<ImportReview | null>(null);
 const rollback = ref<ImportRollback | null>(null);
 const rollbackReason = shallowRef("");
+
+const previewableStatuses = ["UPLOADED", "PREVIEWED"];
+const resultDownloadableStatuses = ["PUBLISHED", "ROLLED_BACK"];
+
+type ImportRowView = ImportRow & { statusTone: "success" | "warning"; statusText: string };
+
+const previewDisabled = computed(() => {
+  const batch = ticket.value;
+  return !batch
+    || busy.value
+    || (!!review.value && review.value.status !== "REJECTED")
+    || !previewableStatuses.includes(batch.status);
+});
+const showPreflight = computed(() => !!ticket.value && ticket.value.status !== "UPLOADED");
+const canDownloadResult = computed(() =>
+  !!ticket.value && resultDownloadableStatuses.includes(ticket.value.status));
+const ticketNoticeText = computed(() => {
+  const status = ticket.value?.status;
+  if (status === "PUBLISHED") return "资产已发布。";
+  if (status === "ROLLED_BACK") return "批次已撤销，资产编码永久保留为废号。";
+  if (status === "QUEUED") return "管理员已批准，后台发布排队中。";
+  if (status === "FAILED") return "后台发布失败，请联系管理员处理。";
+  return "当前仅保存预检结果，尚未发布资产。";
+});
+const isPreviewed = computed(() => ticket.value?.status === "PREVIEWED");
+const reviewRejectedHint = computed(() => review.value?.status === "REJECTED" ? "可修正后重新预检。" : "");
+const canSubmitReview = computed(() =>
+  readyRows.value > 0 && (!review.value || review.value.status === "REJECTED"));
+const isPublished = computed(() => ticket.value?.status === "PUBLISHED");
+const canRequestRollback = computed(() => !rollback.value || rollback.value.status === "REJECTED");
+const rollbackRequestDisabled = computed(() => busy.value || !rollbackReason.value.trim());
+const canExecuteRollback = computed(() => rollback.value?.status === "APPROVED");
+const rowViews = computed<ImportRowView[]>(() => rows.value.map((row) => ({
+  ...row,
+  statusTone: row.status === "READY" ? "success" : "warning",
+  statusText: row.status === "READY" ? "可导入" : "需修正",
+})));
+const hasNoRows = computed(() => rows.value.length === 0);
+const emptyRowKindText = computed(() => rowFilter.value === "ERROR" ? "错误" : "正确");
+const prevPageDisabled = computed(() => page.value <= 1);
+const nextPageDisabled = computed(() => page.value * 50 >= total.value);
 
 function selectedFile(event: Event): void {
   file.value = (event.target as HTMLInputElement).files?.[0] ?? null;
@@ -224,44 +265,40 @@ onMounted(async () => {
       </div>
       <div class="fams-form-actions">
         <button class="fams-button" data-kind="primary" type="button"
-          :disabled="busy || !!review && review.status !== 'REJECTED' || !['UPLOADED', 'PREVIEWED'].includes(ticket.status)"
+          :disabled="previewDisabled"
           @click="preview">运行预检</button>
       </div>
     </section>
 
-    <section v-if="ticket && ticket.status !== 'UPLOADED'" class="fams-panel fams-stack" aria-label="预检结果">
+    <section v-if="showPreflight" class="fams-panel fams-stack" aria-label="预检结果">
       <div class="fams-panel-head">
         <div>
           <h2 class="fams-panel-title">3. 预检结果</h2>
         </div>
         <div class="fams-panel-actions">
           <button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="report">下载预检结果 CSV</button>
-          <button v-if="['PUBLISHED', 'ROLLED_BACK'].includes(ticket.status)"
+          <button v-if="canDownloadResult"
             class="fams-button" data-kind="secondary" data-size="sm" type="button"
             @click="resultReport">下载导入结果 CSV</button>
           <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="refresh">刷新状态</button>
         </div>
       </div>
       <p>正确 {{ readyRows }} 行 · 错误 {{ errorRows }} 行。
-        {{ ticket.status === 'PUBLISHED' ? '资产已发布。'
-          : ticket.status === 'ROLLED_BACK' ? '批次已撤销，资产编码永久保留为废号。'
-          : ticket.status === 'QUEUED' ? '管理员已批准，后台发布排队中。'
-            : ticket.status === 'FAILED' ? '后台发布失败，请联系管理员处理。'
-              : '当前仅保存预检结果，尚未发布资产。' }}</p>
-      <div v-if="ticket.status === 'PREVIEWED'" class="fams-form-actions">
-        <p v-if="review">核验状态：{{ importReviewLabels[review.status] }}。{{ review.status === 'REJECTED' ? '可修正后重新预检。' : '' }}</p>
-        <button v-if="readyRows > 0 && (!review || review.status === 'REJECTED')"
+        {{ ticketNoticeText }}</p>
+      <div v-if="isPreviewed" class="fams-form-actions">
+        <p v-if="review">核验状态：{{ importReviewLabels[review.status] }}。{{ reviewRejectedHint }}</p>
+        <button v-if="canSubmitReview"
           class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="submitReview">提交管理员核验</button>
       </div>
-      <div v-if="ticket.status === 'PUBLISHED'" class="fams-field-row">
+      <div v-if="isPublished" class="fams-field-row">
         <p v-if="rollback">整批撤销：{{ importRollbackLabels[rollback.status] }}。</p>
-        <template v-if="!rollback || rollback.status === 'REJECTED'">
+        <template v-if="canRequestRollback">
           <label class="fams-field"><span class="fams-field-label">撤销原因</span>
             <input class="fams-control" v-model="rollbackReason" maxlength="500" /></label>
-          <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || !rollbackReason.trim()"
+          <button class="fams-button" data-kind="secondary" type="button" :disabled="rollbackRequestDisabled"
             @click="submitRollback">申请整批撤销</button>
         </template>
-        <button v-if="rollback?.status === 'APPROVED'" class="fams-button" data-kind="primary" type="button"
+        <button v-if="canExecuteRollback" class="fams-button" data-kind="primary" type="button"
           :disabled="busy" @click="executeRollback">执行已批准的撤销</button>
       </div>
       <div class="fams-panel-actions">
@@ -271,24 +308,24 @@ onMounted(async () => {
       <div class="fams-table-scroll"><table class="fams-table">
         <thead><tr><th scope="col" data-column-kind="identity">Excel 行</th><th scope="col">名称</th><th scope="col">资产编码</th><th scope="col">状态</th><th scope="col">错误列 / 原值 / 原因</th></tr></thead>
         <tbody>
-          <tr v-for="row in rows" :key="row.sheetRow">
+          <tr v-for="row in rowViews" :key="row.sheetRow">
             <th scope="row" data-column-kind="identity">{{ row.sheetRow }}</th>
             <td>{{ row.source[mapping.name] ?? '—' }}</td>
             <td>{{ row.source[mapping.assetCode] ?? '—' }}</td>
-            <td><span class="fams-status" :data-tone="row.status === 'READY' ? 'success' : 'warning'">{{ row.status === 'READY' ? '可导入' : '需修正' }}</span></td>
+            <td><span class="fams-status" :data-tone="row.statusTone">{{ row.statusText }}</span></td>
             <td><div v-for="item in row.errors ?? []" :key="item.column + item.reason">
               {{ item.sheet }} / {{ item.column }}：{{ item.original || '（空）' }} · {{ item.reason }}
             </div></td>
           </tr>
-          <tr v-if="rows.length === 0" class="fams-table-empty"><td colspan="5"><strong>当前没有{{ rowFilter === 'ERROR' ? '错误' : '正确' }}行</strong>切换上方筛选或翻页查看其余行。</td></tr>
+          <tr v-if="hasNoRows" class="fams-table-empty"><td colspan="5"><strong>当前没有{{ emptyRowKindText }}行</strong>切换上方筛选或翻页查看其余行。</td></tr>
         </tbody>
       </table></div>
       <div class="fams-pagination">
         <span class="fams-pagination-summary">共 {{ total }} 行</span>
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="page <= 1" @click="page--; loadRows()">上一页</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevPageDisabled" @click="page--; loadRows()">上一页</button>
           <span class="fams-pagination-page">第 {{ page }} 页</span>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="page * 50 >= total"
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextPageDisabled"
             @click="page++; loadRows()">下一页</button>
         </div>
       </div>

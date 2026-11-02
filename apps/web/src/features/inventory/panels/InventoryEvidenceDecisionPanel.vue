@@ -24,6 +24,18 @@ const available = computed(() => props.observations.filter(row => row.recheck_ge
   ["ACCEPTED", "DIFFERENCE_REVIEW", "CONFLICT_REVIEW", "OLD_ASSIGNMENT_REVIEW", "TIME_REVIEW"].includes(row.outcome)));
 const active = computed(() => board.value && ["IN_PROGRESS", "WAITING_REVIEW"].includes(board.value.task.task_status));
 const dimensions: Record<string, string> = { NORMAL: "正常", LOCATION: "位置", USAGE_MODE: "使用方式", RESPONSIBILITY: "责任", CONDITION: "状况", UNKNOWN: "未知事实", PERIOD_MOVEMENT: "期间流转", CONFLICT: "观察冲突", OLD_ASSIGNMENT: "旧分配", TIME: "时间异常", FINDING: "任务外线索", LATE: "迟到线索" };
+const evidenceRows = computed(() => available.value.map(row => ({ ...row,
+  selectionHint: row.id === selection.value?.review.observation_id ? "当前所选" : "未选证据",
+  locationText: row.facts_json.actual?.locationHint || row.facts_json.actual?.locationId || "待核实" })));
+const dispositionRows = computed(() => dispositions.value.map(row => ({ ...row,
+  dispositionText: row.disposition === "REJECTED" ? "有反证拒绝" : "补充线索",
+  recordedAtText: new Date(row.recorded_at).toLocaleString() })));
+const chosenStatusText = computed(() => selection.value?.review.review_status === "ACCEPTED" ? "已采信" : "待采信");
+const decisionFieldsetDisabled = computed(() => locked.value || !active.value || !selection.value?.review.observation_id);
+const decisionDisabled = computed(() => !target.value || chosen.value && !references.value.length || reason.value.trim().length < 3 || evidence.value.trim().length < 10);
+const acceptanceDisabled = computed(() => selection.value?.review.review_status !== "SELECTED" || reason.value.trim().length < 3 || evidence.value.trim().length < 10);
+const historyPrevDisabled = computed(() => locked.value || page.value === 1);
+const historyNextDisabled = computed(() => locked.value || page.value * 20 >= total.value);
 let epoch = 0, live = true;
 const valid = (token: number, who: string) => live && token === epoch && who === identity.value;
 function clear() { selection.value = null; board.value = null; subjects.value = []; dispositions.value = []; target.value = "";
@@ -123,12 +135,12 @@ onBeforeUnmount(() => { live = false; epoch++; clear(); });
     <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
 
     <template v-if="selection">
-      <p v-if="selection.review.observation_id" class="fams-panel-subtitle">当前选择：证据 {{ selection.review.observation_id }} · {{ selection.review.review_status === 'ACCEPTED' ? '已采信' : '待采信' }}</p>
+      <p v-if="selection.review.observation_id" class="fams-panel-subtitle">当前选择：证据 {{ selection.review.observation_id }} · {{ chosenStatusText }}</p>
       <p v-else class="fams-panel-subtitle">请先明确选择本轮证据。</p>
 
-      <fieldset class="fams-card fams-stack" :disabled="locked || !active || !selection.review.observation_id">
+      <fieldset class="fams-card fams-stack" :disabled="decisionFieldsetDisabled">
         <label class="fams-field"><span class="fams-field-label">待处理原始证据</span>
-          <select class="fams-control" v-model="target" @change="readSubjects"><option value="">请选择</option><option v-for="row in available" :key="row.id" :value="row.id">证据 {{ row.id }} · {{ row.id === selection.review.observation_id ? '当前所选' : '未选证据' }} · 位置 {{ row.facts_json.actual?.locationHint || row.facts_json.actual?.locationId || '待核实' }}</option></select></label>
+          <select class="fams-control" v-model="target" @change="readSubjects"><option value="">请选择</option><option v-for="row in evidenceRows" :key="row.id" :value="row.id">证据 {{ row.id }} · {{ row.selectionHint }} · 位置 {{ row.locationText }}</option></select></label>
         <ul v-if="subjects.length" class="fams-timeline">
           <li v-for="row in subjects" :key="row.dimension">{{ dimensions[row.dimension] }}：{{ statuses[row.subject_status] }} · 第 {{ row.version }} 版<span v-if="row.reviewer_username"> · {{ row.reviewer_username }}</span></li>
         </ul>
@@ -141,8 +153,8 @@ onBeforeUnmount(() => { live = false; epoch++; clear(); });
             <textarea class="fams-control" v-model="evidence" minlength="10" maxlength="2000" /></label>
         </div>
         <div class="fams-panel-actions">
-          <button class="fams-button" data-kind="primary" type="button" :disabled="!target || chosen && !references.length || reason.trim().length < 3 || evidence.trim().length < 10" @click="openConfirm(false)">共同提交证据处置</button>
-          <button class="fams-button" data-kind="secondary" type="button" :disabled="selection.review.review_status !== 'SELECTED' || reason.trim().length < 3 || evidence.trim().length < 10" @click="openConfirm(true)">最终采信所选证据</button>
+          <button class="fams-button" data-kind="primary" type="button" :disabled="decisionDisabled" @click="openConfirm(false)">共同提交证据处置</button>
+          <button class="fams-button" data-kind="secondary" type="button" :disabled="acceptanceDisabled" @click="openConfirm(true)">最终采信所选证据</button>
         </div>
         <div v-if="confirmKind" class="fams-card fams-stack" role="group" :aria-label="confirmLabels[confirmKind]">
           <p>{{ confirmHint }}</p>
@@ -156,14 +168,14 @@ onBeforeUnmount(() => { live = false; epoch++; clear(); });
       <h4 class="fams-panel-title">未选证据处置记录</h4>
       <p v-if="!total" class="fams-panel-subtitle">尚无反证或补充处置。</p>
       <ul class="fams-timeline">
-        <li v-for="row in dispositions" :key="row.observation_id">证据 {{ row.observation_id }} · {{ row.disposition === 'REJECTED' ? '有反证拒绝' : '补充线索' }}；反证依据选择 {{ row.counter_observation_id }} 第 {{ row.counter_review_version }} 版<small>{{ row.actor_username }} · {{ new Date(row.recorded_at).toLocaleString() }}；{{ row.reason }}；{{ row.evidence }}</small></li>
+        <li v-for="row in dispositionRows" :key="row.observation_id">证据 {{ row.observation_id }} · {{ row.dispositionText }}；反证依据选择 {{ row.counter_observation_id }} 第 {{ row.counter_review_version }} 版<small>{{ row.actor_username }} · {{ row.recordedAtText }}；{{ row.reason }}；{{ row.evidence }}</small></li>
       </ul>
 
       <div class="fams-pagination">
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page === 1" @click="pages(-1)">上页处置记录</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="historyPrevDisabled" @click="pages(-1)">上页处置记录</button>
           <span class="fams-pagination-page">第 {{ page }} 页</span>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page * 20 >= total" @click="pages(1)">下页处置记录</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="historyNextDisabled" @click="pages(1)">下页处置记录</button>
         </div>
       </div>
     </template>

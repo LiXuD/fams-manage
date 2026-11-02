@@ -91,6 +91,55 @@ async function paginate(delta: number) {
 const modes: Record<string, string> = { STORAGE: "仓库保管", PERSONAL: "个人使用", SHARED: "部门公用" };
 const conditions: Record<string, string> = { GOOD: "正常", DAMAGED: "损坏", UNKNOWN: "不确定" };
 const outcomes: Record<string, string> = { ACCEPTED: "本轮观察候选", DIFFERENCE_REVIEW: "差异待复核", DUPLICATE: "重复，未重复计数", CONFLICT_REVIEW: "冲突待复核", OLD_ASSIGNMENT_REVIEW: "旧分配证据", TIME_REVIEW: "时间待核实", LATE_REVIEW: "迟到补充线索", EXPIRED: "过期拒绝", FINDING_REVIEW: "任务外或手工线索" };
+interface BoardRow extends ReviewItem {
+  selectLabel: string; bookLocationText: string; bookCustodyText: string; responsibleText: string;
+  candidateOutcomeText: string; roundText: string; candidateLocationText: string; candidateCustodyText: string; candidateConditionText: string;
+  currentLocationText: string; currentCustodyText: string; reviewedAtText: string; reviewActionText: string; blockedText: string;
+}
+interface ObservationRow extends Observation {
+  outcomeText: string; receivedAtText: string; observedAtText: string; photoCount: number; locationText: string; responsibilityText: string;
+}
+interface ResultRow { itemId: string; statusText: string; processedText: string }
+const boardRows = computed<BoardRow[]>(() => (board.value?.items ?? []).map(row => {
+  const candidate = row.candidate?.facts_json.actual;
+  return { ...row,
+    selectLabel: `选择 ${row.item.snapshot_json.assetCode}`,
+    bookLocationText: row.item.snapshot_json.locationName || '未指定位置',
+    bookCustodyText: modes[row.item.snapshot_json.custodyType ?? ''] || '待核实',
+    responsibleText: row.item.snapshot_json.responsibleEmployeeName ?? row.item.snapshot_json.departmentResponsibleEmployeeName ?? '仓库保管',
+    candidateOutcomeText: row.candidate ? outcomes[row.candidate.outcome] ?? '待核实' : '',
+    roundText: `第 ${row.item.recheck_generation + 1} 轮`,
+    candidateLocationText: row.candidate ? (candidate?.locationId === row.item.snapshot_json.locationId
+      ? row.item.snapshot_json.locationName ?? '' : candidate?.locationHint || candidate?.locationId || '未知') : '',
+    candidateCustodyText: row.candidate ? modes[candidate?.custodyType ?? ''] || '未知使用模式' : '',
+    candidateConditionText: row.candidate ? conditions[candidate?.condition ?? ''] || '状况未知' : '',
+    currentLocationText: row.current ? row.current.locationName || '位置待核实' : '',
+    currentCustodyText: row.current ? modes[row.current.custodyType ?? ''] || '待核实' : '',
+    reviewedAtText: new Date(row.review.reviewed_at!).toLocaleString(),
+    reviewActionText: row.review.review_status === 'SELECTED' ? '已选择待采信证据' : row.review.review_status === 'ACCEPTED' ? '已采信' : '已记录未观察',
+    blockedText: row.blockedReason ? reviewProblems[row.blockedReason] ?? '须独立复核' : '' };
+}));
+const observationRows = computed<ObservationRow[]>(() => (observations.value?.rows ?? []).map(row => ({ ...row,
+  outcomeText: outcomes[row.outcome] ?? '待核实',
+  receivedAtText: new Date(row.received_at).toLocaleString(),
+  observedAtText: row.facts_json.rawObservedAt ? new Date(row.facts_json.rawObservedAt).toLocaleString() : '未保留或待核实',
+  photoCount: row.facts_json.photoIds?.length ?? 0,
+  locationText: row.facts_json.actual?.locationHint || row.facts_json.actual?.locationId || '未知',
+  responsibilityText: row.facts_json.actual?.responsibilityHint || row.facts_json.actual?.responsibleEmployeeId || '待核实或仓库保管' })));
+const resultRows = computed<ResultRow[]>(() => (result.value?.items ?? []).map(item => ({ itemId: item.itemId,
+  statusText: item.status === 'ACCEPTED' ? '已采信' : reviewProblems[item.code ?? ''] ?? '请核对当前结果',
+  processedText: item.current?.reviewer_username ? `；${item.current.reviewer_username} 于 ${new Date(item.current.reviewed_at!).toLocaleString()} 已处理` : '' })));
+const matchedRows = computed<ReviewItem[]>(() => { const itemId = observations.value?.itemId;
+  return itemId ? (board.value?.items ?? []).filter(row => row.item.id === itemId) : []; });
+const observationIds = computed<string[]>(() => observations.value?.rows.map(row => row.id) ?? []);
+const acceptanceOpen = computed(() => !!board.value && ['IN_PROGRESS', 'WAITING_REVIEW'].includes(board.value.task.task_status));
+const nextObservationDisabled = computed(() => { const seen = observations.value;
+  return locked.value || !seen || seen.page * 20 >= seen.total; });
+const prevObservationDisabled = computed(() => { const seen = observations.value;
+  return locked.value || !seen || seen.page === 1; });
+const nextBoardDisabled = computed(() => locked.value || !board.value || page.value * 20 >= board.value.total);
+const prevBoardDisabled = computed(() => locked.value || page.value === 1);
+const acceptDisabled = computed(() => !selected.value.length || !reason.value.trim());
 watch(() => props.taskId, () => { generation++; clear(); page.value = 1; void load(); }, { immediate: true });
 watch(identity, () => { generation++; clear(); error.value = "身份或权限已变化，请重新进入复核任务。"; }, { flush: "sync" });
 onBeforeUnmount(() => { live = false; generation++; clear(); });
@@ -112,7 +161,7 @@ onBeforeUnmount(() => { live = false; generation++; clear(); });
     <p v-if="board" class="fams-panel-subtitle">已采信 {{ board.reviewedCount }} 项 / 应盘 {{ board.total }} 项</p>
     <p v-if="result" class="fams-notice" data-state="success" role="status"><strong>本次已采信 {{ result.accepted }} 项，冲突或待核实 {{ result.conflicts }} 项。</strong></p>
     <ul v-if="result" class="fams-timeline">
-      <li v-for="item in result.items" :key="item.itemId">应盘项 {{ item.itemId }}：{{ item.status === 'ACCEPTED' ? '已采信' : reviewProblems[item.code ?? ''] ?? '请核对当前结果' }}<small v-if="item.current?.reviewer_username">；{{ item.current.reviewer_username }} 于 {{ new Date(item.current.reviewed_at!).toLocaleString() }} 已处理</small></li>
+      <li v-for="row in resultRows" :key="row.itemId">应盘项 {{ row.itemId }}：{{ row.statusText }}<small v-if="row.processedText">{{ row.processedText }}</small></li>
     </ul>
 
     <div v-if="board" class="fams-table-scroll">
@@ -120,25 +169,25 @@ onBeforeUnmount(() => { live = false; generation++; clear(); });
         <thead><tr><th scope="col">选择</th><th scope="col" data-column-kind="identity">账面快照</th>
           <th scope="col">原始现场观察</th><th scope="col">当前资产与复核</th></tr></thead>
         <tbody>
-          <tr v-for="row in board.items" :key="row.item.id">
+          <tr v-for="row in boardRows" :key="row.item.id">
             <td><label class="fams-selection"><input v-model="selected" :value="row.item.id" type="checkbox"
-              :disabled="locked || !row.canAcceptNormal" :aria-label="`选择 ${row.item.snapshot_json.assetCode}`" /></label></td>
-            <th scope="row" data-column-kind="identity"><strong>{{ row.item.snapshot_json.assetCode }} · {{ row.item.snapshot_json.name }}</strong><p>{{ row.item.snapshot_json.locationName || '未指定位置' }}</p><p>{{ modes[row.item.snapshot_json.custodyType ?? ''] || '待核实' }} · {{ row.item.snapshot_json.responsibleEmployeeName ?? row.item.snapshot_json.departmentResponsibleEmployeeName ?? '仓库保管' }}</p></th>
+              :disabled="locked || !row.canAcceptNormal" :aria-label="row.selectLabel" /></label></td>
+            <th scope="row" data-column-kind="identity"><strong>{{ row.item.snapshot_json.assetCode }} · {{ row.item.snapshot_json.name }}</strong><p>{{ row.bookLocationText }}</p><p>{{ row.bookCustodyText }} · {{ row.responsibleText }}</p></th>
             <td>
               <template v-if="row.candidate">
-                <p>{{ outcomes[row.candidate.outcome] ?? '待核实' }} · 第 {{ row.item.recheck_generation + 1 }} 轮</p>
-                <p>位置：{{ row.candidate.facts_json.actual?.locationId === row.item.snapshot_json.locationId ? row.item.snapshot_json.locationName : row.candidate.facts_json.actual?.locationHint || row.candidate.facts_json.actual?.locationId || '未知' }}</p>
-                <p>{{ modes[row.candidate.facts_json.actual?.custodyType ?? ''] || '未知使用模式' }} · {{ conditions[row.candidate.facts_json.actual?.condition ?? ''] || '状况未知' }}</p>
+                <p>{{ row.candidateOutcomeText }} · {{ row.roundText }}</p>
+                <p>位置：{{ row.candidateLocationText }}</p>
+                <p>{{ row.candidateCustodyText }} · {{ row.candidateConditionText }}</p>
                 <p v-if="row.candidate.facts_json.actual?.unknownReason">未知原因：{{ row.candidate.facts_json.actual.unknownReason }}</p>
               </template>
               <p v-else>尚无本轮观察候选</p>
               <button class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="locked" @click="history(row)">查看全部原始证据</button>
             </td>
             <td>
-              <template v-if="row.current"><strong>{{ row.current.name }}</strong><p>{{ row.current.locationName || '位置待核实' }} · {{ modes[row.current.custodyType ?? ''] || '待核实' }}</p></template>
+              <template v-if="row.current"><strong>{{ row.current.name }}</strong><p>{{ row.currentLocationText }} · {{ row.currentCustodyText }}</p></template>
               <p v-else>当前资产不可用</p>
-              <p v-if="row.review.reviewer_username">{{ row.review.reviewer_username }} 于 {{ new Date(row.review.reviewed_at!).toLocaleString() }} {{ row.review.review_status === 'SELECTED' ? '已选择待采信证据' : row.review.review_status === 'ACCEPTED' ? '已采信' : '已记录未观察' }}；原因：{{ row.review.reason }}</p>
-              <p v-if="row.blockedReason">{{ reviewProblems[row.blockedReason] ?? '须独立复核' }}</p>
+              <p v-if="row.review.reviewer_username">{{ row.review.reviewer_username }} 于 {{ row.reviewedAtText }} {{ row.reviewActionText }}；原因：{{ row.review.reason }}</p>
+              <p v-if="row.blockedReason">{{ row.blockedText }}</p>
               <p v-if="row.movementEvents.length">期间业务事件 {{ row.movementEvents.length }} 条，不能仅凭当前位置相同判正常。</p>
             </td>
           </tr>
@@ -149,16 +198,16 @@ onBeforeUnmount(() => { live = false; generation++; clear(); });
 
     <div class="fams-pagination">
       <div class="fams-pagination-actions">
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page === 1" @click="paginate(-1)">上页证据</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevBoardDisabled" @click="paginate(-1)">上页证据</button>
         <span class="fams-pagination-page">第 {{ page }} 页</span>
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || !board || page * 20 >= board.total" @click="paginate(1)">下页证据</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextBoardDisabled" @click="paginate(1)">下页证据</button>
       </div>
     </div>
 
-    <fieldset v-if="board && ['IN_PROGRESS','WAITING_REVIEW'].includes(board.task.task_status)" class="fams-card fams-stack" :disabled="locked">
+    <fieldset v-if="acceptanceOpen" class="fams-card fams-stack" :disabled="locked">
       <label class="fams-field"><span class="fams-field-label">正常采信原因</span>
         <textarea class="fams-control" v-model="reason" maxlength="1000" /></label>
-      <button class="fams-button" data-kind="primary" type="button" :disabled="!selected.length || !reason.trim()" @click="openAccept">逐项采信所选正常观察</button>
+      <button class="fams-button" data-kind="primary" type="button" :disabled="acceptDisabled" @click="openAccept">逐项采信所选正常观察</button>
       <div v-if="confirmOpen" class="fams-card fams-stack" role="group" :aria-label="confirmLabel">
         <p>{{ confirmHint }}</p>
         <div class="fams-panel-actions">
@@ -170,20 +219,20 @@ onBeforeUnmount(() => { live = false; generation++; clear(); });
 
     <template v-if="observations && board"><InventorySelectionPanel :key="observations.itemId" :task-id="taskId" :item-id="observations.itemId" :item-page="board.page" :observations="observations.rows" @invalid="clear" @changed="load" /></template>
     <template v-if="observations && board"><InventoryEvidenceDecisionPanel :key="observations.itemId" :task-id="taskId" :item-id="observations.itemId" :item-page="board.page" :observations="observations.rows" @invalid="clear" @changed="load" /></template>
-    <template v-if="observations && board"><InventoryDifferencePanel v-for="row in board.items.filter(value => value.item.id === observations!.itemId)" :key="row.item.id" :task-id="taskId" :item="row" :item-page="board.page" :observation-ids="observations.rows.map(value => value.id)" @invalid="clear" /></template>
+    <template v-if="observations && board"><InventoryDifferencePanel v-for="row in matchedRows" :key="row.item.id" :task-id="taskId" :item="row" :item-page="board.page" :observation-ids="observationIds" @invalid="clear" /></template>
 
     <section v-if="observations" class="fams-card fams-stack">
       <h3 class="fams-panel-title">应盘项 {{ observations.itemId }} 的原始证据</h3>
-      <article v-for="observation in observations.rows" :key="observation.id" class="fams-card">
-        <p>证据 {{ observation.id }} · {{ outcomes[observation.outcome] ?? '待核实' }} · 接收于 {{ new Date(observation.received_at).toLocaleString() }}</p>
-        <p>观察于 {{ observation.facts_json.rawObservedAt ? new Date(observation.facts_json.rawObservedAt).toLocaleString() : '未保留或待核实' }}；照片 {{ observation.facts_json.photoIds?.length ?? 0 }} 张</p>
-        <p>位置 {{ observation.facts_json.actual?.locationHint || observation.facts_json.actual?.locationId || '未知' }}；责任线索 {{ observation.facts_json.actual?.responsibilityHint || observation.facts_json.actual?.responsibleEmployeeId || '待核实或仓库保管' }}</p>
+      <article v-for="observation in observationRows" :key="observation.id" class="fams-card">
+        <p>证据 {{ observation.id }} · {{ observation.outcomeText }} · 接收于 {{ observation.receivedAtText }}</p>
+        <p>观察于 {{ observation.observedAtText }}；照片 {{ observation.photoCount }} 张</p>
+        <p>位置 {{ observation.locationText }}；责任线索 {{ observation.responsibilityText }}</p>
         <p>{{ observation.facts_json.actual?.description }}</p>
         <InventoryPhotoEvidence v-if="observation.facts_json.photoIds?.length" :task-id="taskId" :event-id="observation.client_event_id" :photo-ids="observation.facts_json.photoIds" @invalid="clear" />
       </article>
-      <template v-for="row in board?.items.filter(item => item.item.id === observations!.itemId) ?? []" :key="row.item.id">
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || observations.page === 1" @click="history(row,-1)">上页原始证据</button>
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || observations.page * 20 >= observations.total" @click="history(row,1)">下页原始证据</button>
+      <template v-for="row in matchedRows" :key="row.item.id">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevObservationDisabled" @click="history(row,-1)">上页原始证据</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextObservationDisabled" @click="history(row,1)">下页原始证据</button>
       </template>
     </section>
   </section>

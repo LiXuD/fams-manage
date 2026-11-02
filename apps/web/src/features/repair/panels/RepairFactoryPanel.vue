@@ -13,7 +13,7 @@ const identity = computed(() => JSON.stringify([session.user?.id, session.user?.
 const canRead = computed(() => !!session.user?.roles.includes("ASSET_ADMIN") || !!session.user?.roles.includes("WAREHOUSE_OPERATOR") && String(session.user.id) === props.repair.processorAccountId);
 const opened = shallowRef(false), busy = shallowRef(false), stale = shallowRef(true), error = shallowRef(""), notice = shallowRef("");
 const partsBusy = shallowRef(false);
-const data = ref<FactoryDetail | null>(null), rows = ref<FactoryRound[]>([]), selected = ref<FactoryRoundDetail | null>(null), selectedId = shallowRef("");
+const data = ref<FactoryDetail | null>(null), roundRows = ref<FactoryRound[]>([]), selected = ref<FactoryRoundDetail | null>(null), selectedId = shallowRef("");
 const history = ref<FactoryHistory[]>([]), total = shallowRef(0), page = shallowRef(1), historyTotal = shallowRef(0), historyPage = shallowRef(1);
 const confirmation = ref<FactoryMutation | null>(null), pending = ref<FactoryMutation | null>(null);
 const reason = shallowRef(""), provider = shallowRef(""), contact = shallowRef(""), phone = shallowRef(""), due = shallowRef(""), fault = shallowRef("");
@@ -31,14 +31,56 @@ const locked = computed(() => props.blocked || busy.value || partsBusy.value || 
 const activeSelected = computed(() => !!selected.value && selected.value.id === data.value?.activeRound?.id);
 const evidencePurpose = computed(() => data.value?.activeRound?.roundStatus === "DISPATCHED" ? "RECEIPT" : "FACTORY_ACK");
 const eligibleEvidence = computed(() => selected.value?.evidence.filter(item => item.purpose === evidencePurpose.value) ?? []);
-const financialEvidence = computed(() => selected.value?.evidence.filter(item => ["QUOTE", "COST_RECEIPT"].includes(item.purpose) && selected.value?.files.some(file => file.objectId === item.object_id && file.scanStatus === "CLEAN")) ?? []);
+const financialEvidence = computed(() => selected.value?.evidence.filter(item => ["QUOTE", "COST_RECEIPT"].includes(item.purpose) && selected.value?.files.some(entry => entry.objectId === item.object_id && entry.scanStatus === "CLEAN")) ?? []);
+const headerRefreshDisabled = computed(() => props.blocked || busy.value || !!confirmation.value);
+const retryDisabled = computed(() => busy.value || props.blocked);
+const confirmDisabled = computed(() => busy.value || props.blocked);
+const pendingScopeCostText = computed(() => { const scope = data.value?.pendingScope; return scope ? costText(scope.costPolicy, scope.costLimit) : ""; });
+const approvedScopeCostText = computed(() => { const scope = data.value?.approvedScope; return scope ? costText(scope.costPolicy, scope.costLimit) : ""; });
+const overrunNotice = computed(() => data.value?.costSummary?.overrun ? "累计费用超出现批准范围，普通结束继续保留，请申请明确新范围。" : "");
+const factorySummaryText = computed(() => { const s = data.value?.summary; return s ? `已实际寄出 ${s.actualDispatchCount} 次；${s.followupOpen ? "返厂事项仍在办理" : data.value?.status === "COMPLETED" ? "维修已实际结束，轮次原记录保留" : "本轮事项已记录，维修尚需核实实际结束"}。` : ""; });
+const scopeActionsShown = computed(() => !!data.value && (data.value.actions.requestScope || data.value.actions.requestCostScope || data.value.actions.decideScope || data.value.actions.withdrawScope || data.value.actions.cancelRound));
+const noRouteHint = computed(() => !!data.value && !data.value.actions.requestScope && !data.value.approvedScope && !data.value.pendingScope);
+const roundPrevDisabled = computed(() => locked.value || page.value === 1);
+const roundNextDisabled = computed(() => locked.value || page.value * 20 >= total.value);
+const historyPrevDisabled = computed(() => locked.value || historyPage.value === 1);
+const historyNextDisabled = computed(() => locked.value || historyPage.value * 20 >= historyTotal.value);
+const locationPrevDisabled = computed(() => locationPage.value === 1);
+const locationNextDisabled = computed(() => locationPage.value * 20 >= locationTotal.value);
+const dispatchText = computed(() => selected.value?.dispatchedAt || "尚未记录");
+const receivedText = computed(() => selected.value?.receivedAt || "尚未记录");
+const conditionText = computed(() => selected.value?.conditionResult === "RESTORED" ? "已恢复" : "仍有故障，继续维修");
+const actualCostText = computed(() => { const cost = selected.value?.actualCost; return cost === null || cost === undefined ? "待核实" : `${cost} 元`; });
+const receivedText2 = computed(() => { const row = selected.value; return row ? `实际状况：${conditionText.value}；${row.treatmentResult ?? ""}；本轮实际费用 ${actualCostText.value}。` : ""; });
+const fileNames = computed<Record<string, string>>(() => Object.fromEntries((selected.value?.files ?? []).map(item => [item.objectId, item.filename])));
+const uploadSectionShown = computed(() => !!(activeSelected.value && data.value?.actions.uploadEvidence || selected.value?.actions?.uploadFinancialEvidence));
+const receiptOptionDisabled = computed(() => selected.value?.roundStatus !== "DISPATCHED");
+const quoteOptionDisabled = computed(() => !selected.value?.actions?.uploadFinancialEvidence);
+const quoteLines = computed(() => (selected.value?.quotes ?? []).map((quote, index) => ({ key: `q${index}:${quote.amount}:${quote.evidenceIds.join(",")}`, amount: quote.amount })));
+const costListShown = computed(() => !!selected.value && (!!selected.value.quotes?.length || selected.value.actualCost !== null));
+const financialRows = computed(() => financialEvidence.value.map(item => ({ ...item, label: item.purpose === "QUOTE" ? "报价原件：" : "费用原件：", filename: fileNames.value[item.object_id] })));
+const receiveFieldsetShown = computed(() => !!(activeSelected.value && (data.value?.actions.dispatch || data.value?.actions.receive)));
+const receiveFieldsetTitle = computed(() => data.value?.actions.receive ? "核实原实物实际收回" : "登记实物实际寄出");
+const originalIdentityText = computed(() => { const id = selected.value?.originalIdentity; return id ? `本轮原机 ${id.assetCode}${id.serialNumber ? ` · 序列号 ${id.serialNumber}` : ""}。` : ""; });
+const serialFieldShown = computed(() => !!selected.value?.originalIdentity.serialNumber);
+const evidenceRows = computed(() => eligibleEvidence.value.map(item => ({ ...item, label: `选用本轮${evidencePurpose.value === "RECEIPT" ? "原机收回" : "厂家接收"}原件 ${fileNames.value[item.object_id] || "待核对原件"}` })));
+const noEligibleEvidence = computed(() => evidenceRows.value.length === 0);
+const noCostLabel = computed(() => { const cost = selected.value?.actualCost; return cost === null || cost === undefined ? "已核实本轮实际没有费用" : `已核对本轮已记录最终费用 ${cost} 元`; });
+const costUnassessedShown = computed(() => selected.value?.actualCost === null);
+const receiveFieldLabel = computed(() => data.value?.actions.receive ? "实际收回状况与处理结果" : "实物寄出与厂家接收依据");
+const previewImageShown = computed(() => previewMime.value !== "application/pdf");
+const historyRows = computed(() => history.value.map(item => ({ ...item, recordedText: new Date(item.recorded_at).toLocaleString() })));
+const costLimitFieldShown = computed(() => costPolicy.value === "LIMITED");
+const fileRows = computed(() => (selected.value?.files ?? []).map(item => ({ ...item, readable: item.scanStatus === "CLEAN" })));
+const finalCostShown = computed(() => selected.value?.actualCost !== null);
+const partsPanelShown = computed(() => selected.value?.roundStatus === "RECEIVED");
 function clearMoney() { moneyAmount.value = ""; moneyReason.value = ""; moneyChecked.value = false; moneyEvidence.value = []; costUnassessed.value = false; }
 watch([busy, pending, confirmation, partsBusy], () => emit("busy-change", busy.value || !!pending.value || !!confirmation.value || partsBusy.value), { flush: "sync" });
 function clearPreview() { download?.abort(); download = null; if (preview.value) URL.revokeObjectURL(preview.value); preview.value = ""; previewName.value = ""; previewMime.value = ""; }
 function clearPhysical() { clearMoney(); observedCode.value = ""; serial.value = ""; actualDate.value = ""; actualTime.value = ""; evidence.value = ""; originalChecked.value = false; noCostChecked.value = false; selectedEvidence.value = []; locationId.value = ""; }
 function reset() {
   partsBusy.value = false;
-  generation++; clearPreview(); opened.value = false; busy.value = false; stale.value = true; data.value = null; rows.value = []; history.value = []; selected.value = null; selectedId.value = "";
+  generation++; clearPreview(); opened.value = false; busy.value = false; stale.value = true; data.value = null; roundRows.value = []; history.value = []; selected.value = null; selectedId.value = "";
   confirmation.value = null; pending.value = null; file.value = null; locations.value = []; total.value = 0; historyTotal.value = 0; page.value = 1; historyPage.value = 1;
   costPolicy.value = "NO_COST"; costLimit.value = ""; reason.value = ""; provider.value = ""; contact.value = ""; phone.value = ""; due.value = ""; fault.value = ""; purpose.value = "FACTORY_ACK"; clearPhysical();
 }
@@ -56,7 +98,7 @@ async function fetchState(epoch: number, owner: string) {
   const nextId = selectedId.value || detail.activeRound?.id || list.items[0]?.id || "";
   const next = nextId ? await factoryRequest<FactoryRoundDetail>(id, `/rounds/${nextId}`) : null;
   if (!current(epoch, owner)) return;
-  data.value = detail; rows.value = list.items; total.value = list.total; history.value = events.items; historyTotal.value = events.total;
+  data.value = detail; roundRows.value = list.items; total.value = list.total; history.value = events.items; historyTotal.value = events.total;
   selected.value = next; selectedId.value = nextId; stale.value = false;
 }
 async function load() {
@@ -197,32 +239,32 @@ onBeforeUnmount(() => { live = false; reset(); emit("busy-change", false); });
         <p class="fams-panel-subtitle">按本维修已批准范围办理返厂。实际收回与费用核实分别记录；收回本身不结束整单维修，更换整机须单独建卡。</p>
       </div>
       <div class="fams-panel-actions">
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="props.blocked || busy || !!confirmation" @click="load">核对返厂范围与轮次</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="headerRefreshDisabled" @click="load">核对返厂范围与轮次</button>
       </div>
     </div>
     <template v-if="opened">
       <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
       <p v-if="notice" class="fams-notice" data-state="success" role="status"><strong>{{ notice }}</strong></p>
-      <button v-if="pending" class="fams-button" data-kind="secondary" type="button" :disabled="busy || props.blocked" @click="perform">重试原返厂办理</button>
+      <button v-if="pending" class="fams-button" data-kind="secondary" type="button" :disabled="retryDisabled" @click="perform">重试原返厂办理</button>
       <div v-if="confirmation" class="fams-card fams-stack" role="group" aria-label="确认本次返厂办理">
         <p>{{ confirmation.label }}。请核对本次已填写的实物、厂家及实际依据；登记后保留原记录。</p>
         <div class="fams-panel-actions">
-          <button class="fams-button" data-kind="primary" type="button" :disabled="busy || props.blocked" @click="confirm">确认保存本次返厂办理</button>
-          <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || props.blocked" @click="confirmation = null">返回修改返厂办理</button>
+          <button class="fams-button" data-kind="primary" type="button" :disabled="confirmDisabled" @click="confirm">确认保存本次返厂办理</button>
+          <button class="fams-button" data-kind="secondary" type="button" :disabled="confirmDisabled" @click="confirmation = null">返回修改返厂办理</button>
         </div>
       </div>
       <template v-if="data">
-        <p v-if="data.pendingScope"><span class="fams-status">{{ factoryScopeStates[data.pendingScope.scopeStatus] }}</span> · {{ data.pendingScope.requestReason }} · 申请费用范围：{{ costText(data.pendingScope.costPolicy, data.pendingScope.costLimit) }}（尚未批准）</p>
-        <p v-if="data.approvedScope"><span class="fams-status">{{ factoryScopeStates[data.approvedScope.scopeStatus] }}</span> · {{ costText(data.approvedScope.costPolicy, data.approvedScope.costLimit) }} · {{ data.approvedScope.decisionReason }}</p>
-        <p v-if="data.costSummary">本维修已核实累计费用 {{ data.costSummary.confirmedTotal }} 元；已收回但费用待核实 {{ data.costSummary.unassessedCount }} 轮。<strong v-if="data.costSummary.overrun">累计费用超出现批准范围，普通结束继续保留，请申请明确新范围。</strong></p>
-        <p v-if="data.summary">已实际寄出 {{ data.summary.actualDispatchCount }} 次；{{ data.summary.followupOpen ? '返厂事项仍在办理' : data.status === 'COMPLETED' ? '维修已实际结束，轮次原记录保留' : '本轮事项已记录，维修尚需核实实际结束' }}。</p>
-        <fieldset v-if="data.actions.requestScope || data.actions.requestCostScope || data.actions.decideScope || data.actions.withdrawScope || data.actions.cancelRound" class="fams-card fams-stack" :disabled="locked || stale">
+        <p v-if="data.pendingScope"><span class="fams-status">{{ factoryScopeStates[data.pendingScope.scopeStatus] }}</span> · {{ data.pendingScope.requestReason }} · 申请费用范围：{{ pendingScopeCostText }}（尚未批准）</p>
+        <p v-if="data.approvedScope"><span class="fams-status">{{ factoryScopeStates[data.approvedScope.scopeStatus] }}</span> · {{ approvedScopeCostText }} · {{ data.approvedScope.decisionReason }}</p>
+        <p v-if="data.costSummary">本维修已核实累计费用 {{ data.costSummary.confirmedTotal }} 元；已收回但费用待核实 {{ data.costSummary.unassessedCount }} 轮。<strong v-if="overrunNotice">{{ overrunNotice }}</strong></p>
+        <p v-if="data.summary">{{ factorySummaryText }}</p>
+        <fieldset v-if="scopeActionsShown" class="fams-card fams-stack" :disabled="locked || stale">
           <label class="fams-field fams-field-wide"><span class="fams-field-label">本次范围或取消原因</span><textarea class="fams-control" v-model="reason" maxlength="1000" /></label>
           <template v-if="data.actions.requestCostScope">
             <div class="fams-field-grid">
               <label class="fams-field"><span class="fams-field-label">本维修所有返厂轮次费用约束</span>
                 <select class="fams-control" v-model="costPolicy"><option value="NO_COST">无费用</option><option value="LIMITED">累计限额</option><option value="UNLIMITED">不限费用</option></select></label>
-              <label v-if="costPolicy === 'LIMITED'" class="fams-field"><span class="fams-field-label">所有轮次累计限额（元）</span>
+              <label v-if="costLimitFieldShown" class="fams-field"><span class="fams-field-label">所有轮次累计限额（元）</span>
                 <input class="fams-control" v-model="costLimit" inputmode="decimal" maxlength="15"></label>
             </div>
             <button class="fams-button" data-kind="primary" type="button" @click="prepare('requestCostScope')">申请返厂费用范围变更</button>
@@ -246,40 +288,40 @@ onBeforeUnmount(() => { live = false; reset(); emit("busy-change", false); });
           </div>
           <button class="fams-button" data-kind="primary" type="button" @click="prepare('createRound')">核对新建待寄出轮次</button>
         </fieldset>
-        <p v-if="!data.actions.requestScope && !data.approvedScope && !data.pendingScope">当前处理库管须先完成实际接修，再提出必要返厂的范围变更。</p>
+        <p v-if="noRouteHint">当前处理库管须先完成实际接修，再提出必要返厂的范围变更。</p>
         <h4 class="fams-panel-title">独立轮次 / 共 {{ total }} 轮</h4>
         <ul class="fams-timeline">
-          <li v-for="row in rows" :key="row.id"><button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked" @click="selectRound(row)">第 {{ row.roundNumber }} 轮 · {{ row.providerName }} · {{ factoryRoundStates[row.roundStatus] }}</button></li>
+          <li v-for="row in roundRows" :key="row.id"><button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked" @click="selectRound(row)">第 {{ row.roundNumber }} 轮 · {{ row.providerName }} · {{ factoryRoundStates[row.roundStatus] }}</button></li>
         </ul>
         <div class="fams-pagination">
           <div class="fams-pagination-actions">
-            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page === 1" @click="paginate(-1)">上一页返厂轮次</button>
+            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="roundPrevDisabled" @click="paginate(-1)">上一页返厂轮次</button>
             <span class="fams-pagination-page">第 {{ page }} 页</span>
-            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page * 20 >= total" @click="paginate(1)">下一页返厂轮次</button>
+            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="roundNextDisabled" @click="paginate(1)">下一页返厂轮次</button>
           </div>
         </div>
         <section v-if="selected" class="fams-card fams-stack" aria-label="所选返厂轮次">
           <h4 class="fams-panel-title">第 {{ selected.roundNumber }} 轮 · <span class="fams-status">{{ factoryRoundStates[selected.roundStatus] }}</span></h4>
           <p>{{ selected.providerName }} · {{ selected.serviceContact }} · {{ selected.servicePhone }}；预计收回 {{ selected.expectedReturnDate }}。</p>
           <p>{{ selected.fault }}</p>
-          <p>实际寄出 {{ selected.dispatchedAt || '尚未记录' }}；实际原机收回 {{ selected.receivedAt || '尚未记录' }}。</p>
-          <p v-if="selected.receivedAt">实际状况：{{ selected.conditionResult === 'RESTORED' ? '已恢复' : '仍有故障，继续维修' }}；{{ selected.treatmentResult }}；本轮实际费用 {{ selected.actualCost === null ? '待核实' : selected.actualCost + ' 元' }}。</p>
+          <p>实际寄出 {{ dispatchText }}；实际原机收回 {{ receivedText }}。</p>
+          <p v-if="selected.receivedAt">{{ receivedText2 }}</p>
           <p v-if="selected.cancelReason">取消原因：{{ selected.cancelReason }}。本轮未计作实际返厂次数。</p>
           <h4 class="fams-panel-title">本轮原始凭证</h4>
           <p v-if="!data.photosAvailable">原件服务暂不可用。</p>
           <ul class="fams-timeline">
-            <li v-for="item in selected.files" :key="item.objectId">{{ item.filename }}<button class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="locked || item.scanStatus !== 'CLEAN'" @click="readFile(item)">读取厂家凭证 {{ item.filename }}</button></li>
+            <li v-for="item in fileRows" :key="item.objectId">{{ item.filename }}<button class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="locked || !item.readable" @click="readFile(item)">读取厂家凭证 {{ item.filename }}</button></li>
           </ul>
-          <fieldset v-if="activeSelected && data.actions.uploadEvidence || selected.actions?.uploadFinancialEvidence" class="fams-card fams-stack" :disabled="locked || stale">
+          <fieldset v-if="uploadSectionShown" class="fams-card fams-stack" :disabled="locked || stale">
             <label class="fams-field"><span class="fams-field-label">本次凭证用途</span>
-              <select class="fams-control" v-model="purpose"><option value="FAULT" :disabled="!activeSelected">实际故障</option><option value="FACTORY_ACK" :disabled="!activeSelected">厂家接收依据</option><option value="RECEIPT" :disabled="selected.roundStatus !== 'DISPATCHED'">原机实际收回依据</option><option value="QUOTE" :disabled="!selected.actions?.uploadFinancialEvidence">本轮报价原件</option><option value="COST_RECEIPT" :disabled="!selected.actions?.uploadFinancialEvidence">本轮实际费用凭证</option></select></label>
+              <select class="fams-control" v-model="purpose"><option value="FAULT" :disabled="!activeSelected">实际故障</option><option value="FACTORY_ACK" :disabled="!activeSelected">厂家接收依据</option><option value="RECEIPT" :disabled="receiptOptionDisabled">原机实际收回依据</option><option value="QUOTE" :disabled="quoteOptionDisabled">本轮报价原件</option><option value="COST_RECEIPT" :disabled="quoteOptionDisabled">本轮实际费用凭证</option></select></label>
             <label class="fams-file"><span class="fams-field-label">选择图片或PDF原件</span><input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" @change="fileChosen"></label>
             <p v-if="file">已选原件：{{ file.name }}</p>
             <button class="fams-button" data-kind="primary" type="button" @click="prepare('upload')">核对追加本轮凭证</button>
           </fieldset>
-          <ul v-if="selected.quotes?.length || selected.actualCost !== null" class="fams-timeline">
-            <li v-for="(quote, index) in selected.quotes || []" :key="index">本轮报价 {{ quote.amount }} 元（不计作实际费用）</li>
-            <li v-if="selected.actualCost !== null">本轮已确认最终费用 {{ selected.actualCost }} 元。</li>
+          <ul v-if="costListShown" class="fams-timeline">
+            <li v-for="line in quoteLines" :key="line.key">本轮报价 {{ line.amount }} 元（不计作实际费用）</li>
+            <li v-if="finalCostShown">本轮已确认最终费用 {{ selected.actualCost }} 元。</li>
           </ul>
           <fieldset v-if="selected.actions?.recordQuote || selected.actions?.recordCost" class="fams-card fams-stack" :disabled="locked || stale">
             <h4 class="fams-panel-title">本轮报价与最终费用</h4>
@@ -289,7 +331,7 @@ onBeforeUnmount(() => { live = false; reset(); emit("busy-change", false); });
               <label class="fams-field fams-field-wide"><span class="fams-field-label">本次费用核对依据</span><textarea class="fams-control" v-model="moneyReason" maxlength="1000" /></label>
             </div>
             <div class="fams-selection-group">
-              <label v-for="item in financialEvidence" :key="item.object_id" class="fams-selection"><input v-model="moneyEvidence" type="checkbox" :value="item.object_id">{{ item.purpose === 'QUOTE' ? '报价原件：' : '费用原件：' }}{{ selected.files.find(file => file.objectId === item.object_id)?.filename }}</label>
+              <label v-for="item in financialRows" :key="item.object_id" class="fams-selection"><input v-model="moneyEvidence" type="checkbox" :value="item.object_id">{{ item.label }}{{ item.filename }}</label>
               <label class="fams-selection"><input v-model="moneyChecked" type="checkbox">已亲自核对本次金额及所选本轮原件</label>
             </div>
             <div class="fams-inline">
@@ -297,20 +339,20 @@ onBeforeUnmount(() => { live = false; reset(); emit("busy-change", false); });
               <button v-if="selected.actions?.recordCost" class="fams-button" data-kind="primary" type="button" @click="prepare('cost')">核对确认本轮最终费用</button>
             </div>
           </fieldset>
-          <fieldset v-if="activeSelected && (data.actions.dispatch || data.actions.receive)" class="fams-card fams-stack" :disabled="locked || stale">
-            <h4 class="fams-panel-title">{{ data.actions.receive ? '核实原实物实际收回' : '登记实物实际寄出' }}</h4>
-            <p>本轮原机 {{ selected.originalIdentity.assetCode }}{{ selected.originalIdentity.serialNumber ? ` · 序列号 ${selected.originalIdentity.serialNumber}` : '' }}。</p>
+          <fieldset v-if="receiveFieldsetShown" class="fams-card fams-stack" :disabled="locked || stale">
+            <h4 class="fams-panel-title">{{ receiveFieldsetTitle }}</h4>
+            <p>{{ originalIdentityText }}</p>
             <div class="fams-field-grid">
               <label class="fams-field"><span class="fams-field-label">现场核对的资产编码</span><input class="fams-control" v-model="observedCode" maxlength="2048"></label>
-              <label v-if="selected.originalIdentity.serialNumber" class="fams-field"><span class="fams-field-label">现场核对的原机序列号</span><input class="fams-control" v-model="serial" maxlength="128"></label>
+              <label v-if="serialFieldShown" class="fams-field"><span class="fams-field-label">现场核对的原机序列号</span><input class="fams-control" v-model="serial" maxlength="128"></label>
               <label class="fams-field"><span class="fams-field-label">实际办理日期</span><input class="fams-control" v-model="actualDate" type="date"></label>
               <label class="fams-field"><span class="fams-field-label">实际办理时刻（含秒，本机时区）</span><input class="fams-control" v-model="actualTime" type="time" step="1"></label>
             </div>
             <label class="fams-selection"><input v-model="originalChecked" type="checkbox">已核实是本轮原实物，编码与身份一致</label>
             <div class="fams-selection-group">
-              <label v-for="item in eligibleEvidence" :key="item.object_id" class="fams-selection"><input v-model="selectedEvidence" type="checkbox" :value="item.object_id">选用本轮{{ evidencePurpose === 'RECEIPT' ? '原机收回' : '厂家接收' }}原件 {{ selected.files.find(file => file.objectId === item.object_id)?.filename || '待核对原件' }}</label>
+              <label v-for="item in evidenceRows" :key="item.object_id" class="fams-selection"><input v-model="selectedEvidence" type="checkbox" :value="item.object_id">{{ item.label }}</label>
             </div>
-            <p v-if="!eligibleEvidence.length">请先上传本轮对应用途的厂家原件，再明确选用。</p>
+            <p v-if="noEligibleEvidence">请先上传本轮对应用途的厂家原件，再明确选用。</p>
             <template v-if="data.actions.receive">
               <div class="fams-field-grid">
                 <label class="fams-field"><span class="fams-field-label">原机实际状况</span><select class="fams-control" v-model="condition"><option value="RESTORED">已恢复</option><option value="STILL_FAULTY">仍有故障，继续维修</option></select></label>
@@ -321,23 +363,23 @@ onBeforeUnmount(() => { live = false; reset(); emit("busy-change", false); });
               </div>
               <div class="fams-pagination">
                 <div class="fams-pagination-actions">
-                  <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locationPage === 1" @click="loadLocations(-1)">上一页收回地点</button>
-                  <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locationPage * 20 >= locationTotal" @click="loadLocations(1)">下一页收回地点</button>
+                  <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locationPrevDisabled" @click="loadLocations(-1)">上一页收回地点</button>
+                  <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locationNextDisabled" @click="loadLocations(1)">下一页收回地点</button>
                 </div>
               </div>
-              <label class="fams-selection"><input v-model="noCostChecked" type="checkbox">{{ selected.actualCost === null ? '已核实本轮实际没有费用' : '已核对本轮已记录最终费用 ' + selected.actualCost + ' 元' }}</label>
-              <label v-if="selected.actualCost === null" class="fams-selection"><input v-model="costUnassessed" type="checkbox">费用尚待核实，先记录原机实际收回</label>
+              <label class="fams-selection"><input v-model="noCostChecked" type="checkbox">{{ noCostLabel }}</label>
+              <label v-if="costUnassessedShown" class="fams-selection"><input v-model="costUnassessed" type="checkbox">费用尚待核实，先记录原机实际收回</label>
             </template>
-            <label class="fams-field fams-field-wide"><span class="fams-field-label">{{ data.actions.receive ? '实际收回状况与处理结果' : '实物寄出与厂家接收依据' }}</span><textarea class="fams-control" v-model="evidence" maxlength="2000" /></label>
+            <label class="fams-field fams-field-wide"><span class="fams-field-label">{{ receiveFieldLabel }}</span><textarea class="fams-control" v-model="evidence" maxlength="2000" /></label>
             <div class="fams-inline">
               <button v-if="data.actions.dispatch" class="fams-button" data-kind="primary" type="button" @click="prepare('dispatch')">核对实际寄出原实物</button>
               <button v-if="data.actions.receive" class="fams-button" data-kind="primary" type="button" @click="prepare('receive')">核对原实物已实际收回</button>
             </div>
           </fieldset>
-          <RepairFactoryPartsPanel v-if="selected.roundStatus === 'RECEIVED'" :key="`${identity}:${selected.id}`" :repair="props.repair" :round="selected" :blocked="props.blocked || busy || !!pending || !!confirmation || stale" @busy-change="partsBusy = $event" @changed="load" @invalidated="reset();emit('invalidated')" @read-file="readFile" />
+          <RepairFactoryPartsPanel v-if="partsPanelShown" :key="`${identity}:${selected.id}`" :repair="props.repair" :round="selected" :blocked="props.blocked || busy || !!pending || !!confirmation || stale" @busy-change="partsBusy = $event" @changed="load" @invalidated="reset();emit('invalidated')" @read-file="readFile" />
           <FamsMediaPreview v-if="preview" @dismiss="clearPreview">
             <figure>
-            <img v-if="previewMime !== 'application/pdf'" :src="preview" :alt="`厂家凭证：${previewName}`">
+            <img v-if="previewImageShown" :src="preview" :alt="`厂家凭证：${previewName}`">
             <p v-else>PDF原件已读取，可保存查看。</p>
             <figcaption>{{ previewName }}</figcaption>
             <div class="fams-inline">
@@ -349,13 +391,13 @@ onBeforeUnmount(() => { live = false; reset(); emit("busy-change", false); });
         </section>
         <h4 class="fams-panel-title">独立办理历史 / 共 {{ historyTotal }} 条</h4>
         <ul class="fams-timeline">
-          <li v-for="item in history" :key="item.id">{{ item.actor_username }} · {{ new Date(item.recorded_at).toLocaleString() }} · {{ factoryEventNames[item.action] || '历史返厂办理' }}</li>
+          <li v-for="item in historyRows" :key="item.id">{{ item.actor_username }} · {{ item.recordedText }} · {{ factoryEventNames[item.action] || '历史返厂办理' }}</li>
         </ul>
         <div class="fams-pagination">
           <div class="fams-pagination-actions">
-            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || historyPage === 1" @click="paginate(-1,true)">上一页返厂历史</button>
+            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="historyPrevDisabled" @click="paginate(-1,true)">上一页返厂历史</button>
             <span class="fams-pagination-page">第 {{ historyPage }} 页</span>
-            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || historyPage * 20 >= historyTotal" @click="paginate(1,true)">下一页返厂历史</button>
+            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="historyNextDisabled" @click="paginate(1,true)">下一页返厂历史</button>
           </div>
         </div>
       </template>

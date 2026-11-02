@@ -28,6 +28,13 @@ const canWrite = session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false;
 const locked = computed(() => busy.value || pending.value !== null);
 const fieldLabels: Record<Action, string> = { notes: "备注修正", copy: "复制建卡数量（1–100）", cancel: "取消原因" };
 const confirmLabels: Record<Action, string> = { notes: "确认修正备注", copy: "确认复制建卡", cancel: "确认取消草稿" };
+const custodyText = computed(() => (selected.value ? custodyLabel(selected.value) : ""));
+const canCorrectNotes = computed(() => canWrite && selected.value !== null
+  && selected.value.cardStage !== "PENDING_INBOUND" && selected.value.cardStage !== "CANCELLED");
+const canCancelDraft = computed(() => canWrite && selected.value?.cardStage === "DRAFT");
+const canPrintTag = computed(() => canWrite && selected.value?.cardStage === "ACTIVE");
+const pendingIsNotes = computed(() => pending.value === "notes");
+const pendingIsCopy = computed(() => pending.value === "copy");
 
 async function open(): Promise<void> {
   error.value = "";
@@ -145,21 +152,21 @@ onMounted(async () => {
         <div><dt>分类</dt><dd>{{ selected.category?.id ?? "—" }}</dd></div>
         <div><dt>型号</dt><dd class="u-break">{{ selected.model ?? "—" }}</dd></div>
         <div><dt>所属组织</dt><dd>{{ selected.organization?.id ?? "—" }}</dd></div>
-        <div><dt>当前保管</dt><dd>{{ custodyLabel(selected) }}</dd></div>
+        <div><dt>当前保管</dt><dd>{{ custodyText }}</dd></div>
       </dl>
       <div class="fams-panel-actions">
         <button v-if="canWrite" class="fams-button" data-kind="secondary" :disabled="locked" type="button" @click="openAction('copy')">复制建卡</button>
-        <button v-if="canWrite && selected.cardStage !== 'PENDING_INBOUND' && selected.cardStage !== 'CANCELLED'"
+        <button v-if="canCorrectNotes"
           class="fams-button" data-kind="secondary" :disabled="locked" type="button" @click="openAction('notes')">修正备注</button>
-        <button v-if="canWrite && selected.cardStage === 'DRAFT'" class="fams-button" data-kind="danger" :disabled="locked"
+        <button v-if="canCancelDraft" class="fams-button" data-kind="danger" :disabled="locked"
           type="button" @click="openAction('cancel')">取消草稿</button>
-        <button v-if="canWrite && selected.cardStage === 'ACTIVE'" class="fams-button" data-kind="secondary" :disabled="locked"
+        <button v-if="canPrintTag" class="fams-button" data-kind="secondary" :disabled="locked"
           type="button" @click="printCurrent">打印标签</button>
       </div>
       <div v-if="pending" class="fams-card fams-stack" role="group" :aria-label="confirmLabels[pending]">
         <label class="fams-field"><span class="fams-field-label">{{ fieldLabels[pending] }}</span>
-          <input v-if="pending === 'notes'" class="fams-control" v-model="notes" />
-          <input v-else-if="pending === 'copy'" class="fams-control" v-model="quantity" type="number" min="1" max="100" />
+          <input v-if="pendingIsNotes" class="fams-control" v-model="notes" />
+          <input v-else-if="pendingIsCopy" class="fams-control" v-model="quantity" type="number" min="1" max="100" />
           <input v-else class="fams-control" v-model="reason" />
         </label>
         <div class="fams-panel-actions">

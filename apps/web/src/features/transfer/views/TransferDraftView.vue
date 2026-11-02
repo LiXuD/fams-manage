@@ -16,6 +16,12 @@ const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef(""),
 const currentAsset = computed(() => assets.value.find(a => a.id === assetId.value));
 const stock = computed(() => currentAsset.value?.lifecycleStatus === "IN_STOCK");
 const bins = computed(() => locations.value.filter(l => stock.value ? l.locationType === "BIN" && l.warehouseId === warehouse.value : l.locationType !== "BIN"));
+const eligibleEmployees = computed(() => employees.value.filter(p => custody.value !== "SHARED" || p.sharedEligible));
+const previewCustody = computed(() => custodyName(currentAsset.value?.custodyType));
+const previewOrganization = computed(() => organization(currentAsset.value?.usingOrganizationId));
+const previewPlace = computed(() => place(currentAsset.value?.currentLocationId));
+const draftRows = computed(() => draftItems.value.map(item => ({ ...item,
+  line: `${item.asset.assetCode}：${place(item.asset.currentLocationId)} → ${place(item.target.locationId)}；${custodyName(item.asset.custodyType)} → ${custodyName(item.target.custodyType)}；${organization(item.target.usingOrganizationId)}` })));
 let pending: BusinessMutation | null = null;
 
 async function catalog(kind: string, org?: string) {
@@ -122,18 +128,18 @@ onMounted(refresh);
           <label class="fams-field"><span class="fams-field-label">目标责任模式</span>
             <select class="fams-control" v-model="custody" :disabled="busy || retryable"><option value="PERSONAL">个人</option><option value="SHARED">部门公用</option></select></label>
           <label class="fams-field"><span class="fams-field-label">实际目标责任人</span>
-            <select class="fams-control" v-model="employee" :disabled="busy || retryable"><option value="">请选择</option><option v-for="person in employees.filter(p => custody !== 'SHARED' || p.sharedEligible)" :key="person.id" :value="person.id">{{ person.name }}</option></select></label>
+            <select class="fams-control" v-model="employee" :disabled="busy || retryable"><option value="">请选择</option><option v-for="person in eligibleEmployees" :key="person.id" :value="person.id">{{ person.name }}</option></select></label>
         </template>
         <label v-else class="fams-field"><span class="fams-field-label">目标仓库</span>
           <select class="fams-control" v-model="warehouse" :disabled="busy || retryable" @change="location = ''"><option value="">请选择</option><option v-for="wh in warehouses" :key="wh.id" :value="wh.id">{{ wh.name }}</option></select></label>
         <label class="fams-field"><span class="fams-field-label">目标位置</span>
           <select class="fams-control" v-model="location" :disabled="busy || retryable"><option value="">请选择</option><option v-for="loc in bins" :key="loc.id" :value="loc.id">{{ loc.name }}</option></select></label>
       </div>
-      <p v-if="currentAsset" class="fams-panel-subtitle">原责任模式 {{ custodyName(currentAsset.custodyType) }} · 原使用组织 {{ organization(currentAsset.usingOrganizationId) }} · 原位置 {{ place(currentAsset.currentLocationId) }}</p>
+      <p v-if="currentAsset" class="fams-panel-subtitle">原责任模式 {{ previewCustody }} · 原使用组织 {{ previewOrganization }} · 原位置 {{ previewPlace }}</p>
       <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || retryable" @click="addItem">添加调拨明细</button>
 
-      <article v-for="(item, index) in draftItems" :key="item.asset.id" class="fams-card fams-stack">
-        <p>{{ item.asset.assetCode }}：{{ place(item.asset.currentLocationId) }} → {{ place(item.target.locationId) }}；{{ custodyName(item.asset.custodyType) }} → {{ custodyName(item.target.custodyType) }}；{{ organization(item.target.usingOrganizationId) }}</p>
+      <article v-for="(item, index) in draftRows" :key="item.asset.id" class="fams-card fams-stack">
+        <p>{{ item.line }}</p>
         <button class="fams-button" data-kind="danger" data-size="sm" type="button" :disabled="busy || retryable" @click="draftItems.splice(index, 1)">移除此明细</button>
       </article>
       <p v-if="draftItems.length" class="fams-panel-subtitle">本单 {{ draftItems.length }} 项，由一名库管记录全部执行；需要多名库管分别负责时，建议按来源/目标位置分组分别提交。</p>

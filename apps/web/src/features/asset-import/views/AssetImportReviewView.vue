@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, shallowRef } from "vue";
+import { computed, onMounted, ref, shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import {
   decideImportReview, decideImportRollback, pendingImportReviews, pendingImportRollbacks,
@@ -21,6 +21,29 @@ const rollbackReason = shallowRef("");
 const error = shallowRef("");
 const notice = shallowRef("");
 const busy = shallowRef(false);
+
+const REVIEW_PAGE_SIZE = 50;
+
+type ReviewRowView = ImportRow & { sourceJson: string; resolvedJson: string };
+
+const hasNoReviews = computed(() => reviews.value.length === 0);
+const reviewPrevDisabled = computed(() => reviewPage.value <= 1);
+const reviewNextDisabled = computed(() => reviews.value.length < REVIEW_PAGE_SIZE);
+const rowViews = computed<ReviewRowView[]>(() => rows.value.map((row) => ({
+  ...row,
+  sourceJson: JSON.stringify(row.source, null, 2),
+  resolvedJson: JSON.stringify(row.resolved ?? {}, null, 2),
+})));
+const hasNoRows = computed(() => rows.value.length === 0);
+const emptyRowKindText = computed(() => rowStatus.value === "READY" ? "正确" : "错误");
+const rowPrevDisabled = computed(() => rowPage.value <= 1);
+const rowNextDisabled = computed(() => rowPage.value * 50 >= rowTotal.value);
+const approveDisabled = computed(() => busy.value || !reason.value.trim() || !sampleVerified.value);
+const rejectDisabled = computed(() => busy.value || !reason.value.trim());
+const rollbackDecideDisabled = computed(() => busy.value || !rollbackReason.value.trim());
+const hasNoRollbacks = computed(() => rollbacks.value.length === 0);
+const rollbackPrevDisabled = computed(() => rollbackPage.value <= 1);
+const rollbackNextDisabled = computed(() => rollbacks.value.length < REVIEW_PAGE_SIZE);
 
 async function loadPending(): Promise<void> {
   const [r, b] = await Promise.all([
@@ -98,14 +121,14 @@ onMounted(async () => {
         <tr v-for="item in reviews" :key="item.batchId"><th scope="row" data-column-kind="identity">{{ item.batchId }}</th>
           <td>{{ item.operatorUsername }}</td><td data-column-kind="numeric">{{ item.readyRows }} / {{ item.errorRows }}</td>
           <td>{{ item.requestedAt }}</td><td data-column-kind="action"><button class="fams-button" data-kind="secondary" type="button" @click="inspect(item)">查看并核验</button></td></tr>
-        <tr v-if="reviews.length === 0" class="fams-table-empty"><td colspan="5"><strong>暂无待核验导入</strong>等待操作员提交导入批次后刷新。</td></tr>
+        <tr v-if="hasNoReviews" class="fams-table-empty"><td colspan="5"><strong>暂无待核验导入</strong>等待操作员提交导入批次后刷新。</td></tr>
       </tbody></table></div>
       <div class="fams-pagination">
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="reviewPage <= 1"
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="reviewPrevDisabled"
             @click="reviewPage--; loadPending()">上一页</button>
           <span class="fams-pagination-page">第 {{ reviewPage }} 页</span>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="reviews.length < 50"
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="reviewNextDisabled"
             @click="reviewPage++; loadPending()">下一页</button>
         </div>
       </div>
@@ -122,20 +145,20 @@ onMounted(async () => {
       <div class="fams-table-scroll"><table class="fams-table"><thead><tr>
         <th scope="col" data-column-kind="identity">Excel 行</th><th scope="col">原始内容</th><th scope="col">识别结果</th><th scope="col">错误</th>
       </tr></thead><tbody>
-        <tr v-for="row in rows" :key="row.sheetRow"><th scope="row" data-column-kind="identity">{{ row.sheetRow }}</th>
-          <td><pre>{{ JSON.stringify(row.source, null, 2) }}</pre></td>
-          <td><pre>{{ JSON.stringify(row.resolved ?? {}, null, 2) }}</pre></td>
+        <tr v-for="row in rowViews" :key="row.sheetRow"><th scope="row" data-column-kind="identity">{{ row.sheetRow }}</th>
+          <td><pre>{{ row.sourceJson }}</pre></td>
+          <td><pre>{{ row.resolvedJson }}</pre></td>
           <td><div v-for="cell in row.errors ?? []" :key="cell.column + cell.reason">
             {{ cell.column }} · {{ cell.original || '（空）' }}：{{ cell.reason }}</div></td></tr>
-        <tr v-if="rows.length === 0" class="fams-table-empty"><td colspan="4"><strong>当前没有{{ rowStatus === 'READY' ? '正确' : '错误' }}行</strong>切换上方按钮查看另一类行。</td></tr>
+        <tr v-if="hasNoRows" class="fams-table-empty"><td colspan="4"><strong>当前没有{{ emptyRowKindText }}行</strong>切换上方按钮查看另一类行。</td></tr>
       </tbody></table></div>
       <div class="fams-pagination">
         <span class="fams-pagination-summary">共 {{ rowTotal }} 行</span>
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="rowPage <= 1"
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="rowPrevDisabled"
             @click="rowPage--; loadRows()">上一页</button>
           <span class="fams-pagination-page">第 {{ rowPage }} 页</span>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="rowPage * 50 >= rowTotal"
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="rowNextDisabled"
             @click="rowPage++; loadRows()">下一页</button>
         </div>
       </div>
@@ -145,9 +168,9 @@ onMounted(async () => {
           <input class="fams-control" v-model="reason" maxlength="500" /></label>
       </div>
       <div class="fams-form-actions">
-        <button class="fams-button" data-kind="primary" type="button" :disabled="busy || !reason.trim() || !sampleVerified"
+        <button class="fams-button" data-kind="primary" type="button" :disabled="approveDisabled"
           @click="decide(true)">批准并发布</button>
-        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || !reason.trim()"
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="rejectDisabled"
           @click="decide(false)">驳回</button>
       </div>
     </section>
@@ -167,18 +190,18 @@ onMounted(async () => {
         <tr v-for="item in rollbacks" :key="item.batchId"><th scope="row" data-column-kind="identity">{{ item.batchId }}</th>
           <td>{{ item.operatorUsername }}</td><td data-column-kind="numeric">{{ item.assetCount }}</td><td>{{ item.reason }}</td>
           <td data-column-kind="action"><div class="fams-inline">
-            <button class="fams-button" data-kind="primary" type="button" :disabled="busy || !rollbackReason.trim()"
+            <button class="fams-button" data-kind="primary" type="button" :disabled="rollbackDecideDisabled"
               @click="decideRollback(item, true)">批准</button>
-            <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || !rollbackReason.trim()"
+            <button class="fams-button" data-kind="secondary" type="button" :disabled="rollbackDecideDisabled"
               @click="decideRollback(item, false)">驳回</button></div></td></tr>
-        <tr v-if="rollbacks.length === 0" class="fams-table-empty"><td colspan="5"><strong>暂无撤销申请</strong>收到申请后填写决定原因并刷新待办。</td></tr>
+        <tr v-if="hasNoRollbacks" class="fams-table-empty"><td colspan="5"><strong>暂无撤销申请</strong>收到申请后填写决定原因并刷新待办。</td></tr>
       </tbody></table></div>
       <div class="fams-pagination">
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="rollbackPage <= 1"
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="rollbackPrevDisabled"
             @click="rollbackPage--; loadPending()">上一页</button>
           <span class="fams-pagination-page">第 {{ rollbackPage }} 页</span>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="rollbacks.length < 50"
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="rollbackNextDisabled"
             @click="rollbackPage++; loadPending()">下一页</button>
         </div>
       </div>

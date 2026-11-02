@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, shallowRef } from "vue";
+import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { businessMessage, businessRequest } from "@/api/business";
@@ -15,6 +15,8 @@ const due = shallowRef(""); const reason = shallowRef("");
 const requestId = shallowRef(""); const requestVersion = shallowRef(0);
 const assetId = shallowRef(""); const assetVersion = shallowRef(0);
 const borrowRequests = ref<BorrowRequestChoice[]>([]);
+const formDisabled = computed(() => busy.value || retryable.value);
+const actionsShown = computed(() => !!selected.value && selected.value.relationStatus === "OPEN");
 let pending: BusinessMutation | null = null;
 
 async function open() {
@@ -103,15 +105,15 @@ onMounted(async () => {
 
       <label class="fams-field">
         <span class="fams-field-label">操作原因 / 验收说明</span>
-        <textarea class="fams-control" v-model="reason" :disabled="busy || retryable" maxlength="1000" />
+        <textarea class="fams-control" v-model="reason" :disabled="formDisabled" maxlength="1000" />
       </label>
       <label class="fams-field">
         <span class="fams-field-label">新的预计归还日</span>
-        <input class="fams-control" v-model="due" type="date" :disabled="busy || retryable" />
+        <input class="fams-control" v-model="due" type="date" :disabled="formDisabled" />
       </label>
-      <div v-if="selected.relationStatus === 'OPEN'" class="fams-panel-actions">
-        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || retryable" @click="extend()">提请延期</button>
-        <button class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable" @click="proposeReturn">申请归还</button>
+      <div v-if="actionsShown" class="fams-panel-actions">
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="formDisabled" @click="extend()">提请延期</button>
+        <button class="fams-button" data-kind="primary" type="button" :disabled="formDisabled" @click="proposeReturn">申请归还</button>
       </div>
 
       <details class="fams-card">
@@ -119,11 +121,11 @@ onMounted(async () => {
         <div class="fams-stack">
           <p class="fams-panel-subtitle">选择待交接的借用申请；管理员批准后，实际接收时重新校验日期。</p>
           <label class="fams-field"><span class="fams-field-label">借用申请</span>
-            <select class="fams-control" v-model="requestId" :disabled="busy || retryable" @change="chooseBorrowRequest"><option value="">请选择</option>
+            <select class="fams-control" v-model="requestId" :disabled="formDisabled" @change="chooseBorrowRequest"><option value="">请选择</option>
               <option v-for="request in borrowRequests" :key="request.id" :value="request.id">借用 {{ request.id }} · {{ request.expectedReturnDate }}</option></select></label>
           <label class="fams-field"><span class="fams-field-label">预计归还日</span>
-            <input class="fams-control" v-model="due" type="date" :disabled="busy || retryable" /></label>
-          <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || retryable" @click="extend(true)">提请接收前延期</button>
+            <input class="fams-control" v-model="due" type="date" :disabled="formDisabled" /></label>
+          <button class="fams-button" data-kind="secondary" type="button" :disabled="formDisabled" @click="extend(true)">提请接收前延期</button>
         </div>
       </details>
     </section>

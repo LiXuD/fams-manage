@@ -15,6 +15,12 @@ const current = (epoch: number, owner: string) => live && epoch === generation &
 function clear() { generation++; rows.value = []; page.value = 1; total.value = 0; busy.value = false; }
 const rows = ref<Review[]>([]); const busy = shallowRef(false); const error = shallowRef("");
 const page = shallowRef(1); const total = shallowRef(0);
+interface ReviewRow extends Review { createdAtText: string; businessPath: string }
+const reviewRows = computed<ReviewRow[]>(() => rows.value.map((review) => ({ ...review,
+  createdAtText: formatProxyTime(review.createdAt),
+  businessPath: (review.businessType === "TRANSFER" ? "/transfers/" : review.businessType === "REPAIR" ? "/repairs/" : "/requisitions/") + review.businessId })));
+const prevDisabled = computed(() => busy.value || page.value <= 1);
+const nextDisabled = computed(() => busy.value || page.value * 20 >= total.value);
 async function refresh(delta = 0) {
   if (busy.value) return;
   const epoch = ++generation, owner = identity.value;
@@ -37,22 +43,22 @@ onBeforeUnmount(() => { live = false; clear(); });
     </template>
     <section class="fams-panel fams-stack" aria-label="代确认结果核查">
       <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
-      <article v-for="review in rows" :key="review.noticeId" class="fams-card fams-stack">
+      <article v-for="review in reviewRows" :key="review.noticeId" class="fams-card fams-stack">
         <div class="fams-panel-head">
           <div>
             <h2 class="fams-panel-title">通知 {{ review.noticeId }} · {{ review.recipient }}</h2>
-            <p class="fams-panel-subtitle">{{ review.reason }} · {{ formatProxyTime(review.createdAt) }}</p>
+            <p class="fams-panel-subtitle">{{ review.reason }} · {{ review.createdAtText }}</p>
           </div>
         </div>
         <router-link :to="{ path: '/proxy-confirmations', query: { id: review.executionId } }">查看代确认与签收凭证</router-link>
-        <router-link :to="{ path: (review.businessType === 'TRANSFER' ? '/transfers/' : review.businessType === 'REPAIR' ? '/repairs/' : '/requisitions/') + review.businessId }">查看业务单据</router-link>
+        <router-link :to="{ path: review.businessPath }">查看业务单据</router-link>
       </article>
       <p v-if="!rows.length">暂无待核查请求。</p>
       <div class="fams-pagination">
         <span class="fams-pagination-summary">{{ page }} 页 / 共 {{ total }} 条</span>
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || page <= 1" @click="refresh(-1)">上一页</button>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || page * 20 >= total" @click="refresh(1)">下一页</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled" @click="refresh(-1)">上一页</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextDisabled" @click="refresh(1)">下一页</button>
         </div>
       </div>
     </section>

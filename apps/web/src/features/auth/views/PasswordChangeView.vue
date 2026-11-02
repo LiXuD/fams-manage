@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, shallowRef } from "vue";
+import { computed, reactive, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
@@ -8,6 +8,9 @@ const router = useRouter();
 const session = useSessionStore();
 const form = reactive({ currentPassword: "", newPassword: "", confirmPassword: "" });
 const localError = shallowRef("");
+const alertVisible = computed(() => !!localError.value || !!session.error);
+const alertText = computed(() => localError.value || session.error?.message || "");
+const submitText = computed(() => session.isBusy ? "提交中…" : "保存并继续");
 
 async function submit(): Promise<void> {
   localError.value = "";
@@ -47,8 +50,8 @@ async function submit(): Promise<void> {
           <label for="confirm-password">确认新密码</label>
           <input id="confirm-password" class="fams-control" v-model="form.confirmPassword" type="password" autocomplete="new-password" minlength="12" required />
         </div>
-        <p v-if="localError || session.error" class="fams-notice" data-state="error" role="alert"><strong>{{ localError || session.error?.message }}</strong></p>
-        <button class="fams-button" data-kind="primary" type="submit" :disabled="session.isBusy">{{ session.isBusy ? "提交中…" : "保存并继续" }}</button>
+        <p v-if="alertVisible" class="fams-notice" data-state="error" role="alert"><strong>{{ alertText }}</strong></p>
+        <button class="fams-button" data-kind="primary" type="submit" :disabled="session.isBusy">{{ submitText }}</button>
       </form>
     </section>
   </AppChrome>

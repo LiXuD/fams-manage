@@ -17,6 +17,8 @@ const personnelChoices = ref<TransferChoice[]>([]);
 const personTasks = shallowRef("");
 const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef(""), retryable = shallowRef(false), page = shallowRef(1), total = shallowRef(0), checked = shallowRef(false);
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
+const prevDisabled = computed(() => busy.value || retryable.value || page.value === 1);
+const nextDisabled = computed(() => busy.value || retryable.value || page.value * 20 >= total.value);
 let pending: BusinessMutation | null = null, grant: string | null = null;
 
 async function catalog(kind: string, org?: string) {
@@ -113,10 +115,10 @@ onMounted(refresh);
       <div class="fams-pagination">
         <span class="fams-pagination-summary">共 {{ total }} 条</span>
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || retryable || page === 1"
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled"
             @click="page--; refresh()">上一页</button>
           <span class="fams-pagination-page">第 {{ page }} 页</span>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || retryable || page * 20 >= total"
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextDisabled"
             @click="page++; refresh()">下一页</button>
         </div>
       </div>

@@ -13,6 +13,9 @@ const pending = ref<RepairMutation | null>(null), confirmation = ref<RepairMutat
 const busy = shallowRef(false), error = shallowRef("");
 const sourceLocked = shallowRef(false);
 const locked = computed(() => busy.value || !!pending.value || !!confirmation.value || sourceLocked.value);
+const adminRole = computed(() => session.user?.roles.includes("ASSET_ADMIN") ?? false);
+const assetPrevDisabled = computed(() => locked.value || assetPage.value === 1);
+const assetNextDisabled = computed(() => locked.value || assetPage.value * 20 >= assetTotal.value);
 let generation = 0, live = true;
 const current = (epoch: number, owner: string) => live && generation === epoch && identity.value === owner;
 function reset() {
@@ -69,7 +72,7 @@ onBeforeUnmount(() => { live = false; reset(); });
         <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="confirmation = null">返回修改</button>
       </div>
     </div>
-    <RepairReturnSourcePanel v-if="session.user?.roles.includes('ASSET_ADMIN')" :blocked="busy || !!pending || !!confirmation" @created="router.push(`/repairs/${encodeURIComponent($event.id)}?saved=1`)" @busy-change="sourceLocked=$event" />
+    <RepairReturnSourcePanel v-if="adminRole" :blocked="busy || !!pending || !!confirmation" @created="router.push(`/repairs/${encodeURIComponent($event.id)}?saved=1`)" @busy-change="sourceLocked=$event" />
     <section class="fams-panel fams-stack">
       <div class="fams-panel-head"><h2 class="fams-panel-title">提交报修</h2></div>
       <button class="fams-button" data-kind="secondary" type="button" :disabled="locked" @click="loadAssets()">查找可报修资产</button>
@@ -79,9 +82,9 @@ onBeforeUnmount(() => { live = false; reset(); });
       <div class="fams-pagination">
         <span class="fams-pagination-summary">共 {{ assetTotal }} 项</span>
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || assetPage === 1" @click="loadAssets(-1)">上一页可报修资产</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="assetPrevDisabled" @click="loadAssets(-1)">上一页可报修资产</button>
           <span class="fams-pagination-page">第 {{ assetPage }} 页</span>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || assetPage * 20 >= assetTotal" @click="loadAssets(1)">下一页可报修资产</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="assetNextDisabled" @click="loadAssets(1)">下一页可报修资产</button>
         </div>
       </div>
       <fieldset class="fams-card fams-stack" :disabled="locked">

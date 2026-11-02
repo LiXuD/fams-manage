@@ -46,9 +46,13 @@ async function confirm() { if (!prepared.value || busy.value || props.blocked) r
 watch(identity, () => { clear(); error.value = ""; }, { immediate: true, flush: "sync" });
 watch(locked, value => emit("busyChange", value), { immediate: true, flush: "sync" });
 onBeforeUnmount(() => { live = false; clear(); emit("busyChange", false); });
+const physicalStageText = computed(() => { const snapshot = context.value?.snapshot; if (!snapshot) return "";
+  return snapshot.outstandingReturn ? snapshot.outstandingReturn.handover_status === 'REFUSED' ? '已拒收，等待实际收回' : '已交出，等待实际接收'
+    : snapshot.physicalHandling.length ? '已离开原保管人，当前库管处理' : snapshot.acceptedAt ? '已原地接修' : '尚未接修'; });
+const sectionShown = computed(() => admin.value && props.repair.status === "WAREHOUSE_PROCESSING" || !!pending.value || !!prepared.value);
 </script>
 <template>
-  <section v-if="admin && repair.status === 'WAREHOUSE_PROCESSING' || pending || prepared" class="fams-card fams-stack" aria-label="维修受控转派">
+  <section v-if="sectionShown" class="fams-card fams-stack" aria-label="维修受控转派">
     <div class="fams-panel-head">
       <h3 class="fams-panel-title">维修受控转派</h3>
       <div v-if="pending" class="fams-panel-actions">
@@ -67,7 +71,7 @@ onBeforeUnmount(() => { live = false; clear(); emit("busyChange", false); });
     </div>
     <fieldset v-if="context" class="fams-card fams-stack" :disabled="locked || blocked">
       <legend class="fams-panel-title">实物与未同步结果核对</legend>
-      <p>当前实物阶段：{{ context.snapshot.outstandingReturn ? context.snapshot.outstandingReturn.handover_status === 'REFUSED' ? '已拒收，等待实际收回' : '已交出，等待实际接收' : context.snapshot.physicalHandling.length ? '已离开原保管人，当前库管处理' : context.snapshot.acceptedAt ? '已原地接修' : '尚未接修' }}。</p>
+      <p>当前实物阶段：{{ physicalStageText }}。</p>
       <div class="fams-field-grid">
         <label class="fams-field"><span class="fams-field-label">接任库管</span>
           <select class="fams-control" v-model="target"><option value="">请选择</option><option v-for="row in context.operators" :key="row.id" :value="row.id">{{ row.name }}</option></select></label>

@@ -11,6 +11,14 @@ const techPage = shallowRef(1), techTotal = shallowRef(0), technician = shallowR
 const prepared = ref<RepairMutation | null>(null), pending = ref<RepairMutation | null>(null);
 const identity = computed(()=>JSON.stringify([session.user?.id,session.user?.roles,session.csrfToken,props.repairId]));
 const locked = computed(()=>busy.value || !!prepared.value || !!pending.value);
+const refreshDisabled = computed(()=>busy.value || !!prepared.value || !!props.blocked);
+const retryDisabled = computed(()=>busy.value || !!props.blocked);
+const confirmDisabled = computed(()=>busy.value || !!props.blocked);
+const inviteFieldsetShown = computed(()=>!!board.value?.canInvite);
+const techPrevDisabled = computed(()=>techPage.value===1);
+const techNextDisabled = computed(()=>techPage.value*20>=techTotal.value);
+const invitationRows = computed(()=>(board.value?.invitations ?? []).map(row=>({...row,statusText:row.invitation_status==='ACTIVE'?'有效邀请':row.invitation_status==='REVOKED'?'已撤销':'已结束',revocable:!!board.value?.canInvite && row.invitation_status==='ACTIVE',revokeText:`撤销 ${row.technician_username} 的协助邀请`})));
+const opinionRows = computed(()=>(board.value?.opinions ?? []).map(row=>({...row,occurredText:new Date(row.occurred_at).toLocaleString(),resultText:opinionResults[row.opinion_result] || '待核实意见'})));
 let generation = 0, live = true;
 const current = (epoch:number,owner:string)=>live && generation===epoch && identity.value===owner;
 function clear() { generation++;board.value=null;technicians.value=[];techPage.value=1;techTotal.value=0;technician.value="";reason.value="";prepared.value=null;pending.value=null;busy.value=false; }
@@ -58,20 +66,20 @@ onBeforeUnmount(()=>{live=false;clear();emit("busyChange",false);});
         <p class="fams-panel-subtitle">科技意见只提供判断和建议，由合法处理库管核实实物后办理；返厂和报废需要相应真实后续。</p>
       </div>
       <div class="fams-panel-actions">
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || !!prepared || blocked" @click="read">刷新协助记录</button>
-        <button v-if="pending" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || blocked" @click="send">用原请求重试协助操作</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="refreshDisabled" @click="read">刷新协助记录</button>
+        <button v-if="pending" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="retryDisabled" @click="send">用原请求重试协助操作</button>
       </div>
     </div>
     <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{error}}</strong></p>
     <div v-if="prepared" class="fams-card fams-stack" role="group" aria-label="确认邀请或撤销">
       <p>确认本次人员和原因，仅开放此维修必要资料；邀请不授予库管处理权，撤销后不能继续读取或提交。</p>
       <div class="fams-panel-actions">
-        <button class="fams-button" data-kind="primary" type="button" :disabled="busy || blocked" @click="confirm">确认保存协助操作</button>
+        <button class="fams-button" data-kind="primary" type="button" :disabled="confirmDisabled" @click="confirm">确认保存协助操作</button>
         <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="prepared=null">返回修改协助操作</button>
       </div>
     </div>
     <template v-if="board">
-      <fieldset v-if="board.canInvite" class="fams-card fams-stack" :disabled="locked || blocked">
+      <fieldset v-if="inviteFieldsetShown" class="fams-card fams-stack" :disabled="locked || blocked">
         <legend class="fams-panel-title">邀请或撤销</legend>
         <button class="fams-button" data-kind="secondary" type="button" @click="candidates()">查找可邀请科技人员</button>
         <div class="fams-field-grid">
@@ -80,8 +88,8 @@ onBeforeUnmount(()=>{live=false;clear();emit("busyChange",false);});
         <div class="fams-pagination">
           <span class="fams-pagination-summary">共{{techTotal}}人</span>
           <div class="fams-pagination-actions">
-            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="techPage===1" @click="candidates(-1)">上一页科技人员</button>
-            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="techPage*20>=techTotal" @click="candidates(1)">下一页科技人员</button>
+            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="techPrevDisabled" @click="candidates(-1)">上一页科技人员</button>
+            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="techNextDisabled" @click="candidates(1)">下一页科技人员</button>
           </div>
         </div>
         <div class="fams-field-grid">
@@ -91,11 +99,11 @@ onBeforeUnmount(()=>{live=false;clear();emit("busyChange",false);});
       </fieldset>
       <p>最近100条邀请，共{{board.invitationTotal}}条</p>
       <ul class="fams-timeline">
-        <li v-for="row in board.invitations" :key="row.id">{{row.technician_username}} · {{row.invitation_status==='ACTIVE'?'有效邀请':row.invitation_status==='REVOKED'?'已撤销':'已结束'}}<small>{{row.reason}}</small><button v-if="board.canInvite && row.invitation_status==='ACTIVE'" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || blocked" @click="prepare(row.id)">撤销 {{row.technician_username}} 的协助邀请</button></li>
+        <li v-for="row in invitationRows" :key="row.id">{{row.technician_username}} · {{row.statusText}}<small>{{row.reason}}</small><button v-if="row.revocable" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || blocked" @click="prepare(row.id)">{{row.revokeText}}</button></li>
       </ul>
       <p>最近100条意见，共{{board.opinionTotal}}条</p>
       <ul class="fams-timeline">
-        <li v-for="row in board.opinions" :key="row.id">{{row.actor_username}} · {{new Date(row.occurred_at).toLocaleString()}} · {{opinionResults[row.opinion_result] || '待核实意见'}}<small>{{row.judgement}}</small><small>{{row.method}}</small><RepairTechnicalEvidence v-for="id in row.attachment_ids_json" :key="id" :invitation-id="row.invitation_id" :object-id="id" kind="staff-attachments" :blocked="locked || blocked" @invalidated="emit('invalidated')"/></li>
+        <li v-for="row in opinionRows" :key="row.id">{{row.actor_username}} · {{row.occurredText}} · {{row.resultText}}<small>{{row.judgement}}</small><small>{{row.method}}</small><RepairTechnicalEvidence v-for="id in row.attachment_ids_json" :key="id" :invitation-id="row.invitation_id" :object-id="id" kind="staff-attachments" :blocked="locked || blocked" @invalidated="emit('invalidated')"/></li>
       </ul>
     </template>
   </section>

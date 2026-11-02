@@ -14,6 +14,21 @@ const mode=ref<"away"|"inbound">("away"),observed=shallowRef(""),actual=shallowR
 const prepared=ref<RepairMutation|null>(null),pending=ref<RepairMutation|null>(null);
 const locked=computed(()=>busy.value||!!prepared.value||!!pending.value);
 const visibleLocations=computed(()=>mode.value==="away"?locations.value:locations.value.filter(row=>row.location_type==="BIN"&&row.warehouse_id===warehouse.value));
+const handlingRows=computed(()=>(props.repair.physicalHandling??[]).map(row=>({...row,occurredText:new Date(row.occurred_at).toLocaleString()})));
+const inboundRows=computed(()=>(props.repair.inbound??[]).map(row=>({...row,occurredText:new Date(row.occurred_at).toLocaleString()})));
+const hasHandling=computed(()=>!!props.repair.physicalHandling?.length);
+const hasTimeline=computed(()=>!!props.repair.physicalHandling?.length||!!props.repair.inbound?.length);
+const retryDisabled=computed(()=>busy.value||!!props.blocked);
+const confirmDisabled=computed(()=>busy.value||!!props.blocked);
+const modeText=computed(()=>mode.value==="away"?"当前：实际接修，维修与资产锁继续保留。":"当前：验收入库，并原子关闭原未结借用及维修。");
+const inboundMode=computed(()=>mode.value==="inbound");
+const acceptAwayAction=computed(()=>!!props.repair.actions?.acceptAway);
+const closeInboundAction=computed(()=>!!props.repair.actions?.closeInbound);
+const showActions=computed(()=>acceptAwayAction.value||closeInboundAction.value);
+const warehousePrevDisabled=computed(()=>warehousePage.value===1);
+const warehouseNextDisabled=computed(()=>warehousePage.value*20>=warehouseTotal.value);
+const locationPrevDisabled=computed(()=>locationPage.value===1);
+const locationNextDisabled=computed(()=>locationPage.value*20>=locationTotal.value);
 let generation=0,live=true;
 const current=(epoch:number,owner:string)=>live&&epoch===generation&&identity.value===owner;
 function clear(){generation++;warehouses.value=[];locations.value=[];warehouse.value="";location.value="";warehousePage.value=1;locationPage.value=1;warehouseTotal.value=0;locationTotal.value=0;observed.value="";actual.value="";evidence.value="";prepared.value=null;pending.value=null;busy.value=false;}
@@ -43,30 +58,30 @@ onBeforeUnmount(()=>{live=false;clear();emit("busyChange",false);});
     <div class="fams-panel-head">
       <h3 class="fams-panel-title">实物接修与验收入库</h3>
       <div v-if="pending" class="fams-panel-actions">
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy||blocked" @click="send">重试原实物办理</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="retryDisabled" @click="send">重试原实物办理</button>
       </div>
     </div>
-    <p v-if="repair.physicalHandling?.length">已记录实物离开原保管人的实际接收。原地关闭不可用，修复后须实际返还接收或验收入库。</p>
-    <ul v-if="repair.physicalHandling?.length||repair.inbound?.length" class="fams-timeline">
-      <li v-for="row in repair.physicalHandling" :key="row.occurred_at">实物接收 {{new Date(row.occurred_at).toLocaleString()}}<small>{{row.evidence}}</small></li>
-      <li v-for="row in repair.inbound" :key="row.occurred_at">已验收入库 {{new Date(row.occurred_at).toLocaleString()}}<small>{{row.evidence}}</small></li>
+    <p v-if="hasHandling">已记录实物离开原保管人的实际接收。原地关闭不可用，修复后须实际返还接收或验收入库。</p>
+    <ul v-if="hasTimeline" class="fams-timeline">
+      <li v-for="row in handlingRows" :key="row.occurred_at">实物接收 {{row.occurredText}}<small>{{row.evidence}}</small></li>
+      <li v-for="row in inboundRows" :key="row.occurred_at">已验收入库 {{row.occurredText}}<small>{{row.evidence}}</small></li>
     </ul>
     <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{error}}</strong></p>
     <div v-if="prepared" class="fams-card fams-stack" role="group" aria-label="核对本次实物办理">
       <p>接修只记录实际接收，不结束维修。验收入库须确认实物及修复结果，同步结束原未结借用和维修，不能用科技建议代替实物。</p>
       <div class="fams-panel-actions">
-        <button class="fams-button" data-kind="primary" type="button" :disabled="busy||blocked" @click="confirm">确认保存实物办理</button>
+        <button class="fams-button" data-kind="primary" type="button" :disabled="confirmDisabled" @click="confirm">确认保存实物办理</button>
         <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="prepared=null">返回修改实物依据</button>
       </div>
     </div>
-    <fieldset v-if="repair.actions?.acceptAway||repair.actions?.closeInbound" class="fams-card fams-stack" :disabled="locked||blocked">
+    <fieldset v-if="showActions" class="fams-card fams-stack" :disabled="locked||blocked">
       <legend class="fams-panel-title">按实际去向办理</legend>
       <div class="fams-inline">
-        <button v-if="repair.actions.acceptAway" class="fams-button" data-kind="secondary" type="button" @click="selectMode('away')">记录离开原保管人的实际接修</button>
-        <button v-if="repair.actions.closeInbound" class="fams-button" data-kind="secondary" type="button" @click="selectMode('inbound')">核对已修复并验收入库</button>
+        <button v-if="acceptAwayAction" class="fams-button" data-kind="secondary" type="button" @click="selectMode('away')">记录离开原保管人的实际接修</button>
+        <button v-if="closeInboundAction" class="fams-button" data-kind="secondary" type="button" @click="selectMode('inbound')">核对已修复并验收入库</button>
       </div>
-      <p>{{mode==='away'?'当前：实际接修，维修与资产锁继续保留。':'当前：验收入库，并原子关闭原未结借用及维修。'}}</p>
-      <template v-if="mode==='inbound'">
+      <p>{{modeText}}</p>
+      <template v-if="inboundMode">
         <button class="fams-button" data-kind="secondary" type="button" @click="catalog('warehouse')">查询回库仓库</button>
         <div class="fams-field-grid">
           <label class="fams-field"><span class="fams-field-label">回库仓库</span>
@@ -75,8 +90,8 @@ onBeforeUnmount(()=>{live=false;clear();emit("busyChange",false);});
         <div class="fams-pagination">
           <span class="fams-pagination-summary">共{{warehouseTotal}}个</span>
           <div class="fams-pagination-actions">
-            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="warehousePage===1" @click="catalog('warehouse',-1)">上一页回库仓库</button>
-            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="warehousePage*20>=warehouseTotal" @click="catalog('warehouse',1)">下一页回库仓库</button>
+            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="warehousePrevDisabled" @click="catalog('warehouse',-1)">上一页回库仓库</button>
+            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="warehouseNextDisabled" @click="catalog('warehouse',1)">下一页回库仓库</button>
           </div>
         </div>
       </template>
@@ -85,12 +100,12 @@ onBeforeUnmount(()=>{live=false;clear();emit("busyChange",false);});
         <label class="fams-field"><span class="fams-field-label">实际位置</span>
           <select class="fams-control" v-model="location"><option value="">请选择当前页有效位置</option><option v-for="row in visibleLocations" :key="row.id" :value="row.id">{{row.name}}</option></select></label>
       </div>
-      <p v-if="mode==='inbound'">仅显示已选仓库的库位；当前页没有时请翻页核对。</p>
+      <p v-if="inboundMode">仅显示已选仓库的库位；当前页没有时请翻页核对。</p>
       <div class="fams-pagination">
         <span class="fams-pagination-summary">共{{locationTotal}}个</span>
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locationPage===1" @click="catalog('location',-1)">上一页实物位置</button>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locationPage*20>=locationTotal" @click="catalog('location',1)">下一页实物位置</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locationPrevDisabled" @click="catalog('location',-1)">上一页实物位置</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locationNextDisabled" @click="catalog('location',1)">下一页实物位置</button>
         </div>
       </div>
       <div class="fams-field-grid">

@@ -28,11 +28,26 @@ const repairFault = shallowRef(""), repairImpact = ref("HIGH"), repairDiscovery 
 const physicalChecked = shallowRef(false), discoveryChecked = shallowRef(false);
 const linkedRepair = ref<{ id: string; assetId: string; version: number; status: string } | null>(null);
 const repairMethod = computed(() => ["FORMAL_REPAIR", "LINK_REPAIR", "REFRESH_REPAIR"].includes(method.value));
+const formalTransfer = computed(() => method.value === "FORMAL_TRANSFER");
+const repairCaptureVisible = computed(() => method.value !== "REFRESH_REPAIR");
+const formalRepair = computed(() => method.value === "FORMAL_REPAIR");
 const locked = computed(() => busy.value || !!pending.value || !!confirmation.value);
 const visible = computed(() => subjects.value.filter(row => row.item_id === props.item.item.id));
 const selected = computed(() => visible.value.filter(row => chosen.value.includes(`${row.observation_id}:${row.dimension}`)));
 const dimensions: Record<string, string> = { NORMAL: "正常", LOCATION: "位置不符", USAGE_MODE: "使用方式不符", RESPONSIBILITY: "责任不符", CONDITION: "状况待核实", UNKNOWN: "未知事实", PERIOD_MOVEMENT: "期间流转", CONFLICT: "观察冲突", OLD_ASSIGNMENT: "旧分配证据", TIME: "时间异常", FINDING: "任务外线索", LATE: "迟到线索" };
 const methods: Record<string, string> = { BOOK_CORRECT: "有明确证据确认账面正确", CONTINUE_SEARCH: "继续查找与核实", FORMAL_TRANSFER: "转正式调拨", REFRESH_TRANSFER: "核对关联调拨进度", FORMAL_REPAIR: "转正式维修", LINK_REPAIR: "关联已有维修单", REFRESH_REPAIR: "核对关联维修进度" };
+const subjectRows = computed(() => visible.value.map(row => ({ ...row,
+  checkKey: `${row.observation_id}:${row.dimension}`,
+  checkboxDisabled: locked.value || ["CLOSED", "TRANSFERRED"].includes(row.subject_status),
+  selectAriaLabel: `选择证据 ${row.observation_id} 的${dimensions[row.dimension]}`,
+  reviewedAtText: new Date(row.reviewed_at!).toLocaleString(),
+  evidenceText: row.evidence || "尚未提交",
+  repairLinks: (row.repairLinks ?? []).map(link => ({ ...link,
+    decisionKey: `repair:${link.decision_version}`, to: { path: `/repairs/${link.repair_id}` } })) })));
+const prepareDisabled = computed(() => locked.value || !props.observationIds.length);
+const prevDisabled = computed(() => locked.value || page.value === 1);
+const nextDisabled = computed(() => locked.value || page.value * 100 >= total.value);
+const decideDisabled = computed(() => !selected.value.length || reason.value.trim().length < 3 || evidence.value.trim().length < 10);
 let epoch = 0, live = true;
 const valid = (token: number, who: string) => live && token === epoch && who === identity.value;
 function clear() { board.value = null; subjects.value = []; chosen.value = []; pending.value = null;
@@ -159,7 +174,7 @@ onBeforeUnmount(() => { live = false; epoch++; clear(); });
       </div>
       <div class="fams-panel-actions">
         <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked" @click="load">刷新差异与当前资产</button>
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || !observationIds.length" @click="prepare">列入当前页证据的差异</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prepareDisabled" @click="prepare">列入当前页证据的差异</button>
       </div>
     </div>
 
@@ -180,12 +195,12 @@ onBeforeUnmount(() => { live = false; epoch++; clear(); });
         <thead><tr><th scope="col">选择</th><th scope="col" data-column-kind="identity">原始证据与维度</th>
           <th scope="col">当前处理</th><th scope="col">决定及正式关联</th></tr></thead>
         <tbody>
-          <tr v-for="row in visible" :key="`${row.observation_id}:${row.dimension}`">
-            <td><label class="fams-selection"><input v-model="chosen" type="checkbox" :value="`${row.observation_id}:${row.dimension}`"
-              :disabled="locked || ['CLOSED','TRANSFERRED'].includes(row.subject_status)" :aria-label="`选择证据 ${row.observation_id} 的${dimensions[row.dimension]}`" /></label></td>
+          <tr v-for="row in subjectRows" :key="row.checkKey">
+            <td><label class="fams-selection"><input v-model="chosen" type="checkbox" :value="row.checkKey"
+              :disabled="row.checkboxDisabled" :aria-label="row.selectAriaLabel" /></label></td>
             <th scope="row" data-column-kind="identity">证据 {{ row.observation_id }} · {{ dimensions[row.dimension] }}</th>
-            <td>{{ statuses[row.subject_status] }} · 第 {{ row.version }} 版<p v-if="row.method">{{ methods[row.method] }}</p><p v-if="row.reviewer_username">{{ row.reviewer_username }} · {{ new Date(row.reviewed_at!).toLocaleString() }}</p><p>{{ row.reason }}</p><p>依据：{{ row.evidence || '尚未提交' }}</p></td>
-            <td><p v-for="decision in row.decisions" :key="decision.after_version">第 {{ decision.after_version }} 版：{{ methods[decision.method] }} · {{ statuses[decision.subject_status] }}；{{ decision.actor_username }}；{{ decision.reason }}；{{ decision.evidence }}</p><p v-for="link in row.links" :key="link.decision_version"><router-link :to="{path:'/transfers',query:{id:link.transfer_id}}">查看关联调拨 {{ link.transfer_id }}</router-link></p><p v-for="link in row.repairLinks" :key="`repair:${link.decision_version}`"><router-link :to="{path:'/repairs/' + link.repair_id}">查看关联维修 {{ link.repair_id }}</router-link></p></td>
+            <td>{{ statuses[row.subject_status] }} · 第 {{ row.version }} 版<p v-if="row.method">{{ methods[row.method] }}</p><p v-if="row.reviewer_username">{{ row.reviewer_username }} · {{ row.reviewedAtText }}</p><p>{{ row.reason }}</p><p>依据：{{ row.evidenceText }}</p></td>
+            <td><p v-for="decision in row.decisions" :key="decision.after_version">第 {{ decision.after_version }} 版：{{ methods[decision.method] }} · {{ statuses[decision.subject_status] }}；{{ decision.actor_username }}；{{ decision.reason }}；{{ decision.evidence }}</p><p v-for="link in row.links" :key="link.decision_version"><router-link :to="{path:'/transfers',query:{id:link.transfer_id}}">查看关联调拨 {{ link.transfer_id }}</router-link></p><p v-for="link in row.repairLinks" :key="link.decisionKey"><router-link :to="link.to">查看关联维修 {{ link.repair_id }}</router-link></p></td>
           </tr>
           <tr v-if="!visible.length" class="fams-table-empty"><td colspan="4"><strong>本页暂无此资产的已列入差异</strong>原始证据不会因当前列表为空而被采信。</td></tr>
         </tbody>
@@ -194,16 +209,16 @@ onBeforeUnmount(() => { live = false; epoch++; clear(); });
 
     <div class="fams-pagination">
       <div class="fams-pagination-actions">
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page === 1" @click="pages(-1)">上页差异</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled" @click="pages(-1)">上页差异</button>
         <span class="fams-pagination-page">第 {{ page }} 页</span>
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page * 100 >= total" @click="pages(1)">下页差异</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextDisabled" @click="pages(1)">下页差异</button>
       </div>
     </div>
 
     <fieldset class="fams-card fams-stack" :disabled="locked">
       <label class="fams-field"><span class="fams-field-label">处理方式</span>
         <select class="fams-control" v-model="method" @change="targetChoices"><option v-for="(label,value) in methods" :key="value" :value="value">{{ label }}</option></select></label>
-      <template v-if="method === 'FORMAL_TRANSFER'">
+      <template v-if="formalTransfer">
         <div class="fams-field-grid">
           <label class="fams-field"><span class="fams-field-label">所属组织</span>
             <select class="fams-control" v-model="owning"><option value="">未指定</option><option v-for="row in organizations" :key="row.id" :value="row.id">{{ row.name }}</option></select></label>
@@ -224,12 +239,12 @@ onBeforeUnmount(() => { live = false; epoch++; clear(); });
       </template>
       <template v-if="repairMethod">
         <p class="fams-panel-subtitle">维修只处理损坏维度。创建或关联后仍须正式审批、库管处理及实际完成；原始照片与时间保留，其他维度分别核实。</p>
-        <template v-if="method !== 'REFRESH_REPAIR'">
+        <template v-if="repairCaptureVisible">
           <label class="fams-field"><span class="fams-field-label">实际发现损坏时间（本机时区）</span>
             <input class="fams-control" v-model="repairDiscovery" type="datetime-local" step="0.001" /></label>
           <label class="fams-selection"><input v-model="physicalChecked" type="checkbox" />已通过实物与原始证据核实损坏</label>
           <label class="fams-selection"><input v-model="discoveryChecked" type="checkbox" />已独立核实上述发现时间，未直接采信异常设备时间</label>
-          <div v-if="method === 'FORMAL_REPAIR'" class="fams-field-grid">
+          <div v-if="formalRepair" class="fams-field-grid">
             <label class="fams-field"><span class="fams-field-label">实际故障</span>
               <textarea class="fams-control" v-model="repairFault" minlength="3" maxlength="2000" /></label>
             <label class="fams-field"><span class="fams-field-label">影响程度</span>
@@ -251,7 +266,7 @@ onBeforeUnmount(() => { live = false; epoch++; clear(); });
         <label class="fams-field"><span class="fams-field-label">明确采信依据</span>
           <textarea class="fams-control" v-model="evidence" minlength="10" maxlength="2000" placeholder="填写可追溯的实物核验、签字记录或其他明确证据" /></label>
       </div>
-      <button class="fams-button" data-kind="primary" type="button" :disabled="!selected.length || reason.trim().length < 3 || evidence.trim().length < 10" @click="decide">共同提交所选差异</button>
+      <button class="fams-button" data-kind="primary" type="button" :disabled="decideDisabled" @click="decide">共同提交所选差异</button>
     </fieldset>
   </section>
 </template>

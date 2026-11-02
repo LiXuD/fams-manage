@@ -23,6 +23,21 @@ const form = ref(emptyForm()), decision = ref({ reason: "", physicalEvidenceChec
 const labels: Record<string, string> = { DRAFT: "凭证草稿", SUBMITTED: "待管理员批准", APPROVED: "已批准，待库管执行", REJECTED: "已驳回", EXECUTED: "已执行", WITHDRAWN: "已撤回" };
 const businessLabels: Record<string, string> = { REQUISITION: "领用/借用", TRANSFER: "调拨", REPAIR: "维修返还" };
 const businessLink = (type: string, id: string) => ({ path: (type === "TRANSFER" ? "/transfers/" : type === "REPAIR" ? "/repairs/" : "/requisitions/") + id });
+const manualReasonShown = computed(() => form.value.collectionMethod === "MANUAL_RECORD");
+const prevDisabled = computed(() => locked.value || page.value <= 1);
+const nextDisabled = computed(() => locked.value || page.value * 20 >= total.value);
+const receivedTimeText = computed(() => (selected.value ? formatProxyTime(selected.value.actualReceivedAt) : ""));
+const selectedBusinessLink = computed(() => (selected.value ? businessLink(selected.value.businessType, selected.value.businessId) : { path: "" }));
+interface AttachmentRow extends Attachment { scanText: string; downloadDisabled: boolean }
+const attachmentRows = computed<AttachmentRow[]>(() => attachments.value.map((item) => ({ ...item,
+  scanText: scanStatusLabels[item.scanStatus], downloadDisabled: busy.value || item.scanStatus !== "CLEAN" })));
+const submitDisabled = computed(() => !attachments.value.some((item) => item.scanStatus === "CLEAN"));
+const draftUploadShown = computed(() => !!warehouse.value && !!selected.value && selected.value.confirmationStatus === "DRAFT");
+const approvalFormShown = computed(() => !!admin.value && !!selected.value && selected.value.confirmationStatus === "SUBMITTED");
+const reasonMissing = computed(() => !decision.value.reason.trim());
+const decisionDisabled = computed(() => !decision.value.reason.trim() || !decision.value.physicalEvidenceChecked || !decision.value.noDisputeChecked);
+const executeShown = computed(() => !!warehouse.value && !!selected.value && selected.value.confirmationStatus === "APPROVED");
+const executedNoticeShown = computed(() => !!selected.value && selected.value.confirmationStatus === "EXECUTED");
 let generation = 0, live = true;
 const current = (epoch: number, owner: string) => live && epoch === generation && owner === identity.value;
 function clear() { generation++; rows.value = []; selected.value = null; attachments.value = []; snapshot.value = null; pending.value = null; pendingUpload.value = null;
@@ -135,7 +150,7 @@ onBeforeUnmount(() => { live = false; clear(); });
             <label class="fams-field"><span class="fams-field-label">凭证类别</span><select class="fams-control" v-model="form.evidenceKind"><option value="SIGNED_RECEIPT">签收单</option><option value="LOGISTICS_RECEIPT">物流签收</option><option value="AUTHORIZED_PROXY">授权代收</option></select></label>
             <label class="fams-field"><span class="fams-field-label">编码采集方式</span><select class="fams-control" v-model="form.collectionMethod"><option value="CODE_CONFIRMED">核对编码</option><option value="SCAN_CONFIRMED">扫描核对</option><option value="MANUAL_RECORD">手工记录</option></select></label>
           </div>
-          <label v-if="form.collectionMethod === 'MANUAL_RECORD'" class="fams-field fams-field-wide"><span class="fams-field-label">手工记录原因</span><textarea class="fams-control" v-model="form.manualReason" required maxlength="1000" /></label>
+          <label v-if="manualReasonShown" class="fams-field fams-field-wide"><span class="fams-field-label">手工记录原因</span><textarea class="fams-control" v-model="form.manualReason" required maxlength="1000" /></label>
           <label class="fams-selection"><input v-model="form.targetOrAuthorizedProxyReceived" type="checkbox" required>已确认本人或其授权代理人实际收到，且无实物或责任争议</label>
           <div class="fams-form-actions"><button class="fams-button" data-kind="primary" type="submit">保存凭证草稿</button></div>
         </fieldset>
@@ -147,8 +162,8 @@ onBeforeUnmount(() => { live = false; clear(); });
       <div class="fams-pagination">
         <span class="fams-pagination-summary">{{ page }} 页 / 共 {{ total }} 条</span>
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page <= 1" @click="paginate(-1)">上一页</button>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page * 20 >= total" @click="paginate(1)">下一页</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled" @click="paginate(-1)">上一页</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextDisabled" @click="paginate(1)">下一页</button>
         </div>
       </div>
       <section v-if="selected" class="fams-card fams-stack">
@@ -158,36 +173,36 @@ onBeforeUnmount(() => { live = false; clear(); });
             <p class="fams-panel-subtitle">{{ businessLabels[selected.businessType] || '业务' }}单据 {{ selected.businessId }} / 明细 {{ selected.itemId }} · 实物 {{ selected.businessSnapshotJson.assetCode }} · 责任人员 {{ selected.businessSnapshotJson.targetEmployeeId }}</p>
           </div>
         </div>
-        <p>实际签收人：{{ selected.actualSigner }} · 时间：{{ formatProxyTime(selected.actualReceivedAt) }}</p>
+        <p>实际签收人：{{ selected.actualSigner }} · 时间：{{ receivedTimeText }}</p>
         <p>无法确认原因：{{ selected.cannotConfirmReason }}；联系记录：{{ selected.contactRecord }}</p>
         <p v-if="selected.delegatedReceipt">代理关系：{{ selected.delegationRelationship }}；授权依据：{{ selected.delegationBasis }}</p>
         <p>凭证 {{ proxyEvidenceLabels[selected.evidenceKind] }} · 采集 {{ proxyCollectionLabels[selected.collectionMethod] }} {{ selected.manualReason }}</p>
         <p>提交账号 {{ selected.creatorAccountId }} · 批准账号 {{ selected.approverAccountId ?? '待批准' }} · 执行账号 {{ selected.executorAccountId ?? '待执行' }}</p>
         <p v-if="selected.decisionReason">决定说明：{{ selected.decisionReason }}</p>
-        <router-link :to="businessLink(selected.businessType, selected.businessId)">查看业务单据与核查入口</router-link>
+        <router-link :to="selectedBusinessLink">查看业务单据与核查入口</router-link>
         <ul class="fams-timeline">
-          <li v-for="attachment in attachments" :key="attachment.objectId">{{ attachment.filename }}<small>{{ scanStatusLabels[attachment.scanStatus] }}</small><button class="fams-button" data-size="sm" type="button" :disabled="busy || attachment.scanStatus !== 'CLEAN'" @click="download(attachment)">下载凭证</button></li>
+          <li v-for="attachment in attachmentRows" :key="attachment.objectId">{{ attachment.filename }}<small>{{ attachment.scanText }}</small><button class="fams-button" data-size="sm" type="button" :disabled="attachment.downloadDisabled" @click="download(attachment)">下载凭证</button></li>
         </ul>
-        <fieldset v-if="warehouse && selected.confirmationStatus === 'DRAFT'" class="fams-stack" :disabled="locked">
+        <fieldset v-if="draftUploadShown" class="fams-stack" :disabled="locked">
           <label class="fams-file"><span class="fams-field-label">签收凭证</span><input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" @change="file = ($event.target as HTMLInputElement).files?.[0] ?? null"></label>
           <div class="fams-inline">
             <button class="fams-button" data-kind="secondary" type="button" :disabled="!file" @click="upload">上传凭证</button>
-            <button class="fams-button" data-kind="primary" type="button" :disabled="!attachments.some(a => a.scanStatus === 'CLEAN')" @click="send(`/proxy-confirmations/${selected.id}/submit`)">冻结凭证并提交批准</button>
+            <button class="fams-button" data-kind="primary" type="button" :disabled="submitDisabled" @click="send(`/proxy-confirmations/${selected.id}/submit`)">冻结凭证并提交批准</button>
           </div>
         </fieldset>
-        <fieldset v-if="admin && selected.confirmationStatus === 'SUBMITTED'" class="fams-stack" :disabled="locked">
+        <fieldset v-if="approvalFormShown" class="fams-stack" :disabled="locked">
           <label class="fams-field fams-field-wide"><span class="fams-field-label">审批说明</span><textarea class="fams-control" v-model="decision.reason" required maxlength="1000" /></label>
           <div class="fams-selection-group">
             <label class="fams-selection"><input v-model="decision.physicalEvidenceChecked" type="checkbox">已下载核验实际签收凭证及授权依据</label>
             <label class="fams-selection"><input v-model="decision.noDisputeChecked" type="checkbox">已确认资产、人员与签收事实无争议</label>
           </div>
           <div class="fams-inline">
-            <button class="fams-button" data-kind="primary" type="button" :disabled="!decision.reason.trim() || !decision.physicalEvidenceChecked || !decision.noDisputeChecked" @click="send(`/proxy-confirmations/${selected.id}/decision`, { ...decision, approved: true })">批准本次代确认</button>
-            <button class="fams-button" data-kind="secondary" type="button" :disabled="!decision.reason.trim()" @click="send(`/proxy-confirmations/${selected.id}/decision`, { ...decision, approved: false })">驳回</button>
+            <button class="fams-button" data-kind="primary" type="button" :disabled="decisionDisabled" @click="send(`/proxy-confirmations/${selected.id}/decision`, { ...decision, approved: true })">批准本次代确认</button>
+            <button class="fams-button" data-kind="secondary" type="button" :disabled="reasonMissing" @click="send(`/proxy-confirmations/${selected.id}/decision`, { ...decision, approved: false })">驳回</button>
           </div>
         </fieldset>
-        <button v-if="warehouse && selected.confirmationStatus === 'APPROVED'" class="fams-button" data-kind="primary" type="button" :disabled="locked" @click="send(`/proxy-confirmations/${selected.id}/execute`)">执行已批准代确认并通知责任人员</button>
-        <p v-if="selected.confirmationStatus === 'EXECUTED'">代确认已执行。责任人员收到结果通知；未读通知不会撤销资产责任。</p>
+        <button v-if="executeShown" class="fams-button" data-kind="primary" type="button" :disabled="locked" @click="send(`/proxy-confirmations/${selected.id}/execute`)">执行已批准代确认并通知责任人员</button>
+        <p v-if="executedNoticeShown">代确认已执行。责任人员收到结果通知；未读通知不会撤销资产责任。</p>
       </section>
     </section>
   </AppChrome>

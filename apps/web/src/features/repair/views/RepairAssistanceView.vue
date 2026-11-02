@@ -11,6 +11,10 @@ const identity=computed(()=>JSON.stringify([session.user?.id,session.user?.roles
 const rows=ref<AssistedRepair[]>([]),total=shallowRef(0),page=shallowRef(1),detail=ref<AssistedRepair|null>(null),busy=shallowRef(false),error=shallowRef(""),notice=shallowRef("");
 const judgement=shallowRef(""),method=shallowRef(""),result=ref("NEEDS_WORK"),occurredAt=shallowRef(""),file=ref<File|null>(null),attachmentIds=ref<string[]>([]);
 const prepared=ref<RepairMutation|null>(null),pending=ref<RepairMutation|null>(null),locked=computed(()=>busy.value||!!prepared.value||!!pending.value);
+const prevDisabled=computed(()=>locked.value||page.value===1);
+const nextDisabled=computed(()=>locked.value||page.value*20>=total.value);
+const faultOccurredAtText=computed(()=>detail.value?new Date(detail.value.faultOccurredAt).toLocaleString():"");
+const opinionRows=computed(()=>(detail.value?.opinions??[]).map(row=>({...row,occurredAtText:new Date(row.occurred_at).toLocaleString()})));
 let generation=0,live=true;
 const current=(epoch:number,owner:string)=>live&&generation===epoch&&identity.value===owner;
 function reset(){generation++;rows.value=[];detail.value=null;total.value=0;page.value=1;judgement.value="";method.value="";result.value="NEEDS_WORK";occurredAt.value="";file.value=null;attachmentIds.value=[];prepared.value=null;pending.value=null;busy.value=false;}
@@ -55,15 +59,15 @@ watch(identity,()=>{reset();error.value="";notice.value="";void read();},{immedi
       <div class="fams-pagination">
         <span class="fams-pagination-summary">共{{total}}项</span>
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page===1" @click="paginate(-1)">上一页受邀维修</button>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page*20>=total" @click="paginate(1)">下一页受邀维修</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled" @click="paginate(-1)">上一页受邀维修</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextDisabled" @click="paginate(1)">下一页受邀维修</button>
         </div>
       </div>
       <section v-if="detail" class="fams-card fams-stack" aria-label="当前受邀故障">
         <div class="fams-panel-head">
           <div>
             <h2 class="fams-panel-title">{{detail.asset.assetCode}} · {{detail.asset.name}}</h2>
-            <p class="fams-panel-subtitle">{{detail.fault}} · 故障发生 {{new Date(detail.faultOccurredAt).toLocaleString()}}</p>
+            <p class="fams-panel-subtitle">{{detail.fault}} · 故障发生 {{faultOccurredAtText}}</p>
           </div>
         </div>
         <p>当前维修阶段：{{repairStates[detail.status]}}</p>
@@ -91,7 +95,7 @@ watch(identity,()=>{reset();error.value="";notice.value="";void read();},{immedi
         <RepairTechnicalEvidence v-for="item in detail.attachments" :key="item.objectId" :invitation-id="detail.invitationId" :object-id="item.objectId" kind="attachments" :filename="item.filename" :blocked="locked" @invalidated="reset"/>
         <div class="fams-panel-head"><h3 class="fams-panel-title">最近100条既有意见 / 共{{detail.opinionTotal || 0}}条</h3></div>
         <ul class="fams-timeline">
-          <li v-for="row in detail.opinions" :key="row.id">{{row.actor_username}} · {{new Date(row.occurred_at).toLocaleString()}} · {{opinionResults[row.opinion_result]}}<small>{{row.judgement}}</small><small>{{row.method}}</small><RepairTechnicalEvidence v-for="id in row.attachment_ids_json" :key="id" :invitation-id="detail.invitationId" :object-id="id" kind="opinion-attachments" :blocked="locked" @invalidated="reset"/></li>
+          <li v-for="row in opinionRows" :key="row.id">{{row.actor_username}} · {{row.occurredAtText}} · {{opinionResults[row.opinion_result]}}<small>{{row.judgement}}</small><small>{{row.method}}</small><RepairTechnicalEvidence v-for="id in row.attachment_ids_json" :key="id" :invitation-id="detail.invitationId" :object-id="id" kind="opinion-attachments" :blocked="locked" @invalidated="reset"/></li>
         </ul>
       </section>
     </section>

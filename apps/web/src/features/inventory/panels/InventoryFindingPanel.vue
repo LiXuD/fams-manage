@@ -132,6 +132,38 @@ watch(method, () => { assets.value = []; receipts.value = []; selectedAsset.valu
 onBeforeUnmount(() => { live = false; clear(); });
 const ownerStates: Record<string, string> = { PENDING_ADMIN_DECISION: "待管理员审批", WAITING_WAREHOUSE_CLAIM: "待库管领取", WAREHOUSE_PROCESSING: "库管处理中", COMPLETED: "已完成", REJECTED: "已驳回", CANCELLED: "已取消" };
 const methodLabels: Record<string, string> = { NON_ENTERPRISE: "非企业资产依据", DUPLICATE_ASSET: "已登记资产重复线索", LINK_INBOUND: "关联正式入库", REFRESH_INBOUND: "核对正式入库进度" };
+const findingRows = computed(() => rows.value.map(row => ({ ...row,
+  descriptionText: row.facts_json.actual?.description || "原始现场线索",
+  receivedAtText: new Date(row.received_at).toLocaleString(),
+  reviewable: ["FINDING_REVIEW", "TIME_REVIEW"].includes(row.outcome) })));
+const counterRows = computed(() => counters.value.map(counter => ({ ...counter,
+  descriptionText: counter.facts_json.actual?.description || "实际重采现场线索",
+  receivedAtText: new Date(counter.received_at).toLocaleString() })));
+const receiptRows = computed(() => receipts.value.map(receipt => ({ ...receipt,
+  statusText: ownerStates[receipt.status] ?? "状态待核实",
+  openHref: `/inbound/${encodeURIComponent(receipt.id)}`,
+  items: receipt.items.map(item => ({ ...item,
+    executionText: item.executionStatus === "ACCEPTED" ? "已实际验收" : "待验收",
+    checked: selectedReceipt.value === receipt.id && selectedAsset.value === item.asset.id })) })));
+const recollectionRows = computed(() => (detail.value?.recollections ?? []).map(link => ({ ...link,
+  occurredAtText: new Date(link.occurred_at).toLocaleString() })));
+const historyRows = computed(() => (detail.value?.history ?? []).map(history => ({ ...history,
+  occurredAtText: history.occurred_at ? new Date(history.occurred_at).toLocaleString() : "时间待核实",
+  methodText: methodLabels[history.method] ?? "历史处理",
+  inboundHref: history.inboundReceiptId ? `/inbound/${encodeURIComponent(history.inboundReceiptId)}` : "" })));
+const subjectStateText = computed(() => states[detail.value?.subject.subject_status ?? ""] || "尚未列入复核");
+const timeSubjectStateText = computed(() => states[timeSubject.value?.subject_status ?? ""] || "尚未列入复核");
+const receiptSearchVisible = computed(() => method.value === "LINK_INBOUND" || method.value === "REFRESH_INBOUND");
+const duplicateMethod = computed(() => method.value === "DUPLICATE_ASSET");
+const searchActionVisible = computed(() => method.value !== "NON_ENTERPRISE");
+const subjectUnlisted = computed(() => !!detail.value && detail.value.subject.version === undefined);
+const subjectOpen = computed(() => !!detail.value && detail.value.subject.subject_status !== "CLOSED");
+const timeReview = computed(() => !!detail.value && detail.value.observation.outcome === "TIME_REVIEW");
+const timeSubjectOpen = computed(() => !!timeSubject.value && timeSubject.value.subject_status !== "CLOSED");
+const prevDisabled = computed(() => locked.value || page.value === 1);
+const nextDisabled = computed(() => locked.value || page.value * 20 >= total.value);
+const counterPrevDisabled = computed(() => counterPage.value === 1);
+const counterNextDisabled = computed(() => counterPage.value * 20 >= counterTotal.value);
 </script>
 <template>
   <section class="fams-card fams-stack" aria-label="盘盈与任务外线索复核">
@@ -155,43 +187,43 @@ const methodLabels: Record<string, string> = { NON_ENTERPRISE: "非企业资产�
     </div>
     <button v-if="pending" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="save()">重试原盘盈复核操作</button>
     <ul class="fams-timeline">
-      <li v-for="row in rows" :key="row.id">
-        <p>{{ row.facts_json.actual?.description || '原始现场线索' }} · {{ new Date(row.received_at).toLocaleString() }}</p>
-        <button v-if="['FINDING_REVIEW', 'TIME_REVIEW'].includes(row.outcome)" class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="locked" @click="open(row)">核对线索 {{ row.id }}</button>
+      <li v-for="row in findingRows" :key="row.id">
+        <p>{{ row.descriptionText }} · {{ row.receivedAtText }}</p>
+        <button v-if="row.reviewable" class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="locked" @click="open(row)">核对线索 {{ row.id }}</button>
         <p v-else>时间、过期或迟到线索须沿对应复核处理，原始事实继续保留。</p></li>
     </ul>
     <div class="fams-pagination">
       <span class="fams-pagination-summary">共 {{ total }} 条</span>
       <div class="fams-pagination-actions">
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page === 1" @click="paginate(-1)">上一页线索</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled" @click="paginate(-1)">上一页线索</button>
         <span class="fams-pagination-page">第 {{ page }} 页</span>
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page * 20 >= total" @click="paginate(1)">下一页线索</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextDisabled" @click="paginate(1)">下一页线索</button>
       </div>
     </div>
     <div v-if="detail" class="fams-card fams-stack">
       <h3 class="fams-panel-title">当前线索 {{ detail.observation.id }}</h3>
       <p>{{ detail.observation.facts_json.actual?.description }}</p>
-      <p>{{ states[detail.subject.subject_status ?? ''] || '尚未列入复核' }}</p>
+      <p>{{ subjectStateText }}</p>
       <InventoryPhotoEvidence v-if="detail.observation.facts_json.photoIds?.length" :task-id="taskId" :event-id="detail.observation.client_event_id" :photo-ids="detail.observation.facts_json.photoIds" @invalid="clear" />
-      <button v-if="detail.subject.version === undefined" class="fams-button" data-kind="primary" type="button" :disabled="locked" @click="save(true)">列入盘盈独立复核</button>
-      <fieldset v-else-if="detail.subject.subject_status !== 'CLOSED'" class="fams-stack" :disabled="locked">
+      <button v-if="subjectUnlisted" class="fams-button" data-kind="primary" type="button" :disabled="locked" @click="save(true)">列入盘盈独立复核</button>
+      <fieldset v-else-if="subjectOpen" class="fams-stack" :disabled="locked">
         <div class="fams-field-grid">
           <label class="fams-field"><span class="fams-field-label">盘盈处理方式</span>
             <select class="fams-control" v-model="method"><option value="NON_ENTERPRISE">有明确依据确认非企业资产</option><option value="DUPLICATE_ASSET">核实为已登记资产的重复线索</option><option value="LINK_INBOUND">关联已提交的正式入库</option><option value="REFRESH_INBOUND">核对既有关联入库进度</option></select></label>
-          <label v-if="method === 'DUPLICATE_ASSET'" class="fams-field"><span class="fams-field-label">权威资产编码</span>
+          <label v-if="duplicateMethod" class="fams-field"><span class="fams-field-label">权威资产编码</span>
             <input class="fams-control" v-model="assetCode" maxlength="128" /></label>
-          <label v-if="method === 'LINK_INBOUND' || method === 'REFRESH_INBOUND'" class="fams-field"><span class="fams-field-label">正式入库单号</span>
+          <label v-if="receiptSearchVisible" class="fams-field"><span class="fams-field-label">正式入库单号</span>
             <input class="fams-control" v-model="receiptNumber" maxlength="128" /></label>
         </div>
-        <button v-if="method !== 'NON_ENTERPRISE'" class="fams-button" data-kind="secondary" type="button" @click="search">查找正式依据</button>
+        <button v-if="searchActionVisible" class="fams-button" data-kind="secondary" type="button" @click="search">查找正式依据</button>
         <div v-if="assets.length" class="fams-selection-group">
           <label v-for="asset in assets" :key="asset.id" class="fams-selection"><input v-model="selectedAsset" type="radio" :value="asset.id" />{{ asset.assetCode }} · {{ asset.name }}</label>
         </div>
-        <div v-for="receipt in receipts" :key="receipt.id" class="fams-card fams-stack">
-          <p>{{ receipt.receiptNumber }} · {{ ownerStates[receipt.status] ?? '状态待核实' }}</p>
-          <a class="fams-button" data-kind="link" :href="`/inbound/${encodeURIComponent(receipt.id)}`">查看正式入库单</a>
+        <div v-for="receipt in receiptRows" :key="receipt.id" class="fams-card fams-stack">
+          <p>{{ receipt.receiptNumber }} · {{ receipt.statusText }}</p>
+          <a class="fams-button" data-kind="link" :href="receipt.openHref">查看正式入库单</a>
           <div class="fams-selection-group">
-            <label v-for="item in receipt.items" :key="item.id" class="fams-selection"><input type="radio" :checked="selectedReceipt === receipt.id && selectedAsset === item.asset.id" @change="selectedReceipt = receipt.id; selectedAsset = item.asset.id" />{{ item.assetSnapshot.assetCode }} · {{ item.assetSnapshot.assetName }} · {{ item.executionStatus === 'ACCEPTED' ? '已实际验收' : '待验收' }}</label>
+            <label v-for="item in receipt.items" :key="item.id" class="fams-selection"><input type="radio" :checked="item.checked" @change="selectedReceipt = receipt.id; selectedAsset = item.asset.id" />{{ item.assetSnapshot.assetCode }} · {{ item.assetSnapshot.assetName }} · {{ item.executionText }}</label>
           </div>
         </div>
         <label class="fams-field"><span class="fams-field-label">盘盈处理原因</span>
@@ -200,21 +232,21 @@ const methodLabels: Record<string, string> = { NON_ENTERPRISE: "非企业资产�
           <textarea class="fams-control" v-model="evidence" maxlength="2000" /></label>
         <button class="fams-button" data-kind="primary" type="button" @click="save()">保存盘盈复核与关联</button>
       </fieldset>
-      <section v-if="detail.observation.outcome === 'TIME_REVIEW'" class="fams-card fams-stack" aria-label="独立时间核实">
-        <h4 class="fams-panel-title">独立时间核实 · {{ states[timeSubject?.subject_status ?? ''] || '尚未列入复核' }}</h4>
+      <section v-if="timeReview" class="fams-card fams-stack" aria-label="独立时间核实">
+        <h4 class="fams-panel-title">独立时间核实 · {{ timeSubjectStateText }}</h4>
         <p>原时间仍不确定。请实际重新采集照片与现场事实，再明确关联同一实物的新线索。盘盈归属不会被重采自动关闭。</p>
         <button v-if="!timeSubject" class="fams-button" data-kind="primary" type="button" :disabled="locked" @click="save(true)">补齐时间与盘盈双项复核</button>
-        <fieldset v-else-if="timeSubject.subject_status !== 'CLOSED'" class="fams-stack" :disabled="locked">
+        <fieldset v-else-if="timeSubjectOpen" class="fams-stack" :disabled="locked">
           <button class="fams-button" data-kind="secondary" type="button" @click="loadCounters()">读取有效重采线索</button>
           <div v-if="counters.length" class="fams-selection-group">
-            <label v-for="counter in counters" :key="counter.id" class="fams-selection"><input v-model="counterId" type="radio" :value="counter.id" />{{ counter.facts_json.actual?.description || '实际重采现场线索' }} · {{ new Date(counter.received_at).toLocaleString() }}</label>
+            <label v-for="counter in counterRows" :key="counter.id" class="fams-selection"><input v-model="counterId" type="radio" :value="counter.id" />{{ counter.descriptionText }} · {{ counter.receivedAtText }}</label>
           </div>
           <div class="fams-pagination">
             <span class="fams-pagination-summary">共 {{ counterTotal }} 条</span>
             <div class="fams-pagination-actions">
-              <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="counterPage === 1" @click="loadCounters(-1)">上一页重采线索</button>
+              <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="counterPrevDisabled" @click="loadCounters(-1)">上一页重采线索</button>
               <span class="fams-pagination-page">第 {{ counterPage }} 页</span>
-              <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="counterPage * 20 >= counterTotal" @click="loadCounters(1)">下一页重采线索</button>
+              <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="counterNextDisabled" @click="loadCounters(1)">下一页重采线索</button>
             </div>
           </div>
           <label class="fams-field"><span class="fams-field-label">同一实物核实原因</span>
@@ -224,12 +256,12 @@ const methodLabels: Record<string, string> = { NON_ENTERPRISE: "非企业资产�
           <button class="fams-button" data-kind="primary" type="button" @click="save(false, true)">保存独立重采关联</button>
         </fieldset>
         <ul class="fams-timeline">
-          <li v-for="link in detail.recollections" :key="link.after_version">{{ link.actor_username }} · {{ new Date(link.occurred_at).toLocaleString() }} · 已关联重采线索 {{ link.counterObservationId }} · {{ link.reason }} · {{ link.evidence }}；原时间仍不确定</li>
+          <li v-for="link in recollectionRows" :key="link.after_version">{{ link.actor_username }} · {{ link.occurredAtText }} · 已关联重采线索 {{ link.counterObservationId }} · {{ link.reason }} · {{ link.evidence }}；原时间仍不确定</li>
         </ul>
       </section>
       <h4 class="fams-panel-title">最近 100 条处理历史 / 共 {{ detail.historyTotal }} 条</h4>
       <ul class="fams-timeline">
-        <li v-for="history in detail.history" :key="history.after_version">{{ history.actor_username }} · {{ history.occurred_at ? new Date(history.occurred_at).toLocaleString() : '时间待核实' }} · {{ states[history.subject_status] }} · {{ methodLabels[history.method] ?? '历史处理' }} · {{ history.reason }} · {{ history.evidence }}<a v-if="history.inboundReceiptId" :href="`/inbound/${encodeURIComponent(history.inboundReceiptId)}`">正式入库</a></li>
+        <li v-for="history in historyRows" :key="history.after_version">{{ history.actor_username }} · {{ history.occurredAtText }} · {{ states[history.subject_status] }} · {{ history.methodText }} · {{ history.reason }} · {{ history.evidence }}<a v-if="history.inboundReceiptId" :href="history.inboundHref">正式入库</a></li>
       </ul>
     </div>
   </section>

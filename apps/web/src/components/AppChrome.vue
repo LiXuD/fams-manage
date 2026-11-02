@@ -117,8 +117,28 @@ function isCurrent(path: string): boolean {
 
 /** 可见条目为空的分组整组不渲染。 */
 const navGroups = computed(() => NAV_GROUPS
-  .map((group) => ({ ...group, items: group.items.filter(visible) }))
+  .map((group) => {
+    const groupCollapsed = collapsed.has(group.label);
+    return {
+      ...group,
+      navId: `nav-group-${group.label}`,
+      expanded: !groupCollapsed,
+      collapseLocked: group.label === activeGroup.value,
+      collapsedState: groupCollapsed ? "true" : "false",
+      items: group.items.filter(visible).map((item) => ({
+        ...item,
+        ariaCurrent: isCurrent(item.path) ? ("page" as const) : undefined,
+      })),
+    };
+  })
   .filter((group) => group.items.length > 0));
+
+const layoutMode = computed(() => session.isAuthenticated ? null : "anonymous");
+
+const showAccountAdminNote = computed(() => session.hasPermission("ACCOUNT_ADMIN"));
+
+const showSessionError = computed(() => session.isAuthenticated && !!session.error && route.name !== "password-change");
+const sessionErrorText = computed(() => session.error?.message ?? "");
 
 /** 页头由路由 meta 单点定义，保证不同菜单的标题落在同一垂直位置。 */
 const pageHead = computed(() => {
@@ -152,25 +172,25 @@ async function handleLogout(): Promise<void> {
           @click="handleLogout">退出</button>
       </div>
     </header>
-    <div class="fams-layout" :data-mode="session.isAuthenticated ? null : 'anonymous'">
+    <div class="fams-layout" :data-mode="layoutMode">
       <nav v-if="session.isAuthenticated" class="fams-sidebar" aria-label="主导航">
         <div class="fams-navigation" data-mode="sidebar">
           <div v-for="group in navGroups" :key="group.label" class="fams-navigation-group">
-            <button class="fams-button fams-navigation-toggle" type="button" :aria-expanded="!collapsed.has(group.label)"
-              :aria-controls="`nav-group-${group.label}`" :disabled="group.label === activeGroup" @click="toggleGroup(group.label)">
+            <button class="fams-button fams-navigation-toggle" type="button" :aria-expanded="group.expanded"
+              :aria-controls="group.navId" :disabled="group.collapseLocked" @click="toggleGroup(group.label)">
               <svg class="fams-nav-chevron" viewBox="0 0 16 16" aria-hidden="true">
                 <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
               <span class="fams-nav-label">{{ group.label }}</span>
             </button>
-            <div :id="`nav-group-${group.label}`" class="fams-navigation-items" :data-collapsed="collapsed.has(group.label) ? 'true' : 'false'">
+            <div :id="group.navId" class="fams-navigation-items" :data-collapsed="group.collapsedState">
               <div class="fams-navigation-items-inner">
                 <router-link v-for="item in group.items" :key="item.path" :to="item.path" class="fams-button"
-                  :aria-current="isCurrent(item.path) ? 'page' : undefined">{{ item.label }}</router-link>
+                  :aria-current="item.ariaCurrent">{{ item.label }}</router-link>
               </div>
             </div>
           </div>
-          <span v-if="session.hasPermission('ACCOUNT_ADMIN')" class="fams-navigation-note">账号与角色 · 后续开放</span>
+          <span v-if="showAccountAdminNote" class="fams-navigation-note">账号与角色 · 后续开放</span>
         </div>
       </nav>
       <main class="fams-main">
@@ -182,9 +202,9 @@ async function handleLogout(): Promise<void> {
           </div>
           <slot name="actions" />
         </header>
-        <section v-if="session.isAuthenticated && session.error && route.name !== 'password-change'" class="fams-notice"
+        <section v-if="showSessionError" class="fams-notice"
           data-state="error" role="alert">
-          <strong>{{ session.error.message }}</strong>
+          <strong>{{ sessionErrorText }}</strong>
         </section>
         <slot />
       </main>

@@ -106,6 +106,17 @@ onBeforeUnmount(() => { live = false; clear(); emit("busyChange", false); });
 const states: Record<string, string> = { PENDING: "待管理员决定", APPROVED: "已批准新目标", REJECTED: "已驳回" };
 const approved = computed(() => props.repair.approvedReturnTargets ?? []);
 const targetText = (target: RepairReturnTarget) => [target.employeeName, target.organizationName, target.locationName].join(" · ");
+const approvedRows = computed(() => approved.value.map(row => ({ ...row,
+  targetDisplayText: targetText(row.target_json),
+  approvedAtText: new Date(row.approved_at).toLocaleString() })));
+const proposalRows = computed(() => rows.value.filter(row => row.business_id === props.repair.id).map(row => ({ ...row,
+  organizationNameText: row.targetDisplay?.organizationName || "待核实",
+  employeeNameText: row.targetDisplay?.employeeName || "待核实",
+  locationNameText: row.targetDisplay?.locationName || "待核实",
+  decidable: admin.value && row.change_status === 'PENDING' })));
+const catalogPrevDisabled = computed(() => catalogPage.value === 1);
+const prevDisabled = computed(() => locked.value || props.blocked || page.value === 1);
+const nextDisabled = computed(() => locked.value || props.blocked || page.value * 20 >= total.value);
 </script>
 <template>
   <section v-if="admin || repair.actions?.changeReturnTarget || approved.length || pending || prepared || snapshot" class="fams-card fams-stack" aria-label="维修返还目标变更">
@@ -119,7 +130,7 @@ const targetText = (target: RepairReturnTarget) => [target.employeeName, target.
       </div>
     </div>
     <ul v-if="approved.length" class="fams-timeline">
-      <li v-for="row in approved" :key="row.id">已批准返还目标：{{ targetText(row.target_json) }}<small>{{ new Date(row.approved_at).toLocaleString() }}</small></li>
+      <li v-for="row in approvedRows" :key="row.id">已批准返还目标：{{ row.targetDisplayText }}<small>{{ row.approvedAtText }}</small></li>
     </ul>
     <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
     <div v-if="prepared" class="fams-card fams-stack" role="group" aria-label="确认维修目标变更">
@@ -147,7 +158,7 @@ const targetText = (target: RepairReturnTarget) => [target.employeeName, target.
       <div class="fams-pagination">
         <span class="fams-pagination-summary">当前页{{ choices.length }}项</span>
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="catalogPage===1" @click="catalog(kind,-1)">上一页目标选项</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="catalogPrevDisabled" @click="catalog(kind,-1)">上一页目标选项</button>
           <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="!catalogMore" @click="catalog(kind,1)">下一页目标选项</button>
         </div>
       </div>
@@ -160,12 +171,12 @@ const targetText = (target: RepairReturnTarget) => [target.employeeName, target.
       <div class="fams-form-actions"><button class="fams-button" data-kind="primary" type="button" @click="propose">核对提请目标变更</button></div>
     </fieldset>
     <button v-if="admin || repair.actions?.changeReturnTarget" class="fams-button" data-kind="secondary" type="button" :disabled="locked || blocked" @click="list()">查询维修目标变更申请</button>
-    <article v-for="row in rows.filter(row=>row.business_id===repair.id)" :key="row.id" class="fams-card fams-stack">
+    <article v-for="row in proposalRows" :key="row.id" class="fams-card fams-stack">
       <h4 class="fams-panel-title">{{ states[row.change_status] }}</h4>
       <p>{{ row.reason }} · {{ row.physical_verification }}</p>
-      <p>新组织 {{ row.targetDisplay?.organizationName || "待核实" }} · 新责任人 {{ row.targetDisplay?.employeeName || "待核实" }} · 新位置 {{ row.targetDisplay?.locationName || "待核实" }}</p>
+      <p>新组织 {{ row.organizationNameText }} · 新责任人 {{ row.employeeNameText }} · 新位置 {{ row.locationNameText }}</p>
       <p v-if="row.decision_reason">{{ row.decision_reason }}</p>
-      <fieldset v-if="admin && row.change_status==='PENDING'" class="fams-card fams-stack" :disabled="locked || blocked">
+      <fieldset v-if="row.decidable" class="fams-card fams-stack" :disabled="locked || blocked">
         <label class="fams-field fams-field-wide"><span class="fams-field-label">新目标决定原因</span><textarea class="fams-control" v-model="decision" maxlength="1000"/></label>
         <div class="fams-inline">
           <button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="decide(row,'APPROVED')">核对批准本单新目标</button>
@@ -176,8 +187,8 @@ const targetText = (target: RepairReturnTarget) => [target.employeeName, target.
     <div class="fams-pagination">
       <span class="fams-pagination-summary">本单维修变更申请第{{ page }}页，共{{ total }}条。</span>
       <div class="fams-pagination-actions">
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || blocked || page===1" @click="list(-1)">上一页变更申请</button>
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || blocked || page*20>=total" @click="list(1)">下一页变更申请</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled" @click="list(-1)">上一页变更申请</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextDisabled" @click="list(1)">下一页变更申请</button>
       </div>
     </div>
   </section>

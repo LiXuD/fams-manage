@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { allocationStatusLabels as labels } from "@/features/requisition/api";
 import { useReassignmentFlow } from "@/composables/useReassignmentFlow";
 
@@ -12,6 +13,10 @@ const { snapshot, target, reason, evidence, checked, busy, error, retryable, ins
     mapItems: (item) => ({ id: item.id, version: item.version, status: item.status, assetVersion: item.assetVersion, lockVersion: item.lockVersion }),
     onSaved: () => emit("saved"),
   });
+const rows = computed(() => (snapshot.value?.items ?? []).map(item => ({
+  ...item, lockText: item.lockVersion < 0 ? "已释放" : String(item.lockVersion),
+})));
+const submitText = computed(() => retryable.value ? "原请求重试转派" : "确认转派整单");
 </script>
 
 <template>
@@ -27,7 +32,7 @@ const { snapshot, target, reason, evidence, checked, busy, error, retryable, ins
     <template v-if="snapshot">
       <p class="fams-panel-subtitle">当前处理账号 {{ snapshot.processorAccountId }} · 处理权版本 {{ snapshot.ownershipVersion }}</p>
       <ul class="fams-timeline">
-        <li v-for="item in snapshot.items" :key="item.id">明细 {{ item.id }} · {{ item.assetCode }} · {{ labels[item.status] }}<small>锁版本 {{ item.lockVersion < 0 ? '已释放' : item.lockVersion }}</small></li>
+        <li v-for="item in rows" :key="item.id">明细 {{ item.id }} · {{ item.assetCode }} · {{ labels[item.status] }}<small>锁版本 {{ item.lockText }}</small></li>
       </ul>
       <div class="fams-field-grid">
         <label class="fams-field"><span class="fams-field-label">接任库管</span>
@@ -39,7 +44,7 @@ const { snapshot, target, reason, evidence, checked, busy, error, retryable, ins
       </div>
       <label class="fams-selection"><input v-model="checked" type="checkbox" :disabled="busy || retryable" />已与处理人或交接记录核对未同步结果</label>
       <div class="fams-panel-actions">
-        <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="submit">{{ retryable ? '原请求重试转派' : '确认转派整单' }}</button>
+        <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="submit">{{ submitText }}</button>
       </div>
     </template>
   </section>

@@ -31,6 +31,21 @@ const executors = ref<Choice[]>([]);
 const selectedItems = ref<string[]>([]); const executor = shallowRef(""); const reason = shallowRef(""); const recheck = shallowRef(false);
 const preview = ref<{ count: number; digest: string } | null>(null);
 const manageable = computed(() => !!detail.value && ["READY", "IN_PROGRESS", "WAITING_REVIEW"].includes(detail.value.task.task_status));
+const startsAtText = computed(() => (detail.value ? new Date(detail.value.task.starts_at).toLocaleString() : ""));
+const dueAtText = computed(() => (detail.value ? new Date(detail.value.task.due_at).toLocaleString() : ""));
+const overdueText = computed(() => (detail.value?.task.overdue ? " · 已逾期，仍可执行" : ""));
+const statusTone = computed(() => (detail.value?.task.overdue ? "warning" : "info"));
+const isDraft = computed(() => detail.value?.task.task_status === "DRAFT");
+const isReady = computed(() => detail.value?.task.task_status === "READY");
+const reasonMissing = computed(() => !reason.value.trim());
+const assignDisabled = computed(() => !selectedItems.value.length || !executor.value || reasonMissing.value
+  || detail.value?.task.task_status === "WAITING_REVIEW" && !recheck.value);
+const panelsVisible = computed(() => !!admin.value && detail.value?.task.task_status !== "DRAFT");
+const latePanelVisible = computed(() => !!admin.value && !!detail.value
+  && ["COMPLETED", "CANCELLED", "TERMINATED"].includes(detail.value.task.task_status));
+const emptyColSpan = computed(() => (admin.value ? 5 : 4));
+const prevDisabled = computed(() => locked.value || itemPage.value === 1);
+const nextDisabled = computed(() => locked.value || itemPage.value * 20 >= (detail.value?.total ?? 0));
 type Confirm = "publish" | "copy" | "start" | "cancel" | "terminate" | "delete" | "assign";
 const confirmKind = ref<Confirm | null>(null);
 const confirmLabels: Record<Confirm, string> = { publish: "确认发布并冻结集合", copy: "确认复制范围创建新草稿",
@@ -136,11 +151,11 @@ onMounted(async () => {
       <div class="fams-panel-head">
         <div>
           <h2 class="fams-panel-title">{{ detail.task.name }}</h2>
-          <p class="fams-panel-subtitle">开始 {{ new Date(detail.task.starts_at).toLocaleString() }} · 截止
-            {{ new Date(detail.task.due_at).toLocaleString() }}{{ detail.task.overdue ? ' · 已逾期，仍可执行' : '' }}</p>
+          <p class="fams-panel-subtitle">开始 {{ startsAtText }} · 截止
+            {{ dueAtText }}{{ overdueText }}</p>
         </div>
         <div class="fams-panel-actions">
-          <span class="fams-status" :data-tone="detail.task.overdue ? 'warning' : 'info'">{{ labels[detail.task.task_status] }}</span>
+          <span class="fams-status" :data-tone="statusTone">{{ labels[detail.task.task_status] }}</span>
         </div>
       </div>
       <p v-if="detail.task.end_reason" class="fams-panel-subtitle">结束原因：{{ detail.task.end_reason }}</p>
@@ -151,24 +166,24 @@ onMounted(async () => {
         <legend class="fams-panel-title">任务操作</legend>
         <div class="fams-panel-actions">
           <button class="fams-button" data-kind="secondary" type="button" @click="openConfirm('copy')">复制范围创建新草稿</button>
-          <template v-if="detail.task.task_status === 'DRAFT'">
+          <template v-if="isDraft">
             <router-link class="fams-button" data-kind="secondary" :to="`/inventory-tasks/${detail.task.id}/edit`">编辑草稿</router-link>
             <button class="fams-button" data-kind="secondary" type="button" @click="previewPublishedRange">预览应盘数量</button>
             <button class="fams-button" data-kind="primary" type="button" :disabled="!preview?.count" @click="openConfirm('publish')">发布并冻结集合</button>
           </template>
-          <button v-if="detail.task.task_status === 'READY'" class="fams-button" data-kind="primary" type="button"
+          <button v-if="isReady" class="fams-button" data-kind="primary" type="button"
             @click="openConfirm('start')">手动开始</button>
         </div>
         <p v-if="preview">预计 {{ preview.count }} 项（待入库和未发布资产已排除）</p>
         <label class="fams-field"><span class="fams-field-label">操作原因</span>
           <textarea class="fams-control" v-model="reason" maxlength="1000" /></label>
         <div class="fams-panel-actions">
-          <button v-if="detail.task.task_status === 'DRAFT'" class="fams-button" data-kind="secondary" type="button"
-            :disabled="!reason.trim()" @click="openConfirm('delete')">删除草稿</button>
+          <button v-if="isDraft" class="fams-button" data-kind="secondary" type="button"
+            :disabled="reasonMissing" @click="openConfirm('delete')">删除草稿</button>
           <template v-if="manageable">
-            <button class="fams-button" data-kind="secondary" type="button" :disabled="!reason.trim()"
+            <button class="fams-button" data-kind="secondary" type="button" :disabled="reasonMissing"
               @click="openConfirm('cancel')">取消无结果任务</button>
-            <button class="fams-button" data-kind="secondary" type="button" :disabled="!reason.trim()"
+            <button class="fams-button" data-kind="secondary" type="button" :disabled="reasonMissing"
               @click="openConfirm('terminate')">终止并保留结果</button>
           </template>
         </div>
@@ -179,7 +194,7 @@ onMounted(async () => {
         </div>
         <div v-if="manageable" class="fams-panel-actions">
           <button class="fams-button" data-kind="primary" type="button"
-            :disabled="!selectedItems.length || !executor || !reason.trim() || detail.task.task_status === 'WAITING_REVIEW' && !recheck"
+            :disabled="assignDisabled"
             @click="openConfirm('assign')">分配所选应盘项</button>
         </div>
         <div v-if="confirmKind" class="fams-card fams-stack" role="group" :aria-label="confirmLabels[confirmKind]">
@@ -193,12 +208,12 @@ onMounted(async () => {
         </div>
       </fieldset>
 
-      <InventoryReviewPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="detail.task.id" :task-id="detail.task.id" @changed="refresh" />
-      <InventoryReadinessPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="`readiness:${detail.task.id}`" :task-id="detail.task.id" @changed="refresh" />
-      <InventorySealPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="`seal:${detail.task.id}`" :task-id="detail.task.id" @changed="refresh" />
-      <InventoryLatePanel v-if="admin && ['COMPLETED', 'CANCELLED', 'TERMINATED'].includes(detail.task.task_status)" :key="`late:${detail.task.id}`" :task-id="detail.task.id" />
-      <InventorySynchronizationPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="`sync:${detail.task.id}`" :task-id="detail.task.id" />
-      <InventoryFindingPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="`finding:${detail.task.id}`" :task-id="detail.task.id" @changed="refresh" />
+      <InventoryReviewPanel v-if="panelsVisible" :key="detail.task.id" :task-id="detail.task.id" @changed="refresh" />
+      <InventoryReadinessPanel v-if="panelsVisible" :key="`readiness:${detail.task.id}`" :task-id="detail.task.id" @changed="refresh" />
+      <InventorySealPanel v-if="panelsVisible" :key="`seal:${detail.task.id}`" :task-id="detail.task.id" @changed="refresh" />
+      <InventoryLatePanel v-if="latePanelVisible" :key="`late:${detail.task.id}`" :task-id="detail.task.id" />
+      <InventorySynchronizationPanel v-if="panelsVisible" :key="`sync:${detail.task.id}`" :task-id="detail.task.id" />
+      <InventoryFindingPanel v-if="panelsVisible" :key="`finding:${detail.task.id}`" :task-id="detail.task.id" @changed="refresh" />
 
       <div class="fams-table-scroll">
         <table class="fams-table">
@@ -214,7 +229,7 @@ onMounted(async () => {
               <td>{{ i.snapshot_json.responsibleEmployeeName ?? i.snapshot_json.departmentResponsibleEmployeeName ?? '仓库保管' }}</td>
               <td class="u-number">{{ i.assignment_version }}</td>
             </tr>
-            <tr v-if="!detail.items.length" class="fams-table-empty"><td :colspan="admin ? 5 : 4"><strong>本页没有应盘项</strong>翻页查看其余应盘集合。</td></tr>
+            <tr v-if="!detail.items.length" class="fams-table-empty"><td :colspan="emptyColSpan"><strong>本页没有应盘项</strong>翻页查看其余应盘集合。</td></tr>
           </tbody>
         </table>
       </div>
@@ -223,10 +238,10 @@ onMounted(async () => {
         <span class="fams-pagination-summary">共 {{ detail.total }} 项应盘</span>
         <div class="fams-pagination-actions">
           <button class="fams-button" data-kind="secondary" data-size="sm" type="button"
-            :disabled="locked || itemPage === 1" @click="pages(-1)">上一页</button>
+            :disabled="prevDisabled" @click="pages(-1)">上一页</button>
           <span class="fams-pagination-page">第 {{ itemPage }} 页</span>
           <button class="fams-button" data-kind="secondary" data-size="sm" type="button"
-            :disabled="locked || itemPage * 20 >= detail.total" @click="pages(1)">下一页</button>
+            :disabled="nextDisabled" @click="pages(1)">下一页</button>
         </div>
       </div>
     </section>

@@ -7,6 +7,8 @@ const session = useSessionStore();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken]));
 const rows = ref<Repair[]>([]), total = shallowRef(0), page = shallowRef(1);
 const busy = shallowRef(false), error = shallowRef("");
+const prevDisabled = computed(() => busy.value || page.value === 1);
+const nextDisabled = computed(() => busy.value || page.value * 20 >= total.value);
 let generation = 0, live = true;
 const current = (epoch: number, owner: string) => live && generation === epoch && identity.value === owner;
 function reset() { generation++; rows.value = []; total.value = 0; page.value = 1; busy.value = false; }
@@ -41,9 +43,9 @@ onBeforeUnmount(() => { live = false; reset(); });
       <div class="fams-pagination">
         <span class="fams-pagination-summary">共 {{ total }} 条</span>
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || page === 1" @click="paginate(-1)">上一页报修</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled" @click="paginate(-1)">上一页报修</button>
           <span class="fams-pagination-page">第 {{ page }} 页</span>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || page * 20 >= total" @click="paginate(1)">下一页报修</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextDisabled" @click="paginate(1)">下一页报修</button>
         </div>
       </div>
     </section>

@@ -30,6 +30,82 @@ const canExecute = computed(() => warehouse.value && (!owner.value || owner.valu
 const reasonLabels: Record<string, string> = { STOCK_SHORTAGE: "库存不足", SPECIFICATION_MISMATCH: "规格不匹配",
   TEMPORARILY_UNAVAILABLE: "暂不可用", OTHER: "其他" };
 
+type ProposalChange = NonNullable<Requisition["changes"]>[number];
+interface ProposalDemandRow extends RequisitionDemandInput { key: string; categoryName: string; custodyText: string }
+interface ProposalChangeRow extends ProposalChange { key: string; statusText: string; demandRows: ProposalDemandRow[] }
+interface DemandRow extends RequisitionDemand {
+  custodyText: string; showAllocate: boolean; showFollowup: boolean; followupText: string;
+}
+type ProposalDecision = NonNullable<Requisition["decisions"]>[number];
+interface DecisionRow extends ProposalDecision { resultText: string }
+interface AllocationRow extends RequisitionAllocation {
+  targetEmployeeName: string; targetLocationName: string;
+  canTargetChange: boolean; canProxyConfirm: boolean; canReplaceAsset: boolean; canRecoverCancel: boolean;
+}
+
+const custodyLabel = (type: RequisitionDemandInput["custodyType"]) => (type === "PERSONAL" ? "个人使用" : "部门公用");
+const requestStatus = computed(() => selected.value?.requestStatus ?? "");
+const canReassign = computed(() => admin.value && !!owner.value
+  && ["WAREHOUSE_PROCESSING", "WAITING_HANDOVER"].includes(requestStatus.value));
+const canDraftActions = computed(() => creator.value && ["DRAFT", "REJECTED"].includes(requestStatus.value));
+const canSubmitDraft = computed(() => requestStatus.value === "DRAFT");
+const canCancel = computed(() => creator.value && !selected.value?.changes?.some(c => c.proposalStatus === "PENDING")
+  && ["DRAFT", "REJECTED", "PENDING_ADMIN_DECISION"].includes(requestStatus.value));
+const canDecide = computed(() => admin.value && requestStatus.value === "PENDING_ADMIN_DECISION");
+const canRequestChange = computed(() => (creator.value || owner.value === session.user?.id)
+  && ["WAITING_WAREHOUSE_CLAIM", "WAREHOUSE_PROCESSING", "WAITING_HANDOVER"].includes(requestStatus.value));
+const reasonDisabled = computed(() => busy.value || retryable.value || !reason.value.trim());
+const unfulfillableDisabled = computed(() => busy.value || retryable.value
+  || (shortageReason.value === "OTHER" && !reason.value.trim()));
+const deliverDisabled = computed(() => busy.value || retryable.value || !observedCode.value.trim()
+  || !destination.value.trim() || !evidence.value.trim());
+const recoverDisabled = computed(() => busy.value || retryable.value || !returned.value || !observedCode.value.trim()
+  || !evidence.value.trim() || !reason.value.trim());
+const assignText = computed(() => replacementId.value ? "确认更换" : "分配此资产");
+const prevDisabled = computed(() => busy.value || inventoryPage.value === 1);
+const nextDisabled = computed(() => busy.value || (inventory.value ? inventoryPage.value * 20 >= inventory.value.total : true));
+
+const changeRows = computed<ProposalChangeRow[]>(() => (selected.value?.changes ?? []).map((row, index) => ({
+  ...row,
+  key: `${index}:${row.proposalStatus}:${JSON.stringify(row.proposalJson)}`,
+  statusText: row.proposalStatus === "PENDING" ? "待确认" : row.proposalStatus === "APPROVED" ? "已批准" : "已驳回",
+  demandRows: row.proposalJson.demands.map((d, i) => ({
+    ...d,
+    key: [i, d.category.id, d.specification, d.quantity, d.custodyType, d.organization.id, d.employee.id,
+      d.location.id, d.expectedDate].join(":"),
+    categoryName: catalogs.value.category?.find(c => c.id === String(d.category.id))?.name ?? "",
+    custodyText: custodyLabel(d.custodyType),
+  })),
+})));
+const demandRows = computed<DemandRow[]>(() => (selected.value?.demands ?? []).map(d => ({
+  ...d,
+  custodyText: custodyLabel(d.custodyType),
+  showAllocate: !!(canExecute.value && d.pendingAllocationQuantity > 0),
+  showFollowup: !!(creator.value && d.unfulfillableQuantity > 0),
+  followupText: (selected.value?.followups ?? []).some(f => f.sourceDemandId === d.id)
+    ? "查看最新后续 / 失败后再申请" : "就此部分重新申请",
+})));
+const decisionRows = computed<DecisionRow[]>(() => (selected.value?.decisions ?? []).map(decision => ({
+  ...decision,
+  resultText: decision.decisionResult === "APPROVED" ? "批准" : "驳回",
+})));
+const allocationRows = computed<AllocationRow[]>(() => (selected.value?.allocations ?? []).map(allocation => {
+  const target = allocation.approvedTargetJson;
+  const employee = target ? catalogs.value.employee?.find(c => c.id === target.employeeId) : undefined;
+  const location = target ? catalogs.value.location?.find(c => c.id === target.locationId) : undefined;
+  const waitingDelivery = allocation.allocationStatus === "WAITING_DELIVERY";
+  const deliveredWaiting = allocation.allocationStatus === "DELIVERED_WAITING_RECEIPT";
+  return {
+    ...allocation,
+    targetEmployeeName: target ? (employee ? employee.name : target.employeeId) : "",
+    targetLocationName: target ? (location ? location.name : target.locationId) : "",
+    canTargetChange: !!(canExecute.value && (waitingDelivery || deliveredWaiting)),
+    canProxyConfirm: !!(canExecute.value && deliveredWaiting),
+    canReplaceAsset: !!(canExecute.value && waitingDelivery),
+    canRecoverCancel: !!(canExecute.value && allocation.allocationStatus === "RECOVERY_PENDING_CANCEL"),
+  };
+}));
+
 async function open() {
   if (!/^[1-9][0-9]{0,18}$/.test(props.id)) { error.value = "没有此申请或操作的当前权限。"; return; }
   selected.value = await requisitionRequest<Requisition>("/" + props.id);
@@ -65,6 +141,20 @@ async function findInventory(demand: RequisitionDemand, nextPage = 1) {
     inventory.value = await requisitionRequest<RequisitionInventory>(`/${selected.value!.id}/demands/${demand.id}/inventory?page=${nextPage}&pageSize=20`);
     inventoryDemand.value = demand; inventoryPage.value = nextPage;
   } catch (e) { error.value = requisitionMessage(e); } finally { busy.value = false; }
+}
+function openInventory(demand: RequisitionDemand): void {
+  replacementId.value = "";
+  void findInventory(demand);
+}
+function replaceAsset(allocation: AllocationRow): void {
+  replacementId.value = allocation.id;
+  void findInventory(selected.value!.demands.find(d => d.id === allocation.demandId)!);
+}
+function assign(asset: RequisitionInventory["items"][number]): void {
+  void mutate(`/${selected.value!.id}/demands/${inventoryDemand.value!.id}/allocations`, {
+    asset: { id: asset.id, version: asset.version },
+    ...(replacementId.value ? { predecessorAllocationId: replacementId.value, replacementReason: reason.value } : {}),
+  });
 }
 async function handover(allocation: RequisitionAllocation, action: "deliver" | "cancel" | "recovery" | "recover") {
   const body = { allocationVersion: allocation.version, lockVersion: allocation.lockVersion,
@@ -116,25 +206,25 @@ onMounted(async () => {
         <button v-if="retryable" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="retry">重试上次操作</button>
       </div>
 
-      <RequisitionReassignment v-if="admin && owner && ['WAREHOUSE_PROCESSING', 'WAITING_HANDOVER'].includes(selected.requestStatus)"
+      <RequisitionReassignment v-if="canReassign"
         :id="selected.id" :version="selected.version" @saved="refresh" />
 
       <div class="fams-panel-actions">
-        <template v-if="creator && ['DRAFT', 'REJECTED'].includes(selected.requestStatus)">
+        <template v-if="canDraftActions">
           <router-link class="fams-button" data-kind="secondary" :to="`/requisitions/${selected.id}/edit`">修改草稿</router-link>
-          <button v-if="selected.requestStatus === 'DRAFT'" class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable"
+          <button v-if="canSubmitDraft" class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable"
             @click="mutate('/' + selected.id + '/submit')">提交管理员确认</button></template>
-        <button v-if="creator && !selected.changes?.some(c => c.proposalStatus === 'PENDING') && ['DRAFT', 'REJECTED', 'PENDING_ADMIN_DECISION'].includes(selected.requestStatus)"
-          class="fams-button" data-kind="danger" type="button" :disabled="busy || retryable || !reason.trim()"
+        <button v-if="canCancel"
+          class="fams-button" data-kind="danger" type="button" :disabled="reasonDisabled"
           @click="mutate('/' + selected.id + '/cancel', { reason })">取消申请</button>
-        <template v-if="admin && selected.requestStatus === 'PENDING_ADMIN_DECISION'">
+        <template v-if="canDecide">
           <button class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable"
             @click="mutate('/' + selected.id + '/decision', { result: 'APPROVED', comment: reason })">批准当前版本</button>
-          <button class="fams-button" data-kind="danger" type="button" :disabled="busy || retryable || !reason.trim()"
+          <button class="fams-button" data-kind="danger" type="button" :disabled="reasonDisabled"
             @click="mutate('/' + selected.id + '/decision', { result: 'REJECTED', comment: reason })">驳回当前版本</button></template>
         <button v-if="canExecute && !owner" class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable"
           @click="mutate('/' + selected.id + '/claim')">领取整单处理权</button>
-        <button v-if="(creator || owner === session.user?.id) && ['WAITING_WAREHOUSE_CLAIM', 'WAREHOUSE_PROCESSING', 'WAITING_HANDOVER'].includes(selected.requestStatus)"
+        <button v-if="canRequestChange"
           class="fams-button" data-kind="secondary" type="button" :disabled="busy || retryable" @click="change">提请范围变更</button>
       </div>
 
@@ -143,14 +233,14 @@ onMounted(async () => {
         <textarea class="fams-control" v-model="reason" maxlength="1000" :disabled="busy || retryable" />
       </label>
 
-      <article v-for="(change, index) in selected.changes" :key="index" class="fams-card fams-stack">
-        <h3>范围变更 · {{ change.proposalStatus === 'PENDING' ? '待确认' : change.proposalStatus === 'APPROVED' ? '已批准' : '已驳回' }}</h3>
-        <p v-for="(d, i) in change.proposalJson.demands" :key="i">需求 {{ i + 1 }}：{{ catalogs.category?.find(c => c.id === String(d.category.id))?.name }} · {{ d.specification }} · 数量 {{ d.quantity }} · {{ d.purpose }} · {{ d.expectedDate }} · {{ d.custodyType === 'PERSONAL' ? '个人使用' : '部门公用' }} · 使用组织 {{ d.organization.id }} · 责任人员 {{ d.employee.id }} · 固定位置 {{ d.location.id }}</p>
+      <article v-for="change in changeRows" :key="change.key" class="fams-card fams-stack">
+        <h3>范围变更 · {{ change.statusText }}</h3>
+        <p v-for="(d, i) in change.demandRows" :key="d.key">需求 {{ i + 1 }}：{{ d.categoryName }} · {{ d.specification }} · 数量 {{ d.quantity }} · {{ d.purpose }} · {{ d.expectedDate }} · {{ d.custodyText }} · 使用组织 {{ d.organization.id }} · 责任人员 {{ d.employee.id }} · 固定位置 {{ d.location.id }}</p>
       </article>
 
-      <article v-for="d in selected.demands" :key="d.id" class="fams-card fams-stack">
+      <article v-for="d in demandRows" :key="d.id" class="fams-card fams-stack">
         <h3>{{ d.categoryNameSnapshot }} · {{ d.specification }}</h3>
-        <p>{{ d.purpose }} · 期望 {{ d.expectedDate }} · {{ d.custodyType === 'PERSONAL' ? '个人使用' : '部门公用' }}</p>
+        <p>{{ d.purpose }} · 期望 {{ d.expectedDate }} · {{ d.custodyText }}</p>
         <dl class="fams-facts">
           <div><dt>申请</dt><dd>{{ d.requestedQuantity }}</dd></div>
           <div><dt>待分配</dt><dd>{{ d.pendingAllocationQuantity }}</dd></div>
@@ -159,45 +249,45 @@ onMounted(async () => {
           <div><dt>无法满足</dt><dd>{{ d.unfulfillableQuantity }}</dd></div>
           <div><dt>已取消</dt><dd>{{ d.cancelledQuantity }}</dd></div>
         </dl>
-        <div v-if="canExecute && d.pendingAllocationQuantity > 0" class="fams-field-row">
-          <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || retryable" @click="replacementId = ''; findInventory(d)">选择可用库存</button>
+        <div v-if="d.showAllocate" class="fams-field-row">
+          <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || retryable" @click="openInventory(d)">选择可用库存</button>
           <label class="fams-field"><span class="fams-field-label">无法满足数量</span>
             <input class="fams-control" v-model.number="shortageQuantity" type="number" min="1" :max="d.pendingAllocationQuantity" /></label>
           <label class="fams-field"><span class="fams-field-label">原因</span>
             <select class="fams-control" v-model="shortageReason"><option v-for="(label, code) in reasonLabels" :key="code" :value="code">{{ label }}</option></select></label>
-          <button class="fams-button" data-kind="danger" type="button" :disabled="busy || retryable || (shortageReason === 'OTHER' && !reason.trim())"
+          <button class="fams-button" data-kind="danger" type="button" :disabled="unfulfillableDisabled"
             @click="mutate(`/${selected.id}/demands/${d.id}/unfulfillable`, { quantity: shortageQuantity, reason: shortageReason, description: reason })">记录无法满足</button>
         </div>
-        <div v-if="creator && d.unfulfillableQuantity > 0" class="fams-panel-actions">
-          <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || retryable" @click="mutate(`/${selected.id}/demands/${d.id}/followup`)">{{ selected.followups.some(f => f.sourceDemandId === d.id) ? '查看最新后续 / 失败后再申请' : '就此部分重新申请' }}</button>
-          <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || retryable || !reason.trim()" @click="mutate('/' + selected.id + '/dispute', { reason })">通知管理员核查</button>
+        <div v-if="d.showFollowup" class="fams-panel-actions">
+          <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || retryable" @click="mutate(`/${selected.id}/demands/${d.id}/followup`)">{{ d.followupText }}</button>
+          <button class="fams-button" data-kind="secondary" type="button" :disabled="reasonDisabled" @click="mutate('/' + selected.id + '/dispute', { reason })">通知管理员核查</button>
         </div>
       </article>
 
       <div v-if="selected.decisions.length" class="fams-panel-divider" />
-      <p v-for="decision in selected.decisions" :key="decision.id" class="fams-panel-subtitle">版本 {{ decision.requestVersion }}：{{ decision.decisionResult === 'APPROVED' ? '批准' : '驳回' }} {{ decision.commentText }}</p>
+      <p v-for="decision in decisionRows" :key="decision.id" class="fams-panel-subtitle">版本 {{ decision.requestVersion }}：{{ decision.resultText }} {{ decision.commentText }}</p>
       <p v-for="record in selected.unfulfillable" :key="record.id" class="fams-panel-subtitle">无法满足 {{ record.quantity }} 件：{{ reasonLabels[record.reasonCode] }} {{ record.reasonDescription }}；当时可用 {{ record.inventoryQuerySummaryJson.availableCount }} 件，查询于 {{ record.inventoryQuerySummaryJson.queriedAt }}</p>
 
-      <article v-for="allocation in selected.allocations" :key="allocation.id" class="fams-card fams-stack">
+      <article v-for="allocation in allocationRows" :key="allocation.id" class="fams-card fams-stack">
         <h3>{{ allocation.assetSnapshotJson.assetCode }} · {{ allocation.assetSnapshotJson.name }} · {{ allocationStatusLabels[allocation.allocationStatus] }}</h3>
-        <p v-if="allocation.approvedTargetJson">批准变更后的责任人员：{{ catalogs.employee?.find(c => c.id === allocation.approvedTargetJson!.employeeId)?.name ?? allocation.approvedTargetJson.employeeId }} · 固定位置：{{ catalogs.location?.find(c => c.id === allocation.approvedTargetJson!.locationId)?.name ?? allocation.approvedTargetJson.locationId }}</p>
+        <p v-if="allocation.approvedTargetJson">批准变更后的责任人员：{{ allocation.targetEmployeeName }} · 固定位置：{{ allocation.targetLocationName }}</p>
         <div class="fams-panel-actions">
-          <router-link v-if="canExecute && ['WAITING_DELIVERY', 'DELIVERED_WAITING_RECEIPT'].includes(allocation.allocationStatus)" class="fams-button" data-kind="link" data-size="sm"
+          <router-link v-if="allocation.canTargetChange" class="fams-button" data-kind="link" data-size="sm"
             :to="{ path: '/requisition-target-changes', query: { businessId: selected.id, itemId: allocation.id } }">申请目标变更</router-link>
-          <router-link v-if="canExecute && allocation.allocationStatus === 'DELIVERED_WAITING_RECEIPT'" class="fams-button" data-kind="link" data-size="sm"
+          <router-link v-if="allocation.canProxyConfirm" class="fams-button" data-kind="link" data-size="sm"
             :to="{ path: '/proxy-confirmations', query: { businessId: selected.id, itemId: allocation.id } }">申请异常代确认</router-link>
-          <button v-if="canExecute && allocation.allocationStatus === 'WAITING_DELIVERY'" class="fams-button" data-kind="secondary" data-size="sm" type="button"
-            :disabled="busy || retryable || !reason.trim()" @click="replacementId = allocation.id; findInventory(selected!.demands.find(d => d.id === allocation.demandId)!)">更换未交出资产</button>
-          <template v-if="canExecute && allocation.allocationStatus === 'WAITING_DELIVERY'">
-            <button class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable || !observedCode.trim() || !destination.trim() || !evidence.trim()"
+          <button v-if="allocation.canReplaceAsset" class="fams-button" data-kind="secondary" data-size="sm" type="button"
+            :disabled="reasonDisabled" @click="replaceAsset(allocation)">更换未交出资产</button>
+          <template v-if="allocation.canReplaceAsset">
+            <button class="fams-button" data-kind="primary" type="button" :disabled="deliverDisabled"
               @click="handover(allocation, 'deliver')">记录实物交出</button>
-            <button class="fams-button" data-kind="danger" type="button" :disabled="busy || retryable || !reason.trim()"
+            <button class="fams-button" data-kind="danger" type="button" :disabled="reasonDisabled"
               @click="handover(allocation, 'cancel')">取消未交出分配</button>
           </template>
-          <button v-if="canExecute && allocation.allocationStatus === 'DELIVERED_WAITING_RECEIPT'" class="fams-button" data-kind="secondary" type="button"
-            :disabled="busy || retryable || !reason.trim()" @click="handover(allocation, 'recovery')">登记待收回取消</button>
-          <button v-if="canExecute && allocation.allocationStatus === 'RECOVERY_PENDING_CANCEL'" class="fams-button" data-kind="primary" type="button"
-            :disabled="busy || retryable || !returned || !observedCode.trim() || !evidence.trim() || !reason.trim()"
+          <button v-if="allocation.canProxyConfirm" class="fams-button" data-kind="secondary" type="button"
+            :disabled="reasonDisabled" @click="handover(allocation, 'recovery')">登记待收回取消</button>
+          <button v-if="allocation.canRecoverCancel" class="fams-button" data-kind="primary" type="button"
+            :disabled="recoverDisabled"
             @click="handover(allocation, 'recover')">确认收回验收并取消</button>
         </div>
       </article>
@@ -238,7 +328,7 @@ onMounted(async () => {
               <th scope="row" data-column-kind="identity">{{ asset.assetCode }}</th>
               <td>{{ asset.name }}</td><td class="u-secondary">{{ asset.model }}</td>
               <td data-column-kind="action"><button class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="busy || retryable"
-                @click="mutate(`/${selected!.id}/demands/${inventoryDemand!.id}/allocations`, { asset: { id: asset.id, version: asset.version }, ...(replacementId ? { predecessorAllocationId: replacementId, replacementReason: reason } : {}) })">{{ replacementId ? '确认更换' : '分配此资产' }}</button></td>
+                @click="assign(asset)">{{ assignText }}</button></td>
             </tr>
             <tr v-if="!inventory.items.length" class="fams-table-empty"><td colspan="4"><strong>没有可用库存</strong>该需求可记录无法满足并通知管理员核查。</td></tr>
           </tbody>
@@ -247,10 +337,10 @@ onMounted(async () => {
       <div class="fams-pagination">
         <span class="fams-pagination-summary">共 {{ inventory.total }} 件</span>
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || inventoryPage === 1"
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled"
             @click="findInventory(inventoryDemand, inventoryPage - 1)">上一页库存</button>
           <span class="fams-pagination-page">第 {{ inventoryPage }} 页</span>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || inventoryPage * 20 >= inventory.total"
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextDisabled"
             @click="findInventory(inventoryDemand, inventoryPage + 1)">下一页库存</button>
         </div>
       </div>

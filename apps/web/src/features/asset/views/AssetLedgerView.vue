@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { shallowRef } from "vue";
+import { computed, shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { usePagedResourceList } from "@/composables/usePagedResourceList";
@@ -14,6 +14,14 @@ const canWrite = session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false;
 const { rows, total, page, error, refresh: load } = usePagedResourceList<AssetCard>(
   (page) => listAssets(page, code.value, nameFilter.value),
   { problem: (cause) => cause instanceof Error ? cause.message : "台账加载失败" });
+
+const displayRows = computed(() => rows.value.map((asset) => ({
+  ...asset,
+  custodyText: custodyLabel(asset),
+})));
+const hasNoRows = computed(() => rows.value.length === 0);
+const prevDisabled = computed(() => page.value <= 1);
+const nextDisabled = computed(() => page.value * 20 >= total.value);
 </script>
 
 <template>
@@ -52,19 +60,19 @@ const { rows, total, page, error, refresh: load } = usePagedResourceList<AssetCa
             </tr>
           </thead>
           <tbody>
-            <tr v-for="asset in rows" :key="asset.id">
+            <tr v-for="asset in displayRows" :key="asset.id">
               <th scope="row" data-column-kind="identity">{{ asset.assetCode }}</th>
               <td>{{ asset.name }}</td>
               <td class="u-secondary">{{ asset.model ?? "—" }}</td>
               <td><span class="fams-status">{{ lifecycleLabels[asset.lifecycle] }}</span></td>
               <td><span class="fams-status">{{ cardStageLabels[asset.cardStage] }}</span></td>
-              <td>{{ custodyLabel(asset) }}</td>
+              <td>{{ asset.custodyText }}</td>
               <td>{{ asset.physicalDestination?.destination ?? "—" }}</td>
               <td data-column-kind="action">
                 <router-link class="fams-button" data-kind="link" data-size="sm" :to="`/assets/${asset.id}`">详情</router-link>
               </td>
             </tr>
-            <tr v-if="rows.length === 0" class="fams-table-empty">
+            <tr v-if="hasNoRows" class="fams-table-empty">
               <td colspan="8"><strong>暂无符合条件的资产</strong>调整资产编码或名称条件后重新查询。</td>
             </tr>
           </tbody>
@@ -74,10 +82,10 @@ const { rows, total, page, error, refresh: load } = usePagedResourceList<AssetCa
       <div class="fams-pagination">
         <span class="fams-pagination-summary">共 {{ total }} 项</span>
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="page <= 1"
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled"
             @click="page--; load()">上一页</button>
           <span class="fams-pagination-page">第 {{ page }} 页</span>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="page * 20 >= total"
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextDisabled"
             @click="page++; load()">下一页</button>
         </div>
       </div>

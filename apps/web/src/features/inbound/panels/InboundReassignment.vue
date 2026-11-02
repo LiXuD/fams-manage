@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { useReassignmentFlow } from "@/composables/useReassignmentFlow";
 
 const props = defineProps<{ id: string; version: number }>();
@@ -12,6 +13,12 @@ const { snapshot, target, reason, evidence, checked, busy, error, retryable, ins
     mapItems: (item) => ({ id: item.id, version: item.version, status: item.status, assetVersion: item.assetVersion, lockVersion: item.lockVersion }),
     onSaved: () => emit("saved"),
   });
+
+const rows = computed(() => (snapshot.value?.items ?? []).map((item) => ({
+  ...item, lockVersionText: item.lockVersion < 0 ? "已释放" : String(item.lockVersion),
+})));
+const formDisabled = computed(() => busy.value || retryable.value);
+const submitText = computed(() => (retryable.value ? "原请求重试转派" : "确认转派整单"));
 </script>
 
 <template>
@@ -26,18 +33,18 @@ const { snapshot, target, reason, evidence, checked, busy, error, retryable, ins
     <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="inspect">加载 / 重新核对转派清单</button>
     <template v-if="snapshot">
       <p>当前处理账号 {{ snapshot.processorAccountId }} · 处理权版本 {{ snapshot.ownershipVersion }}</p>
-      <p v-for="item in snapshot.items" :key="item.id">明细 {{ item.id }} · {{ item.assetCode }} · {{ labels[item.status] }} · 仓库 {{ item.warehouseId }} / 位置 {{ item.locationId }} · 锁版本 {{ item.lockVersion < 0 ? '已释放' : item.lockVersion }}</p>
+      <p v-for="item in rows" :key="item.id">明细 {{ item.id }} · {{ item.assetCode }} · {{ labels[item.status] }} · 仓库 {{ item.warehouseId }} / 位置 {{ item.locationId }} · 锁版本 {{ item.lockVersionText }}</p>
       <div class="fams-field-grid">
         <label class="fams-field"><span class="fams-field-label">接任库管</span>
-          <select class="fams-control" v-model="target" :disabled="busy || retryable"><option value="">请选择</option><option v-for="person in snapshot.operators" :key="person.id" :value="person.id">{{ person.name }}</option></select></label>
+          <select class="fams-control" v-model="target" :disabled="formDisabled"><option value="">请选择</option><option v-for="person in snapshot.operators" :key="person.id" :value="person.id">{{ person.name }}</option></select></label>
         <label class="fams-field"><span class="fams-field-label">转派原因</span>
-          <textarea class="fams-control" v-model="reason" maxlength="1000" :disabled="busy || retryable" /></label>
+          <textarea class="fams-control" v-model="reason" maxlength="1000" :disabled="formDisabled" /></label>
         <label class="fams-field"><span class="fams-field-label">实物阶段与资产锁交接凭证</span>
-          <textarea class="fams-control" v-model="evidence" maxlength="1000" :disabled="busy || retryable" /></label>
-        <label class="fams-selection"><input v-model="checked" type="checkbox" :disabled="busy || retryable" />已与处理人或交接记录核对未同步结果</label>
+          <textarea class="fams-control" v-model="evidence" maxlength="1000" :disabled="formDisabled" /></label>
+        <label class="fams-selection"><input v-model="checked" type="checkbox" :disabled="formDisabled" />已与处理人或交接记录核对未同步结果</label>
       </div>
       <div class="fams-panel-actions">
-        <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="submit">{{ retryable ? '原请求重试转派' : '确认转派整单' }}</button>
+        <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="submit">{{ submitText }}</button>
       </div>
     </template>
   </section>

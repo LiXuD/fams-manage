@@ -18,6 +18,12 @@ const range = ref<Range>(emptyRange());
 const catalogs = ref<Record<string, Choice[]>>({}); const version = shallowRef(0);
 const busy = shallowRef(false); const error = shallowRef(""); const pending = ref<BusinessMutation | null>(null);
 const locked = computed(() => busy.value || !!pending.value);
+type ChoiceRow = { id: string; name: string; suffixText: string };
+const catalogRows = computed<Record<string, ChoiceRow[]>>(() => Object.fromEntries(
+  Object.entries(catalogs.value).map(([kind, rows]): [string, ChoiceRow[]] => [kind, rows.map((c) => ({
+    id: c.id, name: c.name, suffixText: c.status === "DISABLED" ? "（已停用）" : "",
+  }))]),
+));
 function toLocal(value: string) {
   const date = new Date(value);
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -82,14 +88,14 @@ onMounted(async () => {
             <input class="fams-control" v-model="due" type="datetime-local" required /></label>
           <label v-for="field in ([['usingOrganizationId','使用部门','organization'],['owningOrganizationId','所属组织','organization'],['categoryId','分类','category'],['warehouseId','仓库','warehouse'],['locationId','位置','location']] as const)" :key="field[0]" class="fams-field">
             <span class="fams-field-label">{{ field[1] }}</span>
-            <select class="fams-control" v-model="range[field[0]]"><option :value="null">全部</option><option v-for="c in catalogs[field[2]]" :key="c.id" :value="c.id">{{ c.name }}{{ c.status === "DISABLED" ? "（已停用）" : "" }}</option></select>
+            <select class="fams-control" v-model="range[field[0]]"><option :value="null">全部</option><option v-for="c in catalogRows[field[2]]" :key="c.id" :value="c.id">{{ c.name }}{{ c.suffixText }}</option></select>
           </label>
           <label class="fams-field"><span class="fams-field-label">生命周期</span>
             <select class="fams-control" v-model="range.lifecycle"><option :value="null">全部</option><option v-for="(text, value) in lifecycleLabels" :key="value" :value="value">{{ text }}</option></select></label>
           <label class="fams-field"><span class="fams-field-label">异常状态</span>
             <select class="fams-control" v-model="range.exception"><option :value="null">全部</option><option v-for="(text, value) in exceptionLabels" :key="value" :value="value">{{ text }}</option></select></label>
           <label class="fams-field"><span class="fams-field-label">当前责任人</span>
-            <select class="fams-control" v-model="range.responsibleEmployeeId"><option :value="null">全部</option><option v-for="c in catalogs.employee" :key="c.id" :value="c.id">{{ c.name }}{{ c.status === "DISABLED" ? "（已停用）" : "" }}</option></select></label>
+            <select class="fams-control" v-model="range.responsibleEmployeeId"><option :value="null">全部</option><option v-for="c in catalogRows.employee" :key="c.id" :value="c.id">{{ c.name }}{{ c.suffixText }}</option></select></label>
         </div>
         <p class="fams-panel-subtitle">范围留空表示全部。保存草稿不会冻结集合；到任务详情页预览应盘数量后再发布。</p>
         <div class="fams-form-actions">

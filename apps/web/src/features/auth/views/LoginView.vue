@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive } from "vue";
+import { computed, reactive } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
@@ -7,6 +7,9 @@ import { useSessionStore } from "@/auth/sessionStore";
 const router = useRouter();
 const session = useSessionStore();
 const form = reactive({ username: "", password: "" });
+const submitDisabled = computed(() => session.isBusy || !form.username || !form.password);
+const submitState = computed(() => session.isBusy ? "loading" : null);
+const submitText = computed(() => session.isBusy ? "登录中…" : "登录");
 
 async function submit(): Promise<void> {
   try {
@@ -40,10 +43,10 @@ async function submit(): Promise<void> {
         <section v-if="session.error" class="fams-notice" data-state="error" role="alert">
           <strong>{{ session.error.message }}</strong>
         </section>
-        <button class="fams-button" data-kind="primary" type="submit" :disabled="session.isBusy || !form.username || !form.password"
-          :data-state="session.isBusy ? 'loading' : null">
+        <button class="fams-button" data-kind="primary" type="submit" :disabled="submitDisabled"
+          :data-state="submitState">
           <span v-if="session.isBusy" class="fams-spinner" aria-hidden="true" />
-          {{ session.isBusy ? "登录中…" : "登录" }}
+          {{ submitText }}
         </button>
         <p class="fams-auth-note">首次登录将要求修改初始密码。账号停用后无法继续访问。</p>
       </form>

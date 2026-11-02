@@ -11,6 +11,10 @@ const identity = computed(() => JSON.stringify([session.user?.id, session.csrfTo
 const scope = computed(() => JSON.stringify([props.taskId, props.eventId, props.photoIds, identity.value]));
 const references = ref<PhotoReference[]>([]), busy = shallowRef(false), loaded = shallowRef(false), error = shallowRef("");
 const preview = shallowRef(""), filename = shallowRef("");
+const actionText = computed(() => loaded.value ? "刷新原始照片资料" : "查看原始照片资料");
+const previewAlt = computed(() => `原始观察照片：${filename.value}`);
+const photoRows = computed(() => references.value.map((row, index) => ({ objectId: row.objectId, source: row,
+  order: index + 1, readable: !!row.photo && readablePhoto(row.photo) })));
 let live = true, generation = 0;
 const current = (epoch: number, captured: string) => live && epoch === generation && captured === scope.value;
 function closePreview() { if (preview.value) URL.revokeObjectURL(preview.value); preview.value = ""; filename.value = ""; }
@@ -52,19 +56,19 @@ onBeforeUnmount(() => { live = false; clear(); });
 <template>
   <section class="fams-card fams-stack" aria-label="原始观察照片">
     <p class="fams-panel-subtitle">原始引用 {{ photoIds.length }} 张；未使用的上传不计入本次观察。</p>
-    <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="load">{{ loaded ? '刷新原始照片资料' : '查看原始照片资料' }}</button>
+    <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="load">{{ actionText }}</button>
     <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
     <ul class="fams-timeline">
-      <li v-for="(row, index) in references" :key="`${index}:${row.objectId}`">
-        <template v-if="row.photo"><span>{{ row.photo.filename }}</span>
-          <button v-if="readablePhoto(row.photo)" class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="busy" @click="open(row)">读取照片 {{ index + 1 }}</button>
+      <li v-for="row in photoRows" :key="row.objectId">
+        <template v-if="row.source.photo"><span>{{ row.source.photo.filename }}</span>
+          <button v-if="row.readable" class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="busy" @click="open(row.source)">读取照片 {{ row.order }}</button>
           <span v-else>尚未通过扫描或格式不可读取，原始引用仍保留。</span>
-        </template><span v-else>照片 {{ index + 1 }} 元数据暂不可读取，原始引用 {{ row.objectId }} 仍保留。</span>
+        </template><span v-else>照片 {{ row.order }} 元数据暂不可读取，原始引用 {{ row.source.objectId }} 仍保留。</span>
       </li>
     </ul>
     <FamsMediaPreview v-if="preview" @dismiss="closePreview">
       <figure>
-      <img :src="preview" :alt="`原始观察照片：${filename}`">
+      <img :src="preview" :alt="previewAlt">
       <figcaption>{{ filename }}</figcaption>
       <button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="closePreview">关闭照片</button>
       </figure>

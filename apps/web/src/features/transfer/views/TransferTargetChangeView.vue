@@ -22,11 +22,21 @@ const reason = shallowRef(""); const code = shallowRef(""); const physical = sha
 const locked = computed(() => busy.value || !!pending.value); const stock = computed(() => snapshot.value?.source.lifecycleStatus === "IN_STOCK");
 const places = computed(() => catalogs.value.location?.filter(row => stock.value
   ? row.locationType === "BIN" && row.warehouseId === target.value?.warehouseId : row.locationType !== "BIN") ?? []);
+const eligibleEmployees = computed(() => employees.value.filter(row => target.value?.custodyType !== "SHARED" || row.sharedEligible));
+const pageCount = computed(() => Math.max(1, Math.ceil(total.value / 20)));
+const snapshotTargetText = computed(() => snapshot.value ? targetText(snapshot.value.target) : "");
+const selectedSourceText = computed(() => selected.value ? targetText(selected.value.source_snapshot_json.target) : "");
+const selectedProposedText = computed(() => selected.value ? targetText(selected.value.proposed_target_json) : "");
 const labels: Record<string, string> = { PENDING: "待管理员批准", APPROVED: "已批准", REJECTED: "已驳回" };
 type Confirm = "propose" | "APPROVED" | "REJECTED";
 const confirmKind = ref<Confirm | null>(null);
 const decisionConfirm = computed(() => confirmKind.value === "APPROVED" || confirmKind.value === "REJECTED"
   ? confirmKind.value : null);
+const proposeConfirmShown = computed(() => confirmKind.value === "propose");
+const decisionMissing = computed(() => !decision.value.trim());
+const canDecideTargetChange = computed(() => !!admin.value && selected.value?.change_status === "PENDING");
+const prevDisabled = computed(() => locked.value || page.value === 1);
+const nextDisabled = computed(() => locked.value || page.value * 20 >= total.value);
 const confirmLabels: Record<Confirm, string> = { propose: "确认提交调拨目标变更", APPROVED: "确认批准调拨目标变更",
   REJECTED: "确认驳回调拨目标变更" };
 const confirmHints: Record<Confirm, string> = { propose: "提请调拨目标变更？已交出实物和原责任保持，批准后新目标仍需按原业务实际接收。",
@@ -132,7 +142,7 @@ onMounted(async () => {
         <div class="fams-panel-head">
           <div>
             <h3 class="fams-panel-title">提请目标变更 · {{ snapshot.assetCode }}</h3>
-            <p class="fams-panel-subtitle">原批准目标：{{ targetText(snapshot.target) }}</p>
+            <p class="fams-panel-subtitle">原批准目标：{{ snapshotTargetText }}</p>
           </div>
         </div>
         <p v-if="snapshot.physical.destination">原交出地点：{{ snapshot.physical.destination }} · {{ snapshot.physical.deliveryEvidence }}</p>
@@ -142,7 +152,7 @@ onMounted(async () => {
             <template v-if="!stock">
               <label class="fams-field"><span class="fams-field-label">新使用组织</span><select class="fams-control" v-model="target.usingOrganizationId" @change="chooseOrganization"><option :value="null">请选择</option><option v-for="c in catalogs.organization" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
               <label class="fams-field"><span class="fams-field-label">新责任模式</span><select class="fams-control" v-model="target.custodyType"><option value="PERSONAL">个人使用</option><option value="SHARED">部门公用</option></select></label>
-              <label class="fams-field"><span class="fams-field-label">新责任人员</span><select class="fams-control" v-model="target.employeeId"><option :value="null">请选择</option><option v-for="c in employees.filter(row => target!.custodyType !== 'SHARED' || row.sharedEligible)" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
+              <label class="fams-field"><span class="fams-field-label">新责任人员</span><select class="fams-control" v-model="target.employeeId"><option :value="null">请选择</option><option v-for="c in eligibleEmployees" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
             </template>
             <label v-else class="fams-field"><span class="fams-field-label">新目标仓库</span><select class="fams-control" v-model="target.warehouseId" @change="target.locationId = ''"><option :value="null">请选择</option><option v-for="c in catalogs.warehouse" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
             <label class="fams-field"><span class="fams-field-label">新固定位置</span><select class="fams-control" v-model="target.locationId"><option value="">请选择</option><option v-for="c in places" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
@@ -153,7 +163,7 @@ onMounted(async () => {
           <label class="fams-selection"><input v-model="checked" type="checkbox" required>已核对实物及去向，未自动收回或解除业务锁</label>
           <div class="fams-form-actions"><button class="fams-button" data-kind="primary" type="submit">提交调拨目标变更</button></div>
         </fieldset>
-        <div v-if="confirmKind === 'propose'" class="fams-card fams-stack" role="group" :aria-label="confirmLabels.propose">
+        <div v-if="proposeConfirmShown" class="fams-card fams-stack" role="group" :aria-label="confirmLabels.propose">
           <p>{{ confirmHints.propose }}</p>
           <div class="fams-panel-actions">
             <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="runConfirm">{{ confirmLabels.propose }}</button>
@@ -167,14 +177,14 @@ onMounted(async () => {
       </ul>
       <section v-if="selected" class="fams-card fams-stack">
         <div class="fams-panel-head"><h3 class="fams-panel-title">目标变更 #{{ selected.id }} · {{ labels[selected.change_status] }}</h3></div>
-        <p>原目标：{{ targetText(selected.source_snapshot_json.target) }}</p><p>新目标：{{ targetText(selected.proposed_target_json) }}</p>
+        <p>原目标：{{ selectedSourceText }}</p><p>新目标：{{ selectedProposedText }}</p>
         <p>原因：{{ selected.reason }}</p><p>实物核对：{{ selected.physical_verification }}</p><p v-if="selected.source_snapshot_json.physical.destination">原交出地点：{{ selected.source_snapshot_json.physical.destination }}</p>
         <p v-if="selected.decision_reason">决定意见：{{ selected.decision_reason }}</p><router-link class="fams-button" data-kind="link" :to="{ path: '/transfers/' + selected.business_id }">查看原调拨单</router-link>
-        <fieldset v-if="admin && selected.change_status === 'PENDING'" class="fams-stack" :disabled="locked">
+        <fieldset v-if="canDecideTargetChange" class="fams-stack" :disabled="locked">
           <label class="fams-field fams-field-wide"><span class="fams-field-label">核验意见</span><textarea class="fams-control" v-model="decision" maxlength="1000" /></label>
           <div class="fams-inline">
-            <button class="fams-button" data-kind="primary" type="button" :disabled="!decision.trim()" @click="openConfirm('APPROVED')">批准调拨目标变更</button>
-            <button class="fams-button" data-kind="danger" type="button" :disabled="!decision.trim()" @click="openConfirm('REJECTED')">驳回</button>
+            <button class="fams-button" data-kind="primary" type="button" :disabled="decisionMissing" @click="openConfirm('APPROVED')">批准调拨目标变更</button>
+            <button class="fams-button" data-kind="danger" type="button" :disabled="decisionMissing" @click="openConfirm('REJECTED')">驳回</button>
           </div>
           <div v-if="decisionConfirm" class="fams-card fams-stack" role="group" :aria-label="confirmLabels[decisionConfirm]">
             <p>{{ confirmHints[decisionConfirm] }}</p>
@@ -186,10 +196,10 @@ onMounted(async () => {
         </fieldset>
       </section>
       <div class="fams-pagination">
-        <span class="fams-pagination-page">{{ page }} / {{ Math.max(1, Math.ceil(total / 20)) }}</span>
+        <span class="fams-pagination-page">{{ page }} / {{ pageCount }}</span>
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page === 1" @click="paginate(-1)">上一页</button>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || page * 20 >= total" @click="paginate(1)">下一页</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled" @click="paginate(-1)">上一页</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextDisabled" @click="paginate(1)">下一页</button>
         </div>
       </div>
     </section>

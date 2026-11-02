@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { shallowRef } from "vue";
+import { computed, shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { usePagedResourceList } from "@/composables/usePagedResourceList";
 import { requisitionLabels as labels, requisitionMessage, requisitionRequest } from "@/features/requisition/api";
@@ -11,6 +11,9 @@ const { rows, busy, error, page, total, refresh } = usePagedResourceList<Requisi
   (page) => requisitionRequest<RequisitionPage>(
     `?page=${page}&pageSize=20${status.value ? "&status=" + status.value : ""}`),
   { problem: requisitionMessage });
+
+const prevPageDisabled = computed<boolean>(() => busy.value || page.value === 1);
+const nextPageDisabled = computed<boolean>(() => busy.value || page.value * 20 >= total.value);
 </script>
 
 <template>
@@ -53,10 +56,10 @@ const { rows, busy, error, page, total, refresh } = usePagedResourceList<Requisi
       <div class="fams-pagination">
         <span class="fams-pagination-summary">共 {{ total }} 条</span>
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || page === 1"
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevPageDisabled"
             @click="page--; refresh()">上一页</button>
           <span class="fams-pagination-page">第 {{ page }} 页</span>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || page * 20 >= total"
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextPageDisabled"
             @click="page++; refresh()">下一页</button>
         </div>
       </div>

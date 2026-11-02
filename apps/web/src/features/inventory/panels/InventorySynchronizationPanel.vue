@@ -29,6 +29,8 @@ async function load() {
   } finally { if (current(epoch, identity)) busy.value = false; }
 }
 function change(delta: number) { page.value += delta; void load(); }
+const prevDisabled = computed(() => busy.value || page.value === 1);
+const nextDisabled = computed(() => busy.value || page.value * 20 >= total.value);
 watch(owner, () => { generation++; rows.value = []; total.value = 0; page.value = 1; void load(); }, { immediate: true });
 onBeforeUnmount(() => { live = false; generation++; rows.value = []; });
 </script>
@@ -54,9 +56,9 @@ onBeforeUnmount(() => { live = false; generation++; rows.value = []; });
     <div class="fams-pagination">
       <span class="fams-pagination-summary">共 {{ total }} 人</span>
       <div class="fams-pagination-actions">
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || page === 1" @click="change(-1)">上页执行人</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled" @click="change(-1)">上页执行人</button>
         <span class="fams-pagination-page">第 {{ page }} 页</span>
-        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || page * 20 >= total" @click="change(1)">下页执行人</button>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextDisabled" @click="change(1)">下页执行人</button>
       </div>
     </div>
   </section>

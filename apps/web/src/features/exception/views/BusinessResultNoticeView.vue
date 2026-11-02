@@ -18,6 +18,18 @@ const unread = shallowRef(0); const busy = shallowRef(false); const error = shal
 const reasons = ref<Record<string, string>>({}); const info = shallowRef("");
 const pendingObjection = ref<(BusinessMutation & { id: string }) | null>(null);
 const pendingRead = ref<(BusinessMutation & { id: string }) | null>(null);
+interface NoticeRow extends Notice { readText: string; createdAtText: string; receivedAtText: string;
+  isRequisition: boolean; isRepair: boolean; isTransfer: boolean; objectionDisabled: boolean }
+const noticeRows = computed<NoticeRow[]>(() => rows.value.map((notice) => ({ ...notice,
+  readText: notice.read ? "已读" : "未读",
+  createdAtText: formatProxyTime(notice.createdAt),
+  receivedAtText: formatProxyTime(notice.content.metadata?.actualReceivedAt ?? ""),
+  isRequisition: notice.businessType === "REQUISITION",
+  isRepair: notice.businessType === "REPAIR",
+  isTransfer: notice.businessType === "TRANSFER",
+  objectionDisabled: busy.value || !!pendingObjection.value || !!pendingRead.value || !reasons.value[notice.id]?.trim() })));
+const prevDisabled = computed(() => busy.value || page.value <= 1);
+const nextDisabled = computed(() => busy.value || page.value * 20 >= total.value);
 let generation = 0, live = true;
 const current = (epoch: number, owner: string) => live && epoch === generation && owner === identity.value;
 function clear() { generation++; rows.value = []; reasons.value = {}; pendingObjection.value = null; pendingRead.value = null;
@@ -78,20 +90,20 @@ onBeforeUnmount(() => { live = false; clear(); });
       <p v-if="info" class="fams-notice" data-state="success" role="status"><strong>{{ info }}</strong></p>
       <button v-if="pendingRead" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="read(pendingRead.id)">原请求重试已读登记</button>
       <button v-if="pendingObjection" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="object(pendingObjection.id)">原请求重试核查登记</button>
-      <article v-for="notice in rows" :key="notice.id" class="fams-card fams-stack">
+      <article v-for="notice in noticeRows" :key="notice.id" class="fams-card fams-stack">
         <div class="fams-panel-head">
           <div>
-            <h2 class="fams-panel-title">代确认执行结果 · {{ notice.read ? '已读' : '未读' }}</h2>
-            <p class="fams-panel-subtitle">资产 {{ notice.content.result.assetCode }} · 单据 {{ notice.businessId }} · {{ formatProxyTime(notice.createdAt) }}</p>
+            <h2 class="fams-panel-title">代确认执行结果 · {{ notice.readText }}</h2>
+            <p class="fams-panel-subtitle">资产 {{ notice.content.result.assetCode }} · 单据 {{ notice.businessId }} · {{ notice.createdAtText }}</p>
           </div>
         </div>
         <p>签收已完成，责任归属为本次有效目标责任人员。</p>
-        <router-link v-if="notice.businessType === 'REQUISITION'" :to="`/requisitions/${notice.businessId}`">查看业务单据并核查</router-link>
-        <router-link v-if="notice.businessType === 'REPAIR'" :to="{ path: '/repairs/' + notice.businessId }">查看维修单据并核查</router-link>
-        <details v-if="notice.businessType === 'TRANSFER'" class="fams-card fams-stack">
+        <router-link v-if="notice.isRequisition" :to="`/requisitions/${notice.businessId}`">查看业务单据并核查</router-link>
+        <router-link v-if="notice.isRepair" :to="{ path: '/repairs/' + notice.businessId }">查看维修单据并核查</router-link>
+        <details v-if="notice.isTransfer" class="fams-card fams-stack">
           <summary class="fams-panel-title">查看本次调拨签收结果与核查依据</summary>
           <p>原调拨 {{ notice.businessId }} / 明细 {{ notice.itemId }} · 资产 {{ notice.content.result.assetCode }}</p>
-          <p>实际签收人 {{ notice.content.actualSigner }} · {{ formatProxyTime(notice.content.metadata?.actualReceivedAt) }}</p>
+          <p>实际签收人 {{ notice.content.actualSigner }} · {{ notice.receivedAtText }}</p>
           <p>原目标责任人员 {{ notice.content.businessSnapshot?.targetEmployeeId }}</p>
           <p>代确认原因 {{ notice.content.metadata?.cannotConfirmReason }}；联系记录 {{ notice.content.metadata?.contactRecord }}</p>
           <p>提交账号 {{ notice.content.submittedBy }} · 批准账号 {{ notice.content.approvedBy }} · 执行账号 {{ notice.content.executedBy }}</p>
@@ -100,15 +112,15 @@ onBeforeUnmount(() => { live = false; clear(); });
         <p v-if="notice.reviewRequested">已登记管理员核查，资产责任保持。</p>
         <form v-else class="fams-stack" @submit.prevent="object(notice.id)">
           <label class="fams-field fams-field-wide"><span class="fams-field-label">核查说明</span><textarea class="fams-control" v-model="reasons[notice.id]" required maxlength="1000" :disabled="busy || !!pendingObjection || !!pendingRead" /></label>
-          <div class="fams-form-actions"><button class="fams-button" data-kind="primary" type="submit" :disabled="busy || !!pendingObjection || !!pendingRead || !reasons[notice.id]?.trim()">通知管理员核查</button></div>
+          <div class="fams-form-actions"><button class="fams-button" data-kind="primary" type="submit" :disabled="notice.objectionDisabled">通知管理员核查</button></div>
         </form>
       </article>
       <p v-if="!rows.length">暂无结果通知。</p>
       <div class="fams-pagination">
         <span class="fams-pagination-summary">{{ page }} 页 / 共 {{ total }} 条</span>
         <div class="fams-pagination-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || page <= 1" @click="refresh(-1)">上一页</button>
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || page * 20 >= total" @click="refresh(1)">下一页</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled" @click="refresh(-1)">上一页</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextDisabled" @click="refresh(1)">下一页</button>
         </div>
       </div>
     </section>

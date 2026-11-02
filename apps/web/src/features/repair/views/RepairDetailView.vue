@@ -30,6 +30,24 @@ const targetChangeLocked = shallowRef(false);
 const reassignmentLocked = shallowRef(false);
 const factoryLocked = shallowRef(false);
 const locked = computed(() => busy.value || !!pending.value || !!confirmation.value || collaborationLocked.value || physicalLocked.value || returnLocked.value || targetChangeLocked.value || reassignmentLocked.value || factoryLocked.value);
+const confirmationFactoryScope = computed(() => (confirmation.value?.body as Record<string, unknown> | undefined)?.allowedMethod === "INTERNAL_OR_FACTORY");
+const confirmationCostScopeText = computed(() => {
+  const body = confirmation.value?.body as Record<string, unknown> | undefined;
+  if (body?.factoryCostPolicy === "UNLIMITED") return "不限费用";
+  if (body?.factoryCostPolicy === "LIMITED") return `所有轮次累计限额 ${body.factoryCostLimit} 元`;
+  return "无费用";
+});
+const occurredAtText = computed(() => detail.value ? new Date(detail.value.occurredAt).toLocaleString() : "");
+const approvalIncludesFactory = computed(() => approvalMethod.value === "INTERNAL_OR_FACTORY");
+const factoryCostLimited = computed(() => factoryCostPolicy.value === "LIMITED");
+const approveButtonText = computed(() => approvalIncludesFactory.value ? "批准内部或必要时返厂" : "批准内部无费用处理");
+const inPlacePanelTitle = computed(() => detail.value?.actions?.completeInPlace ? "核对已恢复并原地关闭" : "现场核实并受理原地维修");
+const factoryDispatchedAtText = computed(() => detail.value?.factorySummary?.round?.dispatchedAt ? new Date(detail.value.factorySummary.round.dispatchedAt).toLocaleString() : "");
+const factoryReceivedAtText = computed(() => detail.value?.factorySummary?.round?.receivedAt ? new Date(detail.value.factorySummary.round.receivedAt).toLocaleString() : "");
+const factoryPanelVisible = computed(() => (session.user?.roles.includes("ASSET_ADMIN") ?? false)
+  || ((session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false) && !!detail.value && detail.value.processorAccountId === session.user?.id));
+const photoRows = computed(() => (detail.value?.photos ?? []).map((photo) => ({ ...photo, readDisabled: locked.value || photo.scanStatus !== "CLEAN" })));
+const historyRows = computed(() => (detail.value?.history ?? []).map((event) => ({ ...event, occurredAtText: new Date(event.occurred_at).toLocaleString() })));
 const eventNames: Record<string, string> = { REPAIR_SUBMITTED: "已提交报修", REPAIR_DECIDED: "管理员已决定", REPAIR_CLAIMED: "库管已领取", REPAIR_CONTROLLED_REASSIGNMENT: "管理员已受控转派",
   REPAIR_ACCEPTED_IN_PLACE: "已受理原地维修", REPAIR_COMPLETED_IN_PLACE: "已核对原地恢复", REPAIR_CANCELLED: "已取消", REPAIR_FAULT_PHOTO_ADDED: "已补充故障照片", REPAIR_CONFLICT_REJECTED: "旧操作已拒绝",
   ...Object.fromEntries(Object.entries(factoryEventNames).map(([action, label]) => [`REPAIR_${action}`, label])) };
@@ -132,7 +150,7 @@ onBeforeUnmount(() => { live = false; reset(); });
     <button v-if="pending" class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="perform">重试原报修操作</button>
     <div v-if="confirmation" class="fams-card fams-stack" role="group" aria-label="确认本次报修办理">
       <p>请核对本次资产、实际依据及处理范围。批准不会自动领取，原地关闭须确认已恢复且实物从未离开原保管人。</p>
-      <p v-if="(confirmation.body as Record<string, unknown> | undefined)?.allowedMethod === 'INTERNAL_OR_FACTORY'">返厂费用范围：{{ (confirmation.body as Record<string, unknown>).factoryCostPolicy === 'UNLIMITED' ? '不限费用' : (confirmation.body as Record<string, unknown>).factoryCostPolicy === 'LIMITED' ? '所有轮次累计限额 ' + (confirmation.body as Record<string, unknown>).factoryCostLimit + ' 元' : '无费用' }}</p>
+      <p v-if="confirmationFactoryScope">返厂费用范围：{{ confirmationCostScopeText }}</p>
       <div class="fams-panel-actions">
         <button class="fams-button" data-kind="primary" type="button" :disabled="busy" @click="confirm">确认保存本次办理</button>
         <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="confirmation = null">返回修改</button>
@@ -142,7 +160,7 @@ onBeforeUnmount(() => { live = false; reset(); });
       <div class="fams-panel-head">
         <div>
           <h2 class="fams-panel-title">{{ detail.source.assetCode }} · {{ detail.source.name }}</h2>
-          <p class="fams-panel-subtitle">{{ repairStates[detail.status] }} · {{ detail.fault }} · 实际发生 {{ new Date(detail.occurredAt).toLocaleString() }}</p>
+          <p class="fams-panel-subtitle">{{ repairStates[detail.status] }} · {{ detail.fault }} · 实际发生 {{ occurredAtText }}</p>
         </div>
       </div>
       <p v-if="detail.returnOrigin">来自损坏归还 {{ detail.returnOrigin.returnId }}，源后续 {{ detail.returnOrigin.followupId }}；原借用 {{ detail.returnOrigin.closedLoanId || '无' }} 已关闭，实际接修和验收入库后才结束源义务。</p>
@@ -150,7 +168,7 @@ onBeforeUnmount(() => { live = false; reset(); });
       <section class="fams-card fams-stack">
         <div class="fams-panel-head"><h3 class="fams-panel-title">原始故障照片</h3></div>
         <p v-if="!detail.photosAvailable">照片服务暂不可用，请联系管理员。</p>
-        <ul class="fams-timeline"><li v-for="photo in detail.photos" :key="photo.objectId">{{ photo.filename }}<button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked || photo.scanStatus !== 'CLEAN'" @click="readPhoto(photo)">读取故障照片 {{ photo.filename }}</button></li></ul>
+        <ul class="fams-timeline"><li v-for="photo in photoRows" :key="photo.objectId">{{ photo.filename }}<button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="photo.readDisabled" @click="readPhoto(photo)">读取故障照片 {{ photo.filename }}</button></li></ul>
         <fieldset v-if="detail.actions?.addFaultPhoto" class="fams-card fams-stack" :disabled="locked">
           <label class="fams-file"><span class="fams-field-label">选择故障图片</span><input type="file" accept=".jpg,.jpeg,.png,.webp" @change="fileChosen"></label>
           <div class="fams-form-actions"><button class="fams-button" data-kind="primary" type="button" @click="prepare('photo')">核对上传故障照片</button></div>
@@ -165,16 +183,16 @@ onBeforeUnmount(() => { live = false; reset(); });
           <label class="fams-field fams-field-wide"><span class="fams-field-label">本次决定原因</span><textarea class="fams-control" v-model="reason" maxlength="1000" /></label>
           <template v-if="detail.actions.approve">
             <label class="fams-field"><span class="fams-field-label">本次批准处理方式</span><select class="fams-control" v-model="approvalMethod" aria-label="本次批准处理方式"><option value="INTERNAL_NO_COST">仅内部无费用处理</option><option value="INTERNAL_OR_FACTORY">内部或必要时返厂</option></select></label>
-            <template v-if="approvalMethod === 'INTERNAL_OR_FACTORY'">
+            <template v-if="approvalIncludesFactory">
               <label class="fams-field"><span class="fams-field-label">本维修所有返厂轮次费用约束</span><select class="fams-control" v-model="factoryCostPolicy" aria-label="本次返厂费用约束"><option value="NO_COST">无费用</option><option value="LIMITED">所有轮次累计限额</option><option value="UNLIMITED">不限费用</option></select></label>
-              <label v-if="factoryCostPolicy === 'LIMITED'" class="fams-field"><span class="fams-field-label">所有轮次累计正限额（元）</span><input class="fams-control" v-model="factoryCostLimit" inputmode="decimal" maxlength="15"></label>
+              <label v-if="factoryCostLimited" class="fams-field"><span class="fams-field-label">所有轮次累计正限额（元）</span><input class="fams-control" v-model="factoryCostLimit" inputmode="decimal" maxlength="15"></label>
             </template>
           </template>
         </div>
         <template v-if="detail.actions.approve">
           <p>一次批准所选范围及明确费用约束。批准不等于已领取、接修或寄出。</p>
           <div class="fams-inline">
-            <button class="fams-button" data-kind="primary" type="button" @click="prepare('approve')">{{ approvalMethod === 'INTERNAL_OR_FACTORY' ? '批准内部或必要时返厂' : '批准内部无费用处理' }}</button>
+            <button class="fams-button" data-kind="primary" type="button" @click="prepare('approve')">{{ approveButtonText }}</button>
             <button class="fams-button" data-kind="secondary" type="button" @click="prepare('reject')">驳回无效报修</button>
           </div>
         </template>
@@ -182,7 +200,7 @@ onBeforeUnmount(() => { live = false; reset(); });
       </fieldset>
       <button v-if="detail.actions?.claim" class="fams-button" data-kind="secondary" type="button" :disabled="locked" @click="prepare('claim')">领取维修处理</button>
       <fieldset v-if="detail.actions?.acceptInPlace || detail.actions?.completeInPlace" class="fams-card fams-stack" :disabled="locked">
-        <div class="fams-panel-head"><h3 class="fams-panel-title">{{ detail.actions.completeInPlace ? '核对已恢复并原地关闭' : '现场核实并受理原地维修' }}</h3></div>
+        <div class="fams-panel-head"><h3 class="fams-panel-title">{{ inPlacePanelTitle }}</h3></div>
         <div class="fams-field-grid">
           <label class="fams-field"><span class="fams-field-label">现场核对的资产编码</span><input class="fams-control" v-model="observedCode" maxlength="2048"></label>
         </div>
@@ -214,16 +232,16 @@ onBeforeUnmount(() => { live = false; reset(); });
         <div class="fams-panel-head"><h3 class="fams-panel-title">返厂进度</h3></div>
         <p v-if="detail.factorySummary.scope">范围：{{ factoryScopeStates[detail.factorySummary.scope.scopeStatus] }}</p>
         <p>实际寄出 {{ detail.factorySummary.actualDispatchCount }} 次</p>
-        <p v-if="detail.factorySummary.round">第 {{ detail.factorySummary.round.roundNumber }} 轮 · {{ factoryRoundStates[detail.factorySummary.round.roundStatus] }} · 预计收回 {{ detail.factorySummary.round.expectedReturnDate }}<span v-if="detail.factorySummary.round.dispatchedAt"> · 实际寄出 {{ new Date(detail.factorySummary.round.dispatchedAt).toLocaleString() }}</span><span v-if="detail.factorySummary.round.receivedAt"> · 实际收回 {{ new Date(detail.factorySummary.round.receivedAt).toLocaleString() }}</span></p>
+        <p v-if="detail.factorySummary.round">第 {{ detail.factorySummary.round.roundNumber }} 轮 · {{ factoryRoundStates[detail.factorySummary.round.roundStatus] }} · 预计收回 {{ detail.factorySummary.round.expectedReturnDate }}<span v-if="detail.factorySummary.round.dispatchedAt"> · 实际寄出 {{ factoryDispatchedAtText }}</span><span v-if="detail.factorySummary.round.receivedAt"> · 实际收回 {{ factoryReceivedAtText }}</span></p>
       </section>
-      <RepairFactoryPanel v-if="session.user?.roles.includes('ASSET_ADMIN') || session.user?.roles.includes('WAREHOUSE_OPERATOR') && detail.processorAccountId === session.user.id" :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || physicalLocked || returnLocked || targetChangeLocked || reassignmentLocked" @changed="load" @invalidated="reset" @busy-change="factoryLocked=$event" />
+      <RepairFactoryPanel v-if="factoryPanelVisible" :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || physicalLocked || returnLocked || targetChangeLocked || reassignmentLocked" @changed="load" @invalidated="reset" @busy-change="factoryLocked=$event" />
       <RepairReassignmentPanel :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || physicalLocked || returnLocked || targetChangeLocked || factoryLocked" @changed="load" @invalidated="reset" @busy-change="reassignmentLocked = $event" />
       <RepairPhysicalPanel :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || returnLocked || targetChangeLocked || reassignmentLocked || factoryLocked" @changed="load" @invalidated="reset" @busy-change="physicalLocked = $event" />
       <RepairReturnPanel :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || physicalLocked || targetChangeLocked || reassignmentLocked || factoryLocked" @changed="load" @invalidated="reset" @busy-change="returnLocked = $event" />
       <RepairTargetChangePanel :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || physicalLocked || returnLocked || reassignmentLocked || factoryLocked" @changed="load" @invalidated="reset" @busy-change="targetChangeLocked = $event" />
       <RepairCollaborationPanel :repair-id="detail.id" :request-version="detail.version" :blocked="busy || !!pending || !!confirmation || physicalLocked || returnLocked || targetChangeLocked || reassignmentLocked || factoryLocked" @changed="load" @invalidated="reset" @busy-change="collaborationLocked = $event" />
       <div class="fams-panel-head"><h3 class="fams-panel-title">最近100条处理历史 / 共 {{ detail.historyTotal || 0 }} 条</h3></div>
-      <ul class="fams-timeline"><li v-for="event in detail.history" :key="event.id">{{ event.actor_username }} · {{ eventNames[event.action] || '历史处理' }}<small>{{ new Date(event.occurred_at).toLocaleString() }} · {{ event.detail_json.reason || event.detail_json.evidence || event.detail_json.fault || '' }}</small></li></ul>
+      <ul class="fams-timeline"><li v-for="event in historyRows" :key="event.id">{{ event.actor_username }} · {{ eventNames[event.action] || '历史处理' }}<small>{{ event.occurredAtText }} · {{ event.detail_json.reason || event.detail_json.evidence || event.detail_json.fault || '' }}</small></li></ul>
     </section>
   </AppChrome>
 </template>
