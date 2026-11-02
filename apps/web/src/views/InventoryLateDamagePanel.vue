@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { inventoryLateResultLabels, reviewRequest, ReviewApiError } from "@/inventory-review/api";
 import { repairStates } from "@/repair/api";
-import type { LoanMutation } from "@/loan/api";
+import type { BusinessMutation } from "@/api/business";
 interface Damage { observation_id: string; version: number; damage_status: string; repair_id: string | null; repair_status: string | null }
 interface Context { assetId: string; currentAsset: { version: number; assetCode?: string; name?: string } | null; damage: Damage;
   originalEvidence: { rawObservedAt: string }; recheckResult: string; todoOpen: boolean;
@@ -13,7 +13,7 @@ const props = defineProps<{ taskId: string; observationId: string; blocked?: boo
 const emit = defineEmits<{ changed: []; invalidated: []; busyChange: [value: boolean] }>();
 const session = useSessionStore(), owner = computed(() => JSON.stringify([props.taskId, props.observationId, session.user?.id, session.user?.roles, session.csrfToken]));
 const context = ref<Context | null>(null), busy = shallowRef(false), error = shallowRef(""), notice = shallowRef(""), page = shallowRef(1);
-const pending = ref<LoanMutation | null>(null), confirming = shallowRef(false), method = ref("FORMAL_REPAIR");
+const pending = ref<BusinessMutation | null>(null), confirming = shallowRef(false), method = ref("FORMAL_REPAIR");
 const reason = shallowRef(""), evidence = shallowRef(""), fault = shallowRef(""), impact = ref("HIGH"), discoveredAt = shallowRef(""), checked = shallowRef(false), timeChecked = shallowRef(false);
 const repairId = shallowRef(""), linked = ref<Linked | null>(null);
 const locked = computed(() => busy.value || !!pending.value || !!props.blocked), states: Record<string, string> = { OPEN: "待实际处理", PROCESSING: "正式维修处理中", CLOSED: "实际维修已完成" };

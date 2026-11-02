@@ -2,8 +2,9 @@
 import { onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
-import { loanLabels as labels, loanMessage, loanRequest, reminderLabels } from "@/loan/api";
-import type { LoanMutation } from "@/loan/api";
+import { businessMessage, businessRequest } from "@/api/business";
+import { loanLabels as labels, reminderLabels } from "@/loan/api";
+import type { BusinessMutation } from "@/api/business";
 import type { BorrowRequestChoice, BusinessPage, Loan } from "@fams/api-types/loan";
 
 const props = defineProps<{ id: string }>();
@@ -14,14 +15,14 @@ const due = shallowRef(""); const reason = shallowRef("");
 const requestId = shallowRef(""); const requestVersion = shallowRef(0);
 const assetId = shallowRef(""); const assetVersion = shallowRef(0);
 const borrowRequests = ref<BorrowRequestChoice[]>([]);
-let pending: LoanMutation | null = null;
+let pending: BusinessMutation | null = null;
 
 async function open() {
-  selected.value = await loanRequest<Loan>("/loans/" + props.id);
+  selected.value = await businessRequest<Loan>("/loans/" + props.id);
   assetId.value = selected.value.assetId; assetVersion.value = selected.value.currentAssetVersion;
 }
 async function loadRequests() {
-  const requestPage = await loanRequest<BusinessPage<BorrowRequestChoice>>("/loans/borrow-requests?page=1&pageSize=20");
+  const requestPage = await businessRequest<BusinessPage<BorrowRequestChoice>>("/loans/borrow-requests?page=1&pageSize=20");
   borrowRequests.value = requestPage.items;
 }
 async function refresh() {
@@ -29,7 +30,7 @@ async function refresh() {
   try {
     await open(); await loadRequests();
     pending = null; retryable.value = false;
-  } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 async function mutate(path: string, version: number, body?: unknown) {
   if (busy.value) return;
@@ -37,11 +38,11 @@ async function mutate(path: string, version: number, body?: unknown) {
   pending ??= { path, version, key: crypto.randomUUID(), body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown };
   busy.value = true; error.value = "";
   try {
-    const value = await loanRequest<{ id: string }>(pending.path, pending);
+    const value = await businessRequest<{ id: string }>(pending.path, pending);
     const completedPath = pending.path; pending = null; retryable.value = false; notice.value = "操作已保存。";
     if (completedPath === "/asset-returns") { await router.push(`/asset-returns/${encodeURIComponent(value.id)}?saved=1`); return; }
     await open(); await loadRequests();
-  } catch (e) { error.value = loanMessage(e); retryable.value = pending !== null; }
+  } catch (e) { error.value = businessMessage(e); retryable.value = pending !== null; }
   finally { busy.value = false; }
 }
 function retry() { if (pending) void mutate(pending.path, pending.version); }
@@ -64,7 +65,7 @@ onMounted(async () => {
   try {
     if (!/^[1-9][0-9]{0,18}$/.test(props.id)) { error.value = "没有当前记录或操作的权限。"; return; }
     await open(); await loadRequests();
-  } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 });
 </script>
 

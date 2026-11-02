@@ -1,6 +1,6 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { LoanApiError } from "@/loan/api";
+import { BusinessApiError } from "@/api/business";
 import { reactive } from "vue";
 import ProxyConfirmationView from "./ProxyConfirmationView.vue";
 
@@ -9,7 +9,7 @@ vi.mock("@/components/AppChrome.vue", () => ({ default: { template: "<main><slot
 vi.mock("vue-router", () => ({ useRoute: () => ({ query: { id: "41" } }),
   useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock("@/auth/sessionStore", () => ({ useSessionStore: () => state.session }));
-vi.mock("@/loan/api", async importOriginal => ({ ...await importOriginal<typeof import("@/loan/api")>(), loanRequest: state.request, loanMessage: () => "结果尚未确认" }));
+vi.mock("@/api/business", async importOriginal => ({ ...await importOriginal<typeof import("@/api/business")>(), businessRequest: state.request, businessMessage: () => "结果尚未确认" }));
 vi.mock("@/attachment/api", async importOriginal => ({ ...await importOriginal<typeof import("@/attachment/api")>(), downloadAttachment: vi.fn() }));
 vi.mock("@/proxy/api", async importOriginal => ({ ...await importOriginal<typeof import("@/proxy/api")>(), uploadProxyEvidence: vi.fn() }));
 
@@ -61,7 +61,7 @@ describe("proxy confirmation approval", () => {
     state.request.mockImplementation(async (path: string) => path.includes("?page=") ? { items: [], total: 0 } : path.endsWith("/attachments") ? { items: [{ objectId: "secret", filename: "signed-private.pdf", scanStatus: "CLEAN" }] } : { id: "41", businessType: "REPAIR", businessId: "8", businessSnapshotJson: { assetCode: "FA-1" } });
     const wrapper = mount(ProxyConfirmationView, { global: { stubs: { RouterLink: true } } }); await flushPromises();
     expect(wrapper.text()).toContain("signed-private.pdf"); expect(wrapper.text()).toContain("维修返还");
-    state.request.mockRejectedValue(new LoanApiError(403, "AUTH_FORBIDDEN"));
+    state.request.mockRejectedValue(new BusinessApiError(403, "AUTH_FORBIDDEN"));
     await wrapper.findAll("button").find(b => b.text() === "刷新当前记录")!.trigger("click"); await flushPromises();
     expect(wrapper.text()).not.toContain("signed-private.pdf"); expect(wrapper.findAll("fieldset")).toHaveLength(0); wrapper.unmount();
   });

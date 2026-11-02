@@ -10,7 +10,7 @@ vi.mock("@/components/AppChrome.vue", async () => {
 vi.mock("vue-router", () => ({ useRoute: () => ({ query: {}, meta: { uiTitle: "领用与借用目标变更",
   uiDesc: "仅变更未完成明细。已交出的实物保持原交出记录和占用锁，批准不会提前转移资产责任。" } }) }));
 vi.mock("@/auth/sessionStore", () => ({ useSessionStore: () => ({ user: { roles: state.roles } }) }));
-vi.mock("@/loan/api", () => ({ loanRequest: state.request, loanMessage: () => "结果尚未确认" }));
+vi.mock("@/api/business", () => ({ businessRequest: state.request, businessMessage: () => "结果尚未确认" }));
 vi.mock("@/requisition/api", () => ({ requisitionRequest: async () => ({ items: [] }) }));
 describe("approved allocation target change", () => {
   beforeEach(() => { state.request.mockReset(); vi.spyOn(window, "confirm").mockReturnValue(true); });

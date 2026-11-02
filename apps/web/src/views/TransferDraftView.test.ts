@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import TransferDraftView from "./TransferDraftView.vue";
 
 const api = vi.hoisted(() => ({ request: vi.fn(), push: vi.fn() }));
-vi.mock("@/loan/api", async importOriginal => ({ ...await importOriginal<typeof import("@/loan/api")>(), loanRequest: api.request }));
+vi.mock("@/api/business", async importOriginal => ({ ...await importOriginal<typeof import("@/api/business")>(), businessRequest: api.request }));
 vi.mock("vue-router", () => ({ useRouter: () => ({ push: api.push }) }));
 
 const asset = { id: "a21", assetCode: "A21", name: "笔记本电脑", version: 7, lifecycleStatus: "IN_USE", custodyType: "PERSONAL",

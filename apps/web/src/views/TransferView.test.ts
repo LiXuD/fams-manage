@@ -6,7 +6,7 @@ import { useSessionStore } from "@/auth/sessionStore";
 import TransferView from "./TransferView.vue";
 
 const api = vi.hoisted(() => ({ request: vi.fn() }));
-vi.mock("@/loan/api", () => ({ loanRequest: api.request, loanMessage: () => "操作结果尚未确认" }));
+vi.mock("@/api/business", () => ({ businessRequest: api.request, businessMessage: () => "操作结果尚未确认" }));
 
 async function fixture() {
   let lose = true;

@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
-import { LoanApiError, loanMessage, loanRequest, type LoanMutation } from "@/loan/api";
+import { BusinessApiError, businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
 import { exceptionLabels, lifecycleLabels } from "@/asset/api";
 
 type Range = { usingOrganizationId: string | null; owningOrganizationId: string | null; categoryId: string | null;
@@ -16,7 +16,7 @@ const emptyRange = (): Range => ({ usingOrganizationId: null, owningOrganization
   locationId: null, lifecycle: null, exception: null, responsibleEmployeeId: null });
 const range = ref<Range>(emptyRange());
 const catalogs = ref<Record<string, Choice[]>>({}); const version = shallowRef(0);
-const busy = shallowRef(false); const error = shallowRef(""); const pending = ref<LoanMutation | null>(null);
+const busy = shallowRef(false); const error = shallowRef(""); const pending = ref<BusinessMutation | null>(null);
 const locked = computed(() => busy.value || !!pending.value);
 function toLocal(value: string) {
   const date = new Date(value);
@@ -27,12 +27,12 @@ async function send(path: string, body: unknown, expectedVersion: number) {
   pending.value ??= { path, key: crypto.randomUUID(), version: expectedVersion, body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown };
   busy.value = true; error.value = "";
   try {
-    const result = await loanRequest<Task>(pending.value.path, pending.value);
+    const result = await businessRequest<Task>(pending.value.path, pending.value);
     pending.value = null;
     await router.push(`/inventory-tasks/${encodeURIComponent(result.id)}`);
   } catch (e) {
-    error.value = loanMessage(e);
-    if (e instanceof LoanApiError && e.status >= 400 && e.status < 500) pending.value = null;
+    error.value = businessMessage(e);
+    if (e instanceof BusinessApiError && e.status >= 400 && e.status < 500) pending.value = null;
   } finally { busy.value = false; }
 }
 function save() {
@@ -48,7 +48,7 @@ onMounted(async () => {
   busy.value = true;
   try {
     if (props.id) {
-      const result = await loanRequest<{ task: Task }>(`/inventory-tasks/${encodeURIComponent(props.id)}?page=1&pageSize=1`);
+      const result = await businessRequest<{ task: Task }>(`/inventory-tasks/${encodeURIComponent(props.id)}?page=1&pageSize=1`);
       version.value = result.task.version; name.value = result.task.name;
       start.value = toLocal(result.task.starts_at); due.value = toLocal(result.task.due_at);
       range.value = { ...emptyRange(), ...result.task.range_json };
@@ -57,11 +57,11 @@ onMounted(async () => {
       const all: Choice[] = []; let p = 1; let rows: Choice[];
       do {
         const path = `/inventory-tasks/catalog/${kind}?page=${p++}&pageSize=200`;
-        rows = (await loanRequest<{ items: Choice[] }>(path)).items; all.push(...rows);
+        rows = (await businessRequest<{ items: Choice[] }>(path)).items; all.push(...rows);
       } while (rows.length === 200);
       catalogs.value[kind] = all;
     }
-  } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 });
 </script>
 <template>

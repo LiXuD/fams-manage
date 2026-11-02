@@ -2,15 +2,15 @@
 import { onMounted, ref, shallowRef } from "vue";
 import { useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
-import { loanMessage, loanRequest } from "@/loan/api";
-import type { LoanMutation } from "@/loan/api";
+import { businessMessage, businessRequest } from "@/api/business";
+import type { BusinessMutation } from "@/api/business";
 import type { BusinessPage, ReturnAssetChoice } from "@fams/api-types/loan";
 
 const router = useRouter();
 const returnAssets = ref<ReturnAssetChoice[]>([]);
 const assetId = shallowRef(""); const assetVersion = shallowRef(0); const reason = shallowRef("");
 const busy = shallowRef(false); const error = shallowRef(""); const retryable = shallowRef(false);
-let pending: LoanMutation | null = null;
+let pending: BusinessMutation | null = null;
 
 function chooseReturnAsset() {
   const asset = returnAssets.value.find(row => row.id === assetId.value);
@@ -26,19 +26,19 @@ async function send(path: string, version: number, body?: unknown) {
   pending ??= { path, version, key: crypto.randomUUID(), body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown };
   busy.value = true; error.value = "";
   try {
-    const value = await loanRequest<{ id: string }>(pending.path, pending);
+    const value = await businessRequest<{ id: string }>(pending.path, pending);
     pending = null; retryable.value = false;
     await router.push(`/asset-returns/${encodeURIComponent(value.id)}?saved=1`);
-  } catch (e) { error.value = loanMessage(e); retryable.value = pending !== null; }
+  } catch (e) { error.value = businessMessage(e); retryable.value = pending !== null; }
   finally { busy.value = false; }
 }
 function retry() { if (pending) void send(pending.path, pending.version); }
 onMounted(async () => {
   busy.value = true;
   try {
-    const assetPage = await loanRequest<BusinessPage<ReturnAssetChoice>>("/asset-returns/eligible-assets?page=1&pageSize=20");
+    const assetPage = await businessRequest<BusinessPage<ReturnAssetChoice>>("/asset-returns/eligible-assets?page=1&pageSize=20");
     returnAssets.value = assetPage.items;
-  } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 });
 </script>
 

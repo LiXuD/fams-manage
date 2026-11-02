@@ -4,7 +4,7 @@ import { useSessionStore } from "@/auth/sessionStore";
 import { AuthApiError } from "@/auth/api";
 import { formatProxyTime } from "@/proxy/time";
 import AppChrome from "@/components/AppChrome.vue";
-import { LoanApiError, loanMessage, loanRequest } from "@/loan/api";
+import { BusinessApiError, businessMessage, businessRequest } from "@/api/business";
 
 interface Review { noticeId: string; executionId: string; businessId: string; businessType: string;
   recipient: string; reason: string; createdAt: string }
@@ -20,11 +20,11 @@ async function refresh(delta = 0) {
   const epoch = ++generation, owner = identity.value;
   busy.value = true; error.value = ""; page.value += delta;
   try {
-    const result = await loanRequest<{ items: Review[]; total: number }>(`/business-result-notices/review-requests?page=${page.value}&pageSize=20`);
+    const result = await businessRequest<{ items: Review[]; total: number }>(`/business-result-notices/review-requests?page=${page.value}&pageSize=20`);
     if (current(epoch, owner)) { rows.value = result.items; total.value = result.total; }
   } catch (e) { if (current(epoch, owner)) {
-    if ((e instanceof LoanApiError || e instanceof AuthApiError) && [401, 403, 404].includes(e.status)) clear();
-    error.value = loanMessage(e);
+    if ((e instanceof BusinessApiError || e instanceof AuthApiError) && [401, 403, 404].includes(e.status)) clear();
+    error.value = businessMessage(e);
   } } finally { if (current(epoch, owner)) busy.value = false; }
 }
 watch(identity, () => { clear(); error.value = ""; if (session.user?.roles.includes("ASSET_ADMIN")) void refresh(); }, { immediate: true, flush: "sync" });

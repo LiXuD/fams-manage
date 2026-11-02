@@ -4,7 +4,7 @@ import InventoryTaskDetailView from "./InventoryTaskDetailView.vue";
 const state = vi.hoisted(() => ({ request: vi.fn(), push: vi.fn(), roles: ["ASSET_ADMIN"] }));
 vi.mock("@/components/AppChrome.vue", () => ({ default: { template: "<main><slot name=\"actions\" /><slot /></main>" } }));
 vi.mock("@/auth/sessionStore", () => ({ useSessionStore: () => ({ user: { roles: state.roles } }) }));
-vi.mock("@/loan/api", () => ({ loanRequest: state.request, loanMessage: () => "结果尚未确认", LoanApiError: class extends Error {} }));
+vi.mock("@/api/business", () => ({ businessRequest: state.request, businessMessage: () => "结果尚未确认", BusinessApiError: class extends Error {} }));
 vi.mock("vue-router", () => ({ useRouter: () => ({ push: state.push }) }));
 const task = (status: string, version: number) => ({ id: "9007199254740993", name: "固定范围", task_status: status, version,
  assignment_version: 0, starts_at: "2026-12-01T00:00:00Z", due_at: "2026-12-02T00:00:00Z", range_json: { categoryId: "7" } });

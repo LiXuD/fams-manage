@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { inventoryLateResultLabels as results, reviewRequest, ReviewApiError } from "@/inventory-review/api";
 import InventoryLateDamagePanel from "./InventoryLateDamagePanel.vue";
-import type { LoanMutation } from "@/loan/api";
+import type { BusinessMutation } from "@/api/business";
 interface Evidence { observation_id: string; comparison_kind: string; report_sha256: string | null;
   snapshot_json: { rawObservedAt: string; calibratedObservedAt: string | null; receivedAt: string;
     assetId: string | null; acceptedObservationId: string | null; facts: { actual?: { locationHint?: string; locationId?: string; condition?: string; unknownReason?: string; description?: string } } } }
@@ -15,7 +15,7 @@ interface Detail { case: Entry; history: { items: Decision[]; page: number; page
 const props = defineProps<{ taskId: string }>(); const session = useSessionStore();
 const owner = computed(() => JSON.stringify([props.taskId, session.user?.id, session.user?.roles, session.csrfToken]));
 const board = ref<Board | null>(null), detail = ref<Detail | null>(null), page = shallowRef(1), busy = shallowRef(false), error = shallowRef("");
-const pending = ref<LoanMutation | null>(null), confirming = shallowRef(false), confirmation = shallowRef("");
+const pending = ref<BusinessMutation | null>(null), confirming = shallowRef(false), confirmation = shallowRef("");
 const reason = shallowRef(""), evidence = shallowRef(""), method = ref("NOTE"), draftName = shallowRef("");
 const startsAt = ref(new Date(Date.now() + 3600000).toISOString()), dueAt = ref(new Date(Date.now() + 7 * 86400000).toISOString());
 const damageBusy = shallowRef(false);

@@ -3,8 +3,9 @@ import { computed, onMounted, ref, shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import AssetReturnReassignment from "@/components/AssetReturnReassignment.vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { inspectionLabels, loanLabels as labels, loanMessage, loanRequest } from "@/loan/api";
-import type { LoanMutation } from "@/loan/api";
+import { businessMessage, businessRequest } from "@/api/business";
+import { inspectionLabels, loanLabels as labels } from "@/loan/api";
+import type { BusinessMutation } from "@/api/business";
 import type { AssetReturn, ReturnChoice } from "@fams/api-types/loan";
 
 const props = defineProps<{ id: string }>();
@@ -18,15 +19,15 @@ const warehouse = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATO
 const bins = computed(() => locations.value.filter(l => l.warehouseId === warehouseId.value));
 const canInspect = computed(() => warehouse.value && selected.value?.returnStatus === "WAREHOUSE_PROCESSING"
   && selected.value.processorAccountId === session.user?.id);
-let pending: LoanMutation | null = null;
+let pending: BusinessMutation | null = null;
 
-async function open() { selected.value = await loanRequest<AssetReturn>("/asset-returns/" + props.id); }
+async function open() { selected.value = await businessRequest<AssetReturn>("/asset-returns/" + props.id); }
 async function refresh() {
   if (busy.value) return; busy.value = true; error.value = "";
   try {
     await open();
     pending = null; retryable.value = false;
-  } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 async function mutate(path: string, version: number, body?: unknown) {
   if (busy.value) return;
@@ -34,10 +35,10 @@ async function mutate(path: string, version: number, body?: unknown) {
   pending ??= { path, version, key: crypto.randomUUID(), body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown };
   busy.value = true; error.value = "";
   try {
-    await loanRequest(pending.path, pending);
+    await businessRequest(pending.path, pending);
     pending = null; retryable.value = false; notice.value = "操作已保存。";
     await open();
-  } catch (e) { error.value = loanMessage(e); retryable.value = pending !== null; }
+  } catch (e) { error.value = businessMessage(e); retryable.value = pending !== null; }
   finally { busy.value = false; }
 }
 function retry() { if (pending) void mutate(pending.path, pending.version); }
@@ -60,7 +61,7 @@ function inspect() {
 }
 async function catalog(kind: string) {
   const rows: ReturnChoice[] = []; let p = 1; let part: ReturnChoice[];
-  do { part = (await loanRequest<{ items: ReturnChoice[] }>(`/asset-returns/catalog/${kind}?page=${p++}&pageSize=200`)).items; rows.push(...part); }
+  do { part = (await businessRequest<{ items: ReturnChoice[] }>(`/asset-returns/catalog/${kind}?page=${p++}&pageSize=200`)).items; rows.push(...part); }
   while (part.length === 200);
   return rows;
 }
@@ -74,7 +75,7 @@ onMounted(async () => {
       notice.value = "操作已保存。";
       window.history.replaceState(null, "", window.location.pathname);
     }
-  } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 });
 </script>
 

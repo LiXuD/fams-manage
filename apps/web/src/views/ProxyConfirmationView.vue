@@ -4,7 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { AuthApiError } from "@/auth/api";
-import { LoanApiError, loanMessage, loanRequest, type LoanMutation } from "@/loan/api";
+import { BusinessApiError, businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
 import { downloadAttachment, scanStatusLabels, type Attachment } from "@/attachment/api";
 import { formatProxyTime } from "@/proxy/time";
 import { proxyCollectionLabels, proxyEvidenceLabels, uploadProxyEvidence, type ProxyConfirmation, type ProxyPage } from "@/proxy/api";
@@ -12,7 +12,7 @@ const route = useRoute(), router = useRouter(), session = useSessionStore();
 const rows = ref<ProxyConfirmation[]>([]), selected = ref<ProxyConfirmation | null>(null);
 const attachments = ref<Attachment[]>([]), snapshot = ref<Record<string, unknown> | null>(null);
 const page = shallowRef(1), total = shallowRef(0), busy = shallowRef(false), error = shallowRef("");
-const pending = ref<LoanMutation | null>(null), pendingUpload = ref<{ id: string; version: number; file: File; key: string } | null>(null);
+const pending = ref<BusinessMutation | null>(null), pendingUpload = ref<{ id: string; version: number; file: File; key: string } | null>(null);
 const file = ref<File | null>(null);
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN")), warehouse = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR"));
 const locked = computed(() => busy.value || !!pending.value || !!pendingUpload.value);
@@ -28,20 +28,20 @@ const current = (epoch: number, owner: string) => live && epoch === generation &
 function clear() { generation++; rows.value = []; selected.value = null; attachments.value = []; snapshot.value = null; pending.value = null; pendingUpload.value = null;
   file.value = null; form.value = emptyForm(); decision.value = { reason: "", physicalEvidenceChecked: false, noDisputeChecked: false }; page.value = 1; total.value = 0; busy.value = false; }
 function failure(cause: unknown, mutation = false) {
-  if (cause instanceof LoanApiError || cause instanceof AuthApiError) {
+  if (cause instanceof BusinessApiError || cause instanceof AuthApiError) {
     if ([401, 403, 404].includes(cause.status)) clear();
     else if (mutation && cause.status >= 400 && cause.status < 500) { pending.value = null; pendingUpload.value = null; }
   }
-  error.value = loanMessage(cause);
+  error.value = businessMessage(cause);
 }
 async function list(epoch: number, owner: string) {
-  const result = await loanRequest<ProxyPage>(`/proxy-confirmations?page=${page.value}&pageSize=20`);
+  const result = await businessRequest<ProxyPage>(`/proxy-confirmations?page=${page.value}&pageSize=20`);
   if (current(epoch, owner)) { rows.value = result.items; total.value = result.total; }
 }
 async function detail(id: string, epoch: number, owner: string) {
-  const record = await loanRequest<ProxyConfirmation>(`/proxy-confirmations/${id}`);
+  const record = await businessRequest<ProxyConfirmation>(`/proxy-confirmations/${id}`);
   if (!current(epoch, owner)) return;
-  const files = await loanRequest<{ items: Attachment[] }>(`/proxy-confirmations/${id}/attachments`);
+  const files = await businessRequest<{ items: Attachment[] }>(`/proxy-confirmations/${id}/attachments`);
   if (!current(epoch, owner)) return;
   selected.value = record; attachments.value = files.items; await router.replace({ query: { id } });
 }
@@ -61,7 +61,7 @@ async function send(path: string, body?: unknown, version = selected.value?.vers
   if (busy.value || pendingUpload.value || pending.value && pending.value.path !== path) return;
   pending.value ??= { path, key: crypto.randomUUID(), version, body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown };
   const operation = pending.value, epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
-  try { const result = await loanRequest<ProxyConfirmation>(operation.path, operation);
+  try { const result = await businessRequest<ProxyConfirmation>(operation.path, operation);
     if (!current(epoch, owner)) return; pending.value = null; snapshot.value = null;
     await detail(result.id, epoch, owner); if (current(epoch, owner)) await list(epoch, owner);
   } catch (cause) { if (current(epoch, owner)) failure(cause, true); } finally { if (current(epoch, owner)) busy.value = false; }
@@ -96,7 +96,7 @@ async function initialize() {
   try { await list(epoch, owner); if (!current(epoch, owner)) return;
     if (route.query.id && /^[1-9][0-9]*$/.test(String(route.query.id))) await detail(String(route.query.id), epoch, owner);
     else if (warehouse.value && route.query.businessId && route.query.itemId) {
-      const result = await loanRequest<Record<string, unknown>>(`/proxy-confirmations/context?businessType=${encodeURIComponent(String(route.query.businessType ?? "REQUISITION"))}&businessId=${encodeURIComponent(String(route.query.businessId))}&itemId=${encodeURIComponent(String(route.query.itemId))}`);
+      const result = await businessRequest<Record<string, unknown>>(`/proxy-confirmations/context?businessType=${encodeURIComponent(String(route.query.businessType ?? "REQUISITION"))}&businessId=${encodeURIComponent(String(route.query.businessId))}&itemId=${encodeURIComponent(String(route.query.itemId))}`);
       if (current(epoch, owner)) { snapshot.value = result; form.value.actualSignerEmployeeId = String(result.targetEmployeeId); form.value.observedAssetCode = String(result.assetCode); }
     }
   } catch (cause) { if (current(epoch, owner)) failure(cause); } finally { if (current(epoch, owner)) busy.value = false; }

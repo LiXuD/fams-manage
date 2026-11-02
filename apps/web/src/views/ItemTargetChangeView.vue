@@ -3,7 +3,7 @@ import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { loanMessage, loanRequest, type LoanMutation } from "@/loan/api";
+import { businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
 import { requisitionRequest } from "@/requisition/api";
 
 type Target = { custodyType: string; organizationId: string; organizationVersion: number;
@@ -21,7 +21,7 @@ const rows = ref<Proposal[]>([]); const selected = ref<Proposal | null>(null); c
 const target = ref<Target | null>(null); const catalogs = ref<Record<string, Choice[]>>({});
 const page = shallowRef(1); const total = shallowRef(0); const error = shallowRef(""); const busy = shallowRef(false);
 const reason = shallowRef(""); const physicalVerification = shallowRef(""); const physicalChecked = shallowRef(false); const observedCode = shallowRef("");
-const decisionReason = shallowRef(""); const pending = ref<LoanMutation | null>(null);
+const decisionReason = shallowRef(""); const pending = ref<BusinessMutation | null>(null);
 type Confirm = "propose" | "APPROVED" | "REJECTED";
 const confirmKind = ref<Confirm | null>(null);
 const decisionConfirm = computed(() => confirmKind.value === "APPROVED" || confirmKind.value === "REJECTED"
@@ -34,14 +34,14 @@ const locked = computed(() => busy.value || !!pending.value);
 const labels: Record<string, string> = { PENDING: "待管理员批准", APPROVED: "已批准", REJECTED: "已驳回" };
 function name(kind: string, id: string) { return catalogs.value[kind]?.find(row => row.id === id)?.name ?? id; }
 async function list() {
-  const result = await loanRequest<{ items: Proposal[]; total: number }>(`/requisition-target-changes?page=${page.value}&pageSize=20`);
+  const result = await businessRequest<{ items: Proposal[]; total: number }>(`/requisition-target-changes?page=${page.value}&pageSize=20`);
   rows.value = result.items; total.value = result.total;
   if (selected.value) selected.value = rows.value.find(row => row.id === selected.value?.id) ?? selected.value;
 }
 async function refresh() {
   if (busy.value) return;
   busy.value = true; error.value = "";
-  try { await list(); } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  try { await list(); } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 function setReference(kind: "organization" | "employee" | "location", event: Event) {
   if (!target.value) return;
@@ -56,9 +56,9 @@ async function send(path: string, body: unknown, version: number) {
   pending.value ??= { path, key: crypto.randomUUID(), version, body: JSON.parse(JSON.stringify(body)) as unknown };
   busy.value = true; error.value = "";
   try {
-    const result = await loanRequest<Proposal>(pending.value.path, pending.value);
+    const result = await businessRequest<Proposal>(pending.value.path, pending.value);
     await list(); selected.value = result; snapshot.value = null; pending.value = null;
-  } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 function openConfirm(kind: Confirm): void {
   if (locked.value) return;
@@ -93,10 +93,10 @@ onMounted(async () => {
     }
     await list();
     if (warehouse.value && route.query.businessId && route.query.itemId) {
-      snapshot.value = await loanRequest<Snapshot>(`/requisition-target-changes/context?businessId=${encodeURIComponent(String(route.query.businessId))}&itemId=${encodeURIComponent(String(route.query.itemId))}`);
+      snapshot.value = await businessRequest<Snapshot>(`/requisition-target-changes/context?businessId=${encodeURIComponent(String(route.query.businessId))}&itemId=${encodeURIComponent(String(route.query.itemId))}`);
       target.value = { ...snapshot.value.target };
     }
-  } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 });
 </script>
 

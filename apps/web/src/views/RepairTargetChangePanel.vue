@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { LoanApiError, loanMessage, loanRequest, type LoanMutation } from "@/loan/api";
+import { BusinessApiError, businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
 import type { Repair, RepairReturnTarget } from "@/repair/api";
 const props = defineProps<{ repair: Repair; blocked?: boolean }>();
 const emit = defineEmits<{ changed: []; invalidated: []; busyChange: [value: boolean] }>();
@@ -19,7 +19,7 @@ const choices = ref<Choice[]>([]), kind = ref<"organization" | "employee" | "loc
 const catalogPage = shallowRef(1), catalogMore = shallowRef(false);
 const organization = ref<Choice | null>(null), employee = ref<Choice | null>(null), location = ref<Choice | null>(null);
 const custody = ref("PERSONAL"), reason = shallowRef(""), code = shallowRef(""), evidence = shallowRef(""), checked = shallowRef(false), decision = shallowRef("");
-const prepared = ref<LoanMutation | null>(null), pending = ref<LoanMutation | null>(null);
+const prepared = ref<BusinessMutation | null>(null), pending = ref<BusinessMutation | null>(null);
 const locked = computed(() => busy.value || !!prepared.value || !!pending.value);
 let generation = 0, live = true;
 const current = (epoch: number, owner: string) => live && epoch === generation && owner === identity.value;
@@ -30,15 +30,15 @@ function clear() {
   busy.value = false; page.value = 1; total.value = 0; catalogPage.value = 1; catalogMore.value = false;
 }
 function failure(cause: unknown) {
-  if (cause instanceof LoanApiError && [401, 403, 404].includes(cause.status)) { clear(); emit("invalidated"); }
-  error.value = loanMessage(cause);
+  if (cause instanceof BusinessApiError && [401, 403, 404].includes(cause.status)) { clear(); emit("invalidated"); }
+  error.value = businessMessage(cause);
 }
 async function list(delta = 0) {
   const next = page.value + delta;
   if (locked.value || props.blocked || next < 1 || delta > 0 && (next - 1) * 20 >= total.value) return;
   const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
   try {
-    const result = await loanRequest<{ items: Proposal[]; total: number }>(base + "?" + type + "&businessId=" + props.repair.id + "&page=" + next + "&pageSize=20");
+    const result = await businessRequest<{ items: Proposal[]; total: number }>(base + "?" + type + "&businessId=" + props.repair.id + "&page=" + next + "&pageSize=20");
     if (current(epoch, owner)) { rows.value = result.items; total.value = result.total; page.value = next; }
   } catch (cause) { if (current(epoch, owner)) failure(cause); }
   finally { if (current(epoch, owner)) busy.value = false; }
@@ -47,7 +47,7 @@ async function begin() {
   if (locked.value || props.blocked || !props.repair.actions?.changeReturnTarget) return;
   const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
   try {
-    const result = await loanRequest<Snapshot>(base + "/context?" + type + "&businessId=" + props.repair.id + "&itemId=" + props.repair.assetId);
+    const result = await businessRequest<Snapshot>(base + "/context?" + type + "&businessId=" + props.repair.id + "&itemId=" + props.repair.assetId);
     if (current(epoch, owner)) { snapshot.value = result; organization.value = null; employee.value = null; location.value = null; checked.value = false; }
   } catch (cause) { if (current(epoch, owner)) failure(cause); }
   finally { if (current(epoch, owner)) busy.value = false; }
@@ -58,7 +58,7 @@ async function catalog(value: typeof kind.value, delta = 0) {
   if (value === kind.value && delta > 0 && !catalogMore.value) return;
   const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
   try {
-    const result = await loanRequest<{ items: Choice[] }>("/transfers/catalog/" + value
+    const result = await businessRequest<{ items: Choice[] }>("/transfers/catalog/" + value
       + "?page=" + next + "&pageSize=20" + (value === "employee" ? "&organizationId=" + organization.value!.id : ""));
     if (current(epoch, owner)) { kind.value = value; choices.value = result.items.filter(row => value === "location" ? row.locationType !== "BIN"
       : value !== "employee" || custody.value !== "SHARED" || row.sharedEligible);
@@ -93,10 +93,10 @@ async function send() {
   if (busy.value || props.blocked || !pending.value) return;
   const operation = pending.value, epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
   try {
-    await loanRequest(operation.path, operation);
+    await businessRequest(operation.path, operation);
     if (current(epoch, owner)) { pending.value = null; snapshot.value = null; checked.value = false; rows.value = []; emit("changed"); }
   } catch (cause) {
-    if (current(epoch, owner)) { if (cause instanceof LoanApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
+    if (current(epoch, owner)) { if (cause instanceof BusinessApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
   } finally { if (current(epoch, owner)) busy.value = false; }
 }
 async function confirm() { if (!prepared.value || busy.value || props.blocked) return; pending.value = prepared.value; prepared.value = null; await send(); }

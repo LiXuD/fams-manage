@@ -1,5 +1,5 @@
 import { shallowRef, watch } from "vue";
-import { loanMessage, loanRequest, type LoanMutation } from "@/loan/api";
+import { businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
 
 /**
  * 整单处理权转派的工作流：读快照 → 填表 → 提交，并守住「丢失应答后用同一请求原样重试」这条不变量。
@@ -40,7 +40,7 @@ export function useReassignmentFlow<TItem>(
   const snapshot = shallowRef<ReassignmentSnapshot<TItem> | null>(null);
   const target = shallowRef(""), reason = shallowRef(""), evidence = shallowRef("");
   const checked = shallowRef(false), busy = shallowRef(false), error = shallowRef(""), retryable = shallowRef(false);
-  let pending: LoanMutation | null = null, generation = 0;
+  let pending: BusinessMutation | null = null, generation = 0;
 
   const endpoint = (id: string) => `/${options.collection}/${id}/reassignment`;
 
@@ -53,10 +53,10 @@ export function useReassignmentFlow<TItem>(
     if (busy.value) return;
     const turn = ++generation; busy.value = true; error.value = "";
     try {
-      const result = await loanRequest<ReassignmentSnapshot<TItem>>(endpoint(props.id));
+      const result = await businessRequest<ReassignmentSnapshot<TItem>>(endpoint(props.id));
       if (turn !== generation) return;
       snapshot.value = result; pending = null; retryable.value = false; checked.value = false;
-    } catch (e) { if (turn === generation) error.value = loanMessage(e); }
+    } catch (e) { if (turn === generation) error.value = businessMessage(e); }
     finally { busy.value = false; }
   }
 
@@ -72,10 +72,10 @@ export function useReassignmentFlow<TItem>(
         items: current.items.map(options.mapItems) } };
     busy.value = true; error.value = ""; const turn = generation;
     try {
-      await loanRequest(pending.path, pending);
+      await businessRequest(pending.path, pending);
       if (turn !== generation) return;
       pending = null; retryable.value = false; snapshot.value = null; options.onSaved();
-    } catch (e) { if (turn === generation) { error.value = loanMessage(e); retryable.value = true; } }
+    } catch (e) { if (turn === generation) { error.value = businessMessage(e); retryable.value = true; } }
     finally { busy.value = false; }
   }
 

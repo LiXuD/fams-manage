@@ -3,7 +3,7 @@ import { computed, onMounted, ref, shallowRef } from "vue";
 import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { loanMessage, loanRequest, type LoanMutation } from "@/loan/api";
+import { businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
 
 type Choice = { id: string; name: string; version: number; locationType?: string; warehouseId?: string; sharedEligible?: boolean };
 type Target = { owningOrganizationId: string | null; custodyType: string; usingOrganizationId: string | null;
@@ -17,7 +17,7 @@ const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 const operator = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR"));
 const rows = ref<Change[]>([]); const selected = ref<Change | null>(null); const snapshot = ref<Snapshot | null>(null);
 const target = ref<Target | null>(null); const catalogs = ref<Record<string, Choice[]>>({}); const employees = ref<Choice[]>([]);
-const page = shallowRef(1); const total = shallowRef(0); const busy = shallowRef(false); const error = shallowRef(""); const pending = ref<LoanMutation | null>(null);
+const page = shallowRef(1); const total = shallowRef(0); const busy = shallowRef(false); const error = shallowRef(""); const pending = ref<BusinessMutation | null>(null);
 const reason = shallowRef(""); const code = shallowRef(""); const physical = shallowRef(""); const checked = shallowRef(false); const decision = shallowRef("");
 const locked = computed(() => busy.value || !!pending.value); const stock = computed(() => snapshot.value?.source.lifecycleStatus === "IN_STOCK");
 const places = computed(() => catalogs.value.location?.filter(row => stock.value
@@ -34,7 +34,7 @@ const confirmHints: Record<Confirm, string> = { propose: "提请调拨目标变�
 const base = "/item-target-changes";
 async function catalog(kind: string, organization?: string) {
   const all: Choice[] = []; let p = 1; let items: Choice[];
-  do { items = (await loanRequest<{ items: Choice[] }>(`/transfers/catalog/${kind}?page=${p++}&pageSize=200${organization ? `&organizationId=${organization}` : ""}`)).items; all.push(...items); }
+  do { items = (await businessRequest<{ items: Choice[] }>(`/transfers/catalog/${kind}?page=${p++}&pageSize=200${organization ? `&organizationId=${organization}` : ""}`)).items; all.push(...items); }
   while (items.length === 200); return all;
 }
 function name(kind: string, id: string | null) { return id ? catalogs.value[kind]?.find(row => row.id === id)?.name ?? id : "未指定"; }
@@ -42,19 +42,19 @@ function targetText(value: Target) {
   return `${value.custodyType === "STORAGE" ? "仓库保管" : value.custodyType === "SHARED" ? "部门公用" : "个人使用"} / ${name("organization", value.usingOrganizationId)} / ${value.employeeId ?? name("warehouse", value.warehouseId)} / ${name("location", value.locationId)}`;
 }
 async function list() {
-  const value = await loanRequest<{ items: Change[]; total: number }>(`${base}?businessType=TRANSFER&page=${page.value}&pageSize=20`);
+  const value = await businessRequest<{ items: Change[]; total: number }>(`${base}?businessType=TRANSFER&page=${page.value}&pageSize=20`);
   rows.value = value.items; total.value = value.total;
   if (selected.value) selected.value = rows.value.find(row => row.id === selected.value?.id) ?? null;
 }
 async function refresh() {
   if (busy.value) return; busy.value = true; error.value = "";
-  try { await list(); } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  try { await list(); } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 async function chooseOrganization() {
   if (!target.value || locked.value) return;
   target.value.employeeId = null; busy.value = true; error.value = "";
   try { employees.value = target.value.usingOrganizationId ? await catalog("employee", target.value.usingOrganizationId) : []; }
-  catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 function captureTarget(): Target | null {
   const value = target.value; if (!value) return null;
@@ -79,8 +79,8 @@ async function send(path: string, body?: unknown, version = selected.value?.vers
   if (busy.value || pending.value && pending.value.path !== path) return;
   pending.value ??= { path, key: crypto.randomUUID(), version, body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown };
   busy.value = true; error.value = "";
-  try { const result = await loanRequest<Change>(pending.value.path, pending.value); await list(); selected.value = result; pending.value = null; snapshot.value = null; }
-  catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  try { const result = await businessRequest<Change>(pending.value.path, pending.value); await list(); selected.value = result; pending.value = null; snapshot.value = null; }
+  catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 function openConfirm(kind: Confirm): void {
   if (locked.value) return;
@@ -113,11 +113,11 @@ onMounted(async () => {
     for (const kind of ["organization", "warehouse", "location"]) catalogs.value[kind] = await catalog(kind);
     await list();
     if (operator.value && route.query.businessId && route.query.itemId) {
-      snapshot.value = await loanRequest<Snapshot>(`${base}/context?businessType=TRANSFER&businessId=${encodeURIComponent(String(route.query.businessId))}&itemId=${encodeURIComponent(String(route.query.itemId))}`);
+      snapshot.value = await businessRequest<Snapshot>(`${base}/context?businessType=TRANSFER&businessId=${encodeURIComponent(String(route.query.businessId))}&itemId=${encodeURIComponent(String(route.query.itemId))}`);
       target.value = { ...snapshot.value.target, referenceVersions: { ...snapshot.value.target.referenceVersions } };
       if (target.value.usingOrganizationId) employees.value = await catalog("employee", target.value.usingOrganizationId);
     }
-  } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 });
 </script>
 <template>

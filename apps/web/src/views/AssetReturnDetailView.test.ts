@@ -6,7 +6,7 @@ import { useSessionStore } from "@/auth/sessionStore";
 import AssetReturnDetailView from "./AssetReturnDetailView.vue";
 
 const api = vi.hoisted(() => ({ request: vi.fn(), roles: ["ASSET_ADMIN"] as Role[] }));
-vi.mock("@/loan/api", async importOriginal => ({ ...await importOriginal<typeof import("@/loan/api")>(), loanRequest: api.request }));
+vi.mock("@/api/business", async importOriginal => ({ ...await importOriginal<typeof import("@/api/business")>(), businessRequest: api.request }));
 
 const asset = { id: "21", assetCode: "A21", name: "Computer", version: 7, lifecycleStatus: "IN_USE", exceptionStatus: "NONE" };
 const returnRow = (over: Record<string, unknown> = {}): Record<string, unknown> => ({ id: "51", assetId: "21", loanId: "11",

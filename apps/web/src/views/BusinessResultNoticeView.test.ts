@@ -6,7 +6,7 @@ import BusinessResultNoticeView from "./BusinessResultNoticeView.vue";
 const api = vi.hoisted(() => ({ request: vi.fn(), session: { user: { id: "5", roles: ["EMPLOYEE"] } as { id: string; roles: string[] } | null, csrfToken: "csrf" } }));
 vi.mock("@/components/AppChrome.vue", () => ({ default: { template: "<main><slot name=\"actions\" /><slot /></main>" } }));
 vi.mock("@/auth/sessionStore", () => ({ useSessionStore: () => api.session }));
-vi.mock("@/loan/api", async importOriginal => ({ ...await importOriginal<typeof import("@/loan/api")>(), loanRequest: api.request, loanMessage: () => "结果尚未确认" }));
+vi.mock("@/api/business", async importOriginal => ({ ...await importOriginal<typeof import("@/api/business")>(), businessRequest: api.request, businessMessage: () => "结果尚未确认" }));
 
 describe("recipient result notice", () => {
   beforeEach(() => { api.request.mockReset(); api.session = reactive({ user: { id: "5", roles: ["EMPLOYEE"] }, csrfToken: "csrf" }); });

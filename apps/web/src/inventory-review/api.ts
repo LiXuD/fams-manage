@@ -1,5 +1,5 @@
 import { apiUrl, mutationHeaders, parseFailure, readJson, sessionCsrfToken } from "@/api/http";
-import type { LoanMutation } from "@/loan/api";
+import type { BusinessMutation } from "@/api/business";
 export interface Snapshot {
   assetCode: string; name: string; version: number; locationId: string | null; locationName?: string;
   custodyType: string | null; responsibleEmployeeName?: string; departmentResponsibleEmployeeName?: string;
@@ -29,7 +29,7 @@ export interface BatchResult {
 export class ReviewApiError extends Error {
   constructor(readonly status: number, readonly code: string, readonly fields: Record<string, string>) { super(code); }
 }
-export async function reviewRequest<T>(path: string, mutation?: LoanMutation): Promise<T> {
+export async function reviewRequest<T>(path: string, mutation?: BusinessMutation): Promise<T> {
   // 本域的写操作即使没有请求体也声明 JSON，故直接组合底座原语，不走 requestJson 的按需 Content-Type。
   const headers: Record<string, string> = {};
   if (mutation) {

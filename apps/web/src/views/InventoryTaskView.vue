@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
-import { loanMessage, loanRequest } from "@/loan/api";
+import { businessMessage, businessRequest } from "@/api/business";
 import { inventoryTaskStatusLabels as labels } from "@/inventory-review/api";
 import { usePagedResourceList } from "@/composables/usePagedResourceList";
 import { useSessionStore } from "@/auth/sessionStore";
@@ -10,8 +10,8 @@ type Task = { id: string; name: string; task_status: string; starts_at: string; 
 const session = useSessionStore();
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 const { rows: tasks, total, page, busy, error, refresh, pages } = usePagedResourceList<Task>(
-  (page) => loanRequest<{ items: Task[]; total: number }>(`/inventory-tasks?page=${page}&pageSize=20`),
-  { problem: loanMessage });
+  (page) => businessRequest<{ items: Task[]; total: number }>(`/inventory-tasks?page=${page}&pageSize=20`),
+  { problem: businessMessage });
 </script>
 <template>
   <AppChrome>

@@ -4,7 +4,7 @@ import InventoryTaskView from "./InventoryTaskView.vue";
 const state = vi.hoisted(() => ({ request: vi.fn(), roles: ["ASSET_ADMIN"] }));
 vi.mock("@/components/AppChrome.vue", () => ({ default: { template: "<main><slot name=\"actions\" /><slot /></main>" } }));
 vi.mock("@/auth/sessionStore", () => ({ useSessionStore: () => ({ user: { roles: state.roles } }) }));
-vi.mock("@/loan/api", () => ({ loanRequest: state.request, loanMessage: () => "结果尚未确认", LoanApiError: class extends Error {} }));
+vi.mock("@/api/business", () => ({ businessRequest: state.request, businessMessage: () => "结果尚未确认", BusinessApiError: class extends Error {} }));
 const links = (wrapper: ReturnType<typeof mount>) => wrapper.findAll("a").map(a => [a.text(), a.attributes("data-destination")]);
 function listWrapper() {
   return mount(InventoryTaskView, { global: { stubs: { RouterLink: { props: ["to"], template: '<a :data-destination="to"><slot /></a>' } } } });

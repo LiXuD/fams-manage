@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import AppChrome from "@/components/AppChrome.vue";
 import { usePagedResourceList } from "@/composables/usePagedResourceList";
-import { loanLabels as labels, loanMessage, loanRequest } from "@/loan/api";
+import { businessMessage, businessRequest } from "@/api/business";
+import { loanLabels as labels } from "@/loan/api";
 import type { AssetReturn, BusinessPage } from "@fams/api-types/loan";
 
 const { rows: returns, busy, error, page, total, refresh } = usePagedResourceList<AssetReturn>(
-  (page) => loanRequest<BusinessPage<AssetReturn>>(`/asset-returns?page=${page}&pageSize=20`),
-  { problem: loanMessage });
+  (page) => businessRequest<BusinessPage<AssetReturn>>(`/asset-returns?page=${page}&pageSize=20`),
+  { problem: businessMessage });
 </script>
 
 <template>

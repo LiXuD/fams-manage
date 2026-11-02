@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import type { LoanMutation } from "@/loan/api";
+import type { BusinessMutation } from "@/api/business";
 import { ReviewApiError, reviewRequest } from "@/inventory-review/api";
 interface Row { item: { id: string; recheck_generation: number; review_status?: string; reason_kind?: string; reason?: string;
   evidence?: string; actor_username?: string; recorded_at?: string; snapshot_json: { assetCode: string; name: string } };
@@ -13,7 +13,7 @@ const session = useSessionStore(); const owner = computed(() => JSON.stringify([
 const view = ref<View | null>(null), page = shallowRef(1), busy = shallowRef(false), error = shallowRef(""), notice = shallowRef("");
 const chosen = shallowRef(""), kind = ref("UNABLE_TO_OBSERVE"), reason = shallowRef(""), evidence = shallowRef(""), waitingReason = shallowRef("");
 const history = ref<History[]>([]), historyTotal = shallowRef(0), historyItem = shallowRef(""), historyPage = shallowRef(1);
-const pending = ref<LoanMutation | null>(null), confirming = shallowRef(false), summary = shallowRef("");
+const pending = ref<BusinessMutation | null>(null), confirming = shallowRef(false), summary = shallowRef("");
 const locked = computed(() => busy.value || !!pending.value);
 const kinds: Record<string, string> = { UNABLE_TO_OBSERVE: "无法实盘（如现场无法进入）", EVIDENCE_UNAVAILABLE: "原证据失效或无法使用，需补盘", ASSET_NOT_FOUND: "实物未找到，继续查找或正式报失" };
 let generation = 0, live = true;

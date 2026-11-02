@@ -6,7 +6,7 @@ import { useSessionStore } from "@/auth/sessionStore";
 import TransferDetailView from "./TransferDetailView.vue";
 
 const api = vi.hoisted(() => ({ request: vi.fn(), query: {} as Record<string, string>, roles: ["ASSET_ADMIN"] as Role[] }));
-vi.mock("@/loan/api", async importOriginal => ({ ...await importOriginal<typeof import("@/loan/api")>(), loanRequest: api.request }));
+vi.mock("@/api/business", async importOriginal => ({ ...await importOriginal<typeof import("@/api/business")>(), businessRequest: api.request }));
 vi.mock("vue-router", () => ({ useRoute: () => ({ query: api.query }) }));
 
 const item = { id: "i1", version: 5, itemStatus: "READY", receiptRequired: true, destination: null, deliveryEvidence: null,

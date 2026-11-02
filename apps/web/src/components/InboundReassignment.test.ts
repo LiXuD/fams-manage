@@ -2,7 +2,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import InboundReassignment from "./InboundReassignment.vue";
 const api = vi.hoisted(() => ({ request: vi.fn() }));
-vi.mock("@/loan/api", () => ({ loanRequest: api.request, loanMessage: () => "结果尚未确认" }));
+vi.mock("@/api/business", () => ({ businessRequest: api.request, businessMessage: () => "结果尚未确认" }));
 describe("controlled inbound reassignment", () => {
   it("requires a checked physical snapshot and retries the identical request after a lost response", async () => {
     const writes: unknown[] = []; let lose = true;

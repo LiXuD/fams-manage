@@ -4,7 +4,7 @@ import { useSessionStore } from "@/auth/sessionStore";
 import { AuthApiError } from "@/auth/api";
 import { formatProxyTime } from "@/proxy/time";
 import AppChrome from "@/components/AppChrome.vue";
-import { LoanApiError, loanMessage, loanRequest, type LoanMutation } from "@/loan/api";
+import { BusinessApiError, businessMessage, businessRequest, type BusinessMutation } from "@/api/business";
 
 interface Notice { id: string; businessType: string; businessId: string; itemId: string;
   content: { result: { assetCode: string }; actualSigner: string; submittedBy: string; approvedBy: string; executedBy: string;
@@ -16,21 +16,21 @@ const identity = computed(() => JSON.stringify([session.user?.id, session.user?.
 const rows = ref<Notice[]>([]); const page = shallowRef(1); const total = shallowRef(0);
 const unread = shallowRef(0); const busy = shallowRef(false); const error = shallowRef("");
 const reasons = ref<Record<string, string>>({}); const info = shallowRef("");
-const pendingObjection = ref<(LoanMutation & { id: string }) | null>(null);
-const pendingRead = ref<(LoanMutation & { id: string }) | null>(null);
+const pendingObjection = ref<(BusinessMutation & { id: string }) | null>(null);
+const pendingRead = ref<(BusinessMutation & { id: string }) | null>(null);
 let generation = 0, live = true;
 const current = (epoch: number, owner: string) => live && epoch === generation && owner === identity.value;
 function clear() { generation++; rows.value = []; reasons.value = {}; pendingObjection.value = null; pendingRead.value = null;
   page.value = 1; total.value = 0; unread.value = 0; info.value = ""; busy.value = false; }
 function failure(cause: unknown, mutation = false) {
-  if (cause instanceof LoanApiError || cause instanceof AuthApiError) {
+  if (cause instanceof BusinessApiError || cause instanceof AuthApiError) {
     if ([401, 403, 404].includes(cause.status)) clear();
     else if (mutation && cause.status >= 400 && cause.status < 500) { pendingObjection.value = null; pendingRead.value = null; }
   }
-  error.value = loanMessage(cause);
+  error.value = businessMessage(cause);
 }
 async function load(epoch: number, owner: string) {
-  const result = await loanRequest<Page>(`/business-result-notices?page=${page.value}&pageSize=20`);
+  const result = await businessRequest<Page>(`/business-result-notices?page=${page.value}&pageSize=20`);
   if (current(epoch, owner)) { rows.value = result.items; total.value = result.total; unread.value = result.unread; }
 }
 async function refresh(delta = 0) {
@@ -46,7 +46,7 @@ async function read(id: string) {
   const operation = pendingRead.value, epoch = ++generation, owner = identity.value;
   busy.value = true; error.value = "";
   try {
-    await loanRequest(operation.path, operation); if (!current(epoch, owner)) return;
+    await businessRequest(operation.path, operation); if (!current(epoch, owner)) return;
     pendingRead.value = null; await load(epoch, owner);
   } catch (cause) { if (current(epoch, owner)) failure(cause, true); } finally { if (current(epoch, owner)) busy.value = false; }
 }
@@ -59,7 +59,7 @@ async function object(id: string) {
   const operation = pendingObjection.value, epoch = ++generation, owner = identity.value;
   busy.value = true; error.value = ""; info.value = "";
   try {
-    await loanRequest(operation.path, operation); if (!current(epoch, owner)) return;
+    await businessRequest(operation.path, operation); if (!current(epoch, owner)) return;
     pendingObjection.value = null; await load(epoch, owner);
     if (current(epoch, owner)) info.value = "已登记管理员核查。核查期间资产责任仍保持，请勿重复办理接收或自行解除责任。";
   } catch (cause) { if (current(epoch, owner)) failure(cause, true); } finally { if (current(epoch, owner)) busy.value = false; }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import type { LoanMutation } from "@/loan/api";
+import type { BusinessMutation } from "@/api/business";
 import type { AssetCard } from "@/asset/api";
 import type { InboundReceipt } from "@/inbound/api";
 import { ReviewApiError, reviewRequest, subjectStatusLabels as states, type Observation } from "@/inventory-review/api";
@@ -17,11 +17,11 @@ const emit = defineEmits<{ changed: [] }>();
 const session = useSessionStore();
 const owner = computed(() => JSON.stringify([props.taskId, session.user?.id, session.csrfToken, session.user?.roles]));
 const rows = ref<Observation[]>([]), total = shallowRef(0), page = shallowRef(1), detail = ref<FindingView | null>(null);
-const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef(""), pending = ref<LoanMutation | null>(null);
+const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef(""), pending = ref<BusinessMutation | null>(null);
 const method = ref("NON_ENTERPRISE"), reason = shallowRef(""), evidence = shallowRef("");
 const assetCode = shallowRef(""), receiptNumber = shallowRef(""), assets = ref<AssetCard[]>([]), receipts = ref<InboundReceipt[]>([]);
 const selectedAsset = shallowRef(""), selectedReceipt = shallowRef("");
-const confirmation = ref<LoanMutation | null>(null);
+const confirmation = ref<BusinessMutation | null>(null);
 const counters = ref<Observation[]>([]), counterTotal = shallowRef(0), counterPage = shallowRef(1), counterId = shallowRef("");
 const timeSubject = computed(() => detail.value?.timeSubject?.[0]);
 const locked = computed(() => busy.value || !!pending.value || !!confirmation.value);

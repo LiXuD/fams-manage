@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import type { LoanMutation } from "@/loan/api";
+import type { BusinessMutation } from "@/api/business";
 import { reviewRequest, ReviewApiError, subjectStatusLabels as statuses, type Board, type ReviewItem } from "@/inventory-review/api";
 import { repairStates } from "@/repair/api";
 import type { TransferChoice, TransferTarget } from "@fams/api-types/transfer";
@@ -17,7 +17,7 @@ const owner = computed(() => JSON.stringify([session.user?.id, session.csrfToken
 const identity = computed(() => `${props.taskId}:${props.item.item.id}:${owner.value}`);
 const board = ref<Board | null>(null), subjects = ref<Subject[]>([]), chosen = ref<string[]>([]);
 const page = shallowRef(1), total = shallowRef(0), busy = shallowRef(false), error = shallowRef(""), notice = shallowRef("");
-const method = ref("BOOK_CORRECT"), reason = shallowRef(""), evidence = shallowRef(""), pending = ref<LoanMutation | null>(null);
+const method = ref("BOOK_CORRECT"), reason = shallowRef(""), evidence = shallowRef(""), pending = ref<BusinessMutation | null>(null);
 const organizations = ref<TransferChoice[]>([]), warehouses = ref<TransferChoice[]>([]), locations = ref<TransferChoice[]>([]), employees = ref<TransferChoice[]>([]);
 const owning = shallowRef(""), using = shallowRef(""), employee = shallowRef(""), warehouse = shallowRef(""), location = shallowRef(""), custody = ref("PERSONAL");
 const currentItem = computed(() => board.value?.items.find(row => row.item.id === props.item.item.id));

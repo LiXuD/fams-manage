@@ -2,8 +2,9 @@
 import { computed, onMounted, ref, shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { loanLabels as labels, loanMessage, loanRequest } from "@/loan/api";
-import type { LoanMutation } from "@/loan/api";
+import { businessMessage, businessRequest } from "@/api/business";
+import { loanLabels as labels } from "@/loan/api";
+import type { BusinessMutation } from "@/api/business";
 import type { BusinessPage, Loan, LoanExtension } from "@fams/api-types/loan";
 
 const session = useSessionStore();
@@ -11,12 +12,12 @@ const loans = ref<Loan[]>([]); const extensions = ref<LoanExtension[]>([]);
 const busy = shallowRef(false); const error = shallowRef(""); const notice = shallowRef(""); const retryable = shallowRef(false);
 const page = shallowRef(1); const total = shallowRef(0); const reason = shallowRef("");
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
-let pending: LoanMutation | null = null;
+let pending: BusinessMutation | null = null;
 
 async function load() {
   const [loanPage, extensionPage] = await Promise.all([
-    loanRequest<BusinessPage<Loan>>(`/loans?page=${page.value}&pageSize=20`),
-    loanRequest<BusinessPage<LoanExtension>>(`/loans/extensions?page=${page.value}&pageSize=20`)]);
+    businessRequest<BusinessPage<Loan>>(`/loans?page=${page.value}&pageSize=20`),
+    businessRequest<BusinessPage<LoanExtension>>(`/loans/extensions?page=${page.value}&pageSize=20`)]);
   loans.value = loanPage.items; extensions.value = extensionPage.items;
   total.value = Math.max(loanPage.total, extensionPage.total);
 }
@@ -25,7 +26,7 @@ async function refresh() {
   try {
     await load();
     pending = null; retryable.value = false;
-  } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 async function mutate(path: string, version: number, body?: unknown) {
   if (busy.value) return;
@@ -33,10 +34,10 @@ async function mutate(path: string, version: number, body?: unknown) {
   pending ??= { path, version, key: crypto.randomUUID(), body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown };
   busy.value = true; error.value = "";
   try {
-    await loanRequest(pending.path, pending);
+    await businessRequest(pending.path, pending);
     pending = null; retryable.value = false; notice.value = "操作已保存。";
     await load();
-  } catch (e) { error.value = loanMessage(e); retryable.value = pending !== null; }
+  } catch (e) { error.value = businessMessage(e); retryable.value = pending !== null; }
   finally { busy.value = false; }
 }
 function retry() { if (pending) void mutate(pending.path, pending.version); }

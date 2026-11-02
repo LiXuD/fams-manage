@@ -4,7 +4,7 @@ import InventoryTaskDraftView from "./InventoryTaskDraftView.vue";
 const state = vi.hoisted(() => ({ request: vi.fn(), push: vi.fn() }));
 vi.mock("@/components/AppChrome.vue", () => ({ default: { template: "<main><slot name=\"actions\" /><slot /></main>" } }));
 vi.mock("@/auth/sessionStore", () => ({ useSessionStore: () => ({ user: { roles: ["ASSET_ADMIN"] } }) }));
-vi.mock("@/loan/api", () => ({ loanRequest: state.request, loanMessage: () => "结果尚未确认", LoanApiError: class extends Error {} }));
+vi.mock("@/api/business", () => ({ businessRequest: state.request, businessMessage: () => "结果尚未确认", BusinessApiError: class extends Error {} }));
 vi.mock("vue-router", () => ({ useRouter: () => ({ push: state.push }) }));
 function draftWrapper(id?: string) {
   return mount(InventoryTaskDraftView, { props: { id }, global: { stubs: { RouterLink: { props: ["to"], template: '<a :data-destination="to"><slot /></a>' } } } });

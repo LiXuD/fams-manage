@@ -4,8 +4,9 @@ import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import TransferReassignment from "@/components/TransferReassignment.vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { loanMessage, loanRequest, transferLabels as labels } from "@/loan/api";
-import type { LoanMutation } from "@/loan/api";
+import { businessMessage, businessRequest } from "@/api/business";
+import { transferLabels as labels } from "@/loan/api";
+import type { BusinessMutation } from "@/api/business";
 import type { Transfer, TransferChoice, TransferItem } from "@fams/api-types/transfer";
 
 const props = defineProps<{ id: string }>();
@@ -17,22 +18,22 @@ const reason = shallowRef(""), code = shallowRef(""), destination = shallowRef("
 const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef(""), retryable = shallowRef(false), checked = shallowRef(false);
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 const operator = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR"));
-let pending: LoanMutation | null = null;
+let pending: BusinessMutation | null = null;
 
 async function catalog(kind: string, org?: string) {
   const result: TransferChoice[] = []; let p = 1, part: TransferChoice[];
-  do { part = (await loanRequest<{ items: TransferChoice[] }>(`/transfers/catalog/${kind}?page=${p++}&pageSize=200${org ? `&organizationId=${org}` : ""}`)).items; result.push(...part); }
+  do { part = (await businessRequest<{ items: TransferChoice[] }>(`/transfers/catalog/${kind}?page=${p++}&pageSize=200${org ? `&organizationId=${org}` : ""}`)).items; result.push(...part); }
   while (part.length === 200);
   return result;
 }
 async function open() {
-  selected.value = await loanRequest<Transfer>("/transfers/" + props.id);
+  selected.value = await businessRequest<Transfer>("/transfers/" + props.id);
   await loadPeople(selected.value);
 }
 async function refresh() {
   if (busy.value) return; busy.value = true; error.value = "";
   try { await open(); pending = null; retryable.value = false; }
-  catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 async function mutate(path: string, version: number, body?: unknown) {
   if (busy.value) return;
@@ -40,10 +41,10 @@ async function mutate(path: string, version: number, body?: unknown) {
   pending ??= { path, version, key: crypto.randomUUID(), body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown };
   busy.value = true; error.value = "";
   try {
-    const result = await loanRequest<{ id: string }>(pending.path, pending);
+    const result = await businessRequest<{ id: string }>(pending.path, pending);
     pending = null; retryable.value = false; notice.value = "操作已保存。";
-    selected.value = await loanRequest<Transfer>("/transfers/" + result.id); await loadPeople(selected.value);
-  } catch (e) { error.value = loanMessage(e); retryable.value = pending !== null; }
+    selected.value = await businessRequest<Transfer>("/transfers/" + result.id); await loadPeople(selected.value);
+  } catch (e) { error.value = businessMessage(e); retryable.value = pending !== null; }
   finally { busy.value = false; }
 }
 function retry() { const operation = pending; if (operation) void mutate(operation.path, operation.version); }
@@ -70,7 +71,7 @@ onMounted(async () => {
     [organizations.value, locations.value] = await Promise.all([catalog("organization"), catalog("location")]);
     await open();
     if (route.query.saved) { notice.value = "操作已保存。"; window.history.replaceState({}, "", window.location.pathname); }
-  } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 });
 </script>
 

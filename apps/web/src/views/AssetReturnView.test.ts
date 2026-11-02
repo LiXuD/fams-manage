@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import AssetReturnView from "./AssetReturnView.vue";
 
 const api = vi.hoisted(() => ({ request: vi.fn() }));
-vi.mock("@/loan/api", async importOriginal => ({ ...await importOriginal<typeof import("@/loan/api")>(), loanRequest: api.request }));
+vi.mock("@/api/business", async importOriginal => ({ ...await importOriginal<typeof import("@/api/business")>(), businessRequest: api.request }));
 
 const row = { id: "51", assetId: "21", loanId: "11", assetVersion: 7, version: 3, proposedBy: "1",
   responsibleEmployeeId: "9", reason: "设备退库", returnStatus: "WAITING_WAREHOUSE_CLAIM", processorAccountId: null,

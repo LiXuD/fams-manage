@@ -3,8 +3,9 @@ import { computed, onMounted, ref, shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { lifecycleLabels } from "@/asset/api";
-import { loanMessage, loanRequest, transferLabels as labels } from "@/loan/api";
-import type { LoanMutation } from "@/loan/api";
+import { businessMessage, businessRequest } from "@/api/business";
+import { transferLabels as labels } from "@/loan/api";
+import type { BusinessMutation } from "@/api/business";
 import type { Transfer, TransferAsset, TransferChoice, TransferReceipt } from "@fams/api-types/transfer";
 
 const session = useSessionStore();
@@ -16,24 +17,24 @@ const personnelChoices = ref<TransferChoice[]>([]);
 const personTasks = shallowRef("");
 const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef(""), retryable = shallowRef(false), page = shallowRef(1), total = shallowRef(0), checked = shallowRef(false);
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
-let pending: LoanMutation | null = null, grant: string | null = null;
+let pending: BusinessMutation | null = null, grant: string | null = null;
 
 async function catalog(kind: string, org?: string) {
   const result: TransferChoice[] = []; let p = 1, part: TransferChoice[];
-  do { part = (await loanRequest<{ items: TransferChoice[] }>(`/transfers/catalog/${kind}?page=${p++}&pageSize=200${org ? `&organizationId=${org}` : ""}`)).items; result.push(...part); }
+  do { part = (await businessRequest<{ items: TransferChoice[] }>(`/transfers/catalog/${kind}?page=${p++}&pageSize=200${org ? `&organizationId=${org}` : ""}`)).items; result.push(...part); }
   while (part.length === 200);
   return result;
 }
 async function load() {
   const [list, waiting] = await Promise.all([
-    loanRequest<{ items: Transfer[]; total: number }>(`/transfers?page=${page.value}&pageSize=20`),
-    loanRequest<{ items: TransferReceipt[] }>("/transfers/receipts/pending")]);
+    businessRequest<{ items: Transfer[]; total: number }>(`/transfers?page=${page.value}&pageSize=20`),
+    businessRequest<{ items: TransferReceipt[] }>("/transfers/receipts/pending")]);
   rows.value = list.items; total.value = list.total; receipts.value = waiting.items;
 }
 async function refresh() {
   if (busy.value) return; busy.value = true; error.value = "";
   try { await load(); pending = null; grant = null; receipt.value = null; retryable.value = false; }
-  catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 async function mutate(path: string, version: number, body?: unknown) {
   if (busy.value) return;
@@ -41,19 +42,19 @@ async function mutate(path: string, version: number, body?: unknown) {
   pending ??= { path, version, key: crypto.randomUUID(), body: body === undefined ? undefined : JSON.parse(JSON.stringify(body)) as unknown };
   busy.value = true; error.value = "";
   try {
-    await loanRequest<{ id: string }>(pending.path, pending);
+    await businessRequest<{ id: string }>(pending.path, pending);
     const action = pending.path; pending = null; retryable.value = false; notice.value = "操作已保存。";
     if (action.includes("/receipts/")) { receipt.value = null; grant = null; }
     await load();
-  } catch (e) { error.value = loanMessage(e); retryable.value = pending !== null; }
+  } catch (e) { error.value = businessMessage(e); retryable.value = pending !== null; }
   finally { busy.value = false; }
 }
 function retry() { const operation = pending; if (operation) void mutate(operation.path, operation.version); }
 async function openReceipt(row: TransferReceipt) {
   if (busy.value || pending) return; busy.value = true; error.value = ""; grant = null;
-  try { const credential = await loanRequest<{ grant: string; requestVersion: number }>(`/transfers/receipts/${row.id}/grant`, { path: "", version: 0, key: crypto.randomUUID() });
+  try { const credential = await businessRequest<{ grant: string; requestVersion: number }>(`/transfers/receipts/${row.id}/grant`, { path: "", version: 0, key: crypto.randomUUID() });
     grant = credential.grant; receipt.value = { ...row, requestVersion: credential.requestVersion }; code.value = ""; checked.value = false;
-  } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 function receive(refuse: boolean) {
   if (!receipt.value || !grant || !checked.value || !code.value.trim() || refuse && !reason.value.trim()) { error.value = "请核对实物、编码及不符原因。"; return; }
@@ -64,14 +65,14 @@ async function loadPersonnelChoices() {
   if (!admin.value || busy.value) return;
   busy.value = true;
   try { personnelChoices.value = await catalog("personnel"); }
-  catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 async function personnel() {
   if (!personId.value || busy.value) return; busy.value = true; error.value = "";
-  try { const value = await loanRequest<{ employee: { name: string; status: string }; assets: TransferAsset[]; pendingReceipts: unknown[]; processingTransfers: unknown[]; openLoans: unknown[]; openReturns: unknown[]; openRequisitions: unknown[] }>(`/transfers/personnel-handover?employeeId=${personId.value}`);
+  try { const value = await businessRequest<{ employee: { name: string; status: string }; assets: TransferAsset[]; pendingReceipts: unknown[]; processingTransfers: unknown[]; openLoans: unknown[]; openReturns: unknown[]; openRequisitions: unknown[] }>(`/transfers/personnel-handover?employeeId=${personId.value}`);
     personAssets.value = value.assets; personNotice.value = `${value.employee.name} · ${value.employee.status === "ACTIVE" ? "有效" : "已停用"}；未交接前保留原责任。`;
     personTasks.value = `待接收调拨 ${value.pendingReceipts.length}，处理中调拨 ${value.processingTransfers.length}，未关闭借用 ${value.openLoans.length}，待归还 ${value.openReturns.length}，领用/借用待办 ${value.openRequisitions.length}。请通过对应业务完成交接；停用不会自动关闭。`;
-  } catch (e) { error.value = loanMessage(e); } finally { busy.value = false; }
+  } catch (e) { error.value = businessMessage(e); } finally { busy.value = false; }
 }
 onMounted(refresh);
 </script>

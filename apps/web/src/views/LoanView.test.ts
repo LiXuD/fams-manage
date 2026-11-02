@@ -6,7 +6,7 @@ import { useSessionStore } from "@/auth/sessionStore";
 import LoanView from "./LoanView.vue";
 
 const api = vi.hoisted(() => ({ request: vi.fn(), roles: ["ASSET_ADMIN"] as Role[] }));
-vi.mock("@/loan/api", async importOriginal => ({ ...await importOriginal<typeof import("@/loan/api")>(), loanRequest: api.request }));
+vi.mock("@/api/business", async importOriginal => ({ ...await importOriginal<typeof import("@/api/business")>(), businessRequest: api.request }));
 
 const loan = { id: "11", assetId: "21", assetCode: "A21", name: "Computer", relationStatus: "OPEN", version: 4,
   currentAssetVersion: 7, borrowedDate: "2098-01-01", originalReturnDate: "2099-01-01", expectedReturnDate: "2099-01-01",
