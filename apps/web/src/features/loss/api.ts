@@ -1,4 +1,4 @@
-import { useSessionStore } from "@/auth/sessionStore";
+import { fileForm, requestJson, type Profile } from "@/api/http";
 export interface LossAsset { id: string; assetCode: string; name: string; version: number; lifecycle: string; responsibleEmployeeId?: string; departmentResponsibleEmployeeId?: string }
 export interface LossReport { id: string; assetId: string; status: string; source: LossAsset; version: number; assetVersion: number;
   ownershipVersion: number; lockVersion?: number; processorAccountId: string | null; lastSeenAt: string; lastLocation: string;
@@ -7,23 +7,31 @@ export interface LossReport { id: string; assetId: string; status: string; sourc
   history?: { id: string; action: string; actor_username: string; occurred_at: string }[] }
 export interface LossRecoveryAsset { assetCode: string; serialNumber: string | null; version: number; locationId: string | null; locationName: string | null; locationVersion: number | null; eligible: boolean }
 export interface LossRecovery { id: string; version: number; assetVersion: number; ownershipVersion: number; status: string; creatorAccountId: string; processorAccountId: string | null; actions: Record<string,boolean>; request?: { destination?: string; facts?: Record<string,unknown> } }
-export interface LossIntent { path: string; key: string; version: number; body?: unknown; file?: File; summary?: string }
+/**
+ * 面板起草、视图确认的「待提交意图」：只带路径、版本、请求体与确认文案。
+ * 幂等键属于视图的确认式提交底座，子组件不得自行生成，否则重试换键。
+ */
+export interface LossIntent { path: string; version: number; body?: unknown; file?: File; summary?: string }
+/** 底座确认后交给 lossRequest 的完整意图。 */
+export interface LossSubmission extends LossIntent { key: string }
 export class LossApiError extends Error { constructor(readonly status: number, readonly code: string) { super(code); } }
-export async function lossRequest<T>(path: string, intent?: LossIntent): Promise<T> {
-  const headers: Record<string, string> = {}; let body: BodyInit | undefined;
-  if (intent) {
-    const token = useSessionStore().csrfToken;
-    if (!token) throw new LossApiError(401, "AUTH_SESSION_INVALID");
-    headers["X-CSRF-Token"] = token; headers["Idempotency-Key"] = intent.key; headers["If-Match-Version"] = String(intent.version);
-    if (intent.file) { const form = new FormData(); form.append("file", intent.file, intent.file.name); body = form; }
-    else if (intent.body !== undefined) { headers["Content-Type"] = "application/json"; body = JSON.stringify(intent.body); }
-  }
-  const response = await fetch("/api/v1/loss-reports" + path, { credentials: "include", method: intent ? "POST" : "GET", headers, body });
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({})) as { code?: string };
-    throw new LossApiError(response.status, data.code ?? "LOSS_REQUEST_FAILED");
-  }
-  return await response.json() as T;
+
+/** 本域在 /api/v1 下的路径前缀，读写两端同源。 */
+const PREFIX = "/loss-reports";
+
+/** 本域的失败三元组形状：错误码不合形时落回本域兜底码，文案仍由 lossProblem 统一给。 */
+const profile: Profile<LossApiError> = {
+  codeFallback: "LOSS_REQUEST_FAILED",
+  failure: ({ status, code }) => new LossApiError(status, code),
+  csrfMissing: () => new LossApiError(401, "AUTH_SESSION_INVALID"),
+};
+
+/** 读走 GET；带意图即按写三件套（CSRF + 幂等键 + 乐观版本）提交，文件走 multipart 表单。 */
+export function lossRequest<T>(path: string, intent?: LossSubmission): Promise<T> {
+  return requestJson<T, LossApiError>(path, profile, intent
+    ? { prefix: PREFIX, method: "POST", key: intent.key, version: intent.version,
+      ...(intent.file ? { form: fileForm(intent.file) } : { json: intent.body }) }
+    : { prefix: PREFIX });
 }
 export const lossStates: Record<string, string> = { PENDING_ADMIN_DECISION: "待管理员确认", WAITING_WAREHOUSE_CLAIM: "待库管领取",
   VERIFYING: "核实中", SEARCHING: "查找中", RECOVERED: "查找中已找回", CONFIRMED_LOST: "已确认遗失·持续跟进", REJECTED: "已驳回", CANCELLED: "已撤回" };

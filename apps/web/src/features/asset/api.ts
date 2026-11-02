@@ -24,6 +24,9 @@ export interface AssetCard {
 
 export interface AssetTag { enterpriseName: string; assetName: string; assetCode: string; qrToken: string; qrCode: string }
 
+/** 整机换新关联：一条记录把旧实物卡与新入库的独立资产卡成对给出；可见范围由当前会话权限决定。 */
+export interface FactoryReplacementLink { sourceId: string; originalAssetId: string; replacementAssetId: string; originalAssetCode: string; replacementAssetCode: string; originalSerialNumber: string | null; replacementSerialNumber: string }
+
 export const lifecycleLabels: Record<string, string> = { WAITING_INBOUND: "待入库", IN_STOCK: "在库", IN_USE: "在用",
   BORROWED: "借出", UNDER_REPAIR: "维修中", FACTORY_REPAIR: "返厂维修", PENDING_SCRAP: "待报废", SCRAPPED: "已报废" };
 export const cardStageLabels: Record<string, string> = { DRAFT: "草稿", PENDING_INBOUND: "待验收入库", ACTIVE: "已生效",
@@ -59,6 +62,10 @@ export function getAsset(id: string): Promise<AssetCard> {
   return request<AssetCard>("/assets/" + encodeURIComponent(id));
 }
 
+export function listFactoryReplacements(id: string): Promise<{ items: FactoryReplacementLink[] }> {
+  return request<{ items: FactoryReplacementLink[] }>("/assets/" + encodeURIComponent(id) + "/factory-replacements");
+}
+
 export function createAsset(payload: Record<string, unknown>): Promise<AssetCard> {
   return request<AssetCard>("/assets", "POST", payload);
 }
@@ -86,8 +93,8 @@ export function reprintTag(id: string, version: number): Promise<{ jobId: string
     "POST", {}, version);
 }
 
-export function activeReferences(path: string): Promise<Page<AssetReference>> {
-  return request<Page<AssetReference>>(path + "/active-references?page=1&pageSize=200");
+export function activeReferences(path: string, page = 1, pageSize = 200): Promise<Page<AssetReference>> {
+  return request<Page<AssetReference>>(path + "/active-references?page=" + page + "&pageSize=" + pageSize);
 }
 
 export function custodyLabel(asset: AssetCard): string {

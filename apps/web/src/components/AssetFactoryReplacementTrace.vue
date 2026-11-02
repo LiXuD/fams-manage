@@ -1,28 +1,43 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, ref, shallowRef, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
+import { AssetApiError, listFactoryReplacements, type FactoryReplacementLink } from "@/features/asset/api";
 const props = defineProps<{ assetId: string }>();
 const emit = defineEmits<{ "open-card": [string] }>();
-interface Link { sourceId: string; originalAssetId: string; replacementAssetId: string; originalAssetCode: string; replacementAssetCode: string; originalSerialNumber: string | null; replacementSerialNumber: string }
-const session = useSessionStore(), items = ref<Link[] | null>(null), busy = ref(false), error = ref("");
+const session = useSessionStore();
+const items = ref<FactoryReplacementLink[] | null>(null), busy = shallowRef(false), error = shallowRef("");
 const identity = computed(() => JSON.stringify([props.assetId, session.user?.id, session.user?.roles, session.csrfToken]));
-let generation = 0, live = true;
-watch(identity, () => { generation++; items.value = null; busy.value = false; error.value = ""; }, { flush: "sync" });
+const liveness = useRequestLiveness(() => [identity.value]);
+/** 行显示模型：序列号缺省与整句文案在此拼装，模板只读现成字段。 */
+const rows = computed(() => (items.value ?? []).map(item => ({
+  sourceId: item.sourceId, originalAssetId: item.originalAssetId, replacementAssetId: item.replacementAssetId,
+  description: `旧机编码 ${item.originalAssetCode} · 序列号 ${item.originalSerialNumber ?? "原记录未登记"}；新机编码 ${item.replacementAssetCode} · 序列号 ${item.replacementSerialNumber}。新机独立入库，旧机责任按实际单据保留。`,
+})));
+const noTrace = computed(() => items.value !== null && items.value.length === 0);
 async function load() {
   if (busy.value) return;
-  const epoch = ++generation, owner = identity.value; busy.value = true; error.value = ""; items.value = null;
+  const turn = liveness.begin(); busy.value = true; error.value = ""; items.value = null;
   try {
-    const response = await fetch(`/api/v1/assets/${props.assetId}/factory-replacements`, { credentials: "include" });
-    if (!response.ok) throw new Error("当前身份无法读取换机关联，请刷新核对权限和资产。 ");
-    const result = await response.json() as { items: Link[] };
-    if (live && epoch === generation && owner === identity.value) items.value = result.items;
-  } catch (cause) { if (live && epoch === generation && owner === identity.value) error.value = cause instanceof Error ? cause.message : "换机关联读取失败，请重试。"; }
-  finally { if (live && epoch === generation && owner === identity.value) busy.value = false; }
+    const result = await listFactoryReplacements(props.assetId);
+    if (liveness.isCurrent(turn)) items.value = result.items;
+  } catch (cause) {
+    if (liveness.isCurrent(turn)) error.value = cause instanceof AssetApiError
+      ? "当前身份无法读取换机关联，请刷新核对权限和资产。 "
+      : cause instanceof Error ? cause.message : "换机关联读取失败，请重试。";
+  } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
-onBeforeUnmount(() => { live = false; generation++; });
+watch(identity, () => { liveness.invalidate(); items.value = null; busy.value = false; error.value = ""; }, { flush: "sync" });
 </script>
 <template>
-  <section aria-label="新旧实物换机追溯"><button :disabled="busy" @click="load">核对新旧实物换机关联</button><p v-if="error" role="alert">{{ error }}</p><p v-if="items && !items.length">当前权限下暂无可见换机关联。</p>
-    <article v-for="item in items" :key="item.sourceId"><p>旧机编码 {{ item.originalAssetCode }} · 序列号 {{ item.originalSerialNumber ?? '原记录未登记' }}；新机编码 {{ item.replacementAssetCode }} · 序列号 {{ item.replacementSerialNumber }}。新机独立入库，旧机责任按实际单据保留。</p><button @click="emit('open-card', item.originalAssetId)">打开旧机资产卡</button><button @click="emit('open-card', item.replacementAssetId)">打开新机资产卡</button></article>
+  <section class="fams-card fams-stack" aria-label="新旧实物换机追溯">
+    <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="load">核对新旧实物换机关联</button>
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+    <p v-if="noTrace">当前权限下暂无可见换机关联。</p>
+    <article v-for="row in rows" :key="row.sourceId" class="fams-card fams-stack">
+      <p>{{ row.description }}</p>
+      <button class="fams-button" data-kind="link" data-size="sm" type="button" @click="emit('open-card', row.originalAssetId)">打开旧机资产卡</button>
+      <button class="fams-button" data-kind="link" data-size="sm" type="button" @click="emit('open-card', row.replacementAssetId)">打开新机资产卡</button>
+    </article>
   </section>
 </template>

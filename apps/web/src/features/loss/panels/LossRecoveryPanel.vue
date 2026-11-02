@@ -1,53 +1,241 @@
 <script setup lang="ts">
-import {ref} from "vue";
-import {lossRequest,type LossIntent,type LossReport,type LossRecovery} from "@/features/loss/api";
-const props=defineProps<{report:LossReport;locked:boolean}>();const emit=defineEmits<{prepare:[intent:LossIntent]}>();
-const observedCode=ref(""),serial=ref(""),foundAt=ref(""),evidence=ref(""),reason=ref(""),checked=ref(false),error=ref("");
-const returnChecked=ref(false),locations=ref<{id:string;name:string;version:number}[]>([]),locationIndex=ref(""),locationPage=ref(0),locationTotal=ref(0),loadingLocations=ref(false);
-async function loadLocations(){
- if(props.locked||loadingLocations.value)return;loadingLocations.value=true;
- try{const result=await lossRequest<{items:{id:string;name:string;version:number}[];total:number}>(`/recovery-locations?page=${locationPage.value+1}&pageSize=100`);if(props.locked)return;locations.value.push(...result.items);locationTotal.value=result.total;locationPage.value++;}
- catch{error.value="位置未加载，请重试。";}finally{loadingLocations.value=false;}
+import { computed, ref, shallowRef } from "vue";
+import { lossRequest, type LossIntent, type LossRecovery, type LossRecoveryAsset, type LossReport } from "@/features/loss/api";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
+
+const props = defineProps<{ report: LossReport; locked: boolean }>();
+/** 只起草，不提交：幂等键与在途簿记由父视图的确认式提交底座持有。 */
+const emit = defineEmits<{ prepare: [intent: LossIntent] }>();
+
+type Action = "recoverOriginal" | "recoverDamaged" | "recoverReturn" | "requestRecovery" | "requestDamaged" | "requestReturn"
+  | "approve" | "reject" | "cancel" | "claim" | "execute" | "executeDamaged" | "executeReturn";
+
+/** 报失单级动作需要的能力位；找回三族都按各自的直接动作复核。 */
+const reportCapabilities: Record<string, string> = { recoverOriginal: "recoverOriginal", recoverDamaged: "recoverOriginal", recoverReturn: "recoverOriginal", requestRecovery: "requestRecovery", requestDamaged: "requestRecovery", requestReturn: "requestRecovery" };
+const attemptCapabilities: Record<string, string> = { approve: "decide", reject: "decide", cancel: "cancel", claim: "claim", execute: "execute", executeDamaged: "execute", executeReturn: "execute" };
+const attemptPaths: Record<string, string> = { approve: "decision", reject: "decision", cancel: "cancel", claim: "claim", execute: "execute", executeDamaged: "execute-to-repair", executeReturn: "execute-to-return" };
+const statusLabels: Record<string, string> = { PENDING_ADMIN_DECISION: "待管理员批准找回", WAITING_WAREHOUSE_CLAIM: "待库管重新认领", VERIFYING: "找回实物核实中", COMPLETED: "已完成找回", REJECTED: "找回申请已驳回", CANCELLED: "找回申请已撤回" };
+const impacts: Record<string, string> = { LOW: "较低", MEDIUM: "中等", HIGH: "较高" };
+
+const observedCode = shallowRef(""), serial = shallowRef(""), foundAt = shallowRef(""), evidence = shallowRef(""), reason = shallowRef(""), checked = shallowRef(false);
+const returnChecked = shallowRef(false), locations = ref<{ id: string; name: string; version: number }[]>([]), locationIndex = shallowRef(""), locationPage = shallowRef(0), locationTotal = shallowRef(0), loadingLocations = shallowRef(false);
+const damagedChecked = shallowRef(false), fault = shallowRef(""), impact = shallowRef("MEDIUM");
+const error = shallowRef("");
+const liveness = useRequestLiveness(() => [props.report.id, props.report.version, props.locked]);
+
+const source = computed(() => props.report.recoveryAsset ?? null);
+const showDamagedSection = computed(() => !!props.report.actions?.recoverOriginal || !!props.report.actions?.requestRecovery || (props.report.recoveries ?? []).some((item) => item.actions.execute && item.request?.facts?.condition === "DAMAGED"));
+const showReturnSection = computed(() => !!props.report.actions?.recoverOriginal || !!props.report.actions?.requestRecovery || (props.report.recoveries ?? []).some((item) => item.actions.execute && item.request?.destination === "ASSET_RETURN"));
+const locationsLoaded = computed(() => locationPage.value > 0);
+const locationsSummary = computed(() => `已加载${locations.value.length}/${locationTotal.value}个位置`);
+const loadLocationsLabel = computed(() => locationsLoaded.value ? "继续加载位置" : "加载实际位置");
+/** 申请行显示模型：状态、去向与三段核实文案在此拼装，按钮可见性按申请单自身事实判定，模板只读现成字段。 */
+const attemptRows = computed(() => (props.report.recoveries ?? []).map((attempt) => {
+  const facts = attempt.request?.facts ?? {};
+  const damaged = facts.condition === "DAMAGED";
+  const returned = attempt.request?.destination === "ASSET_RETURN";
+  return { ...attempt,
+    statusText: statusLabels[attempt.status] ?? attempt.status,
+    processorText: attempt.processorAccountId ?? "尚未认领",
+    foundAtText: show(facts.foundAt),
+    observedCodeText: show(facts.observedAssetCode),
+    observedSerialText: showOr(facts.observedSerialNumber, "未登记"),
+    locationIdText: show(facts.locationId),
+    destinationText: returned ? "关联归还/退库，原责任待实物验收后移交" : "原责任恢复或维修",
+    conditionText: facts.condition === "INTACT" ? "完好" : damaged ? "损坏，批准后转正式维修" : "需关联处理",
+    custodianText: facts.stillOriginalCustodian === true ? "仍由原责任人保管" : "责任需核对",
+    identityText: facts.physicalIdentityVerified === true ? "已对照原机身份" : "身份待核对",
+    evidenceText: show(facts.evidence),
+    showReason: attempt.actions.decide || attempt.actions.cancel,
+    executeOriginalShown: attempt.actions.execute && !damaged && !returned,
+    executeDamagedShown: attempt.actions.execute && damaged,
+    executeReturnShown: attempt.actions.execute && returned };
+}));
+
+function show(value: unknown): string { return value === undefined || value === null ? "" : String(value); }
+function showOr(value: unknown, fallback: string): string { return value ? String(value) : fallback; }
+
+async function loadLocations() {
+  if (props.locked || loadingLocations.value) return;
+  const turn = liveness.begin();
+  loadingLocations.value = true;
+  try {
+    const result = await lossRequest<{ items: { id: string; name: string; version: number }[]; total: number }>(`/recovery-locations?page=${locationPage.value + 1}&pageSize=100`);
+    if (!liveness.isCurrent(turn)) return;
+    locations.value.push(...result.items); locationTotal.value = result.total; locationPage.value++;
+  } catch { error.value = "位置未加载，请重试。"; }
+  finally { loadingLocations.value = false; }
 }
-const damagedChecked=ref(false),fault=ref(""),impact=ref("MEDIUM");
-const names:Record<string,string>={PENDING_ADMIN_DECISION:"待管理员批准找回",WAITING_WAREHOUSE_CLAIM:"待库管重新认领",VERIFYING:"找回实物核实中",COMPLETED:"已完成找回",REJECTED:"找回申请已驳回",CANCELLED:"找回申请已撤回"};
-function prepare(action:string,attempt?:LossRecovery){
- if(props.locked)return;const row=props.report;const capability=({approve:"decide",reject:"decide",cancel:"cancel",claim:"claim",execute:"execute",executeDamaged:"execute",executeReturn:"execute"}as Record<string,string>)[action];
- if(attempt?!attempt.actions[capability??""]:!row.actions?.[["recoverDamaged","recoverReturn"].includes(action)?"recoverOriginal":["requestDamaged","requestReturn"].includes(action)?"requestRecovery":action])return;
- error.value="";try{let body:unknown;const source=row.recoveryAsset;let summary="";
-  if(["recoverReturn","requestReturn","executeReturn"].includes(action)){
-   const place=locations.value.find(item=>item.id===locationIndex.value),date=new Date(foundAt.value);
-   if(!source||!returnChecked.value||!place||!Number.isFinite(date.getTime())||!observedCode.value.trim()||source.serialNumber&&!serial.value.trim()||evidence.value.trim().length<10)throw Error("请核对完好原机、实际位置、找回时间及至少10字变更保管证据，并确认关联归还/退库。");
-   const facts={foundAt:date.toISOString(),observedAssetCode:observedCode.value.trim(),observedSerialNumber:serial.value.trim(),locationId:place.id,locationVersion:place.version,physicalIdentityVerified:true,condition:"INTACT",stillOriginalCustodian:false,evidence:evidence.value.trim()};
-   body=action==="requestReturn"?{assetVersion:source.version,facts}:{assetVersion:attempt?.assetVersion??row.assetVersion,ownershipVersion:attempt?.ownershipVersion??row.ownershipVersion,lockVersion:row.lockVersion,facts};
-   summary=`${action==="requestReturn"?"新建归还/退库找回申请，须新批准并认领":"找回并建立正式归还/退库"}：${facts.observedAssetCode}；实际位置${place.name}；${facts.evidence}。原责任和借用保留至退库审批及实物验收，当前锁继续保留，尚未成为可用库存。`;
-  }else if(["recoverDamaged","requestDamaged","executeDamaged"].includes(action)){
-   const date=new Date(foundAt.value);if(!source||!damagedChecked.value||!Number.isFinite(date.getTime())||!observedCode.value.trim()||source.serialNumber&&!serial.value.trim()||evidence.value.trim().length<10||action!=="requestDamaged"&&fault.value.trim().length<10||!source.locationId||source.locationVersion===null)throw Error("请核对原机身份、实际找回时间、至少10字证据及故障，并确认原责任原地损坏实物。");
-   body={recovery:{assetVersion:attempt?.assetVersion??row.assetVersion,ownershipVersion:attempt?.ownershipVersion??row.ownershipVersion,lockVersion:row.lockVersion,facts:{foundAt:date.toISOString(),observedAssetCode:observedCode.value.trim(),observedSerialNumber:serial.value.trim(),locationId:source.locationId,locationVersion:source.locationVersion,physicalIdentityVerified:true,condition:"DAMAGED",stillOriginalCustodian:true,evidence:evidence.value.trim()}},fault:fault.value.trim(),impact:impact.value};
-   if(action==="requestDamaged") body={assetVersion:source.version,facts:(body as {recovery:{facts:unknown}}).recovery.facts};
-   summary=action==="requestDamaged"?`新建损坏找回申请：${observedCode.value.trim()}；${evidence.value.trim()}。须管理员批准并重新认领核实后才能转正式维修，当前不恢复正常，原遗失事实和责任保留。`:`原机损坏找回并建立正式维修：${observedCode.value.trim()}，故障：${fault.value.trim()}；资产继续由维修单锁定，须管理员批准及库管实际处理，原责任和借用日期保留。`;
-  }else if(["recoverOriginal","requestRecovery","execute"].includes(action)){
-   const date=new Date(foundAt.value);if(!source||!checked.value||!Number.isFinite(date.getTime())||!observedCode.value.trim()||evidence.value.trim().length<10||!source.locationId||source.locationVersion===null||source.serialNumber&&!serial.value.trim())throw Error("请对照原机编码/序列号，填写实际找回时间及至少10字证据，并确认完好、原保管与登记位置。");
-   const facts={foundAt:date.toISOString(),observedAssetCode:observedCode.value.trim(),observedSerialNumber:serial.value.trim(),locationId:source.locationId,locationVersion:source.locationVersion,physicalIdentityVerified:true,condition:"INTACT",stillOriginalCustodian:true,evidence:evidence.value.trim()};
-   body=action==="requestRecovery"?{assetVersion:source.version,facts}:{assetVersion:attempt?.assetVersion??row.assetVersion,ownershipVersion:attempt?.ownershipVersion??row.ownershipVersion,lockVersion:row.lockVersion,facts};
-   summary=`${action==="requestRecovery"?"新建找回申请，批准认领后才能恢复":"核实后恢复原责任资产"}：${facts.observedAssetCode}，序列号${facts.observedSerialNumber||"未登记"}，找回时间${facts.foundAt}，登记位置${source.locationName}；${facts.evidence}。原借用不改期，历史遗失事实保留。`;
-  }else{if(action!=="claim"){if(reason.value.trim().length<3)throw Error("请填写至少3字本次原因。");body=action==="cancel"?{reason:reason.value.trim()}:{result:action==="approve"?"APPROVE":"REJECT",reason:reason.value.trim()};}summary=action==="claim"?"取得新的唯一找回处理权，尚未恢复资产。":`${action==="approve"?"批准新找回申请，仍须库管核实执行":action==="reject"?"驳回找回申请，保留原遗失与责任跟进":"撤回新找回申请，保留原遗失与责任跟进"}；${reason.value.trim()}`;}
-  if(attempt&&["execute","executeDamaged","executeReturn"].includes(action)&&((attempt.request?.destination==="ASSET_RETURN")!==(action==="executeReturn")))return;
-  if(attempt&&["execute","executeDamaged"].includes(action)&&((attempt.request?.facts?.condition==="DAMAGED")!==(action==="executeDamaged")))return;
-  const path=attempt?`/recoveries/${attempt.id}/${action==="approve"||action==="reject"?"decision":action==="executeDamaged"?"execute-to-repair":action==="executeReturn"?"execute-to-return":action}`:`/${row.id}/${action==="recoverOriginal"?"recover-original":action==="recoverDamaged"?"recover-to-repair":action==="recoverReturn"?"recover-to-return":action==="requestReturn"?"return-recovery-requests":action==="requestDamaged"?"repair-recovery-requests":"recovery-requests"}`;
-  emit("prepare",Object.freeze({path,version:attempt?.version??row.version,key:crypto.randomUUID(),body,summary}));
- }catch(cause){error.value=cause instanceof Error?cause.message:"请核实当前原机与责任。";}
+
+/** 实物实际所在的那一条位置记录：locations 由分页 push 追加，读取必须每次现算，不能缓存。 */
+function selectedPlace() { return locations.value.find((item) => item.id === locationIndex.value) ?? null; }
+
+/** 完好原机但保管或位置已变化：核实事实按实际位置登记，后续走正式归还/退库。 */
+function returnFacts() {
+  const place = selectedPlace(), date = new Date(foundAt.value);
+  if (!source.value || !returnChecked.value || !place || !Number.isFinite(date.getTime()) || !observedCode.value.trim() || source.value.serialNumber && !serial.value.trim() || evidence.value.trim().length < 10) {
+    throw new Error("请核对完好原机、实际位置、找回时间及至少10字变更保管证据，并确认关联归还/退库。");
+  }
+  return { foundAt: date.toISOString(), observedAssetCode: observedCode.value.trim(), observedSerialNumber: serial.value.trim(), locationId: place.id, locationVersion: place.version, physicalIdentityVerified: true, condition: "INTACT", stillOriginalCustodian: false, evidence: evidence.value.trim() };
+}
+
+/** 原机在原登记位置发现损坏：连同故障与使用影响一起转入正式维修。 */
+function damagedFacts() {
+  const date = new Date(foundAt.value);
+  if (!source.value || !damagedChecked.value || !Number.isFinite(date.getTime()) || !observedCode.value.trim() || source.value.serialNumber && !serial.value.trim() || evidence.value.trim().length < 10 || !source.value.locationId || source.value.locationVersion === null) {
+    throw new Error("请核对原机身份、实际找回时间、至少10字证据及故障，并确认原责任原地损坏实物。");
+  }
+  return { foundAt: date.toISOString(), observedAssetCode: observedCode.value.trim(), observedSerialNumber: serial.value.trim(), locationId: source.value.locationId, locationVersion: source.value.locationVersion, physicalIdentityVerified: true, condition: "DAMAGED", stillOriginalCustodian: true, evidence: evidence.value.trim() };
+}
+
+/** 完好原机仍由原责任人在登记位置保管：核实后可直接结束查找或转入新找回申请。 */
+function intactFacts() {
+  const date = new Date(foundAt.value);
+  if (!source.value || !checked.value || !Number.isFinite(date.getTime()) || !observedCode.value.trim() || evidence.value.trim().length < 10 || !source.value.locationId || source.value.locationVersion === null || source.value.serialNumber && !serial.value.trim()) {
+    throw new Error("请对照原机编码/序列号，填写实际找回时间及至少10字证据，并确认完好、原保管与登记位置。");
+  }
+  return { foundAt: date.toISOString(), observedAssetCode: observedCode.value.trim(), observedSerialNumber: serial.value.trim(), locationId: source.value.locationId, locationVersion: source.value.locationVersion, physicalIdentityVerified: true, condition: "INTACT", stillOriginalCustodian: true, evidence: evidence.value.trim() };
+}
+
+/** 新建申请只带资产版本；直接办理与在办申请执行时带齐三个乐观版本。 */
+function recoveryBody(facts: unknown, requestOnly: boolean, row: LossReport, attempt?: LossRecovery, asset?: LossRecoveryAsset | null) {
+  return requestOnly ? { assetVersion: asset?.version, facts }
+    : { assetVersion: attempt?.assetVersion ?? row.assetVersion, ownershipVersion: attempt?.ownershipVersion ?? row.ownershipVersion, lockVersion: row.lockVersion, facts };
+}
+
+function draftOf(action: Action, attempt?: LossRecovery): { path: string; body: unknown; summary: string; version: number } {
+  const row = props.report;
+  if (action === "recoverReturn" || action === "requestReturn" || action === "executeReturn") {
+    const facts = returnFacts(), requestOnly = action === "requestReturn";
+    return { path: requestOnly ? `/${row.id}/return-recovery-requests` : attempt ? `/recoveries/${attempt.id}/execute-to-return` : `/${row.id}/recover-to-return`,
+      body: recoveryBody(facts, requestOnly, row, attempt, source.value),
+      summary: `${requestOnly ? "新建归还/退库找回申请，须新批准并认领" : "找回并建立正式归还/退库"}：${facts.observedAssetCode}；实际位置${selectedPlace()?.name}；${facts.evidence}。原责任和借用保留至退库审批及实物验收，当前锁继续保留，尚未成为可用库存。`,
+      version: attempt?.version ?? row.version };
+  }
+  if (action === "recoverDamaged" || action === "requestDamaged" || action === "executeDamaged") {
+    const facts = damagedFacts();
+    if (action !== "requestDamaged" && fault.value.trim().length < 10) throw new Error("请核对原机身份、实际找回时间、至少10字证据及故障，并确认原责任原地损坏实物。");
+    if (action === "requestDamaged") {
+      return { path: `/${row.id}/repair-recovery-requests`, body: { assetVersion: source.value?.version, facts },
+        summary: `新建损坏找回申请：${observedCode.value.trim()}；${evidence.value.trim()}。须管理员批准并重新认领核实后才能转正式维修，当前不恢复正常，原遗失事实和责任保留。`,
+        version: row.version };
+    }
+    return { path: attempt ? `/recoveries/${attempt.id}/execute-to-repair` : `/${row.id}/recover-to-repair`,
+      body: { recovery: recoveryBody(facts, false, row, attempt), fault: fault.value.trim(), impact: impact.value },
+      summary: `原机损坏找回并建立正式维修：${observedCode.value.trim()}，故障：${fault.value.trim()}；资产继续由维修单锁定，须管理员批准及库管实际处理，原责任和借用日期保留。`,
+      version: attempt?.version ?? row.version };
+  }
+  if (action === "recoverOriginal" || action === "requestRecovery" || action === "execute") {
+    const facts = intactFacts(), requestOnly = action === "requestRecovery";
+    return { path: requestOnly ? `/${row.id}/recovery-requests` : attempt ? `/recoveries/${attempt.id}/execute` : `/${row.id}/recover-original`,
+      body: recoveryBody(facts, requestOnly, row, attempt, source.value),
+      summary: `${requestOnly ? "新建找回申请，批准认领后才能恢复" : "核实后恢复原责任资产"}：${facts.observedAssetCode}，序列号${facts.observedSerialNumber || "未登记"}，找回时间${facts.foundAt}，登记位置${source.value?.locationName}；${facts.evidence}。原借用不改期，历史遗失事实保留。`,
+      version: attempt?.version ?? row.version };
+  }
+  // 在办找回申请的审批、撤回与认领。
+  if (action !== "claim" && reason.value.trim().length < 3) throw new Error("请填写至少3字本次原因。");
+  const body = action === "claim" ? undefined : action === "cancel" ? { reason: reason.value.trim() } : { result: action === "approve" ? "APPROVE" : "REJECT", reason: reason.value.trim() };
+  const summary = action === "claim" ? "取得新的唯一找回处理权，尚未恢复资产。"
+    : `${action === "approve" ? "批准新找回申请，仍须库管核实执行" : action === "reject" ? "驳回找回申请，保留原遗失与责任跟进" : "撤回新找回申请，保留原遗失与责任跟进"}；${reason.value.trim()}`;
+  return { path: `/recoveries/${attempt?.id}/${attemptPaths[action]}`, body, summary, version: attempt?.version ?? row.version };
+}
+
+/** 执行按钮必须与申请单自身事实同族：归还退库、损坏转维修与原机恢复互斥。 */
+function matchesAttempt(action: Action, attempt: LossRecovery | undefined): boolean {
+  if (!attempt) return true;
+  if (action === "execute" || action === "executeDamaged" || action === "executeReturn") {
+    if ((attempt.request?.destination === "ASSET_RETURN") !== (action === "executeReturn")) return false;
+  }
+  if (action === "execute" || action === "executeDamaged") {
+    if ((attempt.request?.facts?.condition === "DAMAGED") !== (action === "executeDamaged")) return false;
+  }
+  return true;
+}
+
+function prepare(action: Action, attempt?: LossRecovery) {
+  if (props.locked) return;
+  const row = props.report;
+  const capable = attempt ? attempt.actions[attemptCapabilities[action]] : row.actions?.[reportCapabilities[action]];
+  if (!capable || !matchesAttempt(action, attempt)) return;
+  error.value = "";
+  try {
+    const draft = draftOf(action, attempt);
+    emit("prepare", Object.freeze({ path: draft.path, version: draft.version, body: draft.body, summary: draft.summary }));
+  } catch (cause) { error.value = cause instanceof Error ? cause.message : "请核实当前原机与责任。"; }
 }
 </script>
-<template><section aria-label="原责任完好找回"><h3>找回核实与实际去向</h3><p>查找中沿原核实授权；已确认遗失须新建申请并重新批准认领。责任或位置变化须关联后续；损坏找回通过对应申请与核实转入正式维修。</p><p v-if="error" role="alert">{{error}}</p>
- <p v-if="report.recoveredAt">原实物已找回：{{report.recoveredAt}}。原遗失及后续履历继续保留。</p>
- <p v-if="report.repairId">已关联正式维修 {{report.repairId}}，请前往维修管理查看审批和实际办理进度。</p>
- <fieldset :disabled="locked"><template v-if="report.recoveryAsset"><p>登记位置：{{report.recoveryAsset.locationName??'缺少登记位置'}}；登记序列号：{{report.recoveryAsset.serialNumber??'未登记'}}</p>
- <label>实际原机编码<input v-model="observedCode" maxlength="64"/></label><label>实际原机序列号（登记有值时必填）<input v-model="serial" maxlength="128"/></label><label>实际找回时间<input v-model="foundAt" type="datetime-local" step="1"/></label><label>找回实物及原保管核实证据<textarea v-model="evidence" maxlength="2000"/></label><label><input v-model="checked" type="checkbox"/>已对照原机身份，亲见实物完好且仍由原责任人在登记位置保管</label></template>
- <button v-if="report.actions?.recoverOriginal" @click="prepare('recoverOriginal')">核实原机并结束查找</button><button v-if="report.actions?.requestRecovery" @click="prepare('requestRecovery')">新建找回申请</button>
- <section v-if="report.actions?.recoverOriginal || report.actions?.requestRecovery || report.recoveries?.some(item=>item.actions.execute &amp;&amp; item.request?.facts?.condition==='DAMAGED')" aria-label="损坏找回转维修"><h4>原责任原地损坏找回</h4><p>填写上方原机身份、实际找回时间及证据，另核实以下损坏事实。</p><label>发现的故障<textarea v-model="fault" maxlength="2000"/></label><label>使用影响<select v-model="impact"><option value="LOW">较低</option><option value="MEDIUM">中等</option><option value="HIGH">较高</option></select></label><label><input v-model="damagedChecked" type="checkbox"/>已亲见损坏原机仍由原责任人在登记位置保管，申请正式维修</label><button v-if="report.actions?.recoverOriginal" @click="prepare('recoverDamaged')">损坏找回并申请维修</button><button v-if="report.actions?.requestRecovery" @click="prepare('requestDamaged')">新建损坏找回申请</button></section>
- <section v-if="report.actions?.recoverOriginal || report.actions?.requestRecovery || report.recoveries?.some(item=>item.actions.execute &amp;&amp; item.request?.destination==='ASSET_RETURN')" aria-label="找回关联归还退库"><h4>保管或位置变化，关联归还/退库</h4><button :disabled="loadingLocations || locked" @click="loadLocations">{{locationPage?'继续加载位置':'加载实际位置'}}</button><p v-if="locationPage">已加载{{locations.length}}/{{locationTotal}}个位置</p><label>实物实际位置<select v-model="locationIndex"><option value="">请选择实际位置</option><option v-for="place in locations" :key="place.id" :value="place.id">{{place.name}}</option></select></label><label><input v-model="returnChecked" type="checkbox"/>已亲见完好原机，保管已变化；按上述实际位置和证据关联归还/退库，原责任待实物验收后移交</label><button v-if="report.actions?.recoverOriginal" @click="prepare('recoverReturn')">找回并申请归还退库</button><button v-if="report.actions?.requestRecovery" @click="prepare('requestReturn')">新建归还退库找回申请</button></section>
- <p v-if="report.returnId">已关联正式归还/退库 {{report.returnId}}，请在借用与退库管理继续审批及实物验收。</p>
- <p>近期找回申请：{{report.recoveriesTotal??0}}项（展示最近20项及当前在办项）</p><article v-for="attempt in report.recoveries" :key="attempt.id"><h4>找回申请 {{attempt.id}} · {{names[attempt.status]??attempt.status}}</h4><p>新处理库管：{{attempt.processorAccountId??'尚未认领'}}；发现时间：{{attempt.request?.facts?.foundAt}}</p><dl aria-label="本次找回申请证据"><dt>申请核实的原机编码</dt><dd>{{attempt.request?.facts?.observedAssetCode}}</dd><dt>申请核实的原机序列号</dt><dd>{{attempt.request?.facts?.observedSerialNumber||'未登记'}}</dd><dt>申请登记位置编号</dt><dd>{{attempt.request?.facts?.locationId}}</dd><dt>本次申请去向</dt><dd>{{attempt.request?.destination==='ASSET_RETURN'?'关联归还/退库，原责任待实物验收后移交':'原责任恢复或维修'}}</dd><dt>申请核实状况</dt><dd>{{attempt.request?.facts?.condition==='INTACT'?'完好':attempt.request?.facts?.condition==='DAMAGED'?'损坏，批准后转正式维修':'需关联处理'}}；{{attempt.request?.facts?.stillOriginalCustodian===true?'仍由原责任人保管':'责任需核对'}}；{{attempt.request?.facts?.physicalIdentityVerified===true?'已对照原机身份':'身份待核对'}}</dd><dt>申请核实证据</dt><dd>{{attempt.request?.facts?.evidence}}</dd></dl><label v-if="attempt.actions.decide||attempt.actions.cancel">本次找回审批/撤回原因<textarea v-model="reason" maxlength="1000"/></label><button v-if="attempt.actions.decide" @click="prepare('approve',attempt)">批准找回申请</button><button v-if="attempt.actions.decide" @click="prepare('reject',attempt)">驳回找回申请</button><button v-if="attempt.actions.cancel" @click="prepare('cancel',attempt)">撤回找回申请</button><button v-if="attempt.actions.claim" @click="prepare('claim',attempt)">重新认领找回任务</button><button v-if="attempt.actions.execute &amp;&amp; attempt.request?.facts?.condition!=='DAMAGED' &amp;&amp; attempt.request?.destination!=='ASSET_RETURN'" @click="prepare('execute',attempt)">核实原机并完成找回</button><button v-if="attempt.actions.execute &amp;&amp; attempt.request?.facts?.condition==='DAMAGED'" @click="prepare('executeDamaged',attempt)">核实损坏原机并转正式维修</button><button v-if="attempt.actions.execute &amp;&amp; attempt.request?.destination==='ASSET_RETURN'" @click="prepare('executeReturn',attempt)">核实完好原机并关联归还退库</button></article>
- </fieldset></section></template>
-<style scoped>fieldset{border:0;padding:0}label{display:flex;flex-direction:column;gap:6px;margin:12px 0;max-width:640px}input,textarea{padding:8px;border:1px solid #cbd5e1;border-radius:5px}button{padding:8px 12px;margin:5px;border:1px solid #cbd5e1;border-radius:5px;background:#f8fafc}button:disabled{opacity:.5}[role=alert]{color:#b91c1c}article{border-top:1px solid #dbe3ee;padding-top:8px}</style>
+<template>
+  <section class="fams-panel fams-stack" aria-label="原责任完好找回">
+    <div class="fams-panel-head">
+      <div>
+        <h3 class="fams-panel-title">找回核实与实际去向</h3>
+        <p class="fams-panel-subtitle">查找中沿原核实授权；已确认遗失须新建申请并重新批准认领。责任或位置变化须关联后续；损坏找回通过对应申请与核实转入正式维修。</p>
+      </div>
+    </div>
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+    <p v-if="report.recoveredAt">原实物已找回：{{ report.recoveredAt }}。原遗失及后续履历继续保留。</p>
+    <p v-if="report.repairId">已关联正式维修 {{ report.repairId }}，请前往维修管理查看审批和实际办理进度。</p>
+    <fieldset class="fams-card fams-stack" :disabled="locked">
+      <template v-if="report.recoveryAsset">
+        <p>登记位置：{{ report.recoveryAsset.locationName ?? '缺少登记位置' }}；登记序列号：{{ report.recoveryAsset.serialNumber ?? '未登记' }}</p>
+        <label class="fams-field"><span class="fams-field-label">实际原机编码</span><input class="fams-control" v-model="observedCode" maxlength="64" /></label>
+        <label class="fams-field"><span class="fams-field-label">实际原机序列号（登记有值时必填）</span><input class="fams-control" v-model="serial" maxlength="128" /></label>
+        <label class="fams-field"><span class="fams-field-label">实际找回时间</span><input class="fams-control" v-model="foundAt" type="datetime-local" step="1" /></label>
+        <label class="fams-field"><span class="fams-field-label">找回实物及原保管核实证据</span><textarea class="fams-control" v-model="evidence" maxlength="2000" /></label>
+        <label class="fams-selection"><input v-model="checked" type="checkbox">已对照原机身份，亲见实物完好且仍由原责任人在登记位置保管</label>
+      </template>
+      <div class="fams-panel-actions">
+        <button v-if="report.actions?.recoverOriginal" class="fams-button" data-kind="primary" type="button" @click="prepare('recoverOriginal')">核实原机并结束查找</button>
+        <button v-if="report.actions?.requestRecovery" class="fams-button" data-kind="secondary" type="button" @click="prepare('requestRecovery')">新建找回申请</button>
+      </div>
+      <section v-if="showDamagedSection" class="fams-card fams-stack" aria-label="损坏找回转维修">
+        <h4 class="fams-panel-title">原责任原地损坏找回</h4>
+        <p>填写上方原机身份、实际找回时间及证据，另核实以下损坏事实。</p>
+        <label class="fams-field"><span class="fams-field-label">发现的故障</span><textarea class="fams-control" v-model="fault" maxlength="2000" /></label>
+        <label class="fams-field"><span class="fams-field-label">使用影响</span><select class="fams-control" v-model="impact"><option v-for="(label, key) in impacts" :key="key" :value="key">{{ label }}</option></select></label>
+        <label class="fams-selection"><input v-model="damagedChecked" type="checkbox">已亲见损坏原机仍由原责任人在登记位置保管，申请正式维修</label>
+        <div class="fams-panel-actions">
+          <button v-if="report.actions?.recoverOriginal" class="fams-button" data-kind="primary" type="button" @click="prepare('recoverDamaged')">损坏找回并申请维修</button>
+          <button v-if="report.actions?.requestRecovery" class="fams-button" data-kind="secondary" type="button" @click="prepare('requestDamaged')">新建损坏找回申请</button>
+        </div>
+      </section>
+      <section v-if="showReturnSection" class="fams-card fams-stack" aria-label="找回关联归还退库">
+        <h4 class="fams-panel-title">保管或位置变化，关联归还/退库</h4>
+        <div class="fams-panel-actions">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="loadingLocations || locked" @click="loadLocations">{{ loadLocationsLabel }}</button>
+        </div>
+        <p v-if="locationsLoaded">{{ locationsSummary }}</p>
+        <label class="fams-field"><span class="fams-field-label">实物实际位置</span><select class="fams-control" v-model="locationIndex"><option value="">请选择实际位置</option><option v-for="place in locations" :key="place.id" :value="place.id">{{ place.name }}</option></select></label>
+        <label class="fams-selection"><input v-model="returnChecked" type="checkbox">已亲见完好原机，保管已变化；按上述实际位置和证据关联归还/退库，原责任待实物验收后移交</label>
+        <div class="fams-panel-actions">
+          <button v-if="report.actions?.recoverOriginal" class="fams-button" data-kind="primary" type="button" @click="prepare('recoverReturn')">找回并申请归还退库</button>
+          <button v-if="report.actions?.requestRecovery" class="fams-button" data-kind="secondary" type="button" @click="prepare('requestReturn')">新建归还退库找回申请</button>
+        </div>
+      </section>
+      <p v-if="report.returnId">已关联正式归还/退库 {{ report.returnId }}，请在借用与退库管理继续审批及实物验收。</p>
+      <p>近期找回申请：{{ report.recoveriesTotal ?? 0 }}项（展示最近20项及当前在办项）</p>
+      <article v-for="attempt in attemptRows" :key="attempt.id" class="fams-card fams-stack">
+        <h4 class="fams-panel-title">找回申请 {{ attempt.id }} · {{ attempt.statusText }}</h4>
+        <p>新处理库管：{{ attempt.processorText }}；发现时间：{{ attempt.foundAtText }}</p>
+        <dl class="fams-facts" aria-label="本次找回申请证据">
+          <div><dt>申请核实的原机编码</dt><dd>{{ attempt.observedCodeText }}</dd></div>
+          <div><dt>申请核实的原机序列号</dt><dd>{{ attempt.observedSerialText }}</dd></div>
+          <div><dt>申请登记位置编号</dt><dd>{{ attempt.locationIdText }}</dd></div>
+          <div><dt>本次申请去向</dt><dd>{{ attempt.destinationText }}</dd></div>
+          <div><dt>申请核实状况</dt><dd>{{ attempt.conditionText }}；{{ attempt.custodianText }}；{{ attempt.identityText }}</dd></div>
+          <div><dt>申请核实证据</dt><dd>{{ attempt.evidenceText }}</dd></div>
+        </dl>
+        <label v-if="attempt.showReason" class="fams-field"><span class="fams-field-label">本次找回审批/撤回原因</span><textarea class="fams-control" v-model="reason" maxlength="1000" /></label>
+        <div class="fams-panel-actions">
+          <button v-if="attempt.actions.decide" class="fams-button" data-kind="primary" type="button" @click="prepare('approve', attempt)">批准找回申请</button>
+          <button v-if="attempt.actions.decide" class="fams-button" data-kind="danger" type="button" @click="prepare('reject', attempt)">驳回找回申请</button>
+          <button v-if="attempt.actions.cancel" class="fams-button" data-kind="secondary" type="button" @click="prepare('cancel', attempt)">撤回找回申请</button>
+          <button v-if="attempt.actions.claim" class="fams-button" data-kind="secondary" type="button" @click="prepare('claim', attempt)">重新认领找回任务</button>
+          <button v-if="attempt.executeOriginalShown" class="fams-button" data-kind="primary" type="button" @click="prepare('execute', attempt)">核实原机并完成找回</button>
+          <button v-if="attempt.executeDamagedShown" class="fams-button" data-kind="primary" type="button" @click="prepare('executeDamaged', attempt)">核实损坏原机并转正式维修</button>
+          <button v-if="attempt.executeReturnShown" class="fams-button" data-kind="primary" type="button" @click="prepare('executeReturn', attempt)">核实完好原机并关联归还退库</button>
+        </div>
+      </article>
+    </fieldset>
+  </section>
+</template>
