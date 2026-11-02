@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef } from "vue";
-import { useRoute } from "vue-router";
+import { computed, ref, shallowRef, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
+import AssetFactoryReplacementTrace from "@/components/AssetFactoryReplacementTrace.vue";
 import QRCode from "qrcode";
 import { useSessionStore } from "@/auth/sessionStore";
 import { useRequestLiveness, type LivenessToken } from "@/composables/useRequestLiveness";
@@ -13,6 +14,7 @@ import {
 type Action = "notes" | "copy" | "cancel";
 const props = defineProps<{ id: string }>();
 const route = useRoute();
+const router = useRouter();
 const session = useSessionStore();
 const selected = ref<AssetCard | null>(null);
 const tag = ref<AssetTag | null>(null);
@@ -62,6 +64,11 @@ function openAction(action: Action): void {
   quantity.value = "1";
   reason.value = "";
   pending.value = action;
+}
+
+/** 换机追溯里的「打开资产卡」在本视图就是换一张卡看：路由是唯一入口，不复用行内选中态。 */
+async function openCard(assetId: string): Promise<void> {
+  await router.push(`/assets/${assetId}`);
 }
 
 async function correctNotes(): Promise<void> {
@@ -127,7 +134,8 @@ async function printCurrent(): Promise<void> {
   finally { busy.value = false; }
 }
 
-onMounted(async () => {
+// 同一路由记录内换 params 不会重挂载，换机追溯的「打开资产卡」因此必须靠 identity 重载。
+watch(identity, async () => {
   const turn = liveness.begin();
   if (!/^[1-9][0-9]{0,18}$/.test(props.id)) { error.value = "资产详情加载失败"; return; }
   await open(turn);
@@ -135,7 +143,7 @@ onMounted(async () => {
     notice.value = `草稿 ${selected.value.assetCode} 已保存`;
     window.history.replaceState({}, "", window.location.pathname);
   }
-});
+}, { immediate: true });
 </script>
 
 <template>
@@ -157,6 +165,7 @@ onMounted(async () => {
       <p v-if="selected.physicalDestination" class="fams-panel-subtitle">
         实物去向：{{ selected.physicalDestination.destination }} · {{ destinationLabels[selected.physicalDestination.status] }}；正式保管仍以上方资产事实为准。
       </p>
+      <AssetFactoryReplacementTrace :asset-id="selected.id" @open-card="openCard" />
       <dl class="fams-facts">
         <div><dt>分类</dt><dd>{{ selected.category?.id ?? "—" }}</dd></div>
         <div><dt>型号</dt><dd class="u-break">{{ selected.model ?? "—" }}</dd></div>

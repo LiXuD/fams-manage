@@ -78,6 +78,13 @@ export function createLoanPage(getServices: () => MiniServices) {
             } catch (error) { if (live && generation === current) this.setData({ error: message(error), returnProgress: null }); }
             finally { if (live && generation === current) this.setData({ busy: false }); }
         },
+        async onResubmitLossReturn(this: Context) {
+            if(!services||!live||this.data.busy||pending||identity!==JSON.stringify(services.sessions.identity))return;
+            const row=this.data.returnProgress;
+            if(!row?.lossRecovery||row.returnStatus!=="REJECTED"||!this.data.reason.trim())return;
+            await mutate(this,`/api/v1/mini/asset-returns/${row.id}/resubmit-loss`,row.version,{approved:false,reason:this.data.reason.trim()});
+            this.setData({returnProgress:null});
+        },
         onReason(this: Context, event: Input) { if (!this.data.busy && !pending) this.setData({ reason: event.detail.value }); },
         onDueDate(this: Context, event: Input) { if (!this.data.busy && !pending) this.setData({ dueDate: event.detail.value }); },
         onSelectAsset(this: Context, event: Selection) {

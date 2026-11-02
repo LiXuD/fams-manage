@@ -108,6 +108,36 @@ public class AssetRepairPort {
         return json.writeValueAsString(snapshot(row));
     }
 
+    /** A loss owner has verified the recovered original; adopt its still-active lock atomically. */
+    public String lossRecoverySubmission(
+            Current actor, long assetId, long version, long report, long lockVersion) {
+        return lossRecoverySubmission(actor, assetId, version, report, report, lockVersion);
+    }
+
+    public String lossRecoverySubmission(
+            Current actor, long assetId, long version, long report, long recoveryItem,
+            long lockVersion) {
+        if (!actor.has(Role.WAREHOUSE_OPERATOR)) {
+            throw new AssetHandoverPort.Failure("REPAIR_ROLE_REQUIRED", 403);
+        }
+        var row = locked(assetId, version);
+        if (!available(row)
+                || db.queryForList(
+                                        "SELECT id FROM fams_asset_business_lock WHERE asset_id=?"
+                                            + " AND business_type='LOST_REPORT' AND business_id=?"
+                                            + " AND business_item_id=? AND lock_version=? AND"
+                                            + " released_at IS NULL FOR UPDATE",
+                                        assetId,
+                                        report,
+                                        recoveryItem,
+                                        lockVersion)
+                                .size()
+                        != 1) {
+            throw new AssetHandoverPort.Failure("REPAIR_LOSS_LOCK_CHANGED", 409);
+        }
+        return json.writeValueAsString(snapshot(row));
+    }
+
     public void requireSubmitted(long assetId, long version) {
         if (!available(locked(assetId, version))) {
             throw new AssetHandoverPort.Failure("REPAIR_ASSET_CHANGED", 409);

@@ -20,6 +20,7 @@ export interface LoanExtension {
   decisionReason: string | null; overdueFrom: string | null; overdueThrough: string | null;
 }
 export interface AssetReturn {
+  lossRecovery?: { reportId: string; lossItemId: string; lockVersion: number; evidenceJson: string };
   id: string; assetId: string; loanId: string | null; assetVersion: number; version: number;
   proposedBy: string; responsibleEmployeeId: string; reason: string;
   returnStatus: "PENDING_APPROVAL" | "REJECTED" | "WAITING_WAREHOUSE_CLAIM" | "WAREHOUSE_PROCESSING" | "COMPLETED" | "TRANSFERRED";

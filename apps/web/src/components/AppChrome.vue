@@ -32,6 +32,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { label: "领用申请与分配", path: "/requisitions", roles: FIELD_ROLES },
       { label: "盘点任务", path: "/inventory-tasks", roles: FIELD_ROLES },
       { label: "报修与维修", path: "/repairs", roles: FIELD_ROLES },
+      { label: "报失与查找", path: "/loss-reports", roles: FIELD_ROLES },
       { label: "我协助的报修", path: "/repair-assistance", roles: ["TECH_ASSISTANT"] },
       { label: "借用、延期与退还", path: "/loans", roles: FIELD_ROLES },
       { label: "退还与退库", path: "/asset-returns", roles: FIELD_ROLES },

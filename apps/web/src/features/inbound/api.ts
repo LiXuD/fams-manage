@@ -20,6 +20,7 @@ export interface InboundReceipt {
   items: InboundItem[];
   currentProcessor?: { processor: { id: string; username: string } };
   decision?: { result: string; comment?: string };
+  factoryReplacement?: { sourceId: string; originalAssetId: string; replacementAssetId: string; repairId: string; roundId: string };
 }
 export const inboundStatusLabels: Record<string, string> = { DRAFT: "草稿", PENDING_ADMIN_DECISION: "待管理员确认",
   REJECTED: "已驳回", WAITING_WAREHOUSE_CLAIM: "待库管领取", WAREHOUSE_PROCESSING: "库管处理中", COMPLETED: "已完成",

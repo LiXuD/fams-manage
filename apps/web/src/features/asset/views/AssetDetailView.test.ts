@@ -12,7 +12,7 @@ vi.mock("@/features/asset/api", async importOriginal => ({
   getAsset: api.asset, getTag: api.tag, updateAsset: api.update, copyAsset: api.copy,
   cancelAsset: api.cancel, reprintTag: api.reprint }));
 vi.mock("qrcode", () => ({ default: { toDataURL: api.qr } }));
-vi.mock("vue-router", () => ({ useRoute: () => ({ query: api.query }) }));
+vi.mock("vue-router", () => ({ useRoute: () => ({ query: api.query }), useRouter: () => ({ push: vi.fn() }) }));
 
 const card = (over: Record<string, unknown> = {}) => ({ id: "21", assetCode: "FA-2026-000101",
   name: "办公笔记本 ThinkPad T14", model: "T14 Gen 4", lifecycle: "IN_USE", exception: "NORMAL",
@@ -78,20 +78,20 @@ describe("资产详情", () => {
   it("非库管只有返回入口，不出现任何办理动作", async () => {
     api.roles = ["EMPLOYEE"];
     const f = await fixture();
-    expect(f.labels()).toEqual([]);
+    expect(f.labels()).toEqual(["核对新旧实物换机关联"]);
     expect(f.wrapper.findAll("a[data-destination]").map(a => a.text())).toEqual(["返回台账列表"]);
     f.wrapper.unmount();
   });
 
   it("在用资产给修正备注与打印标签，取消草稿只属于草稿卡", async () => {
     const active = await fixture();
-    expect(active.labels()).toEqual(["复制建卡", "修正备注", "打印标签"]);
+    expect(active.labels()).toEqual(["核对新旧实物换机关联", "复制建卡", "修正备注", "打印标签"]);
     active.wrapper.unmount();
     const draft = await fixture({ cardStage: "DRAFT", version: 1 });
-    expect(draft.labels()).toEqual(["复制建卡", "修正备注", "取消草稿"]);
+    expect(draft.labels()).toEqual(["核对新旧实物换机关联", "复制建卡", "修正备注", "取消草稿"]);
     draft.wrapper.unmount();
     const cancelled = await fixture({ cardStage: "CANCELLED" });
-    expect(cancelled.labels()).toEqual(["复制建卡"]);
+    expect(cancelled.labels()).toEqual(["核对新旧实物换机关联", "复制建卡"]);
     cancelled.wrapper.unmount();
   });
 
@@ -99,7 +99,7 @@ describe("资产详情", () => {
     const f = await fixture();
     f.button("修正备注").trigger("click"); await flushPromises();
     expect(f.wrapper.find("div[role=\"group\"]").attributes("aria-label")).toBe("确认修正备注");
-    expect(f.labels()).toEqual(["复制建卡", "修正备注", "打印标签", "确认修正备注", "返回修改"]);
+    expect(f.labels()).toEqual(["核对新旧实物换机关联", "复制建卡", "修正备注", "打印标签", "确认修正备注", "返回修改"]);
     f.button("返回修改").trigger("click"); await flushPromises();
     f.button("复制建卡").trigger("click"); await flushPromises();
     f.button("返回修改").trigger("click"); await flushPromises();
@@ -118,7 +118,7 @@ describe("资产详情", () => {
     expect(api.update).toHaveBeenCalledWith("21", 7, { notes: "同意修正" });
     expect(f.wrapper.text()).toContain("备注已更新");
     expect(f.wrapper.text()).toContain("FA-2026-000101 · 已生效 · 版本 8");
-    expect(f.labels()).toEqual(["复制建卡", "修正备注", "打印标签"]);
+    expect(f.labels()).toEqual(["核对新旧实物换机关联", "复制建卡", "修正备注", "打印标签"]);
     f.wrapper.unmount();
   });
 
@@ -160,7 +160,7 @@ describe("资产详情", () => {
     f.button("确认取消草稿").trigger("click"); await flushPromises();
     expect(api.cancel).toHaveBeenCalledWith("21", 1, "重复建卡");
     expect(f.wrapper.text()).toContain("草稿已取消，编码永久保留");
-    expect(f.labels()).toEqual(["复制建卡"]);
+    expect(f.labels()).toEqual(["核对新旧实物换机关联", "复制建卡"]);
     f.wrapper.unmount();
   });
 

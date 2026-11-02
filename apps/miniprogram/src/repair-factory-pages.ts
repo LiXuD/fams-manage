@@ -309,5 +309,6 @@ export function createRepairFactoryPage(getServices: () => MiniServices) {
         async onViewFile(this: Context) { if (!editable(this) || !preview || !services.openEvidence) return; const epoch = generation; this.setData({ busy: true });
             try { await services.openEvidence(preview, this.data.previewName); } catch (error) { if (current(epoch)) failure(this, error); } finally { finish(this, epoch); } },
         onBack(this: Context) { if (!this.data.busy && !pending && !prepared) services.navigate("/pages/repairs/index?id=" + repairId); },
+        onReplacement(this: Context) { if (editable(this) && this.data.selected && ["DISPATCHED", "RECEIVED"].includes(this.data.selected.roundStatus)) services.navigate("/pages/repair-replacement/index?id=" + repairId + "&round=" + this.data.selected.id); },
     };
 }

@@ -64,3 +64,5 @@ module.exports = {status:function(value){return names[value] || value;},reason:f
 </view>
 
 <navigator url="/pages/repairs/index">报修与内部维修（按当前权限）</navigator>
+
+<navigator url="/pages/loss-reports/index">报失与查找（按当前权限）</navigator>

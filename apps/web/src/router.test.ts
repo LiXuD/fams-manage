@@ -21,7 +21,7 @@ describe("router 页头元数据", () => {
 
   it("除入口三页外每条路由都是可解析的懒加载工厂", async () => {
     const lazy = router.getRoutes().filter((route) => !EAGER_ROUTES.has(String(route.name)));
-    expect(lazy).toHaveLength(35);
+    expect(lazy).toHaveLength(36);
     for (const route of lazy) {
       const factory: unknown = route.components?.default;
       expect(typeof factory, `${String(route.name)} 未改为懒加载`).toBe("function");

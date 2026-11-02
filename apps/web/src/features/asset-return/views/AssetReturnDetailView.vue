@@ -28,6 +28,10 @@ const canReassign = computed(() => admin.value && selected.value?.returnStatus =
 const inspectionNeedsBin = computed(() => result.value !== "MISSING");
 const inspectionIsMissing = computed(() => result.value === "MISSING");
 const formDisabled = computed(() => busy.value || retryable.value);
+/** 找回关联退库被驳回后，管理员补充说明重新送审；条件与禁用都留在脚本，模板只做读取。 */
+const canResubmitLoss = computed(() => !!admin.value && !!selected.value?.lossRecovery
+  && selected.value?.returnStatus === "REJECTED");
+const resubmitDisabled = computed(() => formDisabled.value || !reason.value.trim());
 const followupRows = computed(() => (selected.value?.followups ?? []).map((followup) => ({
   ...followup,
   businessTypeText: followup.businessType === "REPAIR" ? "损坏维修" : "报失处理",
@@ -131,6 +135,9 @@ onMounted(async () => {
       </div>
 
       <p>{{ selected.reason }}</p>
+      <p v-if="selected.lossRecovery" class="fams-panel-subtitle">
+        找回关联退库：历史报失 {{ selected.lossRecovery.reportId }}。原责任和借用保留至实物验收；驳回仍保留资产锁。
+      </p>
 
       <label class="fams-field">
         <span class="fams-field-label">操作原因 / 验收说明</span>
@@ -144,6 +151,9 @@ onMounted(async () => {
         </template>
         <button v-if="canClaim" class="fams-button" data-kind="primary" type="button"
           :disabled="formDisabled" @click="mutate(`/asset-returns/${selected.id}/claim`, selected.version)">领取整单验收</button>
+        <button v-if="canResubmitLoss" class="fams-button" data-kind="primary" type="button"
+          :disabled="resubmitDisabled"
+          @click="mutate(`/asset-returns/${selected.id}/resubmit-loss`, selected.version, { approved: false, reason: reason.trim() })">补充说明并重新送审退库</button>
       </div>
 
       <AssetReturnReassignment v-if="canReassign"

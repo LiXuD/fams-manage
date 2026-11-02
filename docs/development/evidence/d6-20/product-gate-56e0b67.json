@@ -1,0 +1,37 @@
+{
+  "candidate": "56e0b67fe85149725365ddaeb291df6098ac7ca8",
+  "gateExit": 0,
+  "javaReports": 102,
+  "java": {
+    "tests": 595,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "webTests": 192,
+  "miniTests": 295,
+  "checkstyle": 0,
+  "spotbugs": 0,
+  "coverage": {
+    "BRANCH": {
+      "covered": 6929,
+      "missed": 2260
+    },
+    "LINE": {
+      "covered": 19724,
+      "missed": 1501
+    }
+  },
+  "jar": {
+    "candidate": "56e0b67",
+    "bytes": 59179645,
+    "sha256": "c24063fa6a775249384c57caff8a8c82a8ebdcb13768c5624b227a439eec0537",
+    "v55Frozen": true
+  },
+  "runtimeRecovery": true,
+  "sameVolumeMysqlRecovery": true,
+  "cleanPostflight": true,
+  "independentReview": "PENDING",
+  "formalQA": "NOT_STARTED",
+  "production": "NOT_STARTED"
+}

@@ -5,6 +5,7 @@ import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness, type LivenessToken } from "@/composables/useRequestLiveness";
 import { useObjectUrlPreview } from "@/composables/useObjectUrlPreview";
 import RepairFactoryPartsPanel from "./RepairFactoryPartsPanel.vue";
+import RepairFactoryReplacementPanel from "./RepairFactoryReplacementPanel.vue";
 import FamsMediaPreview from "@/components/FamsMediaPreview.vue";
 import { RepairApiError, repairRequest, type Repair } from "@/features/repair/api";
 import { factoryEventNames, factoryEvidenceContent, factoryProblem, factoryRequest, factoryRoundStates, factoryScopeStates, type FactoryMutation } from "@/features/repair/factory-api";
@@ -19,6 +20,7 @@ const identity = computed(() => JSON.stringify([session.user?.id, session.user?.
 const canRead = computed(() => !!session.user?.roles.includes("ASSET_ADMIN") || !!session.user?.roles.includes("WAREHOUSE_OPERATOR") && String(session.user.id) === props.repair.processorAccountId);
 const opened = shallowRef(false), busy = shallowRef(false), stale = shallowRef(true), error = shallowRef(""), notice = shallowRef("");
 const partsBusy = shallowRef(false);
+const replacementBusy = shallowRef(false);
 const data = ref<FactoryDetail | null>(null), roundRows = ref<FactoryRound[]>([]), selected = ref<FactoryRoundDetail | null>(null), selectedId = shallowRef("");
 const history = ref<FactoryHistory[]>([]), total = shallowRef(0), page = shallowRef(1), historyTotal = shallowRef(0), historyPage = shallowRef(1);
 /** 确认式幂等提交：草稿/在途两槽与幂等键簿记归底座；busy/locked、URL、文件与文案留在本面板。 */
@@ -33,7 +35,8 @@ const locationId = shallowRef(""), locations = ref<{ id: string; name: string; v
 const file = ref<File | null>(null), purpose = ref("FACTORY_ACK"), selectedEvidence = ref<string[]>([]);
 const preview = useObjectUrlPreview();
 const liveness = useRequestLiveness(() => [identity.value]);
-const locked = computed(() => blocked.value || busy.value || partsBusy.value || !!pending.value || !!confirmation.value);
+const locked = computed(() => blocked.value || busy.value || partsBusy.value || replacementBusy.value
+  || !!pending.value || !!confirmation.value);
 const activeSelected = computed(() => !!selected.value && selected.value.id === data.value?.activeRound?.id);
 const evidencePurpose = computed(() => data.value?.activeRound?.roundStatus === "DISPATCHED" ? "RECEIPT" : "FACTORY_ACK");
 const eligibleEvidence = computed(() => selected.value?.evidence.filter(item => item.purpose === evidencePurpose.value) ?? []);
@@ -80,11 +83,17 @@ const costLimitFieldShown = computed(() => costPolicy.value === "LIMITED");
 const fileRows = computed(() => (selected.value?.files ?? []).map(item => ({ ...item, readable: item.scanStatus === "CLEAN" })));
 const finalCostShown = computed(() => selected.value?.actualCost !== null);
 const partsPanelShown = computed(() => selected.value?.roundStatus === "RECEIVED");
+/** 整机换新在已寄出与已收回两种轮次都可能办理，去向选项本身由轮次状态限制。 */
+const replacementPanelShown = computed(() => selected.value?.roundStatus === "DISPATCHED"
+  || selected.value?.roundStatus === "RECEIVED");
 function clearMoney() { moneyAmount.value = ""; moneyReason.value = ""; moneyChecked.value = false; moneyEvidence.value = []; costUnassessed.value = false; }
-watch([busy, pending, confirmation, partsBusy], () => { claimed.value = busy.value || !!pending.value || !!confirmation.value || partsBusy.value; }, { flush: "sync" });
+watch([busy, pending, confirmation, partsBusy, replacementBusy], () => {
+  claimed.value = busy.value || !!pending.value || !!confirmation.value || partsBusy.value || replacementBusy.value;
+}, { flush: "sync" });
 function clearPhysical() { clearMoney(); observedCode.value = ""; serial.value = ""; actualDate.value = ""; actualTime.value = ""; evidence.value = ""; originalChecked.value = false; noCostChecked.value = false; selectedEvidence.value = []; locationId.value = ""; }
 function reset() {
   partsBusy.value = false;
+  replacementBusy.value = false;
   liveness.invalidate(); preview.close(); opened.value = false; busy.value = false; stale.value = true; data.value = null; roundRows.value = []; history.value = []; selected.value = null; selectedId.value = "";
   resetSubmit(); file.value = null; locations.value = []; total.value = 0; historyTotal.value = 0; page.value = 1; historyPage.value = 1;
   costPolicy.value = "NO_COST"; costLimit.value = ""; reason.value = ""; provider.value = ""; contact.value = ""; phone.value = ""; due.value = ""; fault.value = ""; purpose.value = "FACTORY_ACK"; clearPhysical();
@@ -381,7 +390,8 @@ onBeforeUnmount(() => { reset(); });
               <button v-if="data.actions.receive" class="fams-button" data-kind="primary" type="button" @click="prepare('receive')">核对原实物已实际收回</button>
             </div>
           </fieldset>
-          <RepairFactoryPartsPanel v-if="partsPanelShown" :key="`${identity}:${selected.id}`" :repair="props.repair" :round="selected" :blocked="blocked || busy || !!pending || !!confirmation || stale" @busy-change="partsBusy = $event" @changed="load" @invalidated="reset();emit('invalidated')" @read-file="readFile" />
+          <RepairFactoryPartsPanel v-if="partsPanelShown" :key="`${identity}:${selected.id}`" :repair="props.repair" :round="selected" :blocked="blocked || busy || replacementBusy || !!pending || !!confirmation || stale" @busy-change="partsBusy = $event" @changed="load" @invalidated="reset();emit('invalidated')" @read-file="readFile" />
+          <RepairFactoryReplacementPanel v-if="replacementPanelShown" :key="`replacement:${identity}:${selected.id}`" :repair="props.repair" :round="selected" :blocked="blocked || busy || partsBusy || !!pending || !!confirmation || stale" @busy-change="replacementBusy = $event" @changed="load" @invalidated="reset();emit('invalidated')" @read-file="readFile" />
           <FamsMediaPreview v-if="preview.url" @dismiss="preview.close()">
             <figure>
             <img v-if="previewImageShown" :src="preview.url" :alt="`厂家凭证：${preview.name}`">

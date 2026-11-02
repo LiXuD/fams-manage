@@ -139,6 +139,9 @@ onMounted(async () => {
           <h2 class="fams-panel-title">{{ selected.receiptNumber }} · {{ inboundStatusLabels[selected.status] }}</h2>
         </div>
       </div>
+      <p v-if="selected.factoryReplacement" class="fams-panel-subtitle">
+        换机来源入库 · 原机资产 {{ selected.factoryReplacement.originalAssetId }} · 返厂轮次 {{ selected.factoryReplacement.roundId }}。新机独立验收入库；旧机责任及原机实际收回另行办理。
+      </p>
       <p v-if="selected.currentProcessor">当前处理人：{{ selected.currentProcessor.processor.username }}</p>
       <p v-if="selected.decision">管理员决定：{{ inboundDecisionLabels[selected.decision.result] }}</p>
       <div class="fams-panel-actions">

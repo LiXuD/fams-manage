@@ -29,15 +29,17 @@ class AssetReturnService {
     private final RequisitionActorContext actors;
     private final AssetReturnPort assets;
     private final AssetHandoverPort handover;
+    private final LoanReminderService reminders;
 
     AssetReturnService(JdbcTemplate db, ObjectMapper json, Clock clock, RequisitionActorContext actors,
-            AssetReturnPort assets, AssetHandoverPort handover) {
+            AssetReturnPort assets, AssetHandoverPort handover, LoanReminderService reminders) {
         this.db = db;
         this.json = json;
         this.clock = clock;
         this.actors = actors;
         this.assets = assets;
         this.handover = handover;
+        this.reminders = reminders;
     }
 
     Map<String, Object> list(Actor actor, int page, int size) {
@@ -132,6 +134,65 @@ class AssetReturnService {
         return finish(current, "propose", key, hash, id);
     }
 
+    Map<String, Object> proposeLossRecovery(Actor actor, String key, long assetId, long version,
+            String reason, LossReturnPort.Source source) {
+        var current = actors.revalidateLocked(actor);
+        role(current, Role.WAREHOUSE_OPERATOR);
+        var asset = one("SELECT * FROM fams_asset WHERE id=? FOR UPDATE", assetId);
+        var loans = db.queryForList("SELECT * FROM fams_loan WHERE asset_id=? AND relation_status='OPEN' FOR UPDATE", assetId);
+        Long owner = (Long) asset.get("PERSONAL".equals(asset.get("custody_type"))
+                ? "responsible_employee_id" : "department_responsible_employee_id");
+        if (owner == null || asset.get("using_organization_id") == null
+                || ("BORROWED".equals(asset.get("lifecycle_status")) ? loans.size() != 1 : !loans.isEmpty())) {
+            throw new LoanFailure("RETURN_LOAN_CHANGED", 409);
+        }
+        var parameters = json.readTree(one("SELECT snapshot_json FROM fams_business_parameter_version WHERE id=?",
+                asset.get("parameter_version_id")).get("snapshot_json").toString());
+        if (!(parameters instanceof tools.jackson.databind.node.ObjectNode snapshot)) {
+            throw new LoanFailure("RETURN_PARAMETER_INVALID", 409);
+        }
+        snapshot.set("lossRecovery", json.valueToTree(source));
+        db.update("INSERT INTO fams_asset_return (asset_id,loan_id,asset_version,responsible_employee_id,"
+                + "using_organization_id,proposed_by,reason,parameter_snapshot_json,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                assetId, loans.isEmpty() ? null : loans.getFirst().get("id"), version, owner,
+                asset.get("using_organization_id"), current.id(), reason, json.writeValueAsString(snapshot), now());
+        long id = lastId();
+        assets.adoptLossRecovery(assetId, version, Long.parseLong(source.reportId()), Long.parseLong(source.lossItemId()), source.lockVersion(), id);
+        todo(id, "APPROVAL", "ASSET_ADMIN", null);
+        audit(actor, current, id, "RETURN_FROM_LOSS_RECOVERY", null, 0L, source);
+        return view(request(id));
+    }
+
+    Map<String, Object> resubmitLossRecovery(Actor actor, long id, long version, String key,
+            String reason) {
+        var current = actors.revalidateLocked(actor);
+        role(current, Role.ASSET_ADMIN);
+        String hash = digest("resubmit-loss:" + id + ":" + version, reason);
+        var prior = replay(current, "resubmit-loss", key, hash);
+        if (prior != null) { return prior; }
+        var row = request(id);
+        state(row, version, "REJECTED");
+        if (!linkedLoss(row)) { throw new LoanFailure("RETURN_LOSS_SOURCE_REQUIRED", 409); }
+        currentAsset(row);
+        requireRetainedLock(row);
+        db.update("UPDATE fams_asset_return SET return_status='PENDING_APPROVAL',version=version+1 WHERE id=?", id);
+        todo(id, "APPROVAL", "ASSET_ADMIN", null);
+        audit(actor, current, id, "RETURN_LOSS_RESUBMITTED", version, version + 1, Map.of("reason", reason));
+        return finish(current, "resubmit-loss", key, hash, id);
+    }
+
+    private boolean linkedLoss(Map<String, Object> row) {
+        return json.readTree(row.get("parameter_snapshot_json").toString()).has("lossRecovery");
+    }
+
+    private void requireRetainedLock(Map<String, Object> row) {
+        if (db.queryForList("SELECT id FROM fams_asset_business_lock WHERE asset_id=? AND business_type='ASSET_RETURN'"
+                + " AND business_id=? AND business_item_id=? AND released_at IS NULL FOR UPDATE",
+                row.get("asset_id"), row.get("id"), row.get("id")).size() != 1) {
+            throw new LoanFailure("RETURN_LOCK_CHANGED", 409);
+        }
+    }
+
     Map<String, Object> decide(Actor actor, long id, long version, String key, AssetReturnController.Decision input) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.ASSET_ADMIN);
@@ -140,13 +201,15 @@ class AssetReturnService {
         if (replay != null) { return replay; }
         var row = request(id);
         state(row, version, "PENDING_APPROVAL");
+        if (linkedLoss(row)) { requireRetainedLock(row); }
         if (input.approved()) { currentAsset(row); }
         db.update("UPDATE fams_asset_return SET return_status=?,decided_by=?,decision_reason=?,decided_at=?,"
                 + "version=version+1 WHERE id=?", input.approved() ? "WAITING_WAREHOUSE_CLAIM" : "REJECTED",
                 current.id(), input.reason(), now(), id);
         closeTodos(id);
         if (input.approved()) { todo(id, "EXECUTION", "WAREHOUSE_OPERATOR", null); }
-        else { release(id, "RETURN_REJECTED"); }
+        else if (!linkedLoss(row)) { release(id, "RETURN_REJECTED"); }
+        else { requireRetainedLock(row); }
         audit(actor, current, id, input.approved() ? "RETURN_APPROVED" : "RETURN_REJECTED", version, version + 1, input);
         return finish(current, "decision", key, hash, id);
     }
@@ -218,6 +281,9 @@ class AssetReturnService {
                 + "location_id=?,completed_at=?,version=version+1 WHERE id=?", missing ? "TRANSFERRED" : "COMPLETED",
                 input.result(), input.reason(), input.warehouseId(), input.locationId(), now(), id);
         closeTodos(id);
+        if (!missing && row.get("loan_id") != null && linkedLoss(row)) {
+            reminders.refresh(number(row, "loan_id"));
+        }
         audit(actor, current, id, "RETURN_INSPECTED", version, version + 1, input);
         return finish(current, "inspect", key, hash, id);
     }
@@ -339,6 +405,9 @@ class AssetReturnService {
             else if (value instanceof Number && (key.equals("id") || key.endsWith("_id") || key.endsWith("_by"))) { wire = value.toString(); }
             result.put(field.toString(), wire);
         });
+        if (row.containsKey("parameter_snapshot_json") && linkedLoss(row)) {
+            result.put("lossRecovery", json.readTree(row.get("parameter_snapshot_json").toString()).get("lossRecovery"));
+        }
         return result;
     }
 }

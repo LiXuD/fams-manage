@@ -26,6 +26,26 @@ public class AssetReturnPort {
         this.json = json;
     }
 
+    /** Adopt the exact active loss item without a released or available-inventory interval. */
+    public Map<String, Object> adoptLossRecovery(long asset, long version, long report,
+            long lossItem, long lockVersion, long request) {
+        var rows = db.queryForList("SELECT * FROM fams_asset WHERE id=? FOR UPDATE", asset);
+        if (rows.size() != 1 || ((Number) rows.getFirst().get("version")).longValue() != version
+                || !"ACTIVE".equals(rows.getFirst().get("card_stage"))
+                || !"NORMAL".equals(rows.getFirst().get("exception_status"))
+                || !java.util.List.of("IN_USE", "BORROWED").contains(rows.getFirst().get("lifecycle_status"))) {
+            throw new AssetHandoverPort.Failure("ASSET_RETURN_CHANGED", 409);
+        }
+        if (db.update("UPDATE fams_asset_business_lock SET business_type='ASSET_RETURN',"
+                + "business_id=?,business_item_id=?,lock_version=lock_version+1 WHERE asset_id=?"
+                + " AND business_type='LOST_REPORT' AND business_id=? AND business_item_id=?"
+                + " AND lock_version=? AND released_at IS NULL", request, request, asset,
+                report, lossItem, lockVersion) != 1) {
+            throw new AssetHandoverPort.Failure("RETURN_LOCK_CHANGED", 409);
+        }
+        return rows.getFirst();
+    }
+
     public void inspect(long asset, long version, String result, Long warehouse, Long location,
             long actor, long source, Instant time) {
         var rows = db.queryForList("SELECT * FROM fams_asset WHERE id=? FOR UPDATE", asset);

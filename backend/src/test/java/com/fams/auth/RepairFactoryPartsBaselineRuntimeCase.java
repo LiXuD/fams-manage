@@ -34,6 +34,10 @@ class RepairFactoryPartsBaselineRuntimeCase {
         migration.migrate();
         assertEquals("53", migration.info().current().getVersion().toString());
         var db = new JdbcTemplate(source);
+        seedAtCurrentSchema(db);
+    }
+
+    void seedAtCurrentSchema(JdbcTemplate db) {
         var existing = db.queryForList("SELECT code FROM fams_organization WHERE id=954520");
         if (!existing.isEmpty()) {
             assertEquals("FACTORYPARTS54", existing.getFirst().get("code"));
