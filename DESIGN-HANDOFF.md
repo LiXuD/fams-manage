@@ -1,9 +1,11 @@
 # FAMS 项目阶段与交接入口
 
-> 唯一现役进度入口 · 更新于 2026-10-27
+> 唯一现役进度入口 · 更新于 2026-11-02
 > 当前结论：第1～5步已完成，第6阶段进行中。当前分支 codex/d6-20-factory；D6-19A、B1、B2a、B2b1固定本地门禁已通过并送独立复核。B2b2批准返还目标变更固定df30962完整本地门禁通过，真实PC持久化及提交JVM强杀恢复另绑工作树包，切片送独立复核；B2c受控转派固定a353a53完整本地门禁通过并送独立复核；B3维修异常代确认及结果通知异议固定fb22632完整门禁通过，B已送独立复核；C1损坏归还工作树已验证并按批次收口，C2a1盘点损坏后端/PC工作树已验证，原生创建/关联及原图链路已验证，迟到损坏独立维修后端/PC工作树已验证，原生迟到创建/关联和原图链路也已验证，C2真实PC/进程恢复已验证；首轮cc0715a审计失败保留，修复后固定cd2ba8b完整门禁通过，C已送独立复核；D6-20A1日期修复候选38df375完整本地门禁及真实PC两轮、原件和提交JVM强杀恢复通过，A1送独立复核；旧1c6ee3c日期失败证据保留。A2固定089e06a完整门禁及原生Page/opaque原件恢复通过，送独立复核；B固定d10f246完整门禁及真实PC两轮费用/8原件/提交JVM强杀恢复/独立入库已通过，送独立复核；C1固定2ff8ea9完整门禁588/177/287通过，但PC发现上传成功后部件表单持续禁用，尚未修复，提交JVM/最终入库未验；先修复并重验C1，再C2整机独立新卡入库、D与D6-21～27。父任务、独立复核及真实外部/CI/QA/生产仍开放，唯一明细见现役开发计划。
 
 > 本次接续材料：[2026-10-27 开发交接](docs/development/2026-10-27-d6-20c1-handoff.md)。代码候选2ff8ea9；已知PC缺陷未修，不将本地门禁当成验收完成。
+>
+> 前端架构批：ARCH-01～ARCH-07 在分支 `codex/d6-20-factory-ui` 以 8 个本地提交完成（HEAD `bdb6eb0`，未推送），是用户指定的第6步内前端结构调整，不进入 D6-01～D6-27 台账、不占用其状态；逐批指标与遗留项只在该分支的 `docs/development/ARCH-*.md` 维护。功能开发仍回到现役计划的 D6-20C1，先修 PC 缺陷再重验 C1。
 ## 1. 八步开发流程与当前进度
 
 | 步骤 | 阶段 | 英文 | 阶段目标 | 当前状态 | 依据 / 下一步 |
@@ -13,7 +15,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | D6-19A/B/C固定本地门禁与实际两端链路已具备并送独立复核；D6-20A1固定38df375含PC/提交JVM恢复通过并送独立复核；A2固定089e06a完整门禁及原生opaque链路送审；B固定d10f246完整门禁及PC/提交JVM恢复送审，下一C/D、D6-21～27。真实外部联调、远端CI与独立复核另验；所有子任务状态与证据以[现役开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)为准 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | D6-19A/B/C固定本地门禁与实际两端链路已具备并送独立复核；D6-20A1固定38df375含PC/提交JVM恢复通过并送独立复核；A2固定089e06a完整门禁及原生opaque链路送审；B固定d10f246完整门禁及PC/提交JVM恢复送审，下一C/D、D6-21～27。真实外部联调、远端CI与独立复核另验；前端架构批 ARCH-01～ARCH-07 另在 `codex/d6-20-factory-ui` 本地完成，入口见 §4；所有子任务状态与证据以[现役开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)为准 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
@@ -53,6 +55,7 @@
 | D0.4 设计证据 | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 第5步验证结果 | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md) |
 | 第6步计划、Git/CI 规范、任务进度与执行记录 | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md) |
+| 前端架构批 ARCH-01～ARCH-07 的规格、指标、偏差与遗留项 | `docs/development/ARCH-*.md`（在 `codex/d6-20-factory-ui` 分支；本文只记阶段与下一步，不复制第二套任务状态） |
 
 `FIXED_ASSET_SYSTEM_DESIGN.md` 是早期系统设计参考，不能替代 PRD V1.5。旧评审、D0.3验证和D0.4执行台账只作为历史证据。
 
@@ -65,6 +68,7 @@
 | 规则 | `changed-and-verified` | AGENTS 已指向当前阶段 |
 | 产品代码 | `in-progress` | D6-18B3迟到补充复核、A8独立时间与盘盈重采切片已实现，完整固定本地门禁通过；仍须完成损坏/盘亏真实后续及后续开发任务 |
 | 产品运行态 | `local-dev-partial` | A8固定 `2eeab4b` Java314/Web93/mini176、静态0、依赖及重启恢复通过；PC实际处理和ClamAV照片链路另绑工作树包。完整PC A、独立真实外部CIQA生产未验证 |
+| 前端架构批 | `local-committed-unpushed` | ARCH-01～ARCH-07 的 8 个提交在 `codex/d6-20-factory-ui`（HEAD `bdb6eb0`）四道本地门禁通过；只调整结构与加载形态，未推送、未经远端CI与独立复核，不改变任何 D6 任务的开放状态 |
 | 记忆 | `out-of-scope` | 本次未修改机器生成记忆 |
 | 工作区 | `handoff-recorded` | 当前分支 `codex/d6-19-repair`，基线A8证据a184932；A8固定功能候选 `2eeab4b` 完整门禁及干净工作区后检通过。本次未合并或推送；历史main整合与远端记录仅作历史证据，当前明细见现役计划 |
 
@@ -228,3 +232,9 @@ D6-12B 真机验收仍按用户安排后置，父任务保持外部 `BLOCKED`；
 2026-10-27：B证据批次4b5eaf0已提交，C开始同一原机部件前后事实与原卡事件，随后整机独立新卡及换机来源真实入库；尚无C通过声明。B及前序独立复核、父项和外部验收仍开放，V1～V53冻结。
 
 2026-10-27：C1部件后端及V54基础局部验证通过，准备独立后端批次；下一C1两端及实际PC/提交JVM，再C2整机新卡与换机入库、D和D21～27。C及父项仍开放，V1～V54冻结，结构从V55追加；细节见唯一计划与D6-20任务卡。
+
+## 2026-11-02 前端架构批记录（ARCH-01～ARCH-07）
+
+用户指定按 Vue 最佳实践技能对 `apps/web` 做架构调整，从 UI-21 基线 `8c0ad54` 起连续 8 个本地提交，分支 `codex/d6-20-factory-ui`：`89b0b79` 路由按需加载并清理 element-plus 死依赖、`a2f812a` 65 个 SFC 纳入 ESLint 门禁、`e9f1b1e` 共享 HTTP 底座、`c2c643e` 资源加载 composable、`bd87431` primitive 状态归位与转派工作流抽出、`d5b1522` 契约类型改用 `@fams/api-types` 包说明符、`7a73178` 跨域写请求内核 `api/business`、`bdb6eb0` 目录重构为 11 个 `features/<域>/{api,views,panels}` 垂直切片。HEAD `bdb6eb0` 实测：首屏必载 JS gzip 由 174.19 kB 降到 49.83 kB（入口 20.81 + 共享块 29.02），代价是全量 JS gzip 升至 226.48 kB；`.vue` 生效 86 条 vue 与 20 条 TS 规则且 `--max-warnings=0` 退出 0；fetch 调用点 40 处/17 文件 → 15 处/6 文件且视图内裸 fetch 归零；primitive `ref` 467 处/59 文件 → 0；`vue-tsc` 0 错误；`vitest run` 66 文件/285 用例全绿，未修改任何既有断言。
+
+边界：该系列不改接口契约、权限、事务、并发与用户可见文案来源，只改结构与加载形态；未推送远端，未经远端 CI、第七阶段 QA、真实外部联调、独立复核与生产验收，也不改变 D6-19/D6-20 各任务的开放状态。逐批规格、探针证据、偏差与遗留项（ARCH-03b 的 `Failure.requestId` 与可选幂等键、剩余 181 处对象/数组 `ref`、52 个视图尚未使用 composable、小程序 5 处相对 `api-types` 导入）只在该分支的 `docs/development/ARCH-01～ARCH-07` 各记录中维护，本文不复制第二套任务状态。下一步仍是现役计划的 D6-20C1 PC 缺陷修复与重验、C2 整机新卡与换机入库、D 及 D6-21～27。
