@@ -9,6 +9,7 @@ import com.fams.auth.RequisitionActorContext;
 import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
+import com.fams.transfer.LossTransferPort;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Profile;
@@ -43,6 +44,7 @@ public class LossService {
     private final com.fams.repair.LossRepairPort repairs;
     private final com.fams.loan.LoanLossPort loans;
     private final com.fams.loan.LossReturnPort returns;
+    private final LossTransferPort transfers;
     private final ObjectProvider<AttachmentRegistry> attachments;
     private final ObjectProvider<AttachmentEvidencePort> evidence;
 
@@ -55,6 +57,7 @@ public class LossService {
             com.fams.repair.LossRepairPort repairs,
             com.fams.loan.LoanLossPort loans,
             com.fams.loan.LossReturnPort returns,
+            LossTransferPort transfers,
             ObjectProvider<AttachmentRegistry> attachments,
             ObjectProvider<AttachmentEvidencePort> evidence) {
         this.db = db;
@@ -65,6 +68,7 @@ public class LossService {
         this.repairs = repairs;
         this.loans = loans;
         this.returns = returns;
+        this.transfers = transfers;
         this.attachments = attachments;
         this.evidence = evidence;
     }
@@ -630,22 +634,24 @@ public class LossService {
 
     public Map<String, Object> requestRecovery(
             Actor actor, long id, long version, UUID key, LossInput.RecoveryRequest input) {
-        return requestRecovery(actor, id, version, key, input, false, false);
+        return requestRecovery(actor, id, version, key, input, false, null);
     }
 
     public Map<String, Object> requestRepairRecovery(
             Actor actor, long id, long version, UUID key, LossInput.DamagedRecoveryRequest input) {
-        return requestRecovery(actor, id, version, key, new LossInput.RecoveryRequest(input.assetVersion(), input.facts()), true, false);
+        return requestRecovery(actor, id, version, key, new LossInput.RecoveryRequest(input.assetVersion(), input.facts()), true, null);
     }
 
     private Map<String, Object> requestRecovery(
             Actor actor, long id, long version, UUID key, LossInput.RecoveryRequest input,
-            boolean damaged, boolean returning) {
+            boolean damaged, String destination) {
+        boolean returning = "ASSET_RETURN".equals(destination);
+        boolean transferring = "TRANSFER".equals(destination);
         var current = actors.revalidateLocked(actor);
         if (!applicant(current)) {
             throw new LossFailure(403, "LOSS_ROLE_REQUIRED");
         }
-        String operation = (returning ? "RECOVERY_RETURN_REQUEST:" : damaged ? "RECOVERY_REPAIR_REQUEST:" : "RECOVERY_REQUEST:") + id,
+        String operation = (transferring ? "RECOVERY_TRANSFER_REQUEST:" : returning ? "RECOVERY_RETURN_REQUEST:" : damaged ? "RECOVERY_REPAIR_REQUEST:" : "RECOVERY_REQUEST:") + id,
                 hash = LossPayloads.fingerprint(json, operation, version, input);
         var prior = replay(current, operation, key, hash);
         if (prior != null) {
@@ -657,15 +663,20 @@ public class LossService {
         if (row.get("recovered_at") != null) {
             throw new LossFailure(409, "LOSS_ALREADY_RECOVERED");
         }
-        if (returning) {
+        if (transferring) {
+            transferRecoveryFacts(row, input.facts());
+        } else if (returning) {
             returnRecoveryFacts(row, input.facts());
         } else if (damaged) {
             damagedRecoveryFacts(row, input.facts());
         } else {
             recoveryFacts(row, input.facts());
         }
-        var asset = returning
-                ? assets.validateReturnRecovery(number(row, "asset_id"), input.assetVersion(), "LOST",
+        var asset = transferring
+                ? assets.validateTransferRecovery(number(row, "asset_id"), input.assetVersion(), "LOST",
+                        row.get("source_snapshot_json").toString(), input.facts().observedAssetCode(),
+                        input.facts().observedSerialNumber(), input.facts().locationId(), input.facts().locationVersion())
+                : returning ? assets.validateReturnRecovery(number(row, "asset_id"), input.assetVersion(), "LOST",
                         row.get("source_snapshot_json").toString(), input.facts().observedAssetCode(),
                         input.facts().observedSerialNumber(), input.facts().locationId(), input.facts().locationVersion())
                 : assets.validateOriginalRecovery(number(row, "asset_id"), input.assetVersion(), "LOST",
@@ -691,8 +702,8 @@ public class LossService {
                 row.get("asset_id"),
                 current.id(),
                 input.assetVersion(),
-                json.writeValueAsString(returning
-                        ? Map.of("assetVersion", input.assetVersion(), "facts", input.facts(), "destination", "ASSET_RETURN")
+                json.writeValueAsString(destination != null
+                        ? Map.of("assetVersion", input.assetVersion(), "facts", input.facts(), "destination", destination)
                         : input),
                 now(),
                 now());
@@ -935,12 +946,22 @@ public class LossService {
     public Map<String, Object> requestReturnRecovery(Actor actor, long id, long version,
             UUID key, LossInput.ReturnRecoveryRequest input) {
         return requestRecovery(actor, id, version, key,
-                new LossInput.RecoveryRequest(input.assetVersion(), input.facts()), false, true);
+                new LossInput.RecoveryRequest(input.assetVersion(), input.facts()), false, "ASSET_RETURN");
+    }
+
+    public Map<String, Object> requestTransferRecovery(Actor actor, long id, long version,
+            UUID key, LossInput.ReturnRecoveryRequest input) {
+        return requestRecovery(actor, id, version, key,
+                new LossInput.RecoveryRequest(input.assetVersion(), input.facts()), false, "TRANSFER");
     }
 
     private void requireRequestedRecoveryAsset(Map<String, Object> row, Map<String, Object> request) {
         var frozen = json.readTree(request.get("request_snapshot_json").toString());
-        if ("ASSET_RETURN".equals(frozen.path("destination").asText())) {
+        String destination = frozen.path("destination").asText();
+        if ("TRANSFER".equals(destination)) {
+            assets.requireTransferRecovery(number(row, "asset_id"), number(request, "asset_version"),
+                    "LOST", row.get("source_snapshot_json").toString());
+        } else if ("ASSET_RETURN".equals(destination)) {
             assets.requireReturnRecovery(number(row, "asset_id"), number(request, "asset_version"),
                     "LOST", row.get("source_snapshot_json").toString());
         } else {
@@ -1010,6 +1031,88 @@ public class LossService {
         loans.refreshLiability(number(row, "asset_id"));
         return closed ? rememberRecovery(current, operation, key, hash, number(row, "id"), id)
                 : remember(current, operation, key, hash, header(number(row, "id")));
+    }
+
+    public Map<String, Object> recoverToTransfer(Actor actor, long id, long version, UUID key,
+            LossInput.TransferRecoveryExecution input) {
+        return recoverToTransfer(actor, id, version, key, input, false);
+    }
+
+    public Map<String, Object> executeRecoveryToTransfer(Actor actor, long id, long version, UUID key,
+            LossInput.TransferRecoveryExecution input) {
+        return recoverToTransfer(actor, id, version, key, input, true);
+    }
+
+    private Map<String, Object> recoverToTransfer(Actor actor, long id, long version, UUID key,
+            LossInput.TransferRecoveryExecution input, boolean closed) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.WAREHOUSE_OPERATOR);
+        String operation = (closed ? "RECOVERY_EXECUTE_TO_TRANSFER:" : "RECOVER_TO_TRANSFER:") + id;
+        String hash = LossPayloads.fingerprint(json, operation, version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var row = closed ? recoveryParent(id) : header(id);
+        var request = closed ? recoveryHeader(id) : row;
+        if (closed) {
+            recoveryGuard(request, version, "VERIFYING");
+            var frozen = json.readTree(request.get("request_snapshot_json").toString());
+            if (!"TRANSFER".equals(frozen.path("destination").asText())) {
+                throw new LossFailure(409, "LOSS_RECOVERY_PURPOSE_CHANGED");
+            }
+        } else {
+            guard(row, version, "SEARCHING");
+        }
+        var recovery = input.recovery();
+        processor(current, request, recovery.ownershipVersion());
+        if (recovery.assetVersion() != number(request, "asset_version")) {
+            throw new LossFailure(409, "LOSS_PROCESSOR_OR_ASSET_CHANGED");
+        }
+        if (closed) {
+            recoveryLock(row, id, recovery.lockVersion());
+        } else {
+            lock(row, recovery.lockVersion());
+        }
+        var facts = recovery.facts();
+        transferRecoveryFacts(row, facts);
+        long report = number(row, "id");
+        long assetId = number(row, "asset_id");
+        long next = assets.recoverForTransfer(assetId, recovery.assetVersion(), closed ? "LOST" : "SEARCHING",
+                row.get("source_snapshot_json").toString(), facts.observedAssetCode(),
+                facts.observedSerialNumber(), facts.locationId(), facts.locationVersion(), report, current.id(), now());
+        var linked = transfers.create(actor, assetId, next, input.target(), input.reason(),
+                new LossTransferPort.Source(report, id, recovery.lockVersion()));
+        var snapshot = Map.of("execution", input, "transferId", linked.get("id"), "destination", "TRANSFER");
+        if (closed) {
+            db.update("UPDATE fams_loss_recovery SET recovery_status='COMPLETED',execution_snapshot_json=?,"
+                    + "version=version+1,updated_at=? WHERE id=?", json.writeValueAsString(snapshot), now(), id);
+        }
+        db.update("UPDATE fams_loss_report SET asset_version=?,recovered_at=?,recovery_snapshot_json=?,"
+                + "report_status=?,version=version+1,updated_at=? WHERE id=?", next, facts.foundAt(),
+                json.writeValueAsString(snapshot), closed ? "CONFIRMED_LOST" : "RECOVERED", now(), report);
+        closeTodos(report);
+        audit(actor, current, row, "LOSS_RECOVERED_TO_TRANSFER", number(row, "version") + 1, snapshot);
+        return closed ? rememberRecovery(current, operation, key, hash, report, id)
+                : remember(current, operation, key, hash, header(report));
+    }
+
+    private void transferRecoveryFacts(Map<String, Object> row, LossInput.RecoveryFacts facts) {
+        validTime(facts.foundAt());
+        if (facts.foundAt().isBefore(instant(row.get("last_seen_at")))
+                || row.get("confirmed_lost_at") != null
+                        && facts.foundAt().isBefore(instant(row.get("confirmed_lost_at")))) {
+            throw new LossFailure(400, "LOSS_RECOVERY_TIME_INVALID");
+        }
+        if (!facts.physicalIdentityVerified() || facts.evidence().strip().length() < 10) {
+            throw new LossFailure(400, "LOSS_RECOVERY_EVIDENCE_REQUIRED");
+        }
+        if (!"INTACT".equals(facts.condition())
+                || facts.stillOriginalCustodian()
+                        && java.util.Objects.equals(Long.toString(facts.locationId()),
+                                json.readTree(row.get("source_snapshot_json").toString()).path("locationId").asText())) {
+            throw new LossFailure(409, "LOSS_TRANSFER_RECOVERY_REQUIRED");
+        }
     }
 
     private void returnRecoveryFacts(Map<String, Object> row, LossInput.RecoveryFacts facts) {
@@ -1525,6 +1628,12 @@ public class LossService {
         result.put("repairId", repair == null ? null : repair.asText());
         var linkedReturn = recovery == null ? null : json.readTree(recovery.toString()).get("returnId");
         result.put("returnId", linkedReturn == null ? null : linkedReturn.asText());
+        if (recovery != null) {
+            var linkedTransfer = json.readTree(recovery.toString()).get("transferId");
+            if (linkedTransfer != null) {
+                result.put("transferId", linkedTransfer.asText());
+            }
+        }
         return result;
     }
 

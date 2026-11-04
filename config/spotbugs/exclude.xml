@@ -663,6 +663,12 @@
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
     <Match>
+        <Class name="com.fams.loss.LossService"/>
+        <Field name="assets"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
         <Class name="com.fams.loss.LossPhotoService"/>
         <Field name="writer"/>
         <Method name="&lt;init&gt;"/>

@@ -317,9 +317,18 @@ public class AssetLossPort {
     /** Recovery to a formal return preserves recorded custody, even when its person is inactive. */
     public Map<String, Object> requireReturnRecovery(
             long id, long version, String exception, String original) {
+        return requireLinkedRecovery(id, version, exception, original, "RETURN", List.of("IN_USE", "BORROWED"));
+    }
+
+    public Map<String, Object> requireTransferRecovery(long id, long version, String exception, String original) {
+        return requireLinkedRecovery(id, version, exception, original, "TRANSFER", List.of("IN_USE", "IN_STOCK"));
+    }
+
+    private Map<String, Object> requireLinkedRecovery(long id, long version, String exception,
+            String original, String destination, List<String> lifecycles) {
         var row = locked(id, version, exception);
-        if (!List.of("IN_USE", "BORROWED").contains(row.get("lifecycle_status"))) {
-            throw new AssetHandoverPort.Failure("LOSS_RETURN_SOURCE_REQUIRED", 409);
+        if (!lifecycles.contains(row.get("lifecycle_status"))) {
+            throw new AssetHandoverPort.Failure("LOSS_" + destination + "_SOURCE_REQUIRED", 409);
         }
         var frozen = json.readTree(original);
         var current = snapshot(row);
@@ -329,7 +338,7 @@ public class AssetLossPort {
             var expected = frozen.path(field);
             if (!Objects.equals(value == null ? null : value.toString(),
                     expected.isNull() || expected.isMissingNode() ? null : expected.asText())) {
-                throw new AssetHandoverPort.Failure("LOSS_RETURN_SOURCE_CHANGED", 409);
+                throw new AssetHandoverPort.Failure("LOSS_" + destination + "_SOURCE_CHANGED", 409);
             }
         }
         return row;
@@ -338,6 +347,19 @@ public class AssetLossPort {
     public Map<String, Object> validateReturnRecovery(long id, long version, String exception,
             String original, String observedCode, String observedSerial, long location, long locationVersion) {
         var row = requireReturnRecovery(id, version, exception, original);
+        verifyLinkedRecoveryFacts(row, observedCode, observedSerial, location, locationVersion);
+        return row;
+    }
+
+    public Map<String, Object> validateTransferRecovery(long id, long version, String exception,
+            String original, String observedCode, String observedSerial, long location, long locationVersion) {
+        var row = requireTransferRecovery(id, version, exception, original);
+        verifyLinkedRecoveryFacts(row, observedCode, observedSerial, location, locationVersion);
+        return row;
+    }
+
+    private void verifyLinkedRecoveryFacts(Map<String, Object> row, String observedCode, String observedSerial,
+            long location, long locationVersion) {
         String serial = row.get("serial_number") == null ? "" : row.get("serial_number").toString();
         if (!row.get("asset_code").equals(observedCode.strip())
                 || !serial.strip().equalsIgnoreCase(observedSerial == null ? "" : observedSerial.strip())) {
@@ -348,7 +370,6 @@ public class AssetLossPort {
         if (places.size() != 1) {
             throw new AssetHandoverPort.Failure("LOSS_LOCATION_CHANGED", 409);
         }
-        return row;
     }
 
     public Map<String, Object> recoveryLocations(int page, int size) {
@@ -365,11 +386,24 @@ public class AssetLossPort {
             long report, long actor, Instant time) {
         validateReturnRecovery(id, version, exception, original, observedCode, observedSerial,
                 location, locationVersion);
+        return clearRecoveryException(id, version, location, report, actor, time, "LOSS_RECOVERED_FOR_RETURN");
+    }
+
+    public long recoverForTransfer(long id, long version, String exception, String original,
+            String observedCode, String observedSerial, long location, long locationVersion,
+            long report, long actor, Instant time) {
+        validateTransferRecovery(id, version, exception, original, observedCode, observedSerial,
+                location, locationVersion);
+        return clearRecoveryException(id, version, location, report, actor, time, "LOSS_RECOVERED_FOR_TRANSFER");
+    }
+
+    private long clearRecoveryException(long id, long version, long location, long report,
+            long actor, Instant time, String event) {
         if (db.update("UPDATE fams_asset SET exception_status='NORMAL',version=version+1,"
                 + "updated_by=?,updated_at=? WHERE id=? AND version=?", actor, time, id, version) != 1) {
             throw new AssetHandoverPort.Failure("LOSS_ASSET_CHANGED", 409);
         }
-        mapper.event(id, "LOSS_RECOVERED_FOR_RETURN", time,
+        mapper.event(id, event, time,
                 json.writeValueAsString(Map.of("reportId", Long.toString(report),
                         "observedLocationId", Long.toString(location))), actor);
         return version + 1;

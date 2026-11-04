@@ -1,19 +1,29 @@
+import type { TransferChoice } from "../../../packages/api-types/src/transfer";
 import type { MiniServices } from "./pages.ts";
 import { MiniRequestError, type FactoryEvidenceFile } from "./session.ts";
-interface Asset { id: string; assetCode: string; name: string; version: number; responsibleEmployeeId?: string; departmentResponsibleEmployeeId?: string }
+interface Asset { id: string; assetCode: string; name: string; version: number; lifecycle?: string; responsibleEmployeeId?: string; departmentResponsibleEmployeeId?: string }
 interface Photo { objectId: string; filename: string; contentType: string }
 interface Recovery { request?: { destination?: string; facts?: Record<string,unknown> }; id: string; version: number; assetVersion: number; ownershipVersion: number; status: string; processorAccountId: string | null; actions: Record<string,boolean> }
 interface RecoveryAsset { version: number; serialNumber: string | null; locationId: string | null; locationVersion: number | null; locationName: string | null }
 interface Report { id: string; source: Asset; status: string; version: number; assetVersion: number; ownershipVersion: number; lockVersion: number;
-    returnId?: string | null; repairId?: string | null; recoveredAt?: string; recoveryAsset?: RecoveryAsset | null; recoveries?: Recovery[]; recoveriesTotal?: number; confirmedLostAt?: string; lastFollowUpAt?: string; lastSeenAt: string; lastLocation: string; circumstances: string; processorAccountId: string | null; nextReviewDate: string | null;
+    transferId?: string; returnId?: string | null; repairId?: string | null; recoveredAt?: string; recoveryAsset?: RecoveryAsset | null; recoveries?: Recovery[]; recoveriesTotal?: number; confirmedLostAt?: string; lastFollowUpAt?: string; lastSeenAt: string; lastLocation: string; circumstances: string; processorAccountId: string | null; nextReviewDate: string | null;
     actions?: Record<string, boolean>; photos?: Photo[]; history?: { id: string; action: string; actor_username: string; occurred_at: string }[] }
 interface Intent { readonly path: string; readonly key: string; readonly version: number; readonly body?: string; readonly file?: FactoryEvidenceFile; readonly label: string }
 interface Place { id: string; name: string; version: number }
-interface Data { locations: Place[]; locationPage: number; locationTotal: number; selectedLocation: string; returnChecked: boolean; rows: Report[]; assets: Asset[]; detail: Report | null; page: number; total: number; assetPage: number; assetTotal: number; selectedAsset: string;
+interface TransferSelection {
+    organizations: TransferChoice[]; people: TransferChoice[]; places: TransferChoice[]; warehouses: TransferChoice[];
+    organization: string; owner: string; person: string; place: string; warehouse: string;
+    custody: string; checked: boolean; sameCustodian: boolean; reason: string;
+}
+const blankTransfer = (): TransferSelection => ({
+    organizations: [], people: [], places: [], warehouses: [], warehouse: "", organization: "", owner: "", person: "", place: "",
+    custody: "PERSONAL", checked: false, sameCustodian: false, reason: "",
+});
+interface Data { transfer: TransferSelection; locations: Place[]; locationPage: number; locationTotal: number; selectedLocation: string; returnChecked: boolean; rows: Report[]; assets: Asset[]; detail: Report | null; page: number; total: number; assetPage: number; assetTotal: number; selectedAsset: string;
     observedAssetCode: string; observedSerialNumber: string; foundDate: string; foundTime: string; recoveryEvidence: string; recoveryChecked: boolean; damagedChecked: boolean; repairFault: string; repairImpact: string; followUpOnly: boolean; relatedClues: string; inabilityReason: string; responsibilityEvidence: string; findings: string; confirmDate: string; confirmTime: string; reviewDate: string; reviewTime: string; busy: boolean; stale: boolean; retry: boolean; confirmation: string; pendingLabel: string; error: string; notice: string; lastDate: string; lastTime: string; lastLocation: string; circumstances: string;
     reason: string; custodianVerification: string; searchedScope: string; searchDate: string; searchTime: string; nextReviewDate: string; photoPath: string; photoName: string }
 interface Context { data: Data; setData(update: Partial<Data>): void }
-const blank = (): Data => ({ locations: [], locationPage: 0, locationTotal: 0, rows: [], assets: [], detail: null, page: 1, total: 0, assetPage: 1, assetTotal: 0, selectedAsset: "", followUpOnly: false, observedAssetCode: "", observedSerialNumber: "", foundDate: "", foundTime: "", recoveryEvidence: "", recoveryChecked: false, returnChecked: false, selectedLocation: "", damagedChecked: false, repairFault: "", repairImpact: "MEDIUM", relatedClues: "", inabilityReason: "", responsibilityEvidence: "", findings: "", confirmDate: "", confirmTime: "", reviewDate: "", reviewTime: "", busy: false, stale: true, retry: false, confirmation: "", pendingLabel: "", error: "", notice: "", lastDate: "", lastTime: "", lastLocation: "", circumstances: "", reason: "", custodianVerification: "", searchedScope: "", searchDate: "", searchTime: "", nextReviewDate: "", photoPath: "", photoName: "" });
+const blank = (): Data => ({ transfer: blankTransfer(), locations: [], locationPage: 0, locationTotal: 0, rows: [], assets: [], detail: null, page: 1, total: 0, assetPage: 1, assetTotal: 0, selectedAsset: "", followUpOnly: false, observedAssetCode: "", observedSerialNumber: "", foundDate: "", foundTime: "", recoveryEvidence: "", recoveryChecked: false, returnChecked: false, selectedLocation: "", damagedChecked: false, repairFault: "", repairImpact: "MEDIUM", relatedClues: "", inabilityReason: "", responsibilityEvidence: "", findings: "", confirmDate: "", confirmTime: "", reviewDate: "", reviewTime: "", busy: false, stale: true, retry: false, confirmation: "", pendingLabel: "", error: "", notice: "", lastDate: "", lastTime: "", lastLocation: "", circumstances: "", reason: "", custodianVerification: "", searchedScope: "", searchDate: "", searchTime: "", nextReviewDate: "", photoPath: "", photoName: "" });
 const day = (date: Date) => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
 const time = (date: Date) => [date.getHours(), date.getMinutes()].map(value => String(value).padStart(2, "0")).join(":");
 function actual(date: string, clock: string, original?: string) {
@@ -66,7 +76,7 @@ export function createLossPage(getServices: () => MiniServices) {
                 : await services.sessions.request("POST", operation.path, operation.body === undefined ? undefined : JSON.parse(operation.body), operation)) as { id: string };
             if (!current(epoch)) return; selectedId = result.id;
             if (!await readState(page,epoch) || !current(epoch)) return;
-            pending = null; discard(operation.file); clearPhoto(); delete instants.last; delete instants.search; delete instants.found; page.setData({ observedAssetCode: "", observedSerialNumber: "", foundDate: "", foundTime: "", recoveryEvidence: "", recoveryChecked: false, returnChecked: false, selectedLocation: "", damagedChecked: false, repairFault: "", repairImpact: "MEDIUM", relatedClues: "", inabilityReason: "", responsibilityEvidence: "", findings: "", confirmDate: "", confirmTime: "", reviewDate: "", reviewTime: "", retry: false, pendingLabel: "", lastDate: "", lastTime: "", lastLocation: "", circumstances: "", selectedAsset: "", reason: "", custodianVerification: "", searchedScope: "", searchDate: "", searchTime: "", nextReviewDate: "", photoPath: "", photoName: "", notice: "本次办理已记录。" });
+            pending = null; discard(operation.file); clearPhoto(); delete instants.last; delete instants.search; delete instants.found; page.setData({ transfer: blankTransfer(), observedAssetCode: "", observedSerialNumber: "", foundDate: "", foundTime: "", recoveryEvidence: "", recoveryChecked: false, returnChecked: false, selectedLocation: "", damagedChecked: false, repairFault: "", repairImpact: "MEDIUM", relatedClues: "", inabilityReason: "", responsibilityEvidence: "", findings: "", confirmDate: "", confirmTime: "", reviewDate: "", reviewTime: "", retry: false, pendingLabel: "", lastDate: "", lastTime: "", lastLocation: "", circumstances: "", selectedAsset: "", reason: "", custodianVerification: "", searchedScope: "", searchDate: "", searchTime: "", nextReviewDate: "", photoPath: "", photoName: "", notice: "本次办理已记录。" });
         } catch (error) { if (current(epoch)) failure(page,error); } finally { finish(page,epoch); }
     };
     const prepare = (page: Context, action: string) => {
@@ -114,13 +124,63 @@ export function createLossPage(getServices: () => MiniServices) {
         const row = page.data.detail, data = page.data;
         if (!row) return;
         const attempt = id ? row.recoveries?.find(item => item.id === id) : undefined;
-        const capability = ({approve:"decide",reject:"decide",cancel:"cancel",claim:"claim",execute:"execute",executeDamaged:"execute",executeReturn:"execute"} as Record<string,string>)[action];
-        if (id ? !attempt || !capability || !attempt.actions[capability] : !["recoverOriginal","recoverDamaged","recoverReturn","requestRecovery","requestDamaged","requestReturn"].includes(action) || !row.actions?.[["recoverDamaged","recoverReturn"].includes(action) ? "recoverOriginal" : ["requestDamaged","requestReturn"].includes(action) ? "requestRecovery" : action]) return;
-        if (attempt && ["execute","executeDamaged","executeReturn"].includes(action) && ((attempt.request?.destination === "ASSET_RETURN") !== (action === "executeReturn"))) return;
+        const capability = ({approve:"decide",reject:"decide",cancel:"cancel",claim:"claim",execute:"execute",executeDamaged:"execute",executeReturn:"execute",executeTransfer:"execute"} as Record<string,string>)[action];
+        if (id ? !attempt || !capability || !attempt.actions[capability] : !["recoverOriginal","recoverDamaged","recoverReturn","recoverTransfer","requestRecovery","requestDamaged","requestReturn","requestTransfer"].includes(action) || !row.actions?.[["recoverDamaged","recoverReturn","recoverTransfer"].includes(action) ? "recoverOriginal" : ["requestDamaged","requestReturn","requestTransfer"].includes(action) ? "requestRecovery" : action]) return;
+        if (attempt && ["execute", "executeDamaged", "executeReturn", "executeTransfer"].includes(action)) {
+            const destination = attempt.request?.destination;
+            if ((destination === "ASSET_RETURN") !== (action === "executeReturn")
+                || (destination === "TRANSFER") !== (action === "executeTransfer")) return;
+        }
         if (attempt && ["execute","executeDamaged"].includes(action) && ((attempt.request?.facts?.condition === "DAMAGED") !== (action === "executeDamaged"))) return;
         try {
             let body: unknown, label: string;
-            if (["recoverReturn","requestReturn","executeReturn"].includes(action)) {
+            if (["recoverTransfer", "requestTransfer", "executeTransfer"].includes(action)) {
+                const source = row.recoveryAsset, place = data.locations.find(item => item.id === data.selectedLocation);
+                const transfer = data.transfer;
+                const stock = row.source.lifecycle === "IN_STOCK";
+                if ((!stock && row.source.lifecycle !== "IN_USE") || !source || !place || !transfer.checked
+                    || !data.observedAssetCode.trim() || (source.serialNumber && !data.observedSerialNumber.trim())
+                    || data.recoveryEvidence.trim().length < 10) throw Error("Missing transfer recovery evidence");
+                const facts = {
+                    foundAt: actual(data.foundDate, data.foundTime, instants.found),
+                    observedAssetCode: data.observedAssetCode.trim(), observedSerialNumber: data.observedSerialNumber.trim(),
+                    locationId: place.id, locationVersion: place.version, physicalIdentityVerified: true,
+                    condition: "INTACT", stillOriginalCustodian: transfer.sameCustodian, evidence: data.recoveryEvidence.trim(),
+                };
+                if (action === "requestTransfer") {
+                    body = { assetVersion: source.version, facts };
+                    label = `申请找回后调拨 ${facts.observedAssetCode}，须重新批准并认领。`;
+                } else {
+                    const org = transfer.organizations.find(item => item.id === transfer.organization);
+                    const owner = transfer.organizations.find(item => item.id === transfer.owner);
+                    const person = transfer.people.find(item => item.id === transfer.person);
+                    const destination = transfer.places.find(item => item.id === transfer.place);
+                    const warehouse = transfer.warehouses.find(item => item.id === transfer.warehouse);
+                    if (!destination || (transfer.owner && !owner) || !transfer.reason.trim()
+                        || !Number.isSafeInteger(row.lockVersion)
+                        || (stock ? !warehouse || destination.warehouseId !== warehouse.id : !org || !person)) {
+                        throw Error("Missing transfer target");
+                    }
+                    const referenceVersions: Record<string, number> = { location: destination.version };
+                    if (stock && warehouse) referenceVersions.warehouse = warehouse.version;
+                    if (!stock && org && person) {
+                        referenceVersions.usingOrganization = org.version;
+                        referenceVersions.employee = person.version;
+                    }
+                    if (owner) referenceVersions.owningOrganization = owner.version;
+                    body = {
+                        recovery: { assetVersion: attempt?.assetVersion ?? row.assetVersion,
+                            ownershipVersion: attempt?.ownershipVersion ?? row.ownershipVersion,
+                            lockVersion: row.lockVersion, facts },
+                        target: { owningOrganizationId: owner?.id ?? null, custodyType: stock ? "STORAGE" : transfer.custody,
+                            usingOrganizationId: stock ? null : org?.id, employeeId: stock ? null : person?.id,
+                            warehouseId: stock ? warehouse?.id : null,
+                            locationId: destination.id, referenceVersions },
+                        reason: transfer.reason.trim(),
+                    };
+                    label = `提交调拨 ${facts.observedAssetCode}，实际位置 ${place.name}，目标 ${warehouse?.name ?? person?.name} / ${destination.name}。批准并履行后更新责任和位置。`;
+                }
+            } else if (["recoverReturn","requestReturn","executeReturn"].includes(action)) {
                 const source=row.recoveryAsset,place=data.locations.find(item=>item.id===data.selectedLocation);
                 if(!source||!place||!data.returnChecked||!data.observedAssetCode.trim()||source.serialNumber&&!data.observedSerialNumber.trim()||data.recoveryEvidence.trim().length<10)throw Error("Missing linked return evidence");
                 const facts={foundAt:actual(data.foundDate,data.foundTime,instants.found),observedAssetCode:data.observedAssetCode.trim(),observedSerialNumber:data.observedSerialNumber.trim(),locationId:place.id,locationVersion:place.version,physicalIdentityVerified:true,condition:"INTACT",stillOriginalCustodian:false,evidence:data.recoveryEvidence.trim()};
@@ -145,13 +205,87 @@ export function createLossPage(getServices: () => MiniServices) {
                 label = ({approve:"批准新找回申请，仍须库管重新认领核实。",reject:"驳回找回申请，原遗失责任跟进保留。",cancel:"撤回新找回申请，原遗失责任跟进保留。",claim:"取得新的唯一找回处理权，尚未恢复正常。"} as Record<string,string>)[action]!;
                 if (action !== "claim") label += data.reason.trim();
             }
-            const path = attempt ? `${base}/recoveries/${attempt.id}/${["approve","reject"].includes(action) ? "decision" : action === "executeDamaged" ? "execute-to-repair" : action === "executeReturn" ? "execute-to-return" : action}` : `${base}/${row.id}/${action === "recoverOriginal" ? "recover-original" : action === "recoverDamaged" ? "recover-to-repair" : action === "recoverReturn" ? "recover-to-return" : action === "requestReturn" ? "return-recovery-requests" : action === "requestDamaged" ? "repair-recovery-requests" : "recovery-requests"}`;
+            const path = attempt ? `${base}/recoveries/${attempt.id}/${["approve","reject"].includes(action) ? "decision" : action === "executeDamaged" ? "execute-to-repair" : action === "executeReturn" ? "execute-to-return" : action === "executeTransfer" ? "execute-to-transfer" : action}` : `${base}/${row.id}/${action === "recoverOriginal" ? "recover-original" : action === "recoverDamaged" ? "recover-to-repair" : action === "recoverReturn" ? "recover-to-return" : action === "requestReturn" ? "return-recovery-requests" : action === "recoverTransfer" ? "recover-to-transfer" : action === "requestTransfer" ? "transfer-recovery-requests" : action === "requestDamaged" ? "repair-recovery-requests" : "recovery-requests"}`;
             prepared = Object.freeze({path, key:services.createKey(),version:attempt?.version ?? row.version,body:body === undefined ? undefined : JSON.stringify(body),label});
             page.setData({confirmation:label,error:""});
         } catch { page.setData({error:"请填写原机编码/序列号、实际找回时间、至少10字证据及本次原因，并确认对应状况、原保管与登记位置；损坏找回还须至少10字故障及使用影响。"}); }
     };
+    const transferCatalog = async (kind: string, epoch: number, organization?: string) => {
+        const items: TransferChoice[] = [];
+        const scope = organization ? `&organizationId=${encodeURIComponent(organization)}` : "";
+        for (let page = 1; current(epoch); page++) {
+            const result = await services.sessions.request("GET",
+                `/api/v1/mini/transfers/catalog/${kind}?page=${page}&pageSize=200${scope}`) as { items: TransferChoice[]; total: number };
+            items.push(...result.items);
+            if (items.length >= result.total || result.items.length === 0) break;
+        }
+        return items;
+    };
     return {
         data: blank(),
+        async onLoadTransferTargets(this: Context) {
+            if (!editable(this)) return;
+            const epoch = generation;
+            this.setData({ busy: true, error: "" });
+            try {
+                const stock = this.data.detail?.source.lifecycle === "IN_STOCK";
+                const [organizations, places, warehouses] = await Promise.all([
+                    transferCatalog("organization", epoch),
+                    !stock || this.data.transfer.warehouse ? transferCatalog("location", epoch) : Promise.resolve([]),
+                    stock ? transferCatalog("warehouse", epoch) : Promise.resolve([]),
+                ]);
+                if (current(epoch)) this.setData({ transfer: {
+                    ...this.data.transfer, organizations, warehouses,
+                    places: places.filter(place => stock
+                        ? place.locationType === "BIN" && place.warehouseId === this.data.transfer.warehouse
+                        : place.locationType !== "BIN"),
+                } });
+            } catch (error) { if (current(epoch)) failure(this, error); }
+            finally { finish(this, epoch); }
+        },
+        async onTransferTarget(this: Context, event: {
+            currentTarget: { dataset: { field: string } }; detail: { value: string };
+        }) {
+            if (!editable(this)) return;
+            const transfer = this.data.transfer, field = event.currentTarget.dataset.field;
+            const index = Number(event.detail.value);
+            if (field === "custody") {
+                this.setData({ transfer: { ...transfer, custody: index === 1 ? "SHARED" : "PERSONAL",
+                    person: "", organization: "", people: [] } });
+            } else if (field === "warehouse" && transfer.warehouses[index]) {
+                const warehouse = transfer.warehouses[index].id, epoch = generation;
+                this.setData({ busy: true, error: "", transfer: { ...transfer, warehouse, place: "", places: [] } });
+                try {
+                    const places = await transferCatalog("location", epoch);
+                    if (current(epoch)) this.setData({ transfer: { ...this.data.transfer,
+                        places: places.filter(place => place.locationType === "BIN" && place.warehouseId === warehouse),
+                    } });
+                } catch (error) { if (current(epoch)) failure(this, error); }
+                finally { finish(this, epoch); }
+            } else if (field === "person" || field === "place" || field === "owner") {
+                const choices = field === "person" ? transfer.people : field === "place" ? transfer.places : transfer.organizations;
+                if (choices[index]) this.setData({ transfer: { ...transfer, [field]: choices[index].id } });
+            } else if (field === "organization" && transfer.organizations[index]) {
+                const organization = transfer.organizations[index].id, epoch = generation;
+                this.setData({ busy: true, error: "", transfer: { ...transfer, organization, person: "", people: [] } });
+                try {
+                    const people = await transferCatalog("employee", epoch, organization);
+                    if (current(epoch)) this.setData({ transfer: { ...this.data.transfer,
+                        people: people.filter(person => transfer.custody !== "SHARED" || person.sharedEligible),
+                    } });
+                } catch (error) { if (current(epoch)) failure(this, error); }
+                finally { finish(this, epoch); }
+            }
+        },
+        onTransferChecked(this: Context, event: { detail: { value: boolean } }) {
+            if (editable(this)) this.setData({ transfer: { ...this.data.transfer, checked: event.detail.value } });
+        },
+        onSameTransferCustodian(this: Context, event: { detail: { value: boolean } }) {
+            if (editable(this)) this.setData({ transfer: { ...this.data.transfer, sameCustodian: event.detail.value } });
+        },
+        onTransferReason(this: Context, event: { detail: { value: string } }) {
+            if (editable(this)) this.setData({ transfer: { ...this.data.transfer, reason: event.detail.value } });
+        },
         onLoad(options: { id?: string }) { selectedId = /^[1-9][0-9]{0,18}$/.test(options.id ?? "") ? options.id! : ""; },
         async onShow(this: Context) { live = true; const next = getServices(); if (services && identity !== JSON.stringify([next.sessions.identity,next.sessions.identityRevision])) wipe(this); services = next; identity = owner(); await read(this); },
         onHide(this: Context) { live = false; generation++; const file = prepared?.file; prepared = null; clearPhoto(); discard(file); this.setData(blank()); },
