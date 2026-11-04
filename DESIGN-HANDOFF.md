@@ -7,7 +7,7 @@
 >
 > 原接续材料：[2026-10-30进度交接](docs/development/2026-10-30-current-progress-handoff.md)。其中待审状态以本轮用户签署和现役计划更新为准；旧候选和机器证据不改写。真实外部/真机、远端CI、正式QA、生产仍另验。
 >
-> 前端架构批：ARCH-01～ARCH-12 在本分支完成（代码批 14 个提交至 `46bb20a`，另有实测与记录批与 ARCH-12 两提交），是用户指定的第6步内前端结构调整，不进入 D6-01～D6-27 台账、不占用其状态；ARCH-08～12 各批的运行时等价性已用真实浏览器逐路由实测收口（ARCH-11 为 117/117 一致，ARCH-12 为 129 单元中 117 一致、12 条报失单元只改形状与文本，见各批记录）。本分支已把该系列与 D6-21 报失功能线合并，并按同一标准改造报失新增前端；2026-11-03 经用户授权推送为 origin 新分支 `codex/d6-21-loss-ui`（tip `cbe84a6`，未合并 main、未建 PR）。逐批指标与遗留项只在 `docs/development/ARCH-*.md` 维护。
+> 前端架构批：ARCH-01～ARCH-13 在本分支完成（代码批 14 个提交至 `46bb20a`，另有实测与记录批、ARCH-12 两提交与 ARCH-13 三提交），是用户指定的第6步内前端结构调整，不进入 D6-01～D6-27 台账、不占用其状态；ARCH-08～13 各批的运行时等价性已用真实浏览器逐路由实测收口（ARCH-11 为 117/117 一致，ARCH-12 为 129 单元中 117 一致、12 条报失单元只改形状与文本，ARCH-13 为 132/132 全一致，见各批记录）。本分支已把该系列与 D6-21 报失功能线合并，并按同一标准改造报失新增前端；2026-11-03 经用户授权推送为 origin 新分支 `codex/d6-21-loss-ui`。逐批指标与遗留项只在 `docs/development/ARCH-*.md` 维护。
 ## 1. 八步开发流程与当前进度
 
 | 步骤 | 阶段 | 英文 | 阶段目标 | 当前状态 | 依据 / 下一步 |
@@ -17,7 +17,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | B2b4a固定3c67b26已获用户复核PASS；当前B2b4b调拨。前端架构批 ARCH-01～ARCH-12 已合入本分支（含报失新增前端收口与真实浏览器逐路由实测），入口见 §4。各父项、真实外部/CI/独立复核以[现役开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)为准 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | B2b4a固定3c67b26已获用户复核PASS；当前B2b4b调拨。前端架构批 ARCH-01～ARCH-13 已合入本分支（含找回转调拨新增前端收口与真实浏览器逐路由实测），入口见 §4。各父项、真实外部/CI/独立复核以[现役开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)为准 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
@@ -57,7 +57,7 @@
 | D0.4 设计证据 | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 第5步验证结果 | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md) |
 | 第6步计划、Git/CI 规范、任务进度与执行记录 | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md) |
-| 前端架构批 ARCH-01～ARCH-12 的规格、指标、偏差与遗留项 | `docs/development/ARCH-*.md`（在当前分支；本文只记阶段与下一步，不复制第二套任务状态） |
+| 前端架构批 ARCH-01～ARCH-13 的规格、指标、偏差与遗留项 | `docs/development/ARCH-*.md`（在当前分支；本文只记阶段与下一步，不复制第二套任务状态） |
 
 `FIXED_ASSET_SYSTEM_DESIGN.md` 是早期系统设计参考，不能替代 PRD V1.5。旧评审、D0.3验证和D0.4执行台账只作为历史证据。
 
@@ -70,9 +70,9 @@
 | 规则 | `changed-and-verified` | AGENTS 已指向当前阶段 |
 | 产品代码 | `in-progress` | A/A1/A2/B1/B2a及B2b4a已用户复核；B2b1/2/3已送审，B2b4b调拨工作树定向验证通过，固定候选门禁与实际PC/JVM恢复待执行，B2b5/C/D仍必需 |
 | 产品运行态 | `local-dev-partial` | B2b3固定3e3e01c完整门禁Java508/XML629/Web213/mini326及实际PC/ClamAV/提交JVM恢复通过，独立复核及外部/CI/QA/生产仍开放 |
-| 前端架构批 | `pushed-unreviewed` | ARCH-01～ARCH-12 的代码批 14 个提交（至 `46bb20a`）+ 实测与记录批 + ARCH-12 两提交（`d8c55ac`/`78a09ca`）已合入本分支 `codex/d6-21-loss-ui`，四道本地门禁通过，且 ARCH-08～12 有真实浏览器逐路由实测（ARCH-12 为 43 路由 × 3 角色 = 129 单元，117 全一致、12 条报失单元只改形状与文本）；2026-11-03 经用户授权推送为 origin 新分支 `codex/d6-21-loss-ui`（tip `cbe84a6`，未合并 main、未建 PR），远端 CI 与独立复核仍未执行；只调整结构、加载形态与内部底座，不改变任何 D6 任务的开放状态 |
+| 前端架构批 | `pushed-unreviewed` | ARCH-01～ARCH-13 的代码批 14 个提交（至 `46bb20a`）+ 实测与记录批 + ARCH-12 两提交（`d8c55ac`/`78a09ca`）+ ARCH-13 三提交（合并 `1d9a776`、改造 `fd20656`、本记录批）已合入本分支 `codex/d6-21-loss-ui`，四道本地门禁通过，且 ARCH-08～13 有真实浏览器逐路由实测（ARCH-13 为 44 路由 × 3 角色 = 132 单元，132 全一致）；分支已推送 origin 同名分支（未合并 main、未建 PR），远端 CI 与独立复核仍未执行；只调整结构、加载形态与内部底座，不改变任何 D6 任务的开放状态。ARCH-13 另修回 `features/transfer/references.ts` 抽取时写反的 `warehouseId` 三元，其效果影响盘亏转调拨与调拨目标变更两域提交，需与后续调拨写路径实测同批复核 |
 | 记忆 | `out-of-scope` | 本次未修改机器生成记忆 |
-| 工作区 | `review-recorded` | codex/d6-21-loss 功能线候选 `3c67b26` 已在 origin 同名分支，未合并 main；该轮隔离运行资源已清理 |
+| 工作区 | `review-recorded` | codex/d6-21-loss 功能线候选 `326aec9` 已在 origin 同名分支并已合入本架构分支，未合并 main；该轮一次性栈与 worktree 资源已清理 |
 
 ## 2026-09-30 续接记录
 
@@ -272,3 +272,37 @@ D6-21A2 功能候选 `482756e` 已完成本轮内部链路验证并送 `IN_REVIE
 边界与遗留：ARCH-12 同样不改接口契约、权限、事务、并发与用户可见文案来源，可见变化只有报失视图的自带页头去重（标题与描述已由路由 meta 经 `AppChrome` 单点渲染）和分页空格口径统一；换机面板与换机追溯所需的返厂轮次、换机记录卡未在一次性栈造出，两者的浏览器渲染留作下一批。
 
 推送事实：本分支 `codex/d6-21-loss-ui`（ARCH-01～ARCH-12 全部提交，tip `cbe84a6`）经用户 2026-11-03 授权推送为 origin 新分支并已设置 upstream；原远端分支 `codex/d6-20-factory-ui` 停在 `e0f404c` 未动，未合并 `main`、未建 PR。推送只改变分发状态，不改变验收状态——除本地四道门禁与 ARCH-11/12 实测外，远端 CI、第七阶段 QA、真实外部联调与独立复核仍未执行，不改变 D6-19/D6-20/D6-21 各任务开放状态。功能开发下一步仍是现役计划的 D6-20C1 PC 缺陷修复与重验、C2 整机新卡与换机入库、D 及 D6-21～27。
+
+## 2026-11-04 找回转调拨前端收口与目录装配修回（ARCH-13，续 ARCH-12）
+
+`codex/d6-21-loss` 在 `326aec9` 交付 D6-21B2b4b「完好找回后关联正式调拨」。合并提交 `1d9a776` 把该功能线并入
+架构分支，三处 modify/delete 冲突（`apps/web/src/views/{LossRecoveryPanel,LossView,TransferView}.vue` 在功能线
+被改、在本分支已被移走）一律以本分支目录形状为准：调拨段挂进 `features/loss/panels/LossRecoveryPanel.vue`
+的同一面板而非并列新页，报失单侧的动作表补 `execute-to-transfer`/`recover-to-transfer`/
+`transfer-recovery-requests` 三条复核，功能线列表与详情同页时代的「重新送审找回调拨」按钮落到拆分后的
+`TransferDetailView`。改造提交 `fd20656` 再按 ARCH-08/09/10 口径收口：目录扇出与目标装配复用
+`features/transfer/references.ts` 的 `loadCatalogPages`/`resolveReference`/`buildTransferTarget`，两处模板派生
+归 computed，10 处新 primitive 归 `shallowRef`；调拨读取刻意不套 `useRequestLiveness` 并写明理由——该底座的
+不变量是「同一时刻只有最后一次 `begin()` 有权写回」，而本面板这三组写入槽互不相干，共用一代序号会让先点的
+按钮被后点的作废，属行为回归。
+
+判据与实测：两条判据脚本对 `apps/web/src` 全量 `sites=0` / `hard_violations=0`（E 类 13 文件保留清单未增减，
+合并基线读数为 2 文件/2 处派生与 2 项硬违规）；根 lint 退出 0、`vue-tsc` 0 错误、`vitest run` 80 文件/353 用例
+全绿（新增 `references.test.ts` 3 用例，功能线新增的调拨装配用例一字未改并通过）、`vite build` 主 CSS
+`index-CvDOmE8w.css` 31.42 kB/gzip 5.65 kB 文件名与字节均未变，全量 JS gzip 255,949→255,824 字节。真实浏览器
+把 `1d9a776`（改前）与本批提交（改后）并排跑同一栈同一库同一份 44 条路由 × 3 角色 = 132 单元：**132/132 全
+一致**，两侧文本总长同为 49,980 字符、`routes_with_issues` 同为 30 且事件集合逐条同集。新形状确实进入测量：
+`warehouse /loss-reports/3` 渲染完整「完好找回后调拨」段与申请行「关联正式调拨」，`/loss-reports/2` 渲染
+「已关联正式调拨 2」，`/transfers/2` 只对创建人渲染「重新送审找回调拨」。默认造单本轮只造出 1 张报失单
+（在用资产被维修/领用/退库的活动锁挡住），找回转调拨链改由产品自己的 HTTP API 补造，`arch-ui-routes.py` 的
+`EXTRA_DETAIL` 随之补三个键把路由从 41 条增至 44 条。
+
+边界与遗留：ARCH-13 不改接口契约、权限、事务、并发与用户可见文案来源；但 §1.1 修回了 ARCH-10 抽取时写反的
+`buildTransferTarget` 第 35 行 `warehouseId` 三元（原写法与同函数内的 `versions.warehouse` 条件相反，也与
+`543221b` 删除的两处内联实现相反），效果是盘亏转调拨与调拨目标变更的在库路径提交 `warehouseId` 由 `null`
+改为所选仓库 id、非在库路径不再对未选中的仓库取 `.id` 抛错。该修回只经纯函数用例与类型/lint 保护，未做这两
+个域的真实浏览器写路径实测，建议与下一次调拨写入批次同批复核。实测仍只覆盖读路径，四个新按钮的点击链路只在
+造单脚本里经产品 API 走通；`新建调拨找回申请` 因唯一一张 LOST 单已挂著在办申请而未渲染，属数据形状缺口。
+小程序侧与后端、契约变更直接取自功能线候选 `326aec9`，本批未改造、未独立复核。另记一条执行前提：`rtk` 沙箱
+无网络，`rtk git fetch` 连不上 github，本轮改用裸 `git fetch` 取远端状态；`node scripts/arch-ui-cdp-sweep.mjs`
+必须走 Node 24 前缀，Node 16 的 `node:util` 无 `parseArgs`。

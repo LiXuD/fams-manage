@@ -38,7 +38,10 @@ DOMAIN_BY_ROUTE = {
 }
 
 # 同一个域里要多渲染几张单据时按 ids 的键补详情路由；名字带后缀，避免和 expand 生成的重名。
-EXTRA_DETAIL = {"loss-reports": {"lossPending": "loss-pending", "lossSearching": "loss-searching"}}
+EXTRA_DETAIL = {"loss-reports": {"lossPending": "loss-pending", "lossSearching": "loss-searching",
+                                 "lossTransfer": "loss-transfer-direct",
+                                 "lossRecoveredTransfer": "loss-transfer-attempt"},
+                "transfer-detail": {"lossCreatedTransfer": "transfer-from-loss-recovery"}}
 
 PARAM = re.compile(r"^(\s*)(?:\{ path: \")(/[^\"]*)\"(?:, name: \"([^\"]+)\")?")
 
