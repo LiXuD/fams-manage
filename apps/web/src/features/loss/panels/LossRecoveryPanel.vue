@@ -1,25 +1,31 @@
 <script setup lang="ts">
 import { computed, ref, shallowRef } from "vue";
 import { lossRequest, type LossIntent, type LossRecovery, type LossRecoveryAsset, type LossReport } from "@/features/loss/api";
+import { businessRequest } from "@/api/business";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
+import type { TransferChoice, TransferTarget } from "@fams/api-types/transfer";
 
 const props = defineProps<{ report: LossReport; locked: boolean }>();
 /** 只起草，不提交：幂等键与在途簿记由父视图的确认式提交底座持有。 */
 const emit = defineEmits<{ prepare: [intent: LossIntent] }>();
 
-type Action = "recoverOriginal" | "recoverDamaged" | "recoverReturn" | "requestRecovery" | "requestDamaged" | "requestReturn"
-  | "approve" | "reject" | "cancel" | "claim" | "execute" | "executeDamaged" | "executeReturn";
+type Action = "recoverOriginal" | "recoverDamaged" | "recoverReturn" | "recoverTransfer" | "requestRecovery" | "requestDamaged" | "requestReturn" | "requestTransfer"
+  | "approve" | "reject" | "cancel" | "claim" | "execute" | "executeDamaged" | "executeReturn" | "executeTransfer";
 
 /** 报失单级动作需要的能力位；找回三族都按各自的直接动作复核。 */
-const reportCapabilities: Record<string, string> = { recoverOriginal: "recoverOriginal", recoverDamaged: "recoverOriginal", recoverReturn: "recoverOriginal", requestRecovery: "requestRecovery", requestDamaged: "requestRecovery", requestReturn: "requestRecovery" };
-const attemptCapabilities: Record<string, string> = { approve: "decide", reject: "decide", cancel: "cancel", claim: "claim", execute: "execute", executeDamaged: "execute", executeReturn: "execute" };
-const attemptPaths: Record<string, string> = { approve: "decision", reject: "decision", cancel: "cancel", claim: "claim", execute: "execute", executeDamaged: "execute-to-repair", executeReturn: "execute-to-return" };
+const reportCapabilities: Record<string, string> = { recoverOriginal: "recoverOriginal", recoverDamaged: "recoverOriginal", recoverReturn: "recoverOriginal", recoverTransfer: "recoverOriginal", requestRecovery: "requestRecovery", requestDamaged: "requestRecovery", requestReturn: "requestRecovery", requestTransfer: "requestRecovery" };
+const attemptCapabilities: Record<string, string> = { approve: "decide", reject: "decide", cancel: "cancel", claim: "claim", execute: "execute", executeDamaged: "execute", executeReturn: "execute", executeTransfer: "execute" };
+const attemptPaths: Record<string, string> = { approve: "decision", reject: "decision", cancel: "cancel", claim: "claim", execute: "execute", executeDamaged: "execute-to-repair", executeReturn: "execute-to-return", executeTransfer: "execute-to-transfer" };
 const statusLabels: Record<string, string> = { PENDING_ADMIN_DECISION: "待管理员批准找回", WAITING_WAREHOUSE_CLAIM: "待库管重新认领", VERIFYING: "找回实物核实中", COMPLETED: "已完成找回", REJECTED: "找回申请已驳回", CANCELLED: "找回申请已撤回" };
 const impacts: Record<string, string> = { LOW: "较低", MEDIUM: "中等", HIGH: "较高" };
 
 const observedCode = shallowRef(""), serial = shallowRef(""), foundAt = shallowRef(""), evidence = shallowRef(""), reason = shallowRef(""), checked = shallowRef(false);
 const returnChecked = shallowRef(false), locations = ref<{ id: string; name: string; version: number }[]>([]), locationIndex = shallowRef(""), locationPage = shallowRef(0), locationTotal = shallowRef(0), loadingLocations = shallowRef(false);
 const damagedChecked = shallowRef(false), fault = shallowRef(""), impact = shallowRef("MEDIUM");
+const transferChecked = ref(false), sameTransferCustodian = ref(false), transferReason = ref(""), targetCustody = ref("PERSONAL");
+const targetOwner = ref(""), targetOrganization = ref(""), targetPerson = ref(""), targetLocation = ref(""), targetWarehouse = ref("");
+const targetOrganizations = ref<TransferChoice[]>([]), targetPeople = ref<TransferChoice[]>([]);
+const targetLocations = ref<TransferChoice[]>([]), targetWarehouses = ref<TransferChoice[]>([]), loadingTarget = ref(false);
 const error = shallowRef("");
 const liveness = useRequestLiveness(() => [props.report.id, props.report.version, props.locked]);
 
@@ -29,11 +35,22 @@ const showReturnSection = computed(() => !!props.report.actions?.recoverOriginal
 const locationsLoaded = computed(() => locationPage.value > 0);
 const locationsSummary = computed(() => `已加载${locations.value.length}/${locationTotal.value}个位置`);
 const loadLocationsLabel = computed(() => locationsLoaded.value ? "继续加载位置" : "加载实际位置");
+const eligibleTargetPeople = computed(() => targetPeople.value.filter(
+  person => targetCustody.value !== "SHARED" || person.sharedEligible));
+const stockTransfer = computed(() => props.report.source?.lifecycle === "IN_STOCK");
+const canTransfer = computed(() => stockTransfer.value || props.report.source?.lifecycle === "IN_USE");
+const eligibleTargetLocations = computed(() => targetLocations.value.filter(place => stockTransfer.value
+  ? place.locationType === "BIN" && place.warehouseId === targetWarehouse.value : place.locationType !== "BIN"));
+const transferAttempt = computed(() => props.report.recoveries?.find(
+  item => item.actions.execute && item.request?.destination === "TRANSFER"));
+const showTransferTarget = computed(() => !!props.report.actions?.recoverOriginal || !!transferAttempt.value);
+const showTransferSection = computed(() => canTransfer.value && (showTransferTarget.value || !!props.report.actions?.requestRecovery));
 /** 申请行显示模型：状态、去向与三段核实文案在此拼装，按钮可见性按申请单自身事实判定，模板只读现成字段。 */
 const attemptRows = computed(() => (props.report.recoveries ?? []).map((attempt) => {
   const facts = attempt.request?.facts ?? {};
   const damaged = facts.condition === "DAMAGED";
   const returned = attempt.request?.destination === "ASSET_RETURN";
+  const transferred = attempt.request?.destination === "TRANSFER";
   return { ...attempt,
     statusText: statusLabels[attempt.status] ?? attempt.status,
     processorText: attempt.processorAccountId ?? "尚未认领",
@@ -41,13 +58,13 @@ const attemptRows = computed(() => (props.report.recoveries ?? []).map((attempt)
     observedCodeText: show(facts.observedAssetCode),
     observedSerialText: showOr(facts.observedSerialNumber, "未登记"),
     locationIdText: show(facts.locationId),
-    destinationText: returned ? "关联归还/退库，原责任待实物验收后移交" : "原责任恢复或维修",
+    destinationText: returned ? "关联归还/退库，原责任待实物验收后移交" : transferred ? "关联正式调拨" : "原责任恢复或维修",
     conditionText: facts.condition === "INTACT" ? "完好" : damaged ? "损坏，批准后转正式维修" : "需关联处理",
     custodianText: facts.stillOriginalCustodian === true ? "仍由原责任人保管" : "责任需核对",
     identityText: facts.physicalIdentityVerified === true ? "已对照原机身份" : "身份待核对",
     evidenceText: show(facts.evidence),
     showReason: attempt.actions.decide || attempt.actions.cancel,
-    executeOriginalShown: attempt.actions.execute && !damaged && !returned,
+    executeOriginalShown: attempt.actions.execute && !damaged && !returned && !transferred,
     executeDamagedShown: attempt.actions.execute && damaged,
     executeReturnShown: attempt.actions.execute && returned };
 }));
@@ -70,6 +87,71 @@ async function loadLocations() {
 /** 实物实际所在的那一条位置记录：locations 由分页 push 追加，读取必须每次现算，不能缓存。 */
 function selectedPlace() { return locations.value.find((item) => item.id === locationIndex.value) ?? null; }
 
+/** 完好找回后转正式调拨：目标目录按调拨域现行规则分页读取。 */
+async function transferCatalog(kind: string, organization?: string): Promise<TransferChoice[]> {
+  const items: TransferChoice[] = [];
+  let page = 1;
+  while (true) {
+    const scope = organization ? `&organizationId=${encodeURIComponent(organization)}` : "";
+    const result = await businessRequest<{ items: TransferChoice[]; total: number }>(
+      `/transfers/catalog/${kind}?page=${page++}&pageSize=200${scope}`);
+    items.push(...result.items);
+    if (items.length >= result.total || result.items.length === 0) return items;
+  }
+}
+async function loadTransferTarget() {
+  if (props.locked || loadingTarget.value) return;
+  loadingTarget.value = true;
+  error.value = "";
+  try {
+    const [organizations, locations, warehouses] = await Promise.all([
+      transferCatalog("organization"), transferCatalog("location"),
+      stockTransfer.value ? transferCatalog("warehouse") : Promise.resolve([]),
+    ]);
+    targetOrganizations.value = organizations;
+    targetLocations.value = locations;
+    targetWarehouses.value = warehouses;
+  } catch { error.value = "调拨目标目录未加载，请重试。"; }
+  finally { loadingTarget.value = false; }
+}
+async function loadTransferPeople() {
+  targetPerson.value = "";
+  targetPeople.value = [];
+  const organization = targetOrganization.value;
+  if (!organization) return;
+  loadingTarget.value = true;
+  error.value = "";
+  try {
+    const people = await transferCatalog("employee", organization);
+    if (targetOrganization.value === organization) targetPeople.value = people;
+  } catch { error.value = "目标责任人员未加载，请重新选择部门。"; }
+  finally { loadingTarget.value = false; }
+}
+function transferTarget(): TransferTarget {
+  const organization = targetOrganizations.value.find(item => item.id === targetOrganization.value);
+  const owner = targetOrganizations.value.find(item => item.id === targetOwner.value);
+  const person = eligibleTargetPeople.value.find(item => item.id === targetPerson.value);
+  const place = eligibleTargetLocations.value.find(item => item.id === targetLocation.value);
+  if (!place || (targetOwner.value && !owner) || !transferReason.value.trim()) {
+    throw new Error("请选择有效的目标位置，并填写调拨原因。");
+  }
+  const referenceVersions: Record<string, number> = { location: place.version };
+  if (owner) referenceVersions.owningOrganization = owner.version;
+  if (stockTransfer.value) {
+    const warehouse = targetWarehouses.value.find(item => item.id === targetWarehouse.value);
+    if (!warehouse) throw new Error("请选择目标仓库和仓位。");
+    referenceVersions.warehouse = warehouse.version;
+    return { owningOrganizationId: owner?.id ?? null, custodyType: "STORAGE",
+      usingOrganizationId: null, employeeId: null, warehouseId: warehouse.id, locationId: place.id, referenceVersions };
+  }
+  if (!organization || !person) throw new Error("请选择有效的调拨目标部门和责任人。");
+  referenceVersions.usingOrganization = organization.version;
+  referenceVersions.employee = person.version;
+  return { owningOrganizationId: owner?.id ?? null, custodyType: targetCustody.value,
+    usingOrganizationId: organization.id, employeeId: person.id, warehouseId: null,
+    locationId: place.id, referenceVersions };
+}
+
 /** 完好原机但保管或位置已变化：核实事实按实际位置登记，后续走正式归还/退库。 */
 function returnFacts() {
   const place = selectedPlace(), date = new Date(foundAt.value);
@@ -77,6 +159,15 @@ function returnFacts() {
     throw new Error("请核对完好原机、实际位置、找回时间及至少10字变更保管证据，并确认关联归还/退库。");
   }
   return { foundAt: date.toISOString(), observedAssetCode: observedCode.value.trim(), observedSerialNumber: serial.value.trim(), locationId: place.id, locationVersion: place.version, physicalIdentityVerified: true, condition: "INTACT", stillOriginalCustodian: false, evidence: evidence.value.trim() };
+}
+
+/** 完好找回并转正式调拨：事实按实物实际位置登记，保管是否仍归原责任人由现场勾选决定。 */
+function transferFacts() {
+  const place = selectedPlace(), date = new Date(foundAt.value);
+  if (!canTransfer.value || !source.value || !transferChecked.value || !place || !Number.isFinite(date.getTime()) || !observedCode.value.trim() || source.value.serialNumber && !serial.value.trim() || evidence.value.trim().length < 10) {
+    throw new Error("请核对完好原机、实际位置、找回时间和至少10字证据，并确认实际保管或位置变化。");
+  }
+  return { foundAt: date.toISOString(), observedAssetCode: observedCode.value.trim(), observedSerialNumber: serial.value.trim(), locationId: place.id, locationVersion: place.version, physicalIdentityVerified: true, condition: "INTACT", stillOriginalCustodian: sameTransferCustodian.value, evidence: evidence.value.trim() };
 }
 
 /** 原机在原登记位置发现损坏：连同故障与使用影响一起转入正式维修。 */
@@ -105,6 +196,21 @@ function recoveryBody(facts: unknown, requestOnly: boolean, row: LossReport, att
 
 function draftOf(action: Action, attempt?: LossRecovery): { path: string; body: unknown; summary: string; version: number } {
   const row = props.report;
+  if (action === "recoverTransfer" || action === "requestTransfer" || action === "executeTransfer") {
+    const facts = transferFacts(), requestOnly = action === "requestTransfer";
+    if (requestOnly) {
+      return { path: `/${row.id}/transfer-recovery-requests`, body: { assetVersion: source.value?.version, facts },
+        summary: `申请找回后调拨 ${facts.observedAssetCode}，须重新批准并认领找回。`, version: row.version };
+    }
+    const target = transferTarget();
+    const person = targetPeople.value.find(item => item.id === target.employeeId);
+    const destination = targetLocations.value.find(item => item.id === target.locationId);
+    const warehouse = targetWarehouses.value.find(item => item.id === target.warehouseId);
+    return { path: attempt ? `/recoveries/${attempt.id}/execute-to-transfer` : `/${row.id}/recover-to-transfer`,
+      body: { recovery: recoveryBody(facts, false, row, attempt), target, reason: transferReason.value.trim() },
+      summary: `找回并提交调拨 ${facts.observedAssetCode}，实际位置 ${selectedPlace()?.name}，目标 ${warehouse?.name ?? person?.name} / ${destination?.name}。原责任和位置保留至实物履行。`,
+      version: attempt?.version ?? row.version };
+  }
   if (action === "recoverReturn" || action === "requestReturn" || action === "executeReturn") {
     const facts = returnFacts(), requestOnly = action === "requestReturn";
     return { path: requestOnly ? `/${row.id}/return-recovery-requests` : attempt ? `/recoveries/${attempt.id}/execute-to-return` : `/${row.id}/recover-to-return`,
@@ -143,8 +249,9 @@ function draftOf(action: Action, attempt?: LossRecovery): { path: string; body: 
 /** 执行按钮必须与申请单自身事实同族：归还退库、损坏转维修与原机恢复互斥。 */
 function matchesAttempt(action: Action, attempt: LossRecovery | undefined): boolean {
   if (!attempt) return true;
-  if (action === "execute" || action === "executeDamaged" || action === "executeReturn") {
+  if (action === "execute" || action === "executeDamaged" || action === "executeReturn" || action === "executeTransfer") {
     if ((attempt.request?.destination === "ASSET_RETURN") !== (action === "executeReturn")) return false;
+    if ((attempt.request?.destination === "TRANSFER") !== (action === "executeTransfer")) return false;
   }
   if (action === "execute" || action === "executeDamaged") {
     if ((attempt.request?.facts?.condition === "DAMAGED") !== (action === "executeDamaged")) return false;
@@ -212,6 +319,40 @@ function prepare(action: Action, attempt?: LossRecovery) {
           <button v-if="report.actions?.requestRecovery" class="fams-button" data-kind="secondary" type="button" @click="prepare('requestReturn')">新建归还退库找回申请</button>
         </div>
       </section>
+      <section v-if="showTransferSection" class="fams-card fams-stack" aria-label="找回关联调拨">
+        <h4 class="fams-panel-title">完好找回后调拨</h4>
+        <p>沿用上方填写的原机身份、实际找回时间、实际位置和证据。调拨单须批准，实际收件后才更新责任。</p>
+        <div class="fams-panel-actions">
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="loadingLocations || locked" @click="loadLocations">{{ locationPage ? '继续加载实际位置' : '加载实物实际位置' }}</button>
+        </div>
+        <label class="fams-field"><span class="fams-field-label">找回实物位置</span><select class="fams-control" v-model="locationIndex"><option value="">请选择实际位置</option><option v-for="place in locations" :key="place.id" :value="place.id">{{ place.name }}</option></select></label>
+        <label class="fams-selection"><input v-model="transferChecked" type="checkbox">已核实完好原机，现场保管或位置已变化，需要正式调拨</label>
+        <label class="fams-selection"><input v-model="sameTransferCustodian" type="checkbox">现场仍由原责任人保管，仅位置变化</label>
+        <template v-if="showTransferTarget">
+          <div class="fams-panel-actions">
+            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="loadingTarget" @click="loadTransferTarget">加载调拨目标目录</button>
+          </div>
+          <fieldset :disabled="loadingTarget">
+            <label class="fams-field"><span class="fams-field-label">目标所属组织</span><select class="fams-control" v-model="targetOwner"><option value="">未指定</option><option v-for="org in targetOrganizations" :key="org.id" :value="org.id">{{ org.name }}</option></select></label>
+            <label v-if="stockTransfer" class="fams-field"><span class="fams-field-label">目标仓库</span><select class="fams-control" v-model="targetWarehouse" @change="targetLocation = ''"><option value="">请选择仓库</option><option v-for="warehouse in targetWarehouses" :key="warehouse.id" :value="warehouse.id">{{ warehouse.name }}</option></select></label>
+            <template v-else>
+              <label class="fams-field"><span class="fams-field-label">目标使用部门</span><select class="fams-control" v-model="targetOrganization" @change="loadTransferPeople"><option value="">请选择部门</option><option v-for="org in targetOrganizations" :key="org.id" :value="org.id">{{ org.name }}</option></select></label>
+              <label class="fams-field"><span class="fams-field-label">目标保管方式</span><select class="fams-control" v-model="targetCustody" @change="targetPerson = ''"><option value="PERSONAL">个人</option><option value="SHARED">部门公用</option></select></label>
+              <label class="fams-field"><span class="fams-field-label">目标责任人</span><select class="fams-control" v-model="targetPerson"><option value="">请选择责任人</option><option v-for="person in eligibleTargetPeople" :key="person.id" :value="person.id">{{ person.name }}</option></select></label>
+            </template>
+            <label class="fams-field"><span class="fams-field-label">目标位置</span><select class="fams-control" v-model="targetLocation"><option value="">请选择目标位置</option><option v-for="place in eligibleTargetLocations" :key="place.id" :value="place.id">{{ place.name }}</option></select></label>
+            <label class="fams-field"><span class="fams-field-label">调拨原因</span><textarea class="fams-control" v-model="transferReason" maxlength="1000" /></label>
+            <div class="fams-panel-actions">
+              <button v-if="report.actions?.recoverOriginal" class="fams-button" data-kind="primary" type="button" @click="prepare('recoverTransfer')">找回并提交调拨</button>
+              <button v-if="transferAttempt" class="fams-button" data-kind="primary" type="button" @click="prepare('executeTransfer', transferAttempt)">核实找回并提交调拨</button>
+            </div>
+          </fieldset>
+        </template>
+        <div class="fams-panel-actions">
+          <button v-if="report.actions?.requestRecovery" class="fams-button" data-kind="secondary" type="button" @click="prepare('requestTransfer')">新建调拨找回申请</button>
+        </div>
+      </section>
+      <p v-if="report.transferId">已关联正式调拨 {{ report.transferId }}，请在调拨管理继续审批和实物交接。</p>
       <p v-if="report.returnId">已关联正式归还/退库 {{ report.returnId }}，请在借用与退库管理继续审批及实物验收。</p>
       <p>近期找回申请：{{ report.recoveriesTotal ?? 0 }}项（展示最近20项及当前在办项）</p>
       <article v-for="attempt in attemptRows" :key="attempt.id" class="fams-card fams-stack">

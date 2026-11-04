@@ -186,6 +186,7 @@ class LossHttpRuntimeCase {
                         + " id FROM fams_loss_report WHERE creator_account_id BETWEEN 951001 AND"
                         + " 951010)");
         cleanLinkedReturns();
+        cleanLinkedTransfers();
         db.update("DELETE FROM fams_asset_business_lock WHERE asset_id BETWEEN 951020 AND 951023");
         for (String table : List.of("fams_loss_recovery", "fams_loss_receipt", "fams_loss_event")) {
             db.update(
@@ -229,7 +230,7 @@ class LossHttpRuntimeCase {
         db.update("DELETE FROM fams_account_role WHERE account_id BETWEEN 951001 AND 951010");
         db.update("DELETE FROM fams_system_account WHERE id BETWEEN 951001 AND 951010");
         db.update("DELETE FROM fams_employee WHERE id BETWEEN 951001 AND 951010");
-        db.update("DELETE FROM fams_location WHERE id BETWEEN 951000 AND 951001");
+        db.update("DELETE FROM fams_location WHERE id BETWEEN 951000 AND 951002");
         for (String table : List.of("fams_warehouse", "fams_asset_category")) {
             db.update("DELETE FROM " + table + " WHERE id=951000");
         }
@@ -2333,6 +2334,197 @@ class LossHttpRuntimeCase {
         ok(returnWrite(admin, id + "/decision", Map.of("approved", false, "reason", "核对补充证据后重新送审"), 0));
         assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=951020 AND released_at IS NULL", Long.class));
         assertEquals("IN_USE", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+    }
+
+    @Test
+    void searchingRecoveryTransfersOnlyAfterApprovalAndActualReceipt() throws Exception {
+        var row = searchingReport();
+        String path = "/" + row.path("id").asText() + "/recover-to-transfer";
+        String key = key();
+        var target = transferRecoveryTarget();
+        var payload = Map.of("recovery", JSON.readTree(returnBody(row, null)), "target", target,
+                "reason", "原机找回后移交新保管人");
+        long version = row.path("version").asLong();
+        var lock = db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020"
+                + " AND released_at IS NULL");
+        assertEquals(409, post(otherWarehouse, path, JSON.writeValueAsString(payload), version, key).statusCode());
+        target.put("referenceVersions", Map.of("usingOrganization", 0, "employee", 1, "location", 0));
+        assertEquals(409, post(warehouse, path, JSON.writeValueAsString(payload), version, key).statusCode());
+        assertEquals(lock, db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020"
+                + " AND released_at IS NULL"));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_transfer_item WHERE asset_id=951020", Long.class));
+        target.put("referenceVersions", Map.of("usingOrganization", 0, "employee", 0, "location", 0));
+        String body = JSON.writeValueAsString(payload);
+        db.execute("CREATE TRIGGER owned_loss_transfer_failure BEFORE INSERT ON fams_loss_event FOR EACH ROW"
+                + " BEGIN IF NEW.action='LOSS_RECOVERED_TO_TRANSFER' THEN SIGNAL SQLSTATE '45000'"
+                + " SET MESSAGE_TEXT='owned transfer recovery audit failure'; END IF; END");
+        try {
+            assertEquals(500, post(warehouse, path, body, version, key).statusCode());
+            assertEquals("SEARCHING", db.queryForObject(
+                    "SELECT exception_status FROM fams_asset WHERE id=951020", String.class));
+            assertEquals(lock, db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020"
+                    + " AND released_at IS NULL"));
+            assertEquals(0L, db.queryForObject(
+                    "SELECT COUNT(*) FROM fams_transfer_item WHERE asset_id=951020", Long.class));
+        } finally {
+            db.execute("DROP TRIGGER IF EXISTS owned_loss_transfer_failure");
+        }
+        JsonNode recovered;
+        try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(() -> post(warehouse, path, body, version, key));
+            String secondKey = key();
+            var second = executor.submit(() -> post(warehouse, path, body, version, secondKey));
+            var responses = List.of(first.get(), second.get());
+            assertEquals(List.of(200, 409), responses.stream().map(HttpResponse::statusCode).sorted().toList());
+            recovered = ok(responses.stream().filter(response -> response.statusCode() == 200).findFirst().orElseThrow());
+            String committedKey = responses.getFirst().statusCode() == 200 ? key : secondKey;
+            assertEquals(recovered, ok(post(warehouse, path, body, version, committedKey)));
+        }
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_transfer_item WHERE asset_id=951020", Long.class));
+        String transfer = recovered.path("transferId").asText();
+        assertFalse(transfer.isBlank());
+        var adopted = db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020"
+                + " AND released_at IS NULL");
+        assertEquals(lock.get("id"), adopted.get("id"));
+        assertEquals("TRANSFER", adopted.get("business_type"));
+        String id = "/" + transfer;
+        ok(transferWrite(admin, id + "/decision", Map.of("approved", false, "reason", "重新核对后送审"), 1));
+        assertEquals(adopted, db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020"
+                + " AND released_at IS NULL"));
+        ok(transferWrite(warehouse, id + "/submit", null, 2));
+        ok(transferWrite(admin, id + "/decision", Map.of("approved", true, "reason", "批准实物调拨"), 3));
+        var claimed = ok(transferWrite(warehouse, id + "/claim", null, 4));
+        var item = claimed.path("items").get(0);
+        String itemId = item.path("id").asText();
+        var delivered = ok(transferWrite(warehouse, id + "/items/" + itemId + "/deliver",
+                Map.of("observedCode", "REP-ASSET-951020", "destination", "现场新保管点",
+                        "evidence", "已实物交出等待接收", "itemVersion", item.path("version").asLong()), 5));
+        assertEquals(951002L, db.queryForObject(
+                "SELECT responsible_employee_id FROM fams_asset WHERE id=951020", Long.class));
+        var receiver = login(6);
+        var grant = ok(transferWrite(receiver, "/receipts/" + itemId + "/grant", null, 0));
+        ok(transferWrite(receiver, "/receipts/" + itemId + "/receive", Map.of(
+                "grant", grant.path("grant").asText(), "observedCode", "REP-ASSET-951020",
+                "physicalChecked", true), delivered.path("version").asLong()));
+        assertEquals(951006L, db.queryForObject(
+                "SELECT responsible_employee_id FROM fams_asset WHERE id=951020", Long.class));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock"
+                + " WHERE asset_id=951020 AND released_at IS NULL", Long.class));
+    }
+
+    @Test
+    void closedTransferRecoveryRequiresNewAuthorizationAndPreservesLossHistory() throws Exception {
+        var row = confirmedReport();
+        String id = row.path("id").asText();
+        String historySql = "SELECT confirmation_snapshot_json,confirmed_lost_at,source_snapshot_json"
+                + " FROM fams_loss_report WHERE id=?";
+        var history = db.queryForMap(historySql, id);
+        var requested = ok(post(employee, "/" + id + "/transfer-recovery-requests", returnRequest(row),
+                row.path("version").asLong(), key()));
+        String recovery = requested.path("recoveryId").asText();
+        String base = "/recoveries/" + recovery;
+        assertEquals(409, post(warehouse, base + "/claim", null, 0, key()).statusCode());
+        ok(post(admin, base + "/decision", decision(), 0, key()));
+        ok(post(warehouse, base + "/claim", null, 1, key()));
+        row = ok(get(warehouse, "/" + id));
+        var attempt = row.path("recoveries").get(0);
+        assertEquals("TRANSFER", attempt.path("request").path("destination").asText());
+        String facts = returnBody(row, attempt);
+        assertEquals(409, post(warehouse, base + "/execute-to-return", facts, 2, key()).statusCode());
+        var lock = db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020"
+                + " AND released_at IS NULL");
+        assertEquals(Long.parseLong(recovery), ((Number) lock.get("business_item_id")).longValue());
+        String body = JSON.writeValueAsString(Map.of("recovery", JSON.readTree(facts),
+                "target", transferRecoveryTarget(), "reason", "找到完好原机后正式调拨"));
+        String key = key();
+        var result = ok(post(warehouse, base + "/execute-to-transfer", body, 2, key));
+        assertEquals(result, ok(post(warehouse, base + "/execute-to-transfer", body, 2, key)));
+        assertEquals("CONFIRMED_LOST", result.path("status").asText());
+        assertEquals("COMPLETED", result.path("recoveryStatus").asText());
+        assertEquals(history, db.queryForMap(historySql, id));
+        var adopted = db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020"
+                + " AND released_at IS NULL");
+        assertEquals(lock.get("id"), adopted.get("id"));
+        assertEquals(result.path("transferId").asLong(), ((Number) adopted.get("business_id")).longValue());
+    }
+
+    @Test
+    void stockRecoveryRemainsLockedUntilWarehouseVerification() throws Exception {
+        db.update("INSERT INTO fams_location(id,code,code_normalized,name,location_type,warehouse_id,"
+                + "status,created_at,updated_at) VALUES"
+                + " (951002,'RECOVERYBIN','RECOVERYBIN','Target bin','BIN',951000,'ACTIVE',NOW(3),NOW(3))");
+        var row = ok(post(warehouse, "", submission(951023), 0, key()));
+        String path = "/" + row.path("id").asText();
+        row = ok(upload(warehouse, row.path("id").asText(), 0, key(), png()));
+        row = ok(post(admin, path + "/decision", decision(), row.path("version").asLong(), key()));
+        row = ok(post(warehouse, path + "/claim", null, row.path("version").asLong(), key()));
+        row = ok(get(warehouse, path));
+        ok(post(warehouse, path + "/search", search(row), row.path("version").asLong(), key()));
+        row = ok(get(warehouse, path));
+        var recovery = (tools.jackson.databind.node.ObjectNode) JSON.readTree(returnBody(row, null));
+        ((tools.jackson.databind.node.ObjectNode) recovery.get("facts")).put("locationId", "951001");
+        var target = transferRecoveryTarget();
+        target.put("custodyType", "STORAGE");
+        target.put("warehouseId", "951000");
+        target.put("usingOrganizationId", null);
+        target.put("employeeId", null);
+        target.put("locationId", "951002");
+        target.put("referenceVersions", Map.of("warehouse", 0, "location", 0));
+        var result = ok(post(warehouse, path + "/recover-to-transfer", JSON.writeValueAsString(Map.of(
+                "recovery", recovery, "target", target, "reason", "原机找回后移至已确认仓位")),
+                row.path("version").asLong(), key()));
+        String transfer = "/" + result.path("transferId").asText();
+        var lock = db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE asset_id=951023"
+                + " AND released_at IS NULL");
+        ok(transferWrite(warehouse, transfer + "/cancel", null, 1));
+        assertEquals(lock, db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE asset_id=951023"
+                + " AND released_at IS NULL"));
+        ok(transferWrite(warehouse, transfer + "/submit", null, 2));
+        ok(transferWrite(admin, transfer + "/decision", Map.of("approved", true, "reason", "批准新仓位"), 3));
+        var claimed = ok(transferWrite(warehouse, transfer + "/claim", null, 4));
+        var item = claimed.path("items").get(0);
+        assertEquals(951000L, db.queryForObject(
+                "SELECT current_location_id FROM fams_asset WHERE id=951023", Long.class));
+        ok(transferWrite(warehouse, transfer + "/items/" + item.path("id").asText() + "/verify",
+                Map.of("observedCode", "REP-ASSET-951023", "destination", "新仓位",
+                        "evidence", "库管已现场核验实物及目标仓位", "itemVersion", item.path("version").asLong()), 5));
+        assertEquals(951002L, db.queryForObject(
+                "SELECT current_location_id FROM fams_asset WHERE id=951023", Long.class));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock"
+                + " WHERE asset_id=951023 AND released_at IS NULL", Long.class));
+    }
+
+    private Map<String, Object> transferRecoveryTarget() {
+        var target = new java.util.LinkedHashMap<String, Object>();
+        target.put("owningOrganizationId", null);
+        target.put("custodyType", "PERSONAL");
+        target.put("usingOrganizationId", "951000");
+        target.put("employeeId", "951006");
+        target.put("warehouseId", null);
+        target.put("locationId", "951001");
+        target.put("referenceVersions", Map.of("usingOrganization", 0, "employee", 0, "location", 0));
+        return target;
+    }
+
+    private HttpResponse<String> transferWrite(Session session, String path, Object body, long version)
+            throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/transfers" + path))
+                .header("Cookie", session.cookie()).header("X-CSRF-Token", session.csrf())
+                .header("Idempotency-Key", key()).header("If-Match-Version", Long.toString(version))
+                .header("Content-Type", "application/json")
+                .POST(body == null ? HttpRequest.BodyPublishers.noBody()
+                        : HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body)))
+                .build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private void cleanLinkedTransfers() {
+        String items = "SELECT id FROM fams_transfer_item WHERE asset_id BETWEEN 951020 AND 951023";
+        String transfers = "SELECT id FROM fams_transfer WHERE creator_account_id BETWEEN 951001 AND 951010";
+        db.update("DELETE FROM fams_transfer_receipt_grant WHERE item_id IN (" + items + ")");
+        db.update("DELETE FROM fams_transfer_event WHERE request_id IN (" + transfers + ")");
+        db.update("DELETE FROM fams_todo WHERE business_type='TRANSFER' AND business_id IN (" + transfers + ")");
+        db.update("DELETE FROM fams_transfer_item WHERE asset_id BETWEEN 951020 AND 951023");
+        db.update("DELETE FROM fams_transfer WHERE creator_account_id BETWEEN 951001 AND 951010");
     }
 
     private String returnBody(JsonNode row, JsonNode recovery) {

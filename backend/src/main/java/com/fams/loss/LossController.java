@@ -251,6 +251,33 @@ public class LossController {
         return retry(() -> reports.executeRecoveryToReturn(actor, id, version, key, input));
     }
 
+    @PostMapping("/{id}/recover-to-transfer")
+    Map<String, Object> recoverToTransfer(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.TransferRecoveryExecution input) {
+        var actor = actors.capture();
+        return retry(() -> reports.recoverToTransfer(actor, id, version, key, input));
+    }
+
+    @PostMapping("/{id}/transfer-recovery-requests")
+    Map<String, Object> requestTransferRecovery(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.ReturnRecoveryRequest input) {
+        var actor = actors.capture();
+        return retry(() -> reports.requestTransferRecovery(actor, id, version, key, input));
+    }
+
+    @PostMapping("/recoveries/{id}/execute-to-transfer")
+    Map<String, Object> executeRecoveryToTransfer(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.TransferRecoveryExecution input) {
+        var actor = actors.capture();
+        return retry(() -> reports.executeRecoveryToTransfer(actor, id, version, key, input));
+    }
+
     private Map<String, Object> retry(Supplier<Map<String, Object>> operation) {
         for (int attempt = 0; ; attempt++) {
             try {

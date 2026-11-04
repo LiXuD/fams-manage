@@ -158,6 +158,7 @@ onMounted(async () => {
       </label>
       <TransferReassignment v-if="showReassignment" :key="selected.id" :id="selected.id" :version="selected.version" @saved="refresh" />
       <div class="fams-panel-actions">
+        <button v-if="selected.creatorAccountId === session.user?.id && ['REJECTED', 'CANCELLED'].includes(selected.requestStatus) && selected.events?.some(event => event.eventType === 'TRANSFER_FROM_LOSS_RECOVERY')" class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable" @click="mutate(`/transfers/${selected.id}/submit`, selected.version)">重新送审找回调拨</button>
         <button v-if="canSubmit" class="fams-button" data-kind="primary" type="button"
           :disabled="busy || retryable" @click="mutate(`/transfers/${selected.id}/submit`, selected.version)">提交调拨</button>
         <button v-if="canCancel" class="fams-button" data-kind="danger" type="button"

@@ -17,13 +17,15 @@ const PAGE_SIZE = 20;
 const REPORT_ID = /^[1-9][0-9]{0,18}$/;
 const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
 /** 面板起草的路径末段 → 详情页需要复核的能力位；与后端动作名同源。 */
-const ATTEMPT_ACTIONS: Record<string, string> = { decision: "decide", cancel: "cancel", claim: "claim", execute: "execute", "execute-to-repair": "execute", "execute-to-return": "execute" };
+const ATTEMPT_ACTIONS: Record<string, string> = { decision: "decide", cancel: "cancel", claim: "claim", execute: "execute", "execute-to-repair": "execute", "execute-to-return": "execute", "execute-to-transfer": "execute" };
 /** 详情级动作路径 → 报失单上的能力位；找回类动作按原机恢复能力复核。 */
 function capabilityFor(row: LossReport, path: string): string | undefined {
   return { [`/${row.id}/confirm-lost`]: "confirmLost", [`/${row.id}/follow-up`]: "followUp",
     [`/${row.id}/recover-original`]: "recoverOriginal", [`/${row.id}/recover-to-repair`]: "recoverOriginal",
-    [`/${row.id}/recover-to-return`]: "recoverOriginal", [`/${row.id}/recovery-requests`]: "requestRecovery",
-    [`/${row.id}/repair-recovery-requests`]: "requestRecovery", [`/${row.id}/return-recovery-requests`]: "requestRecovery" }[path];
+    [`/${row.id}/recover-to-return`]: "recoverOriginal", [`/${row.id}/recover-to-transfer`]: "recoverOriginal",
+    [`/${row.id}/recovery-requests`]: "requestRecovery",
+    [`/${row.id}/repair-recovery-requests`]: "requestRecovery", [`/${row.id}/return-recovery-requests`]: "requestRecovery",
+    [`/${row.id}/transfer-recovery-requests`]: "requestRecovery" }[path];
 }
 
 const session = useSessionStore(), route = useRoute();

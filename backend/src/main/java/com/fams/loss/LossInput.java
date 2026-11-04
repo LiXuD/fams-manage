@@ -81,6 +81,11 @@ public final class LossInput {
             @NotNull @PositiveOrZero Long lockVersion,
             @NotNull @jakarta.validation.Valid RecoveryFacts facts) {}
 
+    public record TransferRecoveryExecution(
+            @NotNull @jakarta.validation.Valid ExplicitRecoveryExecution recovery,
+            @NotNull com.fams.asset.AssetTransferPort.Target target,
+            @NotBlank @Size(max = 1000) String reason) {}
+
     public record ClosedRepairRecovery(
             @NotNull @jakarta.validation.Valid ExplicitRecoveryExecution recovery,
             @NotBlank @Size(min = 10, max = 2000) String fault,

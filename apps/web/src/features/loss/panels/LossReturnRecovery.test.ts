@@ -27,3 +27,38 @@ it.each([false,true])("return recovery uses actual location and independent purp
  w.unmount();
 });
 it("refreshed return link survives without editable recovery form",()=>{const w=mount(LossRecoveryPanel,{props:{report:{...row(),actions:{},recoveryAsset:null,recoveredAt:"2026-10-31T02:00:00Z",returnId:"9007199254740993"},locked:false}});expect(w.text()).toContain("已关联正式归还/退库 9007199254740993");w.unmount();});
+
+it("PC recovery transfer separates observed location from the approved transfer target", async () => {
+ const report = row();
+ report.source = {id:"2",assetCode:"ORIGINAL",name:"原机",version:3,lifecycle:"IN_USE"};
+ vi.stubGlobal("fetch",vi.fn(async (path:string) => {
+  const items = path.includes("/recovery-locations") ? [{id:"9007199254740993",name:"实际位置",version:7}]
+   : path.includes("/catalog/location") ? [{id:"9007199254740994",name:"目标位置",version:8,locationType:"ROOM"}]
+   : path.includes("/catalog/organization") ? [{id:"4",name:"目标部门",version:5}]
+   : [{id:"9007199254740995",name:"目标责任人",version:6}];
+  return {ok:true,json:async()=>({items,total:items.length})};
+ }));
+ const w = mount(LossRecoveryPanel,{props:{report,locked:false}});
+ await fill(w);
+ const panel = w.get('[aria-label="找回关联调拨"]');
+ const button = (label:string) => panel.findAll("button").find(item=>item.text()===label)!;
+ await button("加载实物实际位置").trigger("click");
+ await button("加载调拨目标目录").trigger("click");
+ await flushPromises();
+ const selects = panel.findAll("select");
+ await selects[0]!.setValue("9007199254740993");
+ await selects[2]!.setValue("4");
+ await flushPromises();
+ await selects[4]!.setValue("9007199254740995");
+ await selects[5]!.setValue("9007199254740994");
+ await panel.find('input').setValue(true);
+ await panel.find('textarea').setValue("找回后移交新责任人");
+ await button("找回并提交调拨").trigger("click");
+ expect(w.emitted("prepare")?.[0]?.[0]).toMatchObject({
+  path:"/9/recover-to-transfer",version:12,body:{
+   recovery:{assetVersion:3,ownershipVersion:4,lockVersion:5,facts:{locationId:"9007199254740993",locationVersion:7}},
+   target:{employeeId:"9007199254740995",locationId:"9007199254740994",referenceVersions:{usingOrganization:5,employee:6,location:8}},
+  },
+ });
+ w.unmount();
+});
