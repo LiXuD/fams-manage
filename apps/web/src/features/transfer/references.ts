@@ -32,5 +32,5 @@ export function buildTransferTarget(parts: { stock: boolean; custodyType: string
   else { versions.usingOrganization = parts.usingOrganization!.version; versions.employee = parts.employee!.version; }
   return { owningOrganizationId: parts.owner?.id ?? null, custodyType: parts.stock ? "STORAGE" : parts.custodyType,
     usingOrganizationId: parts.stock ? null : parts.usingOrganization!.id, employeeId: parts.stock ? null : parts.employee!.id,
-    warehouseId: parts.stock ? null : parts.warehouse!.id, locationId: parts.location.id, referenceVersions: versions };
+    warehouseId: parts.stock ? parts.warehouse!.id : null, locationId: parts.location.id, referenceVersions: versions };
 }

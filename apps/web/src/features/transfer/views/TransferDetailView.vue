@@ -61,6 +61,10 @@ function custodyName(value: unknown) { return value === "PERSONAL" ? "个人" : 
 function personName(id: unknown) { return id ? peopleNames.value[String(id)] ?? "原登记责任人员" : "仓库保管"; }
 const canSubmit = computed(() => { const s = selected.value;
   return !!s && s.creatorAccountId === session.user?.id && s.requestStatus === "DRAFT"; });
+/** 找回来源的调拨在驳回或取消后保锁，创建人可在目标仍合法时原单重送。 */
+const canResubmitFromLossRecovery = computed(() => { const s = selected.value;
+  return !!s && s.creatorAccountId === session.user?.id && ["REJECTED", "CANCELLED"].includes(s.requestStatus)
+    && s.events?.some(event => event.eventType === "TRANSFER_FROM_LOSS_RECOVERY"); });
 const canCancel = computed(() => { const s = selected.value;
   return !!s && s.creatorAccountId === session.user?.id && ["DRAFT", "PENDING_APPROVAL"].includes(s.requestStatus); });
 const canDecide = computed(() => !!admin.value && selected.value?.requestStatus === "PENDING_APPROVAL");
@@ -158,7 +162,7 @@ onMounted(async () => {
       </label>
       <TransferReassignment v-if="showReassignment" :key="selected.id" :id="selected.id" :version="selected.version" @saved="refresh" />
       <div class="fams-panel-actions">
-        <button v-if="selected.creatorAccountId === session.user?.id && ['REJECTED', 'CANCELLED'].includes(selected.requestStatus) && selected.events?.some(event => event.eventType === 'TRANSFER_FROM_LOSS_RECOVERY')" class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable" @click="mutate(`/transfers/${selected.id}/submit`, selected.version)">重新送审找回调拨</button>
+        <button v-if="canResubmitFromLossRecovery" class="fams-button" data-kind="primary" type="button" :disabled="busy || retryable" @click="mutate(`/transfers/${selected.id}/submit`, selected.version)">重新送审找回调拨</button>
         <button v-if="canSubmit" class="fams-button" data-kind="primary" type="button"
           :disabled="busy || retryable" @click="mutate(`/transfers/${selected.id}/submit`, selected.version)">提交调拨</button>
         <button v-if="canCancel" class="fams-button" data-kind="danger" type="button"

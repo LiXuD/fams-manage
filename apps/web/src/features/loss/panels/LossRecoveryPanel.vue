@@ -2,6 +2,7 @@
 import { computed, ref, shallowRef } from "vue";
 import { lossRequest, type LossIntent, type LossRecovery, type LossRecoveryAsset, type LossReport } from "@/features/loss/api";
 import { businessRequest } from "@/api/business";
+import { buildTransferTarget, loadCatalogPages, resolveReference } from "@/features/transfer/references";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import type { TransferChoice, TransferTarget } from "@fams/api-types/transfer";
 
@@ -22,10 +23,11 @@ const impacts: Record<string, string> = { LOW: "较低", MEDIUM: "中等", HIGH:
 const observedCode = shallowRef(""), serial = shallowRef(""), foundAt = shallowRef(""), evidence = shallowRef(""), reason = shallowRef(""), checked = shallowRef(false);
 const returnChecked = shallowRef(false), locations = ref<{ id: string; name: string; version: number }[]>([]), locationIndex = shallowRef(""), locationPage = shallowRef(0), locationTotal = shallowRef(0), loadingLocations = shallowRef(false);
 const damagedChecked = shallowRef(false), fault = shallowRef(""), impact = shallowRef("MEDIUM");
-const transferChecked = ref(false), sameTransferCustodian = ref(false), transferReason = ref(""), targetCustody = ref("PERSONAL");
-const targetOwner = ref(""), targetOrganization = ref(""), targetPerson = ref(""), targetLocation = ref(""), targetWarehouse = ref("");
+const transferChecked = shallowRef(false), sameTransferCustodian = shallowRef(false), transferReason = shallowRef(""), targetCustody = shallowRef("PERSONAL");
+const targetOwner = shallowRef(""), targetOrganization = shallowRef(""), targetPerson = shallowRef(""), targetLocation = shallowRef(""), targetWarehouse = shallowRef("");
+/** 目标目录整份替换，与本面板既有的 locations 保持同形。 */
 const targetOrganizations = ref<TransferChoice[]>([]), targetPeople = ref<TransferChoice[]>([]);
-const targetLocations = ref<TransferChoice[]>([]), targetWarehouses = ref<TransferChoice[]>([]), loadingTarget = ref(false);
+const targetLocations = ref<TransferChoice[]>([]), targetWarehouses = ref<TransferChoice[]>([]), loadingTarget = shallowRef(false);
 const error = shallowRef("");
 const liveness = useRequestLiveness(() => [props.report.id, props.report.version, props.locked]);
 
@@ -35,6 +37,7 @@ const showReturnSection = computed(() => !!props.report.actions?.recoverOriginal
 const locationsLoaded = computed(() => locationPage.value > 0);
 const locationsSummary = computed(() => `已加载${locations.value.length}/${locationTotal.value}个位置`);
 const loadLocationsLabel = computed(() => locationsLoaded.value ? "继续加载位置" : "加载实际位置");
+const loadTransferLocationsLabel = computed(() => locationsLoaded.value ? "继续加载实际位置" : "加载实物实际位置");
 const eligibleTargetPeople = computed(() => targetPeople.value.filter(
   person => targetCustody.value !== "SHARED" || person.sharedEligible));
 const stockTransfer = computed(() => props.report.source?.lifecycle === "IN_STOCK");
@@ -87,29 +90,21 @@ async function loadLocations() {
 /** 实物实际所在的那一条位置记录：locations 由分页 push 追加，读取必须每次现算，不能缓存。 */
 function selectedPlace() { return locations.value.find((item) => item.id === locationIndex.value) ?? null; }
 
-/** 完好找回后转正式调拨：目标目录按调拨域现行规则分页读取。 */
-async function transferCatalog(kind: string, organization?: string): Promise<TransferChoice[]> {
-  const items: TransferChoice[] = [];
-  let page = 1;
-  while (true) {
-    const scope = organization ? `&organizationId=${encodeURIComponent(organization)}` : "";
-    const result = await businessRequest<{ items: TransferChoice[]; total: number }>(
-      `/transfers/catalog/${kind}?page=${page++}&pageSize=200${scope}`);
-    items.push(...result.items);
-    if (items.length >= result.total || result.items.length === 0) return items;
-  }
+/** 完好找回后转正式调拨：目标目录沿用调拨域的分页扇出与目标装配，请求客户端仍是跨域写内核。 */
+function transferCatalog(kind: string, organization?: string): Promise<TransferChoice[]> {
+  return loadCatalogPages<TransferChoice>(businessRequest, "/transfers/catalog", kind, organization);
 }
 async function loadTransferTarget() {
   if (props.locked || loadingTarget.value) return;
   loadingTarget.value = true;
   error.value = "";
   try {
-    const [organizations, locations, warehouses] = await Promise.all([
+    const [organizations, places, warehouses] = await Promise.all([
       transferCatalog("organization"), transferCatalog("location"),
       stockTransfer.value ? transferCatalog("warehouse") : Promise.resolve([]),
     ]);
     targetOrganizations.value = organizations;
-    targetLocations.value = locations;
+    targetLocations.value = places;
     targetWarehouses.value = warehouses;
   } catch { error.value = "调拨目标目录未加载，请重试。"; }
   finally { loadingTarget.value = false; }
@@ -123,33 +118,26 @@ async function loadTransferPeople() {
   error.value = "";
   try {
     const people = await transferCatalog("employee", organization);
+    // 目标槽位与上面的目录读取互不相干，迟到判据只能按部门值现算，不能共用一代序号互相作废写回。
     if (targetOrganization.value === organization) targetPeople.value = people;
   } catch { error.value = "目标责任人员未加载，请重新选择部门。"; }
   finally { loadingTarget.value = false; }
 }
 function transferTarget(): TransferTarget {
-  const organization = targetOrganizations.value.find(item => item.id === targetOrganization.value);
-  const owner = targetOrganizations.value.find(item => item.id === targetOwner.value);
-  const person = eligibleTargetPeople.value.find(item => item.id === targetPerson.value);
-  const place = eligibleTargetLocations.value.find(item => item.id === targetLocation.value);
+  const owner = resolveReference(targetOrganizations.value, targetOwner.value);
+  const place = resolveReference(eligibleTargetLocations.value, targetLocation.value);
   if (!place || (targetOwner.value && !owner) || !transferReason.value.trim()) {
     throw new Error("请选择有效的目标位置，并填写调拨原因。");
   }
-  const referenceVersions: Record<string, number> = { location: place.version };
-  if (owner) referenceVersions.owningOrganization = owner.version;
   if (stockTransfer.value) {
-    const warehouse = targetWarehouses.value.find(item => item.id === targetWarehouse.value);
+    const warehouse = resolveReference(targetWarehouses.value, targetWarehouse.value);
     if (!warehouse) throw new Error("请选择目标仓库和仓位。");
-    referenceVersions.warehouse = warehouse.version;
-    return { owningOrganizationId: owner?.id ?? null, custodyType: "STORAGE",
-      usingOrganizationId: null, employeeId: null, warehouseId: warehouse.id, locationId: place.id, referenceVersions };
+    return buildTransferTarget({ stock: true, custodyType: targetCustody.value, location: place, owner, warehouse });
   }
-  if (!organization || !person) throw new Error("请选择有效的调拨目标部门和责任人。");
-  referenceVersions.usingOrganization = organization.version;
-  referenceVersions.employee = person.version;
-  return { owningOrganizationId: owner?.id ?? null, custodyType: targetCustody.value,
-    usingOrganizationId: organization.id, employeeId: person.id, warehouseId: null,
-    locationId: place.id, referenceVersions };
+  const usingOrganization = resolveReference(targetOrganizations.value, targetOrganization.value);
+  const employee = resolveReference(eligibleTargetPeople.value, targetPerson.value);
+  if (!usingOrganization || !employee) throw new Error("请选择有效的调拨目标部门和责任人。");
+  return buildTransferTarget({ stock: false, custodyType: targetCustody.value, location: place, owner, usingOrganization, employee });
 }
 
 /** 完好原机但保管或位置已变化：核实事实按实际位置登记，后续走正式归还/退库。 */
@@ -203,9 +191,9 @@ function draftOf(action: Action, attempt?: LossRecovery): { path: string; body: 
         summary: `申请找回后调拨 ${facts.observedAssetCode}，须重新批准并认领找回。`, version: row.version };
     }
     const target = transferTarget();
-    const person = targetPeople.value.find(item => item.id === target.employeeId);
-    const destination = targetLocations.value.find(item => item.id === target.locationId);
-    const warehouse = targetWarehouses.value.find(item => item.id === target.warehouseId);
+    const person = resolveReference(targetPeople.value, target.employeeId);
+    const destination = resolveReference(targetLocations.value, target.locationId);
+    const warehouse = resolveReference(targetWarehouses.value, target.warehouseId);
     return { path: attempt ? `/recoveries/${attempt.id}/execute-to-transfer` : `/${row.id}/recover-to-transfer`,
       body: { recovery: recoveryBody(facts, false, row, attempt), target, reason: transferReason.value.trim() },
       summary: `找回并提交调拨 ${facts.observedAssetCode}，实际位置 ${selectedPlace()?.name}，目标 ${warehouse?.name ?? person?.name} / ${destination?.name}。原责任和位置保留至实物履行。`,
@@ -323,7 +311,7 @@ function prepare(action: Action, attempt?: LossRecovery) {
         <h4 class="fams-panel-title">完好找回后调拨</h4>
         <p>沿用上方填写的原机身份、实际找回时间、实际位置和证据。调拨单须批准，实际收件后才更新责任。</p>
         <div class="fams-panel-actions">
-          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="loadingLocations || locked" @click="loadLocations">{{ locationPage ? '继续加载实际位置' : '加载实物实际位置' }}</button>
+          <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="loadingLocations || locked" @click="loadLocations">{{ loadTransferLocationsLabel }}</button>
         </div>
         <label class="fams-field"><span class="fams-field-label">找回实物位置</span><select class="fams-control" v-model="locationIndex"><option value="">请选择实际位置</option><option v-for="place in locations" :key="place.id" :value="place.id">{{ place.name }}</option></select></label>
         <label class="fams-selection"><input v-model="transferChecked" type="checkbox">已核实完好原机，现场保管或位置已变化，需要正式调拨</label>
