@@ -216,6 +216,42 @@ class ScrapSubmitHttpRuntimeCase {
         assertEquals(403, get(fixture.otherWarehouse, "/" + id + "/execution-catalog/location").statusCode());
     }
 
+    @Test
+    void nativePageUsesOpaqueSessionsAndReplaysCommittedExecution() throws Exception {
+        var json = new tools.jackson.databind.ObjectMapper();
+        var grants = new java.util.LinkedHashMap<String, Object>();
+        for (var entry : java.util.Map.of("employee", 951002L, "admin", 951001L, "warehouse", 951003L).entrySet()) {
+            var identity = new MiniWechatIdentityPort.Identity("owned-scrap-native", entry.getKey());
+            db.update("INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES (?,?,NOW(3))",
+                    entry.getValue(), miniSessions.identityHash(identity));
+            var grant = miniSessions.start(identity, UUID.randomUUID());
+            grants.put(entry.getKey(), java.util.Map.of("sessionToken", grant.sessionToken(),
+                    "accountId", entry.getValue().toString(), "bindingId", grant.bindingId()));
+        }
+        var script = java.nio.file.Path.of(System.getProperty("user.dir")).getParent()
+                .resolve("apps/miniprogram/test/runtime-scrap-http.mjs");
+        var builder = new ProcessBuilder("rtk", "proxy", System.getProperty("fams.test.node",
+                System.getenv().getOrDefault("FAMS_TEST_NODE_EXECUTABLE", "node")), script.toString())
+                .redirectErrorStream(true);
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_SCRAP_GRANTS", json.writeValueAsString(grants));
+        var process = builder.start();
+        try {
+            org.junit.jupiter.api.Assertions.assertTrue(process.waitFor(45, java.util.concurrent.TimeUnit.SECONDS));
+            String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            assertEquals(0, process.exitValue(), output);
+            org.junit.jupiter.api.Assertions.assertTrue(output.contains("\"nativeScrapExecuted\":true"), output);
+        } finally {
+            if (process.isAlive()) {
+                process.destroyForcibly();
+            }
+        }
+        assertEquals("SCRAPPED", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_disposition WHERE request_id"
+                + " IN (SELECT id FROM fams_scrap_request WHERE asset_id=951020)", Long.class));
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_receipt WHERE operation LIKE 'EXECUTE:%'", Long.class));
+    }
+
     private HttpResponse<String> get(Session session, String path) throws Exception {
         return http.send(HttpRequest.newBuilder(URI.create(
                 "http://127.0.0.1:" + port + "/api/v1/scrap-requests" + path))
