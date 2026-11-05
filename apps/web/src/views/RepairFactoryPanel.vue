@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { LossApiError, lossRequest, type LossReport } from "@/loss/api";
 import RepairFactoryPartsPanel from "./RepairFactoryPartsPanel.vue";
 import RepairFactoryReplacementPanel from "./RepairFactoryReplacementPanel.vue";
 import { RepairApiError, repairRequest, type Repair } from "@/repair/api";
@@ -22,6 +23,7 @@ const observedCode = ref(""), serial = ref(""), actualDate = ref(""), actualTime
 const costPolicy = ref("NO_COST"), costLimit = ref(""), moneyAmount = ref(""), moneyReason = ref(""), moneyChecked = ref(false), moneyEvidence = ref<string[]>([]), costUnassessed = ref(false);
 const moneyPattern = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/;
 const costText = (policy?: string, limit?: string | null) => policy === "UNLIMITED" ? "费用不限" : policy === "LIMITED" ? `所有轮次累计限额 ${limit ?? "待核对"} 元` : "无费用";
+const lossSeenAt = ref(""), lossLastLocation = ref(""), lossCircumstances = ref(""), linkedLoss = ref("");
 const originalChecked = ref(false), noCostChecked = ref(false), condition = ref("RESTORED");
 const locationId = ref(""), locations = ref<{ id: string; name: string; version: number }[]>([]), locationPage = ref(1), locationTotal = ref(0);
 const file = ref<File | null>(null), purpose = ref("FACTORY_ACK"), selectedEvidence = ref<string[]>([]);
@@ -38,6 +40,7 @@ watch([busy, pending, confirmation, partsBusy, replacementBusy], () => emit("bus
 function clearPreview() { download?.abort(); download = null; if (preview.value) URL.revokeObjectURL(preview.value); preview.value = ""; previewName.value = ""; previewMime.value = ""; }
 function clearPhysical() { clearMoney(); observedCode.value = ""; serial.value = ""; actualDate.value = ""; actualTime.value = ""; evidence.value = ""; originalChecked.value = false; noCostChecked.value = false; selectedEvidence.value = []; locationId.value = ""; }
 function reset() {
+  lossSeenAt.value = ""; lossLastLocation.value = ""; lossCircumstances.value = ""; linkedLoss.value = "";
   partsBusy.value = false;
   replacementBusy.value = false;
   generation++; clearPreview(); opened.value = false; busy.value = false; stale.value = true; data.value = null; rows.value = []; history.value = []; selected.value = null; selectedId.value = "";
@@ -94,14 +97,15 @@ function physicalTime() {
   if (!Number.isFinite(date.getTime()) || date.getFullYear() !== parts[0] || date.getMonth() + 1 !== parts[1] || date.getDate() !== parts[2] || date.getHours() !== time[0] || date.getMinutes() !== time[1] || date.getSeconds() !== time[2]) throw new Error("physical time invalid");
   return date.toISOString();
 }
-type Action = "requestCostScope" | "quote" | "cost" | "requestScope" | "approveScope" | "rejectScope" | "withdrawScope" | "createRound" | "cancelRound" | "dispatch" | "receive" | "upload";
+type Action = "requestCostScope" | "quote" | "cost" | "requestScope" | "approveScope" | "rejectScope" | "withdrawScope" | "createRound" | "cancelRound" | "dispatch" | "receive" | "upload" | "reportLoss";
 function prepare(action: Action) {
   if (locked.value || stale.value || !data.value) return; error.value = "";
   const state = data.value, active = state.activeRound, row = selected.value;
   const permission = action === "approveScope" || action === "rejectScope" ? "decideScope" : action === "upload" ? "uploadEvidence" : action;
   const financialPurpose = ["QUOTE", "COST_RECEIPT"].includes(purpose.value);
   const financial = action === "quote" || action === "cost" || action === "upload" && financialPurpose;
-  const permitted = action === "quote" ? row?.actions?.recordQuote : action === "cost" ? row?.actions?.recordCost
+  const permitted = action === "reportLoss" ? state.actions.receive && activeSelected.value && state.lockVersion != null
+    : action === "quote" ? row?.actions?.recordQuote : action === "cost" ? row?.actions?.recordCost
     : action === "upload" && financialPurpose ? row?.actions?.uploadFinancialEvidence : state.actions[permission as keyof typeof state.actions];
   if (!permitted) return;
   const guards = { assetVersion: state.assetVersion, ownershipVersion: state.ownershipVersion, lockVersion: state.lockVersion };
@@ -130,6 +134,16 @@ function prepare(action: Action) {
       if (!moneyPattern.test(amount) || !moneyChecked.value || moneyReason.value.trim().length < 3 || !selected.every(id => allowed.has(id)) || (action === "quote" || /[1-9]/.test(amount)) && !selected.length) { error.value = "请核对精确金额、原因及本轮对应用途原件，并亲自确认已核对。"; return; }
       path += action === "quote" ? "/quotes" : "/cost"; body = { ...guards, roundVersion: row.version, amount, evidenceIds: selected, reason: moneyReason.value.trim(), finalAmountChecked: true };
       label = `${action === "quote" ? "登记本轮报价" : "确认本轮最终费用"} ${amount} 元；${moneyReason.value.trim()}`;
+    } else if (action === "reportLoss") {
+      const time = new Date(lossSeenAt.value);
+      if (!Number.isFinite(time.getTime()) || !lossLastLocation.value.trim() || lossCircumstances.value.trim().length < 10) {
+        error.value = "请填写原机最后见到的时间、位置及至少10字无法收回的依据。";
+        return;
+      }
+      path = `/factory/${state.repairId}/rounds/${row.id}`;
+      body = { ...guards, roundVersion: row.version, lastSeenAt: time.toISOString(),
+        lastLocation: lossLastLocation.value.trim(), circumstances: lossCircumstances.value.trim() };
+      label = "提交原机无法收回报失。报失待批准，原返厂轮次保留实际寄出记录。";
     } else if (action === "cancelRound") { path += "/cancel"; body = { ...guards, roundVersion: row.version, reason: reason.value.trim() }; label = "取消尚未寄出的轮次"; }
     else if (action === "upload") {
       const value = file.value, pdf = value && /\.pdf$/i.test(value.name);
@@ -154,15 +168,26 @@ async function perform() {
   if (!pending.value || busy.value || props.blocked) return;
   const operation = pending.value, epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
   try {
-    await factoryRequest<FactoryReply>(operation.repairId, operation.path, operation);
+    const report = operation.path.startsWith("/factory/")
+      ? await lossRequest<LossReport>(operation.path, operation) : null;
+    if (!report) await factoryRequest<FactoryReply>(operation.repairId, operation.path, operation);
     if (!current(epoch, owner)) return;
+    if (report) {
+      linkedLoss.value = report.id;
+      lossSeenAt.value = ""; lossLastLocation.value = ""; lossCircumstances.value = "";
+    }
     pending.value = null; stale.value = true; file.value = null; clearPhysical(); clearPreview(); reason.value = "";
     if (operation.path === "/rounds") { selectedId.value = ""; purpose.value = "FACTORY_ACK"; }
     if (operation.path.endsWith("/dispatch")) purpose.value = "RECEIPT";
-    notice.value = "本次办理已保存。轮次收回不等于整单维修完成，仍需核实后续实际去向。";
+    notice.value = report ? "已建立待审批报失。请打开报失单上传情况图片。"
+      : "本次办理已保存。轮次收回不等于整单维修完成，仍需核实后续实际去向。";
     await fetchState(epoch, owner);
   } catch (cause) {
-    if (current(epoch, owner)) { if (cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
+    if (current(epoch, owner)) {
+      const error = cause instanceof LossApiError ? new RepairApiError(cause.status, cause.code, {}) : cause;
+      if (error instanceof RepairApiError && error.status >= 400 && error.status < 500) pending.value = null;
+      failure(error);
+    }
   } finally { if (current(epoch, owner)) busy.value = false; }
   if (current(epoch, owner) && !pending.value) emit("changed");
 }
@@ -212,6 +237,14 @@ onBeforeUnmount(() => { live = false; reset(); emit("busy-change", false); });
         <p v-if="!data.actions.requestScope && !data.approvedScope && !data.pendingScope">当前处理库管须先完成实际接修，再提出必要返厂的范围变更。</p>
         <h4>独立轮次 / 共 {{ total }} 轮</h4><ul><li v-for="row in rows" :key="row.id"><button :disabled="locked" @click="selectRound(row)">第 {{ row.roundNumber }} 轮 · {{ row.providerName }} · {{ factoryRoundStates[row.roundStatus] }}</button></li></ul><button :disabled="locked || page === 1" @click="paginate(-1)">上一页返厂轮次</button>第 {{ page }} 页<button :disabled="locked || page * 20 >= total" @click="paginate(1)">下一页返厂轮次</button>
         <section v-if="selected" aria-label="所选返厂轮次"><h4>第 {{ selected.roundNumber }} 轮 · {{ factoryRoundStates[selected.roundStatus] }}</h4><p>{{ selected.providerName }} · {{ selected.serviceContact }} · {{ selected.servicePhone }}；预计收回 {{ selected.expectedReturnDate }}。</p><p>{{ selected.fault }}</p><p>实际寄出 {{ selected.dispatchedAt || '尚未记录' }}；实际原机收回 {{ selected.receivedAt || '尚未记录' }}。</p><p v-if="selected.receivedAt">实际状况：{{ selected.conditionResult === 'RESTORED' ? '已恢复' : '仍有故障，继续维修' }}；{{ selected.treatmentResult }}；本轮实际费用 {{ selected.actualCost === null ? '待核实' : selected.actualCost + ' 元' }}。</p><p v-if="selected.cancelReason">取消原因：{{ selected.cancelReason }}。本轮未计作实际返厂次数。</p>
+          <p v-if="linkedLoss"><router-link :to="`/loss-reports/${linkedLoss}`">查看报失单 {{ linkedLoss }} 并上传情况图片</router-link></p>
+          <fieldset v-if="activeSelected && data.actions.receive && data.lockVersion != null" :disabled="locked || stale">
+            <h4>返厂原机无法收回</h4>
+            <label>最后见到原机的时间<input v-model="lossSeenAt" type="datetime-local" step="1"></label>
+            <label>最后见到原机的位置<input v-model="lossLastLocation" maxlength="500"></label>
+            <label>无法收回的依据<textarea v-model="lossCircumstances" maxlength="2000" /></label>
+            <button @click="prepare('reportLoss')">核对返厂原机报失</button>
+          </fieldset>
           <h4>本轮原始凭证</h4><p v-if="!data.photosAvailable">原件服务暂不可用。</p><ul><li v-for="item in selected.files" :key="item.objectId">{{ item.filename }}<button :disabled="locked || item.scanStatus !== 'CLEAN'" @click="readFile(item)">读取厂家凭证 {{ item.filename }}</button></li></ul>
           <fieldset v-if="activeSelected && data.actions.uploadEvidence || selected.actions?.uploadFinancialEvidence" :disabled="locked || stale"><label>本次凭证用途<select v-model="purpose"><option value="FAULT" :disabled="!activeSelected">实际故障</option><option value="FACTORY_ACK" :disabled="!activeSelected">厂家接收依据</option><option value="RECEIPT" :disabled="selected.roundStatus !== 'DISPATCHED'">原机实际收回依据</option><option value="QUOTE" :disabled="!selected.actions?.uploadFinancialEvidence">本轮报价原件</option><option value="COST_RECEIPT" :disabled="!selected.actions?.uploadFinancialEvidence">本轮实际费用凭证</option></select></label><label>选择图片或PDF原件<input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" @change="fileChosen"></label><p v-if="file">已选原件：{{ file.name }}</p><button @click="prepare('upload')">核对追加本轮凭证</button></fieldset>
           <p v-for="(quote, index) in selected.quotes || []" :key="index">本轮报价 {{ quote.amount }} 元（不计作实际费用）</p>
@@ -220,7 +253,8 @@ onBeforeUnmount(() => { live = false; reset(); emit("busy-change", false); });
             <label v-for="item in financialEvidence" :key="item.object_id"><input v-model="moneyEvidence" type="checkbox" :value="item.object_id">{{ item.purpose === 'QUOTE' ? '报价原件：' : '费用原件：' }}{{ selected.files.find(file => file.objectId === item.object_id)?.filename }}</label>
             <label><input v-model="moneyChecked" type="checkbox">已亲自核对本次金额及所选本轮原件</label><button v-if="selected.actions?.recordQuote" @click="prepare('quote')">核对登记本轮报价</button><button v-if="selected.actions?.recordCost" @click="prepare('cost')">核对确认本轮最终费用</button>
           </fieldset>
-          <fieldset v-if="activeSelected && (data.actions.dispatch || data.actions.receive)" :disabled="locked || stale"><h4>{{ data.actions.receive ? '核实原实物实际收回' : '登记实物实际寄出' }}</h4><p>本轮原机 {{ selected.originalIdentity.assetCode }}{{ selected.originalIdentity.serialNumber ? ` · 序列号 ${selected.originalIdentity.serialNumber}` : '' }}。</p><label>现场核对的资产编码<input v-model="observedCode" maxlength="2048"></label><label v-if="selected.originalIdentity.serialNumber">现场核对的原机序列号<input v-model="serial" maxlength="128"></label><label>实际办理日期<input v-model="actualDate" type="date"></label><label>实际办理时刻（含秒，本机时区）<input v-model="actualTime" type="time" step="1"></label><label><input v-model="originalChecked" type="checkbox">已核实是本轮原实物，编码与身份一致</label>
+          <p v-if="activeSelected && data.actions.receive && data.lockVersion == null">当前轮次没有返厂维修锁，请先核对关联业务进度。</p>
+          <fieldset v-if="activeSelected && (data.actions.dispatch || data.actions.receive)" :disabled="locked || stale || data.lockVersion == null"><h4>{{ data.actions.receive ? '核实原实物实际收回' : '登记实物实际寄出' }}</h4><p>本轮原机 {{ selected.originalIdentity.assetCode }}{{ selected.originalIdentity.serialNumber ? ` · 序列号 ${selected.originalIdentity.serialNumber}` : '' }}。</p><label>现场核对的资产编码<input v-model="observedCode" maxlength="2048"></label><label v-if="selected.originalIdentity.serialNumber">现场核对的原机序列号<input v-model="serial" maxlength="128"></label><label>实际办理日期<input v-model="actualDate" type="date"></label><label>实际办理时刻（含秒，本机时区）<input v-model="actualTime" type="time" step="1"></label><label><input v-model="originalChecked" type="checkbox">已核实是本轮原实物，编码与身份一致</label>
             <label v-for="item in eligibleEvidence" :key="item.object_id"><input v-model="selectedEvidence" type="checkbox" :value="item.object_id">选用本轮{{ evidencePurpose === 'RECEIPT' ? '原机收回' : '厂家接收' }}原件 {{ selected.files.find(file => file.objectId === item.object_id)?.filename || '待核对原件' }}</label><p v-if="!eligibleEvidence.length">请先上传本轮对应用途的厂家原件，再明确选用。</p>
             <template v-if="data.actions.receive"><label>原机实际状况<select v-model="condition"><option value="RESTORED">已恢复</option><option value="STILL_FAULTY">仍有故障，继续维修</option></select></label><button @click="loadLocations()">查询有效收回地点</button><label v-for="location in locations" :key="location.id"><input v-model="locationId" type="radio" :value="location.id">{{ location.name }}</label><button :disabled="locationPage === 1" @click="loadLocations(-1)">上一页收回地点</button><button :disabled="locationPage * 20 >= locationTotal" @click="loadLocations(1)">下一页收回地点</button><label><input v-model="noCostChecked" type="checkbox">{{ selected.actualCost === null ? '已核实本轮实际没有费用' : '已核对本轮已记录最终费用 ' + selected.actualCost + ' 元' }}</label><label v-if="selected.actualCost === null"><input v-model="costUnassessed" type="checkbox">费用尚待核实，先记录原机实际收回</label></template>
             <label>{{ data.actions.receive ? '实际收回状况与处理结果' : '实物寄出与厂家接收依据' }}<textarea v-model="evidence" maxlength="2000" /></label><button v-if="data.actions.dispatch" @click="prepare('dispatch')">核对实际寄出原实物</button><button v-if="data.actions.receive" @click="prepare('receive')">核对原实物已实际收回</button>

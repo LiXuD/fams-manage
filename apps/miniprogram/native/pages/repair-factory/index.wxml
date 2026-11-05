@@ -73,7 +73,8 @@ module.exports={state:function(s){return states[s]||'历史阶段';},event:funct
 <checkbox-group bindchange="onPartsEvidence"><label wx:for="{{partsFiles}}" wx:key="object_id"><checkbox value="{{item.object_id}}" disabled="{{busy || retry || confirmation || stale || !detail.photosAvailable}}"/>选用部件变更原件 {{item.filename}}</label></checkbox-group>
 <checkbox-group bindchange="onChecked"><label><checkbox value="original" checked="{{originalChecked}}" disabled="{{busy || retry || confirmation || stale || !detail.photosAvailable}}"/>已亲自核实仍为原实物，部件前后资料与所选原件相符</label></checkbox-group>
 <button data-action="parts" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale || !detail.photosAvailable}}">核对保存部件变更</button></view></view></view>
-<view wx:if="{{activeSelected &amp;&amp; (detail.actions.dispatch || detail.actions.receive)}}">
+<view wx:if="{{activeSelected &amp;&amp; detail.actions.receive &amp;&amp; detail.lockVersion == null}}">当前轮次没有返厂维修锁，请先核对关联业务进度。</view>
+<view wx:if="{{activeSelected &amp;&amp; detail.lockVersion != null &amp;&amp; (detail.actions.dispatch || detail.actions.receive)}}">
 <view class="title">{{detail.actions.receive ? '核实原机实际收回' : '登记原机实际寄出'}}</view><view>本轮原机：{{selected.originalIdentity.assetCode}}；{{selected.originalIdentity.serialNumber}}</view>
 <view>现场核对的资产编码</view><input value="{{observedCode}}" data-field="observedCode" bindinput="onField" maxlength="2048" disabled="{{busy || retry || confirmation || stale}}"/>
 <view wx:if="{{selected.originalIdentity.serialNumber}}">现场核对的原机序列号<input value="{{serial}}" data-field="serial" bindinput="onField" maxlength="128" disabled="{{busy || retry || confirmation || stale}}"/></view>
@@ -89,6 +90,19 @@ module.exports={state:function(s){return states[s]||'历史阶段';},event:funct
 <button wx:if="{{locationPage > 1}}" data-delta="-1" bindtap="onLocations" disabled="{{busy || retry || confirmation || stale}}">上一页收回地点</button><button wx:if="{{locationPage * 20 &lt; locationTotal}}" data-delta="1" bindtap="onLocations" disabled="{{busy || retry || confirmation || stale}}">下一页收回地点</button></view>
 <view>{{detail.actions.receive ? '实际收回状况与处理结果（至少10字）' : '实际寄出与厂家接收依据（至少10字）'}}</view><textarea value="{{evidence}}" data-field="evidence" bindinput="onField" maxlength="2000" disabled="{{busy || retry || confirmation || stale}}"/>
 <button wx:if="{{detail.actions.dispatch}}" data-action="dispatch" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对原机已实际寄出</button><button wx:if="{{detail.actions.receive}}" data-action="receive" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对原机已实际收回</button></view></view>
+<button wx:if="{{linkedLoss}}" bindtap="onLinkedLoss" disabled="{{busy || retry || confirmation || stale}}">查看报失单并上传情况图片</button>
+<view wx:if="{{activeSelected &amp;&amp; detail.actions.receive &amp;&amp; detail.lockVersion != null}}" class="card">
+  <view>返厂原机无法收回</view>
+  <view>最后见到原机的当地日期和时间</view>
+  <picker mode="date" value="{{lossDate}}" data-field="lossDate" bindchange="onField" disabled="{{busy || retry || confirmation || stale}}"><view>{{lossDate || '选择日期'}}</view></picker>
+  <picker mode="time" value="{{lossTime}}" data-field="lossTime" bindchange="onField" disabled="{{busy || retry || confirmation || stale}}"><view>{{lossTime || '选择时间'}}</view></picker>
+  <view>最后见到原机的位置</view>
+  <input value="{{lossLocation}}" data-field="lossLocation" bindinput="onField" maxlength="500" disabled="{{busy || retry || confirmation || stale}}"/>
+  <view>无法收回的依据（至少10字）</view>
+  <textarea value="{{lossCircumstances}}" data-field="lossCircumstances" bindinput="onField" maxlength="2000" disabled="{{busy || retry || confirmation || stale}}"/>
+  <button data-action="reportLoss" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对返厂原机报失</button>
+</view>
+
 <view wx:if="{{previewPath}}" class="card"><view>{{previewName}}</view><image wx:if="{{previewMime !== 'application/pdf'}}" src="{{previewPath}}" mode="widthFix"/><button bindtap="onViewFile" disabled="{{busy || retry || confirmation || stale}}">打开这份原件</button><button bindtap="onCloseFile">关闭并清理原件</button></view>
 <view class="card"><view class="title">独立办理历史 · 共{{historyTotal}}条</view><view wx:for="{{history}}" wx:key="id">{{item.actor_username}} · {{item.recorded_at}} · {{labels.event(item.action)}}</view>
 <button wx:if="{{historyPage > 1}}" data-kind="history" data-delta="-1" bindtap="onPage" disabled="{{busy || retry || confirmation || stale}}">上一页返厂历史</button><view>历史第{{historyPage}}页</view><button wx:if="{{historyPage * 20 &lt; historyTotal}}" data-kind="history" data-delta="1" bindtap="onPage" disabled="{{busy || retry || confirmation || stale}}">下一页返厂历史</button></view>

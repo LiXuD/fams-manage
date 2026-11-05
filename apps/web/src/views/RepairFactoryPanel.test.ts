@@ -124,3 +124,38 @@ it("actual original return explicitly retains an unknown amount instead of inven
 it("identity replacement removes an unsent final amount and selected financial originals",async()=>{
  const current=round();current.actions={recordCost:true};current.evidence[0]!.purpose="COST_RECEIPT";wire(()=>detail({},current),()=>current,async()=>response({}));const wrapper=page();await open(wrapper);await field(wrapper,"本次金额","67.89");await field(wrapper,"本次费用核对依据","私有费用核实记录");await field(wrapper,"费用原件：",true);state.session.csrfToken="renewed";await flushPromises();expect(wrapper.text()).not.toContain("私有费用核实记录");expect(wrapper.find('input[inputmode="decimal"]').exists()).toBe(false);expect(wrapper.text()).not.toContain("确认保存本次返厂办理");wrapper.unmount();
 });
+
+it("factory loss keeps the original guarded request after a lost reply", async () => {
+  const current = round(true), writes: RequestInit[] = [];
+  let hasLock = true;
+  const requests = wire(
+    () => ({ ...detail({ receive: true }, current), lockVersion: hasLock ? 3 : null }),
+    () => current,
+    async input => {
+      writes.push(input);
+      if (hasLock) { hasLock = false; throw Error("committed reply lost"); }
+      return response({ id: "9007199254740998" });
+    }
+  );
+  const wrapper = page();
+  await open(wrapper);
+  await field(wrapper, "最后见到原机的时间", "2026-10-30T10:20:00");
+  await field(wrapper, "最后见到原机的位置", "厂家返厂检修点");
+  await field(wrapper, "无法收回的依据", "已核实厂家库房和运单仍无法找到原机");
+  await button(wrapper, "核对返厂原机报失").trigger("click");
+  expect(writes).toHaveLength(0);
+  await button(wrapper, "确认保存本次返厂办理").trigger("click");
+  await flushPromises();
+  await button(wrapper, "重试原返厂办理").trigger("click");
+  await flushPromises();
+  expect(writes).toHaveLength(2);
+  expect(writes[1]).toEqual(writes[0]);
+  expect(requests.filter(url => url.includes("/loss-reports/factory/"))).toEqual(
+    Array(2).fill("/api/v1/loss-reports/factory/19/rounds/" + id)
+  );
+  expect(JSON.parse(String(writes[0]?.body))).toMatchObject({
+    assetVersion: 7, ownershipVersion: 2, lockVersion: 3, roundVersion: 10, lastLocation: "厂家返厂检修点"
+  });
+  expect(wrapper.text()).toContain("已建立待审批报失");
+  wrapper.unmount();
+});

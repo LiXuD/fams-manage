@@ -651,6 +651,96 @@ public class RepairFactoryService {
                 current, operation, key, fingerprint, id, number(round, "scope_id"), roundId);
     }
 
+    public record LossSource(long repairId, long roundId, long assetId, long assetVersion,
+            long processorAccountId, Instant dispatchedAt) {}
+
+    /** Locks the dispatched source until the caller finishes creating the report. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public LossSource lossSource(Actor actor, long repairId, long roundId, long repairVersion,
+            long roundVersion, long assetVersion, long ownershipVersion, long lockVersion) {
+        var current = warehouse(actor);
+        var row = header(repairId);
+        requireOwner(current, row);
+        guard(actor, current, row, repairVersion, assetVersion, ownershipVersion, lockVersion);
+        var round = round(repairId, roundId);
+        roundGuard(actor, current, row, round, roundVersion, "DISPATCHED");
+        long assetId = number(row, "asset_id");
+        assets.requireOriginal(assets.snapshot(assetId, assetVersion, "FACTORY_REPAIR"),
+                round.get("original_identity_json").toString());
+        return new LossSource(repairId, roundId, assetId, assetVersion, current.id(),
+                instant(round.get("dispatched_at")));
+    }
+
+    /** Adopts the existing repair lock without changing the round's physical receipt facts. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void handoffToLoss(Actor actor, LossSource source, long reportId, long lockVersion) {
+        var current = warehouse(actor);
+        var row = header(source.repairId());
+        requireOwner(current, row);
+        var round = round(source.repairId(), source.roundId());
+        if (source.processorAccountId() != current.id()
+                || source.assetId() != number(row, "asset_id")
+                || source.assetVersion() != number(row, "asset_version")
+                || !"DISPATCHED".equals(round.get("round_status"))
+                || source.assetId() != number(round, "asset_id")) {
+            throw new RepairFailure(409, "REPAIR_FACTORY_LOSS_SOURCE_CHANGED");
+        }
+        if (db.update("UPDATE fams_asset_business_lock SET business_type='LOST_REPORT',"
+                + "business_id=?,business_item_id=?,lock_version=lock_version+1"
+                + " WHERE asset_id=? AND business_type='REPAIR' AND business_id=? AND business_item_id=?"
+                + " AND lock_version=? AND released_at IS NULL", reportId, reportId, source.assetId(),
+                source.repairId(), source.repairId(), lockVersion) != 1) {
+            throw new RepairFailure(409, "REPAIR_FACTORY_LOCK_CHANGED");
+        }
+        closeTodo(source.repairId(), "FACTORY_RETURN");
+        advance(actor, current, row, "FACTORY_LOSS_HANDED_OFF", number(round, "scope_id"),
+                source.roundId(), Map.of("reportId", Long.toString(reportId)), Role.WAREHOUSE_OPERATOR);
+    }
+
+    /** Restores a rejected or withdrawn initial report to the original repair queue. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void restoreFromLoss(Actor actor, long repairId, long roundId, long assetId, long reportId) {
+        var current = reader(actor);
+        var row = header(repairId);
+        restoreLossLock(actor, current, row, roundId, assetId, reportId, reportId,
+                number(row, "asset_version"), "FACTORY_LOSS_RETURNED");
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void resumeAfterLoss(Actor actor, long repairId, long roundId, long assetId,
+            long reportId, long lossItemId, long assetVersion) {
+        var current = warehouse(actor);
+        var row = header(repairId);
+        requireOwner(current, row);
+        restoreLossLock(actor, current, row, roundId, assetId, reportId, lossItemId,
+                assetVersion, "FACTORY_LOSS_RECOVERED");
+    }
+
+    private void restoreLossLock(Actor actor, Current current, Map<String, Object> row, long roundId,
+            long assetId, long reportId, long lossItemId, long assetVersion, String action) {
+        long repairId = number(row, "id");
+        var round = round(repairId, roundId);
+        if (!"WAREHOUSE_PROCESSING".equals(row.get("repair_status"))
+                || number(row, "asset_id") != assetId
+                || number(round, "asset_id") != assetId
+                || !"DISPATCHED".equals(round.get("round_status"))) {
+            throw new RepairFailure(409, "REPAIR_FACTORY_LOSS_SOURCE_CHANGED");
+        }
+        assets.requireOriginal(assets.snapshot(assetId, assetVersion, "FACTORY_REPAIR"),
+                round.get("original_identity_json").toString());
+        if (db.update("UPDATE fams_asset_business_lock SET business_type='REPAIR',"
+                + "business_id=?,business_item_id=?,lock_version=lock_version+1"
+                + " WHERE asset_id=? AND business_type='LOST_REPORT' AND business_id=? AND business_item_id=?"
+                + " AND released_at IS NULL", repairId, repairId, assetId, reportId, lossItemId) != 1) {
+            throw new RepairFailure(409, "REPAIR_FACTORY_LOCK_CHANGED");
+        }
+        row.put("asset_version", assetVersion);
+        todo(repairId, "FACTORY_RETURN", "WAREHOUSE_OPERATOR", (Long) row.get("processor_account_id"));
+        Role role = current.has(Role.ASSET_ADMIN) ? Role.ASSET_ADMIN : Role.WAREHOUSE_OPERATOR;
+        advance(actor, current, row, action, number(round, "scope_id"), roundId,
+                Map.of("reportId", Long.toString(reportId)), role);
+    }
+
     public Map<String, Object> receive(
             Actor actor,
             long id,

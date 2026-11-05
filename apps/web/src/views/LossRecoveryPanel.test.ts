@@ -1,5 +1,5 @@
-import {mount} from "@vue/test-utils";
-import {expect,it} from "vitest";
+import {flushPromises,mount} from "@vue/test-utils";
+import {expect,it,vi} from "vitest";
 import LossRecoveryPanel from "./LossRecoveryPanel.vue";
 import type {LossReport,LossIntent} from "@/loss/api";
 const row=()=>({id:"9",source:{assetCode:"ASSET-1"},version:12,assetVersion:3,ownershipVersion:4,lockVersion:5,recoveryAsset:{assetCode:"ASSET-1",serialNumber:"SERIAL-1",version:3,locationId:"9007199254740993",locationVersion:7,locationName:"原登记位置",eligible:true},actions:{recoverOriginal:true},recoveries:[]} as unknown as LossReport);
@@ -26,4 +26,37 @@ it("closed damaged request is explicitly separate and execution uses only its ne
  await w.find('article button').trigger('click');
  expect(w.emitted('prepare')![1]![0]).toMatchObject({path:'/recoveries/44/execute-to-repair',version:7,body:{recovery:{ownershipVersion:6,lockVersion:5,facts:{condition:'DAMAGED'}},impact:'MEDIUM'}});
  w.unmount();
+});
+
+it("executes an approved factory recovery only through the existing repair destination", async () => {
+ const report = row();
+ report.actions = {};
+ report.recoveries = [{ id: "44", version: 7, assetVersion: 3, ownershipVersion: 6, status: "VERIFYING",
+  creatorAccountId: "2", processorAccountId: "4", actions: { execute: true },
+  request: { destination: "FACTORY_REPAIR", facts: { condition: "DAMAGED" } } }];
+ vi.stubGlobal("fetch", vi.fn(async () => ({
+  ok: true, json: async () => ({ items: [{ id: "9007199254740995", name: "实际找回点", version: 8 }], total: 1 })
+ })));
+ const wrapper = mount(LossRecoveryPanel, { props: { report, locked: false } });
+ try {
+  await fill(wrapper);
+  expect(wrapper.find('[aria-label="损坏找回转维修"]').exists()).toBe(false);
+  const section = wrapper.find('[aria-label="返厂原机找回续修"]');
+  await section.findAll("button")[0]!.trigger("click");
+  await flushPromises();
+  await section.findAll("select")[0]!.setValue("9007199254740995");
+  await section.findAll("select")[1]!.setValue("DAMAGED");
+  await section.findAll("button")[1]!.trigger("click");
+  expect(wrapper.emitted("prepare")).toBeUndefined();
+  await section.find('input[type="checkbox"]').setValue(true);
+  await section.findAll("button")[1]!.trigger("click");
+  expect(wrapper.emitted("prepare")![0]![0]).toMatchObject({
+   path: "/recoveries/44/execute-to-factory", version: 7,
+   body: { assetVersion: 3, ownershipVersion: 6, lockVersion: 5,
+    facts: { locationId: "9007199254740995", locationVersion: 8, condition: "DAMAGED", stillOriginalCustodian: false } }
+  });
+ } finally {
+  wrapper.unmount();
+  vi.unstubAllGlobals();
+ }
 });
