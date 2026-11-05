@@ -6,11 +6,14 @@ import com.fams.product.contract.model.ErrorResponse;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,10 +27,12 @@ import java.util.UUID;
 @RequestMapping({"/api/v1/scrap-requests", "/api/v1/mini/scrap-requests"})
 public class ScrapController {
     private final ScrapService scrap;
+    private final ScrapReviewService review;
     private final RequisitionActorContext actors;
 
-    public ScrapController(ScrapService scrap, RequisitionActorContext actors) {
+    public ScrapController(ScrapService scrap, ScrapReviewService review, RequisitionActorContext actors) {
         this.scrap = scrap;
+        this.review = review;
         this.actors = actors;
     }
 
@@ -35,6 +40,22 @@ public class ScrapController {
     ScrapService.Receipt submit(@RequestHeader("Idempotency-Key") UUID key,
             @Valid @RequestBody ScrapService.Submission input) {
         return scrap.submit(actors.capture(), key, input);
+    }
+
+    @PostMapping("/{id}/decision")
+    ScrapReviewService.Receipt decide(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.Decision input) {
+        return review.decide(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/{id}/claim")
+    ScrapReviewService.Receipt claim(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.Claim input) {
+        return review.claim(actors.capture(), id, version, key, input);
     }
 
     @ExceptionHandler(AssetHandoverPort.Failure.class)

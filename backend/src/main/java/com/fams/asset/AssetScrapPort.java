@@ -85,4 +85,59 @@ public class AssetScrapPort {
                 json.writeValueAsString(Map.of("scrapRequestId", Long.toString(requestId))), actorId);
         return version + 1;
     }
+
+    public void requirePending(long assetId, long version, long requestId, long lockVersion) {
+        if (db.queryForList(
+                "SELECT a.id FROM fams_asset a JOIN fams_asset_business_lock b ON b.asset_id=a.id"
+                        + " WHERE a.id=? AND a.version=? AND a.lifecycle_status='PENDING_SCRAP'"
+                        + " AND b.business_type='SCRAP' AND b.business_id=? AND b.business_item_id=?"
+                        + " AND b.lock_version=? AND b.released_at IS NULL FOR UPDATE",
+                assetId, version, requestId, requestId, lockVersion).isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_ASSET_OR_LOCK_CHANGED", 409);
+        }
+    }
+
+    /** Invalid custody stays frozen for a separately authorized restoration. */
+    public boolean restoreStandalone(long assetId, long version, long requestId, String lifecycle,
+            long actorId, Instant time) {
+        var asset = db.queryForMap("SELECT custody_type,storage_warehouse_id,current_location_id,"
+                + "using_organization_id,responsible_employee_id,department_responsible_employee_id"
+                + " FROM fams_asset WHERE id=? FOR UPDATE", assetId);
+        var locations = db.queryForList("SELECT warehouse_id,location_type FROM fams_location"
+                + " WHERE id=? AND status='ACTIVE' FOR UPDATE", asset.get("current_location_id"));
+        if (locations.isEmpty()) {
+            return false;
+        }
+        var location = locations.getFirst();
+        boolean valid = false;
+        if ("IN_STOCK".equals(lifecycle) && "STORAGE".equals(asset.get("custody_type"))) {
+            Object warehouse = asset.get("storage_warehouse_id");
+            valid = "BIN".equals(location.get("location_type"))
+                    && Objects.equals(warehouse, location.get("warehouse_id"))
+                    && !db.queryForList("SELECT id FROM fams_warehouse WHERE id=? AND status='ACTIVE' FOR UPDATE",
+                            warehouse).isEmpty();
+        } else if ("IN_USE".equals(lifecycle)) {
+            Object organization = asset.get("using_organization_id");
+            Object employee = switch (String.valueOf(asset.get("custody_type"))) {
+                case "PERSONAL" -> asset.get("responsible_employee_id");
+                case "SHARED" -> asset.get("department_responsible_employee_id");
+                default -> null;
+            };
+            valid = !db.queryForList("SELECT id FROM fams_organization WHERE id=? AND status='ACTIVE' FOR UPDATE",
+                            organization).isEmpty()
+                    && !db.queryForList("SELECT id FROM fams_employee WHERE id=? AND organization_id=?"
+                                    + " AND status='ACTIVE' FOR UPDATE", employee, organization).isEmpty();
+        }
+        if (!valid) {
+            return false;
+        }
+        if (db.update("UPDATE fams_asset SET lifecycle_status=?,version=version+1,updated_at=?,updated_by=?"
+                + " WHERE id=? AND version=? AND lifecycle_status='PENDING_SCRAP'",
+                lifecycle, time, actorId, assetId, version) != 1) {
+            throw new AssetHandoverPort.Failure("SCRAP_ASSET_CHANGED", 409);
+        }
+        mapper.event(assetId, "SCRAP_SOURCE_RESTORED", time,
+                json.writeValueAsString(Map.of("scrapRequestId", Long.toString(requestId))), actorId);
+        return true;
+    }
 }

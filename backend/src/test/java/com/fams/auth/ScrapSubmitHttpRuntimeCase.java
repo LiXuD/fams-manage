@@ -100,6 +100,70 @@ class ScrapSubmitHttpRuntimeCase {
                 + " AND todo_type='APPROVAL' AND todo_status='OPEN'", Long.class));
     }
 
+    @Test
+    void approvalKeepsFrozenStateAndOnlyOneWarehouseCanClaim() throws Exception {
+        var json = new tools.jackson.databind.ObjectMapper();
+        var submitted = json.readTree(submit(fixture.employee, UUID.randomUUID().toString(), INPUT).body());
+        String id = submitted.path("id").asText();
+        String decision = "{\"assetVersion\":1,\"lockVersion\":0,\"result\":\"APPROVE\","
+                + "\"reason\":\"已核对实物状态与报废依据\",\"approvedDisposition\":\"待处置保管\"}";
+        String key = UUID.randomUUID().toString();
+        assertEquals(403, write(fixture.employee, id, "decision", 0, key, decision).statusCode());
+        var approved = write(fixture.admin, id, "decision", 0, key, decision);
+        assertEquals(200, approved.statusCode(), approved.body());
+        assertEquals(approved.body(), write(fixture.admin, id, "decision", 0, key, decision).body());
+        assertEquals("PENDING_SCRAP", db.queryForObject(
+                "SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_disposition", Long.class));
+        String claim = "{\"assetVersion\":1,\"lockVersion\":0}";
+        String claimKey = UUID.randomUUID().toString();
+        var claimed = write(fixture.warehouse, id, "claim", 1, claimKey, claim);
+        assertEquals(200, claimed.statusCode(), claimed.body());
+        assertEquals(claimed.body(), write(fixture.warehouse, id, "claim", 1, claimKey, claim).body());
+        assertEquals(409, write(fixture.otherWarehouse, id, "claim", 1,
+                UUID.randomUUID().toString(), claim).statusCode());
+        assertEquals(1L, db.queryForObject("SELECT ownership_version FROM fams_scrap_request"
+                + " WHERE id=?", Long.class, Long.parseLong(id)));
+    }
+
+    @Test
+    void rejectionRestoresValidCustodyAndKeepsInvalidCustodyFrozen() throws Exception {
+        var json = new tools.jackson.databind.ObjectMapper();
+        var first = json.readTree(submit(fixture.employee, UUID.randomUUID().toString(), INPUT).body());
+        String body = "{\"assetVersion\":1,\"lockVersion\":0,\"result\":\"REJECT\","
+                + "\"reason\":\"经核对无需报废\"}";
+        var rejected = write(fixture.admin, first.path("id").asText(), "decision", 0,
+                UUID.randomUUID().toString(), body);
+        assertEquals(200, rejected.statusCode(), rejected.body());
+        assertEquals("REJECTED", json.readTree(rejected.body()).path("status").asText());
+        assertEquals("IN_USE", db.queryForObject(
+                "SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock"
+                + " WHERE asset_id=951020 AND released_at IS NULL", Long.class));
+        var next = json.readTree(submit(fixture.employee, UUID.randomUUID().toString(),
+                INPUT.replace("\"assetVersion\":0", "\"assetVersion\":2")).body());
+        db.update("UPDATE fams_employee SET status='DISABLED' WHERE id=951002");
+        var frozen = write(fixture.admin, next.path("id").asText(), "decision", 0,
+                UUID.randomUUID().toString(), body.replace("\"assetVersion\":1", "\"assetVersion\":3"));
+        assertEquals(200, frozen.statusCode(), frozen.body());
+        assertEquals("RESTORE_REQUIRED", json.readTree(frozen.body()).path("status").asText());
+        assertEquals("PENDING_SCRAP", db.queryForObject(
+                "SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock"
+                + " WHERE asset_id=951020 AND released_at IS NULL", Long.class));
+    }
+
+    private HttpResponse<String> write(Session session, String id, String action, long version,
+            String key, String body) throws Exception {
+        return http.send(HttpRequest.newBuilder(
+                URI.create("http://127.0.0.1:" + port + "/api/v1/scrap-requests/" + id + "/" + action))
+                .header("Content-Type", "application/json").header("Cookie", session.cookie())
+                .header("X-CSRF-Token", session.csrf()).header("Idempotency-Key", key)
+                .header("If-Match-Version", Long.toString(version))
+                .POST(HttpRequest.BodyPublishers.ofString(body)).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
     private HttpResponse<String> submit(Session session, String key, String input) throws Exception {
         var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/scrap-requests"))
                 .header("Content-Type", "application/json")
