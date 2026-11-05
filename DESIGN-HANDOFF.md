@@ -1,9 +1,9 @@
 # FAMS 项目阶段与交接入口
 
-> 唯一现役进度入口 · 更新于 2026-11-04
-> 第1～5步完成，第6步进行中。当前分支 `codex/d6-21-loss-ui`（承接 `codex/d6-21-loss` 功能线并合入前端架构批），接续基线 `326aec9`。用户本人本轮明确所有待复核内容全部PASS，已关闭29个已送审子项，D6-15/16/19父项本地DEV_VERIFIED；D6-21A亦已关闭。现役计划§四.5是唯一状态明细。
+> 唯一现役进度入口 · 更新于 2026-11-05
+> 第1～5步完成，第6步进行中。当前分支 `codex/d6-21-loss-ui`（承接 `codex/d6-21-loss` 功能线并合入前端架构批），接续基线 `1299a30`。用户本人本轮明确所有待复核内容全部PASS，已关闭29个已送审子项，D6-15/16/19父项本地DEV_VERIFIED；D6-21A亦已关闭。现役计划§四.5是唯一状态明细。
 >
-> D6-21B2b1后端/PC固定43049d0完整门禁及真实PC/JVM通过，已送IN_REVIEW；B2b2原生损坏找回固定d9c0eb0完整门禁及真实Page/opaque链路通过，已送IN_REVIEW；独立复核未签。B2b3结案后损坏找回固定3e3e01c完整门禁及PC/JVM通过，已送IN_REVIEW；B2b4a归还/退库固定3c67b26已获用户复核PASS，B2b4b找回关联调拨已实现，工作树定向验证与用户本轮复核通过，下一步固定候选门禁与实际PC/JVM恢复。责任/位置变化、返厂/报废及跨来源C/D仍必需，不提前关闭D6-20/21父项。当前结果见[B2b4a送审](docs/development/2026-11-04-d6-21b2b4a-review-handoff.md)及[B2b3送审](docs/development/2026-10-31-d6-21b2b3-review-handoff.md)；此前结果见[B2b1送审](docs/development/2026-10-30-d6-21b2b1-review-handoff.md)、[B2b2送审](docs/development/2026-10-30-d6-21b2b2-review-handoff.md)及[D6-21任务卡](docs/development/D6-21-task-card.md)。
+> D6-21B2b1后端/PC固定43049d0完整门禁及真实PC/JVM通过，已送IN_REVIEW；B2b2原生损坏找回固定d9c0eb0完整门禁及真实Page/opaque链路通过，已送IN_REVIEW；独立复核未签。B2b3结案后损坏找回固定3e3e01c完整门禁及PC/JVM通过，已送IN_REVIEW；B2b4a归还/退库固定3c67b26已获用户复核PASS，B2b4b固定326aec9产品门禁、实际PC/JVM恢复与用户复核通过，B2b4本地关闭，下一返厂无法收回转报失与找回续修。责任/位置变化、返厂/报废及跨来源C/D仍必需，不提前关闭D6-20/21父项。当前结果见[B2b4a送审](docs/development/2026-11-04-d6-21b2b4a-review-handoff.md)及[B2b3送审](docs/development/2026-10-31-d6-21b2b3-review-handoff.md)；此前结果见[B2b1送审](docs/development/2026-10-30-d6-21b2b1-review-handoff.md)、[B2b2送审](docs/development/2026-10-30-d6-21b2b2-review-handoff.md)及[D6-21任务卡](docs/development/D6-21-task-card.md)。
 >
 > 原接续材料：[2026-10-30进度交接](docs/development/2026-10-30-current-progress-handoff.md)。其中待审状态以本轮用户签署和现役计划更新为准；旧候选和机器证据不改写。真实外部/真机、远端CI、正式QA、生产仍另验。
 >
@@ -17,7 +17,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | B2b4a固定3c67b26已获用户复核PASS；当前B2b4b调拨。前端架构批 ARCH-01～ARCH-13 已合入本分支（含找回转调拨新增前端收口与真实浏览器逐路由实测），入口见 §4。各父项、真实外部/CI/独立复核以[现役开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)为准 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | B2b4a固定3c67b26已获用户复核PASS；当前返厂无法收回转报失与找回续修。前端架构批 ARCH-01～ARCH-13 已合入本分支（含找回转调拨新增前端收口与真实浏览器逐路由实测），入口见 §4。各父项、真实外部/CI/独立复核以[现役开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)为准 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
@@ -68,11 +68,11 @@
 | 设计文档 | `changed-and-verified` | 一期功能覆盖验证已完成并同步 |
 | 开发计划 | `in-progress` | V1.2 顺序调整已获用户授权；D6-04～D6-08 与 D6-09A 本地 `DEV_VERIFIED`；D6-08 全部必需子任务及父任务经用户复核关闭；D6-01B/03B 远端能力尚未完成 |
 | 规则 | `changed-and-verified` | AGENTS 已指向当前阶段 |
-| 产品代码 | `in-progress` | A/A1/A2/B1/B2a及B2b4a已用户复核；B2b1/2/3已送审，B2b4b调拨工作树定向验证通过，固定候选门禁与实际PC/JVM恢复待执行，B2b5/C/D仍必需 |
+| 产品代码 | `in-progress` | A/A1/A2/B1/B2a及B2b4a已用户复核；B2b1/2/3已送审，B2b4b固定候选门禁与实际PC/JVM恢复通过，B2b5/C/D仍必需 |
 | 产品运行态 | `local-dev-partial` | B2b3固定3e3e01c完整门禁Java508/XML629/Web213/mini326及实际PC/ClamAV/提交JVM恢复通过，独立复核及外部/CI/QA/生产仍开放 |
 | 前端架构批 | `pushed-unreviewed` | ARCH-01～ARCH-13 的代码批 14 个提交（至 `46bb20a`）+ 实测与记录批 + ARCH-12 两提交（`d8c55ac`/`78a09ca`）+ ARCH-13 三提交（合并 `1d9a776`、改造 `fd20656`、本记录批）已合入本分支 `codex/d6-21-loss-ui`，四道本地门禁通过，且 ARCH-08～13 有真实浏览器逐路由实测（ARCH-13 为 44 路由 × 3 角色 = 132 单元，132 全一致）；分支已推送 origin 同名分支（未合并 main、未建 PR），远端 CI 与独立复核仍未执行；只调整结构、加载形态与内部底座，不改变任何 D6 任务的开放状态。ARCH-13 另修回 `features/transfer/references.ts` 抽取时写反的 `warehouseId` 三元，其效果影响盘亏转调拨与调拨目标变更两域提交，需与后续调拨写路径实测同批复核 |
 | 记忆 | `out-of-scope` | 本次未修改机器生成记忆 |
-| 工作区 | `review-recorded` | codex/d6-21-loss 功能线候选 `326aec9` 已在 origin 同名分支并已合入本架构分支，未合并 main；该轮一次性栈与 worktree 资源已清理 |
+| 工作区 | `review-recorded` | codex/d6-21-loss 功能线已到 `1299a30`（D6-21B2b4b 收口文档批）并已合入本架构分支，未合并 main；该轮一次性栈与 worktree 资源已清理 |
 
 ## 2026-09-30 续接记录
 
