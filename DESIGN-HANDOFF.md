@@ -1,13 +1,13 @@
 # FAMS 项目阶段与交接入口
 
 > 唯一现役进度入口 · 更新于 2026-11-05
-> 第1～5步完成，第6步进行中。当前分支 `codex/d6-21-loss-ui`（承接 `codex/d6-21-loss` 功能线并合入前端架构批），接续基线 `1299a30`。用户本人本轮明确所有待复核内容全部PASS，已关闭29个已送审子项，D6-15/16/19父项本地DEV_VERIFIED；D6-21A亦已关闭。现役计划§四.5是唯一状态明细。
+> 第1～5步完成，第6步进行中。当前分支 `codex/d6-21-loss-ui`（承接 `codex/d6-21-loss` 功能线并合入前端架构批），接续基线 `38d95fc`。用户本人本轮明确所有待复核内容全部PASS，已关闭29个已送审子项，D6-15/16/19父项本地DEV_VERIFIED；D6-21A亦已关闭。现役计划§四.5是唯一状态明细。
 >
 > D6-21B2b1后端/PC固定43049d0完整门禁及真实PC/JVM通过，已送IN_REVIEW；B2b2原生损坏找回固定d9c0eb0完整门禁及真实Page/opaque链路通过，已送IN_REVIEW；独立复核未签。B2b3结案后损坏找回固定3e3e01c完整门禁及PC/JVM通过，已送IN_REVIEW；B2b4a归还/退库固定3c67b26已获用户复核PASS，B2b4b固定326aec9产品门禁、实际PC/JVM恢复与用户复核通过，B2b4本地关闭。返厂无法收回转报失与找回续修已提交1e95d57，精确静态修复后的f2f7b1b完整门禁、实际PC/ClamAV及提交JVM恢复和原轮次实收通过，B2b5a已获用户本人本轮复核PASS，本地DEV_VERIFIED，B2b5b报废新纳管仍依D6-22。D6-22A已推进独立报废提交、审批认领及实物执行（e17d269、f2f7b1b、ddbf9f5），PC/原生提交至执行入口已接入，当前继续附件、处置及关联来源。责任/位置变化、返厂/报废及跨来源C/D仍必需，不提前关闭D6-20/21父项。当前结果见[B2b4a送审](docs/development/2026-11-04-d6-21b2b4a-review-handoff.md)及[B2b3送审](docs/development/2026-10-31-d6-21b2b3-review-handoff.md)；此前结果见[B2b1送审](docs/development/2026-10-30-d6-21b2b1-review-handoff.md)、[B2b2送审](docs/development/2026-10-30-d6-21b2b2-review-handoff.md)及[D6-21任务卡](docs/development/D6-21-task-card.md)。
 >
 > 原接续材料：[2026-10-30进度交接](docs/development/2026-10-30-current-progress-handoff.md)。其中待审状态以本轮用户签署和现役计划更新为准；旧候选和机器证据不改写。真实外部/真机、远端CI、正式QA、生产仍另验。
 >
-> 前端架构批：ARCH-01～ARCH-13 在本分支完成（代码批 14 个提交至 `46bb20a`，另有实测与记录批、ARCH-12 两提交与 ARCH-13 三提交），是用户指定的第6步内前端结构调整，不进入 D6-01～D6-27 台账、不占用其状态；ARCH-08～13 各批的运行时等价性已用真实浏览器逐路由实测收口（ARCH-11 为 117/117 一致，ARCH-12 为 129 单元中 117 一致、12 条报失单元只改形状与文本，ARCH-13 为 132/132 全一致，见各批记录）。本分支已把该系列与 D6-21 报失功能线合并，并按同一标准改造报失新增前端；2026-11-03 经用户授权推送为 origin 新分支 `codex/d6-21-loss-ui`。逐批指标与遗留项只在 `docs/development/ARCH-*.md` 维护。
+> 前端架构批：ARCH-01～ARCH-14 在本分支完成（代码批 14 个提交至 `46bb20a`，另有实测与记录批、ARCH-12 两提交、ARCH-13 三提交与 ARCH-14 三提交），是用户指定的第6步内前端结构调整，不进入 D6-01～D6-27 台账、不占用其状态；ARCH-08～14 各批的运行时等价性已用真实浏览器逐路由实测收口（ARCH-11 为 117/117 一致，ARCH-12 为 129 单元中 117 一致、12 条报失单元只改形状与文本，ARCH-13 为 132/132 全一致，ARCH-14 为 144 单元中 129 一致、15 条报废单元只改形状与文本，见各批记录）。本分支已把该系列与 D6-21 报失功能线合并，并按同一标准改造报失新增前端；2026-11-03 经用户授权推送为 origin 新分支 `codex/d6-21-loss-ui`。逐批指标与遗留项只在 `docs/development/ARCH-*.md` 维护。
 ## 1. 八步开发流程与当前进度
 
 | 步骤 | 阶段 | 英文 | 阶段目标 | 当前状态 | 依据 / 下一步 |
@@ -17,7 +17,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | B2b4a固定3c67b26已获用户复核PASS；返厂续修固定f2f7b1b已获用户本轮复核PASS；继续D6-22附件、处置及关联来源。前端架构批 ARCH-01～ARCH-13 已合入本分支（含找回转调拨新增前端收口与真实浏览器逐路由实测），入口见 §4。各父项、真实外部/CI/独立复核以[现役开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)为准 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | B2b4a固定3c67b26已获用户复核PASS；返厂续修固定f2f7b1b已获用户本轮复核PASS；继续D6-22附件、处置及关联来源。前端架构批 ARCH-01～ARCH-14 已合入本分支（含独立报废新增前端收口与真实浏览器逐路由实测），入口见 §4。各父项、真实外部/CI/独立复核以[现役开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)为准 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 
@@ -57,7 +57,7 @@
 | D0.4 设计证据 | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 第5步验证结果 | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md) |
 | 第6步计划、Git/CI 规范、任务进度与执行记录 | [开发计划 V1.2](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md) |
-| 前端架构批 ARCH-01～ARCH-13 的规格、指标、偏差与遗留项 | `docs/development/ARCH-*.md`（在当前分支；本文只记阶段与下一步，不复制第二套任务状态） |
+| 前端架构批 ARCH-01～ARCH-14 的规格、指标、偏差与遗留项 | `docs/development/ARCH-*.md`（在当前分支；本文只记阶段与下一步，不复制第二套任务状态） |
 
 `FIXED_ASSET_SYSTEM_DESIGN.md` 是早期系统设计参考，不能替代 PRD V1.5。旧评审、D0.3验证和D0.4执行台账只作为历史证据。
 
@@ -70,7 +70,7 @@
 | 规则 | `changed-and-verified` | AGENTS 已指向当前阶段 |
 | 产品代码 | `in-progress` | A/A1/A2/B1/B2a及B2b4a已用户复核；B2b1/2/3已送审，B2b4b固定候选门禁与实际PC/JVM恢复通过，B2b5/C/D仍必需 |
 | 产品运行态 | `local-dev-partial` | B2b3固定3e3e01c完整门禁Java508/XML629/Web213/mini326及实际PC/ClamAV/提交JVM恢复通过，独立复核及外部/CI/QA/生产仍开放 |
-| 前端架构批 | `pushed-unreviewed` | ARCH-01～ARCH-13 的代码批 14 个提交（至 `46bb20a`）+ 实测与记录批 + ARCH-12 两提交（`d8c55ac`/`78a09ca`）+ ARCH-13 三提交（合并 `1d9a776`、改造 `fd20656`、本记录批）已合入本分支 `codex/d6-21-loss-ui`，四道本地门禁通过，且 ARCH-08～13 有真实浏览器逐路由实测（ARCH-13 为 44 路由 × 3 角色 = 132 单元，132 全一致）；分支已推送 origin 同名分支（未合并 main、未建 PR），远端 CI 与独立复核仍未执行；只调整结构、加载形态与内部底座，不改变任何 D6 任务的开放状态。ARCH-13 另修回 `features/transfer/references.ts` 抽取时写反的 `warehouseId` 三元，其效果影响盘亏转调拨与调拨目标变更两域提交，需与后续调拨写路径实测同批复核 |
+| 前端架构批 | `pushed-unreviewed` | ARCH-01～ARCH-14 的代码批 14 个提交（至 `46bb20a`）+ 实测与记录批 + ARCH-12 两提交（`d8c55ac`/`78a09ca`）+ ARCH-13 三提交（合并 `1d9a776`、改造 `fd20656`、记录批）+ ARCH-14 三提交（合并 `349ab8c`、改造 `b0fc6eb`、本记录批）已合入本分支 `codex/d6-21-loss-ui`，四道本地门禁通过，且 ARCH-08～14 有真实浏览器逐路由实测（ARCH-14 为 48 路由 × 3 角色 = 144 单元，129 一致、15 条报废单元只改形状与文本，控件/文案/事件集合零差异）；分支已推送 origin 同名分支（未合并 main、未建 PR），远端 CI 与独立复核仍未执行；只调整结构、加载形态与内部底座，不改变任何 D6 任务的开放状态。ARCH-14 未能在浏览器里渲染返厂报失与找回续修两段（一次性栈缺一条已寄出的返厂轮次），该实测缺口与报废写路径一起留到下一批 |
 | 记忆 | `out-of-scope` | 本次未修改机器生成记忆 |
 | 工作区 | `review-recorded` | codex/d6-21-loss 功能线已到 `1299a30`（D6-21B2b4b 收口文档批）并已合入本架构分支，未合并 main；该轮一次性栈与 worktree 资源已清理 |
 
@@ -306,5 +306,41 @@ D6-21A2 功能候选 `482756e` 已完成本轮内部链路验证并送 `IN_REVIE
 小程序侧与后端、契约变更直接取自功能线候选 `326aec9`，本批未改造、未独立复核。另记一条执行前提：`rtk` 沙箱
 无网络，`rtk git fetch` 连不上 github，本轮改用裸 `git fetch` 取远端状态；`node scripts/arch-ui-cdp-sweep.mjs`
 必须走 Node 24 前缀，Node 16 的 `node:util` 无 `parseArgs`。
+
+## 2026-11-05 独立报废域新增前端收口（ARCH-14，续 ARCH-13）
+
+`codex/d6-21-loss` 在 `38d95fc` 交付 D6-22A「独立报废提交/审批/认领/实物执行」与 D6-21B2b5a「返厂原机
+无法收回转报失与找回续修」。合并提交 `349ab8c` 把这两条链并入架构分支：功能线的前端仍写在扁平路径
+`apps/web/src/views/ScrapView.vue` 与 `src/scrap/api.ts` 上，git 的重命名检测把新页建议到
+`features/repair/panels/`，本批按 `features/scrap/{api.ts,views/}` 第 13 个垂直切片落地；三处
+modify/delete 冲突（`views/{LossRecoveryPanel,LossView,RepairFactoryPanel}.vue`）以本分支目录形状为准，
+返厂报失与找回续修作为面板内新段挂载而非并列新页。与 ARCH-12/13 不同，本提交在移植这两处增量时已按
+本分支词表与 computed 归位形状落地，只有新增报废域留到改造提交 `b0fc6eb` 收口。
+
+改造提交 `b0fc6eb` 按 ARCH-08/09/10/12 口径收口报废域：裸 `fetch` → `api/http.requestJson`（本域 profile
+保留 `SCRAP_REQUEST_FAILED` 兜底码与 `401 AUTH_SESSION_INVALID`），`ScrapIntent` 拆草稿/带键两型、幂等键
+上交 `useConfirmedSubmit`，自持 `generation/live` → `useRequestLiveness`（三条读取本就共用一个互斥位，
+与 ARCH-13 的「互不相干槽位」情形不同），24 处 primitive 归 `shallowRef`，7 处模板派生归
+`requestRows`/`stateText` 与 13 个 computed，275 字节含裸色值 `#d9e0e8` 的 scoped CSS 归零并改用
+`fams-*` 词表；视图自带 `<h1>` 与外层包装 section 删除，页头由 `AppChrome` 按路由 meta 单点渲染，
+`uiDesc` 刻意留空以不新造产品文案。
+
+判据与实测：两条判据脚本对 `apps/web/src` 全量 `sites=0` / `hard_violations=0`（E 类 13 文件保留清单
+未增减；合并基线读数为 1 文件/7 处派生与 5 项硬违规）；根 lint 退出 0、`vue-tsc` 0 错误、`vitest run`
+81 文件/357 用例全绿（ARCH-13 为 80/353，本轮 +报废 2 条 +功能线 2 条，既有断言一字未改）、`vite build`
+通过，`index-CvDOmE8w.css` 31.42 kB/gzip 5.65 kB 文件名与字节均未变，per-view CSS 产物归零、`dist/assets`
+只剩一份 CSS，全量 JS gzip 255,824（ARCH-13）→ 259,338（合并基线）→ 259,865 字节。真实浏览器把
+`349ab8c`（改前）与本批提交（改后）并排跑同一栈同一库同一份 48 条路由 × 3 角色 = 144 个渲染单元：
+**129 逐字节一致，15 个差异恰好是 5 条报废路由 × 3 角色且只改结构签名与文本**，控件总数/禁用数、
+可点文案集合、翻页探针与运行时事件集合零差异，两侧 `routes_with_issues` 同为 27 且事件逐条同集。
+造单底座本轮补了 8 张在用资产卡（`FA-USE60…67`）才让报失线造满三张、报废线造满四张——ARCH-13 记的
+「eligible 资产耗尽」在本轮复现并扩大到报废线；报废实物执行另踩一条真实判据（`occurredAt` 被截到秒会
+早于单据 `updated_at` 而报 `SCRAP_PHYSICAL_EVIDENCE_INVALID`），已在脚本内修正。
+
+边界与遗留：ARCH-14 不改接口契约、权限、事务、并发与用户可见文案来源。返厂报失段、找回续修段与
+ARCH-13 的找回转调拨三条路由本轮都没能在浏览器里渲染出来——前两者需要一条已寄出且持锁的返厂轮次
+（本轮没把范围申请→批准→建轮次→寄出这条链造通），第三者的一次性造单驱动脚本留在 `/tmp` 未入库；
+两者分别由功能线新增并通过的两条用例与判据脚本零命中保护，实测缺口与报废写路径一起留到下一批。
+小程序侧与后端、契约变更直接取自功能线候选 `38d95fc`，本批未改造、未独立复核。
 
 2026-11-05：用户本人确认本轮返厂续修复核通过，B2b5a本地DEV_VERIFIED，授权提交并推送当前功能分支。报废提交至实物执行已有PC/原生入口及局部验证，完整D6-22及父任务仍开放。未接入的3个报废附件草稿已具名stash保留，恢复开发时先核对stash，完成接入与验证后另行提交。任务状态以现役计划§四.5为准。

@@ -35,13 +35,16 @@ DOMAIN_BY_ROUTE = {
     "asset-return-detail": "assetReturn",
     "transfer-detail": "transfer",
     "loss-reports": "loss",
+    "scrap-requests": "scrap",
 }
 
 # 同一个域里要多渲染几张单据时按 ids 的键补详情路由；名字带后缀，避免和 expand 生成的重名。
 EXTRA_DETAIL = {"loss-reports": {"lossPending": "loss-pending", "lossSearching": "loss-searching",
                                  "lossTransfer": "loss-transfer-direct",
                                  "lossRecoveredTransfer": "loss-transfer-attempt"},
-                "transfer-detail": {"lossCreatedTransfer": "transfer-from-loss-recovery"}}
+                "transfer-detail": {"lossCreatedTransfer": "transfer-from-loss-recovery"},
+                "scrap-requests": {"scrapProcessing": "scrap-processing", "scrapExecuted": "scrap-executed",
+                                   "scrapRejected": "scrap-rejected"}}
 
 PARAM = re.compile(r"^(\s*)(?:\{ path: \")(/[^\"]*)\"(?:, name: \"([^\"]+)\")?")
 
@@ -50,7 +53,7 @@ PROBED = {
     "assets", "asset-import", "asset-import-review", "asset-returns",
     "business-result-notices", "business-result-reviews", "inventory-task-detail",
     "inventory-tasks", "loans", "loss-reports", "proxy-confirmations", "requisition-target-changes",
-    "requisitions", "repair-assistance", "repairs", "transfer-target-changes", "transfers",
+    "requisitions", "repair-assistance", "repairs", "scrap-requests", "transfer-target-changes", "transfers",
 }
 
 

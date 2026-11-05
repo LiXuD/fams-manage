@@ -99,6 +99,8 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=Path("/tmp/fams-arch-ids.json"))
     parser.add_argument("--only-loss", action="store_true",
                         help="只跑报失线：其它 step 直接返回 None，沿用上一轮已造好的单据")
+    parser.add_argument("--only-scrap", action="store_true",
+                        help="只跑报废线：其它 step 直接返回 None，沿用上一轮已造好的单据")
     args = parser.parse_args()
     password = json.loads(args.info.read_text())["password"]
 
@@ -111,7 +113,7 @@ def main() -> int:
     def step(label: str, session: Session, method: str, path: str,
              payload: object = None, version: int | None = None,
              record: str | None = None) -> dict | None:
-        if args.only_loss and "loss" not in label:
+        if (args.only_loss and "loss" not in label) or (args.only_scrap and "scrap" not in label):
             return None
         status, body = session.call(method, path, payload, version)
         try:
@@ -321,8 +323,105 @@ def main() -> int:
         if requested.get("id"):
             created["loss"] = str(requested["id"])
 
-    if args.only_loss and args.out.is_file():
-        # 只跑报失线时保留上一轮记下的其它单据 id，路由清单仍要它们。
+    # 报废与处置：四张单据分别停在待管理员确认、已认领待实物执行（执行目录与核实段同屏）、
+    # 已执行（带处置进度行）与被驳回。实物执行的位置与保管人版本一律取自产品自己的
+    # execution-catalog，不手写库内快照。
+    def scrap_reload(request_id: str) -> dict:
+        status, body = admin.call("GET", f"/scrap-requests/{request_id}")
+        return json.loads(body) if status == 200 else {}
+
+    def scrap_submit(index: int, tag: str) -> dict:
+        if index >= len(scrap_eligible):
+            failures.append(f"scrap {tag}: eligible assets exhausted ({len(scrap_eligible)} rows)")
+            return {}
+        asset = scrap_eligible[index]
+        head = step(f"scrap submit {tag}", employee, "POST", "/scrap-requests", {
+            "assetId": asset["id"], "assetVersion": asset["version"],
+            "reason": "原机已无法继续使用，维修报价超过重置成本",
+            "observedCondition": "主板与电源均无法通电，现场核验实物仍在原登记位置",
+            "proposedDisposition": "断电拆解后按电子废弃物回收"})
+        return scrap_reload(str(head["id"])) if head else {}
+
+    def scrap_approve(tag: str, current: dict) -> dict:
+        approved = step(f"scrap approve {tag}", admin, "POST", f"/scrap-requests/{current.get('id')}/decision", {
+            "assetVersion": current.get("assetVersion"), "lockVersion": current.get("lockVersion"),
+            "result": "APPROVE", "reason": "已核对维修与使用记录，同意按建议范围报废",
+            "approvedDisposition": "断电拆解后按电子废弃物回收"}, int(current.get("version", 0)))
+        return scrap_reload(str(current.get("id"))) if approved else current
+
+    def scrap_claim(tag: str, current: dict) -> dict:
+        claimed = step(f"scrap claim {tag}", warehouse, "POST", f"/scrap-requests/{current.get('id')}/claim", {
+            "assetVersion": current.get("assetVersion"), "lockVersion": current.get("lockVersion")},
+            int(current.get("version", 0)))
+        if not claimed:
+            return current
+        status, body = warehouse.call("GET", f"/scrap-requests/{current.get('id')}")
+        return json.loads(body) if status == 200 else current
+
+    def scrap_execute(tag: str, current: dict) -> dict:
+        request_id = str(current.get("id"))
+        places = ((step(f"scrap location catalog {tag}", warehouse, "GET",
+                        f"/scrap-requests/{request_id}/execution-catalog/location?page=1&pageSize=100")
+                    or {}).get("items")) or []
+        staff = ((step(f"scrap employee catalog {tag}", warehouse, "GET",
+                       f"/scrap-requests/{request_id}/execution-catalog/employee?page=1&pageSize=100")
+                  or {}).get("items")) or []
+        if not places or not staff:
+            failures.append(f"scrap execute {tag}: execution catalog empty")
+            return current
+        executed = step(f"scrap execute {tag}", warehouse, "POST", f"/scrap-requests/{request_id}/execute", {
+            "assetVersion": current.get("assetVersion"), "lockVersion": current.get("lockVersion"),
+            "ownershipVersion": current.get("ownershipVersion"),
+            "observedCode": (current.get("source") or {}).get("assetCode", ""),
+            "observedSerial": (current.get("source") or {}).get("serialNumber") or None,
+            "locationId": places[0]["id"], "locationVersion": places[0]["version"],
+            "custodianEmployeeId": staff[0]["id"], "custodianVersion": staff[0]["version"],
+            "occurredAt": (datetime.now(timezone.utc).replace(microsecond=0)
+                           + timedelta(seconds=1)).isoformat().replace("+00:00", "Z"),
+            "physicalIdentityVerified": True,
+            "evidence": "现场核对原机编码与序列号一致，实物已断电拆解并移交处置保管人",
+            "dispositionMethod": "断电拆解后按电子废弃物回收",
+            "plannedDisposalDate": (datetime.now(timezone.utc) + timedelta(days=10)).strftime("%Y-%m-%d")},
+            int(current.get("version", 0)))
+        if not executed:
+            return current
+        status, body = warehouse.call("GET", f"/scrap-requests/{request_id}")
+        return json.loads(body) if status == 200 else current
+
+    def scrap_reject(tag: str, current: dict) -> dict:
+        rejected = step(f"scrap reject {tag}", admin, "POST", f"/scrap-requests/{current.get('id')}/decision", {
+            "assetVersion": current.get("assetVersion"), "lockVersion": current.get("lockVersion"),
+            "result": "REJECT", "reason": "仍可维修，先回原责任人继续使用并观察"},
+            int(current.get("version", 0)))
+        return scrap_reload(str(current.get("id"))) if rejected else current
+
+    scrap_eligible = ((step("scrap eligible", employee, "GET",
+                            "/scrap-requests/eligible?page=1&pageSize=20") or {}).get("items")) or []
+
+    scrap_pending = scrap_submit(0, "pending")
+    if scrap_pending:
+        created["scrap"] = str(scrap_pending["id"])
+
+    scrap_processing = scrap_submit(1, "processing")
+    if scrap_processing:
+        scrap_processing = scrap_claim("processing", scrap_approve("processing", scrap_processing))
+        if (scrap_processing.get("actions") or {}).get("execute"):
+            created["scrapProcessing"] = str(scrap_processing["id"])
+
+    scrap_done = scrap_submit(2, "executed")
+    if scrap_done:
+        scrap_done = scrap_execute("executed", scrap_claim("executed", scrap_approve("executed", scrap_done)))
+        if (scrap_done.get("disposition")):
+            created["scrapExecuted"] = str(scrap_done["id"])
+
+    scrap_rejected = scrap_submit(3, "rejected")
+    if scrap_rejected:
+        scrap_rejected = scrap_reject("rejected", scrap_rejected)
+        if (scrap_rejected.get("status") or "").startswith("REJECT"):
+            created["scrapRejected"] = str(scrap_rejected["id"])
+
+    if (args.only_loss or args.only_scrap) and args.out.is_file():
+        # 只跑单条线时保留上一轮记下的其它单据 id，路由清单仍要它们。
         created = {**json.loads(args.out.read_text()), **created}
     args.out.write_text(json.dumps(created, indent=2, ensure_ascii=False))
     print(f"\ncreated={json.dumps(created, ensure_ascii=False)}", flush=True)
