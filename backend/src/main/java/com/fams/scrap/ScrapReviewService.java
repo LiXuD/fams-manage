@@ -8,6 +8,7 @@ import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
@@ -24,6 +25,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.Map;
@@ -38,14 +41,16 @@ public class ScrapReviewService {
     private final Clock clock;
     private final RequisitionActorContext actors;
     private final AssetScrapPort assets;
+    private final com.fams.loan.LoanLossPort loans;
 
     public ScrapReviewService(JdbcTemplate db, ObjectMapper json, Clock clock,
-            RequisitionActorContext actors, AssetScrapPort assets) {
+            RequisitionActorContext actors, AssetScrapPort assets, com.fams.loan.LoanLossPort loans) {
         this.db = db;
         this.json = json;
         this.clock = clock;
         this.actors = actors;
         this.assets = assets;
+        this.loans = loans;
     }
 
     public record Decision(
@@ -130,6 +135,91 @@ public class ScrapReviewService {
                 ownership, "PROCESSING", Long.toString(current.id())), time);
     }
 
+    public record Execution(
+            @NotNull @PositiveOrZero Long assetVersion,
+            @NotNull @PositiveOrZero Long lockVersion,
+            @NotNull @PositiveOrZero Long ownershipVersion,
+            @NotBlank @Size(max = 64) String observedCode,
+            @Size(max = 128) String observedSerial,
+            @NotNull @Positive Long locationId,
+            @NotNull @PositiveOrZero Long locationVersion,
+            @NotNull @Positive Long custodianEmployeeId,
+            @NotNull @PositiveOrZero Long custodianVersion,
+            @NotNull Instant occurredAt,
+            @NotNull Boolean physicalIdentityVerified,
+            @NotBlank @Size(min = 10, max = 2000) String evidence,
+            @NotBlank @Size(max = 500) String dispositionMethod,
+            LocalDate plannedDisposalDate) {}
+
+    public Receipt execute(Actor actor, long id, long version, UUID key, Execution input) {
+        var current = current(actor, Role.WAREHOUSE_OPERATOR);
+        String operation = "EXECUTE:" + id;
+        String hash = fingerprint(version, input);
+        var request = db.queryForList("SELECT processor_account_id FROM fams_scrap_request WHERE id=? FOR UPDATE", id);
+        if (request.isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_NOT_FOUND", 404);
+        }
+        if (!java.util.Objects.equals(request.getFirst().get("processor_account_id"), current.id())) {
+            throw new AssetHandoverPort.Failure("SCRAP_PROCESSOR_REQUIRED", 403);
+        }
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var row = guarded(id, version, input.assetVersion(), input.lockVersion(), "PROCESSING");
+        if (!"STANDALONE".equals(row.get("source_type"))
+                || number(row, "ownership_version") != input.ownershipVersion()) {
+            throw new AssetHandoverPort.Failure("SCRAP_SOURCE_OR_OWNERSHIP_CHANGED", 409);
+        }
+        var approval = json.readTree(row.get("decision_snapshot_json").toString()).path("decision");
+        if (!input.dispositionMethod().strip().equals(approval.path("approvedDisposition").asText().strip())) {
+            throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_OUTSIDE_APPROVAL", 409);
+        }
+        var time = now();
+        Instant created = instant(row.get("updated_at"));
+        if (!Boolean.TRUE.equals(input.physicalIdentityVerified()) || input.evidence().strip().length() < 10
+                || input.occurredAt().isBefore(created) || input.occurredAt().isAfter(time.plusSeconds(2))
+                || !input.occurredAt().equals(input.occurredAt().truncatedTo(ChronoUnit.MILLIS))) {
+            throw new AssetHandoverPort.Failure("SCRAP_PHYSICAL_EVIDENCE_INVALID", 400);
+        }
+        if (db.queryForList("SELECT id FROM fams_employee WHERE id=? AND version=? AND status='ACTIVE' FOR UPDATE",
+                input.custodianEmployeeId(), input.custodianVersion()).isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_CUSTODIAN_CHANGED", 409);
+        }
+        String parameters = db.queryForObject("SELECT v.snapshot_json FROM fams_business_parameter_state s"
+                + " JOIN fams_business_parameter_version v ON v.id=s.current_version_id"
+                + " WHERE s.singleton_id=1 AND v.status='ACTIVE' FOR SHARE", String.class);
+        var settings = json.readTree(parameters);
+        LocalDate today = LocalDate.now(clock.withZone(ZoneId.of(settings.path("timezone").asText())));
+        LocalDate due = input.plannedDisposalDate() == null ? today.plusDays(30) : input.plannedDisposalDate();
+        if (due.isBefore(today)) {
+            throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_DATE_INVALID", 400);
+        }
+        long asset = number(row, "asset_id");
+        loans.requireRecovery(asset, "IN_USE", null, null);
+        long assetVersion = assets.executeStandalone(asset, input.assetVersion(), id, input.lockVersion(),
+                input.observedCode(), input.observedSerial(), input.locationId(), input.locationVersion(), current.id(), time);
+        String execution = json.writeValueAsString(input);
+        db.update("UPDATE fams_scrap_request SET request_status='EXECUTED',execution_snapshot_json=?,"
+                + "asset_version=?,version=version+1,updated_at=? WHERE id=?",
+                execution, assetVersion, time, id);
+        db.update("INSERT INTO fams_scrap_disposition(request_id,processor_account_id,disposition_status,"
+                + "due_date,custody_snapshot_json,created_at,updated_at)"
+                + " VALUES (?,?,'PENDING_DISPOSITION',?,?,?,?)",
+                id, current.id(), due, execution, time, time);
+        if (db.update("UPDATE fams_asset_business_lock SET released_at=?,release_reason='SCRAP_EXECUTED',"
+                + "lock_version=lock_version+1 WHERE asset_id=? AND business_type='SCRAP' AND business_id=?"
+                + " AND business_item_id=? AND lock_version=? AND released_at IS NULL",
+                time, asset, id, id, input.lockVersion()) != 1) {
+            throw new AssetHandoverPort.Failure("SCRAP_ASSET_OR_LOCK_CHANGED", 409);
+        }
+        closeTodo(id, "EXECUTE", time);
+        todo(id, "DISPOSITION", "WAREHOUSE_OPERATOR", current.id(), time);
+        audit(actor, current, Role.WAREHOUSE_OPERATOR, id, version, "SCRAP_EXECUTED", input, time);
+        return remember(current, operation, key, hash, new Receipt(Long.toString(id), Long.toString(asset),
+                version + 1, assetVersion, input.ownershipVersion(), "EXECUTED", Long.toString(current.id())), time);
+    }
+
     private Map<String, Object> guarded(long id, long version, long assetVersion, long lockVersion,
             String expectedStatus) {
         var rows = db.queryForList("SELECT * FROM fams_scrap_request WHERE id=? FOR UPDATE", id);
@@ -199,6 +289,13 @@ public class ScrapReviewService {
                         + "resource_type,resource_id,before_version,after_version,occurred_at,detail_json)"
                         + " VALUES (?,?,?,?,'SCRAP',?,?,?,?,?)",
                 actor.requestId().toString(), current.id(), role.name(), action, id, version, version + 1, time, detail);
+    }
+
+    private Instant instant(Object value) {
+        if (value instanceof java.sql.Timestamp timestamp) {
+            return timestamp.toInstant();
+        }
+        return ((java.time.LocalDateTime) value).toInstant(java.time.ZoneOffset.UTC);
     }
 
     private Instant now() {

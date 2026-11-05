@@ -61,6 +61,7 @@ class ScrapSubmitHttpRuntimeCase {
         db.execute("DROP TRIGGER IF EXISTS owned_scrap_audit_failure");
         String requests = " IN (SELECT id FROM fams_scrap_request WHERE asset_id=951020)";
         db.update("DELETE FROM fams_todo WHERE business_type='SCRAP' AND business_id" + requests);
+        db.update("DELETE FROM fams_scrap_disposition WHERE request_id" + requests);
         db.update("DELETE FROM fams_scrap_event WHERE request_id" + requests);
         db.update("DELETE FROM fams_scrap_receipt WHERE scrap_request_id" + requests);
         db.update("DELETE FROM fams_scrap_request WHERE asset_id=951020");
@@ -124,6 +125,41 @@ class ScrapSubmitHttpRuntimeCase {
                 UUID.randomUUID().toString(), claim).statusCode());
         assertEquals(1L, db.queryForObject("SELECT ownership_version FROM fams_scrap_request"
                 + " WHERE id=?", Long.class, Long.parseLong(id)));
+
+        var execution = json.createObjectNode().put("assetVersion", 1).put("lockVersion", 0)
+                .put("ownershipVersion", 1).put("observedCode", "REP-ASSET-951020")
+                .put("locationId", "951001").put("locationVersion", 0)
+                .put("custodianEmployeeId", "951003").put("custodianVersion", 0)
+                .put("occurredAt", java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString())
+                .put("physicalIdentityVerified", true).put("evidence", "原处理库管已现场核对实物身份及待处置保管依据")
+                .put("dispositionMethod", "待处置保管");
+        String executeKey = UUID.randomUUID().toString();
+        String input = json.writeValueAsString(execution);
+        assertEquals(403, write(fixture.otherWarehouse, id, "execute", 2, executeKey, input).statusCode());
+        assertEquals(409, write(fixture.warehouse, id, "execute", 2, executeKey,
+                input.replace("REP-ASSET-951020", "WRONG-ORIGINAL")).statusCode());
+        db.execute("CREATE TRIGGER owned_scrap_audit_failure BEFORE INSERT ON fams_audit_event"
+                + " FOR EACH ROW BEGIN IF NEW.action='SCRAP_EXECUTED' THEN SIGNAL"
+                + " SQLSTATE '45000' SET MESSAGE_TEXT='owned scrap execution audit failure'; END IF; END");
+        try {
+            assertEquals(500, write(fixture.warehouse, id, "execute", 2, executeKey, input).statusCode());
+            assertEquals("PENDING_SCRAP", db.queryForObject(
+                    "SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+            assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_disposition", Long.class));
+        } finally {
+            db.execute("DROP TRIGGER owned_scrap_audit_failure");
+        }
+        var executed = write(fixture.warehouse, id, "execute", 2, executeKey, input);
+        assertEquals(200, executed.statusCode(), executed.body());
+        assertEquals(executed.body(), write(fixture.warehouse, id, "execute", 2, executeKey, input).body());
+        assertEquals("SCRAPPED", db.queryForObject(
+                "SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+        assertEquals("PENDING_DISPOSITION", db.queryForObject(
+                "SELECT disposition_status FROM fams_scrap_disposition WHERE request_id=?", String.class, Long.parseLong(id)));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock"
+                + " WHERE asset_id=951020 AND released_at IS NULL", Long.class));
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_todo WHERE business_type='SCRAP'"
+                + " AND business_id=? AND todo_type='DISPOSITION' AND todo_status='OPEN'", Long.class, Long.parseLong(id)));
     }
 
     @Test

@@ -58,6 +58,22 @@ public class ScrapController {
         return review.claim(actors.capture(), id, version, key, input);
     }
 
+    @PostMapping("/{id}/execute")
+    ScrapReviewService.Receipt execute(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.Execution input) {
+        return review.execute(actors.capture(), id, version, key, input);
+    }
+
+    @ExceptionHandler(com.fams.loan.LoanLossPort.Failure.class)
+    ResponseEntity<ErrorResponse> loanRejection(com.fams.loan.LoanLossPort.Failure failure,
+            HttpServletRequest request) {
+        UUID id = request.getAttribute("fams.request.id") instanceof UUID value ? value : UUID.randomUUID();
+        return ResponseEntity.status(409).body(new ErrorResponse(failure.getMessage(),
+                failure.getMessage(), id, Map.of()));
+    }
+
     @ExceptionHandler(AssetHandoverPort.Failure.class)
     ResponseEntity<ErrorResponse> rejection(AssetHandoverPort.Failure failure, HttpServletRequest request) {
         UUID requestId = request.getAttribute("fams.request.id") instanceof UUID id ? id : UUID.randomUUID();

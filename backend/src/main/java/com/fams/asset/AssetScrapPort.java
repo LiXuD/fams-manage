@@ -140,4 +140,30 @@ public class AssetScrapPort {
                 json.writeValueAsString(Map.of("scrapRequestId", Long.toString(requestId))), actorId);
         return true;
     }
+
+    public long executeStandalone(long assetId, long version, long requestId, long lockVersion,
+            String observedCode, String observedSerial, long locationId, long locationVersion,
+            long actorId, Instant time) {
+        requirePending(assetId, version, requestId, lockVersion);
+        var asset = db.queryForMap("SELECT asset_code,serial_number,exception_status"
+                + " FROM fams_asset WHERE id=? FOR UPDATE", assetId);
+        if (!Objects.equals(asset.get("asset_code"), observedCode.strip())
+                || asset.get("serial_number") != null
+                        && !Objects.equals(asset.get("serial_number"), observedSerial == null ? null : observedSerial.strip())
+                || !"NORMAL".equals(asset.get("exception_status"))) {
+            throw new AssetHandoverPort.Failure("SCRAP_PHYSICAL_IDENTITY_CHANGED", 409);
+        }
+        if (db.queryForList("SELECT id FROM fams_location WHERE id=? AND version=? AND status='ACTIVE' FOR UPDATE",
+                locationId, locationVersion).isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_LOCATION_CHANGED", 409);
+        }
+        if (db.update("UPDATE fams_asset SET lifecycle_status='SCRAPPED',version=version+1,"
+                + "updated_at=?,updated_by=? WHERE id=? AND version=? AND lifecycle_status='PENDING_SCRAP'",
+                time, actorId, assetId, version) != 1) {
+            throw new AssetHandoverPort.Failure("SCRAP_ASSET_CHANGED", 409);
+        }
+        mapper.event(assetId, "SCRAP_EXECUTED", time,
+                json.writeValueAsString(Map.of("scrapRequestId", Long.toString(requestId))), actorId);
+        return version + 1;
+    }
 }
