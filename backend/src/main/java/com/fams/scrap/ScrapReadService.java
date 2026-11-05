@@ -123,8 +123,12 @@ public class ScrapReadService {
         var source = json.readTree(row.get("source_snapshot_json").toString());
         result.put("source", Map.of("assetCode", source.path("asset_code").asText(),
                 "name", source.path("name").asText(), "serialNumber", source.path("serial_number").asText("")));
-        result.put("decision", row.get("decision_snapshot_json") == null
-                ? null : json.readTree(row.get("decision_snapshot_json").toString()));
+        var decision = row.get("decision_snapshot_json") == null
+                ? null : json.readTree(row.get("decision_snapshot_json").toString());
+        if (decision instanceof tools.jackson.databind.node.ObjectNode object) {
+            object.remove("attachmentEvidence");
+        }
+        result.put("decision", decision);
         result.put("execution", row.get("execution_snapshot_json") == null
                 ? null : json.readTree(row.get("execution_snapshot_json").toString()));
         var locks = db.queryForList("SELECT lock_version FROM fams_asset_business_lock"

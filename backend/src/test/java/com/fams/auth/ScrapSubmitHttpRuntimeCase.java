@@ -22,7 +22,7 @@ import java.net.http.HttpResponse;
 import java.util.UUID;
 
 @SpringBootTest(
-        classes = HandoverHttpTest.TestApplication.class,
+        classes = {HandoverHttpTest.TestApplication.class, ScrapSubmitHttpRuntimeCase.AttachmentFixtures.class},
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
             "spring.profiles.active=fams-product",
@@ -39,6 +39,28 @@ class ScrapSubmitHttpRuntimeCase {
     private final RepairHttpRuntimeCase fixture = new RepairHttpRuntimeCase();
     private final HttpClient http = HttpClient.newHttpClient();
 
+    private static final java.util.concurrent.atomic.AtomicReference<com.fams.attachment.MalwareScanner.Result> SCAN =
+            new java.util.concurrent.atomic.AtomicReference<>(com.fams.attachment.MalwareScanner.Result.CLEAN);
+    private static final java.util.concurrent.atomic.AtomicReference<Runnable> DURING_SCAN =
+            new java.util.concurrent.atomic.AtomicReference<>();
+
+    @org.springframework.boot.test.context.TestConfiguration
+    static class AttachmentFixtures {
+        @org.springframework.context.annotation.Bean
+        @org.springframework.context.annotation.Primary
+        com.fams.attachment.MalwareScanner scrapScanner() {
+            return input -> {
+                org.junit.jupiter.api.Assertions.assertFalse(org.springframework.transaction.support
+                        .TransactionSynchronizationManager.isActualTransactionActive());
+                var hook = DURING_SCAN.getAndSet(null);
+                if (hook != null) {
+                    hook.run();
+                }
+                return SCAN.get();
+            };
+        }
+    }
+
     @Autowired JdbcTemplate db;
     @Autowired MiniSessionService miniSessions;
     @Value("${local.server.port}") int port;
@@ -54,11 +76,20 @@ class ScrapSubmitHttpRuntimeCase {
         fixture.port = port;
         fixture.miniSessions = miniSessions;
         fixture.seed();
+        SCAN.set(com.fams.attachment.MalwareScanner.Result.CLEAN);
+        DURING_SCAN.set(null);
     }
 
     @AfterEach
     void cleanup() throws Exception {
+        SCAN.set(com.fams.attachment.MalwareScanner.Result.CLEAN);
+        DURING_SCAN.set(null);
         db.execute("DROP TRIGGER IF EXISTS owned_scrap_audit_failure");
+        db.update("DELETE FROM fams_attachment WHERE business_type IN ('SCRAP','SCRAP_DISPOSITION')"
+                + " AND uploader_account_id BETWEEN 951001 AND 951010");
+        db.update("DELETE FROM fams_attachment_scope WHERE business_type IN ('SCRAP','SCRAP_DISPOSITION')"
+                + " AND business_id IN (SELECT id FROM fams_scrap_request WHERE asset_id=951020)");
+        db.update("DELETE FROM fams_account_authorization WHERE account_id BETWEEN 951001 AND 951010");
         String requests = " IN (SELECT id FROM fams_scrap_request WHERE asset_id=951020)";
         db.update("DELETE FROM fams_todo WHERE business_type='SCRAP' AND business_id" + requests);
         db.update("DELETE FROM fams_scrap_disposition WHERE request_id" + requests);
@@ -250,6 +281,154 @@ class ScrapSubmitHttpRuntimeCase {
         assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_disposition WHERE request_id"
                 + " IN (SELECT id FROM fams_scrap_request WHERE asset_id=951020)", Long.class));
         assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_receipt WHERE operation LIKE 'EXECUTE:%'", Long.class));
+    }
+
+
+    @Test
+    void requestAttachmentsAreScannedAtomicVersionedAndRetriedAfterApproval() throws Exception {
+        String id = scrapId();
+        String key = UUID.randomUUID().toString();
+        assertEquals(403, upload(fixture.other, id, "request", 0, key).statusCode());
+        SCAN.set(com.fams.attachment.MalwareScanner.Result.INFECTED);
+        assertEquals(422, upload(fixture.employee, id, "request", 0, key).statusCode());
+        SCAN.set(com.fams.attachment.MalwareScanner.Result.UNAVAILABLE);
+        assertEquals(503, upload(fixture.employee, id, "request", 0, key).statusCode());
+        SCAN.set(com.fams.attachment.MalwareScanner.Result.CLEAN);
+        db.execute("CREATE TRIGGER owned_scrap_audit_failure BEFORE INSERT ON fams_audit_event"
+                + " FOR EACH ROW BEGIN IF NEW.action='SCRAP_ATTACHMENT_ADDED' THEN SIGNAL"
+                + " SQLSTATE '45000' SET MESSAGE_TEXT='owned attachment audit failure'; END IF; END");
+        assertEquals(500, upload(fixture.employee, id, "request", 0, key).statusCode());
+        db.execute("DROP TRIGGER owned_scrap_audit_failure");
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_attachment WHERE business_type='SCRAP'", Long.class));
+        assertEquals(0L, db.queryForObject("SELECT version FROM fams_scrap_request WHERE id=?", Long.class, Long.parseLong(id)));
+        var uploaded = upload(fixture.employee, id, "request", 0, key);
+        assertEquals(200, uploaded.statusCode(), uploaded.body());
+        try (var files = java.nio.file.Files.list(RepairHttpRuntimeCase.photoRoot)) {
+            assertEquals(1L, files.count());
+        }
+        assertEquals(uploaded.body(), upload(fixture.employee, id, "request", 0, key).body());
+        try (var files = java.nio.file.Files.list(RepairHttpRuntimeCase.photoRoot)) {
+            assertEquals(1L, files.count());
+        }
+        String approval = approval();
+        assertEquals(403, write(fixture.admin, id, "decision", 1, UUID.randomUUID().toString(), approval).statusCode());
+        grantField(951001, "ASSET_ADMIN");
+        var approved = write(fixture.admin, id, "decision", 1, UUID.randomUUID().toString(), approval);
+        assertEquals(200, approved.statusCode(), approved.body());
+        var json = new tools.jackson.databind.ObjectMapper();
+        var snapshot = json.readTree(db.queryForObject("SELECT decision_snapshot_json FROM fams_scrap_request WHERE id=?",
+                String.class, Long.parseLong(id)));
+        assertEquals(1, snapshot.path("attachmentEvidence").size());
+        String object = json.readTree(uploaded.body()).path("objectId").asText();
+        var frozen = snapshot.path("attachmentEvidence").get(0);
+        assertEquals(object, frozen.path("objectId").asText());
+        assertEquals(db.queryForObject("SELECT content_sha256 FROM fams_attachment WHERE object_id=?", String.class, object),
+                frozen.path("sha256").asText());
+        org.junit.jupiter.api.Assertions.assertFalse(get(fixture.employee, "/" + id).body().contains(object));
+        org.junit.jupiter.api.Assertions.assertFalse(get(fixture.admin, "").body().contains(object));
+        assertEquals(uploaded.body(), upload(fixture.employee, id, "request", 0, key).body());
+        assertEquals(409, upload(fixture.employee, id, "request", 2, UUID.randomUUID().toString()).statusCode());
+        assertEquals(409, upload(fixture.employee, id, "request", 1, key).statusCode());
+    }
+
+    @Test
+    void attachmentReadsRequireBothCurrentRecordScopeAndSensitiveGrant() throws Exception {
+        String id = scrapId();
+        var uploaded = upload(fixture.employee, id, "request", 0, UUID.randomUUID().toString());
+        assertEquals(200, uploaded.statusCode(), uploaded.body());
+        var json = new tools.jackson.databind.ObjectMapper();
+        String object = json.readTree(uploaded.body()).path("objectId").asText();
+        String path = "/" + id + "/attachments/request";
+        assertEquals(403, get(fixture.employee, path).statusCode());
+        assertEquals(403, get(fixture.admin, path).statusCode());
+        grantField(951002, "EMPLOYEE");
+        grantField(951007, "EMPLOYEE");
+        assertEquals(404, get(fixture.other, path).statusCode());
+        assertEquals(200, get(fixture.employee, path).statusCode());
+        var grant = write(fixture.employee, id, "attachments/request/" + object + "/download-grant",
+                1, UUID.randomUUID().toString(), "{}");
+        assertEquals(200, grant.statusCode(), grant.body());
+        String url = json.readTree(grant.body()).path("url").asText();
+        var content = http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + url))
+                .header("Cookie", fixture.employee.cookie()).GET().build(), HttpResponse.BodyHandlers.ofByteArray());
+        assertEquals(200, content.statusCode());
+        org.junit.jupiter.api.Assertions.assertArrayEquals(png(), content.body());
+        assertEquals("no-store", content.headers().firstValue("cache-control").orElseThrow());
+        assertEquals(404, get(fixture.employee, url.substring("/api/v1/scrap-requests".length())
+                .replace("request/", "disposition/")).statusCode());
+        db.update("DELETE FROM fams_account_field_permission WHERE authorization_id=?", 951002L);
+        assertEquals(403, get(fixture.employee, path).statusCode());
+        assertEquals(403, get(fixture.employee, url.substring("/api/v1/scrap-requests".length())).statusCode());
+    }
+
+    @Test
+    void scanRaceRejectsStaleVersionAndDispositionEvidenceKeepsTerminalRequestImmutable() throws Exception {
+        String id = scrapId();
+        DURING_SCAN.set(() -> db.update("UPDATE fams_scrap_request SET version=version+1 WHERE id=?", Long.parseLong(id)));
+        assertEquals(409, upload(fixture.employee, id, "request", 0, UUID.randomUUID().toString()).statusCode());
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_attachment WHERE business_type='SCRAP'", Long.class));
+        var approved = write(fixture.admin, id, "decision", 1, UUID.randomUUID().toString(), approval());
+        assertEquals(200, approved.statusCode(), approved.body());
+        assertEquals(200, write(fixture.warehouse, id, "claim", 2, UUID.randomUUID().toString(),
+                "{\"assetVersion\":1,\"lockVersion\":0}").statusCode());
+        var json = new tools.jackson.databind.ObjectMapper();
+        var execution = json.createObjectNode().put("assetVersion", 1).put("lockVersion", 0)
+                .put("ownershipVersion", 1).put("observedCode", "REP-ASSET-951020")
+                .put("locationId", "951001").put("locationVersion", 0)
+                .put("custodianEmployeeId", "951003").put("custodianVersion", 0)
+                .put("occurredAt", java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString())
+                .put("physicalIdentityVerified", true).put("evidence", "核验原机并实际接收保管后执行报废等待处置")
+                .put("dispositionMethod", "待处置保管");
+        var executed = write(fixture.warehouse, id, "execute", 3, UUID.randomUUID().toString(), json.writeValueAsString(execution));
+        assertEquals(200, executed.statusCode(), executed.body());
+        var before = db.queryForMap("SELECT * FROM fams_scrap_request WHERE id=?", Long.parseLong(id));
+        String key = UUID.randomUUID().toString();
+        assertEquals(403, upload(fixture.otherWarehouse, id, "disposition", 0, key).statusCode());
+        var uploaded = upload(fixture.warehouse, id, "disposition", 0, key);
+        assertEquals(200, uploaded.statusCode(), uploaded.body());
+        assertEquals(uploaded.body(), upload(fixture.warehouse, id, "disposition", 0, key).body());
+        assertEquals(before, db.queryForMap("SELECT * FROM fams_scrap_request WHERE id=?", Long.parseLong(id)));
+        assertEquals(1L, db.queryForObject("SELECT version FROM fams_scrap_disposition WHERE request_id=?", Long.class, Long.parseLong(id)));
+        var capabilities = json.readTree(get(fixture.warehouse, "/" + id + "/attachment-capabilities").body());
+        org.junit.jupiter.api.Assertions.assertTrue(capabilities.path("canUploadDisposition").asBoolean());
+        org.junit.jupiter.api.Assertions.assertFalse(capabilities.path("canRead").asBoolean());
+    }
+
+    private void grantField(long account, String role) {
+        db.update("INSERT INTO fams_account_authorization(id,account_id,role_code,generation_no,authorization_status,"
+                + "change_reason,created_at) VALUES (?,?,?,1,'ACTIVE','owned scrap field grant',NOW(3))", account, account, role);
+        db.update("INSERT INTO fams_account_field_permission(authorization_id,permission_code,granted_at)"
+                + " VALUES (?,'SCRAP_ATTACHMENT',NOW(3))", account);
+    }
+
+    private String scrapId() throws Exception {
+        var submitted = submit(fixture.employee, UUID.randomUUID().toString(), INPUT);
+        assertEquals(200, submitted.statusCode(), submitted.body());
+        return new tools.jackson.databind.ObjectMapper().readTree(submitted.body()).path("id").asText();
+    }
+
+    private String approval() {
+        return "{\"assetVersion\":1,\"lockVersion\":0,\"result\":\"APPROVE\","
+                + "\"reason\":\"已核对原机和报废依据\",\"approvedDisposition\":\"待处置保管\"}";
+    }
+
+    private byte[] png() {
+        return java.util.Base64.getDecoder().decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0WQAAAAASUVORK5CYII=");
+    }
+
+    private HttpResponse<String> upload(Session session, String id, String kind, long version, String key) throws Exception {
+        String boundary = "owned-scrap-" + UUID.randomUUID();
+        var bytes = new java.io.ByteArrayOutputStream();
+        bytes.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"evidence.png\"\r\n"
+                + "Content-Type: image/png\r\n\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        bytes.write(png());
+        bytes.write(("\r\n--" + boundary + "--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/scrap-requests/"
+                + id + "/attachments/" + kind)).header("Cookie", session.cookie()).header("X-CSRF-Token", session.csrf())
+                .header("If-Match-Version", Long.toString(version)).header("Idempotency-Key", key)
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(bytes.toByteArray())).build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> get(Session session, String path) throws Exception {

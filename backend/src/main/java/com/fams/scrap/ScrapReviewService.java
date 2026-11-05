@@ -42,15 +42,18 @@ public class ScrapReviewService {
     private final RequisitionActorContext actors;
     private final AssetScrapPort assets;
     private final com.fams.loan.LoanLossPort loans;
+    private final com.fams.auth.ScrapSensitiveAccess sensitive;
 
     public ScrapReviewService(JdbcTemplate db, ObjectMapper json, Clock clock,
-            RequisitionActorContext actors, AssetScrapPort assets, com.fams.loan.LoanLossPort loans) {
+            RequisitionActorContext actors, AssetScrapPort assets, com.fams.loan.LoanLossPort loans,
+            com.fams.auth.ScrapSensitiveAccess sensitive) {
         this.db = db;
         this.json = json;
         this.clock = clock;
         this.actors = actors;
         this.assets = assets;
         this.loans = loans;
+        this.sensitive = sensitive;
     }
 
     public record Decision(
@@ -80,6 +83,13 @@ public class ScrapReviewService {
             throw new AssetHandoverPort.Failure("SCRAP_DECISION_INVALID", 400);
         }
         var request = guarded(id, version, input.assetVersion(), input.lockVersion(), "PENDING_ADMIN_DECISION");
+        // Match the locked request version even if an earlier read established a MySQL snapshot.
+        var attachments = db.queryForList("SELECT detail_json FROM fams_scrap_event"
+                + " WHERE request_id=? AND action='SCRAP_ATTACHMENT_ADDED' ORDER BY id FOR UPDATE", String.class, id)
+                .stream().map(json::readTree).toList();
+        if (approve && !attachments.isEmpty()) {
+            sensitive.requireRead(actor);
+        }
         long asset = number(request, "asset_id");
         var time = now();
         String status = "WAITING_WAREHOUSE_CLAIM";
@@ -100,7 +110,7 @@ public class ScrapReviewService {
         db.update("UPDATE fams_scrap_request SET request_status=?,decision_snapshot_json=?,asset_version=?,"
                         + "version=version+1,updated_at=? WHERE id=?",
                 status, json.writeValueAsString(Map.of("decision", input, "decidedBy", Long.toString(current.id()),
-                        "decidedAt", time)), assetVersion, time, id);
+                        "decidedAt", time, "attachmentEvidence", attachments)), assetVersion, time, id);
         closeTodo(id, "APPROVAL", time);
         if (approve) {
             todo(id, "CLAIM", "WAREHOUSE_OPERATOR", null, time);
