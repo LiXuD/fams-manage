@@ -90,12 +90,40 @@ public class AssetLossPort {
         return json.writeValueAsString(snapshot(row));
     }
 
-    public void requireSubmitted(long id, long version) {
-        locked(id, version, "NORMAL");
+    /** Captures custody for a factory loss after the repair owner validates its active lock. */
+    public Map<String, Object> factorySubmission(long id, long version) {
+        return snapshot(lockFactoryAsset(id, version, "NORMAL"));
     }
 
-    public long searching(long id, long version, long report, long actor, Instant time) {
-        locked(id, version, "NORMAL");
+    private Map<String, Object> lockFactoryAsset(long id, long version, String exception) {
+        var rows = db.queryForList("SELECT * FROM fams_asset WHERE id=? FOR UPDATE", id);
+        if (rows.isEmpty()) {
+            throw new AssetHandoverPort.Failure("ASSET_NOT_FOUND", 404);
+        }
+        var row = rows.getFirst();
+        if (!"ACTIVE".equals(row.get("card_stage"))
+                || !"FACTORY_REPAIR".equals(row.get("lifecycle_status"))
+                || !exception.equals(row.get("exception_status"))
+                || ((Number) row.get("version")).longValue() != version) {
+            throw new AssetHandoverPort.Failure("LOSS_ASSET_CHANGED", 409);
+        }
+        return row;
+    }
+
+    public void requireSubmitted(long id, long version, boolean factory) {
+        lockTransitionAsset(id, version, "NORMAL", factory);
+    }
+
+    private void lockTransitionAsset(long id, long version, String exception, boolean factory) {
+        if (factory) {
+            lockFactoryAsset(id, version, exception);
+        } else {
+            locked(id, version, exception);
+        }
+    }
+
+    public long searching(long id, long version, long report, long actor, Instant time, boolean factory) {
+        lockTransitionAsset(id, version, "NORMAL", factory);
         if (db.update(
                         "UPDATE fams_asset SET"
                             + " exception_status='SEARCHING',version=version+1,updated_by=?,updated_at=?"
@@ -116,8 +144,8 @@ public class AssetLossPort {
         return version + 1;
     }
 
-    public long confirmedLost(long id, long version, long report, long actor, Instant time) {
-        locked(id, version, "SEARCHING");
+    public long confirmedLost(long id, long version, long report, long actor, Instant time, boolean factory) {
+        lockTransitionAsset(id, version, "SEARCHING", factory);
         if (db.update(
                         "UPDATE fams_asset SET exception_status='LOST',version=version+1,"
                                 + "updated_by=?,updated_at=? WHERE id=? AND version=?",
@@ -395,6 +423,22 @@ public class AssetLossPort {
         validateTransferRecovery(id, version, exception, original, observedCode, observedSerial,
                 location, locationVersion);
         return clearRecoveryException(id, version, location, report, actor, time, "LOSS_RECOVERED_FOR_TRANSFER");
+    }
+
+    public void requireFactoryRecovery(long id, long version) {
+        lockFactoryAsset(id, version, "LOST");
+    }
+
+    public void validateFactoryRecovery(long id, long version, String exception,
+            String observedCode, String observedSerial, long location, long locationVersion) {
+        var row = lockFactoryAsset(id, version, exception);
+        verifyLinkedRecoveryFacts(row, observedCode, observedSerial, location, locationVersion);
+    }
+
+    public long recoverForFactory(long id, long version, String exception, String observedCode,
+            String observedSerial, long location, long locationVersion, long report, long actor, Instant time) {
+        validateFactoryRecovery(id, version, exception, observedCode, observedSerial, location, locationVersion);
+        return clearRecoveryException(id, version, location, report, actor, time, "LOSS_RECOVERED_FOR_FACTORY");
     }
 
     private long clearRecoveryException(long id, long version, long location, long report,

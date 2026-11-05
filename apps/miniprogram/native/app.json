@@ -28,7 +28,8 @@
     "pages/repair-inventory-evidence/index",
     "pages/repair-factory/index",
     "pages/repair-replacement/index",
-    "pages/loss-reports/index"
+    "pages/loss-reports/index",
+    "pages/scrap-requests/index"
   ],
   "window": {
     "navigationBarTitleText": "企业资产",

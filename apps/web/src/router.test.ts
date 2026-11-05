@@ -19,10 +19,10 @@ describe("router 页头元数据", () => {
     }
   });
 
-  // 顺序解析 36 个路由 chunk，耗时随全量套件的 worker 竞争浮动，默认 5s 上限贴边。
+  // 顺序解析 37 个路由 chunk，耗时随全量套件的 worker 竞争浮动，默认 5s 上限贴边。
   it("除入口三页外每条路由都是可解析的懒加载工厂", async () => {
     const lazy = router.getRoutes().filter((route) => !EAGER_ROUTES.has(String(route.name)));
-    expect(lazy).toHaveLength(36);
+    expect(lazy).toHaveLength(37);
     for (const route of lazy) {
       const factory: unknown = route.components?.default;
       expect(typeof factory, `${String(route.name)} 未改为懒加载`).toBe("function");

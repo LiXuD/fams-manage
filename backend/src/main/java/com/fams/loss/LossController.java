@@ -69,6 +69,17 @@ public class LossController {
         return retry(() -> reports.submit(actor, key, input));
     }
 
+    @PostMapping("/factory/{repairId}/rounds/{roundId}")
+    Map<String, Object> submitFactory(
+            @PathVariable @Positive long repairId,
+            @PathVariable @Positive long roundId,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long repairVersion,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.FactorySubmission input) {
+        var actor = actors.capture();
+        return retry(() -> reports.submitFactory(actor, repairId, roundId, repairVersion, key, input));
+    }
+
     @PostMapping("/{id}/decision")
     Map<String, Object> decide(
             @PathVariable @Positive long id,
@@ -276,6 +287,33 @@ public class LossController {
             @Valid @RequestBody LossInput.TransferRecoveryExecution input) {
         var actor = actors.capture();
         return retry(() -> reports.executeRecoveryToTransfer(actor, id, version, key, input));
+    }
+
+    @PostMapping("/{id}/factory-recovery-requests")
+    Map<String, Object> requestFactoryRecovery(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.ReturnRecoveryRequest input) {
+        var actor = actors.capture();
+        return retry(() -> reports.requestFactoryRecovery(actor, id, version, key, input));
+    }
+
+    @PostMapping("/{id}/recover-to-factory")
+    Map<String, Object> recoverToFactory(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.ExplicitRecoveryExecution input) {
+        var actor = actors.capture();
+        return retry(() -> reports.recoverToFactory(actor, id, version, key, input, false));
+    }
+
+    @PostMapping("/recoveries/{id}/execute-to-factory")
+    Map<String, Object> executeRecoveryToFactory(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.ExplicitRecoveryExecution input) {
+        var actor = actors.capture();
+        return retry(() -> reports.recoverToFactory(actor, id, version, key, input, true));
     }
 
     private Map<String, Object> retry(Supplier<Map<String, Object>> operation) {

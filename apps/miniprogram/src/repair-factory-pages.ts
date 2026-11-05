@@ -12,6 +12,7 @@ interface Data {
     error: string; notice: string; confirmation: string; pendingLabel: string;
     reason: string; provider: string; contact: string; phone: string; due: string; fault: string;
     observedCode: string; serial: string; actualDate: string; actualTime: string; evidence: string;
+    lossDate: string; lossTime: string; lossLocation: string; lossCircumstances: string; linkedLoss: string;
     originalChecked: boolean; noCostChecked: boolean; condition: string; conditionIndex: number;
     locations: Place[]; locationId: string; locationPage: number; locationTotal: number; evidenceIds: string[];
     eligibleFiles: { object_id: string; filename: string }[]; activeSelected: boolean;
@@ -24,7 +25,7 @@ interface Data {
     partsEvidenceIds: string[]; partsFiles: { object_id: string; filename: string }[];
 }
 interface Context { data: Data; setData(update: Partial<Data>): void }
-type Action = "parts" | "requestCostScope" | "quote" | "cost" | "requestScope" | "approveScope" | "rejectScope" | "withdrawScope" | "createRound" | "cancelRound" | "dispatch" | "receive" | "upload";
+type Action = "parts" | "requestCostScope" | "quote" | "cost" | "requestScope" | "approveScope" | "rejectScope" | "withdrawScope" | "createRound" | "cancelRound" | "dispatch" | "receive" | "upload" | "reportLoss";
 class FactoryFormError extends Error {}
 const moneyPattern = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/;
 const purposeNames: Record<string, string> = { FAULT: "实际故障", FACTORY_ACK: "厂家接收依据", RECEIPT: "原机收回依据", QUOTE: "本轮报价原件", COST_RECEIPT: "本轮实际费用凭证", PARTS_CHANGE: "本轮部件变更原件" };
@@ -34,6 +35,7 @@ const idPattern = /^[1-9][0-9]{0,18}$/;
 const blank = (): Data => ({ detail: null, rows: [], selected: null, history: [], page: 1, total: 0, historyPage: 1, historyTotal: 0,
     busy: false, stale: true, retry: false, error: "", notice: "", confirmation: "", pendingLabel: "", reason: "", provider: "", contact: "",
     phone: "", due: "", fault: "", observedCode: "", serial: "", actualDate: "", actualTime: "", evidence: "", originalChecked: false,
+    lossDate: "", lossTime: "", lossLocation: "", lossCircumstances: "", linkedLoss: "",
     noCostChecked: false, condition: "", conditionIndex: 0, locations: [], locationId: "", locationPage: 1, locationTotal: 0, evidenceIds: [],
     eligibleFiles: [], activeSelected: false, fileName: "", purposeIndex: 1, purposeLabels: ["实际故障", "厂家接收依据", "本轮报价原件", "本轮实际费用凭证"],
     costPolicyIndex: 0, costPolicyLabels: ["无费用", "所有轮次累计限额", "不限费用"], costLimit: "", approvedCostLabel: "", pendingCostLabel: "",
@@ -130,7 +132,7 @@ export function createRepairFactoryPage(getServices: () => MiniServices) {
         try {
             const result = (operation.file && operation.form
                 ? await services.sessions.uploadFactoryEvidence(operation.path, operation.file, { key: operation.key, version: operation.version, ...operation.form })
-                : await services.sessions.request("POST", operation.path, operation.body === undefined ? undefined : JSON.parse(operation.body) as unknown, operation)) as { round?: { id: string } };
+                : await services.sessions.request("POST", operation.path, operation.body === undefined ? undefined : JSON.parse(operation.body) as unknown, operation)) as { id?: string; round?: { id: string } };
             if (!current(epoch)) return;
             if (result.round?.id) selectedId = result.round.id;
             if (!await readState(page, epoch) || !current(epoch)) return;
@@ -141,17 +143,20 @@ export function createRepairFactoryPage(getServices: () => MiniServices) {
                 purposeKinds: page.data.purposeKinds, financialFiles: page.data.financialFiles,
                 parts: page.data.parts, partsPage: page.data.partsPage, partsFiles: page.data.partsFiles,
                 approvedCostLabel: page.data.approvedCostLabel, pendingCostLabel: page.data.pendingCostLabel };
-            page.setData({ ...blank(), ...saved, stale: false, notice: "本次办理结果已核对，实际进度以当前单据为准。" });
+            const linkedLoss = operation.path.startsWith("/api/v1/mini/loss-reports/factory/") ? result.id ?? "" : page.data.linkedLoss;
+            page.setData({ ...blank(), ...saved, linkedLoss, stale: false, notice: linkedLoss
+                ? "已建立待审批报失，请打开报失单上传情况图片。" : "本次办理结果已核对，实际进度以当前单据为准。" });
             discard(operation.file); clearPreview();
         } catch (error) { if (current(epoch)) failure(page, error); } finally { finish(page, epoch); }
     };
     const prepare = (page: Context, action: Action) => {
-        if (!editable(page) || !page.data.detail || !["parts", "requestScope", "requestCostScope", "quote", "cost", "approveScope", "rejectScope", "withdrawScope", "createRound", "cancelRound", "dispatch", "receive", "upload"].includes(action)) return;
+        if (!editable(page) || !page.data.detail || !["parts", "requestScope", "requestCostScope", "quote", "cost", "approveScope", "rejectScope", "withdrawScope", "createRound", "cancelRound", "dispatch", "receive", "upload", "reportLoss"].includes(action)) return;
         const d = page.data.detail, row = page.data.selected, permission = ["approveScope", "rejectScope"].includes(action) ? "decideScope" : action === "upload" ? "uploadEvidence" : action;
         const financialPurpose = ["QUOTE", "COST_RECEIPT"].includes(page.data.purposeKinds[page.data.purposeIndex] ?? "");
         const financial = action === "quote" || action === "cost" || action === "upload" && financialPurpose;
         const partsAction = action === "parts" || action === "upload" && page.data.purposeKinds[page.data.purposeIndex] === "PARTS_CHANGE";
-        const permitted = partsAction ? page.data.parts?.canRecord && d.photosAvailable : action === "quote" ? row?.actions?.recordQuote : action === "cost" ? row?.actions?.recordCost
+        const permitted = action === "reportLoss" ? d.actions.receive && d.lockVersion != null
+            : partsAction ? page.data.parts?.canRecord && d.photosAvailable : action === "quote" ? row?.actions?.recordQuote : action === "cost" ? row?.actions?.recordCost
             : action === "upload" && financialPurpose ? row?.actions?.uploadFinancialEvidence : d.actions[permission];
         if (!permitted) return;
         const guards = { assetVersion: d.assetVersion, ownershipVersion: d.ownershipVersion, lockVersion: d.lockVersion };
@@ -179,7 +184,14 @@ export function createRepairFactoryPage(getServices: () => MiniServices) {
             } else {
                 if (!row || !financial && !partsAction && (row.id !== d.activeRound?.id || row.version !== d.activeRound.version) || d.lockVersion === null) throw new FactoryFormError("请刷新并选中当前活动轮次。");
                 path = "/rounds/" + row.id;
-                if (action === "parts") {
+                if (action === "reportLoss") {
+                    const lastLocation = page.data.lossLocation.trim(), circumstances = page.data.lossCircumstances.trim();
+                    if (!lastLocation || circumstances.length < 10) throw new FactoryFormError("请填写最后见到原机的位置及至少10字无法收回的依据。");
+                    path = "/api/v1/mini/loss-reports/factory/" + repairId + "/rounds/" + row.id;
+                    body = { ...guards, roundVersion: row.version, lastLocation, circumstances,
+                        lastSeenAt: physicalTime(page.data.lossDate, page.data.lossTime + ":00") };
+                    label = "提交原机无法收回报失，保留原轮次实际寄出记录。";
+                } else if (action === "parts") {
                     const partName = page.data.partsName.trim(), beforeInfo = page.data.partsBefore.trim(), afterInfo = page.data.partsAfter.trim(), reason = page.data.partsReason.trim();
                     const evidenceIds = [...page.data.partsEvidenceIds], allowed = new Set(page.data.partsFiles.map(f => f.object_id));
                     if (!partName || partName.length > 100 || !beforeInfo || beforeInfo.length > 2000 || !afterInfo || afterInfo.length > 2000 || beforeInfo === afterInfo || reason.length < 10 || reason.length > 1000
@@ -226,7 +238,7 @@ export function createRepairFactoryPage(getServices: () => MiniServices) {
                     label += "；" + page.data.observedCode.trim() + "；" + page.data.actualDate + " " + page.data.actualTime;
                 }
             }
-            prepared = Object.freeze({ path: route(path), key: services.createKey(), version: d.version, body: body === undefined ? undefined : JSON.stringify(body), file, form, label });
+            prepared = Object.freeze({ path: action === "reportLoss" ? path : route(path), key: services.createKey(), version: d.version, body: body === undefined ? undefined : JSON.stringify(body), file, form, label });
             page.setData({ confirmation: label, error: "" });
         } catch (error) { try { discard(file); } finally { page.setData({ error: error instanceof FactoryFormError ? error.message : "原件副本或办理资料尚未核实，请重新选择并核对图片10MB、PDF20MB限制。" }); } }
     };
@@ -246,7 +258,7 @@ export function createRepairFactoryPage(getServices: () => MiniServices) {
         async onRefresh(this: Context) { if (ensureCurrent(this) && !this.data.busy && !prepared) await read(this); },
         onField(this: Context, e: { currentTarget: { dataset: { field: string } }; detail: { value: string } }) {
             const field = e.currentTarget.dataset.field;
-            if (editable(this) && ["reason", "provider", "contact", "phone", "due", "fault", "observedCode", "serial", "actualDate", "actualTime", "evidence", "costLimit", "moneyAmount", "moneyReason", "partsName", "partsBefore", "partsAfter", "partsReason"].includes(field)) {
+            if (editable(this) && ["reason", "provider", "contact", "phone", "due", "fault", "observedCode", "serial", "actualDate", "actualTime", "evidence", "costLimit", "moneyAmount", "moneyReason", "partsName", "partsBefore", "partsAfter", "partsReason", "lossDate", "lossTime", "lossLocation", "lossCircumstances"].includes(field)) {
                 if (["actualDate", "actualTime"].includes(field)) actualInstant = "";
                 this.setData({ [field]: e.detail.value });
             }
@@ -308,6 +320,9 @@ export function createRepairFactoryPage(getServices: () => MiniServices) {
         onCloseFile(this: Context) { if (!ensureCurrent(this)) return; try { clearPreview(); } finally { this.setData({ previewPath: "", previewName: "", previewMime: "" }); } },
         async onViewFile(this: Context) { if (!editable(this) || !preview || !services.openEvidence) return; const epoch = generation; this.setData({ busy: true });
             try { await services.openEvidence(preview, this.data.previewName); } catch (error) { if (current(epoch)) failure(this, error); } finally { finish(this, epoch); } },
+        onLinkedLoss(this: Context) {
+            if (editable(this) && idPattern.test(this.data.linkedLoss)) services.navigate("/pages/loss-reports/index?id=" + this.data.linkedLoss);
+        },
         onBack(this: Context) { if (!this.data.busy && !pending && !prepared) services.navigate("/pages/repairs/index?id=" + repairId); },
         onReplacement(this: Context) { if (editable(this) && this.data.selected && ["DISPATCHED", "RECEIVED"].includes(this.data.selected.roundStatus)) services.navigate("/pages/repair-replacement/index?id=" + repairId + "&round=" + this.data.selected.id); },
     };

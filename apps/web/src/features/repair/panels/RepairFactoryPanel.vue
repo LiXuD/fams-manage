@@ -8,6 +8,7 @@ import RepairFactoryPartsPanel from "./RepairFactoryPartsPanel.vue";
 import RepairFactoryReplacementPanel from "./RepairFactoryReplacementPanel.vue";
 import FamsMediaPreview from "@/components/FamsMediaPreview.vue";
 import { RepairApiError, repairRequest, type Repair } from "@/features/repair/api";
+import { LossApiError, lossRequest, type LossReport } from "@/features/loss/api";
 import { factoryEventNames, factoryEvidenceContent, factoryProblem, factoryRequest, factoryRoundStates, factoryScopeStates, type FactoryMutation } from "@/features/repair/factory-api";
 import type { FactoryDetail, FactoryFile, FactoryHistory, FactoryPage, FactoryReply, FactoryRound, FactoryRoundDetail } from "@/features/repair/factory-types";
 import { useBusy } from "@/features/repair/busyRegistry";
@@ -30,6 +31,7 @@ const observedCode = shallowRef(""), serial = shallowRef(""), actualDate = shall
 const costPolicy = shallowRef("NO_COST"), costLimit = shallowRef(""), moneyAmount = shallowRef(""), moneyReason = shallowRef(""), moneyChecked = shallowRef(false), moneyEvidence = ref<string[]>([]), costUnassessed = shallowRef(false);
 const moneyPattern = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/;
 const costText = (policy?: string, limit?: string | null) => policy === "UNLIMITED" ? "费用不限" : policy === "LIMITED" ? `所有轮次累计限额 ${limit ?? "待核对"} 元` : "无费用";
+const lossSeenAt = shallowRef(""), lossLastLocation = shallowRef(""), lossCircumstances = shallowRef(""), linkedLoss = shallowRef("");
 const originalChecked = shallowRef(false), noCostChecked = shallowRef(false), condition = ref("RESTORED");
 const locationId = shallowRef(""), locations = ref<{ id: string; name: string; version: number }[]>([]), locationPage = shallowRef(1), locationTotal = shallowRef(0);
 const file = ref<File | null>(null), purpose = ref("FACTORY_ACK"), selectedEvidence = ref<string[]>([]);
@@ -69,6 +71,11 @@ const quoteLines = computed(() => (selected.value?.quotes ?? []).map((quote, ind
 const costListShown = computed(() => !!selected.value && (!!selected.value.quotes?.length || selected.value.actualCost !== null));
 const financialRows = computed(() => financialEvidence.value.map(item => ({ ...item, label: item.purpose === "QUOTE" ? "报价原件：" : "费用原件：", filename: fileNames.value[item.object_id] })));
 const receiveFieldsetShown = computed(() => !!(activeSelected.value && (data.value?.actions.dispatch || data.value?.actions.receive)));
+/** 返厂维修锁是报失与收回两段的共同前提：缺锁时收回表单禁用并给出核对提示。 */
+const receiveFieldsetDisabled = computed(() => locked.value || stale.value || data.value?.lockVersion == null);
+const noFactoryLockHint = computed(() => !!(activeSelected.value && data.value?.actions.receive && data.value?.lockVersion == null));
+const reportLossSectionShown = computed(() => !!(activeSelected.value && data.value?.actions.receive && data.value?.lockVersion != null));
+const linkedLossPath = computed(() => `/loss-reports/${linkedLoss.value}`);
 const receiveFieldsetTitle = computed(() => data.value?.actions.receive ? "核实原实物实际收回" : "登记实物实际寄出");
 const originalIdentityText = computed(() => { const id = selected.value?.originalIdentity; return id ? `本轮原机 ${id.assetCode}${id.serialNumber ? ` · 序列号 ${id.serialNumber}` : ""}。` : ""; });
 const serialFieldShown = computed(() => !!selected.value?.originalIdentity.serialNumber);
@@ -92,6 +99,7 @@ watch([busy, pending, confirmation, partsBusy, replacementBusy], () => {
 }, { flush: "sync" });
 function clearPhysical() { clearMoney(); observedCode.value = ""; serial.value = ""; actualDate.value = ""; actualTime.value = ""; evidence.value = ""; originalChecked.value = false; noCostChecked.value = false; selectedEvidence.value = []; locationId.value = ""; }
 function reset() {
+  lossSeenAt.value = ""; lossLastLocation.value = ""; lossCircumstances.value = ""; linkedLoss.value = "";
   partsBusy.value = false;
   replacementBusy.value = false;
   liveness.invalidate(); preview.close(); opened.value = false; busy.value = false; stale.value = true; data.value = null; roundRows.value = []; history.value = []; selected.value = null; selectedId.value = "";
@@ -148,14 +156,15 @@ function physicalTime() {
   if (!Number.isFinite(date.getTime()) || date.getFullYear() !== parts[0] || date.getMonth() + 1 !== parts[1] || date.getDate() !== parts[2] || date.getHours() !== time[0] || date.getMinutes() !== time[1] || date.getSeconds() !== time[2]) throw new Error("physical time invalid");
   return date.toISOString();
 }
-type Action = "requestCostScope" | "quote" | "cost" | "requestScope" | "approveScope" | "rejectScope" | "withdrawScope" | "createRound" | "cancelRound" | "dispatch" | "receive" | "upload";
+type Action = "requestCostScope" | "quote" | "cost" | "requestScope" | "approveScope" | "rejectScope" | "withdrawScope" | "createRound" | "cancelRound" | "dispatch" | "receive" | "upload" | "reportLoss";
 function prepare(action: Action) {
   if (locked.value || stale.value || !data.value) return; error.value = "";
   const state = data.value, active = state.activeRound, row = selected.value;
   const permission = action === "approveScope" || action === "rejectScope" ? "decideScope" : action === "upload" ? "uploadEvidence" : action;
   const financialPurpose = ["QUOTE", "COST_RECEIPT"].includes(purpose.value);
   const financial = action === "quote" || action === "cost" || action === "upload" && financialPurpose;
-  const permitted = action === "quote" ? row?.actions?.recordQuote : action === "cost" ? row?.actions?.recordCost
+  const permitted = action === "reportLoss" ? state.actions.receive && activeSelected.value && state.lockVersion != null
+    : action === "quote" ? row?.actions?.recordQuote : action === "cost" ? row?.actions?.recordCost
     : action === "upload" && financialPurpose ? row?.actions?.uploadFinancialEvidence : state.actions[permission as keyof typeof state.actions];
   if (!permitted) return;
   const guards = { assetVersion: state.assetVersion, ownershipVersion: state.ownershipVersion, lockVersion: state.lockVersion };
@@ -184,6 +193,16 @@ function prepare(action: Action) {
       if (!moneyPattern.test(amount) || !moneyChecked.value || moneyReason.value.trim().length < 3 || !selected.every(id => allowed.has(id)) || (action === "quote" || /[1-9]/.test(amount)) && !selected.length) { error.value = "请核对精确金额、原因及本轮对应用途原件，并亲自确认已核对。"; return; }
       path += action === "quote" ? "/quotes" : "/cost"; body = { ...guards, roundVersion: row.version, amount, evidenceIds: selected, reason: moneyReason.value.trim(), finalAmountChecked: true };
       label = `${action === "quote" ? "登记本轮报价" : "确认本轮最终费用"} ${amount} 元；${moneyReason.value.trim()}`;
+    } else if (action === "reportLoss") {
+      const time = new Date(lossSeenAt.value);
+      if (!Number.isFinite(time.getTime()) || !lossLastLocation.value.trim() || lossCircumstances.value.trim().length < 10) {
+        error.value = "请填写原机最后见到的时间、位置及至少10字无法收回的依据。";
+        return;
+      }
+      path = `/factory/${state.repairId}/rounds/${row.id}`;
+      body = { ...guards, roundVersion: row.version, lastSeenAt: time.toISOString(),
+        lastLocation: lossLastLocation.value.trim(), circumstances: lossCircumstances.value.trim() };
+      label = "提交原机无法收回报失。报失待批准，原返厂轮次保留实际寄出记录。";
     } else if (action === "cancelRound") { path += "/cancel"; body = { ...guards, roundVersion: row.version, reason: reason.value.trim() }; label = "取消尚未寄出的轮次"; }
     else if (action === "upload") {
       const value = file.value, pdf = value && /\.pdf$/i.test(value.name);
@@ -207,16 +226,25 @@ function prepare(action: Action) {
 async function perform() {
   if (!pending.value || busy.value || blocked.value) return;
   const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
+  const submission = { ...operation.payload, key: operation.key };
   try {
-    await factoryRequest<FactoryReply>(operation.payload.repairId, operation.payload.path, { ...operation.payload, key: operation.key });
+    // 返厂原机报失走报失域端点，其响应即新报失单；其余动作仍走返厂域。
+    const report = operation.payload.path.startsWith("/factory/")
+      ? await lossRequest<LossReport>(operation.payload.path, submission) : null;
+    if (!report) await factoryRequest<FactoryReply>(operation.payload.repairId, operation.payload.path, submission);
     if (!liveness.isCurrent(turn)) return;
+    if (report) { linkedLoss.value = report.id; lossSeenAt.value = ""; lossLastLocation.value = ""; lossCircumstances.value = ""; }
     settle(); stale.value = true; file.value = null; clearPhysical(); preview.close(); reason.value = "";
     if (operation.payload.path === "/rounds") { selectedId.value = ""; purpose.value = "FACTORY_ACK"; }
     if (operation.payload.path.endsWith("/dispatch")) purpose.value = "RECEIPT";
-    notice.value = "本次办理已保存。轮次收回不等于整单维修完成，仍需核实后续实际去向。";
+    notice.value = report ? "已建立待审批报失。请打开报失单上传情况图片。" : "本次办理已保存。轮次收回不等于整单维修完成，仍需核实后续实际去向。";
     await fetchState(turn);
   } catch (cause) {
-    if (liveness.isCurrent(turn)) { fail(cause); failure(cause); }
+    if (liveness.isCurrent(turn)) {
+      // 报失请求的失败按本面板既有的维修域判据与文案处置，只在边界处换成本域错误类。
+      const domainError = cause instanceof LossApiError ? new RepairApiError(cause.status, cause.code, {}) : cause;
+      fail(domainError); failure(domainError);
+    }
   } finally { if (liveness.isCurrent(turn)) busy.value = false; }
   if (liveness.isCurrent(turn) && !pending.value) emit("changed");
 }
@@ -321,6 +349,14 @@ onBeforeUnmount(() => { reset(); });
           <p>实际寄出 {{ dispatchText }}；实际原机收回 {{ receivedText }}。</p>
           <p v-if="selected.receivedAt">{{ receivedText2 }}</p>
           <p v-if="selected.cancelReason">取消原因：{{ selected.cancelReason }}。本轮未计作实际返厂次数。</p>
+          <p v-if="linkedLoss"><router-link class="fams-button" data-kind="link" :to="linkedLossPath">查看报失单 {{ linkedLoss }} 并上传情况图片</router-link></p>
+          <fieldset v-if="reportLossSectionShown" class="fams-card fams-stack" :disabled="locked || stale">
+            <h4 class="fams-panel-title">返厂原机无法收回</h4>
+            <label class="fams-field"><span class="fams-field-label">最后见到原机的时间</span><input class="fams-control" v-model="lossSeenAt" type="datetime-local" step="1"></label>
+            <label class="fams-field"><span class="fams-field-label">最后见到原机的位置</span><input class="fams-control" v-model="lossLastLocation" maxlength="500"></label>
+            <label class="fams-field fams-field-wide"><span class="fams-field-label">无法收回的依据</span><textarea class="fams-control" v-model="lossCircumstances" maxlength="2000" /></label>
+            <button class="fams-button" data-kind="primary" type="button" @click="prepare('reportLoss')">核对返厂原机报失</button>
+          </fieldset>
           <h4 class="fams-panel-title">本轮原始凭证</h4>
           <p v-if="!data.photosAvailable">原件服务暂不可用。</p>
           <ul class="fams-timeline">
@@ -353,7 +389,8 @@ onBeforeUnmount(() => { reset(); });
               <button v-if="selected.actions?.recordCost" class="fams-button" data-kind="primary" type="button" @click="prepare('cost')">核对确认本轮最终费用</button>
             </div>
           </fieldset>
-          <fieldset v-if="receiveFieldsetShown" class="fams-card fams-stack" :disabled="locked || stale">
+          <p v-if="noFactoryLockHint">当前轮次没有返厂维修锁，请先核对关联业务进度。</p>
+          <fieldset v-if="receiveFieldsetShown" class="fams-card fams-stack" :disabled="receiveFieldsetDisabled">
             <h4 class="fams-panel-title">{{ receiveFieldsetTitle }}</h4>
             <p>{{ originalIdentityText }}</p>
             <div class="fams-field-grid">

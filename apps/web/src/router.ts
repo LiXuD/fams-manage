@@ -41,6 +41,7 @@ const RepairDraftView = () => import("@/features/repair/views/RepairDraftView.vu
 const RepairDetailView = () => import("@/features/repair/views/RepairDetailView.vue");
 const RepairAssistanceView = () => import("@/features/repair/views/RepairAssistanceView.vue");
 const LossView = () => import("@/features/loss/views/LossView.vue");
+const ScrapView = () => import("@/features/scrap/views/ScrapView.vue");
 
 declare module "vue-router" {
   interface RouteMeta {
@@ -60,6 +61,7 @@ export const router = createRouter({
     { path: "/repairs/new", name: "repair-new", component: RepairDraftView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "新建报修", uiDesc: "选择可报修资产并填写实际故障、影响程度和发生时间。提交后到报修详情等待管理员决定。" } },
     { path: "/repairs/:id", name: "repair-detail", component: RepairDetailView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "报修详情", uiDesc: "决定、领取、原地维修、返厂、返还与协作只作用于本报修单。实物证据和历史保留在原记录上。" } },
     { path: "/loss-reports/:id?", name: "loss-reports", component: LossView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "报失与查找", uiDesc: "报告找不到只冻结流转；批准核实后，由处理库管记录实际查找。原责任和借用继续保留。" } },
+    { path: "/scrap-requests/:id?", name: "scrap-requests", component: ScrapView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "报废与处置" } },
     { path: "/inventory-tasks", name: "inventory-tasks", component: InventoryTaskView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "盘点任务", uiDesc: "发布时冻结应盘集合与责任快照。盘点不直接改变资产责任；执行人只查看自己的应盘项。" } },
     { path: "/inventory-tasks/new", name: "inventory-task-new", component: InventoryTaskDraftView, props: true, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "新建盘点草稿", uiDesc: "先划定盘点范围并保存草稿。到任务详情页预览应盘数量后再发布冻结。" } },
     { path: "/inventory-tasks/:id/edit", name: "inventory-task-edit", component: InventoryTaskDraftView, props: true, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "修改盘点草稿", uiDesc: "草稿发布前可调整范围与时间。已发布任务保留原快照，请新建任务。" } },

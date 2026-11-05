@@ -69,3 +69,33 @@ test("native recovery transfer keeps target references and original write after 
  assert.equal(body.recovery.facts.locationId,"9007199254740995");
  assert.equal(f.page.data.detail.transferId,"9007199254741004");
 });
+
+test("factory recovery uses its own approval and returns a damaged original to the existing repair", async () => {
+ const f = fixture();
+ const prepareFacts = async () => {
+  await proof(f);
+  await f.page.onLoadLocations();
+  f.page.onReturnLocation({detail:{value:"0"}});
+  f.page.onFactoryChecked({detail:{value:true}});
+  f.page.onFactoryDamaged({detail:{value:true}});
+ };
+ Object.assign(f.row,{status:"CONFIRMED_LOST",actions:{requestFactoryRecovery:true}});
+ await prepareFacts();
+ f.page.onRecoveryPrepare(event({action:"requestFactoryRecovery"}));
+ await f.page.onConfirm();
+ assert.match(writes(f)[0].path,/factory-recovery-requests$/);
+ assert.equal(writes(f)[0].body.facts.condition,"DAMAGED");
+ Object.assign(f.row,{actions:{},recoveries:[{id:"44",version:7,assetVersion:2,ownershipVersion:9,actions:{execute:true},request:{destination:"FACTORY_REPAIR",facts:{condition:"DAMAGED"}}}]});
+ await prepareFacts();
+ f.page.onRecoveryPrepare(event({action:"executeDamaged",id:"44"}));
+ assert.equal(f.page.data.confirmation,"");
+ f.page.onRecoveryPrepare(event({action:"executeFactory",id:"44"}));
+ assert.match(f.page.data.confirmation,/实际收回仍由原轮次另行登记/);
+ await f.page.onConfirm();
+ const {path,body,mutation} = writes(f)[1];
+ assert.match(path,/recoveries\/44\/execute-to-factory$/);
+ assert.equal(mutation.version,7);
+ assert.deepEqual([body.assetVersion,body.ownershipVersion,body.lockVersion],[2,9,4]);
+ assert.deepEqual([body.facts.locationId,body.facts.locationVersion],["9007199254740995",8]);
+ assert.equal(body.facts.stillOriginalCustodian,false);
+});

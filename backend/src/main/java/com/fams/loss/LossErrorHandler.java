@@ -43,6 +43,12 @@ public class LossErrorHandler {
         return response(failure.status(), failure.getMessage(), Map.of(), request);
     }
 
+    @ExceptionHandler(com.fams.repair.RepairFailure.class)
+    ResponseEntity<ErrorResponse> factorySource(com.fams.repair.RepairFailure failure,
+            HttpServletRequest request) {
+        return response(failure.status(), failure.getMessage(), Map.of(), request);
+    }
+
     @ExceptionHandler(com.fams.loan.LossReturnPort.Failure.class)
     ResponseEntity<ErrorResponse> returned(com.fams.loan.LossReturnPort.Failure failure,
             HttpServletRequest request) {
