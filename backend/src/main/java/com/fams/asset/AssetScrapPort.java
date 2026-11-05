@@ -153,7 +153,9 @@ public class AssetScrapPort {
                 || !"NORMAL".equals(asset.get("exception_status"))) {
             throw new AssetHandoverPort.Failure("SCRAP_PHYSICAL_IDENTITY_CHANGED", 409);
         }
-        if (db.queryForList("SELECT id FROM fams_location WHERE id=? AND version=? AND status='ACTIVE' FOR UPDATE",
+        if (db.queryForList("SELECT l.id FROM fams_location l LEFT JOIN fams_warehouse w ON w.id=l.warehouse_id"
+                + " WHERE l.id=? AND l.version=? AND l.status='ACTIVE'"
+                + " AND (l.warehouse_id IS NULL OR w.status='ACTIVE') FOR UPDATE",
                 locationId, locationVersion).isEmpty()) {
             throw new AssetHandoverPort.Failure("SCRAP_LOCATION_CHANGED", 409);
         }
@@ -165,5 +167,24 @@ public class AssetScrapPort {
         mapper.event(assetId, "SCRAP_EXECUTED", time,
                 json.writeValueAsString(Map.of("scrapRequestId", Long.toString(requestId))), actorId);
         return version + 1;
+    }
+
+    public Map<String, Object> eligible(Current actor, int page, int size) {
+        String where = " FROM fams_asset a WHERE a.card_stage='ACTIVE' AND a.exception_status='NORMAL'"
+                + " AND a.lifecycle_status IN ('IN_STOCK','IN_USE') AND (? OR (? AND a.responsible_employee_id=?)"
+                + " OR (? AND a.using_organization_id=?)) AND NOT EXISTS (SELECT 1 FROM fams_asset_business_lock b"
+                + " WHERE b.asset_id=a.id AND b.released_at IS NULL)";
+        Object[] scope = {actor.globalApplicant(), actor.has(Role.EMPLOYEE), actor.employeeId(),
+                actor.has(Role.DEPARTMENT_ASSET_MANAGER), actor.organizationId()};
+        var args = new java.util.ArrayList<Object>(java.util.Arrays.asList(scope));
+        args.add(size);
+        args.add(((long) page - 1) * size);
+        var items = db.queryForList("SELECT a.id,a.asset_code,a.name,a.version" + where
+                + " ORDER BY a.id DESC LIMIT ? OFFSET ?", args.toArray()).stream()
+                .map(row -> Map.of("id", row.get("id").toString(), "assetCode", row.get("asset_code"),
+                        "name", row.get("name"), "version", row.get("version"))).toList();
+        return Map.of("items", items, "total", Objects.requireNonNull(
+                db.queryForObject("SELECT COUNT(*)" + where, Long.class, scope)),
+                "page", page, "pageSize", size);
     }
 }

@@ -7,11 +7,14 @@ import com.fams.product.contract.model.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.PositiveOrZero;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,13 +30,39 @@ import java.util.UUID;
 @RequestMapping({"/api/v1/scrap-requests", "/api/v1/mini/scrap-requests"})
 public class ScrapController {
     private final ScrapService scrap;
+    private final ScrapReadService reads;
     private final ScrapReviewService review;
     private final RequisitionActorContext actors;
 
-    public ScrapController(ScrapService scrap, ScrapReviewService review, RequisitionActorContext actors) {
+    public ScrapController(ScrapService scrap, ScrapReviewService review, ScrapReadService reads, RequisitionActorContext actors) {
         this.scrap = scrap;
+        this.reads = reads;
         this.review = review;
         this.actors = actors;
+    }
+
+    @GetMapping
+    Map<String, Object> list(@RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
+            @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
+        return reads.list(actors.capture(), page, pageSize);
+    }
+
+    @GetMapping("/eligible")
+    Map<String, Object> eligible(@RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
+            @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
+        return reads.eligible(actors.capture(), page, pageSize);
+    }
+
+    @GetMapping("/{id}")
+    Map<String, Object> get(@PathVariable @Positive long id) {
+        return reads.get(actors.capture(), id);
+    }
+
+    @GetMapping("/{id}/execution-catalog/{kind}")
+    Map<String, Object> catalog(@PathVariable @Positive long id, @PathVariable String kind,
+            @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
+            @RequestParam(defaultValue = "100") @Positive @Max(100) int pageSize) {
+        return reads.catalog(actors.capture(), id, kind, page, pageSize);
     }
 
     @PostMapping

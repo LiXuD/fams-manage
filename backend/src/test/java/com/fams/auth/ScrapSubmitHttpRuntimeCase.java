@@ -189,6 +189,39 @@ class ScrapSubmitHttpRuntimeCase {
                 + " WHERE asset_id=951020 AND released_at IS NULL", Long.class));
     }
 
+    @Test
+    void queryScopeHidesPendingRequestsAndExecutionCatalogFromOtherActors() throws Exception {
+        var json = new tools.jackson.databind.ObjectMapper();
+        var submitted = json.readTree(submit(fixture.employee, UUID.randomUUID().toString(), INPUT).body());
+        String id = submitted.path("id").asText();
+        assertEquals(200, get(fixture.employee, "/" + id).statusCode());
+        assertEquals(200, get(fixture.admin, "/" + id).statusCode());
+        assertEquals(404, get(fixture.other, "/" + id).statusCode());
+        assertEquals(404, get(fixture.warehouse, "/" + id).statusCode());
+        assertEquals(403, get(fixture.system, "/" + id).statusCode());
+        assertEquals(0, json.readTree(get(fixture.other, "?page=1&pageSize=20").body()).path("total").asInt());
+        var employee = json.readTree(get(fixture.employee, "/" + id).body());
+        assertEquals(id, employee.path("id").asText());
+        assertEquals("REP-ASSET-951020", employee.path("source").path("assetCode").asText());
+        assertEquals(0, json.readTree(get(fixture.employee, "/eligible").body()).path("items").size());
+        String approve = "{\"assetVersion\":1,\"lockVersion\":0,\"result\":\"APPROVE\","
+                + "\"reason\":\"核对后批准报废\",\"approvedDisposition\":\"待处置保管\"}";
+        var approved = write(fixture.admin, id, "decision", 0, UUID.randomUUID().toString(), approve);
+        assertEquals(200, approved.statusCode(), approved.body());
+        assertEquals(200, get(fixture.warehouse, "/" + id).statusCode());
+        assertEquals(403, get(fixture.warehouse, "/" + id + "/execution-catalog/employee").statusCode());
+        assertEquals(200, write(fixture.warehouse, id, "claim", 1, UUID.randomUUID().toString(),
+                "{\"assetVersion\":1,\"lockVersion\":0}").statusCode());
+        assertEquals(200, get(fixture.warehouse, "/" + id + "/execution-catalog/employee").statusCode());
+        assertEquals(403, get(fixture.otherWarehouse, "/" + id + "/execution-catalog/location").statusCode());
+    }
+
+    private HttpResponse<String> get(Session session, String path) throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create(
+                "http://127.0.0.1:" + port + "/api/v1/scrap-requests" + path))
+                .header("Cookie", session.cookie()).GET().build(), HttpResponse.BodyHandlers.ofString());
+    }
+
     private HttpResponse<String> write(Session session, String id, String action, long version,
             String key, String body) throws Exception {
         return http.send(HttpRequest.newBuilder(

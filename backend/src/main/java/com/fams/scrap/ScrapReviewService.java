@@ -182,7 +182,8 @@ public class ScrapReviewService {
                 || !input.occurredAt().equals(input.occurredAt().truncatedTo(ChronoUnit.MILLIS))) {
             throw new AssetHandoverPort.Failure("SCRAP_PHYSICAL_EVIDENCE_INVALID", 400);
         }
-        if (db.queryForList("SELECT id FROM fams_employee WHERE id=? AND version=? AND status='ACTIVE' FOR UPDATE",
+        if (db.queryForList("SELECT e.id FROM fams_employee e JOIN fams_organization o ON o.id=e.organization_id"
+                + " WHERE e.id=? AND e.version=? AND e.status='ACTIVE' AND o.status='ACTIVE' FOR UPDATE",
                 input.custodianEmployeeId(), input.custodianVersion()).isEmpty()) {
             throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_CUSTODIAN_CHANGED", 409);
         }

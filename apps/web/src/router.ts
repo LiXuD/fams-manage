@@ -21,12 +21,14 @@ import TransferTargetChangeView from "@/views/TransferTargetChangeView.vue";
 
 import InventoryTaskView from "@/views/InventoryTaskView.vue";
 import LossView from "@/views/LossView.vue";
+import ScrapView from "@/views/ScrapView.vue";
 import RepairView from "@/views/RepairView.vue";
 import RepairAssistanceView from "@/views/RepairAssistanceView.vue";
 
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
+    { path: "/scrap-requests/:id?", name: "scrap-requests", component: ScrapView, meta: { requiresAuth: true } },
     { path: "/loss-reports/:id?", name: "loss-reports", component: LossView, meta: { requiresAuth: true } },
     { path: "/repair-assistance/:id?", name: "repair-assistance", component: RepairAssistanceView, meta: { requiresAuth: true } },
     { path: "/repairs/:id?", name: "repairs", component: RepairView, meta: { requiresAuth: true } },

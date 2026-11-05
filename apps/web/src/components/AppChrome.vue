@@ -44,6 +44,7 @@ async function handleLogout(): Promise<void> {
         <router-link v-if="session.user?.roles.some(role => ['EMPLOYEE', 'DEPARTMENT_ASSET_MANAGER', 'WAREHOUSE_OPERATOR', 'ASSET_ADMIN'].includes(role))" to="/inventory-tasks" class="nav-item">盘点任务</router-link>
         <router-link v-if="session.user?.roles.some(role => ['EMPLOYEE', 'DEPARTMENT_ASSET_MANAGER', 'WAREHOUSE_OPERATOR', 'ASSET_ADMIN'].includes(role))" to="/repairs" class="nav-item">报修与维修</router-link>
         <router-link v-if="session.user?.roles.some(role => ['EMPLOYEE', 'DEPARTMENT_ASSET_MANAGER', 'WAREHOUSE_OPERATOR', 'ASSET_ADMIN'].includes(role))" to="/loss-reports" class="nav-item">报失与查找</router-link>
+        <router-link v-if="session.user?.roles.some(role => ['EMPLOYEE', 'DEPARTMENT_ASSET_MANAGER', 'WAREHOUSE_OPERATOR', 'ASSET_ADMIN'].includes(role))" to="/scrap-requests" class="nav-item">报废与处置</router-link>
         <router-link v-if="session.user?.roles.includes('TECH_ASSISTANT')" to="/repair-assistance" class="nav-item">我协助的报修</router-link>
         <router-link v-if="session.user?.roles.some((role) => ['EMPLOYEE', 'DEPARTMENT_ASSET_MANAGER', 'WAREHOUSE_OPERATOR', 'ASSET_ADMIN'].includes(role))" to="/loans" class="nav-item">借用、延期与退还</router-link>
         <router-link v-if="session.user?.roles.some((role) => ['EMPLOYEE', 'DEPARTMENT_ASSET_MANAGER', 'WAREHOUSE_OPERATOR', 'ASSET_ADMIN'].includes(role))" to="/transfers" class="nav-item">调拨与人员交接</router-link>
