@@ -169,6 +169,23 @@ public class AssetScrapPort {
         return version + 1;
     }
 
+    /** Serialize disposition with any later workflow that needs this asset. */
+    public void requireDispositionAsset(long id, long version, String observedCode, String observedSerial) {
+        var rows = db.queryForList("SELECT asset_code,serial_number FROM fams_asset WHERE id=? AND version=?"
+                + " AND card_stage='ACTIVE' AND lifecycle_status='SCRAPPED' AND exception_status='NORMAL' FOR UPDATE",
+                id, version);
+        if (rows.isEmpty() || !db.queryForList("SELECT id FROM fams_asset_business_lock WHERE asset_id=?"
+                + " AND released_at IS NULL FOR UPDATE", id).isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_ASSET_OR_LOCK_CHANGED", 409);
+        }
+        var asset = rows.getFirst();
+        if (!Objects.equals(asset.get("asset_code"), observedCode.strip())
+                || asset.get("serial_number") != null && !Objects.equals(asset.get("serial_number"),
+                        observedSerial == null ? null : observedSerial.strip())) {
+            throw new AssetHandoverPort.Failure("SCRAP_PHYSICAL_IDENTITY_CHANGED", 409);
+        }
+    }
+
     public Map<String, Object> eligible(Current actor, int page, int size) {
         String where = " FROM fams_asset a WHERE a.card_stage='ACTIVE' AND a.exception_status='NORMAL'"
                 + " AND a.lifecycle_status IN ('IN_STOCK','IN_USE') AND (? OR (? AND a.responsible_employee_id=?)"

@@ -1,0 +1,373 @@
+{
+  "candidate": "ec351d5a52a2e650138602ab335c40a468326ed9",
+  "verifiedOn": "2026-11-06",
+  "scope": "Standalone scrap request evidence and pending disposition evidence through PC UI",
+  "runtime": {
+    "candidate": "ec351d5a52a2e650138602ab335c40a468326ed9",
+    "artifactSha256": "1af4da38b0a11a0ffdb493c0ac70face037ca47afe15d5073c33816a6360f522",
+    "scanner": "ClamAV 1.4.6/28129/Sun Sep 20 06:26:26 2026",
+    "committingJvm": 79747,
+    "restartedJvm": 79882,
+    "originalReceiptReplayed": true,
+    "completeBusinessRowsAndFileHashesEqual": true,
+    "requestStatus": "EXECUTED",
+    "requestVersion": 4,
+    "dispositionStatus": "PENDING_DISPOSITION",
+    "dispositionVersion": 1,
+    "assetLifecycle": "SCRAPPED",
+    "cleanAttachmentCounts": {
+      "request": 1,
+      "disposition": 1
+    },
+    "activeScrapLocks": 0,
+    "attachmentReceipts": 2
+  },
+  "browser": {
+    "originalSha256": "79d67cab43bcc2c581ee0623800b3e8997fa4bf75516bafa94d32f1a49f141d6",
+    "requestId": "1",
+    "roleSessions": [
+      "employee",
+      "admin",
+      "warehouse"
+    ],
+    "requestUploadReplyLost": true,
+    "replayed": true,
+    "fieldDeniedForEmployee": true,
+    "viewedOriginals": [
+      "request",
+      "disposition"
+    ],
+    "pendingDisposition": true,
+    "events": [
+      {
+        "role": "employee",
+        "path": "/api/v1/auth/login",
+        "method": "POST",
+        "status": 200
+      },
+      {
+        "role": "employee",
+        "path": "/api/v1/scrap-requests",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "employee",
+        "path": "/api/v1/scrap-requests/eligible",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "employee",
+        "path": "/api/v1/scrap-requests",
+        "method": "POST",
+        "status": 200
+      },
+      {
+        "role": "employee",
+        "path": "/api/v1/scrap-requests",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "employee",
+        "path": "/api/v1/scrap-requests/1",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "employee",
+        "path": "/api/v1/scrap-requests/1/attachment-capabilities",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "employee",
+        "path": "/api/v1/scrap-requests/1/attachments/request",
+        "method": "POST",
+        "status": 503
+      },
+      {
+        "role": "employee",
+        "path": "/api/v1/scrap-requests/1/attachments/request",
+        "method": "POST",
+        "status": 200
+      },
+      {
+        "role": "employee",
+        "path": "/api/v1/scrap-requests",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "employee",
+        "path": "/api/v1/scrap-requests/1",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "employee",
+        "path": "/api/v1/scrap-requests/1/attachment-capabilities",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "admin",
+        "path": "/api/v1/auth/login",
+        "method": "POST",
+        "status": 200
+      },
+      {
+        "role": "admin",
+        "path": "/api/v1/scrap-requests",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "admin",
+        "path": "/api/v1/scrap-requests",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "admin",
+        "path": "/api/v1/scrap-requests/1",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "admin",
+        "path": "/api/v1/scrap-requests/1/attachment-capabilities",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "admin",
+        "path": "/api/v1/scrap-requests/1/attachments/request",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "admin",
+        "path": "/api/v1/scrap-requests/1/attachments/request/9473b229-973c-4be4-8b8b-30b108573f3c/download-grant",
+        "method": "POST",
+        "status": 200
+      },
+      {
+        "role": "admin",
+        "path": "/api/v1/scrap-requests/1/attachments/request/9473b229-973c-4be4-8b8b-30b108573f3c/content",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "admin",
+        "path": "/api/v1/scrap-requests/1/decision",
+        "method": "POST",
+        "status": 200
+      },
+      {
+        "role": "admin",
+        "path": "/api/v1/scrap-requests",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "admin",
+        "path": "/api/v1/scrap-requests/1",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "admin",
+        "path": "/api/v1/scrap-requests/1/attachment-capabilities",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "admin",
+        "path": "/api/v1/scrap-requests/1/attachments/request",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/auth/login",
+        "method": "POST",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests/1",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests/1/attachment-capabilities",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests/1/attachments/request",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests/1/claim",
+        "method": "POST",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests/1",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests/1/attachment-capabilities",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests/1/attachments/request",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests/1/execution-catalog/location",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests/1/execution-catalog/employee",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests/1/execute",
+        "method": "POST",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests/1",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests/1/attachment-capabilities",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests/1/attachments/request",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests/1/attachments/disposition",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests/1/attachments/disposition",
+        "method": "POST",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests/1",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests/1/attachment-capabilities",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests/1/attachments/request",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests/1/attachments/disposition",
+        "method": "GET",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests/1/attachments/disposition/c6c6fcf3-3680-40b3-acdf-e8d0481781c8/download-grant",
+        "method": "POST",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/scrap-requests/1/attachments/disposition/c6c6fcf3-3680-40b3-acdf-e8d0481781c8/content",
+        "method": "GET",
+        "status": 200
+      }
+    ],
+    "errors": []
+  },
+  "initialAttempt": {
+    "result": "script timeout before submission",
+    "reason": "Exact label did not locate the populated select. Scoped combobox selector and a new isolated baseline passed on the same candidate."
+  },
+  "cleanup": {
+    "browserClosed": true,
+    "applicationAndViteStopped": true,
+    "ownedMySqlVolumeAndScannerRemoved": true,
+    "quarantineRemoved": true
+  },
+  "pending": [
+    "Actual disposition and loss write-off",
+    "Related source conversion and correction",
+    "Fixed full product gate and independent review",
+    "Real WeChat and device acceptance"
+  ]
+}

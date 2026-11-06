@@ -120,20 +120,49 @@ export class MiniSessionClient {
         this.checkResponse(response); return response.data;
     }
 
-    async downloadFactoryEvidence(path: string, contentType: string, sizeBytes: number): Promise<string> {
-        if (!/^\/api\/v1\/mini\/repairs\/[1-9][0-9]{0,18}\/factory\/rounds\/[1-9][0-9]{0,18}\/evidence\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/content\?token=[A-Za-z0-9_.-]{1,4096}$/i.test(path)
-            || !["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(contentType)
-            || !Number.isSafeInteger(sizeBytes) || sizeBytes <= 0 || sizeBytes > (contentType === "application/pdf" ? 20 : 10) * 1024 * 1024) throw new Error("返厂原件读取参数无效。");
+    async uploadScrapEvidence(path: string, file: FactoryEvidenceFile, mutation: { key: string; version: number }): Promise<unknown> {
+        if (!/^\/api\/v1\/mini\/scrap-requests\/[1-9][0-9]{0,18}\/attachments\/(request|disposition)$/.test(path)
+            || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(mutation.key)
+            || !Number.isSafeInteger(mutation.version) || mutation.version < 0) throw new Error("报废附件上传身份或版本无效。");
         const session = this.current, generation = this.generation;
         if (!session) throw new MiniRequestError(401, "AUTH_SESSION_INVALID");
-        if (!this.runtime.downloadFactoryEvidence || !this.runtime.discardFactoryEvidence) throw new Error("当前环境无法安全读取返厂原件。");
+        if (!this.runtime.upload || !this.runtime.verifyFactoryEvidence) throw new Error("当前环境无法安全上传报废附件。");
+        this.runtime.verifyFactoryEvidence({ identity: { accountId: session.accountId, bindingId: session.bindingId }, file });
+        this.assertGeneration(generation);
+        const response = await this.runtime.upload({ url: this.origin + path, filePath: file.path,
+            header: { "X-FAMS-Mini-Session": session.sessionToken, "Idempotency-Key": mutation.key, "If-Match-Version": String(mutation.version) },
+            formData: { originalFilename: file.name, declaredContentType: file.contentType } });
+        this.assertGeneration(generation);
+        if (response.statusCode === 401) this.clear();
+        this.checkResponse(response); return response.data;
+    }
+
+    async downloadScrapEvidence(path: string, contentType: string, sizeBytes: number): Promise<string> {
+        if (!/^\/api\/v1\/mini\/scrap-requests\/[1-9][0-9]{0,18}\/attachments\/(request|disposition)\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\/content\?grant=[A-Za-z0-9_.-]{1,256}$/i.test(path)) {
+            throw new Error("报废附件下载地址无效。");
+        }
+        return this.downloadPrivateEvidence(path, contentType, sizeBytes);
+    }
+
+    async downloadFactoryEvidence(path: string, contentType: string, sizeBytes: number): Promise<string> {
+        if (!/^\/api\/v1\/mini\/repairs\/[1-9][0-9]{0,18}\/factory\/rounds\/[1-9][0-9]{0,18}\/evidence\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/content\?token=[A-Za-z0-9_.-]{1,4096}$/i.test(path)
+        ) throw new Error("返厂原件读取参数无效。");
+        return this.downloadPrivateEvidence(path, contentType, sizeBytes);
+    }
+
+    private async downloadPrivateEvidence(path: string, contentType: string, sizeBytes: number): Promise<string> {
+        if (!["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(contentType)
+            || !Number.isSafeInteger(sizeBytes) || sizeBytes <= 0 || sizeBytes > (contentType === "application/pdf" ? 20 : 10) * 1024 * 1024) throw new Error("原件读取参数无效。");
+        const session = this.current, generation = this.generation;
+        if (!session) throw new MiniRequestError(401, "AUTH_SESSION_INVALID");
+        if (!this.runtime.downloadFactoryEvidence || !this.runtime.discardFactoryEvidence) throw new Error("当前环境无法安全读取原件。");
         const response = await this.runtime.downloadFactoryEvidence({ url: this.origin + path,
             header: { "X-FAMS-Mini-Session": session.sessionToken }, identity: { accountId: session.accountId, bindingId: session.bindingId }, contentType, sizeBytes });
         try {
             this.assertGeneration(generation);
             if (response.statusCode === 401) this.clear();
             this.checkResponse({ statusCode: response.statusCode, data: null });
-            if (!response.filePath) throw new Error("返厂原件暂不可读取。");
+            if (!response.filePath) throw new Error("原件暂不可读取。");
             return response.filePath;
         } catch (error) { if (response.filePath) this.runtime.discardFactoryEvidence(response.filePath); throw error; }
     }

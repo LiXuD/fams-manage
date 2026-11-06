@@ -1,0 +1,105 @@
+{
+  "candidate": "9d48e97205f4b5644b4117a034bd710f67f67b0c",
+  "verifiedOn": "2026-11-06",
+  "scope": "Overdue disposition list and removal after closure through actual PC",
+  "fixture": "Only the pending disposition due date was backdated in the isolated database to exercise the overdue condition.",
+  "runtime": {
+    "candidate": "9d48e97205f4b5644b4117a034bd710f67f67b0c",
+    "artifactSha256": "c931a217ce0c682d494cf85f9c1130a2419575ef1a7cf7fc930d79ce4da8d042",
+    "scanner": "ClamAV 1.4.6/28129/Sun Sep 20 06:26:26 2026",
+    "pastDueFixtureDate": "2026-11-04",
+    "requestStatus": "EXECUTED",
+    "requestVersion": 4,
+    "dispositionStatus": "DISPOSED",
+    "dispositionVersion": 2,
+    "assetLifecycle": "SCRAPPED",
+    "cleanAttachmentCounts": {
+      "request": 1,
+      "disposition": 1
+    },
+    "activeScrapLocks": 0,
+    "attachmentReceipts": 2,
+    "completionReceipts": 1,
+    "dispositionTodoClosed": true
+  },
+  "browser": {
+    "originalSha256": "79d67cab43bcc2c581ee0623800b3e8997fa4bf75516bafa94d32f1a49f141d6",
+    "requestId": "1",
+    "roleSessions": [
+      "employee",
+      "admin",
+      "warehouse"
+    ],
+    "overdueDueDate": "2026-11-04",
+    "removedAfterClosure": true,
+    "fieldDeniedForEmployee": true,
+    "viewedOriginals": [
+      "request",
+      "disposition"
+    ],
+    "actualDispositionClosed": true,
+    "errors": []
+  },
+  "relevantHttp": [
+    {
+      "role": "admin",
+      "path": "/api/v1/scrap-requests/dispositions/overdue",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "role": "admin",
+      "path": "/api/v1/scrap-requests/dispositions/overdue",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "role": "warehouse",
+      "path": "/api/v1/scrap-requests/dispositions/overdue",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "role": "warehouse",
+      "path": "/api/v1/scrap-requests/dispositions/overdue",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "role": "warehouse",
+      "path": "/api/v1/scrap-requests/dispositions/overdue",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "role": "warehouse",
+      "path": "/api/v1/scrap-requests/1/disposition/complete",
+      "method": "POST",
+      "status": 200
+    },
+    {
+      "role": "warehouse",
+      "path": "/api/v1/scrap-requests/dispositions/overdue",
+      "method": "GET",
+      "status": 200
+    },
+    {
+      "role": "admin",
+      "path": "/api/v1/scrap-requests/dispositions/overdue",
+      "method": "GET",
+      "status": 200
+    }
+  ],
+  "cleanup": {
+    "browserClosed": true,
+    "applicationAndViteStopped": true,
+    "ownedMySqlVolumeAndScannerRemoved": true,
+    "quarantineRemoved": true
+  },
+  "pending": [
+    "Related-source conversion and loss write-off",
+    "Configurable default limit and notification escalation in D6-24",
+    "Full product gate and independent review",
+    "Real WeChat and device acceptance"
+  ]
+}

@@ -47,6 +47,12 @@ public class ScrapController {
         return reads.list(actors.capture(), page, pageSize);
     }
 
+    @GetMapping("/dispositions/overdue")
+    Map<String, Object> overdueDispositions(@RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
+            @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
+        return reads.overdueDispositions(actors.capture(), page, pageSize);
+    }
+
     @GetMapping("/eligible")
     Map<String, Object> eligible(@RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
@@ -93,6 +99,14 @@ public class ScrapController {
             @RequestHeader("Idempotency-Key") UUID key,
             @Valid @RequestBody ScrapReviewService.Execution input) {
         return review.execute(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/{id}/disposition/complete")
+    ScrapReviewService.DispositionReceipt completeDisposition(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.DispositionCompletion input) {
+        return review.completeDisposition(actors.capture(), id, version, key, input);
     }
 
     @ExceptionHandler(com.fams.loan.LoanLossPort.Failure.class)

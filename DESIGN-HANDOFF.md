@@ -1,9 +1,9 @@
 # FAMS 项目阶段与交接入口
 
-> 唯一现役进度入口 · 更新于 2026-11-05
-> 第1～5步完成，第6步进行中。当前分支 `codex/d6-21-loss-ui`（承接 `codex/d6-21-loss` 功能线并合入前端架构批），接续基线 `38d95fc`。用户本人本轮明确所有待复核内容全部PASS，已关闭29个已送审子项，D6-15/16/19父项本地DEV_VERIFIED；D6-21A亦已关闭。现役计划§四.5是唯一状态明细。
+> 唯一现役进度入口 · 更新于 2026-11-06
+> 第1～5步完成，第6步进行中。当前分支 `codex/d6-21-loss-ui`（承接 `codex/d6-21-loss` 功能线并合入前端架构批），接续基线 `6134e96`。用户本人本轮明确所有待复核内容全部PASS，已关闭29个已送审子项，D6-15/16/19父项本地DEV_VERIFIED；D6-21A亦已关闭。现役计划§四.5是唯一状态明细。
 >
-> D6-21B2b1后端/PC固定43049d0完整门禁及真实PC/JVM通过，已送IN_REVIEW；B2b2原生损坏找回固定d9c0eb0完整门禁及真实Page/opaque链路通过，已送IN_REVIEW；独立复核未签。B2b3结案后损坏找回固定3e3e01c完整门禁及PC/JVM通过，已送IN_REVIEW；B2b4a归还/退库固定3c67b26已获用户复核PASS，B2b4b固定326aec9产品门禁、实际PC/JVM恢复与用户复核通过，B2b4本地关闭。返厂无法收回转报失与找回续修已提交1e95d57，精确静态修复后的f2f7b1b完整门禁、实际PC/ClamAV及提交JVM恢复和原轮次实收通过，B2b5a已获用户本人本轮复核PASS，本地DEV_VERIFIED，B2b5b报废新纳管仍依D6-22。D6-22A已推进独立报废提交、审批认领及实物执行（e17d269、f2f7b1b、ddbf9f5），PC/原生提交至执行入口已接入，当前继续附件、处置及关联来源。责任/位置变化、返厂/报废及跨来源C/D仍必需，不提前关闭D6-20/21父项。当前结果见[B2b4a送审](docs/development/2026-11-04-d6-21b2b4a-review-handoff.md)及[B2b3送审](docs/development/2026-10-31-d6-21b2b3-review-handoff.md)；此前结果见[B2b1送审](docs/development/2026-10-30-d6-21b2b1-review-handoff.md)、[B2b2送审](docs/development/2026-10-30-d6-21b2b2-review-handoff.md)及[D6-21任务卡](docs/development/D6-21-task-card.md)。
+> D6-21B2b1后端/PC固定43049d0完整门禁及真实PC/JVM通过，已送IN_REVIEW；B2b2原生损坏找回固定d9c0eb0完整门禁及真实Page/opaque链路通过，已送IN_REVIEW；独立复核未签。B2b3结案后损坏找回固定3e3e01c完整门禁及PC/JVM通过，已送IN_REVIEW；B2b4a归还/退库固定3c67b26已获用户复核PASS，B2b4b固定326aec9产品门禁、实际PC/JVM恢复与用户复核通过，B2b4本地关闭。返厂无法收回转报失与找回续修已提交1e95d57，精确静态修复后的f2f7b1b完整门禁、实际PC/ClamAV及提交JVM恢复和原轮次实收通过，B2b5a已获用户本人本轮复核PASS，本地DEV_VERIFIED，B2b5b报废新纳管仍依D6-22。D6-22A已推进独立报废提交、审批认领及实物执行（e17d269、f2f7b1b、ddbf9f5），PC/原生提交至执行入口已接入，双端附件已接入，固定 ec351d5 的实际 PC、真实扫描与提交 JVM 验证通过，独立报废实际处置已在 135087f 通过 PC 结案和提交 JVM 恢复，双端超期清单已在 9d48e97 通过实际 PC，继续关联来源和遗失核销。责任/位置变化、返厂/报废及跨来源C/D仍必需，不提前关闭D6-20/21父项。当前结果见[B2b4a送审](docs/development/2026-11-04-d6-21b2b4a-review-handoff.md)及[B2b3送审](docs/development/2026-10-31-d6-21b2b3-review-handoff.md)；此前结果见[B2b1送审](docs/development/2026-10-30-d6-21b2b1-review-handoff.md)、[B2b2送审](docs/development/2026-10-30-d6-21b2b2-review-handoff.md)及[D6-21任务卡](docs/development/D6-21-task-card.md)。
 >
 > 原接续材料：[2026-10-30进度交接](docs/development/2026-10-30-current-progress-handoff.md)。其中待审状态以本轮用户签署和现役计划更新为准；旧候选和机器证据不改写。真实外部/真机、远端CI、正式QA、生产仍另验。
 >
@@ -344,3 +344,5 @@ ARCH-13 的找回转调拨三条路由本轮都没能在浏览器里渲染出来
 小程序侧与后端、契约变更直接取自功能线候选 `38d95fc`，本批未改造、未独立复核。
 
 2026-11-05：用户本人确认本轮返厂续修复核通过，B2b5a本地DEV_VERIFIED，授权提交并推送当前功能分支。报废提交至实物执行已有PC/原生入口及局部验证，完整D6-22及父任务仍开放。未接入的3个报废附件草稿已具名stash保留，恢复开发时先核对stash，完成接入与验证后另行提交。任务状态以现役计划§四.5为准。
+
+2026-11-06：已恢复并接入上轮报废附件草稿。继续 D6-22 双端附件页面及处置履行，状态与证据见现役计划 §四.5 及 D6-22 任务卡。

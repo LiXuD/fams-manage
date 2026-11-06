@@ -14,6 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -33,13 +36,15 @@ public class ScrapReadService {
     private final ObjectMapper json;
     private final RequisitionActorContext actors;
     private final AssetScrapPort assets;
+    private final Clock clock;
 
     public ScrapReadService(JdbcTemplate db, ObjectMapper json, RequisitionActorContext actors,
-            AssetScrapPort assets) {
+            AssetScrapPort assets, Clock clock) {
         this.db = db;
         this.json = json;
         this.actors = actors;
         this.assets = assets;
+        this.clock = clock;
     }
 
     public Map<String, Object> eligible(Actor actor, int page, int size) {
@@ -56,7 +61,32 @@ public class ScrapReadService {
                         + " ORDER BY r.id DESC LIMIT ? OFFSET ?", args.toArray()).stream()
                         .map(row -> view(current, row)).toList(),
                 "total", Objects.requireNonNull(db.queryForObject("SELECT COUNT(*)" + SCOPE, Long.class, scope)),
-                "page", page, "pageSize", size);
+                "page", page, "pageSize", size, "canListOverdueDispositions", canListOverdue(current));
+    }
+
+    public Map<String, Object> overdueDispositions(Actor actor, int page, int size) {
+        var current = actors.revalidateLocked(actor);
+        if (!canListOverdue(current)) {
+            throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_FOLLOW_UP_FORBIDDEN", 403);
+        }
+        String settings = db.queryForObject("SELECT v.snapshot_json FROM fams_business_parameter_state s"
+                + " JOIN fams_business_parameter_version v ON v.id=s.current_version_id"
+                + " WHERE s.singleton_id=1 AND v.status='ACTIVE'", String.class);
+        LocalDate today = LocalDate.now(clock.withZone(ZoneId.of(json.readTree(settings).path("timezone").asText())));
+        String where = " FROM fams_scrap_disposition d JOIN fams_scrap_request r ON r.id=d.request_id"
+                + " WHERE d.disposition_status='PENDING_DISPOSITION' AND r.request_status='EXECUTED'"
+                + " AND d.due_date<? AND (? OR d.processor_account_id=?)";
+        boolean administrator = current.has(Role.ASSET_ADMIN);
+        var items = db.queryForList("SELECT r.*" + where + " ORDER BY d.due_date,d.request_id LIMIT ? OFFSET ?",
+                today, administrator, current.id(), size, ((long) page - 1) * size).stream()
+                .map(row -> view(current, row)).toList();
+        return Map.of("items", items, "total", Objects.requireNonNull(db.queryForObject("SELECT COUNT(*)" + where,
+                        Long.class, today, administrator, current.id())),
+                "page", page, "pageSize", size, "businessDate", today, "canListOverdueDispositions", true);
+    }
+
+    private static boolean canListOverdue(Current current) {
+        return current.has(Role.ASSET_ADMIN) || current.has(Role.WAREHOUSE_OPERATOR);
     }
 
     public Map<String, Object> get(Actor actor, long id) {
@@ -71,8 +101,12 @@ public class ScrapReadService {
     public Map<String, Object> catalog(Actor actor, long id, String kind, int page, int size) {
         var current = actors.revalidateLocked(actor);
         var row = visible(current, id);
-        if (!"PROCESSING".equals(row.get("request_status")) || !current.has(Role.WAREHOUSE_OPERATOR)
-                || !Objects.equals(row.get("processor_account_id"), current.id())) {
+        boolean processing = "PROCESSING".equals(row.get("request_status"))
+                && Objects.equals(row.get("processor_account_id"), current.id());
+        boolean disposing = "employee".equals(kind) && "EXECUTED".equals(row.get("request_status"))
+                && !db.queryForList("SELECT request_id FROM fams_scrap_disposition WHERE request_id=?"
+                        + " AND processor_account_id=? AND disposition_status='PENDING_DISPOSITION'", id, current.id()).isEmpty();
+        if (!current.has(Role.WAREHOUSE_OPERATOR) || !(processing || disposing)) {
             throw new AssetHandoverPort.Failure("SCRAP_PROCESSOR_REQUIRED", 403);
         }
         String from = switch (kind) {
@@ -123,8 +157,12 @@ public class ScrapReadService {
         var source = json.readTree(row.get("source_snapshot_json").toString());
         result.put("source", Map.of("assetCode", source.path("asset_code").asText(),
                 "name", source.path("name").asText(), "serialNumber", source.path("serial_number").asText("")));
-        result.put("decision", row.get("decision_snapshot_json") == null
-                ? null : json.readTree(row.get("decision_snapshot_json").toString()));
+        var decision = row.get("decision_snapshot_json") == null
+                ? null : json.readTree(row.get("decision_snapshot_json").toString());
+        if (decision instanceof tools.jackson.databind.node.ObjectNode object) {
+            object.remove("attachmentEvidence");
+        }
+        result.put("decision", decision);
         result.put("execution", row.get("execution_snapshot_json") == null
                 ? null : json.readTree(row.get("execution_snapshot_json").toString()));
         var locks = db.queryForList("SELECT lock_version FROM fams_asset_business_lock"
@@ -133,14 +171,31 @@ public class ScrapReadService {
         result.put("lockVersion", locks.isEmpty() ? null : locks.getFirst().get("lock_version"));
         boolean owner = actor.has(Role.WAREHOUSE_OPERATOR)
                 && Objects.equals(actor.id(), row.get("processor_account_id"));
+        var dispositions = db.queryForList("SELECT disposition_status,DATE_FORMAT(due_date,'%Y-%m-%d') due_date,version,custody_snapshot_json,"
+                + "completion_snapshot_json,processor_account_id FROM fams_scrap_disposition WHERE request_id=?", id);
+        Map<String, Object> disposition = dispositions.isEmpty() ? null : new LinkedHashMap<>(dispositions.getFirst());
+        boolean canDispose = disposition != null && actor.has(Role.WAREHOUSE_OPERATOR)
+                && Objects.equals(disposition.get("processor_account_id"), actor.id())
+                && "EXECUTED".equals(row.get("request_status")) && "STANDALONE".equals(row.get("source_type"))
+                && "PENDING_DISPOSITION".equals(disposition.get("disposition_status"));
+        if (disposition != null) {
+            disposition.remove("processor_account_id");
+            Object completion = disposition.remove("completion_snapshot_json");
+            if (completion != null && "DISPOSED".equals(disposition.get("disposition_status"))) {
+                var snapshot = json.readTree(completion.toString());
+                var facts = snapshot.path("facts");
+                disposition.put("completion", Map.of("occurredAt", facts.path("occurredAt").asText(),
+                        "method", facts.path("method").asText(), "recipient", facts.path("recipient").asText(),
+                        "operatorName", snapshot.path("operatorName").asText()));
+            }
+        }
         result.put("actions", Map.of("decide", actor.has(Role.ASSET_ADMIN)
                         && "PENDING_ADMIN_DECISION".equals(row.get("request_status")),
                 "claim", actor.has(Role.WAREHOUSE_OPERATOR)
                         && "WAITING_WAREHOUSE_CLAIM".equals(row.get("request_status")),
-                "execute", owner && "PROCESSING".equals(row.get("request_status"))));
-        var disposition = db.queryForList("SELECT disposition_status,due_date,version,custody_snapshot_json,"
-                + "completion_snapshot_json FROM fams_scrap_disposition WHERE request_id=?", id);
-        result.put("disposition", disposition.isEmpty() ? null : disposition.getFirst());
+                "execute", owner && "PROCESSING".equals(row.get("request_status")),
+                "dispose", canDispose));
+        result.put("disposition", disposition);
         return result;
     }
 }
