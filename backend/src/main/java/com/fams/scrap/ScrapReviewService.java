@@ -113,7 +113,7 @@ public class ScrapReviewService {
             boolean restored = switch (request.get("source_type").toString()) {
                 case "STANDALONE" -> assets.restoreStandalone(asset, assetVersion, id,
                         source.path("lifecycle_status").asText(), current.id(), time);
-                case "LOSS" -> restoreBorrowedLoss(asset, assetVersion, id, source, current.id(), time);
+                case "LOSS" -> restoreLoss(asset, assetVersion, id, source, current.id(), time);
                 default -> false;
             };
             status = restored ? "REJECTED" : "RESTORE_REQUIRED";
@@ -141,17 +141,20 @@ public class ScrapReviewService {
                 new Receipt(Long.toString(id), Long.toString(asset), version + 1, assetVersion, 0, status, null), time);
     }
 
-    private boolean restoreBorrowedLoss(long asset, long version, long id, tools.jackson.databind.JsonNode source,
+    private boolean restoreLoss(long asset, long version, long id, tools.jackson.databind.JsonNode source,
             long actor, Instant time) {
-        long borrower = source.path("responsible_employee_id").asLong();
-        long organization = source.path("using_organization_id").asLong();
-        var proof = source.path("lossEvidence");
-        var loan = loans.openBorrowing(asset, borrower, organization).orElse(null);
-        if (loan == null || !Long.toString(loan.id()).equals(proof.path("loanId").asText())
-                || loan.version() != proof.path("loanVersion").asLong(-1)) {
+        if ("BORROWED".equals(source.path("lifecycle_status").asText())) {
+            var proof = source.path("lossEvidence");
+            var loan = loans.openBorrowing(asset, source.path("responsible_employee_id").asLong(),
+                    source.path("using_organization_id").asLong()).orElse(null);
+            if (loan == null || !Long.toString(loan.id()).equals(proof.path("loanId").asText())
+                    || loan.version() != proof.path("loanVersion").asLong(-1)) {
+                return false;
+            }
+        } else if (loans.hasOpenBorrowing(asset)) {
             return false;
         }
-        return assets.restoreBorrowedLoss(asset, version, id, borrower, organization, actor, time);
+        return assets.restoreLoss(asset, version, id, source, actor, time);
     }
 
     public Receipt claim(Actor actor, long id, long version, UUID key, Claim input) {
@@ -297,16 +300,21 @@ public class ScrapReviewService {
         var source = json.readTree(row.get("source_snapshot_json").toString());
         var proof = source.path("lossEvidence");
         var loss = losses.requireExecutionEvidence(reportId, proof.path("reportVersion").asLong(-1));
-        if (loss.assetId() != asset || loss.borrowerId() != source.path("responsible_employee_id").asLong()
-                || loss.organizationId() != source.path("using_organization_id").asLong()
+        if (loss.assetId() != asset || !loss.lifecycle().equals(source.path("lifecycle_status").asText())
+                || !assets.matchesOriginalLossCustody(source, json.readTree(loss.sourceJson()))
                 || !json.readTree(loss.confirmationJson()).equals(proof.path("confirmation"))) {
             throw new AssetHandoverPort.Failure("SCRAP_LOSS_SOURCE_CHANGED", 409);
         }
         var time = now();
-        long assetVersion = assets.executeBorrowedLoss(asset, input.assetVersion(), id, input.lockVersion(),
-                loss.borrowerId(), loss.organizationId(), current.id(), time);
-        loans.terminateLost(asset, loss.borrowerId(), loss.organizationId(),
-                proof.path("loanId").asLong(), proof.path("loanVersion").asLong(-1), time);
+        long assetVersion = assets.executeLoss(asset, input.assetVersion(), id, input.lockVersion(),
+                source, current.id(), time);
+        if ("BORROWED".equals(loss.lifecycle())) {
+            loans.terminateLost(asset, source.path("responsible_employee_id").asLong(),
+                    source.path("using_organization_id").asLong(), proof.path("loanId").asLong(),
+                    proof.path("loanVersion").asLong(-1), time);
+        } else {
+            loans.requireRecovery(asset, loss.lifecycle(), null, null);
+        }
         losses.closeFollowUp(reportId, time);
         var facts = Map.of("lossEvidence", proof, "evidence", input.evidence().strip(), "writtenOffAt", time);
         String execution = json.writeValueAsString(facts);

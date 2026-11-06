@@ -196,7 +196,7 @@ export function createScrapPage(getServices: () => MiniServices) {
                 else if (action === "executeLoss") {
                     if (data.evidence.trim().length < 10) { page.setData({ error: "请填写至少10字的核销复核依据。" }); return; }
                     body = { ...body, ownershipVersion: row.ownershipVersion, evidence: data.evidence.trim() };
-                    summary = "核销 " + row.source.assetCode + " 并终止原借用，保留遗失及原借用历史。";
+                    summary = "核销 " + row.source.assetCode + "，保留原遗失和保管历史。如有原借用，将终止原借用。";
                 } else {
                     const place = data.places.find(item => item.id === data.location), person = data.people.find(item => item.id === data.custodian);
                     const actual = new Date(data.actualDate + "T" + data.actualTime), method = row.decision?.decision?.approvedDisposition;

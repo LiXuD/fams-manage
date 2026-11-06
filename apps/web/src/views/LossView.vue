@@ -113,7 +113,7 @@ function prepareScrap() {
     path: "/from-loss/" + row.id, key: crypto.randomUUID(), version: row.version, lossReportId: row.id,
     body: Object.freeze({ assetVersion, reason: scrapReason.value.trim(), observedCondition: scrapCondition.value.trim(),
       proposedDisposition: "遗失核销" }),
-    summary: "提交 " + row.source.assetCode + " 的关联报废申请。资产进入待报废，原借用责任保留至最终执行。",
+    summary: "提交 " + row.source.assetCode + " 的关联报废申请。资产进入待报废，原保管责任继续保留。",
   });
 }
 async function send() {
@@ -189,8 +189,8 @@ onBeforeUnmount(() => { live = false; reset(); });
       <p>处理库管：{{ detail.processorAccountId ?? '尚未认领' }}<span v-if="detail.recoveryAsset?.lifecycle !== 'PENDING_SCRAP' && detail.recoveryAsset?.lifecycle !== 'SCRAPPED'">；下次复核：{{ detail.nextReviewDate ?? '核实后填写' }}</span></p>
       <p v-if="detail.status === 'SEARCHING'">已进入查找中，资产继续持锁。本次查找仍在处理中。</p>
       <p v-if="detail.recoveryAsset?.lifecycle === 'SCRAPPED'">原资产已报废，原报失证据继续保留。</p>
-      <p v-else-if="detail.recoveryAsset?.lifecycle === 'PENDING_SCRAP'">资产已进入待报废，原借用责任继续保留。</p>
-      <p v-else-if="detail.status === 'CONFIRMED_LOST' && !detail.recoveredAt">已确认遗失，本次查找单结案，原责任和借用仍在，持续跟进。确认时间：{{ detail.confirmedLostAt }}；最近跟进：{{ detail.lastFollowUpAt ?? '尚未跟进' }}</p>
+      <p v-else-if="detail.recoveryAsset?.lifecycle === 'PENDING_SCRAP'">资产已进入待报废，{{ detail.source.lifecycle === "BORROWED" ? "原借用责任" : "原保管责任" }}继续保留。</p>
+      <p v-else-if="detail.status === 'CONFIRMED_LOST' && !detail.recoveredAt">已确认遗失，本次查找单结案，原保管责任继续保留，如有原借用也继续保留，仍需跟进。确认时间：{{ detail.confirmedLostAt }}；最近跟进：{{ detail.lastFollowUpAt ?? '尚未跟进' }}</p>
       <RouterLink v-if="scrapReceiptId" :to="'/scrap-requests/' + scrapReceiptId">查看关联报废申请</RouterLink>
       <fieldset v-if="detail.actions?.requestScrap" :disabled="locked || readOwner !== identity">
         <legend>从确认遗失发起关联报废</legend>

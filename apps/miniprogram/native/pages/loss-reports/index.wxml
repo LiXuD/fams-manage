@@ -30,8 +30,8 @@ module.exports={status:function(value){return names[value]||value;}};
     <view>确认遗失实际时间</view><picker mode="date" value="{{confirmDate}}" data-field="confirmDate" bindchange="onField" disabled="{{busy || retry || confirmation || stale}}"><view>{{confirmDate || '选择日期'}}</view></picker><picker mode="time" value="{{confirmTime}}" data-field="confirmTime" bindchange="onField" disabled="{{busy || retry || confirmation || stale}}"><view>{{confirmTime || '选择时间'}}</view></picker><button data-kind="confirm" bindtap="onNow" disabled="{{busy || retry || confirmation || stale}}">记录当前确认时刻</button><button data-action="confirmLost" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">凭证据确认遗失</button></view>
   </view><view wx:if="{{detail.status === 'SEARCHING'}}" class="hint">继续查找仍在处理中，原责任与资产锁继续保留。</view>
   <view wx:if="{{detail.recoveryAsset.lifecycle === 'SCRAPPED'}}" class="hint">原资产已报废，原报失证据继续保留。</view>
-  <view wx:elif="{{detail.recoveryAsset.lifecycle === 'PENDING_SCRAP'}}" class="hint">资产已进入待报废，原借用责任继续保留。</view>
-  <view wx:elif="{{detail.status === 'CONFIRMED_LOST' && !detail.recoveredAt}}" class="hint">已确认遗失，本次查找单已结案；原责任和借用仍在，持续跟进。确认时间：{{detail.confirmedLostAt}}；最近跟进：{{detail.lastFollowUpAt || '尚未跟进'}}</view>
+  <view wx:elif="{{detail.recoveryAsset.lifecycle === 'PENDING_SCRAP'}}" class="hint">资产已进入待报废，{{detail.source.lifecycle === 'BORROWED' ? '原借用责任' : '原保管责任'}}继续保留。</view>
+  <view wx:elif="{{detail.status === 'CONFIRMED_LOST' && !detail.recoveredAt}}" class="hint">已确认遗失，本次查找单已结案；原保管责任继续保留，如有原借用也继续保留，仍需跟进。确认时间：{{detail.confirmedLostAt}}；最近跟进：{{detail.lastFollowUpAt || '尚未跟进'}}</view>
   <navigator wx:if="{{scrapReceiptId}}" url="/pages/scrap-requests/index?id={{scrapReceiptId}}">查看关联报废申请</navigator>
   <view wx:if="{{detail.actions.requestScrap}}" class="card">
    <view>从确认遗失发起关联报废</view>

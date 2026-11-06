@@ -90,13 +90,23 @@ public class ScrapService {
         if (prior != null) {
             return prior;
         }
-        var loss = losses.requireBorrowedLoss(current, reportId, version);
-        var source = new LinkedHashMap<>(assets.borrowedLossSource(loss.assetId(), input.assetVersion(),
-                loss.borrowerId(), loss.organizationId()));
-        var borrowing = loans.requireOpenBorrowing(loss.assetId(), loss.borrowerId(), loss.organizationId());
-        var proof = Map.of("reportId", Long.toString(reportId), "reportVersion", version,
-                "confirmedAt", loss.confirmedAt(), "confirmation", json.readTree(loss.confirmationJson()),
-                "loanId", Long.toString(borrowing.id()), "loanVersion", borrowing.version());
+        var loss = losses.requireSubmissionEvidence(current, reportId, version);
+        var source = new LinkedHashMap<>(assets.lossSource(loss.assetId(), input.assetVersion(),
+                loss.lifecycle(), json.readTree(loss.sourceJson())));
+        var proof = new LinkedHashMap<String, Object>();
+        proof.put("reportId", Long.toString(reportId));
+        proof.put("reportVersion", version);
+        proof.put("confirmedAt", loss.confirmedAt());
+        proof.put("confirmation", json.readTree(loss.confirmationJson()));
+        if ("BORROWED".equals(loss.lifecycle())) {
+            var borrowing = loans.requireOpenBorrowing(loss.assetId(),
+                    ((Number) source.get("responsible_employee_id")).longValue(),
+                    ((Number) source.get("using_organization_id")).longValue());
+            proof.put("loanId", Long.toString(borrowing.id()));
+            proof.put("loanVersion", borrowing.version());
+        } else {
+            loans.requireRecovery(loss.assetId(), loss.lifecycle(), null, null);
+        }
         source.put("lossEvidence", proof);
         var submission = new Submission(loss.assetId(), input.assetVersion(), input.reason(),
                 input.observedCondition(), input.proposedDisposition());
@@ -131,7 +141,7 @@ public class ScrapService {
                         + "acquired_at) VALUES (?,'SCRAP',?,?,?)",
                 input.assetId(), id, id, time);
         long assetVersion = "LOSS".equals(sourceType)
-                ? assets.freezeBorrowedLoss(input.assetId(), input.assetVersion(), id, current.id(), time)
+                ? assets.freezeLoss(input.assetId(), input.assetVersion(), id, source.get("lifecycle_status").toString(), current.id(), time)
                 : assets.freezeStandalone(input.assetId(), input.assetVersion(), id, current.id(), time);
         db.update(
                 "INSERT INTO fams_todo(pool_type,business_type,business_id,todo_type,todo_status,opened_at)"

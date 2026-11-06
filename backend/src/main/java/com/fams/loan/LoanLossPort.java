@@ -53,6 +53,11 @@ public class LoanLossPort {
                 ((Number) loan.get("version")).longValue()));
     }
 
+    public boolean hasOpenBorrowing(long asset) {
+        return !db.queryForList("SELECT id FROM fams_loan WHERE asset_id=? AND relation_status='OPEN' FOR UPDATE", asset)
+                .isEmpty();
+    }
+
     public void terminateLost(long asset, long borrower, long organization, long loanId, long version,
             java.time.Instant time) {
         if (db.update("UPDATE fams_loan SET relation_status='LOST_TERMINATED',closed_at=?,updated_at=?,version=version+1"

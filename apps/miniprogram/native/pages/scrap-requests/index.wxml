@@ -85,7 +85,7 @@ module.exports={state:function(value){return names[value]||value;}};
       <button data-action="execute" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对执行报废</button>
     </view>
     <view wx:if="{{detail.actions.executeLoss}}">
-      <view>执行遗失核销，关闭原借用。</view>
+      <view>执行遗失核销。如有原借用，将同时关闭。</view>
       <textarea value="{{evidence}}" data-field="evidence" bindinput="onField" maxlength="2000" placeholder="核销复核依据" disabled="{{busy || retry || confirmation || stale}}"/>
       <button data-action="executeLoss" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对执行遗失核销</button>
     </view>

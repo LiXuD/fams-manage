@@ -14,6 +14,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -30,34 +31,36 @@ public class LossScrapSourcePort {
         this.json = json;
     }
 
-    public record BorrowedLoss(long assetId, long borrowerId, long organizationId,
+    public record ConfirmedLoss(long assetId, String lifecycle, String sourceJson,
             Instant confirmedAt, String confirmationJson) {}
 
-    public BorrowedLoss requireBorrowedLoss(Current current, long id, long version) {
+    public ConfirmedLoss requireSubmissionEvidence(Current current, long id, long version) {
         var row = lockedReport(id);
         if (!canSubmit(current, row)) {
             throw new LossFailure(403, "SCRAP_LOSS_SOURCE_FORBIDDEN");
         }
-        return confirmedBorrowing(row, version);
+        return confirmedSource(row, version);
     }
 
     static boolean canSubmit(Current current, Map<String, Object> row) {
         return current.has(Role.ASSET_ADMIN)
                 || current.has(Role.WAREHOUSE_OPERATOR) && Objects.equals(current.id(), row.get("processor_account_id"))
-                || current.has(Role.EMPLOYEE) && Objects.equals(current.employeeId(), row.get("responsible_employee_id"))
-                || current.has(Role.DEPARTMENT_ASSET_MANAGER) && Objects.equals(current.organizationId(), row.get("using_organization_id"));
+                || current.has(Role.EMPLOYEE)
+                        && (Objects.equals(current.employeeId(), row.get("responsible_employee_id"))
+                                || Objects.equals(current.employeeId(), row.get("shared_responsible_employee_id")))
+                || current.has(Role.DEPARTMENT_ASSET_MANAGER)
+                        && Objects.equals(current.organizationId(), row.get("using_organization_id"));
     }
 
-    static boolean confirmedBorrowedSource(Map<String, Object> row, JsonNode source) {
+    static boolean confirmedScrapSource(Map<String, Object> row, JsonNode source) {
         return "CONFIRMED_LOST".equals(row.get("report_status")) && row.get("recovered_at") == null
-                && "BORROWED".equals(source.path("lifecycle").asText())
-                && row.get("confirmation_snapshot_json") != null && row.get("confirmed_lost_at") != null
-                && row.get("responsible_employee_id") != null && row.get("using_organization_id") != null;
+                && List.of("BORROWED", "IN_USE", "IN_STOCK").contains(source.path("lifecycle").asText())
+                && row.get("confirmation_snapshot_json") != null && row.get("confirmed_lost_at") != null;
     }
 
     /** The scrap workflow has already authorized its processor independently of the old loss processor. */
-    public BorrowedLoss requireExecutionEvidence(long reportId, long version) {
-        return confirmedBorrowing(lockedReport(reportId), version);
+    public ConfirmedLoss requireExecutionEvidence(long reportId, long version) {
+        return confirmedSource(lockedReport(reportId), version);
     }
 
     public void closeFollowUp(long reportId, Instant time) {
@@ -73,16 +76,15 @@ public class LossScrapSourcePort {
         return rows.getFirst();
     }
 
-    private BorrowedLoss confirmedBorrowing(Map<String, Object> row, long version) {
+    private ConfirmedLoss confirmedSource(Map<String, Object> row, long version) {
         var source = json.readTree(row.get("source_snapshot_json").toString());
-        if (((Number) row.get("version")).longValue() != version || !confirmedBorrowedSource(row, source)) {
+        if (((Number) row.get("version")).longValue() != version || !confirmedScrapSource(row, source)) {
             throw new LossFailure(409, "SCRAP_LOSS_SOURCE_CHANGED");
         }
         Object confirmed = row.get("confirmed_lost_at");
         Instant at = confirmed instanceof java.sql.Timestamp timestamp ? timestamp.toInstant()
                 : ((java.time.LocalDateTime) confirmed).toInstant(ZoneOffset.UTC);
-        return new BorrowedLoss(((Number) row.get("asset_id")).longValue(),
-                ((Number) row.get("responsible_employee_id")).longValue(),
-                ((Number) row.get("using_organization_id")).longValue(), at, row.get("confirmation_snapshot_json").toString());
+        return new ConfirmedLoss(((Number) row.get("asset_id")).longValue(), source.path("lifecycle").asText(),
+                source.toString(), at, row.get("confirmation_snapshot_json").toString());
     }
 }

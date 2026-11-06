@@ -221,12 +221,13 @@ public class LossService {
         actions.put("requestFactoryRecovery", factoryProcessor != null && recoveryOpen && applicant(current)
                 && "CONFIRMED_LOST".equals(row.get("report_status"))
                 && !Boolean.TRUE.equals(recoveryAsset.get("locked")));
-        actions.put("requestScrap", "BORROWED".equals(currentLifecycle)
+        var original = json.readTree(row.get("source_snapshot_json").toString());
+        actions.put("requestScrap", recoveryAsset != null && currentLifecycle.equals(original.path("lifecycle").asText())
                 && "LOST".equals(recoveryAsset.get("exceptionStatus"))
                 && Boolean.TRUE.equals(recoveryAsset.get("eligible"))
                 && !Boolean.TRUE.equals(recoveryAsset.get("locked"))
                 && LossScrapSourcePort.canSubmit(current, row)
-                && LossScrapSourcePort.confirmedBorrowedSource(row, json.readTree(row.get("source_snapshot_json").toString())));
+                && LossScrapSourcePort.confirmedScrapSource(row, original));
         result.put("actions", actions);
         return result;
     }

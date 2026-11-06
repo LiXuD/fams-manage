@@ -92,7 +92,7 @@ export function createLossPage(getServices: () => MiniServices) {
             if (!data.scrapReason.trim() || !data.scrapCondition.trim()) {
                 page.setData({ error: "请填写关联报废原因与确认遗失后的实际情况。" }); return;
             }
-            label = "提交 " + row.source.assetCode + " 的关联报废申请。资产进入待报废，原借用责任保留至最终执行。";
+            label = "提交 " + row.source.assetCode + " 的关联报废申请。资产进入待报废，原保管责任继续保留。";
             prepared = Object.freeze({ path: "/api/v1/mini/scrap-requests/from-loss/" + row.id, lossReportId: row.id,
                 key: services.createKey(), version: row.version, label, body: JSON.stringify({
                     assetVersion, reason: data.scrapReason.trim(), observedCondition: data.scrapCondition.trim(),

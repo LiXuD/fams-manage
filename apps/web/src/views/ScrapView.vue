@@ -186,7 +186,7 @@ function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute" |
     else if (action === "executeLoss") {
       if (evidence.value.trim().length < 10) { error.value = "请填写至少10字的核销复核依据。"; return; }
       body = { ...body, ownershipVersion: row.ownershipVersion, evidence: evidence.value.trim() };
-      summary = "核销 " + row.source.assetCode + " 并终止原借用，保留遗失及原借用历史。";
+      summary = "核销 " + row.source.assetCode + "，保留原遗失和保管历史。如有原借用，将终止原借用。";
     } else {
       const place = places.value.find(item => item.id === location.value), person = people.value.find(item => item.id === custodian.value);
       const time = new Date(occurred.value), method = row.decision?.decision?.approvedDisposition;
@@ -317,7 +317,7 @@ onBeforeUnmount(() => { live = false; reset(); });
       </fieldset>
       <fieldset v-if="detail.actions.executeLoss" :disabled="locked || stale">
         <legend>执行遗失核销</legend>
-        <p>核对原报失及原借用责任，执行后关闭原借用。</p>
+        <p>核对原报失及保管责任。如有原借用，执行后关闭原借用。</p>
         <label>核销复核依据<textarea v-model="evidence" maxlength="2000"/></label>
         <button @click="prepare('executeLoss')">核对执行遗失核销</button>
       </fieldset>
