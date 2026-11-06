@@ -1,18 +1,21 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { RouterLink, useRoute } from "vue-router";
 import LossRecoveryPanel from "./LossRecoveryPanel.vue";
 import LossProgressPanel from "./LossProgressPanel.vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { LossApiError, lossProblem, lossRequest, lossReportState, type LossAsset, type LossIntent, type LossReport } from "@/loss/api";
+import { ScrapApiError, scrapRequest, type ScrapIntent } from "@/scrap/api";
+type PageIntent = LossIntent | (ScrapIntent & { lossReportId: string });
 const session = useSessionStore(), route = useRoute();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, route.params.id]));
 const rows = ref<LossReport[]>([]), detail = ref<LossReport | null>(null), total = ref(0), page = ref(1);
 const assets = ref<LossAsset[]>([]), assetId = ref(""), assetPage = ref(1), assetTotal = ref(0);
 const lastSeenAt = ref(""), lastLocation = ref(""), circumstances = ref(""), reason = ref("");
 const custodian = ref(""), searchedScope = ref(""), searchedAt = ref(""), nextReviewDate = ref("");
-const file = ref<File | null>(null), pending = ref<LossIntent | null>(null), confirmation = ref<LossIntent | null>(null);
+const scrapReason = ref(""), scrapCondition = ref(""), scrapReceiptId = ref("");
+const file = ref<File | null>(null), pending = ref<PageIntent | null>(null), confirmation = ref<PageIntent | null>(null);
 const busy = ref(false), error = ref(""), notice = ref("");
 const preview = ref(""), previewName = ref("");
 let download: AbortController | null = null;
@@ -22,19 +25,25 @@ const followUpOnly = ref(false);
 const current = (epoch: number, owner: string) => live && epoch === generation && owner === identity.value;
 function reset() {
   generation++; readOwner = ""; followUpOnly.value = false; clearPreview(); rows.value = []; detail.value = null; assets.value = []; assetId.value = ""; file.value = null;
+  scrapReason.value = ""; scrapCondition.value = ""; scrapReceiptId.value = "";
   pending.value = null; confirmation.value = null; busy.value = false; total.value = 0; page.value = 1; assetPage.value = 1; assetTotal.value = 0;
   lastSeenAt.value = ""; lastLocation.value = ""; circumstances.value = ""; reason.value = "";
   custodian.value = ""; searchedScope.value = ""; searchedAt.value = ""; nextReviewDate.value = ""; error.value = ""; notice.value = "";
 }
-function failure(cause: unknown) { if (cause instanceof LossApiError && [401, 403, 404].includes(cause.status)) reset(); error.value = lossProblem(cause); }
+function failure(cause: unknown) {
+  const problem = cause instanceof ScrapApiError ? new LossApiError(cause.status, cause.code) : cause;
+  if (problem instanceof LossApiError && [401, 403, 404].includes(problem.status)) reset();
+  error.value = lossProblem(problem);
+}
 async function load(id = detail.value?.id ?? String(route.params.id ?? ""), delta = 0) {
   if (busy.value || confirmation.value) return;
   const next = page.value + delta; if (next < 1 || delta > 0 && (next - 1) * 20 >= total.value) return;
   clearPreview();
   if (id !== detail.value?.id) {
+    scrapReason.value = ""; scrapCondition.value = ""; scrapReceiptId.value = "";
     file.value = null; reason.value = ""; custodian.value = ""; searchedScope.value = ""; searchedAt.value = ""; nextReviewDate.value = "";
   }
-  const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  const epoch = ++generation, owner = identity.value; readOwner = ""; busy.value = true; error.value = "";
   try {
     const result = await lossRequest<{ items: LossReport[]; total: number }>(`${followUpOnly.value ? "/follow-ups" : ""}?page=${next}&pageSize=20`);
     const selected = /^[1-9][0-9]{0,18}$/.test(id) ? await lossRequest<LossReport>(`/${id}`) : null;
@@ -92,16 +101,41 @@ function prepare(action: "submit" | "approve" | "reject" | "cancel" | "claim" | 
   }
   confirmation.value = Object.freeze({ path, key: crypto.randomUUID(), version: row?.version ?? 0, body, file: upload });
 }
+function prepareScrap() {
+  const row = detail.value, assetVersion = row?.recoveryAsset?.version;
+  if (locked.value || readOwner !== identity.value || !row?.actions?.requestScrap
+      || assetVersion === undefined || !Number.isSafeInteger(assetVersion) || assetVersion < 0) return;
+  if (!scrapReason.value.trim() || !scrapCondition.value.trim()) {
+    error.value = "请填写关联报废原因与确认遗失后的实际情况。"; return;
+  }
+  error.value = "";
+  confirmation.value = Object.freeze({
+    path: "/from-loss/" + row.id, key: crypto.randomUUID(), version: row.version, lossReportId: row.id,
+    body: Object.freeze({ assetVersion, reason: scrapReason.value.trim(), observedCondition: scrapCondition.value.trim(),
+      proposedDisposition: "遗失核销" }),
+    summary: "提交 " + row.source.assetCode + " 的关联报废申请。资产进入待报废，原借用责任保留至最终执行。",
+  });
+}
 async function send() {
   if (busy.value || !pending.value) return;
   const intent = pending.value, owner = identity.value, epoch = ++generation; busy.value = true; error.value = "";
   let refresh = "";
   try {
-    const result = await lossRequest<LossReport>(intent.path, intent);
-    if (current(epoch, owner)) { pending.value = null; file.value = null; refresh = result.id; notice.value = "本次操作已记录。"; }
+    const linked = "lossReportId" in intent;
+    const result = linked ? await scrapRequest<{ id: string }>(intent.path, intent)
+      : await lossRequest<LossReport>(intent.path, intent);
+    if (current(epoch, owner)) {
+      pending.value = null; file.value = null;
+      refresh = linked ? intent.lossReportId : result.id;
+      if (linked) { scrapReceiptId.value = result.id; scrapReason.value = ""; scrapCondition.value = ""; }
+      notice.value = linked ? "关联报废申请已提交。" : "本次操作已记录。";
+    }
   } catch (cause) {
     if (current(epoch, owner)) {
-      if (cause instanceof LossApiError && cause.status < 500) pending.value = null;
+      if ((cause instanceof LossApiError || cause instanceof ScrapApiError) && cause.status < 500) {
+        pending.value = null;
+        if (cause instanceof ScrapApiError) readOwner = "";
+      }
       failure(cause);
     }
   } finally { if (current(epoch, owner)) busy.value = false; }
@@ -152,9 +186,18 @@ onBeforeUnmount(() => { live = false; reset(); });
     </section>
     <section v-if="detail" aria-label="报失详情"><h2>报失单 {{ detail.id }} · {{ lossReportState(detail) }}</h2>
       <p>{{ detail.source.assetCode }} · {{ detail.source.name }}；最后见到 {{ detail.lastSeenAt }}；位置：{{ detail.lastLocation }}</p><p>{{ detail.circumstances }}</p>
-      <p>处理库管：{{ detail.processorAccountId ?? '尚未认领' }}；下次复核：{{ detail.nextReviewDate ?? '核实后填写' }}</p>
+      <p>处理库管：{{ detail.processorAccountId ?? '尚未认领' }}<span v-if="detail.recoveryAsset?.lifecycle !== 'PENDING_SCRAP' && detail.recoveryAsset?.lifecycle !== 'SCRAPPED'">；下次复核：{{ detail.nextReviewDate ?? '核实后填写' }}</span></p>
       <p v-if="detail.status === 'SEARCHING'">已进入查找中，资产继续持锁。本次查找仍在处理中。</p>
-      <p v-if="detail.status === 'CONFIRMED_LOST' && !detail.recoveredAt">已确认遗失，本次查找单结案，原责任和借用仍在，持续跟进。确认时间：{{ detail.confirmedLostAt }}；最近跟进：{{ detail.lastFollowUpAt ?? '尚未跟进' }}</p>
+      <p v-if="detail.recoveryAsset?.lifecycle === 'SCRAPPED'">原资产已报废，原报失证据继续保留。</p>
+      <p v-else-if="detail.recoveryAsset?.lifecycle === 'PENDING_SCRAP'">资产已进入待报废，原借用责任继续保留。</p>
+      <p v-else-if="detail.status === 'CONFIRMED_LOST' && !detail.recoveredAt">已确认遗失，本次查找单结案，原责任和借用仍在，持续跟进。确认时间：{{ detail.confirmedLostAt }}；最近跟进：{{ detail.lastFollowUpAt ?? '尚未跟进' }}</p>
+      <RouterLink v-if="scrapReceiptId" :to="'/scrap-requests/' + scrapReceiptId">查看关联报废申请</RouterLink>
+      <fieldset v-if="detail.actions?.requestScrap" :disabled="locked || readOwner !== identity">
+        <legend>从确认遗失发起关联报废</legend>
+        <label>关联报废原因<textarea v-model="scrapReason" maxlength="2000" /></label>
+        <label>确认遗失后的实际情况<textarea v-model="scrapCondition" maxlength="2000" /></label>
+        <button @click="prepareScrap">核对关联报废申请</button>
+      </fieldset>
       <LossRecoveryPanel v-if="detail.recoveryAsset || detail.recoveredAt || detail.recoveries?.length" :key="'recovery:' + identity + detail.id + ':' + detail.version" :report="detail" :locked="locked" @prepare="prepareProgress" />
       <LossProgressPanel v-if="detail.actions?.confirmLost || detail.actions?.followUp" :key="identity + detail.id + ':' + detail.version" :report="detail" :locked="locked" @prepare="prepareProgress" />
       <fieldset :disabled="locked"><template v-if="detail.actions?.addPhoto"><label>情况图片<input type="file" accept="image/png,image/jpeg,image/webp" @change="chosen" /></label><button @click="prepare('photo')">上传情况图片</button></template>

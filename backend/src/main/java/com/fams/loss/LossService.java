@@ -156,6 +156,7 @@ public class LossService {
                         && List.of("SEARCHING", "CONFIRMED_LOST")
                                 .contains(row.get("report_status"));
         var recoveryAsset = recoveryOpen ? assets.recoveryView(number(row, "asset_id")) : null;
+        String currentLifecycle = recoveryAsset == null ? "" : recoveryAsset.get("lifecycle").toString();
         result.put("recoveryAsset", recoveryAsset);
         var recoveries =
                 db.queryForList(
@@ -192,6 +193,7 @@ public class LossService {
                         "followUp",
                         "CONFIRMED_LOST".equals(row.get("report_status"))
                                 && row.get("recovered_at") == null
+                                && !List.of("PENDING_SCRAP", "SCRAPPED").contains(currentLifecycle)
                                 && current.has(Role.WAREHOUSE_OPERATOR)
                                 && java.util.Objects.equals(
                                         current.id(), row.get("processor_account_id")),
@@ -219,6 +221,12 @@ public class LossService {
         actions.put("requestFactoryRecovery", factoryProcessor != null && recoveryOpen && applicant(current)
                 && "CONFIRMED_LOST".equals(row.get("report_status"))
                 && !Boolean.TRUE.equals(recoveryAsset.get("locked")));
+        actions.put("requestScrap", "BORROWED".equals(currentLifecycle)
+                && "LOST".equals(recoveryAsset.get("exceptionStatus"))
+                && Boolean.TRUE.equals(recoveryAsset.get("eligible"))
+                && !Boolean.TRUE.equals(recoveryAsset.get("locked"))
+                && LossScrapSourcePort.canSubmit(current, row)
+                && LossScrapSourcePort.confirmedBorrowedSource(row, json.readTree(row.get("source_snapshot_json").toString())));
         result.put("actions", actions);
         return result;
     }

@@ -1094,6 +1094,11 @@ class LossHttpRuntimeCase {
         var confirmed = ok(post(warehouse, "/" + report + "/confirm-lost", confirmation(searching),
                 searching.path("version").asLong(), key()));
         long sourceVersion = confirmed.path("version").asLong(), assetVersion = confirmed.path("assetVersion").asLong();
+        var eligible = ok(get(employee, "/" + report));
+        assertEquals(true, eligible.path("actions").path("requestScrap").asBoolean());
+        assertEquals(assetVersion, eligible.path("recoveryAsset").path("version").asLong());
+        assertEquals(true, ok(get(warehouse, "/" + report)).path("actions").path("requestScrap").asBoolean());
+
         var originalLoan = db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020");
         var originalLoss = db.queryForMap("SELECT * FROM fams_loss_report WHERE id=?", Long.parseLong(report));
         String from = "/from-loss/" + report, requestKey = key();
@@ -1123,6 +1128,10 @@ class LossHttpRuntimeCase {
         assertEquals(originalLoan.get("id").toString(), proof.path("loanId").asText());
         assertEquals(JSON.readTree(originalLoss.get("confirmation_snapshot_json").toString()), proof.path("confirmation"));
         assertEquals("PENDING_SCRAP", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+        var frozen = ok(get(warehouse, "/" + report));
+        assertEquals(false, frozen.path("actions").path("requestScrap").asBoolean(true));
+        assertEquals(false, frozen.path("actions").path("followUp").asBoolean(true));
+        assertEquals("PENDING_SCRAP", frozen.path("recoveryAsset").path("lifecycle").asText());
         assertEquals("LOST", db.queryForObject("SELECT exception_status FROM fams_asset WHERE id=951020", String.class));
         assertEquals(409, post(warehouse, "/" + report + "/follow-up", followUp(confirmed), sourceVersion, key()).statusCode());
         var reject = JSON.createObjectNode().put("assetVersion", frozenVersion).put("lockVersion", 0)
@@ -1136,6 +1145,9 @@ class LossHttpRuntimeCase {
         assertEquals(originalLoan, db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020"));
         assertEquals(originalLoss, db.queryForMap("SELECT * FROM fams_loss_report WHERE id=?", Long.parseLong(report)));
         assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=951020 AND released_at IS NULL", Long.class));
+        var reopened = ok(get(employee, "/" + report));
+        assertEquals(true, reopened.path("actions").path("requestScrap").asBoolean());
+        assertEquals(restored.path("assetVersion"), reopened.path("recoveryAsset").path("version"));
         payload.put("assetVersion", restored.path("assetVersion").asLong());
         var resubmitted = ok(postScrap(employee, from, JSON.writeValueAsString(payload), sourceVersion, key()));
         assertEquals("PENDING_ADMIN_DECISION", resubmitted.path("status").asText());
@@ -1216,6 +1228,48 @@ class LossHttpRuntimeCase {
         assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_todo WHERE closed_at IS NULL AND"
                 + " ((business_type='LOST_REPORT' AND business_id=?) OR (business_type='SCRAP' AND business_id=?)"
                 + " OR (business_type='LOAN' AND business_id=?))", Long.class, Long.parseLong(report), id, loan.get("id")));
+    }
+
+    @Test
+    void actualNativePageSubmitsAndWritesOffLinkedLossWithOriginalRetries() throws Exception {
+        borrowing(true);
+        db.update("UPDATE fams_loan SET parameter_snapshot_json=JSON_OBJECT('timezone','Asia/Shanghai') WHERE asset_id=951020");
+        var searching = searchingReport();
+        String report = searching.path("id").asText();
+        ok(post(warehouse, "/" + report + "/confirm-lost", confirmation(searching),
+                searching.path("version").asLong(), key()));
+        var grants = new java.util.LinkedHashMap<String, Object>();
+        for (var account : Map.of("employee", 951002L, "admin", 951001L, "warehouse", 951003L).entrySet()) {
+            var identity = new MiniWechatIdentityPort.Identity("owned-native-loss-scrap", account.getKey());
+            db.update("INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES (?,?,NOW(3))",
+                    account.getValue(), miniSessions.identityHash(identity));
+            var grant = miniSessions.start(identity, UUID.randomUUID());
+            grants.put(account.getKey(), Map.of("sessionToken", grant.sessionToken(),
+                    "accountId", account.getValue().toString(), "bindingId", grant.bindingId()));
+        }
+        var script = java.nio.file.Path.of(System.getProperty("user.dir")).getParent()
+                .resolve("apps/miniprogram/test/runtime-loss-scrap-http.mjs");
+        var builder = new ProcessBuilder("rtk", "proxy", System.getProperty("fams.test.node",
+                System.getenv().getOrDefault("FAMS_TEST_NODE_EXECUTABLE", "node")), script.toString())
+                .redirectErrorStream(true);
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_LOSS_REPORT", report);
+        builder.environment().put("FAMS_TEST_LOSS_GRANTS", JSON.writeValueAsString(grants));
+        var process = builder.start();
+        try {
+            org.junit.jupiter.api.Assertions.assertTrue(process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS));
+        } finally {
+            if (process.isAlive()) {
+                process.destroyForcibly();
+            }
+        }
+        String result = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        assertEquals(0, process.exitValue(), result);
+        org.junit.jupiter.api.Assertions.assertTrue(result.contains("\"nativeLossScrap\":true"), result);
+        long scrap = db.queryForObject("SELECT id FROM fams_scrap_request WHERE asset_id=951020", Long.class);
+        assertEquals(2L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_receipt WHERE scrap_request_id=?"
+                + " AND (operation LIKE 'SUBMIT_LOSS:%' OR operation LIKE 'EXECUTE_LOSS:%')", Long.class, scrap));
+        assertEquals("LOST_TERMINATED", db.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=951020", String.class));
     }
 
     private HttpResponse<String> postScrap(Session session, String path, String body, long version, String key) throws Exception {

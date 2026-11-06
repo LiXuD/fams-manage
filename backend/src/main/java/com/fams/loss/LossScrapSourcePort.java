@@ -9,10 +9,12 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Map;
 import java.util.Objects;
 
 /** Loss owns access to and interpretation of confirmed loss evidence. */
@@ -33,13 +35,24 @@ public class LossScrapSourcePort {
 
     public BorrowedLoss requireBorrowedLoss(Current current, long id, long version) {
         var row = lockedReport(id);
-        if (!(current.has(Role.ASSET_ADMIN)
-                || current.has(Role.WAREHOUSE_OPERATOR) && Objects.equals(current.id(), row.get("processor_account_id"))
-                || current.has(Role.EMPLOYEE) && Objects.equals(current.employeeId(), row.get("responsible_employee_id"))
-                || current.has(Role.DEPARTMENT_ASSET_MANAGER) && Objects.equals(current.organizationId(), row.get("using_organization_id")))) {
+        if (!canSubmit(current, row)) {
             throw new LossFailure(403, "SCRAP_LOSS_SOURCE_FORBIDDEN");
         }
         return confirmedBorrowing(row, version);
+    }
+
+    static boolean canSubmit(Current current, Map<String, Object> row) {
+        return current.has(Role.ASSET_ADMIN)
+                || current.has(Role.WAREHOUSE_OPERATOR) && Objects.equals(current.id(), row.get("processor_account_id"))
+                || current.has(Role.EMPLOYEE) && Objects.equals(current.employeeId(), row.get("responsible_employee_id"))
+                || current.has(Role.DEPARTMENT_ASSET_MANAGER) && Objects.equals(current.organizationId(), row.get("using_organization_id"));
+    }
+
+    static boolean confirmedBorrowedSource(Map<String, Object> row, JsonNode source) {
+        return "CONFIRMED_LOST".equals(row.get("report_status")) && row.get("recovered_at") == null
+                && "BORROWED".equals(source.path("lifecycle").asText())
+                && row.get("confirmation_snapshot_json") != null && row.get("confirmed_lost_at") != null
+                && row.get("responsible_employee_id") != null && row.get("using_organization_id") != null;
     }
 
     /** The scrap workflow has already authorized its processor independently of the old loss processor. */
@@ -52,7 +65,7 @@ public class LossScrapSourcePort {
                 + " AND business_id=? AND todo_type='LOST_FOLLOW_UP' AND closed_at IS NULL", time, reportId);
     }
 
-    private java.util.Map<String, Object> lockedReport(long id) {
+    private Map<String, Object> lockedReport(long id) {
         var rows = db.queryForList("SELECT * FROM fams_loss_report WHERE id=? FOR UPDATE", id);
         if (rows.isEmpty()) {
             throw new LossFailure(404, "LOSS_NOT_FOUND");
@@ -60,13 +73,9 @@ public class LossScrapSourcePort {
         return rows.getFirst();
     }
 
-    private BorrowedLoss confirmedBorrowing(java.util.Map<String, Object> row, long version) {
+    private BorrowedLoss confirmedBorrowing(Map<String, Object> row, long version) {
         var source = json.readTree(row.get("source_snapshot_json").toString());
-        if (((Number) row.get("version")).longValue() != version
-                || !"CONFIRMED_LOST".equals(row.get("report_status")) || row.get("recovered_at") != null
-                || !"BORROWED".equals(source.path("lifecycle").asText())
-                || row.get("confirmation_snapshot_json") == null || row.get("confirmed_lost_at") == null
-                || row.get("responsible_employee_id") == null || row.get("using_organization_id") == null) {
+        if (((Number) row.get("version")).longValue() != version || !confirmedBorrowedSource(row, source)) {
             throw new LossFailure(409, "SCRAP_LOSS_SOURCE_CHANGED");
         }
         Object confirmed = row.get("confirmed_lost_at");
