@@ -153,7 +153,7 @@ async function catalog(kind: "location" | "employee") {
   } catch (cause) { if (current(epoch, owner)) failure(cause); }
   finally { if (current(epoch, owner)) busy.value = false; }
 }
-function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute") {
+function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute" | "executeLoss") {
   if (locked.value || stale.value) return;
   const row = detail.value;
   let path = "", body: Record<string, unknown>, version: number | undefined, summary: string;
@@ -170,17 +170,24 @@ function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute") 
     if (!row || row.lockVersion == null) return;
     const capability = action === "approve" || action === "reject" ? "decide" : action;
     if (!row.actions[capability]) return;
-    version = row.version; path = "/" + row.id + "/" + (capability === "decide" ? "decision" : action);
+    version = row.version; path = "/" + row.id + "/" + (capability === "decide" ? "decision" : action === "executeLoss" ? "execute-loss" : action);
     body = { assetVersion: row.assetVersion, lockVersion: row.lockVersion };
+    const loss = row.sourceType === "LOSS";
     if (capability === "decide") {
-      if (!decisionReason.value.trim() || action === "approve" && !approved.value.trim()) {
+      const method = loss ? "遗失核销" : approved.value.trim();
+      if (!decisionReason.value.trim() || action === "approve" && !method) {
         error.value = "请填写本次原因，批准时须明确允许的处置范围。"; return;
       }
       body = { ...body, result: action === "approve" ? "APPROVE" : "REJECT", reason: decisionReason.value.trim(),
-        ...(action === "approve" ? { approvedDisposition: approved.value.trim() } : {}) };
-      summary = action === "approve" ? "批准处置范围 " + approved.value.trim() + "，等待库管认领核实。" : "驳回报废，核对原保管关系后恢复。";
-    } else if (action === "claim") summary = "取得本单唯一处理权，核验实物后执行。";
-    else {
+        ...(action === "approve" ? { approvedDisposition: method } : {}) };
+      summary = action === "approve" ? "批准处置范围 " + method + "，等待库管认领核实。" : "驳回报废，核对原保管关系后恢复。";
+    } else if (action === "claim") summary = loss
+      ? "取得本单唯一处理权，核对遗失证据后执行。" : "取得本单唯一处理权，核验实物后执行。";
+    else if (action === "executeLoss") {
+      if (evidence.value.trim().length < 10) { error.value = "请填写至少10字的核销复核依据。"; return; }
+      body = { ...body, ownershipVersion: row.ownershipVersion, evidence: evidence.value.trim() };
+      summary = "核销 " + row.source.assetCode + " 并终止原借用，保留遗失及原借用历史。";
+    } else {
       const place = places.value.find(item => item.id === location.value), person = people.value.find(item => item.id === custodian.value);
       const time = new Date(occurred.value), method = row.decision?.decision?.approvedDisposition;
       if (!place || !person || !physical.value || !method || !Number.isFinite(time.getTime())
@@ -262,12 +269,12 @@ onBeforeUnmount(() => { live = false; reset(); });
       <button v-if="canListOverdue" :disabled="locked" @click="toggleOverdue">{{ overdueOnly ? '返回全部申请' : '查看超期待处置' }}</button>
       <p v-if="overdueOnly && businessDate">业务日期 {{ businessDate }}，已超期 {{ total }} 单</p>
       <p v-if="overdueOnly && !stale && !total">当前没有超期待处置记录。</p>
-      <ul><li v-for="row in rows" :key="row.id"><button :disabled="locked" @click="load(row.id)">{{ row.source.assetCode }} · {{ scrapStates[row.status] || row.status }}</button><span v-if="overdueOnly">计划处置 {{ row.disposition?.due_date }}</span></li></ul>
+      <ul><li v-for="row in rows" :key="row.id"><button :disabled="locked" @click="load(row.id)">{{ row.source.assetCode }} · {{ row.sourceType === 'LOSS' && row.status === 'PROCESSING' ? '待遗失核销' : scrapStates[row.status] || row.status }}</button><span v-if="overdueOnly">计划处置 {{ row.disposition?.due_date }}</span></li></ul>
       <button :disabled="locked || page === 1" @click="load('', page - 1)">上一页报废申请</button>
       <button :disabled="locked || page * 20 >= total" @click="load('', page + 1)">下一页报废申请</button>
     </section>
     <section v-if="detail" aria-label="报废详情"><h2>{{ detail.source.assetCode }} · {{ detail.source.name }}</h2>
-      <p>{{ scrapStates[detail.status] || detail.status }} · 原因 {{ detail.reason }} · 现状 {{ detail.observedCondition }}</p>
+      <p>{{ detail.sourceType === 'LOSS' && detail.status === 'PROCESSING' ? '待遗失核销' : scrapStates[detail.status] || detail.status }} · 原因 {{ detail.reason }} · 现状 {{ detail.observedCondition }}</p>
       <p>建议处置 {{ detail.proposedDisposition }} · 当前处理库管 {{ detail.processorAccountId || '尚未认领' }}</p>
       <section v-if="capabilities" aria-label="报废附件">
         <p v-if="!capabilities.canRead">查看报废附件需要单独授权。</p>
@@ -291,7 +298,8 @@ onBeforeUnmount(() => { live = false; reset(); });
         </section>
       </section>
       <fieldset v-if="detail.actions.decide" :disabled="locked || stale"><label>本次决定原因<textarea v-model="decisionReason" maxlength="1000"/></label>
-        <label>批准的处置范围<input v-model="approved" maxlength="500"/></label><button @click="prepare('approve')">批准报废范围</button><button @click="prepare('reject')">驳回报废申请</button>
+        <p v-if="detail.sourceType === 'LOSS'">批准的处置范围 遗失核销</p>
+        <label v-else>批准的处置范围<input v-model="approved" maxlength="500"/></label><button @click="prepare('approve')">批准报废范围</button><button @click="prepare('reject')">驳回报废申请</button>
       </fieldset>
       <button v-if="detail.actions.claim" :disabled="locked || stale" @click="prepare('claim')">认领报废处理</button>
       <fieldset v-if="detail.actions.execute" :disabled="locked || stale"><h3>核验原机并执行报废</h3>
@@ -307,8 +315,15 @@ onBeforeUnmount(() => { live = false; reset(); });
         <label><input v-model="physical" type="checkbox"/>已亲见并核对同一原机和处置保管安排</label>
         <button @click="prepare('execute')">核对执行报废</button>
       </fieldset>
+      <fieldset v-if="detail.actions.executeLoss" :disabled="locked || stale">
+        <legend>执行遗失核销</legend>
+        <p>核对原报失及原借用责任，执行后关闭原借用。</p>
+        <label>核销复核依据<textarea v-model="evidence" maxlength="2000"/></label>
+        <button @click="prepare('executeLoss')">核对执行遗失核销</button>
+      </fieldset>
       <p v-if="detail.disposition">处置进度 {{ detail.disposition.disposition_status === 'PENDING_DISPOSITION' ? '待实际处置'
-        : detail.disposition.disposition_status === 'DISPOSED' ? '已处置' : detail.disposition.disposition_status }} · 计划日期 {{ detail.disposition.due_date }}</p>
+        : detail.disposition.disposition_status === 'DISPOSED' ? '已处置' : detail.disposition.disposition_status === 'LOSS_WRITTEN_OFF' ? '遗失核销'
+        : detail.disposition.disposition_status }}<span v-if="detail.disposition.due_date"> · 计划日期 {{ detail.disposition.due_date }}</span></p>
       <p v-if="detail.disposition?.completion">实际处置 {{ detail.disposition.completion.occurredAt }} · {{ detail.disposition.completion.method }}
         · 处置对象 {{ detail.disposition.completion.recipient }} · 经办人 {{ detail.disposition.completion.operatorName }}</p>
       <fieldset v-if="detail.actions.dispose" :disabled="locked || stale || !capabilities?.canRead">

@@ -7,6 +7,7 @@ import com.fams.auth.RequisitionActorContext;
 import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
+import com.fams.loss.LossScrapSourcePort;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
@@ -47,18 +48,21 @@ public class ScrapReviewService {
     private final RequisitionActorContext actors;
     private final AssetScrapPort assets;
     private final com.fams.loan.LoanLossPort loans;
+    private final LossScrapSourcePort losses;
     private final com.fams.auth.ScrapSensitiveAccess sensitive;
     private final ObjectProvider<AttachmentEvidencePort> evidence;
 
     public ScrapReviewService(JdbcTemplate db, ObjectMapper json, Clock clock,
             RequisitionActorContext actors, AssetScrapPort assets, com.fams.loan.LoanLossPort loans,
-            com.fams.auth.ScrapSensitiveAccess sensitive, ObjectProvider<AttachmentEvidencePort> evidence) {
+            LossScrapSourcePort losses, com.fams.auth.ScrapSensitiveAccess sensitive,
+            ObjectProvider<AttachmentEvidencePort> evidence) {
         this.db = db;
         this.json = json;
         this.clock = clock;
         this.actors = actors;
         this.assets = assets;
         this.loans = loans;
+        this.losses = losses;
         this.sensitive = sensitive;
         this.evidence = evidence;
     }
@@ -90,6 +94,9 @@ public class ScrapReviewService {
             throw new AssetHandoverPort.Failure("SCRAP_DECISION_INVALID", 400);
         }
         var request = guarded(id, version, input.assetVersion(), input.lockVersion(), "PENDING_ADMIN_DECISION");
+        if (approve && "LOSS".equals(request.get("source_type")) && !lossWriteOff(input.approvedDisposition())) {
+            throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_OUTSIDE_APPROVAL", 409);
+        }
         // Match the locked request version even if an earlier read established a MySQL snapshot.
         var attachments = db.queryForList("SELECT detail_json FROM fams_scrap_event"
                 + " WHERE request_id=? AND action='SCRAP_ATTACHMENT_ADDED' ORDER BY id FOR UPDATE", String.class, id)
@@ -242,17 +249,92 @@ public class ScrapReviewService {
                 + "due_date,custody_snapshot_json,created_at,updated_at)"
                 + " VALUES (?,?,'PENDING_DISPOSITION',?,?,?,?)",
                 id, current.id(), due, execution, time, time);
-        if (db.update("UPDATE fams_asset_business_lock SET released_at=?,release_reason='SCRAP_EXECUTED',"
-                + "lock_version=lock_version+1 WHERE asset_id=? AND business_type='SCRAP' AND business_id=?"
-                + " AND business_item_id=? AND lock_version=? AND released_at IS NULL",
-                time, asset, id, id, input.lockVersion()) != 1) {
-            throw new AssetHandoverPort.Failure("SCRAP_ASSET_OR_LOCK_CHANGED", 409);
-        }
+        releaseExecutedLock(id, asset, input.lockVersion(), time);
         closeTodo(id, "EXECUTE", time);
         todo(id, "DISPOSITION", "WAREHOUSE_OPERATOR", current.id(), time);
         audit(actor, current, Role.WAREHOUSE_OPERATOR, id, version, "SCRAP_EXECUTED", input, time);
         return remember(current, operation, key, hash, new Receipt(Long.toString(id), Long.toString(asset),
                 version + 1, assetVersion, input.ownershipVersion(), "EXECUTED", Long.toString(current.id())), time);
+    }
+
+    public record LossExecution(
+            @NotNull @PositiveOrZero Long assetVersion,
+            @NotNull @PositiveOrZero Long lockVersion,
+            @NotNull @PositiveOrZero Long ownershipVersion,
+            @NotBlank @Size(min = 10, max = 2000) String evidence) {}
+
+    public Receipt executeLoss(Actor actor, long id, long version, UUID key, LossExecution input) {
+        var current = current(actor, Role.WAREHOUSE_OPERATOR);
+        String operation = "EXECUTE_LOSS:" + id;
+        String hash = fingerprint(version, input);
+        var requests = db.queryForList("SELECT * FROM fams_scrap_request WHERE id=? FOR UPDATE", id);
+        if (requests.isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_NOT_FOUND", 404);
+        }
+        var row = requests.getFirst();
+        if (!Objects.equals(row.get("processor_account_id"), current.id())) {
+            throw new AssetHandoverPort.Failure("SCRAP_PROCESSOR_REQUIRED", 403);
+        }
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        if (!"PROCESSING".equals(row.get("request_status")) || number(row, "version") != version
+                || number(row, "asset_version") != input.assetVersion()) {
+            throw new AssetHandoverPort.Failure("SCRAP_REQUEST_CHANGED", 409);
+        }
+        if (!"LOSS".equals(row.get("source_type")) || number(row, "ownership_version") != input.ownershipVersion()) {
+            throw new AssetHandoverPort.Failure("SCRAP_SOURCE_OR_OWNERSHIP_CHANGED", 409);
+        }
+        var approval = json.readTree(row.get("decision_snapshot_json").toString()).path("decision");
+        if (!lossWriteOff(approval.path("approvedDisposition").asText())) {
+            throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_OUTSIDE_APPROVAL", 409);
+        }
+        if (input.evidence().strip().length() < 10) {
+            throw new AssetHandoverPort.Failure("SCRAP_LOSS_EVIDENCE_REQUIRED", 400);
+        }
+        long reportId = number(row, "source_business_id"), asset = number(row, "asset_id");
+        var source = json.readTree(row.get("source_snapshot_json").toString());
+        var proof = source.path("lossEvidence");
+        var loss = losses.requireExecutionEvidence(reportId, proof.path("reportVersion").asLong(-1));
+        if (loss.assetId() != asset || loss.borrowerId() != source.path("responsible_employee_id").asLong()
+                || loss.organizationId() != source.path("using_organization_id").asLong()
+                || !json.readTree(loss.confirmationJson()).equals(proof.path("confirmation"))) {
+            throw new AssetHandoverPort.Failure("SCRAP_LOSS_SOURCE_CHANGED", 409);
+        }
+        var time = now();
+        long assetVersion = assets.executeBorrowedLoss(asset, input.assetVersion(), id, input.lockVersion(),
+                loss.borrowerId(), loss.organizationId(), current.id(), time);
+        loans.terminateLost(asset, loss.borrowerId(), loss.organizationId(),
+                proof.path("loanId").asLong(), proof.path("loanVersion").asLong(-1), time);
+        losses.closeFollowUp(reportId, time);
+        var facts = Map.of("lossEvidence", proof, "evidence", input.evidence().strip(), "writtenOffAt", time);
+        String execution = json.writeValueAsString(facts);
+        db.update("UPDATE fams_scrap_request SET request_status='EXECUTED',execution_snapshot_json=?,"
+                + "asset_version=?,version=version+1,updated_at=? WHERE id=?",
+                execution, assetVersion, time, id);
+        db.update("INSERT INTO fams_scrap_disposition(request_id,processor_account_id,disposition_status,"
+                + "custody_snapshot_json,completion_snapshot_json,created_at,updated_at)"
+                + " VALUES (?,?,'LOSS_WRITTEN_OFF',?,?,?,?)", id, current.id(), source.toString(), execution, time, time);
+        releaseExecutedLock(id, asset, input.lockVersion(), time);
+        closeTodo(id, "EXECUTE", time);
+        audit(actor, current, Role.WAREHOUSE_OPERATOR, id, version, "SCRAP_LOSS_WRITTEN_OFF", facts, time);
+        return remember(current, operation, key, hash, new Receipt(Long.toString(id), Long.toString(asset),
+                version + 1, assetVersion, input.ownershipVersion(), "EXECUTED", Long.toString(current.id())), time);
+    }
+
+    private boolean lossWriteOff(String method) {
+        String value = method.strip();
+        return "LOSS_WRITTEN_OFF".equals(value) || "遗失核销".equals(value);
+    }
+
+    private void releaseExecutedLock(long id, long asset, long lockVersion, Instant time) {
+        if (db.update("UPDATE fams_asset_business_lock SET released_at=?,release_reason='SCRAP_EXECUTED',"
+                + "lock_version=lock_version+1 WHERE asset_id=? AND business_type='SCRAP' AND business_id=?"
+                + " AND business_item_id=? AND lock_version=? AND released_at IS NULL",
+                time, asset, id, id, lockVersion) != 1) {
+            throw new AssetHandoverPort.Failure("SCRAP_ASSET_OR_LOCK_CHANGED", 409);
+        }
     }
 
     public record DispositionCompletion(

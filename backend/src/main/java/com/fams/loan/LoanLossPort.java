@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Loan owns switching current reminders; loss never closes or renews the original relationship. */
+/** Loan owns current reminders and final termination of the original lost borrowing. */
 @Component
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
@@ -51,6 +51,18 @@ public class LoanLossPort {
         var loan = rows.getFirst();
         return java.util.Optional.of(new OpenBorrowing(((Number) loan.get("id")).longValue(),
                 ((Number) loan.get("version")).longValue()));
+    }
+
+    public void terminateLost(long asset, long borrower, long organization, long loanId, long version,
+            java.time.Instant time) {
+        if (db.update("UPDATE fams_loan SET relation_status='LOST_TERMINATED',closed_at=?,updated_at=?,version=version+1"
+                        + " WHERE id=? AND asset_id=? AND borrower_employee_id=? AND using_organization_id=?"
+                        + " AND relation_status='OPEN' AND version=?",
+                time, time, loanId, asset, borrower, organization, version) != 1) {
+            throw new Failure("LOSS_LOAN_IDENTITY_CHANGED");
+        }
+        db.update("UPDATE fams_todo SET todo_status='CLOSED',closed_at=? WHERE business_type='LOAN'"
+                + " AND business_id=? AND closed_at IS NULL", time, loanId);
     }
 
     public void requireRecovery(long asset, String lifecycle, Long borrower, Long organization) {

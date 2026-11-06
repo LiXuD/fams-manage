@@ -165,8 +165,11 @@ public class ScrapReadService {
             object.remove("attachmentEvidence");
         }
         result.put("decision", decision);
-        result.put("execution", row.get("execution_snapshot_json") == null
-                ? null : json.readTree(row.get("execution_snapshot_json").toString()));
+        boolean lossSource = "LOSS".equals(row.get("source_type"));
+        var execution = row.get("execution_snapshot_json") == null
+                ? null : json.readTree(row.get("execution_snapshot_json").toString());
+        result.put("execution", lossSource && execution != null
+                ? Map.of("writtenOffAt", execution.path("writtenOffAt").asText()) : execution);
         var locks = db.queryForList("SELECT lock_version FROM fams_asset_business_lock"
                 + " WHERE asset_id=? AND business_type='SCRAP' AND business_id=?"
                 + " AND business_item_id=? AND released_at IS NULL", row.get("asset_id"), id, id);
@@ -182,6 +185,9 @@ public class ScrapReadService {
                 && "PENDING_DISPOSITION".equals(disposition.get("disposition_status"));
         if (disposition != null) {
             disposition.remove("processor_account_id");
+            if (lossSource) {
+                disposition.remove("custody_snapshot_json");
+            }
             Object completion = disposition.remove("completion_snapshot_json");
             if (completion != null && "DISPOSED".equals(disposition.get("disposition_status"))) {
                 var snapshot = json.readTree(completion.toString());
@@ -196,6 +202,7 @@ public class ScrapReadService {
                 "claim", actor.has(Role.WAREHOUSE_OPERATOR)
                         && "WAITING_WAREHOUSE_CLAIM".equals(row.get("request_status")),
                 "execute", owner && "PROCESSING".equals(row.get("request_status")) && "STANDALONE".equals(row.get("source_type")),
+                "executeLoss", owner && "PROCESSING".equals(row.get("request_status")) && lossSource,
                 "dispose", canDispose));
         result.put("disposition", disposition);
         return result;

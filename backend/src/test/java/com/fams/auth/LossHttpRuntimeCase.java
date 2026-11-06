@@ -187,6 +187,7 @@ class LossHttpRuntimeCase {
                         + " 951010)");
         String scraps = " IN (SELECT id FROM fams_scrap_request WHERE asset_id BETWEEN 951020 AND 951023)";
         db.update("DELETE FROM fams_todo WHERE business_type='SCRAP' AND business_id" + scraps);
+        db.update("DELETE FROM fams_scrap_disposition WHERE request_id" + scraps);
         db.update("DELETE FROM fams_scrap_event WHERE request_id" + scraps);
         db.update("DELETE FROM fams_scrap_receipt WHERE scrap_request_id" + scraps);
         db.update("DELETE FROM fams_scrap_request WHERE asset_id BETWEEN 951020 AND 951023");
@@ -1144,6 +1145,77 @@ class LossHttpRuntimeCase {
                 JSON.writeValueAsString(reject), 0, key()));
         assertEquals("RESTORE_REQUIRED", corrective.path("status").asText());
         assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=951020 AND released_at IS NULL", Long.class));
+    }
+
+    @Test
+    void approvedLostScrapAtomicallyWritesOffAndTerminatesBorrowing() throws Exception {
+        borrowing(true);
+        db.update("UPDATE fams_loan SET parameter_snapshot_json=JSON_OBJECT('timezone','Asia/Shanghai') WHERE asset_id=951020");
+        var searching = searchingReport();
+        String report = searching.path("id").asText();
+        var confirmed = ok(post(warehouse, "/" + report + "/confirm-lost", confirmation(searching),
+                searching.path("version").asLong(), key()));
+        var loss = db.queryForMap("SELECT * FROM fams_loss_report WHERE id=?", Long.parseLong(report));
+        var loan = db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020");
+        var payload = JSON.createObjectNode().put("assetVersion", confirmed.path("assetVersion").asLong())
+                .put("reason", "已确认遗失申请报废").put("observedCondition", "原资产持续查找未能找回")
+                .put("proposedDisposition", "遗失核销");
+        var submitted = ok(postScrap(employee, "/from-loss/" + report, payload.toString(),
+                confirmed.path("version").asLong(), key()));
+        String path = "/" + submitted.path("id").asText();
+        long id = submitted.path("id").asLong(), assetVersion = submitted.path("assetVersion").asLong();
+        var versions = JSON.createObjectNode().put("assetVersion", assetVersion).put("lockVersion", 0);
+        var decision = versions.deepCopy().put("result", "APPROVE").put("reason", "确认遗失证据完整")
+                .put("approvedDisposition", "物理销毁");
+        assertEquals(409, postScrap(admin, path + "/decision", decision.toString(), 0, key()).statusCode());
+        decision.put("approvedDisposition", "LOSS_WRITTEN_OFF");
+        ok(postScrap(admin, path + "/decision", decision.toString(), 0, key()));
+        var claimed = ok(postScrap(otherWarehouse, path + "/claim", versions.toString(), 1, key()));
+        var input = versions.deepCopy().put("ownershipVersion", claimed.path("ownershipVersion").asLong())
+                .put("evidence", "经核对原报失证据，确认原资产未找回，办理遗失核销");
+        String execution = path + "/execute-loss", body = input.toString(), requestKey = key();
+        long version = claimed.path("version").asLong();
+        assertEquals(403, postScrap(warehouse, execution, body, version, key()).statusCode());
+        assertEquals(409, postScrap(otherWarehouse, execution, body, version - 1, key()).statusCode());
+        var frozen = db.queryForMap("SELECT * FROM fams_asset WHERE id=951020");
+        db.execute("CREATE TRIGGER owned_repair_audit_failure BEFORE INSERT ON fams_audit_event"
+                + " FOR EACH ROW BEGIN IF NEW.action='SCRAP_LOSS_WRITTEN_OFF' THEN SIGNAL"
+                + " SQLSTATE '45000' SET MESSAGE_TEXT='owned write-off audit failure'; END IF; END");
+        assertEquals(500, postScrap(otherWarehouse, execution, body, version, requestKey).statusCode());
+        db.execute("DROP TRIGGER owned_repair_audit_failure");
+        assertEquals(frozen, db.queryForMap("SELECT * FROM fams_asset WHERE id=951020"));
+        assertEquals(loan, db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020"));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_disposition WHERE request_id=?", Long.class, id));
+        var executed = ok(postScrap(otherWarehouse, execution, body, version, requestKey));
+        assertEquals("EXECUTED", executed.path("status").asText());
+        assertEquals(executed, ok(postScrap(otherWarehouse, execution, body, version, requestKey)));
+        assertEquals(409, postScrap(otherWarehouse, execution, input.put("evidence", "变更核销依据不允许重用原键").toString(),
+                version, requestKey).statusCode());
+        assertEquals(409, postScrap(otherWarehouse, execution, body, version, key()).statusCode());
+        var asset = db.queryForMap("SELECT * FROM fams_asset WHERE id=951020");
+        assertEquals("SCRAPPED", asset.get("lifecycle_status"));
+        assertEquals("LOST", asset.get("exception_status"));
+        assertEquals(frozen.get("responsible_employee_id"), asset.get("responsible_employee_id"));
+        assertEquals(frozen.get("current_location_id"), asset.get("current_location_id"));
+        var closed = db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020");
+        assertEquals("LOST_TERMINATED", closed.get("relation_status"));
+        org.junit.jupiter.api.Assertions.assertNotNull(closed.get("closed_at"));
+        assertEquals(null, closed.get("open_asset_id"));
+        for (String field : List.of("borrowed_date", "original_return_date", "expected_return_date", "borrower_employee_id")) {
+            assertEquals(loan.get(field), closed.get(field));
+        }
+        assertEquals(loss, db.queryForMap("SELECT * FROM fams_loss_report WHERE id=?", Long.parseLong(report)));
+        var disposition = db.queryForMap("SELECT * FROM fams_scrap_disposition WHERE request_id=?", id);
+        assertEquals("LOSS_WRITTEN_OFF", disposition.get("disposition_status"));
+        assertEquals(null, disposition.get("due_date"));
+        var proof = JSON.readTree(disposition.get("completion_snapshot_json").toString()).path("lossEvidence");
+        assertEquals(report, proof.path("reportId").asText());
+        assertEquals(JSON.readTree(loss.get("confirmation_snapshot_json").toString()), proof.path("confirmation"));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=951020"
+                + " AND released_at IS NULL", Long.class));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_todo WHERE closed_at IS NULL AND"
+                + " ((business_type='LOST_REPORT' AND business_id=?) OR (business_type='SCRAP' AND business_id=?)"
+                + " OR (business_type='LOAN' AND business_id=?))", Long.class, Long.parseLong(report), id, loan.get("id")));
     }
 
     private HttpResponse<String> postScrap(Session session, String path, String body, long version, String key) throws Exception {

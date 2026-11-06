@@ -5,10 +5,11 @@ export interface ScrapRequest {
   id: string; assetId: string; version: number; assetVersion: number; ownershipVersion: number;
   lockVersion: number | null; processorAccountId: string | null; status: string;
   reason: string; observedCondition: string; proposedDisposition: string;
+  sourceType?: string;
   source: { assetCode: string; name: string; serialNumber: string };
-  actions: { decide: boolean; claim: boolean; execute: boolean; dispose?: boolean };
+  actions: { decide: boolean; claim: boolean; execute: boolean; executeLoss?: boolean; dispose?: boolean };
   decision: { decision?: { approvedDisposition?: string } } | null;
-  disposition: { disposition_status: string; due_date: string; version?: number;
+  disposition: { disposition_status: string; due_date: string | null; version?: number;
     completion?: { occurredAt: string; method: string; recipient: string; operatorName: string } } | null;
 }
 export type ScrapAttachmentKind = "request" | "disposition";

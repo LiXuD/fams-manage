@@ -32,17 +32,35 @@ public class LossScrapSourcePort {
             Instant confirmedAt, String confirmationJson) {}
 
     public BorrowedLoss requireBorrowedLoss(Current current, long id, long version) {
-        var rows = db.queryForList("SELECT * FROM fams_loss_report WHERE id=? FOR UPDATE", id);
-        if (rows.isEmpty()) {
-            throw new LossFailure(404, "LOSS_NOT_FOUND");
-        }
-        var row = rows.getFirst();
+        var row = lockedReport(id);
         if (!(current.has(Role.ASSET_ADMIN)
                 || current.has(Role.WAREHOUSE_OPERATOR) && Objects.equals(current.id(), row.get("processor_account_id"))
                 || current.has(Role.EMPLOYEE) && Objects.equals(current.employeeId(), row.get("responsible_employee_id"))
                 || current.has(Role.DEPARTMENT_ASSET_MANAGER) && Objects.equals(current.organizationId(), row.get("using_organization_id")))) {
             throw new LossFailure(403, "SCRAP_LOSS_SOURCE_FORBIDDEN");
         }
+        return confirmedBorrowing(row, version);
+    }
+
+    /** The scrap workflow has already authorized its processor independently of the old loss processor. */
+    public BorrowedLoss requireExecutionEvidence(long reportId, long version) {
+        return confirmedBorrowing(lockedReport(reportId), version);
+    }
+
+    public void closeFollowUp(long reportId, Instant time) {
+        db.update("UPDATE fams_todo SET todo_status='CLOSED',closed_at=? WHERE business_type='LOST_REPORT'"
+                + " AND business_id=? AND todo_type='LOST_FOLLOW_UP' AND closed_at IS NULL", time, reportId);
+    }
+
+    private java.util.Map<String, Object> lockedReport(long id) {
+        var rows = db.queryForList("SELECT * FROM fams_loss_report WHERE id=? FOR UPDATE", id);
+        if (rows.isEmpty()) {
+            throw new LossFailure(404, "LOSS_NOT_FOUND");
+        }
+        return rows.getFirst();
+    }
+
+    private BorrowedLoss confirmedBorrowing(java.util.Map<String, Object> row, long version) {
         var source = json.readTree(row.get("source_snapshot_json").toString());
         if (((Number) row.get("version")).longValue() != version
                 || !"CONFIRMED_LOST".equals(row.get("report_status")) || row.get("recovered_at") != null

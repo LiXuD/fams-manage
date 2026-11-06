@@ -109,6 +109,14 @@ public class ScrapController {
         return review.execute(actors.capture(), id, version, key, input);
     }
 
+    @PostMapping("/{id}/execute-loss")
+    ScrapReviewService.Receipt executeLoss(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.LossExecution input) {
+        return review.executeLoss(actors.capture(), id, version, key, input);
+    }
+
     @PostMapping("/{id}/disposition/complete")
     ScrapReviewService.DispositionReceipt completeDisposition(@PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,

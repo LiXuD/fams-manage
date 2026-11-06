@@ -207,6 +207,20 @@ public class AssetScrapPort {
         return version + 1;
     }
 
+    public long executeBorrowedLoss(long asset, long version, long requestId, long lockVersion,
+            long borrower, long organization, long actor, Instant time) {
+        requirePending(asset, version, requestId, lockVersion);
+        if (db.update("UPDATE fams_asset SET lifecycle_status='SCRAPPED',version=version+1,updated_at=?,updated_by=?"
+                        + " WHERE id=? AND version=? AND lifecycle_status='PENDING_SCRAP' AND exception_status='LOST'"
+                        + " AND custody_type='PERSONAL' AND responsible_employee_id=? AND using_organization_id=?",
+                time, actor, asset, version, borrower, organization) != 1) {
+            throw new AssetHandoverPort.Failure("SCRAP_LOSS_ASSET_CHANGED", 409);
+        }
+        mapper.event(asset, "SCRAP_EXECUTED", time,
+                json.writeValueAsString(Map.of("scrapRequestId", Long.toString(requestId), "sourceType", "LOSS")), actor);
+        return version + 1;
+    }
+
     /** Serialize disposition with any later workflow that needs this asset. */
     public void requireDispositionAsset(long id, long version, String observedCode, String observedSerial) {
         var rows = db.queryForList("SELECT asset_code,serial_number FROM fams_asset WHERE id=? AND version=?"
