@@ -392,6 +392,23 @@ class ScrapSubmitHttpRuntimeCase {
                 .put("dispositionMethod", "待处置保管");
         var executed = write(fixture.warehouse, id, "execute", 3, UUID.randomUUID().toString(), json.writeValueAsString(execution));
         assertEquals(200, executed.statusCode(), executed.body());
+        String overdue = "/dispositions/overdue";
+        var empty = get(fixture.admin, overdue);
+        assertEquals(200, empty.statusCode(), empty.body());
+        var date = java.time.LocalDate.parse(json.readTree(empty.body()).path("businessDate").asText());
+        assertEquals(403, get(fixture.employee, overdue).statusCode());
+        assertEquals(0, json.readTree(empty.body()).path("total").asInt());
+        db.update("UPDATE fams_scrap_disposition SET due_date=? WHERE request_id=?", date, Long.parseLong(id));
+        assertEquals(0, json.readTree(get(fixture.admin, overdue).body()).path("total").asInt());
+        db.update("UPDATE fams_scrap_disposition SET due_date=? WHERE request_id=?", date.minusDays(1), Long.parseLong(id));
+        var overduePage = json.readTree(get(fixture.admin, overdue + "?page=1&pageSize=1").body());
+        assertEquals(1, overduePage.path("total").asInt());
+        assertEquals(id, overduePage.path("items").get(0).path("id").asText());
+        assertEquals(date.minusDays(1).toString(), overduePage.path("items").get(0).path("disposition").path("due_date").asText());
+        assertEquals(0, json.readTree(get(fixture.admin, overdue + "?page=2&pageSize=1").body()).path("items").size());
+        assertEquals(1, json.readTree(get(fixture.warehouse, overdue).body()).path("total").asInt());
+        assertEquals(0, json.readTree(get(fixture.otherWarehouse, overdue).body()).path("total").asInt());
+
         var before = db.queryForMap("SELECT * FROM fams_scrap_request WHERE id=?", Long.parseLong(id));
         String key = UUID.randomUUID().toString();
         assertEquals(403, upload(fixture.otherWarehouse, id, "disposition", 0, key).statusCode());
@@ -434,6 +451,7 @@ class ScrapSubmitHttpRuntimeCase {
         var closed = write(fixture.warehouse, id, action, 1, completeKey, body);
         assertEquals(200, closed.statusCode(), closed.body());
         assertEquals("DISPOSED", json.readTree(closed.body()).path("status").asText());
+        assertEquals(0, json.readTree(get(fixture.admin, overdue).body()).path("total").asInt());
         assertEquals(2, json.readTree(closed.body()).path("version").asInt());
         assertEquals(closed.body(), write(fixture.warehouse, id, action, 1, completeKey, body).body());
         assertEquals(409, write(fixture.warehouse, id, action, 1, completeKey,

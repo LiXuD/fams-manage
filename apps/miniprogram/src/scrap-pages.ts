@@ -21,6 +21,7 @@ const attachmentKind = (kind: string): kind is AttachmentKind => kind === "reque
 const attachmentLabel = { request: "申请附件", disposition: "处置凭证" };
 interface Data {
     rows: Scrap[]; detail: Scrap | null; assets: Asset[]; selectedAsset: string;
+    overdueOnly: boolean; canListOverdue: boolean; businessDate: string;
     page: number; total: number; assetPage: number; assetTotal: number;
     places: Choice[]; people: Choice[]; location: string; custodian: string;
     locationPage: number; locationTotal: number; peoplePage: number; peopleTotal: number;
@@ -36,6 +37,7 @@ const emptyAttachments = () => ({ capabilities: null, requestFiles: [], disposit
     previewPath: "", previewName: "", previewMime: "" });
 const blank = (): Data => ({
     ...emptyAttachments(), recipient: "", dispositionEvidence: [],
+    overdueOnly: false, canListOverdue: false, businessDate: "",
     rows: [], detail: null, assets: [], selectedAsset: "", page: 1, total: 0, assetPage: 1, assetTotal: 0,
     places: [], people: [], location: "", custodian: "", locationPage: 0, locationTotal: 0, peoplePage: 0, peopleTotal: 0,
     reason: "", condition: "", proposed: "", decisionReason: "", approved: "", observed: "", serial: "",
@@ -86,11 +88,15 @@ export function createScrapPage(getServices: () => MiniServices) {
         else page.setData({ busy: false });
     };
     const readState = async (page: Context, epoch: number) => {
-        const rows = await services.sessions.request("GET", base + "?page=" + page.data.page + "&pageSize=20") as { items: Scrap[]; total: number };
+        const listPath = page.data.overdueOnly ? "/dispositions/overdue" : "";
+        const rows = await services.sessions.request("GET", base + listPath + "?page=" + page.data.page + "&pageSize=20") as {
+            items: Scrap[]; total: number; canListOverdueDispositions?: boolean; businessDate?: string;
+        };
         if (!current(epoch)) return false;
         const detail = selectedId ? await services.sessions.request("GET", base + "/" + selectedId) as Scrap : null;
         if (!current(epoch)) return false;
-        page.setData({ rows: rows.items, total: rows.total, detail, stale: false, retry: !!pending, pendingSummary: pending?.summary ?? "" });
+        page.setData({ rows: rows.items, total: rows.total, detail, stale: false, retry: !!pending, pendingSummary: pending?.summary ?? "",
+            canListOverdue: rows.canListOverdueDispositions === true, businessDate: rows.businessDate ?? "" });
         if (detail) await readAttachments(page, detail, epoch);
         return current(epoch);
     };
@@ -136,7 +142,7 @@ export function createScrapPage(getServices: () => MiniServices) {
     };
     const read = async (page: Context) => {
         if (!ensure(page) || page.data.busy || prepared) return;
-        const paging = { page: page.data.page }, epoch = ++generation;
+        const paging = { page: page.data.page, overdueOnly: page.data.overdueOnly }, epoch = ++generation;
         actualInstant = ""; page.setData({ ...blank(), ...paging, busy: true, retry: !!pending }); closePreview(page);
         try { await readState(page, epoch); } catch (error) { if (current(epoch)) failure(page, error); }
         finally { finish(page, epoch); }
@@ -153,6 +159,7 @@ export function createScrapPage(getServices: () => MiniServices) {
             selectedId = result.id;
             if (!await readState(page, epoch)) return;
             const saved = { rows: page.data.rows, total: page.data.total, detail: page.data.detail, page: page.data.page,
+                overdueOnly: page.data.overdueOnly, canListOverdue: page.data.canListOverdue, businessDate: page.data.businessDate,
                 capabilities: page.data.capabilities, requestFiles: page.data.requestFiles, dispositionFiles: page.data.dispositionFiles };
             pending = null; actualInstant = "";
             page.setData({ ...blank(), ...saved, stale: false, busy: true, notice: "本次办理已保存，请核对当前进度。" });
@@ -216,6 +223,12 @@ export function createScrapPage(getServices: () => MiniServices) {
         async onOpen(this: Context, event: { currentTarget: { dataset: { id: string } } }) {
             if (!editable(this) || !this.data.rows.some(row => row.id === event.currentTarget.dataset.id)) return;
             selectedId = event.currentTarget.dataset.id; await read(this);
+        },
+        async onToggleOverdue(this: Context) {
+            if (!editable(this) || !this.data.canListOverdue) return;
+            selectedId = "";
+            this.setData({ overdueOnly: !this.data.overdueOnly, page: 1 });
+            await read(this);
         },
         async onPage(this: Context, event: { currentTarget: { dataset: { delta: string } } }) {
             const next = this.data.page + Number(event.currentTarget.dataset.delta);

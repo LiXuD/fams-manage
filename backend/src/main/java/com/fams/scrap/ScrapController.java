@@ -47,6 +47,12 @@ public class ScrapController {
         return reads.list(actors.capture(), page, pageSize);
     }
 
+    @GetMapping("/dispositions/overdue")
+    Map<String, Object> overdueDispositions(@RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
+            @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
+        return reads.overdueDispositions(actors.capture(), page, pageSize);
+    }
+
     @GetMapping("/eligible")
     Map<String, Object> eligible(@RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {

@@ -203,3 +203,29 @@ it("closes actual disposition with its independent version and selected clean or
   expect(wrapper.text()).toContain("经办人 现场经办人");
   wrapper.unmount();
 });
+
+
+it("opens an overdue disposition from the scoped server list and returns to all requests", async () => {
+  const row: ScrapRequest = { ...report(), status: "EXECUTED",
+    disposition: { disposition_status: "PENDING_DISPOSITION", due_date: "2026-11-05" } };
+  const paths: string[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    paths.push(url);
+    if (url.includes("/dispositions/overdue?")) return response({ items: [row], total: 1,
+      canListOverdueDispositions: true, businessDate: "2026-11-06" });
+    if (url.includes("?")) return response({ items: [row], total: 1, canListOverdueDispositions: true });
+    if (url.endsWith("attachment-capabilities")) return response({ canRead: false });
+    return response(row);
+  }));
+  const wrapper = mount(ScrapView); await flushPromises();
+  await button(wrapper, "查看超期待处置").trigger("click"); await flushPromises();
+  expect(wrapper.text()).toContain("业务日期 2026-11-06，已超期 1 单");
+  expect(wrapper.text()).toContain("计划处置 2026-11-05");
+  await button(wrapper, "ORIGINAL-1 · 已执行报废").trigger("click"); await flushPromises();
+  expect(paths).toContain("/api/v1/scrap-requests/" + row.id);
+  expect(wrapper.text()).toContain("处置进度 待实际处置");
+  await button(wrapper, "返回全部申请").trigger("click"); await flushPromises();
+  expect(wrapper.text()).not.toContain("已超期 1 单");
+  expect(wrapper.find('[aria-label="报废详情"]').exists()).toBe(false);
+  wrapper.unmount();
+});

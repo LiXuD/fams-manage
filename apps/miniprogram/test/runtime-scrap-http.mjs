@@ -122,6 +122,7 @@ async function inspect(value, kind, close) {
 }
 try {
     const employee = await page("employee");
+    assert.equal(employee.data.canListOverdue, false);
     await employee.onAssets(); okay(employee);
     employee.onAsset(event({ id: "951020" }));
     for (const [name, value] of Object.entries({ reason: "已核对原机无法继续使用", condition: "同一原机实际损坏", proposed: "核对后待处置" })) employee.onField(field(name, value));
@@ -187,6 +188,14 @@ try {
     assert.equal(warehouse.data.detail.disposition.version, 2);
     assert.equal(warehouse.data.detail.disposition.completion.recipient, "现场接收处置单位");
     assert.equal(warehouse.data.detail.actions.dispose, false);
+    assert.equal(warehouse.data.canListOverdue, true);
+    await warehouse.onToggleOverdue(); okay(warehouse);
+    assert.equal(warehouse.data.overdueOnly, true);
+    assert.match(warehouse.data.businessDate, /^\d{4}-\d{2}-\d{2}$/);
+    assert.equal(warehouse.data.total, 0);
+    await warehouse.onToggleOverdue(); okay(warehouse);
+    assert.equal(warehouse.data.overdueOnly, false);
+    assert.ok(warehouse.data.rows.some(row => row.id === id));
     for (const value of [employee, admin, warehouse]) value.onUnload();
     console.log(JSON.stringify({ nativeScrapExecuted: true, originalReceiptReplayed: true,
         separatePendingDisposition: true, nativeScrapAttachments: true, nativeDispositionClosed: true, requestId: id }));

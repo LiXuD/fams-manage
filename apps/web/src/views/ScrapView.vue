@@ -10,6 +10,7 @@ import { ScrapApiError, scrapOriginal, scrapRequest, scrapStates, type ScrapAsse
 const route = useRoute(), session = useSessionStore();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, route.params.id]));
 const rows = ref<ScrapRequest[]>([]), detail = ref<ScrapRequest | null>(null), page = ref(1), total = ref(0);
+const overdueOnly = ref(false), canListOverdue = ref(false), businessDate = ref("");
 const assets = ref<ScrapAsset[]>([]), assetPage = ref(1), assetTotal = ref(0), selectedAsset = ref("");
 const reason = ref(""), condition = ref(""), proposed = ref(""), decisionReason = ref(""), approved = ref("");
 const observed = ref(""), serial = ref(""), occurred = ref(""), physical = ref(false), evidence = ref(""), due = ref("");
@@ -36,6 +37,7 @@ function clearFacts() {
 function reset() {
   clearAttachments(); generation++; clearFacts(); rows.value = []; detail.value = null; assets.value = []; selectedAsset.value = "";
   page.value = 1; total.value = 0; assetPage.value = 1; assetTotal.value = 0;
+  overdueOnly.value = false; canListOverdue.value = false; businessDate.value = "";
   reason.value = ""; condition.value = ""; proposed.value = "";
   pending.value = null; confirmation.value = null; busy.value = false; stale.value = true; error.value = ""; notice.value = "";
 }
@@ -50,14 +52,24 @@ async function load(id = detail.value?.id ?? String(route.params.id ?? ""), next
   const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
   clearAttachments();
   try {
-    const result = await scrapRequest<{ items: ScrapRequest[]; total: number }>("?page=" + next + "&pageSize=20");
+    const listPath = overdueOnly.value ? "/dispositions/overdue" : "";
+    const result = await scrapRequest<{ items: ScrapRequest[]; total: number;
+      canListOverdueDispositions?: boolean; businessDate?: string }>(listPath + "?page=" + next + "&pageSize=20");
     const selected = /^[1-9][0-9]{0,18}$/.test(id) ? await scrapRequest<ScrapRequest>("/" + id) : null;
     if (!current(epoch, owner)) return;
     if (detail.value?.id !== selected?.id) clearFacts();
     rows.value = result.items; total.value = result.total; page.value = next; detail.value = selected; stale.value = false;
+    canListOverdue.value = result.canListOverdueDispositions === true;
+    businessDate.value = result.businessDate ?? "";
     if (selected) await loadAttachments(selected, epoch, owner);
   } catch (cause) { if (current(epoch, owner)) { stale.value = true; failure(cause); } }
   finally { if (current(epoch, owner)) busy.value = false; }
+}
+function toggleOverdue() {
+  if (locked.value || !canListOverdue.value) return;
+  overdueOnly.value = !overdueOnly.value;
+  rows.value = []; total.value = 0; detail.value = null; clearFacts(); stale.value = true;
+  void load("", 1);
 }
 function closePreview() {
   if (preview.value) URL.revokeObjectURL(preview.value.url);
@@ -246,8 +258,11 @@ onBeforeUnmount(() => { live = false; reset(); });
         <label>建议处置方式<input v-model="proposed" maxlength="500"/></label><button @click="prepare('submit')">核对提交报废申请</button>
       </fieldset>
     </section>
-    <section aria-label="报废申请列表"><h2>申请进度</h2>
-      <ul><li v-for="row in rows" :key="row.id"><button :disabled="locked" @click="load(row.id)">{{ row.source.assetCode }} · {{ scrapStates[row.status] || row.status }}</button></li></ul>
+    <section aria-label="报废申请列表"><h2>{{ overdueOnly ? '超期待处置' : '申请进度' }}</h2>
+      <button v-if="canListOverdue" :disabled="locked" @click="toggleOverdue">{{ overdueOnly ? '返回全部申请' : '查看超期待处置' }}</button>
+      <p v-if="overdueOnly && businessDate">业务日期 {{ businessDate }}，已超期 {{ total }} 单</p>
+      <p v-if="overdueOnly && !stale && !total">当前没有超期待处置记录。</p>
+      <ul><li v-for="row in rows" :key="row.id"><button :disabled="locked" @click="load(row.id)">{{ row.source.assetCode }} · {{ scrapStates[row.status] || row.status }}</button><span v-if="overdueOnly">计划处置 {{ row.disposition?.due_date }}</span></li></ul>
       <button :disabled="locked || page === 1" @click="load('', page - 1)">上一页报废申请</button>
       <button :disabled="locked || page * 20 >= total" @click="load('', page + 1)">下一页报废申请</button>
     </section>

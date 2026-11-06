@@ -25,8 +25,14 @@ module.exports={state:function(value){return names[value]||value;}};
     <button data-action="submit" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对提交报废申请</button>
   </view>
   <view class="card">
-    <view class="title">申请进度</view>
-    <button wx:for="{{rows}}" wx:key="id" data-id="{{item.id}}" bindtap="onOpen" disabled="{{busy || retry || confirmation || stale}}">{{item.source.assetCode}} · {{labels.state(item.status)}}</button>
+    <view class="title">{{overdueOnly ? '超期待处置' : '申请进度'}}</view>
+    <button wx:if="{{canListOverdue}}" bindtap="onToggleOverdue" disabled="{{busy || retry || confirmation || stale}}">{{overdueOnly ? '返回全部申请' : '查看超期待处置'}}</button>
+    <view wx:if="{{overdueOnly &amp;&amp; businessDate}}">业务日期 {{businessDate}}，已超期 {{total}} 单</view>
+    <view wx:if="{{overdueOnly &amp;&amp; !stale &amp;&amp; !total}}">当前没有超期待处置记录。</view>
+    <view wx:for="{{rows}}" wx:key="id">
+      <button data-id="{{item.id}}" bindtap="onOpen" disabled="{{busy || retry || confirmation || stale}}">{{item.source.assetCode}} · {{labels.state(item.status)}}</button>
+      <view wx:if="{{overdueOnly}}">计划处置 {{item.disposition.due_date}}</view>
+    </view>
     <button data-delta="-1" bindtap="onPage" disabled="{{busy || retry || confirmation || stale || page === 1}}">上一页报废申请</button>
     <button data-delta="1" bindtap="onPage" disabled="{{busy || retry || confirmation || stale || page * 20 >= total}}">下一页报废申请</button>
   </view>
