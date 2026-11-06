@@ -91,3 +91,71 @@ it("execution freezes independent versions and selected real custody before writ
   expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
   wrapper.unmount();
 });
+
+
+it("retries the original multipart file and request version after a committed response is lost", async () => {
+  const row = { ...report(), status: "PENDING_ADMIN_DECISION", actions: { decide: false, claim: false, execute: false } };
+  const writes: RequestInit[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
+    if (url.endsWith("/attachments/request") && init.method === "POST") {
+      writes.push(init);
+      if (writes.length === 1) { row.version++; throw Error("committed upload reply lost"); }
+      return response({ id: row.id, version: row.version });
+    }
+    if (url.endsWith("attachment-capabilities")) return response({ canRead: false, canUploadRequest: true,
+      canUploadDisposition: false, requestVersion: row.version, dispositionVersion: null });
+    return response(url.includes("?") ? { items: [row], total: 1 } : row);
+  }));
+  const wrapper = mount(ScrapView); await flushPromises();
+  await button(wrapper, "ORIGINAL-1 · 待管理员确认").trigger("click"); await flushPromises();
+  const input = wrapper.get('input[type="file"]');
+  const file = new File(["original"], "报废原件.png", { type: "image/png" });
+  Object.defineProperty(input.element, "files", { value: [file] });
+  await input.trigger("change");
+  expect(writes).toHaveLength(0);
+  expect(wrapper.get('[role="dialog"]').text()).toContain(file.name);
+  await button(wrapper, "确认提交本次办理").trigger("click"); await flushPromises();
+  await button(wrapper, "刷新报废进度").trigger("click"); await flushPromises();
+  await button(wrapper, "重试原报废操作").trigger("click"); await flushPromises();
+  expect(writes).toHaveLength(2);
+  expect(writes[1]?.headers).toEqual(writes[0]?.headers);
+  expect(writes[0]?.headers).toMatchObject({ "If-Match-Version": "2" });
+  expect((writes[0]?.body as FormData).get("file")).toBe(file);
+  expect((writes[1]?.body as FormData).get("file")).toBe(file);
+  wrapper.unmount();
+});
+
+it("discards a late attachment response after identity changes and revokes an opened original", async () => {
+  const row = report();
+  const objectId = "913f4814-383f-4a40-aa23-96691cf5166d";
+  const file = { objectId, filename: "敏感原件.png", contentType: "image/png", sizeBytes: 4 };
+  const path = "/api/v1/scrap-requests/" + row.id + "/attachments/request/" + objectId;
+  let release: ((value: Response) => void) | undefined;
+  let delayed = false;
+  const bytes = { ok: true, blob: async () => new Blob(["data"], { type: file.contentType }) } as Response;
+  const create = vi.fn(() => "blob:protected-scrap"), revoke = vi.fn();
+  vi.stubGlobal("URL", class extends URL { static createObjectURL = create; static revokeObjectURL = revoke; });
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    if (url.endsWith("/attachment-capabilities")) return response({ canRead: true });
+    if (url.endsWith("/attachments/request")) return response([file]);
+    if (url.endsWith("/download-grant")) return response({ url: path + "/content?grant=private" });
+    if (url.startsWith(path + "/content?")) {
+      if (delayed) return new Promise<Response>(resolve => { release = resolve; });
+      return bytes;
+    }
+    return response(url.includes("?") ? { items: [row], total: 1 } : row);
+  }));
+  const wrapper = mount(ScrapView); await flushPromises();
+  await button(wrapper, "ORIGINAL-1 · 待实物核验与执行").trigger("click"); await flushPromises();
+  await button(wrapper, file.filename).trigger("click"); await flushPromises();
+  expect(wrapper.get("img").attributes("src")).toBe("blob:protected-scrap");
+  delayed = true;
+  await button(wrapper, file.filename).trigger("click"); await flushPromises();
+  expect(revoke).toHaveBeenCalledWith("blob:protected-scrap");
+  state.session.user.id = "2";
+  expect(release).toBeDefined(); release?.(bytes); await flushPromises();
+  expect(create).toHaveBeenCalledTimes(1);
+  expect(wrapper.find("img").exists()).toBe(false);
+  expect(wrapper.text()).not.toContain(file.filename);
+  wrapper.unmount();
+});

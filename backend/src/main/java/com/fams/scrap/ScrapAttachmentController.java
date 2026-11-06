@@ -1,5 +1,6 @@
 package com.fams.scrap;
 
+import com.fams.asset.AssetHandoverPort;
 import com.fams.auth.RequisitionActorContext;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -9,6 +10,7 @@ import jakarta.validation.constraints.Size;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,6 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Profile("fams-product")
@@ -54,9 +57,27 @@ public class ScrapAttachmentController {
             @PathVariable String kind,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
+            @RequestParam(required = false) String originalFilename,
+            @RequestParam(required = false) String declaredContentType,
             @RequestParam("file") MultipartFile file)
             throws IOException {
         var actor = actors.capture();
+        String filename = file.getOriginalFilename();
+        String mime = file.getContentType();
+        if (originalFilename != null || declaredContentType != null) {
+            if (originalFilename == null || originalFilename.isBlank() || originalFilename.length() > 255
+                    || originalFilename.contains("/") || originalFilename.contains("\\")
+                    || originalFilename.codePoints().anyMatch(Character::isISOControl)
+                    || declaredContentType == null
+                    || !Set.of("image/png", "image/jpeg", "image/webp", "application/pdf").contains(declaredContentType)
+                    || mime != null && !MediaType.APPLICATION_OCTET_STREAM_VALUE.equals(mime)
+                            && !mime.equals(declaredContentType)) {
+                throw new AssetHandoverPort.Failure("SCRAP_ATTACHMENT_INVALID", 422);
+            }
+            // WeChat may send an opaque part name and MIME. The intake still validates actual bytes.
+            filename = originalFilename;
+            mime = declaredContentType;
+        }
         try (var bytes = file.getInputStream()) {
             return photos.upload(
                     actor,
@@ -64,8 +85,8 @@ public class ScrapAttachmentController {
                     kind,
                     version,
                     key,
-                    file.getOriginalFilename(),
-                    file.getContentType(),
+                    filename,
+                    mime,
                     bytes);
         }
     }

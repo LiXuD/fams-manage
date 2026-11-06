@@ -251,6 +251,9 @@ class ScrapSubmitHttpRuntimeCase {
     void nativePageUsesOpaqueSessionsAndReplaysCommittedExecution() throws Exception {
         var json = new tools.jackson.databind.ObjectMapper();
         var grants = new java.util.LinkedHashMap<String, Object>();
+        grantField(951001, "ASSET_ADMIN");
+        grantField(951002, "EMPLOYEE");
+        grantField(951003, "WAREHOUSE_OPERATOR");
         for (var entry : java.util.Map.of("employee", 951002L, "admin", 951001L, "warehouse", 951003L).entrySet()) {
             var identity = new MiniWechatIdentityPort.Identity("owned-scrap-native", entry.getKey());
             db.update("INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES (?,?,NOW(3))",
@@ -272,6 +275,7 @@ class ScrapSubmitHttpRuntimeCase {
             String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
             assertEquals(0, process.exitValue(), output);
             org.junit.jupiter.api.Assertions.assertTrue(output.contains("\"nativeScrapExecuted\":true"), output);
+            org.junit.jupiter.api.Assertions.assertTrue(output.contains("\"nativeScrapAttachments\":true"), output);
         } finally {
             if (process.isAlive()) {
                 process.destroyForcibly();
@@ -281,6 +285,8 @@ class ScrapSubmitHttpRuntimeCase {
         assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_disposition WHERE request_id"
                 + " IN (SELECT id FROM fams_scrap_request WHERE asset_id=951020)", Long.class));
         assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_receipt WHERE operation LIKE 'EXECUTE:%'", Long.class));
+        assertEquals(2L, db.queryForObject("SELECT COUNT(*) FROM fams_attachment WHERE business_type IN ('SCRAP','SCRAP_DISPOSITION')", Long.class));
+        assertEquals(2L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_receipt WHERE operation LIKE 'ATTACHMENT:%'", Long.class));
     }
 
 

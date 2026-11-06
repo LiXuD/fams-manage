@@ -34,6 +34,23 @@ module.exports={state:function(value){return names[value]||value;}};
     <view class="title">{{detail.source.assetCode}} · {{detail.source.name}}</view>
     <view>{{labels.state(detail.status)}} · 当前库管 {{detail.processorAccountId || '尚未认领'}}</view>
     <view>原因 {{detail.reason}} · 现状 {{detail.observedCondition}} · 建议处置 {{detail.proposedDisposition}}</view>
+    <view wx:if="{{capabilities}}">
+      <view wx:if="{{!capabilities.canRead}}">查看报废附件需要单独授权。</view>
+      <view class="title">申请附件</view>
+      <button wx:if="{{capabilities.canUploadRequest}}" data-kind="request" bindtap="onPickAttachment" disabled="{{busy || retry || confirmation || stale}}">选择申请附件</button>
+      <button wx:for="{{requestFiles}}" wx:key="objectId" data-kind="request" data-id="{{item.objectId}}" bindtap="onReadAttachment" disabled="{{busy || retry || confirmation || stale}}">{{item.filename}}</button>
+      <view wx:if="{{detail.disposition}}">
+        <view class="title">处置凭证</view>
+        <button wx:if="{{capabilities.canUploadDisposition}}" data-kind="disposition" bindtap="onPickAttachment" disabled="{{busy || retry || confirmation || stale}}">选择处置凭证</button>
+        <button wx:for="{{dispositionFiles}}" wx:key="objectId" data-kind="disposition" data-id="{{item.objectId}}" bindtap="onReadAttachment" disabled="{{busy || retry || confirmation || stale}}">{{item.filename}}</button>
+      </view>
+      <view wx:if="{{previewPath}}" class="card">
+        <view>{{previewName}}</view>
+        <image wx:if="{{previewMime !== 'application/pdf'}}" src="{{previewPath}}" mode="widthFix"/>
+        <button wx:else bindtap="onOpenAttachment" disabled="{{busy || retry || confirmation || stale}}">打开 PDF 原件</button>
+        <button bindtap="onCloseAttachment" disabled="{{busy}}">关闭报废原件</button>
+      </view>
+    </view>
     <view wx:if="{{detail.actions.decide}}">
       <view>本次决定原因</view><textarea value="{{decisionReason}}" data-field="decisionReason" bindinput="onField" maxlength="1000" disabled="{{busy || retry || confirmation || stale}}"/>
       <view>批准的处置范围</view><input value="{{approved}}" data-field="approved" bindinput="onField" maxlength="500" disabled="{{busy || retry || confirmation || stale}}"/>

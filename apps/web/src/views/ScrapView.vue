@@ -3,7 +3,8 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { ScrapApiError, scrapRequest, scrapStates, type ScrapAsset, type ScrapChoice,
+import { ScrapApiError, scrapOriginal, scrapRequest, scrapStates, type ScrapAsset, type ScrapChoice,
+  type ScrapAttachment, type ScrapAttachmentCapabilities, type ScrapAttachmentKind,
   type ScrapIntent, type ScrapRequest } from "@/scrap/api";
 
 const route = useRoute(), session = useSessionStore();
@@ -17,6 +18,11 @@ const locationPage = ref(0), locationTotal = ref(0), peoplePage = ref(0), people
 const busy = ref(false), stale = ref(true), error = ref(""), notice = ref("");
 const confirmation = ref<ScrapIntent | null>(null), pending = ref<ScrapIntent | null>(null);
 const locked = computed(() => busy.value || !!confirmation.value || !!pending.value);
+const attachmentKinds = ["request", "disposition"] as const;
+const attachmentLabel = { request: "申请附件", disposition: "处置凭证" };
+const capabilities = ref<ScrapAttachmentCapabilities | null>(null);
+const attachments = ref<Record<ScrapAttachmentKind, ScrapAttachment[]>>({ request: [], disposition: [] });
+const preview = ref<{ url: string; name: string; mime: string } | null>(null);
 let generation = 0, live = true;
 const current = (epoch: number, owner: string) => live && epoch === generation && owner === identity.value;
 function clearFacts() {
@@ -26,7 +32,7 @@ function clearFacts() {
   occurred.value = ""; physical.value = false; evidence.value = ""; due.value = "";
 }
 function reset() {
-  generation++; clearFacts(); rows.value = []; detail.value = null; assets.value = []; selectedAsset.value = "";
+  clearAttachments(); generation++; clearFacts(); rows.value = []; detail.value = null; assets.value = []; selectedAsset.value = "";
   page.value = 1; total.value = 0; assetPage.value = 1; assetTotal.value = 0;
   reason.value = ""; condition.value = ""; proposed.value = "";
   pending.value = null; confirmation.value = null; busy.value = false; stale.value = true; error.value = ""; notice.value = "";
@@ -40,14 +46,75 @@ function failure(cause: unknown) {
 async function load(id = detail.value?.id ?? String(route.params.id ?? ""), next = page.value) {
   if (busy.value || confirmation.value) return;
   const epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
+  clearAttachments();
   try {
     const result = await scrapRequest<{ items: ScrapRequest[]; total: number }>("?page=" + next + "&pageSize=20");
     const selected = /^[1-9][0-9]{0,18}$/.test(id) ? await scrapRequest<ScrapRequest>("/" + id) : null;
     if (!current(epoch, owner)) return;
     if (detail.value?.id !== selected?.id) clearFacts();
     rows.value = result.items; total.value = result.total; page.value = next; detail.value = selected; stale.value = false;
+    if (selected) await loadAttachments(selected, epoch, owner);
   } catch (cause) { if (current(epoch, owner)) { stale.value = true; failure(cause); } }
   finally { if (current(epoch, owner)) busy.value = false; }
+}
+function closePreview() {
+  if (preview.value) URL.revokeObjectURL(preview.value.url);
+  preview.value = null;
+}
+function clearAttachments() {
+  closePreview(); capabilities.value = null;
+  attachments.value = { request: [], disposition: [] };
+}
+async function loadAttachments(row: ScrapRequest, epoch: number, owner: string) {
+  const path = "/" + row.id;
+  try {
+    const caps = await scrapRequest<ScrapAttachmentCapabilities>(path + "/attachment-capabilities");
+    if (!current(epoch, owner)) return;
+    const files = caps.canRead ? await Promise.all([
+      scrapRequest<ScrapAttachment[]>(path + "/attachments/request"),
+      row.disposition ? scrapRequest<ScrapAttachment[]>(path + "/attachments/disposition") : Promise.resolve([]),
+    ]) : [[], []];
+    if (!current(epoch, owner)) return;
+    capabilities.value = caps;
+    attachments.value = { request: files[0] ?? [], disposition: files[1] ?? [] };
+  } catch (cause) {
+    if (!current(epoch, owner)) return;
+    if (cause instanceof ScrapApiError && cause.status === 401) { failure(cause); return; }
+    if (!(cause instanceof ScrapApiError && cause.status === 404)) error.value = "附件暂不可读取，请刷新报废进度。";
+  }
+}
+function pickAttachment(kind: ScrapAttachmentKind, event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0]; input.value = "";
+  const row = detail.value, caps = capabilities.value;
+  if (!file || !row || !caps || locked.value || stale.value) return;
+  const allowed = kind === "request" ? caps.canUploadRequest : caps.canUploadDisposition;
+  const version = kind === "request" ? caps.requestVersion : caps.dispositionVersion;
+  if (!allowed || version == null) return;
+  if (!["image/png", "image/jpeg", "image/webp", "application/pdf"].includes(file.type)
+      || file.size <= 0 || file.size > (file.type === "application/pdf" ? 20 : 10) * 1024 * 1024) {
+    error.value = "请选择有效的图片或 PDF。图片最多 10 MB，PDF 最多 20 MB。"; return;
+  }
+  error.value = "";
+  confirmation.value = Object.freeze({ path: "/" + row.id + "/attachments/" + kind,
+    key: crypto.randomUUID(), version, body: Object.freeze({}), file,
+    summary: "上传" + attachmentLabel[kind] + "「" + file.name + "」。" });
+}
+async function openAttachment(kind: ScrapAttachmentKind, item: ScrapAttachment) {
+  const row = detail.value;
+  if (!row || locked.value || stale.value || !capabilities.value?.canRead
+      || !attachments.value[kind].includes(item)) return;
+  const epoch = ++generation, owner = identity.value;
+  closePreview(); busy.value = true; error.value = "";
+  try {
+    const blob = await scrapOriginal(row.id, kind, item, () => current(epoch, owner));
+    if (blob && current(epoch, owner)) preview.value = { url: URL.createObjectURL(blob), name: item.filename, mime: blob.type };
+  } catch (cause) {
+    if (!current(epoch, owner)) return;
+    clearAttachments();
+    if (cause instanceof ScrapApiError && cause.status === 401) failure(cause);
+    else error.value = "附件读取未完成，请刷新并核对访问权限。";
+  } finally { if (current(epoch, owner)) busy.value = false; }
 }
 async function loadAssets(next = 1) {
   if (locked.value) return;
@@ -119,6 +186,7 @@ async function perform() {
   if (!pending.value || busy.value) return;
   const operation = pending.value, epoch = ++generation, owner = identity.value;
   busy.value = true; error.value = ""; let saved = "";
+  clearAttachments();
   try {
     const result = await scrapRequest<{ id: string }>(operation.path, operation);
     if (!current(epoch, owner)) return;
@@ -164,6 +232,27 @@ onBeforeUnmount(() => { live = false; reset(); });
     <section v-if="detail" aria-label="报废详情"><h2>{{ detail.source.assetCode }} · {{ detail.source.name }}</h2>
       <p>{{ scrapStates[detail.status] || detail.status }} · 原因 {{ detail.reason }} · 现状 {{ detail.observedCondition }}</p>
       <p>建议处置 {{ detail.proposedDisposition }} · 当前处理库管 {{ detail.processorAccountId || '尚未认领' }}</p>
+      <section v-if="capabilities" aria-label="报废附件">
+        <p v-if="!capabilities.canRead">查看报废附件需要单独授权。</p>
+        <template v-for="kind in attachmentKinds" :key="kind">
+          <section v-if="kind === 'request' || detail.disposition" :aria-label="attachmentLabel[kind]">
+            <h3>{{ attachmentLabel[kind] }}</h3>
+            <label v-if="kind === 'request' ? capabilities.canUploadRequest : capabilities.canUploadDisposition">
+              选择{{ attachmentLabel[kind] }}
+              <input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" :disabled="locked || stale"
+                @change="pickAttachment(kind, $event)"/>
+            </label>
+            <ul v-if="capabilities.canRead"><li v-for="item in attachments[kind]" :key="item.objectId">
+              <button :disabled="locked || stale" @click="openAttachment(kind, item)">{{ item.filename }}</button>
+            </li></ul>
+          </section>
+        </template>
+        <section v-if="preview" aria-label="报废附件原件">
+          <img v-if="preview.mime !== 'application/pdf'" :src="preview.url" :alt="preview.name" class="scrap-preview"/>
+          <a :href="preview.url" :download="preview.name">下载原件 {{ preview.name }}</a>
+          <button @click="closePreview">关闭报废原件</button>
+        </section>
+      </section>
       <fieldset v-if="detail.actions.decide" :disabled="locked || stale"><label>本次决定原因<textarea v-model="decisionReason" maxlength="1000"/></label>
         <label>批准的处置范围<input v-model="approved" maxlength="500"/></label><button @click="prepare('approve')">批准报废范围</button><button @click="prepare('reject')">驳回报废申请</button>
       </fieldset>
@@ -188,5 +277,6 @@ onBeforeUnmount(() => { live = false; reset(); });
 <style scoped>
 .scrap-page { max-width: 1080px; } section { margin: 20px 0; }
 fieldset { border: 1px solid #d9e0e8; padding: 16px; } label { display: block; margin: 12px 0; }
+.scrap-preview { display: block; max-width: 100%; max-height: 360px; }
 textarea { display: block; width: min(100%, 720px); min-height: 70px; } button { margin: 6px; }
 </style>

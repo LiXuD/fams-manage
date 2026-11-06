@@ -1,5 +1,5 @@
 import type { MiniServices } from "./pages.ts";
-import { MiniRequestError } from "./session.ts";
+import { MiniRequestError, type FactoryEvidenceFile } from "./session.ts";
 
 interface Choice { id: string; name: string; version: number }
 interface Asset extends Choice { assetCode: string }
@@ -11,7 +11,13 @@ interface Scrap {
     decision: { decision?: { approvedDisposition?: string } } | null;
     disposition: { disposition_status: string; due_date: string } | null;
 }
-interface Intent { readonly path: string; readonly key: string; readonly version?: number; readonly body: string; readonly summary: string }
+type AttachmentKind = "request" | "disposition";
+interface Attachment { objectId: string; filename: string; contentType: string; sizeBytes: number }
+interface Capabilities { canRead: boolean; canUploadRequest: boolean; canUploadDisposition: boolean; requestVersion: number; dispositionVersion: number | null }
+interface Intent { readonly path: string; readonly key: string; readonly version?: number; readonly body: string; readonly summary: string; readonly file?: FactoryEvidenceFile }
+interface Pick { id: string; kind: AttachmentKind; owner: string; version: number; file?: { path: string; name: string; size: number } }
+const attachmentKind = (kind: string): kind is AttachmentKind => kind === "request" || kind === "disposition";
+const attachmentLabel = { request: "申请附件", disposition: "处置凭证" };
 interface Data {
     rows: Scrap[]; detail: Scrap | null; assets: Asset[]; selectedAsset: string;
     page: number; total: number; assetPage: number; assetTotal: number;
@@ -19,10 +25,15 @@ interface Data {
     locationPage: number; locationTotal: number; peoplePage: number; peopleTotal: number;
     reason: string; condition: string; proposed: string; decisionReason: string; approved: string;
     observed: string; serial: string; actualDate: string; actualTime: string; physical: boolean; evidence: string; due: string;
+    capabilities: Capabilities | null; requestFiles: Attachment[]; dispositionFiles: Attachment[];
+    previewPath: string; previewName: string; previewMime: string;
     busy: boolean; stale: boolean; retry: boolean; confirmation: string; pendingSummary: string; error: string; notice: string;
 }
 interface Context { data: Data; setData(update: Partial<Data>): void }
+const emptyAttachments = () => ({ capabilities: null, requestFiles: [], dispositionFiles: [],
+    previewPath: "", previewName: "", previewMime: "" });
 const blank = (): Data => ({
+    ...emptyAttachments(),
     rows: [], detail: null, assets: [], selectedAsset: "", page: 1, total: 0, assetPage: 1, assetTotal: 0,
     places: [], people: [], location: "", custodian: "", locationPage: 0, locationTotal: 0, peoplePage: 0, peopleTotal: 0,
     reason: "", condition: "", proposed: "", decisionReason: "", approved: "", observed: "", serial: "",
@@ -34,23 +45,37 @@ const time = (value: Date) => [value.getHours(), value.getMinutes(), value.getSe
 export function createScrapPage(getServices: () => MiniServices) {
     const base = "/api/v1/mini/scrap-requests";
     let services: MiniServices, identity = "", selectedId = "", live = false, generation = 0, actualInstant = "";
-    let pending: Intent | null = null, prepared: Intent | null = null;
+    let pending: Intent | null = null, prepared: Intent | null = null, pick: Pick | null = null, previewPath = "";
     const owner = () => JSON.stringify([services.sessions.identity, services.sessions.identityRevision]);
     const current = (epoch: number) => live && generation === epoch && identity === owner();
+    const discard = (page: Context, path?: string) => {
+        if (!path) return;
+        try { services.sessions.discardFactoryEvidence(path); }
+        catch { if (live) page.setData({ error: "资料已隐藏，原件清理待重新进入后重试。" }); }
+    };
+    const closePreview = (page: Context) => {
+        const path = previewPath; previewPath = "";
+        page.setData({ previewPath: "", previewName: "", previewMime: "" });
+        discard(page, path);
+    };
     const wipe = (page: Context) => {
-        generation++; selectedId = ""; pending = null; prepared = null; actualInstant = ""; page.setData(blank());
+        const preparedFile = prepared?.file?.path, pendingFile = pending?.file?.path;
+        generation++; selectedId = ""; pending = null; prepared = null; pick = null; actualInstant = "";
+        page.setData(blank()); closePreview(page); discard(page, preparedFile); discard(page, pendingFile);
     };
     const ensure = (page: Context) => {
         if (!live) return false;
         if (owner() === identity) return true;
         wipe(page); page.setData({ error: "身份已变化，原资料已隐藏。" }); return false;
     };
-    const editable = (page: Context) => ensure(page) && !page.data.busy && !page.data.stale && !pending && !prepared;
+    const editable = (page: Context) => ensure(page) && !page.data.busy && !page.data.stale && !pending && !prepared && !pick;
     const failure = (page: Context, error: unknown) => {
         if (error instanceof MiniRequestError && [401, 403, 404].includes(error.status)) {
             wipe(page); page.setData({ error: "身份、权限或记录已失效。" });
         } else if (error instanceof MiniRequestError && error.status >= 400 && error.status < 500) {
-            pending = null; page.setData({ stale: true, retry: false, pendingSummary: "", error: "资料或处理权已变化，请刷新后重新核对。" });
+            const file = pending?.file?.path; pending = null;
+            page.setData({ stale: true, retry: false, pendingSummary: "", error: "资料或处理权已变化，请刷新后重新核对。" });
+            discard(page, file);
         } else page.setData({ stale: true, retry: !!pending, error: pending ? "结果尚未确认，请刷新进度并用原操作重试。" : "读取未完成，请重试。" });
     };
     const finish = (page: Context, epoch: number) => {
@@ -64,27 +89,72 @@ export function createScrapPage(getServices: () => MiniServices) {
         const detail = selectedId ? await services.sessions.request("GET", base + "/" + selectedId) as Scrap : null;
         if (!current(epoch)) return false;
         page.setData({ rows: rows.items, total: rows.total, detail, stale: false, retry: !!pending, pendingSummary: pending?.summary ?? "" });
-        return true;
+        if (detail) await readAttachments(page, detail, epoch);
+        return current(epoch);
+    };
+    const readAttachments = async (page: Context, row: Scrap, epoch: number) => {
+        const path = base + "/" + row.id;
+        try {
+            const capabilities = await services.sessions.request("GET", path + "/attachment-capabilities") as Capabilities;
+            if (!current(epoch)) return;
+            const files = capabilities.canRead ? await Promise.all([
+                services.sessions.request("GET", path + "/attachments/request") as Promise<Attachment[]>,
+                row.disposition ? services.sessions.request("GET", path + "/attachments/disposition") as Promise<Attachment[]> : Promise.resolve([]),
+            ]) : [[], []];
+            if (current(epoch)) page.setData({ capabilities, requestFiles: files[0] ?? [], dispositionFiles: files[1] ?? [] });
+        } catch (error) {
+            if (!current(epoch)) return;
+            if (error instanceof MiniRequestError && error.status === 401) throw error;
+            if (!(error instanceof MiniRequestError && error.status === 404)) page.setData({ error: "附件暂不可读取，请刷新报废进度。" });
+        }
+    };
+    const uploadVersion = (page: Context, kind: AttachmentKind): number | null => {
+        const caps = page.data.capabilities;
+        if (kind === "request") return caps?.canUploadRequest ? caps.requestVersion : null;
+        return caps?.canUploadDisposition ? caps.dispositionVersion : null;
+    };
+    const preparePicked = (page: Context) => {
+        if (!live || page.data.busy || !pick?.file) return;
+        const chosen = pick, original = pick.file; pick = null;
+        if (owner() !== chosen.owner || selectedId !== chosen.id || page.data.detail?.id !== chosen.id
+            || page.data.stale || uploadVersion(page, chosen.kind) !== chosen.version) {
+            page.setData({ error: "报废单据或权限已变化，请刷新并重新选择附件。" }); return;
+        }
+        let file: FactoryEvidenceFile | undefined;
+        try {
+            file = services.sessions.stageFactoryEvidence(original);
+            const summary = "上传" + attachmentLabel[chosen.kind] + "「" + file.name + "」。";
+            prepared = Object.freeze({ path: base + "/" + chosen.id + "/attachments/" + chosen.kind,
+                key: services.createKey(), version: chosen.version, body: "{}", file, summary });
+            page.setData({ confirmation: summary, error: "" });
+        } catch {
+            discard(page, file?.path);
+            page.setData({ error: "请选择有效的图片或 PDF。图片最多 10 MB，PDF 最多 20 MB。" });
+        }
     };
     const read = async (page: Context) => {
         if (!ensure(page) || page.data.busy || prepared) return;
         const paging = { page: page.data.page }, epoch = ++generation;
-        actualInstant = ""; page.setData({ ...blank(), ...paging, busy: true, retry: !!pending });
+        actualInstant = ""; page.setData({ ...blank(), ...paging, busy: true, retry: !!pending }); closePreview(page);
         try { await readState(page, epoch); } catch (error) { if (current(epoch)) failure(page, error); }
         finally { finish(page, epoch); }
     };
     const send = async (page: Context) => {
         if (!ensure(page) || !pending || page.data.busy) return;
         const operation = pending, epoch = ++generation; page.setData({ busy: true, error: "" });
+        closePreview(page); page.setData(emptyAttachments());
         try {
-            const result = await services.sessions.request("POST", operation.path, JSON.parse(operation.body) as unknown,
-                { key: operation.key, version: operation.version ?? 0 }) as { id: string };
+            const mutation = { key: operation.key, version: operation.version ?? 0 };
+            const result = (operation.file ? await services.sessions.uploadScrapEvidence(operation.path, operation.file, mutation)
+                : await services.sessions.request("POST", operation.path, JSON.parse(operation.body) as unknown, mutation)) as { id: string };
             if (!current(epoch)) return;
             selectedId = result.id;
             if (!await readState(page, epoch)) return;
-            const saved = { rows: page.data.rows, total: page.data.total, detail: page.data.detail, page: page.data.page };
+            const saved = { rows: page.data.rows, total: page.data.total, detail: page.data.detail, page: page.data.page,
+                capabilities: page.data.capabilities, requestFiles: page.data.requestFiles, dispositionFiles: page.data.dispositionFiles };
             pending = null; actualInstant = "";
             page.setData({ ...blank(), ...saved, stale: false, busy: true, notice: "本次办理已保存，请核对当前进度。" });
+            discard(page, operation.file?.path);
         } catch (error) { if (current(epoch)) failure(page, error); } finally { finish(page, epoch); }
     };
     const prepare = (page: Context, action: string) => {
@@ -133,9 +203,12 @@ export function createScrapPage(getServices: () => MiniServices) {
         async onShow(this: Context) {
             live = true; const next = getServices();
             if (services && identity !== JSON.stringify([next.sessions.identity, next.sessions.identityRevision])) wipe(this);
-            services = next; identity = owner(); await read(this);
+            services = next; identity = owner(); await read(this); preparePicked(this);
         },
-        onHide(this: Context) { live = false; generation++; prepared = null; actualInstant = ""; this.setData(blank()); },
+        onHide(this: Context) {
+            live = false; generation++; const file = prepared?.file?.path;
+            prepared = null; actualInstant = ""; this.setData(blank()); closePreview(this); discard(this, file);
+        },
         onUnload(this: Context) { live = false; wipe(this); },
         async onRefresh(this: Context) { await read(this); },
         async onOpen(this: Context, event: { currentTarget: { dataset: { id: string } } }) {
@@ -191,12 +264,63 @@ export function createScrapPage(getServices: () => MiniServices) {
             const row = (kind === "location" ? this.data.places : this.data.people)[index];
             if (row && ["location", "employee"].includes(kind)) this.setData(kind === "location" ? { location: row.id } : { custodian: row.id });
         },
+        async onPickAttachment(this: Context, event: { currentTarget: { dataset: { kind: string } } }) {
+            const kind = event.currentTarget.dataset.kind, row = this.data.detail;
+            if (!editable(this) || !row || !attachmentKind(kind) || !services.chooseEvidence) return;
+            const version = uploadVersion(this, kind);
+            if (version == null) return;
+            const ticket: Pick = { id: row.id, kind, owner: identity, version }, epoch = generation;
+            pick = ticket; this.setData({ busy: true, error: "" });
+            try {
+                const file = await services.chooseEvidence();
+                if (pick === ticket && owner() === ticket.owner) ticket.file = file;
+            } catch { if (pick === ticket) pick = null; }
+            finally { finish(this, epoch); }
+            preparePicked(this);
+        },
+        async onReadAttachment(this: Context, event: { currentTarget: { dataset: { kind: string; id: string } } }) {
+            const { kind, id } = event.currentTarget.dataset, row = this.data.detail;
+            if (!editable(this) || !row || !this.data.capabilities?.canRead || !attachmentKind(kind)
+                || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) return;
+            const file = (kind === "request" ? this.data.requestFiles : this.data.dispositionFiles).find(item => item.objectId === id);
+            if (!file) return;
+            const path = base + "/" + row.id + "/attachments/" + kind + "/" + id, epoch = ++generation;
+            this.setData({ busy: true, error: "" }); closePreview(this);
+            try {
+                const grant = await services.sessions.request("POST", path + "/download-grant") as { url: string };
+                if (!current(epoch)) return;
+                if (typeof grant.url !== "string" || !grant.url.startsWith(path + "/content?grant=")) throw new Error("Invalid grant scope");
+                const privatePath = await services.sessions.downloadScrapEvidence(grant.url, file.contentType, file.sizeBytes);
+                if (!current(epoch)) { discard(this, privatePath); return; }
+                previewPath = privatePath;
+                this.setData({ previewPath, previewName: file.filename, previewMime: file.contentType });
+            } catch (error) {
+                if (current(epoch)) {
+                    this.setData(emptyAttachments());
+                    if (error instanceof MiniRequestError && error.status === 401) failure(this, error);
+                    else this.setData({ error: "附件读取未完成，请刷新并核对访问权限。" });
+                }
+            } finally { finish(this, epoch); }
+        },
+        onCloseAttachment(this: Context) { if (ensure(this) && !this.data.busy) closePreview(this); },
+        async onOpenAttachment(this: Context) {
+            if (!editable(this) || !previewPath || !services.openEvidence) return;
+            const epoch = generation;
+            this.setData({ busy: true });
+            try { await services.openEvidence(previewPath, this.data.previewName); }
+            catch { if (current(epoch)) this.setData({ error: "原件未打开，请重试。" }); }
+            finally { finish(this, epoch); }
+        },
         onPrepare(this: Context, event: { currentTarget: { dataset: { action: string } } }) { prepare(this, event.currentTarget.dataset.action); },
         async onConfirm(this: Context) {
             if (!ensure(this) || !prepared || pending || this.data.busy) return;
             pending = prepared; prepared = null; this.setData({ confirmation: "", retry: true, pendingSummary: pending.summary }); await send(this);
         },
-        onCancel(this: Context) { if (ensure(this) && !pending && !this.data.busy) { prepared = null; this.setData({ confirmation: "" }); } },
+        onCancel(this: Context) {
+            if (!ensure(this) || pending || this.data.busy) return;
+            const file = prepared?.file?.path; prepared = null;
+            this.setData({ confirmation: "" }); discard(this, file);
+        },
         async onRetry(this: Context) { await send(this); },
     };
 }
