@@ -15,8 +15,8 @@ const origin = "https://scrap-test.invalid";
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "fams-native-scrap-"));
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0WQAAAAASUVORK5CYII=", "base64");
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
-const writes = [], uploads = [], clients = new Map();
-let drop = true, dropUpload = true;
+const writes = [], uploads = [], completions = [], clients = new Map();
+let drop = true, dropUpload = true, dropCompletion = true;
 function target(url) {
     assert.ok(url.startsWith(origin + "/api/v1/mini/scrap-requests"));
     return "http://127.0.0.1:" + port + url.slice(origin.length);
@@ -47,6 +47,13 @@ function services(role) {
                         version: input.header["If-Match-Version"], body: structuredClone(input.data) });
                     if (drop && response.status === 200) {
                         drop = false; input.fail(Error("Owned adapter dropped committed scrap response")); return;
+                    }
+                }
+                if (input.method === "POST" && input.url.endsWith("/disposition/complete")) {
+                    completions.push({ path: input.url, key: input.header["Idempotency-Key"],
+                        version: input.header["If-Match-Version"], body: structuredClone(input.data), status: response.status });
+                    if (dropCompletion && response.ok) {
+                        dropCompletion = false; input.fail(Error("Owned adapter dropped committed disposition closure")); return;
                     }
                 }
                 input.success({ statusCode: response.status, data });
@@ -159,9 +166,30 @@ try {
     assert.equal(warehouse.data.capabilities.dispositionVersion, 1);
     assert.equal(warehouse.data.detail.version, executedVersion);
     await inspect(warehouse, "disposition", () => warehouse.onHide());
+    await warehouse.onShow(); okay(warehouse);
+    await warehouse.onCatalog(event({ kind: "employee" }));
+    const operator = warehouse.data.people.findIndex(item => item.id === "951003");
+    assert.ok(operator >= 0);
+    warehouse.onChoice({ ...event({ kind: "employee" }), detail: { value: String(operator) } });
+    warehouse.onField(field("observed", "REP-ASSET-951020"));
+    warehouse.onField(field("recipient", "现场接收处置单位"));
+    warehouse.onNow();
+    warehouse.onPrepareDisposition(); assert.equal(warehouse.data.confirmation, "");
+    warehouse.onDispositionEvidence({ detail: { value: [warehouse.data.dispositionFiles[0].objectId] } });
+    warehouse.onPrepareDisposition(); assert.match(warehouse.data.confirmation, /现场接收处置单位/);
+    await warehouse.onConfirm(); assert.equal(warehouse.data.retry, true);
+    assert.equal(completions[0].status, 200); assert.equal(completions[0].version, "1");
+    warehouse.onHide(); await warehouse.onShow();
+    assert.equal(warehouse.data.detail.disposition.disposition_status, "DISPOSED");
+    await warehouse.onRetry(); okay(warehouse);
+    assert.deepEqual(completions, [completions[0], completions[0]]);
+    assert.equal(warehouse.data.detail.version, executedVersion);
+    assert.equal(warehouse.data.detail.disposition.version, 2);
+    assert.equal(warehouse.data.detail.disposition.completion.recipient, "现场接收处置单位");
+    assert.equal(warehouse.data.detail.actions.dispose, false);
     for (const value of [employee, admin, warehouse]) value.onUnload();
     console.log(JSON.stringify({ nativeScrapExecuted: true, originalReceiptReplayed: true,
-        separatePendingDisposition: true, nativeScrapAttachments: true, requestId: id }));
+        separatePendingDisposition: true, nativeScrapAttachments: true, nativeDispositionClosed: true, requestId: id }));
 } finally {
     fs.rmSync(root, { recursive: true, force: true });
 }

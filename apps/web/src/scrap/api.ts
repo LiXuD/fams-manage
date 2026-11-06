@@ -6,9 +6,10 @@ export interface ScrapRequest {
   lockVersion: number | null; processorAccountId: string | null; status: string;
   reason: string; observedCondition: string; proposedDisposition: string;
   source: { assetCode: string; name: string; serialNumber: string };
-  actions: { decide: boolean; claim: boolean; execute: boolean };
+  actions: { decide: boolean; claim: boolean; execute: boolean; dispose?: boolean };
   decision: { decision?: { approvedDisposition?: string } } | null;
-  disposition: { disposition_status: string; due_date: string } | null;
+  disposition: { disposition_status: string; due_date: string; version?: number;
+    completion?: { occurredAt: string; method: string; recipient: string; operatorName: string } } | null;
 }
 export type ScrapAttachmentKind = "request" | "disposition";
 export interface ScrapAttachmentCapabilities {

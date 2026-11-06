@@ -71,8 +71,12 @@ public class ScrapReadService {
     public Map<String, Object> catalog(Actor actor, long id, String kind, int page, int size) {
         var current = actors.revalidateLocked(actor);
         var row = visible(current, id);
-        if (!"PROCESSING".equals(row.get("request_status")) || !current.has(Role.WAREHOUSE_OPERATOR)
-                || !Objects.equals(row.get("processor_account_id"), current.id())) {
+        boolean processing = "PROCESSING".equals(row.get("request_status"))
+                && Objects.equals(row.get("processor_account_id"), current.id());
+        boolean disposing = "employee".equals(kind) && "EXECUTED".equals(row.get("request_status"))
+                && !db.queryForList("SELECT request_id FROM fams_scrap_disposition WHERE request_id=?"
+                        + " AND processor_account_id=? AND disposition_status='PENDING_DISPOSITION'", id, current.id()).isEmpty();
+        if (!current.has(Role.WAREHOUSE_OPERATOR) || !(processing || disposing)) {
             throw new AssetHandoverPort.Failure("SCRAP_PROCESSOR_REQUIRED", 403);
         }
         String from = switch (kind) {
@@ -137,14 +141,31 @@ public class ScrapReadService {
         result.put("lockVersion", locks.isEmpty() ? null : locks.getFirst().get("lock_version"));
         boolean owner = actor.has(Role.WAREHOUSE_OPERATOR)
                 && Objects.equals(actor.id(), row.get("processor_account_id"));
+        var dispositions = db.queryForList("SELECT disposition_status,due_date,version,custody_snapshot_json,"
+                + "completion_snapshot_json,processor_account_id FROM fams_scrap_disposition WHERE request_id=?", id);
+        Map<String, Object> disposition = dispositions.isEmpty() ? null : new LinkedHashMap<>(dispositions.getFirst());
+        boolean canDispose = disposition != null && actor.has(Role.WAREHOUSE_OPERATOR)
+                && Objects.equals(disposition.get("processor_account_id"), actor.id())
+                && "EXECUTED".equals(row.get("request_status")) && "STANDALONE".equals(row.get("source_type"))
+                && "PENDING_DISPOSITION".equals(disposition.get("disposition_status"));
+        if (disposition != null) {
+            disposition.remove("processor_account_id");
+            Object completion = disposition.remove("completion_snapshot_json");
+            if (completion != null && "DISPOSED".equals(disposition.get("disposition_status"))) {
+                var snapshot = json.readTree(completion.toString());
+                var facts = snapshot.path("facts");
+                disposition.put("completion", Map.of("occurredAt", facts.path("occurredAt").asText(),
+                        "method", facts.path("method").asText(), "recipient", facts.path("recipient").asText(),
+                        "operatorName", snapshot.path("operatorName").asText()));
+            }
+        }
         result.put("actions", Map.of("decide", actor.has(Role.ASSET_ADMIN)
                         && "PENDING_ADMIN_DECISION".equals(row.get("request_status")),
                 "claim", actor.has(Role.WAREHOUSE_OPERATOR)
                         && "WAITING_WAREHOUSE_CLAIM".equals(row.get("request_status")),
-                "execute", owner && "PROCESSING".equals(row.get("request_status"))));
-        var disposition = db.queryForList("SELECT disposition_status,due_date,version,custody_snapshot_json,"
-                + "completion_snapshot_json FROM fams_scrap_disposition WHERE request_id=?", id);
-        result.put("disposition", disposition.isEmpty() ? null : disposition.getFirst());
+                "execute", owner && "PROCESSING".equals(row.get("request_status")),
+                "dispose", canDispose));
+        result.put("disposition", disposition);
         return result;
     }
 }

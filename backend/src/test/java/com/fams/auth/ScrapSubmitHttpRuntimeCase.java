@@ -276,6 +276,7 @@ class ScrapSubmitHttpRuntimeCase {
             assertEquals(0, process.exitValue(), output);
             org.junit.jupiter.api.Assertions.assertTrue(output.contains("\"nativeScrapExecuted\":true"), output);
             org.junit.jupiter.api.Assertions.assertTrue(output.contains("\"nativeScrapAttachments\":true"), output);
+            org.junit.jupiter.api.Assertions.assertTrue(output.contains("\"nativeDispositionClosed\":true"), output);
         } finally {
             if (process.isAlive()) {
                 process.destroyForcibly();
@@ -287,6 +288,10 @@ class ScrapSubmitHttpRuntimeCase {
         assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_receipt WHERE operation LIKE 'EXECUTE:%'", Long.class));
         assertEquals(2L, db.queryForObject("SELECT COUNT(*) FROM fams_attachment WHERE business_type IN ('SCRAP','SCRAP_DISPOSITION')", Long.class));
         assertEquals(2L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_receipt WHERE operation LIKE 'ATTACHMENT:%'", Long.class));
+        assertEquals("DISPOSED", db.queryForObject("SELECT disposition_status FROM fams_scrap_disposition", String.class));
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_receipt"
+                + " WHERE operation LIKE 'COMPLETE_DISPOSITION:%'", Long.class));
+
     }
 
 
@@ -398,6 +403,52 @@ class ScrapSubmitHttpRuntimeCase {
         var capabilities = json.readTree(get(fixture.warehouse, "/" + id + "/attachment-capabilities").body());
         org.junit.jupiter.api.Assertions.assertTrue(capabilities.path("canUploadDisposition").asBoolean());
         org.junit.jupiter.api.Assertions.assertFalse(capabilities.path("canRead").asBoolean());
+        var complete = json.createObjectNode().put("requestVersion", 4).put("ownershipVersion", 1)
+                .put("observedCode", "REP-ASSET-951020").put("method", "待处置保管")
+                .put("recipient", "现场处置对象").put("operatorEmployeeId", "951003").put("operatorVersion", 0)
+                .put("occurredAt", java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString());
+        String object = json.readTree(uploaded.body()).path("objectId").asText();
+        complete.putArray("evidenceObjectIds").add(object);
+        String action = "disposition/complete", completeKey = UUID.randomUUID().toString();
+        String body = json.writeValueAsString(complete);
+        assertEquals(403, write(fixture.otherWarehouse, id, action, 1, completeKey, body).statusCode());
+        assertEquals(403, write(fixture.warehouse, id, action, 1, completeKey, body).statusCode());
+        grantField(951003, "WAREHOUSE_OPERATOR");
+        assertEquals(409, write(fixture.warehouse, id, action, 0, completeKey, body).statusCode());
+        assertEquals(409, write(fixture.warehouse, id, action, 1, completeKey,
+                body.replace(object, UUID.randomUUID().toString())).statusCode());
+        assertEquals(409, write(fixture.warehouse, id, action, 1, completeKey,
+                body.replace("REP-ASSET-951020", "WRONG-ORIGINAL")).statusCode());
+        assertEquals(200, get(fixture.warehouse, "/" + id + "/execution-catalog/employee").statusCode());
+        assertEquals(403, get(fixture.otherWarehouse, "/" + id + "/execution-catalog/employee").statusCode());
+        var asset = db.queryForMap("SELECT * FROM fams_asset WHERE id=951020");
+        var pending = db.queryForMap("SELECT * FROM fams_scrap_disposition WHERE request_id=?", Long.parseLong(id));
+        db.execute("CREATE TRIGGER owned_scrap_audit_failure BEFORE INSERT ON fams_audit_event"
+                + " FOR EACH ROW BEGIN IF NEW.action='SCRAP_DISPOSITION_COMPLETED' THEN SIGNAL"
+                + " SQLSTATE '45000' SET MESSAGE_TEXT='owned disposition audit failure'; END IF; END");
+        assertEquals(500, write(fixture.warehouse, id, action, 1, completeKey, body).statusCode());
+        db.execute("DROP TRIGGER owned_scrap_audit_failure");
+        assertEquals(pending, db.queryForMap("SELECT * FROM fams_scrap_disposition WHERE request_id=?", Long.parseLong(id)));
+        assertEquals("OPEN", db.queryForObject("SELECT todo_status FROM fams_todo WHERE business_type='SCRAP'"
+                + " AND business_id=? AND todo_type='DISPOSITION'", String.class, Long.parseLong(id)));
+        var closed = write(fixture.warehouse, id, action, 1, completeKey, body);
+        assertEquals(200, closed.statusCode(), closed.body());
+        assertEquals("DISPOSED", json.readTree(closed.body()).path("status").asText());
+        assertEquals(2, json.readTree(closed.body()).path("version").asInt());
+        assertEquals(closed.body(), write(fixture.warehouse, id, action, 1, completeKey, body).body());
+        assertEquals(409, write(fixture.warehouse, id, action, 1, completeKey,
+                body.replace("现场处置对象", "另一处置对象")).statusCode());
+        assertEquals(409, write(fixture.warehouse, id, action, 2, UUID.randomUUID().toString(), body).statusCode());
+        assertEquals(before, db.queryForMap("SELECT * FROM fams_scrap_request WHERE id=?", Long.parseLong(id)));
+        assertEquals(asset, db.queryForMap("SELECT * FROM fams_asset WHERE id=951020"));
+        assertEquals("CLOSED", db.queryForObject("SELECT todo_status FROM fams_todo WHERE business_type='SCRAP'"
+                + " AND business_id=? AND todo_type='DISPOSITION'", String.class, Long.parseLong(id)));
+        String publicDetail = get(fixture.employee, "/" + id).body();
+        assertEquals("现场处置对象", json.readTree(publicDetail).path("disposition").path("completion").path("recipient").asText());
+        org.junit.jupiter.api.Assertions.assertFalse(publicDetail.contains(object));
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='SCRAP_DISPOSITION'"
+                + " AND resource_id=? AND action='SCRAP_DISPOSITION_COMPLETED'", Long.class, Long.parseLong(id)));
+
     }
 
     private void grantField(long account, String role) {

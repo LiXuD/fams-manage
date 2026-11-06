@@ -95,6 +95,14 @@ public class ScrapController {
         return review.execute(actors.capture(), id, version, key, input);
     }
 
+    @PostMapping("/{id}/disposition/complete")
+    ScrapReviewService.DispositionReceipt completeDisposition(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.DispositionCompletion input) {
+        return review.completeDisposition(actors.capture(), id, version, key, input);
+    }
+
     @ExceptionHandler(com.fams.loan.LoanLossPort.Failure.class)
     ResponseEntity<ErrorResponse> loanRejection(com.fams.loan.LoanLossPort.Failure failure,
             HttpServletRequest request) {

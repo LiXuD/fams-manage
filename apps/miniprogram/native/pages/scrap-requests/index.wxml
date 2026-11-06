@@ -77,6 +77,25 @@ module.exports={state:function(value){return names[value]||value;}};
       <view><switch checked="{{physical}}" bindchange="onChecked" disabled="{{busy || retry || confirmation || stale}}"/>已亲见并核对同一原机和处置保管安排</view>
       <button data-action="execute" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对执行报废</button>
     </view>
-    <view wx:if="{{detail.disposition}}">处置进度 {{detail.disposition.disposition_status === 'PENDING_DISPOSITION' ? '待实际处置' : detail.disposition.disposition_status}} · 计划日期 {{detail.disposition.due_date}}</view>
+    <view wx:if="{{detail.disposition}}">处置进度 {{detail.disposition.disposition_status === 'PENDING_DISPOSITION' ? '待实际处置' : (detail.disposition.disposition_status === 'DISPOSED' ? '已处置' : detail.disposition.disposition_status)}} · 计划日期 {{detail.disposition.due_date}}</view>
+    <view wx:if="{{detail.disposition.completion}}">实际处置 {{detail.disposition.completion.occurredAt}} · {{detail.disposition.completion.method}} · 处置对象 {{detail.disposition.completion.recipient}} · 经办人 {{detail.disposition.completion.operatorName}}</view>
+    <view wx:if="{{detail.actions.dispose &amp;&amp; capabilities.canRead}}">
+      <view class="title">登记实际处置</view>
+      <view>批准的处置方式 {{detail.decision.decision.approvedDisposition}}</view>
+      <view>处置原机编码</view><input value="{{observed}}" data-field="observed" bindinput="onField" maxlength="64" disabled="{{busy || retry || confirmation || stale}}"/>
+      <view>处置原机序列号</view><input value="{{serial}}" data-field="serial" bindinput="onField" maxlength="128" disabled="{{busy || retry || confirmation || stale}}"/>
+      <view>实际处置日期（年-月-日）</view><input value="{{actualDate}}" data-field="actualDate" bindinput="onField" placeholder="年-月-日" disabled="{{busy || retry || confirmation || stale}}"/>
+      <view>实际处置当地时刻（时:分:秒）</view><input value="{{actualTime}}" data-field="actualTime" bindinput="onField" placeholder="时:分:秒" disabled="{{busy || retry || confirmation || stale}}"/>
+      <button bindtap="onNow" disabled="{{busy || retry || confirmation || stale}}">记录当前实际处置时刻</button>
+      <view>接收或处置对象</view><input value="{{recipient}}" data-field="recipient" bindinput="onField" maxlength="500" disabled="{{busy || retry || confirmation || stale}}"/>
+      <button data-kind="employee" bindtap="onCatalog" disabled="{{busy || retry || confirmation || stale || (peoplePage > 0 &amp;&amp; people.length >= peopleTotal)}}">加载更多实际经办人</button>
+      <picker range="{{people}}" range-key="name" data-kind="employee" bindchange="onChoice" disabled="{{busy || retry || confirmation || stale}}"><view>选择实际经办人（{{people.length}}/{{peopleTotal}}）</view></picker>
+      <view wx:for="{{people}}" wx:key="id" wx:if="{{item.id === custodian}}">已选实际经办人 {{item.name}}</view>
+      <view wx:if="{{!dispositionFiles.length}}">请先上传处置凭证。</view>
+      <checkbox-group bindchange="onDispositionEvidence">
+        <label wx:for="{{dispositionFiles}}" wx:key="objectId"><checkbox value="{{item.objectId}}" disabled="{{busy || retry || confirmation || stale}}"/>使用凭证 {{item.filename}}</label>
+      </checkbox-group>
+      <button bindtap="onPrepareDisposition" disabled="{{busy || retry || confirmation || stale}}">核对实际处置结案</button>
+    </view>
   </view>
 </view>

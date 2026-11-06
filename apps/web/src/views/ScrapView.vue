@@ -13,6 +13,7 @@ const rows = ref<ScrapRequest[]>([]), detail = ref<ScrapRequest | null>(null), p
 const assets = ref<ScrapAsset[]>([]), assetPage = ref(1), assetTotal = ref(0), selectedAsset = ref("");
 const reason = ref(""), condition = ref(""), proposed = ref(""), decisionReason = ref(""), approved = ref("");
 const observed = ref(""), serial = ref(""), occurred = ref(""), physical = ref(false), evidence = ref(""), due = ref("");
+const recipient = ref(""), dispositionEvidence = ref<string[]>([]);
 const places = ref<ScrapChoice[]>([]), people = ref<ScrapChoice[]>([]), location = ref(""), custodian = ref("");
 const locationPage = ref(0), locationTotal = ref(0), peoplePage = ref(0), peopleTotal = ref(0);
 const busy = ref(false), stale = ref(true), error = ref(""), notice = ref("");
@@ -30,6 +31,7 @@ function clearFacts() {
   locationPage.value = 0; peoplePage.value = 0; locationTotal.value = 0; peopleTotal.value = 0;
   decisionReason.value = ""; approved.value = ""; observed.value = ""; serial.value = "";
   occurred.value = ""; physical.value = false; evidence.value = ""; due.value = "";
+  recipient.value = ""; dispositionEvidence.value = [];
 }
 function reset() {
   clearAttachments(); generation++; clearFacts(); rows.value = []; detail.value = null; assets.value = []; selectedAsset.value = "";
@@ -126,7 +128,8 @@ async function loadAssets(next = 1) {
   finally { if (current(epoch, owner)) busy.value = false; }
 }
 async function catalog(kind: "location" | "employee") {
-  if (locked.value || stale.value || !detail.value?.actions.execute) return;
+  if (locked.value || stale.value || !(detail.value?.actions.execute
+      || kind === "employee" && detail.value?.actions.dispose)) return;
   const next = (kind === "location" ? locationPage.value : peoplePage.value) + 1;
   const epoch = ++generation, owner = identity.value; busy.value = true;
   try {
@@ -181,6 +184,25 @@ function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute") 
     }
   }
   confirmation.value = Object.freeze({ path, key: crypto.randomUUID(), version, body: Object.freeze(body), summary });
+}
+function prepareDisposition() {
+  const row = detail.value;
+  if (locked.value || stale.value || !row?.actions.dispose || !capabilities.value?.canRead || row.disposition?.version == null) return;
+  const person = people.value.find(item => item.id === custodian.value);
+  const date = new Date(occurred.value), method = row.decision?.decision?.approvedDisposition;
+  const ids = dispositionEvidence.value.filter(id => attachments.value.disposition.some(item => item.objectId === id));
+  if (!person || !method || !recipient.value.trim() || !observed.value.trim()
+      || row.source.serialNumber && !serial.value.trim() || !Number.isFinite(date.getTime()) || !ids.length) {
+    error.value = "请核对原机、实际处置时间、接收或处置对象、经办人及凭证。"; return;
+  }
+  const body = Object.freeze({ requestVersion: row.version, ownershipVersion: row.ownershipVersion,
+    observedCode: observed.value.trim(), observedSerial: serial.value.trim(), occurredAt: date.toISOString(),
+    method, recipient: recipient.value.trim(), operatorEmployeeId: person.id, operatorVersion: person.version,
+    evidenceObjectIds: Object.freeze(ids) });
+  error.value = "";
+  confirmation.value = Object.freeze({ path: "/" + row.id + "/disposition/complete", key: crypto.randomUUID(),
+    version: row.disposition.version, body, summary: "确认 " + row.source.assetCode + " 已实际处置。处置对象 "
+      + body.recipient + "，经办人 " + person.name + "，凭证 " + ids.length + " 份。" });
 }
 async function perform() {
   if (!pending.value || busy.value) return;
@@ -270,7 +292,25 @@ onBeforeUnmount(() => { live = false; reset(); });
         <label><input v-model="physical" type="checkbox"/>已亲见并核对同一原机和处置保管安排</label>
         <button @click="prepare('execute')">核对执行报废</button>
       </fieldset>
-      <p v-if="detail.disposition">处置进度 {{ detail.disposition.disposition_status === 'PENDING_DISPOSITION' ? '待实际处置' : detail.disposition.disposition_status }} · 计划日期 {{ detail.disposition.due_date }}</p>
+      <p v-if="detail.disposition">处置进度 {{ detail.disposition.disposition_status === 'PENDING_DISPOSITION' ? '待实际处置'
+        : detail.disposition.disposition_status === 'DISPOSED' ? '已处置' : detail.disposition.disposition_status }} · 计划日期 {{ detail.disposition.due_date }}</p>
+      <p v-if="detail.disposition?.completion">实际处置 {{ detail.disposition.completion.occurredAt }} · {{ detail.disposition.completion.method }}
+        · 处置对象 {{ detail.disposition.completion.recipient }} · 经办人 {{ detail.disposition.completion.operatorName }}</p>
+      <fieldset v-if="detail.actions.dispose" :disabled="locked || stale || !capabilities?.canRead">
+        <legend>登记实际处置</legend>
+        <p>批准的处置方式 {{ detail.decision?.decision?.approvedDisposition }}</p>
+        <label>处置原机编码<input v-model="observed" maxlength="64"/></label>
+        <label>处置原机序列号<input v-model="serial" maxlength="128"/></label>
+        <label>实际处置时间<input v-model="occurred" type="datetime-local" step="0.001"/></label>
+        <label>接收或处置对象<input v-model="recipient" maxlength="500"/></label>
+        <button :disabled="peoplePage > 0 && people.length >= peopleTotal" @click="catalog('employee')">加载更多实际经办人</button>
+        <label>实际经办人<select v-model="custodian"><option value="">请选择</option><option v-for="item in people" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
+        <p v-if="attachments.disposition.length === 0">请先上传处置凭证。</p>
+        <label v-for="file in attachments.disposition" :key="file.objectId">
+          <input v-model="dispositionEvidence" type="checkbox" :value="file.objectId"/>使用凭证 {{ file.filename }}
+        </label>
+        <button @click="prepareDisposition">核对实际处置结案</button>
+      </fieldset>
     </section>
   </section></AppChrome>
 </template>

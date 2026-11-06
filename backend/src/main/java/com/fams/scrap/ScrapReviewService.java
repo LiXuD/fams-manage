@@ -2,6 +2,7 @@ package com.fams.scrap;
 
 import com.fams.asset.AssetHandoverPort;
 import com.fams.asset.AssetScrapPort;
+import com.fams.attachment.AttachmentEvidencePort;
 import com.fams.auth.RequisitionActorContext;
 import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.RequisitionActorContext.Current;
@@ -13,6 +14,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -29,7 +31,10 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -43,10 +48,11 @@ public class ScrapReviewService {
     private final AssetScrapPort assets;
     private final com.fams.loan.LoanLossPort loans;
     private final com.fams.auth.ScrapSensitiveAccess sensitive;
+    private final ObjectProvider<AttachmentEvidencePort> evidence;
 
     public ScrapReviewService(JdbcTemplate db, ObjectMapper json, Clock clock,
             RequisitionActorContext actors, AssetScrapPort assets, com.fams.loan.LoanLossPort loans,
-            com.fams.auth.ScrapSensitiveAccess sensitive) {
+            com.fams.auth.ScrapSensitiveAccess sensitive, ObjectProvider<AttachmentEvidencePort> evidence) {
         this.db = db;
         this.json = json;
         this.clock = clock;
@@ -54,6 +60,7 @@ public class ScrapReviewService {
         this.assets = assets;
         this.loans = loans;
         this.sensitive = sensitive;
+        this.evidence = evidence;
     }
 
     public record Decision(
@@ -229,6 +236,103 @@ public class ScrapReviewService {
         audit(actor, current, Role.WAREHOUSE_OPERATOR, id, version, "SCRAP_EXECUTED", input, time);
         return remember(current, operation, key, hash, new Receipt(Long.toString(id), Long.toString(asset),
                 version + 1, assetVersion, input.ownershipVersion(), "EXECUTED", Long.toString(current.id())), time);
+    }
+
+    public record DispositionCompletion(
+            @NotNull @PositiveOrZero Long requestVersion,
+            @NotNull @PositiveOrZero Long ownershipVersion,
+            @NotBlank @Size(max = 64) String observedCode,
+            @Size(max = 128) String observedSerial,
+            @NotNull Instant occurredAt,
+            @NotBlank @Size(max = 500) String method,
+            @NotBlank @Size(max = 500) String recipient,
+            @NotNull @Positive Long operatorEmployeeId,
+            @NotNull @PositiveOrZero Long operatorVersion,
+            @NotNull @Size(min = 1, max = 14) List<@NotNull UUID> evidenceObjectIds) {
+        public DispositionCompletion {
+            evidenceObjectIds = evidenceObjectIds == null ? null : List.copyOf(evidenceObjectIds);
+        }
+    }
+
+    public record DispositionReceipt(String id, long version, String status) {}
+
+    public DispositionReceipt completeDisposition(Actor actor, long id, long version, UUID key,
+            DispositionCompletion input) {
+        var current = current(actor, Role.WAREHOUSE_OPERATOR);
+        // Keep the request/disposition lock order shared with evidence registration and later reversal.
+        var requests = db.queryForList("SELECT * FROM fams_scrap_request WHERE id=? FOR UPDATE", id);
+        if (requests.isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_NOT_FOUND", 404);
+        }
+        var request = requests.getFirst();
+        var dispositions = db.queryForList("SELECT processor_account_id,disposition_status,version"
+                + " FROM fams_scrap_disposition WHERE request_id=? FOR UPDATE", id);
+        if (dispositions.isEmpty() || !Objects.equals(dispositions.getFirst().get("processor_account_id"), current.id())) {
+            throw new AssetHandoverPort.Failure("SCRAP_PROCESSOR_REQUIRED", 403);
+        }
+        var disposition = dispositions.getFirst();
+        String operation = "COMPLETE_DISPOSITION:" + id;
+        String hash = fingerprint(version, input);
+        var prior = db.queryForList("SELECT payload_sha256,response_json FROM fams_scrap_receipt"
+                + " WHERE actor_account_id=? AND operation=? AND request_id=? FOR UPDATE", current.id(), operation, key.toString());
+        if (!prior.isEmpty()) {
+            if (!hash.equals(prior.getFirst().get("payload_sha256"))) {
+                throw new AssetHandoverPort.Failure("SCRAP_IDEMPOTENCY_CONFLICT", 409);
+            }
+            return json.readValue(prior.getFirst().get("response_json").toString(), DispositionReceipt.class);
+        }
+        if (!"EXECUTED".equals(request.get("request_status")) || !"STANDALONE".equals(request.get("source_type"))
+                || number(request, "version") != input.requestVersion()
+                || number(request, "ownership_version") != input.ownershipVersion()
+                || !"PENDING_DISPOSITION".equals(disposition.get("disposition_status"))
+                || number(disposition, "version") != version) {
+            throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_CHANGED", 409);
+        }
+        var executed = json.readTree(request.get("execution_snapshot_json").toString());
+        if (!input.method().strip().equals(executed.path("dispositionMethod").asText().strip())) {
+            throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_OUTSIDE_APPROVAL", 409);
+        }
+        var time = now();
+        if (input.occurredAt().isBefore(Instant.parse(executed.path("occurredAt").asText()))
+                || input.occurredAt().isAfter(time)
+                || !input.occurredAt().equals(input.occurredAt().truncatedTo(ChronoUnit.MILLIS))) {
+            throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_DATE_INVALID", 400);
+        }
+        assets.requireDispositionAsset(number(request, "asset_id"), number(request, "asset_version"),
+                input.observedCode(), input.observedSerial());
+        var operators = db.queryForList("SELECT e.name FROM fams_employee e JOIN fams_organization o ON o.id=e.organization_id"
+                + " WHERE e.id=? AND e.version=? AND e.status='ACTIVE' AND o.status='ACTIVE' FOR UPDATE",
+                input.operatorEmployeeId(), input.operatorVersion());
+        if (operators.isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_OPERATOR_CHANGED", 409);
+        }
+        sensitive.requireRead(actor);
+        var attachments = evidence.getIfAvailable();
+        if (attachments == null) {
+            throw new AssetHandoverPort.Failure("SCRAP_ATTACHMENT_STORAGE_UNAVAILABLE", 503);
+        }
+        if (Set.copyOf(input.evidenceObjectIds()).size() != input.evidenceObjectIds().size()
+                || input.evidenceObjectIds().stream().anyMatch(object -> !attachments.clean("SCRAP_DISPOSITION", id, current.id(), object))) {
+            throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_EVIDENCE_INVALID", 409);
+        }
+        String detail = json.writeValueAsString(Map.of("facts", input, "operatorName", operators.getFirst().get("name"),
+                "recordedBy", Long.toString(current.id()), "recordedAt", time));
+        db.update("UPDATE fams_scrap_disposition SET disposition_status='DISPOSED',completion_snapshot_json=?,"
+                + "version=version+1,updated_at=? WHERE request_id=?", detail, time, id);
+        if (db.update("UPDATE fams_todo SET todo_status='CLOSED',closed_at=? WHERE business_type='SCRAP'"
+                + " AND business_id=? AND todo_type='DISPOSITION' AND assignee_account_id=? AND closed_at IS NULL",
+                time, id, current.id()) != 1) {
+            throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_TODO_CHANGED", 409);
+        }
+        db.update("INSERT INTO fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,"
+                + "resource_id,before_version,after_version,occurred_at,detail_json)"
+                + " VALUES (?,?,'WAREHOUSE_OPERATOR','SCRAP_DISPOSITION_COMPLETED','SCRAP_DISPOSITION',?,?,?,?,?)",
+                actor.requestId().toString(), current.id(), id, version, version + 1, time, detail);
+        var receipt = new DispositionReceipt(Long.toString(id), version + 1, "DISPOSED");
+        db.update("INSERT INTO fams_scrap_receipt(actor_account_id,operation,request_id,scrap_request_id,"
+                + "payload_sha256,response_json,created_at) VALUES (?,?,?,?,?,?,?)",
+                current.id(), operation, key.toString(), id, hash, json.writeValueAsString(receipt), time);
+        return receipt;
     }
 
     private Map<String, Object> guarded(long id, long version, long assetVersion, long lockVersion,

@@ -159,3 +159,47 @@ it("discards a late attachment response after identity changes and revokes an op
   expect(wrapper.text()).not.toContain(file.filename);
   wrapper.unmount();
 });
+
+
+it("closes actual disposition with its independent version and selected clean original", async () => {
+  const row: ScrapRequest = { ...report(), version: 4, status: "EXECUTED",
+    actions: { decide: false, claim: false, execute: false, dispose: true },
+    disposition: { disposition_status: "PENDING_DISPOSITION", due_date: "2026-12-06", version: 8 } };
+  const objectId = "913f4814-383f-4a40-aa23-96691cf5166d";
+  const writes: RequestInit[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, input: RequestInit) => {
+    if (url.endsWith("/disposition/complete")) {
+      writes.push(input);
+      row.actions.dispose = false;
+      row.disposition = { ...row.disposition!, disposition_status: "DISPOSED", version: 9,
+        completion: { occurredAt: "2026-11-06T02:00:00Z", method: "核对后待处置", recipient: "接收单位", operatorName: "现场经办人" } };
+      return response({ id: row.id, version: 9, status: "DISPOSED" });
+    }
+    if (url.endsWith("attachment-capabilities")) return response({ canRead: true, dispositionVersion: row.disposition?.version });
+    if (url.endsWith("/attachments/request")) return response([]);
+    if (url.endsWith("/attachments/disposition")) return response([{ objectId, filename: "实际凭证.png", contentType: "image/png", sizeBytes: 4 }]);
+    if (url.includes("/execution-catalog/employee")) return response({ items: [{ id: "9007199254740991", name: "现场经办人", version: 6 }], total: 1 });
+    return response(url.includes("?") ? { items: [row], total: 1 } : row);
+  }));
+  const wrapper = mount(ScrapView); await flushPromises();
+  await button(wrapper, "ORIGINAL-1 · 已执行报废").trigger("click"); await flushPromises();
+  await button(wrapper, "加载更多实际经办人").trigger("click"); await flushPromises();
+  await field(wrapper, "处置原机编码", "ORIGINAL-1");
+  await field(wrapper, "处置原机序列号", "SERIAL-1");
+  await field(wrapper, "实际处置时间", "2026-11-06T10:00:00");
+  await field(wrapper, "接收或处置对象", "接收单位");
+  await field(wrapper, "实际经办人", "9007199254740991");
+  await button(wrapper, "核对实际处置结案").trigger("click");
+  expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+  await field(wrapper, "使用凭证 实际凭证.png", true);
+  await button(wrapper, "核对实际处置结案").trigger("click");
+  expect(writes).toHaveLength(0);
+  await button(wrapper, "确认提交本次办理").trigger("click"); await flushPromises();
+  expect(writes).toHaveLength(1);
+  expect(writes[0]?.headers).toMatchObject({ "If-Match-Version": "8" });
+  expect(JSON.parse(String(writes[0]?.body))).toMatchObject({ requestVersion: 4, ownershipVersion: 4,
+    operatorEmployeeId: "9007199254740991", operatorVersion: 6, evidenceObjectIds: [objectId], recipient: "接收单位" });
+  expect(wrapper.text()).toContain("处置进度 已处置");
+  expect(wrapper.text()).toContain("经办人 现场经办人");
+  wrapper.unmount();
+});

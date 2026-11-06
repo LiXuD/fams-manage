@@ -7,9 +7,10 @@ interface Scrap {
     id: string; version: number; assetVersion: number; ownershipVersion: number; lockVersion: number | null;
     status: string; processorAccountId: string | null; reason: string; observedCondition: string; proposedDisposition: string;
     source: { assetCode: string; name: string; serialNumber: string };
-    actions: { decide: boolean; claim: boolean; execute: boolean };
+    actions: { decide: boolean; claim: boolean; execute: boolean; dispose?: boolean };
     decision: { decision?: { approvedDisposition?: string } } | null;
-    disposition: { disposition_status: string; due_date: string } | null;
+    disposition: { disposition_status: string; due_date: string; version?: number;
+        completion?: { occurredAt: string; method: string; recipient: string; operatorName: string } } | null;
 }
 type AttachmentKind = "request" | "disposition";
 interface Attachment { objectId: string; filename: string; contentType: string; sizeBytes: number }
@@ -25,6 +26,7 @@ interface Data {
     locationPage: number; locationTotal: number; peoplePage: number; peopleTotal: number;
     reason: string; condition: string; proposed: string; decisionReason: string; approved: string;
     observed: string; serial: string; actualDate: string; actualTime: string; physical: boolean; evidence: string; due: string;
+    recipient: string; dispositionEvidence: string[];
     capabilities: Capabilities | null; requestFiles: Attachment[]; dispositionFiles: Attachment[];
     previewPath: string; previewName: string; previewMime: string;
     busy: boolean; stale: boolean; retry: boolean; confirmation: string; pendingSummary: string; error: string; notice: string;
@@ -33,7 +35,7 @@ interface Context { data: Data; setData(update: Partial<Data>): void }
 const emptyAttachments = () => ({ capabilities: null, requestFiles: [], dispositionFiles: [],
     previewPath: "", previewName: "", previewMime: "" });
 const blank = (): Data => ({
-    ...emptyAttachments(),
+    ...emptyAttachments(), recipient: "", dispositionEvidence: [],
     rows: [], detail: null, assets: [], selectedAsset: "", page: 1, total: 0, assetPage: 1, assetTotal: 0,
     places: [], people: [], location: "", custodian: "", locationPage: 0, locationTotal: 0, peoplePage: 0, peopleTotal: 0,
     reason: "", condition: "", proposed: "", decisionReason: "", approved: "", observed: "", serial: "",
@@ -235,7 +237,7 @@ export function createScrapPage(getServices: () => MiniServices) {
         },
         onField(this: Context, event: { currentTarget: { dataset: { field: string } }; detail: { value: string } }) {
             const field = event.currentTarget.dataset.field;
-            if (!editable(this) || !["reason", "condition", "proposed", "decisionReason", "approved", "observed", "serial", "actualDate", "actualTime", "evidence", "due"].includes(field)) return;
+            if (!editable(this) || !["reason", "condition", "proposed", "decisionReason", "approved", "observed", "serial", "actualDate", "actualTime", "evidence", "due", "recipient"].includes(field)) return;
             if (["actualDate", "actualTime"].includes(field)) actualInstant = "";
             this.setData({ [field]: event.detail.value });
         },
@@ -247,7 +249,8 @@ export function createScrapPage(getServices: () => MiniServices) {
         },
         async onCatalog(this: Context, event: { currentTarget: { dataset: { kind: string } } }) {
             const kind = event.currentTarget.dataset.kind;
-            if (!editable(this) || !this.data.detail?.actions.execute || !["location", "employee"].includes(kind)) return;
+            if (!editable(this) || !["location", "employee"].includes(kind)
+                || !(this.data.detail?.actions.execute || kind === "employee" && this.data.detail?.actions.dispose)) return;
             const next = (kind === "location" ? this.data.locationPage : this.data.peoplePage) + 1, epoch = ++generation;
             this.setData({ busy: true });
             try {
@@ -310,6 +313,29 @@ export function createScrapPage(getServices: () => MiniServices) {
             try { await services.openEvidence(previewPath, this.data.previewName); }
             catch { if (current(epoch)) this.setData({ error: "原件未打开，请重试。" }); }
             finally { finish(this, epoch); }
+        },
+        onDispositionEvidence(this: Context, event: { detail: { value: string[] } }) {
+            if (!editable(this) || !this.data.detail?.actions.dispose || !this.data.capabilities?.canRead) return;
+            this.setData({ dispositionEvidence: event.detail.value.filter(id => this.data.dispositionFiles.some(file => file.objectId === id)) });
+        },
+        onPrepareDisposition(this: Context) {
+            const data = this.data, row = data.detail;
+            if (!editable(this) || !row?.actions.dispose || !data.capabilities?.canRead || row.disposition?.version == null) return;
+            const person = data.people.find(item => item.id === data.custodian), method = row.decision?.decision?.approvedDisposition;
+            const actual = new Date(data.actualDate + "T" + data.actualTime);
+            if (!person || !method || !data.recipient.trim() || !data.observed.trim() || row.source.serialNumber && !data.serial.trim()
+                || !data.dispositionEvidence.length || !Number.isFinite(actual.getTime())
+                || day(actual) !== data.actualDate || time(actual) !== data.actualTime) {
+                this.setData({ error: "请核对原机、实际处置时间、接收或处置对象、经办人及凭证。" }); return;
+            }
+            const body = { requestVersion: row.version, ownershipVersion: row.ownershipVersion, observedCode: data.observed.trim(),
+                observedSerial: data.serial.trim(), occurredAt: actualInstant || actual.toISOString(), method, recipient: data.recipient.trim(),
+                operatorEmployeeId: person.id, operatorVersion: person.version, evidenceObjectIds: data.dispositionEvidence };
+            const summary = "确认 " + row.source.assetCode + " 已实际处置。处置对象 " + body.recipient
+                + "，经办人 " + person.name + "，凭证 " + data.dispositionEvidence.length + " 份。";
+            prepared = Object.freeze({ path: base + "/" + row.id + "/disposition/complete", key: services.createKey(),
+                version: row.disposition.version, body: JSON.stringify(body), summary });
+            this.setData({ confirmation: summary, error: "" });
         },
         onPrepare(this: Context, event: { currentTarget: { dataset: { action: string } } }) { prepare(this, event.currentTarget.dataset.action); },
         async onConfirm(this: Context) {
