@@ -464,7 +464,7 @@ public class LossService {
         String where =
                 " FROM fams_loss_report r JOIN fams_asset a ON a.id=r.asset_id"
                         + " WHERE r.report_status='CONFIRMED_LOST' AND a.exception_status='LOST'"
-                        + " AND a.lifecycle_status<>'SCRAPPED' AND (? OR r.creator_account_id=?"
+                        + " AND a.lifecycle_status NOT IN ('SCRAPPED','PENDING_SCRAP') AND (? OR r.creator_account_id=?"
                         + " OR r.responsible_employee_id=? OR r.shared_responsible_employee_id=?"
                         + " OR (? AND r.using_organization_id=?) OR ?)";
         Object[] scope = {

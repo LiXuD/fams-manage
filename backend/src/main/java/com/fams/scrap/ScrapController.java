@@ -77,6 +77,14 @@ public class ScrapController {
         return scrap.submit(actors.capture(), key, input);
     }
 
+    @PostMapping("/from-loss/{reportId}")
+    ScrapService.Receipt submitFromLoss(@PathVariable @Positive long reportId,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapService.LossSubmission input) {
+        return scrap.submitFromLoss(actors.capture(), reportId, version, key, input);
+    }
+
     @PostMapping("/{id}/decision")
     ScrapReviewService.Receipt decide(@PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
@@ -107,6 +115,13 @@ public class ScrapController {
             @RequestHeader("Idempotency-Key") UUID key,
             @Valid @RequestBody ScrapReviewService.DispositionCompletion input) {
         return review.completeDisposition(actors.capture(), id, version, key, input);
+    }
+
+    @ExceptionHandler(com.fams.loss.LossFailure.class)
+    ResponseEntity<ErrorResponse> lossRejection(com.fams.loss.LossFailure failure, HttpServletRequest request) {
+        UUID id = request.getAttribute("fams.request.id") instanceof UUID value ? value : UUID.randomUUID();
+        return ResponseEntity.status(failure.status()).body(new ErrorResponse(failure.getMessage(),
+                failure.getMessage(), id, Map.of()));
     }
 
     @ExceptionHandler(com.fams.loan.LoanLossPort.Failure.class)

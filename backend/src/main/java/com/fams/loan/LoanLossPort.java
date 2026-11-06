@@ -36,6 +36,23 @@ public class LoanLossPort {
         }
     }
 
+    public record OpenBorrowing(long id, long version) {}
+
+    public OpenBorrowing requireOpenBorrowing(long asset, long borrower, long organization) {
+        return openBorrowing(asset, borrower, organization).orElseThrow(() -> new Failure("LOSS_LOAN_IDENTITY_CHANGED"));
+    }
+
+    public java.util.Optional<OpenBorrowing> openBorrowing(long asset, long borrower, long organization) {
+        var rows = db.queryForList("SELECT id,version FROM fams_loan WHERE asset_id=? AND borrower_employee_id=?"
+                + " AND using_organization_id=? AND relation_status='OPEN' FOR UPDATE", asset, borrower, organization);
+        if (rows.size() != 1) {
+            return java.util.Optional.empty();
+        }
+        var loan = rows.getFirst();
+        return java.util.Optional.of(new OpenBorrowing(((Number) loan.get("id")).longValue(),
+                ((Number) loan.get("version")).longValue()));
+    }
+
     public void requireRecovery(long asset, String lifecycle, Long borrower, Long organization) {
         var rows =
                 db.queryForList(

@@ -102,9 +102,13 @@ public class ScrapReviewService {
         String status = "WAITING_WAREHOUSE_CLAIM";
         long assetVersion = input.assetVersion();
         if (!approve) {
-            String previous = json.readTree(request.get("source_snapshot_json").toString())
-                    .path("lifecycle_status").asText();
-            boolean restored = assets.restoreStandalone(asset, assetVersion, id, previous, current.id(), time);
+            var source = json.readTree(request.get("source_snapshot_json").toString());
+            boolean restored = switch (request.get("source_type").toString()) {
+                case "STANDALONE" -> assets.restoreStandalone(asset, assetVersion, id,
+                        source.path("lifecycle_status").asText(), current.id(), time);
+                case "LOSS" -> restoreBorrowedLoss(asset, assetVersion, id, source, current.id(), time);
+                default -> false;
+            };
             status = restored ? "REJECTED" : "RESTORE_REQUIRED";
             if (restored) {
                 assetVersion++;
@@ -128,6 +132,19 @@ public class ScrapReviewService {
         audit(actor, current, Role.ASSET_ADMIN, id, version, action, input, time);
         return remember(current, operation, key, hash,
                 new Receipt(Long.toString(id), Long.toString(asset), version + 1, assetVersion, 0, status, null), time);
+    }
+
+    private boolean restoreBorrowedLoss(long asset, long version, long id, tools.jackson.databind.JsonNode source,
+            long actor, Instant time) {
+        long borrower = source.path("responsible_employee_id").asLong();
+        long organization = source.path("using_organization_id").asLong();
+        var proof = source.path("lossEvidence");
+        var loan = loans.openBorrowing(asset, borrower, organization).orElse(null);
+        if (loan == null || !Long.toString(loan.id()).equals(proof.path("loanId").asText())
+                || loan.version() != proof.path("loanVersion").asLong(-1)) {
+            return false;
+        }
+        return assets.restoreBorrowedLoss(asset, version, id, borrower, organization, actor, time);
     }
 
     public Receipt claim(Actor actor, long id, long version, UUID key, Claim input) {
