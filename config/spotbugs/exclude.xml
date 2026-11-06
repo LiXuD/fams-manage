@@ -689,6 +689,18 @@
     </Match>
     <!-- Spring owns these injected application services and preserves their shared identity. -->
     <Match>
+        <Class name="com.fams.loss.LossScrapSourcePort"/>
+        <Field name="db"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.fams.loss.LossScrapSourcePort"/>
+        <Field name="json"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
         <Class name="com.fams.loss.LossController"/>
         <Field name="reports"/>
         <Method name="&lt;init&gt;"/>

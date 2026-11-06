@@ -68,6 +68,44 @@ public class AssetScrapPort {
         return source;
     }
 
+    public Map<String, Object> borrowedLossSource(long assetId, long version, long borrower, long organization) {
+        var rows = db.queryForList("SELECT id,asset_code,name,serial_number,lifecycle_status,exception_status,card_stage,"
+                + "custody_type,storage_warehouse_id,current_location_id,using_organization_id,responsible_employee_id,"
+                + "department_responsible_employee_id,version FROM fams_asset WHERE id=? AND version=?"
+                + " AND card_stage='ACTIVE' AND lifecycle_status='BORROWED' AND exception_status='LOST'"
+                + " AND responsible_employee_id=? AND using_organization_id=? FOR UPDATE", assetId, version, borrower, organization);
+        if (rows.size() != 1 || !db.queryForList("SELECT id FROM fams_asset_business_lock WHERE asset_id=?"
+                + " AND released_at IS NULL FOR UPDATE", assetId).isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_ASSET_OR_LOCK_CHANGED", 409);
+        }
+        return rows.getFirst();
+    }
+
+    public long freezeBorrowedLoss(long id, long version, long requestId, long actor, Instant time) {
+        if (db.update("UPDATE fams_asset a SET lifecycle_status='PENDING_SCRAP',version=version+1,updated_at=?,updated_by=?"
+                + " WHERE a.id=? AND a.version=? AND a.lifecycle_status='BORROWED' AND a.exception_status='LOST'"
+                + " AND EXISTS (SELECT 1 FROM fams_asset_business_lock b WHERE b.asset_id=a.id AND b.business_type='SCRAP'"
+                + " AND b.business_id=? AND b.business_item_id=? AND b.released_at IS NULL)",
+                time, actor, id, version, requestId, requestId) != 1) {
+            throw new AssetHandoverPort.Failure("SCRAP_ASSET_CHANGED", 409);
+        }
+        mapper.event(id, "SCRAP_REQUESTED", time,
+                json.writeValueAsString(Map.of("scrapRequestId", Long.toString(requestId))), actor);
+        return version + 1;
+    }
+
+    public boolean restoreBorrowedLoss(long id, long version, long requestId, long borrower, long organization,
+            long actor, Instant time) {
+        if (db.update("UPDATE fams_asset SET lifecycle_status='BORROWED',version=version+1,updated_at=?,updated_by=?"
+                + " WHERE id=? AND version=? AND lifecycle_status='PENDING_SCRAP' AND exception_status='LOST'"
+                + " AND responsible_employee_id=? AND using_organization_id=?", time, actor, id, version, borrower, organization) != 1) {
+            return false;
+        }
+        mapper.event(id, "SCRAP_SOURCE_RESTORED", time,
+                json.writeValueAsString(Map.of("scrapRequestId", Long.toString(requestId))), actor);
+        return true;
+    }
+
     /** Freezes the asset only once the application owns the exact active scrap lock. */
     public long freezeStandalone(long assetId, long version, long requestId, long actorId, Instant time) {
         if (db.update(

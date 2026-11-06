@@ -145,6 +145,8 @@ public class ScrapReadService {
         long id = ((Number) row.get("id")).longValue();
         result.put("id", Long.toString(id));
         result.put("assetId", row.get("asset_id").toString());
+        result.put("sourceType", row.get("source_type"));
+        result.put("sourceBusinessId", row.get("source_business_id") == null ? null : row.get("source_business_id").toString());
         result.put("version", row.get("version"));
         result.put("assetVersion", row.get("asset_version"));
         result.put("ownershipVersion", row.get("ownership_version"));
@@ -193,7 +195,7 @@ public class ScrapReadService {
                         && "PENDING_ADMIN_DECISION".equals(row.get("request_status")),
                 "claim", actor.has(Role.WAREHOUSE_OPERATOR)
                         && "WAITING_WAREHOUSE_CLAIM".equals(row.get("request_status")),
-                "execute", owner && "PROCESSING".equals(row.get("request_status")),
+                "execute", owner && "PROCESSING".equals(row.get("request_status")) && "STANDALONE".equals(row.get("source_type")),
                 "dispose", canDispose));
         result.put("disposition", disposition);
         return result;

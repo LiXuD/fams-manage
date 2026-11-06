@@ -177,7 +177,7 @@ public class AssetLossPort {
         if (rows.size() != 1
                 || !"ACTIVE".equals(rows.getFirst().get("card_stage"))
                 || !"LOST".equals(rows.getFirst().get("exception_status"))
-                || "SCRAPPED".equals(rows.getFirst().get("lifecycle_status"))) {
+                || List.of("SCRAPPED", "PENDING_SCRAP").contains(rows.getFirst().get("lifecycle_status"))) {
             throw new AssetHandoverPort.Failure("LOSS_ASSET_CHANGED", 409);
         }
     }
