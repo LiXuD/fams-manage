@@ -109,16 +109,16 @@ public class AssetScrapPort {
         return freezeLinked(id, version, requestId, lifecycle, "LOST", actor, time);
     }
 
-    public Map<String, Object> repairSource(long asset, long version) {
-        var row = lockedSourceAsset(asset, version, "UNDER_REPAIR", "NORMAL");
+    public Map<String, Object> repairSource(long asset, long version, boolean factory) {
+        var row = lockedSourceAsset(asset, version, factory ? "FACTORY_REPAIR" : "UNDER_REPAIR", "NORMAL");
         if (row == null) {
             throw new AssetHandoverPort.Failure("SCRAP_ASSET_CHANGED", 409);
         }
         return row;
     }
 
-    public long freezeRepair(long id, long version, long requestId, long actor, Instant time) {
-        return freezeLinked(id, version, requestId, "UNDER_REPAIR", "NORMAL", actor, time);
+    public long freezeRepair(long id, long version, long requestId, long actor, Instant time, boolean factory) {
+        return freezeLinked(id, version, requestId, factory ? "FACTORY_REPAIR" : "UNDER_REPAIR", "NORMAL", actor, time);
     }
 
     private long freezeLinked(long id, long version, long requestId, String lifecycle, String exception, long actor, Instant time) {
@@ -139,7 +139,8 @@ public class AssetScrapPort {
                 && restoreStandalone(id, version, requestId, source.path("lifecycle_status").asText(), actor, time);
     }
 
-    public boolean restoreRepair(long asset, long version, long requestId, JsonNode source, long actor, Instant time) {
+    public boolean restoreRepair(long asset, long version, long requestId, JsonNode source, long actor, Instant time,
+            boolean factory) {
         if (!hasFrozenCustody(asset, version, source, "NORMAL")
                 || db.queryForList("SELECT a.id FROM fams_asset a JOIN fams_location l ON l.id=a.current_location_id"
                         + " LEFT JOIN fams_warehouse w ON w.id=a.storage_warehouse_id"
@@ -150,9 +151,9 @@ public class AssetScrapPort {
                         + " AND e.organization_id=a.using_organization_id)) FOR UPDATE", asset).isEmpty()) {
             return false;
         }
-        if (db.update("UPDATE fams_asset SET lifecycle_status='UNDER_REPAIR',version=version+1,updated_at=?,updated_by=?"
+        if (db.update("UPDATE fams_asset SET lifecycle_status=?,version=version+1,updated_at=?,updated_by=?"
                 + " WHERE id=? AND version=? AND lifecycle_status='PENDING_SCRAP'",
-                time, actor, asset, version) != 1) {
+                factory ? "FACTORY_REPAIR" : "UNDER_REPAIR", time, actor, asset, version) != 1) {
             throw new AssetHandoverPort.Failure("SCRAP_ASSET_CHANGED", 409);
         }
         mapper.event(asset, "SCRAP_SOURCE_RESTORED", time,
@@ -164,6 +165,21 @@ public class AssetScrapPort {
         if (!hasFrozenCustody(asset, version, source, "NORMAL")) {
             throw new AssetHandoverPort.Failure("SCRAP_ASSET_CHANGED", 409);
         }
+    }
+
+    public long executeFactory(long asset, long version, long request, long lockVersion, JsonNode source,
+            long actor, Instant time) {
+        requirePending(asset, version, request, lockVersion);
+        requireFrozenRepair(asset, version, source);
+        if (db.update("UPDATE fams_asset SET lifecycle_status='SCRAPPED',version=version+1,updated_at=?,updated_by=?"
+                + " WHERE id=? AND version=? AND lifecycle_status='PENDING_SCRAP' AND exception_status='NORMAL'",
+                time, actor, asset, version) != 1) {
+            throw new AssetHandoverPort.Failure("SCRAP_ASSET_CHANGED", 409);
+        }
+        mapper.event(asset, "SCRAP_EXECUTED", time,
+                json.writeValueAsString(Map.of("scrapRequestId", Long.toString(request), "sourceType", "FACTORY_REPLACEMENT")),
+                actor);
+        return version + 1;
     }
 
     /** Freezes the asset only once the application owns the exact active scrap lock. */

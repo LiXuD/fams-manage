@@ -166,6 +166,10 @@ public class ScrapReadService {
         }
         result.put("decision", decision);
         boolean lossSource = "LOSS".equals(row.get("source_type"));
+        boolean factory = "FACTORY_REPLACEMENT".equals(row.get("source_type"));
+        if (factory) {
+            result.put("factoryDisposition", source.path("repairEvidence").path("context").path("method").asText());
+        }
         var execution = row.get("execution_snapshot_json") == null
                 ? null : json.readTree(row.get("execution_snapshot_json").toString());
         result.put("execution", lossSource && execution != null
@@ -185,14 +189,15 @@ public class ScrapReadService {
                 && "PENDING_DISPOSITION".equals(disposition.get("disposition_status"));
         if (disposition != null) {
             disposition.remove("processor_account_id");
-            if (lossSource) {
+            if (lossSource || factory) {
                 disposition.remove("custody_snapshot_json");
             }
             Object completion = disposition.remove("completion_snapshot_json");
             if (completion != null && "DISPOSED".equals(disposition.get("disposition_status"))) {
                 var snapshot = json.readTree(completion.toString());
                 var facts = snapshot.path("facts");
-                disposition.put("completion", Map.of("occurredAt", facts.path("occurredAt").asText(),
+                disposition.put("completion", factory ? Map.of("occurredAt", facts.path("occurredAt").asText(),
+                        "method", facts.path("method").asText()) : Map.of("occurredAt", facts.path("occurredAt").asText(),
                         "method", facts.path("method").asText(), "recipient", facts.path("recipient").asText(),
                         "operatorName", snapshot.path("operatorName").asText()));
             }
@@ -203,6 +208,7 @@ public class ScrapReadService {
                         && "WAITING_WAREHOUSE_CLAIM".equals(row.get("request_status")),
                 "execute", owner && "PROCESSING".equals(row.get("request_status")) && ScrapReviewService.physicalSource(row.get("source_type")),
                 "executeLoss", owner && "PROCESSING".equals(row.get("request_status")) && lossSource,
+                "executeFactory", owner && "PROCESSING".equals(row.get("request_status")) && factory,
                 "dispose", canDispose));
         result.put("disposition", disposition);
         return result;

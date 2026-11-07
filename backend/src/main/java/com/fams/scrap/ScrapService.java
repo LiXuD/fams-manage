@@ -121,7 +121,7 @@ public class ScrapService {
             @NotBlank @Size(max = 2000) String reason, @NotBlank @Size(max = 2000) String observedCondition,
             @NotBlank @Size(max = 500) String proposedDisposition) {}
 
-    private record RepairLink(RepairService.ScrapSource source, long lockVersion) {}
+    private record RepairLink(RepairService.ScrapSource source, long lockVersion, Long replacementId) {}
 
     public Receipt submitFromRepair(Actor actor, long repairId, long version, UUID key, RepairSubmission input) {
         var current = actors.revalidateLocked(actor);
@@ -135,20 +135,48 @@ public class ScrapService {
             return prior;
         }
         var repair = repairs.scrapSource(actor, repairId, version, input.assetVersion(), input.ownershipVersion(), input.lockVersion());
-        var source = new LinkedHashMap<>(assets.repairSource(repair.assetId(), input.assetVersion()));
+        return createFromRepair(actor, current, operation, key, hash, input, repair, null);
+    }
+
+    public Receipt submitFromFactory(Actor actor, long repairId, long roundId, long replacementId, long version,
+            long roundVersion, UUID key, RepairSubmission input) {
+        var current = actors.revalidateLocked(actor);
+        if (!current.has(com.fams.auth.Role.WAREHOUSE_OPERATOR)) {
+            throw new AssetHandoverPort.Failure("SCRAP_ROLE_REQUIRED", 403);
+        }
+        String operation = "SUBMIT_FACTORY:" + replacementId;
+        String hash = fingerprint(new FactoryIntent(repairId, roundId, version, roundVersion, input));
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var repair = repairs.factoryScrapSource(actor, repairId, roundId, replacementId, version, roundVersion,
+                input.assetVersion(), input.ownershipVersion(), input.lockVersion());
+        if (!json.readTree(repair.contextJson()).path("method").asText().equals(input.proposedDisposition().strip())) {
+            throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_OUTSIDE_APPROVAL", 409);
+        }
+        return createFromRepair(actor, current, operation, key, hash, input, repair, replacementId);
+    }
+
+    private Receipt createFromRepair(Actor actor, Current current, String operation, UUID key, String hash,
+            RepairSubmission input, RepairService.ScrapSource repair, Long replacementId) {
+        boolean factory = replacementId != null;
+        var source = new LinkedHashMap<>(assets.repairSource(repair.assetId(), input.assetVersion(), factory));
         var proof = new LinkedHashMap<String, Object>();
-        proof.put("repairVersion", version + 1);
+        proof.put("repairVersion", repair.repairVersion() + 1);
         proof.put("original", json.readTree(repair.originalSnapshot()));
         proof.put("context", json.readTree(repair.contextJson()));
         proof.put("borrowing", repair.borrowing());
         source.put("repairEvidence", proof);
         var submission = new Submission(repair.assetId(), input.assetVersion(), input.reason(),
                 input.observedCondition(), input.proposedDisposition());
-        return create(actor, current, operation, key, hash, submission, "REPAIR", repairId, source, input,
-                new RepairLink(repair, input.lockVersion()));
+        return create(actor, current, operation, key, hash, submission, factory ? "FACTORY_REPLACEMENT" : "REPAIR",
+                repair.repairId(), source, input, new RepairLink(repair, input.lockVersion(), replacementId));
     }
 
     private record RepairIntent(long repairVersion, RepairSubmission input) {}
+    private record FactoryIntent(long repairId, long roundId, long repairVersion, long roundVersion,
+            RepairSubmission input) {}
 
     private Receipt replay(Current current, String operation, UUID key, String hash) {
         var prior = db.queryForList("SELECT payload_sha256,response_json FROM fams_scrap_receipt WHERE actor_account_id=?"
@@ -166,10 +194,11 @@ public class ScrapService {
             Submission input, String sourceType, Long sourceId, Map<String, Object> source, Object facts, RepairLink link) {
         var time = clock.instant().truncatedTo(ChronoUnit.MILLIS);
         db.update(
-                "INSERT INTO fams_scrap_request(asset_id,creator_account_id,source_type,source_business_id,"
+                "INSERT INTO fams_scrap_request(asset_id,creator_account_id,source_type,source_business_id,source_item_id,"
                         + "source_snapshot_json,reason,observed_condition,proposed_disposition,"
-                        + "asset_version,created_at,updated_at,processor_account_id,ownership_version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                input.assetId(), current.id(), sourceType, sourceId, json.writeValueAsString(source), input.reason().strip(),
+                        + "asset_version,created_at,updated_at,processor_account_id,ownership_version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                input.assetId(), current.id(), sourceType, sourceId, link == null ? null : link.replacementId(),
+                json.writeValueAsString(source), input.reason().strip(),
                 input.observedCondition().strip(), input.proposedDisposition().strip(), input.assetVersion() + 1,
                 time, time, link == null ? null : current.id(), link == null ? 0 : 1);
         long id = Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
@@ -182,7 +211,8 @@ public class ScrapService {
         long assetVersion = switch (sourceType) {
             case "LOSS" -> assets.freezeLoss(input.assetId(), input.assetVersion(), id,
                     source.get("lifecycle_status").toString(), current.id(), time);
-            case "REPAIR" -> assets.freezeRepair(input.assetId(), input.assetVersion(), id, current.id(), time);
+            case "REPAIR", "FACTORY_REPLACEMENT" -> assets.freezeRepair(input.assetId(), input.assetVersion(), id,
+                    current.id(), time, "FACTORY_REPLACEMENT".equals(sourceType));
             default -> assets.freezeStandalone(input.assetId(), input.assetVersion(), id, current.id(), time);
         };
         db.update(

@@ -51,6 +51,29 @@ test("dedicated originals survive unknown upload until original-key retry succee
 test("read-only permission cannot be bypassed by calling native prepare handlers", async () => {
     const f = fixture(false); await draft(f); f.page.onPrepare(event({ action: "create" })); assert.equal(f.page.data.confirmation, ""); assert.equal(writes(f).length, 0); assert.equal(f.calls.some(call => call.path?.includes("replacement-references")), false);
 });
+test("manufacturer scrap resumes the same original intent after hide and show", async () => {
+    const f = fixture(false), request = f.sessions.request;
+    Object.assign(f.records, { canRequestScrap: true, items: [{ id: "41", originalDisposition: "FACTORY_RETAINED" }] });
+    let lost = true;
+    f.sessions.request = async (...args) => {
+        const result = await request(...args);
+        if (args[0] !== "POST") return result;
+        if (lost) { lost = false; f.header.version++; f.round.version++; throw new Error("committed reply lost"); }
+        return { id: "77" };
+    };
+    await f.page.onShow();
+    f.page.onScrapField(field("scrapReason", "厂家已收旧"));
+    f.page.onScrapField(field("scrapCondition", "本轮收旧原件已核实"));
+    f.page.onScrap(event({ id: "41" }));
+    await f.page.onConfirm();
+    f.page.onHide();
+    await f.page.onShow();
+    await f.page.onRetry();
+    assert.deepEqual(writes(f)[1], writes(f)[0]);
+    assert.equal(writes(f)[0].path, "/api/v1/mini/scrap-requests/from-factory/9/rounds/" + roundId + "/replacements/41");
+    assert.equal(writes(f)[0].body.roundVersion, 10);
+    assert.equal(f.page.data.scrapReceipt, "77");
+});
 test("definitive rejection discards retry until explicit new read and decision", async () => {
     const f = fixture(), request = f.sessions.request; f.sessions.request = async (...args) => { if (args[0] === "POST") throw new MiniRequestError(409, "REPAIR_VERSION_MISMATCH"); return request(...args); };
     await draft(f); f.page.onPrepare(event({ action: "create" })); await f.page.onConfirm(); assert.equal(f.page.data.retry, false); assert.equal(f.page.data.stale, true); f.page.onPrepare(event({ action: "create" })); assert.equal(f.page.data.confirmation, "");

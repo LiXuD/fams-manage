@@ -153,7 +153,7 @@ async function catalog(kind: "location" | "employee") {
   } catch (cause) { if (current(epoch, owner)) failure(cause); }
   finally { if (current(epoch, owner)) busy.value = false; }
 }
-function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute" | "executeLoss") {
+function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute" | "executeLoss" | "executeFactory") {
   if (locked.value || stale.value) return;
   const row = detail.value;
   let path = "", body: Record<string, unknown>, version: number | undefined, summary: string;
@@ -170,20 +170,25 @@ function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute" |
     if (!row || row.lockVersion == null) return;
     const capability = action === "approve" || action === "reject" ? "decide" : action;
     if (!row.actions[capability]) return;
-    version = row.version; path = "/" + row.id + "/" + (capability === "decide" ? "decision" : action === "executeLoss" ? "execute-loss" : action);
+    version = row.version; path = "/" + row.id + "/" + (capability === "decide" ? "decision" : action === "executeLoss" ? "execute-loss" : action === "executeFactory" ? "execute-factory" : action);
     body = { assetVersion: row.assetVersion, lockVersion: row.lockVersion };
     const loss = row.sourceType === "LOSS";
     if (capability === "decide") {
-      const method = loss ? "遗失核销" : approved.value.trim();
+      const method = loss ? "遗失核销" : row.factoryDisposition ?? approved.value.trim();
       if (!decisionReason.value.trim() || action === "approve" && !method) {
         error.value = "请填写本次原因，批准时须明确允许的处置范围。"; return;
       }
       body = { ...body, result: action === "approve" ? "APPROVE" : "REJECT", reason: decisionReason.value.trim(),
         ...(action === "approve" ? { approvedDisposition: method } : {}) };
-      summary = action === "approve" ? "批准处置范围 " + method + "，等待库管认领核实。" : "驳回报废，核对原保管关系后恢复。";
+      summary = action === "approve" ? "批准处置范围 " + method + (row.factoryDisposition ? "，由原库管凭厂家证明执行。" : "，等待库管办理。") : "驳回报废，核对原保管关系后恢复。";
     } else if (action === "claim") summary = loss
       ? "取得本单唯一处理权，核对遗失证据后执行。" : "取得本单唯一处理权，核验实物后执行。";
-    else if (action === "executeLoss") {
+    else if (action === "executeFactory") {
+      const time = new Date(occurred.value);
+      if (!Number.isFinite(time.getTime())) { error.value = "请填写厂家凭证记载的实际处置时间。"; return; }
+      body = { ...body, ownershipVersion: row.ownershipVersion, occurredAt: time.toISOString() };
+      summary = "依据本轮厂家证明执行 " + row.source.assetCode + " 报废并登记实际处置。";
+    } else if (action === "executeLoss") {
       if (evidence.value.trim().length < 10) { error.value = "请填写至少10字的核销复核依据。"; return; }
       body = { ...body, ownershipVersion: row.ownershipVersion, evidence: evidence.value.trim() };
       summary = "核销 " + row.source.assetCode + "，保留原遗失和保管历史。如有原借用，将终止原借用。";
@@ -275,6 +280,8 @@ onBeforeUnmount(() => { live = false; reset(); });
     </section>
     <section v-if="detail" aria-label="报废详情"><h2>{{ detail.source.assetCode }} · {{ detail.source.name }}</h2>
       <p>{{ detail.sourceType === 'LOSS' && detail.status === 'PROCESSING' ? '待遗失核销' : scrapStates[detail.status] || detail.status }} · 原因 {{ detail.reason }} · 现状 {{ detail.observedCondition }}</p>
+      <a v-if="detail.factoryDisposition && detail.sourceBusinessId && (detail.actions.decide || detail.actions.executeFactory)"
+        :href="'/repairs/' + detail.sourceBusinessId">前往原维修核对厂家凭证</a>
       <p>建议处置 {{ detail.proposedDisposition }} · 当前处理库管 {{ detail.processorAccountId || '尚未认领' }}</p>
       <section v-if="capabilities" aria-label="报废附件">
         <p v-if="!capabilities.canRead">查看报废附件需要单独授权。</p>
@@ -299,6 +306,7 @@ onBeforeUnmount(() => { live = false; reset(); });
       </section>
       <fieldset v-if="detail.actions.decide" :disabled="locked || stale"><label>本次决定原因<textarea v-model="decisionReason" maxlength="1000"/></label>
         <p v-if="detail.sourceType === 'LOSS'">批准的处置范围 遗失核销</p>
+        <p v-else-if="detail.factoryDisposition">批准的处置范围 {{ detail.factoryDisposition === "FACTORY_RETAINED" ? "厂家收旧" : "厂家销毁" }}</p>
         <label v-else>批准的处置范围<input v-model="approved" maxlength="500"/></label><button @click="prepare('approve')">批准报废范围</button><button @click="prepare('reject')">驳回报废申请</button>
       </fieldset>
       <button v-if="detail.actions.claim" :disabled="locked || stale" @click="prepare('claim')">认领报废处理</button>
@@ -315,6 +323,11 @@ onBeforeUnmount(() => { live = false; reset(); });
         <label><input v-model="physical" type="checkbox"/>已亲见并核对同一原机和处置保管安排</label>
         <button @click="prepare('execute')">核对执行报废</button>
       </fieldset>
+      <fieldset v-if="detail.actions.executeFactory" :disabled="locked || stale">
+        <legend>按厂家凭证执行报废</legend>
+        <label>凭证记载的实际处置时间<input v-model="occurred" type="datetime-local" step="0.001"/></label>
+        <button @click="prepare('executeFactory')">核对厂家凭证并执行报废</button>
+      </fieldset>
       <fieldset v-if="detail.actions.executeLoss" :disabled="locked || stale">
         <legend>执行遗失核销</legend>
         <p>核对原报失及保管责任。如有原借用，执行后关闭原借用。</p>
@@ -325,7 +338,7 @@ onBeforeUnmount(() => { live = false; reset(); });
         : detail.disposition.disposition_status === 'DISPOSED' ? '已处置' : detail.disposition.disposition_status === 'LOSS_WRITTEN_OFF' ? '遗失核销'
         : detail.disposition.disposition_status }}<span v-if="detail.disposition.due_date"> · 计划日期 {{ detail.disposition.due_date }}</span></p>
       <p v-if="detail.disposition?.completion">实际处置 {{ detail.disposition.completion.occurredAt }} · {{ detail.disposition.completion.method }}
-        · 处置对象 {{ detail.disposition.completion.recipient }} · 经办人 {{ detail.disposition.completion.operatorName }}</p>
+        <span v-if="detail.disposition.completion.recipient">· 处置对象 {{ detail.disposition.completion.recipient }}</span><span v-if="detail.disposition.completion.operatorName"> · 经办人 {{ detail.disposition.completion.operatorName }}</span></p>
       <fieldset v-if="detail.actions.dispose" :disabled="locked || stale || !capabilities?.canRead">
         <legend>登记实际处置</legend>
         <p>批准的处置方式 {{ detail.decision?.decision?.approvedDisposition }}</p>

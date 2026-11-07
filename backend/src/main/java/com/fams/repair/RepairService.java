@@ -965,6 +965,30 @@ public class RepairService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
+    public ScrapSource factoryScrapSource(Actor actor, long id, long round, long replacement, long version,
+            long roundVersion, long assetVersion, long ownership, long lockVersion) {
+        var proof = factoryOperations.scrapEvidence(actor, id, round, replacement, version, roundVersion,
+                assetVersion, ownership, lockVersion);
+        var row = header(id);
+        long asset = number(row, "asset_id");
+        var borrowing = loans.open(asset);
+        loans.requireIdentity(asset, originalLoan(row), borrowing == null ? null : borrowing.version());
+        return new ScrapSource(id, asset, version, number(row, "processor_account_id"),
+                row.get("source_snapshot_json").toString(), json.writeValueAsString(proof), borrowing);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean matchesFactoryScrapEvidence(long repair, long asset, RepairFactoryService.ScrapEvidence expected) {
+        return expected != null && expected.equals(factoryOperations.replacementScrapEvidence(
+                repair, expected.roundId(), expected.replacementId(), asset));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void requireFactoryScrapEvidenceObjects(Current current, long repair, RepairFactoryService.ScrapEvidence proof) {
+        factoryOperations.requireScrapEvidenceObjects(current, repair, proof);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
     public void handoffToScrap(Actor actor, Current current, ScrapSource source, long scrap, long lockVersion, long nextAssetVersion) {
         transferScrapLock(source.assetId(), source.repairId(), scrap, lockVersion, true);
         db.update("UPDATE fams_repair_request SET asset_version=?,version=version+1,updated_at=? WHERE id=?",
@@ -988,11 +1012,11 @@ public class RepairService {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void restoreFromScrap(Actor actor, Current current, long repair, long version, long asset, long scrap,
-            long lockVersion, long nextAssetVersion, long processor) {
+            long lockVersion, long nextAssetVersion, long processor, boolean factory) {
         transferScrapLock(asset, repair, scrap, lockVersion, false);
         db.update("UPDATE fams_repair_request SET asset_version=?,version=version+1,updated_at=? WHERE id=?",
                 nextAssetVersion, now(), repair);
-        todo(repair, "PROCESS", "WAREHOUSE_OPERATOR", processor);
+        todo(repair, factory ? "FACTORY_RETURN" : "PROCESS", "WAREHOUSE_OPERATOR", processor);
         audit(actor, current, Map.of("id", repair), "REPAIR_SCRAP_RETURNED", version, version + 1,
                 Map.of("scrapId", Long.toString(scrap)), Role.ASSET_ADMIN.name());
     }

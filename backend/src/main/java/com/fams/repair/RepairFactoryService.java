@@ -652,6 +652,54 @@ public class RepairFactoryService {
                 current, operation, key, fingerprint, id, number(round, "scope_id"), roundId);
     }
 
+    public record ScrapEvidence(long roundId, long roundVersion, long replacementId, String method,
+            String provider, Instant dispatchedAt, Instant observedAt, long recordedBy, String evidenceIdsJson) {}
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ScrapEvidence scrapEvidence(Actor actor, long repairId, long roundId, long replacementId,
+            long repairVersion, long roundVersion, long assetVersion, long ownershipVersion, long lockVersion) {
+        var current = warehouse(actor);
+        var row = header(repairId);
+        requireOwner(current, row);
+        guard(actor, current, row, repairVersion, assetVersion, ownershipVersion, lockVersion);
+        var round = round(repairId, roundId);
+        roundGuard(actor, current, row, round, roundVersion, "DISPATCHED");
+        assets.requireOriginal(assets.snapshot(number(row, "asset_id"), assetVersion, "FACTORY_REPAIR"),
+                round.get("original_identity_json").toString());
+        var proof = replacementScrapEvidence(repairId, roundId, replacementId, number(row, "asset_id"));
+        if (proof == null) {
+            throw new RepairFailure(409, "REPAIR_FACTORY_SCRAP_EVIDENCE_CHANGED");
+        }
+        requireScrapEvidenceObjects(current, repairId, proof);
+        return proof;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ScrapEvidence replacementScrapEvidence(long repairId, long roundId, long replacementId, long assetId) {
+        var rows = db.queryForList("SELECT r.version,r.provider_name,r.dispatched_at,p.original_disposition,p.observed_at,"
+                + " p.recorded_by,p.evidence_ids_json FROM fams_repair_factory_round r"
+                + " JOIN fams_repair_factory_replacement p ON p.repair_id=r.repair_id AND p.round_id=r.id"
+                + " WHERE r.repair_id=? AND r.id=? AND r.asset_id=? AND r.round_status='DISPATCHED'"
+                + " AND r.received_at IS NULL AND p.id=? AND p.original_asset_id=r.asset_id"
+                + " AND p.original_disposition IN ('FACTORY_RETAINED','FACTORY_DESTROYED') FOR UPDATE",
+                repairId, roundId, assetId, replacementId);
+        if (rows.isEmpty()) {
+            return null;
+        }
+        var row = rows.getFirst();
+        return new ScrapEvidence(roundId, number(row, "version"), replacementId,
+                row.get("original_disposition").toString(), row.get("provider_name").toString(),
+                instant(row.get("dispatched_at")), instant(row.get("observed_at")), number(row, "recorded_by"),
+                row.get("evidence_ids_json").toString());
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void requireScrapEvidenceObjects(Current current, long repairId, ScrapEvidence proof) {
+        var ids = new java.util.ArrayList<UUID>();
+        json.readTree(proof.evidenceIdsJson()).forEach(node -> ids.add(UUID.fromString(node.asText())));
+        selected(current, repairId, proof.roundId(), ids, "REPLACEMENT");
+    }
+
     public record LossSource(long repairId, long roundId, long assetId, long assetVersion,
             long processorAccountId, Instant dispatchedAt) {}
 
@@ -863,10 +911,13 @@ public class RepairFactoryService {
         var round = round(id, roundId);
         var items = db.queryForList("SELECT * FROM fams_repair_factory_replacement"
                 + " WHERE repair_id=? AND round_id=?", id, roundId);
+        boolean processing = owner(current, row) && "WAREHOUSE_PROCESSING".equals(row.get("repair_status"));
         return Map.of("items", items.stream().map(item -> replacementView(actor, item)).toList(),
-                "canRecord", owner(current, row)
-                        && "WAREHOUSE_PROCESSING".equals(row.get("repair_status"))
-                        && replacementPhase(id, round));
+                "canRecord", processing && replacementPhase(id, round),
+                "canRequestScrap", processing && "DISPATCHED".equals(round.get("round_status"))
+                        && reply(row, null, null).get("lockVersion") != null
+                        && items.stream().anyMatch(item -> List.of("FACTORY_RETAINED", "FACTORY_DESTROYED")
+                                .contains(item.get("original_disposition"))));
     }
 
     private Map<String, Object> replacementView(Actor actor, Map<String, Object> item) {

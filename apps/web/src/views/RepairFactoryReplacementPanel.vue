@@ -5,9 +5,11 @@ import { RepairApiError, type Repair } from "@/repair/api";
 import { factoryProblem, factoryRequest, type FactoryMutation } from "@/repair/factory-api";
 import type { FactoryDetail, FactoryFile, FactoryRoundDetail } from "@/repair/factory-types";
 import type { AssetReference, Page } from "@/asset/api";
+import { ScrapApiError, scrapRequest } from "@/scrap/api";
 
 interface Replacement { id: string; sourceId: string; originalDisposition: string; replacementAssetId: string | null; inbound: { id: string; receiptNumber: string; status: string } | null }
-interface Replacements { items: Replacement[]; canRecord: boolean }
+interface Replacements { items: Replacement[]; canRecord: boolean; canRequestScrap?: boolean }
+type Mutation = FactoryMutation & ({ scrap?: never } | { scrap: true; body: Readonly<Record<string, unknown>> });
 type Kind = "category" | "organization" | "warehouse" | "location";
 const sources: { kind: Kind; label: string; path: string }[] = [
   { kind: "category", label: "资产分类", path: "/asset-categories" }, { kind: "organization", label: "归属组织", path: "/organizations" },
@@ -20,7 +22,8 @@ const identity = computed(() => JSON.stringify([session.user?.id, session.user?.
 const canRead = computed(() => !!session.user?.roles.includes("ASSET_ADMIN") || !!session.user?.roles.includes("WAREHOUSE_OPERATOR") && String(session.user.id) === props.repair.processorAccountId);
 const opened = ref(false), busy = ref(false), stale = ref(true), error = ref(""), notice = ref("");
 const header = ref<FactoryDetail | null>(null), roundData = ref<FactoryRoundDetail | null>(null), records = ref<Replacements | null>(null);
-const confirmation = ref<FactoryMutation | null>(null), pending = ref<FactoryMutation | null>(null);
+const confirmation = ref<Mutation | null>(null), pending = ref<Mutation | null>(null);
+const scrapReason = ref(""), scrapCondition = ref(""), scrapReceipt = ref("");
 const name = ref(""), serial = ref(""), model = ref(""), unit = ref(""), date = ref(""), observed = ref(""), disposition = ref(""), reason = ref("");
 const checked = ref(false), evidenceIds = ref<string[]>([]), file = ref<File | null>(null);
 const choices = ref<Record<Kind, string>>({ category: "", organization: "", warehouse: "", location: "" });
@@ -34,7 +37,7 @@ const destinations: Record<string, string> = { FACTORY_RETAINED: "厂家已收�
 watch([busy, pending, confirmation], () => emit("busy-change", busy.value || !!pending.value || !!confirmation.value), { flush: "sync" });
 watch(() => choices.value.warehouse, () => { choices.value.location = ""; });
 function clearDraft() { name.value = ""; serial.value = ""; model.value = ""; unit.value = ""; date.value = ""; observed.value = ""; disposition.value = ""; reason.value = ""; checked.value = false; evidenceIds.value = []; file.value = null; }
-function reset() { generation++; opened.value = false; busy.value = false; stale.value = true; header.value = null; roundData.value = null; records.value = null; confirmation.value = null; pending.value = null; references.value = {}; choices.value = { category: "", organization: "", warehouse: "", location: "" }; clearDraft(); }
+function reset() { generation++; opened.value = false; busy.value = false; stale.value = true; header.value = null; roundData.value = null; records.value = null; confirmation.value = null; pending.value = null; references.value = {}; choices.value = { category: "", organization: "", warehouse: "", location: "" }; scrapReason.value = ""; scrapCondition.value = ""; scrapReceipt.value = ""; clearDraft(); }
 function failure(cause: unknown) {
   if (cause instanceof RepairApiError && [401, 403, 404].includes(cause.status)) { reset(); emit("invalidated"); }
   if (cause instanceof RepairApiError && [400, 409, 413, 422].includes(cause.status)) stale.value = true;
@@ -110,15 +113,32 @@ function prepare(upload: boolean) {
   }
   confirmation.value = Object.freeze(mutation); error.value = ""; notice.value = "";
 }
+function prepareScrap(item: Replacement) {
+  const meta = header.value, round = roundData.value;
+  if (locked.value || !ready.value || !records.value?.canRequestScrap || !meta || !round || meta.lockVersion == null
+      || !["FACTORY_RETAINED", "FACTORY_DESTROYED"].includes(item.originalDisposition)) return;
+  if (!scrapReason.value.trim() || !scrapCondition.value.trim()) { error.value = "请填写旧机报废原因及已核实情况。"; return; }
+  const scrap = Object.freeze({ assetVersion: meta.assetVersion, ownershipVersion: meta.ownershipVersion,
+    lockVersion: meta.lockVersion, reason: scrapReason.value.trim(), observedCondition: scrapCondition.value.trim(),
+    proposedDisposition: item.originalDisposition });
+  confirmation.value = Object.freeze({ scrap: true, repairId: props.repair.id, version: meta.version,
+    path: `/from-factory/${props.repair.id}/rounds/${round.id}/replacements/${item.id}`, key: crypto.randomUUID(),
+    body: Object.freeze({ roundVersion: round.version, scrap }), label: "按本轮厂家凭证提交旧机关联报废，等待管理员确认。" });
+  error.value = ""; notice.value = "";
+}
 async function perform() {
   if (!pending.value || busy.value || props.blocked) return;
   const operation = pending.value, epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
   try {
-    await factoryRequest(operation.repairId, operation.path, operation);
+    const receipt = operation.scrap ? await scrapRequest<{ id: string }>(operation.path,
+      { ...operation, body: operation.body, summary: operation.label }) : null;
+    if (!operation.scrap) await factoryRequest(operation.repairId, operation.path, operation);
     if (!current(epoch, owner)) return;
-    pending.value = null; clearDraft(); stale.value = true; notice.value = "本次换机资料已保存。新机须独立入库，旧机责任仍待按实际去向办理。";
+    pending.value = null; clearDraft(); stale.value = true;
+    if (receipt) { scrapReceipt.value = receipt.id; scrapReason.value = ""; scrapCondition.value = ""; }
+    notice.value = receipt ? "旧机关联报废申请已提交。" : "本次换机资料已保存。新机须独立入库，旧机责任仍待按实际去向办理。";
     await fetchState(epoch, owner);
-  } catch (cause) { if (current(epoch, owner)) { if (cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); } }
+  } catch (cause) { if (current(epoch, owner)) { const problem = cause instanceof ScrapApiError ? new RepairApiError(cause.status, cause.code, {}) : cause; if (problem instanceof RepairApiError && problem.status >= 400 && problem.status < 500) pending.value = null; failure(problem); } }
   finally { if (current(epoch, owner)) busy.value = false; }
   if (current(epoch, owner) && !pending.value) emit("changed");
 }
@@ -133,9 +153,18 @@ onBeforeUnmount(() => { live = false; reset(); emit("busy-change", false); });
     <button :disabled="props.blocked || busy || !!confirmation" @click="load">核对整机换新记录</button>
     <template v-if="opened">
       <p v-if="error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p>
+      <a v-if="scrapReceipt" :href="'/scrap-requests/' + scrapReceipt">查看关联报废单</a>
       <p v-if="pending">本次结果尚待核对，重试将沿用原请求。</p><button v-if="pending" :disabled="busy || props.blocked" @click="perform">重试原换机办理</button>
       <section v-if="confirmation" aria-label="确认本次换机办理"><p>{{ confirmation.label }}</p><button :disabled="busy || props.blocked" @click="confirm">确认保存本次换机办理</button><button :disabled="busy || props.blocked" @click="confirmation = null">返回修改换机办理</button></section>
       <article v-for="item in records?.items" :key="item.id"><p>旧机：{{ destinations[item.originalDisposition] }}。</p><p v-if="item.inbound">新机资产 {{ item.replacementAssetId }}；入库单 {{ item.inbound.receiptNumber }} · {{ item.inbound.status }}。<a :href="'/inbound?receiptId=' + item.inbound.id">进入这张入库单核对并办理</a></p><p v-else>新机建卡及入库草稿按原创建者权限保留，尚未进入当前身份可办理范围。</p></article>
+      <fieldset v-if="records?.canRequestScrap" :disabled="locked || !ready">
+        <legend>依据厂家凭证申请旧机报废</legend>
+        <label>旧机报废原因<textarea v-model="scrapReason" maxlength="2000"/></label>
+        <label>旧机已核实情况<textarea v-model="scrapCondition" maxlength="2000"/></label>
+        <template v-for="item in records.items" :key="'scrap-' + item.id">
+          <button v-if="item.originalDisposition === 'FACTORY_RETAINED' || item.originalDisposition === 'FACTORY_DESTROYED'" @click="prepareScrap(item)">核对旧机关联报废</button>
+        </template>
+      </fieldset>
       <template v-if="records?.canRecord && header && roundData">
         <fieldset :disabled="locked || !ready || !header.photosAvailable"><legend>厂家整机换新原件</legend><label>选择厂家换机图片或PDF原件<input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" @change="fileChosen"></label><p v-if="file">已选换机原件：{{ file.name }}</p><button @click="prepare(true)">核对追加厂家换机原件</button></fieldset>
         <fieldset :disabled="locked || !ready || !header.photosAvailable"><legend>新机资料及旧机去向</legend>

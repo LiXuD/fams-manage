@@ -93,6 +93,27 @@ public class ScrapController {
         return scrap.submitFromRepair(actors.capture(), repairId, version, key, input);
     }
 
+    @PostMapping("/from-factory/{repairId}/rounds/{roundId}/replacements/{replacementId}")
+    ScrapService.Receipt submitFromFactory(@PathVariable @Positive long repairId, @PathVariable @Positive long roundId,
+            @PathVariable @Positive long replacementId,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody FactorySubmission input) {
+        return scrap.submitFromFactory(actors.capture(), repairId, roundId, replacementId, version,
+                input.roundVersion(), key, input.scrap());
+    }
+
+    record FactorySubmission(@jakarta.validation.constraints.NotNull @PositiveOrZero Long roundVersion,
+            @jakarta.validation.constraints.NotNull @Valid ScrapService.RepairSubmission scrap) {}
+
+    @PostMapping("/{id}/execute-factory")
+    ScrapReviewService.Receipt executeFactory(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.FactoryExecution input) {
+        return review.executeFactory(actors.capture(), id, version, key, input);
+    }
+
     @PostMapping("/{id}/decision")
     ScrapReviewService.Receipt decide(@PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,

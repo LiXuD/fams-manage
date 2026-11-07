@@ -5,17 +5,18 @@ import type { FactoryDetail, FactoryRoundDetail } from "./repair-factory-types.t
 type Kind = "category" | "organization" | "warehouse" | "location";
 interface Reference { id: string; code: string; name: string; version: number; warehouse?: { id: string } }
 interface Catalog { kind: Kind; label: string; page: number; total: number; items: Reference[]; selected: string }
-interface Replacements { canRecord: boolean; items: { id: string; originalDisposition: string; replacementAssetId: string | null; inbound: { id: string; receiptNumber: string; status: string } | null }[] }
+interface Replacements { canRecord: boolean; canRequestScrap?: boolean; items: { id: string; originalDisposition: string; replacementAssetId: string | null; inbound: { id: string; receiptNumber: string; status: string } | null }[] }
 interface Intent { readonly path: string; readonly key: string; readonly version: number; readonly body?: string; readonly file?: FactoryEvidenceFile;
-    readonly form?: Readonly<{ roundVersion: number; assetVersion: number; ownershipVersion: number; lockVersion: number; purpose: string }>; readonly label: string }
+    readonly form?: Readonly<{ roundVersion: number; assetVersion: number; ownershipVersion: number; lockVersion: number; purpose: string }>; readonly label: string; readonly scrap?: true }
 interface Data { header: FactoryDetail | null; round: FactoryRoundDetail | null; records: Replacements | null; references: Catalog[]; busy: boolean; stale: boolean; retry: boolean; confirmation: string; pendingLabel: string; error: string; notice: string;
     name: string; serial: string; model: string; unit: string; businessDate: string; actualDate: string; actualTime: string; reason: string; checked: boolean; disposition: string; evidenceIds: string[]; fileName: string;
-    originals: { id: string; name: string }[]; dispositions: { id: string; name: string }[] }
+    originals: { id: string; name: string }[]; dispositions: { id: string; name: string }[];
+    scrapReason: string; scrapCondition: string; scrapReceipt: string }
 interface Context { data: Data; setData(update: Partial<Data>): void }
 const idPattern = /^[1-9][0-9]{0,18}$/;
 const kinds: [Kind, string][] = [["category", "资产分类"], ["organization", "归属组织"], ["warehouse", "计划入库仓库"], ["location", "计划入库库位"]];
 const dispositions = [{ id: "FACTORY_RETAINED", name: "厂家已收走旧机，责任待办理" }, { id: "FACTORY_DESTROYED", name: "厂家确认销毁旧机，待关联报废" }, { id: "CONTINUES_REPAIR", name: "旧机暂留维修，责任继续保留" }];
-const blank = (): Data => ({ header: null, round: null, records: null, references: [], busy: false, stale: true, retry: false, confirmation: "", pendingLabel: "", error: "", notice: "", name: "", serial: "", model: "", unit: "", businessDate: "", actualDate: "", actualTime: "", reason: "", checked: false, disposition: "", evidenceIds: [], originals: [], dispositions: [], fileName: "" });
+const blank = (): Data => ({ header: null, round: null, records: null, references: [], busy: false, stale: true, retry: false, confirmation: "", pendingLabel: "", error: "", notice: "", name: "", serial: "", model: "", unit: "", businessDate: "", actualDate: "", actualTime: "", reason: "", checked: false, disposition: "", evidenceIds: [], originals: [], dispositions: [], fileName: "", scrapReason: "", scrapCondition: "", scrapReceipt: "" });
 const day = (value: Date) => [value.getFullYear(), String(value.getMonth() + 1).padStart(2, "0"), String(value.getDate()).padStart(2, "0")].join("-");
 const clock = (value: Date) => [value.getHours(), value.getMinutes(), value.getSeconds()].map(x => String(x).padStart(2, "0")).join(":");
 function actualTime(date: string, time: string) {
@@ -35,7 +36,8 @@ export function createRepairReplacementPage(getServices: () => MiniServices) {
     const discard = (file?: FactoryEvidenceFile) => { if (file) services.sessions.discardFactoryEvidence(file.path); };
     const wipe = (page: Context) => { const files = new Set([pending?.file, prepared?.file]); pending = null; prepared = null; chosen = null; instant = ""; page.setData(blank()); for (const file of files) discard(file); };
     const ensure = (page: Context) => { if (!live) return false; if (identity === owner()) return true; try { wipe(page); } finally { page.setData({ error: "身份已变化，请重新进入；原办理资料已隐藏。" }); } return false; };
-    const editable = (page: Context) => ensure(page) && !page.data.busy && !page.data.stale && !pending && !prepared && !!page.data.records?.canRecord;
+    const idle = (page: Context) => ensure(page) && !page.data.busy && !page.data.stale && !pending && !prepared;
+    const editable = (page: Context) => idle(page) && !!page.data.records?.canRecord;
     const failure = (page: Context, error: unknown) => {
         if (error instanceof MiniRequestError && [401, 403, 404].includes(error.status)) { try { wipe(page); } finally { page.setData({ error: "身份、处理权或记录已失效，原资料已隐藏。" }); } }
         else if (error instanceof MiniRequestError && [400, 409, 413, 422].includes(error.status)) { const file = pending?.file; pending = null; try { discard(file); } finally { page.setData({ retry: false, stale: true, error: "办理已拒绝，请刷新核对新旧机身份、版本、入库目标和原件后重新填写。" }); } }
@@ -71,12 +73,17 @@ export function createRepairReplacementPage(getServices: () => MiniServices) {
         if (!ensure(page) || page.data.busy || !pending) return;
         const operation = pending, epoch = ++generation; page.setData({ busy: true, error: "" });
         try {
+            let receipt: { id: string } | undefined;
             if (operation.file && operation.form) await services.sessions.uploadFactoryEvidence(operation.path, operation.file, { key: operation.key, version: operation.version, ...operation.form });
-            else await services.sessions.request("POST", operation.path, JSON.parse(operation.body!), operation);
+            else {
+                const result = await services.sessions.request("POST", operation.path, JSON.parse(operation.body!), operation);
+                if (operation.scrap) receipt = result as { id: string };
+            }
             if (!current(epoch) || !await readState(page, epoch) || !current(epoch)) return;
             pending = null; chosen = null; instant = "";
             const saved = { header: page.data.header, round: page.data.round, records: page.data.records, references: page.data.references, originals: page.data.originals, dispositions: page.data.dispositions };
-            page.setData({ ...blank(), ...saved, stale: false, notice: "本次资料已保存。新机仍须独立提交、批准和实际验收入库；旧机责任继续保留。" }); discard(operation.file);
+            page.setData({ ...blank(), ...saved, stale: false, scrapReceipt: receipt?.id ?? "",
+                notice: receipt ? "旧机关联报废申请已提交。" : "本次资料已保存。新机仍须独立提交、批准和实际验收入库；旧机责任继续保留。" }); discard(operation.file);
         } catch (error) { if (current(epoch)) failure(page, error); } finally { finish(page, epoch); }
     };
     const prepare = (page: Context, upload: boolean) => {
@@ -118,6 +125,27 @@ export function createRepairReplacementPage(getServices: () => MiniServices) {
         onReference(this: Context, event: { currentTarget: { dataset: { kind: Kind; id: string } } }) { if (!editable(this)) return; const { kind, id } = event.currentTarget.dataset, warehouse = this.data.references.find(item => item.kind === "warehouse")?.selected; const catalog = this.data.references.find(item => item.kind === kind), item = catalog?.items.find(item => item.id === id); if (!item || kind === "location" && item.warehouse?.id !== warehouse) return; this.setData({ references: this.data.references.map(item => ({ ...item, selected: item.kind === kind ? id : kind === "warehouse" && item.kind === "location" ? "" : item.selected })) }); },
         async onReferences(this: Context, event: { currentTarget: { dataset: { kind: Kind; delta: string } } }) { if (!editable(this)) return; const { kind, delta } = event.currentTarget.dataset, catalog = this.data.references.find(item => item.kind === kind), change = Number(delta), next = (catalog?.page ?? 1) + change; if (!catalog || ![-1, 1].includes(change) || next < 1 || (next - 1) * 20 >= catalog.total) return; const epoch = ++generation; this.setData({ busy: true }); try { const result = await services.sessions.request("GET", route("/replacement-references/" + kind + "?page=" + next + "&pageSize=20")) as Catalog; if (current(epoch)) this.setData({ references: this.data.references.map(item => item.kind === kind ? { ...catalog, ...result, selected: "" } : kind === "warehouse" && item.kind === "location" ? { ...item, selected: "" } : item) }); } catch (error) { if (current(epoch)) failure(this, error); } finally { finish(this, epoch); } },
         async onChoose(this: Context) { if (!editable(this) || !services.chooseEvidence) return; const epoch = generation; this.setData({ busy: true }); try { const file = await services.chooseEvidence(); if (current(epoch)) { chosen = file; this.setData({ fileName: file.name }); } } catch (error) { if (current(epoch)) failure(this, error); } finally { finish(this, epoch); } },
+        onScrapField(this: Context, event: { currentTarget: { dataset: { field: string } }; detail: { value: string } }) {
+            const { field } = event.currentTarget.dataset;
+            if (idle(this) && this.data.records?.canRequestScrap && (field === "scrapReason" || field === "scrapCondition")) {
+                this.setData({ [field]: event.detail.value });
+            }
+        },
+        onScrap(this: Context, event: { currentTarget: { dataset: { id: string } } }) {
+            const { records, header, round, scrapReason, scrapCondition } = this.data;
+            if (!idle(this) || !records?.canRequestScrap || !header || !round || header.lockVersion == null) return;
+            const item = records.items.find(candidate => candidate.id === event.currentTarget.dataset.id);
+            if (!item || !["FACTORY_RETAINED", "FACTORY_DESTROYED"].includes(item.originalDisposition)) return;
+            if (!scrapReason.trim() || !scrapCondition.trim()) { this.setData({ error: "请填写旧机报废原因及已核实情况。" }); return; }
+            const scrap = { assetVersion: header.assetVersion, ownershipVersion: header.ownershipVersion,
+                lockVersion: header.lockVersion, reason: scrapReason.trim(), observedCondition: scrapCondition.trim(),
+                proposedDisposition: item.originalDisposition };
+            const path = "/api/v1/mini/scrap-requests/from-factory/" + repairId + "/rounds/" + roundId + "/replacements/" + item.id;
+            const label = "按本轮厂家凭证提交旧机关联报废，等待管理员确认。";
+            prepared = Object.freeze({ path, key: services.createKey(), version: header.version,
+                body: JSON.stringify({ roundVersion: round.version, scrap }), label, scrap: true });
+            this.setData({ confirmation: label, error: "" });
+        },
         onPrepare(this: Context, event: { currentTarget: { dataset: { action: string } } }) { if (["create", "upload"].includes(event.currentTarget.dataset.action)) prepare(this, event.currentTarget.dataset.action === "upload"); },
         async onConfirm(this: Context) { if (!ensure(this) || this.data.busy || pending || !prepared) return; pending = prepared; prepared = null; this.setData({ confirmation: "", retry: true, pendingLabel: pending.label }); await send(this); },
         onCancel(this: Context) { if (!ensure(this) || this.data.busy || pending || !prepared) return; const file = prepared.file; prepared = null; try { discard(file); } finally { this.setData({ confirmation: "" }); } },

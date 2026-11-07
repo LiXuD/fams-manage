@@ -834,6 +834,83 @@ class RepairFactoryHttpRuntimeCase {
         assertEquals(0, count("SELECT COUNT(*) FROM fams_repair_factory_round WHERE received_at IS NOT NULL"));
     }
 
+    @Test
+    void factoryScrapReturnsOriginalLockOnRejectionAndExecutesFromEvidence() throws Exception {
+        String repair = approved(), round = create(repair, fixture.warehouse);
+        dispatch(repair, round, fixture.warehouse);
+        String evidence = upload(repair, round, fixture.warehouse, "REPLACEMENT");
+        var replacement = replacementInput(repair, round, evidence);
+        var detail = privateDetail(fixture.warehouse, repair);
+        var recorded = ok(post(fixture.warehouse, path(repair, "/rounds/" + round + "/replacements"),
+                detail.path("version").asLong(), key(), replacement));
+        String source = "/from-factory/" + repair + "/rounds/" + round + "/replacements/"
+                + recorded.path("replacementId").asText();
+        long lock = db.queryForObject("SELECT id FROM fams_asset_business_lock WHERE asset_id=951020"
+                + " AND released_at IS NULL", Long.class);
+        detail = privateDetail(fixture.warehouse, repair);
+        long roundVersion = privateRound(fixture.warehouse, repair, round).path("version").asLong();
+        var submission = factoryScrapInput(detail, roundVersion);
+        long repairVersion = detail.path("version").asLong();
+        assertEquals(409, factoryScrapPost(fixture.warehouse, source + "0", repairVersion, key(), submission).statusCode());
+        String submitKey = key();
+        var pending = ok(factoryScrapPost(fixture.warehouse, source, repairVersion, submitKey, submission));
+        assertEquals(pending, ok(factoryScrapPost(fixture.warehouse, source, repairVersion, submitKey, submission)));
+        assertEquals("PENDING_SCRAP", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+        var decision = JSON.createObjectNode().put("assetVersion", pending.path("assetVersion").asLong())
+                .put("lockVersion", detail.path("lockVersion").asLong() + 1)
+                .put("result", "REJECT").put("reason", "Review the original manufacturer proof");
+        var rejected = ok(factoryScrapPost(fixture.admin, "/" + pending.path("id").asText() + "/decision", 0, key(), decision));
+        assertEquals("REJECTED", rejected.path("status").asText());
+        assertEquals(lock, db.queryForObject("SELECT id FROM fams_asset_business_lock WHERE asset_id=951020"
+                + " AND business_type='REPAIR' AND released_at IS NULL", Long.class));
+        assertEquals("FACTORY_REPAIR", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+        detail = privateDetail(fixture.warehouse, repair);
+        pending = ok(factoryScrapPost(fixture.warehouse, source, detail.path("version").asLong(), key(),
+                factoryScrapInput(detail, roundVersion)));
+        String request = "/" + pending.path("id").asText();
+        decision.put("assetVersion", pending.path("assetVersion").asLong())
+                .put("lockVersion", detail.path("lockVersion").asLong() + 1)
+                .put("result", "APPROVE").put("approvedDisposition", "FACTORY_DESTROYED");
+        assertEquals(409, factoryScrapPost(fixture.admin, request + "/decision", 0, key(), decision).statusCode());
+        decision.put("approvedDisposition", "FACTORY_RETAINED");
+        var approved = ok(factoryScrapPost(fixture.admin, request + "/decision", 0, key(), decision));
+        assertEquals("PROCESSING", approved.path("status").asText());
+        var execution = JSON.createObjectNode().put("assetVersion", approved.path("assetVersion").asLong())
+                .put("lockVersion", decision.path("lockVersion").asLong())
+                .put("ownershipVersion", approved.path("ownershipVersion").asLong())
+                .put("occurredAt", "2000-01-01T00:00:00Z");
+        assertEquals(403, factoryScrapPost(fixture.otherWarehouse, request + "/execute-factory", 1, key(), execution).statusCode());
+        assertEquals(400, factoryScrapPost(fixture.warehouse, request + "/execute-factory", 1, key(), execution).statusCode());
+        execution.set("occurredAt", replacement.path("observedAt"));
+        String executeKey = key();
+        var completed = ok(factoryScrapPost(fixture.warehouse, request + "/execute-factory", 1, executeKey, execution));
+        assertEquals(completed, ok(factoryScrapPost(fixture.warehouse, request + "/execute-factory", 1, executeKey, execution)));
+        assertEquals("EXECUTED", completed.path("status").asText());
+        assertEquals("DISPOSED", db.queryForObject("SELECT disposition_status FROM fams_scrap_disposition WHERE request_id=?",
+                String.class, completed.path("id").asText()));
+        assertEquals("SCRAPPED", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+        assertEquals("COMPLETED", db.queryForObject("SELECT repair_status FROM fams_repair_request WHERE id=?", String.class, repair));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_repair_factory_round WHERE received_at IS NOT NULL"));
+        assertEquals(0, activeLocks());
+    }
+
+    private ObjectNode factoryScrapInput(JsonNode detail, long roundVersion) {
+        var body = JSON.createObjectNode().put("roundVersion", roundVersion);
+        body.set("scrap", guards(detail).put("reason", "Original retained by manufacturer")
+                .put("observedCondition", "Verified manufacturer replacement evidence")
+                .put("proposedDisposition", "FACTORY_RETAINED"));
+        return body;
+    }
+
+    private HttpResponse<String> factoryScrapPost(Session session, String route, long version, String key, JsonNode input)
+            throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/scrap-requests" + route))
+                .header("Cookie", session.cookie()).header("X-CSRF-Token", session.csrf())
+                .header("Idempotency-Key", key).header("If-Match-Version", Long.toString(version))
+                .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(input.toString())).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
     private ObjectNode replacementInput(String id, String round, String object) throws Exception {
         replacementNumbering();
         var input = guards(privateDetail(fixture.warehouse, id));

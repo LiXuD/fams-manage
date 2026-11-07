@@ -39,6 +39,8 @@ module.exports={state:function(value){return names[value]||value;}};
   <view wx:if="{{detail}}" class="card">
     <view class="title">{{detail.source.assetCode}} · {{detail.source.name}}</view>
     <view>{{detail.sourceType === 'LOSS' &amp;&amp; detail.status === 'PROCESSING' ? '待遗失核销' : labels.state(detail.status)}} · 当前库管 {{detail.processorAccountId || '尚未认领'}}</view>
+    <navigator wx:if="{{detail.factoryDisposition &amp;&amp; detail.sourceBusinessId &amp;&amp; (detail.actions.decide || detail.actions.executeFactory)}}"
+      url="/pages/repair-factory/index?id={{detail.sourceBusinessId}}">前往原维修核对厂家凭证</navigator>
     <view>原因 {{detail.reason}} · 现状 {{detail.observedCondition}} · 建议处置 {{detail.proposedDisposition}}</view>
     <view wx:if="{{capabilities}}">
       <view wx:if="{{!capabilities.canRead}}">查看报废附件需要单独授权。</view>
@@ -60,6 +62,7 @@ module.exports={state:function(value){return names[value]||value;}};
     <view wx:if="{{detail.actions.decide}}">
       <view>本次决定原因</view><textarea value="{{decisionReason}}" data-field="decisionReason" bindinput="onField" maxlength="1000" disabled="{{busy || retry || confirmation || stale}}"/>
       <view wx:if="{{detail.sourceType === 'LOSS'}}">批准的处置范围 遗失核销</view>
+      <view wx:elif="{{detail.factoryDisposition}}">批准的处置范围 {{detail.factoryDisposition === 'FACTORY_RETAINED' ? '厂家收旧' : '厂家销毁'}}</view>
       <view wx:else><view>批准的处置范围</view><input value="{{approved}}" data-field="approved" bindinput="onField" maxlength="500" disabled="{{busy || retry || confirmation || stale}}"/></view>
       <button data-action="approve" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">批准报废范围</button>
       <button data-action="reject" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">驳回报废申请</button>
@@ -84,13 +87,18 @@ module.exports={state:function(value){return names[value]||value;}};
       <view><switch checked="{{physical}}" bindchange="onChecked" disabled="{{busy || retry || confirmation || stale}}"/>已亲见并核对同一原机和处置保管安排</view>
       <button data-action="execute" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对执行报废</button>
     </view>
+    <view wx:if="{{detail.actions.executeFactory}}">
+      <view>凭证记载的实际处置日期（年-月-日）</view><input value="{{actualDate}}" data-field="actualDate" bindinput="onField" disabled="{{busy || retry || confirmation || stale}}"/>
+      <view>凭证记载的实际处置时刻（时:分:秒）</view><input value="{{actualTime}}" data-field="actualTime" bindinput="onField" disabled="{{busy || retry || confirmation || stale}}"/>
+      <button data-action="executeFactory" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对厂家凭证并执行报废</button>
+    </view>
     <view wx:if="{{detail.actions.executeLoss}}">
       <view>执行遗失核销。如有原借用，将同时关闭。</view>
       <textarea value="{{evidence}}" data-field="evidence" bindinput="onField" maxlength="2000" placeholder="核销复核依据" disabled="{{busy || retry || confirmation || stale}}"/>
       <button data-action="executeLoss" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对执行遗失核销</button>
     </view>
     <view wx:if="{{detail.disposition}}">处置进度 {{detail.disposition.disposition_status === 'PENDING_DISPOSITION' ? '待实际处置' : (detail.disposition.disposition_status === 'DISPOSED' ? '已处置' : (detail.disposition.disposition_status === 'LOSS_WRITTEN_OFF' ? '遗失核销' : detail.disposition.disposition_status))}}<text wx:if="{{detail.disposition.due_date}}"> · 计划日期 {{detail.disposition.due_date}}</text></view>
-    <view wx:if="{{detail.disposition.completion}}">实际处置 {{detail.disposition.completion.occurredAt}} · {{detail.disposition.completion.method}} · 处置对象 {{detail.disposition.completion.recipient}} · 经办人 {{detail.disposition.completion.operatorName}}</view>
+    <view wx:if="{{detail.disposition.completion}}">实际处置 {{detail.disposition.completion.occurredAt}} · {{detail.disposition.completion.method}}<text wx:if="{{detail.disposition.completion.recipient}}"> · 处置对象 {{detail.disposition.completion.recipient}}</text><text wx:if="{{detail.disposition.completion.operatorName}}"> · 经办人 {{detail.disposition.completion.operatorName}}</text></view>
     <view wx:if="{{detail.actions.dispose &amp;&amp; capabilities.canRead}}">
       <view class="title">登记实际处置</view>
       <view>批准的处置方式 {{detail.decision.decision.approvedDisposition}}</view>

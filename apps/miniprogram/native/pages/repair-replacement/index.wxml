@@ -2,6 +2,15 @@
 <view class="card"><view class="title">整机换新与独立入库</view><view>新实物使用独立新卡、新编码和新序列号。旧机维修、借用和待处理责任继续保留。</view><button bindtap="onRefresh" disabled="{{busy || confirmation}}">刷新核对换机资料</button><view role="alert">{{error}}</view><view>{{notice}}</view></view>
 <view wx:if="{{retry}}" class="card">结果尚未确认；重试沿用原请求、版本和原件。{{pendingLabel}}<button bindtap="onRetry" disabled="{{busy}}">重试原换机办理</button></view>
 <view wx:if="{{confirmation}}" class="card"><view>{{confirmation}}</view><button bindtap="onConfirm" disabled="{{busy}}">确认保存本次换机办理</button><button bindtap="onCancel" disabled="{{busy}}">返回修改换机办理</button></view>
+<navigator wx:if="{{scrapReceipt}}" url="/pages/scrap-requests/index?id={{scrapReceipt}}">查看关联报废单</navigator>
+<view wx:if="{{records.canRequestScrap}}" class="card">
+  <view class="title">依据厂家凭证申请旧机报废</view>
+  <view>旧机报废原因</view><textarea value="{{scrapReason}}" data-field="scrapReason" bindinput="onScrapField" maxlength="2000" disabled="{{busy || retry || confirmation || stale}}"/>
+  <view>旧机已核实情况</view><textarea value="{{scrapCondition}}" data-field="scrapCondition" bindinput="onScrapField" maxlength="2000" disabled="{{busy || retry || confirmation || stale}}"/>
+  <block wx:for="{{records.items}}" wx:key="id">
+    <button wx:if="{{item.originalDisposition === 'FACTORY_RETAINED' || item.originalDisposition === 'FACTORY_DESTROYED'}}" data-id="{{item.id}}" bindtap="onScrap" disabled="{{busy || retry || confirmation || stale}}">核对旧机关联报废</button>
+  </block>
+</view>
 <view wx:for="{{records.items}}" wx:key="id" class="card"><view>旧机实际去向：{{item.originalDisposition}}</view><view wx:if="{{item.inbound}}">新机资产 {{item.replacementAssetId}}；入库单 {{item.inbound.receiptNumber}} · {{item.inbound.status}}。请到PC入库管理独立提交、批准和实际验收入库。</view><view wx:else>新机草稿尚未进入当前身份可办理范围。</view></view>
 <view wx:if="{{records.canRecord}}" class="card"><view class="title">厂家整机换新原件</view><button bindtap="onChoose" disabled="{{busy || retry || confirmation || stale}}">选择厂家换机图片或PDF原件</button><view>{{fileName}}</view><button data-action="upload" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对追加厂家换机原件</button>
 <checkbox-group bindchange="onEvidence"><label wx:for="{{originals}}" wx:key="id"><checkbox value="{{item.id}}" disabled="{{busy || retry || confirmation || stale}}"/>选用厂家换机原件 {{item.name}}</label></checkbox-group>
