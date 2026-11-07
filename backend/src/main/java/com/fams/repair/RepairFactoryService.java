@@ -192,7 +192,8 @@ public class RepairFactoryService {
                                 owner
                                         && processing
                                         && active != null
-                                        && "DISPATCHED".equals(active.get("round_status")),
+                                        && "DISPATCHED".equals(active.get("round_status"))
+                                        && !originalDestroyed(id, number(active, "id")),
                         "uploadEvidence", owner && processing && active != null,
                         "requestCostScope",
                                 owner
@@ -664,6 +665,7 @@ public class RepairFactoryService {
         guard(actor, current, row, repairVersion, assetVersion, ownershipVersion, lockVersion);
         var round = round(repairId, roundId);
         roundGuard(actor, current, row, round, roundVersion, "DISPATCHED");
+        requireOriginalNotDestroyed(repairId, roundId);
         long assetId = number(row, "asset_id");
         assets.requireOriginal(assets.snapshot(assetId, assetVersion, "FACTORY_REPAIR"),
                 round.get("original_identity_json").toString());
@@ -767,6 +769,7 @@ public class RepairFactoryService {
                 input.lockVersion());
         var round = round(id, roundId);
         roundGuard(actor, current, row, round, input.roundVersion(), "DISPATCHED");
+        requireOriginalNotDestroyed(id, roundId);
         if (!input.originalPhysicalIdentityChecked()
                 || !List.of("RESTORED", "STILL_FAULTY").contains(input.conditionResult())) {
             throw new RepairFailure(400, "REPAIR_FACTORY_ORIGINAL_RECEIPT_REQUIRED");
@@ -828,6 +831,18 @@ public class RepairFactoryService {
                 Role.WAREHOUSE_OPERATOR);
         return remember(
                 current, operation, key, fingerprint, id, number(round, "scope_id"), roundId);
+    }
+
+    private boolean originalDestroyed(long repairId, long roundId) {
+        return !db.queryForList("SELECT id FROM fams_repair_factory_replacement"
+                + " WHERE repair_id=? AND round_id=? AND original_disposition='FACTORY_DESTROYED' FOR UPDATE",
+                repairId, roundId).isEmpty();
+    }
+
+    private void requireOriginalNotDestroyed(long repairId, long roundId) {
+        if (originalDestroyed(repairId, roundId)) {
+            throw new RepairFailure(409, "REPAIR_FACTORY_ORIGINAL_ALREADY_DESTROYED");
+        }
     }
 
     private boolean replacementPhase(long id, Map<String, Object> round) {

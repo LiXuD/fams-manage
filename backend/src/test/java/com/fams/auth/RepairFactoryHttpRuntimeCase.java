@@ -801,6 +801,39 @@ class RepairFactoryHttpRuntimeCase {
         }
     }
 
+    @Test
+    void destroyedOriginalCannotBeReceivedOrReportedMissing() throws Exception {
+        String id = approved(), round = create(id, fixture.warehouse);
+        dispatch(id, round, fixture.warehouse);
+        String replacement = upload(id, round, fixture.warehouse, "REPLACEMENT");
+        upload(id, round, fixture.warehouse, "RECEIPT");
+        var input = replacementInput(id, round, replacement).put("originalDisposition", "FACTORY_DESTROYED");
+        long version = privateDetail(fixture.warehouse, id).path("version").asLong();
+        ok(post(fixture.warehouse, path(id, "/rounds/" + round + "/replacements"), version, key(), input));
+        var detail = privateDetail(fixture.warehouse, id);
+        assertFalse(detail.path("actions").path("receive").asBoolean());
+        long lock = db.queryForObject("SELECT id FROM fams_asset_business_lock"
+                + " WHERE asset_id=951020 AND released_at IS NULL", Long.class);
+        version = detail.path("version").asLong();
+        var received = post(fixture.warehouse, path(id, "/rounds/" + round + "/receive-original"),
+                version, key(), movement(id, round, fixture.warehouse, true, "RESTORED"));
+        assertEquals(409, received.statusCode());
+        assertTrue(received.body().contains("REPAIR_FACTORY_ORIGINAL_ALREADY_DESTROYED"));
+        var report = guards(detail);
+        report.put("roundVersion", privateRound(fixture.warehouse, id, round).path("version").asLong());
+        report.put("lastSeenAt", now()).put("lastLocation", "Manufacturer site")
+                .put("circumstances", "Attempt to file a missing report after documented destruction");
+        var reported = factoryLossPost(fixture.warehouse, "/factory/" + id + "/rounds/" + round,
+                version, key(), report);
+        assertEquals(409, reported.statusCode());
+        assertTrue(reported.body().contains("REPAIR_FACTORY_ORIGINAL_ALREADY_DESTROYED"));
+        assertEquals(lock, db.queryForObject("SELECT id FROM fams_asset_business_lock WHERE asset_id=951020"
+                + " AND business_type='REPAIR' AND released_at IS NULL", Long.class));
+        assertEquals("DISPATCHED", db.queryForObject("SELECT round_status FROM fams_repair_factory_round WHERE id=?",
+                String.class, round));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_repair_factory_round WHERE received_at IS NOT NULL"));
+    }
+
     private ObjectNode replacementInput(String id, String round, String object) throws Exception {
         replacementNumbering();
         var input = guards(privateDetail(fixture.warehouse, id));
