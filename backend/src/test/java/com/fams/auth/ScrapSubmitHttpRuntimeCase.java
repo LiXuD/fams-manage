@@ -19,6 +19,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.List;
 import java.util.UUID;
 
 @SpringBootTest(
@@ -218,6 +219,42 @@ class ScrapSubmitHttpRuntimeCase {
                 "SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
         assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock"
                 + " WHERE asset_id=951020 AND released_at IS NULL", Long.class));
+    }
+
+    @Test
+    void cancellationRestoresValidCustodyAndRetainsInvalidCustodyForCorrection() throws Exception {
+        var json = new tools.jackson.databind.ObjectMapper();
+        var submitted = submit(fixture.employee, UUID.randomUUID().toString(), INPUT);
+        assertEquals(200, submitted.statusCode(), submitted.body());
+        String id = json.readTree(submitted.body()).path("id").asText();
+        String body = "{\"assetVersion\":1,\"lockVersion\":0,\"reason\":\"撤回报废申请\"}";
+        assertEquals(403, write(fixture.other, id, "cancel", 0, UUID.randomUUID().toString(), body).statusCode());
+        assertEquals(409, write(fixture.employee, id, "cancel", 1, UUID.randomUUID().toString(), body).statusCode());
+        String key = UUID.randomUUID().toString();
+        var cancelled = write(fixture.employee, id, "cancel", 0, key, body);
+        assertEquals(200, cancelled.statusCode(), cancelled.body());
+        assertEquals("CANCELLED", json.readTree(cancelled.body()).path("status").asText());
+        assertEquals(cancelled.body(), write(fixture.employee, id, "cancel", 0, key, body).body());
+        assertEquals("IN_USE", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock"
+                + " WHERE asset_id=951020 AND released_at IS NULL", Long.class));
+        submitted = submit(fixture.employee, UUID.randomUUID().toString(), INPUT.replace("\"assetVersion\":0", "\"assetVersion\":2"));
+        assertEquals(200, submitted.statusCode(), submitted.body());
+        id = json.readTree(submitted.body()).path("id").asText();
+        var approval = write(fixture.admin, id, "decision", 0, UUID.randomUUID().toString(),
+                "{\"assetVersion\":3,\"lockVersion\":0,\"result\":\"APPROVE\",\"reason\":\"核对完毕\",\"approvedDisposition\":\"销毁\"}");
+        assertEquals(200, approval.statusCode(), approval.body());
+        body = body.replace("\"assetVersion\":1", "\"assetVersion\":3");
+        assertEquals(409, write(fixture.employee, id, "cancel", 1, UUID.randomUUID().toString(), body).statusCode());
+        db.update("UPDATE fams_employee SET status='DISABLED' WHERE id=951002");
+        var frozen = write(fixture.admin, id, "cancel", 1, UUID.randomUUID().toString(), body);
+        assertEquals(200, frozen.statusCode(), frozen.body());
+        assertEquals("RESTORE_REQUIRED", json.readTree(frozen.body()).path("status").asText());
+        assertEquals("PENDING_SCRAP", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock"
+                + " WHERE asset_id=951020 AND released_at IS NULL", Long.class));
+        assertEquals(List.of("RESTORE_REQUIRED"), db.queryForList("SELECT todo_type FROM fams_todo"
+                + " WHERE business_type='SCRAP' AND business_id=? AND todo_status='OPEN'", String.class, id));
     }
 
     @Test

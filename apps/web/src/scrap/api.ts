@@ -9,7 +9,7 @@ export interface ScrapRequest {
   sourceBusinessId?: string | null;
   factoryDisposition?: "FACTORY_RETAINED" | "FACTORY_DESTROYED";
   source: { assetCode: string; name: string; serialNumber: string };
-  actions: { decide: boolean; claim: boolean; execute: boolean; executeLoss?: boolean; executeFactory?: boolean; dispose?: boolean };
+  actions: { decide: boolean; cancel?: boolean; claim: boolean; execute: boolean; executeLoss?: boolean; executeFactory?: boolean; dispose?: boolean };
   decision: { decision?: { approvedDisposition?: string } } | null;
   disposition: { disposition_status: string; due_date: string | null; version?: number;
     completion?: { occurredAt: string; method: string; recipient?: string; operatorName?: string } } | null;

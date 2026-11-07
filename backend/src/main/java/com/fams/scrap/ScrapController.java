@@ -114,6 +114,14 @@ public class ScrapController {
         return review.executeFactory(actors.capture(), id, version, key, input);
     }
 
+    @PostMapping("/{id}/cancel")
+    ScrapReviewService.Receipt cancel(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.Cancellation input) {
+        return review.cancel(actors.capture(), id, version, key, input);
+    }
+
     @PostMapping("/{id}/decision")
     ScrapReviewService.Receipt decide(@PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,

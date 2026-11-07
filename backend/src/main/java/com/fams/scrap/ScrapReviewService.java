@@ -82,8 +82,77 @@ public class ScrapReviewService {
     public record Claim(@NotNull @PositiveOrZero Long assetVersion,
             @NotNull @PositiveOrZero Long lockVersion) {}
 
+    public record Cancellation(@NotNull @PositiveOrZero Long assetVersion,
+            @NotNull @PositiveOrZero Long lockVersion,
+            @NotBlank @Size(max = 1000) String reason) {}
+
     public record Receipt(String id, String assetId, long version, long assetVersion,
             long ownershipVersion, String status, String processorAccountId) {}
+
+    static boolean mayCancel(Current current, Map<String, Object> request) {
+        if (!"STANDALONE".equals(request.get("source_type"))) {
+            return false;
+        }
+        Object status = request.get("request_status");
+        if ("PENDING_ADMIN_DECISION".equals(status)) {
+            return current.has(Role.ASSET_ADMIN) || Objects.equals(current.id(), request.get("creator_account_id"));
+        }
+        return current.has(Role.ASSET_ADMIN)
+                && List.of("WAITING_WAREHOUSE_CLAIM", "PROCESSING").contains(status);
+    }
+
+    public Receipt cancel(Actor actor, long id, long version, UUID key, Cancellation input) {
+        var current = actors.revalidateLocked(actor);
+        var rows = db.queryForList("SELECT * FROM fams_scrap_request WHERE id=? FOR UPDATE", id);
+        if (rows.isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_NOT_FOUND", 404);
+        }
+        var request = rows.getFirst();
+        boolean admin = current.has(Role.ASSET_ADMIN);
+        if (!admin && !Objects.equals(current.id(), request.get("creator_account_id"))) {
+            throw new AssetHandoverPort.Failure("SCRAP_CANCEL_FORBIDDEN", 403);
+        }
+        String operation = "CANCEL:" + id;
+        String hash = fingerprint(version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        if (!mayCancel(current, request) || number(request, "version") != version
+                || number(request, "asset_version") != input.assetVersion()) {
+            throw new AssetHandoverPort.Failure("SCRAP_CANCEL_NOT_ALLOWED", 409);
+        }
+        long asset = number(request, "asset_id");
+        var time = now();
+        assets.requirePending(asset, input.assetVersion(), id, input.lockVersion());
+        var source = json.readTree(request.get("source_snapshot_json").toString());
+        boolean restored = !loans.hasOpenBorrowing(asset)
+                && assets.restoreStandaloneCancellation(asset, input.assetVersion(), id, source, current.id(), time);
+        long assetVersion = restored ? input.assetVersion() + 1 : input.assetVersion();
+        String status = restored ? "CANCELLED" : "RESTORE_REQUIRED";
+        if (restored) {
+            if (db.update("UPDATE fams_asset_business_lock SET released_at=?,release_reason='SCRAP_CANCELLED',"
+                    + "lock_version=lock_version+1 WHERE asset_id=? AND business_type='SCRAP' AND business_id=?"
+                    + " AND business_item_id=? AND lock_version=? AND released_at IS NULL",
+                    time, asset, id, id, input.lockVersion()) != 1) {
+                throw new AssetHandoverPort.Failure("SCRAP_ASSET_OR_LOCK_CHANGED", 409);
+            }
+        } else {
+            todo(id, "RESTORE_REQUIRED", "ASSET_ADMIN", null, time);
+        }
+        db.update("UPDATE fams_scrap_request SET request_status=?,asset_version=?,version=version+1,updated_at=? WHERE id=?",
+                status, assetVersion, time, id);
+        for (String task : List.of("APPROVAL", "CLAIM", "EXECUTE")) {
+            closeTodo(id, task, time);
+        }
+        Role role = admin ? Role.ASSET_ADMIN : current.roles().stream().sorted().findFirst()
+                .orElseThrow(() -> new AssetHandoverPort.Failure("SCRAP_CANCEL_FORBIDDEN", 403));
+        audit(actor, current, role, id, version, restored ? "SCRAP_CANCELLED" : "SCRAP_CANCEL_RESTORE_REQUIRED",
+                Map.of("reason", input.reason().strip()), time);
+        return remember(current, operation, key, hash, new Receipt(Long.toString(id), Long.toString(asset),
+                version + 1, assetVersion, number(request, "ownership_version"), status,
+                Objects.toString(request.get("processor_account_id"), null)), time);
+    }
 
     public Receipt decide(Actor actor, long id, long version, UUID key, Decision input) {
         var current = current(actor, Role.ASSET_ADMIN);

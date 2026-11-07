@@ -139,6 +139,12 @@ public class AssetScrapPort {
                 && restoreStandalone(id, version, requestId, source.path("lifecycle_status").asText(), actor, time);
     }
 
+    public boolean restoreStandaloneCancellation(long asset, long version, long request, JsonNode source,
+            long actor, Instant time) {
+        return hasFrozenCustody(asset, version, source, "NORMAL")
+                && restoreStandalone(asset, version, request, source.path("lifecycle_status").asText(), actor, time);
+    }
+
     public boolean restoreRepair(long asset, long version, long requestId, JsonNode source, long actor, Instant time,
             boolean factory) {
         if (!hasFrozenCustody(asset, version, source, "NORMAL")
