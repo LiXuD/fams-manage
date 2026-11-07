@@ -8,6 +8,8 @@ import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 import com.fams.loss.LossScrapSourcePort;
+import com.fams.loan.LoanRepairPort;
+import com.fams.repair.RepairService;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
@@ -49,12 +51,13 @@ public class ScrapReviewService {
     private final AssetScrapPort assets;
     private final com.fams.loan.LoanLossPort loans;
     private final LossScrapSourcePort losses;
+    private final RepairService repairs;
     private final com.fams.auth.ScrapSensitiveAccess sensitive;
     private final ObjectProvider<AttachmentEvidencePort> evidence;
 
     public ScrapReviewService(JdbcTemplate db, ObjectMapper json, Clock clock,
             RequisitionActorContext actors, AssetScrapPort assets, com.fams.loan.LoanLossPort loans,
-            LossScrapSourcePort losses, com.fams.auth.ScrapSensitiveAccess sensitive,
+            LossScrapSourcePort losses, RepairService repairs, com.fams.auth.ScrapSensitiveAccess sensitive,
             ObjectProvider<AttachmentEvidencePort> evidence) {
         this.db = db;
         this.json = json;
@@ -63,6 +66,7 @@ public class ScrapReviewService {
         this.assets = assets;
         this.loans = loans;
         this.losses = losses;
+        this.repairs = repairs;
         this.sensitive = sensitive;
         this.evidence = evidence;
     }
@@ -106,7 +110,16 @@ public class ScrapReviewService {
         }
         long asset = number(request, "asset_id");
         var time = now();
-        String status = "WAITING_WAREHOUSE_CLAIM";
+        boolean repairSource = "REPAIR".equals(request.get("source_type"));
+        if (approve && repairSource) {
+            var proof = json.readTree(request.get("source_snapshot_json").toString()).path("repairEvidence");
+            if (request.get("processor_account_id") == null || !proof.has("repairVersion")
+                    || !repairs.canRestoreFromScrap(number(request, "source_business_id"), proof.path("repairVersion").asLong(-1),
+                    asset, input.assetVersion(), number(request, "processor_account_id"), repairBorrowing(proof))) {
+                throw new AssetHandoverPort.Failure("SCRAP_SOURCE_OR_OWNERSHIP_CHANGED", 409);
+            }
+        }
+        String status = repairSource ? "PROCESSING" : "WAITING_WAREHOUSE_CLAIM";
         long assetVersion = input.assetVersion();
         if (!approve) {
             var source = json.readTree(request.get("source_snapshot_json").toString());
@@ -114,11 +127,14 @@ public class ScrapReviewService {
                 case "STANDALONE" -> assets.restoreStandalone(asset, assetVersion, id,
                         source.path("lifecycle_status").asText(), current.id(), time);
                 case "LOSS" -> restoreLoss(asset, assetVersion, id, source, current.id(), time);
+                case "REPAIR" -> restoreRepair(actor, current, request, assetVersion, input.lockVersion(), source, time);
                 default -> false;
             };
             status = restored ? "REJECTED" : "RESTORE_REQUIRED";
             if (restored) {
                 assetVersion++;
+            }
+            if (restored && !repairSource) {
                 db.update("UPDATE fams_asset_business_lock SET released_at=?,release_reason='SCRAP_REJECTED',"
                         + "lock_version=lock_version+1 WHERE asset_id=? AND business_type='SCRAP'"
                         + " AND business_id=? AND business_item_id=? AND released_at IS NULL",
@@ -130,7 +146,9 @@ public class ScrapReviewService {
                 status, json.writeValueAsString(Map.of("decision", input, "decidedBy", Long.toString(current.id()),
                         "decidedAt", time, "attachmentEvidence", attachments)), assetVersion, time, id);
         closeTodo(id, "APPROVAL", time);
-        if (approve) {
+        if (approve && repairSource) {
+            todo(id, "EXECUTE", "WAREHOUSE_OPERATOR", number(request, "processor_account_id"), time);
+        } else if (approve) {
             todo(id, "CLAIM", "WAREHOUSE_OPERATOR", null, time);
         } else if ("RESTORE_REQUIRED".equals(status)) {
             todo(id, "RESTORE_REQUIRED", "ASSET_ADMIN", null, time);
@@ -138,7 +156,34 @@ public class ScrapReviewService {
         String action = approve ? "SCRAP_APPROVED" : "SCRAP_REJECTED";
         audit(actor, current, Role.ASSET_ADMIN, id, version, action, input, time);
         return remember(current, operation, key, hash,
-                new Receipt(Long.toString(id), Long.toString(asset), version + 1, assetVersion, 0, status, null), time);
+                new Receipt(Long.toString(id), Long.toString(asset), version + 1, assetVersion,
+                        number(request, "ownership_version"), status,
+                        repairSource && request.get("processor_account_id") != null ? request.get("processor_account_id").toString() : null), time);
+    }
+
+    private boolean restoreRepair(Actor actor, Current current, Map<String, Object> request,
+            long assetVersion, long lockVersion, tools.jackson.databind.JsonNode source, Instant time) {
+        var proof = source.path("repairEvidence");
+        if (!proof.has("repairVersion") || request.get("processor_account_id") == null) {
+            return false;
+        }
+        long asset = number(request, "asset_id"), id = number(request, "id"), repair = number(request, "source_business_id");
+        long repairVersion = proof.path("repairVersion").asLong(-1), processor = number(request, "processor_account_id");
+        if (!repairs.canRestoreFromScrap(repair, repairVersion, asset, assetVersion, processor, repairBorrowing(proof))
+                || !assets.restoreRepair(asset, assetVersion, id, source, current.id(), time)) {
+            return false;
+        }
+        repairs.restoreFromScrap(actor, current, repair, repairVersion, asset, id, lockVersion, assetVersion + 1, processor);
+        return true;
+    }
+
+    private LoanRepairPort.Context repairBorrowing(tools.jackson.databind.JsonNode proof) {
+        var borrowing = proof.path("borrowing");
+        return borrowing.isMissingNode() || borrowing.isNull() ? null : json.readValue(borrowing.toString(), LoanRepairPort.Context.class);
+    }
+
+    static boolean physicalSource(Object source) {
+        return "STANDALONE".equals(source) || "REPAIR".equals(source);
     }
 
     private boolean restoreLoss(long asset, long version, long id, tools.jackson.databind.JsonNode source,
@@ -211,7 +256,7 @@ public class ScrapReviewService {
             return prior;
         }
         var row = guarded(id, version, input.assetVersion(), input.lockVersion(), "PROCESSING");
-        if (!"STANDALONE".equals(row.get("source_type"))
+        if (!physicalSource(row.get("source_type"))
                 || number(row, "ownership_version") != input.ownershipVersion()) {
             throw new AssetHandoverPort.Failure("SCRAP_SOURCE_OR_OWNERSHIP_CHANGED", 409);
         }
@@ -241,7 +286,20 @@ public class ScrapReviewService {
             throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_DATE_INVALID", 400);
         }
         long asset = number(row, "asset_id");
-        loans.requireRecovery(asset, "IN_USE", null, null);
+        if ("REPAIR".equals(row.get("source_type"))) {
+            var source = json.readTree(row.get("source_snapshot_json").toString());
+            var proof = source.path("repairEvidence");
+            var borrowing = repairBorrowing(proof);
+            assets.requireFrozenRepair(asset, input.assetVersion(), source);
+            repairs.closeFromScrap(actor, current, number(row, "source_business_id"), proof.path("repairVersion").asLong(-1),
+                    asset, input.assetVersion(), id, borrowing);
+            if (borrowing != null) {
+                loans.terminateLost(asset, borrowing.borrowerEmployeeId(), borrowing.organizationId(),
+                        borrowing.id(), borrowing.version(), time);
+            }
+        } else {
+            loans.requireRecovery(asset, "IN_USE", null, null);
+        }
         long assetVersion = assets.executeStandalone(asset, input.assetVersion(), id, input.lockVersion(),
                 input.observedCode(), input.observedSerial(), input.locationId(), input.locationVersion(), current.id(), time);
         String execution = json.writeValueAsString(input);
@@ -388,7 +446,7 @@ public class ScrapReviewService {
             }
             return json.readValue(prior.getFirst().get("response_json").toString(), DispositionReceipt.class);
         }
-        if (!"EXECUTED".equals(request.get("request_status")) || !"STANDALONE".equals(request.get("source_type"))
+        if (!"EXECUTED".equals(request.get("request_status")) || !physicalSource(request.get("source_type"))
                 || number(request, "version") != input.requestVersion()
                 || number(request, "ownership_version") != input.ownershipVersion()
                 || !"PENDING_DISPOSITION".equals(disposition.get("disposition_status"))

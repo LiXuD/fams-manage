@@ -7,6 +7,7 @@ import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.loan.LoanLossPort;
 import com.fams.loss.LossScrapSourcePort;
+import com.fams.repair.RepairService;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -43,9 +44,10 @@ public class ScrapService {
     private final AssetScrapPort assets;
     private final LossScrapSourcePort losses;
     private final LoanLossPort loans;
+    private final RepairService repairs;
 
     public ScrapService(JdbcTemplate db, ObjectMapper json, Clock clock,
-            RequisitionActorContext actors, AssetScrapPort assets, LossScrapSourcePort losses, LoanLossPort loans) {
+            RequisitionActorContext actors, AssetScrapPort assets, LossScrapSourcePort losses, LoanLossPort loans, RepairService repairs) {
         this.db = db;
         this.json = json;
         this.clock = clock;
@@ -53,6 +55,7 @@ public class ScrapService {
         this.assets = assets;
         this.losses = losses;
         this.loans = loans;
+        this.repairs = repairs;
     }
 
     public record Submission(
@@ -79,7 +82,7 @@ public class ScrapService {
             return prior;
         }
         var source = assets.standaloneSource(current, input.assetId(), input.assetVersion());
-        return create(actor, current, "SUBMIT", key, hash, input, "STANDALONE", null, source, input);
+        return create(actor, current, "SUBMIT", key, hash, input, "STANDALONE", null, source, input, null);
     }
 
     public Receipt submitFromLoss(Actor actor, long reportId, long version, UUID key, LossSubmission input) {
@@ -110,8 +113,42 @@ public class ScrapService {
         source.put("lossEvidence", proof);
         var submission = new Submission(loss.assetId(), input.assetVersion(), input.reason(),
                 input.observedCondition(), input.proposedDisposition());
-        return create(actor, current, operation, key, hash, submission, "LOSS", reportId, source, input);
+        return create(actor, current, operation, key, hash, submission, "LOSS", reportId, source, input, null);
     }
+
+    public record RepairSubmission(@NotNull @PositiveOrZero Long assetVersion,
+            @NotNull @PositiveOrZero Long ownershipVersion, @NotNull @PositiveOrZero Long lockVersion,
+            @NotBlank @Size(max = 2000) String reason, @NotBlank @Size(max = 2000) String observedCondition,
+            @NotBlank @Size(max = 500) String proposedDisposition) {}
+
+    private record RepairLink(RepairService.ScrapSource source, long lockVersion) {}
+
+    public Receipt submitFromRepair(Actor actor, long repairId, long version, UUID key, RepairSubmission input) {
+        var current = actors.revalidateLocked(actor);
+        if (!current.has(com.fams.auth.Role.WAREHOUSE_OPERATOR)) {
+            throw new AssetHandoverPort.Failure("SCRAP_ROLE_REQUIRED", 403);
+        }
+        String operation = "SUBMIT_REPAIR:" + repairId;
+        String hash = fingerprint(new RepairIntent(version, input));
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var repair = repairs.scrapSource(actor, repairId, version, input.assetVersion(), input.ownershipVersion(), input.lockVersion());
+        var source = new LinkedHashMap<>(assets.repairSource(repair.assetId(), input.assetVersion()));
+        var proof = new LinkedHashMap<String, Object>();
+        proof.put("repairVersion", version + 1);
+        proof.put("original", json.readTree(repair.originalSnapshot()));
+        proof.put("context", json.readTree(repair.contextJson()));
+        proof.put("borrowing", repair.borrowing());
+        source.put("repairEvidence", proof);
+        var submission = new Submission(repair.assetId(), input.assetVersion(), input.reason(),
+                input.observedCondition(), input.proposedDisposition());
+        return create(actor, current, operation, key, hash, submission, "REPAIR", repairId, source, input,
+                new RepairLink(repair, input.lockVersion()));
+    }
+
+    private record RepairIntent(long repairVersion, RepairSubmission input) {}
 
     private Receipt replay(Current current, String operation, UUID key, String hash) {
         var prior = db.queryForList("SELECT payload_sha256,response_json FROM fams_scrap_receipt WHERE actor_account_id=?"
@@ -126,23 +163,28 @@ public class ScrapService {
     }
 
     private Receipt create(Actor actor, Current current, String operation, UUID key, String hash,
-            Submission input, String sourceType, Long sourceId, Map<String, Object> source, Object facts) {
+            Submission input, String sourceType, Long sourceId, Map<String, Object> source, Object facts, RepairLink link) {
         var time = clock.instant().truncatedTo(ChronoUnit.MILLIS);
         db.update(
                 "INSERT INTO fams_scrap_request(asset_id,creator_account_id,source_type,source_business_id,"
                         + "source_snapshot_json,reason,observed_condition,proposed_disposition,"
-                        + "asset_version,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                        + "asset_version,created_at,updated_at,processor_account_id,ownership_version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 input.assetId(), current.id(), sourceType, sourceId, json.writeValueAsString(source), input.reason().strip(),
                 input.observedCondition().strip(), input.proposedDisposition().strip(), input.assetVersion() + 1,
-                time, time);
+                time, time, link == null ? null : current.id(), link == null ? 0 : 1);
         long id = Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
-        db.update(
-                "INSERT INTO fams_asset_business_lock(asset_id,business_type,business_id,business_item_id,"
-                        + "acquired_at) VALUES (?,'SCRAP',?,?,?)",
-                input.assetId(), id, id, time);
-        long assetVersion = "LOSS".equals(sourceType)
-                ? assets.freezeLoss(input.assetId(), input.assetVersion(), id, source.get("lifecycle_status").toString(), current.id(), time)
-                : assets.freezeStandalone(input.assetId(), input.assetVersion(), id, current.id(), time);
+        if (link == null) {
+            db.update("INSERT INTO fams_asset_business_lock(asset_id,business_type,business_id,business_item_id,"
+                    + "acquired_at) VALUES (?,'SCRAP',?,?,?)", input.assetId(), id, id, time);
+        } else {
+            repairs.handoffToScrap(actor, current, link.source(), id, link.lockVersion(), input.assetVersion() + 1);
+        }
+        long assetVersion = switch (sourceType) {
+            case "LOSS" -> assets.freezeLoss(input.assetId(), input.assetVersion(), id,
+                    source.get("lifecycle_status").toString(), current.id(), time);
+            case "REPAIR" -> assets.freezeRepair(input.assetId(), input.assetVersion(), id, current.id(), time);
+            default -> assets.freezeStandalone(input.assetId(), input.assetVersion(), id, current.id(), time);
+        };
         db.update(
                 "INSERT INTO fams_todo(pool_type,business_type,business_id,todo_type,todo_status,opened_at)"
                         + " VALUES ('ASSET_ADMIN','SCRAP',?,'APPROVAL','OPEN',?)",

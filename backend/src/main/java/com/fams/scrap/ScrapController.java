@@ -85,6 +85,14 @@ public class ScrapController {
         return scrap.submitFromLoss(actors.capture(), reportId, version, key, input);
     }
 
+    @PostMapping("/from-repair/{repairId}")
+    ScrapService.Receipt submitFromRepair(@PathVariable @Positive long repairId,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapService.RepairSubmission input) {
+        return scrap.submitFromRepair(actors.capture(), repairId, version, key, input);
+    }
+
     @PostMapping("/{id}/decision")
     ScrapReviewService.Receipt decide(@PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
@@ -123,6 +131,20 @@ public class ScrapController {
             @RequestHeader("Idempotency-Key") UUID key,
             @Valid @RequestBody ScrapReviewService.DispositionCompletion input) {
         return review.completeDisposition(actors.capture(), id, version, key, input);
+    }
+
+    @ExceptionHandler(com.fams.repair.RepairFailure.class)
+    ResponseEntity<ErrorResponse> repairRejection(com.fams.repair.RepairFailure failure, HttpServletRequest request) {
+        UUID id = request.getAttribute("fams.request.id") instanceof UUID value ? value : UUID.randomUUID();
+        return ResponseEntity.status(failure.status()).body(new ErrorResponse(failure.getMessage(),
+                failure.getMessage(), id, Map.of()));
+    }
+
+    @ExceptionHandler(com.fams.loan.LoanRepairPort.Failure.class)
+    ResponseEntity<ErrorResponse> repairLoanRejection(com.fams.loan.LoanRepairPort.Failure failure, HttpServletRequest request) {
+        UUID id = request.getAttribute("fams.request.id") instanceof UUID value ? value : UUID.randomUUID();
+        return ResponseEntity.status(409).body(new ErrorResponse(failure.getMessage(),
+                failure.getMessage(), id, Map.of()));
     }
 
     @ExceptionHandler(com.fams.loss.LossFailure.class)

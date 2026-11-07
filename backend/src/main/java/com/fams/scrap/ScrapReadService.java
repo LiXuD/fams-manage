@@ -181,7 +181,7 @@ public class ScrapReadService {
         Map<String, Object> disposition = dispositions.isEmpty() ? null : new LinkedHashMap<>(dispositions.getFirst());
         boolean canDispose = disposition != null && actor.has(Role.WAREHOUSE_OPERATOR)
                 && Objects.equals(disposition.get("processor_account_id"), actor.id())
-                && "EXECUTED".equals(row.get("request_status")) && "STANDALONE".equals(row.get("source_type"))
+                && "EXECUTED".equals(row.get("request_status")) && ScrapReviewService.physicalSource(row.get("source_type"))
                 && "PENDING_DISPOSITION".equals(disposition.get("disposition_status"));
         if (disposition != null) {
             disposition.remove("processor_account_id");
@@ -201,7 +201,7 @@ public class ScrapReadService {
                         && "PENDING_ADMIN_DECISION".equals(row.get("request_status")),
                 "claim", actor.has(Role.WAREHOUSE_OPERATOR)
                         && "WAITING_WAREHOUSE_CLAIM".equals(row.get("request_status")),
-                "execute", owner && "PROCESSING".equals(row.get("request_status")) && "STANDALONE".equals(row.get("source_type")),
+                "execute", owner && "PROCESSING".equals(row.get("request_status")) && ScrapReviewService.physicalSource(row.get("source_type")),
                 "executeLoss", owner && "PROCESSING".equals(row.get("request_status")) && lossSource,
                 "dispose", canDispose));
         result.put("disposition", disposition);

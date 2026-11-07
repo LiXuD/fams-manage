@@ -381,6 +381,7 @@ public class RepairService {
         boolean pending = "PENDING_ADMIN_DECISION".equals(row.get("repair_status"));
         boolean processing =
                 "WAREHOUSE_PROCESSING".equals(row.get("repair_status"))
+                        && !locks.isEmpty()
                         && current.has(Role.WAREHOUSE_OPERATOR)
                         && java.util.Objects.equals(
                                 current.id(), nullable(row.get("processor_account_id")));
@@ -426,6 +427,8 @@ public class RepairService {
                                 json.readTree(row.get("source_snapshot_json").toString())
                                         .path("lifecycle")
                                         .asText());
+        actions.put("requestScrap", processing && row.get("accepted_at") != null && outstanding == null
+                && noCostHandling(row.get("allowed_method")));
         actions.put("deliverReturn", processing && away && outstanding == null && returnable);
         actions.put("changeReturnTarget", processing && away && outstanding == null && returnable);
         actions.put(
@@ -439,7 +442,7 @@ public class RepairService {
                 "reassign",
                 current.has(Role.ASSET_ADMIN)
                         && "WAREHOUSE_PROCESSING".equals(row.get("repair_status"))
-                        && row.get("processor_account_id") != null);
+                        && !locks.isEmpty() && row.get("processor_account_id") != null);
         actions.put(
                 "proxyReturn",
                 processing
@@ -457,6 +460,7 @@ public class RepairService {
             if (Boolean.TRUE.equals(factorySummary.get("followupOpen"))) {
                 for (var action :
                         List.of(
+                                "requestScrap",
                                 "acceptInPlace",
                                 "completeInPlace",
                                 "acceptAway",
@@ -932,6 +936,101 @@ public class RepairService {
                 input,
                 Role.WAREHOUSE_OPERATOR.name());
         return remember(current, operation, key, fingerprint, header(id));
+    }
+
+    public record ScrapSource(long repairId, long assetId, long repairVersion, long processorAccountId,
+            String originalSnapshot, String contextJson, LoanRepairPort.Context borrowing) {}
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ScrapSource scrapSource(Actor actor, long id, long version, long assetVersion, long ownership, long lockVersion) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.WAREHOUSE_OPERATOR);
+        var row = header(id);
+        owner(actor, current, row);
+        physicalGuard(actor, current, row, version, assetVersion, ownership, lockVersion);
+        if (row.get("accepted_at") == null) {
+            throw new RepairFailure(409, "REPAIR_PHYSICAL_ACCEPTANCE_REQUIRED");
+        }
+        long asset = number(row, "asset_id");
+        var borrowing = loans.open(asset);
+        loans.requireIdentity(asset, originalLoan(row), borrowing == null ? null : borrowing.version());
+        var context = new LinkedHashMap<String, Object>();
+        context.put("acceptedAt", wire(row.get("accepted_at")));
+        context.put("approval", json.readTree(row.get("approval_snapshot_json").toString()));
+        context.put("physicalHandling", wire(db.queryForList("SELECT * FROM fams_repair_physical_handling WHERE repair_id=?", id)));
+        context.put("approvedReturnTarget", wire(approvedTarget(row)));
+        context.put("ownershipVersion", ownership);
+        return new ScrapSource(id, asset, version, current.id(), row.get("source_snapshot_json").toString(),
+                json.writeValueAsString(context), borrowing);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void handoffToScrap(Actor actor, Current current, ScrapSource source, long scrap, long lockVersion, long nextAssetVersion) {
+        transferScrapLock(source.assetId(), source.repairId(), scrap, lockVersion, true);
+        db.update("UPDATE fams_repair_request SET asset_version=?,version=version+1,updated_at=? WHERE id=?",
+                nextAssetVersion, now(), source.repairId());
+        closeTodos(source.repairId());
+        audit(actor, current, Map.of("id", source.repairId()), "REPAIR_SCRAP_HANDED_OFF",
+                source.repairVersion(), source.repairVersion() + 1, Map.of("scrapId", Long.toString(scrap)), Role.WAREHOUSE_OPERATOR.name());
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean canRestoreFromScrap(long repair, long version, long asset, long assetVersion, long processor,
+            LoanRepairPort.Context borrowing) {
+        var row = header(repair);
+        return matchesScrapHandoff(row, version, asset, assetVersion, processor)
+                && !db.queryForList("SELECT a.id FROM fams_system_account a JOIN fams_account_role r ON r.account_id=a.id"
+                        + " JOIN fams_employee e ON e.id=a.employee_id JOIN fams_organization o ON o.id=e.organization_id"
+                        + " WHERE a.id=? AND a.status='ENABLED' AND r.role_code='WAREHOUSE_OPERATOR'"
+                        + " AND e.status='ACTIVE' AND o.status='ACTIVE' FOR UPDATE", processor).isEmpty()
+                && java.util.Objects.equals(loans.open(asset), borrowing);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void restoreFromScrap(Actor actor, Current current, long repair, long version, long asset, long scrap,
+            long lockVersion, long nextAssetVersion, long processor) {
+        transferScrapLock(asset, repair, scrap, lockVersion, false);
+        db.update("UPDATE fams_repair_request SET asset_version=?,version=version+1,updated_at=? WHERE id=?",
+                nextAssetVersion, now(), repair);
+        todo(repair, "PROCESS", "WAREHOUSE_OPERATOR", processor);
+        audit(actor, current, Map.of("id", repair), "REPAIR_SCRAP_RETURNED", version, version + 1,
+                Map.of("scrapId", Long.toString(scrap)), Role.ASSET_ADMIN.name());
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void closeFromScrap(Actor actor, Current current, long repair, long version, long asset, long assetVersion,
+            long scrap, LoanRepairPort.Context borrowing) {
+        var row = header(repair);
+        if (!matchesScrapHandoff(row, version, asset, assetVersion, current.id())
+                || !java.util.Objects.equals(loans.open(asset), borrowing)) {
+            throw new RepairFailure(409, "REPAIR_SCRAP_SOURCE_CHANGED");
+        }
+        db.update("UPDATE fams_repair_request SET repair_status='COMPLETED',completed_at=?,asset_version=?,"
+                + "version=version+1,updated_at=? WHERE id=?", now(), assetVersion + 1, now(), repair);
+        var origin = returnOrigin(repair);
+        if (origin != null) {
+            returned.progress(number(origin, "followup_id"), repair, "COMPLETED", null);
+        }
+        closeCollaborations(repair);
+        closeTodos(repair);
+        audit(actor, current, row, "REPAIR_CLOSED_BY_SCRAP", version, version + 1,
+                Map.of("scrapId", Long.toString(scrap)), Role.WAREHOUSE_OPERATOR.name());
+    }
+
+    private boolean matchesScrapHandoff(Map<String, Object> row, long version, long asset, long assetVersion, long processor) {
+        return "WAREHOUSE_PROCESSING".equals(row.get("repair_status")) && number(row, "version") == version
+                && number(row, "asset_id") == asset && number(row, "asset_version") == assetVersion
+                && java.util.Objects.equals(row.get("processor_account_id"), processor);
+    }
+
+    private void transferScrapLock(long asset, long repair, long scrap, long lockVersion, boolean toScrap) {
+        long from = toScrap ? repair : scrap, to = toScrap ? scrap : repair;
+        if (db.update("UPDATE fams_asset_business_lock SET business_type=?,business_id=?,business_item_id=?,lock_version=lock_version+1"
+                + " WHERE asset_id=? AND business_type=? AND business_id=? AND business_item_id=?"
+                + " AND lock_version=? AND released_at IS NULL", toScrap ? "SCRAP" : "REPAIR", to, to, asset,
+                toScrap ? "REPAIR" : "SCRAP", from, from, lockVersion) != 1) {
+            throw new RepairFailure(409, "REPAIR_SCRAP_LOCK_CHANGED");
+        }
     }
 
     public Map<String, Object> physicalCatalog(Actor actor, String kind, int page, int size) {

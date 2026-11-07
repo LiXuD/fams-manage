@@ -15,7 +15,7 @@ export interface Repair { id: string; assetId: string; creatorAccountId: string;
   approvedReturnTargets?: { id: string; target_json: RepairReturnTarget; approved_at: string }[];
   returnRecollections?: { handover_id: string; occurred_at: string; evidence: string }[];
   factorySummary?: FactorySummary;
-  photosAvailable?: boolean; photos?: RepairPhoto[]; actions?: { approve: boolean; claim: boolean; acceptInPlace: boolean; completeInPlace: boolean; addFaultPhoto: boolean; cancel: boolean; acceptAway?: boolean; closeInbound?: boolean; deliverReturn?: boolean; receiveReturn?: boolean; refuseReturn?: boolean; recollectReturn?: boolean; changeReturnTarget?: boolean; proxyReturn?: boolean };
+  photosAvailable?: boolean; photos?: RepairPhoto[]; actions?: { requestScrap?: boolean; approve: boolean; claim: boolean; acceptInPlace: boolean; completeInPlace: boolean; addFaultPhoto: boolean; cancel: boolean; acceptAway?: boolean; closeInbound?: boolean; deliverReturn?: boolean; receiveReturn?: boolean; refuseReturn?: boolean; recollectReturn?: boolean; changeReturnTarget?: boolean; proxyReturn?: boolean };
   inventoryEvidence?: { taskId: string; observationId: string; clientEventId: string; photoIds: string[] }[];
   returnOrigin?: { followupId: string; returnId: string; closedLoanId: string | null; processorAccountId: string } | null;
   history?: { id: string; action: string; actor_username: string; actor_role: string; occurred_at: string; detail_json: Record<string, unknown> }[]; historyTotal?: number }

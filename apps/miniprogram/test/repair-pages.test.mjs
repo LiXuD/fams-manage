@@ -37,3 +37,24 @@ test("initial fee policy rejects a zero or imprecise cumulative budget before co
  const f=fixture();let confirms=0;f.services.confirm=async()=>{confirms++;return true;};await reason(f);f.page.onApprovalMethod({detail:{value:"1"}});f.page.onFactoryCostPolicy({detail:{value:"1"}});
  for(const amount of ["0.00","1.001","1e2","-1","01.00"]){f.page.onField(field("factoryCostLimit",amount));await f.page.onAction(event({action:"approve"}));}assert.equal(confirms,0);assert.equal(writes(f).length,0);
 });
+
+test("linked scrap retains exact versions through hide and original retry without selecting the scrap as repair", async () => {
+ const f=fixture(),request=f.sessions.request;let lost=true;
+ f.detail.actions={requestScrap:true};
+ f.sessions.request=async(...args)=>{
+  const result=await request(...args);
+  if(args[0]!=="POST")return result;
+  if(lost){lost=false;f.detail.version=4;f.detail.actions={};throw Error("committed reply lost");}
+  return {id:"9007199254740999"};
+ };
+ await f.page.onShow();
+ for(const[name,value]of Object.entries({scrapReason:"原机无法继续维修",scrapCondition:"现场核对原机实物及原责任事实",scrapMethod:"实物待处置"}))f.page.onField(field(name,value));
+ await f.page.onScrap();assert.equal(f.page.data.retry,true);
+ f.page.onHide();await f.page.onShow();await f.page.onRetry();
+ assert.deepEqual(writes(f)[0],writes(f)[1]);
+ assert.equal(writes(f)[0].path,"/api/v1/mini/scrap-requests/from-repair/9");
+ assert.equal(writes(f)[0].mutation.version,3);
+ assert.deepEqual(writes(f)[0].body,{assetVersion:6,ownershipVersion:2,lockVersion:7,reason:"原机无法继续维修",observedCondition:"现场核对原机实物及原责任事实",proposedDisposition:"实物待处置"});
+ assert.equal(f.page.data.detail.id,"9");assert.equal(f.page.data.scrapReceiptId,"9007199254740999");
+ assert.equal(f.calls.some(item=>item.path==="/api/v1/mini/repairs/9007199254740999"),false);
+});
