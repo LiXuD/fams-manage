@@ -10,7 +10,7 @@ interface Scrap {
     sourceBusinessId?: string | null;
     factoryDisposition?: "FACTORY_RETAINED" | "FACTORY_DESTROYED";
     source: { assetCode: string; name: string; serialNumber: string };
-    actions: { decide: boolean; claim: boolean; execute: boolean; executeLoss?: boolean; executeFactory?: boolean; dispose?: boolean };
+    actions: { decide: boolean; cancel?: boolean; claim: boolean; execute: boolean; executeLoss?: boolean; executeFactory?: boolean; dispose?: boolean };
     decision: { decision?: { approvedDisposition?: string } } | null;
     disposition: { disposition_status: string; due_date: string | null; version?: number;
         completion?: { occurredAt: string; method: string; recipient?: string; operatorName?: string } } | null;
@@ -170,7 +170,7 @@ export function createScrapPage(getServices: () => MiniServices) {
         } catch (error) { if (current(epoch)) failure(page, error); } finally { finish(page, epoch); }
     };
     const prepare = (page: Context, action: string) => {
-        if (!editable(page) || !["submit", "approve", "reject", "claim", "execute", "executeLoss", "executeFactory"].includes(action)) return;
+        if (!editable(page) || !["submit", "approve", "reject", "claim", "execute", "executeLoss", "executeFactory", "cancel"].includes(action)) return;
         const data = page.data, row = data.detail;
         let path = base, body: Record<string, unknown>, version: number | undefined, summary: string;
         try {
@@ -182,7 +182,7 @@ export function createScrapPage(getServices: () => MiniServices) {
                 summary = "提交 " + asset.assetCode + " 报废申请，等待管理员确认。";
             } else {
                 const capability = action === "approve" || action === "reject" ? "decide" : action;
-                if (!row || row.lockVersion == null || !["decide", "claim", "execute", "executeLoss", "executeFactory"].includes(capability)
+                if (!row || row.lockVersion == null || !["decide", "claim", "execute", "executeLoss", "executeFactory", "cancel"].includes(capability)
                     || !row.actions[capability as keyof Scrap["actions"]]) return;
                 path += "/" + row.id + "/" + (capability === "decide" ? "decision" : action === "executeLoss" ? "execute-loss" : action === "executeFactory" ? "execute-factory" : action);
                 version = row.version; body = { assetVersion: row.assetVersion, lockVersion: row.lockVersion };
@@ -193,6 +193,10 @@ export function createScrapPage(getServices: () => MiniServices) {
                     body = { ...body, result: action === "approve" ? "APPROVE" : "REJECT", reason: data.decisionReason.trim(),
                         ...(action === "approve" ? { approvedDisposition: method } : {}) };
                     summary = action === "approve" ? "批准处置范围 " + method + (row.factoryDisposition ? "，由原库管凭厂家证明执行。" : "，等待库管办理。") : "驳回报废并核对原保管关系后恢复。";
+                } else if (action === "cancel") {
+                    if (!data.decisionReason.trim()) { page.setData({ error: "请填写取消原因。" }); return; }
+                    body = { ...body, reason: data.decisionReason.trim() };
+                    summary = "取消本次报废申请。系统会核对原保管关系，失效时保留冻结并交由管理员处理。";
                 } else if (action === "claim") summary = loss
                     ? "取得本单唯一处理权，核对遗失证据后执行。" : "取得本单唯一处理权，核验实物后执行。";
                 else if (action === "executeFactory") {

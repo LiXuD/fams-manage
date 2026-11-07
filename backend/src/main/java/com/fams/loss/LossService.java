@@ -220,11 +220,13 @@ public class LossService {
                 && current.has(Role.WAREHOUSE_OPERATOR) && "SEARCHING".equals(row.get("report_status")));
         actions.put("requestFactoryRecovery", factoryProcessor != null && recoveryOpen && applicant(current)
                 && "CONFIRMED_LOST".equals(row.get("report_status"))
+                && Boolean.TRUE.equals(recoveryAsset.get("factoryScrapEligible"))
                 && !Boolean.TRUE.equals(recoveryAsset.get("locked")));
         var original = json.readTree(row.get("source_snapshot_json").toString());
         actions.put("requestScrap", recoveryAsset != null && currentLifecycle.equals(original.path("lifecycle").asText())
                 && "LOST".equals(recoveryAsset.get("exceptionStatus"))
-                && Boolean.TRUE.equals(recoveryAsset.get("eligible"))
+                && (Boolean.TRUE.equals(recoveryAsset.get("eligible"))
+                        || Boolean.TRUE.equals(recoveryAsset.get("factoryScrapEligible")))
                 && !Boolean.TRUE.equals(recoveryAsset.get("locked"))
                 && LossScrapSourcePort.canSubmit(current, row)
                 && LossScrapSourcePort.confirmedScrapSource(row, original));

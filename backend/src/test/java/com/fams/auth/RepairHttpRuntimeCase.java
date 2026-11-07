@@ -689,7 +689,7 @@ class RepairHttpRuntimeCase {
                         "repair_id=" + id + " AND action='REPAIR_CONFLICT_REJECTED'"));
     }
 
-    private void borrowing(boolean expired) {
+    void borrowing(boolean expired) {
         db.update(
                 "INSERT INTO"
                     + " fams_asset_import_batch(id,actor_account_id,upload_key,source_sha256,source_bytes,source_xlsx,created_at,updated_at)"

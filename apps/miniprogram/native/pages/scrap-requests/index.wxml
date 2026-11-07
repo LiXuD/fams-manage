@@ -67,6 +67,10 @@ module.exports={state:function(value){return names[value]||value;}};
       <button data-action="approve" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">批准报废范围</button>
       <button data-action="reject" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">驳回报废申请</button>
     </view>
+    <view wx:if="{{detail.actions.cancel}}">
+      <view wx:if="{{!detail.actions.decide}}">取消原因<textarea value="{{decisionReason}}" data-field="decisionReason" bindinput="onField" maxlength="1000" disabled="{{busy || retry || confirmation || stale}}"/></view>
+      <button data-action="cancel" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">取消报废申请</button>
+    </view>
     <button wx:if="{{detail.actions.claim}}" data-action="claim" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">认领报废处理</button>
     <view wx:if="{{detail.actions.execute}}">
       <view class="title">核验原机并执行报废</view><view>批准范围 {{detail.decision.decision.approvedDisposition}}</view>

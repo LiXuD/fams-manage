@@ -272,7 +272,7 @@ async function catalog(kind: "location" | "employee") {
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 
-function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute" | "executeLoss" | "executeFactory") {
+function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute" | "executeLoss" | "executeFactory" | "cancel") {
   if (locked.value || stale.value) return;
   const row = detail.value;
   let path = "", body: Record<string, unknown>, version: number | undefined, summary: string;
@@ -302,6 +302,10 @@ function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute" |
       summary = action === "approve"
         ? "批准处置范围 " + method + (row.factoryDisposition ? "，由原库管凭厂家证明执行。" : "，等待库管办理。")
         : "驳回报废，核对原保管关系后恢复。";
+    } else if (action === "cancel") {
+      if (!decisionReason.value.trim()) { error.value = "请填写取消原因。"; return; }
+      body = { ...body, reason: decisionReason.value.trim() };
+      summary = "取消本次报废申请。系统会核对原保管关系，失效时保留冻结并交由管理员处理。";
     } else if (action === "claim") summary = row.sourceType === "LOSS"
       ? "取得本单唯一处理权，核对遗失证据后执行。" : "取得本单唯一处理权，核验实物后执行。";
     else if (action === "executeFactory") {
@@ -454,6 +458,10 @@ onBeforeUnmount(resetView);
           <button class="fams-button" data-kind="primary" type="button" @click="prepare('approve')">批准报废范围</button>
           <button class="fams-button" data-kind="danger" type="button" @click="prepare('reject')">驳回报废申请</button>
         </div>
+      </fieldset>
+      <fieldset v-if="detail.actions.cancel" :disabled="locked || stale">
+        <label v-if="!detail.actions.decide">取消原因<textarea v-model="decisionReason" maxlength="1000"/></label>
+        <button @click="prepare('cancel')">取消报废申请</button>
       </fieldset>
       <div v-if="detail.actions.claim" class="fams-panel-actions">
         <button class="fams-button" data-kind="secondary" type="button" :disabled="locked || stale" @click="prepare('claim')">认领报废处理</button>

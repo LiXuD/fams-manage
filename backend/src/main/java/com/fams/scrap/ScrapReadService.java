@@ -204,6 +204,7 @@ public class ScrapReadService {
         }
         result.put("actions", Map.of("decide", actor.has(Role.ASSET_ADMIN)
                         && "PENDING_ADMIN_DECISION".equals(row.get("request_status")),
+                "cancel", !locks.isEmpty() && ScrapReviewService.mayCancel(actor, row),
                 "claim", actor.has(Role.WAREHOUSE_OPERATOR)
                         && "WAITING_WAREHOUSE_CLAIM".equals(row.get("request_status")),
                 "execute", owner && "PROCESSING".equals(row.get("request_status")) && ScrapReviewService.physicalSource(row.get("source_type")),
