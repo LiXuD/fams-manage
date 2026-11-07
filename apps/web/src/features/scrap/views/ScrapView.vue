@@ -29,6 +29,7 @@ const FACTORY_DISPOSITION_SCOPE: Record<"FACTORY_RETAINED" | "FACTORY_DESTROYED"
 };
 const DISPOSITION_STATE_LABEL: Record<string, string> = { PENDING_DISPOSITION: "待实际处置", DISPOSED: "已处置", LOSS_WRITTEN_OFF: "遗失核销" };
 const APPROVE_SCOPE_REQUIRED_MESSAGE = "请填写本次原因，批准时须明确允许的处置范围。";
+const CANCEL_REASON_REQUIRED_MESSAGE = "请填写取消原因。";
 const FACTORY_OCCURRED_REQUIRED_MESSAGE = "请填写厂家凭证记载的实际处置时间。";
 const LOSS_EVIDENCE_REQUIRED_MESSAGE = "请填写至少10字的核销复核依据。";
 
@@ -138,6 +139,8 @@ const showFactoryProofLink = computed(() => {
 const factoryProofHref = computed(() => `/repairs/${detail.value?.sourceBusinessId ?? ""}`);
 const showApprovedScopeNote = computed(() => approvedScopeText.value !== "");
 const showApprovedScopeField = computed(() => !showApprovedScopeNote.value);
+/** 取消段与批准段共用 decisionReason 一个输入位；有决定权时该位已在批准段出现，不重复渲染。 */
+const showCancelReasonField = computed(() => detail.value !== null && !detail.value.actions.decide);
 
 function clearFacts() {
   places.value = []; people.value = []; location.value = ""; custodian.value = "";
@@ -303,7 +306,7 @@ function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute" |
         ? "批准处置范围 " + method + (row.factoryDisposition ? "，由原库管凭厂家证明执行。" : "，等待库管办理。")
         : "驳回报废，核对原保管关系后恢复。";
     } else if (action === "cancel") {
-      if (!decisionReason.value.trim()) { error.value = "请填写取消原因。"; return; }
+      if (!decisionReason.value.trim()) { error.value = CANCEL_REASON_REQUIRED_MESSAGE; return; }
       body = { ...body, reason: decisionReason.value.trim() };
       summary = "取消本次报废申请。系统会核对原保管关系，失效时保留冻结并交由管理员处理。";
     } else if (action === "claim") summary = row.sourceType === "LOSS"
@@ -459,9 +462,11 @@ onBeforeUnmount(resetView);
           <button class="fams-button" data-kind="danger" type="button" @click="prepare('reject')">驳回报废申请</button>
         </div>
       </fieldset>
-      <fieldset v-if="detail.actions.cancel" :disabled="locked || stale">
-        <label v-if="!detail.actions.decide">取消原因<textarea v-model="decisionReason" maxlength="1000"/></label>
-        <button @click="prepare('cancel')">取消报废申请</button>
+      <fieldset v-if="detail.actions.cancel" class="fams-card fams-stack" :disabled="locked || stale">
+        <label v-if="showCancelReasonField" class="fams-field fams-field-wide"><span class="fams-field-label">取消原因</span><textarea class="fams-control" v-model="decisionReason" maxlength="1000"/></label>
+        <div class="fams-panel-actions">
+          <button class="fams-button" data-kind="danger" type="button" @click="prepare('cancel')">取消报废申请</button>
+        </div>
       </fieldset>
       <div v-if="detail.actions.claim" class="fams-panel-actions">
         <button class="fams-button" data-kind="secondary" type="button" :disabled="locked || stale" @click="prepare('claim')">认领报废处理</button>
