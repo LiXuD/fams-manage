@@ -4,11 +4,11 @@ import { MiniRequestError, type FactoryEvidenceFile } from "./session.ts";
 interface Asset { id: string; assetCode: string; name: string; version: number; lifecycle?: string; responsibleEmployeeId?: string; departmentResponsibleEmployeeId?: string }
 interface Photo { objectId: string; filename: string; contentType: string }
 interface Recovery { request?: { destination?: string; facts?: Record<string,unknown> }; id: string; version: number; assetVersion: number; ownershipVersion: number; status: string; processorAccountId: string | null; actions: Record<string,boolean> }
-interface RecoveryAsset { version: number; serialNumber: string | null; locationId: string | null; locationVersion: number | null; locationName: string | null }
+interface RecoveryAsset { lifecycle?: string; version: number; serialNumber: string | null; locationId: string | null; locationVersion: number | null; locationName: string | null }
 interface Report { id: string; source: Asset & { factorySource?: { repairId: string; roundId: string } }; status: string; version: number; assetVersion: number; ownershipVersion: number; lockVersion: number;
     transferId?: string; returnId?: string | null; repairId?: string | null; recoveredAt?: string; recoveryAsset?: RecoveryAsset | null; recoveries?: Recovery[]; recoveriesTotal?: number; confirmedLostAt?: string; lastFollowUpAt?: string; lastSeenAt: string; lastLocation: string; circumstances: string; processorAccountId: string | null; nextReviewDate: string | null;
     actions?: Record<string, boolean>; photos?: Photo[]; history?: { id: string; action: string; actor_username: string; occurred_at: string }[] }
-interface Intent { readonly path: string; readonly key: string; readonly version: number; readonly body?: string; readonly file?: FactoryEvidenceFile; readonly label: string }
+interface Intent { readonly path: string; readonly lossReportId?: string; readonly key: string; readonly version: number; readonly body?: string; readonly file?: FactoryEvidenceFile; readonly label: string }
 interface Place { id: string; name: string; version: number }
 interface TransferSelection {
     organizations: TransferChoice[]; people: TransferChoice[]; places: TransferChoice[]; warehouses: TransferChoice[];
@@ -21,9 +21,10 @@ const blankTransfer = (): TransferSelection => ({
 });
 interface Data { transfer: TransferSelection; locations: Place[]; locationPage: number; locationTotal: number; selectedLocation: string; returnChecked: boolean; rows: Report[]; assets: Asset[]; detail: Report | null; page: number; total: number; assetPage: number; assetTotal: number; selectedAsset: string;
     factoryChecked: boolean; factoryDamaged: boolean; observedAssetCode: string; observedSerialNumber: string; foundDate: string; foundTime: string; recoveryEvidence: string; recoveryChecked: boolean; damagedChecked: boolean; repairFault: string; repairImpact: string; followUpOnly: boolean; relatedClues: string; inabilityReason: string; responsibilityEvidence: string; findings: string; confirmDate: string; confirmTime: string; reviewDate: string; reviewTime: string; busy: boolean; stale: boolean; retry: boolean; confirmation: string; pendingLabel: string; error: string; notice: string; lastDate: string; lastTime: string; lastLocation: string; circumstances: string;
+    scrapReason: string; scrapCondition: string; scrapReceiptId: string;
     reason: string; custodianVerification: string; searchedScope: string; searchDate: string; searchTime: string; nextReviewDate: string; photoPath: string; photoName: string }
 interface Context { data: Data; setData(update: Partial<Data>): void }
-const blank = (): Data => ({ transfer: blankTransfer(), locations: [], locationPage: 0, locationTotal: 0, rows: [], assets: [], detail: null, page: 1, total: 0, assetPage: 1, assetTotal: 0, selectedAsset: "", followUpOnly: false, observedAssetCode: "", observedSerialNumber: "", foundDate: "", foundTime: "", recoveryEvidence: "", recoveryChecked: false, returnChecked: false, selectedLocation: "", damagedChecked: false, factoryChecked: false, factoryDamaged: false, repairFault: "", repairImpact: "MEDIUM", relatedClues: "", inabilityReason: "", responsibilityEvidence: "", findings: "", confirmDate: "", confirmTime: "", reviewDate: "", reviewTime: "", busy: false, stale: true, retry: false, confirmation: "", pendingLabel: "", error: "", notice: "", lastDate: "", lastTime: "", lastLocation: "", circumstances: "", reason: "", custodianVerification: "", searchedScope: "", searchDate: "", searchTime: "", nextReviewDate: "", photoPath: "", photoName: "" });
+const blank = (): Data => ({ transfer: blankTransfer(), locations: [], locationPage: 0, locationTotal: 0, rows: [], assets: [], detail: null, page: 1, total: 0, assetPage: 1, assetTotal: 0, selectedAsset: "", followUpOnly: false, observedAssetCode: "", observedSerialNumber: "", foundDate: "", foundTime: "", recoveryEvidence: "", recoveryChecked: false, returnChecked: false, selectedLocation: "", damagedChecked: false, factoryChecked: false, factoryDamaged: false, repairFault: "", repairImpact: "MEDIUM", relatedClues: "", inabilityReason: "", responsibilityEvidence: "", findings: "", confirmDate: "", confirmTime: "", reviewDate: "", reviewTime: "", busy: false, stale: true, retry: false, confirmation: "", pendingLabel: "", error: "", notice: "", lastDate: "", lastTime: "", lastLocation: "", circumstances: "", scrapReason: "", scrapCondition: "", scrapReceiptId: "", reason: "", custodianVerification: "", searchedScope: "", searchDate: "", searchTime: "", nextReviewDate: "", photoPath: "", photoName: "" });
 const day = (date: Date) => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
 const time = (date: Date) => [date.getHours(), date.getMinutes()].map(value => String(value).padStart(2, "0")).join(":");
 function actual(date: string, clock: string, original?: string) {
@@ -74,14 +75,32 @@ export function createLossPage(getServices: () => MiniServices) {
         try {
             const result = (operation.file ? await services.sessions.uploadEvidence(operation.path, operation.file.path, operation)
                 : await services.sessions.request("POST", operation.path, operation.body === undefined ? undefined : JSON.parse(operation.body), operation)) as { id: string };
-            if (!current(epoch)) return; selectedId = result.id;
+            if (!current(epoch)) return; selectedId = operation.lossReportId ?? result.id;
             if (!await readState(page,epoch) || !current(epoch)) return;
-            pending = null; discard(operation.file); clearPhoto(); delete instants.last; delete instants.search; delete instants.found; page.setData({ transfer: blankTransfer(), observedAssetCode: "", observedSerialNumber: "", foundDate: "", foundTime: "", recoveryEvidence: "", recoveryChecked: false, returnChecked: false, selectedLocation: "", damagedChecked: false, factoryChecked: false, factoryDamaged: false, repairFault: "", repairImpact: "MEDIUM", relatedClues: "", inabilityReason: "", responsibilityEvidence: "", findings: "", confirmDate: "", confirmTime: "", reviewDate: "", reviewTime: "", retry: false, pendingLabel: "", lastDate: "", lastTime: "", lastLocation: "", circumstances: "", selectedAsset: "", reason: "", custodianVerification: "", searchedScope: "", searchDate: "", searchTime: "", nextReviewDate: "", photoPath: "", photoName: "", notice: "本次办理已记录。" });
+            pending = null; discard(operation.file); clearPhoto(); delete instants.last; delete instants.search; delete instants.found; page.setData({ transfer: blankTransfer(), observedAssetCode: "", observedSerialNumber: "", foundDate: "", foundTime: "", recoveryEvidence: "", recoveryChecked: false, returnChecked: false, selectedLocation: "", damagedChecked: false, factoryChecked: false, factoryDamaged: false, repairFault: "", repairImpact: "MEDIUM", relatedClues: "", inabilityReason: "", responsibilityEvidence: "", findings: "", confirmDate: "", confirmTime: "", reviewDate: "", reviewTime: "", retry: false, pendingLabel: "", lastDate: "", lastTime: "", lastLocation: "", circumstances: "", selectedAsset: "", reason: "", custodianVerification: "", searchedScope: "", searchDate: "", searchTime: "", nextReviewDate: "", photoPath: "", photoName: "",
+                scrapReason: "", scrapCondition: "", scrapReceiptId: operation.lossReportId ? result.id : page.data.scrapReceiptId,
+                notice: operation.lossReportId ? "关联报废申请已提交。" : "本次办理已记录。" });
         } catch (error) { if (current(epoch)) failure(page,error); } finally { finish(page,epoch); }
     };
     const prepare = (page: Context, action: string) => {
         if (!editable(page)) return;
         const row = page.data.detail, data = page.data; let path = base, body: unknown, label: string;
+        if (action === "requestScrap") {
+            const assetVersion = row?.recoveryAsset?.version;
+            if (!row?.actions?.requestScrap || assetVersion === undefined
+                || !Number.isSafeInteger(assetVersion) || assetVersion < 0) return;
+            if (!data.scrapReason.trim() || !data.scrapCondition.trim()) {
+                page.setData({ error: "请填写关联报废原因与确认遗失后的实际情况。" }); return;
+            }
+            label = "提交 " + row.source.assetCode + " 的关联报废申请。资产进入待报废，原保管责任继续保留。";
+            prepared = Object.freeze({ path: "/api/v1/mini/scrap-requests/from-loss/" + row.id, lossReportId: row.id,
+                key: services.createKey(), version: row.version, label, body: JSON.stringify({
+                    assetVersion, reason: data.scrapReason.trim(), observedCondition: data.scrapCondition.trim(),
+                    proposedDisposition: "遗失核销",
+                }) });
+            page.setData({ confirmation: label, error: "" });
+            return;
+        }
         try {
             if (action === "submit") {
                 const asset = data.assets.find(item => item.id === data.selectedAsset);
@@ -309,7 +328,7 @@ export function createLossPage(getServices: () => MiniServices) {
         async onRefresh(this: Context) { await read(this); },
         async onOpen(this: Context, event: { currentTarget: { dataset: { id: string } } }) { if (!editable(this) || !this.data.rows.some(row => row.id === event.currentTarget.dataset.id)) return; selectedId = event.currentTarget.dataset.id; this.setData({returnChecked:false,selectedLocation:"",locations:[],locationPage:0,locationTotal:0}); await read(this); },
         onAsset(this: Context, event: { currentTarget: { dataset: { id: string } } }) { if (editable(this) && this.data.assets.some(row => row.id === event.currentTarget.dataset.id)) this.setData({ selectedAsset: event.currentTarget.dataset.id }); },
-        onField(this: Context, event: { currentTarget: { dataset: { field: string } }; detail: { value: string } }) { const field = event.currentTarget.dataset.field; if (!editable(this) || !["lastDate","lastTime","lastLocation","circumstances","reason","custodianVerification","searchedScope","searchDate","searchTime","nextReviewDate","relatedClues","inabilityReason","responsibilityEvidence","findings","confirmDate","confirmTime","reviewDate","reviewTime","observedAssetCode","observedSerialNumber","foundDate","foundTime","recoveryEvidence","repairFault"].includes(field)) return; if (["lastDate","lastTime"].includes(field)) delete instants.last; if (["searchDate","searchTime"].includes(field)) delete instants.search; if (["confirmDate","confirmTime"].includes(field)) delete instants.confirm; if (["reviewDate","reviewTime"].includes(field)) delete instants.review; if (["foundDate","foundTime"].includes(field)) delete instants.found; this.setData({ [field]: event.detail.value }); },
+        onField(this: Context, event: { currentTarget: { dataset: { field: string } }; detail: { value: string } }) { const field = event.currentTarget.dataset.field; if (!editable(this) || !["lastDate","lastTime","lastLocation","circumstances","scrapReason","scrapCondition","reason","custodianVerification","searchedScope","searchDate","searchTime","nextReviewDate","relatedClues","inabilityReason","responsibilityEvidence","findings","confirmDate","confirmTime","reviewDate","reviewTime","observedAssetCode","observedSerialNumber","foundDate","foundTime","recoveryEvidence","repairFault"].includes(field)) return; if (["lastDate","lastTime"].includes(field)) delete instants.last; if (["searchDate","searchTime"].includes(field)) delete instants.search; if (["confirmDate","confirmTime"].includes(field)) delete instants.confirm; if (["reviewDate","reviewTime"].includes(field)) delete instants.review; if (["foundDate","foundTime"].includes(field)) delete instants.found; this.setData({ [field]: event.detail.value }); },
         onNow(this: Context, event: { currentTarget: { dataset: { kind: string } } }) { const kind = event.currentTarget.dataset.kind; if (!editable(this) || !["last","search","confirm","review","found"].includes(kind)) return; const now = new Date(); instants[kind] = now.toISOString(); this.setData(kind === "last" ? { lastDate: day(now), lastTime: time(now) } : kind === "search" ? { searchDate: day(now), searchTime: time(now) } : kind === "confirm" ? { confirmDate: day(now), confirmTime: time(now) } : kind === "review" ? { reviewDate: day(now), reviewTime: time(now) } : { foundDate: day(now), foundTime: time(now) }); },
         onRecoveryPrepare(this: Context, event: { currentTarget: { dataset: { action: string; id?: string } } }) { prepareRecovery(this,event.currentTarget.dataset.action,event.currentTarget.dataset.id); },
         async onLoadLocations(this: Context) {

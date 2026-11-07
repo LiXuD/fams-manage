@@ -20,6 +20,17 @@ const REQUEST_ID = /^[1-9][0-9]{0,18}$/;
 /** 两类附件的渲染顺序与段落标题同源，段落装配集中在 attachmentSections 一处。 */
 const ATTACHMENT_KINDS: ScrapAttachmentKind[] = ["request", "disposition"];
 const ATTACHMENT_LABEL: Record<ScrapAttachmentKind, string> = { request: "申请附件", disposition: "处置凭证" };
+/** 报失来源的批准范围与后端约定同源，不由前端改写；故报失单在处理中的读法是「待遗失核销」。 */
+const LOSS_DISPOSITION_METHOD = "遗失核销";
+const LOSS_PENDING_WRITE_OFF_TEXT = "待遗失核销";
+/** 厂家去向码在批准范围里的读法；与报失固定值同为「批准的处置范围」的只读来源。 */
+const FACTORY_DISPOSITION_SCOPE: Record<"FACTORY_RETAINED" | "FACTORY_DESTROYED", string> = {
+  FACTORY_RETAINED: "厂家收旧", FACTORY_DESTROYED: "厂家销毁",
+};
+const DISPOSITION_STATE_LABEL: Record<string, string> = { PENDING_DISPOSITION: "待实际处置", DISPOSED: "已处置", LOSS_WRITTEN_OFF: "遗失核销" };
+const APPROVE_SCOPE_REQUIRED_MESSAGE = "请填写本次原因，批准时须明确允许的处置范围。";
+const FACTORY_OCCURRED_REQUIRED_MESSAGE = "请填写厂家凭证记载的实际处置时间。";
+const LOSS_EVIDENCE_REQUIRED_MESSAGE = "请填写至少10字的核销复核依据。";
 
 interface AttachmentSection {
   kind: ScrapAttachmentKind; label: string; uploadLabel: string; canUpload: boolean; items: ScrapAttachment[];
@@ -48,29 +59,46 @@ const { prepared, pending, prepare: draft, confirm: adopt, settle, fail, cancel,
   failure: (cause) => cause instanceof ScrapApiError && cause.status >= 400 && cause.status < 500,
 });
 
+/** 报失来源单在处理中没有实物可验，读法改为「待遗失核销」；其余状态沿用域内映射。 */
+function rowStateText(row: Pick<ScrapRequest, "sourceType" | "status">): string {
+  return row.sourceType === "LOSS" && row.status === "PROCESSING" ? LOSS_PENDING_WRITE_OFF_TEXT : scrapRequestState(row);
+}
+/** 批准范围的只读来源：报失固定遗失核销，厂家换机取本单去向码，其余仍是管理员填写。 */
+function approvedScopeMethod(row: ScrapRequest): string {
+  return row.sourceType === "LOSS" ? LOSS_DISPOSITION_METHOD : row.factoryDisposition ? FACTORY_DISPOSITION_SCOPE[row.factoryDisposition] : "";
+}
+
 const locked = computed(() => busy.value || !!prepared.value || !!pending.value);
 const refreshDisabled = computed(() => busy.value || !!prepared.value);
 const requestRows = computed(() => rows.value.map((row) => ({
-  ...row, stateText: scrapRequestState(row), dueText: `计划处置 ${row.disposition?.due_date ?? ""}`,
+  ...row, stateText: rowStateText(row), dueText: `计划处置 ${row.disposition?.due_date ?? ""}`,
 })));
-const detailStateText = computed(() => detail.value ? scrapRequestState(detail.value) : "");
+const detailStateText = computed(() => detail.value ? rowStateText(detail.value) : "");
 const detailTitle = computed(() => detail.value ? `${detail.value.source.assetCode} · ${detail.value.source.name}` : "");
 const detailFactsText = computed(() => detail.value
   ? `${detailStateText.value} · 原因 ${detail.value.reason} · 现状 ${detail.value.observedCondition}` : "");
 const detailPlanText = computed(() => detail.value
   ? `建议处置 ${detail.value.proposedDisposition} · 当前处理库管 ${detail.value.processorAccountId || "尚未认领"}` : "");
 const approvedDispositionText = computed(() => detail.value?.decision?.decision?.approvedDisposition ?? "");
+/** 只读批准范围：报失与厂家来源无输入框，读数与 prepare 的口径同用 approvedScopeMethod。 */
+const approvedScopeText = computed(() => {
+  const row = detail.value;
+  if (!row) return "";
+  const method = approvedScopeMethod(row) || row.factoryDisposition || "";
+  return method ? `批准的处置范围 ${method}` : "";
+});
 const dispositionText = computed(() => {
   const row = detail.value?.disposition;
   if (!row) return "";
-  const state = row.disposition_status === "PENDING_DISPOSITION" ? "待实际处置"
-    : row.disposition_status === "DISPOSED" ? "已处置" : row.disposition_status;
-  return `处置进度 ${state} · 计划日期 ${row.due_date}`;
+  const state = DISPOSITION_STATE_LABEL[row.disposition_status] ?? row.disposition_status;
+  return `处置进度 ${state}${row.due_date ? ` · 计划日期 ${row.due_date}` : ""}`;
 });
 const completionText = computed(() => {
   const done = detail.value?.disposition?.completion;
   if (!done) return "";
-  return `实际处置 ${done.occurredAt} · ${done.method} · 处置对象 ${done.recipient} · 经办人 ${done.operatorName}`;
+  return `实际处置 ${done.occurredAt} · ${done.method}`
+    + (done.recipient ? ` · 处置对象 ${done.recipient}` : "")
+    + (done.operatorName ? ` · 经办人 ${done.operatorName}` : "");
 });
 const assetPrevDisabled = computed(() => assetPage.value === 1);
 const assetNextDisabled = computed(() => assetPage.value * PAGE_SIZE >= assetTotal.value);
@@ -101,6 +129,15 @@ const dispositionFiles = computed(() => attachments.value.disposition);
 const showDispositionEmptyNote = computed(() => dispositionFiles.value.length === 0);
 const dispositionDisabled = computed(() => locked.value || stale.value || capabilities.value?.canRead !== true);
 const previewImageShown = computed(() => preview.url !== "" && preview.mime !== "application/pdf");
+/** 厂家来源单只有决定权或厂家执行权时，才值得引导回原维修核对凭证；其余身份不显示。 */
+const showFactoryProofLink = computed(() => {
+  const row = detail.value;
+  return !!row?.factoryDisposition && !!row.sourceBusinessId
+    && (row.actions.decide || row.actions.executeFactory === true);
+});
+const factoryProofHref = computed(() => `/repairs/${detail.value?.sourceBusinessId ?? ""}`);
+const showApprovedScopeNote = computed(() => approvedScopeText.value !== "");
+const showApprovedScopeField = computed(() => !showApprovedScopeNote.value);
 
 function clearFacts() {
   places.value = []; people.value = []; location.value = ""; custodian.value = "";
@@ -235,7 +272,7 @@ async function catalog(kind: "location" | "employee") {
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 
-function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute") {
+function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute" | "executeLoss" | "executeFactory") {
   if (locked.value || stale.value) return;
   const row = detail.value;
   let path = "", body: Record<string, unknown>, version: number | undefined, summary: string;
@@ -252,17 +289,31 @@ function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute") 
     if (!row || row.lockVersion == null) return;
     const capability = action === "approve" || action === "reject" ? "decide" : action;
     if (!row.actions[capability]) return;
-    version = row.version; path = "/" + row.id + "/" + (capability === "decide" ? "decision" : action);
+    const segment = action === "executeLoss" ? "execute-loss" : action === "executeFactory" ? "execute-factory" : action;
+    version = row.version; path = "/" + row.id + "/" + (capability === "decide" ? "decision" : segment);
     body = { assetVersion: row.assetVersion, lockVersion: row.lockVersion };
     if (capability === "decide") {
-      if (!decisionReason.value.trim() || action === "approve" && !approved.value.trim()) {
-        error.value = "请填写本次原因，批准时须明确允许的处置范围。"; return;
+      const method = approvedScopeMethod(row) || approved.value.trim();
+      if (!decisionReason.value.trim() || action === "approve" && !method) {
+        error.value = APPROVE_SCOPE_REQUIRED_MESSAGE; return;
       }
       body = { ...body, result: action === "approve" ? "APPROVE" : "REJECT", reason: decisionReason.value.trim(),
-        ...(action === "approve" ? { approvedDisposition: approved.value.trim() } : {}) };
-      summary = action === "approve" ? "批准处置范围 " + approved.value.trim() + "，等待库管认领核实。" : "驳回报废，核对原保管关系后恢复。";
-    } else if (action === "claim") summary = "取得本单唯一处理权，核验实物后执行。";
-    else {
+        ...(action === "approve" ? { approvedDisposition: method } : {}) };
+      summary = action === "approve"
+        ? "批准处置范围 " + method + (row.factoryDisposition ? "，由原库管凭厂家证明执行。" : "，等待库管办理。")
+        : "驳回报废，核对原保管关系后恢复。";
+    } else if (action === "claim") summary = row.sourceType === "LOSS"
+      ? "取得本单唯一处理权，核对遗失证据后执行。" : "取得本单唯一处理权，核验实物后执行。";
+    else if (action === "executeFactory") {
+      const time = new Date(occurred.value);
+      if (!Number.isFinite(time.getTime())) { error.value = FACTORY_OCCURRED_REQUIRED_MESSAGE; return; }
+      body = { ...body, ownershipVersion: row.ownershipVersion, occurredAt: time.toISOString() };
+      summary = "依据本轮厂家证明执行 " + row.source.assetCode + " 报废并登记实际处置。";
+    } else if (action === "executeLoss") {
+      if (evidence.value.trim().length < 10) { error.value = LOSS_EVIDENCE_REQUIRED_MESSAGE; return; }
+      body = { ...body, ownershipVersion: row.ownershipVersion, evidence: evidence.value.trim() };
+      summary = "核销 " + row.source.assetCode + "，保留原遗失和保管历史。如有原借用，将终止原借用。";
+    } else {
       const place = places.value.find(item => item.id === location.value), person = people.value.find(item => item.id === custodian.value);
       const time = new Date(occurred.value), method = row.decision?.decision?.approvedDisposition;
       if (!place || !person || !physical.value || !method || !Number.isFinite(time.getTime())
@@ -385,6 +436,7 @@ onBeforeUnmount(resetView);
     <section v-if="detail" class="fams-panel fams-stack" aria-label="报废详情">
       <div class="fams-panel-head"><h2 class="fams-panel-title">{{ detailTitle }}</h2></div>
       <p>{{ detailFactsText }}</p>
+      <a v-if="showFactoryProofLink" :href="factoryProofHref">前往原维修核对厂家凭证</a>
       <p>{{ detailPlanText }}</p>
       <section v-if="capabilities" class="fams-card fams-stack" aria-label="报废附件">
         <p v-if="!capabilities.canRead">查看报废附件需要单独授权。</p>
@@ -396,7 +448,8 @@ onBeforeUnmount(resetView);
       </section>
       <fieldset v-if="detail.actions.decide" class="fams-card fams-stack" :disabled="locked || stale">
         <label class="fams-field fams-field-wide"><span class="fams-field-label">本次决定原因</span><textarea class="fams-control" v-model="decisionReason" maxlength="1000"/></label>
-        <label class="fams-field"><span class="fams-field-label">批准的处置范围</span><input class="fams-control" v-model="approved" maxlength="500"/></label>
+        <p v-if="showApprovedScopeNote">{{ approvedScopeText }}</p>
+        <label v-if="showApprovedScopeField" class="fams-field"><span class="fams-field-label">批准的处置范围</span><input class="fams-control" v-model="approved" maxlength="500"/></label>
         <div class="fams-panel-actions">
           <button class="fams-button" data-kind="primary" type="button" @click="prepare('approve')">批准报废范围</button>
           <button class="fams-button" data-kind="danger" type="button" @click="prepare('reject')">驳回报废申请</button>
@@ -425,6 +478,21 @@ onBeforeUnmount(resetView);
         <label class="fams-selection"><input v-model="physical" type="checkbox"/>已亲见并核对同一原机和处置保管安排</label>
         <div class="fams-panel-actions">
           <button class="fams-button" data-kind="primary" type="button" @click="prepare('execute')">核对执行报废</button>
+        </div>
+      </fieldset>
+      <fieldset v-if="detail.actions.executeFactory" class="fams-card fams-stack" :disabled="locked || stale">
+        <h3 class="fams-panel-title">按厂家凭证执行报废</h3>
+        <label class="fams-field"><span class="fams-field-label">凭证记载的实际处置时间</span><input class="fams-control" v-model="occurred" type="datetime-local" step="0.001"/></label>
+        <div class="fams-panel-actions">
+          <button class="fams-button" data-kind="primary" type="button" @click="prepare('executeFactory')">核对厂家凭证并执行报废</button>
+        </div>
+      </fieldset>
+      <fieldset v-if="detail.actions.executeLoss" class="fams-card fams-stack" :disabled="locked || stale">
+        <h3 class="fams-panel-title">执行遗失核销</h3>
+        <p>核对原报失及保管责任。如有原借用，执行后关闭原借用。</p>
+        <label class="fams-field fams-field-wide"><span class="fams-field-label">核销复核依据</span><textarea class="fams-control" v-model="evidence" maxlength="2000"/></label>
+        <div class="fams-panel-actions">
+          <button class="fams-button" data-kind="primary" type="button" @click="prepare('executeLoss')">核对执行遗失核销</button>
         </div>
       </fieldset>
       <p v-if="detail.disposition">{{ dispositionText }}</p>

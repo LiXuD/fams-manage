@@ -30,3 +30,36 @@ test("capabilities cannot be bypassed and verification freezes all four versions
 test("invalid calendar and out-of-bound pages do not submit or load beyond known totals",async()=>{const f=fixture();await draft(f);f.page.onField(field("lastDate","2026-02-31"));f.page.onPrepare(event({action:"submit"}));assert.equal(f.page.data.confirmation,"");await f.page.onPage(event({kind:"reports",delta:"-1"}));assert.equal(f.page.data.page,1);await f.page.onPage(event({kind:"reports",delta:"1"}));assert.equal(f.page.data.page,2);const count=f.calls.length;await f.page.onPage(event({kind:"reports",delta:"1"}));assert.equal(f.calls.length,count);});
 
 test("native manifest and WXML events wire the actual registered loss Page",async()=>{const fs=await import("node:fs/promises");const root=new URL("../",import.meta.url);const manifest=JSON.parse(await fs.readFile(new URL("native/app.json",root),"utf8"));assert.ok(manifest.pages.includes("pages/loss-reports/index"));const f=fixture();globalThis.getApp=()=>({getServices:()=>f.services});let registered;globalThis.Page=page=>registered=page;try{await import("../src/pages/loss-reports/index.ts");const template=await fs.readFile(new URL("native/pages/loss-reports/index.wxml",root),"utf8");for(const match of template.matchAll(/bind(?:tap|change|input)="([^"\s]+)"/g)) assert.equal(typeof registered[match[1]],"function",match[1]);assert.match(await fs.readFile(new URL("native/pages/request-center/index.wxml",root),"utf8"),/pages\/loss-reports\/index/);}finally{delete globalThis.getApp;delete globalThis.Page;}});
+
+test("native linked scrap keeps the report open and retains the original request through hide and retry", async () => {
+    const f = fixture(), request = f.sessions.request, scrap = "9007199254740997";
+    f.row.status = "CONFIRMED_LOST"; f.row.actions = { requestScrap: true };
+    f.row.recoveryAsset = { version: 19, lifecycle: "BORROWED" };
+    let lost = true;
+    f.sessions.request = async (...args) => {
+        const result = await request(...args);
+        if (args[0] !== "POST") return result;
+        if (lost) {
+            lost = false; f.row.recoveryAsset = { version: 20, lifecycle: "PENDING_SCRAP" }; f.row.actions = {};
+            throw Error("committed reply lost");
+        }
+        return { id: scrap };
+    };
+    await f.page.onShow();
+    f.page.onField(field("scrapReason", "持续查找未找回"));
+    f.page.onField(field("scrapCondition", "原借出实物仍无法收回"));
+    f.page.onPrepare(event({ action: "requestScrap" }));
+    assert.equal(writes(f).length, 0);
+    await f.page.onConfirm();
+    assert.equal(f.page.data.retry, true);
+    f.page.onHide(); await f.page.onShow(); await f.page.onRetry();
+    assert.deepEqual(writes(f)[0], writes(f)[1]);
+    assert.equal(writes(f)[0].path, "/api/v1/mini/scrap-requests/from-loss/" + id);
+    assert.equal(writes(f)[0].mutation.version, 8);
+    assert.deepEqual(writes(f)[0].body, {
+        assetVersion: 19, reason: "持续查找未找回", observedCondition: "原借出实物仍无法收回", proposedDisposition: "遗失核销",
+    });
+    assert.equal(f.page.data.detail.id, id);
+    assert.equal(f.page.data.scrapReceiptId, scrap);
+    assert.equal(f.calls.some(call => call.path === "/api/v1/mini/loss-reports/" + scrap), false);
+});

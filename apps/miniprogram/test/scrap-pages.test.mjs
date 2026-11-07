@@ -116,3 +116,30 @@ test("registered native Page and all bound WXML handlers are present", async () 
         delete globalThis.Page; delete globalThis.getApp;
     }
 });
+
+test("native loss write-off retries its confirmed facts and distinct version headers", async () => {
+    const f = fixture(), request = f.sessions.request;
+    f.row.sourceType = "LOSS"; f.row.actions.execute = false; f.row.actions.executeLoss = true;
+    let lost = true;
+    f.sessions.request = async (...args) => {
+        const result = await request(...args);
+        if (args[0] === "POST" && lost) {
+            lost = false; f.row.version = 3; f.row.actions.executeLoss = false;
+            throw Error("committed reply lost");
+        }
+        return result;
+    };
+    await f.page.onShow();
+    const evidence = "复核原报失确认与借用责任后办理遗失核销";
+    f.page.onField(field("evidence", evidence));
+    f.page.onPrepare(event({ action: "executeLoss" }));
+    assert.equal(writes(f).length, 0);
+    assert.match(f.page.data.confirmation, /终止原借用/);
+    await f.page.onConfirm();
+    assert.equal(f.page.data.retry, true);
+    f.page.onHide(); await f.page.onShow(); await f.page.onRetry();
+    assert.deepEqual(writes(f)[0], writes(f)[1]);
+    assert.equal(writes(f)[0].path, "/api/v1/mini/scrap-requests/" + f.row.id + "/execute-loss");
+    assert.equal(writes(f)[0].mutation.version, 2);
+    assert.deepEqual(writes(f)[0].body, { assetVersion: 3, lockVersion: 5, ownershipVersion: 4, evidence });
+});

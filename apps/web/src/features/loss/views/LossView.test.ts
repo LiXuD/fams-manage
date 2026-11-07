@@ -4,7 +4,10 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import LossView from "./LossView.vue";
 const state = vi.hoisted(() => ({ session: { user: { id: "1", roles: ["ASSET_ADMIN"] }, csrfToken: "csrf" } }));
 vi.mock("@/auth/sessionStore", () => ({ useSessionStore: () => state.session }));
-vi.mock("vue-router", () => ({ useRoute: () => ({ params: { id: "9" } }) }));
+vi.mock("vue-router", () => ({
+  useRoute: () => ({ params: { id: "9" } }),
+  RouterLink: { props: ["to"], template: '<a :href="to"><slot /></a>' },
+}));
 const record = () => ({ id: "9", assetId: "9007199254740993", source: { id: "9007199254740993", assetCode: "LOSS-001", name: "私有报失资产", version: 6, lifecycle: "BORROWED" }, status: "PENDING_ADMIN_DECISION", version: 3, assetVersion: 6, ownershipVersion: 1, lockVersion: 2, lastSeenAt: "2026-10-20T00:00:00Z", lastLocation: "原保管位置", circumstances: "离开原保管位置后未找到实物", processorAccountId: null, nextReviewDate: null, actions: { decide: true, addPhoto: true }, photos: [], history: [] });
 const response = (body: unknown, status = 200) => ({ ok: status === 200, status, json: async () => structuredClone(body) }) as Response;
 const mountPage = () => mount(LossView, { global: { stubs: { AppChrome: { template: "<main><slot /></main>" } } } });
@@ -90,3 +93,39 @@ it("switching reports discards the previous original preview and verification in
 });
 
 it("recovered loss shows historical loss and found state without offering liability follow-up",async()=>{const row={...record(),status:"CONFIRMED_LOST",recoveredAt:"2026-10-30T02:20:00Z",actions:{}};vi.stubGlobal("fetch",vi.fn(async(url:string)=>response(url.endsWith("/9")?row:{items:[row],total:1})));const w=mountPage();await flushPromises();expect(w.find('tbody').text()).toContain('遗失事实保留·已找回');expect(w.find('[aria-label="报失详情"] h2').text()).toContain('遗失事实保留·已找回');expect(w.text()).not.toContain('已确认遗失·持续跟进');expect(w.findAll('button').some(item=>item.text()==='记录持续跟进')).toBe(false);expect(row.status).toBe('CONFIRMED_LOST');w.unmount();});
+
+it("opens linked scrap with current asset version and replays only the original request", async () => {
+  const row = { ...record(), status: "CONFIRMED_LOST",
+    actions: { requestScrap: true }, recoveryAsset: { version: 19, lifecycle: "BORROWED" } };
+  const writes: { url: string; input: RequestInit }[] = [];
+  let lost = true;
+  vi.stubGlobal("fetch", vi.fn(async (url: string, input: RequestInit) => {
+    if (input.method === "POST") {
+      writes.push({ url, input });
+      if (lost) {
+        lost = false; row.recoveryAsset = { version: 20, lifecycle: "PENDING_SCRAP" }; row.actions.requestScrap = false;
+        throw Error("committed reply lost");
+      }
+      return response({ id: "9007199254740999" });
+    }
+    return response(url.endsWith("/9") ? row : { items: [row], total: 1 });
+  }));
+  const wrapper = mountPage(); await flushPromises();
+  await wrapper.findAll("label").find(node => node.text() === "关联报废原因")!.find("textarea").setValue("持续查找未找回");
+  await wrapper.findAll("label").find(node => node.text() === "确认遗失后的实际情况")!.find("textarea").setValue("原借出实物仍无法收回");
+  await button(wrapper, "核对关联报废申请").trigger("click");
+  expect(writes).toHaveLength(0);
+  await button(wrapper, "确认提交").trigger("click"); await flushPromises();
+  await button(wrapper, "只读核对最新结果").trigger("click"); await flushPromises();
+  await button(wrapper, "使用原请求重试").trigger("click"); await flushPromises();
+  expect(writes).toHaveLength(2);
+  expect(writes[0]).toEqual(writes[1]);
+  expect(writes[0]?.url).toBe("/api/v1/scrap-requests/from-loss/9");
+  expect(writes[0]?.input.headers).toMatchObject({ "If-Match-Version": "3" });
+  expect(JSON.parse(String(writes[0]?.input.body))).toEqual({
+    assetVersion: 19, reason: "持续查找未找回", observedCondition: "原借出实物仍无法收回", proposedDisposition: "遗失核销",
+  });
+  expect(wrapper.get('a[href="/scrap-requests/9007199254740999"]').text()).toBe("查看关联报废申请");
+  expect(wrapper.text()).toContain("原借用责任继续保留");
+  wrapper.unmount();
+});

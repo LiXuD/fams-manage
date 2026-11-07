@@ -5,11 +5,19 @@ import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness, type LivenessToken } from "@/composables/useRequestLiveness";
 import { RepairApiError, type Repair } from "@/features/repair/api";
 import { factoryProblem, factoryRequest, type FactoryMutation } from "@/features/repair/factory-api";
+import { ScrapApiError, scrapRequest } from "@/features/scrap/api";
 import type { FactoryDetail, FactoryFile, FactoryRoundDetail } from "@/features/repair/factory-types";
 import { activeReferences, AssetApiError, type AssetReference, type Page } from "@/features/asset/api";
 
 interface Replacement { id: string; sourceId: string; originalDisposition: string; replacementAssetId: string | null; inbound: { id: string; receiptNumber: string; status: string } | null }
-interface Replacements { items: Replacement[]; canRecord: boolean }
+interface Replacements { items: Replacement[]; canRecord: boolean; canRequestScrap?: boolean }
+/** 面板在确认底座里持有的意图：常规换机突变，或带 scrap 标记的旧机关联报废突变。 */
+type Mutation = Omit<FactoryMutation, "key"> | { scrap: true; repairId: string; path: string; version: number; body: Readonly<Record<string, unknown>>; label: string };
+/** 只有厂家收旧/销毁两种旧机去向才能转关联报废；CONTINUES_REPAIR 留在维修线内。 */
+const SCRAP_ELIGIBLE_DISPOSITIONS = new Set(["FACTORY_RETAINED", "FACTORY_DESTROYED"]);
+const SCRAP_INCOMPLETE_MESSAGE = "请填写旧机报废原因及已核实情况。";
+const SCRAP_SAVED_NOTICE = "旧机关联报废申请已提交。";
+const SCRAP_RECEIPT_LABEL = "查看关联报废单";
 type Kind = "category" | "organization" | "warehouse" | "location";
 /** 四类参考资料按页取用；页大小同时供翻页边界与禁用判据使用。 */
 const REFERENCE_PAGE_SIZE = 50;
@@ -30,10 +38,11 @@ const opened = shallowRef(false), busy = shallowRef(false), stale = shallowRef(t
 const header = ref<FactoryDetail | null>(null), roundData = ref<FactoryRoundDetail | null>(null), records = ref<Replacements | null>(null);
 const name = shallowRef(""), serial = shallowRef(""), model = shallowRef(""), unit = shallowRef(""), date = shallowRef(""), observed = shallowRef(""), disposition = shallowRef(""), reason = shallowRef("");
 const checked = shallowRef(false), evidenceIds = ref<string[]>([]), file = ref<File | null>(null);
+const scrapReason = shallowRef(""), scrapCondition = shallowRef(""), scrapReceipt = ref<string | null>(null);
 const choices = ref<Record<Kind, string>>({ category: "", organization: "", warehouse: "", location: "" });
 const references = ref<Partial<Record<Kind, Page<AssetReference>>>>({});
 /** 确认式幂等提交：草稿/在途两槽与幂等键簿记归底座；busy/locked、URL、文件选择与文案留在本面板。 */
-const { prepared: confirmation, pending, prepare: draft, confirm: adopt, settle, fail, cancel, reset: resetSubmit } = useConfirmedSubmit<Omit<FactoryMutation, "key">>({
+const { prepared: confirmation, pending, prepare: draft, confirm: adopt, settle, fail, cancel, reset: resetSubmit } = useConfirmedSubmit<Mutation>({
   identity: () => identity.value,
   failure: (cause) => cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500,
 });
@@ -48,10 +57,18 @@ const originalsDisabled = computed(() => locked.value || !ready.value || !header
 const replacementRows = computed(() => (records.value?.items ?? []).map(item => ({
   id: item.id,
   dispositionText: destinations[item.originalDisposition],
+  canScrap: SCRAP_ELIGIBLE_DISPOSITIONS.has(item.originalDisposition),
   replacementAssetId: item.replacementAssetId,
   inbound: item.inbound,
   inboundHref: item.inbound ? `/inbound?receiptId=${item.inbound.id}` : "",
 })));
+/** 可转关联报废的旧机行；候选资格与 prepareScrap 的复核同源。 */
+const scrapReplacementRows = computed(() => (records.value?.items ?? [])
+  .filter(item => SCRAP_ELIGIBLE_DISPOSITIONS.has(item.originalDisposition))
+  .map(item => ({ id: item.id })));
+const showScrapForm = computed(() => records.value?.canRequestScrap === true);
+const showScrapReceipt = computed(() => scrapReceipt.value !== null);
+const scrapReceiptHref = computed(() => `/scrap-requests/${scrapReceipt.value ?? ""}`);
 const referenceRows = computed(() => sources.map(source => {
   const refs = references.value[source.kind], currentPage = refs?.page ?? 1;
   const options = (refs?.items ?? []).filter(item => source.kind !== "location" || item.warehouse?.id === choices.value.warehouse)
@@ -66,8 +83,9 @@ const originalsRows = computed(() => originals.value.map(item => {
 watch([busy, pending, confirmation], () => emit("busy-change", busy.value || !!pending.value || !!confirmation.value), { flush: "sync" });
 watch(() => choices.value.warehouse, () => { choices.value.location = ""; });
 function clearDraft() { name.value = ""; serial.value = ""; model.value = ""; unit.value = ""; date.value = ""; observed.value = ""; disposition.value = ""; reason.value = ""; checked.value = false; evidenceIds.value = []; file.value = null; }
-function reset() { liveness.invalidate(); resetSubmit(); opened.value = false; busy.value = false; stale.value = true; header.value = null; roundData.value = null; records.value = null; references.value = {}; choices.value = { category: "", organization: "", warehouse: "", location: "" }; clearDraft(); }
+function reset() { liveness.invalidate(); resetSubmit(); opened.value = false; busy.value = false; stale.value = true; header.value = null; roundData.value = null; records.value = null; references.value = {}; choices.value = { category: "", organization: "", warehouse: "", location: "" }; scrapReason.value = ""; scrapCondition.value = ""; scrapReceipt.value = null; clearDraft(); }
 function failure(cause: unknown) {
+  if (cause instanceof ScrapApiError) cause = new RepairApiError(cause.status, cause.code, {});
   if (cause instanceof RepairApiError && [401, 403, 404].includes(cause.status)) { reset(); emit("invalidated"); }
   if (cause instanceof RepairApiError && [400, 409, 413, 422].includes(cause.status)) stale.value = true;
   error.value = factoryProblem(cause);
@@ -121,7 +139,7 @@ function prepare(upload: boolean) {
   const meta = header.value, round = roundData.value;
   if (locked.value || !ready.value || !records.value?.canRecord || !meta || !round || meta.lockVersion == null || !meta.photosAvailable) return;
   const guards = { roundVersion: round.version, assetVersion: meta.assetVersion, ownershipVersion: meta.ownershipVersion, lockVersion: meta.lockVersion };
-  let submission: Omit<FactoryMutation, "key">;
+  let submission: Mutation;
   if (upload) {
     const chosen = file.value, pdf = chosen && /\.pdf$/i.test(chosen.name);
     if (!chosen || !chosen.size || chosen.name.length > 255 || !/\.(pdf|png|jpe?g|webp)$/i.test(chosen.name) || chosen.size > (pdf ? 20 : 10) * 1024 * 1024) { error.value = "请选择不超过10MB的图片或不超过20MB的PDF换机原件。"; return; }
@@ -142,13 +160,40 @@ function prepare(upload: boolean) {
   }
   draft(() => Object.freeze(submission)); error.value = ""; notice.value = "";
 }
+/** 旧机关联报废冻结本轮四个版本；去向码原样转写为建议处置，不由前端改写。 */
+function prepareScrap(id: string) {
+  const meta = header.value, round = roundData.value;
+  const item = records.value?.items.find(value => value.id === id);
+  if (locked.value || !ready.value || !records.value?.canRequestScrap || !item || !meta || !round || meta.lockVersion == null
+      || !SCRAP_ELIGIBLE_DISPOSITIONS.has(item.originalDisposition)) return;
+  if (!scrapReason.value.trim() || !scrapCondition.value.trim()) { error.value = SCRAP_INCOMPLETE_MESSAGE; return; }
+  const scrap = Object.freeze({ assetVersion: meta.assetVersion, ownershipVersion: meta.ownershipVersion,
+    lockVersion: meta.lockVersion, reason: scrapReason.value.trim(), observedCondition: scrapCondition.value.trim(),
+    proposedDisposition: item.originalDisposition });
+  draft(() => Object.freeze({ scrap: true as const, repairId: props.repair.id, version: meta.version,
+    path: `/from-factory/${props.repair.id}/rounds/${round.id}/replacements/${item.id}`,
+    body: Object.freeze({ roundVersion: round.version, scrap }), label: "按本轮厂家凭证提交旧机关联报废，等待管理员确认。" }));
+  error.value = ""; notice.value = "";
+}
 async function perform() {
   if (!pending.value || busy.value || props.blocked) return;
   const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
   try {
-    await factoryRequest(operation.payload.repairId, operation.payload.path, { ...operation.payload, key: operation.key });
-    if (!liveness.isCurrent(turn)) return;
-    settle(); clearDraft(); stale.value = true; notice.value = "本次换机资料已保存。新机须独立入库，旧机责任仍待按实际去向办理。";
+    const linked = "scrap" in operation.payload;
+    if (linked) {
+      const receipt = await scrapRequest<{ id: string }>(operation.payload.path,
+        { path: operation.payload.path, version: operation.payload.version, body: operation.payload.body,
+          summary: operation.payload.label, key: operation.key });
+      if (!liveness.isCurrent(turn)) return;
+      settle(); clearDraft(); stale.value = true;
+      scrapReceipt.value = receipt.id; scrapReason.value = ""; scrapCondition.value = "";
+      notice.value = SCRAP_SAVED_NOTICE;
+    } else {
+      await factoryRequest(operation.payload.repairId, operation.payload.path, { ...operation.payload, key: operation.key });
+      if (!liveness.isCurrent(turn)) return;
+      settle(); clearDraft(); stale.value = true;
+      notice.value = "本次换机资料已保存。新机须独立入库，旧机责任仍待按实际去向办理。";
+    }
     await fetchState(turn);
   } catch (cause) { if (liveness.isCurrent(turn)) { fail(cause); failure(cause); } }
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
@@ -173,6 +218,7 @@ onBeforeUnmount(() => { reset(); emit("busy-change", false); });
     <template v-if="opened">
       <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
       <p v-if="notice" class="fams-notice" data-state="success" role="status"><strong>{{ notice }}</strong></p>
+      <a v-if="showScrapReceipt" :href="scrapReceiptHref">{{ SCRAP_RECEIPT_LABEL }}</a>
       <p v-if="pending">本次结果尚待核对，重试将沿用原请求。</p>
       <button v-if="pending" class="fams-button" data-kind="secondary" type="button" :disabled="retryDisabled" @click="perform">重试原换机办理</button>
       <div v-if="confirmation" class="fams-card fams-stack" role="group" aria-label="确认本次换机办理">
@@ -187,6 +233,16 @@ onBeforeUnmount(() => { reset(); emit("busy-change", false); });
         <p v-if="row.inbound">新机资产 {{ row.replacementAssetId }}；入库单 {{ row.inbound.receiptNumber }} · {{ row.inbound.status }}。<a :href="row.inboundHref">进入这张入库单核对并办理</a></p>
         <p v-else>新机建卡及入库草稿按原创建者权限保留，尚未进入当前身份可办理范围。</p>
       </article>
+      <fieldset v-if="showScrapForm" class="fams-card fams-stack" :disabled="locked || !ready">
+        <legend class="fams-panel-title">依据厂家凭证申请旧机报废</legend>
+        <div class="fams-field-grid">
+          <label class="fams-field fams-field-wide"><span class="fams-field-label">旧机报废原因</span><textarea class="fams-control" v-model="scrapReason" maxlength="2000"/></label>
+          <label class="fams-field fams-field-wide"><span class="fams-field-label">旧机已核实情况</span><textarea class="fams-control" v-model="scrapCondition" maxlength="2000"/></label>
+        </div>
+        <div class="fams-panel-actions">
+          <button v-for="row in scrapReplacementRows" :key="row.id" class="fams-button" data-kind="primary" type="button" @click="prepareScrap(row.id)">核对旧机关联报废</button>
+        </div>
+      </fieldset>
       <template v-if="records?.canRecord && header && roundData">
         <fieldset class="fams-card fams-stack" :disabled="originalsDisabled">
           <legend class="fams-panel-title">厂家整机换新原件</legend>

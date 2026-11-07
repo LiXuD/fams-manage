@@ -194,6 +194,8 @@ public class AssetLossPort {
         view.put("assetCode", row.get("asset_code"));
         view.put("serialNumber", row.get("serial_number"));
         view.put("version", row.get("version"));
+        view.put("lifecycle", row.get("lifecycle_status"));
+        view.put("exceptionStatus", row.get("exception_status"));
         view.put(
                 "locationId",
                 row.get("current_location_id") == null

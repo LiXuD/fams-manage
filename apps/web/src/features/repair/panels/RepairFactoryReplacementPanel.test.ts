@@ -46,6 +46,28 @@ it("freezes a complete independently sourced new-card draft with four guards and
   expect(JSON.parse(writes[0]!.body as string)).toMatchObject({ roundVersion: 10, assetVersion: 7, ownershipVersion: 2, lockVersion: 3, replacementPhysicalIdentityChecked: true, originalDisposition: "FACTORY_RETAINED", evidenceIds: ["replacement-1"], newAsset: { serialNumber: "NEW-SERIAL", category: { id: "101", version: 3 }, organization: { id: "101", version: 3 } }, warehouseId: "101", locationId: "101" });
   expect(writes[0]!.headers).toMatchObject({ "If-Match-Version": "5", "X-CSRF-Token": "csrf" });
 });
+
+it("replays the exact manufacturer scrap intent after a lost receipt", async () => {
+  let lost = true;
+  const state = wire(async () => {
+    if (lost) { lost = false; throw new Error("committed reply lost"); }
+    return response({ id: "77" });
+  });
+  Object.assign(state.remote.records, { canRecord: false, canRequestScrap: true,
+    items: [{ id: "41", originalDisposition: "FACTORY_DESTROYED", inbound: null }] });
+  const wrapper = create();
+  await click(wrapper, "核对整机换新记录");
+  await field(wrapper, "旧机报废原因", "厂家确认旧机销毁");
+  await field(wrapper, "旧机已核实情况", "本轮原件已核实");
+  await click(wrapper, "核对旧机关联报废");
+  await click(wrapper, "确认保存本次换机办理");
+  await click(wrapper, "重试原换机办理");
+  expect(state.writes[1]).toEqual(state.writes[0]);
+  expect(JSON.parse(String(state.writes[0]?.body))).toEqual({ roundVersion: 10,
+    scrap: { assetVersion: 7, ownershipVersion: 2, lockVersion: 3, reason: "厂家确认旧机销毁",
+      observedCondition: "本轮原件已核实", proposedDisposition: "FACTORY_DESTROYED" } });
+  expect(wrapper.get('a[href="/scrap-requests/77"]').text()).toBe("查看关联报废单");
+});
 it("preserves the original unknown-result decision across readonly refresh and parent versions", async () => {
   const state = wire(async () => { state.remote.header.version = 6; state.remote.round.version = 11; if (state.writes.length === 1) throw new Error("committed reply lost"); return response({}); });
   const wrapper = create(); await click(wrapper, "核对整机换新记录"); await draft(wrapper); await click(wrapper, "核对建立新卡及入库草稿"); await click(wrapper, "确认保存本次换机办理");

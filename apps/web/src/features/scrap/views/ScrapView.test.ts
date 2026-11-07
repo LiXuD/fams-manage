@@ -229,3 +229,56 @@ it("opens an overdue disposition from the scoped server list and returns to all 
   expect(wrapper.find('[aria-label="报废详情"]').exists()).toBe(false);
   wrapper.unmount();
 });
+
+it("writes off a lost asset using the approved loss action and the original versions", async () => {
+  const row: ScrapRequest = { ...report(), sourceType: "LOSS",
+    actions: { decide: false, claim: false, execute: false, executeLoss: true } };
+  const writes: { url: string; input: RequestInit }[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, input: RequestInit) => {
+    if (input.method === "POST") {
+      writes.push({ url, input }); row.actions.executeLoss = false;
+      row.disposition = { disposition_status: "LOSS_WRITTEN_OFF", due_date: null };
+      return response({ id: row.id });
+    }
+    if (url.endsWith("attachment-capabilities")) return response({ canRead: false });
+    return response(url.includes("?") ? { items: [row], total: 1 } : row);
+  }));
+  const wrapper = mount(ScrapView); await flushPromises();
+  await button(wrapper, "ORIGINAL-1 · 待遗失核销").trigger("click"); await flushPromises();
+  expect(wrapper.text()).not.toContain("实际原机编码");
+  const evidence = "核对原报失证据与原借用后办理遗失核销";
+  await field(wrapper, "核销复核依据", evidence);
+  await button(wrapper, "核对执行遗失核销").trigger("click");
+  expect(writes).toHaveLength(0);
+  await button(wrapper, "确认提交本次办理").trigger("click"); await flushPromises();
+  expect(writes[0]?.url).toBe("/api/v1/scrap-requests/" + row.id + "/execute-loss");
+  expect(writes[0]?.input.headers).toMatchObject({ "If-Match-Version": "2" });
+  expect(JSON.parse(String(writes[0]?.input.body))).toEqual({ assetVersion: 3, lockVersion: 5, ownershipVersion: 4, evidence });
+  expect(wrapper.text()).toContain("处置进度 遗失核销");
+  expect(wrapper.text()).not.toContain("计划日期");
+  wrapper.unmount();
+});
+
+it("executes manufacturer scrap from the recorded proof and its actual date", async () => {
+  const row: ScrapRequest = { ...report(), sourceType: "FACTORY_REPLACEMENT", factoryDisposition: "FACTORY_RETAINED",
+    sourceBusinessId: "71", actions: { decide: false, claim: false, execute: false, executeFactory: true } };
+  const writes: { url: string; input: RequestInit }[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, input: RequestInit) => {
+    if (input.method === "POST") { writes.push({ url, input }); return response({ id: row.id }); }
+    if (url.endsWith("attachment-capabilities")) return response({ canRead: false });
+    return response(url.includes("?") ? { items: [row], total: 1 } : row);
+  }));
+  const wrapper = mount(ScrapView); await flushPromises();
+  await wrapper.findAll("button").find(item => item.text().startsWith("ORIGINAL-1 ·"))!.trigger("click"); await flushPromises();
+  expect(wrapper.get('a[href="/repairs/71"]').text()).toContain("核对厂家凭证");
+  await button(wrapper, "核对厂家凭证并执行报废").trigger("click");
+  expect(wrapper.text()).toContain("请填写厂家凭证记载的实际处置时间");
+  const occurred = "2026-11-07T09:23:41";
+  await field(wrapper, "凭证记载的实际处置时间", occurred);
+  await button(wrapper, "核对厂家凭证并执行报废").trigger("click");
+  await button(wrapper, "确认提交本次办理").trigger("click"); await flushPromises();
+  expect(writes[0]?.url).toBe("/api/v1/scrap-requests/" + row.id + "/execute-factory");
+  expect(JSON.parse(String(writes[0]?.input.body))).toEqual({ assetVersion: 3, lockVersion: 5,
+    ownershipVersion: 4, occurredAt: new Date(occurred).toISOString() });
+  wrapper.unmount();
+});

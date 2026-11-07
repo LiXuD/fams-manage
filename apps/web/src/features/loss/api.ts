@@ -5,7 +5,7 @@ export interface LossReport { id: string; assetId: string; status: string; sourc
   circumstances: string; transferId?: string; returnId?: string | null; repairId?: string | null; recoveredAt?: string; recoveryAsset?: LossRecoveryAsset | null; recoveries?: LossRecovery[]; recoveriesTotal?: number; confirmedLostAt?: string; lastFollowUpAt?: string; nextReviewDate: string | null; photosAvailable?: boolean;
   photos?: { objectId: string; filename: string; contentType?: string }[]; actions?: Record<string, boolean>;
   history?: { id: string; action: string; actor_username: string; occurred_at: string }[] }
-export interface LossRecoveryAsset { assetCode: string; serialNumber: string | null; version: number; locationId: string | null; locationName: string | null; locationVersion: number | null; eligible: boolean }
+export interface LossRecoveryAsset { lifecycle?: string; assetCode: string; serialNumber: string | null; version: number; locationId: string | null; locationName: string | null; locationVersion: number | null; eligible: boolean }
 export interface LossRecovery { id: string; version: number; assetVersion: number; ownershipVersion: number; status: string; creatorAccountId: string; processorAccountId: string | null; actions: Record<string,boolean>; request?: { destination?: string; facts?: Record<string,unknown> } }
 /**
  * 面板起草、视图确认的「待提交意图」：只带路径、版本、请求体与确认文案。

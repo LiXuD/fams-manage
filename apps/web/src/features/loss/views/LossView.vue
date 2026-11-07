@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
-import { useRoute } from "vue-router";
+import { RouterLink, useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import FamsMediaPreview from "@/components/FamsMediaPreview.vue";
 import LossRecoveryPanel from "../panels/LossRecoveryPanel.vue";
@@ -10,14 +10,31 @@ import { requestBlob } from "@/api/http";
 import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useObjectUrlPreview } from "@/composables/useObjectUrlPreview";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
+import { ScrapApiError, scrapRequest } from "@/features/scrap/api";
 import { LossApiError, lossProblem, lossRequest, lossReportState, type LossAsset, type LossIntent, type LossReport, type LossSubmission } from "@/features/loss/api";
 
 const PAGE_SIZE = 20;
 /** 报失单号是纯数字主键；路由参数只有在合形时才值得单独发一次详情读取。 */
 const REPORT_ID = /^[1-9][0-9]{0,18}$/;
 const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
+/** 关联报废写路径的前缀；命中它即将请求交给报废域底座。 */
+const LINKED_SCRAP_PREFIX = "/from-loss/";
+/** 报失转报废的批准范围与报废域、后端约定同源，前端只转写不改写。 */
+const LOSS_SCRAP_DISPOSITION = "遗失核销";
+const LINKED_SCRAP_INCOMPLETE_MESSAGE = "请填写关联报废原因与确认遗失后的实际情况。";
+const LINKED_SCRAP_SUBMITTED_NOTICE = "关联报废申请已提交。";
+const LINKED_SCRAP_RECEIPT_LABEL = "查看关联报废申请";
+const DEFAULT_PREPARED_SUMMARY = "请确认本次资产、情况、版本及证据，提交后保留操作履历。";
+const DEFAULT_PENDING_SUMMARY = "操作结果待核对，当前输入已冻结。";
 /** 面板起草的路径末段 → 详情页需要复核的能力位；与后端动作名同源。 */
 const ATTEMPT_ACTIONS: Record<string, string> = { decision: "decide", cancel: "cancel", claim: "claim", execute: "execute", "execute-to-repair": "execute", "execute-to-return": "execute", "execute-to-transfer": "execute", "execute-to-factory": "execute" };
+/** 本视图在确认底座里持有的意图：报失意图，或已收敛到固定路径的关联报废意图（摘要必填供确认段直读）。 */
+type PageIntent = LossSubmission | { path: string; version: number; body: Readonly<Record<string, unknown>>; summary: string };
+const isLinkedScrap = (path: string) => path.startsWith(LINKED_SCRAP_PREFIX);
+/** 资产已进入报废流程后的复核行读法；两种在途态都不再提示下次复核。 */
+function lifecycleAfterScrap(lifecycle: string | undefined): "PENDING_SCRAP" | "SCRAPPED" | "" {
+  return lifecycle === "PENDING_SCRAP" || lifecycle === "SCRAPPED" ? lifecycle : "";
+}
 /** 详情级动作路径 → 报失单上的能力位；找回类动作按原机恢复能力复核。 */
 function capabilityFor(row: LossReport, path: string): string | undefined {
   return { [`/${row.id}/confirm-lost`]: "confirmLost", [`/${row.id}/follow-up`]: "followUp",
@@ -37,11 +54,12 @@ const assets = ref<LossAsset[]>([]), assetId = shallowRef(""), assetPage = shall
 const lastSeenAt = shallowRef(""), lastLocation = shallowRef(""), circumstances = shallowRef(""), reason = shallowRef("");
 const custodian = shallowRef(""), searchedScope = shallowRef(""), searchedAt = shallowRef(""), nextReviewDate = shallowRef("");
 const file = shallowRef<File | null>(null);
+const scrapReason = shallowRef(""), scrapCondition = shallowRef(""), scrapReceiptId = ref<string | null>(null);
 const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef("");
 const liveness = useRequestLiveness(() => [identity.value]);
 const preview = useObjectUrlPreview();
 /** 确认式幂等提交：草稿/在途两槽与幂等键归底座；本域确定性失败判据（4xx 结果已定）留在视图声明。 */
-const { prepared, pending, prepare: draft, confirm: adopt, settle, fail, cancel, reset } = useConfirmedSubmit<Omit<LossSubmission, "key">>({
+const { prepared, pending, prepare: draft, confirm: adopt, settle, fail, cancel, reset } = useConfirmedSubmit<Omit<PageIntent, "key">>({
   identity: () => identity.value,
   failure: (cause) => cause instanceof LossApiError && cause.status < 500,
 });
@@ -61,13 +79,38 @@ const showCancelButton = computed(() => !!detail.value?.actions?.cancel);
 const showClaimButton = computed(() => !!detail.value?.actions?.claim);
 const showPhotoForm = computed(() => !!detail.value?.actions?.addPhoto);
 const showSearchingNote = computed(() => detail.value?.status === "SEARCHING");
-const showConfirmedLostNote = computed(() => detail.value?.status === "CONFIRMED_LOST" && !detail.value?.recoveredAt);
+const recoveryLifecycleAfterScrap = computed(() => lifecycleAfterScrap(detail.value?.recoveryAsset?.lifecycle));
+const showScrappedNote = computed(() => recoveryLifecycleAfterScrap.value === "SCRAPPED");
+const showPendingScrapNote = computed(() => recoveryLifecycleAfterScrap.value === "PENDING_SCRAP");
+const showConfirmedLostNote = computed(() => !showScrappedNote.value && !showPendingScrapNote.value
+  && detail.value?.status === "CONFIRMED_LOST" && !detail.value?.recoveredAt);
+const showReviewLine = computed(() => !showScrappedNote.value && !showPendingScrapNote.value);
+/** 报废在途时的责任提示行：借用来源提示原借用责任，其余提示原保管责任。 */
+const pendingScrapNoteText = computed(() => {
+  const row = detail.value;
+  if (!row) return "";
+  return `资产已进入待报废，${row.source.lifecycle === "BORROWED" ? "原借用责任" : "原保管责任"}继续保留。`;
+});
+const confirmedLostNoteText = computed(() => {
+  const row = detail.value;
+  if (!row) return "";
+  return `已确认遗失，本次查找单结案，原保管责任继续保留，如有原借用也继续保留，仍需跟进。确认时间：${row.confirmedLostAt}；最近跟进：${row.lastFollowUpAt ?? "尚未跟进"}`;
+});
+const reviewLineText = computed(() => {
+  const row = detail.value;
+  if (!row) return "";
+  const processor = `处理库管：${row.processorAccountId ?? "尚未认领"}`;
+  return showReviewLine.value ? `${processor}；下次复核：${row.nextReviewDate ?? "核实后填写"}` : processor;
+});
+const showLinkedScrapForm = computed(() => detail.value?.actions?.requestScrap === true);
+const showScrapReceipt = computed(() => scrapReceiptId.value !== null);
+const scrapReceiptHref = computed(() => `/scrap-requests/${scrapReceiptId.value ?? ""}`);
 const assetPrevDisabled = computed(() => locked.value || assetPage.value <= 1);
 const assetNextDisabled = computed(() => locked.value || assetPage.value * PAGE_SIZE >= assetTotal.value);
 const recordsPrevDisabled = computed(() => locked.value || page.value <= 1);
 const recordsNextDisabled = computed(() => locked.value || page.value * PAGE_SIZE >= total.value);
-const preparedSummary = computed(() => prepared.value?.payload.summary ?? "请确认本次资产、情况、版本及证据，提交后保留操作履历。");
-const pendingSummary = computed(() => pending.value?.payload.summary ?? "操作结果待核对，当前输入已冻结。");
+const preparedSummary = computed(() => prepared.value?.payload.summary ?? DEFAULT_PREPARED_SUMMARY);
+const pendingSummary = computed(() => pending.value?.payload.summary ?? DEFAULT_PENDING_SUMMARY);
 const recoveryPanelKey = computed(() => detail.value ? `recovery:${identity.value}:${detail.value.id}:${detail.value.version}` : "");
 const progressPanelKey = computed(() => detail.value ? `${identity.value}:${detail.value.id}:${detail.value.version}` : "");
 
@@ -79,11 +122,13 @@ function resetView() {
   lastSeenAt.value = ""; lastLocation.value = ""; circumstances.value = ""; reason.value = "";
   custodian.value = ""; searchedScope.value = ""; searchedAt.value = ""; nextReviewDate.value = "";
   file.value = null; error.value = ""; notice.value = "";
+  scrapReason.value = ""; scrapCondition.value = ""; scrapReceiptId.value = null;
 }
-/** 身份、权限或记录失效时整页作废；其余失败只落文案，保留输入供修改。 */
+/** 身份、权限或记录失效时整页作废；其余失败只落文案，保留输入供修改。关联报废的失败按报失域同形归一后再判。 */
 function reportFailure(cause: unknown) {
-  if (cause instanceof LossApiError && [401, 403, 404].includes(cause.status)) { reset(); resetView(); }
-  error.value = lossProblem(cause);
+  const problem = cause instanceof ScrapApiError ? new LossApiError(cause.status, cause.code) : cause;
+  if (problem instanceof LossApiError && [401, 403, 404].includes(problem.status)) { reset(); resetView(); }
+  error.value = lossProblem(problem);
 }
 
 async function load(id = detail.value?.id ?? String(route.params.id ?? ""), delta = 0) {
@@ -93,6 +138,7 @@ async function load(id = detail.value?.id ?? String(route.params.id ?? ""), delt
   preview.close();
   if (id !== detail.value?.id) {
     file.value = null; reason.value = ""; custodian.value = ""; searchedScope.value = ""; searchedAt.value = ""; nextReviewDate.value = "";
+    scrapReason.value = ""; scrapCondition.value = ""; scrapReceiptId.value = null;
   }
   const turn = liveness.begin(); busy.value = true; error.value = "";
   try {
@@ -170,15 +216,38 @@ function prepare(action: "submit" | "approve" | "reject" | "cancel" | "claim" | 
   draft(() => Object.freeze({ path, version: row?.version ?? 0, body, file: upload }));
 }
 
+/** 关联报废只复核资产乐观版本；借用/非借用来源都走同一 from-loss 端点。 */
+function prepareScrap() {
+  const row = detail.value, assetVersion = row?.recoveryAsset?.version;
+  if (locked.value || !row?.actions?.requestScrap
+      || assetVersion === undefined || !Number.isSafeInteger(assetVersion) || assetVersion < 0) return;
+  if (!scrapReason.value.trim() || !scrapCondition.value.trim()) {
+    error.value = LINKED_SCRAP_INCOMPLETE_MESSAGE; return;
+  }
+  error.value = "";
+  draft(() => Object.freeze({
+    path: LINKED_SCRAP_PREFIX + row.id, version: row.version,
+    body: Object.freeze({ assetVersion, reason: scrapReason.value.trim(), observedCondition: scrapCondition.value.trim(),
+      proposedDisposition: LOSS_SCRAP_DISPOSITION }),
+    summary: "提交 " + row.source.assetCode + " 的关联报废申请。资产进入待报废，原保管责任继续保留。",
+  }));
+}
+
 async function send() {
   const operation = pending.value;
   if (!operation || busy.value) return;
+  const linked = isLinkedScrap(operation.payload.path);
   const turn = liveness.begin(); busy.value = true; error.value = "";
   let refresh = "";
   try {
-    const result = await lossRequest<LossReport>(operation.payload.path, { ...operation.payload, key: operation.key });
+    const result = linked
+      ? await scrapRequest<{ id: string }>(operation.payload.path, { ...operation.payload, key: operation.key,
+          summary: operation.payload.summary ?? "", body: (operation.payload.body ?? {}) as Readonly<Record<string, unknown>> })
+      : await lossRequest<LossReport>(operation.payload.path, { ...operation.payload, key: operation.key });
     if (!liveness.isCurrent(turn)) return;
-    settle(); file.value = null; refresh = result.id; notice.value = "本次操作已记录。";
+    settle(); file.value = null; refresh = linked ? (detail.value?.id ?? "") : result.id;
+    if (linked) { scrapReceiptId.value = result.id; scrapReason.value = ""; scrapCondition.value = ""; }
+    notice.value = linked ? LINKED_SCRAP_SUBMITTED_NOTICE : "本次操作已记录。";
   } catch (cause) {
     if (liveness.isCurrent(turn)) { fail(cause); reportFailure(cause); }
   } finally { if (liveness.isCurrent(turn)) busy.value = false; }
@@ -294,9 +363,18 @@ onBeforeUnmount(resetView);
         </div>
       </div>
       <p>{{ detail.circumstances }}</p>
-      <p>处理库管：{{ detail.processorAccountId ?? '尚未认领' }}；下次复核：{{ detail.nextReviewDate ?? '核实后填写' }}</p>
+      <p>{{ reviewLineText }}</p>
       <p v-if="showSearchingNote">已进入查找中，资产继续持锁。本次查找仍在处理中。</p>
-      <p v-if="showConfirmedLostNote">已确认遗失，本次查找单结案，原责任和借用仍在，持续跟进。确认时间：{{ detail.confirmedLostAt }}；最近跟进：{{ detail.lastFollowUpAt ?? '尚未跟进' }}</p>
+      <p v-if="showScrappedNote">原资产已报废，原报失证据继续保留。</p>
+      <p v-else-if="showPendingScrapNote">{{ pendingScrapNoteText }}</p>
+      <p v-else-if="showConfirmedLostNote">{{ confirmedLostNoteText }}</p>
+      <RouterLink v-if="showScrapReceipt" class="fams-button" data-kind="link" data-size="sm" :to="scrapReceiptHref">{{ LINKED_SCRAP_RECEIPT_LABEL }}</RouterLink>
+      <fieldset v-if="showLinkedScrapForm" class="fams-card fams-stack" :disabled="locked">
+        <legend class="fams-panel-title">从确认遗失发起关联报废</legend>
+        <label class="fams-field fams-field-wide"><span class="fams-field-label">关联报废原因</span><textarea class="fams-control" v-model="scrapReason" maxlength="2000" /></label>
+        <label class="fams-field fams-field-wide"><span class="fams-field-label">确认遗失后的实际情况</span><textarea class="fams-control" v-model="scrapCondition" maxlength="2000" /></label>
+        <div class="fams-panel-actions"><button class="fams-button" data-kind="primary" type="button" @click="prepareScrap">核对关联报废申请</button></div>
+      </fieldset>
       <LossRecoveryPanel v-if="showRecoveryPanel" :key="recoveryPanelKey" :report="detail" :locked="locked" @prepare="prepareProgress" />
       <LossProgressPanel v-if="showProgressPanel" :key="progressPanelKey" :report="detail" :locked="locked" @prepare="prepareProgress" />
       <fieldset class="fams-card fams-stack" :disabled="locked">

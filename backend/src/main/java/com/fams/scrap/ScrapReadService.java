@@ -165,8 +165,15 @@ public class ScrapReadService {
             object.remove("attachmentEvidence");
         }
         result.put("decision", decision);
-        result.put("execution", row.get("execution_snapshot_json") == null
-                ? null : json.readTree(row.get("execution_snapshot_json").toString()));
+        boolean lossSource = "LOSS".equals(row.get("source_type"));
+        boolean factory = "FACTORY_REPLACEMENT".equals(row.get("source_type"));
+        if (factory) {
+            result.put("factoryDisposition", source.path("repairEvidence").path("context").path("method").asText());
+        }
+        var execution = row.get("execution_snapshot_json") == null
+                ? null : json.readTree(row.get("execution_snapshot_json").toString());
+        result.put("execution", lossSource && execution != null
+                ? Map.of("writtenOffAt", execution.path("writtenOffAt").asText()) : execution);
         var locks = db.queryForList("SELECT lock_version FROM fams_asset_business_lock"
                 + " WHERE asset_id=? AND business_type='SCRAP' AND business_id=?"
                 + " AND business_item_id=? AND released_at IS NULL", row.get("asset_id"), id, id);
@@ -178,15 +185,19 @@ public class ScrapReadService {
         Map<String, Object> disposition = dispositions.isEmpty() ? null : new LinkedHashMap<>(dispositions.getFirst());
         boolean canDispose = disposition != null && actor.has(Role.WAREHOUSE_OPERATOR)
                 && Objects.equals(disposition.get("processor_account_id"), actor.id())
-                && "EXECUTED".equals(row.get("request_status")) && "STANDALONE".equals(row.get("source_type"))
+                && "EXECUTED".equals(row.get("request_status")) && ScrapReviewService.physicalSource(row.get("source_type"))
                 && "PENDING_DISPOSITION".equals(disposition.get("disposition_status"));
         if (disposition != null) {
             disposition.remove("processor_account_id");
+            if (lossSource || factory) {
+                disposition.remove("custody_snapshot_json");
+            }
             Object completion = disposition.remove("completion_snapshot_json");
             if (completion != null && "DISPOSED".equals(disposition.get("disposition_status"))) {
                 var snapshot = json.readTree(completion.toString());
                 var facts = snapshot.path("facts");
-                disposition.put("completion", Map.of("occurredAt", facts.path("occurredAt").asText(),
+                disposition.put("completion", factory ? Map.of("occurredAt", facts.path("occurredAt").asText(),
+                        "method", facts.path("method").asText()) : Map.of("occurredAt", facts.path("occurredAt").asText(),
                         "method", facts.path("method").asText(), "recipient", facts.path("recipient").asText(),
                         "operatorName", snapshot.path("operatorName").asText()));
             }
@@ -195,7 +206,9 @@ public class ScrapReadService {
                         && "PENDING_ADMIN_DECISION".equals(row.get("request_status")),
                 "claim", actor.has(Role.WAREHOUSE_OPERATOR)
                         && "WAITING_WAREHOUSE_CLAIM".equals(row.get("request_status")),
-                "execute", owner && "PROCESSING".equals(row.get("request_status")) && "STANDALONE".equals(row.get("source_type")),
+                "execute", owner && "PROCESSING".equals(row.get("request_status")) && ScrapReviewService.physicalSource(row.get("source_type")),
+                "executeLoss", owner && "PROCESSING".equals(row.get("request_status")) && lossSource,
+                "executeFactory", owner && "PROCESSING".equals(row.get("request_status")) && factory,
                 "dispose", canDispose));
         result.put("disposition", disposition);
         return result;
