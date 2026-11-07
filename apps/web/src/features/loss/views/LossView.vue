@@ -54,7 +54,7 @@ const assets = ref<LossAsset[]>([]), assetId = shallowRef(""), assetPage = shall
 const lastSeenAt = shallowRef(""), lastLocation = shallowRef(""), circumstances = shallowRef(""), reason = shallowRef("");
 const custodian = shallowRef(""), searchedScope = shallowRef(""), searchedAt = shallowRef(""), nextReviewDate = shallowRef("");
 const file = shallowRef<File | null>(null);
-const scrapReason = shallowRef(""), scrapCondition = shallowRef(""), scrapReceiptId = ref<string | null>(null);
+const scrapReason = shallowRef(""), scrapCondition = shallowRef(""), scrapReceiptId = shallowRef<string | null>(null);
 const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef("");
 const liveness = useRequestLiveness(() => [identity.value]);
 const preview = useObjectUrlPreview();

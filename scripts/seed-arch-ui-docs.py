@@ -252,11 +252,12 @@ def main() -> int:
                 "condition": "INTACT", "stillOriginalCustodian": True,
                 "evidence": "当面核对原机编码与序列号，实物仍在原登记位置由原保管人保管"}
 
-    def report(index: int, tag: str) -> dict:
-        if index >= len(eligible_items):
-            failures.append(f"loss {tag}: eligible assets exhausted ({len(eligible_items)} rows)")
+    def report(index: int, tag: str, pool: list[dict] | None = None) -> dict:
+        rows = eligible_items if pool is None else pool
+        if index >= len(rows):
+            failures.append(f"loss {tag}: eligible assets exhausted ({len(rows)} rows)")
             return {}
-        asset = eligible_items[index]
+        asset = rows[index]
         head = step(f"loss submit {tag}", employee, "POST", "/loss-reports", {
             "assetId": asset["id"], "assetVersion": asset["version"], "lastSeenAt": iso(-3),
             "lastLocation": "原保管位置：三楼东侧办公室",
@@ -419,6 +420,158 @@ def main() -> int:
         scrap_rejected = scrap_reject("rejected", scrap_rejected)
         if (scrap_rejected.get("status") or "").startswith("REJECT"):
             created["scrapRejected"] = str(scrap_rejected["id"])
+
+    # 关联报废来源：一条「已受理原地维修 → 转关联报废」，两条「确认遗失 → 转关联报废」
+    # （一张停在待管理员确认，一张走到已批准已认领，让执行动作与报废在途生命周期同屏可见）。
+    def repair_reload(repair_id: str) -> dict:
+        # 关联报废的动作位只有当前处理库管读得到，用建单员工的会话读会拿到空 actions。
+        status, body = warehouse.call("GET", f"/repairs/{repair_id}")
+        return json.loads(body) if status == 200 else {}
+
+    def repair_accepted(tag: str, pool: list[dict], index: int) -> dict:
+        """建单 → 批准内部无费用 → 库管领取 → 原地受理；停在 requestScrap 入口可见处。"""
+        if len(pool) <= index:
+            failures.append(f"repair {tag}: eligible assets exhausted ({len(pool)} rows)")
+            return {}
+        chosen = pool[index]
+        accepted = step(f"repair {tag} submit", employee, "POST", "/repairs", {
+            "assetId": chosen["id"], "assetVersion": chosen["version"],
+            "fault": "原机维修后仍无法恢复", "impact": "MEDIUM", "occurredAt": now()})
+        if not accepted:
+            return {}
+        decided = step(f"repair {tag} approve", admin, "POST",
+                       f"/repairs/{accepted['id']}/decision",
+                       {"result": "APPROVE", "allowedMethod": "INTERNAL_NO_COST",
+                        "reason": "批准内部无费用处理，实物留在原地"}, version_of(accepted))
+        claimed = step(f"repair {tag} claim", warehouse, "POST",
+                       f"/repairs/{accepted['id']}/claim", None, version_of(decided) or 1)
+        current = repair_reload(str(accepted["id"]))
+        step(f"repair {tag} accept in place", warehouse, "POST",
+             f"/repairs/{accepted['id']}/accept-in-place", {
+                 "assetVersion": current.get("assetVersion"),
+                 "ownershipVersion": current.get("ownershipVersion"),
+                 "lockVersion": current.get("lockVersion"),
+                 "observedCode": (current.get("source") or {}).get("assetCode", ""),
+                 "actualLocationId": (current.get("source") or {}).get("locationId"),
+                 "neverLeftCustodian": True,
+                 "evidence": "现场核对原机编码与实物仍在原保管人处，按原地受理核实"},
+             version_of(claimed) or version_of(current))
+        return repair_reload(str(accepted["id"]))
+
+    def repair_linked_scrap(tag: str, current: dict) -> None:
+        if not (current.get("actions") or {}).get("requestScrap"):
+            failures.append(f"repair {tag}: requestScrap action absent after accept-in-place")
+            return
+        submitted = step(f"repair {tag} linked scrap", warehouse, "POST",
+                         f"/scrap-requests/from-repair/{current['id']}", {
+                             "assetVersion": current.get("assetVersion"),
+                             "ownershipVersion": current.get("ownershipVersion"),
+                             "lockVersion": current.get("lockVersion"),
+                             "reason": "原机维修后仍无法恢复",
+                             "observedCondition": "实物仍在原地但已无使用价值",
+                             "proposedDisposition": "断电拆解后按电子废弃物回收"},
+                         version_of(current))
+        if submitted:
+            created["repairScrap"] = str(current["id"])
+            created["scrapRepair"] = str(submitted["id"])
+
+    def loss_confirmed(tag: str, index: int, pool: list[dict]) -> dict:
+        """跑到「已确认遗失且未找回」，保留 requestScrap 入口本身可见。"""
+        report_row = report(index, tag, pool)
+        if not report_row:
+            return {}
+        approved = move(f"loss {tag} approve", admin, f"/loss-reports/{report_row['id']}/decision",
+                        {"result": "APPROVE", "reason": "批准进入实物查找"}, report_row)
+        claimed = move(f"loss {tag} claim", warehouse, f"/loss-reports/{approved.get('id', '')}/claim",
+                       None, approved)
+        searched = move(f"loss {tag} search", warehouse, f"/loss-reports/{claimed.get('id', '')}/search", {
+            "assetVersion": claimed.get("assetVersion"), "ownershipVersion": claimed.get("ownershipVersion"),
+            "lockVersion": claimed.get("lockVersion"),
+            "custodianVerification": "已联系最后保管人核对完整交接过程",
+            "searchedScope": "已查找原办公室抽屉、维修工位与盘点留痕",
+            "searchedAt": iso(-2), "nextReviewDate": (datetime.now(timezone.utc) + timedelta(days=14))
+            .date().isoformat()}, claimed)
+        return move(f"loss {tag} confirm lost", warehouse,
+                    f"/loss-reports/{searched.get('id', '')}/confirm-lost", {
+                        "assetVersion": searched.get("assetVersion"),
+                        "ownershipVersion": searched.get("ownershipVersion"),
+                        "lockVersion": searched.get("lockVersion"),
+                        "custodianVerification": "已联系最后保管人核对完整交接过程",
+                        "searchedScope": "已查找原办公室抽屉、维修工位与盘点留痕",
+                        "searchedAt": iso(-2),
+                        "relatedClues": "交接单、维修工单与盘点记录均无实物线索",
+                        "inabilityReason": "全部登记位置与责任人线索查尽，仍未见原实物",
+                        "responsibilityEvidence": "保管人与两名同事共同确认原位置无实物",
+                        "confirmedAt": iso(-1)}, searched)
+
+    def loss_linked_scrap(tag: str, index: int, pool: list[dict], claim_after_approve: bool) -> dict:
+        confirmed = loss_confirmed(f"{tag} source", index, pool)
+        if not confirmed:
+            return {}
+        if not (confirmed.get("actions") or {}).get("requestScrap"):
+            failures.append(f"loss {tag}: requestScrap action absent after confirm-lost")
+            return confirmed
+        linked = step(f"loss {tag} linked scrap", warehouse, "POST",
+                      f"/scrap-requests/from-loss/{confirmed['id']}", {
+                          "assetVersion": (confirmed.get("recoveryAsset") or {}).get("version"),
+                          "reason": "持续查找未找回，原实物无法收回",
+                          "observedCondition": "线索查尽且保管人与同事共同确认无实物",
+                          "proposedDisposition": "遗失核销"}, version_of(confirmed))
+        if not linked:
+            return confirmed
+        receipt = scrap_reload(str(linked["id"])) or linked
+        if not claim_after_approve:
+            created["scrapLoss"] = str(receipt["id"])
+            return confirmed
+        approved_scrap = step(f"loss {tag} scrap approve", admin, "POST",
+                              f"/scrap-requests/{receipt['id']}/decision", {
+                                  "assetVersion": receipt.get("assetVersion"),
+                                  "lockVersion": receipt.get("lockVersion"), "result": "APPROVE",
+                                  "reason": "已核对遗失证据，批准按遗失核销处置",
+                                  "approvedDisposition": "遗失核销"}, version_of(receipt))
+        if not approved_scrap:
+            return confirmed
+        current = scrap_reload(str(receipt["id"]))
+        claimed_scrap = step(f"loss {tag} scrap claim", warehouse, "POST",
+                             f"/scrap-requests/{current.get('id')}/claim", {
+                                 "assetVersion": current.get("assetVersion"),
+                                 "lockVersion": current.get("lockVersion")}, version_of(current))
+        if claimed_scrap:
+            created["scrapLossProcessing"] = str(receipt["id"])
+        return confirmed
+
+    # 关联报废要在报失/报废两条线跑完之后再取一次可报失清单：先前那份快照里的
+    # 前几张资产此时已被自己的单据锁住，直接按下标复用会撞 LOSS_ASSET_CHANGED。
+    linked_eligible = ((step("loss linked eligible", employee, "GET",
+                             "/loss-reports/eligible?page=1&pageSize=20") or {}).get("items")) or []
+    pending_linked = loss_linked_scrap("linked pending", 0, linked_eligible, False)
+    if pending_linked:
+        created["lossScrapPending"] = str(pending_linked["id"])
+    processing_linked = loss_linked_scrap("linked processing", 1, linked_eligible, True)
+    if processing_linked:
+        created["lossScrapProcessing"] = str(processing_linked["id"])
+
+    # 入口态各留一张：一张「已确认遗失、尚未转报废」（报失页的关联报废表单可见），
+    # 一张「已受理原地维修、尚未转报废」（报修详情页的关联报废表单可见）。
+    entry_eligible = ((step("loss entry eligible", employee, "GET",
+                            "/loss-reports/eligible?page=1&pageSize=20") or {}).get("items")) or []
+    entry_report = loss_confirmed("scrap entry", 0, entry_eligible)
+    if (entry_report.get("actions") or {}).get("requestScrap"):
+        created["lossScrapEntry"] = str(entry_report["id"])
+    else:
+        failures.append("loss scrap entry: requestScrap action absent after confirm-lost")
+
+    repair_pool = ((step("repair linked eligible", employee, "GET",
+                         "/repairs/eligible?page=1&pageSize=20") or {}).get("items")) or []
+    entered_repair = repair_accepted("scrap entry", repair_pool, 0)
+    if (entered_repair.get("actions") or {}).get("requestScrap"):
+        created["repairScrapEntry"] = str(entered_repair["id"])
+    else:
+        failures.append("repair scrap entry: requestScrap action absent after accept-in-place")
+    handed_repair = repair_accepted("linked scrap", repair_pool, 1)
+    if handed_repair:
+        repair_linked_scrap("linked scrap", handed_repair)
+
 
     if (args.only_loss or args.only_scrap) and args.out.is_file():
         # 只跑单条线时保留上一轮记下的其它单据 id，路由清单仍要它们。

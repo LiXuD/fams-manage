@@ -36,7 +36,7 @@ const moneyPattern = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/;
 const observedCode = shallowRef(""), evidence = shallowRef(""), confirmedPlace = shallowRef(false), neverLeft = shallowRef(false);
 const selectedFile = ref<File | null>(null), preview = useObjectUrlPreview();
 const pending = ref<PageMutation | null>(null), confirmation = ref<PageMutation | null>(null);
-const scrapReason = shallowRef(""), scrapCondition = shallowRef(""), scrapMethod = shallowRef(""), scrapReceiptId = ref<string | null>(null);
+const scrapReason = shallowRef(""), scrapCondition = shallowRef(""), scrapMethod = shallowRef(""), scrapReceiptId = shallowRef<string | null>(null);
 const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef("");
 /** 页内互斥：视图占 host 一位（读取、待确认、在途办理），各面板各占一位，互不逐条转发。 */
 const registry = provideBusyRegistry(), host = registry.register("host"), factoryBusy = registry.occupied("factory");

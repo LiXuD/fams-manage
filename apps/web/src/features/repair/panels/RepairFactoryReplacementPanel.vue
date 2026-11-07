@@ -38,7 +38,7 @@ const opened = shallowRef(false), busy = shallowRef(false), stale = shallowRef(t
 const header = ref<FactoryDetail | null>(null), roundData = ref<FactoryRoundDetail | null>(null), records = ref<Replacements | null>(null);
 const name = shallowRef(""), serial = shallowRef(""), model = shallowRef(""), unit = shallowRef(""), date = shallowRef(""), observed = shallowRef(""), disposition = shallowRef(""), reason = shallowRef("");
 const checked = shallowRef(false), evidenceIds = ref<string[]>([]), file = ref<File | null>(null);
-const scrapReason = shallowRef(""), scrapCondition = shallowRef(""), scrapReceipt = ref<string | null>(null);
+const scrapReason = shallowRef(""), scrapCondition = shallowRef(""), scrapReceipt = shallowRef<string | null>(null);
 const choices = ref<Record<Kind, string>>({ category: "", organization: "", warehouse: "", location: "" });
 const references = ref<Partial<Record<Kind, Page<AssetReference>>>>({});
 /** 确认式幂等提交：草稿/在途两槽与幂等键簿记归底座；busy/locked、URL、文件选择与文案留在本面板。 */

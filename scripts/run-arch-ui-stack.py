@@ -139,11 +139,12 @@ ASSET_SHAPES = [
      1, 1, None, None, 1, None, None, None),
     (20, "FA-RETURN", "Desk to return", 1, "Standard", "台", "ACTIVE", "PERSONAL", "IN_USE", "NORMAL",
      None, 2, None, None, 1, 2, 3, None),
-    # 8 张同类在用卡：报失线要 3 张、报废线要 4 张，加上被维修/领用/退库活动锁挡住的余量，
+    # 12 张同类在用卡：报失线要 3 张、报废线要 4 张、确认遗失转关联报废要 2 张、
+    # 受理报修转关联报废要 1 张，加上被维修/领用/退库活动锁挡住的余量，
     # 否则 /loss-reports/eligible 与 /scrap-requests/eligible 在造单中途就耗尽。
     *[(60 + offset, f"FA-USE{60 + offset}", f"Laptop for recovery line {60 + offset}", 2, "Air 13", "台",
        "ACTIVE", "PERSONAL", "IN_USE", "NORMAL", None, 2, None, None, 1, 2, 3, None)
-      for offset in range(8)],
+      for offset in range(12)],
 ]
 
 
