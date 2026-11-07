@@ -224,13 +224,14 @@ public class AssetScrapPort {
         }
         var location = locations.getFirst();
         boolean valid = false;
-        if ("IN_STOCK".equals(lifecycle) && "STORAGE".equals(asset.get("custody_type"))) {
+        if (("IN_STOCK".equals(lifecycle) || "FACTORY_REPAIR".equals(lifecycle))
+                && "STORAGE".equals(asset.get("custody_type"))) {
             Object warehouse = asset.get("storage_warehouse_id");
             valid = "BIN".equals(location.get("location_type"))
                     && Objects.equals(warehouse, location.get("warehouse_id"))
                     && !db.queryForList("SELECT id FROM fams_warehouse WHERE id=? AND status='ACTIVE' FOR UPDATE",
                             warehouse).isEmpty();
-        } else if ("IN_USE".equals(lifecycle) || "BORROWED".equals(lifecycle)) {
+        } else if (List.of("IN_USE", "BORROWED", "FACTORY_REPAIR").contains(lifecycle)) {
             Object organization = asset.get("using_organization_id");
             Object employee = switch (String.valueOf(asset.get("custody_type"))) {
                 case "PERSONAL" -> asset.get("responsible_employee_id");

@@ -111,10 +111,13 @@ public class ScrapReviewService {
         }
         long asset = number(request, "asset_id");
         var time = now();
+        var source = json.readTree(request.get("source_snapshot_json").toString());
+        var factoryLoss = factoryLossRepair(source.path("lossEvidence"));
         boolean factory = "FACTORY_REPLACEMENT".equals(request.get("source_type"));
         boolean repairSource = factory || "REPAIR".equals(request.get("source_type"));
+        boolean inheritedProcessor = repairSource || factoryLoss != null;
         if (approve && repairSource) {
-            var proof = json.readTree(request.get("source_snapshot_json").toString()).path("repairEvidence");
+            var proof = source.path("repairEvidence");
             if (request.get("processor_account_id") == null || !proof.has("repairVersion")
                     || !repairs.canRestoreFromScrap(number(request, "source_business_id"), proof.path("repairVersion").asLong(-1),
                     asset, input.assetVersion(), number(request, "processor_account_id"), repairBorrowing(proof))) {
@@ -127,10 +130,13 @@ public class ScrapReviewService {
                 }
             }
         }
-        String status = repairSource ? "PROCESSING" : "WAITING_WAREHOUSE_CLAIM";
+        if (approve && factoryLoss != null && (!Objects.equals(request.get("processor_account_id"), factoryLoss.processorAccountId())
+                || !validFactoryLossRepair(asset, factoryLoss))) {
+            throw new AssetHandoverPort.Failure("SCRAP_SOURCE_OR_OWNERSHIP_CHANGED", 409);
+        }
+        String status = inheritedProcessor ? "PROCESSING" : "WAITING_WAREHOUSE_CLAIM";
         long assetVersion = input.assetVersion();
         if (!approve) {
-            var source = json.readTree(request.get("source_snapshot_json").toString());
             boolean restored = switch (request.get("source_type").toString()) {
                 case "STANDALONE" -> assets.restoreStandalone(asset, assetVersion, id,
                         source.path("lifecycle_status").asText(), current.id(), time);
@@ -155,7 +161,7 @@ public class ScrapReviewService {
                 status, json.writeValueAsString(Map.of("decision", input, "decidedBy", Long.toString(current.id()),
                         "decidedAt", time, "attachmentEvidence", attachments)), assetVersion, time, id);
         closeTodo(id, "APPROVAL", time);
-        if (approve && repairSource) {
+        if (approve && inheritedProcessor) {
             todo(id, "EXECUTE", "WAREHOUSE_OPERATOR", number(request, "processor_account_id"), time);
         } else if (approve) {
             todo(id, "CLAIM", "WAREHOUSE_OPERATOR", null, time);
@@ -167,7 +173,8 @@ public class ScrapReviewService {
         return remember(current, operation, key, hash,
                 new Receipt(Long.toString(id), Long.toString(asset), version + 1, assetVersion,
                         number(request, "ownership_version"), status,
-                        repairSource && request.get("processor_account_id") != null ? request.get("processor_account_id").toString() : null), time);
+                        inheritedProcessor && request.get("processor_account_id") != null
+                                ? request.get("processor_account_id").toString() : null), time);
     }
 
     private boolean restoreRepair(Actor actor, Current current, Map<String, Object> request,
@@ -209,7 +216,12 @@ public class ScrapReviewService {
 
     private boolean restoreLoss(long asset, long version, long id, tools.jackson.databind.JsonNode source,
             long actor, Instant time) {
-        if ("BORROWED".equals(source.path("lifecycle_status").asText())) {
+        if ("FACTORY_REPAIR".equals(source.path("lifecycle_status").asText())) {
+            var factory = factoryLossRepair(source.path("lossEvidence"));
+            if (factory == null || !validFactoryLossRepair(asset, factory)) {
+                return false;
+            }
+        } else if ("BORROWED".equals(source.path("lifecycle_status").asText())) {
             var proof = source.path("lossEvidence");
             var loan = loans.openBorrowing(asset, source.path("responsible_employee_id").asLong(),
                     source.path("using_organization_id").asLong()).orElse(null);
@@ -221,6 +233,15 @@ public class ScrapReviewService {
             return false;
         }
         return assets.restoreLoss(asset, version, id, source, actor, time);
+    }
+
+    private RepairService.FactoryLossScrap factoryLossRepair(tools.jackson.databind.JsonNode proof) {
+        var factory = proof.path("factoryRepair");
+        return factory.isMissingNode() ? null : json.readValue(factory.toString(), RepairService.FactoryLossScrap.class);
+    }
+
+    private boolean validFactoryLossRepair(long asset, RepairService.FactoryLossScrap source) {
+        return source.equals(repairs.factoryLossScrap(source.repairId(), source.roundId(), asset, source.processorAccountId()));
     }
 
     public Receipt claim(Actor actor, long id, long version, UUID key, Claim input) {
@@ -458,6 +479,19 @@ public class ScrapReviewService {
             loans.terminateLost(asset, source.path("responsible_employee_id").asLong(),
                     source.path("using_organization_id").asLong(), proof.path("loanId").asLong(),
                     proof.path("loanVersion").asLong(-1), time);
+        } else if (loss.factory() != null) {
+            var factory = factoryLossRepair(proof);
+            if (factory == null || factory.repairId() != loss.factory().repairId()
+                    || factory.roundId() != loss.factory().roundId()
+                    || factory.processorAccountId() != loss.factory().processorAccountId()) {
+                throw new AssetHandoverPort.Failure("SCRAP_LOSS_SOURCE_CHANGED", 409);
+            }
+            repairs.closeFromFactoryLossScrap(actor, current, factory, input.assetVersion(), id);
+            var borrowing = factory.borrowing();
+            if (borrowing != null) {
+                loans.terminateLost(asset, borrowing.borrowerEmployeeId(), borrowing.organizationId(),
+                        borrowing.id(), borrowing.version(), time);
+            }
         } else {
             loans.requireRecovery(asset, loss.lifecycle(), null, null);
         }

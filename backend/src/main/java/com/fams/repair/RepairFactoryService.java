@@ -652,6 +652,14 @@ public class RepairFactoryService {
                 current, operation, key, fingerprint, id, number(round, "scope_id"), roundId);
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Long dispatchedLossScrapVersion(long repair, long round, long asset) {
+        var rows = db.queryForList("SELECT version FROM fams_repair_factory_round WHERE repair_id=? AND id=?"
+                + " AND asset_id=? AND round_status='DISPATCHED' AND received_at IS NULL FOR UPDATE",
+                Long.class, repair, round, asset);
+        return rows.isEmpty() || originalDestroyed(repair, round) ? null : rows.getFirst();
+    }
+
     public record ScrapEvidence(long roundId, long roundVersion, long replacementId, String method,
             String provider, Instant dispatchedAt, Instant observedAt, long recordedBy, String evidenceIdsJson) {}
 

@@ -216,6 +216,8 @@ public class AssetLossPort {
                                         + " released_at IS NULL",
                                 id)
                         .isEmpty());
+        view.put("factoryScrapEligible", "ACTIVE".equals(row.get("card_stage"))
+                && "FACTORY_REPAIR".equals(row.get("lifecycle_status")) && "LOST".equals(row.get("exception_status")));
         return view;
     }
 

@@ -31,8 +31,10 @@ public class LossScrapSourcePort {
         this.json = json;
     }
 
+    public record FactorySource(long repairId, long roundId, long processorAccountId) {}
+
     public record ConfirmedLoss(long assetId, String lifecycle, String sourceJson,
-            Instant confirmedAt, String confirmationJson) {}
+            Instant confirmedAt, String confirmationJson, FactorySource factory) {}
 
     public ConfirmedLoss requireSubmissionEvidence(Current current, long id, long version) {
         var row = lockedReport(id);
@@ -54,8 +56,20 @@ public class LossScrapSourcePort {
 
     static boolean confirmedScrapSource(Map<String, Object> row, JsonNode source) {
         return "CONFIRMED_LOST".equals(row.get("report_status")) && row.get("recovered_at") == null
-                && List.of("BORROWED", "IN_USE", "IN_STOCK").contains(source.path("lifecycle").asText())
+                && (List.of("BORROWED", "IN_USE", "IN_STOCK").contains(source.path("lifecycle").asText())
+                        || factorySource(row, source) != null)
                 && row.get("confirmation_snapshot_json") != null && row.get("confirmed_lost_at") != null;
+    }
+
+    private static FactorySource factorySource(Map<String, Object> row, JsonNode source) {
+        if (!"FACTORY_REPAIR".equals(source.path("lifecycle").asText())) {
+            return null;
+        }
+        var factory = source.path("factorySource");
+        long repair = factory.path("repairId").asLong(), round = factory.path("roundId").asLong();
+        long processor = factory.path("processorAccountId").asLong();
+        return repair > 0 && round > 0 && processor > 0 && Objects.equals(row.get("processor_account_id"), processor)
+                ? new FactorySource(repair, round, processor) : null;
     }
 
     /** The scrap workflow has already authorized its processor independently of the old loss processor. */
@@ -85,6 +99,6 @@ public class LossScrapSourcePort {
         Instant at = confirmed instanceof java.sql.Timestamp timestamp ? timestamp.toInstant()
                 : ((java.time.LocalDateTime) confirmed).toInstant(ZoneOffset.UTC);
         return new ConfirmedLoss(((Number) row.get("asset_id")).longValue(), source.path("lifecycle").asText(),
-                source.toString(), at, row.get("confirmation_snapshot_json").toString());
+                source.toString(), at, row.get("confirmation_snapshot_json").toString(), factorySource(row, source));
     }
 }

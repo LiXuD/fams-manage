@@ -1003,11 +1003,51 @@ public class RepairService {
             LoanRepairPort.Context borrowing) {
         var row = header(repair);
         return matchesScrapHandoff(row, version, asset, assetVersion, processor)
-                && !db.queryForList("SELECT a.id FROM fams_system_account a JOIN fams_account_role r ON r.account_id=a.id"
+                && activeScrapProcessor(processor)
+                && java.util.Objects.equals(loans.open(asset), borrowing);
+    }
+
+    private boolean activeScrapProcessor(long processor) {
+        return !db.queryForList("SELECT a.id FROM fams_system_account a JOIN fams_account_role r ON r.account_id=a.id"
                         + " JOIN fams_employee e ON e.id=a.employee_id JOIN fams_organization o ON o.id=e.organization_id"
                         + " WHERE a.id=? AND a.status='ENABLED' AND r.role_code='WAREHOUSE_OPERATOR'"
-                        + " AND e.status='ACTIVE' AND o.status='ACTIVE' FOR UPDATE", processor).isEmpty()
-                && java.util.Objects.equals(loans.open(asset), borrowing);
+                        + " AND e.status='ACTIVE' AND o.status='ACTIVE' FOR UPDATE", processor).isEmpty();
+    }
+
+    public record FactoryLossScrap(long repairId, long repairVersion, long roundId, long roundVersion,
+            long processorAccountId, LoanRepairPort.Context borrowing) {}
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public FactoryLossScrap factoryLossScrap(long repair, long round, long asset, long processor) {
+        var row = header(repair);
+        if (!"WAREHOUSE_PROCESSING".equals(row.get("repair_status")) || number(row, "asset_id") != asset
+                || !java.util.Objects.equals(row.get("processor_account_id"), processor) || !activeScrapProcessor(processor)) {
+            return null;
+        }
+        Long roundVersion = factoryOperations.dispatchedLossScrapVersion(repair, round, asset);
+        if (roundVersion == null) {
+            return null;
+        }
+        var borrowing = loans.open(asset);
+        var original = originalLoan(row);
+        if (original == null ? borrowing != null : borrowing == null || original.id() != borrowing.id()
+                || original.borrowerEmployeeId() != borrowing.borrowerEmployeeId()
+                || original.organizationId() != borrowing.organizationId()) {
+            return null;
+        }
+        return new FactoryLossScrap(repair, number(row, "version"), round, roundVersion, processor, borrowing);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void closeFromFactoryLossScrap(Actor actor, Current current, FactoryLossScrap source,
+            long assetVersion, long scrap) {
+        var row = header(source.repairId());
+        if (current.id() != source.processorAccountId()
+                || !source.equals(factoryLossScrap(source.repairId(), source.roundId(), number(row, "asset_id"),
+                        source.processorAccountId()))) {
+            throw new RepairFailure(409, "REPAIR_SCRAP_SOURCE_CHANGED");
+        }
+        finishFromScrap(actor, current, row, source.repairVersion(), assetVersion, scrap);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -1029,6 +1069,12 @@ public class RepairService {
                 || !java.util.Objects.equals(loans.open(asset), borrowing)) {
             throw new RepairFailure(409, "REPAIR_SCRAP_SOURCE_CHANGED");
         }
+        finishFromScrap(actor, current, row, version, assetVersion, scrap);
+    }
+
+    private void finishFromScrap(Actor actor, Current current, Map<String, Object> row, long version,
+            long assetVersion, long scrap) {
+        long repair = number(row, "id");
         db.update("UPDATE fams_repair_request SET repair_status='COMPLETED',completed_at=?,asset_version=?,"
                 + "version=version+1,updated_at=? WHERE id=?", now(), assetVersion + 1, now(), repair);
         var origin = returnOrigin(repair);

@@ -82,7 +82,7 @@ public class ScrapService {
             return prior;
         }
         var source = assets.standaloneSource(current, input.assetId(), input.assetVersion());
-        return create(actor, current, "SUBMIT", key, hash, input, "STANDALONE", null, source, input, null);
+        return create(actor, current, "SUBMIT", key, hash, input, "STANDALONE", null, source, input, null, null);
     }
 
     public Receipt submitFromLoss(Actor actor, long reportId, long version, UUID key, LossSubmission input) {
@@ -101,19 +101,29 @@ public class ScrapService {
         proof.put("reportVersion", version);
         proof.put("confirmedAt", loss.confirmedAt());
         proof.put("confirmation", json.readTree(loss.confirmationJson()));
+        Long processor = null;
         if ("BORROWED".equals(loss.lifecycle())) {
             var borrowing = loans.requireOpenBorrowing(loss.assetId(),
                     ((Number) source.get("responsible_employee_id")).longValue(),
                     ((Number) source.get("using_organization_id")).longValue());
             proof.put("loanId", Long.toString(borrowing.id()));
             proof.put("loanVersion", borrowing.version());
+        } else if (loss.factory() != null) {
+            var factory = loss.factory();
+            var repair = repairs.factoryLossScrap(factory.repairId(), factory.roundId(), loss.assetId(),
+                    factory.processorAccountId());
+            if (repair == null) {
+                throw new AssetHandoverPort.Failure("SCRAP_SOURCE_OR_OWNERSHIP_CHANGED", 409);
+            }
+            proof.put("factoryRepair", repair);
+            processor = repair.processorAccountId();
         } else {
             loans.requireRecovery(loss.assetId(), loss.lifecycle(), null, null);
         }
         source.put("lossEvidence", proof);
         var submission = new Submission(loss.assetId(), input.assetVersion(), input.reason(),
                 input.observedCondition(), input.proposedDisposition());
-        return create(actor, current, operation, key, hash, submission, "LOSS", reportId, source, input, null);
+        return create(actor, current, operation, key, hash, submission, "LOSS", reportId, source, input, null, processor);
     }
 
     public record RepairSubmission(@NotNull @PositiveOrZero Long assetVersion,
@@ -171,7 +181,8 @@ public class ScrapService {
         var submission = new Submission(repair.assetId(), input.assetVersion(), input.reason(),
                 input.observedCondition(), input.proposedDisposition());
         return create(actor, current, operation, key, hash, submission, factory ? "FACTORY_REPLACEMENT" : "REPAIR",
-                repair.repairId(), source, input, new RepairLink(repair, input.lockVersion(), replacementId));
+                repair.repairId(), source, input, new RepairLink(repair, input.lockVersion(), replacementId),
+                repair.processorAccountId());
     }
 
     private record RepairIntent(long repairVersion, RepairSubmission input) {}
@@ -191,7 +202,8 @@ public class ScrapService {
     }
 
     private Receipt create(Actor actor, Current current, String operation, UUID key, String hash,
-            Submission input, String sourceType, Long sourceId, Map<String, Object> source, Object facts, RepairLink link) {
+            Submission input, String sourceType, Long sourceId, Map<String, Object> source, Object facts,
+            RepairLink link, Long processor) {
         var time = clock.instant().truncatedTo(ChronoUnit.MILLIS);
         db.update(
                 "INSERT INTO fams_scrap_request(asset_id,creator_account_id,source_type,source_business_id,source_item_id,"
@@ -200,7 +212,7 @@ public class ScrapService {
                 input.assetId(), current.id(), sourceType, sourceId, link == null ? null : link.replacementId(),
                 json.writeValueAsString(source), input.reason().strip(),
                 input.observedCondition().strip(), input.proposedDisposition().strip(), input.assetVersion() + 1,
-                time, time, link == null ? null : current.id(), link == null ? 0 : 1);
+                time, time, processor, processor == null ? 0 : 1);
         long id = Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
         if (link == null) {
             db.update("INSERT INTO fams_asset_business_lock(asset_id,business_type,business_id,business_item_id,"
