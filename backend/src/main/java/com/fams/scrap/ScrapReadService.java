@@ -110,7 +110,13 @@ public class ScrapReadService {
                 && "RESTORE_REQUIRED".equals(row.get("request_status")) && "STANDALONE".equals(row.get("source_type"))
                 && db.queryForList("SELECT id FROM fams_scrap_correction WHERE request_id=?"
                         + " AND active_guard=1", id).isEmpty();
-        if (!correctionTarget && (!current.has(Role.WAREHOUSE_OPERATOR) || !(processing || disposing))) {
+        boolean reversalTarget = "bin".equals(kind) && mayRequestReversal(current, row)
+                && db.queryForList("SELECT id FROM fams_scrap_reversal WHERE request_id=?"
+                        + " AND active_guard=1", id).isEmpty()
+                && !db.queryForList("SELECT request_id FROM fams_scrap_disposition WHERE request_id=?"
+                        + " AND disposition_status='PENDING_DISPOSITION'", id).isEmpty();
+        if (!correctionTarget && !reversalTarget
+                && (!current.has(Role.WAREHOUSE_OPERATOR) || !(processing || disposing))) {
             throw new AssetHandoverPort.Failure("SCRAP_PROCESSOR_REQUIRED", 403);
         }
         String from = switch (kind) {
@@ -127,6 +133,12 @@ public class ScrapReadService {
                         "id", item.get("id").toString(), "name", item.get("name"), "version", item.get("version"))).toList();
         return Map.of("items", rows, "total", Objects.requireNonNull(db.queryForObject(
                 "SELECT COUNT(*)" + from, Long.class)), "page", page, "pageSize", size);
+    }
+
+    private static boolean mayRequestReversal(Current actor, Map<String, Object> row) {
+        return "EXECUTED".equals(row.get("request_status")) && "STANDALONE".equals(row.get("source_type"))
+                && (actor.has(Role.ASSET_ADMIN) || actor.has(Role.WAREHOUSE_OPERATOR)
+                        || Objects.equals(actor.id(), row.get("creator_account_id")));
     }
 
     private Map<String, Object> visible(Current current, long id) {
@@ -215,6 +227,14 @@ public class ScrapReadService {
                 + " FROM fams_scrap_correction c JOIN fams_location l ON l.id=c.target_location_id"
                 + " WHERE c.request_id=? AND c.active_guard=1", id);
         var correction = correctionRows.isEmpty() ? null : correctionView(correctionRows.getFirst());
+        var reversalRows = db.queryForList("SELECT r.id,r.reversal_status,r.processor_account_id,r.asset_version,"
+                + "r.target_location_id,r.target_location_version,r.ownership_version,r.version,r.reason,"
+                + "l.name AS target_location_name"
+                + " FROM fams_scrap_reversal r JOIN fams_location l ON l.id=r.target_location_id"
+                + " WHERE r.request_id=? AND r.active_guard=1", id);
+        var reversal = reversalRows.isEmpty() ? null : reversalView(reversalRows.getFirst());
+        boolean pendingDisposal = disposition != null
+                && "PENDING_DISPOSITION".equals(disposition.get("disposition_status"));
         boolean correctionPending = correction != null && "PENDING_ADMIN_DECISION".equals(correction.get("status"));
         boolean correctionClaimable = correction != null && "WAITING_WAREHOUSE_CLAIM".equals(correction.get("status"));
         boolean correctionProcessor = correction != null && actor.has(Role.WAREHOUSE_OPERATOR)
@@ -236,8 +256,34 @@ public class ScrapReadService {
         actions.put("decideCorrection", correctionPending && actor.has(Role.ASSET_ADMIN));
         actions.put("claimCorrection", correctionClaimable && actor.has(Role.WAREHOUSE_OPERATOR));
         actions.put("executeCorrection", correctionProcessor && "PROCESSING".equals(correction.get("status")));
+        actions.put("initiateReversal", reversal == null && pendingDisposal
+                && ScrapReadService.mayRequestReversal(actor, row));
+        actions.put("decideReversal", reversal != null
+                && "PENDING_ADMIN_DECISION".equals(reversal.get("status")) && actor.has(Role.ASSET_ADMIN));
+        actions.put("claimReversal", reversal != null
+                && "WAITING_WAREHOUSE_CLAIM".equals(reversal.get("status")) && actor.has(Role.WAREHOUSE_OPERATOR));
+        actions.put("executeReversal", reversal != null && actor.has(Role.WAREHOUSE_OPERATOR)
+                && Objects.equals(actor.id(), reversalRows.getFirst().get("processor_account_id"))
+                && "PROCESSING".equals(reversal.get("status")));
         result.put("actions", actions);
         result.put("correction", correction);
+        result.put("reversal", reversal);
+        return result;
+    }
+
+    private Map<String, Object> reversalView(Map<String, Object> row) {
+        var result = new LinkedHashMap<String, Object>();
+        result.put("id", row.get("id").toString());
+        result.put("status", row.get("reversal_status"));
+        result.put("version", row.get("version"));
+        result.put("assetVersion", row.get("asset_version"));
+        result.put("targetLocationId", row.get("target_location_id").toString());
+        result.put("targetLocationVersion", row.get("target_location_version"));
+        result.put("targetLocationName", row.get("target_location_name"));
+        result.put("ownershipVersion", row.get("ownership_version"));
+        result.put("processorAccountId", row.get("processor_account_id") == null
+                ? null : row.get("processor_account_id").toString());
+        result.put("reason", row.get("reason"));
         return result;
     }
 

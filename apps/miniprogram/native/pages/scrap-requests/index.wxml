@@ -1,7 +1,8 @@
 <wxs module="labels">
 var names={PENDING_ADMIN_DECISION:'待管理员确认',WAITING_WAREHOUSE_CLAIM:'待库管认领',PROCESSING:'待实物核验与执行',RESTORE_REQUIRED:'原保管关系失效，待纠正',REJECTED:'已驳回并恢复',CANCELLED:'已取消',EXECUTED:'已执行报废',CORRECTED:'冻结保管已受控纠正恢复'};
 var corrections={PENDING_ADMIN_DECISION:'纠正待管理员确认',WAITING_WAREHOUSE_CLAIM:'纠正待库管认领',PROCESSING:'纠正待实物核验恢复',COMPLETED:'纠正已恢复在库',REJECTED:'纠正已驳回'};
-module.exports={state:function(value){return names[value]||value;},correction:function(value){return corrections[value]||value;}};
+var reversals={PENDING_ADMIN_DECISION:'冲正待管理员确认',WAITING_WAREHOUSE_CLAIM:'冲正待库管认领',PROCESSING:'冲正待实物核验入库',COMPLETED:'冲正已恢复在库',REJECTED:'冲正已驳回'};
+module.exports={state:function(value){return names[value]||value;},correction:function(value){return corrections[value]||value;},reversal:function(value){return reversals[value]||value;}};
 </wxs>
 <view class="page">
   <view class="title">报废与处置</view>
@@ -102,6 +103,36 @@ module.exports={state:function(value){return names[value]||value;},correction:fu
       <view><switch checked="{{physical}}" bindchange="onChecked" disabled="{{busy || retry || confirmation || stale}}"/>已亲见并核对同一原机与批准仓位一致</view>
       <button data-action="executeCorrection" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对执行纠正恢复</button>
     </view>
+    <view wx:if="{{detail.reversal}}">冲正进度 {{labels.reversal(detail.reversal.status)}} · 目标仓位 {{detail.reversal.targetLocationName}} · 当前冲正办理人 {{detail.reversal.processorAccountId || '尚未认领'}}</view>
+    <view wx:if="{{detail.actions.initiateReversal}}">
+      <view class="title">发起误报废冲正</view>
+      <view>本单已执行报废但尚未实际处置。请选择重新验收入的仓位并说明错误原因，批准后由库管核验实物恢复在库。</view>
+      <button data-kind="bin" bindtap="onCatalog" disabled="{{busy || retry || confirmation || stale || (binPage > 0 &amp;&amp; bins.length >= binTotal)}}">加载更多有效仓位</button>
+      <picker range="{{bins}}" range-key="name" data-kind="bin" bindchange="onChoice" disabled="{{busy || retry || confirmation || stale}}"><view>选择冲正目标仓位（{{bins.length}}/{{binTotal}}）</view></picker>
+      <view wx:for="{{bins}}" wx:key="id" wx:if="{{item.id === reversalLocation}}">已选目标仓位 {{item.name}}</view>
+      <view>冲正原因</view><textarea value="{{reversalReason}}" data-field="reversalReason" bindinput="onField" maxlength="1000" disabled="{{busy || retry || confirmation || stale}}"/>
+      <button data-action="requestReversal" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对发起误报废冲正</button>
+    </view>
+    <view wx:if="{{detail.actions.decideReversal}}">
+      <view class="title">确认误报废冲正</view>
+      <view>目标仓位 {{detail.reversal.targetLocationName}} · 冲正原因 {{detail.reversal.reason}}</view>
+      <view>本次决定原因</view><textarea value="{{reversalDecision}}" data-field="reversalDecision" bindinput="onField" maxlength="1000" disabled="{{busy || retry || confirmation || stale}}"/>
+      <button data-action="approveReversal" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">批准误报废冲正</button>
+      <button data-action="rejectReversal" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">驳回误报废冲正</button>
+    </view>
+    <button wx:if="{{detail.actions.claimReversal}}" data-action="claimReversal" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">认领误报废冲正</button>
+    <view wx:if="{{detail.actions.executeReversal}}">
+      <view class="title">核验原机并执行冲正入库</view>
+      <view>批准目标仓位 {{detail.reversal.targetLocationName}}</view>
+      <view>实际原机编码</view><input value="{{observed}}" data-field="observed" bindinput="onField" maxlength="64" disabled="{{busy || retry || confirmation || stale}}"/>
+      <view>实际原机序列号</view><input value="{{serial}}" data-field="serial" bindinput="onField" maxlength="128" disabled="{{busy || retry || confirmation || stale}}"/>
+      <view>实际核验日期（年-月-日）</view><input value="{{actualDate}}" data-field="actualDate" bindinput="onField" placeholder="年-月-日" disabled="{{busy || retry || confirmation || stale}}"/>
+      <view>实际核验当地时刻（时:分:秒）</view><input value="{{actualTime}}" data-field="actualTime" bindinput="onField" placeholder="时:分:秒" disabled="{{busy || retry || confirmation || stale}}"/>
+      <button bindtap="onNow" disabled="{{busy || retry || confirmation || stale}}">记录当前实际核验时刻</button>
+      <view>实际核验依据（至少10字）</view><textarea value="{{evidence}}" data-field="evidence" bindinput="onField" maxlength="2000" disabled="{{busy || retry || confirmation || stale}}"/>
+      <view><switch checked="{{physical}}" bindchange="onChecked" disabled="{{busy || retry || confirmation || stale}}"/>已亲见并核对同一原机与批准仓位一致</view>
+      <button data-action="executeReversal" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对执行冲正入库</button>
+    </view>
     <button wx:if="{{detail.actions.claim}}" data-action="claim" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">认领报废处理</button>
     <view wx:if="{{detail.actions.execute}}">
       <view class="title">核验原机并执行报废</view><view>批准范围 {{detail.decision.decision.approvedDisposition}}</view>
@@ -132,7 +163,7 @@ module.exports={state:function(value){return names[value]||value;},correction:fu
       <textarea value="{{evidence}}" data-field="evidence" bindinput="onField" maxlength="2000" placeholder="核销复核依据" disabled="{{busy || retry || confirmation || stale}}"/>
       <button data-action="executeLoss" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对执行遗失核销</button>
     </view>
-    <view wx:if="{{detail.disposition}}">处置进度 {{detail.disposition.disposition_status === 'PENDING_DISPOSITION' ? '待实际处置' : (detail.disposition.disposition_status === 'DISPOSED' ? '已处置' : (detail.disposition.disposition_status === 'LOSS_WRITTEN_OFF' ? '遗失核销' : detail.disposition.disposition_status))}}<text wx:if="{{detail.disposition.due_date}}"> · 计划日期 {{detail.disposition.due_date}}</text></view>
+    <view wx:if="{{detail.disposition}}">处置进度 {{detail.disposition.disposition_status === 'PENDING_DISPOSITION' ? '待实际处置' : (detail.disposition.disposition_status === 'DISPOSED' ? '已处置' : (detail.disposition.disposition_status === 'LOSS_WRITTEN_OFF' ? '遗失核销' : (detail.disposition.disposition_status === 'REVERSED' ? '已因冲正撤销' : detail.disposition.disposition_status))}}<text wx:if="{{detail.disposition.due_date}}"> · 计划日期 {{detail.disposition.due_date}}</text></view>
     <view wx:if="{{detail.disposition.completion}}">实际处置 {{detail.disposition.completion.occurredAt}} · {{detail.disposition.completion.method}}<text wx:if="{{detail.disposition.completion.recipient}}"> · 处置对象 {{detail.disposition.completion.recipient}}</text><text wx:if="{{detail.disposition.completion.operatorName}}"> · 经办人 {{detail.disposition.completion.operatorName}}</text></view>
     <view wx:if="{{detail.actions.dispose &amp;&amp; capabilities.canRead}}">
       <view class="title">登记实际处置</view>

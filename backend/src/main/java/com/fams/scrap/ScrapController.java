@@ -154,6 +154,38 @@ public class ScrapController {
         return review.executeCorrection(actors.capture(), id, version, key, input);
     }
 
+    @PostMapping("/{id}/reversals")
+    ScrapReviewService.Receipt requestReversal(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.ReversalRequest input) {
+        return review.requestReversal(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/reversals/{id}/decision")
+    ScrapReviewService.Receipt decideReversal(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.ReversalDecision input) {
+        return review.decideReversal(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/reversals/{id}/claim")
+    ScrapReviewService.Receipt claimReversal(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.ReversalClaim input) {
+        return review.claimReversal(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/reversals/{id}/execute")
+    ScrapReviewService.Receipt executeReversal(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.ReversalExecution input) {
+        return review.executeReversal(actors.capture(), id, version, key, input);
+    }
+
     @PostMapping("/{id}/decision")
     ScrapReviewService.Receipt decide(@PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,

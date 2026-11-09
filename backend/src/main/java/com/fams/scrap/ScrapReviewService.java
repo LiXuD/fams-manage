@@ -195,7 +195,7 @@ public class ScrapReviewService {
         long asset = number(request, "asset_id");
         var time = now();
         assets.requirePending(asset, input.assetVersion(), id, input.lockVersion());
-        if (!assets.matchesCorrectedTarget(input.locationId(), input.locationVersion())) {
+        if (!assets.matchesActiveBin(input.locationId(), input.locationVersion())) {
             throw new AssetHandoverPort.Failure("SCRAP_CORRECTION_TARGET_CHANGED", 409);
         }
         db.update("INSERT INTO fams_scrap_correction(request_id,asset_id,creator_account_id,reason,asset_version,"
@@ -251,7 +251,7 @@ public class ScrapReviewService {
         }
         long request = number(correction, "request_id"), asset = number(correction, "asset_id");
         var time = now();
-        if (approve && !assets.matchesCorrectedTarget(number(correction, "target_location_id"),
+        if (approve && !assets.matchesActiveBin(number(correction, "target_location_id"),
                 number(correction, "target_location_version"))) {
             throw new AssetHandoverPort.Failure("SCRAP_CORRECTION_TARGET_CHANGED", 409);
         }
@@ -345,6 +345,216 @@ public class ScrapReviewService {
                 json.writeValueAsString(input), assetVersion, time, id);
         closeTodo(request, "CORRECTION_EXECUTE", time);
         audit(actor, current, Role.WAREHOUSE_OPERATOR, request, version, "SCRAP_CORRECTION_EXECUTED", input, time);
+        return remember(current, operation, key, hash, new Receipt(Long.toString(request), Long.toString(asset),
+                version + 1, assetVersion, input.ownershipVersion(), "COMPLETED", Long.toString(current.id())), time);
+    }
+
+    public record ReversalRequest(@NotNull @PositiveOrZero Long assetVersion, @NotNull @Positive Long locationId,
+            @NotNull @PositiveOrZero Long locationVersion, @NotBlank @Size(max = 1000) String reason) {}
+
+    public record ReversalDecision(@NotNull @PositiveOrZero Long assetVersion, @NotBlank String result,
+            @NotBlank @Size(max = 1000) String reason) {}
+
+    public record ReversalClaim(@NotNull @PositiveOrZero Long assetVersion) {}
+
+    public record ReversalExecution(@NotNull @PositiveOrZero Long assetVersion,
+            @NotNull @PositiveOrZero Long ownershipVersion, @NotNull @PositiveOrZero Long locationVersion,
+            @NotBlank @Size(max = 64) String observedCode, @Size(max = 128) String observedSerial,
+            @NotNull Instant occurredAt, @NotNull Boolean physicalIdentityVerified,
+            @NotBlank @Size(min = 10, max = 2000) String evidence) {}
+
+    private static final List<Role> REVERSAL_INITIATORS = List.of(Role.ASSET_ADMIN, Role.WAREHOUSE_OPERATOR,
+            Role.DEPARTMENT_ASSET_MANAGER, Role.EMPLOYEE);
+
+    public Receipt requestReversal(Actor actor, long id, long version, UUID key, ReversalRequest input) {
+        var current = actors.revalidateLocked(actor);
+        var initiator = REVERSAL_INITIATORS.stream().filter(current::has).findFirst()
+                .orElseThrow(() -> new AssetHandoverPort.Failure("SCRAP_REVERSAL_FORBIDDEN", 403));
+        var rows = db.queryForList("SELECT * FROM fams_scrap_request WHERE id=? FOR UPDATE", id);
+        if (rows.isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_NOT_FOUND", 404);
+        }
+        var request = rows.getFirst();
+        if (initiator == Role.EMPLOYEE || initiator == Role.DEPARTMENT_ASSET_MANAGER) {
+            if (!Objects.equals(current.id(), request.get("creator_account_id"))) {
+                throw new AssetHandoverPort.Failure("SCRAP_REVERSAL_FORBIDDEN", 403);
+            }
+        }
+        String operation = "REVERSAL:" + id;
+        String hash = fingerprint(version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        if (!"STANDALONE".equals(request.get("source_type")) || !"EXECUTED".equals(request.get("request_status"))
+                || number(request, "version") != version || number(request, "asset_version") != input.assetVersion()) {
+            throw new AssetHandoverPort.Failure("SCRAP_REVERSAL_NOT_ALLOWED", 409);
+        }
+        if (!db.queryForList("SELECT id FROM fams_scrap_reversal WHERE request_id=? AND active_guard=1"
+                + " FOR UPDATE", id).isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_REVERSAL_OPEN", 409);
+        }
+        var disposition = db.queryForList("SELECT disposition_status FROM fams_scrap_disposition"
+                + " WHERE request_id=? FOR UPDATE", id);
+        if (disposition.isEmpty() || !"PENDING_DISPOSITION".equals(disposition.getFirst().get("disposition_status"))) {
+            throw new AssetHandoverPort.Failure("SCRAP_REVERSAL_NOT_ALLOWED", 409);
+        }
+        long asset = number(request, "asset_id");
+        var time = now();
+        assets.requireReversibleAsset(asset, input.assetVersion());
+        if (!assets.matchesActiveBin(input.locationId(), input.locationVersion())) {
+            throw new AssetHandoverPort.Failure("SCRAP_REVERSAL_TARGET_CHANGED", 409);
+        }
+        db.update("INSERT INTO fams_scrap_reversal(request_id,asset_id,creator_account_id,reason,asset_version,"
+                + "target_location_id,target_location_version,reversal_status,request_snapshot_json,"
+                + "created_at,updated_at) VALUES (?, ?, ?, ?, ?, ?, ?,'PENDING_ADMIN_DECISION',?,?,?)",
+                id, asset, current.id(), input.reason().strip(), input.assetVersion(),
+                input.locationId(), input.locationVersion(), json.writeValueAsString(input), time, time);
+        long reversal = Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
+        closeTodo(id, "DISPOSITION", time);
+        todo(id, "REVERSAL_DECIDE", "ASSET_ADMIN", null, time);
+        audit(actor, current, initiator, id, number(request, "version"), "SCRAP_REVERSAL_REQUESTED",
+                Map.of("reversalId", Long.toString(reversal), "input", input), time);
+        return remember(current, operation, key, hash, new Receipt(Long.toString(id), Long.toString(asset),
+                number(request, "version"), input.assetVersion(), number(request, "ownership_version"),
+                "PENDING_ADMIN_DECISION", null), time);
+    }
+
+    private Map<String, Object> reversalGuarded(long id, long version, long assetVersion) {
+        var parents = db.queryForList("SELECT request_id FROM fams_scrap_reversal WHERE id=?", id);
+        if (parents.isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_REVERSAL_NOT_FOUND", 404);
+        }
+        long request = number(parents.getFirst(), "request_id");
+        // Lock the parent before the sub-record so disposition completion and reversal serialize identically.
+        if (db.queryForList("SELECT id FROM fams_scrap_request WHERE id=? AND request_status='EXECUTED'"
+                + " AND source_type='STANDALONE' FOR UPDATE", request).isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_REVERSAL_CHANGED", 409);
+        }
+        var rows = db.queryForList("SELECT * FROM fams_scrap_reversal WHERE id=? FOR UPDATE", id);
+        if (rows.isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_REVERSAL_NOT_FOUND", 404);
+        }
+        var reversal = rows.getFirst();
+        if (number(reversal, "version") != version || number(reversal, "asset_version") != assetVersion) {
+            throw new AssetHandoverPort.Failure("SCRAP_REVERSAL_CHANGED", 409);
+        }
+        if (db.queryForList("SELECT request_id FROM fams_scrap_disposition WHERE request_id=?"
+                + " AND disposition_status='PENDING_DISPOSITION' FOR UPDATE", request).isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_REVERSAL_CHANGED", 409);
+        }
+        assets.requireReversibleAsset(number(reversal, "asset_id"), assetVersion);
+        return reversal;
+    }
+
+    public Receipt decideReversal(Actor actor, long id, long version, UUID key, ReversalDecision input) {
+        var current = current(actor, Role.ASSET_ADMIN);
+        boolean approve = "APPROVE".equals(input.result());
+        if (!approve && !"REJECT".equals(input.result())) {
+            throw new AssetHandoverPort.Failure("SCRAP_REVERSAL_INPUT_INVALID", 400);
+        }
+        String operation = "REVERSAL_DECISION:" + id;
+        String hash = fingerprint(version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var reversal = reversalGuarded(id, version, input.assetVersion());
+        if (!"PENDING_ADMIN_DECISION".equals(reversal.get("reversal_status"))) {
+            throw new AssetHandoverPort.Failure("SCRAP_REVERSAL_CHANGED", 409);
+        }
+        long request = number(reversal, "request_id"), asset = number(reversal, "asset_id");
+        var time = now();
+        if (approve && !assets.matchesActiveBin(number(reversal, "target_location_id"),
+                number(reversal, "target_location_version"))) {
+            throw new AssetHandoverPort.Failure("SCRAP_REVERSAL_TARGET_CHANGED", 409);
+        }
+        db.update("UPDATE fams_scrap_reversal SET reversal_status=?,approval_snapshot_json=?,"
+                + "version=version+1,updated_at=? WHERE id=?",
+                approve ? "WAITING_WAREHOUSE_CLAIM" : "REJECTED",
+                json.writeValueAsString(Map.of("decision", input, "decidedBy", Long.toString(current.id()),
+                        "decidedAt", time)), time, id);
+        closeTodo(request, "REVERSAL_DECIDE", time);
+        if (approve) {
+            todo(request, "REVERSAL_CLAIM", "WAREHOUSE_OPERATOR", null, time);
+        } else {
+            var processor = db.queryForObject("SELECT processor_account_id FROM fams_scrap_disposition"
+                    + " WHERE request_id=?", Long.class, request);
+            todo(request, "DISPOSITION", "WAREHOUSE_OPERATOR", processor, time);
+        }
+        audit(actor, current, Role.ASSET_ADMIN, request, version,
+                approve ? "SCRAP_REVERSAL_APPROVED" : "SCRAP_REVERSAL_REJECTED",
+                Map.of("reversalId", Long.toString(id), "input", input), time);
+        return remember(current, operation, key, hash, new Receipt(Long.toString(request), Long.toString(asset),
+                version + 1, input.assetVersion(), number(reversal, "ownership_version"),
+                approve ? "WAITING_WAREHOUSE_CLAIM" : "REJECTED", null), time);
+    }
+
+    public Receipt claimReversal(Actor actor, long id, long version, UUID key, ReversalClaim input) {
+        var current = current(actor, Role.WAREHOUSE_OPERATOR);
+        String operation = "REVERSAL_CLAIM:" + id;
+        String hash = fingerprint(version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var reversal = reversalGuarded(id, version, input.assetVersion());
+        if (!"WAITING_WAREHOUSE_CLAIM".equals(reversal.get("reversal_status"))) {
+            throw new AssetHandoverPort.Failure("SCRAP_REVERSAL_CHANGED", 409);
+        }
+        long request = number(reversal, "request_id"), asset = number(reversal, "asset_id");
+        var time = now();
+        long ownership = number(reversal, "ownership_version") + 1;
+        db.update("UPDATE fams_scrap_reversal SET reversal_status='PROCESSING',processor_account_id=?,"
+                + "ownership_version=?,version=version+1,updated_at=? WHERE id=?", current.id(), ownership, time, id);
+        closeTodo(request, "REVERSAL_CLAIM", time);
+        todo(request, "REVERSAL_EXECUTE", "WAREHOUSE_OPERATOR", current.id(), time);
+        audit(actor, current, Role.WAREHOUSE_OPERATOR, request, version, "SCRAP_REVERSAL_CLAIMED", input, time);
+        return remember(current, operation, key, hash, new Receipt(Long.toString(request), Long.toString(asset),
+                version + 1, input.assetVersion(), ownership, "PROCESSING", Long.toString(current.id())), time);
+    }
+
+    public Receipt executeReversal(Actor actor, long id, long version, UUID key, ReversalExecution input) {
+        var current = current(actor, Role.WAREHOUSE_OPERATOR);
+        String operation = "REVERSAL_EXECUTE:" + id;
+        String hash = fingerprint(version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var reversal = reversalGuarded(id, version, input.assetVersion());
+        if (!"PROCESSING".equals(reversal.get("reversal_status"))
+                || number(reversal, "ownership_version") != input.ownershipVersion()) {
+            throw new AssetHandoverPort.Failure("SCRAP_REVERSAL_CHANGED", 409);
+        }
+        if (!Objects.equals(reversal.get("processor_account_id"), current.id())) {
+            throw new AssetHandoverPort.Failure("SCRAP_PROCESSOR_REQUIRED", 403);
+        }
+        long request = number(reversal, "request_id"), asset = number(reversal, "asset_id");
+        var time = now();
+        Instant created = instant(reversal.get("created_at"));
+        if (!Boolean.TRUE.equals(input.physicalIdentityVerified()) || input.evidence().strip().length() < 10
+                || input.occurredAt().isBefore(created) || input.occurredAt().isAfter(time.plusSeconds(2))
+                || !input.occurredAt().equals(input.occurredAt().truncatedTo(ChronoUnit.MILLIS))) {
+            throw new AssetHandoverPort.Failure("SCRAP_PHYSICAL_EVIDENCE_INVALID", 400);
+        }
+        if (number(reversal, "target_location_version") != input.locationVersion()) {
+            throw new AssetHandoverPort.Failure("SCRAP_REVERSAL_TARGET_CHANGED", 409);
+        }
+        long assetVersion = assets.reverseToStock(asset, input.assetVersion(), request,
+                number(reversal, "target_location_id"), input.locationVersion(),
+                input.observedCode(), input.observedSerial(), current.id(), time);
+        if (db.update("UPDATE fams_scrap_disposition SET disposition_status='REVERSED',updated_at=?,"
+                + "version=version+1 WHERE request_id=? AND disposition_status='PENDING_DISPOSITION'",
+                time, request) != 1) {
+            throw new AssetHandoverPort.Failure("SCRAP_REVERSAL_CHANGED", 409);
+        }
+        db.update("UPDATE fams_scrap_reversal SET reversal_status='COMPLETED',execution_snapshot_json=?,"
+                + "asset_version=?,version=version+1,updated_at=? WHERE id=?",
+                json.writeValueAsString(input), assetVersion, time, id);
+        closeTodo(request, "REVERSAL_EXECUTE", time);
+        closeTodo(request, "DISPOSITION", time);
+        audit(actor, current, Role.WAREHOUSE_OPERATOR, request, version, "SCRAP_REVERSAL_EXECUTED", input, time);
         return remember(current, operation, key, hash, new Receipt(Long.toString(request), Long.toString(asset),
                 version + 1, assetVersion, input.ownershipVersion(), "COMPLETED", Long.toString(current.id())), time);
     }
@@ -816,6 +1026,10 @@ public class ScrapReviewService {
             throw new AssetHandoverPort.Failure("SCRAP_NOT_FOUND", 404);
         }
         var request = requests.getFirst();
+        if (!db.queryForList("SELECT id FROM fams_scrap_reversal WHERE request_id=? AND active_guard=1 FOR UPDATE",
+                id).isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_REVERSAL_OPEN", 409);
+        }
         var dispositions = db.queryForList("SELECT processor_account_id,disposition_status,version"
                 + " FROM fams_scrap_disposition WHERE request_id=? FOR UPDATE", id);
         if (dispositions.isEmpty() || !Objects.equals(dispositions.getFirst().get("processor_account_id"), current.id())) {
@@ -868,8 +1082,11 @@ public class ScrapReviewService {
         }
         String detail = json.writeValueAsString(Map.of("facts", input, "operatorName", operators.getFirst().get("name"),
                 "recordedBy", Long.toString(current.id()), "recordedAt", time));
-        db.update("UPDATE fams_scrap_disposition SET disposition_status='DISPOSED',completion_snapshot_json=?,"
-                + "version=version+1,updated_at=? WHERE request_id=?", detail, time, id);
+        if (db.update("UPDATE fams_scrap_disposition SET disposition_status='DISPOSED',"
+                + "completion_snapshot_json=?,version=version+1,updated_at=? WHERE request_id=?"
+                + " AND disposition_status='PENDING_DISPOSITION'", detail, time, id) != 1) {
+            throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_CHANGED", 409);
+        }
         if (db.update("UPDATE fams_todo SET todo_status='CLOSED',closed_at=? WHERE business_type='SCRAP'"
                 + " AND business_id=? AND todo_type='DISPOSITION' AND assignee_account_id=? AND closed_at IS NULL",
                 time, id, current.id()) != 1) {

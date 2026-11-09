@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { ScrapApiError, scrapOriginal, scrapRequest, scrapCorrectionStates, scrapStates, type ScrapAsset, type ScrapChoice,
+import { ScrapApiError, scrapOriginal, scrapRequest, scrapCorrectionStates, scrapReversalStates, scrapStates, type ScrapAsset, type ScrapChoice,
   type ScrapAttachment, type ScrapAttachmentCapabilities, type ScrapAttachmentKind,
   type ScrapIntent, type ScrapRequest } from "@/scrap/api";
 
@@ -19,6 +19,7 @@ const places = ref<ScrapChoice[]>([]), people = ref<ScrapChoice[]>([]), location
 const locationPage = ref(0), locationTotal = ref(0), peoplePage = ref(0), peopleTotal = ref(0);
 const bins = ref<ScrapChoice[]>([]), binPage = ref(0), binTotal = ref(0);
 const correctionLocation = ref(""), correctionReason = ref(""), correctionDecision = ref("");
+const reversalLocation = ref(""), reversalReason = ref(""), reversalDecision = ref("");
 const busy = ref(false), stale = ref(true), error = ref(""), notice = ref("");
 const confirmation = ref<ScrapIntent | null>(null), pending = ref<ScrapIntent | null>(null);
 const locked = computed(() => busy.value || !!confirmation.value || !!pending.value);
@@ -34,6 +35,7 @@ function clearFacts() {
   locationPage.value = 0; peoplePage.value = 0; locationTotal.value = 0; peopleTotal.value = 0;
   bins.value = []; binPage.value = 0; binTotal.value = 0;
   correctionLocation.value = ""; correctionReason.value = ""; correctionDecision.value = "";
+  reversalLocation.value = ""; reversalReason.value = ""; reversalDecision.value = "";
   decisionReason.value = ""; approved.value = ""; observed.value = ""; serial.value = "";
   occurred.value = ""; physical.value = false; evidence.value = ""; due.value = "";
   recipient.value = ""; dispositionEvidence.value = [];
@@ -146,7 +148,8 @@ async function loadAssets(next = 1) {
 async function catalog(kind: "location" | "employee" | "bin") {
   if (locked.value || stale.value || !(detail.value?.actions.execute
       || kind === "employee" && detail.value?.actions.dispose
-      || kind === "bin" && detail.value?.actions.initiateCorrection)) return;
+      || kind === "bin" && (detail.value?.actions.initiateCorrection
+          || detail.value?.actions.initiateReversal))) return;
   const next = (kind === "location" ? locationPage.value : kind === "bin" ? binPage.value : peoplePage.value) + 1;
   const epoch = ++generation, owner = identity.value; busy.value = true;
   try {
@@ -160,7 +163,8 @@ async function catalog(kind: "location" | "employee" | "bin") {
   finally { if (current(epoch, owner)) busy.value = false; }
 }
 function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute" | "executeLoss" | "executeFactory" | "cancel"
-    | "requestCorrection" | "approveCorrection" | "rejectCorrection" | "claimCorrection" | "executeCorrection") {
+    | "requestCorrection" | "approveCorrection" | "rejectCorrection" | "claimCorrection" | "executeCorrection"
+    | "requestReversal" | "approveReversal" | "rejectReversal" | "claimReversal" | "executeReversal") {
   if (locked.value || stale.value) return;
   const row = detail.value;
   let path = "", body: Record<string, unknown>, version: number | undefined, summary: string;
@@ -214,6 +218,47 @@ function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute" |
         observedCode: observed.value.trim(), observedSerial: serial.value.trim(), occurredAt: time.toISOString(),
         physicalIdentityVerified: true, evidence: evidence.value.trim() };
       summary = "执行纠正，将 " + row.source.assetCode + " 核验后恢复至批准仓位 " + correction.targetLocationName + "。";
+    }
+  } else if (action === "requestReversal") {
+    if (!row || !row.actions.initiateReversal) return;
+    const place = bins.value.find(item => item.id === reversalLocation.value);
+    if (!place || !reversalReason.value.trim()) {
+      error.value = "请选择有效入库仓位并填写冲正原因。"; return;
+    }
+    path = "/" + row.id + "/reversals"; version = row.version;
+    body = { assetVersion: row.assetVersion, locationId: place.id,
+      locationVersion: place.version, reason: reversalReason.value.trim() };
+    summary = "发起误报废冲正，建议将 " + row.source.assetCode + " 重新验收入至仓位 " + place.name + "，等待管理员确认。";
+  } else if (action === "approveReversal" || action === "rejectReversal"
+      || action === "claimReversal" || action === "executeReversal") {
+    const reversal = row?.reversal;
+    if (!reversal) return;
+    const capability = action === "approveReversal" || action === "rejectReversal"
+      ? "decideReversal" : action;
+    if (!row.actions[capability]) return;
+    version = reversal.version; body = { assetVersion: reversal.assetVersion };
+    if (capability === "decideReversal") {
+      if (!reversalDecision.value.trim()) { error.value = "请填写本次决定原因。"; return; }
+      path = "/reversals/" + reversal.id + "/decision";
+      body = { ...body, result: action === "approveReversal" ? "APPROVE" : "REJECT",
+        reason: reversalDecision.value.trim() };
+      summary = action === "approveReversal"
+        ? "批准冲正至仓位 " + reversal.targetLocationName + "，等待库管核验实物。"
+        : "驳回本次冲正，资产保持已报废并回到库管待处置。";
+    } else if (action === "claimReversal") {
+      path = "/reversals/" + reversal.id + "/claim";
+      summary = "取得本单冲正唯一处理权，核验实物后重新验收入库。";
+    } else {
+      const time = new Date(occurred.value);
+      if (!physical.value || !observed.value.trim() || row.source.serialNumber && !serial.value.trim()
+          || evidence.value.trim().length < 10 || !Number.isFinite(time.getTime())) {
+        error.value = "请核对原机编码、序列号、实际时刻及至少10字核验依据。"; return;
+      }
+      path = "/reversals/" + reversal.id + "/execute";
+      body = { ...body, ownershipVersion: reversal.ownershipVersion, locationVersion: reversal.targetLocationVersion,
+        observedCode: observed.value.trim(), observedSerial: serial.value.trim(), occurredAt: time.toISOString(),
+        physicalIdentityVerified: true, evidence: evidence.value.trim() };
+      summary = "执行冲正，将 " + row.source.assetCode + " 核验后重新验收入批准仓位 " + reversal.targetLocationName + "。";
     }
   } else {
     if (!row || row.lockVersion == null) return;
@@ -392,6 +437,32 @@ onBeforeUnmount(() => { live = false; reset(); });
         <label><input v-model="physical" type="checkbox"/>已亲见并核对同一原机与批准仓位一致</label>
         <button @click="prepare('executeCorrection')">核对执行纠正恢复</button>
       </fieldset>
+      <p v-if="detail.reversal">冲正进度 {{ scrapReversalStates[detail.reversal.status] || detail.reversal.status }} · 目标仓位 {{ detail.reversal.targetLocationName }} · 冲正原因 {{ detail.reversal.reason }} · 当前冲正办理人 {{ detail.reversal.processorAccountId || '尚未认领' }}</p>
+      <fieldset v-if="detail.actions.initiateReversal" :disabled="locked || stale">
+        <legend>发起误报废冲正</legend>
+        <p>本单已执行报废但尚未实际处置。请选择重新验收入的仓位并说明错误原因，批准后由库管核验实物恢复在库。</p>
+        <button :disabled="binPage > 0 && bins.length >= binTotal" @click="catalog('bin')">加载更多有效仓位</button>
+        <label>冲正目标仓位<select v-model="reversalLocation"><option value="">请选择</option><option v-for="item in bins" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
+        <label>冲正原因<textarea v-model="reversalReason" maxlength="1000"/></label>
+        <button @click="prepare('requestReversal')">核对发起误报废冲正</button>
+      </fieldset>
+      <fieldset v-if="detail.actions.decideReversal" :disabled="locked || stale">
+        <legend>确认误报废冲正</legend>
+        <p>目标仓位 {{ detail.reversal?.targetLocationName }} · 冲正原因 {{ detail.reversal?.reason }}</p>
+        <label>本次决定原因<textarea v-model="reversalDecision" maxlength="1000"/></label>
+        <button @click="prepare('approveReversal')">批准误报废冲正</button>
+        <button @click="prepare('rejectReversal')">驳回误报废冲正</button>
+      </fieldset>
+      <button v-if="detail.actions.claimReversal" :disabled="locked || stale" @click="prepare('claimReversal')">认领误报废冲正</button>
+      <fieldset v-if="detail.actions.executeReversal" :disabled="locked || stale">
+        <legend>核验原机并执行冲正入库</legend>
+        <p>批准目标仓位 {{ detail.reversal?.targetLocationName }}</p>
+        <label>实际原机编码<input v-model="observed" maxlength="64"/></label><label>实际原机序列号<input v-model="serial" maxlength="128"/></label>
+        <label>实际核验时间<input v-model="occurred" type="datetime-local" step="0.001"/></label>
+        <label>实际核验依据<textarea v-model="evidence" maxlength="2000"/></label>
+        <label><input v-model="physical" type="checkbox"/>已亲见并核对同一原机与批准仓位一致</label>
+        <button @click="prepare('executeReversal')">核对执行冲正入库</button>
+      </fieldset>
       <button v-if="detail.actions.claim" :disabled="locked || stale" @click="prepare('claim')">认领报废处理</button>
       <fieldset v-if="detail.actions.execute" :disabled="locked || stale"><h3>核验原机并执行报废</h3>
         <p>批准范围 {{ detail.decision?.decision?.approvedDisposition }}</p>
@@ -419,7 +490,7 @@ onBeforeUnmount(() => { live = false; reset(); });
       </fieldset>
       <p v-if="detail.disposition">处置进度 {{ detail.disposition.disposition_status === 'PENDING_DISPOSITION' ? '待实际处置'
         : detail.disposition.disposition_status === 'DISPOSED' ? '已处置' : detail.disposition.disposition_status === 'LOSS_WRITTEN_OFF' ? '遗失核销'
-        : detail.disposition.disposition_status }}<span v-if="detail.disposition.due_date"> · 计划日期 {{ detail.disposition.due_date }}</span></p>
+        : detail.disposition.disposition_status === 'REVERSED' ? '已因冲正撤销' : detail.disposition.disposition_status }}<span v-if="detail.disposition.due_date"> · 计划日期 {{ detail.disposition.due_date }}</span></p>
       <p v-if="detail.disposition?.completion">实际处置 {{ detail.disposition.completion.occurredAt }} · {{ detail.disposition.completion.method }}
         <span v-if="detail.disposition.completion.recipient">· 处置对象 {{ detail.disposition.completion.recipient }}</span><span v-if="detail.disposition.completion.operatorName"> · 经办人 {{ detail.disposition.completion.operatorName }}</span></p>
       <fieldset v-if="detail.actions.dispose" :disabled="locked || stale || !capabilities?.canRead">

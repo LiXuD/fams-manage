@@ -15,8 +15,8 @@ const origin = "https://scrap-test.invalid";
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "fams-native-scrap-"));
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0WQAAAAASUVORK5CYII=", "base64");
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
-const writes = [], uploads = [], completions = [], correctionWrites = [], clients = new Map();
-let drop = true, dropUpload = true, dropCompletion = true, dropCorrection = true;
+const writes = [], uploads = [], completions = [], correctionWrites = [], reversalWrites = [], clients = new Map();
+let drop = true, dropUpload = true, dropCompletion = true, dropCorrection = true, dropReversal = true;
 function target(url) {
     assert.ok(url.startsWith(origin + "/api/v1/mini/scrap-requests"));
     return "http://127.0.0.1:" + port + url.slice(origin.length);
@@ -42,11 +42,18 @@ function services(role) {
                     body: input.data === undefined ? undefined : JSON.stringify(input.data), redirect: "error",
                 });
                 const data = await response.json();
-                if (input.method === "POST" && input.url.endsWith("/execute")) {
+                if (input.method === "POST" && /\/scrap-requests\/[0-9]+\/execute$/.test(input.url)) {
                     writes.push({ path: input.url, key: input.header["Idempotency-Key"],
                         version: input.header["If-Match-Version"], body: structuredClone(input.data) });
                     if (drop && response.status === 200) {
                         drop = false; input.fail(Error("Owned adapter dropped committed scrap response")); return;
+                    }
+                }
+                if (input.method === "POST" && /\/reversals\/[0-9]+\/execute$/.test(input.url)) {
+                    reversalWrites.push({ path: input.url, key: input.header["Idempotency-Key"],
+                        version: input.header["If-Match-Version"], body: structuredClone(input.data) });
+                    if (dropReversal && response.status === 200) {
+                        dropReversal = false; input.fail(Error("Owned adapter dropped committed reversal response")); return;
                     }
                 }
                 if (input.method === "POST" && /\/corrections\/[0-9]+\/execute$/.test(input.url)) {
@@ -238,10 +245,50 @@ try {
     await correctingWarehouse.onRetry(); okay(correctingWarehouse);
     assert.deepEqual(correctionWrites[1], frozenCorrection);
     assert.equal(correctionWrites.length, 2);
-    for (const value of [employee, admin, warehouse, correctingAdmin, correctingWarehouse]) value.onUnload();
+    const reversalId = process.env.FAMS_TEST_SCRAP_REVERSAL_REQUEST;
+    assert.match(reversalId ?? "", /^[1-9][0-9]{0,18}$/);
+    const reversingWarehouse = await page("warehouse", reversalId);
+    assert.equal(reversingWarehouse.data.detail.status, "EXECUTED");
+    assert.equal(reversingWarehouse.data.detail.disposition.disposition_status, "PENDING_DISPOSITION");
+    assert.equal(reversingWarehouse.data.detail.actions.initiateReversal, true);
+    await reversingWarehouse.onCatalog(event({ kind: "bin" })); okay(reversingWarehouse);
+    const reversalBin = reversingWarehouse.data.bins.findIndex(item => item.id === "951000");
+    assert.ok(reversalBin >= 0);
+    reversingWarehouse.onChoice({ ...event({ kind: "bin" }), detail: { value: String(reversalBin) } });
+    reversingWarehouse.onField(field("reversalReason", "原机被误判报废，实物完好且尚未实际处置"));
+    await act(reversingWarehouse, "requestReversal"); okay(reversingWarehouse);
+    assert.equal(reversingWarehouse.data.detail.actions.initiateReversal, false);
+    assert.equal(reversingWarehouse.data.detail.reversal.status, "PENDING_ADMIN_DECISION");
+    assert.equal(reversingWarehouse.data.detail.reversal.targetLocationName, "Original bin");
+    const reversingAdmin = await page("admin", reversalId);
+    assert.equal(reversingAdmin.data.detail.actions.decideReversal, true);
+    reversingAdmin.onField(field("reversalDecision", "批准误报废冲正重新验收入库"));
+    await act(reversingAdmin, "approveReversal"); okay(reversingAdmin);
+    assert.equal(reversingAdmin.data.detail.reversal.status, "WAITING_WAREHOUSE_CLAIM");
+    await reversingWarehouse.onRefresh(); okay(reversingWarehouse);
+    assert.equal(reversingWarehouse.data.detail.actions.claimReversal, true);
+    await act(reversingWarehouse, "claimReversal"); okay(reversingWarehouse);
+    assert.equal(reversingWarehouse.data.detail.reversal.status, "PROCESSING");
+    reversingWarehouse.onField(field("observed", "REP-ASSET-951023"));
+    reversingWarehouse.onField(field("evidence", "现场亲见原机并核对批准仓位一致后重新验收入库保管"));
+    reversingWarehouse.onNow(); reversingWarehouse.onChecked({ detail: { value: true } });
+    await act(reversingWarehouse, "executeReversal");
+    assert.equal(reversingWarehouse.data.retry, true);
+    const frozenReversal = structuredClone(reversalWrites[0]);
+    await reversingWarehouse.onRefresh();
+    reversingWarehouse.onHide(); await reversingWarehouse.onShow();
+    assert.equal(reversingWarehouse.data.detail.status, "EXECUTED");
+    assert.equal(reversingWarehouse.data.detail.reversal, null);
+    assert.equal(reversingWarehouse.data.detail.disposition.disposition_status, "REVERSED");
+    assert.match(reversingWarehouse.data.pendingSummary, /冲正|仓位/);
+    await reversingWarehouse.onRetry(); okay(reversingWarehouse);
+    assert.deepEqual(reversalWrites[1], frozenReversal);
+    assert.equal(reversalWrites.length, 2);
+    for (const value of [employee, admin, warehouse, correctingAdmin, correctingWarehouse,
+        reversingAdmin, reversingWarehouse]) value.onUnload();
     console.log(JSON.stringify({ nativeScrapExecuted: true, originalReceiptReplayed: true,
         separatePendingDisposition: true, nativeScrapAttachments: true, nativeDispositionClosed: true,
-        nativeScrapCorrectionClosed: true, requestId: id }));
+        nativeScrapCorrectionClosed: true, nativeScrapReversalClosed: true, requestId: id }));
 } finally {
     fs.rmSync(root, { recursive: true, force: true });
 }

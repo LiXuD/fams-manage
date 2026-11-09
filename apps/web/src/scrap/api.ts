@@ -11,8 +11,12 @@ export interface ScrapRequest {
   source: { assetCode: string; name: string; serialNumber: string };
   actions: { decide: boolean; cancel?: boolean; claim: boolean; execute: boolean; executeLoss?: boolean;
     executeFactory?: boolean; dispose?: boolean; initiateCorrection?: boolean; decideCorrection?: boolean;
-    claimCorrection?: boolean; executeCorrection?: boolean };
+    claimCorrection?: boolean; executeCorrection?: boolean; initiateReversal?: boolean; decideReversal?: boolean;
+    claimReversal?: boolean; executeReversal?: boolean };
   correction?: { id: string; version: number; status: string; assetVersion: number; lockVersion: number;
+    targetLocationId: string; targetLocationVersion: number; targetLocationName: string;
+    ownershipVersion: number; processorAccountId: string | null; reason: string } | null;
+  reversal?: { id: string; version: number; status: string; assetVersion: number;
     targetLocationId: string; targetLocationVersion: number; targetLocationName: string;
     ownershipVersion: number; processorAccountId: string | null; reason: string } | null;
   decision: { decision?: { approvedDisposition?: string } } | null;
@@ -96,4 +100,8 @@ export const scrapStates: Record<string, string> = {
 export const scrapCorrectionStates: Record<string, string> = {
   PENDING_ADMIN_DECISION: "纠正待管理员确认", WAITING_WAREHOUSE_CLAIM: "纠正待库管认领",
   PROCESSING: "纠正待实物核验恢复", COMPLETED: "纠正已恢复在库", REJECTED: "纠正已驳回",
+};
+export const scrapReversalStates: Record<string, string> = {
+  PENDING_ADMIN_DECISION: "冲正待管理员确认", WAITING_WAREHOUSE_CLAIM: "冲正待库管认领",
+  PROCESSING: "冲正待实物核验入库", COMPLETED: "冲正已恢复在库", REJECTED: "冲正已驳回",
 };

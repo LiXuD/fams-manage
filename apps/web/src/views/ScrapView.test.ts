@@ -329,6 +329,78 @@ it("runs the controlled correction from frozen invalid custody through approved 
   wrapper.unmount();
 });
 
+it("runs the reversal of an executed but un-disposed scrap through approved bin re-acceptance", async () => {
+  const reversal = { id: "97", version: 0, status: "PENDING_ADMIN_DECISION", assetVersion: 3,
+    targetLocationId: "21", targetLocationVersion: 8, targetLocationName: "归还仓位", ownershipVersion: 0,
+    processorAccountId: null, reason: "原机被误判报废，实物完好且未处置" };
+  const row: ScrapRequest = { ...report(), version: 4, status: "EXECUTED", lockVersion: null, reversal: null,
+    disposition: { disposition_status: "PENDING_DISPOSITION", due_date: "2026-12-06", version: 8 },
+    actions: { decide: false, claim: false, execute: false, initiateReversal: true } };
+  const writes: { url: string; input: RequestInit }[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, input: RequestInit) => {
+    if (input.method === "POST") {
+      writes.push({ url, input });
+      if (url.endsWith("/reversals")) {
+        row.actions.initiateReversal = false; row.actions.decideReversal = true;
+        row.reversal = { ...reversal };
+      } else if (url.endsWith("/decision")) {
+        row.actions.decideReversal = false; row.actions.claimReversal = true;
+        row.reversal = { ...reversal, version: 1, status: "WAITING_WAREHOUSE_CLAIM" };
+      } else if (url.endsWith("/claim")) {
+        row.actions.claimReversal = false; row.actions.executeReversal = true;
+        row.reversal = { ...reversal, version: 2, status: "PROCESSING", ownershipVersion: 1, processorAccountId: "1" };
+      } else if (url.endsWith("/execute")) {
+        row.actions.executeReversal = false; row.reversal = null;
+        row.disposition = { ...row.disposition!, disposition_status: "REVERSED", version: 9 };
+      }
+      return response({ id: row.id });
+    }
+    if (url.includes("/execution-catalog/bin")) return response({ items: [{ id: "21", name: "归还仓位", version: 8 }], total: 1 });
+    if (url.endsWith("attachment-capabilities")) return response({ canRead: false });
+    return response(url.includes("?") ? { items: [row], total: 1 } : row);
+  }));
+  const wrapper = mount(ScrapView); await flushPromises();
+  await button(wrapper, "ORIGINAL-1 · 已执行报废").trigger("click"); await flushPromises();
+  await button(wrapper, "加载更多有效仓位").trigger("click"); await flushPromises();
+  await field(wrapper, "冲正目标仓位", "21");
+  await field(wrapper, "冲正原因", "原机被误判报废，实物完好且未处置");
+  await button(wrapper, "核对发起误报废冲正").trigger("click");
+  await button(wrapper, "确认提交本次办理").trigger("click"); await flushPromises();
+  expect(writes[0]?.url).toBe("/api/v1/scrap-requests/" + row.id + "/reversals");
+  expect(writes[0]?.input.headers).toMatchObject({ "If-Match-Version": "4" });
+  expect(JSON.parse(String(writes[0]?.input.body))).toEqual({ assetVersion: 3,
+    locationId: "21", locationVersion: 8, reason: "原机被误判报废，实物完好且未处置" });
+  await button(wrapper, "批准误报废冲正").trigger("click");
+  expect(writes).toHaveLength(1);
+  await field(wrapper, "本次决定原因", "批准重新验收入库");
+  await button(wrapper, "批准误报废冲正").trigger("click");
+  await button(wrapper, "确认提交本次办理").trigger("click"); await flushPromises();
+  expect(writes[1]?.url).toBe("/api/v1/scrap-requests/reversals/97/decision");
+  expect(writes[1]?.input.headers).toMatchObject({ "If-Match-Version": "0" });
+  expect(JSON.parse(String(writes[1]?.input.body))).toEqual({ assetVersion: 3,
+    result: "APPROVE", reason: "批准重新验收入库" });
+  await button(wrapper, "认领误报废冲正").trigger("click");
+  await button(wrapper, "确认提交本次办理").trigger("click"); await flushPromises();
+  expect(writes[2]?.url).toBe("/api/v1/scrap-requests/reversals/97/claim");
+  expect(writes[2]?.input.headers).toMatchObject({ "If-Match-Version": "1" });
+  expect(JSON.parse(String(writes[2]?.input.body))).toEqual({ assetVersion: 3 });
+  await flushPromises();
+  expect(wrapper.text()).toContain("冲正进度 冲正待实物核验入库 · 目标仓位 归还仓位");
+  await field(wrapper, "实际原机编码", "ORIGINAL-1");
+  await field(wrapper, "实际原机序列号", "SERIAL-1");
+  await field(wrapper, "实际核验时间", "2026-11-09T10:00:00");
+  await field(wrapper, "实际核验依据", "现场核对原机与批准仓位一致后重新验收入库");
+  await field(wrapper, "已亲见并核对", true);
+  await button(wrapper, "核对执行冲正入库").trigger("click");
+  await button(wrapper, "确认提交本次办理").trigger("click"); await flushPromises();
+  expect(writes[3]?.url).toBe("/api/v1/scrap-requests/reversals/97/execute");
+  expect(writes[3]?.input.headers).toMatchObject({ "If-Match-Version": "2" });
+  expect(JSON.parse(String(writes[3]?.input.body))).toMatchObject({ assetVersion: 3,
+    ownershipVersion: 1, locationVersion: 8, observedCode: "ORIGINAL-1", physicalIdentityVerified: true });
+  expect(wrapper.text()).toContain("处置进度 已因冲正撤销");
+  wrapper.unmount();
+});
+
 it("executes manufacturer scrap from the recorded proof and its actual date", async () => {
   const row: ScrapRequest = { ...report(), sourceType: "FACTORY_REPLACEMENT", factoryDisposition: "FACTORY_RETAINED",
     sourceBusinessId: "71", actions: { decide: false, claim: false, execute: false, executeFactory: true } };

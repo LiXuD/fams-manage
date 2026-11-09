@@ -1245,6 +1245,8 @@ def verify_java_quality(context: RuntimeContext) -> None:
              "-Dd6.22.loss.termination.upgrade=true", "LoanLossTerminationUpgradeRuntimeCase"),
             ("scrap V61 populated correction expansion and repeat",
              "-Dd6.22.scrap.correction.upgrade.runtime=true", "ScrapCorrectionUpgradeRuntimeCase"),
+            ("scrap V62 populated reversal expansion and repeat",
+             "-Dd6.22.scrap.reversal.upgrade.runtime=true", "ScrapReversalUpgradeRuntimeCase"),
             ("scrap submission freeze, audit rollback and receipt HTTP",
              "-Dd6.22.scrap.submit.runtime=true", "ScrapSubmitHttpRuntimeCase"),
             ("actual independent loss verification HTTP", "-Dd6.21.loss.runtime=true",
