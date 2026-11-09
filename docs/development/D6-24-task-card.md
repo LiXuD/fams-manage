@@ -15,12 +15,30 @@
 
 本片刻意不改变已复核行为：领用交接的接收截止用瞬时加自然日、调拨用当日对齐两种既有口径保持原样，其统一随 B 片的提醒判定一并处理，避免在底座片中改写 D6-12/D6-14 已验收事实。
 
+## D6-24B1 跨域提醒扫描与去重
+
+B 片按闭环再分两片：B1 为只写提醒事实的扫描引擎，B2 为待办与超期读取端点及双端消息中心。
+
+V65 `fams_business_reminder` 一行代表一次不可变的通知事实，唯一键为（业务类型、对象、阶段、冻结截止时刻、档位、发生日、`recipient_slot`）。`recipient_slot` 是 `COALESCE(recipient_account_id,0)` 的 STORED 生成列：MySQL 唯一键放行任意多个 NULL，直接用可空接收人列做键会让池级提醒每轮重复插入；生成列同时保留接收人外键。阶段、档位与接收池三段 CHECK 防止新域写入口径外的值，`reminder_business_date>=notice_date` 保证只会记录已发生的档位。
+
+`BusinessReminderService.scan()` 七段扫描全部以对象自身已冻结的快照与时区推导档位，不新增逐域时限列，也不改写任何业务状态：
+
+- 入库三段（`ADMIN_DECISION`/`WAREHOUSE_CLAIM`/`FIRST_EXECUTION`）读 `*_due_at`；管理员确认额外用 `BusinessCalendar.nthWorkday(snapshot, zone, submitted_at, 1)` 推导"1 个工作日未处理"档，因为确认截止本身可能还有数个工作日。
+- 领用交接与调拨实物接收（`HANDOVER_RECEIPT`）用快照时区的 24 小时前、当日、逾期三档；接收人经 `fams_system_account` 的 ENABLED 账号映射，映射不到或逾期责任在管理员时回退 `ASSET_ADMIN` 池。领用段以 `fams_requisition_allocation` 为分页驱动表（`business_id` 即分配行号），与既有 `REQUISITION_ALLOCATION` 待办口径一致。
+- 盘点截止（`INVENTORY_COMPLETION`）对 `DISTINCT executor_account_id` 逐人通知，无执行人时整单进管理员池；借用归还继续走已复核的 V25 `fams_loan_reminder`，本片不重复建第二条事实。
+- 返厂收回、报失复核、报废处置按 DATE 字段与 ACTIVE 参数版本的时区取当日 24:00 作为截止时刻。返厂的 `OVERDUE_EVERY_7_DAYS` 发生日由到期日推导（`due + 7×max(1,⌊(today-due)/7⌋)`）而非 `today`，因此续跑或重启仍落在同一周桶，不会每天新增一条逾期提醒。
+
+每档只在 `today>=noticeDate` 时写 `INSERT ... ON DUPLICATE KEY UPDATE id=id`，故同档位同发生日重跑零新增；扫描按 `x.id>? ORDER BY x.id LIMIT 200` 游标分页，JOIN 参数版本表不会放大或丢行。`BusinessReminderScheduler` 与借用扫描同为分钟级固定延迟，站内可达不依赖外部通道。
+
+DATETIME 经当前驱动映射为 `LocalDateTime`（UTC 墙钟），`instant()` 与既有 `RepairFactoryGuard` 同口径按 `ZoneOffset.UTC` 换算，避免直接强转 `Timestamp` 抛 ClassCastException。
+
 ## 验证
 
 - `BusinessCalendarTest` 6 项：周末起点跳下个工作日、节假日跳过、补班日优先于节假日、跨年（1 月 1 日休 → 下个工作日为周一）、同一瞬时在企业时区与 UTC 下的起算日与截止时刻差异、`workdays<1` 拒绝。
 - 回归行为不变：`IdentityMasterDataHttpTest` 24 项（参数九键校验与版本生效）、`InboundHttpTest` 1 项真实 HTTP/MySQL 全流程（含三段 `*_due_at` 前后稳定断言）在自有隔离 MySQL 8.4.11 通过，日志 output/d6-24-calendar-runtime.log。
-- `FamsArchitectureTest` 与 `FamsArchitectureRulesTest` 各 3 项通过，inbound→masterdata 新增静态依赖未形成模块环；Checkstyle 与 SpotBugs 零报告。
+- `BusinessReminderRuntimeCase` 1 项（自有隔离 MySQL 8.4.11，`scripts/verify-d6-03a.py` 已登记 d6-24 独立库，日志 output/d6-24-reminder-runtime.log）固定时钟 2026-11-09（周一）：入库待确认（周五提交、2 个工作日截止）只得"1 个工作日未处理"一档、执行超期只得 `OVERDUE`、领取截止在下周零通知；交接接收 24 小时前与当日两档且接收人映射到本人账号；盘点两位执行人各 4 档共 8 行、无执行人整单进管理员池零提前通知；返厂 10-29/11-01/11-08 三档（周桶由到期日推导）；报失复核 2 档、报废处置 3 档。九组共 20 行；同日重跑仍 20 行；推进到 11-13 时领取段补出 `DUE_IN_1_DAY`+`OVERDUE`、接收段补出 `OVERDUE`、周桶仍为 1 行；改盘点到期日后按新截止时刻另发四档。
+- `FamsArchitectureTest` 与 `FamsArchitectureRulesTest` 各 3 项通过，inbound→masterdata 与 reminder→masterdata 新增静态依赖未形成模块环；Checkstyle 与 SpotBugs 零报告。
 
 ## 尚待交付
 
-B 片跨域提醒扫描与异常清单读取端点及双端消息中心；C 片值班提醒人与持续未处理升级、角色恢复可见性；D 片外部通道兜底、指标与 R-08 证据。真实短信、微信模板与真机触达仍依 D6-09B/10B，本卡不宣称已验证。
+B2 片的待办与超期读取端点、按人已读状态、PC 与小程序消息中心及异常清单，以及档位变化时关闭旧待办的接续；C 片值班提醒人与持续未处理升级、角色恢复可见性；D 片外部通道兜底、指标与 R-08 证据。真实短信、微信模板与真机触达仍依 D6-09B/10B，本卡不宣称已验证。

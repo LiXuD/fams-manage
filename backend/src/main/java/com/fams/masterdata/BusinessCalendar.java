@@ -18,10 +18,10 @@ public final class BusinessCalendar {
     }
 
     /**
-     * Start of the day following the nth workday after the given moment, in the supplied zone, so a
-     * deadline covers exactly that many whole workdays.
+     * The nth workday after the zone day of the given moment, skipping weekends and holidays unless the
+     * date is a registered adjusted workday.
      */
-    public static Instant workdayDeadline(JsonNode snapshot, ZoneId zone, Instant moment, long workdays) {
+    public static LocalDate nthWorkday(JsonNode snapshot, ZoneId zone, Instant moment, long workdays) {
         if (workdays < 1) {
             throw new IllegalArgumentException("ASSET_PARAMETER_WORKDAYS_INVALID");
         }
@@ -32,7 +32,15 @@ public final class BusinessCalendar {
                 counted++;
             }
         }
-        return date.plusDays(1).atStartOfDay(zone).toInstant();
+        return date;
+    }
+
+    /**
+     * Start of the day following the nth workday after the given moment, in the supplied zone, so a
+     * deadline covers exactly that many whole workdays.
+     */
+    public static Instant workdayDeadline(JsonNode snapshot, ZoneId zone, Instant moment, long workdays) {
+        return nthWorkday(snapshot, zone, moment, workdays).plusDays(1).atStartOfDay(zone).toInstant();
     }
 
     private static boolean containsDate(JsonNode values, LocalDate date) {
