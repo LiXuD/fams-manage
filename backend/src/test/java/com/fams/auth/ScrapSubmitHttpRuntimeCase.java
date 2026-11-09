@@ -91,12 +91,13 @@ class ScrapSubmitHttpRuntimeCase {
         db.update("DELETE FROM fams_attachment_scope WHERE business_type IN ('SCRAP','SCRAP_DISPOSITION')"
                 + " AND business_id IN (SELECT id FROM fams_scrap_request WHERE asset_id=951020)");
         db.update("DELETE FROM fams_account_authorization WHERE account_id BETWEEN 951001 AND 951010");
-        String requests = " IN (SELECT id FROM fams_scrap_request WHERE asset_id=951020)";
+        String requests = " IN (SELECT id FROM fams_scrap_request WHERE asset_id BETWEEN 951020 AND 951023)";
         db.update("DELETE FROM fams_todo WHERE business_type='SCRAP' AND business_id" + requests);
+        db.update("DELETE FROM fams_scrap_correction WHERE request_id" + requests);
         db.update("DELETE FROM fams_scrap_disposition WHERE request_id" + requests);
         db.update("DELETE FROM fams_scrap_event WHERE request_id" + requests);
         db.update("DELETE FROM fams_scrap_receipt WHERE scrap_request_id" + requests);
-        db.update("DELETE FROM fams_scrap_request WHERE asset_id=951020");
+        db.update("DELETE FROM fams_scrap_request WHERE asset_id BETWEEN 951020 AND 951023");
         fixture.cleanup();
     }
 
@@ -258,6 +259,117 @@ class ScrapSubmitHttpRuntimeCase {
     }
 
     @Test
+    void correctionReopensInvalidTargetsAndRestoresFrozenScrapIntoApprovedBin() throws Exception {
+        var json = new tools.jackson.databind.ObjectMapper();
+        var submitted = json.readTree(submit(fixture.employee, UUID.randomUUID().toString(), INPUT).body());
+        String id = submitted.path("id").asText();
+        db.update("UPDATE fams_employee SET status='DISABLED' WHERE id=951002");
+        var frozen = write(fixture.admin, id, "decision", 0, UUID.randomUUID().toString(),
+                "{\"assetVersion\":1,\"lockVersion\":0,\"result\":\"REJECT\",\"reason\":\"经核对无需报废\"}");
+        assertEquals(200, frozen.statusCode(), frozen.body());
+        assertEquals("RESTORE_REQUIRED", json.readTree(frozen.body()).path("status").asText());
+        String open = "{\"assetVersion\":1,\"lockVersion\":0,\"locationId\":\"951000\",\"locationVersion\":0,"
+                + "\"reason\":\"原保管人已停用，指定有效仓位重新入库\"}";
+        assertEquals(403, write(fixture.other, id, "corrections", 1, UUID.randomUUID().toString(), open).statusCode());
+        assertEquals(409, write(fixture.admin, id, "corrections", 0, UUID.randomUUID().toString(), open).statusCode());
+        db.update("UPDATE fams_location SET status='DISABLED' WHERE id=951000");
+        assertEquals(409, write(fixture.admin, id, "corrections", 1, UUID.randomUUID().toString(), open).statusCode());
+        db.update("UPDATE fams_location SET status='ACTIVE' WHERE id=951000");
+        String requestKey = UUID.randomUUID().toString();
+        var opened = write(fixture.admin, id, "corrections", 1, requestKey, open);
+        assertEquals(200, opened.statusCode(), opened.body());
+        assertEquals(opened.body(), write(fixture.admin, id, "corrections", 1, requestKey, open).body());
+        assertEquals(409, write(fixture.admin, id, "corrections", 1, UUID.randomUUID().toString(), open).statusCode());
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_correction WHERE request_id=?"
+                + " AND active_guard=1", Long.class, Long.parseLong(id)));
+        String cid = json.readTree(get(fixture.admin, "/" + id).body()).path("correction").path("id").asText();
+        assertEquals(List.of("CORRECTION_DECIDE"), db.queryForList("SELECT todo_type FROM fams_todo"
+                + " WHERE business_type='SCRAP' AND business_id=? AND todo_status='OPEN'", String.class, id));
+        String decide = "{\"assetVersion\":1,\"lockVersion\":0,\"result\":\"APPROVE\","
+                + "\"reason\":\"批准按有效仓位受控纠正恢复在库\"}";
+        db.update("UPDATE fams_warehouse SET status='DISABLED' WHERE id=951000");
+        assertEquals(409, write(fixture.admin, "corrections/" + cid, "decision", 0,
+                UUID.randomUUID().toString(), decide).statusCode());
+        db.update("UPDATE fams_warehouse SET status='ACTIVE' WHERE id=951000");
+        var bounced = write(fixture.admin, "corrections/" + cid, "decision", 0, UUID.randomUUID().toString(),
+                decide.replace("\"APPROVE\"", "\"REJECT\"").replace("批准按有效仓位受控纠正恢复在库", "仓位需重新核实"));
+        assertEquals(200, bounced.statusCode(), bounced.body());
+        assertEquals("REJECTED", json.readTree(bounced.body()).path("status").asText());
+        assertEquals(List.of("RESTORE_REQUIRED"), db.queryForList("SELECT todo_type FROM fams_todo"
+                + " WHERE business_type='SCRAP' AND business_id=? AND todo_status='OPEN'", String.class, id));
+        var retried = write(fixture.admin, id, "corrections", 1, UUID.randomUUID().toString(), open);
+        assertEquals(200, retried.statusCode(), retried.body());
+        cid = json.readTree(get(fixture.admin, "/" + id).body()).path("correction").path("id").asText();
+        String approveKey = UUID.randomUUID().toString();
+        var approved = write(fixture.admin, "corrections/" + cid, "decision", 0, approveKey, decide);
+        assertEquals(200, approved.statusCode(), approved.body());
+        assertEquals(approved.body(), write(fixture.admin, "corrections/" + cid, "decision", 0, approveKey, decide).body());
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_todo WHERE business_type='SCRAP'"
+                + " AND business_id=? AND todo_type='CORRECTION_CLAIM' AND todo_status='OPEN'", Long.class, id));
+        String claim = "{\"assetVersion\":1,\"lockVersion\":0}";
+        String claimKey = UUID.randomUUID().toString();
+        assertEquals(403, write(fixture.other, "corrections/" + cid, "claim", 1,
+                UUID.randomUUID().toString(), claim).statusCode());
+        var claimed = write(fixture.warehouse, "corrections/" + cid, "claim", 1, claimKey, claim);
+        assertEquals(200, claimed.statusCode(), claimed.body());
+        assertEquals(claimed.body(), write(fixture.warehouse, "corrections/" + cid, "claim", 1, claimKey, claim).body());
+        assertEquals(409, write(fixture.otherWarehouse, "corrections/" + cid, "claim", 1,
+                UUID.randomUUID().toString(), claim).statusCode());
+        var execution = json.createObjectNode().put("assetVersion", 1).put("lockVersion", 0)
+                .put("ownershipVersion", 1).put("locationVersion", 0).put("observedCode", "REP-ASSET-951020")
+                .put("occurredAt", java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString())
+                .put("physicalIdentityVerified", true).put("evidence", "库管现场核对原机后按批准仓位重新入库保管");
+        String executeKey = UUID.randomUUID().toString();
+        String body = json.writeValueAsString(execution);
+        assertEquals(403, write(fixture.otherWarehouse, "corrections/" + cid, "execute", 2,
+                UUID.randomUUID().toString(), body).statusCode());
+        assertEquals(409, write(fixture.warehouse, "corrections/" + cid, "execute", 2,
+                UUID.randomUUID().toString(), body.replace("REP-ASSET-951020", "WRONG-ORIGINAL")).statusCode());
+        var evidenceShort = write(fixture.warehouse, "corrections/" + cid, "execute", 2,
+                UUID.randomUUID().toString(), body.replace("库管现场核对原机后按批准仓位重新入库保管", "依据不足"));
+        assertEquals(400, evidenceShort.statusCode(), evidenceShort.body());
+        db.execute("CREATE TRIGGER owned_scrap_audit_failure BEFORE INSERT ON fams_audit_event"
+                + " FOR EACH ROW BEGIN IF NEW.action='SCRAP_CORRECTION_EXECUTED' THEN SIGNAL"
+                + " SQLSTATE '45000' SET MESSAGE_TEXT='owned scrap correction audit failure'; END IF; END");
+        try {
+            assertEquals(500, write(fixture.warehouse, "corrections/" + cid, "execute", 2, executeKey, body).statusCode());
+            assertEquals("PENDING_SCRAP", db.queryForObject(
+                    "SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+            assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock"
+                    + " WHERE asset_id=951020 AND released_at IS NULL", Long.class));
+            assertEquals("PROCESSING", db.queryForObject("SELECT correction_status FROM fams_scrap_correction"
+                    + " WHERE id=?", String.class, Long.parseLong(cid)));
+        } finally {
+            db.execute("DROP TRIGGER owned_scrap_audit_failure");
+        }
+        var executed = write(fixture.warehouse, "corrections/" + cid, "execute", 2, executeKey, body);
+        assertEquals(200, executed.statusCode(), executed.body());
+        assertEquals(executed.body(), write(fixture.warehouse, "corrections/" + cid, "execute", 2, executeKey, body).body());
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_receipt WHERE operation=?",
+                Long.class, "CORRECTION_EXECUTE:" + cid));
+        var restored = db.queryForMap("SELECT lifecycle_status,custody_type,storage_warehouse_id,"
+                + "current_location_id,using_organization_id,responsible_employee_id FROM fams_asset WHERE id=951020");
+        assertEquals("IN_STOCK", restored.get("lifecycle_status"));
+        assertEquals("STORAGE", restored.get("custody_type"));
+        assertEquals(951000L, restored.get("storage_warehouse_id"));
+        assertEquals(951000L, restored.get("current_location_id"));
+        assertEquals(null, restored.get("using_organization_id"));
+        assertEquals(null, restored.get("responsible_employee_id"));
+        assertEquals("CORRECTED", db.queryForObject("SELECT request_status FROM fams_scrap_request WHERE id=?",
+                String.class, Long.parseLong(id)));
+        assertEquals("COMPLETED", db.queryForObject("SELECT correction_status FROM fams_scrap_correction WHERE id=?",
+                String.class, Long.parseLong(cid)));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock"
+                + " WHERE asset_id=951020 AND released_at IS NULL", Long.class));
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock"
+                + " WHERE asset_id=951020 AND release_reason='SCRAP_CORRECTED'", Long.class));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_todo WHERE business_type='SCRAP'"
+                + " AND business_id=? AND todo_status='OPEN'", Long.class, id));
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_timeline_event WHERE asset_id=951020"
+                + " AND event_type='SCRAP_CORRECTED_RESTORED'", Long.class));
+    }
+
+    @Test
     void queryScopeHidesPendingRequestsAndExecutionCatalogFromOtherActors() throws Exception {
         var json = new tools.jackson.databind.ObjectMapper();
         var submitted = json.readTree(submit(fixture.employee, UUID.randomUUID().toString(), INPUT).body());
@@ -301,11 +413,22 @@ class ScrapSubmitHttpRuntimeCase {
         }
         var script = java.nio.file.Path.of(System.getProperty("user.dir")).getParent()
                 .resolve("apps/miniprogram/test/runtime-scrap-http.mjs");
+        var correctionRequest = json.readTree(submit(fixture.other, UUID.randomUUID().toString(),
+                INPUT.replace("951020", "951021")).body()).path("id").asText();
+        var approvedLinked = write(fixture.admin, correctionRequest, "decision", 0, UUID.randomUUID().toString(),
+                "{\"assetVersion\":1,\"lockVersion\":0,\"result\":\"APPROVE\",\"reason\":\"核对完毕\","
+                        + "\"approvedDisposition\":\"待处置保管\"}");
+        assertEquals(200, approvedLinked.statusCode(), approvedLinked.body());
+        var frozen = write(fixture.admin, correctionRequest, "cancel", 1, UUID.randomUUID().toString(),
+                "{\"assetVersion\":1,\"lockVersion\":0,\"reason\":\"撤回报废申请\"}");
+        assertEquals(200, frozen.statusCode(), frozen.body());
+        assertEquals("RESTORE_REQUIRED", json.readTree(frozen.body()).path("status").asText());
         var builder = new ProcessBuilder("rtk", "proxy", System.getProperty("fams.test.node",
                 System.getenv().getOrDefault("FAMS_TEST_NODE_EXECUTABLE", "node")), script.toString())
                 .redirectErrorStream(true);
         builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
         builder.environment().put("FAMS_TEST_SCRAP_GRANTS", json.writeValueAsString(grants));
+        builder.environment().put("FAMS_TEST_SCRAP_CORRECTION_REQUEST", correctionRequest);
         var process = builder.start();
         try {
             org.junit.jupiter.api.Assertions.assertTrue(process.waitFor(45, java.util.concurrent.TimeUnit.SECONDS));
@@ -314,12 +437,22 @@ class ScrapSubmitHttpRuntimeCase {
             org.junit.jupiter.api.Assertions.assertTrue(output.contains("\"nativeScrapExecuted\":true"), output);
             org.junit.jupiter.api.Assertions.assertTrue(output.contains("\"nativeScrapAttachments\":true"), output);
             org.junit.jupiter.api.Assertions.assertTrue(output.contains("\"nativeDispositionClosed\":true"), output);
+            org.junit.jupiter.api.Assertions.assertTrue(output.contains("\"nativeScrapCorrectionClosed\":true"), output);
         } finally {
             if (process.isAlive()) {
                 process.destroyForcibly();
             }
         }
         assertEquals("SCRAPPED", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+        assertEquals("IN_STOCK", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=951021", String.class));
+        assertEquals("STORAGE", db.queryForObject("SELECT custody_type FROM fams_asset WHERE id=951021", String.class));
+        assertEquals(951000L, db.queryForObject("SELECT storage_warehouse_id FROM fams_asset WHERE id=951021", Long.class));
+        assertEquals("CORRECTED", db.queryForObject("SELECT request_status FROM fams_scrap_request WHERE id=?",
+                String.class, Long.parseLong(correctionRequest)));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock"
+                + " WHERE asset_id=951021 AND released_at IS NULL", Long.class));
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_receipt"
+                + " WHERE operation LIKE 'CORRECTION_EXECUTE:%'", Long.class));
         assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_disposition WHERE request_id"
                 + " IN (SELECT id FROM fams_scrap_request WHERE asset_id=951020)", Long.class));
         assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_receipt WHERE operation LIKE 'EXECUTE:%'", Long.class));

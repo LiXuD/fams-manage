@@ -122,6 +122,38 @@ public class ScrapController {
         return review.cancel(actors.capture(), id, version, key, input);
     }
 
+    @PostMapping("/{id}/corrections")
+    ScrapReviewService.Receipt requestCorrection(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.CorrectionRequest input) {
+        return review.requestCorrection(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/corrections/{id}/decision")
+    ScrapReviewService.Receipt decideCorrection(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.CorrectionDecision input) {
+        return review.decideCorrection(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/corrections/{id}/claim")
+    ScrapReviewService.Receipt claimCorrection(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.CorrectionClaim input) {
+        return review.claimCorrection(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/corrections/{id}/execute")
+    ScrapReviewService.Receipt executeCorrection(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.CorrectionExecution input) {
+        return review.executeCorrection(actors.capture(), id, version, key, input);
+    }
+
     @PostMapping("/{id}/decision")
     ScrapReviewService.Receipt decide(@PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
@@ -196,5 +228,14 @@ public class ScrapController {
         UUID requestId = request.getAttribute("fams.request.id") instanceof UUID id ? id : UUID.randomUUID();
         String code = failure.getMessage();
         return ResponseEntity.status(failure.status()).body(new ErrorResponse(code, code, requestId, Map.of()));
+    }
+
+    @ExceptionHandler(org.springframework.web.method.annotation.HandlerMethodValidationException.class)
+    ResponseEntity<ErrorResponse> invalidRequest(
+            org.springframework.web.method.annotation.HandlerMethodValidationException failure,
+            HttpServletRequest request) {
+        UUID requestId = request.getAttribute("fams.request.id") instanceof UUID id ? id : UUID.randomUUID();
+        return ResponseEntity.badRequest().body(new ErrorResponse("INVALID_REQUEST",
+                "Request validation failed.", requestId, Map.of()));
     }
 }

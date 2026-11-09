@@ -154,6 +154,201 @@ public class ScrapReviewService {
                 Objects.toString(request.get("processor_account_id"), null)), time);
     }
 
+    public record CorrectionRequest(@NotNull @PositiveOrZero Long assetVersion,
+            @NotNull @PositiveOrZero Long lockVersion, @NotNull @Positive Long locationId,
+            @NotNull @PositiveOrZero Long locationVersion, @NotBlank @Size(max = 1000) String reason) {}
+
+    public record CorrectionDecision(@NotNull @PositiveOrZero Long assetVersion,
+            @NotNull @PositiveOrZero Long lockVersion, @NotBlank String result,
+            @NotBlank @Size(max = 1000) String reason) {}
+
+    public record CorrectionClaim(@NotNull @PositiveOrZero Long assetVersion,
+            @NotNull @PositiveOrZero Long lockVersion) {}
+
+    public record CorrectionExecution(@NotNull @PositiveOrZero Long assetVersion,
+            @NotNull @PositiveOrZero Long lockVersion, @NotNull @PositiveOrZero Long ownershipVersion,
+            @NotNull @PositiveOrZero Long locationVersion, @NotBlank @Size(max = 64) String observedCode,
+            @Size(max = 128) String observedSerial, @NotNull Instant occurredAt,
+            @NotNull Boolean physicalIdentityVerified, @NotBlank @Size(min = 10, max = 2000) String evidence) {}
+
+    public Receipt requestCorrection(Actor actor, long id, long version, UUID key, CorrectionRequest input) {
+        var current = current(actor, Role.ASSET_ADMIN);
+        var rows = db.queryForList("SELECT * FROM fams_scrap_request WHERE id=? FOR UPDATE", id);
+        if (rows.isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_NOT_FOUND", 404);
+        }
+        var request = rows.getFirst();
+        String operation = "CORRECTION:" + id;
+        String hash = fingerprint(version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        if (!"STANDALONE".equals(request.get("source_type")) || !"RESTORE_REQUIRED".equals(request.get("request_status"))
+                || number(request, "version") != version || number(request, "asset_version") != input.assetVersion()) {
+            throw new AssetHandoverPort.Failure("SCRAP_CORRECTION_NOT_ALLOWED", 409);
+        }
+        if (!db.queryForList("SELECT id FROM fams_scrap_correction WHERE request_id=? AND active_guard=1"
+                + " FOR UPDATE", id).isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_CORRECTION_OPEN", 409);
+        }
+        long asset = number(request, "asset_id");
+        var time = now();
+        assets.requirePending(asset, input.assetVersion(), id, input.lockVersion());
+        if (!assets.matchesCorrectedTarget(input.locationId(), input.locationVersion())) {
+            throw new AssetHandoverPort.Failure("SCRAP_CORRECTION_TARGET_CHANGED", 409);
+        }
+        db.update("INSERT INTO fams_scrap_correction(request_id,asset_id,creator_account_id,reason,asset_version,"
+                + "lock_version,target_location_id,target_location_version,correction_status,request_snapshot_json,"
+                + "created_at,updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?,'PENDING_ADMIN_DECISION',?,?,?)",
+                id, asset, current.id(), input.reason().strip(), input.assetVersion(), input.lockVersion(),
+                input.locationId(), input.locationVersion(), json.writeValueAsString(input), time, time);
+        long correction = Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
+        closeTodo(id, "RESTORE_REQUIRED", time);
+        todo(id, "CORRECTION_DECIDE", "ASSET_ADMIN", null, time);
+        audit(actor, current, Role.ASSET_ADMIN, id, number(request, "version"), "SCRAP_CORRECTION_REQUESTED",
+                Map.of("correctionId", Long.toString(correction), "input", input), time);
+        return remember(current, operation, key, hash, new Receipt(Long.toString(id), Long.toString(asset),
+                number(request, "version"), input.assetVersion(), number(request, "ownership_version"),
+                "PENDING_ADMIN_DECISION", null), time);
+    }
+
+    private Map<String, Object> correctionGuarded(long id, long version, CorrectionClaim input) {
+        var rows = db.queryForList("SELECT * FROM fams_scrap_correction WHERE id=? FOR UPDATE", id);
+        if (rows.isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_CORRECTION_NOT_FOUND", 404);
+        }
+        var correction = rows.getFirst();
+        if (number(correction, "version") != version || number(correction, "asset_version") != input.assetVersion()
+                || number(correction, "lock_version") != input.lockVersion()) {
+            throw new AssetHandoverPort.Failure("SCRAP_CORRECTION_CHANGED", 409);
+        }
+        var requests = db.queryForList("SELECT request_status FROM fams_scrap_request WHERE id=? FOR UPDATE",
+                number(correction, "request_id"));
+        if (requests.isEmpty() || !"RESTORE_REQUIRED".equals(requests.getFirst().get("request_status"))) {
+            throw new AssetHandoverPort.Failure("SCRAP_CORRECTION_CHANGED", 409);
+        }
+        assets.requirePending(number(correction, "asset_id"), input.assetVersion(),
+                number(correction, "request_id"), input.lockVersion());
+        return correction;
+    }
+
+    public Receipt decideCorrection(Actor actor, long id, long version, UUID key, CorrectionDecision input) {
+        var current = current(actor, Role.ASSET_ADMIN);
+        boolean approve = "APPROVE".equals(input.result());
+        if (!approve && !"REJECT".equals(input.result())) {
+            throw new AssetHandoverPort.Failure("SCRAP_CORRECTION_INPUT_INVALID", 400);
+        }
+        String operation = "CORRECTION_DECISION:" + id;
+        String hash = fingerprint(version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var correction = correctionGuarded(id, version, new CorrectionClaim(input.assetVersion(), input.lockVersion()));
+        if (!"PENDING_ADMIN_DECISION".equals(correction.get("correction_status"))) {
+            throw new AssetHandoverPort.Failure("SCRAP_CORRECTION_CHANGED", 409);
+        }
+        long request = number(correction, "request_id"), asset = number(correction, "asset_id");
+        var time = now();
+        if (approve && !assets.matchesCorrectedTarget(number(correction, "target_location_id"),
+                number(correction, "target_location_version"))) {
+            throw new AssetHandoverPort.Failure("SCRAP_CORRECTION_TARGET_CHANGED", 409);
+        }
+        db.update("UPDATE fams_scrap_correction SET correction_status=?,approval_snapshot_json=?,"
+                + "version=version+1,updated_at=? WHERE id=?",
+                approve ? "WAITING_WAREHOUSE_CLAIM" : "REJECTED",
+                json.writeValueAsString(Map.of("decision", input, "decidedBy", Long.toString(current.id()),
+                        "decidedAt", time)), time, id);
+        closeTodo(request, "CORRECTION_DECIDE", time);
+        if (approve) {
+            todo(request, "CORRECTION_CLAIM", "WAREHOUSE_OPERATOR", null, time);
+        } else {
+            todo(request, "RESTORE_REQUIRED", "ASSET_ADMIN", null, time);
+        }
+        audit(actor, current, Role.ASSET_ADMIN, request, version,
+                approve ? "SCRAP_CORRECTION_APPROVED" : "SCRAP_CORRECTION_REJECTED",
+                Map.of("correctionId", Long.toString(id), "input", input), time);
+        return remember(current, operation, key, hash, new Receipt(Long.toString(request), Long.toString(asset),
+                version + 1, input.assetVersion(), number(correction, "ownership_version"),
+                approve ? "WAITING_WAREHOUSE_CLAIM" : "REJECTED", null), time);
+    }
+
+    public Receipt claimCorrection(Actor actor, long id, long version, UUID key, CorrectionClaim input) {
+        var current = current(actor, Role.WAREHOUSE_OPERATOR);
+        String operation = "CORRECTION_CLAIM:" + id;
+        String hash = fingerprint(version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var correction = correctionGuarded(id, version, input);
+        if (!"WAITING_WAREHOUSE_CLAIM".equals(correction.get("correction_status"))) {
+            throw new AssetHandoverPort.Failure("SCRAP_CORRECTION_CHANGED", 409);
+        }
+        long request = number(correction, "request_id"), asset = number(correction, "asset_id");
+        var time = now();
+        long ownership = number(correction, "ownership_version") + 1;
+        db.update("UPDATE fams_scrap_correction SET correction_status='PROCESSING',processor_account_id=?,"
+                + "ownership_version=?,version=version+1,updated_at=? WHERE id=?", current.id(), ownership, time, id);
+        closeTodo(request, "CORRECTION_CLAIM", time);
+        todo(request, "CORRECTION_EXECUTE", "WAREHOUSE_OPERATOR", current.id(), time);
+        audit(actor, current, Role.WAREHOUSE_OPERATOR, request, version, "SCRAP_CORRECTION_CLAIMED", input, time);
+        return remember(current, operation, key, hash, new Receipt(Long.toString(request), Long.toString(asset),
+                version + 1, input.assetVersion(), ownership, "PROCESSING", Long.toString(current.id())), time);
+    }
+
+    public Receipt executeCorrection(Actor actor, long id, long version, UUID key, CorrectionExecution input) {
+        var current = current(actor, Role.WAREHOUSE_OPERATOR);
+        var processor = db.queryForList("SELECT processor_account_id FROM fams_scrap_correction WHERE id=? FOR UPDATE", id);
+        if (processor.isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_CORRECTION_NOT_FOUND", 404);
+        }
+        if (!Objects.equals(processor.getFirst().get("processor_account_id"), current.id())) {
+            throw new AssetHandoverPort.Failure("SCRAP_PROCESSOR_REQUIRED", 403);
+        }
+        String operation = "CORRECTION_EXECUTE:" + id;
+        String hash = fingerprint(version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var correction = correctionGuarded(id, version, new CorrectionClaim(input.assetVersion(), input.lockVersion()));
+        if (!"PROCESSING".equals(correction.get("correction_status"))
+                || number(correction, "ownership_version") != input.ownershipVersion()) {
+            throw new AssetHandoverPort.Failure("SCRAP_CORRECTION_CHANGED", 409);
+        }
+        long request = number(correction, "request_id"), asset = number(correction, "asset_id");
+        var time = now();
+        Instant created = instant(correction.get("created_at"));
+        if (!Boolean.TRUE.equals(input.physicalIdentityVerified()) || input.evidence().strip().length() < 10
+                || input.occurredAt().isBefore(created) || input.occurredAt().isAfter(time.plusSeconds(2))
+                || !input.occurredAt().equals(input.occurredAt().truncatedTo(ChronoUnit.MILLIS))) {
+            throw new AssetHandoverPort.Failure("SCRAP_PHYSICAL_EVIDENCE_INVALID", 400);
+        }
+        if (number(correction, "target_location_version") != input.locationVersion()) {
+            throw new AssetHandoverPort.Failure("SCRAP_CORRECTION_TARGET_CHANGED", 409);
+        }
+        long assetVersion = assets.restoreCorrected(asset, input.assetVersion(), request,
+                number(correction, "target_location_id"), input.locationVersion(),
+                input.observedCode(), input.observedSerial(), current.id(), time);
+        if (db.update("UPDATE fams_asset_business_lock SET released_at=?,release_reason='SCRAP_CORRECTED',"
+                + "lock_version=lock_version+1 WHERE asset_id=? AND business_type='SCRAP' AND business_id=?"
+                + " AND business_item_id=? AND lock_version=? AND released_at IS NULL",
+                time, asset, request, request, input.lockVersion()) != 1) {
+            throw new AssetHandoverPort.Failure("SCRAP_ASSET_OR_LOCK_CHANGED", 409);
+        }
+        db.update("UPDATE fams_scrap_request SET request_status='CORRECTED',asset_version=?,"
+                + "version=version+1,updated_at=? WHERE id=?", assetVersion, time, request);
+        db.update("UPDATE fams_scrap_correction SET correction_status='COMPLETED',execution_snapshot_json=?,"
+                + "asset_version=?,version=version+1,updated_at=? WHERE id=?",
+                json.writeValueAsString(input), assetVersion, time, id);
+        closeTodo(request, "CORRECTION_EXECUTE", time);
+        audit(actor, current, Role.WAREHOUSE_OPERATOR, request, version, "SCRAP_CORRECTION_EXECUTED", input, time);
+        return remember(current, operation, key, hash, new Receipt(Long.toString(request), Long.toString(asset),
+                version + 1, assetVersion, input.ownershipVersion(), "COMPLETED", Long.toString(current.id())), time);
+    }
+
     public Receipt decide(Actor actor, long id, long version, UUID key, Decision input) {
         var current = current(actor, Role.ASSET_ADMIN);
         String operation = "DECIDE:" + id;

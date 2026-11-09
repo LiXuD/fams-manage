@@ -1,6 +1,7 @@
 <wxs module="labels">
-var names={PENDING_ADMIN_DECISION:'待管理员确认',WAITING_WAREHOUSE_CLAIM:'待库管认领',PROCESSING:'待实物核验与执行',RESTORE_REQUIRED:'原保管关系失效，待纠正',REJECTED:'已驳回并恢复',CANCELLED:'已取消',EXECUTED:'已执行报废'};
-module.exports={state:function(value){return names[value]||value;}};
+var names={PENDING_ADMIN_DECISION:'待管理员确认',WAITING_WAREHOUSE_CLAIM:'待库管认领',PROCESSING:'待实物核验与执行',RESTORE_REQUIRED:'原保管关系失效，待纠正',REJECTED:'已驳回并恢复',CANCELLED:'已取消',EXECUTED:'已执行报废',CORRECTED:'冻结保管已受控纠正恢复'};
+var corrections={PENDING_ADMIN_DECISION:'纠正待管理员确认',WAITING_WAREHOUSE_CLAIM:'纠正待库管认领',PROCESSING:'纠正待实物核验恢复',COMPLETED:'纠正已恢复在库',REJECTED:'纠正已驳回'};
+module.exports={state:function(value){return names[value]||value;},correction:function(value){return corrections[value]||value;}};
 </wxs>
 <view class="page">
   <view class="title">报废与处置</view>
@@ -70,6 +71,36 @@ module.exports={state:function(value){return names[value]||value;}};
     <view wx:if="{{detail.actions.cancel}}">
       <view wx:if="{{!detail.actions.decide}}">取消原因<textarea value="{{decisionReason}}" data-field="decisionReason" bindinput="onField" maxlength="1000" disabled="{{busy || retry || confirmation || stale}}"/></view>
       <button data-action="cancel" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">取消报废申请</button>
+    </view>
+    <view wx:if="{{detail.correction}}">纠正进度 {{labels.correction(detail.correction.status)}} · 目标仓位 {{detail.correction.targetLocationName}} · 当前纠正办理人 {{detail.correction.processorAccountId || '尚未认领'}}</view>
+    <view wx:if="{{detail.actions.initiateCorrection}}">
+      <view class="title">发起受控纠正</view>
+      <view>原保管关系已失效，资产保持冻结。请选择有效仓位并说明纠正依据，批准后由库管核验实物恢复在库。</view>
+      <button data-kind="bin" bindtap="onCatalog" disabled="{{busy || retry || confirmation || stale || (binPage > 0 &amp;&amp; bins.length >= binTotal)}}">加载更多有效仓位</button>
+      <picker range="{{bins}}" range-key="name" data-kind="bin" bindchange="onChoice" disabled="{{busy || retry || confirmation || stale}}"><view>选择纠正目标仓位（{{bins.length}}/{{binTotal}}）</view></picker>
+      <view wx:for="{{bins}}" wx:key="id" wx:if="{{item.id === correctionLocation}}">已选目标仓位 {{item.name}}</view>
+      <view>纠正原因</view><textarea value="{{correctionReason}}" data-field="correctionReason" bindinput="onField" maxlength="1000" disabled="{{busy || retry || confirmation || stale}}"/>
+      <button data-action="requestCorrection" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对发起受控纠正</button>
+    </view>
+    <view wx:if="{{detail.actions.decideCorrection}}">
+      <view class="title">确认受控纠正</view>
+      <view>目标仓位 {{detail.correction.targetLocationName}} · 纠正原因 {{detail.correction.reason}}</view>
+      <view>本次决定原因</view><textarea value="{{correctionDecision}}" data-field="correctionDecision" bindinput="onField" maxlength="1000" disabled="{{busy || retry || confirmation || stale}}"/>
+      <button data-action="approveCorrection" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">批准受控纠正</button>
+      <button data-action="rejectCorrection" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">驳回受控纠正</button>
+    </view>
+    <button wx:if="{{detail.actions.claimCorrection}}" data-action="claimCorrection" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">认领受控纠正</button>
+    <view wx:if="{{detail.actions.executeCorrection}}">
+      <view class="title">核验原机并执行纠正恢复</view>
+      <view>批准目标仓位 {{detail.correction.targetLocationName}}</view>
+      <view>实际原机编码</view><input value="{{observed}}" data-field="observed" bindinput="onField" maxlength="64" disabled="{{busy || retry || confirmation || stale}}"/>
+      <view>实际原机序列号</view><input value="{{serial}}" data-field="serial" bindinput="onField" maxlength="128" disabled="{{busy || retry || confirmation || stale}}"/>
+      <view>实际核验日期（年-月-日）</view><input value="{{actualDate}}" data-field="actualDate" bindinput="onField" placeholder="年-月-日" disabled="{{busy || retry || confirmation || stale}}"/>
+      <view>实际核验当地时刻（时:分:秒）</view><input value="{{actualTime}}" data-field="actualTime" bindinput="onField" placeholder="时:分:秒" disabled="{{busy || retry || confirmation || stale}}"/>
+      <button bindtap="onNow" disabled="{{busy || retry || confirmation || stale}}">记录当前实际核验时刻</button>
+      <view>实际核验依据（至少10字）</view><textarea value="{{evidence}}" data-field="evidence" bindinput="onField" maxlength="2000" disabled="{{busy || retry || confirmation || stale}}"/>
+      <view><switch checked="{{physical}}" bindchange="onChecked" disabled="{{busy || retry || confirmation || stale}}"/>已亲见并核对同一原机与批准仓位一致</view>
+      <button data-action="executeCorrection" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">核对执行纠正恢复</button>
     </view>
     <button wx:if="{{detail.actions.claim}}" data-action="claim" bindtap="onPrepare" disabled="{{busy || retry || confirmation || stale}}">认领报废处理</button>
     <view wx:if="{{detail.actions.execute}}">

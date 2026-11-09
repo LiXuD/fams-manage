@@ -1,9 +1,9 @@
 # FAMS 项目阶段与交接入口
 
-> 唯一现役进度入口 · 更新于 2026-11-07
+> 唯一现役进度入口 · 更新于 2026-11-09
 > 第1～5步完成，第6步进行中。当前分支 `codex/d6-21-loss`，接续基线 `144b1bf657fe6c531dbf8f2d185d770d8bb55919`。用户本人本轮明确所有待复核内容全部PASS，已关闭29个已送审子项，D6-15/16/19父项本地DEV_VERIFIED；D6-21A亦已关闭。现役计划§四.5是唯一状态明细。
 >
-> D6-21B2b1后端/PC固定43049d0完整门禁及真实PC/JVM通过，已送IN_REVIEW；B2b2原生损坏找回固定d9c0eb0完整门禁及真实Page/opaque链路通过，已送IN_REVIEW；独立复核未签。B2b3结案后损坏找回固定3e3e01c完整门禁及PC/JVM通过，已送IN_REVIEW；B2b4a归还/退库固定3c67b26已获用户复核PASS，B2b4b固定326aec9产品门禁、实际PC/JVM恢复与用户复核通过，B2b4本地关闭。返厂无法收回转报失与找回续修已提交1e95d57，精确静态修复后的f2f7b1b完整门禁、实际PC/ClamAV及提交JVM恢复和原轮次实收通过，B2b5a已获用户本人本轮复核PASS，本地DEV_VERIFIED，B2b5b报废新纳管仍依D6-22。D6-22A已推进独立报废提交、审批认领及实物执行（e17d269、f2f7b1b、ddbf9f5），PC/原生提交至执行入口已接入，双端附件已接入，固定 ec351d5 的实际 PC、真实扫描与提交 JVM 验证通过，独立报废实际处置已在 135087f 通过 PC 结案和提交 JVM 恢复，双端超期清单已在 9d48e97 通过实际 PC。本轮用户确认这三项已交接切片复核通过。确认遗失的借出、个人在用、部门公用和在库资产可由双端报失详情发起关联报废，支持按原保管关系驳回恢复和执行遗失核销。个人在用固定 048507d 实际 PC 核销已通过，已接通受理后的内部维修关联报废及双端入口，原库管承接、驳回原锁恢复和实物执行已形成定向证据并获用户本轮复核通过，返厂收旧及厂家销毁已接通双端报废申请、原锁驳回恢复和凭证执行，返厂确认遗失已接入双端报废与核销，下一步补独立报废取消及受控纠正。责任/位置变化、返厂/报废及跨来源C/D仍必需，不提前关闭D6-20/21父项。当前结果见[B2b4a送审](docs/development/2026-11-04-d6-21b2b4a-review-handoff.md)及[B2b3送审](docs/development/2026-10-31-d6-21b2b3-review-handoff.md)；此前结果见[B2b1送审](docs/development/2026-10-30-d6-21b2b1-review-handoff.md)、[B2b2送审](docs/development/2026-10-30-d6-21b2b2-review-handoff.md)及[D6-21任务卡](docs/development/D6-21-task-card.md)。
+> D6-21B2b1后端/PC固定43049d0完整门禁及真实PC/JVM通过，已送IN_REVIEW；B2b2原生损坏找回固定d9c0eb0完整门禁及真实Page/opaque链路通过，已送IN_REVIEW；独立复核未签。B2b3结案后损坏找回固定3e3e01c完整门禁及PC/JVM通过，已送IN_REVIEW；B2b4a归还/退库固定3c67b26已获用户复核PASS，B2b4b固定326aec9产品门禁、实际PC/JVM恢复与用户复核通过，B2b4本地关闭。返厂无法收回转报失与找回续修已提交1e95d57，精确静态修复后的f2f7b1b完整门禁、实际PC/ClamAV及提交JVM恢复和原轮次实收通过，B2b5a已获用户本人本轮复核PASS，本地DEV_VERIFIED，B2b5b报废新纳管仍依D6-22。D6-22A已推进独立报废提交、审批认领及实物执行（e17d269、f2f7b1b、ddbf9f5），PC/原生提交至执行入口已接入，双端附件已接入，固定 ec351d5 的实际 PC、真实扫描与提交 JVM 验证通过，独立报废实际处置已在 135087f 通过 PC 结案和提交 JVM 恢复，双端超期清单已在 9d48e97 通过实际 PC。本轮用户确认这三项已交接切片复核通过。确认遗失的借出、个人在用、部门公用和在库资产可由双端报失详情发起关联报废，支持按原保管关系驳回恢复和执行遗失核销。个人在用固定 048507d 实际 PC 核销已通过，已接通受理后的内部维修关联报废及双端入口，原库管承接、驳回原锁恢复和实物执行已形成定向证据并获用户本轮复核通过，返厂收旧及厂家销毁已接通双端报废申请、原锁驳回恢复和凭证执行，返厂确认遗失已接入双端报废与核销；独立报废取消（64122d8）与受控纠正办理已接通：管理员指定有效仓位发起关联纠正，任意单管理员批准或驳回（驳回保持冻结重开纠正待办），库管认领后核验原机按批准仓位恢复在库并释放原锁，报废单转已纠正恢复。V61升级、报废提交10项（含原生Page原键重试）、报失HTTP43、维修HTTP18、架构6、契约9、Web233、mini339及静态零问题定向通过；实际PC、提交JVM重启恢复与完整产品门禁待补。责任/位置变化、返厂/报废及跨来源C/D仍必需，不提前关闭D6-20/21父项。当前结果见[B2b4a送审](docs/development/2026-11-04-d6-21b2b4a-review-handoff.md)及[B2b3送审](docs/development/2026-10-31-d6-21b2b3-review-handoff.md)；此前结果见[B2b1送审](docs/development/2026-10-30-d6-21b2b1-review-handoff.md)、[B2b2送审](docs/development/2026-10-30-d6-21b2b2-review-handoff.md)及[D6-21任务卡](docs/development/D6-21-task-card.md)。
 >
 > 原接续材料：[2026-10-30进度交接](docs/development/2026-10-30-current-progress-handoff.md)。其中待审状态以本轮用户签署和现役计划更新为准；旧候选和机器证据不改写。真实外部/真机、远端CI、正式QA、生产仍另验；本轮新代码不包含在接续前的用户签署范围内。
 
@@ -16,7 +16,7 @@
 | 3 | 信息架构与交互设计 | Design | 流程、页面结构与交互原型 | `COMPLETED` | [IA D0.2](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md) |
 | 4 | 视觉设计与规范 | UI | 视觉风格、组件库与设计系统 | `COMPLETED` | [D0.4 设计交接](docs/superpowers/designs/2026-09-06-fams-ui/HANDOFF-D0.4.md) |
 | 5 | 原型验证与可用性测试 | Validate | 核对设计稿是否覆盖功能设计文档 | `COMPLETED` | [轻量功能覆盖验证](docs/superpowers/specs/2026-09-11-fams-prototype-validation-usability-test.md)通过 |
-| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | B2b4a固定3c67b26已获用户复核PASS；返厂续修固定f2f7b1b已获用户本轮复核PASS；继续 D6-22A 独立报废取消及受控纠正。各父项、真实外部/CI/独立复核以[现役开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)为准 |
+| 6 | 技术开发与实现 | Develop | 前后端编码、接口联调 | `IN_PROGRESS` | B2b4a固定3c67b26已获用户复核PASS；返厂续修固定f2f7b1b已获用户本轮复核PASS；继续 D6-22A 受控纠正的实际双端联调、提交 JVM 恢复与完整产品门禁，随后跨来源纠正及 D6-22D 冲正与报废后找回。各父项、真实外部/CI/独立复核以[现役开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)为准 |
 | 7 | 测试与质量保障 | QA | 功能、性能、安全测试与缺陷修复 | `NOT_STARTED` | 待第 6 步形成可运行系统后执行 |
 | 8 | 灰度发布与上线运营 | Launch | 灰度放量、监控与持续迭代 | `NOT_STARTED` | 尚无部署或生产端点 |
 

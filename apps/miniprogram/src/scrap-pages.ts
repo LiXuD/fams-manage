@@ -3,6 +3,11 @@ import { MiniRequestError, type FactoryEvidenceFile } from "./session.ts";
 
 interface Choice { id: string; name: string; version: number }
 interface Asset extends Choice { assetCode: string }
+interface Correction {
+    id: string; version: number; status: string; assetVersion: number; lockVersion: number;
+    targetLocationId: string; targetLocationVersion: number; targetLocationName: string;
+    ownershipVersion: number; processorAccountId: string | null; reason: string;
+}
 interface Scrap {
     id: string; version: number; assetVersion: number; ownershipVersion: number; lockVersion: number | null;
     status: string; processorAccountId: string | null; reason: string; observedCondition: string; proposedDisposition: string;
@@ -10,8 +15,11 @@ interface Scrap {
     sourceBusinessId?: string | null;
     factoryDisposition?: "FACTORY_RETAINED" | "FACTORY_DESTROYED";
     source: { assetCode: string; name: string; serialNumber: string };
-    actions: { decide: boolean; cancel?: boolean; claim: boolean; execute: boolean; executeLoss?: boolean; executeFactory?: boolean; dispose?: boolean };
+    actions: { decide: boolean; cancel?: boolean; claim: boolean; execute: boolean; executeLoss?: boolean;
+        executeFactory?: boolean; dispose?: boolean; initiateCorrection?: boolean; decideCorrection?: boolean;
+        claimCorrection?: boolean; executeCorrection?: boolean };
     decision: { decision?: { approvedDisposition?: string } } | null;
+    correction?: Correction | null;
     disposition: { disposition_status: string; due_date: string | null; version?: number;
         completion?: { occurredAt: string; method: string; recipient?: string; operatorName?: string } } | null;
 }
@@ -28,6 +36,8 @@ interface Data {
     page: number; total: number; assetPage: number; assetTotal: number;
     places: Choice[]; people: Choice[]; location: string; custodian: string;
     locationPage: number; locationTotal: number; peoplePage: number; peopleTotal: number;
+    bins: Choice[]; binPage: number; binTotal: number;
+    correctionLocation: string; correctionReason: string; correctionDecision: string;
     reason: string; condition: string; proposed: string; decisionReason: string; approved: string;
     observed: string; serial: string; actualDate: string; actualTime: string; physical: boolean; evidence: string; due: string;
     recipient: string; dispositionEvidence: string[];
@@ -43,6 +53,7 @@ const blank = (): Data => ({
     overdueOnly: false, canListOverdue: false, businessDate: "",
     rows: [], detail: null, assets: [], selectedAsset: "", page: 1, total: 0, assetPage: 1, assetTotal: 0,
     places: [], people: [], location: "", custodian: "", locationPage: 0, locationTotal: 0, peoplePage: 0, peopleTotal: 0,
+    bins: [], binPage: 0, binTotal: 0, correctionLocation: "", correctionReason: "", correctionDecision: "",
     reason: "", condition: "", proposed: "", decisionReason: "", approved: "", observed: "", serial: "",
     actualDate: "", actualTime: "", physical: false, evidence: "", due: "", busy: false, stale: true, retry: false,
     confirmation: "", pendingSummary: "", error: "", notice: "",
@@ -170,7 +181,9 @@ export function createScrapPage(getServices: () => MiniServices) {
         } catch (error) { if (current(epoch)) failure(page, error); } finally { finish(page, epoch); }
     };
     const prepare = (page: Context, action: string) => {
-        if (!editable(page) || !["submit", "approve", "reject", "claim", "execute", "executeLoss", "executeFactory", "cancel"].includes(action)) return;
+        if (!editable(page) || !["submit", "approve", "reject", "claim", "execute", "executeLoss",
+            "executeFactory", "cancel", "requestCorrection", "approveCorrection", "rejectCorrection",
+            "claimCorrection", "executeCorrection"].includes(action)) return;
         const data = page.data, row = data.detail;
         let path = base, body: Record<string, unknown>, version: number | undefined, summary: string;
         try {
@@ -180,6 +193,51 @@ export function createScrapPage(getServices: () => MiniServices) {
                 body = { assetId: asset.id, assetVersion: asset.version, reason: data.reason.trim(),
                     observedCondition: data.condition.trim(), proposedDisposition: data.proposed.trim() };
                 summary = "提交 " + asset.assetCode + " 报废申请，等待管理员确认。";
+            } else if (action === "requestCorrection") {
+                if (!row || !row.actions.initiateCorrection) return;
+                const place = data.bins.find(item => item.id === data.correctionLocation);
+                if (!place || !data.correctionReason.trim()) {
+                    page.setData({ error: "请选择有效纠正仓位并填写纠正原因。" }); return;
+                }
+                path += "/" + row.id + "/corrections"; version = row.version;
+                body = { assetVersion: row.assetVersion, lockVersion: row.lockVersion, locationId: place.id,
+                    locationVersion: place.version, reason: data.correctionReason.trim() };
+                summary = "发起受控纠正，建议将 " + row.source.assetCode + " 恢复至仓位 " + place.name + "，等待管理员确认。";
+            } else if (action === "approveCorrection" || action === "rejectCorrection"
+                || action === "claimCorrection" || action === "executeCorrection") {
+                const correction = row?.correction;
+                if (!correction) return;
+                const capability = action === "approveCorrection" || action === "rejectCorrection"
+                    ? "decideCorrection" : action;
+                if (!row.actions[capability]) return;
+                version = correction.version; path += "/corrections/" + correction.id; body = {};
+                if (capability === "decideCorrection") {
+                    if (!data.correctionDecision.trim()) { page.setData({ error: "请填写本次决定原因。" }); return; }
+                    path += "/decision";
+                    body = { assetVersion: correction.assetVersion, lockVersion: correction.lockVersion,
+                        result: action === "approveCorrection" ? "APPROVE" : "REJECT", reason: data.correctionDecision.trim() };
+                    summary = action === "approveCorrection"
+                        ? "批准纠正至仓位 " + correction.targetLocationName + "，等待库管核验实物。"
+                        : "驳回本次纠正，资产保持冻结并回到管理员纠正待办。";
+                } else if (action === "claimCorrection") {
+                    path += "/claim";
+                    body = { assetVersion: correction.assetVersion, lockVersion: correction.lockVersion };
+                    summary = "取得本单纠正唯一处理权，核验实物后恢复在库。";
+                } else {
+                    const actual = new Date(data.actualDate + "T" + data.actualTime);
+                    if (!data.physical || !data.observed.trim() || row.source.serialNumber && !data.serial.trim()
+                        || data.evidence.trim().length < 10 || !Number.isFinite(actual.getTime())
+                        || day(actual) !== data.actualDate || time(actual) !== data.actualTime) {
+                        page.setData({ error: "请核对原机编码、序列号、实际时刻及至少10字核验依据。" }); return;
+                    }
+                    path += "/execute";
+                    body = { assetVersion: correction.assetVersion, lockVersion: correction.lockVersion,
+                        ownershipVersion: correction.ownershipVersion, locationVersion: correction.targetLocationVersion,
+                        observedCode: data.observed.trim(), observedSerial: data.serial.trim(),
+                        occurredAt: actualInstant || actual.toISOString(), physicalIdentityVerified: true,
+                        evidence: data.evidence.trim() };
+                    summary = "执行纠正，将 " + row.source.assetCode + " 核验后恢复至批准仓位 " + correction.targetLocationName + "。";
+                }
             } else {
                 const capability = action === "approve" || action === "reject" ? "decide" : action;
                 if (!row || row.lockVersion == null || !["decide", "claim", "execute", "executeLoss", "executeFactory", "cancel"].includes(capability)
@@ -271,7 +329,8 @@ export function createScrapPage(getServices: () => MiniServices) {
         },
         onField(this: Context, event: { currentTarget: { dataset: { field: string } }; detail: { value: string } }) {
             const field = event.currentTarget.dataset.field;
-            if (!editable(this) || !["reason", "condition", "proposed", "decisionReason", "approved", "observed", "serial", "actualDate", "actualTime", "evidence", "due", "recipient"].includes(field)) return;
+            if (!editable(this) || !["reason", "condition", "proposed", "decisionReason", "approved", "observed", "serial",
+                "actualDate", "actualTime", "evidence", "due", "recipient", "correctionReason", "correctionDecision"].includes(field)) return;
             if (["actualDate", "actualTime"].includes(field)) actualInstant = "";
             this.setData({ [field]: event.detail.value });
         },
@@ -283,21 +342,32 @@ export function createScrapPage(getServices: () => MiniServices) {
         },
         async onCatalog(this: Context, event: { currentTarget: { dataset: { kind: string } } }) {
             const kind = event.currentTarget.dataset.kind;
-            if (!editable(this) || !["location", "employee"].includes(kind)
-                || !(this.data.detail?.actions.execute || kind === "employee" && this.data.detail?.actions.dispose)) return;
-            const next = (kind === "location" ? this.data.locationPage : this.data.peoplePage) + 1, epoch = ++generation;
+            if (!editable(this) || !["location", "employee", "bin"].includes(kind)
+                || !(this.data.detail?.actions.execute || kind === "employee" && this.data.detail?.actions.dispose
+                    || kind === "bin" && this.data.detail?.actions.initiateCorrection)) return;
+            const next = (kind === "location" ? this.data.locationPage : kind === "bin" ? this.data.binPage : this.data.peoplePage) + 1;
+            const epoch = ++generation;
             this.setData({ busy: true });
             try {
                 const result = await services.sessions.request("GET", base + "/" + this.data.detail.id
                     + "/execution-catalog/" + kind + "?page=" + next + "&pageSize=100") as { items: Choice[]; total: number };
                 if (!current(epoch)) return;
-                this.setData(kind === "location" ? { places: [...this.data.places, ...result.items], locationPage: next, locationTotal: result.total }
-                    : { people: [...this.data.people, ...result.items], peoplePage: next, peopleTotal: result.total });
+                if (kind === "bin") {
+                    this.setData({ bins: [...this.data.bins, ...result.items], binPage: next, binTotal: result.total });
+                } else {
+                    this.setData(kind === "location" ? { places: [...this.data.places, ...result.items], locationPage: next, locationTotal: result.total }
+                        : { people: [...this.data.people, ...result.items], peoplePage: next, peopleTotal: result.total });
+                }
             } catch (error) { if (current(epoch)) failure(this, error); } finally { finish(this, epoch); }
         },
         onChoice(this: Context, event: { currentTarget: { dataset: { kind: string } }; detail: { value: string } }) {
             if (!editable(this)) return;
             const index = Number(event.detail.value), kind = event.currentTarget.dataset.kind;
+            if (kind === "bin") {
+                const row = this.data.bins[index];
+                if (row) this.setData({ correctionLocation: row.id });
+                return;
+            }
             const row = (kind === "location" ? this.data.places : this.data.people)[index];
             if (row && ["location", "employee"].includes(kind)) this.setData(kind === "location" ? { location: row.id } : { custodian: row.id });
         },

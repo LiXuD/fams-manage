@@ -9,7 +9,12 @@ export interface ScrapRequest {
   sourceBusinessId?: string | null;
   factoryDisposition?: "FACTORY_RETAINED" | "FACTORY_DESTROYED";
   source: { assetCode: string; name: string; serialNumber: string };
-  actions: { decide: boolean; cancel?: boolean; claim: boolean; execute: boolean; executeLoss?: boolean; executeFactory?: boolean; dispose?: boolean };
+  actions: { decide: boolean; cancel?: boolean; claim: boolean; execute: boolean; executeLoss?: boolean;
+    executeFactory?: boolean; dispose?: boolean; initiateCorrection?: boolean; decideCorrection?: boolean;
+    claimCorrection?: boolean; executeCorrection?: boolean };
+  correction?: { id: string; version: number; status: string; assetVersion: number; lockVersion: number;
+    targetLocationId: string; targetLocationVersion: number; targetLocationName: string;
+    ownershipVersion: number; processorAccountId: string | null; reason: string } | null;
   decision: { decision?: { approvedDisposition?: string } } | null;
   disposition: { disposition_status: string; due_date: string | null; version?: number;
     completion?: { occurredAt: string; method: string; recipient?: string; operatorName?: string } } | null;
@@ -86,4 +91,9 @@ export const scrapStates: Record<string, string> = {
   PENDING_ADMIN_DECISION: "待管理员确认", WAITING_WAREHOUSE_CLAIM: "待库管认领",
   PROCESSING: "待实物核验与执行", RESTORE_REQUIRED: "原保管关系失效，待纠正",
   REJECTED: "已驳回并恢复", CANCELLED: "已取消", EXECUTED: "已执行报废",
+  CORRECTED: "冻结保管已受控纠正恢复",
+};
+export const scrapCorrectionStates: Record<string, string> = {
+  PENDING_ADMIN_DECISION: "纠正待管理员确认", WAITING_WAREHOUSE_CLAIM: "纠正待库管认领",
+  PROCESSING: "纠正待实物核验恢复", COMPLETED: "纠正已恢复在库", REJECTED: "纠正已驳回",
 };

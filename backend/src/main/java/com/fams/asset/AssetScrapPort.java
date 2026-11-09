@@ -217,6 +217,46 @@ public class AssetScrapPort {
         }
     }
 
+    public long restoreCorrected(long assetId, long version, long requestId, long locationId, long locationVersion,
+            String observedCode, String observedSerial, long actorId, Instant time) {
+        var warehouses = db.queryForList("SELECT l.warehouse_id FROM fams_location l"
+                + " JOIN fams_warehouse w ON w.id=l.warehouse_id WHERE l.id=? AND l.version=?"
+                + " AND l.status='ACTIVE' AND l.location_type='BIN' AND w.status='ACTIVE' FOR UPDATE",
+                locationId, locationVersion);
+        if (warehouses.isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_CORRECTION_TARGET_CHANGED", 409);
+        }
+        var asset = db.queryForMap("SELECT asset_code,serial_number,lifecycle_status,exception_status"
+                + " FROM fams_asset WHERE id=? FOR UPDATE", assetId);
+        if (!Objects.equals(asset.get("asset_code"), observedCode.strip())
+                || asset.get("serial_number") != null
+                        && !Objects.equals(asset.get("serial_number"), observedSerial == null ? null : observedSerial.strip())
+                || !"PENDING_SCRAP".equals(asset.get("lifecycle_status"))
+                || !"NORMAL".equals(asset.get("exception_status"))) {
+            throw new AssetHandoverPort.Failure("SCRAP_PHYSICAL_IDENTITY_CHANGED", 409);
+        }
+        if (db.update("UPDATE fams_asset SET lifecycle_status='IN_STOCK',custody_type='STORAGE',"
+                + "storage_warehouse_id=?,current_location_id=?,using_organization_id=NULL,"
+                + "responsible_employee_id=NULL,department_responsible_employee_id=NULL,"
+                + "version=version+1,updated_at=?,updated_by=? WHERE id=? AND version=?"
+                + " AND lifecycle_status='PENDING_SCRAP'",
+                warehouses.getFirst().get("warehouse_id"), locationId, time, actorId, assetId, version) != 1) {
+            throw new AssetHandoverPort.Failure("SCRAP_ASSET_CHANGED", 409);
+        }
+        mapper.event(assetId, "SCRAP_CORRECTED_RESTORED", time,
+                json.writeValueAsString(Map.of("scrapRequestId", Long.toString(requestId),
+                        "correctedWarehouseId", Long.toString(
+                                ((Number) warehouses.getFirst().get("warehouse_id")).longValue()))),
+                actorId);
+        return version + 1;
+    }
+
+    public boolean matchesCorrectedTarget(long locationId, long locationVersion) {
+        return !db.queryForList("SELECT l.id FROM fams_location l JOIN fams_warehouse w ON w.id=l.warehouse_id"
+                + " WHERE l.id=? AND l.version=? AND l.status='ACTIVE' AND l.location_type='BIN'"
+                + " AND w.status='ACTIVE' FOR UPDATE", locationId, locationVersion).isEmpty();
+    }
+
     /** Invalid custody stays frozen for a separately authorized restoration. */
     public boolean restoreStandalone(long assetId, long version, long requestId, String lifecycle,
             long actorId, Instant time) {

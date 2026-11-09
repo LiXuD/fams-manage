@@ -106,12 +106,18 @@ public class ScrapReadService {
         boolean disposing = "employee".equals(kind) && "EXECUTED".equals(row.get("request_status"))
                 && !db.queryForList("SELECT request_id FROM fams_scrap_disposition WHERE request_id=?"
                         + " AND processor_account_id=? AND disposition_status='PENDING_DISPOSITION'", id, current.id()).isEmpty();
-        if (!current.has(Role.WAREHOUSE_OPERATOR) || !(processing || disposing)) {
+        boolean correctionTarget = "bin".equals(kind) && current.has(Role.ASSET_ADMIN)
+                && "RESTORE_REQUIRED".equals(row.get("request_status")) && "STANDALONE".equals(row.get("source_type"))
+                && db.queryForList("SELECT id FROM fams_scrap_correction WHERE request_id=?"
+                        + " AND active_guard=1", id).isEmpty();
+        if (!correctionTarget && (!current.has(Role.WAREHOUSE_OPERATOR) || !(processing || disposing))) {
             throw new AssetHandoverPort.Failure("SCRAP_PROCESSOR_REQUIRED", 403);
         }
         String from = switch (kind) {
             case "location" -> " FROM fams_location a LEFT JOIN fams_warehouse p ON p.id=a.warehouse_id"
                     + " WHERE a.status='ACTIVE' AND (a.warehouse_id IS NULL OR p.status='ACTIVE')";
+            case "bin" -> " FROM fams_location a JOIN fams_warehouse p ON p.id=a.warehouse_id"
+                    + " WHERE a.status='ACTIVE' AND a.location_type='BIN' AND p.status='ACTIVE'";
             case "employee" -> " FROM fams_employee a JOIN fams_organization p ON p.id=a.organization_id"
                     + " WHERE a.status='ACTIVE' AND p.status='ACTIVE'";
             default -> throw new AssetHandoverPort.Failure("SCRAP_CATALOG_INVALID", 400);
@@ -202,16 +208,53 @@ public class ScrapReadService {
                         "operatorName", snapshot.path("operatorName").asText()));
             }
         }
-        result.put("actions", Map.of("decide", actor.has(Role.ASSET_ADMIN)
-                        && "PENDING_ADMIN_DECISION".equals(row.get("request_status")),
-                "cancel", !locks.isEmpty() && ScrapReviewService.mayCancel(actor, row),
-                "claim", actor.has(Role.WAREHOUSE_OPERATOR)
-                        && "WAITING_WAREHOUSE_CLAIM".equals(row.get("request_status")),
-                "execute", owner && "PROCESSING".equals(row.get("request_status")) && ScrapReviewService.physicalSource(row.get("source_type")),
-                "executeLoss", owner && "PROCESSING".equals(row.get("request_status")) && lossSource,
-                "executeFactory", owner && "PROCESSING".equals(row.get("request_status")) && factory,
-                "dispose", canDispose));
         result.put("disposition", disposition);
+        var correctionRows = db.queryForList("SELECT c.id,c.correction_status,c.processor_account_id,c.asset_version,"
+                + "c.lock_version,c.target_location_id,c.target_location_version,c.ownership_version,c.version,"
+                + "c.reason,l.name AS target_location_name"
+                + " FROM fams_scrap_correction c JOIN fams_location l ON l.id=c.target_location_id"
+                + " WHERE c.request_id=? AND c.active_guard=1", id);
+        var correction = correctionRows.isEmpty() ? null : correctionView(correctionRows.getFirst());
+        boolean correctionPending = correction != null && "PENDING_ADMIN_DECISION".equals(correction.get("status"));
+        boolean correctionClaimable = correction != null && "WAITING_WAREHOUSE_CLAIM".equals(correction.get("status"));
+        boolean correctionProcessor = correction != null && actor.has(Role.WAREHOUSE_OPERATOR)
+                && !correctionRows.isEmpty() && Objects.equals(actor.id(),
+                        correctionRows.getFirst().get("processor_account_id"));
+        var actions = new LinkedHashMap<String, Object>();
+        actions.put("decide", actor.has(Role.ASSET_ADMIN) && "PENDING_ADMIN_DECISION".equals(row.get("request_status")));
+        actions.put("cancel", !locks.isEmpty() && ScrapReviewService.mayCancel(actor, row));
+        actions.put("claim", actor.has(Role.WAREHOUSE_OPERATOR)
+                && "WAITING_WAREHOUSE_CLAIM".equals(row.get("request_status")));
+        actions.put("execute", owner && "PROCESSING".equals(row.get("request_status"))
+                && ScrapReviewService.physicalSource(row.get("source_type")));
+        actions.put("executeLoss", owner && "PROCESSING".equals(row.get("request_status")) && lossSource);
+        actions.put("executeFactory", owner && "PROCESSING".equals(row.get("request_status")) && factory);
+        actions.put("dispose", canDispose);
+        actions.put("initiateCorrection", actor.has(Role.ASSET_ADMIN)
+                && "RESTORE_REQUIRED".equals(row.get("request_status"))
+                && "STANDALONE".equals(row.get("source_type")) && correction == null);
+        actions.put("decideCorrection", correctionPending && actor.has(Role.ASSET_ADMIN));
+        actions.put("claimCorrection", correctionClaimable && actor.has(Role.WAREHOUSE_OPERATOR));
+        actions.put("executeCorrection", correctionProcessor && "PROCESSING".equals(correction.get("status")));
+        result.put("actions", actions);
+        result.put("correction", correction);
+        return result;
+    }
+
+    private Map<String, Object> correctionView(Map<String, Object> row) {
+        var result = new LinkedHashMap<String, Object>();
+        result.put("id", row.get("id").toString());
+        result.put("status", row.get("correction_status"));
+        result.put("version", row.get("version"));
+        result.put("assetVersion", row.get("asset_version"));
+        result.put("lockVersion", row.get("lock_version"));
+        result.put("targetLocationId", row.get("target_location_id").toString());
+        result.put("targetLocationVersion", row.get("target_location_version"));
+        result.put("targetLocationName", row.get("target_location_name"));
+        result.put("ownershipVersion", row.get("ownership_version"));
+        result.put("processorAccountId", row.get("processor_account_id") == null
+                ? null : row.get("processor_account_id").toString());
+        result.put("reason", row.get("reason"));
         return result;
     }
 }

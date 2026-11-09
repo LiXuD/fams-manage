@@ -259,6 +259,76 @@ it("writes off a lost asset using the approved loss action and the original vers
   wrapper.unmount();
 });
 
+it("runs the controlled correction from frozen invalid custody through approved bin restore", async () => {
+  const correction = { id: "88", version: 0, status: "PENDING_ADMIN_DECISION", assetVersion: 3, lockVersion: 5,
+    targetLocationId: "21", targetLocationVersion: 8, targetLocationName: "归还仓位", ownershipVersion: 0,
+    processorAccountId: null, reason: "原保管人已停用，按有效仓位恢复在库" };
+  const row: ScrapRequest = { ...report(), status: "RESTORE_REQUIRED", correction: null,
+    actions: { decide: false, claim: false, execute: false, initiateCorrection: true } };
+  const writes: { url: string; input: RequestInit }[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, input: RequestInit) => {
+    if (input.method === "POST") {
+      writes.push({ url, input });
+      if (url.endsWith("/corrections")) {
+        row.actions.initiateCorrection = false; row.actions.decideCorrection = true;
+        row.correction = { ...correction };
+      } else if (url.endsWith("/decision")) {
+        row.actions.decideCorrection = false; row.actions.claimCorrection = true;
+        row.correction = { ...correction, version: 1, status: "WAITING_WAREHOUSE_CLAIM" };
+      } else if (url.endsWith("/claim")) {
+        row.actions.claimCorrection = false; row.actions.executeCorrection = true;
+        row.correction = { ...correction, version: 2, status: "PROCESSING", ownershipVersion: 1, processorAccountId: "1" };
+      } else if (url.endsWith("/execute")) {
+        row.actions.executeCorrection = false; row.correction = null; row.status = "CORRECTED";
+      }
+      return response({ id: row.id });
+    }
+    if (url.includes("/execution-catalog/bin")) return response({ items: [{ id: "21", name: "归还仓位", version: 8 }], total: 1 });
+    if (url.endsWith("attachment-capabilities")) return response({ canRead: false });
+    return response(url.includes("?") ? { items: [row], total: 1 } : row);
+  }));
+  const wrapper = mount(ScrapView); await flushPromises();
+  await button(wrapper, "ORIGINAL-1 · 原保管关系失效，待纠正").trigger("click"); await flushPromises();
+  await button(wrapper, "加载更多有效仓位").trigger("click"); await flushPromises();
+  await field(wrapper, "纠正目标仓位", "21");
+  await field(wrapper, "纠正原因", "原保管人已停用，按有效仓位恢复在库");
+  await button(wrapper, "核对发起受控纠正").trigger("click");
+  await button(wrapper, "确认提交本次办理").trigger("click"); await flushPromises();
+  expect(writes[0]?.url).toBe("/api/v1/scrap-requests/" + row.id + "/corrections");
+  expect(writes[0]?.input.headers).toMatchObject({ "If-Match-Version": "2" });
+  expect(JSON.parse(String(writes[0]?.input.body))).toEqual({ assetVersion: 3, lockVersion: 5,
+    locationId: "21", locationVersion: 8, reason: "原保管人已停用，按有效仓位恢复在库" });
+  await button(wrapper, "批准受控纠正").trigger("click");
+  expect(writes).toHaveLength(1);
+  await field(wrapper, "本次决定原因", "批准按有效仓位受控纠正");
+  await button(wrapper, "批准受控纠正").trigger("click");
+  await button(wrapper, "确认提交本次办理").trigger("click"); await flushPromises();
+  expect(writes[1]?.url).toBe("/api/v1/scrap-requests/corrections/88/decision");
+  expect(writes[1]?.input.headers).toMatchObject({ "If-Match-Version": "0" });
+  expect(JSON.parse(String(writes[1]?.input.body))).toEqual({ assetVersion: 3, lockVersion: 5,
+    result: "APPROVE", reason: "批准按有效仓位受控纠正" });
+  await button(wrapper, "认领受控纠正").trigger("click");
+  await button(wrapper, "确认提交本次办理").trigger("click"); await flushPromises();
+  expect(writes[2]?.url).toBe("/api/v1/scrap-requests/corrections/88/claim");
+  expect(writes[2]?.input.headers).toMatchObject({ "If-Match-Version": "1" });
+  expect(JSON.parse(String(writes[2]?.input.body))).toEqual({ assetVersion: 3, lockVersion: 5 });
+  await flushPromises();
+  expect(wrapper.text()).toContain("纠正进度 纠正待实物核验恢复 · 目标仓位 归还仓位");
+  await field(wrapper, "实际原机编码", "ORIGINAL-1");
+  await field(wrapper, "实际原机序列号", "SERIAL-1");
+  await field(wrapper, "实际核验时间", "2026-11-09T10:00:00");
+  await field(wrapper, "实际核验依据", "现场核对原机与批准仓位一致后恢复在库保管");
+  await field(wrapper, "已亲见并核对", true);
+  await button(wrapper, "核对执行纠正恢复").trigger("click");
+  await button(wrapper, "确认提交本次办理").trigger("click"); await flushPromises();
+  expect(writes[3]?.url).toBe("/api/v1/scrap-requests/corrections/88/execute");
+  expect(writes[3]?.input.headers).toMatchObject({ "If-Match-Version": "2" });
+  expect(JSON.parse(String(writes[3]?.input.body))).toMatchObject({ assetVersion: 3, lockVersion: 5,
+    ownershipVersion: 1, locationVersion: 8, observedCode: "ORIGINAL-1", physicalIdentityVerified: true });
+  expect(wrapper.text()).toContain("冻结保管已受控纠正恢复");
+  wrapper.unmount();
+});
+
 it("executes manufacturer scrap from the recorded proof and its actual date", async () => {
   const row: ScrapRequest = { ...report(), sourceType: "FACTORY_REPLACEMENT", factoryDisposition: "FACTORY_RETAINED",
     sourceBusinessId: "71", actions: { decide: false, claim: false, execute: false, executeFactory: true } };

@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { ScrapApiError, scrapOriginal, scrapRequest, scrapStates, type ScrapAsset, type ScrapChoice,
+import { ScrapApiError, scrapOriginal, scrapRequest, scrapCorrectionStates, scrapStates, type ScrapAsset, type ScrapChoice,
   type ScrapAttachment, type ScrapAttachmentCapabilities, type ScrapAttachmentKind,
   type ScrapIntent, type ScrapRequest } from "@/scrap/api";
 
@@ -17,6 +17,8 @@ const observed = ref(""), serial = ref(""), occurred = ref(""), physical = ref(f
 const recipient = ref(""), dispositionEvidence = ref<string[]>([]);
 const places = ref<ScrapChoice[]>([]), people = ref<ScrapChoice[]>([]), location = ref(""), custodian = ref("");
 const locationPage = ref(0), locationTotal = ref(0), peoplePage = ref(0), peopleTotal = ref(0);
+const bins = ref<ScrapChoice[]>([]), binPage = ref(0), binTotal = ref(0);
+const correctionLocation = ref(""), correctionReason = ref(""), correctionDecision = ref("");
 const busy = ref(false), stale = ref(true), error = ref(""), notice = ref("");
 const confirmation = ref<ScrapIntent | null>(null), pending = ref<ScrapIntent | null>(null);
 const locked = computed(() => busy.value || !!confirmation.value || !!pending.value);
@@ -30,6 +32,8 @@ const current = (epoch: number, owner: string) => live && epoch === generation &
 function clearFacts() {
   places.value = []; people.value = []; location.value = ""; custodian.value = "";
   locationPage.value = 0; peoplePage.value = 0; locationTotal.value = 0; peopleTotal.value = 0;
+  bins.value = []; binPage.value = 0; binTotal.value = 0;
+  correctionLocation.value = ""; correctionReason.value = ""; correctionDecision.value = "";
   decisionReason.value = ""; approved.value = ""; observed.value = ""; serial.value = "";
   occurred.value = ""; physical.value = false; evidence.value = ""; due.value = "";
   recipient.value = ""; dispositionEvidence.value = [];
@@ -139,21 +143,24 @@ async function loadAssets(next = 1) {
   } catch (cause) { if (current(epoch, owner)) failure(cause); }
   finally { if (current(epoch, owner)) busy.value = false; }
 }
-async function catalog(kind: "location" | "employee") {
+async function catalog(kind: "location" | "employee" | "bin") {
   if (locked.value || stale.value || !(detail.value?.actions.execute
-      || kind === "employee" && detail.value?.actions.dispose)) return;
-  const next = (kind === "location" ? locationPage.value : peoplePage.value) + 1;
+      || kind === "employee" && detail.value?.actions.dispose
+      || kind === "bin" && detail.value?.actions.initiateCorrection)) return;
+  const next = (kind === "location" ? locationPage.value : kind === "bin" ? binPage.value : peoplePage.value) + 1;
   const epoch = ++generation, owner = identity.value; busy.value = true;
   try {
     const result = await scrapRequest<{ items: ScrapChoice[]; total: number }>(
       "/" + detail.value.id + "/execution-catalog/" + kind + "?page=" + next + "&pageSize=100");
     if (!current(epoch, owner)) return;
     if (kind === "location") { places.value.push(...result.items); locationPage.value = next; locationTotal.value = result.total; }
+    else if (kind === "bin") { bins.value.push(...result.items); binPage.value = next; binTotal.value = result.total; }
     else { people.value.push(...result.items); peoplePage.value = next; peopleTotal.value = result.total; }
   } catch (cause) { if (current(epoch, owner)) failure(cause); }
   finally { if (current(epoch, owner)) busy.value = false; }
 }
-function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute" | "executeLoss" | "executeFactory" | "cancel") {
+function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute" | "executeLoss" | "executeFactory" | "cancel"
+    | "requestCorrection" | "approveCorrection" | "rejectCorrection" | "claimCorrection" | "executeCorrection") {
   if (locked.value || stale.value) return;
   const row = detail.value;
   let path = "", body: Record<string, unknown>, version: number | undefined, summary: string;
@@ -166,6 +173,48 @@ function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute" |
     body = { assetId: asset.id, assetVersion: asset.version, reason: reason.value.trim(),
       observedCondition: condition.value.trim(), proposedDisposition: proposed.value.trim() };
     summary = "提交 " + asset.assetCode + " 报废申请，等待管理员确认。";
+  } else if (action === "requestCorrection") {
+    if (!row || !row.actions.initiateCorrection) return;
+    const place = bins.value.find(item => item.id === correctionLocation.value);
+    if (!place || !correctionReason.value.trim()) {
+      error.value = "请选择有效纠正仓位并填写纠正原因。"; return;
+    }
+    path = "/" + row.id + "/corrections"; version = row.version;
+    body = { assetVersion: row.assetVersion, lockVersion: row.lockVersion, locationId: place.id,
+      locationVersion: place.version, reason: correctionReason.value.trim() };
+    summary = "发起受控纠正，建议将 " + row.source.assetCode + " 恢复至仓位 " + place.name + "，等待管理员确认。";
+  } else if (action === "approveCorrection" || action === "rejectCorrection"
+      || action === "claimCorrection" || action === "executeCorrection") {
+    const correction = row?.correction;
+    if (!correction) return;
+    const capability = action === "approveCorrection" || action === "rejectCorrection"
+      ? "decideCorrection" : action;
+    if (!row.actions[capability]) return;
+    version = correction.version; body = { assetVersion: correction.assetVersion, lockVersion: correction.lockVersion };
+    if (capability === "decideCorrection") {
+      if (!correctionDecision.value.trim()) { error.value = "请填写本次决定原因。"; return; }
+      path = "/corrections/" + correction.id + "/decision";
+      body = { ...body, result: action === "approveCorrection" ? "APPROVE" : "REJECT",
+        reason: correctionDecision.value.trim() };
+      summary = action === "approveCorrection"
+        ? "批准纠正至仓位 " + correction.targetLocationName + "，等待库管核验实物。"
+        : "驳回本次纠正，资产保持冻结并回到管理员纠正待办。";
+    } else if (action === "claimCorrection") {
+      path = "/corrections/" + correction.id + "/claim";
+      summary = "取得本单纠正唯一处理权，核验实物后恢复在库。";
+    } else {
+      if (!row.actions.executeCorrection) return;
+      const time = new Date(occurred.value);
+      if (!physical.value || !observed.value.trim() || row.source.serialNumber && !serial.value.trim()
+          || evidence.value.trim().length < 10 || !Number.isFinite(time.getTime())) {
+        error.value = "请核对原机编码、序列号、实际时刻及至少10字核验依据。"; return;
+      }
+      path = "/corrections/" + correction.id + "/execute";
+      body = { ...body, ownershipVersion: correction.ownershipVersion, locationVersion: correction.targetLocationVersion,
+        observedCode: observed.value.trim(), observedSerial: serial.value.trim(), occurredAt: time.toISOString(),
+        physicalIdentityVerified: true, evidence: evidence.value.trim() };
+      summary = "执行纠正，将 " + row.source.assetCode + " 核验后恢复至批准仓位 " + correction.targetLocationName + "。";
+    }
   } else {
     if (!row || row.lockVersion == null) return;
     const capability = action === "approve" || action === "reject" ? "decide" : action;
@@ -316,6 +365,32 @@ onBeforeUnmount(() => { live = false; reset(); });
       <fieldset v-if="detail.actions.cancel" :disabled="locked || stale">
         <label v-if="!detail.actions.decide">取消原因<textarea v-model="decisionReason" maxlength="1000"/></label>
         <button @click="prepare('cancel')">取消报废申请</button>
+      </fieldset>
+      <p v-if="detail.correction">纠正进度 {{ scrapCorrectionStates[detail.correction.status] || detail.correction.status }} · 目标仓位 {{ detail.correction.targetLocationName }} · 纠正原因 {{ detail.correction.reason }} · 当前纠正办理人 {{ detail.correction.processorAccountId || '尚未认领' }}</p>
+      <fieldset v-if="detail.actions.initiateCorrection" :disabled="locked || stale">
+        <legend>发起受控纠正</legend>
+        <p>原保管关系已失效，资产保持冻结。请选择有效仓位并说明纠正依据，批准后由库管核验实物恢复在库。</p>
+        <button :disabled="binPage > 0 && bins.length >= binTotal" @click="catalog('bin')">加载更多有效仓位</button>
+        <label>纠正目标仓位<select v-model="correctionLocation"><option value="">请选择</option><option v-for="item in bins" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
+        <label>纠正原因<textarea v-model="correctionReason" maxlength="1000"/></label>
+        <button @click="prepare('requestCorrection')">核对发起受控纠正</button>
+      </fieldset>
+      <fieldset v-if="detail.actions.decideCorrection" :disabled="locked || stale">
+        <legend>确认受控纠正</legend>
+        <p>目标仓位 {{ detail.correction?.targetLocationName }} · 纠正原因 {{ detail.correction?.reason }}</p>
+        <label>本次决定原因<textarea v-model="correctionDecision" maxlength="1000"/></label>
+        <button @click="prepare('approveCorrection')">批准受控纠正</button>
+        <button @click="prepare('rejectCorrection')">驳回受控纠正</button>
+      </fieldset>
+      <button v-if="detail.actions.claimCorrection" :disabled="locked || stale" @click="prepare('claimCorrection')">认领受控纠正</button>
+      <fieldset v-if="detail.actions.executeCorrection" :disabled="locked || stale">
+        <legend>核验原机并执行纠正恢复</legend>
+        <p>批准目标仓位 {{ detail.correction?.targetLocationName }}</p>
+        <label>实际原机编码<input v-model="observed" maxlength="64"/></label><label>实际原机序列号<input v-model="serial" maxlength="128"/></label>
+        <label>实际核验时间<input v-model="occurred" type="datetime-local" step="0.001"/></label>
+        <label>实际核验依据<textarea v-model="evidence" maxlength="2000"/></label>
+        <label><input v-model="physical" type="checkbox"/>已亲见并核对同一原机与批准仓位一致</label>
+        <button @click="prepare('executeCorrection')">核对执行纠正恢复</button>
       </fieldset>
       <button v-if="detail.actions.claim" :disabled="locked || stale" @click="prepare('claim')">认领报废处理</button>
       <fieldset v-if="detail.actions.execute" :disabled="locked || stale"><h3>核验原机并执行报废</h3>

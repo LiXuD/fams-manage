@@ -15,8 +15,8 @@ const origin = "https://scrap-test.invalid";
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "fams-native-scrap-"));
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0WQAAAAASUVORK5CYII=", "base64");
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
-const writes = [], uploads = [], completions = [], clients = new Map();
-let drop = true, dropUpload = true, dropCompletion = true;
+const writes = [], uploads = [], completions = [], correctionWrites = [], clients = new Map();
+let drop = true, dropUpload = true, dropCompletion = true, dropCorrection = true;
 function target(url) {
     assert.ok(url.startsWith(origin + "/api/v1/mini/scrap-requests"));
     return "http://127.0.0.1:" + port + url.slice(origin.length);
@@ -47,6 +47,13 @@ function services(role) {
                         version: input.header["If-Match-Version"], body: structuredClone(input.data) });
                     if (drop && response.status === 200) {
                         drop = false; input.fail(Error("Owned adapter dropped committed scrap response")); return;
+                    }
+                }
+                if (input.method === "POST" && /\/corrections\/[0-9]+\/execute$/.test(input.url)) {
+                    correctionWrites.push({ path: input.url, key: input.header["Idempotency-Key"],
+                        version: input.header["If-Match-Version"], body: structuredClone(input.data) });
+                    if (dropCorrection && response.status === 200) {
+                        dropCorrection = false; input.fail(Error("Owned adapter dropped committed correction response")); return;
                     }
                 }
                 if (input.method === "POST" && input.url.endsWith("/disposition/complete")) {
@@ -196,9 +203,45 @@ try {
     await warehouse.onToggleOverdue(); okay(warehouse);
     assert.equal(warehouse.data.overdueOnly, false);
     assert.ok(warehouse.data.rows.some(row => row.id === id));
-    for (const value of [employee, admin, warehouse]) value.onUnload();
+    const correctionId = process.env.FAMS_TEST_SCRAP_CORRECTION_REQUEST;
+    assert.match(correctionId ?? "", /^[1-9][0-9]{0,18}$/);
+    const correctingAdmin = await page("admin", correctionId);
+    assert.equal(correctingAdmin.data.detail.status, "RESTORE_REQUIRED");
+    assert.equal(correctingAdmin.data.detail.actions.initiateCorrection, true);
+    await correctingAdmin.onCatalog(event({ kind: "bin" })); okay(correctingAdmin);
+    const binIndex = correctingAdmin.data.bins.findIndex(item => item.id === "951000");
+    assert.ok(binIndex >= 0);
+    correctingAdmin.onChoice({ ...event({ kind: "bin" }), detail: { value: String(binIndex) } });
+    correctingAdmin.onField(field("correctionReason", "原责任人组织已失效，按有效仓位恢复在库"));
+    await act(correctingAdmin, "requestCorrection"); okay(correctingAdmin);
+    assert.equal(correctingAdmin.data.detail.actions.decideCorrection, true);
+    assert.equal(correctingAdmin.data.detail.correction.targetLocationName, "Original bin");
+    assert.equal(correctingAdmin.data.detail.correction.status, "PENDING_ADMIN_DECISION");
+    correctingAdmin.onField(field("correctionDecision", "批准按有效仓位受控纠正"));
+    await act(correctingAdmin, "approveCorrection"); okay(correctingAdmin);
+    assert.equal(correctingAdmin.data.detail.correction.status, "WAITING_WAREHOUSE_CLAIM");
+    const correctingWarehouse = await page("warehouse", correctionId);
+    assert.equal(correctingWarehouse.data.detail.actions.claimCorrection, true);
+    await act(correctingWarehouse, "claimCorrection"); okay(correctingWarehouse);
+    assert.equal(correctingWarehouse.data.detail.correction.status, "PROCESSING");
+    correctingWarehouse.onField(field("observed", "REP-ASSET-951021"));
+    correctingWarehouse.onField(field("evidence", "现场亲见原机并核对批准仓位一致后恢复在库保管"));
+    correctingWarehouse.onNow(); correctingWarehouse.onChecked({ detail: { value: true } });
+    await act(correctingWarehouse, "executeCorrection");
+    assert.equal(correctingWarehouse.data.retry, true);
+    const frozenCorrection = structuredClone(correctionWrites[0]);
+    await correctingWarehouse.onRefresh();
+    correctingWarehouse.onHide(); await correctingWarehouse.onShow();
+    assert.equal(correctingWarehouse.data.detail.status, "CORRECTED");
+    assert.equal(correctingWarehouse.data.detail.correction, null);
+    assert.match(correctingWarehouse.data.pendingSummary, /纠正|仓位/);
+    await correctingWarehouse.onRetry(); okay(correctingWarehouse);
+    assert.deepEqual(correctionWrites[1], frozenCorrection);
+    assert.equal(correctionWrites.length, 2);
+    for (const value of [employee, admin, warehouse, correctingAdmin, correctingWarehouse]) value.onUnload();
     console.log(JSON.stringify({ nativeScrapExecuted: true, originalReceiptReplayed: true,
-        separatePendingDisposition: true, nativeScrapAttachments: true, nativeDispositionClosed: true, requestId: id }));
+        separatePendingDisposition: true, nativeScrapAttachments: true, nativeDispositionClosed: true,
+        nativeScrapCorrectionClosed: true, requestId: id }));
 } finally {
     fs.rmSync(root, { recursive: true, force: true });
 }
