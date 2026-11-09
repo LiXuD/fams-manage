@@ -190,6 +190,7 @@ class LossHttpRuntimeCase {
         db.update("DELETE FROM fams_scrap_disposition WHERE request_id" + scraps);
         db.update("DELETE FROM fams_scrap_event WHERE request_id" + scraps);
         db.update("DELETE FROM fams_scrap_receipt WHERE scrap_request_id" + scraps);
+        db.update("DELETE FROM fams_scrap_recovery WHERE request_id" + scraps);
         db.update("DELETE FROM fams_scrap_request WHERE asset_id BETWEEN 951020 AND 951023");
         cleanLinkedReturns();
         cleanLinkedTransfers();
@@ -1231,6 +1232,259 @@ class LossHttpRuntimeCase {
     }
 
     @Test
+    void recoveredPhysicalAfterWriteOffReAcceptsOriginalCardAndKeepsWrittenOffFacts() throws Exception {
+        borrowing(true);
+        db.update("UPDATE fams_loan SET parameter_snapshot_json=JSON_OBJECT('timezone','Asia/Shanghai') WHERE asset_id=951020");
+        var searching = searchingReport();
+        String report = searching.path("id").asText();
+        var confirmed = ok(post(warehouse, "/" + report + "/confirm-lost", confirmation(searching),
+                searching.path("version").asLong(), key()));
+        var payload = JSON.createObjectNode().put("assetVersion", confirmed.path("assetVersion").asLong())
+                .put("reason", "已确认遗失申请报废").put("observedCondition", "原资产持续查找未能找回")
+                .put("proposedDisposition", "遗失核销");
+        var submitted = ok(postScrap(employee, "/from-loss/" + report, payload.toString(),
+                confirmed.path("version").asLong(), key()));
+        String path = "/" + submitted.path("id").asText();
+        long id = submitted.path("id").asLong();
+        var versions = JSON.createObjectNode().put("assetVersion", submitted.path("assetVersion").asLong())
+                .put("lockVersion", 0);
+        var decision = versions.deepCopy().put("result", "APPROVE").put("reason", "确认遗失证据完整")
+                .put("approvedDisposition", "LOSS_WRITTEN_OFF");
+        ok(postScrap(admin, path + "/decision", decision.toString(), 0, key()));
+        var claimed = ok(postScrap(otherWarehouse, path + "/claim", versions.toString(), 1, key()));
+        var writeOff = versions.deepCopy().put("ownershipVersion", claimed.path("ownershipVersion").asLong())
+                .put("evidence", "经核对原报失证据，确认原资产未找回，办理遗失核销");
+        var executed = ok(postScrap(otherWarehouse, path + "/execute-loss", writeOff.toString(),
+                claimed.path("version").asLong(), key()));
+        long requestVersion = executed.path("version").asLong(), assetVersion = executed.path("assetVersion").asLong();
+        var frozenAsset = db.queryForMap("SELECT * FROM fams_asset WHERE id=951020");
+        var frozenRequest = db.queryForMap("SELECT * FROM fams_scrap_request WHERE id=?", id);
+        var frozenDisposal = db.queryForMap("SELECT * FROM fams_scrap_disposition WHERE request_id=?", id);
+        var frozenLoan = db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020");
+        var frozenLoss = db.queryForMap("SELECT * FROM fams_loss_report WHERE id=?", Long.parseLong(report));
+        assertEquals("SCRAPPED", frozenAsset.get("lifecycle_status"));
+        assertEquals("LOST", frozenAsset.get("exception_status"));
+        assertEquals("LOSS_WRITTEN_OFF", frozenDisposal.get("disposition_status"));
+        assertEquals("LOST_TERMINATED", frozenLoan.get("relation_status"));
+        assertEquals(null, frozenLoss.get("recovered_at"));
+
+        var detail = ok(getScrap(employee, path));
+        assertEquals(true, detail.path("actions").path("initiateRecovery").asBoolean());
+        assertEquals(false, detail.path("actions").path("initiateReversal").asBoolean());
+        org.junit.jupiter.api.Assertions.assertTrue(detail.path("recovery").isNull());
+        assertEquals(200, getScrap(employee, path + "/execution-catalog/bin").statusCode());
+        assertEquals(200, getScrap(warehouse, path + "/execution-catalog/location").statusCode());
+        assertEquals(200, getScrap(warehouse, path + "/execution-catalog/employee").statusCode());
+        var reversalOnly = JSON.createObjectNode().put("assetVersion", assetVersion).put("locationId", "951000")
+                .put("locationVersion", 0).put("reason", "尚未实际处置的误报废才允许冲正").toString();
+        assertEquals(409, postScrap(warehouse, path + "/reversals", reversalOnly, requestVersion, key()).statusCode());
+
+        var found = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        var recovery = JSON.createObjectNode().put("assetVersion", assetVersion).put("foundAt", found.toString())
+                .put("temporaryLocationId", "951001").put("temporaryLocationVersion", 0)
+                .put("temporaryCustodianEmployeeId", "951005").put("locationId", "951000").put("locationVersion", 0)
+                .put("reason", "核销后重新找到同一原机，先登记临时保管再申请原卡重新纳管");
+        assertEquals(403, postScrap(other, path + "/recoveries", recovery.toString(), requestVersion, key()).statusCode());
+        assertEquals(403, postScrap(system, path + "/recoveries", recovery.toString(), requestVersion, key()).statusCode());
+        assertEquals(409, postScrap(warehouse, path + "/recoveries", recovery.toString(), requestVersion - 1, key()).statusCode());
+        assertEquals(409, postScrap(warehouse, path + "/recoveries",
+                recovery.put("assetVersion", assetVersion - 1).toString(), requestVersion, key()).statusCode());
+        recovery.put("assetVersion", assetVersion);
+        var early = postScrap(warehouse, path + "/recoveries",
+                recovery.put("foundAt", found.minusSeconds(60).toString()).toString(), requestVersion, key());
+        assertEquals(400, early.statusCode(), early.body());
+        org.junit.jupiter.api.Assertions.assertTrue(early.body().contains("SCRAP_RECOVERY_FACTS_INVALID"), early.body());
+        recovery.put("foundAt", found.toString());
+        db.update("UPDATE fams_location SET status='DISABLED' WHERE id=951001");
+        assertEquals(409, postScrap(warehouse, path + "/recoveries", recovery.toString(), requestVersion, key()).statusCode());
+        db.update("UPDATE fams_location SET status='ACTIVE' WHERE id=951001");
+        db.update("UPDATE fams_employee SET status='DISABLED' WHERE id=951005");
+        assertEquals(409, postScrap(warehouse, path + "/recoveries", recovery.toString(), requestVersion, key()).statusCode());
+        db.update("UPDATE fams_employee SET status='ACTIVE' WHERE id=951005");
+        db.update("UPDATE fams_warehouse SET status='DISABLED' WHERE id=951000");
+        assertEquals(409, postScrap(warehouse, path + "/recoveries", recovery.toString(), requestVersion, key()).statusCode());
+        db.update("UPDATE fams_warehouse SET status='ACTIVE' WHERE id=951000");
+
+        String open = recovery.toString();
+        String requestKey = key();
+        var registered = ok(postScrap(warehouse, path + "/recoveries", open, requestVersion, requestKey));
+        assertEquals("PENDING_ADMIN_DECISION", registered.path("status").asText());
+        assertEquals(registered, ok(postScrap(warehouse, path + "/recoveries", open, requestVersion, requestKey)));
+        assertEquals(409, postScrap(warehouse, path + "/recoveries", open, requestVersion, key()).statusCode());
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_recovery WHERE request_id=?"
+                + " AND active_guard=1", Long.class, id));
+        assertEquals(List.of("RECOVERY_DECIDE"), db.queryForList("SELECT todo_type FROM fams_todo"
+                + " WHERE business_type='SCRAP' AND business_id=? AND todo_status='OPEN'", String.class, id));
+        var record = ok(getScrap(employee, path)).path("recovery");
+        String first = record.path("id").asText();
+        assertEquals("Original room", record.path("temporaryLocationName").asText());
+        assertEquals("Repair person", record.path("temporaryCustodianName").asText());
+        assertEquals("Original bin", record.path("targetLocationName").asText());
+        assertEquals(found.toString().replace("Z", "") + "000", record.path("foundAt").asText());
+        assertEquals(assetVersion, record.path("assetVersion").asLong());
+        assertEquals(0L, record.path("version").asLong());
+        assertEquals(false, ok(getScrap(employee, path)).path("actions").path("initiateRecovery").asBoolean());
+        assertEquals(403, getScrap(warehouse, path + "/execution-catalog/bin").statusCode());
+
+        var approval = JSON.createObjectNode().put("assetVersion", assetVersion).put("result", "APPROVE")
+                .put("reason", "批准原卡重新纳管并保留原遗失核销与借用终止事实");
+        var refusal = JSON.createObjectNode().put("assetVersion", assetVersion).put("result", "REJECT")
+                .put("reason", "临时保管与拟恢复仓位需重新核实");
+        String decide = "/recoveries/" + first + "/decision";
+        assertEquals(403, postScrap(warehouse, decide, approval.toString(), 0, key()).statusCode());
+        assertEquals(403, postScrap(employee, decide, approval.toString(), 0, key()).statusCode());
+        assertEquals(409, postScrap(admin, decide, approval.toString(), 1, key()).statusCode());
+        assertEquals(409, postScrap(admin, decide,
+                approval.put("assetVersion", assetVersion - 1).toString(), 0, key()).statusCode());
+        approval.put("assetVersion", assetVersion);
+        assertEquals(400, postScrap(admin, decide,
+                approval.put("result", "SKIP").toString(), 0, key()).statusCode());
+        approval.put("result", "APPROVE");
+        String rejectKey = key();
+        var bounced = ok(postScrap(admin, decide, refusal.toString(), 0, rejectKey));
+        assertEquals("REJECTED", bounced.path("status").asText());
+        assertEquals(bounced, ok(postScrap(admin, decide, refusal.toString(), 0, rejectKey)));
+        assertEquals(409, postScrap(admin, decide, refusal.toString(), 0, key()).statusCode());
+        assertEquals(List.of(), db.queryForList("SELECT id FROM fams_todo WHERE business_type='SCRAP'"
+                + " AND business_id=? AND todo_status='OPEN'", Long.class, id));
+        assertEquals("REJECTED", db.queryForObject("SELECT recovery_status FROM fams_scrap_recovery WHERE id=?",
+                String.class, Long.parseLong(first)));
+        assertEquals(frozenAsset, db.queryForMap("SELECT * FROM fams_asset WHERE id=951020"));
+        assertEquals(frozenRequest, db.queryForMap("SELECT * FROM fams_scrap_request WHERE id=?", id));
+        assertEquals(frozenDisposal, db.queryForMap("SELECT * FROM fams_scrap_disposition WHERE request_id=?", id));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_timeline_event WHERE asset_id=951020"
+                + " AND event_type='SCRAP_RECOVERED_REREGISTERED'", Long.class));
+        var released = ok(getScrap(employee, path));
+        org.junit.jupiter.api.Assertions.assertTrue(released.path("recovery").isNull());
+        assertEquals(true, released.path("actions").path("initiateRecovery").asBoolean());
+        assertEquals(200, getScrap(employee, path + "/execution-catalog/bin").statusCode());
+
+        ok(postScrap(employee, path + "/recoveries", open, requestVersion, key()));
+        String rid = ok(getScrap(employee, path)).path("recovery").path("id").asText();
+        decide = "/recoveries/" + rid + "/decision";
+        db.update("UPDATE fams_warehouse SET status='DISABLED' WHERE id=951000");
+        var targetGone = postScrap(admin, decide, approval.toString(), 0, key());
+        assertEquals(409, targetGone.statusCode(), targetGone.body());
+        org.junit.jupiter.api.Assertions.assertTrue(targetGone.body().contains("SCRAP_RECOVERY_TARGET_CHANGED"),
+                targetGone.body());
+        db.update("UPDATE fams_warehouse SET status='ACTIVE' WHERE id=951000");
+        String approveKey = key();
+        var approved = ok(postScrap(admin, decide, approval.toString(), 0, approveKey));
+        assertEquals("WAITING_WAREHOUSE_CLAIM", approved.path("status").asText());
+        assertEquals(approved, ok(postScrap(admin, decide, approval.toString(), 0, approveKey)));
+        assertEquals(List.of("RECOVERY_CLAIM"), db.queryForList("SELECT todo_type FROM fams_todo"
+                + " WHERE business_type='SCRAP' AND business_id=? AND todo_status='OPEN'", String.class, id));
+
+        String claim = "{\"assetVersion\":" + assetVersion + "}";
+        String claimKey = key();
+        assertEquals(403, postScrap(employee, "/recoveries/" + rid + "/claim", claim, 1, key()).statusCode());
+        assertEquals(409, postScrap(otherWarehouse, "/recoveries/" + rid + "/claim", claim, 0, key()).statusCode());
+        var taken = ok(postScrap(otherWarehouse, "/recoveries/" + rid + "/claim", claim, 1, claimKey));
+        assertEquals("PROCESSING", taken.path("status").asText());
+        assertEquals(1L, taken.path("ownershipVersion").asLong());
+        assertEquals(taken, ok(postScrap(otherWarehouse, "/recoveries/" + rid + "/claim", claim, 1, claimKey)));
+        assertEquals(409, postScrap(warehouse, "/recoveries/" + rid + "/claim", claim, 1, key()).statusCode());
+        assertEquals(951004L, db.queryForObject("SELECT assignee_account_id FROM fams_todo WHERE business_type='SCRAP'"
+                + " AND business_id=? AND todo_type='RECOVERY_EXECUTE' AND todo_status='OPEN'", Long.class, id));
+
+        var accept = JSON.createObjectNode().put("assetVersion", assetVersion).put("ownershipVersion", 1)
+                .put("locationVersion", 0).put("observedCode", "REP-ASSET-951020")
+                .put("occurredAt", Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString())
+                .put("physicalIdentityVerified", true)
+                .put("evidence", "现场核对原机身份与批准仓位一致后按原卡验收入库，原遗失核销与借用终止保持不改");
+        String occurred = accept.path("occurredAt").asText();
+        String execution = "/recoveries/" + rid + "/execute";
+        assertEquals(403, postScrap(warehouse, execution, accept.toString(), 2, key()).statusCode());
+        assertEquals(409, postScrap(otherWarehouse, execution,
+                accept.put("assetVersion", assetVersion - 1).toString(), 2, key()).statusCode());
+        accept.put("assetVersion", assetVersion);
+        assertEquals(409, postScrap(otherWarehouse, execution, accept.toString(), 1, key()).statusCode());
+        var wrongCode = postScrap(otherWarehouse, execution,
+                accept.put("observedCode", "REP-ASSET-951021").toString(), 2, key());
+        assertEquals(409, wrongCode.statusCode(), wrongCode.body());
+        org.junit.jupiter.api.Assertions.assertTrue(wrongCode.body().contains("SCRAP_PHYSICAL_IDENTITY_CHANGED"),
+                wrongCode.body());
+        accept.put("observedCode", "REP-ASSET-951020");
+        assertEquals(400, postScrap(otherWarehouse, execution,
+                accept.put("physicalIdentityVerified", false).toString(), 2, key()).statusCode());
+        accept.put("physicalIdentityVerified", true);
+        assertEquals(400, postScrap(otherWarehouse, execution,
+                accept.put("occurredAt", found.minusSeconds(60).toString()).toString(), 2, key()).statusCode());
+        accept.put("occurredAt", occurred);
+        assertEquals(409, postScrap(otherWarehouse, execution,
+                accept.put("locationVersion", 1).toString(), 2, key()).statusCode());
+        accept.put("locationVersion", 0);
+
+        String accepted = accept.toString(), executeKey = key();
+        db.execute("CREATE TRIGGER owned_repair_audit_failure BEFORE INSERT ON fams_audit_event"
+                + " FOR EACH ROW BEGIN IF NEW.action='SCRAP_RECOVERY_EXECUTED' THEN SIGNAL"
+                + " SQLSTATE '45000' SET MESSAGE_TEXT='owned recovery audit failure'; END IF; END");
+        assertEquals(500, postScrap(otherWarehouse, execution, accepted, 2, executeKey).statusCode());
+        db.execute("DROP TRIGGER owned_repair_audit_failure");
+        assertEquals(frozenAsset, db.queryForMap("SELECT * FROM fams_asset WHERE id=951020"));
+        assertEquals("PROCESSING", db.queryForObject("SELECT recovery_status FROM fams_scrap_recovery WHERE id=?",
+                String.class, Long.parseLong(rid)));
+        assertEquals(2L, db.queryForObject("SELECT version FROM fams_scrap_recovery WHERE id=?", Long.class,
+                Long.parseLong(rid)));
+        assertEquals(null, db.queryForObject("SELECT execution_snapshot_json FROM fams_scrap_recovery WHERE id=?",
+                String.class, Long.parseLong(rid)));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_timeline_event WHERE asset_id=951020"
+                + " AND event_type='SCRAP_RECOVERED_REREGISTERED'", Long.class));
+        var recovered = ok(postScrap(otherWarehouse, execution, accepted, 2, executeKey));
+        assertEquals("COMPLETED", recovered.path("status").asText());
+        assertEquals(assetVersion + 1, recovered.path("assetVersion").asLong());
+        assertEquals(recovered, ok(postScrap(otherWarehouse, execution, accepted, 2, executeKey)));
+        assertEquals(409, postScrap(otherWarehouse, execution, accepted, 2, key()).statusCode());
+
+        var stock = db.queryForMap("SELECT * FROM fams_asset WHERE id=951020");
+        assertEquals("IN_STOCK", stock.get("lifecycle_status"));
+        assertEquals("NORMAL", stock.get("exception_status"));
+        assertEquals("STORAGE", stock.get("custody_type"));
+        assertEquals("ACTIVE", stock.get("card_stage"));
+        assertEquals(951000L, ((Number) stock.get("storage_warehouse_id")).longValue());
+        assertEquals(951000L, ((Number) stock.get("current_location_id")).longValue());
+        assertEquals(null, stock.get("using_organization_id"));
+        assertEquals(null, stock.get("responsible_employee_id"));
+        assertEquals(null, stock.get("department_responsible_employee_id"));
+        assertEquals(assetVersion + 1, ((Number) stock.get("version")).longValue());
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_asset WHERE asset_code='REP-ASSET-951020'",
+                Long.class));
+        assertEquals("COMPLETED", db.queryForObject("SELECT recovery_status FROM fams_scrap_recovery WHERE id=?",
+                String.class, Long.parseLong(rid)));
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_recovery WHERE request_id=?"
+                + " AND recovery_status='COMPLETED'", Long.class, id));
+        assertEquals(frozenDisposal, db.queryForMap("SELECT * FROM fams_scrap_disposition WHERE request_id=?", id));
+        assertEquals(frozenRequest, db.queryForMap("SELECT * FROM fams_scrap_request WHERE id=?", id));
+        assertEquals(frozenLoan, db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020"));
+        assertEquals(frozenLoss, db.queryForMap("SELECT * FROM fams_loss_report WHERE id=?", Long.parseLong(report)));
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_timeline_event WHERE asset_id=951020"
+                + " AND event_type='SCRAP_RECOVERED_REREGISTERED'", Long.class));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=951020"
+                + " AND released_at IS NULL", Long.class));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_todo WHERE closed_at IS NULL AND"
+                + " ((business_type='SCRAP' AND business_id=?) OR (business_type='LOST_REPORT' AND business_id=?)"
+                + " OR (business_type='LOAN' AND business_id=?))", Long.class, id, Long.parseLong(report),
+                frozenLoan.get("id")));
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_receipt WHERE scrap_request_id=?"
+                + " AND operation=?", Long.class, id, "RECOVERY_EXECUTE:" + rid));
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_receipt WHERE scrap_request_id=?"
+                + " AND operation=?", Long.class, id, "RECOVERY_DECISION:" + rid));
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_receipt WHERE scrap_request_id=?"
+                + " AND operation=?", Long.class, id, "RECOVERY_CLAIM:" + rid));
+        assertEquals(2L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_receipt WHERE scrap_request_id=?"
+                + " AND operation=?", Long.class, id, "RECOVERY:" + id));
+        var closed = ok(getScrap(employee, path));
+        org.junit.jupiter.api.Assertions.assertTrue(closed.path("recovery").isNull());
+        assertEquals(false, closed.path("actions").path("initiateRecovery").asBoolean());
+        assertEquals("LOSS_WRITTEN_OFF", closed.path("disposition").path("disposition_status").asText());
+        assertEquals(409, postScrap(employee, path + "/recoveries", open, requestVersion, key()).statusCode());
+        var after = ok(get(employee, "/" + report));
+        assertEquals(false, after.path("actions").path("requestRecovery").asBoolean());
+        assertEquals("IN_STOCK", after.path("recoveryAsset").path("lifecycle").asText());
+        assertEquals(false, after.path("recoveryAsset").path("eligible").asBoolean());
+    }
+
+    @Test
     void actualNativePageSubmitsAndWritesOffLinkedLossWithOriginalRetries() throws Exception {
         borrowing(true);
         db.update("UPDATE fams_loan SET parameter_snapshot_json=JSON_OBJECT('timezone','Asia/Shanghai') WHERE asset_id=951020");
@@ -1270,6 +1524,36 @@ class LossHttpRuntimeCase {
         assertEquals(2L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_receipt WHERE scrap_request_id=?"
                 + " AND (operation LIKE 'SUBMIT_LOSS:%' OR operation LIKE 'EXECUTE_LOSS:%')", Long.class, scrap));
         assertEquals("LOST_TERMINATED", db.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=951020", String.class));
+        org.junit.jupiter.api.Assertions.assertTrue(result.contains("\"nativeScrapRecoveryClosed\":true"), result);
+        var registered = db.queryForMap("SELECT r.recovery_status,r.temporary_location_id,r.target_location_id,"
+                + "r.temporary_custodian_employee_id,DATE_FORMAT(r.found_at,'%Y-%m-%dT%H:%i:%s.%f') found_at"
+                + " FROM fams_scrap_recovery r JOIN fams_scrap_request q ON q.id=r.request_id WHERE q.asset_id=951020");
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_recovery r"
+                + " JOIN fams_scrap_request q ON q.id=r.request_id WHERE q.asset_id=951020", Long.class));
+        assertEquals("COMPLETED", registered.get("recovery_status"));
+        assertEquals(951000L, ((Number) registered.get("target_location_id")).longValue());
+        assertEquals(951001L, ((Number) registered.get("temporary_custodian_employee_id")).longValue());
+        String foundAt = registered.get("found_at").toString();
+        org.junit.jupiter.api.Assertions.assertTrue(foundAt.matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}"),
+                foundAt);
+        String writtenOff = JSON.readTree(db.queryForObject("SELECT completion_snapshot_json"
+                + " FROM fams_scrap_disposition WHERE request_id=?", String.class, scrap))
+                .path("writtenOffAt").asText();
+        org.junit.jupiter.api.Assertions.assertTrue(foundAt.substring(0, 19).compareTo(writtenOff.substring(0, 19)) >= 0,
+                foundAt + " < " + writtenOff);
+        var nativeAsset = db.queryForMap("SELECT lifecycle_status,exception_status,custody_type,storage_warehouse_id,"
+                + "current_location_id,using_organization_id,responsible_employee_id FROM fams_asset WHERE id=951020");
+        assertEquals("IN_STOCK", nativeAsset.get("lifecycle_status"));
+        assertEquals("NORMAL", nativeAsset.get("exception_status"));
+        assertEquals("STORAGE", nativeAsset.get("custody_type"));
+        assertEquals(951000L, ((Number) nativeAsset.get("storage_warehouse_id")).longValue());
+        assertEquals(951000L, ((Number) nativeAsset.get("current_location_id")).longValue());
+        assertEquals(null, nativeAsset.get("using_organization_id"));
+        assertEquals(null, nativeAsset.get("responsible_employee_id"));
+        assertEquals(4L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_receipt WHERE scrap_request_id=?"
+                + " AND operation LIKE 'RECOVERY%'", Long.class, scrap));
+        assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_timeline_event WHERE asset_id=951020"
+                + " AND event_type='SCRAP_RECOVERED_REREGISTERED'", Long.class));
     }
 
     @Test
@@ -1334,6 +1618,11 @@ class LossHttpRuntimeCase {
                 .header("Cookie", session.cookie()).header("X-CSRF-Token", session.csrf()).header("Idempotency-Key", key)
                 .header("If-Match-Version", Long.toString(version)).header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> getScrap(Session session, String path) throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/scrap-requests" + path))
+                .header("Cookie", session.cookie()).GET().build(), HttpResponse.BodyHandlers.ofString());
     }
 
     @Test

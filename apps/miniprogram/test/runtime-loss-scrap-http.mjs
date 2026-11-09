@@ -28,7 +28,8 @@ function services(role) {
                     headers: { "Content-Type": "application/json", ...input.header }, redirect: "error",
                     body: input.data === undefined ? undefined : JSON.stringify(input.data) });
                 const data = await reply.json();
-                if (input.method === "POST" && (url.includes("/from-loss/") || url.endsWith("/execute-loss"))) {
+                if (input.method === "POST" && (url.includes("/from-loss/") || url.endsWith("/execute-loss")
+                        || /\/scrap-requests\/recoveries\/[0-9]+\/execute$/.test(url))) {
                     const attempts = writes.get(url) ?? [];
                     attempts.push({ key: input.header["Idempotency-Key"], version: input.header["If-Match-Version"],
                         body: structuredClone(input.data), status: reply.status });
@@ -117,7 +118,51 @@ try {
     assert.equal(warehouse.data.detail.disposition.disposition_status, "LOSS_WRITTEN_OFF");
     assert.equal(warehouse.data.detail.disposition.due_date, null);
     warehouse.onUnload();
-    console.log(JSON.stringify({ nativeLossScrap: true, originalSubmitRetry: true, originalExecuteRetry: true }));
+    const registering = await open("scrap", "warehouse", scrap);
+    assert.equal(registering.data.detail.actions.initiateRecovery, true);
+    assert.equal(registering.data.detail.actions.initiateReversal, false);
+    await registering.onCatalog(event({ kind: "location" })); okay(registering);
+    await registering.onCatalog(event({ kind: "employee" })); okay(registering);
+    await registering.onCatalog(event({ kind: "bin" })); okay(registering);
+    const found = new Date(), pad = value => String(value).padStart(2, "0");
+    field(registering, "recoveryFoundDate",
+        [found.getFullYear(), pad(found.getMonth() + 1), pad(found.getDate())].join("-"));
+    field(registering, "recoveryFoundTime", [found.getHours(), found.getMinutes(), found.getSeconds()].map(pad).join(":"));
+    registering.onChoice({ ...event({ kind: "location" }), detail: { value: "0" } });
+    registering.onChoice({ ...event({ kind: "employee" }), detail: { value: "0" } });
+    registering.onChoice({ ...event({ kind: "bin" }), detail: { value: "0" } });
+    field(registering, "recoveryReason", "现场找回同一原机，先登记临时保管再申请重新纳管");
+    await confirm(registering, "requestRecovery"); okay(registering);
+    assert.equal(registering.data.detail.actions.initiateRecovery, false);
+    assert.equal(registering.data.detail.recovery.status, "PENDING_ADMIN_DECISION");
+    assert.equal(registering.data.detail.disposition.disposition_status, "LOSS_WRITTEN_OFF");
+    assert.ok(registering.data.detail.recovery.temporaryCustodianName, registering.data.error);
+    registering.onUnload();
+
+    const approving = await open("scrap", "admin", scrap);
+    assert.equal(approving.data.detail.actions.decideRecovery, true);
+    field(approving, "recoveryDecision", "批准原卡重新纳管并保留原遗失核销事实");
+    await confirm(approving, "approveRecovery"); okay(approving);
+    assert.equal(approving.data.detail.recovery.status, "WAITING_WAREHOUSE_CLAIM");
+    approving.onUnload();
+
+    const accepting = await open("scrap", "warehouse", scrap);
+    assert.equal(accepting.data.detail.actions.claimRecovery, true);
+    const recoveryId = accepting.data.detail.recovery.id;
+    await confirm(accepting, "claimRecovery"); okay(accepting);
+    assert.equal(accepting.data.detail.recovery.status, "PROCESSING");
+    field(accepting, "observed", accepting.data.detail.source.assetCode);
+    field(accepting, "serial", accepting.data.detail.source.serialNumber);
+    field(accepting, "evidence", "现场核对原机身份与批准仓位一致后按原卡验收入库");
+    accepting.onNow(); accepting.onChecked({ detail: { value: true } });
+    await confirm(accepting, "executeRecovery");
+    await retry(accepting, "/api/v1/mini/scrap-requests/recoveries/" + recoveryId + "/execute");
+    assert.equal(accepting.data.detail.recovery, null);
+    assert.equal(accepting.data.detail.status, "EXECUTED");
+    assert.equal(accepting.data.detail.disposition.disposition_status, "LOSS_WRITTEN_OFF");
+    accepting.onUnload();
+    console.log(JSON.stringify({ nativeLossScrap: true, originalSubmitRetry: true, originalExecuteRetry: true,
+        nativeScrapRecoveryClosed: true }));
 } finally {
     delete globalThis.getApp;
     delete globalThis.Page;

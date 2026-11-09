@@ -406,6 +406,71 @@ public class AssetScrapPort {
         }
     }
 
+    /** A written-off scrap whose physical item came back stays scrapped until a separate re-acceptance approval. */
+    public void requireRecoverableAsset(long id, long version) {
+        if (db.queryForList("SELECT id FROM fams_asset WHERE id=? AND version=?"
+                        + " AND card_stage='ACTIVE' AND lifecycle_status='SCRAPPED'"
+                        + " AND exception_status IN ('NORMAL','LOST') FOR UPDATE",
+                        id, version).isEmpty()
+                || !db.queryForList("SELECT id FROM fams_asset_business_lock WHERE asset_id=?"
+                        + " AND released_at IS NULL FOR UPDATE", id).isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_ASSET_OR_LOCK_CHANGED", 409);
+        }
+    }
+
+    public boolean matchesTemporaryLocation(long locationId, long locationVersion) {
+        return !db.queryForList("SELECT l.id FROM fams_location l LEFT JOIN fams_warehouse w ON w.id=l.warehouse_id"
+                + " WHERE l.id=? AND l.version=? AND l.status='ACTIVE'"
+                + " AND (l.warehouse_id IS NULL OR w.status='ACTIVE') FOR UPDATE",
+                locationId, locationVersion).isEmpty();
+    }
+
+    public boolean temporaryLocationActive(long locationId) {
+        return !db.queryForList("SELECT l.id FROM fams_location l LEFT JOIN fams_warehouse w ON w.id=l.warehouse_id"
+                + " WHERE l.id=? AND l.status='ACTIVE'"
+                + " AND (l.warehouse_id IS NULL OR w.status='ACTIVE') FOR UPDATE", locationId).isEmpty();
+    }
+
+    /** Re-acceptance restores the original card; the loss write-off, closed loan and scrap facts stay recorded. */
+    public long reregisterToStock(long assetId, long version, long requestId, long temporaryLocationId,
+            long targetLocationId, long targetLocationVersion, String observedCode, String observedSerial,
+            long actorId, Instant time) {
+        var warehouses = db.queryForList("SELECT l.warehouse_id FROM fams_location l"
+                + " JOIN fams_warehouse w ON w.id=l.warehouse_id WHERE l.id=? AND l.version=?"
+                + " AND l.status='ACTIVE' AND l.location_type='BIN' AND w.status='ACTIVE' FOR UPDATE",
+                targetLocationId, targetLocationVersion);
+        if (warehouses.isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_TARGET_CHANGED", 409);
+        }
+        if (!temporaryLocationActive(temporaryLocationId)) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_TEMPORARY_CHANGED", 409);
+        }
+        var asset = db.queryForMap("SELECT asset_code,serial_number,lifecycle_status,exception_status"
+                + " FROM fams_asset WHERE id=? FOR UPDATE", assetId);
+        if (!Objects.equals(asset.get("asset_code"), observedCode.strip())
+                || asset.get("serial_number") != null
+                        && !Objects.equals(asset.get("serial_number"), observedSerial == null ? null : observedSerial.strip())
+                || !"SCRAPPED".equals(asset.get("lifecycle_status"))
+                || !List.of("NORMAL", "LOST").contains(asset.get("exception_status"))) {
+            throw new AssetHandoverPort.Failure("SCRAP_PHYSICAL_IDENTITY_CHANGED", 409);
+        }
+        if (db.update("UPDATE fams_asset SET lifecycle_status='IN_STOCK',custody_type='STORAGE',"
+                + "exception_status='NORMAL',storage_warehouse_id=?,current_location_id=?,"
+                + "using_organization_id=NULL,responsible_employee_id=NULL,"
+                + "department_responsible_employee_id=NULL,version=version+1,updated_at=?,updated_by=?"
+                + " WHERE id=? AND version=? AND lifecycle_status='SCRAPPED'",
+                warehouses.getFirst().get("warehouse_id"), targetLocationId, time, actorId, assetId, version) != 1) {
+            throw new AssetHandoverPort.Failure("SCRAP_ASSET_CHANGED", 409);
+        }
+        mapper.event(assetId, "SCRAP_RECOVERED_REREGISTERED", time,
+                json.writeValueAsString(Map.of("scrapRequestId", Long.toString(requestId),
+                        "recoveredWarehouseId", Long.toString(
+                                ((Number) warehouses.getFirst().get("warehouse_id")).longValue()),
+                        "temporaryLocationId", Long.toString(temporaryLocationId))),
+                actorId);
+        return version + 1;
+    }
+
     public Map<String, Object> eligible(Current actor, int page, int size) {
         String where = " FROM fams_asset a WHERE a.card_stage='ACTIVE' AND a.exception_status='NORMAL'"
                 + " AND a.lifecycle_status IN ('IN_STOCK','IN_USE') AND (? OR (? AND a.responsible_employee_id=?)"

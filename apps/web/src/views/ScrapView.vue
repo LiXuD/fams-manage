@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { ScrapApiError, scrapOriginal, scrapRequest, scrapCorrectionStates, scrapReversalStates, scrapStates, type ScrapAsset, type ScrapChoice,
+import { ScrapApiError, scrapOriginal, scrapRequest, scrapCorrectionStates, scrapReversalStates, scrapRecoveryStates, scrapStates, type ScrapAsset, type ScrapChoice,
   type ScrapAttachment, type ScrapAttachmentCapabilities, type ScrapAttachmentKind,
   type ScrapIntent, type ScrapRequest } from "@/scrap/api";
 
@@ -20,6 +20,8 @@ const locationPage = ref(0), locationTotal = ref(0), peoplePage = ref(0), people
 const bins = ref<ScrapChoice[]>([]), binPage = ref(0), binTotal = ref(0);
 const correctionLocation = ref(""), correctionReason = ref(""), correctionDecision = ref("");
 const reversalLocation = ref(""), reversalReason = ref(""), reversalDecision = ref("");
+const recoveryFound = ref(""), recoveryPlace = ref(""), recoveryCustodian = ref("");
+const recoveryLocation = ref(""), recoveryReason = ref(""), recoveryDecision = ref("");
 const busy = ref(false), stale = ref(true), error = ref(""), notice = ref("");
 const confirmation = ref<ScrapIntent | null>(null), pending = ref<ScrapIntent | null>(null);
 const locked = computed(() => busy.value || !!confirmation.value || !!pending.value);
@@ -36,6 +38,8 @@ function clearFacts() {
   bins.value = []; binPage.value = 0; binTotal.value = 0;
   correctionLocation.value = ""; correctionReason.value = ""; correctionDecision.value = "";
   reversalLocation.value = ""; reversalReason.value = ""; reversalDecision.value = "";
+  recoveryFound.value = ""; recoveryPlace.value = ""; recoveryCustodian.value = "";
+  recoveryLocation.value = ""; recoveryReason.value = ""; recoveryDecision.value = "";
   decisionReason.value = ""; approved.value = ""; observed.value = ""; serial.value = "";
   occurred.value = ""; physical.value = false; evidence.value = ""; due.value = "";
   recipient.value = ""; dispositionEvidence.value = [];
@@ -146,15 +150,17 @@ async function loadAssets(next = 1) {
   finally { if (current(epoch, owner)) busy.value = false; }
 }
 async function catalog(kind: "location" | "employee" | "bin") {
-  if (locked.value || stale.value || !(detail.value?.actions.execute
-      || kind === "employee" && detail.value?.actions.dispose
-      || kind === "bin" && (detail.value?.actions.initiateCorrection
-          || detail.value?.actions.initiateReversal))) return;
+  const row = detail.value;
+  if (locked.value || stale.value || !row || !(row.actions.execute
+      || kind === "employee" && (row.actions.dispose || row.actions.initiateRecovery)
+      || kind === "location" && (row.actions.execute || row.actions.initiateRecovery)
+      || kind === "bin" && (row.actions.initiateCorrection
+          || row.actions.initiateReversal || row.actions.initiateRecovery))) return;
   const next = (kind === "location" ? locationPage.value : kind === "bin" ? binPage.value : peoplePage.value) + 1;
   const epoch = ++generation, owner = identity.value; busy.value = true;
   try {
     const result = await scrapRequest<{ items: ScrapChoice[]; total: number }>(
-      "/" + detail.value.id + "/execution-catalog/" + kind + "?page=" + next + "&pageSize=100");
+      "/" + row.id + "/execution-catalog/" + kind + "?page=" + next + "&pageSize=100");
     if (!current(epoch, owner)) return;
     if (kind === "location") { places.value.push(...result.items); locationPage.value = next; locationTotal.value = result.total; }
     else if (kind === "bin") { bins.value.push(...result.items); binPage.value = next; binTotal.value = result.total; }
@@ -164,7 +170,8 @@ async function catalog(kind: "location" | "employee" | "bin") {
 }
 function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute" | "executeLoss" | "executeFactory" | "cancel"
     | "requestCorrection" | "approveCorrection" | "rejectCorrection" | "claimCorrection" | "executeCorrection"
-    | "requestReversal" | "approveReversal" | "rejectReversal" | "claimReversal" | "executeReversal") {
+    | "requestReversal" | "approveReversal" | "rejectReversal" | "claimReversal" | "executeReversal"
+    | "requestRecovery" | "approveRecovery" | "rejectRecovery" | "claimRecovery" | "executeRecovery") {
   if (locked.value || stale.value) return;
   const row = detail.value;
   let path = "", body: Record<string, unknown>, version: number | undefined, summary: string;
@@ -259,6 +266,53 @@ function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute" |
         observedCode: observed.value.trim(), observedSerial: serial.value.trim(), occurredAt: time.toISOString(),
         physicalIdentityVerified: true, evidence: evidence.value.trim() };
       summary = "执行冲正，将 " + row.source.assetCode + " 核验后重新验收入批准仓位 " + reversal.targetLocationName + "。";
+    }
+  } else if (action === "requestRecovery") {
+    if (!row || !row.actions.initiateRecovery) return;
+    const place = places.value.find(item => item.id === recoveryPlace.value);
+    const person = people.value.find(item => item.id === recoveryCustodian.value);
+    const target = bins.value.find(item => item.id === recoveryLocation.value);
+    const found = new Date(recoveryFound.value);
+    if (!place || !person || !target || !recoveryReason.value.trim() || !Number.isFinite(found.getTime())) {
+      error.value = "请选择临时保管位置与经办人、拟恢复仓位并填写找回事实和原因。"; return;
+    }
+    path = "/" + row.id + "/recoveries"; version = row.version;
+    body = { assetVersion: row.assetVersion, foundAt: found.toISOString(), temporaryLocationId: place.id,
+      temporaryLocationVersion: place.version, temporaryCustodianEmployeeId: person.id,
+      locationId: target.id, locationVersion: target.version, reason: recoveryReason.value.trim() };
+    summary = "登记 " + row.source.assetCode + " 报废后找回：实物暂由 " + person.name + " 在 " + place.name
+      + " 保管，建议验收入仓位 " + target.name + "，等待管理员确认纳管。";
+  } else if (action === "approveRecovery" || action === "rejectRecovery"
+      || action === "claimRecovery" || action === "executeRecovery") {
+    const recovery = row?.recovery;
+    if (!recovery) return;
+    const capability = action === "approveRecovery" || action === "rejectRecovery"
+      ? "decideRecovery" : action;
+    if (!row.actions[capability]) return;
+    version = recovery.version; body = { assetVersion: recovery.assetVersion };
+    if (capability === "decideRecovery") {
+      if (!recoveryDecision.value.trim()) { error.value = "请填写本次决定原因。"; return; }
+      path = "/recoveries/" + recovery.id + "/decision";
+      body = { ...body, result: action === "approveRecovery" ? "APPROVE" : "REJECT",
+        reason: recoveryDecision.value.trim() };
+      summary = action === "approveRecovery"
+        ? "批准找回纳管至仓位 " + recovery.targetLocationName + "，等待库管实物验收。"
+        : "驳回本次找回纳管，资产保持已报废并保留临时保管事实。";
+    } else if (action === "claimRecovery") {
+      path = "/recoveries/" + recovery.id + "/claim";
+      summary = "取得本单找回唯一处理权，核验原机后重新纳管入库。";
+    } else {
+      const time = new Date(occurred.value);
+      if (!physical.value || !observed.value.trim() || row.source.serialNumber && !serial.value.trim()
+          || evidence.value.trim().length < 10 || !Number.isFinite(time.getTime())) {
+        error.value = "请核对原机编码、序列号、实际时刻及至少10字核验依据。"; return;
+      }
+      path = "/recoveries/" + recovery.id + "/execute";
+      body = { ...body, ownershipVersion: recovery.ownershipVersion, locationVersion: recovery.targetLocationVersion,
+        observedCode: observed.value.trim(), observedSerial: serial.value.trim(), occurredAt: time.toISOString(),
+        physicalIdentityVerified: true, evidence: evidence.value.trim() };
+      summary = "执行找回纳管，将原卡 " + row.source.assetCode + " 核验后验收入批准仓位 "
+        + recovery.targetLocationName + "，原遗失核销与借用终止保持不改。";
     }
   } else {
     if (!row || row.lockVersion == null) return;
@@ -462,6 +516,37 @@ onBeforeUnmount(() => { live = false; reset(); });
         <label>实际核验依据<textarea v-model="evidence" maxlength="2000"/></label>
         <label><input v-model="physical" type="checkbox"/>已亲见并核对同一原机与批准仓位一致</label>
         <button @click="prepare('executeReversal')">核对执行冲正入库</button>
+      </fieldset>
+      <p v-if="detail.recovery">找回进度 {{ scrapRecoveryStates[detail.recovery.status] || detail.recovery.status }} · 临时保管 {{ detail.recovery.temporaryCustodianName }} @ {{ detail.recovery.temporaryLocationName }} · 拟恢复仓位 {{ detail.recovery.targetLocationName }} · 找回事实 {{ detail.recovery.reason }} · 当前找回办理人 {{ detail.recovery.processorAccountId || '尚未认领' }}</p>
+      <fieldset v-if="detail.actions.initiateRecovery" :disabled="locked || stale">
+        <legend>登记报废后找回</legend>
+        <p>本单已按遗失核销结束。实物后来找回时先登记找回事实和临时保管，资产保持已报废；批准后由库管核验原机并重新纳管入库，不重复建卡、不重开原借用。</p>
+        <label>实际找回时刻<input v-model="recoveryFound" type="datetime-local" step="0.001"/></label>
+        <button :disabled="locationPage > 0 && places.length >= locationTotal" @click="catalog('location')">加载更多临时保管位置</button>
+        <label>临时保管位置<select v-model="recoveryPlace"><option value="">请选择</option><option v-for="item in places" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
+        <button :disabled="peoplePage > 0 && people.length >= peopleTotal" @click="catalog('employee')">加载更多临时保管经办人</button>
+        <label>临时保管经办人<select v-model="recoveryCustodian"><option value="">请选择</option><option v-for="item in people" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
+        <button :disabled="binPage > 0 && bins.length >= binTotal" @click="catalog('bin')">加载更多有效仓位</button>
+        <label>拟恢复仓位<select v-model="recoveryLocation"><option value="">请选择</option><option v-for="item in bins" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
+        <label>找回事实与原因<textarea v-model="recoveryReason" maxlength="1000"/></label>
+        <button @click="prepare('requestRecovery')">核对登记报废后找回</button>
+      </fieldset>
+      <fieldset v-if="detail.actions.decideRecovery" :disabled="locked || stale">
+        <legend>确认找回重新纳管</legend>
+        <p>临时保管 {{ detail.recovery?.temporaryCustodianName }} @ {{ detail.recovery?.temporaryLocationName }} · 拟恢复仓位 {{ detail.recovery?.targetLocationName }} · 找回事实 {{ detail.recovery?.reason }}</p>
+        <label>本次决定原因<textarea v-model="recoveryDecision" maxlength="1000"/></label>
+        <button @click="prepare('approveRecovery')">批准找回纳管</button>
+        <button @click="prepare('rejectRecovery')">驳回找回纳管</button>
+      </fieldset>
+      <button v-if="detail.actions.claimRecovery" :disabled="locked || stale" @click="prepare('claimRecovery')">认领找回纳管</button>
+      <fieldset v-if="detail.actions.executeRecovery" :disabled="locked || stale">
+        <legend>核验原机并执行找回纳管</legend>
+        <p>批准目标仓位 {{ detail.recovery?.targetLocationName }}</p>
+        <label>实际原机编码<input v-model="observed" maxlength="64"/></label><label>实际原机序列号<input v-model="serial" maxlength="128"/></label>
+        <label>实际验收时间<input v-model="occurred" type="datetime-local" step="0.001"/></label>
+        <label>实际验收依据<textarea v-model="evidence" maxlength="2000"/></label>
+        <label><input v-model="physical" type="checkbox"/>已亲见并核对同一原机与批准仓位一致</label>
+        <button @click="prepare('executeRecovery')">核对执行找回纳管</button>
       </fieldset>
       <button v-if="detail.actions.claim" :disabled="locked || stale" @click="prepare('claim')">认领报废处理</button>
       <fieldset v-if="detail.actions.execute" :disabled="locked || stale"><h3>核验原机并执行报废</h3>

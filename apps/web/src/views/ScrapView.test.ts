@@ -401,6 +401,90 @@ it("runs the reversal of an executed but un-disposed scrap through approved bin 
   wrapper.unmount();
 });
 
+it("registers a post-scrap recovery and re-accepts the original card after write-off", async () => {
+  const recovery = { id: "104", version: 0, status: "PENDING_ADMIN_DECISION", assetVersion: 3, foundAt: "2026-11-09T01:20:00.000",
+    temporaryLocationId: "11", temporaryLocationName: "临时收货区", temporaryCustodianEmployeeId: "12",
+    temporaryCustodianName: "现场收货人", targetLocationId: "21", targetLocationVersion: 8,
+    targetLocationName: "归还仓位", ownershipVersion: 0, processorAccountId: null,
+    reason: "现场找回同一原机，先登记临时保管再申请重新纳管" };
+  const row: ScrapRequest = { ...report(), version: 5, status: "EXECUTED", lockVersion: null, recovery: null,
+    disposition: { disposition_status: "LOSS_WRITTEN_OFF", due_date: null, version: 0 },
+    actions: { decide: false, claim: false, execute: false, initiateRecovery: true } };
+  const writes: { url: string; input: RequestInit }[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, input: RequestInit) => {
+    if (input.method === "POST") {
+      writes.push({ url, input });
+      if (url.endsWith("/recoveries")) {
+        row.actions.initiateRecovery = false; row.actions.decideRecovery = true;
+        row.recovery = { ...recovery };
+      } else if (url.endsWith("/decision")) {
+        row.actions.decideRecovery = false; row.actions.claimRecovery = true;
+        row.recovery = { ...recovery, version: 1, status: "WAITING_WAREHOUSE_CLAIM" };
+      } else if (url.endsWith("/claim")) {
+        row.actions.claimRecovery = false; row.actions.executeRecovery = true;
+        row.recovery = { ...recovery, version: 2, status: "PROCESSING", ownershipVersion: 1, processorAccountId: "1" };
+      } else if (url.endsWith("/execute")) {
+        row.actions.executeRecovery = false; row.recovery = null;
+      }
+      return response({ id: row.id });
+    }
+    if (url.includes("/execution-catalog/location")) return response({ items: [{ id: "11", name: "临时收货区", version: 6 }], total: 1 });
+    if (url.includes("/execution-catalog/employee")) return response({ items: [{ id: "12", name: "现场收货人", version: 7 }], total: 1 });
+    if (url.includes("/execution-catalog/bin")) return response({ items: [{ id: "21", name: "归还仓位", version: 8 }], total: 1 });
+    if (url.endsWith("attachment-capabilities")) return response({ canRead: false });
+    return response(url.includes("?") ? { items: [row], total: 1 } : row);
+  }));
+  const wrapper = mount(ScrapView); await flushPromises();
+  await button(wrapper, "ORIGINAL-1 · 已执行报废").trigger("click"); await flushPromises();
+  await button(wrapper, "加载更多临时保管位置").trigger("click"); await flushPromises();
+  await button(wrapper, "加载更多临时保管经办人").trigger("click"); await flushPromises();
+  await button(wrapper, "加载更多有效仓位").trigger("click"); await flushPromises();
+  await field(wrapper, "实际找回时刻", "2026-11-09T09:20:00");
+  await field(wrapper, "临时保管位置", "11");
+  await field(wrapper, "临时保管经办人", "12");
+  await field(wrapper, "拟恢复仓位", "21");
+  await field(wrapper, "找回事实与原因", "现场找回同一原机，先登记临时保管再申请重新纳管");
+  await button(wrapper, "核对登记报废后找回").trigger("click");
+  expect(writes).toHaveLength(0);
+  expect(wrapper.text()).toContain("临时收货区");
+  await button(wrapper, "确认提交本次办理").trigger("click"); await flushPromises();
+  expect(writes[0]?.url).toBe("/api/v1/scrap-requests/" + row.id + "/recoveries");
+  expect(writes[0]?.input.headers).toMatchObject({ "If-Match-Version": "5" });
+  expect(JSON.parse(String(writes[0]?.input.body))).toMatchObject({ assetVersion: 3,
+    temporaryLocationId: "11", temporaryLocationVersion: 6, temporaryCustodianEmployeeId: "12",
+    locationId: "21", locationVersion: 8, reason: "现场找回同一原机，先登记临时保管再申请重新纳管" });
+  expect(String(JSON.parse(String(writes[0]?.input.body)).foundAt)).toMatch(/^2026-11-09T/);
+  await button(wrapper, "批准找回纳管").trigger("click");
+  expect(writes).toHaveLength(1);
+  await field(wrapper, "本次决定原因", "批准原卡重新纳管");
+  await button(wrapper, "批准找回纳管").trigger("click");
+  await button(wrapper, "确认提交本次办理").trigger("click"); await flushPromises();
+  expect(writes[1]?.url).toBe("/api/v1/scrap-requests/recoveries/104/decision");
+  expect(writes[1]?.input.headers).toMatchObject({ "If-Match-Version": "0" });
+  expect(JSON.parse(String(writes[1]?.input.body))).toEqual({ assetVersion: 3,
+    result: "APPROVE", reason: "批准原卡重新纳管" });
+  await button(wrapper, "认领找回纳管").trigger("click");
+  await button(wrapper, "确认提交本次办理").trigger("click"); await flushPromises();
+  expect(writes[2]?.url).toBe("/api/v1/scrap-requests/recoveries/104/claim");
+  expect(JSON.parse(String(writes[2]?.input.body))).toEqual({ assetVersion: 3 });
+  await flushPromises();
+  expect(wrapper.text()).toContain("找回进度 找回待实物验收纳管 · 临时保管 现场收货人 @ 临时收货区 · 拟恢复仓位 归还仓位");
+  await field(wrapper, "实际原机编码", "ORIGINAL-1");
+  await field(wrapper, "实际原机序列号", "SERIAL-1");
+  await field(wrapper, "实际验收时间", "2026-11-09T10:00:00");
+  await field(wrapper, "实际验收依据", "现场核对原机身份与批准仓位一致后按原卡验收入库");
+  await field(wrapper, "已亲见并核对", true);
+  await button(wrapper, "核对执行找回纳管").trigger("click");
+  await button(wrapper, "确认提交本次办理").trigger("click"); await flushPromises();
+  expect(writes[3]?.url).toBe("/api/v1/scrap-requests/recoveries/104/execute");
+  expect(writes[3]?.input.headers).toMatchObject({ "If-Match-Version": "2" });
+  expect(JSON.parse(String(writes[3]?.input.body))).toMatchObject({ assetVersion: 3, ownershipVersion: 1,
+    locationVersion: 8, observedCode: "ORIGINAL-1", observedSerial: "SERIAL-1", physicalIdentityVerified: true });
+  expect(wrapper.text()).toContain("处置进度 遗失核销");
+  expect(wrapper.text()).not.toContain("找回进度");
+  wrapper.unmount();
+});
+
 it("executes manufacturer scrap from the recorded proof and its actual date", async () => {
   const row: ScrapRequest = { ...report(), sourceType: "FACTORY_REPLACEMENT", factoryDisposition: "FACTORY_RETAINED",
     sourceBusinessId: "71", actions: { decide: false, claim: false, execute: false, executeFactory: true } };

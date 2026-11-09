@@ -363,12 +363,12 @@ public class ScrapReviewService {
             @NotNull Instant occurredAt, @NotNull Boolean physicalIdentityVerified,
             @NotBlank @Size(min = 10, max = 2000) String evidence) {}
 
-    private static final List<Role> REVERSAL_INITIATORS = List.of(Role.ASSET_ADMIN, Role.WAREHOUSE_OPERATOR,
+    private static final List<Role> FOLLOW_UP_INITIATORS = List.of(Role.ASSET_ADMIN, Role.WAREHOUSE_OPERATOR,
             Role.DEPARTMENT_ASSET_MANAGER, Role.EMPLOYEE);
 
     public Receipt requestReversal(Actor actor, long id, long version, UUID key, ReversalRequest input) {
         var current = actors.revalidateLocked(actor);
-        var initiator = REVERSAL_INITIATORS.stream().filter(current::has).findFirst()
+        var initiator = FOLLOW_UP_INITIATORS.stream().filter(current::has).findFirst()
                 .orElseThrow(() -> new AssetHandoverPort.Failure("SCRAP_REVERSAL_FORBIDDEN", 403));
         var rows = db.queryForList("SELECT * FROM fams_scrap_request WHERE id=? FOR UPDATE", id);
         if (rows.isEmpty()) {
@@ -555,6 +555,222 @@ public class ScrapReviewService {
         closeTodo(request, "REVERSAL_EXECUTE", time);
         closeTodo(request, "DISPOSITION", time);
         audit(actor, current, Role.WAREHOUSE_OPERATOR, request, version, "SCRAP_REVERSAL_EXECUTED", input, time);
+        return remember(current, operation, key, hash, new Receipt(Long.toString(request), Long.toString(asset),
+                version + 1, assetVersion, input.ownershipVersion(), "COMPLETED", Long.toString(current.id())), time);
+    }
+
+    public record RecoveryRequest(@NotNull @PositiveOrZero Long assetVersion, @NotNull Instant foundAt,
+            @NotNull @Positive Long temporaryLocationId, @NotNull @PositiveOrZero Long temporaryLocationVersion,
+            @NotNull @Positive Long temporaryCustodianEmployeeId, @NotNull @Positive Long locationId,
+            @NotNull @PositiveOrZero Long locationVersion, @NotBlank @Size(max = 1000) String reason) {}
+
+    public record RecoveryDecision(@NotNull @PositiveOrZero Long assetVersion, @NotBlank String result,
+            @NotBlank @Size(max = 1000) String reason) {}
+
+    public record RecoveryClaim(@NotNull @PositiveOrZero Long assetVersion) {}
+
+    public record RecoveryExecution(@NotNull @PositiveOrZero Long assetVersion,
+            @NotNull @PositiveOrZero Long ownershipVersion, @NotNull @PositiveOrZero Long locationVersion,
+            @NotBlank @Size(max = 64) String observedCode, @Size(max = 128) String observedSerial,
+            @NotNull Instant occurredAt, @NotNull Boolean physicalIdentityVerified,
+            @NotBlank @Size(min = 10, max = 2000) String evidence) {}
+
+    public Receipt requestRecovery(Actor actor, long id, long version, UUID key, RecoveryRequest input) {
+        var current = actors.revalidateLocked(actor);
+        var initiator = FOLLOW_UP_INITIATORS.stream().filter(current::has).findFirst()
+                .orElseThrow(() -> new AssetHandoverPort.Failure("SCRAP_RECOVERY_FORBIDDEN", 403));
+        var rows = db.queryForList("SELECT * FROM fams_scrap_request WHERE id=? FOR UPDATE", id);
+        if (rows.isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_NOT_FOUND", 404);
+        }
+        var request = rows.getFirst();
+        if ((initiator == Role.EMPLOYEE || initiator == Role.DEPARTMENT_ASSET_MANAGER)
+                && !Objects.equals(current.id(), request.get("creator_account_id"))) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_FORBIDDEN", 403);
+        }
+        String operation = "RECOVERY:" + id;
+        String hash = fingerprint(version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        if (!"EXECUTED".equals(request.get("request_status")) || number(request, "version") != version
+                || number(request, "asset_version") != input.assetVersion()) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_NOT_ALLOWED", 409);
+        }
+        if (!db.queryForList("SELECT id FROM fams_scrap_recovery WHERE request_id=? AND active_guard=1"
+                + " FOR UPDATE", id).isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_OPEN", 409);
+        }
+        var dispositions = db.queryForList("SELECT disposition_status,completion_snapshot_json"
+                + " FROM fams_scrap_disposition WHERE request_id=? FOR UPDATE", id);
+        if (dispositions.isEmpty()
+                || !"LOSS_WRITTEN_OFF".equals(dispositions.getFirst().get("disposition_status"))) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_NOT_ALLOWED", 409);
+        }
+        long asset = number(request, "asset_id");
+        var time = now();
+        assets.requireRecoverableAsset(asset, input.assetVersion());
+        Instant writtenOff = Instant.parse(json.readTree(dispositions.getFirst()
+                .get("completion_snapshot_json").toString()).path("writtenOffAt").asText(null));
+        // Both clients submit recovered instants with second precision, so floor the write-off bound.
+        if (input.foundAt().isBefore(writtenOff.truncatedTo(ChronoUnit.SECONDS))
+                || input.foundAt().isAfter(time.plusSeconds(2))
+                || !input.foundAt().equals(input.foundAt().truncatedTo(ChronoUnit.MILLIS))) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_FACTS_INVALID", 400);
+        }
+        if (!assets.matchesTemporaryLocation(input.temporaryLocationId(), input.temporaryLocationVersion())) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_TEMPORARY_CHANGED", 409);
+        }
+        if (db.queryForList("SELECT e.id FROM fams_employee e JOIN fams_organization o ON o.id=e.organization_id"
+                + " WHERE e.id=? AND e.status='ACTIVE' AND o.status='ACTIVE' FOR UPDATE",
+                input.temporaryCustodianEmployeeId()).isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_CUSTODIAN_CHANGED", 409);
+        }
+        if (!assets.matchesActiveBin(input.locationId(), input.locationVersion())) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_TARGET_CHANGED", 409);
+        }
+        db.update("INSERT INTO fams_scrap_recovery(request_id,asset_id,creator_account_id,reason,found_at,"
+                + "temporary_location_id,temporary_location_version,temporary_custodian_employee_id,asset_version,"
+                + "target_location_id,target_location_version,recovery_status,request_snapshot_json,"
+                + "created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,'PENDING_ADMIN_DECISION',?,?,?)",
+                id, asset, current.id(), input.reason().strip(), input.foundAt(), input.temporaryLocationId(),
+                input.temporaryLocationVersion(), input.temporaryCustodianEmployeeId(), input.assetVersion(),
+                input.locationId(), input.locationVersion(), json.writeValueAsString(input), time, time);
+        long recovery = Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
+        todo(id, "RECOVERY_DECIDE", "ASSET_ADMIN", null, time);
+        audit(actor, current, initiator, id, number(request, "version"), "SCRAP_RECOVERY_REQUESTED",
+                Map.of("recoveryId", Long.toString(recovery), "input", input), time);
+        return remember(current, operation, key, hash, new Receipt(Long.toString(id), Long.toString(asset),
+                number(request, "version"), input.assetVersion(), number(request, "ownership_version"),
+                "PENDING_ADMIN_DECISION", null), time);
+    }
+
+    private Map<String, Object> recoveryGuarded(long id, long version, long assetVersion) {
+        var parents = db.queryForList("SELECT request_id FROM fams_scrap_recovery WHERE id=?", id);
+        if (parents.isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_NOT_FOUND", 404);
+        }
+        long request = number(parents.getFirst(), "request_id");
+        // Lock the parent before the sub-record so write-off follow-ups and recovery serialize identically.
+        if (db.queryForList("SELECT id FROM fams_scrap_request WHERE id=? AND request_status='EXECUTED'"
+                + " FOR UPDATE", request).isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_CHANGED", 409);
+        }
+        var rows = db.queryForList("SELECT * FROM fams_scrap_recovery WHERE id=? FOR UPDATE", id);
+        if (rows.isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_NOT_FOUND", 404);
+        }
+        var recovery = rows.getFirst();
+        if (number(recovery, "version") != version || number(recovery, "asset_version") != assetVersion) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_CHANGED", 409);
+        }
+        if (db.queryForList("SELECT request_id FROM fams_scrap_disposition WHERE request_id=?"
+                + " AND disposition_status='LOSS_WRITTEN_OFF' FOR UPDATE", request).isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_CHANGED", 409);
+        }
+        assets.requireRecoverableAsset(number(recovery, "asset_id"), assetVersion);
+        return recovery;
+    }
+
+    public Receipt decideRecovery(Actor actor, long id, long version, UUID key, RecoveryDecision input) {
+        var current = current(actor, Role.ASSET_ADMIN);
+        boolean approve = "APPROVE".equals(input.result());
+        if (!approve && !"REJECT".equals(input.result())) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_INPUT_INVALID", 400);
+        }
+        String operation = "RECOVERY_DECISION:" + id;
+        String hash = fingerprint(version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var recovery = recoveryGuarded(id, version, input.assetVersion());
+        if (!"PENDING_ADMIN_DECISION".equals(recovery.get("recovery_status"))) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_CHANGED", 409);
+        }
+        long request = number(recovery, "request_id"), asset = number(recovery, "asset_id");
+        var time = now();
+        if (approve && !assets.matchesActiveBin(number(recovery, "target_location_id"),
+                number(recovery, "target_location_version"))) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_TARGET_CHANGED", 409);
+        }
+        db.update("UPDATE fams_scrap_recovery SET recovery_status=?,approval_snapshot_json=?,"
+                + "version=version+1,updated_at=? WHERE id=?",
+                approve ? "WAITING_WAREHOUSE_CLAIM" : "REJECTED",
+                json.writeValueAsString(Map.of("decision", input, "decidedBy", Long.toString(current.id()),
+                        "decidedAt", time)), time, id);
+        closeTodo(request, "RECOVERY_DECIDE", time);
+        if (approve) {
+            todo(request, "RECOVERY_CLAIM", "WAREHOUSE_OPERATOR", null, time);
+        }
+        audit(actor, current, Role.ASSET_ADMIN, request, version,
+                approve ? "SCRAP_RECOVERY_APPROVED" : "SCRAP_RECOVERY_REJECTED",
+                Map.of("recoveryId", Long.toString(id), "input", input), time);
+        return remember(current, operation, key, hash, new Receipt(Long.toString(request), Long.toString(asset),
+                version + 1, input.assetVersion(), number(recovery, "ownership_version"),
+                approve ? "WAITING_WAREHOUSE_CLAIM" : "REJECTED", null), time);
+    }
+
+    public Receipt claimRecovery(Actor actor, long id, long version, UUID key, RecoveryClaim input) {
+        var current = current(actor, Role.WAREHOUSE_OPERATOR);
+        String operation = "RECOVERY_CLAIM:" + id;
+        String hash = fingerprint(version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var recovery = recoveryGuarded(id, version, input.assetVersion());
+        if (!"WAITING_WAREHOUSE_CLAIM".equals(recovery.get("recovery_status"))) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_CHANGED", 409);
+        }
+        long request = number(recovery, "request_id"), asset = number(recovery, "asset_id");
+        var time = now();
+        long ownership = number(recovery, "ownership_version") + 1;
+        db.update("UPDATE fams_scrap_recovery SET recovery_status='PROCESSING',processor_account_id=?,"
+                + "ownership_version=?,version=version+1,updated_at=? WHERE id=?", current.id(), ownership, time, id);
+        closeTodo(request, "RECOVERY_CLAIM", time);
+        todo(request, "RECOVERY_EXECUTE", "WAREHOUSE_OPERATOR", current.id(), time);
+        audit(actor, current, Role.WAREHOUSE_OPERATOR, request, version, "SCRAP_RECOVERY_CLAIMED", input, time);
+        return remember(current, operation, key, hash, new Receipt(Long.toString(request), Long.toString(asset),
+                version + 1, input.assetVersion(), ownership, "PROCESSING", Long.toString(current.id())), time);
+    }
+
+    public Receipt executeRecovery(Actor actor, long id, long version, UUID key, RecoveryExecution input) {
+        var current = current(actor, Role.WAREHOUSE_OPERATOR);
+        String operation = "RECOVERY_EXECUTE:" + id;
+        String hash = fingerprint(version, input);
+        var prior = replay(current, operation, key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var recovery = recoveryGuarded(id, version, input.assetVersion());
+        if (!"PROCESSING".equals(recovery.get("recovery_status"))
+                || number(recovery, "ownership_version") != input.ownershipVersion()) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_CHANGED", 409);
+        }
+        if (!Objects.equals(recovery.get("processor_account_id"), current.id())) {
+            throw new AssetHandoverPort.Failure("SCRAP_PROCESSOR_REQUIRED", 403);
+        }
+        long request = number(recovery, "request_id"), asset = number(recovery, "asset_id");
+        var time = now();
+        Instant found = instant(recovery.get("found_at"));
+        if (!Boolean.TRUE.equals(input.physicalIdentityVerified()) || input.evidence().strip().length() < 10
+                || input.occurredAt().isBefore(found) || input.occurredAt().isAfter(time.plusSeconds(2))
+                || !input.occurredAt().equals(input.occurredAt().truncatedTo(ChronoUnit.MILLIS))) {
+            throw new AssetHandoverPort.Failure("SCRAP_PHYSICAL_EVIDENCE_INVALID", 400);
+        }
+        if (number(recovery, "target_location_version") != input.locationVersion()) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_TARGET_CHANGED", 409);
+        }
+        long assetVersion = assets.reregisterToStock(asset, input.assetVersion(), request,
+                number(recovery, "temporary_location_id"), number(recovery, "target_location_id"),
+                input.locationVersion(), input.observedCode(), input.observedSerial(), current.id(), time);
+        db.update("UPDATE fams_scrap_recovery SET recovery_status='COMPLETED',execution_snapshot_json=?,"
+                + "asset_version=?,version=version+1,updated_at=? WHERE id=?",
+                json.writeValueAsString(input), assetVersion, time, id);
+        closeTodo(request, "RECOVERY_EXECUTE", time);
+        audit(actor, current, Role.WAREHOUSE_OPERATOR, request, version, "SCRAP_RECOVERY_EXECUTED", input, time);
         return remember(current, operation, key, hash, new Receipt(Long.toString(request), Long.toString(asset),
                 version + 1, assetVersion, input.ownershipVersion(), "COMPLETED", Long.toString(current.id())), time);
     }

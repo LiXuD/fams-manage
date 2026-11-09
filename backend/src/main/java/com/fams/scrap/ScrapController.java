@@ -186,6 +186,38 @@ public class ScrapController {
         return review.executeReversal(actors.capture(), id, version, key, input);
     }
 
+    @PostMapping("/{id}/recoveries")
+    ScrapReviewService.Receipt requestRecovery(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.RecoveryRequest input) {
+        return review.requestRecovery(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/recoveries/{id}/decision")
+    ScrapReviewService.Receipt decideRecovery(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.RecoveryDecision input) {
+        return review.decideRecovery(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/recoveries/{id}/claim")
+    ScrapReviewService.Receipt claimRecovery(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.RecoveryClaim input) {
+        return review.claimRecovery(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/recoveries/{id}/execute")
+    ScrapReviewService.Receipt executeRecovery(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.RecoveryExecution input) {
+        return review.executeRecovery(actors.capture(), id, version, key, input);
+    }
+
     @PostMapping("/{id}/decision")
     ScrapReviewService.Receipt decide(@PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,

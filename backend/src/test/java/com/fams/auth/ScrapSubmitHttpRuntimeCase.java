@@ -95,6 +95,7 @@ class ScrapSubmitHttpRuntimeCase {
         db.update("DELETE FROM fams_todo WHERE business_type='SCRAP' AND business_id" + requests);
         db.update("DELETE FROM fams_scrap_correction WHERE request_id" + requests);
         db.update("DELETE FROM fams_scrap_reversal WHERE request_id" + requests);
+        db.update("DELETE FROM fams_scrap_recovery WHERE request_id" + requests);
         db.update("DELETE FROM fams_scrap_disposition WHERE request_id" + requests);
         db.update("DELETE FROM fams_scrap_event WHERE request_id" + requests);
         db.update("DELETE FROM fams_scrap_receipt WHERE scrap_request_id" + requests);
@@ -395,6 +396,16 @@ class ScrapSubmitHttpRuntimeCase {
         var originalRequest = db.queryForMap("SELECT * FROM fams_scrap_request WHERE id=?", Long.parseLong(id));
         var pendingDisposal = db.queryForMap("SELECT * FROM fams_scrap_disposition WHERE request_id=?",
                 Long.parseLong(id));
+        var pending = json.createObjectNode().put("assetVersion", 2)
+                .put("foundAt", java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString())
+                .put("temporaryLocationId", "951001").put("temporaryLocationVersion", 0)
+                .put("temporaryCustodianEmployeeId", "951003").put("locationId", "951000").put("locationVersion", 0)
+                .put("reason", "尚未办理遗失核销的报废单据申请找回");
+        var unregistered = write(fixture.admin, id, "recoveries", 3, UUID.randomUUID().toString(),
+                json.writeValueAsString(pending));
+        assertEquals(409, unregistered.statusCode(), unregistered.body());
+        org.junit.jupiter.api.Assertions.assertTrue(unregistered.body().contains("SCRAP_RECOVERY_NOT_ALLOWED"),
+                unregistered.body());
         String open = "{\"assetVersion\":2,\"locationId\":\"951000\",\"locationVersion\":0,"
                 + "\"reason\":\"原机被误判报废且尚未实际处置，申请重新验收入库\"}";
         assertEquals(403, write(fixture.employee, id, "reversals", 3, UUID.randomUUID().toString(), open).statusCode());
@@ -557,6 +568,11 @@ class ScrapSubmitHttpRuntimeCase {
         assertEquals(409, refused.statusCode(), refused.body());
         org.junit.jupiter.api.Assertions.assertTrue(refused.body().contains("SCRAP_REVERSAL_NOT_ALLOWED"),
                 refused.body());
+        var disposedRecovery = write(fixture.admin, disposed, "recoveries", 3, UUID.randomUUID().toString(),
+                json.writeValueAsString(pending));
+        assertEquals(409, disposedRecovery.statusCode(), disposedRecovery.body());
+        org.junit.jupiter.api.Assertions.assertTrue(disposedRecovery.body().contains("SCRAP_RECOVERY_NOT_ALLOWED"),
+                disposedRecovery.body());
         assertEquals("SCRAPPED", db.queryForObject(
                 "SELECT lifecycle_status FROM fams_asset WHERE id=951022", String.class));
     }

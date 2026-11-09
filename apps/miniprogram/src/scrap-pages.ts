@@ -13,6 +13,13 @@ interface Reversal {
     targetLocationId: string; targetLocationVersion: number; targetLocationName: string;
     ownershipVersion: number; processorAccountId: string | null; reason: string;
 }
+interface Recovery {
+    id: string; version: number; status: string; assetVersion: number; foundAt: string;
+    temporaryLocationId: string; temporaryLocationName: string; temporaryCustodianEmployeeId: string;
+    temporaryCustodianName: string; targetLocationId: string; targetLocationVersion: number;
+    targetLocationName: string; ownershipVersion: number; processorAccountId: string | null;
+    reason: string;
+}
 interface Scrap {
     id: string; version: number; assetVersion: number; ownershipVersion: number; lockVersion: number | null;
     status: string; processorAccountId: string | null; reason: string; observedCondition: string; proposedDisposition: string;
@@ -23,10 +30,12 @@ interface Scrap {
     actions: { decide: boolean; cancel?: boolean; claim: boolean; execute: boolean; executeLoss?: boolean;
         executeFactory?: boolean; dispose?: boolean; initiateCorrection?: boolean; decideCorrection?: boolean;
         claimCorrection?: boolean; executeCorrection?: boolean; initiateReversal?: boolean; decideReversal?: boolean;
-        claimReversal?: boolean; executeReversal?: boolean };
+        claimReversal?: boolean; executeReversal?: boolean; initiateRecovery?: boolean; decideRecovery?: boolean;
+        claimRecovery?: boolean; executeRecovery?: boolean };
     decision: { decision?: { approvedDisposition?: string } } | null;
     correction?: Correction | null;
     reversal?: Reversal | null;
+    recovery?: Recovery | null;
     disposition: { disposition_status: string; due_date: string | null; version?: number;
         completion?: { occurredAt: string; method: string; recipient?: string; operatorName?: string } } | null;
 }
@@ -46,6 +55,8 @@ interface Data {
     bins: Choice[]; binPage: number; binTotal: number;
     correctionLocation: string; correctionReason: string; correctionDecision: string;
     reversalLocation: string; reversalReason: string; reversalDecision: string;
+    recoveryFoundDate: string; recoveryFoundTime: string; recoveryPlace: string; recoveryCustodian: string;
+    recoveryLocation: string; recoveryReason: string; recoveryDecision: string;
     reason: string; condition: string; proposed: string; decisionReason: string; approved: string;
     observed: string; serial: string; actualDate: string; actualTime: string; physical: boolean; evidence: string; due: string;
     recipient: string; dispositionEvidence: string[];
@@ -63,6 +74,8 @@ const blank = (): Data => ({
     places: [], people: [], location: "", custodian: "", locationPage: 0, locationTotal: 0, peoplePage: 0, peopleTotal: 0,
     bins: [], binPage: 0, binTotal: 0, correctionLocation: "", correctionReason: "", correctionDecision: "",
     reversalLocation: "", reversalReason: "", reversalDecision: "",
+    recoveryFoundDate: "", recoveryFoundTime: "", recoveryPlace: "", recoveryCustodian: "",
+    recoveryLocation: "", recoveryReason: "", recoveryDecision: "",
     reason: "", condition: "", proposed: "", decisionReason: "", approved: "", observed: "", serial: "",
     actualDate: "", actualTime: "", physical: false, evidence: "", due: "", busy: false, stale: true, retry: false,
     confirmation: "", pendingSummary: "", error: "", notice: "",
@@ -193,7 +206,8 @@ export function createScrapPage(getServices: () => MiniServices) {
         if (!editable(page) || !["submit", "approve", "reject", "claim", "execute", "executeLoss",
             "executeFactory", "cancel", "requestCorrection", "approveCorrection", "rejectCorrection",
             "claimCorrection", "executeCorrection", "requestReversal", "approveReversal", "rejectReversal",
-            "claimReversal", "executeReversal"].includes(action)) return;
+            "claimReversal", "executeReversal", "requestRecovery", "approveRecovery", "rejectRecovery",
+            "claimRecovery", "executeRecovery"].includes(action)) return;
         const data = page.data, row = data.detail;
         let path = base, body: Record<string, unknown>, version: number | undefined, summary: string;
         try {
@@ -293,6 +307,60 @@ export function createScrapPage(getServices: () => MiniServices) {
                         evidence: data.evidence.trim() };
                     summary = "执行冲正，将 " + row.source.assetCode + " 核验后重新验收入批准仓位 " + reversal.targetLocationName + "。";
                 }
+            } else if (action === "requestRecovery") {
+                if (!row || !row.actions.initiateRecovery) return;
+                const place = data.places.find(item => item.id === data.recoveryPlace);
+                const person = data.people.find(item => item.id === data.recoveryCustodian);
+                const target = data.bins.find(item => item.id === data.recoveryLocation);
+                const found = new Date(data.recoveryFoundDate + "T" + data.recoveryFoundTime);
+                if (!place || !person || !target || !data.recoveryReason.trim()
+                    || !Number.isFinite(found.getTime()) || day(found) !== data.recoveryFoundDate
+                    || time(found) !== data.recoveryFoundTime) {
+                    page.setData({ error: "请选择临时保管位置与经办人、拟恢复仓位并填写找回时刻、事实和原因。" }); return;
+                }
+                path += "/" + row.id + "/recoveries"; version = row.version;
+                body = { assetVersion: row.assetVersion, foundAt: found.toISOString(),
+                    temporaryLocationId: place.id, temporaryLocationVersion: place.version,
+                    temporaryCustodianEmployeeId: person.id, locationId: target.id, locationVersion: target.version,
+                    reason: data.recoveryReason.trim() };
+                summary = "登记 " + row.source.assetCode + " 报废后找回：实物暂由 " + person.name + " 在 " + place.name
+                    + " 保管，建议验收入仓位 " + target.name + "，等待管理员确认纳管。";
+            } else if (action === "approveRecovery" || action === "rejectRecovery"
+                || action === "claimRecovery" || action === "executeRecovery") {
+                const recovery = row?.recovery;
+                if (!recovery) return;
+                const capability = action === "approveRecovery" || action === "rejectRecovery"
+                    ? "decideRecovery" : action;
+                if (!row.actions[capability]) return;
+                version = recovery.version; path += "/recoveries/" + recovery.id;
+                body = { assetVersion: recovery.assetVersion };
+                if (capability === "decideRecovery") {
+                    if (!data.recoveryDecision.trim()) { page.setData({ error: "请填写本次决定原因。" }); return; }
+                    path += "/decision";
+                    body = { ...body, result: action === "approveRecovery" ? "APPROVE" : "REJECT",
+                        reason: data.recoveryDecision.trim() };
+                    summary = action === "approveRecovery"
+                        ? "批准找回纳管至仓位 " + recovery.targetLocationName + "，等待库管实物验收。"
+                        : "驳回本次找回纳管，资产保持已报废并保留临时保管事实。";
+                } else if (action === "claimRecovery") {
+                    path += "/claim";
+                    summary = "取得本单找回唯一处理权，核验原机后按原卡重新纳管。";
+                } else {
+                    const actual = new Date(data.actualDate + "T" + data.actualTime);
+                    if (!data.physical || !data.observed.trim() || row.source.serialNumber && !data.serial.trim()
+                        || data.evidence.trim().length < 10 || !Number.isFinite(actual.getTime())
+                        || day(actual) !== data.actualDate || time(actual) !== data.actualTime) {
+                        page.setData({ error: "请核对原机编码、序列号、实际时刻及至少10字验收依据。" }); return;
+                    }
+                    path += "/execute";
+                    body = { ...body, ownershipVersion: recovery.ownershipVersion,
+                        locationVersion: recovery.targetLocationVersion,
+                        observedCode: data.observed.trim(), observedSerial: data.serial.trim(),
+                        occurredAt: actualInstant || actual.toISOString(), physicalIdentityVerified: true,
+                        evidence: data.evidence.trim() };
+                    summary = "执行找回纳管，将原卡 " + row.source.assetCode + " 验收入批准仓位 "
+                        + recovery.targetLocationName + "，原遗失核销与借用终止保持不改。";
+                }
             } else {
                 const capability = action === "approve" || action === "reject" ? "decide" : action;
                 if (!row || row.lockVersion == null || !["decide", "claim", "execute", "executeLoss", "executeFactory", "cancel"].includes(capability)
@@ -386,7 +454,8 @@ export function createScrapPage(getServices: () => MiniServices) {
             const field = event.currentTarget.dataset.field;
             if (!editable(this) || !["reason", "condition", "proposed", "decisionReason", "approved", "observed", "serial",
                 "actualDate", "actualTime", "evidence", "due", "recipient", "correctionReason", "correctionDecision",
-                "reversalReason", "reversalDecision"].includes(field)) return;
+                "reversalReason", "reversalDecision", "recoveryFoundDate", "recoveryFoundTime",
+                "recoveryReason", "recoveryDecision"].includes(field)) return;
             if (["actualDate", "actualTime"].includes(field)) actualInstant = "";
             this.setData({ [field]: event.detail.value });
         },
@@ -398,15 +467,17 @@ export function createScrapPage(getServices: () => MiniServices) {
         },
         async onCatalog(this: Context, event: { currentTarget: { dataset: { kind: string } } }) {
             const kind = event.currentTarget.dataset.kind;
-            if (!editable(this) || !["location", "employee", "bin"].includes(kind)
-                || !(this.data.detail?.actions.execute || kind === "employee" && this.data.detail?.actions.dispose
-                    || kind === "bin" && (this.data.detail?.actions.initiateCorrection
-                        || this.data.detail?.actions.initiateReversal))) return;
+            const detail = this.data.detail;
+            if (!editable(this) || !["location", "employee", "bin"].includes(kind) || !detail
+                || !(detail.actions.execute || kind === "employee" && (detail.actions.dispose || detail.actions.initiateRecovery)
+                    || kind === "location" && (detail.actions.execute || detail.actions.initiateRecovery)
+                    || kind === "bin" && (detail.actions.initiateCorrection || detail.actions.initiateReversal
+                        || detail.actions.initiateRecovery))) return;
             const next = (kind === "location" ? this.data.locationPage : kind === "bin" ? this.data.binPage : this.data.peoplePage) + 1;
             const epoch = ++generation;
             this.setData({ busy: true });
             try {
-                const result = await services.sessions.request("GET", base + "/" + this.data.detail.id
+                const result = await services.sessions.request("GET", base + "/" + detail.id
                     + "/execution-catalog/" + kind + "?page=" + next + "&pageSize=100") as { items: Choice[]; total: number };
                 if (!current(epoch)) return;
                 if (kind === "bin") {
@@ -420,15 +491,20 @@ export function createScrapPage(getServices: () => MiniServices) {
         onChoice(this: Context, event: { currentTarget: { dataset: { kind: string } }; detail: { value: string } }) {
             if (!editable(this)) return;
             const index = Number(event.detail.value), kind = event.currentTarget.dataset.kind;
-            if (kind === "bin") {
-                const row = this.data.bins[index];
-                if (!row) return;
-                this.setData(this.data.detail?.actions.initiateReversal
-                    ? { reversalLocation: row.id } : { correctionLocation: row.id });
+            const actions = this.data.detail?.actions;
+            const list = kind === "bin" ? this.data.bins : kind === "location" ? this.data.places : this.data.people;
+            const row = list[index];
+            if (!row || !["bin", "location", "employee"].includes(kind)) return;
+            if (actions?.initiateRecovery) {
+                this.setData(kind === "bin" ? { recoveryLocation: row.id }
+                    : kind === "location" ? { recoveryPlace: row.id } : { recoveryCustodian: row.id });
                 return;
             }
-            const row = (kind === "location" ? this.data.places : this.data.people)[index];
-            if (row && ["location", "employee"].includes(kind)) this.setData(kind === "location" ? { location: row.id } : { custodian: row.id });
+            if (kind === "bin") {
+                this.setData(actions?.initiateReversal ? { reversalLocation: row.id } : { correctionLocation: row.id });
+                return;
+            }
+            this.setData(kind === "location" ? { location: row.id } : { custodian: row.id });
         },
         async onPickAttachment(this: Context, event: { currentTarget: { dataset: { kind: string } } }) {
             const kind = event.currentTarget.dataset.kind, row = this.data.detail;

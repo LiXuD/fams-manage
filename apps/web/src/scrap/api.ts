@@ -12,13 +12,19 @@ export interface ScrapRequest {
   actions: { decide: boolean; cancel?: boolean; claim: boolean; execute: boolean; executeLoss?: boolean;
     executeFactory?: boolean; dispose?: boolean; initiateCorrection?: boolean; decideCorrection?: boolean;
     claimCorrection?: boolean; executeCorrection?: boolean; initiateReversal?: boolean; decideReversal?: boolean;
-    claimReversal?: boolean; executeReversal?: boolean };
+    claimReversal?: boolean; executeReversal?: boolean; initiateRecovery?: boolean; decideRecovery?: boolean;
+    claimRecovery?: boolean; executeRecovery?: boolean };
   correction?: { id: string; version: number; status: string; assetVersion: number; lockVersion: number;
     targetLocationId: string; targetLocationVersion: number; targetLocationName: string;
     ownershipVersion: number; processorAccountId: string | null; reason: string } | null;
   reversal?: { id: string; version: number; status: string; assetVersion: number;
     targetLocationId: string; targetLocationVersion: number; targetLocationName: string;
     ownershipVersion: number; processorAccountId: string | null; reason: string } | null;
+  recovery?: { id: string; version: number; status: string; assetVersion: number; foundAt: string;
+    temporaryLocationId: string; temporaryLocationName: string; temporaryCustodianEmployeeId: string;
+    temporaryCustodianName: string; targetLocationId: string; targetLocationVersion: number;
+    targetLocationName: string; ownershipVersion: number; processorAccountId: string | null;
+    reason: string } | null;
   decision: { decision?: { approvedDisposition?: string } } | null;
   disposition: { disposition_status: string; due_date: string | null; version?: number;
     completion?: { occurredAt: string; method: string; recipient?: string; operatorName?: string } } | null;
@@ -104,4 +110,8 @@ export const scrapCorrectionStates: Record<string, string> = {
 export const scrapReversalStates: Record<string, string> = {
   PENDING_ADMIN_DECISION: "冲正待管理员确认", WAITING_WAREHOUSE_CLAIM: "冲正待库管认领",
   PROCESSING: "冲正待实物核验入库", COMPLETED: "冲正已恢复在库", REJECTED: "冲正已驳回",
+};
+export const scrapRecoveryStates: Record<string, string> = {
+  PENDING_ADMIN_DECISION: "找回待管理员确认纳管", WAITING_WAREHOUSE_CLAIM: "找回待库管认领",
+  PROCESSING: "找回待实物验收纳管", COMPLETED: "找回已验收入库", REJECTED: "找回纳管已驳回",
 };
