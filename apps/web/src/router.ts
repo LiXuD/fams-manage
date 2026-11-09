@@ -15,6 +15,7 @@ import TransferView from "@/views/TransferView.vue";
 import ProxyConfirmationView from "@/views/ProxyConfirmationView.vue";
 import BusinessResultNoticeView from "@/views/BusinessResultNoticeView.vue";
 import BusinessResultReviewView from "@/views/BusinessResultReviewView.vue";
+import MessageCenterView from "@/views/MessageCenterView.vue";
 
 import ItemTargetChangeView from "@/views/ItemTargetChangeView.vue";
 import TransferTargetChangeView from "@/views/TransferTargetChangeView.vue";
@@ -38,6 +39,7 @@ export const router = createRouter({
     { path: "/business-result-reviews", name: "business-result-reviews", component: BusinessResultReviewView, meta: { requiresAuth: true } },
     { path: "/proxy-confirmations", name: "proxy-confirmations", component: ProxyConfirmationView, meta: { requiresAuth: true } },
     { path: "/business-result-notices", name: "business-result-notices", component: BusinessResultNoticeView, meta: { requiresAuth: true } },
+    { path: "/messages", name: "messages", component: MessageCenterView, meta: { requiresAuth: true } },
     { path: "/", name: "home", component: HomeView, meta: { requiresAuth: true } },
     { path: "/login", name: "login", component: LoginView },
     { path: "/password/change", name: "password-change", component: PasswordChangeView, meta: { requiresAuth: true } },

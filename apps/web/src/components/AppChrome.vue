@@ -53,6 +53,7 @@ async function handleLogout(): Promise<void> {
         <router-link v-if="session.user?.roles.some(role => ['WAREHOUSE_OPERATOR', 'ASSET_ADMIN'].includes(role))" to="/transfer-target-changes" class="nav-item">调拨目标变更</router-link>
         <router-link v-if="session.user?.roles.includes('ASSET_ADMIN')" to="/business-result-reviews" class="nav-item">代确认结果核查</router-link>
         <router-link to="/business-result-notices" class="nav-item">业务结果通知</router-link>
+        <router-link to="/messages" class="nav-item">消息中心与异常清单</router-link>
       </nav>
       <main class="workspace-content">
         <p v-if="session.isAuthenticated && session.error && route.name !== 'password-change'" class="form-error" role="alert">{{ session.error.message }}</p>

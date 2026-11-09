@@ -32,13 +32,29 @@ V65 `fams_business_reminder` 一行代表一次不可变的通知事实，唯一
 
 DATETIME 经当前驱动映射为 `LocalDateTime`（UTC 墙钟），`instant()` 与既有 `RepairFactoryGuard` 同口径按 `ZoneOffset.UTC` 换算，避免直接强转 `Timestamp` 抛 ClassCastException。
 
+## D6-24B2 待办与超期读取端点及双端消息中心
+
+V66 `fams_message_receipt` 以（账号、消息类别、消息号）为主键保存个人已读时间，`message_kind` 限 `TODO`/`REMINDER`。跨表引用不建外键：待办与提醒分属两张表，`kind` 已把两者分开，且回执是只增不改的旁路事实，删除业务行不应牵连读取状态；这一点在卡片的开放项中如实登记。
+
+`MessageService` 用一条 UNION ALL 同时读取两个权威事实源，不在应用层拼分页：
+
+- `INBOX`（我的消息）：`fams_todo` 中仍 OPEN 且"指派给本人或本人角色所属共享池"的待办，加上 `fams_business_reminder` 中"接收人为本人或接收池属本人角色"的提醒。提醒只取每个（对象、阶段）的最新一次发生（`id = MAX(id)`），历史提醒继续保留但不重复占用消息中心。
+- `EXCEPTION`（异常清单）：只取档位词表中的逾期类（`OVERDUE`、`OVERDUE_EVERY_7_DAYS`、`UNRESOLVED_AFTER_1_WORKDAY`），资产管理员看全部池，库管看 `WAREHOUSE_OPERATOR` 池与本人；其他角色直接 403 `MESSAGE_SCOPE_FORBIDDEN`。借用域的逾期待办与提醒共用同一档位词表，因此 `LoanReminderService` 生成的档位待办自然进入同一清单。
+- `read`（`POST /api/v1/messages/{kind}/{id}/read`，mini 同形）：先按同一可寻址谓词 `FOR UPDATE` 校验该消息当前确属本人/本池（管理员对所有池负责），再写一条个人回执；`ON DUPLICATE KEY UPDATE message_id=message_id` 使重复请求无副作用。已读不关闭待办、不改资产锁、不改时限，符合"某人阅读不等于已处理"。
+
+`pools()` 只把 `ASSET_ADMIN`/`WAREHOUSE_OPERATOR`/`EMPLOYEE` 角色映射到同名池，TECH_ASSISTANT 刻意排除：该角色按 `revalidateRepairParticipantLocked` 口径核验，用普通业务身份重校验会直接被 `AuthOperationException.forbidden()` 拒绝，其技术意见待办继续在维修邀请页读取。DATETIME 继续按驱动 `LocalDateTime` 的 UTC 墙钟口径换算成瞬时。
+
+PC 侧新增 `views/MessageCenterView.vue`（`/messages`，AppChrome 导航"消息中心与异常清单"，异常清单按钮仅管理员与库管可见），沿用既有 `generation + identity` 竞态守卫与"原请求重试已读登记"；小程序侧新增 `src/messages-pages.ts` 工厂（`view` 参数产出消息中心与异常清单两页，`pages/messages`、`pages/exceptions` 与 `native/app.json` 注册），提示语明确"已读登记只记录本人状态，业务办理仍以原单据为准"。两端跳转仅对原生/PC 上能按业务身份重新校验的页面给出深链：小程序只链接报废与报失详情，其余显示单据号由用户在对应业务页处理。
+
 ## 验证
 
 - `BusinessCalendarTest` 6 项：周末起点跳下个工作日、节假日跳过、补班日优先于节假日、跨年（1 月 1 日休 → 下个工作日为周一）、同一瞬时在企业时区与 UTC 下的起算日与截止时刻差异、`workdays<1` 拒绝。
 - 回归行为不变：`IdentityMasterDataHttpTest` 24 项（参数九键校验与版本生效）、`InboundHttpTest` 1 项真实 HTTP/MySQL 全流程（含三段 `*_due_at` 前后稳定断言）在自有隔离 MySQL 8.4.11 通过，日志 output/d6-24-calendar-runtime.log。
 - `BusinessReminderRuntimeCase` 1 项（自有隔离 MySQL 8.4.11，`scripts/verify-d6-03a.py` 已登记 d6-24 独立库，日志 output/d6-24-reminder-runtime.log）固定时钟 2026-11-09（周一）：入库待确认（周五提交、2 个工作日截止）只得"1 个工作日未处理"一档、执行超期只得 `OVERDUE`、领取截止在下周零通知；交接接收 24 小时前与当日两档且接收人映射到本人账号；盘点两位执行人各 4 档共 8 行、无执行人整单进管理员池零提前通知；返厂 10-29/11-01/11-08 三档（周桶由到期日推导）；报失复核 2 档、报废处置 3 档。九组共 20 行；同日重跑仍 20 行；推进到 11-13 时领取段补出 `DUE_IN_1_DAY`+`OVERDUE`、接收段补出 `OVERDUE`、周桶仍为 1 行；改盘点到期日后按新截止时刻另发四档。
-- `FamsArchitectureTest` 与 `FamsArchitectureRulesTest` 各 3 项通过，inbound→masterdata 与 reminder→masterdata 新增静态依赖未形成模块环；Checkstyle 与 SpotBugs 零报告。
+- `MessagesHttpRuntimeCase` 1 项（真实 HTTP + 自有隔离 MySQL 8.4.11，`scripts/verify-d6-03a.py` 已登记 d6-24b 独立库与授权，日志 output/d6-24-messages-runtime.log）：管理员/库管/员工三个真实会话各自只看到名下或本池的待办与提醒，`TECH_ASSISTANT` 池行不进入三者；同一（对象、阶段）只出现最新一次发生；提醒行回传 `objectStage`（`ADMIN_DECISION`）而待办回传空串；`view=EXCEPTION` 对员工 403、对 `view=BOGUS` 400；管理员已读后本人未读数由 3 降 2 而库管未读数不变，待办 `todo_status` 仍为 OPEN；员工改他人池中消息 404、管理员可代读、缺 `Idempotency-Key` 400，同一消息两位读者各存一条回执；mini 头会话读同一清单并写出本人回执；`pageSize=1` 分页两页内容不重叠。
+- `MessageCenterView.test.ts` 3 项：两类来源的中文标签与未读数、异常清单切换按 `view=EXCEPTION` 重查、丢失回复后按同一 path/key 原样重试且已读不重复提交、员工看不到异常清单、账号切换后迟到的旧收件箱不Paint。`messages-pages.test.mjs` 4 项：同一断言口径覆盖原生工厂、403 清空并提示、仅报废/报失给出 `?id=` 深链、迟到的旧身份响应丢弃并回登录。
+- Web 239 项、小程序 343 项、`vue-tsc`、`vite build`、小程序 `tsc --noEmit`/`build.mjs` 与 eslint `--max-warnings=0` 全绿；`BusinessReminderRuntimeCase` 在加入 V66 后复跑仍通过；Checkstyle、SpotBugs 零报告，架构 6 项（`FamsArchitectureTest` + `FamsArchitectureRulesTest`）通过证明 reminder→auth 未形成模块环；契约新增 4 个 operation 后本地静态契约的引用、唯一 operationId、示例与追溯检查通过，Java 侧 OpenAPI 校验无错误。
 
 ## 尚待交付
 
-B2 片的待办与超期读取端点、按人已读状态、PC 与小程序消息中心及异常清单，以及档位变化时关闭旧待办的接续；C 片值班提醒人与持续未处理升级、角色恢复可见性；D 片外部通道兜底、指标与 R-08 证据。真实短信、微信模板与真机触达仍依 D6-09B/10B，本卡不宣称已验证。
+C 片值班提醒人与持续未处理升级、角色恢复可见性；D 片外部通道兜底、指标与 R-08 证据。B2 之后仍开放：本会话未接入 GitNexus/AOCI，未运行 `impact`/`detect_changes`；实际 PC 浏览器与真机小程序联调、提交 JVM 重启恢复、完整 D6-03A 产品门禁与独立复核未做；`scripts/verify-d6-02c.py` 的 `assert_write_contracts` 在本片之前已有 170 个既有 operation 不通过（首个为库存观察下载授权被判定为"未分类的非业务写"），本片按既有 `readBusinessResultNotice` 同口径分类，未修改门禁口径；`fams_message_receipt` 不建跨表外键、TECH_ASSISTANT 池消息不经本端点、小程序仅两类深链，均如上登记。真实短信、微信模板与真机触达仍依 D6-09B/10B，本卡不宣称已验证。

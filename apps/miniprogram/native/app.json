@@ -12,6 +12,8 @@
     "pages/proxy-confirmations/index",
     "pages/business-result-notices/index",
     "pages/business-result-reviews/index",
+    "pages/messages/index",
+    "pages/exceptions/index",
     "pages/target-changes/index",
     "pages/inventory-tasks/index",
     "pages/inventory-collection/index",
