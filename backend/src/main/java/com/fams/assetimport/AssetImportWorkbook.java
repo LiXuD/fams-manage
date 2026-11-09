@@ -25,7 +25,7 @@ public final class AssetImportWorkbook {
     private static final int MAX_CELL_LENGTH = 4_096;
     private static final List<String> TEMPLATE_COLUMNS = List.of("资产编码", "名称", "分类编码", "所属组织编码",
             "型号", "单位", "序列号", "资产状态", "仓库编码", "位置编码", "使用组织编码", "使用人编号",
-            "借出日期", "预计归还日");
+            "借出日期", "预计归还日", "报废前状态", "报废原因", "报废前现状", "建议处置方式");
 
     public record CellError(String sheet, int sheetRow, String column, String original, String reason) {
         public CellError(int sheetRow, String column, String original, String reason) {
@@ -85,8 +85,10 @@ public final class AssetImportWorkbook {
             help.createRow(1).createCell(0).setCellValue("分类、组织、仓库、位置和人员优先填写唯一编码。");
             help.createRow(2).createCell(0).setCellValue("示例：A-001 / 办公桌 / CAT-01 / ORG-01 / M1 / 台。");
             help.createRow(3).createCell(0).setCellValue("单文件最多 20,000 行、20 MB；公式单元格不能导入。");
-            help.createRow(4).createCell(0).setCellValue("资产状态：在库、在用个人、在用公用或借出；预检将逐行报告错误。");
+            help.createRow(4).createCell(0).setCellValue("资产状态：在库、在用个人、在用公用、借出或待报废；预检将逐行报告错误。");
             help.createRow(5).createCell(0).setCellValue("借出须填写使用人、当前位置、借出日期、预计归还日（YYYY-MM-DD）；历史逾期允许导入。");
+            help.createRow(6).createCell(0).setCellValue("待报废须填写报废前状态（在库/在用个人/在用公用）、对应的完整保管快照、报废原因、报废前现状与建议处置方式。");
+            help.createRow(7).createCell(0).setCellValue("待报废发布只建立待管理员确认的期初报废申请与资产锁，不等于批准报废；遗失或维修来源暂不支持期初导入。");
             workbook.write(output);
             return output.toByteArray();
         } catch (IOException failure) {

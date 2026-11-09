@@ -432,6 +432,7 @@ onBeforeUnmount(() => { live = false; reset(); });
     </section>
     <section v-if="detail" aria-label="报废详情"><h2>{{ detail.source.assetCode }} · {{ detail.source.name }}</h2>
       <p>{{ detail.sourceType === 'LOSS' && detail.status === 'PROCESSING' ? '待遗失核销' : scrapStates[detail.status] || detail.status }} · 原因 {{ detail.reason }} · 现状 {{ detail.observedCondition }}</p>
+      <p v-if="detail.initialSource">期初承接批次 {{ detail.initialSource.batchId }} 第 {{ detail.initialSource.sheetRow }} 行：报废事实来自上线前既有记录，批准仍需管理员另行决定。</p>
       <a v-if="detail.factoryDisposition && detail.sourceBusinessId && (detail.actions.decide || detail.actions.executeFactory)"
         :href="'/repairs/' + detail.sourceBusinessId">前往原维修核对厂家凭证</a>
       <p>建议处置 {{ detail.proposedDisposition }} · 当前处理库管 {{ detail.processorAccountId || '尚未认领' }}</p>

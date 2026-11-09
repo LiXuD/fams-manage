@@ -25,6 +25,7 @@ interface Scrap {
     status: string; processorAccountId: string | null; reason: string; observedCondition: string; proposedDisposition: string;
     sourceType?: string;
     sourceBusinessId?: string | null;
+    initialSource?: { batchId: string; sheetRow: number } | null;
     factoryDisposition?: "FACTORY_RETAINED" | "FACTORY_DESTROYED";
     source: { assetCode: string; name: string; serialNumber: string };
     actions: { decide: boolean; cancel?: boolean; claim: boolean; execute: boolean; executeLoss?: boolean;

@@ -21,14 +21,9 @@ public class AssetInitialPublicationPort {
     public record InitialAsset(String code, String name, long categoryId, long organizationId,
                                String model, String unit, String serial, String state,
                                Long warehouseId, Long locationId, Long usingOrganizationId,
-                               Long employeeId, LocalDate borrowedDate, LocalDate expectedReturnDate) {
-        public InitialAsset(String code, String name, long categoryId, long organizationId,
-                String model, String unit, String serial, String state, Long warehouseId,
-                Long locationId, Long usingOrganizationId, Long employeeId) {
-            this(code, name, categoryId, organizationId, model, unit, serial, state, warehouseId,
-                    locationId, usingOrganizationId, employeeId, null, null);
-        }
-    }
+                               Long employeeId, LocalDate borrowedDate, LocalDate expectedReturnDate,
+                               String preScrapState, String scrapReason, String scrapCondition,
+                               String proposedDisposition) { }
     public record Context(UUID batchId, int sheetRow, long actorId, String username,
                           long parameterId, LocalDate businessDate, Instant now) { }
     public record Created(long id, String code) { }
@@ -38,16 +33,19 @@ public class AssetInitialPublicationPort {
     private final AssetSecretCodec codec;
     private final ObjectMapper json;
     private final com.fams.business.InitialBorrowingPort loans;
+    private final com.fams.business.InitialScrapPort scraps;
     private final java.util.List<AssetDownstreamUsePort> downstream;
 
     AssetInitialPublicationPort(AssetMapper mapper, AssetMasterDataPort masterData,
             AssetSecretCodec codec, ObjectMapper json, com.fams.business.InitialBorrowingPort loans,
+            com.fams.business.InitialScrapPort scraps,
             java.util.List<AssetDownstreamUsePort> downstream) {
         this.mapper = mapper;
         this.masterData = masterData;
         this.codec = codec;
         this.json = json;
         this.loans = loans;
+        this.scraps = scraps;
         this.downstream = java.util.List.copyOf(downstream);
     }
 
@@ -67,7 +65,9 @@ public class AssetInitialPublicationPort {
                 || asset.name().strip().length() > 256) {
             throw new IllegalArgumentException("ASSET_IMPORT_ROW_INVALID");
         }
-        String custody = switch (asset.state()) {
+        boolean pendingScrap = "待报废".equals(asset.state());
+        String opening = pendingScrap ? asset.preScrapState() : asset.state();
+        String custody = switch (opening) {
             case "在库" -> "STORAGE";
             case "在用个人", "借出" -> "PERSONAL";
             case "在用公用" -> "SHARED";
@@ -84,8 +84,8 @@ public class AssetInitialPublicationPort {
                 ? null : asset.serial().strip());
         values.put("serialNormalized", values.get("serial") == null ? null
                 : ((String) values.get("serial")).toUpperCase(Locale.ROOT));
-        values.put("lifecycle", "STORAGE".equals(custody) ? "IN_STOCK"
-                : "借出".equals(asset.state()) ? "BORROWED" : "IN_USE");
+        values.put("lifecycle", pendingScrap ? "PENDING_SCRAP"
+                : "STORAGE".equals(custody) ? "IN_STOCK" : "借出".equals(opening) ? "BORROWED" : "IN_USE");
         values.put("custody", custody);
         values.put("warehouseId", "STORAGE".equals(custody) ? asset.warehouseId() : null);
         values.put("locationId", asset.locationId());
@@ -111,12 +111,19 @@ public class AssetInitialPublicationPort {
                     context.sheetRow(), asset.borrowedDate(), asset.expectedReturnDate(),
                     context.businessDate(), context.parameterId(), context.now());
         }
+        if (pendingScrap) {
+            scraps.open(new com.fams.business.InitialScrapPort.Opening(id,
+                    "STORAGE".equals(custody) ? "IN_STOCK" : "IN_USE", asset.scrapReason().strip(),
+                    asset.scrapCondition().strip(), asset.proposedDisposition().strip(), context.actorId(),
+                    context.batchId(), context.sheetRow(), context.now()));
+        }
         return new Created(id, code);
     }
 
     @Transactional
     public void assertReversible(long assetId, UUID batchId) {
         loans.assertReversible(assetId, batchId);
+        scraps.assertReversible(assetId, batchId);
         if (downstream.stream().anyMatch(port -> port.hasPublishedUse(assetId))) {
             throw new IllegalStateException("ASSET_IMPORT_ROLLBACK_DOWNSTREAM");
         }
@@ -132,6 +139,7 @@ public class AssetInitialPublicationPort {
         Map<String, Object> tag = mapper.tag(assetId);
         if (tag == null) { throw new IllegalStateException("ASSET_IMPORT_ROLLBACK_DOWNSTREAM"); }
         loans.cancel(assetId, batchId, now);
+        scraps.cancel(assetId, batchId, now);
         mapper.archiveTag(assetId, (String) tag.get("token_hash"),
                 ((LocalDateTime) tag.get("issued_at")).toInstant(ZoneOffset.UTC), now,
                 "INITIAL_IMPORT_ROLLBACK");

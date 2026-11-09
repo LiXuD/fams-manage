@@ -485,6 +485,28 @@ it("registers a post-scrap recovery and re-accepts the original card after write
   wrapper.unmount();
 });
 
+it("labels an opening-scrap request with its initialization batch row and keeps the approval flow unchanged", async () => {
+  const batchId = "0d1e5f2a-6b7c-4d3e-8f90-1a2b3c4d5e6f";
+  const opening: ScrapRequest = { ...report(), version: 0, assetVersion: 0, ownershipVersion: 0,
+    lockVersion: 0, status: "PENDING_ADMIN_DECISION", processorAccountId: null, initialSource: null,
+    actions: { decide: true, claim: false, execute: false } };
+  const serve = (body: ScrapRequest) => vi.fn(async (url: string) =>
+    response(url.includes("?") ? { items: [body], total: 1 } : body));
+  vi.stubGlobal("fetch", serve(opening));
+  const without = mount(ScrapView); await flushPromises();
+  await button(without, "ORIGINAL-1 · 待管理员确认").trigger("click"); await flushPromises();
+  expect(without.text()).not.toContain("期初承接批次");
+  without.unmount();
+  opening.initialSource = { batchId, sheetRow: 7 };
+  vi.stubGlobal("fetch", serve(opening));
+  const wrapper = mount(ScrapView); await flushPromises();
+  await button(wrapper, "ORIGINAL-1 · 待管理员确认").trigger("click"); await flushPromises();
+  expect(wrapper.text()).toContain(`期初承接批次 ${batchId} 第 7 行`);
+  expect(wrapper.text()).toContain("批准仍需管理员另行决定");
+  expect(button(wrapper, "批准报废范围").exists()).toBe(true);
+  wrapper.unmount();
+});
+
 it("executes manufacturer scrap from the recorded proof and its actual date", async () => {
   const row: ScrapRequest = { ...report(), sourceType: "FACTORY_REPLACEMENT", factoryDisposition: "FACTORY_RETAINED",
     sourceBusinessId: "71", actions: { decide: false, claim: false, execute: false, executeFactory: true } };

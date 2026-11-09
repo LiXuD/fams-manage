@@ -190,6 +190,9 @@ public class ScrapReadService {
         var source = json.readTree(row.get("source_snapshot_json").toString());
         result.put("source", Map.of("assetCode", source.path("asset_code").asText(),
                 "name", source.path("name").asText(), "serialNumber", source.path("serial_number").asText("")));
+        result.put("initialSource", row.get("initial_batch_id") == null ? null
+                : Map.of("batchId", row.get("initial_batch_id").toString(),
+                        "sheetRow", row.get("initial_sheet_row")));
         var decision = row.get("decision_snapshot_json") == null
                 ? null : json.readTree(row.get("decision_snapshot_json").toString());
         if (decision instanceof tools.jackson.databind.node.ObjectNode object) {

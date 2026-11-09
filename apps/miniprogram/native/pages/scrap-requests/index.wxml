@@ -45,6 +45,7 @@ module.exports={state:function(value){return names[value]||value;},correction:fu
     <navigator wx:if="{{detail.factoryDisposition &amp;&amp; detail.sourceBusinessId &amp;&amp; (detail.actions.decide || detail.actions.executeFactory)}}"
       url="/pages/repair-factory/index?id={{detail.sourceBusinessId}}">前往原维修核对厂家凭证</navigator>
     <view>原因 {{detail.reason}} · 现状 {{detail.observedCondition}} · 建议处置 {{detail.proposedDisposition}}</view>
+    <view wx:if="{{detail.initialSource}}">期初承接批次 {{detail.initialSource.batchId}} 第 {{detail.initialSource.sheetRow}} 行 · 批准仍需管理员另行决定</view>
     <view wx:if="{{capabilities}}">
       <view wx:if="{{!capabilities.canRead}}">查看报废附件需要单独授权。</view>
       <view class="title">申请附件</view>

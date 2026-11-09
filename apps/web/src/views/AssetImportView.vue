@@ -20,6 +20,8 @@ const fields = [
   { key: "warehouse", label: "仓库编码" }, { key: "location", label: "位置编码" },
   { key: "usingOrganization", label: "使用组织编码" }, { key: "employee", label: "使用人编号" },
   { key: "borrowedDate", label: "借出日期" }, { key: "expectedReturnDate", label: "预计归还日" },
+  { key: "preScrapState", label: "报废前状态" }, { key: "scrapReason", label: "报废原因" },
+  { key: "scrapCondition", label: "报废前现状" }, { key: "proposedDisposition", label: "建议处置方式" },
 ];
 const file = ref<File | null>(null);
 const uploadKey = ref(crypto.randomUUID());
