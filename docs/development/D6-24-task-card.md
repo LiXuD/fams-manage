@@ -46,6 +46,20 @@ V66 `fams_message_receipt` 以（账号、消息类别、消息号）为主键�
 
 PC 侧新增 `views/MessageCenterView.vue`（`/messages`，AppChrome 导航"消息中心与异常清单"，异常清单按钮仅管理员与库管可见），沿用既有 `generation + identity` 竞态守卫与"原请求重试已读登记"；小程序侧新增 `src/messages-pages.ts` 工厂（`view` 参数产出消息中心与异常清单两页，`pages/messages`、`pages/exceptions` 与 `native/app.json` 注册），提示语明确"已读登记只记录本人状态，业务办理仍以原单据为准"。两端跳转仅对原生/PC 上能按业务身份重新校验的页面给出深链：小程序只链接报废与报失详情，其余显示单据号由用户在对应业务页处理。
 
+## D6-24C1 值班提醒人配置底座
+
+D6-24C 按"配置底座 → 阈值消费与升级 → 配置异常 → 停用转派与角色恢复"四段实施，本段是第一段。
+
+V67 `fams_duty_assignment` 是每个共享池一条 ACTIVE 行的不可变链：`role_code` 由 CHECK 限 `ASSET_ADMIN`/`WAREHOUSE_OPERATOR`，`sequence_no` 自 1 递增并以 `(role_code,sequence_no)` 唯一，`(role_code,active_slot)`（`duty_status='ACTIVE'` 生成列）保证同池同时只有一个现任，被替换的旧行转 `SUPERSEDED` 并写 `superseded_at` 后整行保留，用于回答"当时谁在值班"。主备双方都挂 `fams_system_account` 外键，CHECK 要求替补与值班人不同，状态与时点由 CHECK 串联（ACTIVE 必空 `superseded_at`）。
+
+值班语义严格按 §9.5：值班提醒人只接收升级通知，不取得独占审批权或处理权，因此这是一份通知元数据而不是业务身份。据此端点走 `MasterDataActorContext` 的配置口径而不是 `RequisitionActorContext.revalidateLocked`——后者按设计只接受业务身份，纯 `SYSTEM_ADMIN` 会话会被 `AUTH_FORBIDDEN` 拒绝（B2 已记录同一事实），用错口径会让"系统管理员配置"这条要求直接不可实现。候选有效性沿用既有共享池判定：账号 `ENABLED` 且非初始密码 + 员工 `ACTIVE` + 组织 `ACTIVE` + 持有该角色。
+
+读取按角色收敛：系统管理员与资产管理员见两池，库管只见本池，其余角色由 `requireCatalogSelector` 直接 403。每次读取回传 `primary.active`/`backup.active`，因此值班人被停用或移出角色时历史配置继续可见但标记失效，供后续升级判定使用；配置端点自身不写任何业务表。
+
+替换是版本守护 + 幂等的单事务：`If-Match-Version` 等于当前 `sequence_no`（首条为 0），否则 409 `DUTY_VERSION_CONFLICT`；`Idempotency-Key` 与 F1 规范化的载荷摘要写入既有 `fams_idempotency_record`，同键同载荷返回原回执且不产生第二条链行，同键不同载荷返回 409 `IDEMPOTENCY_PAYLOAD_CONFLICT`；成功后一事务写旧行 SUPERSEDED、新行 ACTIVE、一条 `DUTY_ASSIGNMENT_REPLACED` 审计。
+
+契约新增 2 个 operation（`GET /duty-assignments`、`PUT /duty-assignments/{roleCode}`，内联 schema），只提供 PC 配置面，故不新增 mini 端点。PC 在消息中心页新增"值班提醒"区块：管理员与库管可读、仅系统管理员可登记，沿用同一 `identity + generation` 竞态守卫与"原请求重试值班登记"；新增 `reminder/api.ts` 承载 PUT 通道，因为既有 `loanRequest` 的写请求固定发 POST。
+
 ## 验证
 
 - `BusinessCalendarTest` 6 项：周末起点跳下个工作日、节假日跳过、补班日优先于节假日、跨年（1 月 1 日休 → 下个工作日为周一）、同一瞬时在企业时区与 UTC 下的起算日与截止时刻差异、`workdays<1` 拒绝。
@@ -55,6 +69,10 @@ PC 侧新增 `views/MessageCenterView.vue`（`/messages`，AppChrome 导航"消�
 - `MessageCenterView.test.ts` 3 项：两类来源的中文标签与未读数、异常清单切换按 `view=EXCEPTION` 重查、丢失回复后按同一 path/key 原样重试且已读不重复提交、员工看不到异常清单、账号切换后迟到的旧收件箱不Paint。`messages-pages.test.mjs` 4 项：同一断言口径覆盖原生工厂、403 清空并提示、仅报废/报失给出 `?id=` 深链、迟到的旧身份响应丢弃并回登录。
 - Web 239 项、小程序 343 项、`vue-tsc`、`vite build`、小程序 `tsc --noEmit`/`build.mjs` 与 eslint `--max-warnings=0` 全绿；`BusinessReminderRuntimeCase` 在加入 V66 后复跑仍通过；Checkstyle、SpotBugs 零报告，架构 6 项（`FamsArchitectureTest` + `FamsArchitectureRulesTest`）通过证明 reminder→auth 未形成模块环；契约新增 4 个 operation 后本地静态契约的引用、唯一 operationId、示例与追溯检查通过，Java 侧 OpenAPI 校验无错误。
 
+- `DutyHttpRuntimeCase` 1 项（真实 HTTP + 自有隔离 MySQL 8.4.11，`scripts/verify-d6-03a.py` 已登记 d6-24c 独立库、授权、`D6_24C_*` 环境变量与用例条目）：系统管理员首次以版本 0 登记两池得到 `version=1` 且主备都判为有效；资产管理员与库管发起登记均 403、员工读取列表 403；把不具备该角色的员工或同一个人同时填成主备分别得到 409 `DUTY_MEMBER_INACTIVE` 与 400 `DUTY_ASSIGNMENT_INVALID`；同一 `Idempotency-Key` 重放返回原回执且该池仍只有 2 行（未产生第三条链行），同键换载荷 409，旧版本 409；替换后 `(ACTIVE=1, 链上=3)`，历史行保留；三会话读取按角色收敛（管理员见两池、库管只见本池）；把在任值班人的员工记录停用后配置仍可见且 `primary.active=false`、`backup.active=true`；`fams_todo` 与 `fams_business_reminder` 仍为 0 行而 `DUTY_ASSIGNMENT_REPLACED` 审计恰 4 条（三次管理员 + 一次库管），证明配置面不触碰业务事实。
+- `MessageCenterView.test.ts` 5 项（新增 2 项）：管理员与库管读到值班链与"已失效"标记且系统管理员才出现登记表单；提交按当前 `version` 发 PUT，丢失回复后按钮转为"原请求重试值班登记"且第二次提交的 path/key/body/版本与第一次逐字段相同，成功后列表版本推进为 2。
+- 修正一处早于本片的编译回归：`1d28cec` 的 `MessageService.item(...)` 用了 11 对键值的 `Map.of`，超出 JDK 上限因而该提交无法编译（B2 当时记录的是加 `objectStage` 之前的运行结果）。本片改为 `Map.ofEntries` 后在自有隔离 MySQL 上复跑 `BusinessReminderRuntimeCase`（V65 档位与去重）与 `MessagesHttpRuntimeCase`（V66 可寻址性与个人已读）两项均通过，B1/B2 的运行时证据在当前树重新成立。
+
 ## 尚待交付
 
-C 片值班提醒人与持续未处理升级、角色恢复可见性；D 片外部通道兜底、指标与 R-08 证据。B2 之后仍开放：本会话未接入 GitNexus/AOCI，未运行 `impact`/`detect_changes`；实际 PC 浏览器与真机小程序联调、提交 JVM 重启恢复、完整 D6-03A 产品门禁与独立复核未做；`scripts/verify-d6-02c.py` 的 `assert_write_contracts` 在本片之前已有 170 个既有 operation 不通过（首个为库存观察下载授权被判定为"未分类的非业务写"），本片按既有 `readBusinessResultNotice` 同口径分类，未修改门禁口径；该门禁已由 D6-02C-C1 改为只读契约声明并机械归一（剩 152 条待 C2 取证），详见 [D6-02C 任务卡](D6-02C-task-card.md)；`fams_message_receipt` 不建跨表外键、TECH_ASSISTANT 池消息不经本端点、小程序仅两类深链，均如上登记。真实短信、微信模板与真机触达仍依 D6-09B/10B，本卡不宣称已验证。
+C 片已交付 C1 值班提醒人配置底座；仍开放 C2 `notificationEscalationThresholds` 四阈值首次产生业务效果（未读满阈值升级值班人、超时再满 1 个工作日的全体强提醒、同一异常每日最多一次、已读也触发、"处理结果/有效转派/带下一跟进时间的核查记录"三类豁免判定）、C3 `fams_configuration_anomaly` 落地（该表与两个只读端点自 D6-02C 起只有契约没有实现，值班人失效与无人有效都依赖它）、C4 成员停用即生成去重的"需要转派"待办与角色恢复后的可见性回归；D 片外部通道兜底、指标与 R-08 证据。B2 之后仍开放：本会话未接入 GitNexus/AOCI，未运行 `impact`/`detect_changes`；实际 PC 浏览器与真机小程序联调、提交 JVM 重启恢复、完整 D6-03A 产品门禁与独立复核未做；`scripts/verify-d6-02c.py` 的 `assert_write_contracts` 在本片之前已有 170 个既有 operation 不通过（首个为库存观察下载授权被判定为"未分类的非业务写"），本片按既有 `readBusinessResultNotice` 同口径分类，未修改门禁口径；该门禁已由 D6-02C-C1 改为只读契约声明并机械归一（剩 152 条待 C2 取证），详见 [D6-02C 任务卡](D6-02C-task-card.md)；`fams_message_receipt` 不建跨表外键、TECH_ASSISTANT 池消息不经本端点、小程序仅两类深链，均如上登记。真实短信、微信模板与真机触达仍依 D6-09B/10B，本卡不宣称已验证。

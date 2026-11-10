@@ -5,6 +5,8 @@ import { AuthApiError } from "@/auth/api";
 import { formatProxyTime } from "@/proxy/time";
 import AppChrome from "@/components/AppChrome.vue";
 import { LoanApiError, loanMessage, loanRequest, type LoanMutation } from "@/loan/api";
+import { ReminderApiError, dutyRequest, reminderMessage,
+  type DutyAssignment, type DutyList, type DutyMutation } from "@/reminder/api";
 
 interface Message {
   kind: "TODO" | "REMINDER"; id: string; businessType: string; businessId: string; stage: string;
@@ -44,7 +46,15 @@ const identity = computed(() => JSON.stringify([session.user?.id, session.user?.
 const rows = ref<Message[]>([]); const page = ref(1); const total = ref(0); const unread = ref(0);
 const busy = ref(false); const error = ref("");
 const pendingRead = ref<(LoanMutation & { id: string }) | null>(null);
-let generation = 0, live = true;
+const duties = ref<DutyAssignment[]>([]); const dutyError = ref("");
+const contact = ref<{ role: "ASSET_ADMIN" | "WAREHOUSE_OPERATOR"; primary: string; backup: string }>(
+  { role: "ASSET_ADMIN", primary: "", backup: "" });
+const pendingDuty = ref<(DutyMutation & { role: string }) | null>(null);
+let generation = 0, dutyGeneration = 0, live = true;
+
+const administrator = computed(() => session.user?.roles.includes("SYSTEM_ADMIN") ?? false);
+const canSeeDuty = computed(() => session.user?.roles.some(
+  role => ["SYSTEM_ADMIN", "ASSET_ADMIN", "WAREHOUSE_OPERATOR"].includes(role)) ?? false);
 
 function label(message: Message): string {
   if (message.kind === "TODO") return `待办 · ${TODOS[message.stage] ?? message.stage}`;
@@ -58,6 +68,7 @@ function destination(message: Message) {
 
 function clear() {
   generation++; rows.value = []; pendingRead.value = null;
+  duties.value = []; pendingDuty.value = null;
   page.value = 1; total.value = 0; unread.value = 0; busy.value = false;
 }
 function failure(cause: unknown, mutation = false) {
@@ -83,6 +94,7 @@ async function switchTo(next: "INBOX" | "EXCEPTION") {
   if (busy.value || next === view.value || pendingRead.value) return;
   view.value = next; await refresh();
 }
+async function reload() { await refresh(); await loadDuty(); }
 async function read(id: string) {
   if (busy.value || pendingRead.value && pendingRead.value.id !== id) return;
   pendingRead.value ??= { id, path: `/messages/${rows.value.find(m => m.id === id)?.kind ?? "TODO"}/${id}/read`,
@@ -95,7 +107,42 @@ async function read(id: string) {
   } catch (cause) { if (current(epoch, owner)) failure(cause, true); }
   finally { if (current(epoch, owner)) busy.value = false; }
 }
-watch(identity, () => { clear(); error.value = ""; if (session.user) void refresh(); },
+const dutyAlive = (epoch: number, owner: string) => live && epoch === dutyGeneration && owner === identity.value;
+async function loadDuty() {
+  if (!canSeeDuty.value) return;
+  const epoch = ++dutyGeneration, owner = identity.value;
+  try {
+    const result = await dutyRequest<DutyList>("/duty-assignments");
+    if (dutyAlive(epoch, owner)) duties.value = result.items;
+  } catch (cause) { if (dutyAlive(epoch, owner)) dutyError.value = reminderMessage(cause); }
+}
+async function rotate() {
+  if (!administrator.value) return;
+  if (!pendingDuty.value) {
+    const role = contact.value.role;
+    const primary = contact.value.primary.trim(), backup = contact.value.backup.trim();
+    if (!/^[1-9][0-9]*$/.test(primary) || backup !== "" && !/^[1-9][0-9]*$/.test(backup)) {
+      dutyError.value = "请填写账号的数字编号。"; return;
+    }
+    pendingDuty.value = { role, key: crypto.randomUUID(),
+      version: Number(duties.value.find(duty => duty.roleCode === role)?.version ?? 0),
+      body: { primaryAccountId: primary, backupAccountId: backup === "" ? null : backup } };
+  }
+  const operation = pendingDuty.value, epoch = ++dutyGeneration, owner = identity.value;
+  dutyError.value = "";
+  try {
+    const saved = await dutyRequest<DutyAssignment>(`/duty-assignments/${operation.role}`, operation);
+    if (!dutyAlive(epoch, owner)) return;
+    duties.value = [...duties.value.filter(duty => duty.roleCode !== operation.role), saved];
+    pendingDuty.value = null;
+  } catch (cause) {
+    if (!dutyAlive(epoch, owner)) return;
+    if (cause instanceof ReminderApiError && cause.status < 500) pendingDuty.value = null;
+    dutyError.value = reminderMessage(cause);
+  }
+}
+watch(identity, () => { clear(); error.value = ""; dutyError.value = "";
+  if (session.user) { void refresh(); void loadDuty(); } },
   { immediate: true, flush: "sync" });
 watch(privileged, allowed => { if (!allowed && view.value === "EXCEPTION") { view.value = "INBOX"; void refresh(); } });
 onBeforeUnmount(() => { live = false; clear(); });
@@ -107,7 +154,7 @@ onBeforeUnmount(() => { live = false; clear(); });
     <div class="actions">
       <button :disabled="busy || view === 'INBOX'" @click="switchTo('INBOX')">我的消息</button>
       <button v-if="privileged" :disabled="busy || view === 'EXCEPTION'" @click="switchTo('EXCEPTION')">异常清单</button>
-      <button :disabled="busy" @click="refresh()">刷新</button>
+      <button :disabled="busy" @click="reload()">刷新</button>
       <button v-if="pendingRead" :disabled="busy" @click="read(pendingRead.id)">原请求重试已读登记</button>
     </div>
     <p v-if="error" role="alert" class="form-error">{{ error }}</p>
@@ -125,5 +172,32 @@ onBeforeUnmount(() => { live = false; clear(); });
       <span>{{ page }} 页 / 共 {{ total }} 条</span>
       <button :disabled="busy || page * 20 >= total" @click="refresh(1)">下一页</button>
     </div>
+    <section v-if="canSeeDuty">
+      <h2>值班提醒</h2>
+      <p>值班提醒人只接收升级通知，不取得审批权或处理权；被替换的配置保留为历史，便于追溯当时谁在值班。</p>
+      <article v-for="duty in duties" :key="duty.roleCode">
+        <h3>{{ duty.roleCode === "ASSET_ADMIN" ? "管理员共享池" : "库管共享池" }}</h3>
+        <p>值班 {{ duty.primary.name }}<template v-if="!duty.primary.active">（已失效）</template>
+          · 替补 <template v-if="duty.backup">{{ duty.backup.name }}<template v-if="!duty.backup.active">（已失效）</template></template>
+          <template v-else>未配置</template></p>
+        <p>生效 {{ formatProxyTime(duty.effectiveAt) }} · 版本 {{ duty.version }}</p>
+      </article>
+      <form v-if="administrator" @submit.prevent="rotate">
+        <label>共享池
+          <select v-model="contact.role" :disabled="!!pendingDuty">
+            <option value="ASSET_ADMIN">管理员</option>
+            <option value="WAREHOUSE_OPERATOR">库管</option>
+          </select>
+        </label>
+        <label>值班提醒人账号
+          <input v-model="contact.primary" :disabled="!!pendingDuty" placeholder="账号数字编号">
+        </label>
+        <label>替补账号
+          <input v-model="contact.backup" :disabled="!!pendingDuty" placeholder="留空表示不设备补">
+        </label>
+        <button type="submit" :disabled="busy">{{ pendingDuty ? "原请求重试值班登记" : "登记值班人" }}</button>
+      </form>
+      <p v-if="dutyError" role="alert" class="form-error">{{ dutyError }}</p>
+    </section>
   </AppChrome>
 </template>

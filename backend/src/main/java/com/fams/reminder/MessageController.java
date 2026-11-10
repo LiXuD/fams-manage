@@ -52,8 +52,8 @@ class MessageController {
         return messages.read(actors.capture(), kind, id);
     }
 
-    @ExceptionHandler(MessageFailure.class)
-    ResponseEntity<ErrorResponse> rejection(MessageFailure failure, HttpServletRequest request) {
+    @ExceptionHandler(ReminderFailure.class)
+    ResponseEntity<ErrorResponse> rejection(ReminderFailure failure, HttpServletRequest request) {
         UUID id = request.getAttribute("fams.request.id") instanceof UUID value ? value : UUID.randomUUID();
         return ResponseEntity.status(failure.status()).body(new ErrorResponse(failure.getMessage(),
                 failure.getMessage(), id, Map.of()));

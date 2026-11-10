@@ -1,9 +1,9 @@
 package com.fams.reminder;
 
-final class MessageFailure extends RuntimeException {
+final class ReminderFailure extends RuntimeException {
     private final int status;
 
-    public MessageFailure(int status, String code) {
+    public ReminderFailure(int status, String code) {
         super(code);
         this.status = status;
     }

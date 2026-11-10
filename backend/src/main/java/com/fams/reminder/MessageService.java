@@ -59,7 +59,7 @@ public class MessageService {
         var current = actors.revalidateLocked(actor);
         var exception = "EXCEPTION".equals(view);
         if (exception && !current.has(Role.ASSET_ADMIN) && !current.has(Role.WAREHOUSE_OPERATOR)) {
-            throw new MessageFailure(403, "MESSAGE_SCOPE_FORBIDDEN");
+            throw new ReminderFailure(403, "MESSAGE_SCOPE_FORBIDDEN");
         }
         var sql = exception ? exceptionSql(current) : inboxSql(current);
         var args = exception ? exceptionArgs(current) : inboxArgs(current);
@@ -92,13 +92,13 @@ public class MessageService {
         } else if ("REMINDER".equals(kind)) {
             addressable = addressableReminder(current, args);
         } else {
-            throw new MessageFailure(400, "MESSAGE_KIND_INVALID");
+            throw new ReminderFailure(400, "MESSAGE_KIND_INVALID");
         }
         var columns = "TODO".equals(kind) ? "t.id" : "r.id";
         var table = "TODO".equals(kind) ? "fams_todo t" : "fams_business_reminder r";
         if (db.queryForList("SELECT " + columns + " FROM " + table + " WHERE " + columns
                 + "=? AND" + addressable + " FOR UPDATE", args.toArray()).isEmpty()) {
-            throw new MessageFailure(404, "MESSAGE_NOT_AVAILABLE");
+            throw new ReminderFailure(404, "MESSAGE_NOT_AVAILABLE");
         }
         db.update("INSERT INTO fams_message_receipt (account_id,message_kind,message_id,read_at)"
                 + " VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE message_id=message_id",
@@ -203,15 +203,17 @@ public class MessageService {
 
     private static Map<String, Object> item(Map<String, Object> row, Set<String> read) {
         var kind = String.valueOf(row.get("message_kind"));
-        return Map.of("kind", kind, "id", row.get("id").toString(),
-                "businessType", row.get("business_type"), "businessId", row.get("business_id").toString(),
-                "stage", row.get("stage"), "objectStage", row.get("object_stage"),
-                "poolType", row.get("pool_type"),
-                "assigneeAccountId", row.get("assignee_account_id") == null
-                        ? "" : row.get("assignee_account_id").toString(),
-                "openedAt", instant(row.get("moment")).toString(),
-                "deadlineAt", row.get("deadline_at") == null ? "" : instant(row.get("deadline_at")).toString(),
-                "read", read.contains(kind + ":" + row.get("id")));
+        return Map.ofEntries(Map.entry("kind", kind), Map.entry("id", row.get("id").toString()),
+                Map.entry("businessType", row.get("business_type")),
+                Map.entry("businessId", row.get("business_id").toString()),
+                Map.entry("stage", row.get("stage")), Map.entry("objectStage", row.get("object_stage")),
+                Map.entry("poolType", row.get("pool_type")),
+                Map.entry("assigneeAccountId", row.get("assignee_account_id") == null
+                        ? "" : row.get("assignee_account_id").toString()),
+                Map.entry("openedAt", instant(row.get("moment")).toString()),
+                Map.entry("deadlineAt", row.get("deadline_at") == null ? ""
+                        : instant(row.get("deadline_at")).toString()),
+                Map.entry("read", read.contains(kind + ":" + row.get("id"))));
     }
 
     private static Instant instant(Object value) {
