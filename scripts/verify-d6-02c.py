@@ -35,6 +35,23 @@ OPENAPI_GENERATOR_VERSION = "7.25.0"
 METHODS = {"get", "post", "put", "patch", "delete"}
 OWNED_GENERATED_TARGETS = (JAVA_TARGET, TS_TARGET)
 RETAINED_GATES = ("scripts/verify-d6-02a.py", "scripts/verify-d6-02b.py")
+STANDARD_HEADER_COMPONENTS = {
+    "Idempotency-Key": ("IdempotencyKey", "IdempotencyKeyUuid"),
+    "X-CSRF-Token": ("CsrfToken",),
+    "If-Match-Version": ("IfMatchVersion",),
+}
+NON_BUSINESS_REGISTRY = "x-non-business-mutations"
+WRITE_BOUNDARY_EXTENSIONS = (
+    "x-actor",
+    "x-version",
+    "x-transaction",
+    "x-audit-event",
+    "x-error-codes",
+    "x-required-error-statuses",
+)
+WRITE_HEADER_REQUIREMENTS = {"Idempotency-Key", "X-CSRF-Token"}
+WRITE_HEADER_EXCEPTIONS = {"csrf": "X-CSRF-Token", "idempotency": "Idempotency-Key"}
+DECLARED_EXCEPTIONS = set(WRITE_HEADER_EXCEPTIONS) | {"version"}
 
 
 class VerificationFailure(RuntimeError):
@@ -136,49 +153,109 @@ def assert_unique_operation_ids(document: dict[str, Any]) -> None:
     operations(document)
 
 
-def parameter_ref_names(operation: dict[str, Any]) -> set[str]:
-    return {
-        parameter.get("$ref", "").rsplit("/", 1)[-1]
-        for parameter in operation.get("parameters", [])
-        if isinstance(parameter, dict)
-    }
+def strip_description(value: dict[str, Any]) -> dict[str, Any]:
+    return {key: item for key, item in value.items() if key != "description"}
+
+
+def declared_headers(
+    document: dict[str, Any], path: str, method: str, operation: dict[str, Any]
+) -> set[str]:
+    """Standard header contracts have one source of truth: an operation either references a shared
+    parameter component or repeats it unchanged, and the request surface is read back as header names."""
+    components = document.get("components", {}).get("parameters", {})
+    declared: set[str] = set()
+    for parameter in operation.get("parameters", []):
+        if not isinstance(parameter, dict):
+            continue
+        reference = str(parameter.get("$ref", ""))
+        if reference.startswith("#/components/parameters/"):
+            component = components.get(reference.rsplit("/", 1)[-1])
+            if isinstance(component, dict) and component.get("in") == "header":
+                declared.add(str(component.get("name")))
+            continue
+        candidates = STANDARD_HEADER_COMPONENTS.get(str(parameter.get("name")))
+        if candidates is None or parameter.get("in") != "header":
+            continue
+        if any(
+            isinstance(components.get(name), dict)
+            and strip_description(parameter) == strip_description(components[name])
+            for name in candidates
+        ):
+            declared.add(str(parameter.get("name")))
+            continue
+        raise VerificationFailure(
+            f"inline {parameter.get('name')} must reuse the shared parameter component: "
+            f"{method.upper()} {path}"
+        )
+    return declared
+
+
+def assert_non_business_registry(
+    document: dict[str, Any], entries: dict[str, tuple[str, str, dict[str, Any]]]
+) -> set[str]:
+    registry = document.get(NON_BUSINESS_REGISTRY)
+    if not isinstance(registry, list):
+        raise VerificationFailure(f"{NON_BUSINESS_REGISTRY} must list every non-business mutation")
+    if any(not isinstance(entry, str) or not entry for entry in registry):
+        raise VerificationFailure(f"{NON_BUSINESS_REGISTRY} contains a malformed entry")
+    if len(set(registry)) != len(registry):
+        raise VerificationFailure(f"{NON_BUSINESS_REGISTRY} contains duplicate operation ids")
+    unknown = sorted(entry for entry in registry if entry not in entries)
+    if unknown:
+        raise VerificationFailure(f"{NON_BUSINESS_REGISTRY} references undeclared operations: {unknown}")
+    return set(registry)
+
+
+def declared_exceptions(operation: dict[str, Any]) -> set[str]:
+    values = operation.get("x-non-applicable", [])
+    if not isinstance(values, list) or any(not isinstance(value, str) for value in values):
+        raise VerificationFailure("x-non-applicable must be a list of exception names")
+    unknown = sorted(set(values) - DECLARED_EXCEPTIONS)
+    if unknown:
+        raise VerificationFailure(f"unknown non-applicable exception: {unknown}")
+    if values and not operation.get("x-exception-rationale"):
+        raise VerificationFailure(
+            f"declared exception without rationale: {operation.get('operationId')}"
+        )
+    return set(values)
 
 
 def assert_write_contracts(document: dict[str, Any]) -> None:
-    for operation_id, (path, method, operation) in operations(document).items():
+    entries = operations(document)
+    registry = assert_non_business_registry(document, entries)
+    registered: set[str] = set()
+    for operation_id, (path, method, operation) in entries.items():
         if method not in {"post", "put", "patch", "delete"}:
             continue
         if not operation.get("x-business-write", False):
-            if operation_id not in {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"}:
+            if operation_id not in registry:
                 raise VerificationFailure(
                     f"unclassified non-business mutation: {method.upper()} {path}"
                 )
             if not operation.get("x-exception-rationale"):
                 raise VerificationFailure(f"missing mutation exception rationale: {operation_id}")
+            registered.add(operation_id)
             continue
-        for extension in (
-            "x-actor",
-            "x-version",
-            "x-transaction",
-            "x-audit-event",
-            "x-error-codes",
-            "x-required-error-statuses",
-        ):
+        for extension in WRITE_BOUNDARY_EXTENSIONS:
             if not operation.get(extension):
                 raise VerificationFailure(f"{operation_id} is missing {extension}")
-        refs = parameter_ref_names(operation)
-        required_refs = {"IdempotencyKey", "CsrfToken"}
-        if operation_id in {"miniVerifyBinding", "miniUnbind"}:
-            if not path.startswith("/mini/auth/") or "csrf" not in operation.get("x-non-applicable", []):
-                raise VerificationFailure(f"invalid mini CSRF exception: {operation_id}")
-            required_refs = {"IdempotencyKey", "IfMatchVersion"}
-        if not required_refs.issubset(refs):
-            raise VerificationFailure(f"{operation_id} is missing idempotency or CSRF")
+        exceptions = declared_exceptions(operation)
+        headers = declared_headers(document, path, method, operation)
+        required = WRITE_HEADER_REQUIREMENTS - {
+            WRITE_HEADER_EXCEPTIONS[name] for name in exceptions if name in WRITE_HEADER_EXCEPTIONS
+        }
+        if not required.issubset(headers):
+            raise VerificationFailure(
+                f"{operation_id} is missing {', '.join(sorted(required - headers))}"
+            )
         for status in operation["x-required-error-statuses"]:
             if str(status) not in operation.get("responses", {}):
                 raise VerificationFailure(
                     f"{operation_id} requires undeclared HTTP status {status}"
                 )
+    stale = sorted(registry - registered)
+    if stale:
+        raise VerificationFailure(f"{NON_BUSINESS_REGISTRY} keeps stale entries: {stale}")
 
 
 def validate_format(value: str, format_name: str, location: str) -> None:
