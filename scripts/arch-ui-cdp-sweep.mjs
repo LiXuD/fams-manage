@@ -34,6 +34,8 @@ const { values: options } = parseArgs({
     shotDir: { type: "string", default: "" },
     viewport: { type: "string", default: "" },
     settle: { type: "string", default: "450" },
+    scope: { type: "string", default: "",
+      help: "只量该选择器对应的内容区（如 main.fams-main），用于把全站级增量与内容区等价性分开" },
   },
 });
 
@@ -125,9 +127,22 @@ async function evaluate(connection, sessionId, expression, awaitPromise = false)
   return result.result.value;
 }
 
+/**
+ * 量测根：默认整站（#app），带 --scope 时只量内容区。
+ * 侧栏/页头等全站级增量（例如新增一条导航条目）会让每个单元的控件数与文本都变，
+ * 内容区口径把这类全局变化排除在外，才能证明「未触及的路由逐字节同屏」。
+ */
+const ROOT_EXPRESSION = options.scope
+  ? `(document.querySelector(${JSON.stringify(options.scope)}) || document.querySelector("#app") || document.body)`
+  : `(document.querySelector("#app") || document.body)`;
+/** 不带 --scope 时文本口径与本脚本既有读数一致（document.body），避免历史批次不可比。 */
+const TEXT_EXPRESSION = options.scope ? `${ROOT_EXPRESSION}.innerText` : "document.body.innerText";
+/** 控件清单根：不带 --scope 时保持 document 全量，与本脚本既有读数一致。 */
+const QUERY_ROOT = options.scope ? ROOT_EXPRESSION : "document";
+
 /** 结构签名：深度优先的 tag.class 序列，不含文本与属性，用来定位 DOM 形状变化。 */
 const STRUCTURE_EXPRESSION = `(() => {
-  const root = document.querySelector("#app") || document.body;
+  const root = ${ROOT_EXPRESSION};
   const walk = (node, depth) => {
     let out = [];
     for (const child of node.children) {
@@ -142,7 +157,7 @@ const STRUCTURE_EXPRESSION = `(() => {
 
 /** 交互清单：按钮/链接/输入的数量、禁用数与首个可点元素，用于证明事件接线未断。 */
 const INVENTORY_EXPRESSION = `JSON.stringify((() => {
-  const nodes = [...document.querySelectorAll("button, a, input, select, textarea")];
+  const nodes = [...${QUERY_ROOT}.querySelectorAll("button, a, input, select, textarea")];
   const text = (element) => (element.innerText || element.value || element.getAttribute("aria-label") || element.name || "").trim().slice(0, 24);
   return {
     total: nodes.length,
@@ -201,7 +216,7 @@ async function settle(connection, sessionId, ms) {
   // 视图多为「挂载后立刻拉数据再渲染」，轮询到文本稳定为止，最多再等 3.5s。
   let previous = "";
   while (Date.now() - start < 3500) {
-    const current = await evaluate(connection, sessionId, "document.body.innerText");
+    const current = await evaluate(connection, sessionId, TEXT_EXPRESSION);
     if (current === previous) return current;
     previous = current;
     await sleep(250);
