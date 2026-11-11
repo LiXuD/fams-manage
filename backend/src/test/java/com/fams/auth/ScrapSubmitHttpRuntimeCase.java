@@ -104,6 +104,40 @@ class ScrapSubmitHttpRuntimeCase {
     }
 
     @Test
+    void malformedIdempotencyKeysAreRejectedBeforeAnyScrapWrite() throws Exception {
+        String malformed = "invalid-uuid-key";
+        var json = new tools.jackson.databind.ObjectMapper();
+        var before = db.queryForMap("SELECT * FROM fams_asset WHERE id=951020");
+        var pc = submit(fixture.employee, malformed, INPUT);
+        assertEquals(400, pc.statusCode(), pc.body());
+        assertEquals("INVALID_REQUEST", json.readTree(pc.body()).path("code").asText());
+
+        var identity = new MiniWechatIdentityPort.Identity("owned-scrap-uuid", "employee");
+        db.update("INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES (?,?,NOW(3))",
+                951002L, miniSessions.identityHash(identity));
+        var session = miniSessions.start(identity, UUID.randomUUID());
+        var nativeRequest = HttpRequest.newBuilder(
+                        URI.create("http://127.0.0.1:" + port + "/api/v1/mini/scrap-requests"))
+                .header("Content-Type", "application/json")
+                .header("X-FAMS-Mini-Session", session.sessionToken())
+                .header("Idempotency-Key", malformed)
+                .POST(HttpRequest.BodyPublishers.ofString(INPUT)).build();
+        var mini = http.send(nativeRequest, HttpResponse.BodyHandlers.ofString());
+        assertEquals(400, mini.statusCode(), mini.body());
+        assertEquals("INVALID_REQUEST", json.readTree(mini.body()).path("code").asText());
+        assertEquals(before, db.queryForMap("SELECT * FROM fams_asset WHERE id=951020"));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_request", Long.class));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_receipt", Long.class));
+
+        String id = scrapId();
+        var attachment = upload(fixture.employee, id, "request", 0, malformed);
+        assertEquals(400, attachment.statusCode(), attachment.body());
+        assertEquals("SCRAP_ATTACHMENT_INVALID", json.readTree(attachment.body()).path("code").asText());
+        assertEquals(0L, db.queryForObject(
+                "SELECT COUNT(*) FROM fams_attachment WHERE business_type='SCRAP'", Long.class));
+    }
+
+    @Test
     void employeeSubmissionIsAtomicAndOriginalReceiptSurvivesAssetFreeze() throws Exception {
         String key = UUID.randomUUID().toString();
         var before = db.queryForMap("SELECT * FROM fams_asset WHERE id=951020");
@@ -270,6 +304,7 @@ class ScrapSubmitHttpRuntimeCase {
                 "{\"assetVersion\":1,\"lockVersion\":0,\"result\":\"REJECT\",\"reason\":\"经核对无需报废\"}");
         assertEquals(200, frozen.statusCode(), frozen.body());
         assertEquals("RESTORE_REQUIRED", json.readTree(frozen.body()).path("status").asText());
+        assertEquals(404, get(fixture.warehouse, "/" + id).statusCode());
         String open = "{\"assetVersion\":1,\"lockVersion\":0,\"locationId\":\"951000\",\"locationVersion\":0,"
                 + "\"reason\":\"原保管人已停用，指定有效仓位重新入库\"}";
         assertEquals(403, write(fixture.other, id, "corrections", 1, UUID.randomUUID().toString(), open).statusCode());
@@ -306,6 +341,10 @@ class ScrapSubmitHttpRuntimeCase {
         var approved = write(fixture.admin, "corrections/" + cid, "decision", 0, approveKey, decide);
         assertEquals(200, approved.statusCode(), approved.body());
         assertEquals(approved.body(), write(fixture.admin, "corrections/" + cid, "decision", 0, approveKey, decide).body());
+        var shared = get(fixture.warehouse, "/" + id);
+        assertEquals(200, shared.statusCode(), shared.body());
+        assertEquals(true, json.readTree(shared.body()).path("actions").path("claimCorrection").asBoolean());
+        assertEquals(200, get(fixture.otherWarehouse, "/" + id).statusCode());
         assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_todo WHERE business_type='SCRAP'"
                 + " AND business_id=? AND todo_type='CORRECTION_CLAIM' AND todo_status='OPEN'", Long.class, id));
         String claim = "{\"assetVersion\":1,\"lockVersion\":0}";
@@ -315,6 +354,7 @@ class ScrapSubmitHttpRuntimeCase {
         var claimed = write(fixture.warehouse, "corrections/" + cid, "claim", 1, claimKey, claim);
         assertEquals(200, claimed.statusCode(), claimed.body());
         assertEquals(claimed.body(), write(fixture.warehouse, "corrections/" + cid, "claim", 1, claimKey, claim).body());
+        assertEquals(404, get(fixture.otherWarehouse, "/" + id).statusCode());
         assertEquals(409, write(fixture.otherWarehouse, "corrections/" + cid, "claim", 1,
                 UUID.randomUUID().toString(), claim).statusCode());
         var execution = json.createObjectNode().put("assetVersion", 1).put("lockVersion", 0)
@@ -361,6 +401,10 @@ class ScrapSubmitHttpRuntimeCase {
                 String.class, Long.parseLong(id)));
         assertEquals("COMPLETED", db.queryForObject("SELECT correction_status FROM fams_scrap_correction WHERE id=?",
                 String.class, Long.parseLong(cid)));
+        var corrected = json.readTree(get(fixture.warehouse, "/" + id).body());
+        assertEquals(cid, corrected.path("correction").path("id").asText());
+        assertEquals("COMPLETED", corrected.path("correction").path("status").asText());
+        assertEquals(false, corrected.path("actions").path("executeCorrection").asBoolean());
         assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock"
                 + " WHERE asset_id=951020 AND released_at IS NULL", Long.class));
         assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock"
@@ -520,6 +564,10 @@ class ScrapSubmitHttpRuntimeCase {
                 Long.parseLong(id)));
         assertEquals("COMPLETED", db.queryForObject("SELECT reversal_status FROM fams_scrap_reversal WHERE id=?",
                 String.class, Long.parseLong(rid)));
+        var reversed = json.readTree(get(fixture.warehouse, "/" + id).body());
+        assertEquals(rid, reversed.path("reversal").path("id").asText());
+        assertEquals("COMPLETED", reversed.path("reversal").path("status").asText());
+        assertEquals(false, reversed.path("actions").path("executeReversal").asBoolean());
         var disposal = db.queryForMap("SELECT * FROM fams_scrap_disposition WHERE request_id=?", Long.parseLong(id));
         assertEquals("REVERSED", disposal.get("disposition_status"));
         assertEquals(1L, ((Number) disposal.get("version")).longValue());

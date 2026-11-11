@@ -188,6 +188,7 @@ class RepairHttpRuntimeCase {
         db.execute("DROP TRIGGER IF EXISTS owned_repair_audit_failure");
         String scraps = " IN (SELECT id FROM fams_scrap_request WHERE asset_id BETWEEN 951020 AND 951023)";
         db.update("DELETE FROM fams_todo WHERE business_type='SCRAP' AND business_id" + scraps);
+        db.update("DELETE FROM fams_scrap_reversal WHERE request_id" + scraps);
         db.update("DELETE FROM fams_scrap_disposition WHERE request_id" + scraps);
         db.update("DELETE FROM fams_scrap_event WHERE request_id" + scraps);
         db.update("DELETE FROM fams_scrap_receipt WHERE scrap_request_id" + scraps);
@@ -962,12 +963,47 @@ class RepairHttpRuntimeCase {
         assertEquals(initialLoan, db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020"));
         assertEquals(before, db.queryForMap("SELECT * FROM fams_repair_request WHERE id=?", Long.parseLong(repair)));
         assertEquals("PENDING_SCRAP", lifecycle(951020));
-        ok(scrapPost(warehouse, scrapPath + "/execute", execution.toString(), 1, requestKey));
+        var executed = ok(scrapPost(warehouse, scrapPath + "/execute", execution.toString(), 1, requestKey));
         var terminated = db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020");
         assertEquals("LOST_TERMINATED", terminated.get("relation_status"));
         for (String field : List.of("borrowed_date", "original_return_date", "expected_return_date", "borrower_employee_id")) {
             assertEquals(initialLoan.get(field), terminated.get(field));
         }
+
+        long scrapId = scrap.path("id").asLong();
+        long assetVersion = executed.path("assetVersion").asLong();
+        var closedRepair = db.queryForMap("SELECT * FROM fams_repair_request WHERE id=?", Long.parseLong(repair));
+        var originalScrap = db.queryForMap("SELECT * FROM fams_scrap_request WHERE id=?", scrapId);
+        assertEquals("COMPLETED", detail(warehouse, repair).path("status").asText());
+        var read = ok(http.send(HttpRequest.newBuilder(URI.create(
+                        "http://127.0.0.1:" + port + "/api/v1/scrap-requests" + scrapPath))
+                .header("Cookie", warehouse.cookie()).GET().build(), HttpResponse.BodyHandlers.ofString()));
+        assertTrue(read.path("actions").path("initiateReversal").asBoolean());
+        var request = JSON.createObjectNode().put("assetVersion", assetVersion).put("locationId", "951000")
+                .put("locationVersion", 0).put("reason", "原机尚未处置，申请核实后重新验收入库");
+        ok(scrapPost(warehouse, scrapPath + "/reversals", request.toString(), executed.path("version").asLong(), key()));
+        String reversal = "/reversals/" + db.queryForObject(
+                "SELECT id FROM fams_scrap_reversal WHERE request_id=?", Long.class, scrapId);
+        var decision = JSON.createObjectNode().put("assetVersion", assetVersion)
+                .put("result", "APPROVE").put("reason", "准予原实物重新验收入库");
+        ok(scrapPost(admin, reversal + "/decision", decision.toString(), 0, key()));
+        var claim = JSON.createObjectNode().put("assetVersion", assetVersion);
+        ok(scrapPost(warehouse, reversal + "/claim", claim.toString(), 1, key()));
+        var intake = JSON.createObjectNode().put("assetVersion", assetVersion)
+                .put("ownershipVersion", executed.path("ownershipVersion").asLong()).put("locationVersion", 0)
+                .put("observedCode", "REP-ASSET-951020").put("physicalIdentityVerified", true)
+                .put("occurredAt", Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString())
+                .put("evidence", "现场核验维修关联原机及批准的有效仓位后验收入库");
+        String intakeKey = key();
+        var reversed = ok(scrapPost(warehouse, reversal + "/execute", intake.toString(), 2, intakeKey));
+        assertEquals(reversed, ok(scrapPost(warehouse, reversal + "/execute", intake.toString(), 2, intakeKey)));
+        assertEquals("IN_STOCK", lifecycle(951020));
+        assertEquals(951000L, db.queryForObject("SELECT current_location_id FROM fams_asset WHERE id=951020", Long.class));
+        assertEquals("REVERSED", db.queryForObject(
+                "SELECT disposition_status FROM fams_scrap_disposition WHERE request_id=?", String.class, scrapId));
+        assertEquals(originalScrap, db.queryForMap("SELECT * FROM fams_scrap_request WHERE id=?", scrapId));
+        assertEquals(closedRepair, db.queryForMap("SELECT * FROM fams_repair_request WHERE id=?", Long.parseLong(repair)));
+        assertEquals(terminated, db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020"));
     }
 
     @Test

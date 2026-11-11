@@ -30,8 +30,10 @@ public class ScrapReadService {
     private static final String SCOPE = " FROM fams_scrap_request r WHERE (? OR r.creator_account_id=?"
             + " OR (? AND CAST(JSON_UNQUOTE(JSON_EXTRACT(r.source_snapshot_json,'$.responsible_employee_id')) AS UNSIGNED)=?)"
             + " OR (? AND CAST(JSON_UNQUOTE(JSON_EXTRACT(r.source_snapshot_json,'$.using_organization_id')) AS UNSIGNED)=?)"
-            + " OR (? AND r.decision_snapshot_json IS NOT NULL"
-            + " AND JSON_UNQUOTE(JSON_EXTRACT(r.decision_snapshot_json,'$.decision.result'))='APPROVE'))";
+            + " OR (? AND (JSON_UNQUOTE(JSON_EXTRACT(r.decision_snapshot_json,'$.decision.result'))='APPROVE'"
+            + " OR EXISTS (SELECT 1 FROM fams_scrap_correction c WHERE c.request_id=r.id"
+            + " AND (c.correction_status='WAITING_WAREHOUSE_CLAIM'"
+            + " OR (c.processor_account_id=? AND c.correction_status IN ('PROCESSING','COMPLETED')))))))";
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final RequisitionActorContext actors;
@@ -142,7 +144,7 @@ public class ScrapReadService {
     }
 
     private static boolean mayRequestReversal(Current actor, Map<String, Object> row) {
-        return "EXECUTED".equals(row.get("request_status")) && "STANDALONE".equals(row.get("source_type"))
+        return "EXECUTED".equals(row.get("request_status")) && ScrapReviewService.reversibleSource(row.get("source_type"))
                 && (actor.has(Role.ASSET_ADMIN) || actor.has(Role.WAREHOUSE_OPERATOR)
                         || Objects.equals(actor.id(), row.get("creator_account_id")));
     }
@@ -168,7 +170,7 @@ public class ScrapReadService {
         return new Object[] {actor.has(Role.ASSET_ADMIN) || actor.has(Role.AUDIT_READ_ONLY), actor.id(),
                 actor.has(Role.EMPLOYEE), actor.employeeId(),
                 actor.has(Role.DEPARTMENT_ASSET_MANAGER), actor.organizationId(),
-                actor.has(Role.WAREHOUSE_OPERATOR)};
+                actor.has(Role.WAREHOUSE_OPERATOR), actor.id()};
     }
 
     private Map<String, Object> view(Current actor, Map<String, Object> row) {
@@ -241,13 +243,15 @@ public class ScrapReadService {
                 + "c.lock_version,c.target_location_id,c.target_location_version,c.ownership_version,c.version,"
                 + "c.reason,l.name AS target_location_name"
                 + " FROM fams_scrap_correction c JOIN fams_location l ON l.id=c.target_location_id"
-                + " WHERE c.request_id=? AND c.active_guard=1", id);
+                + " WHERE c.request_id=? AND (c.active_guard=1 OR c.correction_status='COMPLETED')"
+                + " ORDER BY c.active_guard DESC,c.id DESC LIMIT 1", id);
         var correction = correctionRows.isEmpty() ? null : correctionView(correctionRows.getFirst());
         var reversalRows = db.queryForList("SELECT r.id,r.reversal_status,r.processor_account_id,r.asset_version,"
                 + "r.target_location_id,r.target_location_version,r.ownership_version,r.version,r.reason,"
                 + "l.name AS target_location_name"
                 + " FROM fams_scrap_reversal r JOIN fams_location l ON l.id=r.target_location_id"
-                + " WHERE r.request_id=? AND r.active_guard=1", id);
+                + " WHERE r.request_id=? AND (r.active_guard=1 OR r.reversal_status='COMPLETED')"
+                + " ORDER BY r.active_guard DESC,r.id DESC LIMIT 1", id);
         var reversal = reversalRows.isEmpty() ? null : reversalView(reversalRows.getFirst());
         var recoveryRows = db.queryForList("SELECT r.id,r.recovery_status,r.processor_account_id,r.asset_version,"
                 + "r.reason,DATE_FORMAT(r.found_at,'%Y-%m-%dT%H:%i:%s.%f') found_at,"
@@ -258,10 +262,9 @@ public class ScrapReadService {
                 + " FROM fams_scrap_recovery r JOIN fams_location l ON l.id=r.target_location_id"
                 + " JOIN fams_location t ON t.id=r.temporary_location_id"
                 + " JOIN fams_employee e ON e.id=r.temporary_custodian_employee_id"
-                + " WHERE r.request_id=? AND r.active_guard=1", id);
+                + " WHERE r.request_id=? AND (r.active_guard=1 OR r.recovery_status='COMPLETED')"
+                + " ORDER BY r.active_guard DESC,r.id DESC LIMIT 1", id);
         var recovery = recoveryRows.isEmpty() ? null : recoveryView(recoveryRows.getFirst());
-        boolean reRegistered = !db.queryForList("SELECT id FROM fams_scrap_recovery WHERE request_id=?"
-                + " AND recovery_status='COMPLETED'", id).isEmpty();
         boolean writtenOff = disposition != null && "LOSS_WRITTEN_OFF".equals(disposition.get("disposition_status"));
         boolean pendingDisposal = disposition != null
                 && "PENDING_DISPOSITION".equals(disposition.get("disposition_status"));
@@ -295,8 +298,7 @@ public class ScrapReadService {
         actions.put("executeReversal", reversal != null && actor.has(Role.WAREHOUSE_OPERATOR)
                 && Objects.equals(actor.id(), reversalRows.getFirst().get("processor_account_id"))
                 && "PROCESSING".equals(reversal.get("status")));
-        actions.put("initiateRecovery", recovery == null && writtenOff && !reRegistered
-                && mayRequestRecovery(actor, row));
+        actions.put("initiateRecovery", recovery == null && writtenOff && mayRequestRecovery(actor, row));
         actions.put("decideRecovery", recovery != null
                 && "PENDING_ADMIN_DECISION".equals(recovery.get("status")) && actor.has(Role.ASSET_ADMIN));
         actions.put("claimRecovery", recovery != null

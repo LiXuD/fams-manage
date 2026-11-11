@@ -366,6 +366,10 @@ public class ScrapReviewService {
     private static final List<Role> FOLLOW_UP_INITIATORS = List.of(Role.ASSET_ADMIN, Role.WAREHOUSE_OPERATOR,
             Role.DEPARTMENT_ASSET_MANAGER, Role.EMPLOYEE);
 
+    static boolean reversibleSource(Object source) {
+        return "STANDALONE".equals(source) || "REPAIR".equals(source);
+    }
+
     public Receipt requestReversal(Actor actor, long id, long version, UUID key, ReversalRequest input) {
         var current = actors.revalidateLocked(actor);
         var initiator = FOLLOW_UP_INITIATORS.stream().filter(current::has).findFirst()
@@ -386,7 +390,7 @@ public class ScrapReviewService {
         if (prior != null) {
             return prior;
         }
-        if (!"STANDALONE".equals(request.get("source_type")) || !"EXECUTED".equals(request.get("request_status"))
+        if (!reversibleSource(request.get("source_type")) || !"EXECUTED".equals(request.get("request_status"))
                 || number(request, "version") != version || number(request, "asset_version") != input.assetVersion()) {
             throw new AssetHandoverPort.Failure("SCRAP_REVERSAL_NOT_ALLOWED", 409);
         }
@@ -427,8 +431,9 @@ public class ScrapReviewService {
         }
         long request = number(parents.getFirst(), "request_id");
         // Lock the parent before the sub-record so disposition completion and reversal serialize identically.
-        if (db.queryForList("SELECT id FROM fams_scrap_request WHERE id=? AND request_status='EXECUTED'"
-                + " AND source_type='STANDALONE' FOR UPDATE", request).isEmpty()) {
+        var scraps = db.queryForList("SELECT source_type FROM fams_scrap_request"
+                + " WHERE id=? AND request_status='EXECUTED' FOR UPDATE", request);
+        if (scraps.isEmpty() || !reversibleSource(scraps.getFirst().get("source_type"))) {
             throw new AssetHandoverPort.Failure("SCRAP_REVERSAL_CHANGED", 409);
         }
         var rows = db.queryForList("SELECT * FROM fams_scrap_reversal WHERE id=? FOR UPDATE", id);
