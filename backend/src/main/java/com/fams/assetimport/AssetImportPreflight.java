@@ -29,7 +29,8 @@ public final class AssetImportPreflight {
                            long organizationId, String model, String unit, String serialNumber,
                            String state, Long warehouseId, Long locationId, Long usingOrganizationId,
                            Long employeeId, java.time.LocalDate borrowedDate,
-                           java.time.LocalDate expectedReturnDate) { }
+                           java.time.LocalDate expectedReturnDate, String preScrapState,
+                           String scrapReason, String scrapCondition, String proposedDisposition) { }
     public record Result(List<ReadyRow> ready, List<AssetImportWorkbook.CellError> errors) {
         public Result {
             ready = List.copyOf(ready);
@@ -44,7 +45,9 @@ public final class AssetImportPreflight {
             Map.entry("serialNumber", "序列号"), Map.entry("state", "资产状态"),
             Map.entry("warehouse", "仓库编码"), Map.entry("location", "位置编码"),
             Map.entry("usingOrganization", "使用组织编码"), Map.entry("employee", "使用人编号"),
-            Map.entry("borrowedDate", "借出日期"), Map.entry("expectedReturnDate", "预计归还日"));
+            Map.entry("borrowedDate", "借出日期"), Map.entry("expectedReturnDate", "预计归还日"),
+            Map.entry("preScrapState", "报废前状态"), Map.entry("scrapReason", "报废原因"),
+            Map.entry("scrapCondition", "报废前现状"), Map.entry("proposedDisposition", "建议处置方式"));
 
     private AssetImportPreflight() { }
 
@@ -109,15 +112,38 @@ public final class AssetImportPreflight {
             Long employee = null;
             java.time.LocalDate borrowedDate = null;
             java.time.LocalDate expectedReturnDate = null;
-            if ("在库".equals(state)) {
+            String preScrapState = null;
+            String scrapReason = null;
+            String scrapCondition = null;
+            String proposedDisposition = null;
+            String custodyState = state;
+            if ("待报废".equals(state)) {
+                preScrapState = required(row, mapping, "preScrapState", errors);
+                if (!List.of("在库", "在用个人", "在用公用").contains(preScrapState)) {
+                    if (!preScrapState.isBlank()) {
+                        errors.add(error(row, mapping, "preScrapState", preScrapState,
+                                "UNSUPPORTED_PRE_SCRAP_STATE"));
+                    }
+                    custodyState = null;
+                } else {
+                    custodyState = preScrapState;
+                }
+                scrapReason = required(row, mapping, "scrapReason", errors);
+                scrapCondition = required(row, mapping, "scrapCondition", errors);
+                proposedDisposition = required(row, mapping, "proposedDisposition", errors);
+                limit(row, mapping, "scrapReason", scrapReason, 2000, errors);
+                limit(row, mapping, "scrapCondition", scrapCondition, 2000, errors);
+                limit(row, mapping, "proposedDisposition", proposedDisposition, 500, errors);
+            }
+            if ("在库".equals(custodyState)) {
                 warehouse = reference(row, mapping, "warehouse", catalog.warehouses(), null, errors);
                 location = reference(row, mapping, "location", catalog.locations(), warehouse, errors);
-            } else if ("在用个人".equals(state) || "在用公用".equals(state) || "借出".equals(state)) {
+            } else if ("在用个人".equals(custodyState) || "在用公用".equals(custodyState) || "借出".equals(custodyState)) {
                 usingOrganization = reference(row, mapping, "usingOrganization",
                         catalog.organizations(), null, errors);
                 employee = reference(row, mapping, "employee", catalog.employees(), usingOrganization, errors);
                 location = reference(row, mapping, "location", catalog.locations(), null, errors);
-                if ("借出".equals(state)) {
+                if ("借出".equals(custodyState)) {
                     borrowedDate = date(row, mapping, "borrowedDate", errors);
                     expectedReturnDate = date(row, mapping, "expectedReturnDate", errors);
                     if (borrowedDate != null && expectedReturnDate != null
@@ -126,13 +152,14 @@ public final class AssetImportPreflight {
                                 expectedReturnDate.toString(), "BORROW_DATE_ORDER_INVALID"));
                     }
                 }
-            } else if (!state.isBlank()) {
+            } else if (!state.isBlank() && !"待报废".equals(state)) {
                 errors.add(error(row, mapping, "state", state, "UNSUPPORTED_INITIAL_STATE"));
             }
             if (errors.size() == before && !invalidRows.contains(row.sheetRow())) {
                 ready.add(new ReadyRow(row.sheetRow(), code, name, category, organization, model, unit,
                         serial, state, warehouse, location, usingOrganization, employee,
-                        borrowedDate, expectedReturnDate));
+                        borrowedDate, expectedReturnDate, preScrapState, scrapReason, scrapCondition,
+                        proposedDisposition));
             }
         }
         return new Result(List.copyOf(ready), List.copyOf(errors));

@@ -122,6 +122,102 @@ public class ScrapController {
         return review.cancel(actors.capture(), id, version, key, input);
     }
 
+    @PostMapping("/{id}/corrections")
+    ScrapReviewService.Receipt requestCorrection(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.CorrectionRequest input) {
+        return review.requestCorrection(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/corrections/{id}/decision")
+    ScrapReviewService.Receipt decideCorrection(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.CorrectionDecision input) {
+        return review.decideCorrection(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/corrections/{id}/claim")
+    ScrapReviewService.Receipt claimCorrection(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.CorrectionClaim input) {
+        return review.claimCorrection(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/corrections/{id}/execute")
+    ScrapReviewService.Receipt executeCorrection(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.CorrectionExecution input) {
+        return review.executeCorrection(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/{id}/reversals")
+    ScrapReviewService.Receipt requestReversal(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.ReversalRequest input) {
+        return review.requestReversal(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/reversals/{id}/decision")
+    ScrapReviewService.Receipt decideReversal(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.ReversalDecision input) {
+        return review.decideReversal(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/reversals/{id}/claim")
+    ScrapReviewService.Receipt claimReversal(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.ReversalClaim input) {
+        return review.claimReversal(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/reversals/{id}/execute")
+    ScrapReviewService.Receipt executeReversal(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.ReversalExecution input) {
+        return review.executeReversal(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/{id}/recoveries")
+    ScrapReviewService.Receipt requestRecovery(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.RecoveryRequest input) {
+        return review.requestRecovery(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/recoveries/{id}/decision")
+    ScrapReviewService.Receipt decideRecovery(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.RecoveryDecision input) {
+        return review.decideRecovery(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/recoveries/{id}/claim")
+    ScrapReviewService.Receipt claimRecovery(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.RecoveryClaim input) {
+        return review.claimRecovery(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/recoveries/{id}/execute")
+    ScrapReviewService.Receipt executeRecovery(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody ScrapReviewService.RecoveryExecution input) {
+        return review.executeRecovery(actors.capture(), id, version, key, input);
+    }
+
     @PostMapping("/{id}/decision")
     ScrapReviewService.Receipt decide(@PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
@@ -196,5 +292,14 @@ public class ScrapController {
         UUID requestId = request.getAttribute("fams.request.id") instanceof UUID id ? id : UUID.randomUUID();
         String code = failure.getMessage();
         return ResponseEntity.status(failure.status()).body(new ErrorResponse(code, code, requestId, Map.of()));
+    }
+
+    @ExceptionHandler(org.springframework.web.method.annotation.HandlerMethodValidationException.class)
+    ResponseEntity<ErrorResponse> invalidRequest(
+            org.springframework.web.method.annotation.HandlerMethodValidationException failure,
+            HttpServletRequest request) {
+        UUID requestId = request.getAttribute("fams.request.id") instanceof UUID id ? id : UUID.randomUUID();
+        return ResponseEntity.badRequest().body(new ErrorResponse("INVALID_REQUEST",
+                "Request validation failed.", requestId, Map.of()));
     }
 }

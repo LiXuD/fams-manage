@@ -217,6 +217,81 @@ public class AssetScrapPort {
         }
     }
 
+    public long restoreCorrected(long assetId, long version, long requestId, long locationId, long locationVersion,
+            String observedCode, String observedSerial, long actorId, Instant time) {
+        var warehouses = db.queryForList("SELECT l.warehouse_id FROM fams_location l"
+                + " JOIN fams_warehouse w ON w.id=l.warehouse_id WHERE l.id=? AND l.version=?"
+                + " AND l.status='ACTIVE' AND l.location_type='BIN' AND w.status='ACTIVE' FOR UPDATE",
+                locationId, locationVersion);
+        if (warehouses.isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_CORRECTION_TARGET_CHANGED", 409);
+        }
+        var asset = db.queryForMap("SELECT asset_code,serial_number,lifecycle_status,exception_status"
+                + " FROM fams_asset WHERE id=? FOR UPDATE", assetId);
+        if (!Objects.equals(asset.get("asset_code"), observedCode.strip())
+                || asset.get("serial_number") != null
+                        && !Objects.equals(asset.get("serial_number"), observedSerial == null ? null : observedSerial.strip())
+                || !"PENDING_SCRAP".equals(asset.get("lifecycle_status"))
+                || !"NORMAL".equals(asset.get("exception_status"))) {
+            throw new AssetHandoverPort.Failure("SCRAP_PHYSICAL_IDENTITY_CHANGED", 409);
+        }
+        if (db.update("UPDATE fams_asset SET lifecycle_status='IN_STOCK',custody_type='STORAGE',"
+                + "storage_warehouse_id=?,current_location_id=?,using_organization_id=NULL,"
+                + "responsible_employee_id=NULL,department_responsible_employee_id=NULL,"
+                + "version=version+1,updated_at=?,updated_by=? WHERE id=? AND version=?"
+                + " AND lifecycle_status='PENDING_SCRAP'",
+                warehouses.getFirst().get("warehouse_id"), locationId, time, actorId, assetId, version) != 1) {
+            throw new AssetHandoverPort.Failure("SCRAP_ASSET_CHANGED", 409);
+        }
+        mapper.event(assetId, "SCRAP_CORRECTED_RESTORED", time,
+                json.writeValueAsString(Map.of("scrapRequestId", Long.toString(requestId),
+                        "correctedWarehouseId", Long.toString(
+                                ((Number) warehouses.getFirst().get("warehouse_id")).longValue()))),
+                actorId);
+        return version + 1;
+    }
+
+    public boolean matchesActiveBin(long locationId, long locationVersion) {
+        return !db.queryForList("SELECT l.id FROM fams_location l JOIN fams_warehouse w ON w.id=l.warehouse_id"
+                + " WHERE l.id=? AND l.version=? AND l.status='ACTIVE' AND l.location_type='BIN'"
+                + " AND w.status='ACTIVE' FOR UPDATE", locationId, locationVersion).isEmpty();
+    }
+
+    /** Reversal re-accepts an already scrapped asset into an approved bin; original scrap facts stay recorded. */
+    public long reverseToStock(long assetId, long version, long requestId, long locationId, long locationVersion,
+            String observedCode, String observedSerial, long actorId, Instant time) {
+        var warehouses = db.queryForList("SELECT l.warehouse_id FROM fams_location l"
+                + " JOIN fams_warehouse w ON w.id=l.warehouse_id WHERE l.id=? AND l.version=?"
+                + " AND l.status='ACTIVE' AND l.location_type='BIN' AND w.status='ACTIVE' FOR UPDATE",
+                locationId, locationVersion);
+        if (warehouses.isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_REVERSAL_TARGET_CHANGED", 409);
+        }
+        var asset = db.queryForMap("SELECT asset_code,serial_number,lifecycle_status,exception_status"
+                + " FROM fams_asset WHERE id=? FOR UPDATE", assetId);
+        if (!Objects.equals(asset.get("asset_code"), observedCode.strip())
+                || asset.get("serial_number") != null
+                        && !Objects.equals(asset.get("serial_number"), observedSerial == null ? null : observedSerial.strip())
+                || !"SCRAPPED".equals(asset.get("lifecycle_status"))
+                || !"NORMAL".equals(asset.get("exception_status"))) {
+            throw new AssetHandoverPort.Failure("SCRAP_PHYSICAL_IDENTITY_CHANGED", 409);
+        }
+        if (db.update("UPDATE fams_asset SET lifecycle_status='IN_STOCK',custody_type='STORAGE',"
+                + "storage_warehouse_id=?,current_location_id=?,using_organization_id=NULL,"
+                + "responsible_employee_id=NULL,department_responsible_employee_id=NULL,"
+                + "version=version+1,updated_at=?,updated_by=? WHERE id=? AND version=?"
+                + " AND lifecycle_status='SCRAPPED'",
+                warehouses.getFirst().get("warehouse_id"), locationId, time, actorId, assetId, version) != 1) {
+            throw new AssetHandoverPort.Failure("SCRAP_ASSET_CHANGED", 409);
+        }
+        mapper.event(assetId, "SCRAP_REVERSED_RESTORED", time,
+                json.writeValueAsString(Map.of("scrapRequestId", Long.toString(requestId),
+                        "reversedWarehouseId", Long.toString(
+                                ((Number) warehouses.getFirst().get("warehouse_id")).longValue()))),
+                actorId);
+        return version + 1;
+    }
+
     /** Invalid custody stays frozen for a separately authorized restoration. */
     public boolean restoreStandalone(long assetId, long version, long requestId, String lifecycle,
             long actorId, Instant time) {
@@ -318,6 +393,82 @@ public class AssetScrapPort {
                         observedSerial == null ? null : observedSerial.strip())) {
             throw new AssetHandoverPort.Failure("SCRAP_PHYSICAL_IDENTITY_CHANGED", 409);
         }
+    }
+
+    /** Only an un-disposed scrapped asset that no later business has locked may be reversed. */
+    public void requireReversibleAsset(long id, long version) {
+        if (db.queryForList("SELECT id FROM fams_asset WHERE id=? AND version=?"
+                        + " AND card_stage='ACTIVE' AND lifecycle_status='SCRAPPED' AND exception_status='NORMAL' FOR UPDATE",
+                        id, version).isEmpty()
+                || !db.queryForList("SELECT id FROM fams_asset_business_lock WHERE asset_id=?"
+                        + " AND released_at IS NULL FOR UPDATE", id).isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_ASSET_OR_LOCK_CHANGED", 409);
+        }
+    }
+
+    /** A written-off scrap whose physical item came back stays scrapped until a separate re-acceptance approval. */
+    public void requireRecoverableAsset(long id, long version) {
+        if (db.queryForList("SELECT id FROM fams_asset WHERE id=? AND version=?"
+                        + " AND card_stage='ACTIVE' AND lifecycle_status='SCRAPPED'"
+                        + " AND exception_status IN ('NORMAL','LOST') FOR UPDATE",
+                        id, version).isEmpty()
+                || !db.queryForList("SELECT id FROM fams_asset_business_lock WHERE asset_id=?"
+                        + " AND released_at IS NULL FOR UPDATE", id).isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_ASSET_OR_LOCK_CHANGED", 409);
+        }
+    }
+
+    public boolean matchesTemporaryLocation(long locationId, long locationVersion) {
+        return !db.queryForList("SELECT l.id FROM fams_location l LEFT JOIN fams_warehouse w ON w.id=l.warehouse_id"
+                + " WHERE l.id=? AND l.version=? AND l.status='ACTIVE'"
+                + " AND (l.warehouse_id IS NULL OR w.status='ACTIVE') FOR UPDATE",
+                locationId, locationVersion).isEmpty();
+    }
+
+    public boolean temporaryLocationActive(long locationId) {
+        return !db.queryForList("SELECT l.id FROM fams_location l LEFT JOIN fams_warehouse w ON w.id=l.warehouse_id"
+                + " WHERE l.id=? AND l.status='ACTIVE'"
+                + " AND (l.warehouse_id IS NULL OR w.status='ACTIVE') FOR UPDATE", locationId).isEmpty();
+    }
+
+    /** Re-acceptance restores the original card; the loss write-off, closed loan and scrap facts stay recorded. */
+    public long reregisterToStock(long assetId, long version, long requestId, long temporaryLocationId,
+            long targetLocationId, long targetLocationVersion, String observedCode, String observedSerial,
+            long actorId, Instant time) {
+        var warehouses = db.queryForList("SELECT l.warehouse_id FROM fams_location l"
+                + " JOIN fams_warehouse w ON w.id=l.warehouse_id WHERE l.id=? AND l.version=?"
+                + " AND l.status='ACTIVE' AND l.location_type='BIN' AND w.status='ACTIVE' FOR UPDATE",
+                targetLocationId, targetLocationVersion);
+        if (warehouses.isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_TARGET_CHANGED", 409);
+        }
+        if (!temporaryLocationActive(temporaryLocationId)) {
+            throw new AssetHandoverPort.Failure("SCRAP_RECOVERY_TEMPORARY_CHANGED", 409);
+        }
+        var asset = db.queryForMap("SELECT asset_code,serial_number,lifecycle_status,exception_status"
+                + " FROM fams_asset WHERE id=? FOR UPDATE", assetId);
+        if (!Objects.equals(asset.get("asset_code"), observedCode.strip())
+                || asset.get("serial_number") != null
+                        && !Objects.equals(asset.get("serial_number"), observedSerial == null ? null : observedSerial.strip())
+                || !"SCRAPPED".equals(asset.get("lifecycle_status"))
+                || !List.of("NORMAL", "LOST").contains(asset.get("exception_status"))) {
+            throw new AssetHandoverPort.Failure("SCRAP_PHYSICAL_IDENTITY_CHANGED", 409);
+        }
+        if (db.update("UPDATE fams_asset SET lifecycle_status='IN_STOCK',custody_type='STORAGE',"
+                + "exception_status='NORMAL',storage_warehouse_id=?,current_location_id=?,"
+                + "using_organization_id=NULL,responsible_employee_id=NULL,"
+                + "department_responsible_employee_id=NULL,version=version+1,updated_at=?,updated_by=?"
+                + " WHERE id=? AND version=? AND lifecycle_status='SCRAPPED'",
+                warehouses.getFirst().get("warehouse_id"), targetLocationId, time, actorId, assetId, version) != 1) {
+            throw new AssetHandoverPort.Failure("SCRAP_ASSET_CHANGED", 409);
+        }
+        mapper.event(assetId, "SCRAP_RECOVERED_REREGISTERED", time,
+                json.writeValueAsString(Map.of("scrapRequestId", Long.toString(requestId),
+                        "recoveredWarehouseId", Long.toString(
+                                ((Number) warehouses.getFirst().get("warehouse_id")).longValue()),
+                        "temporaryLocationId", Long.toString(temporaryLocationId))),
+                actorId);
+        return version + 1;
     }
 
     public Map<String, Object> eligible(Current actor, int page, int size) {

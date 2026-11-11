@@ -48,6 +48,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { label: "调拨目标变更", path: "/transfer-target-changes", roles: LEDGER_ROLES },
       { label: "代确认结果核查", path: "/business-result-reviews", roles: ["ASSET_ADMIN"] },
       { label: "业务结果通知", path: "/business-result-notices" },
+      { label: "消息中心与异常清单", path: "/messages" },
     ],
   },
 ];

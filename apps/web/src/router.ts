@@ -29,6 +29,7 @@ const TransferDetailView = () => import("@/features/transfer/views/TransferDetai
 const ProxyConfirmationView = () => import("@/features/exception/views/ProxyConfirmationView.vue");
 const BusinessResultNoticeView = () => import("@/features/exception/views/BusinessResultNoticeView.vue");
 const BusinessResultReviewView = () => import("@/features/exception/views/BusinessResultReviewView.vue");
+const MessageCenterView = () => import("@/features/reminder/views/MessageCenterView.vue");
 
 const ItemTargetChangeView = () => import("@/features/requisition/views/ItemTargetChangeView.vue");
 const TransferTargetChangeView = () => import("@/features/transfer/views/TransferTargetChangeView.vue");
@@ -71,6 +72,7 @@ export const router = createRouter({
     { path: "/business-result-reviews", name: "business-result-reviews", component: BusinessResultReviewView, meta: { requiresAuth: true, uiGroup: "异常与核查", uiTitle: "代确认结果核查", uiDesc: "资产管理员共享查看，不因查看保留审批权。请核验原签收凭证与业务事实，再按现有业务流程处理；核查请求不自动解除责任。" } },
     { path: "/proxy-confirmations", name: "proxy-confirmations", component: ProxyConfirmationView, meta: { requiresAuth: true, uiGroup: "异常与核查", uiTitle: "异常代确认", uiDesc: "仅用于已经实际交付、原接收人无法操作确认的资产。管理员批准后，当前库管还需明确执行。" } },
     { path: "/business-result-notices", name: "business-result-notices", component: BusinessResultNoticeView, meta: { requiresAuth: true, uiGroup: "异常与核查", uiTitle: "业务结果通知", uiDesc: "代确认执行后资产责任已生效；如有异议，请从业务单据联系管理员核查。" } },
+    { path: "/messages", name: "messages", component: MessageCenterView, meta: { requiresAuth: true, uiGroup: "异常与核查", uiTitle: "消息中心", uiDesc: "站内消息与工作台待办是权威事实源；阅读不改变业务状态，也不代替办理。" } },
     { path: "/", name: "home", component: HomeView, meta: { requiresAuth: true, uiGroup: "总览", uiTitle: "当前身份与权限", uiDesc: "页面只展示服务端当前授权结果；每次业务请求仍由服务端重新校验。" } },
     { path: "/login", name: "login", component: LoginView },
     { path: "/password/change", name: "password-change", component: PasswordChangeView, meta: { requiresAuth: true } },

@@ -7,12 +7,40 @@ export interface ScrapRequest {
   reason: string; observedCondition: string; proposedDisposition: string;
   sourceType?: string;
   sourceBusinessId?: string | null;
+  initialSource?: { batchId: string; sheetRow: number } | null;
   factoryDisposition?: "FACTORY_RETAINED" | "FACTORY_DESTROYED";
   source: { assetCode: string; name: string; serialNumber: string };
-  actions: { decide: boolean; cancel?: boolean; claim: boolean; execute: boolean; executeLoss?: boolean; executeFactory?: boolean; dispose?: boolean };
+  actions: { decide: boolean; cancel?: boolean; claim: boolean; execute: boolean; executeLoss?: boolean;
+    executeFactory?: boolean; dispose?: boolean; initiateCorrection?: boolean; decideCorrection?: boolean;
+    claimCorrection?: boolean; executeCorrection?: boolean; initiateReversal?: boolean; decideReversal?: boolean;
+    claimReversal?: boolean; executeReversal?: boolean; initiateRecovery?: boolean; decideRecovery?: boolean;
+    claimRecovery?: boolean; executeRecovery?: boolean };
+  correction?: ScrapCorrection | null;
+  reversal?: ScrapReversal | null;
+  recovery?: ScrapRecovery | null;
   decision: { decision?: { approvedDisposition?: string } } | null;
   disposition: { disposition_status: string; due_date: string | null; version?: number;
     completion?: { occurredAt: string; method: string; recipient?: string; operatorName?: string } } | null;
+}
+/** 受控纠正行：纠正自己的版本、冻结的原锁与批准目标仓位，实物执行时再核对归属与仓位版本。 */
+export interface ScrapCorrection {
+  id: string; version: number; status: string; assetVersion: number; lockVersion: number;
+  targetLocationId: string; targetLocationVersion: number; targetLocationName: string;
+  ownershipVersion: number; processorAccountId: string | null; reason: string;
+}
+/** 误报废冲正行：无原锁，目标仓位由批准决定，执行时按实物重新验收入库。 */
+export interface ScrapReversal {
+  id: string; version: number; status: string; assetVersion: number;
+  targetLocationId: string; targetLocationVersion: number; targetLocationName: string;
+  ownershipVersion: number; processorAccountId: string | null; reason: string;
+}
+/** 报废后找回行：找回时刻与临时保管关系由登记方给出，批准后才由库管重新纳管。 */
+export interface ScrapRecovery {
+  id: string; version: number; status: string; assetVersion: number; foundAt: string;
+  temporaryLocationId: string; temporaryLocationName: string; temporaryCustodianEmployeeId: string;
+  temporaryCustodianName: string; targetLocationId: string; targetLocationVersion: number;
+  targetLocationName: string; ownershipVersion: number; processorAccountId: string | null;
+  reason: string;
 }
 /** 附件的两类归属：申请原件与处置凭证，路径与能力位都按这一枚举分流。 */
 export type ScrapAttachmentKind = "request" | "disposition";
@@ -110,6 +138,20 @@ export const scrapStates: Record<string, string> = {
   PENDING_ADMIN_DECISION: "待管理员确认", WAITING_WAREHOUSE_CLAIM: "待库管认领",
   PROCESSING: "待实物核验与执行", RESTORE_REQUIRED: "原保管关系失效，待纠正",
   REJECTED: "已驳回并恢复", CANCELLED: "已取消", EXECUTED: "已执行报废",
+  CORRECTED: "冻结保管已受控纠正恢复",
+};
+/** 纠正、冲正与找回三段共用同一组后端状态码，但每段的中文读法按各自的业务动作用语。 */
+export const scrapCorrectionStates: Record<string, string> = {
+  PENDING_ADMIN_DECISION: "纠正待管理员确认", WAITING_WAREHOUSE_CLAIM: "纠正待库管认领",
+  PROCESSING: "纠正待实物核验恢复", COMPLETED: "纠正已恢复在库", REJECTED: "纠正已驳回",
+};
+export const scrapReversalStates: Record<string, string> = {
+  PENDING_ADMIN_DECISION: "冲正待管理员确认", WAITING_WAREHOUSE_CLAIM: "冲正待库管认领",
+  PROCESSING: "冲正待实物核验入库", COMPLETED: "冲正已恢复在库", REJECTED: "冲正已驳回",
+};
+export const scrapRecoveryStates: Record<string, string> = {
+  PENDING_ADMIN_DECISION: "找回待管理员确认纳管", WAITING_WAREHOUSE_CLAIM: "找回待库管认领",
+  PROCESSING: "找回待实物验收纳管", COMPLETED: "找回已验收入库", REJECTED: "找回纳管已驳回",
 };
 export function scrapRequestState(row: Pick<ScrapRequest, "status">): string {
   return scrapStates[row.status] ?? row.status;

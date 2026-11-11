@@ -206,5 +206,194 @@ class GeneratedTreeTest(unittest.TestCase):
             self.assertNotEqual(VERIFIER.manifest(first), VERIFIER.manifest(second))
 
 
+class WriteContractRuleTest(unittest.TestCase):
+    """The write gate reads its rules from the contract, so each failure surface needs its own fixture."""
+
+    PARAMETERS = {
+        "IdempotencyKey": {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": True,
+            "schema": {"type": "string", "minLength": 16, "maxLength": 128},
+        },
+        "IdempotencyKeyUuid": {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": True,
+            "schema": {"type": "string", "format": "uuid"},
+        },
+        "CsrfToken": {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": True,
+            "schema": {"type": "string", "minLength": 16},
+        },
+    }
+
+    def document(self, operations: dict[str, dict[str, object]], registry: list[str]) -> dict:
+        return {
+            "components": {"parameters": self.PARAMETERS},
+            "paths": {f"/{name}": {"post": operation} for name, operation in operations.items()},
+            "x-non-business-mutations": registry,
+        }
+
+    def business_write(self, **overrides: object) -> dict[str, object]:
+        operation: dict[str, object] = {
+            "operationId": "doWrite",
+            "parameters": [
+                {"$ref": "#/components/parameters/IdempotencyKey"},
+                {"$ref": "#/components/parameters/CsrfToken"},
+            ],
+            "responses": {"200": {}, "400": {}, "409": {}},
+            "x-business-write": True,
+            "x-actor": "Current operator",
+            "x-version": "Aggregate version",
+            "x-transaction": "Single commit",
+            "x-audit-event": "WRITE_DONE",
+            "x-error-codes": ["WRITE_INVALID"],
+            "x-required-error-statuses": [400, 409],
+        }
+        operation.update(overrides)
+        return operation
+
+    def auth_operation(self, **overrides: object) -> dict[str, object]:
+        operation: dict[str, object] = {
+            "operationId": "login",
+            "parameters": [],
+            "responses": {"200": {}},
+            "x-exception-rationale": "Establishes the session credential itself.",
+        }
+        operation.update(overrides)
+        return operation
+
+    def test_conforming_business_write_and_registered_auth_mutation_pass(self) -> None:
+        document = self.document(
+            {"write": self.business_write(), "login": self.auth_operation()}, ["login"]
+        )
+        VERIFIER.assert_write_contracts(document)
+
+    def test_uuid_idempotency_component_satisfies_the_requirement(self) -> None:
+        document = self.document(
+            {"write": self.business_write(
+                parameters=[
+                    {"$ref": "#/components/parameters/IdempotencyKeyUuid"},
+                    {"$ref": "#/components/parameters/CsrfToken"},
+                ]
+            )},
+            [],
+        )
+        VERIFIER.assert_write_contracts(document)
+
+    def test_declared_csrf_exception_replaces_the_cookie_header_requirement(self) -> None:
+        document = self.document(
+            {"write": self.business_write(
+                parameters=[{"$ref": "#/components/parameters/IdempotencyKey"}],
+                **{"x-non-applicable": ["csrf"], "x-exception-rationale": "Header-only session."},
+            )},
+            [],
+        )
+        VERIFIER.assert_write_contracts(document)
+
+    def test_unregistered_non_business_mutation_is_rejected(self) -> None:
+        document = self.document({"login": self.auth_operation()}, [])
+        with self.assertRaises(VERIFIER.VerificationFailure) as failure:
+            VERIFIER.assert_write_contracts(document)
+        self.assertIn("unclassified non-business mutation", str(failure.exception))
+
+    def test_registered_mutation_without_rationale_is_rejected(self) -> None:
+        document = self.document({"login": self.auth_operation(**{"x-exception-rationale": ""})}, ["login"])
+        with self.assertRaises(VERIFIER.VerificationFailure) as failure:
+            VERIFIER.assert_write_contracts(document)
+        self.assertIn("missing mutation exception rationale", str(failure.exception))
+
+    def test_registry_that_keeps_a_reclassified_operation_is_rejected(self) -> None:
+        document = self.document({"login": self.business_write(operationId="login")}, ["login"])
+        with self.assertRaises(VERIFIER.VerificationFailure) as failure:
+            VERIFIER.assert_write_contracts(document)
+        self.assertIn("keeps stale entries", str(failure.exception))
+
+    def test_registry_referring_to_an_unknown_operation_is_rejected(self) -> None:
+        document = self.document({"write": self.business_write()}, ["gone"])
+        with self.assertRaises(VERIFIER.VerificationFailure) as failure:
+            VERIFIER.assert_write_contracts(document)
+        self.assertIn("references undeclared operations", str(failure.exception))
+
+    def test_business_write_missing_a_boundary_extension_is_rejected(self) -> None:
+        for extension in VERIFIER.WRITE_BOUNDARY_EXTENSIONS:
+            with self.subTest(extension=extension):
+                document = self.document({"write": self.business_write(**{extension: None})}, [])
+                with self.assertRaises(VERIFIER.VerificationFailure) as failure:
+                    VERIFIER.assert_write_contracts(document)
+                self.assertIn(f"is missing {extension}", str(failure.exception))
+
+    def test_unknown_exception_name_is_rejected(self) -> None:
+        document = self.document(
+            {"write": self.business_write(
+                **{"x-non-applicable": ["cookies"], "x-exception-rationale": "Invented."}
+            )},
+            [],
+        )
+        with self.assertRaises(VERIFIER.VerificationFailure) as failure:
+            VERIFIER.assert_write_contracts(document)
+        self.assertIn("unknown non-applicable exception", str(failure.exception))
+
+    def test_exception_without_rationale_is_rejected(self) -> None:
+        document = self.document(
+            {"write": self.business_write(
+                parameters=[{"$ref": "#/components/parameters/IdempotencyKey"}],
+                **{"x-non-applicable": ["csrf"]},
+            )},
+            [],
+        )
+        with self.assertRaises(VERIFIER.VerificationFailure) as failure:
+            VERIFIER.assert_write_contracts(document)
+        self.assertIn("declared exception without rationale", str(failure.exception))
+
+    def test_inline_header_that_diverges_from_the_component_is_rejected(self) -> None:
+        document = self.document(
+            {"write": self.business_write(
+                parameters=[
+                    {"$ref": "#/components/parameters/IdempotencyKey"},
+                    {"name": "X-CSRF-Token", "in": "header", "required": True, "schema": {"type": "string"}},
+                ]
+            )},
+            [],
+        )
+        with self.assertRaises(VERIFIER.VerificationFailure) as failure:
+            VERIFIER.assert_write_contracts(document)
+        self.assertIn("must reuse the shared parameter component", str(failure.exception))
+
+    def test_inline_header_that_only_adds_a_description_is_accepted(self) -> None:
+        document = self.document(
+            {"write": self.business_write(
+                parameters=[
+                    {"$ref": "#/components/parameters/IdempotencyKey"},
+                    dict(self.PARAMETERS["CsrfToken"], description="Cookie paired token."),
+                ]
+            )},
+            [],
+        )
+        VERIFIER.assert_write_contracts(document)
+
+    def test_business_write_without_a_required_header_is_rejected(self) -> None:
+        document = self.document(
+            {"write": self.business_write(
+                parameters=[{"$ref": "#/components/parameters/CsrfToken"}]
+            )},
+            [],
+        )
+        with self.assertRaises(VERIFIER.VerificationFailure) as failure:
+            VERIFIER.assert_write_contracts(document)
+        self.assertIn("doWrite is missing Idempotency-Key", str(failure.exception))
+
+    def test_required_error_status_without_a_response_is_rejected(self) -> None:
+        document = self.document(
+            {"write": self.business_write(responses={"200": {}, "400": {}})}, []
+        )
+        with self.assertRaises(VERIFIER.VerificationFailure) as failure:
+            VERIFIER.assert_write_contracts(document)
+        self.assertIn("requires undeclared HTTP status", str(failure.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

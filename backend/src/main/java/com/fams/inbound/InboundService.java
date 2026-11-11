@@ -20,6 +20,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import com.fams.auth.InboundActorContext.Actor;
+import com.fams.masterdata.BusinessCalendar;
 import com.fams.masterdata.InboundNumberPort;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -772,32 +773,8 @@ class InboundService {
         Map<String, Object> version = one("SELECT snapshot_json FROM fams_business_parameter_version "
                 + "WHERE id=?", parameterVersionId);
         if (version == null) { throw InboundFailure.conflict("INBOUND_PARAMETERS_UNAVAILABLE"); }
-        JsonNode snapshot = json.readTree(text(version, "snapshot_json"));
-        LocalDate date = LocalDate.ofInstant(now, ZoneId.of(timezone));
-        for (long index = 0; index < workdays; ) {
-            date = date.plusDays(1);
-            boolean adjusted = containsDate(snapshot.path("adjustedWorkdays"), date);
-            boolean holiday = containsDate(snapshot.path("holidays"), date);
-            boolean weekday = containsDay(snapshot.path("workWeek"), date);
-            if (adjusted || (weekday && !holiday)) { index++; }
-        }
-        return date.plusDays(1).atStartOfDay(ZoneId.of(timezone)).toInstant();
-    }
-
-    private boolean containsDate(JsonNode values, LocalDate date) {
-        if (!values.isArray()) { return false; }
-        for (JsonNode value : values) {
-            if (date.toString().equals(value.asText())) { return true; }
-        }
-        return false;
-    }
-
-    private boolean containsDay(JsonNode values, LocalDate date) {
-        if (!values.isArray()) { return false; }
-        for (JsonNode value : values) {
-            if (date.getDayOfWeek().name().equals(value.asText())) { return true; }
-        }
-        return false;
+        return BusinessCalendar.workdayDeadline(
+                json.readTree(text(version, "snapshot_json")), ZoneId.of(timezone), now, workdays);
     }
 
     private int days(JsonNode node, String name) {

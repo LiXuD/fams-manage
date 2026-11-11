@@ -76,7 +76,25 @@
 5. 数据字典、权限/错误文档、OpenAPI、示例和追溯表相互一致；ID、时间、二维码、状态、权限、事务、并发、幂等、迁移和恢复边界均可由检查或审查定位。
 6. 由非实施者完成任务级规格/质量复核，并按计划完成权限、事务、迁移、恢复关键独立技术复核；控制器对 reviewed HEAD 全量复跑后才可写 `DEV_VERIFIED`。
 
+## 2026-11-10 写分类增量（C1 声明式门禁与契约机械归一）
+
+D6-24B 期间发现 `assert_write_contracts` 早于本片已有大量 operation 不通过，用户裁决按“改为读契约声明 + 分三片”处理：C1 声明式门禁与机械归一、C2 按代码补全业务写分类、C3 路径键规范化。本节只记录 C1。
+
+- **门禁口径（`scripts/verify-d6-02c.py`）**：删除两处硬编码 operationId 集合，Python 不再枚举任何 operationId。规则改为完全读契约声明：
+  - 根级新增 `x-non-business-mutations` 注册表，非业务写必须登记其中并携带 `x-exception-rationale`；注册表含未知 operationId、重复项、指向已重分类 operation 的过期项均失败关闭。
+  - 业务写仍须声明 `x-actor/x-version/x-transaction/x-audit-event/x-error-codes/x-required-error-statuses`（`WRITE_BOUNDARY_EXTENSIONS`）。
+  - 必选请求头改为按“头名”判定：`Idempotency-Key`、`X-CSRF-Token` 可由 `x-non-applicable` 的 `idempotency`/`csrf` 声明豁免，豁免必须给理由；`x-non-applicable` 只允许 `csrf/idempotency/version` 词表，未知名称失败关闭。
+  - 标准头参数必须复用公共组件：`$ref` 组件，或与组件去掉 `description` 后逐字段相同的内联声明；同一头名允许多个组件候选（`Idempotency-Key` → `IdempotencyKey`、`IdempotencyKeyUuid`）。
+- **契约机械归一（`contracts/fams-core-v1.yaml`）**：全部改动都有代码依据，未新增任何语义判断。
+  - 111 个 `/mini/` 业务写补上 `x-non-applicable: [csrf]` 与既有口径一致的理由。依据：`AuthRequestFilter` 在 `/api/v1/mini/` 分支只按 opaque mini 头取 `MiniSessionService.requireCurrent` 后 `return`，该分支不进入 `isWrite` + `requireCsrf`；小程序全仓不发送 `X-CSRF-Token`。
+  - 20 个 PC 业务写补上 `$ref: CsrfToken`。依据：同一过滤器对非 mini 的 `/api/v1` 写请求一律要求 `X-CSRF-Token`，对应 web 域 API 客户端本就发送该头。
+  - 19 个盘点 operation 的内联 `Idempotency-Key`（`type: string, format: uuid`）改为引用新增组件 `IdempotencyKeyUuid`，线格式与校验语义逐字段不变。依据：这些端点的控制器形参为 `@RequestHeader("Idempotency-Key") UUID key`（`InventoryReadiness/Late/Synchronization/Difference/Selection/Seal/Finding/Review/PhotoController`），与 `@Size(min = 16, max = 128) String` 的另一组端点不同，故不能并入 `IdempotencyKey`。
+- **覆盖面变化（如实登记）**：旧门禁把 `IfMatchVersion` 只写死给 `miniVerifyBinding/miniUnbind`，新口径不再按路径或 operationId 特判，也不新增强制版本头规则。实测有 33 个业务写声明了版本边界但既无 `If-Match-Version` 也未声明 `version` 豁免（多为创建类与只读标记类），是否统一要求版本头留待 C2 依据代码裁决。
+- **本地证据**：契约 672 个 operation 的 `assert_all_local_refs`、`assert_unique_operation_ids`、`validate_examples`、`assert_traceability`、`assert_generator_pom` 全部通过；`./mvnw -pl backend validate -Dopenapi.input-spec=contracts/fams-core-v1.yaml` 的真实 OpenAPI 校验退出 0；`scripts/test_verify_d6_02c_verifier.py` 新增 14 项写分类规则用例（注册表缺失/过期/未知、六项边界、豁免无理由、未知豁免名、内联头未复用组件、仅加描述的组件复用、UUID 组件满足幂等、缺头、错误状态未声明），25 项中 24 项通过，唯一失败项 `test_current_contract_has_resolved_refs_and_schema_aligned_examples` 是对真实契约整体调用 `assert_write_contracts`，属 C2 待办而非用例缺陷。`scripts/test_verify_d6_02c.py` 原来把旧 allowlist 复制进测试，已替换为按声明规则检查真实契约的 2 项用例（含把 mini 豁免与 `AuthRequestFilter` 源码绑定的用例）。
+- **剩余 RED（C2 交接）**：按规则逐条统计为 152 条违例、152 个 operation，全部需要读代码取证：52 个仍标为非业务写的 mutation 未分类（含领用全生命周期、导入审核/回滚/期初窗口、盘点范围预检、交接/调拨收货授权、盘点校时与实物识别、同步申报拒绝）、52 个业务写六项边界全缺（报失与报废大部分）、47 个业务写缺 `x-error-codes`、1 个缺 `x-version`（`uploadAssetImportBatch`）。C1 未修改这些声明，也未运行完整 D6-02C 门禁（其在写分类断言处即失败关闭）。
+
 ## 数据影响、回滚、风险与限制
+
 
 - **数据影响：** 当前只定义未来表结构与迁移策略，不创建或修改产品数据库；验证生成物和临时文件必须可清理。
 - **代码回滚：** 在未共享短分支上按功能提交逆序回退至基线 `9a181cd`；不修改 D6-02B 已执行的技术探针迁移。
