@@ -16,7 +16,8 @@ interface Page { items: Message[]; total: number; unread: number; view: string }
 
 const TIERS: Record<string, string> = { DUE_IN_3_DAYS: "提前3日", DUE_IN_1_DAY: "提前1日",
   DUE_IN_24_HOURS: "截止前24小时", DUE_TODAY: "今日到期", OVERDUE: "已逾期",
-  OVERDUE_EVERY_7_DAYS: "逾期每7日跟进", UNRESOLVED_AFTER_1_WORKDAY: "1个工作日未处理" };
+  OVERDUE_EVERY_7_DAYS: "逾期每7日跟进", UNRESOLVED_AFTER_1_WORKDAY: "1个工作日未处理",
+  DUTY_UNREAD_ESCALATION: "升级值班提醒", OVERDUE_UNRESOLVED_WORKDAY: "超时1个工作日仍未处理" };
 const STAGES: Record<string, string> = { ADMIN_DECISION: "管理员确认", WAREHOUSE_CLAIM: "库管领取",
   FIRST_EXECUTION: "首次执行", HANDOVER_RECEIPT: "实物接收", INVENTORY_COMPLETION: "盘点完成",
   FACTORY_RETURN: "返厂收回", LOSS_REVIEW: "报失复核", SCRAP_DISPOSITION: "报废处置" };

@@ -31,7 +31,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Profile("fams-product")
 @Transactional(isolation = Isolation.READ_COMMITTED)
 public class MessageService {
-    private static final String OVERDUE_TYPES = "('OVERDUE','OVERDUE_EVERY_7_DAYS','UNRESOLVED_AFTER_1_WORKDAY')";
+    private static final String ESCALATION_TYPES = "('DUTY_UNREAD_ESCALATION','OVERDUE_UNRESOLVED_WORKDAY')";
+    /** The group notice for a still-unhandled object belongs to the overdue exception vocabulary; a duty
+     * escalation is a personal notice and stays out of it. */
+    private static final String OVERDUE_TYPES = "('OVERDUE','OVERDUE_EVERY_7_DAYS','UNRESOLVED_AFTER_1_WORKDAY',"
+            + "'OVERDUE_UNRESOLVED_WORKDAY')";
     private static final String TODO_COLUMNS =
             " SELECT 'TODO' message_kind,t.id id,t.business_type,t.business_id,t.todo_type stage,"
             + " '' object_stage,t.pool_type,t.assignee_account_id,t.opened_at moment,"
@@ -40,10 +44,17 @@ public class MessageService {
             " SELECT 'REMINDER' message_kind,r.id id,r.business_type,r.business_id,r.reminder_type stage,"
             + " r.stage object_stage,r.recipient_pool_type pool_type,r.recipient_account_id,r.created_at moment,"
             + " r.deadline_at FROM fams_business_reminder r WHERE";
-    /** Only the latest occurrence of an object stage is an active message; earlier ones stay as history. */
+    /**
+     * Only the latest occurrence of an object stage is an active message; earlier ones stay as history. Escalation
+     * tiers are newest-per-recipient within their own tier instead, so an escalation never displaces the ladder
+     * notice that triggered it.
+     */
     private static final String NEWEST_OCCURRENCE =
             " r.id=(SELECT MAX(x.id) FROM fams_business_reminder x WHERE x.business_type=r.business_type"
-            + " AND x.business_id=r.business_id AND x.stage=r.stage) AND";
+            + " AND x.business_id=r.business_id AND x.stage=r.stage AND ((x.reminder_type IN" + ESCALATION_TYPES
+            + " AND x.reminder_type=r.reminder_type AND x.recipient_slot=r.recipient_slot)"
+            + " OR (r.reminder_type NOT IN" + ESCALATION_TYPES + " AND x.reminder_type NOT IN" + ESCALATION_TYPES
+            + "))) AND";
 
     private final JdbcTemplate db;
     private final RequisitionActorContext actors;
