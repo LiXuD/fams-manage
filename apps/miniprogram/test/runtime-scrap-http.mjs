@@ -240,7 +240,8 @@ try {
     await correctingWarehouse.onRefresh();
     correctingWarehouse.onHide(); await correctingWarehouse.onShow();
     assert.equal(correctingWarehouse.data.detail.status, "CORRECTED");
-    assert.equal(correctingWarehouse.data.detail.correction, null);
+    assert.equal(correctingWarehouse.data.detail.correction.status, "COMPLETED");
+    assert.equal(correctingWarehouse.data.detail.actions.executeCorrection, false);
     assert.match(correctingWarehouse.data.pendingSummary, /纠正|仓位/);
     await correctingWarehouse.onRetry(); okay(correctingWarehouse);
     assert.deepEqual(correctionWrites[1], frozenCorrection);
@@ -278,7 +279,8 @@ try {
     await reversingWarehouse.onRefresh();
     reversingWarehouse.onHide(); await reversingWarehouse.onShow();
     assert.equal(reversingWarehouse.data.detail.status, "EXECUTED");
-    assert.equal(reversingWarehouse.data.detail.reversal, null);
+    assert.equal(reversingWarehouse.data.detail.reversal.status, "COMPLETED");
+    assert.equal(reversingWarehouse.data.detail.actions.executeReversal, false);
     assert.equal(reversingWarehouse.data.detail.disposition.disposition_status, "REVERSED");
     assert.match(reversingWarehouse.data.pendingSummary, /冲正|仓位/);
     await reversingWarehouse.onRetry(); okay(reversingWarehouse);

@@ -157,7 +157,9 @@ try {
     accepting.onNow(); accepting.onChecked({ detail: { value: true } });
     await confirm(accepting, "executeRecovery");
     await retry(accepting, "/api/v1/mini/scrap-requests/recoveries/" + recoveryId + "/execute");
-    assert.equal(accepting.data.detail.recovery, null);
+    assert.equal(accepting.data.detail.recovery.id, recoveryId);
+    assert.equal(accepting.data.detail.recovery.status, "COMPLETED");
+    assert.equal(accepting.data.detail.actions.initiateRecovery, false);
     assert.equal(accepting.data.detail.status, "EXECUTED");
     assert.equal(accepting.data.detail.disposition.disposition_status, "LOSS_WRITTEN_OFF");
     accepting.onUnload();
