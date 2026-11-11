@@ -144,7 +144,7 @@ public class ScrapReadService {
     }
 
     private static boolean mayRequestReversal(Current actor, Map<String, Object> row) {
-        return "EXECUTED".equals(row.get("request_status")) && ScrapReviewService.reversibleSource(row.get("source_type"))
+        return "EXECUTED".equals(row.get("request_status")) && ScrapReviewService.physicalSource(row.get("source_type"))
                 && (actor.has(Role.ASSET_ADMIN) || actor.has(Role.WAREHOUSE_OPERATOR)
                         || Objects.equals(actor.id(), row.get("creator_account_id")));
     }
