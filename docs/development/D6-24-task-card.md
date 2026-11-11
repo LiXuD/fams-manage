@@ -73,6 +73,12 @@ V67 `fams_duty_assignment` 是每个共享池一条 ACTIVE 行的不可变链：
 - `MessageCenterView.test.ts` 5 项（新增 2 项）：管理员与库管读到值班链与"已失效"标记且系统管理员才出现登记表单；提交按当前 `version` 发 PUT，丢失回复后按钮转为"原请求重试值班登记"且第二次提交的 path/key/body/版本与第一次逐字段相同，成功后列表版本推进为 2。
 - 修正一处早于本片的编译回归：`1d28cec` 的 `MessageService.item(...)` 用了 11 对键值的 `Map.of`，超出 JDK 上限因而该提交无法编译（B2 当时记录的是加 `objectStage` 之前的运行结果）。本片改为 `Map.ofEntries` 后在自有隔离 MySQL 上复跑 `BusinessReminderRuntimeCase`（V65 档位与去重）与 `MessagesHttpRuntimeCase`（V66 可寻址性与个人已读）两项均通过，B1/B2 的运行时证据在当前树重新成立。
 
-## 尚待交付
+## C1 交接时的遗留项
 
 C 片已交付 C1 值班提醒人配置底座；仍开放 C2 `notificationEscalationThresholds` 四阈值首次产生业务效果（未读满阈值升级值班人、超时再满 1 个工作日的全体强提醒、同一异常每日最多一次、已读也触发、"处理结果/有效转派/带下一跟进时间的核查记录"三类豁免判定）、C3 `fams_configuration_anomaly` 落地（该表与两个只读端点自 D6-02C 起只有契约没有实现，值班人失效与无人有效都依赖它）、C4 成员停用即生成去重的"需要转派"待办与角色恢复后的可见性回归；D 片外部通道兜底、指标与 R-08 证据。B2 之后仍开放：本会话未接入 GitNexus/AOCI，未运行 `impact`/`detect_changes`；实际 PC 浏览器与真机小程序联调、提交 JVM 重启恢复、完整 D6-03A 产品门禁与独立复核未做；`scripts/verify-d6-02c.py` 的 `assert_write_contracts` 在本片之前已有 170 个既有 operation 不通过（首个为库存观察下载授权被判定为"未分类的非业务写"），本片按既有 `readBusinessResultNotice` 同口径分类，未修改门禁口径；该门禁已由 D6-02C-C1 改为只读契约声明并机械归一（剩 152 条待 C2 取证），详见 [D6-02C 任务卡](D6-02C-task-card.md)；`fams_message_receipt` 不建跨表外键、TECH_ASSISTANT 池消息不经本端点、小程序仅两类深链，均如上登记。真实短信、微信模板与真机触达仍依 D6-09B/10B，本卡不宣称已验证。
+
+## 2026-11-11 D6-24C2 阈值和升级定向验证
+
+D6-24C2 固定候选 `1972d48` 已登记 `DutyEscalationRuntimeCase` 与独立 MySQL schema。升级读取原单冻结阈值和企业时区，修复值班主备双列读取、未读查询重复 SELECT，以及完整工作日边界。隔离 MySQL 8.4.11 定向用例与 6 项架构检查通过，Checkstyle/SpotBugs 零报告。统一产品入口在固定候选上已实际执行新增用例，1 项通过、零失败与跳过，日志 `output/first-batch-reminder-1972d48.txt`。用例每个阶段造 201 条，覆盖五段翻页、阈值前后、主备失效回退、个人已读、群提醒、有效转派、每日去重及零阈值。实际页面与提交后 JVM 的业务恢复并入 D6-24 联验。本批验证五个已有扫描阶段。C3 配置异常、C4 停用转派与角色恢复、D 投递和观测仍待交付。
+
+2026-11-11 产品门禁：固定候选 `1972d48` 的 `verify-product-development.py` 退出 0。V68 升级扫描用例 1 项通过，Java 必需测试 532 项，Checkstyle/SpotBugs 零报告，行覆盖 93.18%、分支 75.95%。Web 241 项和小程序 343 项通过。类型、lint、双端构建、应用重启与同卷 MySQL 重启恢复及清理通过。D6-24C2 固定候选进入 `IN_REVIEW`。实际页面和提交后 JVM 的业务恢复由 D6-24 联验继续取证，D6-24 父任务仍为 `IN_PROGRESS`。日志 `output/first-batch-product-1972d48.log`。
