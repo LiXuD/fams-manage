@@ -30,7 +30,7 @@ def run_rtk(command: str) -> subprocess.CompletedProcess[str]:
     """Run every external verification command through rtk."""
 
     return subprocess.run(
-        ["rtk", "run", command],
+        ["rtk", "run", "-c", command],
         cwd=ROOT,
         env=os.environ.copy(),
         capture_output=True,
@@ -63,7 +63,7 @@ def focused_output(output: str) -> list[str]:
 
 def require_step(label: str, command: str, expected: int = 0) -> str:
     result = run_rtk(command)
-    print(f"[{label}] exit={result.returncode}: rtk run {command}")
+    print(f"[{label}] exit={result.returncode}: rtk run -c {command}")
     output = result.stdout + result.stderr
     lines = [line.strip() for line in output.splitlines() if line.strip()]
     selected = lines if label == "final status" else focused_output(output)
