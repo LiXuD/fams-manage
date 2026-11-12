@@ -1013,8 +1013,9 @@ public class RepairService {
             throw new RepairFailure(409, "REPAIR_LOCK_CHANGED");
         }
         long before = number(row, "version");
+        long resumedAssetVersion = assetVersion == null ? number(row, "asset_version") : assetVersion.longValue();
         db.update("UPDATE fams_repair_request SET asset_version=?,version=version+1,updated_at=? WHERE id=?",
-                assetVersion == null ? number(row, "asset_version") : assetVersion, now(), repairId);
+                resumedAssetVersion, now(), repairId);
         todo(repairId, "PROCESS", "WAREHOUSE_OPERATOR", processor);
         audit(actor, current, row, "REPAIR_LOSS_RETURNED", before, before + 1, Map.of("reportId", Long.toString(report)),
                 current.has(Role.WAREHOUSE_OPERATOR) ? Role.WAREHOUSE_OPERATOR.name() : Role.ASSET_ADMIN.name());
