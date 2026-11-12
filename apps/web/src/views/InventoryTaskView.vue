@@ -157,7 +157,7 @@ onMounted(async () => {
       </fieldset>
       <InventoryReviewPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="detail.task.id" :task-id="detail.task.id" @changed="refresh" />
       <InventoryReadinessPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="`readiness:${detail.task.id}`" :task-id="detail.task.id" @changed="refresh" />
-      <InventorySealPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="`seal:${detail.task.id}`" :task-id="detail.task.id" @changed="refresh" />
+      <InventorySealPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="`seal:${detail.task.id}`" :task-id="detail.task.id" :task-version="detail.task.version" @changed="refresh" />
       <InventoryLatePanel v-if="admin && ['COMPLETED', 'CANCELLED', 'TERMINATED'].includes(detail.task.task_status)" :key="`late:${detail.task.id}`" :task-id="detail.task.id" />
       <InventorySynchronizationPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="`sync:${detail.task.id}`" :task-id="detail.task.id" />
       <InventoryFindingPanel v-if="admin && detail.task.task_status !== 'DRAFT'" :key="`finding:${detail.task.id}`" :task-id="detail.task.id" @changed="refresh" />
