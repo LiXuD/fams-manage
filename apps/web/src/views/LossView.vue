@@ -186,6 +186,7 @@ onBeforeUnmount(() => { live = false; reset(); });
     </section>
     <section v-if="detail" aria-label="报失详情"><h2>报失单 {{ detail.id }} · {{ lossReportState(detail) }}</h2>
       <p>{{ detail.source.assetCode }} · {{ detail.source.name }}；最后见到 {{ detail.lastSeenAt }}；位置：{{ detail.lastLocation }}</p><p>{{ detail.circumstances }}</p>
+      <p v-if="detail.source.inventorySource">盘点来源：任务 {{ detail.source.inventorySource.taskId }} · 应盘项 {{ detail.source.inventorySource.itemId }} · 未盘记录 {{ detail.source.inventorySource.reasonId }}</p>
       <p>处理库管：{{ detail.processorAccountId ?? '尚未认领' }}<span v-if="detail.recoveryAsset?.lifecycle !== 'PENDING_SCRAP' && detail.recoveryAsset?.lifecycle !== 'SCRAPPED'">；下次复核：{{ detail.nextReviewDate ?? '核实后填写' }}</span></p>
       <p v-if="detail.status === 'SEARCHING'">已进入查找中，资产继续持锁。本次查找仍在处理中。</p>
       <p v-if="detail.recoveryAsset?.lifecycle === 'SCRAPPED'">原资产已报废，原报失证据继续保留。</p>

@@ -243,6 +243,30 @@ public class LossService {
         }
         validTime(input.lastSeenAt());
         String source = assets.submission(current, input.assetId(), input.assetVersion());
+        var row = openReport(actor, current, input, source, "LOSS_REPORTED");
+        return remember(current, "SUBMIT", key, hash, row);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    String submitInventory(Actor actor, InventoryLossPort.Source inventory,
+            LossInput.Submission input) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.ASSET_ADMIN);
+        validTime(input.lastSeenAt());
+        var source = (tools.jackson.databind.node.ObjectNode) json.readTree(
+                assets.submission(current, input.assetId(), input.assetVersion()));
+        source.putObject("inventorySource")
+                .put("taskId", Long.toString(inventory.taskId()))
+                .put("itemId", Long.toString(inventory.itemId()))
+                .put("reasonId", Long.toString(inventory.reasonId()))
+                .put("recheckGeneration", inventory.recheckGeneration());
+        var row = openReport(actor, current, input, json.writeValueAsString(source),
+                "LOSS_REPORTED_FROM_INVENTORY");
+        return row.get("id").toString();
+    }
+
+    private Map<String, Object> openReport(Actor actor, Current current, LossInput.Submission input,
+            String source, String event) {
         long id = insertReport(current, input, source);
         db.update(
                 "INSERT INTO"
@@ -253,8 +277,9 @@ public class LossService {
                 id,
                 now());
         todo(id, "APPROVAL", "ASSET_ADMIN", null);
-        audit(actor, current, header(id), "LOSS_REPORTED", 0, input);
-        return remember(current, "SUBMIT", key, hash, header(id));
+        var row = header(id);
+        audit(actor, current, row, event, 0, input);
+        return row;
     }
 
     public Map<String, Object> submitFactory(Actor actor, long repairId, long roundId, long repairVersion,
