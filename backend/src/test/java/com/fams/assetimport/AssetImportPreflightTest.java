@@ -263,9 +263,12 @@ class AssetImportPreflightTest {
         assertEquals("报废原因", missing.errors().getFirst().column());
         values.put("报废原因", "上线前已确认无法修复");
         values.put("资产状态", "维修中");
-        assertEquals("UNSUPPORTED_INITIAL_STATE", AssetImportPreflight.check(
+        var openingWithoutEvidence = AssetImportPreflight.check(
                 new AssetImportWorkbook.Parsed(columns, List.of(new AssetImportWorkbook.DataRow(2, values)),
-                        List.of()), Map.of(), catalog()).errors().getFirst().reason());
+                        List.of()), Map.of(), catalog());
+        assertTrue(openingWithoutEvidence.ready().isEmpty());
+        assertEquals("REQUIRED", openingWithoutEvidence.errors().getFirst().reason());
+        assertEquals("维修前状态", openingWithoutEvidence.errors().getFirst().column());
     }
 
     private AssetImportPreflight.Catalog catalog() {

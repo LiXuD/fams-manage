@@ -1,6 +1,6 @@
 import { useSessionStore } from "@/auth/sessionStore";
 import type { FactorySummary } from "./factory-types";
-export interface RepairAsset { id: string; assetCode: string; name: string; version: number; lifecycle: string;
+export interface RepairAsset { initialSource?: { batchId: string; sheetRow: number; stage: string; evidence: string; factoryDestination?: string }; id: string; assetCode: string; name: string; version: number; lifecycle: string;
   custodyType: string; locationId: string | null; locationName: string | null }
 export interface RepairPhoto { objectId: string; filename: string; contentType: string; sizeBytes: number; scanStatus: string }
 export interface RepairReturnTarget { custodyType: string; employeeId: string; employeeName: string; employeeVersion: number;
