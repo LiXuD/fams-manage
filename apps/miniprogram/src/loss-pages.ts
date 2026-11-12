@@ -5,7 +5,7 @@ interface Asset { id: string; assetCode: string; name: string; version: number; 
 interface Photo { objectId: string; filename: string; contentType: string }
 interface Recovery { request?: { destination?: string; facts?: Record<string,unknown> }; id: string; version: number; assetVersion: number; ownershipVersion: number; status: string; processorAccountId: string | null; actions: Record<string,boolean> }
 interface RecoveryAsset { lifecycle?: string; version: number; serialNumber: string | null; locationId: string | null; locationVersion: number | null; locationName: string | null }
-interface Report { id: string; source: Asset & { factorySource?: { repairId: string; roundId: string };
+interface Report { id: string; source: Asset & { factorySource?: { repairId: string; roundId: string }; internalRepairSource?: { repairId: string };
     inventorySource?: { taskId: string; itemId: string; reasonId: string }; returnSource?: { returnId: string; followupId: string } }; status: string; version: number; assetVersion: number; ownershipVersion: number; lockVersion: number;
     transferId?: string; returnId?: string | null; repairId?: string | null; recoveredAt?: string; recoveryAsset?: RecoveryAsset | null; recoveries?: Recovery[]; recoveriesTotal?: number; confirmedLostAt?: string; lastFollowUpAt?: string; lastSeenAt: string; lastLocation: string; circumstances: string; processorAccountId: string | null; nextReviewDate: string | null;
     actions?: Record<string, boolean>; photos?: Photo[]; history?: { id: string; action: string; actor_username: string; occurred_at: string }[] }
@@ -143,14 +143,16 @@ export function createLossPage(getServices: () => MiniServices) {
         if (!editable(page)) return;
         const row = page.data.detail, data = page.data;
         if (!row) return;
+        const internal = !!row.source.internalRepairSource;
         const attempt = id ? row.recoveries?.find(item => item.id === id) : undefined;
         const capability = ({approve:"decide",reject:"decide",cancel:"cancel",claim:"claim",execute:"execute",executeDamaged:"execute",executeReturn:"execute",executeTransfer:"execute",executeFactory:"execute"} as Record<string,string>)[action];
-        if (id ? !attempt || !capability || !attempt.actions[capability] : !["recoverOriginal","recoverDamaged","recoverReturn","recoverTransfer","requestRecovery","requestDamaged","requestReturn","requestTransfer","recoverFactory","requestFactoryRecovery"].includes(action) || !row.actions?.[["recoverDamaged","recoverReturn","recoverTransfer"].includes(action) ? "recoverOriginal" : ["requestDamaged","requestReturn","requestTransfer"].includes(action) ? "requestRecovery" : action]) return;
+        if (id ? !attempt || !capability || !attempt.actions[capability] : !["recoverOriginal","recoverDamaged","recoverReturn","recoverTransfer","requestRecovery","requestDamaged","requestReturn","requestTransfer","recoverFactory","requestFactoryRecovery"].includes(action) || !row.actions?.[["recoverDamaged","recoverReturn","recoverTransfer"].includes(action) ? "recoverOriginal" : ["requestDamaged","requestReturn","requestTransfer"].includes(action) ? "requestRecovery" : action === "recoverFactory" && internal ? "recoverInternalRepair"
+                : action === "requestFactoryRecovery" && internal ? "requestInternalRepairRecovery" : action]) return;
         if (attempt && ["execute", "executeDamaged", "executeReturn", "executeTransfer", "executeFactory"].includes(action)) {
             const destination = attempt.request?.destination;
             if ((destination === "ASSET_RETURN") !== (action === "executeReturn")
                 || (destination === "TRANSFER") !== (action === "executeTransfer")
-                || (destination === "FACTORY_REPAIR") !== (action === "executeFactory")) return;
+                || (["FACTORY_REPAIR", "INTERNAL_REPAIR"].includes(destination ?? "")) !== (action === "executeFactory")) return;
         }
         if (attempt && ["execute","executeDamaged"].includes(action) && ((attempt.request?.facts?.condition === "DAMAGED") !== (action === "executeDamaged"))) return;
         try {
@@ -214,7 +216,7 @@ export function createLossPage(getServices: () => MiniServices) {
                 const requesting = action === "requestFactoryRecovery";
                 body = requesting ? { assetVersion: source.version, facts } : { assetVersion: attempt?.assetVersion ?? row.assetVersion,
                     ownershipVersion: attempt?.ownershipVersion ?? row.ownershipVersion, lockVersion: row.lockVersion, facts };
-                label = `${requesting ? "新建返厂找回申请，须重新批准并认领" : "核实原机并交回原返厂维修"}：${facts.observedAssetCode}；实际位置${place.name}；${data.factoryDamaged ? "损坏" : "完好"}；${facts.evidence}。实际收回仍由原轮次另行登记。`;
+                label = `${requesting ? "新建找回申请，须重新批准并认领" : internal ? "核实原机并交回原内部维修" : "核实原机并交回原返厂维修"}：${facts.observedAssetCode}；实际位置${place.name}；${data.factoryDamaged ? "损坏" : "完好"}；${facts.evidence}。${internal ? "请在原维修单继续办理。" : "实际收回仍由原轮次另行登记。"}`;
             } else if (["recoverReturn","requestReturn","executeReturn"].includes(action)) {
                 const source=row.recoveryAsset,place=data.locations.find(item=>item.id===data.selectedLocation);
                 if(!source||!place||!data.returnChecked||!data.observedAssetCode.trim()||source.serialNumber&&!data.observedSerialNumber.trim()||data.recoveryEvidence.trim().length<10)throw Error("Missing linked return evidence");
@@ -240,7 +242,7 @@ export function createLossPage(getServices: () => MiniServices) {
                 label = ({approve:"批准新找回申请，仍须库管重新认领核实。",reject:"驳回找回申请，原遗失责任跟进保留。",cancel:"撤回新找回申请，原遗失责任跟进保留。",claim:"取得新的唯一找回处理权，尚未恢复正常。"} as Record<string,string>)[action]!;
                 if (action !== "claim") label += data.reason.trim();
             }
-            const path = attempt ? `${base}/recoveries/${attempt.id}/${["approve","reject"].includes(action) ? "decision" : action === "executeDamaged" ? "execute-to-repair" : action === "executeReturn" ? "execute-to-return" : action === "executeTransfer" ? "execute-to-transfer" : action === "executeFactory" ? "execute-to-factory" : action}` : `${base}/${row.id}/${action === "recoverFactory" ? "recover-to-factory" : action === "requestFactoryRecovery" ? "factory-recovery-requests" : action === "recoverOriginal" ? "recover-original" : action === "recoverDamaged" ? "recover-to-repair" : action === "recoverReturn" ? "recover-to-return" : action === "requestReturn" ? "return-recovery-requests" : action === "recoverTransfer" ? "recover-to-transfer" : action === "requestTransfer" ? "transfer-recovery-requests" : action === "requestDamaged" ? "repair-recovery-requests" : "recovery-requests"}`;
+            const path = attempt ? `${base}/recoveries/${attempt.id}/${["approve","reject"].includes(action) ? "decision" : action === "executeDamaged" ? "execute-to-repair" : action === "executeReturn" ? "execute-to-return" : action === "executeTransfer" ? "execute-to-transfer" : action === "executeFactory" ? (internal ? "execute-to-internal-repair" : "execute-to-factory") : action}` : `${base}/${row.id}/${action === "recoverFactory" ? (internal ? "recover-to-internal-repair" : "recover-to-factory") : action === "requestFactoryRecovery" ? (internal ? "internal-repair-recovery-requests" : "factory-recovery-requests") : action === "recoverOriginal" ? "recover-original" : action === "recoverDamaged" ? "recover-to-repair" : action === "recoverReturn" ? "recover-to-return" : action === "requestReturn" ? "return-recovery-requests" : action === "recoverTransfer" ? "recover-to-transfer" : action === "requestTransfer" ? "transfer-recovery-requests" : action === "requestDamaged" ? "repair-recovery-requests" : "recovery-requests"}`;
             prepared = Object.freeze({path, key:services.createKey(),version:attempt?.version ?? row.version,body:body === undefined ? undefined : JSON.stringify(body),label});
             page.setData({confirmation:label,error:""});
         } catch { page.setData({error:"请填写原机编码/序列号、实际找回时间、至少10字证据及本次原因，并确认对应状况、原保管与登记位置；损坏找回还须至少10字故障及使用影响。"}); }

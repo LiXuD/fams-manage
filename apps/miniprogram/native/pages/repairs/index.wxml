@@ -19,6 +19,15 @@
 <view wx:if="{{detail.actions.approve &amp;&amp; approvalMethodIndex === 1}}"><picker range="{{factoryCostPolicyLabels}}" value="{{factoryCostPolicyIndex}}" bindchange="onFactoryCostPolicy" disabled="{{busy || retry}}"><view>本维修所有返厂轮次费用：{{factoryCostPolicyLabels[factoryCostPolicyIndex]}}</view></picker><input wx:if="{{factoryCostPolicyIndex === 1}}" value="{{factoryCostLimit}}" data-field="factoryCostLimit" bindinput="onField" type="digit" maxlength="15" placeholder="所有轮次累计正限额（元）" disabled="{{busy || retry}}"/></view>
 <button wx:if="{{detail.actions.approve}}" data-action="approve" bindtap="onAction" disabled="{{busy || retry}}">{{approvalMethodIndex === 1 ? '一次批准内部及必要返厂范围' : '批准内部零费用维修'}}</button><button wx:if="{{detail.actions.approve}}" data-action="reject" bindtap="onAction" disabled="{{busy || retry}}">驳回</button><button wx:if="{{detail.actions.cancel}}" data-action="cancel" bindtap="onAction" disabled="{{busy || retry}}">取消报修</button><button wx:if="{{detail.actions.claim}}" data-action="claim" bindtap="onAction" disabled="{{busy || retry}}">领取维修处理权</button>
 <navigator wx:if="{{scrapReceiptId}}" url="/pages/scrap-requests/index?id={{scrapReceiptId}}">查看维修关联报废</navigator>
+ <button wx:if="{{detail.latestLossReportId}}" bindtap="onOpenLoss" disabled="{{busy || retry}}">查看维修关联报失</button>
+ <view wx:if="{{detail.actions.requestLoss}}" class="card">
+  <view>内部维修实物缺失</view>
+  <picker mode="date" value="{{lossDate}}" data-field="lossDate" bindchange="onLossField" disabled="{{busy || retry}}"><view>最后见到日期 {{lossDate}}</view></picker>
+  <picker mode="time" value="{{lossTime}}" data-field="lossTime" bindchange="onLossField" disabled="{{busy || retry}}"><view>最后见到时间 {{lossTime}}</view></picker>
+  <input value="{{lossLocation}}" data-field="lossLocation" bindinput="onLossField" placeholder="最后见到地点" maxlength="500" disabled="{{busy || retry}}"/>
+  <textarea value="{{lossCircumstances}}" data-field="lossCircumstances" bindinput="onLossField" placeholder="实物查找情况" maxlength="2000" disabled="{{busy || retry}}"/>
+  <button bindtap="onReportLoss" disabled="{{busy || retry}}">核对维修关联报失</button>
+ </view>
 <view wx:if="{{detail.actions.requestScrap}}">
  <view>维修关联报废原因</view><textarea value="{{scrapReason}}" data-field="scrapReason" bindinput="onField" maxlength="2000" disabled="{{busy || retry}}"/>
  <view>报废实物现状</view><textarea value="{{scrapCondition}}" data-field="scrapCondition" bindinput="onField" maxlength="2000" disabled="{{busy || retry}}"/>

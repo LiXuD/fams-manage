@@ -89,13 +89,17 @@ function transferTarget(): TransferTarget {
     locationId: place.id, referenceVersions };
 }
 const factoryChecked = ref(false), factoryCondition = ref("INTACT");
+const internalRepair = computed(() => !!props.report.source.internalRepairSource);
+const retainedDestination = computed(() => internalRepair.value ? "INTERNAL_REPAIR" : "FACTORY_REPAIR");
+const recoverRetainedAction = computed(() => internalRepair.value ? "recoverInternalRepair" : "recoverFactory");
+const requestRetainedAction = computed(() => internalRepair.value ? "requestInternalRepairRecovery" : "requestFactoryRecovery");
 const factoryAttempt = computed(() => props.report.recoveries?.find(
-  item => item.actions.execute && item.request?.destination === "FACTORY_REPAIR"));
+  item => item.actions.execute && item.request?.destination === retainedDestination.value));
 const damagedChecked=ref(false),fault=ref(""),impact=ref("MEDIUM");
 const names:Record<string,string>={PENDING_ADMIN_DECISION:"待管理员批准找回",WAITING_WAREHOUSE_CLAIM:"待库管重新认领",VERIFYING:"找回实物核实中",COMPLETED:"已完成找回",REJECTED:"找回申请已驳回",CANCELLED:"找回申请已撤回"};
 function prepare(action:string,attempt?:LossRecovery){
  if(props.locked)return;const row=props.report;const capability=({approve:"decide",reject:"decide",cancel:"cancel",claim:"claim",execute:"execute",executeDamaged:"execute",executeReturn:"execute",executeTransfer:"execute",executeFactory:"execute"}as Record<string,string>)[action];
- if(attempt?!attempt.actions[capability??""]:!row.actions?.[["recoverDamaged","recoverReturn","recoverTransfer"].includes(action)?"recoverOriginal":["requestDamaged","requestReturn","requestTransfer"].includes(action)?"requestRecovery":action])return;
+ if(attempt?!attempt.actions[capability??""]:!row.actions?.[["recoverDamaged","recoverReturn","recoverTransfer"].includes(action)?"recoverOriginal":["requestDamaged","requestReturn","requestTransfer"].includes(action)?"requestRecovery":action==="recoverFactory"?recoverRetainedAction.value:action==="requestFactoryRecovery"?requestRetainedAction.value:action])return;
  error.value="";try{let body:unknown;const source=row.recoveryAsset;let summary="";
   if (["recoverFactory", "requestFactoryRecovery", "executeFactory"].includes(action)) {
    const place = locations.value.find(item => item.id === locationIndex.value);
@@ -112,7 +116,8 @@ function prepare(action:string,attempt?:LossRecovery){
      : { assetVersion: attempt?.assetVersion ?? row.assetVersion,
        ownershipVersion: attempt?.ownershipVersion ?? row.ownershipVersion, lockVersion: row.lockVersion, facts };
    summary = action === "requestFactoryRecovery" ? "提交原维修续办的找回申请，待批准和重新认领。"
-     : "找回并把锁交回原维修。实际收回仍须在原返厂轮次办理。";
+     : internalRepair.value ? "找回并把锁交回原内部维修，后续继续按原维修办理。"
+       : "找回并把锁交回原维修。实际收回仍须在原返厂轮次办理。";
   } else if (["recoverTransfer", "requestTransfer", "executeTransfer"].includes(action)) {
    const place = locations.value.find(item => item.id === locationIndex.value);
    const date = new Date(foundAt.value);
@@ -157,16 +162,17 @@ function prepare(action:string,attempt?:LossRecovery){
    const destination = attempt.request?.destination;
    if ((destination === "ASSET_RETURN") !== (action === "executeReturn")
        || (destination === "TRANSFER") !== (action === "executeTransfer")
-       || (destination === "FACTORY_REPAIR") !== (action === "executeFactory")) return;
+       || (["FACTORY_REPAIR", "INTERNAL_REPAIR"].includes(destination ?? "")) !== (action === "executeFactory")) return;
   }
   if(attempt&&["execute","executeDamaged"].includes(action)&&((attempt.request?.facts?.condition==="DAMAGED")!==(action==="executeDamaged")))return;
-  const path=attempt?`/recoveries/${attempt.id}/${action==="approve"||action==="reject"?"decision":action==="executeDamaged"?"execute-to-repair":action==="executeReturn"?"execute-to-return":action==="executeTransfer"?"execute-to-transfer":action==="executeFactory"?"execute-to-factory":action}`:`/${row.id}/${action==="recoverFactory"?"recover-to-factory":action==="requestFactoryRecovery"?"factory-recovery-requests":action==="recoverOriginal"?"recover-original":action==="recoverDamaged"?"recover-to-repair":action==="recoverReturn"?"recover-to-return":action==="requestReturn"?"return-recovery-requests":action==="recoverTransfer"?"recover-to-transfer":action==="requestTransfer"?"transfer-recovery-requests":action==="requestDamaged"?"repair-recovery-requests":"recovery-requests"}`;
+  const path=attempt?`/recoveries/${attempt.id}/${action==="approve"||action==="reject"?"decision":action==="executeDamaged"?"execute-to-repair":action==="executeReturn"?"execute-to-return":action==="executeTransfer"?"execute-to-transfer":action==="executeFactory"?(internalRepair.value?"execute-to-internal-repair":"execute-to-factory"):action}`:`/${row.id}/${action==="recoverFactory"?(internalRepair.value?"recover-to-internal-repair":"recover-to-factory"):action==="requestFactoryRecovery"?(internalRepair.value?"internal-repair-recovery-requests":"factory-recovery-requests"):action==="recoverOriginal"?"recover-original":action==="recoverDamaged"?"recover-to-repair":action==="recoverReturn"?"recover-to-return":action==="requestReturn"?"return-recovery-requests":action==="recoverTransfer"?"recover-to-transfer":action==="requestTransfer"?"transfer-recovery-requests":action==="requestDamaged"?"repair-recovery-requests":"recovery-requests"}`;
   emit("prepare",Object.freeze({path,version:attempt?.version??row.version,key:crypto.randomUUID(),body,summary}));
  }catch(cause){error.value=cause instanceof Error?cause.message:"请核实当前原机与责任。";}
 }
 </script>
 <template><section aria-label="原责任完好找回"><h3>找回核实与实际去向</h3><p>查找中沿原核实授权；已确认遗失须新建申请并重新批准认领。责任或位置变化须关联后续；损坏找回通过对应申请与核实转入正式维修。</p><p v-if="error" role="alert">{{error}}</p>
  <p v-if="report.recoveredAt">原实物已找回：{{report.recoveredAt}}。原遗失及后续履历继续保留。</p>
+ <p v-if="report.repairId &amp;&amp; report.source.internalRepairSource">已交回原内部维修 {{report.repairId}}，请在原维修单继续办理。</p>
  <p v-if="report.repairId &amp;&amp; report.source.factorySource">已交回原返厂维修 {{report.repairId}}，请在原轮次登记实际收回。</p>
  <p v-else-if="report.repairId">已关联正式维修 {{report.repairId}}，请前往维修管理查看审批和实际办理进度。</p>
  <fieldset :disabled="locked"><template v-if="report.recoveryAsset"><p>登记位置：{{report.recoveryAsset.locationName??'缺少登记位置'}}；登记序列号：{{report.recoveryAsset.serialNumber??'未登记'}}</p>
@@ -199,19 +205,19 @@ function prepare(action:string,attempt?:LossRecovery){
   </template>
   <button v-if="report.actions?.requestRecovery" @click="prepare('requestTransfer')">新建调拨找回申请</button>
  </section>
- <section v-if="report.actions?.recoverFactory || report.actions?.requestFactoryRecovery || factoryAttempt" aria-label="返厂原机找回续修">
-  <h4>返厂原机找回续修</h4>
+ <section v-if="report.actions?.[recoverRetainedAction] || report.actions?.[requestRetainedAction] || factoryAttempt" :aria-label="internalRepair ? '内部维修实物找回' : '返厂原机找回续修'">
+  <h4>{{internalRepair ? '内部维修实物找回' : '返厂原机找回续修'}}</h4>
   <p>填写上方原机编码、序列号、找回时间及证据。原维修继续办理实际收回。</p>
   <button :disabled="loadingLocations || locked" @click="loadLocations">加载找回实物位置</button>
   <label>原机找回位置<select v-model="locationIndex"><option value="">请选择实际位置</option><option v-for="place in locations" :key="place.id" :value="place.id">{{place.name}}</option></select></label>
   <label>找回时原机状况<select v-model="factoryCondition"><option value="INTACT">完好</option><option value="DAMAGED">损坏</option></select></label>
-  <label><input v-model="factoryChecked" type="checkbox"/>已亲见并对照返厂原机</label>
-  <button v-if="report.actions?.recoverFactory" @click="prepare('recoverFactory')">找回并交回原维修</button>
-  <button v-if="report.actions?.requestFactoryRecovery" @click="prepare('requestFactoryRecovery')">新建返厂原机找回申请</button>
+  <label><input v-model="factoryChecked" type="checkbox"/>已亲见并对照{{internalRepair ? '原维修实物' : '返厂原机'}}</label>
+  <button v-if="report.actions?.[recoverRetainedAction]" @click="prepare('recoverFactory')">找回并交回原维修</button>
+  <button v-if="report.actions?.[requestRetainedAction]" @click="prepare('requestFactoryRecovery')">新建{{internalRepair ? '内部维修' : '返厂原机'}}找回申请</button>
   <button v-if="factoryAttempt" @click="prepare('executeFactory', factoryAttempt)">核实找回并交回原维修</button>
  </section>
  <p v-if="report.transferId">已关联正式调拨 {{report.transferId}}，请在调拨管理继续审批和实物交接。</p>
  <p v-if="report.returnId">已关联正式归还/退库 {{report.returnId}}，请在借用与退库管理继续审批及实物验收。</p>
- <p>近期找回申请：{{report.recoveriesTotal??0}}项（展示最近20项及当前在办项）</p><article v-for="attempt in report.recoveries" :key="attempt.id"><h4>找回申请 {{attempt.id}} · {{names[attempt.status]??attempt.status}}</h4><p>新处理库管：{{attempt.processorAccountId??'尚未认领'}}；发现时间：{{attempt.request?.facts?.foundAt}}</p><dl aria-label="本次找回申请证据"><dt>申请核实的原机编码</dt><dd>{{attempt.request?.facts?.observedAssetCode}}</dd><dt>申请核实的原机序列号</dt><dd>{{attempt.request?.facts?.observedSerialNumber||'未登记'}}</dd><dt>申请登记位置编号</dt><dd>{{attempt.request?.facts?.locationId}}</dd><dt>本次申请去向</dt><dd>{{attempt.request?.destination==='ASSET_RETURN'?'关联归还/退库，原责任待实物验收后移交':attempt.request?.destination==='TRANSFER'?'关联正式调拨':attempt.request?.destination==='FACTORY_REPAIR'?'交回原返厂维修':'原责任恢复或维修'}}</dd><dt>申请核实状况</dt><dd>{{attempt.request?.facts?.condition==='INTACT'?'完好':attempt.request?.facts?.condition==='DAMAGED'?'损坏，批准后转正式维修':'需关联处理'}}；{{attempt.request?.facts?.stillOriginalCustodian===true?'仍由原责任人保管':'责任需核对'}}；{{attempt.request?.facts?.physicalIdentityVerified===true?'已对照原机身份':'身份待核对'}}</dd><dt>申请核实证据</dt><dd>{{attempt.request?.facts?.evidence}}</dd></dl><label v-if="attempt.actions.decide||attempt.actions.cancel">本次找回审批/撤回原因<textarea v-model="reason" maxlength="1000"/></label><button v-if="attempt.actions.decide" @click="prepare('approve',attempt)">批准找回申请</button><button v-if="attempt.actions.decide" @click="prepare('reject',attempt)">驳回找回申请</button><button v-if="attempt.actions.cancel" @click="prepare('cancel',attempt)">撤回找回申请</button><button v-if="attempt.actions.claim" @click="prepare('claim',attempt)">重新认领找回任务</button><button v-if="attempt.actions.execute &amp;&amp; attempt.request?.facts?.condition!=='DAMAGED' &amp;&amp; attempt.request?.destination!=='ASSET_RETURN' &amp;&amp; attempt.request?.destination!=='TRANSFER' &amp;&amp; attempt.request?.destination!=='FACTORY_REPAIR'" @click="prepare('execute',attempt)">核实原机并完成找回</button><button v-if="attempt.actions.execute &amp;&amp; attempt.request?.facts?.condition==='DAMAGED' &amp;&amp; attempt.request?.destination!=='FACTORY_REPAIR'" @click="prepare('executeDamaged',attempt)">核实损坏原机并转正式维修</button><button v-if="attempt.actions.execute &amp;&amp; attempt.request?.destination==='ASSET_RETURN'" @click="prepare('executeReturn',attempt)">核实完好原机并关联归还退库</button></article>
+ <p>近期找回申请：{{report.recoveriesTotal??0}}项（展示最近20项及当前在办项）</p><article v-for="attempt in report.recoveries" :key="attempt.id"><h4>找回申请 {{attempt.id}} · {{names[attempt.status]??attempt.status}}</h4><p>新处理库管：{{attempt.processorAccountId??'尚未认领'}}；发现时间：{{attempt.request?.facts?.foundAt}}</p><dl aria-label="本次找回申请证据"><dt>申请核实的原机编码</dt><dd>{{attempt.request?.facts?.observedAssetCode}}</dd><dt>申请核实的原机序列号</dt><dd>{{attempt.request?.facts?.observedSerialNumber||'未登记'}}</dd><dt>申请登记位置编号</dt><dd>{{attempt.request?.facts?.locationId}}</dd><dt>本次申请去向</dt><dd>{{attempt.request?.destination==='ASSET_RETURN'?'关联归还/退库，原责任待实物验收后移交':attempt.request?.destination==='TRANSFER'?'关联正式调拨':attempt.request?.destination==='FACTORY_REPAIR'?'交回原返厂维修':attempt.request?.destination==='INTERNAL_REPAIR'?'交回原内部维修':'原责任恢复或维修'}}</dd><dt>申请核实状况</dt><dd>{{attempt.request?.facts?.condition==='INTACT'?'完好':attempt.request?.facts?.condition==='DAMAGED'?'损坏，批准后转正式维修':'需关联处理'}}；{{attempt.request?.facts?.stillOriginalCustodian===true?'仍由原责任人保管':'责任需核对'}}；{{attempt.request?.facts?.physicalIdentityVerified===true?'已对照原机身份':'身份待核对'}}</dd><dt>申请核实证据</dt><dd>{{attempt.request?.facts?.evidence}}</dd></dl><label v-if="attempt.actions.decide||attempt.actions.cancel">本次找回审批/撤回原因<textarea v-model="reason" maxlength="1000"/></label><button v-if="attempt.actions.decide" @click="prepare('approve',attempt)">批准找回申请</button><button v-if="attempt.actions.decide" @click="prepare('reject',attempt)">驳回找回申请</button><button v-if="attempt.actions.cancel" @click="prepare('cancel',attempt)">撤回找回申请</button><button v-if="attempt.actions.claim" @click="prepare('claim',attempt)">重新认领找回任务</button><button v-if="attempt.actions.execute &amp;&amp; attempt.request?.facts?.condition!=='DAMAGED' &amp;&amp; attempt.request?.destination!=='ASSET_RETURN' &amp;&amp; attempt.request?.destination!=='TRANSFER' &amp;&amp; attempt.request?.destination!=='FACTORY_REPAIR' &amp;&amp; attempt.request?.destination!=='INTERNAL_REPAIR'" @click="prepare('execute',attempt)">核实原机并完成找回</button><button v-if="attempt.actions.execute &amp;&amp; attempt.request?.facts?.condition==='DAMAGED' &amp;&amp; attempt.request?.destination!=='FACTORY_REPAIR' &amp;&amp; attempt.request?.destination!=='INTERNAL_REPAIR'" @click="prepare('executeDamaged',attempt)">核实损坏原机并转正式维修</button><button v-if="attempt.actions.execute &amp;&amp; attempt.request?.destination==='ASSET_RETURN'" @click="prepare('executeReturn',attempt)">核实完好原机并关联归还退库</button></article>
  </fieldset></section></template>
 <style scoped>fieldset{border:0;padding:0}label{display:flex;flex-direction:column;gap:6px;margin:12px 0;max-width:640px}input,textarea{padding:8px;border:1px solid #cbd5e1;border-radius:5px}button{padding:8px 12px;margin:5px;border:1px solid #cbd5e1;border-radius:5px;background:#f8fafc}button:disabled{opacity:.5}[role=alert]{color:#b91c1c}article{border-top:1px solid #dbe3ee;padding-top:8px}</style>

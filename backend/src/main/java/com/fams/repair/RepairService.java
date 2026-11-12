@@ -475,6 +475,13 @@ public class RepairService {
                 }
             }
         }
+        actions.put("requestLoss", Boolean.TRUE.equals(actions.get("requestScrap")));
+        var reports = db.queryForList("SELECT JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.reportId'))"
+                + " FROM fams_repair_event WHERE repair_id=? AND action='REPAIR_LOSS_HANDED_OFF' ORDER BY id DESC LIMIT 1",
+                String.class, id);
+        if (!reports.isEmpty()) {
+            result.put("latestLossReportId", reports.getFirst());
+        }
         result.put("actions", actions);
         return result;
     }
@@ -962,6 +969,55 @@ public class RepairService {
         context.put("ownershipVersion", ownership);
         return new ScrapSource(id, asset, version, current.id(), row.get("source_snapshot_json").toString(),
                 json.writeValueAsString(context), borrowing);
+    }
+
+    public record LossSource(long repairId, long assetId, long repairVersion, long processorAccountId,
+            Instant acceptedAt, String contextJson) {}
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public LossSource lossSource(Actor actor, long id, long version, long assetVersion, long ownership, long lockVersion) {
+        var source = scrapSource(actor, id, version, assetVersion, ownership, lockVersion);
+        var row = header(id);
+        return new LossSource(id, source.assetId(), version, source.processorAccountId(),
+                Instant.parse(wire(row.get("accepted_at")).toString()), source.contextJson());
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void handoffToLoss(Actor actor, Current current, LossSource source, long report, long lockVersion) {
+        if (db.update("UPDATE fams_asset_business_lock SET business_type='LOST_REPORT',business_id=?,business_item_id=?,"
+                + "lock_version=lock_version+1 WHERE asset_id=? AND business_type='REPAIR' AND business_id=?"
+                + " AND business_item_id=? AND lock_version=? AND released_at IS NULL", report, report, source.assetId(),
+                source.repairId(), source.repairId(), lockVersion) != 1) {
+            throw new RepairFailure(409, "REPAIR_LOCK_CHANGED");
+        }
+        db.update("UPDATE fams_repair_request SET version=version+1,updated_at=? WHERE id=?", now(), source.repairId());
+        closeTodos(source.repairId());
+        audit(actor, current, Map.of("id", source.repairId()), "REPAIR_LOSS_HANDED_OFF",
+                source.repairVersion(), source.repairVersion() + 1, Map.of("reportId", Long.toString(report)),
+                Role.WAREHOUSE_OPERATOR.name());
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void resumeFromLoss(Actor actor, Current current, long repairId, long assetId, long processor,
+            long report, long lossItem, Long assetVersion) {
+        var row = header(repairId);
+        if (!"WAREHOUSE_PROCESSING".equals(row.get("repair_status")) || number(row, "asset_id") != assetId
+                || !java.util.Objects.equals(row.get("processor_account_id"), processor)) {
+            throw new RepairFailure(409, "REPAIR_LOSS_SOURCE_CHANGED");
+        }
+        var borrowing = loans.open(assetId);
+        loans.requireIdentity(assetId, originalLoan(row), borrowing == null ? null : borrowing.version());
+        if (db.update("UPDATE fams_asset_business_lock SET business_type='REPAIR',business_id=?,business_item_id=?,"
+                + "lock_version=lock_version+1 WHERE asset_id=? AND business_type='LOST_REPORT' AND business_id=?"
+                + " AND business_item_id=? AND released_at IS NULL", repairId, repairId, assetId, report, lossItem) != 1) {
+            throw new RepairFailure(409, "REPAIR_LOCK_CHANGED");
+        }
+        long before = number(row, "version");
+        db.update("UPDATE fams_repair_request SET asset_version=?,version=version+1,updated_at=? WHERE id=?",
+                assetVersion == null ? number(row, "asset_version") : assetVersion, now(), repairId);
+        todo(repairId, "PROCESS", "WAREHOUSE_OPERATOR", processor);
+        audit(actor, current, row, "REPAIR_LOSS_RETURNED", before, before + 1, Map.of("reportId", Long.toString(report)),
+                current.has(Role.WAREHOUSE_OPERATOR) ? Role.WAREHOUSE_OPERATOR.name() : Role.ASSET_ADMIN.name());
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

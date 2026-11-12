@@ -2,17 +2,17 @@ import type { MiniServices } from "./pages.ts";
 import { MiniRequestError } from "./session.ts";
 import type { FactorySummary } from "./repair-factory-types.ts";
 interface Asset { id: string; assetCode: string; name: string; version: number; locationId: string | null; locationName: string | null }
-interface Repair { inventoryEvidence?: { taskId: string; observationId: string; photoIds: string[] }[]; id: string; source: Asset; fault: string; status: string; version: number; assetVersion: number; ownershipVersion: number; lockVersion: number;
+interface Repair { latestLossReportId?: string; inventoryEvidence?: { taskId: string; observationId: string; photoIds: string[] }[]; id: string; source: Asset; fault: string; status: string; version: number; assetVersion: number; ownershipVersion: number; lockVersion: number;
     loanVersion?: number | null; physicalHandling?: { occurred_at: string; evidence: string }[]; inbound?: { occurred_at: string; evidence: string }[];
     loanExpectedReturnDate?: string | null; returnHandovers?: ReturnHandover[]; returnRecollections?: { handover_id: string; occurred_at: string; evidence: string }[];
     actions: Record<string, boolean>; factorySummary?: FactorySummary; photos?: { objectId: string; filename: string; contentType: string }[];
     history?: { id: string; action: string; actor_username: string; occurred_at: string }[]; historyTotal?: number }
-interface Pending { repairSourceId?: string; path: string; key: string; version: number; body?: unknown; file?: string }
+interface Pending { repairSourceId?: string; lossSource?: true; path: string; key: string; version: number; body?: unknown; file?: string }
 interface PhysicalPlace { id: string; name: string; version: number; warehouse_id?: string | null; location_type?: string }
 interface ReturnTarget { employeeName: string; organizationName: string; locationName: string; employeeVersion: number; organizationVersion: number; locationVersion: number }
 interface ReturnHandover { id: string; handover_status: string; target_snapshot_json: ReturnTarget; delivered_at: string; delivery_evidence: string; receipt_at?: string; receipt_evidence?: string }
 type ReturnMode = "delivery" | "receipt" | "refusal" | "recollection";
-interface Data { scrapReason: string; scrapCondition: string; scrapMethod: string; scrapReceiptId: string; rows: Repair[]; assets: Asset[]; detail: Repair | null; selectedAsset: string; assetPage: number; assetTotal: number;
+interface Data { lossDate?: string; lossTime?: string; lossLocation?: string; lossCircumstances?: string; scrapReason: string; scrapCondition: string; scrapMethod: string; scrapReceiptId: string; rows: Repair[]; assets: Asset[]; detail: Repair | null; selectedAsset: string; assetPage: number; assetTotal: number;
     approvalMethod: "INTERNAL_NO_COST" | "INTERNAL_OR_FACTORY"; approvalMethodIndex: number; factoryCostPolicyIndex: number; factoryCostPolicyLabels: string[]; factoryCostLimit: string;
     page: number; total: number; busy: boolean; retry: boolean; error: string; fault: string; impact: string; occurredAt: string;
     reason: string; observedCode: string; evidence: string; locationConfirmed: boolean; neverLeft: boolean; photoPath: string; photoName: string;
@@ -80,7 +80,7 @@ export function createRepairPage(getServices: () => MiniServices) {
             const detail = selectedId ? await services.sessions.request("GET", `/api/v1/mini/repairs/${selectedId}`) as Repair : null;
             if (!current(epoch)) return;
             pending = null; page.setData({ detail, retry: false, reason: "", fault: "", scrapReason: "", scrapCondition: "", scrapMethod: "",
-                scrapReceiptId: operation.repairSourceId ? result.id ?? "" : page.data.scrapReceiptId }); await read(page);
+                scrapReceiptId: operation.repairSourceId && !operation.lossSource ? result.id ?? "" : page.data.scrapReceiptId }); await read(page);
         } catch (error) { if (current(epoch)) failure(page, error); }
     };
     const confirm = async (page: Context, operation: Pending, text: string) => {
@@ -161,6 +161,30 @@ export function createRepairPage(getServices: () => MiniServices) {
                     assetVersion: row.assetVersion, ownershipVersion: row.ownershipVersion, lockVersion: row.lockVersion,
                     reason: data.scrapReason.trim(), observedCondition: data.scrapCondition.trim(), proposedDisposition: data.scrapMethod.trim(),
                 }) }, "提交维修关联报废，原维修事实保留，报废批准后仍由原处理库管执行。");
+        },
+        onLossField(this: Context, event: { currentTarget: { dataset: { field: string } }; detail: { value: string } }) {
+            const field = event.currentTarget.dataset.field;
+            if (!this.data.busy && !pending && current(generation) && ["lossDate", "lossTime", "lossLocation", "lossCircumstances"].includes(field)) {
+                this.setData({ [field]: event.detail.value });
+            }
+        },
+        async onReportLoss(this: Context) {
+            const row = this.data.detail;
+            if (this.data.busy || pending || !current(generation) || !row?.actions.requestLoss || row.lockVersion == null) return;
+            const at = new Date(this.data.lossDate + "T" + this.data.lossTime);
+            const lastLocation = this.data.lossLocation?.trim(), circumstances = this.data.lossCircumstances?.trim();
+            if (!Number.isFinite(at.getTime()) || !lastLocation || !circumstances || circumstances.length < 10) {
+                this.setData({ error: "请填写最后见到时间、地点和实物查找情况。" }); return;
+            }
+            await confirm(this, { path: "/api/v1/mini/loss-reports/internal-repairs/" + row.id, lossSource: true,
+                repairSourceId: row.id, key: services.createKey(), version: row.version, body: {
+                    assetVersion: row.assetVersion, ownershipVersion: row.ownershipVersion, lockVersion: row.lockVersion,
+                    lastSeenAt: at.toISOString(), lastLocation, circumstances,
+                } }, "提交关联报失审批并移交原维修锁，保留经办人、借用和返还目标。");
+        },
+        onOpenLoss(this: Context) {
+            const id = this.data.detail?.latestLossReportId;
+            if (id && !this.data.busy && !pending && current(generation)) services.navigate("/pages/loss-reports/index?id=" + id);
         },
         async onPhysicalAction(this: Context) {
             const row = this.data.detail, mode = this.data.physicalMode;

@@ -3,6 +3,7 @@ package com.fams.auth;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -3170,6 +3171,84 @@ class LossHttpRuntimeCase {
             db.update("DELETE FROM " + table + " WHERE repair_id IN (" + ids + ")");
         }
         db.update("DELETE FROM fams_repair_request WHERE asset_id BETWEEN 951020 AND 951023");
+    }
+
+    @Test
+    void internalRepairHandsOffTheSameLockAndRecoversBackToOriginalRepairAfterFreshApproval() throws Exception {
+        borrowing(false);
+        db.update("UPDATE fams_loan SET parameter_snapshot_json=JSON_OBJECT('timezone','Asia/Shanghai') WHERE asset_id=951020");
+        var loan = db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020");
+        String loanSnapshot = JSON.writeValueAsString(Map.of("id", loan.get("id"), "version", loan.get("version"),
+                "borrowerEmployeeId", 951002, "organizationId", 951000, "expectedReturnDate", loan.get("expected_return_date").toString()));
+        db.update("UPDATE fams_asset SET lifecycle_status='UNDER_REPAIR' WHERE id=951020");
+        db.update("""
+                INSERT INTO fams_repair_request(id,asset_id,creator_account_id,using_organization_id,
+                    responsible_employee_id,asset_version,source_snapshot_json,loan_snapshot_json,timezone_id,
+                    fault,impact,occurred_at,repair_status,allowed_method,approval_snapshot_json,processor_account_id,
+                    claimed_at,accepted_at,created_at,updated_at)
+                VALUES (951300,951020,951002,951000,951002,0,JSON_OBJECT('lifecycle','BORROWED'),?,'Asia/Shanghai',
+                    '借用实物已经接修','MEDIUM',NOW(3)-INTERVAL 3 HOUR,'WAREHOUSE_PROCESSING',
+                    'INTERNAL_NO_COST','{}',951003,NOW(3)-INTERVAL 2 HOUR,NOW(3)-INTERVAL 1 HOUR,NOW(3),NOW(3))
+                """, loanSnapshot);
+        db.update("INSERT INTO fams_asset_business_lock(asset_id,business_type,business_id,business_item_id,acquired_at)"
+                + " VALUES (951020,'REPAIR',951300,951300,NOW(3))");
+        long lockId = db.queryForObject("SELECT id FROM fams_asset_business_lock WHERE asset_id=951020", Long.class);
+        var repair = db.queryForMap("SELECT * FROM fams_repair_request WHERE id=951300");
+        String lastSeen = Instant.now().minusSeconds(1800).truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString();
+        String endpoint = "/internal-repairs/951300";
+        try {
+            var input = Map.of("assetVersion", 0, "ownershipVersion", 0, "lockVersion", 0,
+                    "lastSeenAt", lastSeen, "lastLocation", "维修办理现场", "circumstances", "维修经办人核对原现场仍未找到实物");
+            String request = JSON.writeValueAsString(input), originalKey = key();
+            var row = ok(post(warehouse, endpoint, request, 0, originalKey));
+            assertEquals(row, ok(post(warehouse, endpoint, request, 0, originalKey)));
+            assertEquals("951300", row.path("source").path("internalRepairSource").path("repairId").asText());
+            assertEquals("LOST_REPORT", db.queryForObject("SELECT business_type FROM fams_asset_business_lock"
+                    + " WHERE id=? AND released_at IS NULL", String.class, lockId));
+            String report = "/" + row.path("id").asText();
+            ok(post(admin, report + "/decision", "{\"result\":\"REJECT\",\"reason\":\"请补充维修实物查找证据\"}", 0, key()));
+            assertEquals("REPAIR", db.queryForObject("SELECT business_type FROM fams_asset_business_lock"
+                    + " WHERE id=? AND released_at IS NULL", String.class, lockId));
+            var retry = new java.util.HashMap<>(input);
+            retry.put("lockVersion", 2);
+            row = ok(post(warehouse, endpoint, JSON.writeValueAsString(retry), 2, key()));
+            report = "/" + row.path("id").asText();
+            row = ok(upload(warehouse, row.path("id").asText(), 0, key(), png()));
+            row = ok(post(admin, report + "/decision", decision(), row.path("version").asLong(), key()));
+            assertEquals(403, post(otherWarehouse, report + "/claim", null, row.path("version").asLong(), key()).statusCode());
+            ok(post(warehouse, report + "/claim", null, row.path("version").asLong(), key()));
+            row = ok(get(warehouse, report));
+            ok(post(warehouse, report + "/search", search(row), row.path("version").asLong(), key()));
+            row = ok(get(warehouse, report));
+            assertTrue(row.path("actions").path("recoverInternalRepair").asBoolean());
+            ok(post(warehouse, report + "/confirm-lost", confirmation(row), row.path("version").asLong(), key()));
+            row = ok(get(warehouse, report));
+            assertTrue(row.path("actions").path("requestInternalRepairRecovery").asBoolean());
+            var requested = ok(post(warehouse, report + "/internal-repair-recovery-requests", recoveryRequest(row),
+                    row.path("version").asLong(), key()));
+            String attempt = "/recoveries/" + requested.path("recoveryId").asText();
+            var approved = ok(post(admin, attempt + "/decision", decision(), 0, key()));
+            ok(post(warehouse, attempt + "/claim", null, approved.path("recoveryVersion").asLong(), key()));
+            row = ok(get(warehouse, report));
+            var recovery = row.path("recoveries").get(0);
+            ok(post(warehouse, attempt + "/execute-to-internal-repair", recoveryBody(row, recovery),
+                    recovery.path("version").asLong(), key()));
+            row = ok(get(warehouse, report));
+            assertEquals("951300", row.path("repairId").asText());
+            assertEquals("CONFIRMED_LOST", row.path("status").asText());
+            assertFalse(row.path("recoveredAt").asText().isBlank());
+            assertEquals("UNDER_REPAIR", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+            assertEquals("NORMAL", db.queryForObject("SELECT exception_status FROM fams_asset WHERE id=951020", String.class));
+            assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=951020"
+                    + " AND business_type='REPAIR' AND business_id=951300 AND released_at IS NULL", Integer.class));
+            var resumed = db.queryForMap("SELECT * FROM fams_repair_request WHERE id=951300");
+            for (String field : List.of("repair_status", "accepted_at", "processor_account_id", "loan_snapshot_json", "approval_snapshot_json")) {
+                assertEquals(repair.get(field), resumed.get(field));
+            }
+            assertEquals(loan, db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020"));
+        } finally {
+            cleanLinkedRepairs();
+        }
     }
 
     private JsonNode confirmedReport() throws Exception {

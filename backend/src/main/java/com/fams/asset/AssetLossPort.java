@@ -100,14 +100,22 @@ public class AssetLossPort {
         return snapshot(lockFactoryAsset(id, version, "NORMAL"));
     }
 
+    public Map<String, Object> internalRepairSubmission(long id, long version) {
+        return snapshot(lockRepairAsset(id, version, "NORMAL", "UNDER_REPAIR"));
+    }
+
     private Map<String, Object> lockFactoryAsset(long id, long version, String exception) {
+        return lockRepairAsset(id, version, exception, "FACTORY_REPAIR");
+    }
+
+    private Map<String, Object> lockRepairAsset(long id, long version, String exception, String lifecycle) {
         var rows = db.queryForList("SELECT * FROM fams_asset WHERE id=? FOR UPDATE", id);
         if (rows.isEmpty()) {
             throw new AssetHandoverPort.Failure("ASSET_NOT_FOUND", 404);
         }
         var row = rows.getFirst();
         if (!"ACTIVE".equals(row.get("card_stage"))
-                || !"FACTORY_REPAIR".equals(row.get("lifecycle_status"))
+                || !lifecycle.equals(row.get("lifecycle_status"))
                 || !exception.equals(row.get("exception_status"))
                 || ((Number) row.get("version")).longValue() != version) {
             throw new AssetHandoverPort.Failure("LOSS_ASSET_CHANGED", 409);
@@ -115,20 +123,20 @@ public class AssetLossPort {
         return row;
     }
 
-    public void requireSubmitted(long id, long version, boolean factory) {
-        lockTransitionAsset(id, version, "NORMAL", factory);
+    public void requireSubmitted(long id, long version, String repairLifecycle) {
+        lockTransitionAsset(id, version, "NORMAL", repairLifecycle);
     }
 
-    private void lockTransitionAsset(long id, long version, String exception, boolean factory) {
-        if (factory) {
-            lockFactoryAsset(id, version, exception);
+    private void lockTransitionAsset(long id, long version, String exception, String repairLifecycle) {
+        if (repairLifecycle != null) {
+            lockRepairAsset(id, version, exception, repairLifecycle);
         } else {
             locked(id, version, exception);
         }
     }
 
-    public long searching(long id, long version, long report, long actor, Instant time, boolean factory) {
-        lockTransitionAsset(id, version, "NORMAL", factory);
+    public long searching(long id, long version, long report, long actor, Instant time, String repairLifecycle) {
+        lockTransitionAsset(id, version, "NORMAL", repairLifecycle);
         if (db.update(
                         "UPDATE fams_asset SET"
                             + " exception_status='SEARCHING',version=version+1,updated_by=?,updated_at=?"
@@ -149,8 +157,8 @@ public class AssetLossPort {
         return version + 1;
     }
 
-    public long confirmedLost(long id, long version, long report, long actor, Instant time, boolean factory) {
-        lockTransitionAsset(id, version, "SEARCHING", factory);
+    public long confirmedLost(long id, long version, long report, long actor, Instant time, String repairLifecycle) {
+        lockTransitionAsset(id, version, "SEARCHING", repairLifecycle);
         if (db.update(
                         "UPDATE fams_asset SET exception_status='LOST',version=version+1,"
                                 + "updated_by=?,updated_at=? WHERE id=? AND version=?",
@@ -448,6 +456,22 @@ public class AssetLossPort {
             String observedSerial, long location, long locationVersion, long report, long actor, Instant time) {
         validateFactoryRecovery(id, version, exception, observedCode, observedSerial, location, locationVersion);
         return clearRecoveryException(id, version, location, report, actor, time, "LOSS_RECOVERED_FOR_FACTORY");
+    }
+
+    public void requireInternalRepairRecovery(long id, long version) {
+        lockRepairAsset(id, version, "LOST", "UNDER_REPAIR");
+    }
+
+    public void validateInternalRepairRecovery(long id, long version, String exception,
+            String observedCode, String observedSerial, long location, long locationVersion) {
+        var row = lockRepairAsset(id, version, exception, "UNDER_REPAIR");
+        verifyLinkedRecoveryFacts(row, observedCode, observedSerial, location, locationVersion);
+    }
+
+    public long recoverForInternalRepair(long id, long version, String exception, String observedCode,
+            String observedSerial, long location, long locationVersion, long report, long actor, Instant time) {
+        validateInternalRepairRecovery(id, version, exception, observedCode, observedSerial, location, locationVersion);
+        return clearRecoveryException(id, version, location, report, actor, time, "LOSS_RECOVERED_FOR_INTERNAL_REPAIR");
     }
 
     private long clearRecoveryException(long id, long version, long location, long report,

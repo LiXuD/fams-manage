@@ -14,7 +14,9 @@ import { factoryEventNames, factoryRoundStates, factoryScopeStates } from "@/rep
 import { useSessionStore } from "@/auth/sessionStore";
 import { RepairApiError, repairProblem, repairRequest, repairStates, type Repair, type RepairAsset, type RepairMutation, type RepairPhoto } from "@/repair/api";
 import { ScrapApiError, scrapRequest, type ScrapIntent } from "@/scrap/api";
-type PageMutation = RepairMutation | (ScrapIntent & { repairSourceId: string });
+import { LossApiError, lossRequest, type LossIntent } from "@/loss/api";
+type PageMutation = RepairMutation | ((ScrapIntent | LossIntent) & { repairSourceId: string; lossSource?: true });
+const lossLastSeen = ref(""), lossLocation = ref(""), lossCircumstances = ref("");
 const scrapReason = ref(""), scrapCondition = ref(""), scrapMethod = ref(""), scrapReceiptId = ref("");
 const session = useSessionStore(), route = useRoute();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, route.params.id]));
@@ -50,7 +52,7 @@ function reset() {
   busy.value = false; factoryLocked.value = false; total.value = 0; assetTotal.value = 0; page.value = 1; assetPage.value = 1;
 }
 function failure(cause: unknown) {
-  if (cause instanceof ScrapApiError) cause = new RepairApiError(cause.status, cause.code, {});
+  if (cause instanceof ScrapApiError || cause instanceof LossApiError) cause = new RepairApiError(cause.status, cause.code, {});
   if (cause instanceof RepairApiError && [401, 403, 404].includes(cause.status)) reset();
   error.value = repairProblem(cause);
 }
@@ -131,22 +133,39 @@ function prepareScrap() {
       reason: scrapReason.value.trim(), observedCondition: scrapCondition.value.trim(), proposedDisposition: scrapMethod.value.trim() }),
   });
 }
+watch(() => detail.value?.id, () => {
+  lossLastSeen.value = ""; lossLocation.value = ""; lossCircumstances.value = "";
+});
+function prepareLoss() {
+  const row = detail.value;
+  if (locked.value || !row?.actions?.requestLoss || row.lockVersion == null) return;
+  const at = new Date(lossLastSeen.value);
+  if (!Number.isFinite(at.getTime()) || !lossLocation.value.trim() || lossCircumstances.value.trim().length < 10) {
+    error.value = "请填写最后见到时间、地点和实物查找情况。"; return;
+  }
+  confirmation.value = { path: "/internal-repairs/" + row.id, repairSourceId: row.id, lossSource: true,
+    key: crypto.randomUUID(), version: row.version, summary: "提交关联报失审批并移交原维修锁，保留经办人、借用和返还目标。",
+    body: { assetVersion: row.assetVersion, ownershipVersion: row.ownershipVersion, lockVersion: row.lockVersion,
+      lastSeenAt: at.toISOString(), lastLocation: lossLocation.value.trim(), circumstances: lossCircumstances.value.trim() } };
+}
 async function perform() {
   if (busy.value || !pending.value) return;
   const operation = pending.value, epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
   try {
     const linked = "repairSourceId" in operation;
-    const result = linked ? await scrapRequest<{ id: string; repairId?: string }>(operation.path, operation)
+    const linkedLoss = linked && operation.lossSource;
+    const result = linkedLoss ? await lossRequest<{ id: string; repairId?: string }>(operation.path, operation as LossIntent)
+      : linked ? await scrapRequest<{ id: string; repairId?: string }>(operation.path, operation as ScrapIntent)
       : await repairRequest<Repair & { repairId?: string }>(operation.path, operation);
     const id = linked ? operation.repairSourceId : result.repairId ?? result.id;
     const selected = await repairRequest<Repair>(`/${id}`);
     const list = await repairRequest<{ items: Repair[]; total: number }>(`?page=${page.value}&pageSize=20`);
     if (current(epoch, owner)) { pending.value = null; detail.value = selected; rows.value = list.items; total.value = list.total;
       selectedFile.value = null; confirmedPlace.value = false; neverLeft.value = false; evidence.value = ""; observedCode.value = "";
-      if (linked) { scrapReceiptId.value = result.id; scrapReason.value = ""; scrapCondition.value = ""; scrapMethod.value = ""; }
-      notice.value = linked ? "关联报废申请已保存。" : "本次结果已保存。批准、库管受理和实际修复分别留痕。"; clearPhoto(); }
+      if (linked && !linkedLoss) { scrapReceiptId.value = result.id; scrapReason.value = ""; scrapCondition.value = ""; scrapMethod.value = ""; }
+      notice.value = linkedLoss ? "关联报失申请已保存。" : linked ? "关联报废申请已保存。" : "本次结果已保存。批准、库管受理和实际修复分别留痕。"; clearPhoto(); }
   } catch (cause) {
-    if (current(epoch, owner)) { if ((cause instanceof RepairApiError || cause instanceof ScrapApiError) && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
+    if (current(epoch, owner)) { if ((cause instanceof RepairApiError || cause instanceof ScrapApiError || cause instanceof LossApiError) && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
   } finally { if (current(epoch, owner)) busy.value = false; }
 }
 async function confirm() { if (!confirmation.value || busy.value) return; pending.value = confirmation.value; confirmation.value = null; await perform(); }
@@ -192,6 +211,14 @@ onBeforeUnmount(() => { live = false; reset(); });
         <figure v-if="preview"><img :src="preview" :alt="`故障照片：${previewName}`"><figcaption>{{ previewName }}</figcaption><button @click="clearPhoto">关闭故障照片</button></figure>
       </section>
       <fieldset v-if="detail.actions?.approve || detail.actions?.cancel" :disabled="locked"><label>本次决定原因<textarea v-model="reason" maxlength="1000" /></label><template v-if="detail.actions.approve"><label>本次批准处理方式<select v-model="approvalMethod" aria-label="本次批准处理方式"><option value="INTERNAL_NO_COST">仅内部无费用处理</option><option value="INTERNAL_OR_FACTORY">内部或必要时返厂</option></select></label><template v-if="approvalMethod === 'INTERNAL_OR_FACTORY'"><label>本维修所有返厂轮次费用约束<select v-model="factoryCostPolicy" aria-label="本次返厂费用约束"><option value="NO_COST">无费用</option><option value="LIMITED">所有轮次累计限额</option><option value="UNLIMITED">不限费用</option></select></label><label v-if="factoryCostPolicy === 'LIMITED'">所有轮次累计正限额（元）<input v-model="factoryCostLimit" inputmode="decimal" maxlength="15"></label></template><p>一次批准所选范围及明确费用约束。批准不等于已领取、接修或寄出。</p><button @click="prepare('approve')">{{ approvalMethod === 'INTERNAL_OR_FACTORY' ? '批准内部或必要时返厂' : '批准内部无费用处理' }}</button><button @click="prepare('reject')">驳回无效报修</button></template><button v-if="detail.actions.cancel" @click="prepare('cancel')">取消尚未批准的报修</button></fieldset>
+      <RouterLink v-if="detail.latestLossReportId" :to="'/loss-reports/' + detail.latestLossReportId">查看维修关联报失</RouterLink>
+      <fieldset v-if="detail.actions?.requestLoss" :disabled="locked">
+        <legend>内部维修实物缺失</legend>
+        <label>最后见到时间<input v-model="lossLastSeen" type="datetime-local" /></label>
+        <label>最后见到地点<input v-model="lossLocation" maxlength="500" /></label>
+        <label>实物查找情况<textarea v-model="lossCircumstances" maxlength="2000" /></label>
+        <button @click="prepareLoss">核对维修关联报失</button>
+      </fieldset>
       <RouterLink v-if="scrapReceiptId" :to="'/scrap-requests/' + scrapReceiptId">查看维修关联报废</RouterLink>
       <fieldset v-if="detail.actions?.requestScrap" :disabled="locked">
         <legend>从维修发起关联报废</legend>

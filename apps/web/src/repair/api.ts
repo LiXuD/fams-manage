@@ -6,7 +6,7 @@ export interface RepairPhoto { objectId: string; filename: string; contentType: 
 export interface RepairReturnTarget { custodyType: string; employeeId: string; employeeName: string; employeeVersion: number;
   organizationId: string; organizationName: string; organizationVersion: number; locationId: string; locationName: string; locationVersion: number; receiverAccountId: string }
 export interface RepairReturnHandover { id: string; handover_status: string; target_snapshot_json: RepairReturnTarget; delivered_at: string; delivery_evidence: string; receipt_at: string | null; receipt_evidence: string | null }
-export interface Repair { id: string; assetId: string; creatorAccountId: string; source: RepairAsset; fault: string; impact: string;
+export interface Repair { latestLossReportId?: string; id: string; assetId: string; creatorAccountId: string; source: RepairAsset; fault: string; impact: string;
   occurredAt: string; status: string; version: number; assetVersion: number; ownershipVersion: number;
   processorAccountId: string | null; acceptedAt: string | null; completedAt: string | null; lockVersion?: number | null;
   loanVersion?: number | null; physicalHandling?: { handler_employee_id: string; actual_location_id: string; occurred_at: string; evidence: string }[];
@@ -15,7 +15,7 @@ export interface Repair { id: string; assetId: string; creatorAccountId: string;
   approvedReturnTargets?: { id: string; target_json: RepairReturnTarget; approved_at: string }[];
   returnRecollections?: { handover_id: string; occurred_at: string; evidence: string }[];
   factorySummary?: FactorySummary;
-  photosAvailable?: boolean; photos?: RepairPhoto[]; actions?: { requestScrap?: boolean; approve: boolean; claim: boolean; acceptInPlace: boolean; completeInPlace: boolean; addFaultPhoto: boolean; cancel: boolean; acceptAway?: boolean; closeInbound?: boolean; deliverReturn?: boolean; receiveReturn?: boolean; refuseReturn?: boolean; recollectReturn?: boolean; changeReturnTarget?: boolean; proxyReturn?: boolean };
+  photosAvailable?: boolean; photos?: RepairPhoto[]; actions?: { requestScrap?: boolean; requestLoss?: boolean; approve: boolean; claim: boolean; acceptInPlace: boolean; completeInPlace: boolean; addFaultPhoto: boolean; cancel: boolean; acceptAway?: boolean; closeInbound?: boolean; deliverReturn?: boolean; receiveReturn?: boolean; refuseReturn?: boolean; recollectReturn?: boolean; changeReturnTarget?: boolean; proxyReturn?: boolean };
   inventoryEvidence?: { taskId: string; observationId: string; clientEventId: string; photoIds: string[] }[];
   returnOrigin?: { followupId: string; returnId: string; closedLoanId: string | null; processorAccountId: string } | null;
   history?: { id: string; action: string; actor_username: string; actor_role: string; occurred_at: string; detail_json: Record<string, unknown> }[]; historyTotal?: number }

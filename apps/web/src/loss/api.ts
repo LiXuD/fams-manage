@@ -1,6 +1,6 @@
 import { useSessionStore } from "@/auth/sessionStore";
 export interface LossAsset { id: string; assetCode: string; name: string; version: number; lifecycle: string; responsibleEmployeeId?: string; departmentResponsibleEmployeeId?: string }
-export interface LossReport { id: string; assetId: string; status: string; source: LossAsset & { factorySource?: { repairId: string; roundId: string };
+export interface LossReport { id: string; assetId: string; status: string; source: LossAsset & { factorySource?: { repairId: string; roundId: string }; internalRepairSource?: { repairId: string };
   inventorySource?: { taskId: string; itemId: string; reasonId: string }; returnSource?: { returnId: string; followupId: string } }; version: number; assetVersion: number;
   ownershipVersion: number; lockVersion?: number; processorAccountId: string | null; lastSeenAt: string; lastLocation: string;
   circumstances: string; transferId?: string; returnId?: string | null; repairId?: string | null; recoveredAt?: string; recoveryAsset?: LossRecoveryAsset | null; recoveries?: LossRecovery[]; recoveriesTotal?: number; confirmedLostAt?: string; lastFollowUpAt?: string; nextReviewDate: string | null; photosAvailable?: boolean;
