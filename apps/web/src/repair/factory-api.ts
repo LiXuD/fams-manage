@@ -25,7 +25,7 @@ export async function factoryRequest<T>(repair: string, path = "", mutation?: Fa
   return await response.json() as T;
 }
 export const factoryRoundStates: Record<string, string> = {
-  PENDING_DISPATCH: "待寄出", DISPATCHED: "已寄出，待原机收回", RECEIVED: "原机已实际收回", CANCELLED: "待寄出轮次已取消",
+  PENDING_DISPATCH: "待寄出", DISPATCHED: "已寄出，待原机收回", RECEIVED: "原机已实际收回", CANCELLED: "待寄出轮次已取消", INITIAL_RETIRED: "期初批次已撤销",
 };
 export const factoryScopeStates: Record<string, string> = {
   PENDING: "待管理员确认返厂范围", APPROVED: "已批准返厂范围", REJECTED: "范围变更已驳回", WITHDRAWN: "范围申请已撤回",

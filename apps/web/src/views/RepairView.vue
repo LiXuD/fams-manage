@@ -204,6 +204,7 @@ onBeforeUnmount(() => { live = false; reset(); });
       <button :disabled="locked || page === 1" @click="paginate(-1)">上一页报修</button>第 {{ page }} 页 / 共 {{ total }} 条<button :disabled="locked || page * 20 >= total" @click="paginate(1)">下一页报修</button>
     </section>
     <section v-if="detail" aria-label="当前报修详情"><h2>{{ detail.source.assetCode }} · {{ detail.source.name }}</h2><p>{{ repairStates[detail.status] }} · {{ detail.fault }} · 实际发生 {{ new Date(detail.occurredAt).toLocaleString() }}</p>
+      <p v-if="detail.source.initialSource">期初承接 {{detail.source.initialSource.batchId}} · 第 {{detail.source.initialSource.sheetRow}} 行 · {{detail.source.initialSource.stage}}。{{detail.source.initialSource.evidence}}<template v-if="detail.source.initialSource.factoryDestination"> · 厂家去向 {{detail.source.initialSource.factoryDestination}}</template></p>
       <p v-if="detail.returnOrigin">来自损坏归还 {{ detail.returnOrigin.returnId }}，源后续 {{ detail.returnOrigin.followupId }}；原借用 {{ detail.returnOrigin.closedLoanId || '无' }} 已关闭，实际接修和验收入库后才结束源义务。</p>
       <p>提交时位置：{{ detail.source.locationName || '待核实' }}。原责任与借用作为返回依据保留；实物离开过或原目标失效时，不能直接原地恢复。</p>
       <section><h3>原始故障照片</h3><p v-if="!detail.photosAvailable">照片服务暂不可用，请联系管理员。</p><ul><li v-for="photo in detail.photos" :key="photo.objectId">{{ photo.filename }}<button :disabled="locked || photo.scanStatus !== 'CLEAN'" @click="readPhoto(photo)">读取故障照片 {{ photo.filename }}</button></li></ul>

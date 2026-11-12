@@ -1,7 +1,7 @@
 import type { MiniServices } from "./pages.ts";
 import { MiniRequestError } from "./session.ts";
 import type { FactorySummary } from "./repair-factory-types.ts";
-interface Asset { id: string; assetCode: string; name: string; version: number; locationId: string | null; locationName: string | null }
+interface Asset { initialSource?: { batchId: string; sheetRow: number; stage: string; evidence: string; factoryDestination?: string }; id: string; assetCode: string; name: string; version: number; locationId: string | null; locationName: string | null }
 interface Repair { latestLossReportId?: string; inventoryEvidence?: { taskId: string; observationId: string; photoIds: string[] }[]; id: string; source: Asset; fault: string; status: string; version: number; assetVersion: number; ownershipVersion: number; lockVersion: number;
     loanVersion?: number | null; physicalHandling?: { occurred_at: string; evidence: string }[]; inbound?: { occurred_at: string; evidence: string }[];
     loanExpectedReturnDate?: string | null; returnHandovers?: ReturnHandover[]; returnRecollections?: { handover_id: string; occurred_at: string; evidence: string }[];

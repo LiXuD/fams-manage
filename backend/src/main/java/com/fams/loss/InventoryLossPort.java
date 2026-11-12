@@ -35,7 +35,7 @@ public class InventoryLossPort {
     private final JdbcTemplate db;
     private final LossService reports;
 
-    public InventoryLossPort(JdbcTemplate db, LossService reports) {
+    InventoryLossPort(JdbcTemplate db, LossService reports) {
         this.db = db;
         this.reports = reports;
     }

@@ -161,6 +161,19 @@ public class AssetRepairPort {
         return json.writeValueAsString(snapshot(row));
     }
 
+    public Map<String, Object> beginInitialRepair(long asset, boolean factory) {
+        var row = locked(asset, 0);
+        if (!available(row) || !"INITIAL_IMPORT".equals(row.get("source_text"))) {
+            throw new AssetHandoverPort.Failure("REPAIR_ASSET_CHANGED", 409);
+        }
+        var source = snapshot(row);
+        if (db.update("UPDATE fams_asset SET lifecycle_status=? WHERE id=? AND version=0",
+                factory ? "FACTORY_REPAIR" : "UNDER_REPAIR", asset) != 1) {
+            throw new AssetHandoverPort.Failure("REPAIR_ASSET_CHANGED", 409);
+        }
+        return source;
+    }
+
     public long accept(
             long assetId,
             long version,
