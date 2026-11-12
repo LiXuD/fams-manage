@@ -146,6 +146,7 @@ public class LossService {
                         "SELECT COUNT(*) FROM fams_loss_event WHERE report_id=?", Long.class, id));
         boolean pending = "PENDING_ADMIN_DECISION".equals(row.get("report_status"));
         Long factoryProcessor = factoryProcessor(row);
+        Long returnProcessor = returnProcessor(row);
         result.put(
                 "confirmation",
                 row.get("confirmation_snapshot_json") == null
@@ -210,7 +211,8 @@ public class LossService {
                         "claim",
                         "WAITING_WAREHOUSE_CLAIM".equals(row.get("report_status"))
                                 && current.has(Role.WAREHOUSE_OPERATOR)
-                                && (factoryProcessor == null || factoryProcessor == current.id()),
+                                && (factoryProcessor == null || factoryProcessor == current.id())
+                                && (returnProcessor == null || returnProcessor == current.id()),
                         "search",
                         "VERIFYING".equals(row.get("report_status"))
                                 && current.has(Role.WAREHOUSE_OPERATOR)
@@ -310,6 +312,26 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
+    long submitReturn(Actor actor, com.fams.business.ReturnLossOpeningPort.Opening opening) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.WAREHOUSE_OPERATOR);
+        if (current.id() != opening.processorAccountId()) {
+            throw new LossFailure(403, "LOSS_RETURN_PROCESSOR_REQUIRED");
+        }
+        var facts = opening.facts();
+        validTime(facts.lastSeenAt());
+        var snapshot = assets.returnSubmission(opening.assetId(), opening.assetVersion());
+        snapshot.put("returnSource", Map.of("returnId", Long.toString(opening.returnId()),
+                "followupId", Long.toString(opening.followupId()),
+                "processorAccountId", Long.toString(opening.processorAccountId())));
+        var input = new LossInput.Submission(opening.assetId(), opening.assetVersion(), facts.lastSeenAt(),
+                facts.lastLocation(), facts.circumstances());
+        long id = insertReport(current, input, json.writeValueAsString(snapshot));
+        todo(id, "APPROVAL", "ASSET_ADMIN", null);
+        audit(actor, current, header(id), "LOSS_REPORTED_FROM_RETURN", 0, input);
+        return id;
+    }
+
     private long insertReport(Current current, LossInput.Submission input, String source) {
         var snapshot = json.readTree(source);
         db.update(
@@ -336,8 +358,20 @@ public class LossService {
         return source.isMissingNode() ? null : Long.valueOf(source.path("processorAccountId").asText());
     }
 
+    private Long returnProcessor(Map<String, Object> row) {
+        var source = json.readTree(row.get("source_snapshot_json").toString()).path("returnSource");
+        return source.isMissingNode() ? null : Long.valueOf(source.path("processorAccountId").asText());
+    }
+
     private void releaseInitialReport(Actor actor, Map<String, Object> row, String reason) {
-        var source = json.readTree(row.get("source_snapshot_json").toString()).path("factorySource");
+        var origin = json.readTree(row.get("source_snapshot_json").toString());
+        var returned = origin.path("returnSource");
+        if (!returned.isMissingNode()) {
+            returns.restoreMissing(Long.parseLong(returned.path("followupId").asText()), number(row, "asset_id"),
+                    number(row, "id"));
+            return;
+        }
+        var source = origin.path("factorySource");
         if (source.isMissingNode()) {
             release(row, reason);
             return;
@@ -385,7 +419,7 @@ public class LossService {
                 id);
         closeTodos(id);
         if (approve) {
-            todo(id, "CLAIM", "WAREHOUSE_OPERATOR", factoryProcessor);
+            todo(id, "CLAIM", "WAREHOUSE_OPERATOR", factoryProcessor == null ? returnProcessor(row) : factoryProcessor);
         } else {
             releaseInitialReport(actor, row, "LOSS_REJECTED");
         }
@@ -434,6 +468,10 @@ public class LossService {
         Long factoryProcessor = factoryProcessor(row);
         if (factoryProcessor != null && factoryProcessor != current.id()) {
             throw new LossFailure(403, "LOSS_FACTORY_PROCESSOR_REQUIRED");
+        }
+        Long returnProcessor = returnProcessor(row);
+        if (returnProcessor != null && returnProcessor != current.id()) {
+            throw new LossFailure(403, "LOSS_RETURN_PROCESSOR_REQUIRED");
         }
         assets.requireSubmitted(number(row, "asset_id"), number(row, "asset_version"), factoryProcessor != null);
         db.update(

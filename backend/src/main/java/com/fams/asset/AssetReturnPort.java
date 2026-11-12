@@ -58,8 +58,8 @@ public class AssetReturnPort {
         }
         Timestamp now = Timestamp.from(time);
         if ("MISSING".equals(result)) {
-            db.update("UPDATE fams_asset SET exception_status='SEARCHING',version=version+1,updated_by=?,updated_at=?"
-                    + " WHERE id=? AND version=?", actor, now, asset, version);
+            db.update("UPDATE fams_asset SET version=version+1,updated_by=?,updated_at=? WHERE id=? AND version=?",
+                    actor, now, asset, version);
         } else {
             if (!java.util.List.of("NORMAL", "DAMAGED").contains(result) || warehouse == null || location == null) {
                 throw new AssetHandoverPort.Failure("ASSET_RETURN_INVALID", 400);
@@ -74,4 +74,17 @@ public class AssetReturnPort {
                 : "DAMAGED".equals(result) ? "RETURN_DAMAGE_REPAIR" : "RETURN_ACCEPTED", time,
                 json.writeValueAsString(Map.of("returnId", Long.toString(source), "inspectionResult", result)), actor);
     }
+
+    /** The loan owner has verified the pending continuation lock on a legacy missing return. */
+    public long prepareLegacyMissingReturn(long asset, long version, long source, long actor, Instant time) {
+        if (db.update("UPDATE fams_asset SET exception_status='NORMAL',version=version+1,updated_by=?,updated_at=?"
+                + " WHERE id=? AND version=? AND card_stage='ACTIVE' AND exception_status='SEARCHING'"
+                + " AND lifecycle_status IN ('BORROWED','IN_USE')", actor, Timestamp.from(time), asset, version) != 1) {
+            throw new AssetHandoverPort.Failure("RETURN_ASSET_CHANGED", 409);
+        }
+        mapper.event(asset, "RETURN_MISSING_APPROVAL_REQUIRED", time,
+                json.writeValueAsString(Map.of("returnId", Long.toString(source))), actor);
+        return version + 1;
+    }
+
 }

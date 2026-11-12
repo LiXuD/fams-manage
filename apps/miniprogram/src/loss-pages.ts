@@ -6,7 +6,7 @@ interface Photo { objectId: string; filename: string; contentType: string }
 interface Recovery { request?: { destination?: string; facts?: Record<string,unknown> }; id: string; version: number; assetVersion: number; ownershipVersion: number; status: string; processorAccountId: string | null; actions: Record<string,boolean> }
 interface RecoveryAsset { lifecycle?: string; version: number; serialNumber: string | null; locationId: string | null; locationVersion: number | null; locationName: string | null }
 interface Report { id: string; source: Asset & { factorySource?: { repairId: string; roundId: string };
-    inventorySource?: { taskId: string; itemId: string; reasonId: string } }; status: string; version: number; assetVersion: number; ownershipVersion: number; lockVersion: number;
+    inventorySource?: { taskId: string; itemId: string; reasonId: string }; returnSource?: { returnId: string; followupId: string } }; status: string; version: number; assetVersion: number; ownershipVersion: number; lockVersion: number;
     transferId?: string; returnId?: string | null; repairId?: string | null; recoveredAt?: string; recoveryAsset?: RecoveryAsset | null; recoveries?: Recovery[]; recoveriesTotal?: number; confirmedLostAt?: string; lastFollowUpAt?: string; lastSeenAt: string; lastLocation: string; circumstances: string; processorAccountId: string | null; nextReviewDate: string | null;
     actions?: Record<string, boolean>; photos?: Photo[]; history?: { id: string; action: string; actor_username: string; occurred_at: string }[] }
 interface Intent { readonly path: string; readonly lossReportId?: string; readonly key: string; readonly version: number; readonly body?: string; readonly file?: FactoryEvidenceFile; readonly label: string }

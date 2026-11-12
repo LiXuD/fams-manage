@@ -90,6 +90,11 @@ public class AssetLossPort {
         return json.writeValueAsString(snapshot(row));
     }
 
+    /** The return owner already holds and validates the source business lock. */
+    public Map<String, Object> returnSubmission(long id, long version) {
+        return snapshot(locked(id, version, "NORMAL"));
+    }
+
     /** Captures custody for a factory loss after the repair owner validates its active lock. */
     public Map<String, Object> factorySubmission(long id, long version) {
         return snapshot(lockFactoryAsset(id, version, "NORMAL"));

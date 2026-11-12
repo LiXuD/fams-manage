@@ -36,4 +36,13 @@ public class LossReturnPort {
             throw new Failure(failure.getMessage(), failure.status());
         }
     }
+
+    public void restoreMissing(long followupId, long asset, long report) {
+        try {
+            returns.restoreMissing(followupId, asset, report);
+        } catch (LoanFailure failure) {
+            throw new Failure(failure.getMessage(), failure.status());
+        }
+    }
+
 }
