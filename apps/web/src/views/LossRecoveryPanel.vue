@@ -89,7 +89,7 @@ function transferTarget(): TransferTarget {
     locationId: place.id, referenceVersions };
 }
 const factoryChecked = ref(false), factoryCondition = ref("INTACT");
-const internalRepair = computed(() => !!props.report.source.internalRepairSource);
+const internalRepair = computed(() => !!props.report.source?.internalRepairSource);
 const retainedDestination = computed(() => internalRepair.value ? "INTERNAL_REPAIR" : "FACTORY_REPAIR");
 const recoverRetainedAction = computed(() => internalRepair.value ? "recoverInternalRepair" : "recoverFactory");
 const requestRetainedAction = computed(() => internalRepair.value ? "requestInternalRepairRecovery" : "requestFactoryRecovery");
@@ -172,8 +172,8 @@ function prepare(action:string,attempt?:LossRecovery){
 </script>
 <template><section aria-label="原责任完好找回"><h3>找回核实与实际去向</h3><p>查找中沿原核实授权；已确认遗失须新建申请并重新批准认领。责任或位置变化须关联后续；损坏找回通过对应申请与核实转入正式维修。</p><p v-if="error" role="alert">{{error}}</p>
  <p v-if="report.recoveredAt">原实物已找回：{{report.recoveredAt}}。原遗失及后续履历继续保留。</p>
- <p v-if="report.repairId &amp;&amp; report.source.internalRepairSource">已交回原内部维修 {{report.repairId}}，请在原维修单继续办理。</p>
- <p v-if="report.repairId &amp;&amp; report.source.factorySource">已交回原返厂维修 {{report.repairId}}，请在原轮次登记实际收回。</p>
+ <p v-if="report.repairId &amp;&amp; report.source?.internalRepairSource">已交回原内部维修 {{report.repairId}}，请在原维修单继续办理。</p>
+ <p v-if="report.repairId &amp;&amp; report.source?.factorySource">已交回原返厂维修 {{report.repairId}}，请在原轮次登记实际收回。</p>
  <p v-else-if="report.repairId">已关联正式维修 {{report.repairId}}，请前往维修管理查看审批和实际办理进度。</p>
  <fieldset :disabled="locked"><template v-if="report.recoveryAsset"><p>登记位置：{{report.recoveryAsset.locationName??'缺少登记位置'}}；登记序列号：{{report.recoveryAsset.serialNumber??'未登记'}}</p>
  <label>实际原机编码<input v-model="observedCode" maxlength="64"/></label><label>实际原机序列号（登记有值时必填）<input v-model="serial" maxlength="128"/></label><label>实际找回时间<input v-model="foundAt" type="datetime-local" step="1"/></label><label>找回实物及原保管核实证据<textarea v-model="evidence" maxlength="2000"/></label><label><input v-model="checked" type="checkbox"/>已对照原机身份，亲见实物完好且仍由原责任人在登记位置保管</label></template>
