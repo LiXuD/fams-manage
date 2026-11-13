@@ -166,8 +166,11 @@ class DutyHttpRuntimeCase {
                 INSERT INTO fams_todo (pool_type,assignee_account_id,business_type,business_id,todo_type,todo_status,opened_at)
                 VALUES ('WAREHOUSE_OPERATOR',931004,'TRANSFER',931001,'EXECUTION','OPEN',NOW(3))
                 """);
-        db.update("UPDATE fams_employee SET status='DISABLED' WHERE id=?", WAREHOUSE);
-        reassignments.scan();
+        assertEquals(200, code(setAccountStatus(system, WAREHOUSE, 0, "DISABLE")));
+        assertEquals(1, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_todo WHERE business_type='TRANSFER' AND business_id=931001
+                    AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1
+                """, Integer.class));
         reassignments.scan();
         assertEquals(1, db.queryForObject("""
                 SELECT COUNT(*) FROM fams_todo WHERE business_type='TRANSFER' AND business_id=931001
@@ -177,8 +180,7 @@ class DutyHttpRuntimeCase {
                 SELECT assignee_account_id FROM fams_todo WHERE business_type='TRANSFER' AND business_id=931001
                     AND todo_type='EXECUTION' AND active_guard=1
                 """, Long.class));
-        db.update("UPDATE fams_employee SET status='ACTIVE' WHERE id=?", WAREHOUSE);
-        reassignments.scan();
+        assertEquals(200, code(setAccountStatus(system, WAREHOUSE, 1, "ENABLE")));
         assertEquals(1, db.queryForObject("""
                 SELECT COUNT(*) FROM fams_todo WHERE business_type='TRANSFER' AND business_id=931001
                     AND todo_type='REASSIGNMENT_REQUIRED' AND todo_status='CLOSED' AND closed_at IS NOT NULL
@@ -259,6 +261,17 @@ class DutyHttpRuntimeCase {
     private HttpResponse<String> get(Session session, String path) throws Exception {
         return http.send(HttpRequest.newBuilder(URI.create(base() + path))
                 .header("Cookie", session.cookie()).GET().build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> setAccountStatus(Session session, long id, long version, String action)
+            throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create(base() + "/system-accounts/" + id + "/status"))
+                .header("Content-Type", "application/json").header("Cookie", session.cookie())
+                .header("X-CSRF-Token", session.csrf()).header("Idempotency-Key", UUID.randomUUID().toString())
+                .header("If-Match-Version", Long.toString(version))
+                .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(
+                        Map.of("action", action, "reason", "Verification of ownership reminder"))))
+                .build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> put(Session session, String role, long version, long primary, Long backup)

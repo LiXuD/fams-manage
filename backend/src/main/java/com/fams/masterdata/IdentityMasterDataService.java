@@ -1,5 +1,8 @@
 package com.fams.masterdata;
 
+import com.fams.auth.WorkforceAvailabilityChanged;
+import org.springframework.context.ApplicationEventPublisher;
+
 import java.text.Normalizer;
 import java.time.Clock;
 import java.time.Duration;
@@ -41,6 +44,7 @@ class IdentityMasterDataService {
     private final IdentityImportParser importParser;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
     IdentityMasterDataService(
             IdentityMasterDataMapper mapper,
@@ -48,13 +52,15 @@ class IdentityMasterDataService {
             MasterDataFingerprint fingerprint,
             IdentityImportParser importParser,
             ObjectMapper objectMapper,
-            Clock authClock) {
+            Clock authClock,
+            ApplicationEventPublisher events) {
         this.mapper = mapper;
         this.phoneCodec = phoneCodec;
         this.fingerprint = fingerprint;
         this.importParser = importParser;
         this.objectMapper = objectMapper;
         this.clock = authClock;
+        this.events = events;
     }
 
     PageOrganization listOrganizations(int page, int pageSize) {
@@ -388,6 +394,7 @@ class IdentityMasterDataService {
             mapper.disableEmployeeAccount(id, actorId, now);
         }
         audit(actorId, requestId, enabled ? "EMPLOYEE_ENABLED" : "EMPLOYEE_DISABLED", id, now);
+        events.publishEvent(new WorkforceAvailabilityChanged());
         return getEmployee(id);
     }
 

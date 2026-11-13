@@ -15,6 +15,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -37,7 +38,7 @@ class ConfigurationAnomalyService {
     }
 
     @Scheduled(fixedDelay = 60000, initialDelay = 60000)
-    @Transactional(isolation = Isolation.READ_COMMITTED)
+    @Transactional(isolation = Isolation.READ_COMMITTED, propagation = Propagation.REQUIRES_NEW)
     public void scan() {
         Timestamp now = Timestamp.from(clock.instant());
         reconcileRole("ASSET_ADMIN", "NO_ASSET_ADMIN", now);
