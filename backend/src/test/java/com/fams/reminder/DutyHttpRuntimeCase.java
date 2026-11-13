@@ -452,6 +452,40 @@ class DutyHttpRuntimeCase {
         verifyInboundTimingReport(restored, reportWarehouse);
         verifyMovementTrend(restored, reportWarehouse);
         verifyAssetDistribution(restored, reportWarehouse);
+        verifyAssetStatusDrilldown(restored, reportWarehouse);
+    }
+
+    private void verifyAssetStatusDrilldown(Session administrator, Session warehouse) throws Exception {
+        var report = "/operations-reports";
+        var summary = ok(get(administrator, report + "?from=2026-11-01&toExclusive=2026-12-01"));
+        var assets = report + "/assets";
+        var groups = summary.path("currentAssets");
+        assertTrue(groups.size() > 1);
+        for (var group : groups) {
+            var filter = "?lifecycle=" + group.path("lifecycle").asText()
+                    + "&exception=" + group.path("exception").asText();
+            var details = ok(get(administrator, assets + filter)).path("items");
+            assertEquals(group.path("count").asInt(), details.size());
+            for (var asset : details) {
+                assertEquals(group.path("lifecycle").asText(), asset.path("lifecycle").asText());
+                assertEquals(group.path("exception").asText(), asset.path("exception").asText());
+            }
+        }
+        var filter = "?lifecycle=UNDER_REPAIR&exception=LOST";
+        assertEquals(403, code(get(warehouse, assets + filter)));
+        assertEquals(403, code(get(warehouse, assets + ".csv" + filter)));
+        assertEquals(400, code(get(administrator, assets + "?lifecycle=UNKNOWN")));
+        assertEquals(400, code(get(administrator, assets + "?exception=UNKNOWN")));
+        var csv = get(administrator, assets + ".csv" + filter);
+        assertEquals(200, code(csv));
+        assertEquals(2, csv.body().lines().count());
+        assertTrue(csv.body().contains("REPORT-C"));
+        assertEquals(1, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='ASSET_CUSTODY_REPORT'
+                    AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.lifecycle'))='UNDER_REPAIR'
+                    AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.exception'))='LOST'
+                    AND JSON_EXTRACT(detail_json,'$.rows')=1
+                """, Integer.class));
     }
 
     private void verifyAssetDistribution(Session administrator, Session warehouse) throws Exception {

@@ -64,10 +64,12 @@ class AssetCustodyReportController {
 
     public record Filters(@PositiveOrZero Long organizationId, @PositiveOrZero Long categoryId, @Positive Long responsibleId, @Positive Long warehouseId,
                           @Positive Long locationId, @Pattern(regexp = "PERSONAL|SHARED|STORAGE") String custody,
-                          @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inventoryBefore) {
+                          @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inventoryBefore,
+                          @Pattern(regexp = "IN_STOCK|IN_USE|BORROWED|UNDER_REPAIR|FACTORY_REPAIR|PENDING_SCRAP") String lifecycle,
+                          @Pattern(regexp = "NORMAL|SEARCHING|LOST") String exception) {
         AssetCustodyReportService.Filter toFilter() {
             return new AssetCustodyReportService.Filter(organizationId, responsibleId, warehouseId,
-                    locationId, custody, inventoryBefore, categoryId);
+                    locationId, custody, inventoryBefore, categoryId, lifecycle, exception);
         }
     }
 }

@@ -8744,6 +8744,14 @@ paths:
         - &reportWarehouse { name: warehouseId, in: query, schema: { $ref: '#/components/schemas/Id' } }
         - &reportLocation { name: locationId, in: query, schema: { $ref: '#/components/schemas/Id' } }
         - &reportCustody { name: custody, in: query, schema: { type: string, enum: [PERSONAL, SHARED, STORAGE] } }
+        - &reportLifecycle
+          name: lifecycle
+          in: query
+          schema: { type: string, enum: [IN_STOCK, IN_USE, BORROWED, UNDER_REPAIR, FACTORY_REPAIR, PENDING_SCRAP] }
+        - &reportException
+          name: exception
+          in: query
+          schema: { $ref: '#/components/schemas/AssetException' }
         - &reportInventoryBefore
           name: inventoryBefore
           in: query
@@ -8795,6 +8803,8 @@ paths:
         - *reportLocation
         - *reportCustody
         - *reportInventoryBefore
+        - *reportLifecycle
+        - *reportException
       responses:
         '200':
           description: Formula-safe UTF-8 CSV containing the authorized custody rows.

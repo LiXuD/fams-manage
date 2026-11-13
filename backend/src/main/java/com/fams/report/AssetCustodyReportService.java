@@ -38,6 +38,8 @@ class AssetCustodyReportService {
                 AND (? IS NULL OR a.current_location_id = ?)
                 AND (? IS NULL OR a.custody_type = ?)
                 AND (? IS NULL OR a.last_inventory_business_date IS NULL OR a.last_inventory_business_date < ?)
+                AND (? IS NULL OR a.lifecycle_status = ?)
+                AND (? IS NULL OR a.exception_status = ?)
                 AND (? IS NULL OR a.id < ?)
             ORDER BY a.id DESC LIMIT ?
             """;
@@ -81,10 +83,10 @@ class AssetCustodyReportService {
                     resource_id,occurred_at,detail_json)
                 VALUES (?,?,?,'OPERATIONS_REPORT_EXPORTED','ASSET_CUSTODY_REPORT',0,?,
                     JSON_OBJECT('rows',?,'organizationId',?,'responsibleId',?,'warehouseId',?,
-                        'locationId',?,'custody',?,'inventoryBefore',?,'categoryId',?))
+                        'locationId',?,'custody',?,'inventoryBefore',?,'categoryId',?,'lifecycle',?,'exception',?))
                 """, actor.requestId(), actor.id(), actor.role(), Timestamp.from(clock.instant()), rows.size(),
                 filter.organizationId(), filter.responsibleId(), filter.warehouseId(), filter.locationId(),
-                filter.custody(), filter.inventoryBefore(), filter.categoryId());
+                filter.custody(), filter.inventoryBefore(), filter.categoryId(), filter.lifecycle(), filter.exception());
         return "\uFEFFassetId,assetCode,name,lifecycle,exception,custody,organization,responsible,warehouse,location,lastInventory\r\n"
                 + rows.stream().map(AssetCustodyReportService::csvRow).collect(Collectors.joining("\r\n"));
     }
@@ -100,7 +102,8 @@ class AssetCustodyReportService {
                 filter.responsibleId(), filter.responsibleId(),
                 filter.responsibleId(), filter.warehouseId(), filter.warehouseId(), filter.locationId(),
                 filter.locationId(), filter.custody(), filter.custody(), filter.inventoryBefore(),
-                filter.inventoryBefore(), before, before, limit);
+                filter.inventoryBefore(), filter.lifecycle(), filter.lifecycle(),
+                filter.exception(), filter.exception(), before, before, limit);
     }
 
     private static String csvRow(Row row) {
@@ -115,7 +118,7 @@ class AssetCustodyReportService {
     }
 
     record Filter(Long organizationId, Long responsibleId, Long warehouseId, Long locationId,
-                  String custody, LocalDate inventoryBefore, Long categoryId) {}
+                  String custody, LocalDate inventoryBefore, Long categoryId, String lifecycle, String exception) {}
     record Distribution(List<Group> organizations, List<Group> categories) {}
     record Group(String id, String name, long count) {}
     record Page(List<Row> items, String nextBefore) {}

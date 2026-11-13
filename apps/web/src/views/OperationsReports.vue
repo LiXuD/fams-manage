@@ -33,6 +33,8 @@ const from = ref(today.slice(0, 8) + "01");
 const toExclusive = ref(tomorrow);
 const query = computed(() => new URLSearchParams({ from: from.value, toExclusive: toExclusive.value }).toString());
 const result = ref<Summary>();
+const custodyReport = ref<InstanceType<typeof AssetCustodyReport>>();
+const effectiveAssetCount = computed(() => result.value?.currentAssets.reduce((total, row) => total + row.count, 0) ?? 0);
 const loadedQuery = ref("");
 const error = ref("");
 const busy = ref(false);
@@ -110,15 +112,18 @@ watch(identity, () => {
       </ul>
       <router-link to="/asset-import-reviews">查看期初核验</router-link>
       <h3>当前有效资产</h3>
+      <button type="button" @click="custodyReport?.select({})">资产总数 {{ effectiveAssetCount }} 件</button>
       <ul>
         <li v-for="row in result.currentAssets" :key="row.lifecycle + row.exception">
-          {{ lifecycleLabels[row.lifecycle] }} · {{ exceptionLabels[row.exception] }} · {{ row.count }} 件
+          <button type="button" @click="custodyReport?.select({ lifecycle: row.lifecycle, exception: row.exception })">
+            {{ lifecycleLabels[row.lifecycle] }} · {{ exceptionLabels[row.exception] }} · {{ row.count }} 件
+          </button>
         </li>
       </ul>
       <router-link to="/assets">查看资产台账</router-link>
       <p>数据时间 {{ result.calculatedAt }}</p>
     </div>
-    <AssetCustodyReport :lifecycle-labels="lifecycleLabels" :exception-labels="exceptionLabels" />
+    <AssetCustodyReport ref="custodyReport" :lifecycle-labels="lifecycleLabels" :exception-labels="exceptionLabels" />
     <AssetMovementTrend :key="'movement-trend:' + identity" />
     <AssetMovementReport :key="identity" :from="from" :to-exclusive="toExclusive" />
     <OverdueLoanReport :key="identity" />
