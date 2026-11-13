@@ -481,8 +481,19 @@ class DutyHttpRuntimeCase {
         assertFalse(assigned.toString().contains("WORKBENCH_OTHER"));
         assertFalse(assigned.toString().contains("WORKBENCH_CLOSED"));
         assertFalse(assigned.toString().contains("WORKBENCH_POOL"));
-        var next = ok(get(warehouse, endpoint + "WAREHOUSE_OPERATOR&before=9007199254741202"));
-        assertFalse(next.toString().contains("WORKBENCH_POOL"));
+        var counts = shared.path("stageCounts");
+        assertTrue(counts.valueStream().anyMatch(row -> "WORKBENCH_POOL".equals(row.path("stage").asText())
+                && row.path("count").asLong() == 1));
+        assertFalse(counts.toString().contains("WORKBENCH_OTHER"));
+        assertFalse(counts.toString().contains("WORKBENCH_MINE"));
+        var filtered = ok(get(warehouse, endpoint + "WAREHOUSE_OPERATOR&stage=WORKBENCH_POOL"));
+        assertEquals(1, filtered.path("items").size());
+        assertEquals("9007199254741202", filtered.path("items").get(0).path("id").asText());
+        assertEquals(counts, filtered.path("stageCounts"));
+        var next = ok(get(warehouse, endpoint + "WAREHOUSE_OPERATOR&stage=WORKBENCH_POOL&before=9007199254741202"));
+        assertEquals(0, next.path("items").size());
+        assertEquals(counts, next.path("stageCounts"));
+        assertEquals(400, code(get(warehouse, endpoint + "WAREHOUSE_OPERATOR&stage=bad")));
     }
 
     private void verifyAssetStatusDrilldown(Session administrator, Session warehouse) throws Exception {

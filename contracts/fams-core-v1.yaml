@@ -8704,17 +8704,26 @@ paths:
           in: query
           required: true
           schema: { type: string, enum: [ASSET_ADMIN, WAREHOUSE_OPERATOR, MINE] }
+        - { name: stage, in: query, schema: { type: string, pattern: '^[A-Z][A-Z0-9_]{0,39}$' } }
         - { name: before, in: query, schema: { $ref: '#/components/schemas/Id' } }
         - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
       responses:
         '200':
-          description: Open todos in descending ID order. Shared pools exclude assigned work.
+          description: Open todos in descending ID order. Shared pools exclude assigned work. Stage totals use the selected scope before stage or cursor filtering.
           content:
             application/json:
               schema:
                 type: object
-                required: [items, nextBefore]
+                required: [items, nextBefore, stageCounts]
                 properties:
+                  stageCounts:
+                    type: array
+                    items:
+                      type: object
+                      required: [stage, count]
+                      properties:
+                        stage: { type: string }
+                        count: { type: integer, format: int64, minimum: 1 }
                   items:
                     type: array
                     items:

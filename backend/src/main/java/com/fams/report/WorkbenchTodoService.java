@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Profile("fams-product")
 class WorkbenchTodoService {
+    private static final String OPEN_TODOS = " FROM fams_todo WHERE todo_status='OPEN' AND closed_at IS NULL";
     private final JdbcTemplate db;
     private final RequisitionActorContext actors;
 
@@ -24,23 +25,24 @@ class WorkbenchTodoService {
     }
 
     @Transactional(isolation = Isolation.REPEATABLE_READ)
-    public Page list(RequisitionActorContext.Actor actor, Scope scope, Long before, int pageSize) {
+    public Page list(RequisitionActorContext.Actor actor, Scope scope, String stage, Long before, int pageSize) {
         var current = actors.revalidateLocked(actor);
         if (!scope.allowed(current)) {
             throw new Forbidden();
         }
-        var rows = db.query("""
-                SELECT id,business_type,business_id,todo_type,opened_at
-                FROM fams_todo
-                WHERE todo_status='OPEN' AND closed_at IS NULL
-                """ + scope.predicate + " AND (? IS NULL OR id < ?) ORDER BY id DESC LIMIT ?",
+        Object assigneeOrPool = scope == Scope.MINE ? current.id() : scope.name();
+        String visible = OPEN_TODOS + scope.predicate;
+        var counts = db.query("SELECT todo_type,COUNT(*) AS total" + visible + " GROUP BY todo_type ORDER BY todo_type",
+                (row, index) -> new StageCount(row.getString("todo_type"), row.getLong("total")), assigneeOrPool);
+        var rows = db.query("SELECT id,business_type,business_id,todo_type,opened_at" + visible
+                        + " AND (? IS NULL OR todo_type=?) AND (? IS NULL OR id < ?) ORDER BY id DESC LIMIT ?",
                 (row, index) -> new Todo(row.getString("id"), row.getString("business_type"),
                         row.getString("business_id"), row.getString("todo_type"), row.getTimestamp("opened_at").toInstant()),
-                scope == Scope.MINE ? current.id() : scope.name(), before, before, pageSize + 1);
+                assigneeOrPool, stage, stage, before, before, pageSize + 1);
         if (rows.size() <= pageSize) {
-            return new Page(rows, null);
+            return new Page(rows, null, counts);
         }
-        return new Page(List.copyOf(rows.subList(0, pageSize)), rows.get(pageSize - 1).id());
+        return new Page(List.copyOf(rows.subList(0, pageSize)), rows.get(pageSize - 1).id(), counts);
     }
 
     enum Scope {
@@ -66,5 +68,6 @@ class WorkbenchTodoService {
     static final class Forbidden extends RuntimeException {}
 
     record Todo(String id, String businessType, String businessId, String stage, Instant openedAt) {}
-    record Page(List<Todo> items, String nextBefore) {}
+    record StageCount(String stage, long count) {}
+    record Page(List<Todo> items, String nextBefore, List<StageCount> stageCounts) {}
 }

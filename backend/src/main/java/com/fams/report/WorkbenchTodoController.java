@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Pattern;
 
 import org.springframework.context.annotation.Profile;
 import java.util.Map;
@@ -51,9 +52,10 @@ class WorkbenchTodoController {
 
     @GetMapping("/api/v1/workbench/todos")
     ResponseEntity<WorkbenchTodoService.Page> list(@RequestParam WorkbenchTodoService.Scope scope,
+            @RequestParam(required = false) @Pattern(regexp = "[A-Z][A-Z0-9_]{0,39}") String stage,
             @RequestParam(required = false) @Positive Long before,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
-                .body(todos.list(actors.capture(), scope, before, pageSize));
+                .body(todos.list(actors.capture(), scope, stage, before, pageSize));
     }
 }
