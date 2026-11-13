@@ -6,6 +6,7 @@ import AssetMovementReport from "./AssetMovementReport.vue";
 import OverdueLoanReport from "./OverdueLoanReport.vue";
 import LossOperationsReport from "./LossOperationsReport.vue";
 import ScrapDispositionReport from "./ScrapDispositionReport.vue";
+import InboundTimingReport from "./InboundTimingReport.vue";
 import BusinessExceptionReport from "./BusinessExceptionReport.vue";
 import InventoryLateReport from "./InventoryLateReport.vue";
 import AssetTimelineReport from "./AssetTimelineReport.vue";
@@ -125,6 +126,7 @@ watch(identity, () => {
     <AssetTimelineReport :key="'asset-timeline:' + identity" />
     <InventoryLateReport :key="'inventory-late:' + identity" />
     <BusinessExceptionReport :key="'business-exceptions:' + identity" />
+    <InboundTimingReport :key="'inbound-timing:' + identity" />
     <details>
       <summary>抽样留痕率核算</summary>
       <p>请按抽查范围和选样方法，用线下证据核实实际业务。同一笔业务只计一次，待核实线索另列。</p>

@@ -449,6 +449,82 @@ class DutyHttpRuntimeCase {
         verifyAssetTimelineReport(restored, reportWarehouse);
         verifyInventoryLateReport(restored, reportWarehouse);
         verifyBusinessExceptionReport(restored, reportWarehouse);
+        verifyInboundTimingReport(restored, reportWarehouse);
+    }
+
+    private void verifyInboundTimingReport(Session administrator, Session warehouse) throws Exception {
+        db.update("""
+                INSERT INTO fams_warehouse (id,code,code_normalized,name,status,created_at,updated_at)
+                VALUES (931001,'REPORT','REPORT','Report warehouse','ACTIVE',NOW(3),NOW(3))
+                """);
+        db.update("""
+                INSERT INTO fams_inbound_decision (receipt_id,decision_result,decided_by_account_id,
+                    decided_by_username_snapshot,decided_role,receipt_version_before,decided_at)
+                VALUES (931000,'APPROVED',931003,'duty3','ASSET_ADMIN',3,'2026-11-13 02:00:00')
+                """);
+        db.update("""
+                INSERT INTO fams_inbound_processing_ownership
+                    (id,receipt_id,processor_account_id,processor_username_snapshot,ownership_version,acquired_at)
+                VALUES (931001,931000,931005,'duty5',1,'2026-11-13 03:00:00')
+                """);
+        db.update("""
+                INSERT INTO fams_audit_event
+                    (id,request_id,actor_account_id,actor_role,action,resource_type,resource_id,occurred_at,detail_json)
+                VALUES (9007199254741010,UUID(),931004,'WAREHOUSE_OPERATOR','INBOUND_WAREHOUSE_CLAIMED',
+                        'INBOUND',931000,'2026-11-13 03:00:00','{}'),
+                    (9007199254741011,UUID(),931003,'ASSET_ADMIN','INBOUND_CONTROLLED_REASSIGNMENT',
+                        'INBOUND',931000,'2026-11-13 04:00:00',JSON_OBJECT('processorAccountId','931005')),
+                    (9007199254741012,UUID(),931005,'WAREHOUSE_OPERATOR','INBOUND_ITEM_ACCEPTED',
+                        'INBOUND',931000,'2026-11-13 05:00:00','{}'),
+                    (9007199254741013,UUID(),931005,'WAREHOUSE_OPERATOR','INBOUND_ITEM_ACCEPTED',
+                        'INBOUND',931000,'2026-11-13 06:00:00','{}')
+                """);
+        db.update("""
+                INSERT INTO fams_inbound_receipt_item (id,receipt_id,asset_id,asset_version_snapshot,
+                    asset_code_snapshot,asset_name_snapshot,target_warehouse_id,warehouse_version_snapshot,
+                    warehouse_code_snapshot,warehouse_name_snapshot,target_location_id,location_version_snapshot,
+                    location_code_snapshot,location_name_snapshot,execution_status,created_at,updated_at)
+                VALUES (931001,931000,9007199254740993,0,'REPORT-A','Fixture',931001,0,'REPORT','Fixture',
+                    931001,0,'REPORT','Fixture','ACCEPTED',NOW(3),NOW(3)),
+                    (931002,931000,9007199254740992,0,'REPORT-C','Fixture',931001,0,'REPORT','Fixture',
+                    931001,0,'REPORT','Fixture','ACCEPTED',NOW(3),NOW(3))
+                """);
+        db.update("""
+                INSERT INTO fams_inbound_acceptance (receipt_item_id,asset_id,ownership_id,accepted_by_account_id,
+                    accepted_by_username_snapshot,accepted_at,business_date,receipt_version_before,
+                    asset_version_before,asset_version_after,lock_version,observed_asset_code,storage_warehouse_id,
+                    storage_location_id,warehouse_version_at_acceptance,location_version_at_acceptance,audit_event_id)
+                VALUES (931001,9007199254740993,931001,931005,'duty5','2026-11-13 05:00:00','2026-11-13',
+                    6,0,1,0,'REPORT-A',931001,931001,0,0,9007199254741012),
+                    (931002,9007199254740992,931001,931005,'duty5','2026-11-13 06:00:00','2026-11-13',
+                    7,0,1,0,'REPORT-C',931001,931001,0,0,9007199254741013)
+                """);
+        var endpoint = "/operations-reports/inbound-timing";
+        var claim = "?kind=CLAIM&receiptId=931000";
+        assertEquals(403, code(get(warehouse, endpoint + claim)));
+        assertEquals(403, code(get(warehouse, endpoint + ".csv" + claim)));
+        assertEquals(400, code(get(administrator, endpoint + "?kind=UNKNOWN")));
+        var approval = ok(get(administrator, endpoint + "?kind=APPROVAL&status=APPROVED")).path("items").get(0);
+        assertEquals(3600, approval.path("elapsedSeconds").asLong());
+        var claimed = ok(get(administrator, endpoint + claim)).path("items").get(0);
+        assertEquals("931004", claimed.path("processorAccountId").asText());
+        assertEquals(3600, claimed.path("elapsedSeconds").asLong());
+        var accepted = ok(get(administrator, endpoint + "?kind=FIRST_EXECUTION")).path("items");
+        assertEquals(1, accepted.size());
+        assertEquals("931005", accepted.get(0).path("processorAccountId").asText());
+        assertEquals(7200, accepted.get(0).path("elapsedSeconds").asLong());
+        var reassigned = ok(get(administrator, endpoint + "?kind=REASSIGNMENT")).path("items").get(0);
+        assertEquals("9007199254741011", reassigned.path("factId").asText());
+        assertTrue(reassigned.path("elapsedSeconds").isNull());
+        assertEquals(0, ok(get(administrator, endpoint + claim + "&before=9007199254741010")).path("items").size());
+        var csv = get(administrator, endpoint + ".csv" + claim);
+        assertEquals(200, code(csv));
+        assertEquals(2, csv.body().lines().count());
+        assertEquals(1, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='INBOUND_TIMING_REPORT'
+                    AND JSON_EXTRACT(detail_json,'$.rows')=1 AND JSON_EXTRACT(detail_json,'$.receiptId')=931000
+                    AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.kind'))='CLAIM'
+                """, Integer.class));
     }
 
     private void verifyBusinessExceptionReport(Session administrator, Session warehouse) throws Exception {
