@@ -5,6 +5,7 @@ import AssetCustodyReport from "./AssetCustodyReport.vue";
 import AssetMovementReport from "./AssetMovementReport.vue";
 import OverdueLoanReport from "./OverdueLoanReport.vue";
 import LossOperationsReport from "./LossOperationsReport.vue";
+import ScrapDispositionReport from "./ScrapDispositionReport.vue";
 
 interface Summary {
   calculatedAt: string;
@@ -115,6 +116,7 @@ watch(identity, () => {
     <AssetMovementReport :key="identity" :from="from" :to-exclusive="toExclusive" />
     <OverdueLoanReport :key="identity" />
     <LossOperationsReport :key="identity" />
+    <ScrapDispositionReport :key="identity" />
     <details>
       <summary>抽样留痕率核算</summary>
       <p>请按抽查范围和选样方法，用线下证据核实实际业务。同一笔业务只计一次，待核实线索另列。</p>

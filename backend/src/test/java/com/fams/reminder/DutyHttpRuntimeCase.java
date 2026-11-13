@@ -443,6 +443,60 @@ class DutyHttpRuntimeCase {
             jobs.fail(sms, "RECIPIENT_UNAVAILABLE_OR_READ", false);
         }
         assertEquals(java.util.Set.of("INVENTORY_COMPLETION", "HANDOVER_RECEIPT"), checkedStages);
+        verifyScrapDispositionReport(restored, login("duty4"));
+    }
+
+    private void verifyScrapDispositionReport(Session administrator, Session warehouse) throws Exception {
+        db.update("""
+                UPDATE fams_business_parameter_version SET snapshot_json=JSON_OBJECT('timezone','+14:00')
+                WHERE id=931000
+                """);
+        db.update("UPDATE fams_business_parameter_state SET current_version_id=931000,current_version=931000");
+        var date = java.time.LocalDate.now(java.time.ZoneOffset.ofHours(14));
+        for (long id = 9007199254740991L; id <= 9007199254740996L; id++) {
+            db.update("""
+                    INSERT INTO fams_scrap_request (id,asset_id,creator_account_id,source_type,source_snapshot_json,
+                        reason,observed_condition,proposed_disposition,request_status,asset_version,created_at,updated_at)
+                    VALUES (?,9007199254740993,931004,'STANDALONE','{}','fixture','fixture','fixture',?,0,NOW(3),NOW(3))
+                    """, id, id == 9007199254740996L ? "CANCELLED" : "EXECUTED");
+        }
+        db.update("""
+                INSERT INTO fams_scrap_disposition (request_id,processor_account_id,disposition_status,due_date,
+                    custody_snapshot_json,created_at,updated_at)
+                VALUES
+                    (9007199254740991,931004,'PENDING_DISPOSITION',?,'{}',NOW(3),NOW(3)),
+                    (9007199254740992,931004,'PENDING_DISPOSITION',?,'{}',NOW(3),NOW(3)),
+                    (9007199254740993,931004,'DISPOSED',?,'{}',NOW(3),'2026-11-13 00:00:00'),
+                    (9007199254740994,931005,'LOSS_WRITTEN_OFF',NULL,'{}',NOW(3),NOW(3)),
+                    (9007199254740995,931004,'REVERSED',?,'{}',NOW(3),NOW(3))
+                """, date.minusDays(1), date, date.minusDays(1), date.minusDays(1));
+        var endpoint = "/operations-reports/scrap-dispositions";
+        assertEquals(403, code(get(warehouse, endpoint)));
+        assertEquals(403, code(get(warehouse, endpoint + ".csv")));
+        assertEquals(400, code(get(administrator, endpoint + "?state=EXECUTED")));
+        var page = ok(get(administrator, endpoint + "?pageSize=1"));
+        assertEquals(date.toString(), page.path("businessDate").asText());
+        assertEquals(5, page.path("counts").size());
+        assertTrue(page.path("counts").valueStream().allMatch(count -> count.path("count").asInt() == 1));
+        assertEquals("REVERSED", page.path("items").get(0).path("state").asText());
+        assertEquals("9007199254740995", page.path("nextBefore").asText());
+        var next = ok(get(administrator, endpoint + "?pageSize=1&before=" + page.path("nextBefore").asText()));
+        assertEquals("LOSS_WRITTEN_OFF", next.path("items").get(0).path("state").asText());
+        assertTrue(next.path("items").get(0).path("dueDate").isNull());
+        var pending = ok(get(administrator, endpoint + "?state=PENDING_DISPOSITION"));
+        assertEquals("9007199254740992", pending.path("items").get(0).path("requestId").asText());
+        var disposed = ok(get(administrator, endpoint + "?state=DISPOSED"));
+        assertEquals("2026-11-13T00:00:00Z", disposed.path("items").get(0).path("dispositionRecordedAt").asText());
+        var csv = get(administrator, endpoint + ".csv?processorId=931004&state=OVERDUE");
+        assertEquals(200, code(csv));
+        assertEquals(2, csv.body().lines().count());
+        assertTrue(csv.body().lines().skip(1).findFirst().orElseThrow().startsWith("9007199254740991,"));
+        assertEquals(1, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='SCRAP_DISPOSITION_REPORT'
+                    AND JSON_EXTRACT(detail_json,'$.rows')=1
+                    AND JSON_EXTRACT(detail_json,'$.processorId')=931004
+                    AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.state'))='OVERDUE'
+                """, Integer.class));
     }
 
     private void verifyLossOperationsReport(Session administrator) throws Exception {

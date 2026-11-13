@@ -8837,6 +8837,77 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { description: More than 10000 matching rows. Narrow the filters. }
 
+  /operations-reports/scrap-dispositions:
+    get:
+      tags: [Reports]
+      operationId: listScrapDispositionReport
+      summary: List scrap dispositions and identify overdue pending records using the current enterprise business date.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - &scrapDispositionReportOrganization { name: processorId, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - &scrapDispositionReportState
+          name: state
+          in: query
+          schema: &scrapDispositionReportStates { type: string, enum: [PENDING_DISPOSITION, OVERDUE, DISPOSED, LOSS_WRITTEN_OFF, REVERSED] }
+        - { name: before, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Processor-scoped state counts before state filtering, and matching rows ordered by descending request ID.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [businessDate, counts, items, nextBefore]
+                properties:
+                  businessDate: { type: string, format: date }
+                  counts:
+                    type: array
+                    items:
+                      type: object
+                      required: [state, count]
+                      properties:
+                        state: *scrapDispositionReportStates
+                        count: { type: integer, format: int64, minimum: 0 }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [requestId, assetId, assetCode, processor, state, dueDate, dispositionRecordedAt]
+                      properties:
+                        requestId: { $ref: '#/components/schemas/Id' }
+                        assetId: { $ref: '#/components/schemas/Id' }
+                        assetCode: { type: string }
+                        processor: { type: string }
+                        state: *scrapDispositionReportStates
+                        dueDate: { type: string, format: date, nullable: true }
+                        dispositionRecordedAt: { type: string, format: date-time, nullable: true }
+                  nextBefore: { type: string, nullable: true, pattern: '^[1-9][0-9]*$' }
+        '400': { description: Invalid filters or cursor. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /operations-reports/scrap-dispositions.csv:
+    get:
+      tags: [Reports]
+      operationId: downloadScrapDispositionReport
+      summary: Export all matching scrap dispositions and record an export audit event.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - *scrapDispositionReportOrganization
+        - *scrapDispositionReportState
+      responses:
+        '200':
+          description: Formula-safe UTF-8 CSV containing all matching dispositions.
+          content:
+            text/csv:
+              schema: { type: string }
+        '400': { description: Invalid filters. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { description: More than 10000 matching rows. Narrow the filters. }
+
   /operations-reports/loss:
     get:
       tags: [Reports]
