@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
-const props = defineProps<{ from: string; toExclusive: string }>();
+
 const kinds = {
   INBOUND: "入库验收",
   REQUISITION: "领用签收",
@@ -9,10 +9,14 @@ const kinds = {
   BORROW: "借用签收",
   BORROW_RETURN: "借用归还验收",
   TRANSFER: "调拨完成",
+  REPAIR: "报修提交",
+  SCRAP: "报废执行",
 };
+const props = defineProps<{ from: string; toExclusive: string; initialKind?: keyof typeof kinds }>();
 const outcomes: Record<string, string> = {
   ACCEPTED: "已验收", RECEIVED: "已签收", PROXY_RECEIVED: "已代确认",
   NORMAL: "正常", DAMAGED: "损坏", MISSING: "缺失并转报失", COMPLETED: "已完成",
+  SUBMITTED: "已提交", EXECUTED: "已执行",
 };
 
 interface Cursor { occurredAt: string; factId: string }
@@ -26,7 +30,7 @@ interface Movement {
 }
 interface Page { items: Movement[]; nextBefore: Cursor | null }
 
-const kind = ref<keyof typeof kinds>("INBOUND");
+const kind = ref<keyof typeof kinds>(props.initialKind ?? "INBOUND");
 const assetId = ref("");
 const filters = computed(() => {
   const params = new URLSearchParams({ kind: kind.value, from: props.from, toExclusive: props.toExclusive });
@@ -61,12 +65,13 @@ async function load(cursor?: Cursor) {
     busy.value = false;
   }
 }
+onMounted(() => { if (props.initialKind) void load(); });
 </script>
 
 <template>
   <section>
     <h3>资产业务流水</h3>
-    <p>沿用上方 UTC 日期范围。归还验收显示正常、损坏和缺失，待办理单据不计入流水。</p>
+    <p>UTC 日期范围 {{ from }} 至 {{ toExclusive }}（不含当日）。归还验收显示正常、损坏和缺失。</p>
     <form class="actions" @submit.prevent="load()">
       <label>业务类型
         <select v-model="kind">

@@ -7,14 +7,18 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -57,6 +61,37 @@ class AssetMovementReportService {
                 + rows.stream().map(row -> String.join(",", filter.kind().name(), row.factId(),
                         row.businessId(), row.assetId(), csv(row.assetCode()), row.occurredAt().toString(),
                         row.outcome())).collect(Collectors.joining("\r\n"));
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public List<TrendMonth> trend() {
+        LocalDate today = LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC);
+        YearMonth first = YearMonth.from(today).minusMonths(5);
+        LocalDate end = today.plusDays(1);
+        List<Kind> kinds = List.of(Kind.INBOUND, Kind.REQUISITION, Kind.TRANSFER, Kind.REPAIR, Kind.SCRAP);
+        Map<Kind, Map<YearMonth, Long>> counts = kinds.stream().collect(Collectors.toMap(kind -> kind,
+                kind -> db.query("""
+                        SELECT EXTRACT(YEAR_MONTH FROM f.occurred_at) AS period, COUNT(*) AS total
+                        FROM (
+                        """ + kind.sql + """
+                        ) f JOIN fams_asset a ON a.id=f.asset_id
+                        WHERE f.occurred_at>=? AND f.occurred_at<?
+                        GROUP BY EXTRACT(YEAR_MONTH FROM f.occurred_at)
+                        """, (row, index) -> {
+                            int period = row.getInt("period");
+                            return Map.entry(YearMonth.of(period / 100, period % 100), row.getLong("total"));
+                        }, utcStart(first.atDay(1)), utcStart(end))
+                        .stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))));
+        return IntStream.range(0, 6).mapToObj(first::plusMonths)
+                .map(month -> new TrendMonth(month.atDay(1), month.equals(YearMonth.from(today))
+                        ? end : month.plusMonths(1).atDay(1),
+                        kinds.stream().map(kind -> new TrendCount(kind,
+                                counts.get(kind).getOrDefault(month, 0L))).toList()))
+                .toList();
+    }
+
+    private static Timestamp utcStart(LocalDate date) {
+        return Timestamp.from(date.atStartOfDay().toInstant(ZoneOffset.UTC));
     }
 
     private List<Row> query(Filter filter, Cursor before, int limit) {
@@ -112,6 +147,16 @@ class AssetMovementReportService {
                 SELECT id AS fact_id, request_id AS business_id, asset_id, completed_at AS occurred_at,
                     'COMPLETED' AS outcome
                 FROM fams_transfer_item WHERE item_status = 'COMPLETED'
+                """),
+        REPAIR("""
+                SELECT e.id AS fact_id,r.id AS business_id,r.asset_id,e.occurred_at,'SUBMITTED' AS outcome
+                FROM fams_repair_event e JOIN fams_repair_request r ON r.id=e.repair_id
+                WHERE e.action IN ('REPAIR_SUBMITTED','REPAIR_RETURN_SOURCE_SUBMITTED')
+                """),
+        SCRAP("""
+                SELECT e.id AS fact_id,r.id AS business_id,r.asset_id,e.occurred_at,'EXECUTED' AS outcome
+                FROM fams_audit_event e JOIN fams_scrap_request r ON r.id=e.resource_id
+                WHERE e.resource_type='SCRAP' AND e.action='SCRAP_EXECUTED'
                 """);
 
         private final String sql;
@@ -127,6 +172,9 @@ class AssetMovementReportService {
                     && from.isBefore(toExclusive) && ChronoUnit.DAYS.between(from, toExclusive) <= 366;
         }
     }
+
+    record TrendMonth(LocalDate from, LocalDate toExclusive, List<TrendCount> counts) {}
+    record TrendCount(Kind kind, long count) {}
 
     record Cursor(Instant occurredAt, String factId) {}
     record Page(List<Row> items, Cursor nextBefore) {}

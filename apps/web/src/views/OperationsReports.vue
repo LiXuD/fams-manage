@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import AssetCustodyReport from "./AssetCustodyReport.vue";
+import AssetMovementTrend from "./AssetMovementTrend.vue";
 import AssetMovementReport from "./AssetMovementReport.vue";
 import OverdueLoanReport from "./OverdueLoanReport.vue";
 import LossOperationsReport from "./LossOperationsReport.vue";
@@ -118,6 +119,7 @@ watch(identity, () => {
       <p>数据时间 {{ result.calculatedAt }}</p>
     </div>
     <AssetCustodyReport :lifecycle-labels="lifecycleLabels" :exception-labels="exceptionLabels" />
+    <AssetMovementTrend :key="'movement-trend:' + identity" />
     <AssetMovementReport :key="identity" :from="from" :to-exclusive="toExclusive" />
     <OverdueLoanReport :key="identity" />
     <LossOperationsReport :key="identity" />

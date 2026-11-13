@@ -8766,6 +8766,36 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { description: More than 10000 matching rows. Narrow the filters. }
 
+  /operations-reports/movement-trend:
+    get:
+      tags: [Reports]
+      operationId: listAssetMovementTrend
+      summary: Count the current UTC month to date and the preceding five months by business fact.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      responses:
+        '200':
+          description: Six chronological windows with zero-filled counts matching the movement details.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [from, toExclusive, counts]
+                  properties:
+                    from: { type: string, format: date }
+                    toExclusive: { type: string, format: date }
+                    counts:
+                      type: array
+                      items:
+                        type: object
+                        required: [kind, count]
+                        properties:
+                          kind: { type: string, enum: [INBOUND, REQUISITION, TRANSFER, REPAIR, SCRAP] }
+                          count: { type: integer, format: int64, minimum: 0 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /operations-reports/movements:
     get:
       tags: [Reports]
@@ -8777,7 +8807,7 @@ paths:
           name: kind
           in: query
           required: true
-          schema: { type: string, enum: [INBOUND, REQUISITION, REQUISITION_RETURN, BORROW, BORROW_RETURN, TRANSFER] }
+          schema: { type: string, enum: [INBOUND, REQUISITION, REQUISITION_RETURN, BORROW, BORROW_RETURN, TRANSFER, REPAIR, SCRAP] }
         - &movementFrom { name: from, in: query, required: true, schema: { type: string, format: date } }
         - &movementUntil { name: toExclusive, in: query, required: true, schema: { type: string, format: date } }
         - &movementAsset { name: assetId, in: query, schema: { $ref: '#/components/schemas/Id' } }
@@ -8804,7 +8834,7 @@ paths:
                         assetId: { $ref: '#/components/schemas/Id' }
                         assetCode: { type: string }
                         occurredAt: { type: string, format: date-time }
-                        outcome: { type: string, enum: [ACCEPTED, RECEIVED, PROXY_RECEIVED, NORMAL, DAMAGED, MISSING, COMPLETED] }
+                        outcome: { type: string, enum: [ACCEPTED, RECEIVED, PROXY_RECEIVED, NORMAL, DAMAGED, MISSING, COMPLETED, SUBMITTED, EXECUTED] }
                   nextBefore:
                     type: object
                     nullable: true

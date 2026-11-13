@@ -450,6 +450,40 @@ class DutyHttpRuntimeCase {
         verifyInventoryLateReport(restored, reportWarehouse);
         verifyBusinessExceptionReport(restored, reportWarehouse);
         verifyInboundTimingReport(restored, reportWarehouse);
+        verifyMovementTrend(restored, reportWarehouse);
+    }
+
+    private void verifyMovementTrend(Session administrator, Session warehouse) throws Exception {
+        db.update("""
+                INSERT INTO fams_repair_event (repair_id,action,before_version,after_version,actor_account_id,
+                    actor_username,actor_role,detail_json,occurred_at)
+                VALUES (931001,'REPAIR_SUBMITTED',0,0,931005,'duty5','EMPLOYEE','{}',UTC_TIMESTAMP(3))
+                """);
+        db.update("""
+                INSERT INTO fams_audit_event (request_id,actor_account_id,actor_role,action,resource_type,
+                    resource_id,occurred_at,detail_json)
+                VALUES (UUID(),931004,'WAREHOUSE_OPERATOR','SCRAP_EXECUTED','SCRAP',9007199254740995,UTC_TIMESTAMP(3),'{}'),
+                    (UUID(),931004,'WAREHOUSE_OPERATOR','SCRAP_EXECUTED','SCRAP',9007199254740994,
+                     UTC_TIMESTAMP(3)-INTERVAL 7 MONTH,'{}')
+                """);
+        var endpoint = "/operations-reports/movement-trend";
+        assertEquals(403, code(get(warehouse, endpoint)));
+        var months = ok(get(administrator, endpoint));
+        assertEquals(6, months.size());
+        assertTrue(months.get(0).path("counts").valueStream().allMatch(row -> row.path("count").asLong() == 0));
+        var current = months.get(5);
+        var window = "?from=" + current.path("from").asText() + "&toExclusive=" + current.path("toExclusive").asText();
+        var counts = current.path("counts");
+        assertEquals(5, counts.size());
+        for (var count : counts) {
+            var kind = count.path("kind").asText();
+            var detail = ok(get(administrator, "/operations-reports/movements" + window + "&kind=" + kind));
+            assertEquals(count.path("count").asInt(), detail.path("items").size(), kind);
+            if ("REPAIR".equals(kind) || "SCRAP".equals(kind)) {
+                assertEquals(1, detail.path("items").size(), kind);
+                assertEquals("REPORT-A", detail.path("items").get(0).path("assetCode").asText());
+            }
+        }
     }
 
     private void verifyInboundTimingReport(Session administrator, Session warehouse) throws Exception {
