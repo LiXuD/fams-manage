@@ -8837,6 +8837,70 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { description: More than 10000 matching rows. Narrow the filters. }
 
+  /operations-reports/repair-operations:
+    get:
+      tags: [Reports]
+      operationId: listRepairOperationsReport
+      summary: List internal repair acceptances or dispatched factory rounds and their confirmed costs.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - &repairReportKind { name: kind, in: query, required: true, schema: { type: string, enum: [INTERNAL, FACTORY] } }
+        - &repairReportFrom { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - &repairReportTo { name: toExclusive, in: query, required: true, schema: { type: string, format: date } }
+        - &repairReportAsset { name: assetId, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - { name: before, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: Totals and rows within the same UTC window. Unknown costs remain null, and actual zero is counted as confirmed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [totals, items, nextBefore]
+                properties:
+                  totals:
+                    type: object
+                    required: [count, confirmedCostCount, actualCost]
+                    properties:
+                      count: { type: integer, format: int64, minimum: 0 }
+                      confirmedCostCount: { type: integer, format: int64, minimum: 0 }
+                      actualCost: { type: number, minimum: 0, nullable: true }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [factId, repairId, assetId, assetCode, occurredAt, status, actualCost]
+                      properties:
+                        factId: { $ref: '#/components/schemas/Id' }
+                        repairId: { $ref: '#/components/schemas/Id' }
+                        assetId: { $ref: '#/components/schemas/Id' }
+                        assetCode: { type: string }
+                        occurredAt: { type: string, format: date-time }
+                        status: { type: string }
+                        actualCost: { type: number, minimum: 0, nullable: true }
+                  nextBefore: { type: string, nullable: true, pattern: '^[1-9][0-9]*$' }
+        '400': { description: Invalid filters or cursor. The date window must be between 1 and 366 days. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /operations-reports/repair-operations.csv:
+    get:
+      tags: [Reports]
+      operationId: downloadRepairOperationsReport
+      summary: Export the matching repair facts and record the query scope in the audit log.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters: [*repairReportKind, *repairReportFrom, *repairReportTo, *repairReportAsset]
+      responses:
+        '200':
+          description: Formula-safe UTF-8 CSV containing all matching facts.
+          content:
+            text/csv:
+              schema: { type: string }
+        '400': { description: Invalid filters. The date window must be between 1 and 366 days. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { description: More than 10000 matching rows. Narrow the filters. }
+
   /operations-reports/scrap-dispositions:
     get:
       tags: [Reports]

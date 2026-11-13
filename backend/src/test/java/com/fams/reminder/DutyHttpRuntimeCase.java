@@ -443,7 +443,76 @@ class DutyHttpRuntimeCase {
             jobs.fail(sms, "RECIPIENT_UNAVAILABLE_OR_READ", false);
         }
         assertEquals(java.util.Set.of("INVENTORY_COMPLETION", "HANDOVER_RECEIPT"), checkedStages);
-        verifyScrapDispositionReport(restored, login("duty4"));
+        var reportWarehouse = login("duty4");
+        verifyScrapDispositionReport(restored, reportWarehouse);
+        verifyRepairOperationsReport(restored, reportWarehouse);
+    }
+
+    private void verifyRepairOperationsReport(Session administrator, Session warehouse) throws Exception {
+        db.update("""
+                INSERT INTO fams_location (id,code,code_normalized,name,location_type,status,created_at,updated_at)
+                VALUES (931001,'REPAIR-REPORT','REPAIR-REPORT','Fixture','ROOM','ACTIVE',NOW(3),NOW(3))
+                """);
+        db.update("""
+                INSERT INTO fams_repair_request (id,asset_id,creator_account_id,asset_version,source_snapshot_json,
+                    timezone_id,fault,impact,occurred_at,created_at,updated_at)
+                VALUES (931001,9007199254740993,931005,0,'{}','UTC','fixture','LOW',NOW(3),NOW(3),NOW(3))
+                """);
+        db.update("""
+                INSERT INTO fams_repair_event (id,repair_id,action,before_version,after_version,actor_account_id,
+                    actor_username,actor_role,detail_json,occurred_at)
+                VALUES
+                    (9007199254740993,931001,'REPAIR_ACCEPTED_IN_PLACE',0,1,931004,'duty4','WAREHOUSE_OPERATOR',
+                     '{}','2026-11-01'),
+                    (9007199254740994,931001,'REPAIR_COMPLETED_IN_PLACE',1,2,931004,'duty4','WAREHOUSE_OPERATOR',
+                     '{}','2026-11-01')
+                """);
+        db.update("""
+                INSERT INTO fams_repair_factory_scope (id,repair_id,request_snapshot_json,request_reason,
+                    requested_by,requested_at)
+                VALUES (931001,931001,'{}','fixture',931004,'2026-11-01')
+                """);
+        db.update("""
+                INSERT INTO fams_repair_factory_round (id,repair_id,asset_id,scope_id,round_number,round_status,
+                    provider_name,service_contact,service_phone,expected_return_date,fault,original_identity_json,
+                    created_by,created_at,dispatched_at,dispatched_by,dispatch_evidence,actual_cost,received_at,
+                    received_by,receive_location_id,receive_location_version,condition_result,treatment_result)
+                VALUES
+                    (9007199254740993,931001,9007199254740993,931001,1,'RECEIVED','provider','contact','test',
+                     '2026-11-09','fixture','{}',931004,'2026-11-01','2026-11-01',931004,'fixture',0,
+                     '2026-11-01',931004,931001,0,'STILL_FAULTY','fixture'),
+                    (9007199254740994,931001,9007199254740993,931001,2,'RECEIVED','provider','contact','test',
+                     '2026-11-09','fixture','{}',931004,'2026-11-01','2026-11-02',931004,'fixture',12.34,
+                     '2026-11-02',931004,931001,0,'STILL_FAULTY','fixture'),
+                    (9007199254740995,931001,9007199254740993,931001,3,'DISPATCHED','provider','contact','test',
+                     '2026-11-09','fixture','{}',931004,'2026-11-01','2026-11-03',931004,'fixture',NULL,
+                     NULL,NULL,NULL,NULL,NULL,NULL)
+                """);
+        var endpoint = "/operations-reports/repair-operations";
+        var window = "?from=2026-11-01&toExclusive=2026-11-04&assetId=9007199254740993";
+        assertEquals(403, code(get(warehouse, endpoint + window + "&kind=FACTORY")));
+        assertEquals(403, code(get(warehouse, endpoint + ".csv" + window + "&kind=FACTORY")));
+        assertEquals(400, code(get(administrator, endpoint + "?from=2026-11-04&toExclusive=2026-11-01&kind=FACTORY")));
+        var factory = ok(get(administrator, endpoint + window + "&kind=FACTORY&pageSize=1"));
+        assertEquals(3, factory.path("totals").path("count").asInt());
+        assertEquals(2, factory.path("totals").path("confirmedCostCount").asInt());
+        assertEquals("12.34", factory.path("totals").path("actualCost").asText());
+        assertTrue(factory.path("items").get(0).path("actualCost").isNull());
+        assertEquals("9007199254740995", factory.path("nextBefore").asText());
+        var next = ok(get(administrator, endpoint + window + "&kind=FACTORY&before=9007199254740995"));
+        assertEquals("9007199254740994", next.path("items").get(0).path("factId").asText());
+        assertEquals(0, next.path("items").get(1).path("actualCost").asInt());
+        var internal = ok(get(administrator, endpoint + window + "&kind=INTERNAL"));
+        assertEquals(1, internal.path("totals").path("count").asInt());
+        assertEquals("REPAIR_ACCEPTED_IN_PLACE", internal.path("items").get(0).path("status").asText());
+        var csv = get(administrator, endpoint + ".csv" + window + "&kind=FACTORY");
+        assertEquals(200, code(csv));
+        assertEquals(4, csv.body().lines().count());
+        assertEquals(1, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='REPAIR_OPERATIONS_REPORT'
+                    AND JSON_EXTRACT(detail_json,'$.rows')=3
+                    AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.kind'))='FACTORY'
+                """, Integer.class));
     }
 
     private void verifyScrapDispositionReport(Session administrator, Session warehouse) throws Exception {
