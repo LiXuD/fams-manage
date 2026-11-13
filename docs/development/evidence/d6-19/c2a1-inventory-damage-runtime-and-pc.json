@@ -3,7 +3,7 @@
   "base_commit": "dac308f",
   "candidate_kind": "worktree, not a fixed C gate",
   "artifact": {
-    "path": "/Users/lixd/IdeaProjects/Git/CodexProject/fams/output/d6-19c2a1-backend.jar",
+    "path": "<workspace>/output/d6-19c2a1-backend.jar",
     "sha256": "5098052544ed8ff4c0861dfa4285477b470732d3d07278610345248e434b3d74",
     "size": 58902533
   },

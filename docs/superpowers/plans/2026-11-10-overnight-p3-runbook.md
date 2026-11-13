@@ -18,7 +18,7 @@
 
 ## 2. 执行规约（每一片都必须满足，缺一不可）
 
-- 所有 shell 命令加 `rtk` 前缀。后端固定 `rtk env JAVA_HOME=/Users/lixd/Library/Java/JavaVirtualMachines/graalvm-jdk-21.0.7/Contents/Home ./mvnw -o ...`；前端固定 `rtk env PATH="$HOME/.nvm/versions/node/v24.18.0/bin:$PATH" npm ...`（`rtk` 默认 Node 16 会破坏 vue-tsc/vitest）。
+- 所有 shell 命令加 `rtk` 前缀。先将 `FAMS_JAVA21_HOME` 指向 Oracle GraalVM 21.0.7 的 JDK 根目录。后端固定 `rtk env JAVA_HOME="$FAMS_JAVA21_HOME" ./mvnw -o ...`；前端固定 `rtk env PATH="$HOME/.nvm/versions/node/v24.18.0/bin:$PATH" npm ...`（`rtk` 默认 Node 16 会破坏 vue-tsc/vitest）。
 - Flyway 迁移只前向追加，编号以执行时仓库内最大 V 号顺延（白天为 V67）；已执行脚本不得编辑、不得回填历史。
 - 每片自包含闭环，按此顺序：实现 → 契约（新 operation 必须带 `x-business-write` 与六项边界声明、PC 写必带 `CsrfToken`+`IdempotencyKey` 组件引用、mini 写声明 `x-non-applicable: [csrf]` 与 `x-exception-rationale`，标准头一律用组件引用）→ 双端接入（如涉及）→ 定向运行时用例（自有隔离 `mysql:8.4.11`，每片独立 schema，`--default-time-zone=+00:00`，就绪用带凭证 `SELECT 1` 判定，结束 `docker rm -f -v`，并在 `scripts/verify-d6-03a.py` 登记独立库、授权、`D6_24X_*` 环境变量与用例条目）→ Checkstyle `-Pquality validate` 与 `spotbugs:check` 零报告 → 架构 `FamsArchitectureTest,FamsArchitectureRulesTest` → 前端四道（`npm run lint`/`typecheck`/`test:web`/`build:web`）→ 文档三处（任务卡、计划 §四.5 行 + §六.3 记录、`DESIGN-HANDOFF.md`）→ 一次提交。
 - 提交信息按计划 §四.4：`<type>(<scope>): <summary>`，空行后背景/动机与主要变化正文，空行后各占一行 `Agent-Task`、`Agent-Model`（写「无法核实」）、`Agent-Decision`、`Agent-Limitation`。

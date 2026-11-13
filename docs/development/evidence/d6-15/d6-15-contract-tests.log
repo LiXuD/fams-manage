@@ -3,7 +3,7 @@
 ERROR: test_identity_master_data_configuration_is_system_admin_only (test_verify_d6_02c.DesignPackageContractTest.test_identity_master_data_configuration_is_system_admin_only) (method='post', path='/system-accounts/{systemAccountId}/mini-binding/unbind')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 173, in test_identity_master_data_configuration_is_system_admin_only
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 173, in test_identity_master_data_configuration_is_system_admin_only
     self.assertEqual(["SYSTEM_ADMIN"], operation.get("x-actor", {}).get("roles"))
                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 AttributeError: 'str' object has no attribute 'get'
@@ -12,7 +12,7 @@ AttributeError: 'str' object has no attribute 'get'
 ERROR: test_identity_master_data_configuration_is_system_admin_only (test_verify_d6_02c.DesignPackageContractTest.test_identity_master_data_configuration_is_system_admin_only) (method='post', path='/employees/{employeeId}/phone-correction')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 173, in test_identity_master_data_configuration_is_system_admin_only
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 173, in test_identity_master_data_configuration_is_system_admin_only
     self.assertEqual(["SYSTEM_ADMIN"], operation.get("x-actor", {}).get("roles"))
                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 AttributeError: 'str' object has no attribute 'get'
@@ -21,9 +21,9 @@ AttributeError: 'str' object has no attribute 'get'
 ERROR: test_current_contract_has_resolved_refs_and_schema_aligned_examples (test_verify_d6_02c_verifier.ContractEvidenceTest.test_current_contract_has_resolved_refs_and_schema_aligned_examples)
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c_verifier.py", line 76, in test_current_contract_has_resolved_refs_and_schema_aligned_examples
+  File "<workspace>/scripts/test_verify_d6_02c_verifier.py", line 76, in test_current_contract_has_resolved_refs_and_schema_aligned_examples
     VERIFIER.assert_write_contracts(document)
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/verify-d6-02c.py", line 153, in assert_write_contracts
+  File "<workspace>/scripts/verify-d6-02c.py", line 153, in assert_write_contracts
     raise VerificationFailure(
 verify_d6_02c.VerificationFailure: unclassified non-business mutation: POST /api/v1/requisitions
 
@@ -31,7 +31,7 @@ verify_d6_02c.VerificationFailure: unclassified non-business mutation: POST /api
 FAIL: test_data_dictionary_maps_asset_and_inbound_contract_fields (test_verify_d6_02c.DesignPackageContractTest.test_data_dictionary_maps_asset_and_inbound_contract_fields) (asset_field='physicalDestination')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2647, in test_data_dictionary_maps_asset_and_inbound_contract_fields
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2647, in test_data_dictionary_maps_asset_and_inbound_contract_fields
     self.assertIn(f"`{field}`", asset_mapping)
 AssertionError: '`physicalDestination`' not found in '\n\nOpenAPI `Asset` 到事实来源的完整映射：\n\n| API 字段 | 事实来源 |\n|---|---|\n| `id`、`assetCode`、`name`、`model`、`unit`、`serialNumber` | `fams_asset.id/asset_code/name/model/unit/serial_number` |\n| `category`、`brand`、`manufacturer`、`organization` | 对应 `*_id` 加当前主数据行 `version`；停用历史仍可读，写入仍要求当前启用版本 |\n| `plannedInboundWarehouse`、`plannedInboundLocation` | `planned_inbound_*_id` 加当前仓库/位置版本；绝不从正式保管列反推 |\n| `acquisitionDate`、`warrantyExpiryDate` | `acquisition_date/warranty_expiry_date` |\n| `serviceProvider`、`serviceContact`、`servicePhone` | 前两项直接映射；电话经字段授权后从 `service_phone_ciphertext` 解密 |\n| `source`、`notes`、`extensionValues` | `source_text/notes/extension_values_json` |\n| `attachments` | 当前有效 `fams_asset_attachment` 行的 `id/version`；内容下载另行鉴权 |\n| `lifecycle`、`exception`、`cardStage`、`version` | 三个状态列与乐观锁版本 |\n| `createdBusinessDate`、`createdAt`、`parameterVersionId` | `created_business_date/created_at/parameter_version_id` |\n| `creator` | `creator_account_id` 与 `creator_username_snapshot`，不依赖账号当前名称 |\n| `usageMode` | `custody_type` 为 `PERSONAL/SHARED` 时同值；`STORAGE` 或无正式保管时省略 |\n| `currentCustody` | 六个正式保管列；引用版本从当前主数据行读取，按互斥组合生成一个分支 |\n| `openBusinessSummary` | 当前活动业务锁、未结单据与处理权的只读聚合；不在资产行冗余保存 |\n| `inboundBusinessDate`、`lastInventoryBusinessDate` | 两个 `DATE` 列直接输出，不做 UTC 换日 |\n\n'
 
@@ -39,7 +39,7 @@ AssertionError: '`physicalDestination`' not found in '\n\nOpenAPI `Asset` 到事
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/api/v1/requisitions')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'createRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -47,7 +47,7 @@ AssertionError: 'createRequisition' not found in {'miniLogout', 'login', 'issueA
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='patch', path='/api/v1/requisitions/{id}')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'reviseRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -55,7 +55,7 @@ AssertionError: 'reviseRequisition' not found in {'miniLogout', 'login', 'issueA
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/api/v1/requisitions/{id}/changes')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'changeRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -63,7 +63,7 @@ AssertionError: 'changeRequisition' not found in {'miniLogout', 'login', 'issueA
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/api/v1/requisitions/{id}/submit')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'submitRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -71,7 +71,7 @@ AssertionError: 'submitRequisition' not found in {'miniLogout', 'login', 'issueA
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/api/v1/requisitions/{id}/decision')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'decideRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -79,7 +79,7 @@ AssertionError: 'decideRequisition' not found in {'miniLogout', 'login', 'issueA
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/api/v1/requisitions/{id}/cancel')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'cancelRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -87,7 +87,7 @@ AssertionError: 'cancelRequisition' not found in {'miniLogout', 'login', 'issueA
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/api/v1/requisitions/{id}/claim')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'claimRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -95,7 +95,7 @@ AssertionError: 'claimRequisition' not found in {'miniLogout', 'login', 'issueAt
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/api/v1/requisitions/{id}/demands/{demandId}/allocations')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'allocateRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -103,7 +103,7 @@ AssertionError: 'allocateRequisition' not found in {'miniLogout', 'login', 'issu
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/api/v1/requisitions/{id}/demands/{demandId}/unfulfillable')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'unfulfillableRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -111,7 +111,7 @@ AssertionError: 'unfulfillableRequisition' not found in {'miniLogout', 'login', 
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/api/v1/requisitions/{id}/dispute')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'disputeRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -119,7 +119,7 @@ AssertionError: 'disputeRequisition' not found in {'miniLogout', 'login', 'issue
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/api/v1/requisitions/{id}/demands/{demandId}/followup')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'followupRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -127,7 +127,7 @@ AssertionError: 'followupRequisition' not found in {'miniLogout', 'login', 'issu
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/api/v1/mini/requisitions')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'createMiniRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -135,7 +135,7 @@ AssertionError: 'createMiniRequisition' not found in {'miniLogout', 'login', 'is
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='patch', path='/api/v1/mini/requisitions/{id}')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'reviseMiniRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -143,7 +143,7 @@ AssertionError: 'reviseMiniRequisition' not found in {'miniLogout', 'login', 'is
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/api/v1/mini/requisitions/{id}/changes')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'changeMiniRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -151,7 +151,7 @@ AssertionError: 'changeMiniRequisition' not found in {'miniLogout', 'login', 'is
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/api/v1/mini/requisitions/{id}/submit')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'submitMiniRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -159,7 +159,7 @@ AssertionError: 'submitMiniRequisition' not found in {'miniLogout', 'login', 'is
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/api/v1/mini/requisitions/{id}/decision')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'decideMiniRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -167,7 +167,7 @@ AssertionError: 'decideMiniRequisition' not found in {'miniLogout', 'login', 'is
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/api/v1/mini/requisitions/{id}/cancel')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'cancelMiniRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -175,7 +175,7 @@ AssertionError: 'cancelMiniRequisition' not found in {'miniLogout', 'login', 'is
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/api/v1/mini/requisitions/{id}/claim')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'claimMiniRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -183,7 +183,7 @@ AssertionError: 'claimMiniRequisition' not found in {'miniLogout', 'login', 'iss
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/api/v1/mini/requisitions/{id}/demands/{demandId}/allocations')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'allocateMiniRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -191,7 +191,7 @@ AssertionError: 'allocateMiniRequisition' not found in {'miniLogout', 'login', '
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/api/v1/mini/requisitions/{id}/demands/{demandId}/unfulfillable')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'unfulfillableMiniRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -199,7 +199,7 @@ AssertionError: 'unfulfillableMiniRequisition' not found in {'miniLogout', 'logi
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/api/v1/mini/requisitions/{id}/dispute')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'disputeMiniRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -207,7 +207,7 @@ AssertionError: 'disputeMiniRequisition' not found in {'miniLogout', 'login', 'i
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/api/v1/mini/requisitions/{id}/demands/{demandId}/followup')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'followupMiniRequisition' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -215,7 +215,7 @@ AssertionError: 'followupMiniRequisition' not found in {'miniLogout', 'login', '
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/asset-initialization-windows')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'openAssetInitializationWindow' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -223,7 +223,7 @@ AssertionError: 'openAssetInitializationWindow' not found in {'miniLogout', 'log
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/asset-initialization-windows/{windowId}/close')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'closeAssetInitializationWindow' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -231,7 +231,7 @@ AssertionError: 'closeAssetInitializationWindow' not found in {'miniLogout', 'lo
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/asset-import-batches')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2578, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2578, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue(operation.get("x-version"), "missing version boundary")
 AssertionError: None is not true : missing version boundary
 
@@ -239,7 +239,7 @@ AssertionError: None is not true : missing version boundary
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/asset-import-batches/{batchId}/preview')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2592, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2592, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue(
 AssertionError: False is not true
 
@@ -247,7 +247,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/asset-import-batches/{batchId}/review')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'requestAssetImportReview' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -255,7 +255,7 @@ AssertionError: 'requestAssetImportReview' not found in {'miniLogout', 'login', 
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/asset-import-batches/{batchId}/decision')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'decideAssetImportReview' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -263,7 +263,7 @@ AssertionError: 'decideAssetImportReview' not found in {'miniLogout', 'login', '
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/asset-import-batches/{batchId}/rollback')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'requestAssetImportRollback' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -271,7 +271,7 @@ AssertionError: 'requestAssetImportRollback' not found in {'miniLogout', 'login'
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/asset-import-batches/{batchId}/rollback-decision')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'decideAssetImportRollback' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -279,7 +279,7 @@ AssertionError: 'decideAssetImportRollback' not found in {'miniLogout', 'login',
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/asset-import-batches/{batchId}/rollback-execute')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'executeAssetImportRollback' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -287,7 +287,7 @@ AssertionError: 'executeAssetImportRollback' not found in {'miniLogout', 'login'
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/requisitions/{request}/allocations/{allocation}/grant')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'pcHandoverGrant' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -295,7 +295,7 @@ AssertionError: 'pcHandoverGrant' not found in {'miniLogout', 'login', 'issueAtt
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/requisitions/{request}/allocations/{allocation}/deliver')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -303,7 +303,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/requisitions/{request}/allocations/{allocation}/cancel')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -311,7 +311,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/requisitions/{request}/allocations/{allocation}/recovery')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -319,7 +319,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/requisitions/{request}/allocations/{allocation}/recover')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -327,7 +327,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/requisitions/{request}/allocations/{allocation}/grant')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'miniHandoverGrant' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -335,7 +335,7 @@ AssertionError: 'miniHandoverGrant' not found in {'miniLogout', 'login', 'issueA
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/requisitions/{request}/allocations/{allocation}/receive')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -343,7 +343,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/requisitions/{request}/allocations/{allocation}/refuse')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -351,7 +351,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/loans/{id}/extensions')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -359,7 +359,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/loans/borrow-requests/{id}/extensions')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -367,7 +367,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/loans/extensions/{id}/decision')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -375,7 +375,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/asset-returns')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -383,7 +383,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/asset-returns/{id}/decision')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -391,7 +391,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/asset-returns/{id}/claim')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -399,7 +399,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/asset-returns/{id}/inspect')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -407,7 +407,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/transfers')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -415,7 +415,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/transfers/{id}/submit')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -423,7 +423,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/transfers/{id}/cancel')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -431,7 +431,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/transfers/{id}/claim')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -439,7 +439,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/transfers/{id}/decision')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -447,7 +447,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/transfers/{id}/items/{itemId}/deliver')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -455,7 +455,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/transfers/{id}/items/{itemId}/verify')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -463,7 +463,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/transfers/{id}/items/{itemId}/cancel')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -471,7 +471,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/transfers/{id}/items/{itemId}/recovery')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -479,7 +479,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/transfers/{id}/items/{itemId}/recover')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -487,7 +487,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/transfers/receipts/{itemId}/grant')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'grantTransferReceipt' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -495,7 +495,7 @@ AssertionError: 'grantTransferReceipt' not found in {'miniLogout', 'login', 'iss
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/transfers/receipts/{itemId}/receive')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -503,7 +503,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/transfers/receipts/{itemId}/refuse')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -511,7 +511,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/transfers')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -519,7 +519,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/transfers/{id}/submit')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -527,7 +527,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/transfers/{id}/cancel')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -535,7 +535,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/transfers/{id}/claim')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -543,7 +543,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/transfers/{id}/decision')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -551,7 +551,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/transfers/{id}/items/{itemId}/deliver')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -559,7 +559,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/transfers/{id}/items/{itemId}/verify')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -567,7 +567,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/transfers/{id}/items/{itemId}/cancel')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -575,7 +575,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/transfers/{id}/items/{itemId}/recovery')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -583,7 +583,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/transfers/{id}/items/{itemId}/recover')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -591,7 +591,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/transfers/receipts/{itemId}/grant')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2574, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
 AssertionError: 'miniGrantTransferReceipt' not found in {'miniLogout', 'login', 'issueAttachmentDownloadGrant', 'miniLogin', 'miniIssueBindingChallenge', 'logout'}
 
@@ -599,7 +599,7 @@ AssertionError: 'miniGrantTransferReceipt' not found in {'miniLogout', 'login', 
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/transfers/receipts/{itemId}/receive')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -607,7 +607,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/transfers/receipts/{itemId}/refuse')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
@@ -615,7 +615,7 @@ AssertionError: False is not true
 FAIL: test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors (test_verify_d6_02c.DesignPackageContractTest.test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors) (method='post', path='/mini/transfers/{id}/reassignment')
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
+  File "<workspace>/scripts/test_verify_d6_02c.py", line 2600, in test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors
     self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
 AssertionError: False is not true
 
