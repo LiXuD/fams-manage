@@ -171,6 +171,7 @@ onMounted(() => {
   void load();
   const assetId = entryQuery.get("assetId");
   if (assetId && /^[1-9][0-9]*$/.test(assetId)) void openCard(assetId);
+  else if (canWrite && entryQuery.get("action") === "create") void openForm();
 });
 </script>
 
