@@ -393,6 +393,59 @@ class DutyHttpRuntimeCase {
         assertFalse(overdueCsv.body().contains("REPORT-C"));
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_audit_event"
                 + " WHERE resource_type='OVERDUE_LOAN_REPORT' AND JSON_EXTRACT(detail_json,'$.rows')=1", Integer.class));
+
+        db.update("""
+                INSERT INTO fams_inventory_task (id,name,task_status,range_json,starts_at,due_at,timezone_id,
+                    creator_account_id,created_at,updated_at)
+                VALUES (931001,'Overdue task','IN_PROGRESS','{}',UTC_TIMESTAMP(3)-INTERVAL 3 DAY,
+                    UTC_TIMESTAMP(3)-INTERVAL 2 DAY,'UTC',931003,UTC_TIMESTAMP(3),UTC_TIMESTAMP(3))
+                """);
+        db.update("""
+                INSERT INTO fams_inventory_item (task_id,asset_id,asset_version,snapshot_json,executor_account_id)
+                VALUES (931001,9007199254740993,0,'{}',931005)
+                """);
+        db.update("""
+                INSERT INTO fams_business_reminder (business_type,business_id,stage,deadline_at,notice_date,
+                    reminder_business_date,reminder_type,recipient_pool_type,recipient_account_id,created_at)
+                SELECT 'INVENTORY_TASK',id,'INVENTORY_COMPLETION',due_at,UTC_DATE(),UTC_DATE(),
+                    'OVERDUE','EMPLOYEE',931005,UTC_TIMESTAMP(3) FROM fams_inventory_task WHERE id=931001
+                """);
+        db.update("""
+                UPDATE fams_transfer_item SET item_status='DELIVERED',receiver_employee_id=931005,
+                    receipt_required=TRUE,delivered_at=UTC_TIMESTAMP(3)-INTERVAL 4 DAY,
+                    receipt_deadline_at=UTC_TIMESTAMP(3)-INTERVAL 2 DAY WHERE id=9007199254740994
+                """);
+        db.update("""
+                INSERT INTO fams_business_reminder (business_type,business_id,stage,deadline_at,notice_date,
+                    reminder_business_date,reminder_type,recipient_pool_type,recipient_account_id,created_at)
+                SELECT 'TRANSFER_ITEM',id,'HANDOVER_RECEIPT',receipt_deadline_at,UTC_DATE(),UTC_DATE(),
+                    'OVERDUE','EMPLOYEE',931005,UTC_TIMESTAMP(3) FROM fams_transfer_item WHERE id=9007199254740994
+                """);
+        deliveries.enqueue("reminder-test");
+        deliveries.enqueue("reminder-test");
+        assertEquals(4, count("fams_notification_delivery"));
+        var checkedStages = new java.util.HashSet<String>();
+        for (int index = 0; index < 2; index++) {
+            var sms = jobs.claim(NotificationDeliveryQueue.KIND, "overdue", java.time.Duration.ofMinutes(1)).orElseThrow();
+            assertEquals("reminder-test", deliveries.eligibleTemplate(sms));
+            var stage = db.queryForObject("""
+                    SELECT r.stage FROM fams_notification_delivery d
+                    JOIN fams_business_reminder r ON r.id=d.reminder_id WHERE d.job_id=?
+                    """, String.class, sms.id().toString());
+            checkedStages.add(stage);
+            if ("INVENTORY_COMPLETION".equals(stage)) {
+                db.update("""
+                        INSERT INTO fams_message_receipt (account_id,message_kind,message_id,read_at)
+                        SELECT 931005,'REMINDER',reminder_id,UTC_TIMESTAMP(3)
+                        FROM fams_notification_delivery WHERE job_id=?
+                        """, sms.id().toString());
+            } else {
+                db.update("UPDATE fams_transfer_item SET receiver_employee_id=931004 WHERE id=9007199254740994");
+            }
+            assertTrue(deliveries.eligibleTemplate(sms) == null);
+            jobs.fail(sms, "RECIPIENT_UNAVAILABLE_OR_READ", false);
+        }
+        assertEquals(java.util.Set.of("INVENTORY_COMPLETION", "HANDOVER_RECEIPT"), checkedStages);
     }
 
     private long rows(String role) {

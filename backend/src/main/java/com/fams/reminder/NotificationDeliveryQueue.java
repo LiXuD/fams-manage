@@ -34,13 +34,35 @@ class NotificationDeliveryQueue {
                 OR (r.business_type = 'REQUISITION_ALLOCATION' AND r.stage = 'HANDOVER_RECEIPT' AND EXISTS (
                     SELECT 1 FROM fams_requisition_allocation x
                     JOIN fams_requisition_handover h ON h.allocation_id = x.id
-                    WHERE x.id = r.business_id AND x.allocation_status = 'DELIVERED_WAITING_RECEIPT'
+                    WHERE x.id = r.business_id AND (r.reminder_type = 'DUTY_UNREAD_ESCALATION'
+                        OR h.temporary_employee_id = e.id)
+                        AND x.allocation_status = 'DELIVERED_WAITING_RECEIPT'
                         AND h.receipt_deadline_at = r.deadline_at
                 ))
                 OR (r.business_type = 'TRANSFER_ITEM' AND r.stage = 'HANDOVER_RECEIPT' AND EXISTS (
                     SELECT 1 FROM fams_transfer_item x WHERE x.id = r.business_id AND x.item_status = 'DELIVERED'
                         AND x.receipt_deadline_at = r.deadline_at
+                        AND (r.reminder_type = 'DUTY_UNREAD_ESCALATION' OR x.receiver_employee_id = e.id)
                 ))
+                OR (r.business_type = 'INVENTORY_TASK' AND r.stage = 'INVENTORY_COMPLETION' AND EXISTS (
+                    SELECT 1 FROM fams_inventory_task t JOIN fams_inventory_item i ON i.task_id = t.id
+                    WHERE t.id = r.business_id AND t.task_status = 'IN_PROGRESS' AND t.due_at = r.deadline_at
+                        AND i.executor_account_id = a.id
+                ))
+            )
+            """;
+    private static final String ELIGIBLE = """
+            AND (
+                (r.reminder_type = 'DUTY_UNREAD_ESCALATION')
+                OR (r.reminder_type = 'OVERDUE' AND r.recipient_pool_type = 'EMPLOYEE'
+                    AND r.stage IN ('HANDOVER_RECEIPT','INVENTORY_COMPLETION') AND r.deadline_at <= ?)
+            )
+            AND a.status = 'ENABLED' AND NOT a.initial_password_required
+            AND e.status = 'ACTIVE' AND o.status = 'ACTIVE'
+            """ + ACTIVE_STAGE + """
+            AND NOT EXISTS (
+                SELECT 1 FROM fams_message_receipt m
+                WHERE m.account_id = a.id AND m.message_kind = 'REMINDER' AND m.message_id = r.id
             )
             """;
     private final JdbcTemplate db;
@@ -55,6 +77,7 @@ class NotificationDeliveryQueue {
 
     @Transactional
     public void enqueue(String template) {
+        var dayAgo = Timestamp.from(clock.instant().minusSeconds(86400));
         List<Recipient> due = db.query("""
                 SELECT r.id, r.recipient_account_id
                 FROM fams_business_reminder r
@@ -62,21 +85,15 @@ class NotificationDeliveryQueue {
                 JOIN fams_employee e ON e.id = a.employee_id
                 JOIN fams_organization o ON o.id = e.organization_id
                 JOIN fams_account_role ar ON ar.account_id = a.id AND ar.role_code = r.recipient_pool_type
-                WHERE r.reminder_type = 'DUTY_UNREAD_ESCALATION' AND r.created_at >= ?
-                  AND a.status = 'ENABLED' AND NOT a.initial_password_required
-                  AND e.status = 'ACTIVE' AND o.status = 'ACTIVE'
-                """ + ACTIVE_STAGE + """
-                  AND NOT EXISTS (
-                      SELECT 1 FROM fams_message_receipt m
-                      WHERE m.account_id = a.id AND m.message_kind = 'REMINDER' AND m.message_id = r.id
-                  )
+                WHERE (r.reminder_type <> 'DUTY_UNREAD_ESCALATION' OR r.created_at >= ?)
+                """ + ELIGIBLE + """
                   AND NOT EXISTS (
                       SELECT 1 FROM fams_notification_delivery d
                       WHERE d.reminder_id = r.id AND d.recipient_account_id = a.id AND d.channel = 'SMS'
                   )
                 ORDER BY r.id LIMIT 100
                 """, (row, index) -> new Recipient(row.getLong(1), row.getLong(2)),
-                Timestamp.from(clock.instant().minusSeconds(86400)));
+                dayAgo, dayAgo);
         for (var recipient : due) {
             String reference = Long.toString(recipient.reminderId());
             String key = "reminder-" + reference;
@@ -92,6 +109,7 @@ class NotificationDeliveryQueue {
     }
 
     String eligibleTemplate(DurableJobService.Claim claim) {
+        var dayAgo = Timestamp.from(clock.instant().minusSeconds(86400));
         return db.query("""
                 SELECT d.template_code FROM fams_notification_delivery d
                 JOIN fams_business_reminder r ON r.id = d.reminder_id
@@ -99,14 +117,9 @@ class NotificationDeliveryQueue {
                 JOIN fams_employee e ON e.id = a.employee_id
                 JOIN fams_organization o ON o.id = e.organization_id
                 JOIN fams_account_role ar ON ar.account_id = a.id AND ar.role_code = r.recipient_pool_type
-                WHERE d.job_id = ? AND a.status = 'ENABLED' AND NOT a.initial_password_required
-                  AND e.status = 'ACTIVE' AND o.status = 'ACTIVE'
-                """ + ACTIVE_STAGE + """
-                  AND NOT EXISTS (
-                      SELECT 1 FROM fams_message_receipt m
-                      WHERE m.account_id = a.id AND m.message_kind = 'REMINDER' AND m.message_id = r.id
-                  )
-                """, (row, index) -> row.getString(1), claim.id().toString()).stream().findFirst().orElse(null);
+                WHERE d.job_id = ?
+                """ + ELIGIBLE, (row, index) -> row.getString(1), claim.id().toString(), dayAgo)
+                .stream().findFirst().orElse(null);
     }
 
     void accepted(DurableJobService.Claim claim) {
