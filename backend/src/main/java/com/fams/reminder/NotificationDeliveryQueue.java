@@ -49,13 +49,28 @@ class NotificationDeliveryQueue {
                     WHERE t.id = r.business_id AND t.task_status = 'IN_PROGRESS' AND t.due_at = r.deadline_at
                         AND i.executor_account_id = a.id
                 ))
+                OR (r.business_type = 'LOST_REPORT' AND r.stage = 'LOSS_REVIEW' AND EXISTS (
+                    SELECT 1 FROM fams_loss_report x
+                    WHERE x.id = r.business_id AND x.report_status IN ('SEARCHING','CONFIRMED_LOST')
+                        AND x.processor_account_id = a.id
+                        AND x.next_review_date = DATE_SUB(r.notice_date, INTERVAL 1 DAY)
+                ))
+                OR (r.business_type = 'SCRAP' AND r.stage = 'SCRAP_DISPOSITION' AND EXISTS (
+                    SELECT 1 FROM fams_scrap_request x JOIN fams_scrap_disposition d ON d.request_id = x.id
+                    WHERE x.id = r.business_id AND x.request_status = 'EXECUTED'
+                        AND d.disposition_status = 'PENDING_DISPOSITION' AND d.processor_account_id = a.id
+                        AND d.due_date = DATE_SUB(r.notice_date, INTERVAL 1 DAY)
+                ))
             )
             """;
     private static final String ELIGIBLE = """
             AND (
                 (r.reminder_type = 'DUTY_UNREAD_ESCALATION')
-                OR (r.reminder_type = 'OVERDUE' AND r.recipient_pool_type = 'EMPLOYEE'
-                    AND r.stage IN ('HANDOVER_RECEIPT','INVENTORY_COMPLETION') AND r.deadline_at <= ?)
+                OR (r.reminder_type = 'OVERDUE' AND r.deadline_at <= ? AND (
+                    (r.recipient_pool_type = 'EMPLOYEE' AND r.stage IN ('HANDOVER_RECEIPT','INVENTORY_COMPLETION'))
+                    OR (r.recipient_pool_type = 'WAREHOUSE_OPERATOR'
+                        AND r.stage IN ('LOSS_REVIEW','SCRAP_DISPOSITION'))
+                ))
             )
             AND a.status = 'ENABLED' AND NOT a.initial_password_required
             AND e.status = 'ACTIVE' AND o.status = 'ACTIVE'

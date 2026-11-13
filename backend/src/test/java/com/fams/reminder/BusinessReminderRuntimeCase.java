@@ -1,8 +1,13 @@
 package com.fams.reminder;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.fams.job.DurableJobService;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -101,6 +106,41 @@ class BusinessReminderRuntimeCase {
                 "INVENTORY_COMPLETION|OVERDUE|2026-11-15|ASSET_ADMIN|-"),
                 notices("INVENTORY_TASK", 930401));
         assertEquals(List.of("2026-11-08", "2026-11-15"), weeklyNoticeDates());
+        verifyCustodianSmsFallback();
+
+    }
+
+    private void verifyCustodianSmsFallback() {
+        db.update("INSERT INTO fams_account_role (account_id,role_code,granted_at)"
+                + " VALUES (?,'WAREHOUSE_OPERATOR','2026-11-01 12:00:00')",
+                WAREHOUSE_ACCOUNT);
+        var clock = Clock.fixed(Instant.parse("2026-11-10T00:00:00Z"), ZoneOffset.UTC);
+        var jobs = new DurableJobService(db, clock);
+        var queue = new NotificationDeliveryQueue(db, jobs, clock);
+        queue.enqueue("custodian-reminder");
+        queue.enqueue("custodian-reminder");
+        assertEquals(List.of("LOSS_REVIEW", "SCRAP_DISPOSITION"), db.queryForList("""
+                SELECT r.stage FROM fams_notification_delivery d
+                JOIN fams_business_reminder r ON r.id=d.reminder_id
+                ORDER BY r.stage
+                """, String.class));
+        for (int index = 0; index < 2; index++) {
+            var claim = jobs.claim(NotificationDeliveryQueue.KIND, "custodian", Duration.ofMinutes(1)).orElseThrow();
+            assertEquals("custodian-reminder", queue.eligibleTemplate(claim));
+            var stage = db.queryForObject("""
+                    SELECT r.stage FROM fams_notification_delivery d
+                    JOIN fams_business_reminder r ON r.id=d.reminder_id WHERE d.job_id=?
+                    """, String.class, claim.id().toString());
+            if ("LOSS_REVIEW".equals(stage)) {
+                db.update("UPDATE fams_loss_report SET next_review_date='2026-11-12' WHERE id=930300");
+            } else {
+                db.update("UPDATE fams_scrap_disposition SET processor_account_id=? WHERE request_id=930301",
+                        EXECUTOR_ACCOUNT);
+            }
+            assertNull(queue.eligibleTemplate(claim));
+            jobs.fail(claim, "RECIPIENT_UNAVAILABLE_OR_READ", false);
+        }
+        assertTrue(jobs.claim(NotificationDeliveryQueue.KIND, "custodian", Duration.ofMinutes(1)).isEmpty());
     }
 
     private void scan(String date) {
