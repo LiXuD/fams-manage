@@ -389,6 +389,8 @@ class DutyHttpRuntimeCase {
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_audit_event"
                 + " WHERE resource_type='OVERDUE_LOAN_REPORT' AND JSON_EXTRACT(detail_json,'$.rows')=1", Integer.class));
 
+        verifyLossOperationsReport(restored);
+
         db.update("""
                 INSERT INTO fams_inventory_task (id,name,task_status,range_json,starts_at,due_at,timezone_id,
                     creator_account_id,created_at,updated_at)
@@ -441,6 +443,54 @@ class DutyHttpRuntimeCase {
             jobs.fail(sms, "RECIPIENT_UNAVAILABLE_OR_READ", false);
         }
         assertEquals(java.util.Set.of("INVENTORY_COMPLETION", "HANDOVER_RECEIPT"), checkedStages);
+    }
+
+    private void verifyLossOperationsReport(Session administrator) throws Exception {
+        db.update("""
+                INSERT INTO fams_loss_report (id,asset_id,creator_account_id,using_organization_id,asset_version,
+                    source_snapshot_json,last_seen_at,last_location,circumstances,report_status,
+                    confirmed_lost_at,recovered_at,created_at,updated_at)
+                VALUES
+                    (9007199254740993,9007199254740993,931004,931000,0,'{}','2026-11-01 00:00:00','X','X',
+                        'SEARCHING',NULL,NULL,'2026-11-02 00:00:00',NOW(3)),
+                    (9007199254740994,9007199254740993,931004,931000,0,'{}','2026-11-01 00:00:00','X','X',
+                        'CONFIRMED_LOST','2026-11-03 00:00:00','2026-11-04 00:00:00','2026-11-02 00:00:00',NOW(3)),
+                    (9007199254740995,9007199254740992,931004,NULL,0,'{}','2026-11-01 00:00:00','X','X',
+                        'CONFIRMED_LOST','2026-11-03 00:00:00',NULL,'2026-11-02 00:00:00',NOW(3)),
+                    (9007199254740996,9007199254740992,931004,931000,0,'{}','2026-11-01 00:00:00','X','X',
+                        'REJECTED',NULL,NULL,'2026-11-02 00:00:00',NOW(3))
+                """);
+        var endpoint = "/operations-reports/loss";
+        var currentWarehouse = login("duty4");
+        assertEquals(403, code(get(currentWarehouse, endpoint)));
+        assertEquals(403, code(get(currentWarehouse, endpoint + ".csv")));
+        assertEquals(400, code(get(administrator, endpoint + "?state=REJECTED")));
+        var page = ok(get(administrator, endpoint + "?organizationId=931000&pageSize=1"));
+        var first = page.path("items").get(0);
+        assertEquals("9007199254740994", first.path("reportId").asText());
+        assertEquals("RECOVERED", first.path("state").asText());
+        assertEquals("2026-11-03T00:00:00Z", first.path("confirmedLostAt").asText());
+        assertEquals("2026-11-04T00:00:00Z", first.path("recoveredAt").asText());
+        assertEquals(2, page.path("counts").size());
+        assertEquals("9007199254740994", page.path("nextBefore").asText());
+        var next = ok(get(administrator, endpoint + "?organizationId=931000&pageSize=1&before="
+                + page.path("nextBefore").asText()));
+        assertEquals("9007199254740993", next.path("items").get(0).path("reportId").asText());
+        assertTrue(next.path("nextBefore").isNull());
+        var confirmed = ok(get(administrator, endpoint + "?state=CONFIRMED_LOST"));
+        assertEquals(1, confirmed.path("items").size());
+        assertEquals("9007199254740995", confirmed.path("items").get(0).path("reportId").asText());
+        assertTrue(confirmed.path("items").get(0).path("organization").isNull());
+        var csv = get(administrator, endpoint + ".csv?organizationId=931000&state=RECOVERED");
+        assertEquals(200, code(csv));
+        assertTrue(csv.body().contains("9007199254740994"));
+        assertEquals(2, csv.body().lines().count());
+        assertTrue(csv.body().lines().skip(1).findFirst().orElseThrow().startsWith("9007199254740994,"));
+        assertEquals(1, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='LOSS_REPORT_EXPORT'
+                    AND JSON_EXTRACT(detail_json,'$.rows')=1
+                    AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.state'))='RECOVERED'
+                """, Integer.class));
     }
 
     private void assertNotificationAdapterReadiness() {

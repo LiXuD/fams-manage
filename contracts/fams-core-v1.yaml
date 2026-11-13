@@ -8837,6 +8837,77 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { description: More than 10000 matching rows. Narrow the filters. }
 
+  /operations-reports/loss:
+    get:
+      tags: [Reports]
+      operationId: listLossOperationsReport
+      summary: List searching, confirmed-lost and recovered reports.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - &lossReportOrganization { name: organizationId, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - &lossReportState
+          name: state
+          in: query
+          schema: &lossReportStates { type: string, enum: [SEARCHING, CONFIRMED_LOST, RECOVERED] }
+        - { name: before, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Organization-scoped state counts before state filtering, and matching rows ordered by descending report ID.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [counts, items, nextBefore]
+                properties:
+                  counts:
+                    type: array
+                    items:
+                      type: object
+                      required: [state, count]
+                      properties:
+                        state: *lossReportStates
+                        count: { type: integer, format: int64, minimum: 0 }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [reportId, assetId, assetCode, organization, state, reportedAt, confirmedLostAt, recoveredAt]
+                      properties:
+                        reportId: { $ref: '#/components/schemas/Id' }
+                        assetId: { $ref: '#/components/schemas/Id' }
+                        assetCode: { type: string }
+                        organization: { type: string, nullable: true }
+                        state: *lossReportStates
+                        reportedAt: { type: string, format: date-time }
+                        confirmedLostAt: { type: string, format: date-time, nullable: true }
+                        recoveredAt: { type: string, format: date-time, nullable: true }
+                  nextBefore: { type: string, nullable: true, pattern: '^[1-9][0-9]*$' }
+        '400': { description: Invalid filters or cursor. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /operations-reports/loss.csv:
+    get:
+      tags: [Reports]
+      operationId: downloadLossOperationsReport
+      summary: Export all matching loss reports and record an export audit event.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - *lossReportOrganization
+        - *lossReportState
+      responses:
+        '200':
+          description: Formula-safe UTF-8 CSV containing all matching reports.
+          content:
+            text/csv:
+              schema: { type: string }
+        '400': { description: Invalid filters. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { description: More than 10000 matching rows. Narrow the filters. }
+
   /operations-reports/overdue-loans:
     get:
       tags: [Reports]
