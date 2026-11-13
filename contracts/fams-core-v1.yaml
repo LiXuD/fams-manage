@@ -8693,6 +8693,44 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /workbench/todos:
+    get:
+      tags: [Reports]
+      operationId: listWorkbenchTodos
+      summary: List the selected role pool or the current operator's assigned open work.
+      x-actor: { required: true, roles: [ASSET_ADMIN, WAREHOUSE_OPERATOR] }
+      parameters:
+        - name: scope
+          in: query
+          required: true
+          schema: { type: string, enum: [ASSET_ADMIN, WAREHOUSE_OPERATOR, MINE] }
+        - { name: before, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: Open todos in descending ID order. Shared pools exclude assigned work.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextBefore]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, businessType, businessId, stage, openedAt]
+                      properties:
+                        id: { $ref: '#/components/schemas/Id' }
+                        businessType: { type: string }
+                        businessId: { $ref: '#/components/schemas/Id' }
+                        stage: { type: string }
+                        openedAt: { type: string, format: date-time }
+                  nextBefore: { type: string, nullable: true, pattern: '^[1-9][0-9]*$' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /operations-reports/asset-distribution:
     get:
       tags: [Reports]

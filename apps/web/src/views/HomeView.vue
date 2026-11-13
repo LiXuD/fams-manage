@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppChrome from "@/components/AppChrome.vue";
+import WorkbenchTodos from "./WorkbenchTodos.vue";
 import OperationsReports from "./OperationsReports.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 
@@ -9,6 +10,7 @@ const session = useSessionStore();
 <template>
   <AppChrome>
     <div class="breadcrumb">工作台 / 当前权限</div>
+    <WorkbenchTodos v-if="session.user?.roles.some(role => role === 'ASSET_ADMIN' || role === 'WAREHOUSE_OPERATOR')" />
     <OperationsReports v-if="session.user?.roles.includes('ASSET_ADMIN')" />
     <section class="permission-summary" aria-labelledby="permission-title">
       <div>

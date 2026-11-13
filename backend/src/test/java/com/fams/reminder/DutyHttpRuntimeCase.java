@@ -453,6 +453,36 @@ class DutyHttpRuntimeCase {
         verifyMovementTrend(restored, reportWarehouse);
         verifyAssetDistribution(restored, reportWarehouse);
         verifyAssetStatusDrilldown(restored, reportWarehouse);
+        verifyWorkbenchTodos(restored, reportWarehouse, login("duty5"));
+    }
+
+    private void verifyWorkbenchTodos(Session administrator, Session warehouse, Session employee) throws Exception {
+        db.update("""
+                INSERT INTO fams_todo (id,pool_type,assignee_account_id,business_type,business_id,
+                    todo_type,todo_status,opened_at,closed_at)
+                VALUES (9007199254741201,'ASSET_ADMIN',NULL,'INBOUND',931000,'WORKBENCH_ADMIN','OPEN',NOW(3),NULL),
+                    (9007199254741202,'WAREHOUSE_OPERATOR',NULL,'INBOUND',931000,'WORKBENCH_POOL','OPEN',NOW(3),NULL),
+                    (9007199254741203,'WAREHOUSE_OPERATOR',931004,'INBOUND',931000,'WORKBENCH_MINE','OPEN',NOW(3),NULL),
+                    (9007199254741204,'WAREHOUSE_OPERATOR',931005,'INBOUND',931000,'WORKBENCH_OTHER','OPEN',NOW(3),NULL),
+                    (9007199254741205,'WAREHOUSE_OPERATOR',931004,'INBOUND',931000,'WORKBENCH_CLOSED','CLOSED',NOW(3),NOW(3))
+                """);
+        var endpoint = "/workbench/todos?scope=";
+        assertEquals(403, code(get(warehouse, endpoint + "ASSET_ADMIN")));
+        assertEquals(403, code(get(administrator, endpoint + "WAREHOUSE_OPERATOR")));
+        assertEquals(403, code(get(employee, endpoint + "MINE")));
+        assertEquals(400, code(get(warehouse, endpoint + "UNKNOWN")));
+        var admin = ok(get(administrator, endpoint + "ASSET_ADMIN&pageSize=1"));
+        assertEquals("9007199254741201", admin.path("items").get(0).path("id").asText());
+        var shared = ok(get(warehouse, endpoint + "WAREHOUSE_OPERATOR&pageSize=1"));
+        assertEquals("9007199254741202", shared.path("items").get(0).path("id").asText());
+        var assigned = ok(get(warehouse, endpoint + "MINE"));
+        assertTrue(assigned.path("items").valueStream()
+                .anyMatch(row -> "9007199254741203".equals(row.path("id").asText())));
+        assertFalse(assigned.toString().contains("WORKBENCH_OTHER"));
+        assertFalse(assigned.toString().contains("WORKBENCH_CLOSED"));
+        assertFalse(assigned.toString().contains("WORKBENCH_POOL"));
+        var next = ok(get(warehouse, endpoint + "WAREHOUSE_OPERATOR&before=9007199254741202"));
+        assertFalse(next.toString().contains("WORKBENCH_POOL"));
     }
 
     private void verifyAssetStatusDrilldown(Session administrator, Session warehouse) throws Exception {
