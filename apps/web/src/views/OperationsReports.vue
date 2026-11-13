@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import AssetCustodyReport from "./AssetCustodyReport.vue";
 
 interface Summary {
   calculatedAt: string;
@@ -107,6 +108,7 @@ watch(identity, () => {
       <router-link to="/assets">查看资产台账</router-link>
       <p>数据时间 {{ result.calculatedAt }}</p>
     </div>
+    <AssetCustodyReport :lifecycle-labels="lifecycleLabels" :exception-labels="exceptionLabels" />
     <details>
       <summary>抽样留痕率核算</summary>
       <p>请按抽查范围和选样方法，用线下证据核实实际业务。同一笔业务只计一次，待核实线索另列。</p>

@@ -8693,6 +8693,79 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /operations-reports/assets:
+    get:
+      tags: [Reports]
+      operationId: listAssetCustodyReport
+      summary: List effective assets by current custody using a descending asset cursor.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - &reportOrganization { name: organizationId, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - &reportResponsible { name: responsibleId, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - &reportWarehouse { name: warehouseId, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - &reportLocation { name: locationId, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - &reportCustody { name: custody, in: query, schema: { type: string, enum: [PERSONAL, SHARED, STORAGE] } }
+        - &reportInventoryBefore
+          name: inventoryBefore
+          in: query
+          description: Include assets never inventoried or last inventoried before this business date.
+          schema: { type: string, format: date }
+        - { name: before, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Authorized current custody rows and the exclusive cursor for the next page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextBefore]
+                properties:
+                  nextBefore: { type: string, nullable: true, pattern: '^[1-9][0-9]*$' }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [assetId, assetCode, name, lifecycle, exception]
+                      properties:
+                        assetId: { $ref: '#/components/schemas/Id' }
+                        assetCode: { type: string }
+                        name: { type: string }
+                        lifecycle: { $ref: '#/components/schemas/AssetLifecycle' }
+                        exception: { $ref: '#/components/schemas/AssetException' }
+                        custody: { type: string, nullable: true, enum: [PERSONAL, SHARED, STORAGE, null] }
+                        organization: { type: string, nullable: true }
+                        responsible: { type: string, nullable: true }
+                        warehouse: { type: string, nullable: true }
+                        location: { type: string, nullable: true }
+                        lastInventory: { type: string, format: date, nullable: true }
+        '400': { description: Invalid custody criteria or cursor. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /operations-reports/assets.csv:
+    get:
+      tags: [Reports]
+      operationId: downloadAssetCustodyReport
+      summary: Export the matching effective assets and record an export audit event.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - *reportOrganization
+        - *reportResponsible
+        - *reportWarehouse
+        - *reportLocation
+        - *reportCustody
+        - *reportInventoryBefore
+      responses:
+        '200':
+          description: Formula-safe UTF-8 CSV containing the authorized custody rows.
+          content:
+            text/csv:
+              schema: { type: string }
+        '400': { description: Invalid custody criteria. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { description: More than 10000 matching rows. Narrow the filters. }
+
   /operations-reports:
     get:
       tags: [Reports]

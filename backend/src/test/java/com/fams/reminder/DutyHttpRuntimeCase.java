@@ -4,11 +4,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fams.auth.MiniNotificationSmsPort;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.UUID;
 
@@ -18,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -207,6 +211,35 @@ class DutyHttpRuntimeCase {
         jobs.complete(retry, "SMS_ACCEPTED", () -> deliveries.accepted(retry));
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_notification_delivery"
                 + " WHERE accepted_at IS NOT NULL", Integer.class));
+        db.update("""
+                INSERT INTO fams_business_reminder (business_type,business_id,stage,deadline_at,notice_date,
+                    reminder_business_date,reminder_type,recipient_pool_type,recipient_account_id,created_at)
+                VALUES ('INBOUND',931000,'ADMIN_DECISION','2026-11-17 16:00:00',UTC_DATE()-INTERVAL 1 DAY,
+                    UTC_DATE(),'DUTY_UNREAD_ESCALATION','ASSET_ADMIN',931003,UTC_TIMESTAMP(3))
+                """);
+        var provider = new StaticListableBeanFactory();
+        var calls = new ArrayList<String>();
+        provider.addBean("sms", new MiniNotificationSmsPort() {
+            @Override public void sendBindingCode(String phone, String code) {
+                throw new AssertionError("The reminder worker must not send binding codes");
+            }
+
+            @Override public Result sendReminder(long recipient, String template, String key) {
+                assertEquals(ADMIN_TWO, recipient);
+                assertEquals("reminder-test", template);
+                calls.add(key);
+                return calls.size() == 1 ? Result.UNKNOWN : Result.ACCEPTED;
+            }
+        });
+        var adapters = provider.getBeanProvider(MiniNotificationSmsPort.class);
+        new NotificationDeliveryWorker(jobs, deliveries, adapters, "reminder-test").poll();
+        assertEquals(1, calls.size());
+        db.update("UPDATE fams_durable_job SET next_attempt_at=UTC_TIMESTAMP(3) WHERE id=?", calls.getFirst());
+        new NotificationDeliveryWorker(jobs, deliveries, adapters, "reminder-test").poll();
+        assertEquals(2, calls.size());
+        assertEquals(calls.getFirst(), calls.getLast());
+        assertEquals(2, db.queryForObject("SELECT COUNT(*) FROM fams_notification_delivery"
+                + " WHERE accepted_at IS NOT NULL", Integer.class));
 
         var report = "/operations-reports?from=2026-11-01&toExclusive=2026-12-01";
         assertEquals(403, code(get(system, report)));
@@ -234,6 +267,36 @@ class DutyHttpRuntimeCase {
                 export.body());
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_audit_event"
                 + " WHERE action='OPERATIONS_REPORT_EXPORTED'", Integer.class));
+
+        db.update("""
+                INSERT INTO fams_asset (id,asset_code,name,lifecycle_status,exception_status,card_stage,
+                    created_business_date,parameter_version_id,creator_account_id,creator_username_snapshot,
+                    created_at,updated_at,created_by,updated_by)
+                VALUES
+                    (9007199254740993,'REPORT-A','=1+1','UNDER_REPAIR','NORMAL','ACTIVE',
+                        '2026-11-13',931000,931004,'duty4',NOW(3),NOW(3),931004,931004),
+                    (9007199254740994,'REPORT-B','Draft','WAITING_INBOUND','NORMAL','DRAFT',
+                        '2026-11-13',931000,931004,'duty4',NOW(3),NOW(3),931004,931004),
+                    (9007199254740992,'REPORT-C','Existing','UNDER_REPAIR','NORMAL','ACTIVE',
+                        '2026-11-13',931000,931004,'duty4',NOW(3),NOW(3),931004,931004)
+                """);
+        var assets = "/operations-reports/assets";
+        assertEquals(403, code(get(system, assets)));
+        assertEquals(403, code(get(login("duty4"), assets + ".csv")));
+        assertEquals(400, code(get(restored, assets + "?warehouseId=-1")));
+        var firstPage = ok(get(restored, assets + "?pageSize=1"));
+        assertEquals("9007199254740993", firstPage.path("nextBefore").asText());
+        assertEquals("REPORT-A", firstPage.path("items").get(0).path("assetCode").asText());
+        var secondPage = ok(get(restored, assets + "?pageSize=1&before=" + firstPage.path("nextBefore").asText()));
+        assertEquals("REPORT-C", secondPage.path("items").get(0).path("assetCode").asText());
+        assertTrue(secondPage.path("nextBefore").isNull());
+        assertEquals(0, ok(get(restored, assets + "?custody=SHARED")).path("items").size());
+        var custodyCsv = get(restored, assets + ".csv?inventoryBefore=2026-11-13");
+        assertEquals(200, code(custodyCsv));
+        assertTrue(custodyCsv.body().contains("'=1+1"));
+        assertFalse(custodyCsv.body().contains("REPORT-B"));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_audit_event"
+                + " WHERE resource_type='ASSET_CUSTODY_REPORT' AND JSON_EXTRACT(detail_json,'$.rows')=2", Integer.class));
     }
 
     private long rows(String role) {

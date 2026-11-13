@@ -17,7 +17,8 @@ const tag = ref<AssetTag | null>(null);
 const qrImage = ref("");
 const total = ref(0);
 const page = ref(1);
-const code = ref("");
+const entryQuery = new URLSearchParams(window.location.search);
+const code = ref(entryQuery.get("assetCode") ?? "");
 const nameFilter = ref("");
 const error = ref("");
 const notice = ref("");
@@ -166,7 +167,11 @@ async function printCurrent(): Promise<void> {
   finally { busy.value = false; }
 }
 
-onMounted(load);
+onMounted(() => {
+  void load();
+  const assetId = entryQuery.get("assetId");
+  if (assetId && /^[1-9][0-9]*$/.test(assetId)) void openCard(assetId);
+});
 </script>
 
 <template>
