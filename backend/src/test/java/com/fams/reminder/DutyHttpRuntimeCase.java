@@ -446,6 +446,52 @@ class DutyHttpRuntimeCase {
         var reportWarehouse = login("duty4");
         verifyScrapDispositionReport(restored, reportWarehouse);
         verifyRepairOperationsReport(restored, reportWarehouse);
+        verifyAssetTimelineReport(restored, reportWarehouse);
+    }
+
+    private void verifyAssetTimelineReport(Session administrator, Session warehouse) throws Exception {
+        db.update("""
+                INSERT INTO fams_asset_timeline_event
+                    (id,asset_id,event_type,business_type,business_id,occurred_at,summary_json,actor_account_id)
+                VALUES
+                    (9007199254740993,9007199254740993,'ASSET_UPDATED','ASSET',9007199254740993,
+                     '2026-11-01',JSON_OBJECT('summary','=1+1','privateField','private fixture'),931004),
+                    (9007199254740994,9007199254740993,'REPAIR_ACCEPTED_IN_PLACE','REPAIR',931001,
+                     '2026-11-01',JSON_OBJECT('summary','Repair accepted'),931004),
+                    (9007199254740995,9007199254740994,'ASSET_DRAFT_CREATED','ASSET',9007199254740994,
+                     '2026-11-01',JSON_OBJECT('summary','Draft'),931004),
+                    (9007199254740996,9007199254740993,'REPAIR_FACTORY_DISPATCHED','ASSET',9007199254740993,
+                     '2026-11-01',JSON_OBJECT('repairId','931001','roundId','9007199254740995'),931004)
+                """);
+        var endpoint = "/operations-reports/asset-timeline";
+        var asset = "?assetId=9007199254740993";
+        assertEquals(403, code(get(warehouse, endpoint + asset)));
+        assertEquals(403, code(get(warehouse, endpoint + ".csv" + asset)));
+        assertEquals(400, code(get(administrator, endpoint + asset + "&beforeId=9007199254740994")));
+        var factory = ok(get(administrator, endpoint + asset + "&eventType=REPAIR_FACTORY_DISPATCHED"))
+                .path("items").get(0);
+        assertEquals("REPAIR", factory.path("businessType").asText());
+        assertEquals("931001", factory.path("businessId").asText());
+        assertEquals("9007199254740995", factory.path("factoryRoundId").asText());
+        var page = ok(get(administrator, endpoint + asset + "&pageSize=1"));
+        assertEquals("9007199254740996", page.path("items").get(0).path("eventId").asText());
+        assertEquals("931001", page.path("items").get(0).path("businessId").asText());
+        var cursor = page.path("nextBefore");
+        var next = ok(get(administrator, endpoint + asset + "&beforeAt=" + cursor.path("occurredAt").asText()
+                + "&beforeId=" + cursor.path("eventId").asText()));
+        assertEquals("9007199254740994", next.path("items").get(0).path("eventId").asText());
+        assertEquals("=1+1", next.path("items").get(1).path("summary").asText());
+        assertEquals(0, ok(get(administrator, endpoint + "?assetId=9007199254740994")).path("items").size());
+        var csv = get(administrator, endpoint + ".csv" + asset + "&eventType=ASSET_UPDATED");
+        assertEquals(200, code(csv));
+        assertEquals(2, csv.body().lines().count());
+        assertTrue(csv.body().contains("'=1+1"));
+        assertFalse(csv.body().contains("private fixture"));
+        assertEquals(1, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='ASSET_TIMELINE_REPORT'
+                    AND resource_id=9007199254740993 AND JSON_EXTRACT(detail_json,'$.rows')=1
+                    AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.eventType'))='ASSET_UPDATED'
+                """, Integer.class));
     }
 
     private void verifyRepairOperationsReport(Session administrator, Session warehouse) throws Exception {

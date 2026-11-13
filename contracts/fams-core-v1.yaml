@@ -8837,6 +8837,72 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { description: More than 10000 matching rows. Narrow the filters. }
 
+  /operations-reports/asset-timeline:
+    get:
+      tags: [Reports]
+      operationId: listAssetTimelineReport
+      summary: List official asset timeline events by asset and optional event type.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - &timelineReportAsset { name: assetId, in: query, required: true, schema: { $ref: '#/components/schemas/Id' } }
+        - &timelineReportEvent
+          name: eventType
+          in: query
+          schema: { type: string, pattern: '^[A-Z][A-Z0-9_]{0,79}$' }
+        - { name: beforeAt, in: query, schema: { type: string, format: date-time } }
+        - { name: beforeId, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: Events for active or pending-inbound cards in reverse chronological and ID order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextBefore]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [eventId, assetCode, eventType, occurredAt, businessType, businessId, factoryRoundId, summary]
+                      properties:
+                        eventId: { $ref: '#/components/schemas/Id' }
+                        assetCode: { type: string }
+                        eventType: { type: string }
+                        occurredAt: { type: string, format: date-time }
+                        businessType: { type: string }
+                        businessId: { type: string, pattern: '^[0-9]+$' }
+                        factoryRoundId: { type: string, nullable: true, pattern: '^[1-9][0-9]*$' }
+                        summary: { type: string }
+                  nextBefore:
+                    type: object
+                    nullable: true
+                    required: [occurredAt, eventId]
+                    properties:
+                      occurredAt: { type: string, format: date-time }
+                      eventId: { $ref: '#/components/schemas/Id' }
+        '400': { description: 'Invalid asset, event type or cursor. Supply both cursor parts together.' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /operations-reports/asset-timeline.csv:
+    get:
+      tags: [Reports]
+      operationId: downloadAssetTimelineReport
+      summary: Export the matching asset timeline and audit the query scope.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters: [*timelineReportAsset, *timelineReportEvent]
+      responses:
+        '200':
+          description: Formula-safe UTF-8 CSV with timeline summaries and source references.
+          content:
+            text/csv:
+              schema: { type: string }
+        '400': { description: Invalid asset or event type. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { description: More than 10000 matching events. Narrow the filters. }
+
   /operations-reports/repair-operations:
     get:
       tags: [Reports]
