@@ -24,15 +24,18 @@ class ConfigurationAnomalyService {
     private final JdbcTemplate db;
     private final Clock clock;
     private final ObjectProvider<MiniNotificationSmsPort> sms;
+    private final ObjectProvider<WechatSubscriptionPort> wechat;
     private final String smsTemplate;
     private final String wechatTemplate;
 
     ConfigurationAnomalyService(JdbcTemplate db, Clock clock, ObjectProvider<MiniNotificationSmsPort> sms,
+            ObjectProvider<WechatSubscriptionPort> wechat,
             @Value("${fams.notification.sms-template:}") String smsTemplate,
             @Value("${fams.notification.wechat-template:}") String wechatTemplate) {
         this.db = db;
         this.clock = clock;
         this.sms = sms;
+        this.wechat = wechat;
         this.smsTemplate = smsTemplate;
         this.wechatTemplate = wechatTemplate;
     }
@@ -45,7 +48,7 @@ class ConfigurationAnomalyService {
         reconcileRole("WAREHOUSE_OPERATOR", "NO_WAREHOUSE_OPERATOR", now);
         reconcileChannel("SMS_CHANNEL_MISSING", sms.getIfUnique() == null
                 || !smsTemplate.matches("[A-Za-z0-9_-]{1,80}"), now);
-        reconcileChannel("WECHAT_TEMPLATE_MISSING", wechatTemplate.isBlank(), now);
+        reconcileChannel("WECHAT_TEMPLATE_MISSING", wechat.getIfUnique() == null || wechatTemplate.isBlank(), now);
     }
 
     private void reconcileChannel(String type, boolean missing, Timestamp now) {

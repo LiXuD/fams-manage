@@ -141,6 +141,7 @@ class DutyHttpRuntimeCase {
         anomalies.scan();
         anomalies.scan();
 
+        assertNotificationAdapterReadiness();
         var path = "/configuration-anomalies";
         var openPage = ok(get(system, path));
         var open = openPage.path("items").valueStream()
@@ -219,17 +220,11 @@ class DutyHttpRuntimeCase {
                 """);
         var provider = new StaticListableBeanFactory();
         var calls = new ArrayList<String>();
-        provider.addBean("sms", new MiniNotificationSmsPort() {
-            @Override public void sendBindingCode(String phone, String code) {
-                throw new AssertionError("The reminder worker must not send binding codes");
-            }
-
-            @Override public Result sendReminder(long recipient, String template, String key) {
-                assertEquals(ADMIN_TWO, recipient);
-                assertEquals("reminder-test", template);
-                calls.add(key);
-                return calls.size() == 1 ? Result.UNKNOWN : Result.ACCEPTED;
-            }
+        provider.addBean("sms", (MiniNotificationSmsPort) (recipient, template, deliveryKey) -> {
+            assertEquals(ADMIN_TWO, recipient);
+            assertEquals("reminder-test", template);
+            calls.add(deliveryKey);
+            return calls.size() == 1 ? MiniNotificationSmsPort.Result.UNKNOWN : MiniNotificationSmsPort.Result.ACCEPTED;
         });
         var adapters = provider.getBeanProvider(MiniNotificationSmsPort.class);
         new NotificationDeliveryWorker(jobs, deliveries, adapters, "reminder-test").poll();
@@ -446,6 +441,36 @@ class DutyHttpRuntimeCase {
             jobs.fail(sms, "RECIPIENT_UNAVAILABLE_OR_READ", false);
         }
         assertEquals(java.util.Set.of("INVENTORY_COMPLETION", "HANDOVER_RECEIPT"), checkedStages);
+    }
+
+    private void assertNotificationAdapterReadiness() {
+        var providers = new StaticListableBeanFactory();
+        var sms = providers.getBeanProvider(MiniNotificationSmsPort.class);
+        var wechat = providers.getBeanProvider(WechatSubscriptionPort.class);
+        var check = new ConfigurationAnomalyService(db, java.time.Clock.systemUTC(), sms, wechat,
+                "reminder-test", "wechat-test");
+        check.scan();
+        assertEquals(2, openChannelAnomalies());
+
+        providers.addBean("sms", (MiniNotificationSmsPort) (account, template, key) -> {
+            throw new AssertionError("Readiness checks must never send a text message");
+        });
+        providers.addBean("wechat", (WechatSubscriptionPort) delivery -> {
+            throw new AssertionError("Readiness checks must never send a subscription message");
+        });
+        check.scan();
+        assertEquals(0, openChannelAnomalies());
+
+        providers.addBean("otherWechat", (WechatSubscriptionPort) delivery -> WechatSubscriptionPort.Result.REJECTED);
+        check.scan();
+        assertEquals(1, openChannelAnomalies());
+    }
+
+    private int openChannelAnomalies() {
+        return db.queryForObject("""
+                SELECT COUNT(*) FROM fams_configuration_anomaly
+                WHERE active_slot=1 AND anomaly_type IN ('SMS_CHANNEL_MISSING','WECHAT_TEMPLATE_MISSING')
+                """, Integer.class);
     }
 
     private long rows(String role) {
