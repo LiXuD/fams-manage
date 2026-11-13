@@ -448,6 +448,63 @@ class DutyHttpRuntimeCase {
         verifyRepairOperationsReport(restored, reportWarehouse);
         verifyAssetTimelineReport(restored, reportWarehouse);
         verifyInventoryLateReport(restored, reportWarehouse);
+        verifyBusinessExceptionReport(restored, reportWarehouse);
+    }
+
+    private void verifyBusinessExceptionReport(Session administrator, Session warehouse) throws Exception {
+        db.update("""
+                INSERT INTO fams_proxy_confirmation (id,business_type,business_id,item_id,business_snapshot_json,
+                    evidence_metadata_json,confirmation_status,observed_asset_code,actual_signer,actual_received_at,
+                    cannot_confirm_reason,contact_record,evidence_kind,collection_method,creator_account_id,
+                    submitted_at,executed_at,created_at,updated_at)
+                VALUES (9007199254740993,'REPAIR',931001,1,'{}','{}','EXECUTED','=1+1','Private signer',
+                    '2026-11-01','reason','Private contact','SIGNED_RECEIPT','CODE_CONFIRMED',931004,
+                    '2026-11-02','2026-11-03',NOW(3),NOW(3)),
+                    (9007199254740994,'REPAIR',931001,1,'{}','{}','DRAFT','Draft','Signer',
+                    '2026-11-01','reason','Contact','SIGNED_RECEIPT','CODE_CONFIRMED',931004,NULL,NULL,NOW(3),NOW(3))
+                """);
+        db.update("""
+                INSERT INTO fams_scrap_reversal (id,request_id,asset_id,creator_account_id,reason,asset_version,
+                    target_location_id,target_location_version,reversal_status,request_snapshot_json,created_at,updated_at)
+                VALUES (9007199254740993,9007199254740995,9007199254740993,931004,'fixture',0,931001,0,
+                    'COMPLETED','{}','2026-11-02','2026-11-03'),
+                    (9007199254740994,9007199254740995,9007199254740993,931004,'fixture',0,931001,0,
+                    'REJECTED','{}','2026-11-01','2026-11-02')
+                """);
+        db.update("""
+                INSERT INTO fams_scrap_recovery (id,request_id,asset_id,creator_account_id,reason,found_at,
+                    temporary_location_id,temporary_location_version,temporary_custodian_employee_id,asset_version,
+                    target_location_id,target_location_version,recovery_status,request_snapshot_json,created_at,updated_at)
+                VALUES (9007199254740993,9007199254740994,9007199254740993,931004,'fixture','2026-11-01',
+                    931001,0,931004,0,931001,0,'PROCESSING','{}','2026-11-02','2026-11-03')
+                """);
+        var endpoint = "/operations-reports/business-exceptions";
+        var proxy = "?kind=PROXY_CONFIRMATION&businessId=931001";
+        assertEquals(403, code(get(warehouse, endpoint + proxy)));
+        assertEquals(403, code(get(warehouse, endpoint + ".csv" + proxy)));
+        assertEquals(400, code(get(administrator, endpoint + "?kind=UNKNOWN")));
+        var proxies = ok(get(administrator, endpoint + proxy)).path("items");
+        assertEquals(1, proxies.size());
+        assertEquals("2026-11-03T00:00:00Z", proxies.get(0).path("processedAt").asText());
+        assertFalse(proxies.toString().contains("Private"));
+        var first = ok(get(administrator, endpoint + "?kind=SCRAP_REVERSAL&pageSize=1"));
+        assertEquals("9007199254740994", first.path("nextBefore").asText());
+        assertTrue(first.path("items").get(0).path("processedAt").isNull());
+        var reversal = ok(get(administrator, endpoint + "?kind=SCRAP_REVERSAL&before=9007199254740994"));
+        assertEquals("COMPLETED", reversal.path("items").get(0).path("status").asText());
+        var recovery = ok(get(administrator, endpoint + "?kind=SCRAP_RECOVERY&status=PROCESSING"));
+        assertEquals("9007199254740994", recovery.path("items").get(0).path("businessId").asText());
+        assertTrue(recovery.path("items").get(0).path("processedAt").isNull());
+        var csv = get(administrator, endpoint + ".csv" + proxy + "&status=EXECUTED");
+        assertEquals(200, code(csv));
+        assertEquals(2, csv.body().lines().count());
+        assertTrue(csv.body().contains("'=1+1"));
+        assertFalse(csv.body().contains("Private"));
+        assertEquals(1, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='BUSINESS_EXCEPTION_REPORT'
+                    AND JSON_EXTRACT(detail_json,'$.rows')=1 AND JSON_EXTRACT(detail_json,'$.businessId')=931001
+                    AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.status'))='EXECUTED'
+                """, Integer.class));
     }
 
     private void verifyInventoryLateReport(Session administrator, Session warehouse) throws Exception {

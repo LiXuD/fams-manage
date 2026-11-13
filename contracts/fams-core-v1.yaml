@@ -8837,6 +8837,62 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { description: More than 10000 matching rows. Narrow the filters. }
 
+  /operations-reports/business-exceptions:
+    get:
+      tags: [Reports]
+      operationId: listBusinessExceptionReport
+      summary: List submitted proxy confirmations, scrap reversals or scrap recoveries.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - &businessExceptionKind { name: kind, in: query, required: true, schema: { type: string, enum: [PROXY_CONFIRMATION, SCRAP_REVERSAL, SCRAP_RECOVERY] } }
+        - &businessExceptionId { name: businessId, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - &businessExceptionStatus { name: status, in: query, schema: { type: string, pattern: '^[A-Z][A-Z0-9_]{0,39}$' } }
+        - { name: before, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: Matching official records in descending record ID order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextBefore]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [recordId, businessType, businessId, assetCode, status, registeredAt, processedAt]
+                      properties:
+                        recordId: { $ref: '#/components/schemas/Id' }
+                        businessType: { type: string }
+                        businessId: { $ref: '#/components/schemas/Id' }
+                        assetCode: { type: string }
+                        status: { type: string }
+                        registeredAt: { type: string, format: date-time }
+                        processedAt: { type: string, format: date-time, nullable: true }
+                  nextBefore: { type: string, nullable: true, pattern: '^[1-9][0-9]*$' }
+        '400': { description: Invalid filters or cursor. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /operations-reports/business-exceptions.csv:
+    get:
+      tags: [Reports]
+      operationId: downloadBusinessExceptionReport
+      summary: Export the matching business exceptions and record the export scope.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters: [*businessExceptionKind, *businessExceptionId, *businessExceptionStatus]
+      responses:
+        '200':
+          description: Formula-safe UTF-8 CSV of matching records.
+          content:
+            text/csv:
+              schema: { type: string }
+        '400': { description: Invalid filters. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { description: More than 10000 matching records. Narrow the filters. }
+
   /operations-reports/inventory-late:
     get:
       tags: [Reports]
