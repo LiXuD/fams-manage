@@ -8693,6 +8693,91 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /operations-reports:
+    get:
+      tags: [Reports]
+      operationId: getOperationsReport
+      summary: Read sealed inventory, initial publication and current asset counts.
+      x-actor:
+        required: true
+        roles: [ASSET_ADMIN]
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: toExclusive
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Counts for the requested UTC window and the current asset snapshot.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [from, toExclusive, calculatedAt, inventory, openingBatches, currentAssets]
+                properties:
+                  from: { type: string, format: date }
+                  toExclusive: { type: string, format: date }
+                  calculatedAt: { type: string, format: date-time }
+                  inventory:
+                    type: object
+                    required: [sealedTasks, expected, accepted, notObserved]
+                    properties:
+                      sealedTasks: { type: integer, format: int64 }
+                      expected: { type: integer, format: int64 }
+                      accepted: { type: integer, format: int64 }
+                      notObserved: { type: integer, format: int64 }
+                  openingBatches:
+                    type: array
+                    items:
+                      type: object
+                      required: [status, count]
+                      properties:
+                        status: { type: string }
+                        count: { type: integer, format: int64 }
+                  currentAssets:
+                    type: array
+                    items:
+                      type: object
+                      required: [lifecycle, exception, count]
+                      properties:
+                        lifecycle: { type: string }
+                        exception: { type: string }
+                        count: { type: integer, format: int64 }
+        '400': { description: Invalid or oversized UTC window. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /operations-reports/inventory.csv:
+    get:
+      tags: [Reports]
+      operationId: downloadOperationsInventoryReport
+      summary: Download audited sealed inventory counts, one row per sealed task.
+      x-actor:
+        required: true
+        roles: [ASSET_ADMIN]
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: toExclusive
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: UTF-8 CSV with task ID, sealing time and counts.
+          content:
+            text/csv:
+              schema: { type: string }
+        '400': { description: Invalid or oversized UTC window. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { description: The selected window exceeds the export row limit. }
+
   /configuration-anomalies:
     get:
       tags: [MasterData]

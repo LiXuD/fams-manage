@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppChrome from "@/components/AppChrome.vue";
+import OperationsReports from "./OperationsReports.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 
 const session = useSessionStore();
@@ -8,6 +9,7 @@ const session = useSessionStore();
 <template>
   <AppChrome>
     <div class="breadcrumb">工作台 / 当前权限</div>
+    <OperationsReports v-if="session.user?.roles.includes('ASSET_ADMIN')" />
     <section class="permission-summary" aria-labelledby="permission-title">
       <div>
         <h1 id="permission-title">当前身份与权限</h1>
