@@ -8693,6 +8693,36 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /operations-reports/asset-distribution:
+    get:
+      tags: [Reports]
+      operationId: getAssetCustodyDistribution
+      summary: Count effective assets by current using department and assigned category.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      responses:
+        '200':
+          description: Two distributions with a zero ID for assets without the corresponding assignment.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [organizations, categories]
+                properties:
+                  organizations:
+                    type: array
+                    items: &assetDistributionGroup
+                      type: object
+                      required: [id, name, count]
+                      properties:
+                        id: { type: string, pattern: '^(0|[1-9][0-9]*)$' }
+                        name: { type: string, nullable: true }
+                        count: { type: integer, format: int64, minimum: 1 }
+                  categories:
+                    type: array
+                    items: *assetDistributionGroup
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /operations-reports/assets:
     get:
       tags: [Reports]
@@ -8700,7 +8730,16 @@ paths:
       summary: List effective assets by current custody using a descending asset cursor.
       x-actor: { required: true, roles: [ASSET_ADMIN] }
       parameters:
-        - &reportOrganization { name: organizationId, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - &reportOrganization
+          name: organizationId
+          in: query
+          description: Current using department ID. Zero selects assets without a using department.
+          schema: { type: string, pattern: '^(0|[1-9][0-9]*)$' }
+        - &reportCategory
+          name: categoryId
+          in: query
+          description: Assigned category ID. Zero selects uncategorized assets.
+          schema: { type: string, pattern: '^(0|[1-9][0-9]*)$' }
         - &reportResponsible { name: responsibleId, in: query, schema: { $ref: '#/components/schemas/Id' } }
         - &reportWarehouse { name: warehouseId, in: query, schema: { $ref: '#/components/schemas/Id' } }
         - &reportLocation { name: locationId, in: query, schema: { $ref: '#/components/schemas/Id' } }
@@ -8750,6 +8789,7 @@ paths:
       x-actor: { required: true, roles: [ASSET_ADMIN] }
       parameters:
         - *reportOrganization
+        - *reportCategory
         - *reportResponsible
         - *reportWarehouse
         - *reportLocation

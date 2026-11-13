@@ -451,6 +451,50 @@ class DutyHttpRuntimeCase {
         verifyBusinessExceptionReport(restored, reportWarehouse);
         verifyInboundTimingReport(restored, reportWarehouse);
         verifyMovementTrend(restored, reportWarehouse);
+        verifyAssetDistribution(restored, reportWarehouse);
+    }
+
+    private void verifyAssetDistribution(Session administrator, Session warehouse) throws Exception {
+        db.update("""
+                INSERT INTO fams_asset_category (id,code,code_normalized,name,status,created_at,updated_at)
+                VALUES (9007199254740993,'REPORT-CATEGORY','REPORT-CATEGORY','Report category','ACTIVE',NOW(3),NOW(3))
+                """);
+        db.update("""
+                UPDATE fams_asset SET category_id=9007199254740993
+                WHERE id IN (9007199254740993,9007199254740994)
+                """);
+        db.update("""
+                UPDATE fams_asset SET custody_type='PERSONAL',using_organization_id=931000,
+                    current_location_id=931001,responsible_employee_id=931005
+                WHERE id=9007199254740993
+                """);
+        var endpoint = "/operations-reports/asset-distribution";
+        assertEquals(403, code(get(warehouse, endpoint)));
+        var report = ok(get(administrator, endpoint));
+        var list = "/operations-reports/assets";
+        for (var dimension : java.util.Map.of("organizations", "organizationId", "categories", "categoryId").entrySet()) {
+            var groups = report.path(dimension.getKey());
+            assertEquals(2, groups.size());
+            assertTrue(groups.valueStream().anyMatch(row -> "0".equals(row.path("id").asText())));
+            for (var group : groups) {
+                var filter = "?" + dimension.getValue() + "=" + group.path("id").asText();
+                var items = ok(get(administrator, list + filter)).path("items");
+                assertEquals(group.path("count").asInt(), items.size());
+                assertEquals(1, items.size());
+                assertFalse(items.toString().contains("REPORT-B"));
+            }
+        }
+        assertEquals(400, code(get(administrator, list + "?categoryId=-1")));
+        var export = get(administrator, list + ".csv?categoryId=9007199254740993&organizationId=931000");
+        assertEquals(200, code(export));
+        assertEquals(2, export.body().lines().count());
+        assertTrue(export.body().contains("REPORT-A"));
+        assertEquals(1, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='ASSET_CUSTODY_REPORT'
+                    AND JSON_EXTRACT(detail_json,'$.categoryId')=9007199254740993
+                    AND JSON_EXTRACT(detail_json,'$.organizationId')=931000
+                    AND JSON_EXTRACT(detail_json,'$.rows')=1
+                """, Integer.class));
     }
 
     private void verifyMovementTrend(Session administrator, Session warehouse) throws Exception {

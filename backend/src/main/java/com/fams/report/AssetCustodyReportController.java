@@ -4,6 +4,7 @@ import com.fams.auth.AssetActorContext;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 
@@ -33,6 +34,12 @@ class AssetCustodyReportController {
         this.reports = reports;
     }
 
+    @GetMapping("/asset-distribution")
+    ResponseEntity<AssetCustodyReportService.Distribution> distribution() {
+        actors.requireAssetAdmin();
+        return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store").body(reports.distribution());
+    }
+
     @GetMapping("/assets")
     ResponseEntity<AssetCustodyReportService.Page> list(@jakarta.validation.Valid @ModelAttribute Filters filters,
             @RequestParam(required = false) @Positive Long before,
@@ -55,12 +62,12 @@ class AssetCustodyReportController {
         }
     }
 
-    public record Filters(@Positive Long organizationId, @Positive Long responsibleId, @Positive Long warehouseId,
+    public record Filters(@PositiveOrZero Long organizationId, @PositiveOrZero Long categoryId, @Positive Long responsibleId, @Positive Long warehouseId,
                           @Positive Long locationId, @Pattern(regexp = "PERSONAL|SHARED|STORAGE") String custody,
                           @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inventoryBefore) {
         AssetCustodyReportService.Filter toFilter() {
             return new AssetCustodyReportService.Filter(organizationId, responsibleId, warehouseId,
-                    locationId, custody, inventoryBefore);
+                    locationId, custody, inventoryBefore, categoryId);
         }
     }
 }

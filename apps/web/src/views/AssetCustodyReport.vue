@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import AssetDistribution from "./AssetDistribution.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 
 interface AssetRow {
@@ -9,7 +10,7 @@ interface AssetRow {
 }
 interface Page { items: AssetRow[]; nextBefore: string | null }
 const props = defineProps<{ lifecycleLabels: Record<string, string>; exceptionLabels: Record<string, string> }>();
-const filters = ref({ organizationId: "", responsibleId: "", warehouseId: "", locationId: "",
+const filters = ref({ organizationId: "", categoryId: "", responsibleId: "", warehouseId: "", locationId: "",
   custody: "", inventoryBefore: "" });
 const query = computed(() => new URLSearchParams(
   Object.entries(filters.value).filter(([, value]) => value !== "")).toString());
@@ -55,6 +56,12 @@ async function load(cursor: string | null = null, movement = 0) {
   }
 }
 
+function selectDistribution(field: "organizationId" | "categoryId", id: string) {
+  filters.value = { organizationId: "", categoryId: "", responsibleId: "", warehouseId: "", locationId: "",
+    custody: "", inventoryBefore: "", [field]: id };
+  void load();
+}
+
 watch(identity, () => {
   generation++;
   applied.value = null;
@@ -67,9 +74,11 @@ onBeforeUnmount(() => generation++);
 
 <template>
   <section>
+    <AssetDistribution :key="identity" @select="selectDistribution" />
     <h3>资产保管与未盘点清单</h3>
     <form class="actions" @submit.prevent="load()">
-      <label>使用部门编号 <input v-model.trim="filters.organizationId" inputmode="numeric" pattern="[1-9][0-9]*"></label>
+      <label>使用部门编号（0 表示无使用部门） <input v-model.trim="filters.organizationId" inputmode="numeric" pattern="0|[1-9][0-9]*"></label>
+      <label>分类编号（0 表示未分类） <input v-model.trim="filters.categoryId" inputmode="numeric" pattern="0|[1-9][0-9]*"></label>
       <label>责任人员编号 <input v-model.trim="filters.responsibleId" inputmode="numeric" pattern="[1-9][0-9]*"></label>
       <label>当前仓库编号 <input v-model.trim="filters.warehouseId" inputmode="numeric" pattern="[1-9][0-9]*"></label>
       <label>当前位置编号 <input v-model.trim="filters.locationId" inputmode="numeric" pattern="[1-9][0-9]*"></label>
