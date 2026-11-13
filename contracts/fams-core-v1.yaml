@@ -8837,6 +8837,65 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { description: More than 10000 matching rows. Narrow the filters. }
 
+  /operations-reports/overdue-loans:
+    get:
+      tags: [Reports]
+      operationId: listOverdueLoanReport
+      summary: List current overdue loans based on their frozen business timezones.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - &overdueOrganization { name: organizationId, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - &overdueBorrower { name: borrowerId, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - { name: before, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Open overdue loan rows in descending ID order and an exclusive cursor.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [calculatedAt, items, nextBefore]
+                properties:
+                  calculatedAt: { type: string, format: date-time }
+                  nextBefore: { type: string, nullable: true, pattern: '^[1-9][0-9]*$' }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [loanId, assetId, assetCode, borrower, organization, expectedReturnDate, businessDate, overdueDays]
+                      properties:
+                        loanId: { $ref: '#/components/schemas/Id' }
+                        assetId: { $ref: '#/components/schemas/Id' }
+                        assetCode: { type: string }
+                        borrower: { type: string }
+                        organization: { type: string }
+                        expectedReturnDate: { type: string, format: date }
+                        businessDate: { type: string, format: date }
+                        overdueDays: { type: integer, format: int64, minimum: 1 }
+        '400': { description: Invalid filters or cursor. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /operations-reports/overdue-loans.csv:
+    get:
+      tags: [Reports]
+      operationId: downloadOverdueLoanReport
+      summary: Export matching current overdue loans and record an export audit event.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - *overdueOrganization
+        - *overdueBorrower
+      responses:
+        '200':
+          description: Formula-safe UTF-8 CSV containing the matching overdue loans.
+          content:
+            text/csv:
+              schema: { type: string }
+        '400': { description: Invalid filters. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { description: More than 10000 matching rows. Narrow the filters. }
+
   /operations-reports:
     get:
       tags: [Reports]

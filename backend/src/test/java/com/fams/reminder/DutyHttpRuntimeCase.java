@@ -350,6 +350,49 @@ class DutyHttpRuntimeCase {
         assertFalse(exportedTransfer.body().contains("REPORT-C"));
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_audit_event"
                 + " WHERE resource_type='ASSET_MOVEMENT_REPORT' AND JSON_EXTRACT(detail_json,'$.rows')=1", Integer.class));
+
+        String batch = "00000000-0000-4000-8000-000000093100";
+        db.update("""
+                INSERT INTO fams_asset_import_batch
+                    (id,actor_account_id,upload_key,source_sha256,source_bytes,source_xlsx,created_at,updated_at)
+                VALUES (?,931004,'overdue-report-fixture',SHA2('overdue-report-fixture',256),1,X'01',NOW(3),NOW(3))
+                """, batch);
+        var now = java.time.Instant.now();
+        var earlyZone = java.time.ZoneOffset.ofHours(-12);
+        var earlyDate = now.atZone(earlyZone).toLocalDate();
+        db.update("""
+                INSERT INTO fams_loan (id,asset_id,borrower_employee_id,using_organization_id,source_type,
+                    initial_batch_id,initial_sheet_row,borrowed_date,original_return_date,expected_return_date,
+                    parameter_snapshot_json,relation_status,closed_at,created_at,updated_at)
+                VALUES
+                    (9007199254740993,9007199254740993,931005,931000,'INITIAL_IMPORT',?,2,
+                        '2020-01-01','2020-02-01',?,JSON_OBJECT('timezone','+14:00'),'OPEN',NULL,NOW(3),NOW(3)),
+                    (9007199254740995,9007199254740992,931005,931000,'INITIAL_IMPORT',?,3,
+                        '2020-01-01','2020-02-01',?,JSON_OBJECT('timezone','-12:00'),'OPEN',NULL,NOW(3),NOW(3)),
+                    (9007199254740996,9007199254740993,931005,931000,'INITIAL_IMPORT',?,4,
+                        '2020-01-01','2020-02-01','2020-02-01',JSON_OBJECT('timezone','UTC'),'RETURNED',NOW(3),NOW(3),NOW(3))
+                """, batch, earlyDate, batch, earlyDate, batch);
+        var overdue = "/operations-reports/overdue-loans";
+        assertEquals(403, code(get(system, overdue)));
+        assertEquals(403, code(get(login("duty4"), overdue + ".csv")));
+        assertEquals(400, code(get(restored, overdue + "?borrowerId=0")));
+        var overduePage = ok(get(restored, overdue + "?pageSize=1&organizationId=931000"));
+        assertEquals("9007199254740993", overduePage.path("items").get(0).path("loanId").asText());
+        assertEquals(earlyDate.toString(), overduePage.path("items").get(0).path("expectedReturnDate").asText());
+        assertTrue(overduePage.path("nextBefore").isNull());
+        db.update("UPDATE fams_loan SET expected_return_date='2020-02-01' WHERE id=9007199254740995");
+        var twoOverdue = ok(get(restored, overdue + "?pageSize=1"));
+        assertEquals("9007199254740995", twoOverdue.path("nextBefore").asText());
+        assertEquals("9007199254740993", ok(get(restored, overdue + "?pageSize=1&before="
+                + twoOverdue.path("nextBefore").asText())).path("items").get(0).path("loanId").asText());
+        db.update("UPDATE fams_asset SET exception_status='LOST' WHERE id=9007199254740992");
+        assertTrue(ok(get(restored, overdue + "?borrowerId=931004")).path("items").isEmpty());
+        var overdueCsv = get(restored, overdue + ".csv?borrowerId=931005");
+        assertEquals(200, code(overdueCsv));
+        assertTrue(overdueCsv.body().contains("REPORT-A"));
+        assertFalse(overdueCsv.body().contains("REPORT-C"));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_audit_event"
+                + " WHERE resource_type='OVERDUE_LOAN_REPORT' AND JSON_EXTRACT(detail_json,'$.rows')=1", Integer.class));
     }
 
     private long rows(String role) {
