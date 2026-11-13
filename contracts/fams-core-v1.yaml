@@ -8837,6 +8837,66 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { description: More than 10000 matching rows. Narrow the filters. }
 
+  /operations-reports/inventory-late:
+    get:
+      tags: [Reports]
+      operationId: listInventoryLateReport
+      summary: List late evidence with its latest review and associated recheck task.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - &inventoryLateReportTask { name: taskId, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - &inventoryLateReportResult
+          name: result
+          in: query
+          schema: &inventoryLateReportResults { type: string, enum: [OPEN, INFORMATION, REVIEWED, FOLLOWUP_OPEN] }
+        - { name: before, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: Matching supplemental cases ordered by descending observation ID.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextBefore]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [observationId, taskId, taskName, assetCode, receivedAt, comparison, result, linkedTaskId, linkedTaskStatus]
+                      properties:
+                        observationId: { $ref: '#/components/schemas/Id' }
+                        taskId: { $ref: '#/components/schemas/Id' }
+                        taskName: { type: string }
+                        assetCode: { type: string, nullable: true }
+                        receivedAt: { type: string, format: date-time }
+                        comparison: { type: string }
+                        result: *inventoryLateReportResults
+                        linkedTaskId: { type: string, nullable: true, pattern: '^[1-9][0-9]*$' }
+                        linkedTaskStatus: { type: string, nullable: true }
+                  nextBefore: { type: string, nullable: true, pattern: '^[1-9][0-9]*$' }
+        '400': { description: Invalid filters or cursor. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /operations-reports/inventory-late.csv:
+    get:
+      tags: [Reports]
+      operationId: downloadInventoryLateReport
+      summary: Export the same late evidence and recheck scope and record an export audit event.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters: [*inventoryLateReportTask, *inventoryLateReportResult]
+      responses:
+        '200':
+          description: Formula-safe UTF-8 CSV of matching cases.
+          content:
+            text/csv:
+              schema: { type: string }
+        '400': { description: Invalid filters. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { description: More than 10000 matching rows. Narrow the filters. }
+
   /operations-reports/asset-timeline:
     get:
       tags: [Reports]

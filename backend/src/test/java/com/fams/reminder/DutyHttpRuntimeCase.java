@@ -447,6 +447,60 @@ class DutyHttpRuntimeCase {
         verifyScrapDispositionReport(restored, reportWarehouse);
         verifyRepairOperationsReport(restored, reportWarehouse);
         verifyAssetTimelineReport(restored, reportWarehouse);
+        verifyInventoryLateReport(restored, reportWarehouse);
+    }
+
+    private void verifyInventoryLateReport(Session administrator, Session warehouse) throws Exception {
+        db.update("""
+                INSERT INTO fams_inventory_task (id,name,task_status,range_json,starts_at,due_at,
+                    creator_account_id,created_at,updated_at)
+                VALUES (931002,'Recheck','READY','{}',UTC_TIMESTAMP(3)+INTERVAL 1 DAY,
+                    UTC_TIMESTAMP(3)+INTERVAL 2 DAY,931003,NOW(3),NOW(3))
+                """);
+        for (long id : new long[]{9007199254740993L, 9007199254740994L}) {
+            db.update("""
+                    INSERT INTO fams_inventory_observation (id,task_id,client_event_id,actor_account_id,
+                        device_id,assignment_version,recheck_generation,source,asset_code,raw_observed_at,
+                        first_persisted_at,client_expires_at,received_at,facts_json,payload_sha256,fact_sha256,
+                        outcome,receipt_json)
+                    VALUES (?,931000,UUID(),931004,UUID(),0,0,'CODE','=1+1','2026-11-01','2026-11-01',
+                        '2026-11-04','2026-11-02','{}',REPEAT('0',64),REPEAT('1',64),'LATE_EVIDENCE','{}')
+                    """, id);
+            db.update("""
+                    INSERT INTO fams_inventory_late_case (observation_id,task_id,comparison_kind,needs_review,
+                        snapshot_json,snapshot_sha256,created_at)
+                    VALUES (?,931000,'FROZEN_CONFLICT',TRUE,'{}',REPEAT('2',64),NOW(3))
+                    """, id);
+        }
+        db.update("""
+                INSERT INTO fams_inventory_late_decision (observation_id,decision_version,method,result,
+                    reason,evidence,linked_task_id,actor_account_id,actor_username,decided_at)
+                VALUES (9007199254740994,1,'NOTE','REVIEWED','reason','evidence',NULL,931003,'duty3',NOW(3)),
+                    (9007199254740994,2,'LINK_RECHECK','FOLLOWUP_OPEN','reason','evidence',931002,931003,'duty3',NOW(3))
+                """);
+        var endpoint = "/operations-reports/inventory-late";
+        assertEquals(403, code(get(warehouse, endpoint)));
+        assertEquals(403, code(get(warehouse, endpoint + ".csv")));
+        assertEquals(400, code(get(administrator, endpoint + "?result=INVALID")));
+        var page = ok(get(administrator, endpoint + "?taskId=931000&pageSize=1"));
+        assertEquals("9007199254740994", page.path("nextBefore").asText());
+        var linked = page.path("items").get(0);
+        assertEquals("FOLLOWUP_OPEN", linked.path("result").asText());
+        assertEquals("931002", linked.path("linkedTaskId").asText());
+        assertEquals("READY", linked.path("linkedTaskStatus").asText());
+        var next = ok(get(administrator, endpoint + "?taskId=931000&before=9007199254740994"));
+        assertEquals("OPEN", next.path("items").get(0).path("result").asText());
+        assertTrue(next.path("nextBefore").isNull());
+        assertEquals(0, ok(get(administrator, endpoint + "?taskId=931002")).path("items").size());
+        var csv = get(administrator, endpoint + ".csv?taskId=931000&result=FOLLOWUP_OPEN");
+        assertEquals(200, code(csv));
+        assertEquals(2, csv.body().lines().count());
+        assertTrue(csv.body().contains("'=1+1"));
+        assertEquals(1, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='INVENTORY_LATE_REPORT'
+                    AND JSON_EXTRACT(detail_json,'$.rows')=1 AND JSON_EXTRACT(detail_json,'$.taskId')=931000
+                    AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.result'))='FOLLOWUP_OPEN'
+                """, Integer.class));
     }
 
     private void verifyAssetTimelineReport(Session administrator, Session warehouse) throws Exception {

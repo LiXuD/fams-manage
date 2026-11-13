@@ -113,6 +113,8 @@ onMounted(async () => {
   busy.value = true;
   try {
     await list();
+    const taskId = new URLSearchParams(window.location.search).get("taskId");
+    if (taskId && /^[1-9][0-9]*$/.test(taskId)) await open(taskId);
     if (admin.value) {
       for (const kind of ["organization", "category", "warehouse", "location", "employee"]) {
         const all: Choice[] = []; let p = 1; let rows: Choice[];
