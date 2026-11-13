@@ -297,6 +297,59 @@ class DutyHttpRuntimeCase {
         assertFalse(custodyCsv.body().contains("REPORT-B"));
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_audit_event"
                 + " WHERE resource_type='ASSET_CUSTODY_REPORT' AND JSON_EXTRACT(detail_json,'$.rows')=2", Integer.class));
+
+        db.update("""
+                INSERT INTO fams_transfer (id,creator_account_id,reason,request_status,created_at,updated_at)
+                VALUES (931000,931004,'Report fixture','PARTIALLY_COMPLETED',NOW(3),NOW(3))
+                """);
+        db.update("""
+                INSERT INTO fams_transfer_item (id,request_id,asset_id,asset_version,source_snapshot_json,
+                    target_snapshot_json,parameter_snapshot_json,receipt_required,item_status,
+                    completed_at,completed_by,after_snapshot_json)
+                VALUES
+                    (9007199254740993,931000,9007199254740993,0,'{}','{}','{}',false,'COMPLETED',
+                        '2026-11-13 09:00:00',931004,'{}'),
+                    (9007199254740992,931000,9007199254740992,0,'{}','{}','{}',false,'COMPLETED',
+                        '2026-11-13 09:00:00',931004,'{}'),
+                    (9007199254740994,931000,9007199254740994,0,'{}','{}','{}',false,'READY',NULL,NULL,NULL)
+                """);
+        var movement = "/operations-reports/movements";
+        var range = "?from=2026-11-13&toExclusive=2026-11-14&kind=";
+        for (String kind : new String[]{"INBOUND", "REQUISITION", "REQUISITION_RETURN", "BORROW", "BORROW_RETURN"}) {
+            assertTrue(ok(get(restored, movement + range + kind)).path("items").isEmpty(), kind);
+        }
+        db.update("""
+                INSERT INTO fams_asset_return (id,asset_id,asset_version,responsible_employee_id,using_organization_id,
+                    proposed_by,reason,return_status,inspection_result,parameter_snapshot_json,created_at,completed_at)
+                VALUES (931000,9007199254740993,0,931005,931000,931004,'Missing fixture',
+                    'TRANSFERRED','MISSING','{}','2026-11-12 09:00:00','2026-11-13 00:00:00')
+                """);
+        var returnRow = ok(get(restored, movement + range + "REQUISITION_RETURN")).path("items").get(0);
+        assertEquals("MISSING", returnRow.path("outcome").asText());
+        assertEquals("2026-11-13T00:00:00Z", returnRow.path("occurredAt").asText());
+        assertTrue(ok(get(restored, movement + "?from=2026-11-12&toExclusive=2026-11-13&kind=REQUISITION_RETURN"))
+                .path("items").isEmpty());
+        assertEquals(400, code(get(restored, movement + range + "INVALID")));
+        assertEquals(400, code(get(restored, movement + "?kind=TRANSFER")));
+        var transfers = movement + range + "TRANSFER";
+        assertEquals(403, code(get(system, transfers)));
+        assertEquals(400, code(get(restored, transfers + "&beforeId=1")));
+        var transferPage = ok(get(restored, transfers + "&pageSize=1"));
+        var cursor = transferPage.path("nextBefore");
+        assertEquals("9007199254740993", cursor.path("factId").asText());
+        assertEquals("2026-11-13T09:00:00Z", cursor.path("occurredAt").asText());
+        var nextTransfer = ok(get(restored, transfers + "&pageSize=1&beforeAt=" + cursor.path("occurredAt").asText()
+                + "&beforeId=" + cursor.path("factId").asText()));
+        assertEquals("REPORT-C", nextTransfer.path("items").get(0).path("assetCode").asText());
+        assertTrue(nextTransfer.path("nextBefore").isNull());
+        var transferCsv = movement + ".csv" + range + "TRANSFER&assetId=9007199254740993";
+        assertEquals(403, code(get(login("duty4"), transferCsv)));
+        var exportedTransfer = get(restored, transferCsv);
+        assertEquals(200, code(exportedTransfer));
+        assertTrue(exportedTransfer.body().contains("REPORT-A"));
+        assertFalse(exportedTransfer.body().contains("REPORT-C"));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_audit_event"
+                + " WHERE resource_type='ASSET_MOVEMENT_REPORT' AND JSON_EXTRACT(detail_json,'$.rows')=1", Integer.class));
     }
 
     private long rows(String role) {

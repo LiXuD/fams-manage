@@ -8766,6 +8766,77 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { description: More than 10000 matching rows. Narrow the filters. }
 
+  /operations-reports/movements:
+    get:
+      tags: [Reports]
+      operationId: listAssetMovementReport
+      summary: List persisted asset execution facts for one kind and a UTC date window of up to 366 days.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - &movementKind
+          name: kind
+          in: query
+          required: true
+          schema: { type: string, enum: [INBOUND, REQUISITION, REQUISITION_RETURN, BORROW, BORROW_RETURN, TRANSFER] }
+        - &movementFrom { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - &movementUntil { name: toExclusive, in: query, required: true, schema: { type: string, format: date } }
+        - &movementAsset { name: assetId, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - { name: beforeAt, in: query, schema: { type: string, format: date-time } }
+        - { name: beforeId, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Facts in descending time and ID order, with a paired exclusive cursor.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextBefore]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [factId, businessId, assetId, assetCode, occurredAt, outcome]
+                      properties:
+                        factId: { $ref: '#/components/schemas/Id' }
+                        businessId: { $ref: '#/components/schemas/Id' }
+                        assetId: { $ref: '#/components/schemas/Id' }
+                        assetCode: { type: string }
+                        occurredAt: { type: string, format: date-time }
+                        outcome: { type: string, enum: [ACCEPTED, RECEIVED, PROXY_RECEIVED, NORMAL, DAMAGED, MISSING, COMPLETED] }
+                  nextBefore:
+                    type: object
+                    nullable: true
+                    required: [occurredAt, factId]
+                    properties:
+                      occurredAt: { type: string, format: date-time }
+                      factId: { $ref: '#/components/schemas/Id' }
+        '400': { description: "Invalid window, filter or paired cursor." }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /operations-reports/movements.csv:
+    get:
+      tags: [Reports]
+      operationId: downloadAssetMovementReport
+      summary: Export matching execution facts and record an export audit event.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - *movementKind
+        - *movementFrom
+        - *movementUntil
+        - *movementAsset
+      responses:
+        '200':
+          description: Formula-safe UTF-8 CSV containing the authorized matching facts.
+          content:
+            text/csv:
+              schema: { type: string }
+        '400': { description: Invalid window or filter. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { description: More than 10000 matching rows. Narrow the filters. }
+
   /operations-reports:
     get:
       tags: [Reports]

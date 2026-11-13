@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import AssetCustodyReport from "./AssetCustodyReport.vue";
+import AssetMovementReport from "./AssetMovementReport.vue";
 
 interface Summary {
   calculatedAt: string;
@@ -109,6 +110,7 @@ watch(identity, () => {
       <p>数据时间 {{ result.calculatedAt }}</p>
     </div>
     <AssetCustodyReport :lifecycle-labels="lifecycleLabels" :exception-labels="exceptionLabels" />
+    <AssetMovementReport :key="identity" :from="from" :to-exclusive="toExclusive" />
     <details>
       <summary>抽样留痕率核算</summary>
       <p>请按抽查范围和选样方法，用线下证据核实实际业务。同一笔业务只计一次，待核实线索另列。</p>
