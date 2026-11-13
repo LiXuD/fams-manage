@@ -63,18 +63,60 @@ class NotificationDeliveryQueue {
                 ))
             )
             """;
+    private static final String FALLBACK = """
+            r.reminder_type = 'SMS_FALLBACK' AND (
+                (r.business_type = 'LOAN' AND r.stage = 'LOAN_RETURN' AND EXISTS (
+                    SELECT 1 FROM fams_loan l JOIN fams_asset asset ON asset.id = l.asset_id
+                    JOIN fams_todo t ON t.business_type = 'LOAN' AND t.business_id = l.id
+                        AND t.todo_type = 'OVERDUE' AND t.todo_status = 'OPEN'
+                        AND t.pool_type = 'EMPLOYEE' AND t.assignee_account_id = a.id
+                    WHERE l.id = r.business_id AND l.borrower_employee_id = e.id AND l.relation_status = 'OPEN'
+                        AND asset.lifecycle_status <> 'SCRAPPED' AND asset.exception_status <> 'LOST'
+                        AND l.expected_return_date = DATE(r.deadline_at)
+                        AND NOT EXISTS (
+                            SELECT 1 FROM fams_message_receipt m WHERE m.account_id = a.id
+                                AND m.message_kind = 'TODO' AND m.message_id = t.id
+                        )
+                ) AND NOT EXISTS (
+                    SELECT 1 FROM fams_business_reminder prev
+                    JOIN fams_notification_delivery d ON d.reminder_id = prev.id AND d.recipient_account_id = a.id
+                    JOIN fams_durable_job j ON j.id = d.job_id
+                    WHERE prev.business_type = 'LOAN' AND prev.business_id = r.business_id
+                        AND prev.stage = 'LOAN_RETURN' AND prev.reminder_type = 'SMS_FALLBACK'
+                        AND prev.id <> r.id
+                        AND (d.accepted_at > DATE_SUB(?, INTERVAL 3 DAY)
+                            OR (prev.id < r.id AND j.job_status IN ('QUEUED','RUNNING','RETRY_WAIT')))
+                ))
+                OR (r.business_type = 'REPAIR_FACTORY_ROUND' AND r.stage = 'FACTORY_RETURN'
+                    AND r.deadline_at <= ? AND EXISTS (
+                        SELECT 1 FROM fams_repair_factory_round x JOIN fams_repair_request p ON p.id = x.repair_id
+                        WHERE x.id = r.business_id AND x.round_status = 'DISPATCHED'
+                            AND p.processor_account_id = a.id
+                            AND x.expected_return_date = DATE_SUB(r.notice_date, INTERVAL 1 DAY)
+                    ) AND NOT EXISTS (
+                        SELECT 1 FROM fams_message_receipt m
+                        WHERE m.account_id = a.id AND m.message_kind = 'REMINDER' AND m.message_id = (
+                            SELECT MAX(n.id) FROM fams_business_reminder n
+                            WHERE n.business_type = r.business_type AND n.business_id = r.business_id
+                                AND n.stage = r.stage AND n.deadline_at = r.deadline_at
+                                AND n.reminder_type IN ('DUE_TODAY','OVERDUE_EVERY_7_DAYS')
+                        )
+                    ))
+            )
+            """;
     private static final String ELIGIBLE = """
-            AND (
+            AND ((
                 (r.reminder_type = 'DUTY_UNREAD_ESCALATION')
                 OR (r.reminder_type = 'OVERDUE' AND r.deadline_at <= ? AND (
                     (r.recipient_pool_type = 'EMPLOYEE' AND r.stage IN ('HANDOVER_RECEIPT','INVENTORY_COMPLETION'))
                     OR (r.recipient_pool_type = 'WAREHOUSE_OPERATOR'
                         AND r.stage IN ('LOSS_REVIEW','SCRAP_DISPOSITION'))
                 ))
+            ) """ + ACTIVE_STAGE + """
+            OR (""" + FALLBACK + """
             )
-            AND a.status = 'ENABLED' AND NOT a.initial_password_required
+            ) AND a.status = 'ENABLED' AND NOT a.initial_password_required
             AND e.status = 'ACTIVE' AND o.status = 'ACTIVE'
-            """ + ACTIVE_STAGE + """
             AND NOT EXISTS (
                 SELECT 1 FROM fams_message_receipt m
                 WHERE m.account_id = a.id AND m.message_kind = 'REMINDER' AND m.message_id = r.id
@@ -92,7 +134,8 @@ class NotificationDeliveryQueue {
 
     @Transactional
     public void enqueue(String template) {
-        var dayAgo = Timestamp.from(clock.instant().minusSeconds(86400));
+        var now = clock.instant();
+        var dayAgo = Timestamp.from(now.minusSeconds(86400));
         List<Recipient> due = db.query("""
                 SELECT r.id, r.recipient_account_id
                 FROM fams_business_reminder r
@@ -102,13 +145,19 @@ class NotificationDeliveryQueue {
                 JOIN fams_account_role ar ON ar.account_id = a.id AND ar.role_code = r.recipient_pool_type
                 WHERE (r.reminder_type <> 'DUTY_UNREAD_ESCALATION' OR r.created_at >= ?)
                 """ + ELIGIBLE + """
+                  AND (r.reminder_type <> 'SMS_FALLBACK' OR NOT EXISTS (
+                      SELECT 1 FROM fams_business_reminder newer
+                      WHERE newer.business_type = r.business_type AND newer.business_id = r.business_id
+                          AND newer.stage = r.stage AND newer.reminder_type = r.reminder_type
+                          AND newer.recipient_slot = r.recipient_slot AND newer.id > r.id
+                  ))
                   AND NOT EXISTS (
                       SELECT 1 FROM fams_notification_delivery d
                       WHERE d.reminder_id = r.id AND d.recipient_account_id = a.id AND d.channel = 'SMS'
                   )
                 ORDER BY r.id LIMIT 100
                 """, (row, index) -> new Recipient(row.getLong(1), row.getLong(2)),
-                dayAgo, dayAgo);
+                dayAgo, dayAgo, Timestamp.from(now), dayAgo);
         for (var recipient : due) {
             String reference = Long.toString(recipient.reminderId());
             String key = "reminder-" + reference;
@@ -124,7 +173,8 @@ class NotificationDeliveryQueue {
     }
 
     String eligibleTemplate(DurableJobService.Claim claim) {
-        var dayAgo = Timestamp.from(clock.instant().minusSeconds(86400));
+        var now = clock.instant();
+        var dayAgo = Timestamp.from(now.minusSeconds(86400));
         return db.query("""
                 SELECT d.template_code FROM fams_notification_delivery d
                 JOIN fams_business_reminder r ON r.id = d.reminder_id
@@ -133,7 +183,7 @@ class NotificationDeliveryQueue {
                 JOIN fams_organization o ON o.id = e.organization_id
                 JOIN fams_account_role ar ON ar.account_id = a.id AND ar.role_code = r.recipient_pool_type
                 WHERE d.job_id = ?
-                """ + ELIGIBLE, (row, index) -> row.getString(1), claim.id().toString(), dayAgo)
+                """ + ELIGIBLE, (row, index) -> row.getString(1), claim.id().toString(), dayAgo, Timestamp.from(now), dayAgo)
                 .stream().findFirst().orElse(null);
     }
 

@@ -11,6 +11,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import javax.sql.DataSource;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,7 +28,7 @@ import tools.jackson.databind.ObjectMapper;
     "spring.profiles.active=fams-product", "spring.flyway.locations=classpath:db/migration/d6_04",
     "fams.security.idempotency-hmac-key=test-idempotency-hmac-key-0123456789abcdef",
     "fams.security.employee-phone-key=test-phone-key-0123456789abcdef-extra",
-    "fams.attachments.cleanup-enabled=false"
+    "spring.flyway.target=73", "fams.attachments.cleanup-enabled=false"
 })
 @EnabledIfSystemProperty(named = "d6.24.reminder.runtime", matches = "true")
 class BusinessReminderRuntimeCase {
@@ -38,6 +40,7 @@ class BusinessReminderRuntimeCase {
 
     @Autowired JdbcTemplate db;
     @Autowired ObjectMapper json;
+    @Autowired DataSource dataSource;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry properties) {
@@ -107,6 +110,8 @@ class BusinessReminderRuntimeCase {
                 notices("INVENTORY_TASK", 930401));
         assertEquals(List.of("2026-11-08", "2026-11-15"), weeklyNoticeDates());
         verifyCustodianSmsFallback();
+        verifyFallbackMigration();
+        verifyLoanAndFactorySmsFallback();
 
     }
 
@@ -141,6 +146,113 @@ class BusinessReminderRuntimeCase {
             jobs.fail(claim, "RECIPIENT_UNAVAILABLE_OR_READ", false);
         }
         assertTrue(jobs.claim(NotificationDeliveryQueue.KIND, "custodian", Duration.ofMinutes(1)).isEmpty());
+    }
+
+    private void verifyFallbackMigration() {
+        var remindersBefore = db.queryForList("SELECT * FROM fams_business_reminder ORDER BY id");
+        var deliveriesBefore = db.queryForList("SELECT * FROM fams_notification_delivery ORDER BY reminder_id");
+        var migration = Flyway.configure().dataSource(dataSource).locations("classpath:db/migration/d6_04").load();
+        assertEquals(1, migration.migrate().migrationsExecuted);
+        assertEquals(0, migration.migrate().migrationsExecuted);
+        assertEquals(remindersBefore, db.queryForList("SELECT * FROM fams_business_reminder ORDER BY id"));
+        assertEquals(deliveriesBefore, db.queryForList("SELECT * FROM fams_notification_delivery ORDER BY reminder_id"));
+    }
+
+    private void verifyLoanAndFactorySmsFallback() {
+        db.update("UPDATE fams_inventory_task SET task_status='TERMINATED' WHERE id IN (930400,930401)");
+        db.update("UPDATE fams_loss_report SET next_review_date='2026-12-01' WHERE id=930300");
+        db.update("INSERT INTO fams_account_role (account_id,role_code,granted_at)"
+                + " VALUES (?,'EMPLOYEE','2026-11-01 12:00:00')", EXECUTOR_ACCOUNT);
+        db.update("UPDATE fams_repair_request SET processor_account_id=? WHERE id=930600", WAREHOUSE_ACCOUNT);
+        db.update("UPDATE fams_repair_factory_round SET expected_return_date='2026-11-17' WHERE id=930600");
+        String batch = "00000000-0000-4000-8000-000000093000";
+        db.update("""
+                INSERT INTO fams_asset_import_batch
+                    (id,actor_account_id,upload_key,source_sha256,source_bytes,source_xlsx,created_at,updated_at)
+                VALUES (?,?,'sms-fallback-fixture',SHA2('sms-fallback-fixture',256),1,X'01',NOW(3),NOW(3))
+                """, batch, ADMIN);
+        db.update("""
+                INSERT INTO fams_loan (id,asset_id,borrower_employee_id,using_organization_id,source_type,
+                    initial_batch_id,initial_sheet_row,borrowed_date,original_return_date,expected_return_date,
+                    parameter_snapshot_json,relation_status,created_at,updated_at)
+                VALUES (930700,930305,?,?,'INITIAL_IMPORT',?,2,'2026-11-01','2026-11-17','2026-11-17',
+                    JSON_OBJECT('timezone','-12:00'),'OPEN',NOW(3),NOW(3))
+                """, EXECUTOR_ACCOUNT, PARAMETER, batch);
+        db.update("""
+                INSERT INTO fams_todo (pool_type,assignee_account_id,business_type,business_id,todo_type,
+                    todo_status,opened_at) VALUES (? ,?,'LOAN',930700,'OVERDUE','OPEN',NOW(3))
+                """, "EMPLOYEE", EXECUTOR_ACCOUNT);
+        scan("2026-11-18");
+        assertEquals(0, fallbackNotices("LOAN"));
+        assertEquals(1, fallbackNotices("REPAIR_FACTORY_ROUND"));
+        assertEquals(0, fallbackDeliveries("REPAIR_FACTORY_ROUND"));
+
+        var before = smsClock("2026-11-18T15:59:59Z");
+        new NotificationDeliveryQueue(db, new DurableJobService(db, before), before).enqueue("fallback-test");
+        assertEquals(0, fallbackDeliveries("REPAIR_FACTORY_ROUND"));
+
+        var start = smsClock("2026-11-18T16:00:00Z");
+        new BusinessReminderService(db, json, start).scan();
+        var jobs = new DurableJobService(db, start);
+        var queue = new NotificationDeliveryQueue(db, jobs, start);
+        queue.enqueue("fallback-test");
+        queue.enqueue("fallback-test");
+        assertEquals(1, fallbackDeliveries("LOAN"));
+        assertEquals(1, fallbackDeliveries("REPAIR_FACTORY_ROUND"));
+        for (int index = 0; index < 2; index++) {
+            var claim = jobs.claim(NotificationDeliveryQueue.KIND, "fallback", Duration.ofMinutes(1)).orElseThrow();
+            assertEquals("fallback-test", queue.eligibleTemplate(claim));
+            var stage = db.queryForObject("""
+                    SELECT r.stage FROM fams_notification_delivery d JOIN fams_business_reminder r ON r.id=d.reminder_id
+                    WHERE d.job_id=?
+                    """, String.class, claim.id().toString());
+            if ("LOAN_RETURN".equals(stage)) {
+                queue.accepted(claim);
+                jobs.complete(claim, "accepted", () -> { });
+            } else {
+                assertEquals("FACTORY_RETURN", stage);
+                db.update("""
+                        INSERT INTO fams_message_receipt (account_id,message_kind,message_id,read_at)
+                        SELECT ?, 'REMINDER', MAX(id), NOW(3) FROM fams_business_reminder
+                        WHERE business_type='REPAIR_FACTORY_ROUND' AND reminder_type='DUE_TODAY'
+                        """, WAREHOUSE_ACCOUNT);
+                assertNull(queue.eligibleTemplate(claim));
+                jobs.fail(claim, "RECIPIENT_UNAVAILABLE_OR_READ", false);
+            }
+        }
+
+        var early = smsClock("2026-11-21T12:00:00Z");
+        new BusinessReminderService(db, json, early).scan();
+        new NotificationDeliveryQueue(db, new DurableJobService(db, early), early).enqueue("fallback-test");
+        assertEquals(2, fallbackNotices("LOAN"));
+        assertEquals(1, fallbackDeliveries("LOAN"));
+
+        var retryClock = smsClock("2026-11-21T16:00:00Z");
+        var retryJobs = new DurableJobService(db, retryClock);
+        var retryQueue = new NotificationDeliveryQueue(db, retryJobs, retryClock);
+        retryQueue.enqueue("fallback-test");
+        assertEquals(2, fallbackDeliveries("LOAN"));
+        var next = retryJobs.claim(NotificationDeliveryQueue.KIND, "fallback", Duration.ofMinutes(1)).orElseThrow();
+        assertEquals("fallback-test", retryQueue.eligibleTemplate(next));
+        db.update("UPDATE fams_loan SET expected_return_date='2026-11-30' WHERE id=930700");
+        assertNull(retryQueue.eligibleTemplate(next));
+    }
+
+    private Clock smsClock(String instant) {
+        return Clock.fixed(Instant.parse(instant), ZoneOffset.UTC);
+    }
+
+    private int fallbackNotices(String source) {
+        return db.queryForObject("""
+                SELECT COUNT(*) FROM fams_business_reminder WHERE business_type=? AND reminder_type='SMS_FALLBACK'
+                """, Integer.class, source);
+    }
+
+    private int fallbackDeliveries(String source) {
+        return db.queryForObject("""
+                SELECT COUNT(*) FROM fams_notification_delivery d JOIN fams_business_reminder r ON r.id=d.reminder_id
+                WHERE r.business_type=? AND r.reminder_type='SMS_FALLBACK'
+                """, Integer.class, source);
     }
 
     private void scan(String date) {

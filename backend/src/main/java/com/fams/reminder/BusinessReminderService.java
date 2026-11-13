@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -48,7 +49,8 @@ public class BusinessReminderService {
         receipts(today);
         transfers(today);
         inventory(today, zone);
-        factoryReturns(today, zone);
+        factoryReturns();
+        overdueLoans();
         lossReviews(today, zone);
         dispositions(today, zone);
     }
@@ -141,9 +143,14 @@ public class BusinessReminderService {
                 });
     }
 
-    private void factoryReturns(LocalDate today, ZoneId zone) {
-        each("SELECT x.id,x.expected_return_date FROM fams_repair_factory_round x WHERE x.round_status='DISPATCHED'",
+    private void factoryReturns() {
+        each("""
+             SELECT x.id,x.expected_return_date,p.timezone_id,p.processor_account_id
+               FROM fams_repair_factory_round x JOIN fams_repair_request p ON p.id=x.repair_id
+              WHERE x.round_status='DISPATCHED'""",
                 row -> {
+                    var zone = ZoneId.of(String.valueOf(row.get("timezone_id")));
+                    var today = clock.instant().atZone(zone).toLocalDate();
                     var due = LocalDate.parse(String.valueOf(row.get("expected_return_date")));
                     record("REPAIR_FACTORY_ROUND", number(row, "id"), "FACTORY_RETURN", due, endOfDay(due, zone), zone,
                             "WAREHOUSE_OPERATOR", null, today, List.of(
@@ -152,6 +159,35 @@ public class BusinessReminderService {
                                     // weekly bucket instead of emitting a fresh notice every run.
                                     new Tier("OVERDUE_EVERY_7_DAYS", due.plusDays(7L * Math.max(1,
                                             (today.toEpochDay() - due.toEpochDay()) / 7)))));
+                    if (row.get("processor_account_id") instanceof Number processor) {
+                        record("REPAIR_FACTORY_ROUND", number(row, "id"), "FACTORY_RETURN", due,
+                                endOfDay(due, zone), zone, "WAREHOUSE_OPERATOR", processor.longValue(), today,
+                                List.of(new Tier("SMS_FALLBACK", due.plusDays(1))));
+                    }
+                });
+    }
+
+    private void overdueLoans() {
+        each("""
+             SELECT x.id,x.expected_return_date,x.parameter_snapshot_json,t.assignee_account_id
+               FROM fams_loan x JOIN fams_asset asset ON asset.id=x.asset_id
+               JOIN fams_todo t ON t.business_type='LOAN' AND t.business_id=x.id
+                    AND t.todo_type='OVERDUE' AND t.todo_status='OPEN' AND t.pool_type='EMPLOYEE'
+              WHERE x.relation_status='OPEN' AND asset.lifecycle_status<>'SCRAPPED'
+                    AND asset.exception_status<>'LOST' AND t.assignee_account_id IS NOT NULL""",
+                row -> {
+                    var zone = zone(row.get("parameter_snapshot_json"));
+                    var today = clock.instant().atZone(zone).toLocalDate();
+                    var due = LocalDate.parse(String.valueOf(row.get("expected_return_date")));
+                    var overdueFrom = due.plusDays(1);
+                    if (!today.isBefore(overdueFrom)) {
+                        long days = ChronoUnit.DAYS.between(overdueFrom, today);
+                        // The internal occurrence stores the effective due date as UTC midnight for SQL equality.
+                        var dueKey = due.atStartOfDay(ZoneOffset.UTC).toInstant();
+                        record("LOAN", number(row, "id"), "LOAN_RETURN", due, dueKey, zone,
+                                "EMPLOYEE", number(row, "assignee_account_id"), today,
+                                List.of(new Tier("SMS_FALLBACK", overdueFrom.plusDays(days / 3 * 3))));
+                    }
                 });
     }
 

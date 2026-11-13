@@ -43,7 +43,7 @@ public class MessageService {
     private static final String REMINDER_COLUMNS =
             " SELECT 'REMINDER' message_kind,r.id id,r.business_type,r.business_id,r.reminder_type stage,"
             + " r.stage object_stage,r.recipient_pool_type pool_type,r.recipient_account_id,r.created_at moment,"
-            + " r.deadline_at FROM fams_business_reminder r WHERE";
+            + " r.deadline_at FROM fams_business_reminder r WHERE r.reminder_type<>'SMS_FALLBACK' AND";
     /**
      * Only the latest occurrence of an object stage is an active message; earlier ones stay as history. Escalation
      * tiers are newest-per-recipient within their own tier instead, so an escalation never displaces the ladder
@@ -51,7 +51,8 @@ public class MessageService {
      */
     private static final String NEWEST_OCCURRENCE =
             " r.id=(SELECT MAX(x.id) FROM fams_business_reminder x WHERE x.business_type=r.business_type"
-            + " AND x.business_id=r.business_id AND x.stage=r.stage AND ((x.reminder_type IN" + ESCALATION_TYPES
+            + " AND x.business_id=r.business_id AND x.stage=r.stage AND x.reminder_type<>'SMS_FALLBACK'"
+            + " AND ((x.reminder_type IN" + ESCALATION_TYPES
             + " AND x.reminder_type=r.reminder_type AND x.recipient_slot=r.recipient_slot)"
             + " OR (r.reminder_type NOT IN" + ESCALATION_TYPES + " AND x.reminder_type NOT IN" + ESCALATION_TYPES
             + "))) AND";
@@ -168,12 +169,12 @@ public class MessageService {
 
     private String addressableReminder(RequisitionActorContext.Current current, List<Object> args) {
         if (current.has(Role.ASSET_ADMIN)) {
-            return " 1=1";
+            return " r.reminder_type<>'SMS_FALLBACK'";
         }
         var pools = pools(current);
         args.add(current.id());
         args.addAll(pools);
-        return addressed("r", "recipient_account_id", "recipient_pool_type", pools);
+        return " r.reminder_type<>'SMS_FALLBACK' AND" + addressed("r", "recipient_account_id", "recipient_pool_type", pools);
     }
 
     private static String addressed(String alias, String personColumn, String poolColumn, List<String> pools) {
