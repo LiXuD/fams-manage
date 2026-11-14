@@ -9,6 +9,8 @@ import { ScrapApiError, scrapOriginal, scrapRequest, scrapCorrectionStates, scra
 
 const route = useRoute(), session = useSessionStore();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, route.params.id]));
+const auditOnly = computed(() => session.user?.roles.includes("AUDIT_READ_ONLY") &&
+  !session.user.roles.some(role => ["EMPLOYEE", "DEPARTMENT_ASSET_MANAGER", "WAREHOUSE_OPERATOR", "ASSET_ADMIN"].includes(role)));
 const rows = ref<ScrapRequest[]>([]), detail = ref<ScrapRequest | null>(null), page = ref(1), total = ref(0);
 const overdueOnly = ref(false), canListOverdue = ref(false), businessDate = ref("");
 const assets = ref<ScrapAsset[]>([]), assetPage = ref(1), assetTotal = ref(0), selectedAsset = ref("");
@@ -71,7 +73,7 @@ async function load(id = detail.value?.id ?? String(route.params.id ?? ""), next
     rows.value = result.items; total.value = result.total; page.value = next; detail.value = selected; stale.value = false;
     canListOverdue.value = result.canListOverdueDispositions === true;
     businessDate.value = result.businessDate ?? "";
-    if (selected) await loadAttachments(selected, epoch, owner);
+    if (selected && !auditOnly.value) await loadAttachments(selected, epoch, owner);
   } catch (cause) { if (current(epoch, owner)) { stale.value = true; failure(cause); } }
   finally { if (current(epoch, owner)) busy.value = false; }
 }
@@ -413,7 +415,7 @@ onBeforeUnmount(() => { live = false; reset(); });
     <section v-if="confirmation" role="dialog" aria-label="确认报废操作"><p>{{ confirmation.summary }}</p>
       <button :disabled="busy" @click="confirm">确认提交本次办理</button><button :disabled="busy" @click="confirmation = null">返回核对</button>
     </section>
-    <section aria-label="提交报废申请"><h2>提交报废申请</h2><button :disabled="locked" @click="loadAssets()">查询可报废资产</button>
+    <section v-if="!auditOnly" aria-label="提交报废申请"><h2>提交报废申请</h2><button :disabled="locked" @click="loadAssets()">查询可报废资产</button>
       <fieldset :disabled="locked || stale">
         <label>资产<select v-model="selectedAsset"><option value="">请选择</option><option v-for="asset in assets" :key="asset.id" :value="asset.id">{{ asset.assetCode }} · {{ asset.name }}</option></select></label>
         <button :disabled="assetPage === 1" @click="loadAssets(assetPage - 1)">上一页可报废资产</button>

@@ -27,7 +27,15 @@ import java.util.Objects;
 @Profile("fams-product")
 @Transactional
 public class ScrapReadService {
-    private static final String SCOPE = " FROM fams_scrap_request r WHERE (? OR r.creator_account_id=?"
+    private static final String SCOPE = " FROM fams_scrap_request r JOIN fams_asset a ON a.id=r.asset_id"
+            + " WHERE (? OR r.creator_account_id=?"
+            + " OR (? AND EXISTS (SELECT 1 FROM fams_account_authorization aa"
+            + " JOIN fams_account_data_scope ds ON ds.authorization_id=aa.id"
+            + " JOIN fams_account_scope_organization os ON os.data_scope_id=ds.id"
+            + " WHERE aa.account_id=? AND aa.role_code='AUDIT_READ_ONLY' AND aa.superseded_at IS NULL"
+            + " AND aa.authorization_status='ACTIVE' AND ds.scope_type='SPECIFIED_ORGANIZATIONS'"
+            + " AND CAST(os.organization_id AS CHAR)=COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(r.source_snapshot_json,'$.using_organization_id')),"
+            + " 'null'),CAST(a.owning_organization_id AS CHAR))))"
             + " OR (? AND CAST(JSON_UNQUOTE(JSON_EXTRACT(r.source_snapshot_json,'$.responsible_employee_id')) AS UNSIGNED)=?)"
             + " OR (? AND CAST(JSON_UNQUOTE(JSON_EXTRACT(r.source_snapshot_json,'$.using_organization_id')) AS UNSIGNED)=?)"
             + " OR (? AND (JSON_UNQUOTE(JSON_EXTRACT(r.decision_snapshot_json,'$.decision.result'))='APPROVE'"
@@ -54,7 +62,7 @@ public class ScrapReadService {
     }
 
     public Map<String, Object> list(Actor actor, int page, int size) {
-        var current = actors.revalidateLocked(actor);
+        var current = actors.revalidateScrapReaderLocked(actor);
         Object[] scope = scope(current);
         var args = new ArrayList<Object>(Arrays.asList(scope));
         args.add(size);
@@ -92,7 +100,7 @@ public class ScrapReadService {
     }
 
     public Map<String, Object> get(Actor actor, long id) {
-        var current = actors.revalidateLocked(actor);
+        var current = actors.revalidateScrapReaderLocked(actor);
         var row = visible(current, id);
         var result = view(current, row);
         result.put("history", db.queryForList("SELECT id,action,actor_username,occurred_at"
@@ -167,10 +175,17 @@ public class ScrapReadService {
     }
 
     private Object[] scope(Current actor) {
-        return new Object[] {actor.has(Role.ASSET_ADMIN) || actor.has(Role.AUDIT_READ_ONLY), actor.id(),
+        return new Object[] {actor.has(Role.ASSET_ADMIN), auditOnly(actor) ? null : actor.id(),
+                actor.has(Role.AUDIT_READ_ONLY), actor.id(),
                 actor.has(Role.EMPLOYEE), actor.employeeId(),
                 actor.has(Role.DEPARTMENT_ASSET_MANAGER), actor.organizationId(),
                 actor.has(Role.WAREHOUSE_OPERATOR), actor.id()};
+    }
+
+    private static boolean auditOnly(Current actor) {
+        return actor.has(Role.AUDIT_READ_ONLY) && !actor.has(Role.ASSET_ADMIN)
+                && !actor.has(Role.WAREHOUSE_OPERATOR) && !actor.has(Role.DEPARTMENT_ASSET_MANAGER)
+                && !actor.has(Role.EMPLOYEE);
     }
 
     private Map<String, Object> view(Current actor, Map<String, Object> row) {
@@ -306,6 +321,9 @@ public class ScrapReadService {
         actions.put("executeRecovery", recovery != null && actor.has(Role.WAREHOUSE_OPERATOR)
                 && Objects.equals(actor.id(), recoveryRows.getFirst().get("processor_account_id"))
                 && "PROCESSING".equals(recovery.get("status")));
+        if (auditOnly(actor)) {
+            actions.replaceAll((action, allowed) -> false);
+        }
         result.put("actions", actions);
         result.put("correction", correction);
         result.put("reversal", reversal);
