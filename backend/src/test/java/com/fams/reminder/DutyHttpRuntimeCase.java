@@ -454,6 +454,31 @@ class DutyHttpRuntimeCase {
         verifyAssetDistribution(restored, reportWarehouse);
         verifyAssetStatusDrilldown(restored, reportWarehouse);
         verifyWorkbenchTodos(restored, reportWarehouse, login("duty5"));
+        verifySealedInventoryTasks(restored, reportWarehouse);
+    }
+
+    private void verifySealedInventoryTasks(Session administrator, Session warehouse) throws Exception {
+        db.update("""
+                INSERT INTO fams_inventory_sealed_evidence (task_id,observation_id,snapshot_json,snapshot_sha256)
+                VALUES (931000,9007199254740993,
+                    '{"subjects":[{"dimension":"LOCATION"},{"dimension":"CONFLICT"}]}',REPEAT('0',64))
+                """);
+        var path = "/operations-reports/inventory";
+        var window = "?from=2026-11-01&toExclusive=2026-12-01";
+        assertEquals(403, code(get(warehouse, path + window)));
+        assertEquals(400, code(get(administrator, path + "?from=2026-12-01&toExclusive=2026-11-01")));
+        var page = ok(get(administrator, path + window));
+        assertEquals(1, page.path("items").size());
+        var row = page.path("items").get(0);
+        assertEquals("931000", row.path("taskId").asText());
+        assertEquals(4, row.path("expected").asInt());
+        assertEquals(3, row.path("accepted").asInt());
+        assertEquals(1, row.path("notObserved").asInt());
+        assertEquals(1, row.path("differenceEvidence").asInt());
+        assertEquals(1, row.path("conflictEvidence").asInt());
+        assertTrue(ok(get(administrator, path + window + "&before=931000")).path("items").isEmpty());
+        assertTrue(ok(get(administrator, path + "?from=2026-11-01&toExclusive=2026-11-13"))
+                .path("items").isEmpty());
     }
 
     private void verifyWorkbenchTodos(Session administrator, Session warehouse, Session employee) throws Exception {

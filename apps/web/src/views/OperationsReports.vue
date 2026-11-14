@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import SealedInventoryTasks from "./SealedInventoryTasks.vue";
 import AssetCustodyReport from "./AssetCustodyReport.vue";
 import AssetMovementTrend from "./AssetMovementTrend.vue";
 import AssetMovementReport from "./AssetMovementReport.vue";
@@ -99,8 +100,8 @@ watch(identity, () => {
       <p>任务 {{ result.inventory.sealedTasks }} 项 · 已采信 {{ result.inventory.accepted }} /
         应盘 {{ result.inventory.expected }} · 未盘 {{ result.inventory.notObserved }}</p>
       <p>统计范围为窗口内已封存报告。未盘计入应盘，草稿、取消、终止和未封存任务排除。</p>
+      <SealedInventoryTasks :key="identity + loadedQuery" :query="loadedQuery" />
       <div class="actions">
-        <router-link to="/inventory-tasks">查看盘点任务</router-link>
         <a :href="`/api/v1/operations-reports/inventory.csv?${loadedQuery}`">下载盘点 CSV</a>
       </div>
       <h3>期初批次</h3>

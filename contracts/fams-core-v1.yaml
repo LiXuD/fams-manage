@@ -9525,6 +9525,45 @@ paths:
         '400': { description: Invalid or oversized UTC window. }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /operations-reports/inventory:
+    get:
+      tags: [Reports]
+      operationId: listSealedInventoryReportTasks
+      summary: List sealed inventory tasks with completion and frozen evidence counts.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: toExclusive, in: query, required: true, schema: { type: string, format: date } }
+        - { name: before, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: Sealed tasks in the UTC window with counts of observations carrying frozen review subjects.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextBefore]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [taskId, name, sealedAt, expected, accepted, notObserved, differenceEvidence, conflictEvidence]
+                      properties:
+                        taskId: { $ref: '#/components/schemas/Id' }
+                        name: { type: string }
+                        sealedAt: { type: string, format: date-time }
+                        expected: { type: integer, format: int64, minimum: 1 }
+                        accepted: { type: integer, format: int64, minimum: 0 }
+                        notObserved: { type: integer, format: int64, minimum: 0 }
+                        differenceEvidence: { type: integer, format: int64, minimum: 0 }
+                        conflictEvidence: { type: integer, format: int64, minimum: 0 }
+                  nextBefore: { type: string, nullable: true, pattern: '^[1-9][0-9]*$' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /operations-reports/inventory.csv:
     get:
       tags: [Reports]
