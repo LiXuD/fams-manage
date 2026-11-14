@@ -66,7 +66,8 @@ def main() -> None:
         print("\n".join(metrics))
         return
     linked_restart = "--restart-linked-import" in sys.argv
-    if linked_restart or "--restart-import" in sys.argv or "--failure-import" in sys.argv:
+    linked_mini = "--mini-linked-import" in sys.argv
+    if linked_restart or linked_mini or "--restart-import" in sys.argv or "--failure-import" in sys.argv:
         run("./mvnw", "-pl", "backend", "-Dd6.08.job.runtime=true",
             "-Dtest=DurableJobRuntimeCase#mysqlSubmissionClaimFencingBackoffAndBusinessRollback",
             "test", env=env)
@@ -81,6 +82,15 @@ def main() -> None:
                    if "D6_08_PUBLICATION_FAILURE " in line]
         if len(metrics) != 1:
             raise RuntimeError("publication failure measurement was not produced")
+        print(metrics[0])
+        return
+    if linked_mini:
+        output = run("./mvnw", "-pl", "backend", "-Dd6.08.import.http.runtime=true", "-Dd6.23.mini.runtime=true",
+                     "-Dtest=AssetImportHttpRuntimeCase#warehouseUploadPreviewAndErrorRowsUseRealSessionAndMysql",
+                     "test", env=env)
+        metrics = [line.strip() for line in output.splitlines() if "D6_23_NATIVE_INITIAL_SCRAP " in line]
+        if len(metrics) != 1:
+            raise RuntimeError("native initial scrap verification did not produce its checkpoint")
         print(metrics[0])
         return
     if linked_restart or "--restart-import" in sys.argv:

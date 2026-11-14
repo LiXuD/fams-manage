@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fams.auth.InitialScrapMiniSessions;
 import com.fams.job.DurableJobService;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -29,6 +30,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -57,6 +59,7 @@ class AssetImportHttpRuntimeCase {
     @Autowired AssetImportReviewService reviews;
     @Autowired AssetImportPublicationService publication;
     @Autowired AssetImportRollbackService rollbacks;
+    @Autowired ApplicationContext context;
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
@@ -246,6 +249,10 @@ class AssetImportHttpRuntimeCase {
         String linkedRestartMarker = System.getenv("D6_23_IMPORT_COMMITTED_MARKER");
         if (linkedRestartMarker != null) {
             holdAfterLinkedPublication(template.body(), warehouse, assetAdmin, worker, Path.of(linkedRestartMarker));
+            return;
+        }
+        if (Boolean.getBoolean("d6.23.mini.runtime")) {
+            exerciseNativeLinkedPublication(template.body(), warehouse, assetAdmin, worker);
             return;
         }
         openingPendingScrapFollowsRealApprovalAndRollback(template.body(), warehouse, assetAdmin, worker);
@@ -977,6 +984,28 @@ class AssetImportHttpRuntimeCase {
 
     private void holdAfterLinkedPublication(byte[] template, Session warehouse, Session administrator,
             AssetImportWorker worker, Path marker) throws Exception {
+        String batch = publishLinkedRecoveryBatch(template, warehouse, administrator, worker);
+        var snapshot = linkedPublicationSnapshot(batch);
+        assertEquals(5, snapshot.get("publication").size());
+        assertEquals(5, snapshot.get("scrap").size());
+        assertEquals(4, snapshot.get("repair").size());
+        assertEquals(3, snapshot.get("rounds").size());
+        assertEquals(2, snapshot.get("loans").size());
+        assertEquals(2, snapshot.get("loss").size());
+        assertEquals(2, snapshot.get("factoryDisposition").size());
+        assertEquals(5, snapshot.get("locks").size());
+        assertEquals(7, snapshot.get("todos").size());
+        assertEquals(1, snapshot.get("jobs").size());
+        assertEquals("SUCCEEDED", snapshot.get("jobs").getFirst().get("job_status"));
+        assertEquals(1, ((Number) snapshot.get("jobs").getFirst().get("execution_generation")).intValue());
+        Path stagedMarker = marker.resolveSibling("publication-in-progress.json");
+        Files.writeString(stagedMarker, JSON.writeValueAsString(Map.of("batchId", batch, "snapshot", snapshot)));
+        Files.move(stagedMarker, marker, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        TimeUnit.MINUTES.sleep(5);
+    }
+
+    private String publishLinkedRecoveryBatch(byte[] template, Session warehouse, Session administrator,
+            AssetImportWorker worker) throws Exception {
         var repair = openingRepairRow("D623-RECOVERY-REPAIR", false);
         var lost = openingRepairRow("D623-RECOVERY-LOST", false);
         var factoryLost = openingRepairRow("D623-RECOVERY-FACTORY-LOST", true);
@@ -995,25 +1024,51 @@ class AssetImportHttpRuntimeCase {
             row.putAll(Map.of(14, "返厂维修", 17, row == retained ? "FACTORY_RETAINED" : "FACTORY_DESTROYED",
                     40, "2026-09-13T09:00:00.123+08:00", 41, "厂家原始处置记录已核对"));
         }
-        String batch = publishScrapBatch(template, warehouse, administrator, worker, "d623-linked-recovery",
+        return publishScrapBatch(template, warehouse, administrator, worker, "d623-linked-recovery",
                 List.of(repair, lost, factoryLost, retained, destroyed), 5, 0);
-        var snapshot = linkedPublicationSnapshot(batch);
-        assertEquals(5, snapshot.get("publication").size());
-        assertEquals(5, snapshot.get("scrap").size());
-        assertEquals(4, snapshot.get("repair").size());
-        assertEquals(3, snapshot.get("rounds").size());
-        assertEquals(2, snapshot.get("loans").size());
-        assertEquals(2, snapshot.get("loss").size());
-        assertEquals(2, snapshot.get("factoryDisposition").size());
-        assertEquals(5, snapshot.get("locks").size());
-        assertEquals(7, snapshot.get("todos").size());
-        assertEquals(1, snapshot.get("jobs").size());
-        assertEquals("SUCCEEDED", snapshot.get("jobs").getFirst().get("job_status"));
-        assertEquals(1, ((Number) snapshot.get("jobs").getFirst().get("execution_generation")).intValue());
-        Path stagedMarker = marker.resolveSibling("publication-in-progress.json");
-        Files.writeString(stagedMarker, JSON.writeValueAsString(Map.of("batchId", batch, "snapshot", snapshot)));
-        Files.move(stagedMarker, marker, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
-        TimeUnit.MINUTES.sleep(5);
+    }
+
+    private void exerciseNativeLinkedPublication(byte[] template, Session warehouse, Session administrator,
+            AssetImportWorker worker) throws Exception {
+        String batch = publishLinkedRecoveryBatch(template, warehouse, administrator, worker);
+        var before = linkedPublicationSnapshot(batch);
+        var grants = InitialScrapMiniSessions.issue(context, db, Map.of("admin", 3L, "warehouse", 1L));
+        var requests = db.queryForList("""
+                SELECT CAST(s.id AS CHAR) AS id, a.asset_code AS code, s.source_type AS sourceType,
+                    s.initial_sheet_row AS sheetRow FROM fams_scrap_request s
+                    JOIN fams_asset a ON a.id=s.asset_id WHERE s.initial_batch_id=? ORDER BY s.initial_sheet_row
+                """, batch);
+        String node = System.getenv().getOrDefault("FAMS_TEST_NODE_EXECUTABLE", "node");
+        var script = Path.of(System.getProperty("user.dir")).getParent()
+                .resolve("apps/miniprogram/test/runtime-initial-linked-scrap-http.mjs");
+        var builder = new ProcessBuilder("rtk", "proxy", node, script.toString()).redirectErrorStream(true);
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_SCRAP_GRANTS", JSON.writeValueAsString(grants));
+        builder.environment().put("FAMS_TEST_INITIAL_SCRAP", JSON.writeValueAsString(Map.of("batchId", batch, "rows", requests)));
+        var process = builder.start();
+        try {
+            assertTrue(process.waitFor(45, TimeUnit.SECONDS), "Native Page did not finish");
+            var output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            assertEquals(0, process.exitValue(), output);
+            assertTrue(output.contains("D6_23_NATIVE_INITIAL_SCRAP executed=5 replayed=5"), output);
+            System.out.println(output.strip());
+        } finally {
+            if (process.isAlive()) {
+                process.destroyForcibly();
+            }
+        }
+        var after = linkedPublicationSnapshot(batch);
+        assertEquals(before.get("rounds"), after.get("rounds"));
+        assertEquals(before.get("factoryDisposition"), after.get("factoryDisposition"));
+        assertEquals(before.get("loss"), after.get("loss"));
+        assertTrue(after.get("locks").isEmpty());
+        assertTrue(after.get("repair").stream().allMatch(value -> "COMPLETED".equals(value.get("repair_status"))));
+        assertTrue(after.get("loans").stream().allMatch(value -> "LOST_TERMINATED".equals(value.get("relation_status"))));
+        assertTrue(after.get("scrap").stream().allMatch(value -> "EXECUTED".equals(value.get("request_status"))));
+        assertEquals(5, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_scrap_receipt r JOIN fams_scrap_request s ON s.id=r.scrap_request_id
+                WHERE s.initial_batch_id=? AND r.operation LIKE 'EXECUTE%'
+                """, Integer.class, batch));
     }
 
     @Test
