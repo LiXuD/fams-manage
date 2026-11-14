@@ -60,12 +60,18 @@ jobs:
         run: |
           commits=$(rtk proxy git rev-list --reverse "$BASE_SHA..$HEAD_SHA")
           test -n "$commits"
-          message="$RUNNER_TEMP/fams-commit-message.txt"
+          message=$(rtk proxy mktemp "$RUNNER_TEMP/fams-commit-message.XXXXXX")
+          failures=0
           while IFS= read -r sha; do
             rtk proxy git show --no-patch --format=%B "$sha" > "$message"
             echo "Checking $sha"
-            rtk proxy .githooks/commit-msg "$message"
+            if ! rtk proxy .githooks/commit-msg "$message"; then
+              echo "::error::Commit message rejected for $sha"
+              failures=$((failures + 1))
+            fi
           done <<< "$commits"
+          echo "$failures commit message(s) rejected"
+          test "$failures" -eq 0
       - name: Check secrets and quality policies
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: |
