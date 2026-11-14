@@ -109,7 +109,10 @@ jobs:
           rtk proxy oasdiff breaking --fail-on ERR "${options[@]}" "$normalized_base" "$spec"
       - name: Validate contract, examples and generated types
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
-        run: rtk proxy python3 -u scripts/verify-d6-02c.py
+        run: |
+          image=$(rtk proxy python3 -c 'import yaml; print(yaml.safe_load(open("compose.yaml"))["services"]["mysql"]["image"])')
+          rtk proxy docker pull "$image"
+          rtk proxy python3 -u scripts/verify-d6-02c.py
       - name: Verify Java, MySQL, clients and recovery
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: rtk proxy python3 -u scripts/verify-product-development.py
