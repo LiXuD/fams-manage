@@ -9,6 +9,8 @@ export interface ScrapRequest {
   sourceBusinessId?: string | null;
   initialSource?: { batchId: string; sheetRow: number } | null;
   factoryDisposition?: "FACTORY_RETAINED" | "FACTORY_DESTROYED";
+  initialFactoryDispositionAt?: string;
+  initialFactoryDispositionEvidence?: string;
   source: { assetCode: string; name: string; serialNumber: string };
   actions: { decide: boolean; cancel?: boolean; claim: boolean; execute: boolean; executeLoss?: boolean;
     executeFactory?: boolean; dispose?: boolean; initiateCorrection?: boolean; decideCorrection?: boolean;

@@ -338,7 +338,7 @@ function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute" |
     } else if (action === "claim") summary = loss
       ? "取得本单唯一处理权，核对遗失证据后执行。" : "取得本单唯一处理权，核验实物后执行。";
     else if (action === "executeFactory") {
-      const time = new Date(occurred.value);
+      const time = new Date(row.initialFactoryDispositionAt ?? occurred.value);
       if (!Number.isFinite(time.getTime())) { error.value = "请填写厂家凭证记载的实际处置时间。"; return; }
       body = { ...body, ownershipVersion: row.ownershipVersion, occurredAt: time.toISOString() };
       summary = "依据本轮厂家证明执行 " + row.source.assetCode + " 报废并登记实际处置。";
@@ -435,7 +435,8 @@ onBeforeUnmount(() => { live = false; reset(); });
     <section v-if="detail" aria-label="报废详情"><h2>{{ detail.source.assetCode }} · {{ detail.source.name }}</h2>
       <p>{{ detail.sourceType === 'LOSS' && detail.status === 'PROCESSING' ? '待遗失核销' : scrapStates[detail.status] || detail.status }} · 原因 {{ detail.reason }} · 现状 {{ detail.observedCondition }}</p>
       <p v-if="detail.initialSource">期初承接批次 {{ detail.initialSource.batchId }} 第 {{ detail.initialSource.sheetRow }} 行：报废事实来自上线前既有记录，批准仍需管理员另行决定。</p>
-      <a v-if="detail.factoryDisposition && detail.sourceBusinessId && (detail.actions.decide || detail.actions.executeFactory)"
+      <p v-if="detail.initialFactoryDispositionEvidence">期初厂家凭证 {{ detail.initialFactoryDispositionEvidence }}</p>
+      <a v-else-if="detail.factoryDisposition && detail.sourceBusinessId && (detail.actions.decide || detail.actions.executeFactory)"
         :href="'/repairs/' + detail.sourceBusinessId">前往原维修核对厂家凭证</a>
       <p>建议处置 {{ detail.proposedDisposition }} · 当前处理库管 {{ detail.processorAccountId || '尚未认领' }}</p>
       <section v-if="capabilities" aria-label="报废附件">
@@ -567,7 +568,8 @@ onBeforeUnmount(() => { live = false; reset(); });
       </fieldset>
       <fieldset v-if="detail.actions.executeFactory" :disabled="locked || stale">
         <legend>按厂家凭证执行报废</legend>
-        <label>凭证记载的实际处置时间<input v-model="occurred" type="datetime-local" step="0.001"/></label>
+        <p v-if="detail.initialFactoryDispositionAt">凭证记载的实际处置时间 {{ detail.initialFactoryDispositionAt }}</p>
+        <label v-else>凭证记载的实际处置时间<input v-model="occurred" type="datetime-local" step="0.001"/></label>
         <button @click="prepare('executeFactory')">核对厂家凭证并执行报废</button>
       </fieldset>
       <fieldset v-if="detail.actions.executeLoss" :disabled="locked || stale">

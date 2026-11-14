@@ -56,6 +56,15 @@ class InitialRepairScrapUpgradeRuntimeCase {
             insertRequest(db, asset, batch, 4, "LOSS", asset);
             assertEquals(3819, assertThrows(UncategorizedSQLException.class,
                     () -> insertRequest(db, asset, batch, 1, "LOSS", asset)).getSQLException().getErrorCode());
+            var beforeFactory = db.queryForList(
+                    "SELECT * FROM fams_scrap_request WHERE initial_batch_id=? ORDER BY initial_sheet_row", batch);
+            var factoryMigration = Flyway.configure().dataSource(source)
+                    .locations("classpath:db/migration/d6_04").target("77").load();
+            assertEquals(1, factoryMigration.migrate().migrationsExecuted);
+            assertEquals(0, factoryMigration.migrate().migrationsExecuted);
+            assertEquals(beforeFactory, db.queryForList(
+                    "SELECT * FROM fams_scrap_request WHERE initial_batch_id=? ORDER BY initial_sheet_row", batch));
+            assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_initial_factory_disposition", Integer.class));
         } finally {
             db.update("DELETE FROM fams_scrap_request WHERE initial_batch_id=?", batch);
             db.update("DELETE FROM fams_asset_import_batch WHERE id=?", batch);

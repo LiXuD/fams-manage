@@ -100,7 +100,8 @@ public class AssetImportPublicationService {
                     row.categoryId(), row.organizationId(), row.model(), row.unit(), row.serialNumber(),
                     row.state(), row.warehouseId(), row.locationId(), row.usingOrganizationId(), row.employeeId(),
                     row.borrowedDate(), row.expectedReturnDate(), row.preScrapState(), row.scrapReason(),
-                    row.scrapCondition(), row.proposedDisposition(), row.preRepairState(), row.repairFacts(), row.lossFacts());
+                    row.scrapCondition(), row.proposedDisposition(), row.preRepairState(), row.repairFacts(),
+                    row.lossFacts(), row.factoryDisposition());
             var context = new AssetInitialPublicationPort.Context(batchId, row.sheetRow(), claim.actorId(),
                     username, parameterId, businessDate, now, administratorId, timezone.getId());
             var created = assets.create(input, context);

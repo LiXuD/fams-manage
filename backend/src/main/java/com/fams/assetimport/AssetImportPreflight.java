@@ -38,7 +38,8 @@ public final class AssetImportPreflight {
                            java.time.LocalDate expectedReturnDate, String preScrapState,
                            String scrapReason, String scrapCondition, String proposedDisposition,
                            String preRepairState, InitialRepairPort.Facts repairFacts,
-                           InitialScrapPort.LossFacts lossFacts) { }
+                           InitialScrapPort.LossFacts lossFacts,
+                           InitialScrapPort.FactoryDisposition factoryDisposition) { }
     public record Result(List<ReadyRow> ready, List<AssetImportWorkbook.CellError> errors) {
         public Result {
             ready = List.copyOf(ready);
@@ -66,7 +67,8 @@ public final class AssetImportPreflight {
             Map.entry("factoryDue", "预计收回日期"), Map.entry("factoryCostPolicy", "返厂费用规则"),
             Map.entry("factoryCostLimit", "返厂费用限额"), Map.entry("factoryRoundNumber", "当前返厂轮次"),
             Map.entry("lossLastSeenAt", "最后见到时刻"), Map.entry("lossLastLocation", "最后见到地点"),
-            Map.entry("lossConfirmedAt", "确认遗失时刻"), Map.entry("lossEvidence", "遗失责任依据"));
+            Map.entry("lossConfirmedAt", "确认遗失时刻"), Map.entry("lossEvidence", "遗失责任依据"),
+            Map.entry("factoryDispositionAt", "厂家实际处置时刻"), Map.entry("factoryDispositionEvidence", "厂家处置凭证"));
 
     private AssetImportPreflight() { }
 
@@ -139,6 +141,7 @@ public final class AssetImportPreflight {
             String preRepairState = null;
             InitialRepairPort.Facts repair = null;
             InitialScrapPort.LossFacts loss = null;
+            InitialScrapPort.FactoryDisposition factoryDisposition = null;
             boolean pendingScrap = "待报废".equals(state);
             if (pendingScrap) {
                 preScrapState = required(row, mapping, "preScrapState", errors);
@@ -166,6 +169,14 @@ public final class AssetImportPreflight {
                             && loss.lastSeenAt().isBefore(repair.factory().dispatchedAt())) {
                         errors.add(error(row, mapping, "lossLastSeenAt", loss.lastSeenAt().toString(), "INITIAL_LOSS_TIME_INVALID"));
                     }
+                } else if (factoryOpening && List.of("FACTORY_RETAINED", "FACTORY_DESTROYED").contains(proposedDisposition)) {
+                    Instant occurred = instant(row, mapping, "factoryDispositionAt", errors);
+                    Instant dispatched = repair.factory().dispatchedAt();
+                    if (occurred != null && (occurred.isAfter(now) || dispatched != null && occurred.isBefore(dispatched))) {
+                        errors.add(error(row, mapping, "factoryDispositionAt", occurred.toString(), "INITIAL_FACTORY_DISPOSITION_TIME_INVALID"));
+                    }
+                    factoryDisposition = new InitialScrapPort.FactoryDisposition(proposedDisposition, occurred,
+                            repairText(row, mapping, "factoryDispositionEvidence", 2000, errors));
                 } else if (lossDisposition || factoryOpening
                         || !repairOpening && !List.of("在库", "在用个人", "在用公用").contains(preScrapState)) {
                     if (!preScrapState.isBlank()) {
@@ -204,7 +215,7 @@ public final class AssetImportPreflight {
                 ready.add(new ReadyRow(row.sheetRow(), code, name, category, organization, model, unit,
                         serial, state, warehouse, location, usingOrganization, employee,
                         borrowedDate, expectedReturnDate, preScrapState, scrapReason, scrapCondition,
-                        proposedDisposition, preRepairState, repair, loss));
+                        proposedDisposition, preRepairState, repair, loss, factoryDisposition));
             }
         }
         return new Result(List.copyOf(ready), List.copyOf(errors));

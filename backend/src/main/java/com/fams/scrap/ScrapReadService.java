@@ -219,7 +219,11 @@ public class ScrapReadService {
         boolean lossSource = "LOSS".equals(row.get("source_type"));
         boolean factory = "FACTORY_REPLACEMENT".equals(row.get("source_type"));
         if (factory) {
-            result.put("factoryDisposition", source.path("repairEvidence").path("context").path("method").asText());
+            var context = source.path("repairEvidence").path("context");
+            result.put("factoryDisposition", context.path("method").asText());
+            if (row.get("initial_batch_id") != null) {
+                result.put("initialFactoryDispositionAt", context.path("occurredAt").asText());
+            }
         }
         var execution = row.get("execution_snapshot_json") == null
                 ? null : json.readTree(row.get("execution_snapshot_json").toString());
@@ -297,6 +301,11 @@ public class ScrapReadService {
                 && ScrapReviewService.physicalSource(row.get("source_type")));
         actions.put("executeLoss", owner && "PROCESSING".equals(row.get("request_status")) && lossSource);
         actions.put("executeFactory", owner && "PROCESSING".equals(row.get("request_status")) && factory);
+        if (factory && row.get("initial_batch_id") != null
+                && (Boolean.TRUE.equals(actions.get("decide")) || Boolean.TRUE.equals(actions.get("executeFactory")))) {
+            result.put("initialFactoryDispositionEvidence",
+                    source.path("repairEvidence").path("context").path("evidence").asText());
+        }
         actions.put("dispose", canDispose);
         actions.put("initiateCorrection", actor.has(Role.ASSET_ADMIN)
                 && "RESTORE_REQUIRED".equals(row.get("request_status"))

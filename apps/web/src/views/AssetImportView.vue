@@ -33,6 +33,8 @@ const fields = [
   { key: "factoryCostLimit", label: "返厂费用限额" }, { key: "factoryRoundNumber", label: "当前返厂轮次" },
   { key: "lossLastSeenAt", label: "最后见到时刻" }, { key: "lossLastLocation", label: "最后见到地点" },
   { key: "lossConfirmedAt", label: "确认遗失时刻" }, { key: "lossEvidence", label: "遗失责任依据" },
+  { key: "factoryDispositionAt", label: "厂家实际处置时刻" },
+  { key: "factoryDispositionEvidence", label: "厂家处置凭证" },
 ];
 const file = ref<File | null>(null);
 const uploadKey = ref(crypto.randomUUID());

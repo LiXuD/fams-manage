@@ -26,7 +26,8 @@ public class AssetInitialPublicationPort {
                                Long employeeId, LocalDate borrowedDate, LocalDate expectedReturnDate,
                                String preScrapState, String scrapReason, String scrapCondition,
                                String proposedDisposition, String preRepairState, InitialRepairPort.Facts repairFacts,
-                               InitialScrapPort.LossFacts lossFacts) { }
+                               InitialScrapPort.LossFacts lossFacts,
+                               InitialScrapPort.FactoryDisposition factoryDisposition) { }
     public record Context(UUID batchId, int sheetRow, long actorId, String username,
                           long parameterId, LocalDate businessDate, Instant now, long administratorId, String timezone) { }
     public record Created(long id, String code) { }
@@ -142,6 +143,8 @@ public class AssetInitialPublicationPort {
                     context.batchId(), context.sheetRow(), context.now());
             if (lossOpening) {
                 scraps.openLoss(scrap, asset.lossFacts(), context.businessDate());
+            } else if (asset.factoryDisposition() != null) {
+                scraps.openFactoryDisposition(scrap, asset.factoryDisposition());
             } else if (repairOpening) {
                 scraps.openRepair(scrap);
             } else {

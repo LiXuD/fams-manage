@@ -29,7 +29,7 @@ public final class AssetImportWorkbook {
             "维修前状态", "当前维修阶段", "维修故障", "影响程度", "故障发生时刻", "接修时刻", "接修位置编码",
             "维修承接依据", "厂家名称", "厂家联系人", "厂家联系电话", "厂家实物去向", "实际寄出时刻", "寄出依据",
             "预计收回日期", "返厂费用规则", "返厂费用限额", "当前返厂轮次",
-            "最后见到时刻", "最后见到地点", "确认遗失时刻", "遗失责任依据");
+            "最后见到时刻", "最后见到地点", "确认遗失时刻", "遗失责任依据", "厂家实际处置时刻", "厂家处置凭证");
 
     public record CellError(String sheet, int sheetRow, String column, String original, String reason) {
         public CellError(int sheetRow, String column, String original, String reason) {
@@ -98,6 +98,7 @@ public final class AssetImportWorkbook {
             help.createRow(10).createCell(0).setCellValue("维修时刻用含时区的文本，例如 2026-09-12T09:30:00+08:00；预计收回日期用 YYYY-MM-DD。");
             help.createRow(11).createCell(0).setCellValue("遗失核销填写报废前保管状态（含借出）、最后见到时刻及地点、确认遗失时刻及责任依据；借出须填写原借用资料。");
             help.createRow(12).createCell(0).setCellValue("返厂资产确认遗失时，报废前状态填返厂维修、建议处置方式填遗失核销。保留维修与寄出资料，最后见到时刻不得早于寄出时刻。");
+            help.createRow(13).createCell(0).setCellValue("厂家已收旧或销毁时，报废前状态填返厂维修，建议处置方式填 FACTORY_RETAINED 或 FACTORY_DESTROYED，并填写实际处置时刻与厂家凭证。");
             workbook.write(output);
             return output.toByteArray();
         } catch (IOException failure) {

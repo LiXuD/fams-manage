@@ -209,6 +209,64 @@ public class ScrapInitialPort implements InitialScrapPort {
     }
 
     @Override
+    public void openFactoryDisposition(Opening opening, FactoryDisposition disposition) {
+        var source = new LinkedHashMap<>(assets.repairSource(opening.asset(), 0, true));
+        var repair = db.queryForMap("""
+                SELECT r.id,r.source_snapshot_json,f.id AS round_id
+                FROM fams_repair_request r JOIN fams_repair_factory_round f ON f.repair_id=r.id AND f.asset_id=r.asset_id
+                WHERE r.initial_batch_id=? AND r.initial_sheet_row=? AND r.asset_id=? AND r.processor_account_id=?
+                  AND r.version=0 AND r.asset_version=0 AND r.repair_status='WAREHOUSE_PROCESSING'
+                  AND f.initial_source AND f.round_status='DISPATCHED' AND f.version=0 AND f.dispatched_at<=?
+                FOR UPDATE
+                """, opening.batch().toString(), opening.row(), opening.asset(), opening.actorId(), disposition.occurredAt());
+        if (disposition.occurredAt().isAfter(opening.time()) || !opening.proposedDisposition().equals(disposition.method())) {
+            throw new IllegalStateException("ASSET_IMPORT_FACTORY_DISPOSITION_INVALID");
+        }
+        long repairId = ((Number) repair.get("id")).longValue();
+        var round = repair.get("round_id");
+        db.update("""
+                INSERT INTO fams_initial_factory_disposition(round_id,method,occurred_at,evidence) VALUES (?,?,?,?)
+                """, round, disposition.method(), disposition.occurredAt(), disposition.evidence());
+        long factId = java.util.Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
+        var proof = new LinkedHashMap<String, Object>();
+        proof.put("repairVersion", 0);
+        proof.put("original", json.readTree(repair.get("source_snapshot_json").toString()));
+        proof.put("borrowing", loans.open(opening.asset()));
+        proof.put("context", Map.of("roundId", Long.toString(((Number) round).longValue()),
+                "method", disposition.method(), "occurredAt", disposition.occurredAt().toString(),
+                "evidence", disposition.evidence()));
+        source.put("repairEvidence", proof);
+        source.put("initialSource", Map.of("batchId", opening.batch().toString(), "sheetRow", Integer.toString(opening.row())));
+        db.update("""
+                INSERT INTO fams_scrap_request(asset_id,creator_account_id,source_type,source_business_id,source_item_id,
+                    source_snapshot_json,reason,observed_condition,proposed_disposition,asset_version,
+                    initial_batch_id,initial_sheet_row,created_at,updated_at,processor_account_id,ownership_version)
+                VALUES (?,?,'FACTORY_REPLACEMENT',?,?,?,?,?,?,0,?,?,?,?,?,1)
+                """, opening.asset(), opening.actorId(), repairId, factId, json.writeValueAsString(source),
+                opening.reason(), opening.observedCondition(), opening.proposedDisposition(), opening.batch().toString(),
+                opening.row(), opening.time(), opening.time(), opening.actorId());
+        long id = java.util.Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
+        if (db.update("""
+                UPDATE fams_asset_business_lock SET business_type='SCRAP',business_id=?,business_item_id=?
+                WHERE asset_id=? AND business_type='REPAIR' AND business_id=? AND business_item_id=?
+                  AND lock_version=0 AND released_at IS NULL
+                """, id, id, opening.asset(), repairId, repairId) != 1
+                || db.update("""
+                UPDATE fams_asset SET lifecycle_status='PENDING_SCRAP'
+                WHERE id=? AND lifecycle_status='FACTORY_REPAIR' AND version=0
+                """, opening.asset()) != 1) {
+            throw new IllegalStateException("ASSET_IMPORT_FACTORY_DISPOSITION_INVALID");
+        }
+        db.update("UPDATE fams_todo SET todo_status='CLOSED',closed_at=? WHERE business_type='REPAIR'"
+                + " AND business_id=? AND closed_at IS NULL", opening.time(), repairId);
+        db.update("INSERT INTO fams_todo(pool_type,business_type,business_id,todo_type,todo_status,opened_at)"
+                + " VALUES ('ASSET_ADMIN','SCRAP',?,'APPROVAL','OPEN',?)", id, opening.time());
+        event(id, "SCRAP_INITIAL_OPENED", opening.actorId(), opening.time(), Map.of(
+                "batchId", opening.batch().toString(), "sheetRow", Integer.toString(opening.row()),
+                "beforeLifecycle", opening.beforeLifecycle(), "factoryDispositionId", Long.toString(factId)));
+    }
+
+    @Override
     public void assertReversible(long asset, UUID batch) {
         guarded(asset, batch);
     }
@@ -244,7 +302,7 @@ public class ScrapInitialPort implements InitialScrapPort {
             return Map.of();
         }
         var request = rows.getFirst();
-        if (rows.size() != 1 || !List.of("STANDALONE", "REPAIR", "LOSS").contains(request.get("source_type"))
+        if (rows.size() != 1 || !List.of("STANDALONE", "REPAIR", "LOSS", "FACTORY_REPLACEMENT").contains(request.get("source_type"))
                 || !"PENDING_ADMIN_DECISION".equals(request.get("request_status"))
                 || ((Number) request.get("version")).longValue() != 0) {
             throw new IllegalStateException("ASSET_IMPORT_ROLLBACK_DOWNSTREAM");
