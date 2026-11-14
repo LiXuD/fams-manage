@@ -47,6 +47,7 @@ jobs:
           "$rtk_path" proxy tar -xzf oasdiff.tar.gz oasdiff
           echo "$PWD" >> "$GITHUB_PATH"
       - name: Install locked project dependencies
+        id: dependencies
         run: |
           rtk proxy npm install --global npm@11.16.0
           rtk proxy npm ci
@@ -66,6 +67,7 @@ jobs:
             rtk proxy .githooks/commit-msg "$message"
           done <<< "$commits"
       - name: Check secrets and quality policies
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: |
           rtk proxy python3 - <<'PY'
           import runpy
@@ -75,6 +77,7 @@ jobs:
           gate["verify_current_head_secrets"]()
           PY
       - name: Check OpenAPI compatibility against the base
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
@@ -82,8 +85,10 @@ jobs:
           rtk proxy git show "$BASE_SHA:$spec" > "$RUNNER_TEMP/fams-base-contract.yaml"
           rtk proxy oasdiff breaking --fail-on ERR "$RUNNER_TEMP/fams-base-contract.yaml" "$spec"
       - name: Validate contract, examples and generated types
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: rtk proxy python3 -u scripts/verify-d6-02c.py
       - name: Verify Java, MySQL, clients and recovery
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: rtk proxy python3 -u scripts/verify-product-development.py
 
   required-ci:
