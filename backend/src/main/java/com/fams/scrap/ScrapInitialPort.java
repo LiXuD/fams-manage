@@ -1,6 +1,8 @@
 package com.fams.scrap;
 
 import com.fams.business.InitialScrapPort;
+import com.fams.asset.AssetScrapPort;
+import com.fams.loan.LoanRepairPort;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,10 +23,64 @@ public class ScrapInitialPort implements InitialScrapPort {
     private static final List<String> BEFORE_LIFECYCLES = List.of("IN_STOCK", "IN_USE");
     private final JdbcTemplate db;
     private final ObjectMapper json;
+    private final AssetScrapPort assets;
+    private final LoanRepairPort loans;
 
-    ScrapInitialPort(JdbcTemplate db, ObjectMapper json) {
+    ScrapInitialPort(JdbcTemplate db, ObjectMapper json, AssetScrapPort assets, LoanRepairPort loans) {
         this.db = db;
         this.json = json;
+        this.assets = assets;
+        this.loans = loans;
+    }
+
+    @Override
+    public void openRepair(Opening opening) {
+        if (!"UNDER_REPAIR".equals(opening.beforeLifecycle()) || opening.row() < 2) {
+            throw new IllegalStateException("ASSET_IMPORT_SCRAP_FACT_INVALID");
+        }
+        var source = new LinkedHashMap<>(assets.repairSource(opening.asset(), 0, false));
+        var repair = db.queryForMap("""
+                SELECT id,source_snapshot_json FROM fams_repair_request
+                WHERE initial_batch_id=? AND initial_sheet_row=? AND asset_id=?
+                AND repair_status='WAREHOUSE_PROCESSING' AND version=0 AND asset_version=0
+                AND accepted_at IS NOT NULL AND processor_account_id=? FOR UPDATE
+                """, opening.batch().toString(), opening.row(), opening.asset(), opening.actorId());
+        long repairId = ((Number) repair.get("id")).longValue();
+        var initial = Map.of("batchId", opening.batch().toString(), "sheetRow", Integer.toString(opening.row()));
+        var proof = new LinkedHashMap<String, Object>();
+        proof.put("repairVersion", 0);
+        proof.put("original", json.readTree(repair.get("source_snapshot_json").toString()));
+        proof.put("borrowing", loans.open(opening.asset()));
+        source.put("repairEvidence", proof);
+        source.put("initialSource", initial);
+        db.update("""
+                INSERT INTO fams_scrap_request(asset_id,creator_account_id,source_type,source_business_id,
+                    source_snapshot_json,reason,observed_condition,proposed_disposition,asset_version,
+                    initial_batch_id,initial_sheet_row,created_at,updated_at,processor_account_id,ownership_version)
+                VALUES (?,?,'REPAIR',?,?,?,?,?,0,?,?,?,?,?,1)
+                """, opening.asset(), opening.actorId(), repairId, json.writeValueAsString(source),
+                opening.reason(), opening.observedCondition(), opening.proposedDisposition(), opening.batch().toString(),
+                opening.row(), opening.time(), opening.time(), opening.actorId());
+        long id = java.util.Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
+        if (db.update("""
+                UPDATE fams_asset_business_lock SET business_type='SCRAP',business_id=?,business_item_id=?
+                WHERE asset_id=? AND business_type='REPAIR' AND business_id=? AND business_item_id=?
+                AND lock_version=0 AND released_at IS NULL
+                """, id, id, opening.asset(), repairId, repairId) != 1
+                || db.update("""
+                UPDATE fams_asset SET lifecycle_status='PENDING_SCRAP'
+                WHERE id=? AND lifecycle_status='UNDER_REPAIR' AND version=0
+                """, opening.asset()) != 1) {
+            throw new IllegalStateException("ASSET_IMPORT_SCRAP_FACT_INVALID");
+        }
+        db.update("UPDATE fams_todo SET todo_status='CLOSED',closed_at=? WHERE business_type='REPAIR'"
+                + " AND business_id=? AND closed_at IS NULL", opening.time(), repairId);
+        db.update("INSERT INTO fams_todo(pool_type,business_type,business_id,todo_type,todo_status,opened_at)"
+                + " VALUES ('ASSET_ADMIN','SCRAP',?,'APPROVAL','OPEN',?)", id, opening.time());
+        event(id, "SCRAP_INITIAL_OPENED", opening.actorId(), opening.time(), Map.of(
+                "batchId", opening.batch().toString(), "sheetRow", Integer.toString(opening.row()),
+                "beforeLifecycle", opening.beforeLifecycle(), "repairId", Long.toString(repairId),
+                "reason", opening.reason()));
     }
 
     @Override
@@ -96,7 +152,7 @@ public class ScrapInitialPort implements InitialScrapPort {
             return Map.of();
         }
         var request = rows.getFirst();
-        if (rows.size() != 1 || !"STANDALONE".equals(request.get("source_type"))
+        if (rows.size() != 1 || !List.of("STANDALONE", "REPAIR").contains(request.get("source_type"))
                 || !"PENDING_ADMIN_DECISION".equals(request.get("request_status"))
                 || ((Number) request.get("version")).longValue() != 0) {
             throw new IllegalStateException("ASSET_IMPORT_ROLLBACK_DOWNSTREAM");

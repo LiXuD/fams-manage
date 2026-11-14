@@ -1331,6 +1331,8 @@ def verify_java_quality(context: RuntimeContext) -> None:
              "-Dd6.24.duty.runtime=true", "DutyHttpRuntimeCase"),
             ("duty escalation thresholds and occurrence dedupe V68",
              "-Dd6.24.duty.escalation.runtime=true", "DutyEscalationRuntimeCase"),
+            ("initial repair scrap V75 populated linked provenance expansion and repeat",
+             "-Dd6.23.initial.repair.scrap.upgrade.runtime=true", "InitialRepairScrapUpgradeRuntimeCase"),
             ("scrap submission freeze, audit rollback and receipt HTTP",
              "-Dd6.22.scrap.submit.runtime=true", "ScrapSubmitHttpRuntimeCase"),
             ("actual independent loss verification HTTP", "-Dd6.21.loss.runtime=true",

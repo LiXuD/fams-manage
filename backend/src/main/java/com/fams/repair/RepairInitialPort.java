@@ -130,8 +130,16 @@ class RepairInitialPort implements InitialRepairPort {
             return;
         }
         long repair = ((Number) source.get("id")).longValue();
-        var locks = db.queryForList("SELECT id FROM fams_asset_business_lock WHERE asset_id=? AND business_type='REPAIR'"
-                + " AND business_id=? AND business_item_id=? AND lock_version=0 AND released_at IS NULL FOR UPDATE", assetId, repair, repair);
+        var locks = db.queryForList("""
+                SELECT l.id FROM fams_asset_business_lock l
+                WHERE l.asset_id=? AND l.lock_version=0 AND l.released_at IS NULL
+                AND ((l.business_type='REPAIR' AND l.business_id=? AND l.business_item_id=?)
+                  OR (l.business_type='SCRAP' AND l.business_item_id=l.business_id AND EXISTS (
+                    SELECT 1 FROM fams_scrap_request s WHERE s.id=l.business_id AND s.source_type='REPAIR'
+                    AND s.source_business_id=? AND s.asset_id=l.asset_id AND s.initial_batch_id=?
+                    AND s.request_status='PENDING_ADMIN_DECISION' AND s.version=0)))
+                FOR UPDATE
+                """, assetId, repair, repair, repair, batch.toString());
         if (!"WAREHOUSE_PROCESSING".equals(source.get("repair_status"))
                 || ((Number) source.get("version")).longValue() != 0 || locks.size() != 1
                 || !db.queryForList("SELECT id FROM fams_repair_factory_round WHERE repair_id=?"

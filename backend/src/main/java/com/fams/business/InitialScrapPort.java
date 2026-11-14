@@ -10,6 +10,8 @@ public interface InitialScrapPort {
 
     void open(Opening opening);
 
+    void openRepair(Opening opening);
+
     void assertReversible(long asset, UUID batch);
 
     void cancel(long asset, UUID batch, Instant time);

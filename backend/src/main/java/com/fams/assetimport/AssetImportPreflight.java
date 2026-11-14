@@ -134,7 +134,12 @@ public final class AssetImportPreflight {
             String custodyState = state;
             String preRepairState = null;
             InitialRepairPort.Facts repair = null;
-            boolean repairOpening = "维修中".equals(state) || "返厂维修".equals(state);
+            boolean pendingScrap = "待报废".equals(state);
+            if (pendingScrap) {
+                preScrapState = required(row, mapping, "preScrapState", errors);
+                custodyState = preScrapState;
+            }
+            boolean repairOpening = "维修中".equals(custodyState) || "返厂维修".equals(state);
             if (repairOpening) {
                 preRepairState = required(row, mapping, "preRepairState", errors);
                 custodyState = preRepairState;
@@ -146,16 +151,13 @@ public final class AssetImportPreflight {
                 }
                 repair = repairFacts(row, mapping, catalog, "返厂维修".equals(state), now, errors);
             }
-            if ("待报废".equals(state)) {
-                preScrapState = required(row, mapping, "preScrapState", errors);
-                if (!List.of("在库", "在用个人", "在用公用").contains(preScrapState)) {
+            if (pendingScrap) {
+                if (!repairOpening && !List.of("在库", "在用个人", "在用公用").contains(preScrapState)) {
                     if (!preScrapState.isBlank()) {
                         errors.add(error(row, mapping, "preScrapState", preScrapState,
                                 "UNSUPPORTED_PRE_SCRAP_STATE"));
                     }
                     custodyState = null;
-                } else {
-                    custodyState = preScrapState;
                 }
                 scrapReason = required(row, mapping, "scrapReason", errors);
                 scrapCondition = required(row, mapping, "scrapCondition", errors);

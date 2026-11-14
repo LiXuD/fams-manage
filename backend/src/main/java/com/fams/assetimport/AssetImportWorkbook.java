@@ -90,7 +90,7 @@ public final class AssetImportWorkbook {
             help.createRow(3).createCell(0).setCellValue("单文件最多 20,000 行、20 MB；公式单元格不能导入。");
             help.createRow(4).createCell(0).setCellValue("资产状态：在库、在用个人、在用公用、借出、维修中、返厂维修或待报废；预检将逐行报告错误。");
             help.createRow(5).createCell(0).setCellValue("借出须填写使用人、当前位置、借出日期、预计归还日（YYYY-MM-DD）；历史逾期允许导入。");
-            help.createRow(6).createCell(0).setCellValue("待报废须填写报废前状态（在库/在用个人/在用公用）、对应的完整保管快照、报废原因、报废前现状与建议处置方式。");
+            help.createRow(6).createCell(0).setCellValue("待报废须填写报废前状态（在库/在用个人/在用公用/维修中）、完整保管快照、报废原因、报废前现状与建议处置方式。维修中来源还须填写维修承接资料。");
             help.createRow(7).createCell(0).setCellValue("待报废发布只建立待管理员确认的期初报废申请与资产锁，不等于批准报废。");
             help.createRow(8).createCell(0).setCellValue("维修中填写维修前状态与保管快照、原借用资料（如有）、原地维修或移出接修、故障、影响程度 LOW/MEDIUM/HIGH、实际时间和承接依据；移出接修须填接修位置。");
             help.createRow(9).createCell(0).setCellValue("返厂维修填写阶段已寄出、当前返厂轮次、厂家、联系人、联系电话、厂家实物去向、实际寄出时刻、寄出依据和预计收回日期；费用规则 NO_COST/LIMITED/UNLIMITED，LIMITED 填正金额。");
