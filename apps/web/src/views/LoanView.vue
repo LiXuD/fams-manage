@@ -169,7 +169,7 @@ onMounted(async () => {
     <h2>借用记录</h2>
     <table><thead><tr><th>资产</th><th>预计归还日</th><th>状态</th><th>操作</th></tr></thead><tbody>
       <tr v-for="row in loans" :key="row.id"><td>{{ row.assetCode }} · {{ row.name }}</td><td>{{ row.expectedReturnDate }}</td>
-        <td>{{ labels[row.relationStatus] }}{{ row.overdue ? ' · 已逾期' : '' }}</td>
+        <td>{{ labels[row.relationStatus] ?? row.relationStatus }}{{ row.overdue ? ' · 已逾期' : '' }}</td>
         <td><button :disabled="busy || retryable" @click="choose(row.id)">查看 / 延期 / 归还</button></td></tr>
     </tbody></table><p v-if="!loans.length">当前范围没有借用记录。</p>
     <div v-if="selected" class="panel">

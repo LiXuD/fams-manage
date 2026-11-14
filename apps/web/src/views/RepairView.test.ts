@@ -68,3 +68,25 @@ it("submits linked scrap with the repair versions and keeps the original repair 
  expect(wrapper.get('a[href="/scrap-requests/9007199254740999"]').text()).toBe("查看维修关联报废");
  wrapper.unmount();
 });
+
+it.each([
+  ["INITIAL_RETIRED", "期初批次已撤销"],
+  ["FUTURE_ROUND_STATE", "FUTURE_ROUND_STATE"],
+])("shows the factory summary for %s", async (roundStatus, label) => {
+  state.session.user.roles = ["EMPLOYEE"];
+  const row = {
+    ...record(),
+    actions: {},
+    factorySummary: {
+      scope: null,
+      round: { id: "42", roundNumber: 2, roundStatus, dispatchedAt: "2026-10-22T01:00:00Z", receivedAt: null },
+      actualDispatchCount: 1,
+      followupOpen: false,
+    },
+  };
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => response(url.endsWith("/9") ? row : { items: [row], total: 1 })));
+  const wrapper = mountPage();
+  await flushPromises();
+  expect(wrapper.get('[aria-label="返厂进度摘要"]').text()).toContain(label);
+  wrapper.unmount();
+});

@@ -1,4 +1,4 @@
-<wxs module="labels">var states={PENDING_ADMIN_DECISION:'待管理员确认',WAITING_WAREHOUSE_CLAIM:'待库管领取',WAREHOUSE_PROCESSING:'库管处理中',COMPLETED:'维修已完成',REJECTED:'已驳回',CANCELLED:'已取消',PENDING:'待管理员确认返厂范围',APPROVED:'返厂范围已批准',WITHDRAWN:'范围已撤回',PENDING_DISPATCH:'待寄出',DISPATCHED:'已寄出，待原机收回',RECEIVED:'原机已实际收回'}; module.exports={state:function(s){return states[s]||s;}};</wxs>
+<wxs module="labels">var states={PENDING_ADMIN_DECISION:'待管理员确认',WAITING_WAREHOUSE_CLAIM:'待库管领取',WAREHOUSE_PROCESSING:'库管处理中',COMPLETED:'维修已完成',REJECTED:'已驳回',CANCELLED:'已取消',PENDING:'待管理员确认返厂范围',APPROVED:'返厂范围已批准',WITHDRAWN:'范围已撤回',PENDING_DISPATCH:'待寄出',DISPATCHED:'已寄出，待原机收回',RECEIVED:'原机已实际收回',INITIAL_RETIRED:'期初批次已撤销'}; module.exports={state:function(s){return states[s]||s;}};</wxs>
 <view class="page"><view class="title">报修与内部维修</view><view class="hint">按实际去向办理内部零费用维修；实物离开过原保管人时不能直接原地恢复，回库须实际验收。</view>
 <navigator url="/pages/repair-return-sources/index">管理员：损坏归还接续维修</navigator>
 <view wx:if="{{error}}" class="error" role="alert">{{error}}</view><button bindtap="onRefresh" disabled="{{busy}}">刷新核对</button><button wx:if="{{retry}}" bindtap="onRetry" disabled="{{busy}}">用原操作重试</button>
