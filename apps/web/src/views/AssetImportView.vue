@@ -31,6 +31,8 @@ const fields = [
   { key: "factoryDispatchedAt", label: "实际寄出时刻" }, { key: "factoryDispatchEvidence", label: "寄出依据" },
   { key: "factoryDue", label: "预计收回日期" }, { key: "factoryCostPolicy", label: "返厂费用规则" },
   { key: "factoryCostLimit", label: "返厂费用限额" }, { key: "factoryRoundNumber", label: "当前返厂轮次" },
+  { key: "lossLastSeenAt", label: "最后见到时刻" }, { key: "lossLastLocation", label: "最后见到地点" },
+  { key: "lossConfirmedAt", label: "确认遗失时刻" }, { key: "lossEvidence", label: "遗失责任依据" },
 ];
 const file = ref<File | null>(null);
 const uploadKey = ref(crypto.randomUUID());

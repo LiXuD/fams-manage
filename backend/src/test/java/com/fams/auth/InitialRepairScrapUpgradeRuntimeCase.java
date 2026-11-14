@@ -44,6 +44,18 @@ class InitialRepairScrapUpgradeRuntimeCase {
                     SELECT source_business_id FROM fams_scrap_request
                     WHERE initial_batch_id=? AND initial_sheet_row=3
                     """, Long.class, batch));
+            var linked = db.queryForMap("SELECT * FROM fams_scrap_request WHERE initial_batch_id=? AND initial_sheet_row=3", batch);
+            var lossMigration = Flyway.configure().dataSource(source)
+                    .locations("classpath:db/migration/d6_04").target("76").load();
+            assertEquals(1, lossMigration.migrate().migrationsExecuted);
+            assertEquals(0, lossMigration.migrate().migrationsExecuted);
+            assertEquals(original, db.queryForMap(
+                    "SELECT * FROM fams_scrap_request WHERE initial_batch_id=? AND initial_sheet_row=2", batch));
+            assertEquals(linked, db.queryForMap(
+                    "SELECT * FROM fams_scrap_request WHERE initial_batch_id=? AND initial_sheet_row=3", batch));
+            insertRequest(db, asset, batch, 4, "LOSS", asset);
+            assertEquals(3819, assertThrows(UncategorizedSQLException.class,
+                    () -> insertRequest(db, asset, batch, 1, "LOSS", asset)).getSQLException().getErrorCode());
         } finally {
             db.update("DELETE FROM fams_scrap_request WHERE initial_batch_id=?", batch);
             db.update("DELETE FROM fams_asset_import_batch WHERE id=?", batch);

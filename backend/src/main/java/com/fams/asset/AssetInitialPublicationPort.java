@@ -2,6 +2,7 @@ package com.fams.asset;
 
 import com.fams.masterdata.AssetMasterDataPort;
 import com.fams.business.InitialRepairPort;
+import com.fams.business.InitialScrapPort;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -24,7 +25,8 @@ public class AssetInitialPublicationPort {
                                Long warehouseId, Long locationId, Long usingOrganizationId,
                                Long employeeId, LocalDate borrowedDate, LocalDate expectedReturnDate,
                                String preScrapState, String scrapReason, String scrapCondition,
-                               String proposedDisposition, String preRepairState, InitialRepairPort.Facts repairFacts) { }
+                               String proposedDisposition, String preRepairState, InitialRepairPort.Facts repairFacts,
+                               InitialScrapPort.LossFacts lossFacts) { }
     public record Context(UUID batchId, int sheetRow, long actorId, String username,
                           long parameterId, LocalDate businessDate, Instant now, long administratorId, String timezone) { }
     public record Created(long id, String code) { }
@@ -70,12 +72,18 @@ public class AssetInitialPublicationPort {
         }
         boolean pendingScrap = "待报废".equals(asset.state());
         boolean repairOpening = asset.repairFacts() != null;
+        boolean lossOpening = asset.lossFacts() != null;
         String opening = repairOpening ? asset.preRepairState()
                 : pendingScrap ? asset.preScrapState() : asset.state();
         if (asset.repairFacts() != null && "借出".equals(opening)
                 && asset.borrowedDate().isAfter(LocalDate.ofInstant(asset.repairFacts().acceptedAt(),
                         java.time.ZoneId.of(context.timezone())))) {
             throw new IllegalStateException("ASSET_IMPORT_INITIAL_REPAIR_BORROW_TIME_INVALID");
+        }
+        if (lossOpening && "借出".equals(opening)
+                && asset.borrowedDate().isAfter(LocalDate.ofInstant(asset.lossFacts().lastSeenAt(),
+                        java.time.ZoneId.of(context.timezone())))) {
+            throw new IllegalStateException("ASSET_IMPORT_INITIAL_LOSS_BORROW_TIME_INVALID");
         }
         String custody = switch (opening) {
             case "在库" -> "STORAGE";
@@ -94,8 +102,8 @@ public class AssetInitialPublicationPort {
                 ? null : asset.serial().strip());
         values.put("serialNormalized", values.get("serial") == null ? null
                 : ((String) values.get("serial")).toUpperCase(Locale.ROOT));
-        values.put("lifecycle", pendingScrap && !repairOpening ? "PENDING_SCRAP"
-                : "STORAGE".equals(custody) ? "IN_STOCK" : "借出".equals(opening) ? "BORROWED" : "IN_USE");
+        String custodyLifecycle = "STORAGE".equals(custody) ? "IN_STOCK" : "借出".equals(opening) ? "BORROWED" : "IN_USE";
+        values.put("lifecycle", pendingScrap && !repairOpening && !lossOpening ? "PENDING_SCRAP" : custodyLifecycle);
         values.put("custody", custody);
         values.put("warehouseId", "STORAGE".equals(custody) ? asset.warehouseId() : null);
         values.put("locationId", asset.locationId());
@@ -128,11 +136,13 @@ public class AssetInitialPublicationPort {
         }
         if (pendingScrap) {
             var scrap = new com.fams.business.InitialScrapPort.Opening(id,
-                    repairOpening ? "UNDER_REPAIR" : "STORAGE".equals(custody) ? "IN_STOCK" : "IN_USE",
+                    repairOpening ? "UNDER_REPAIR" : custodyLifecycle,
                     asset.scrapReason().strip(), asset.scrapCondition().strip(),
                     asset.proposedDisposition().strip(), context.actorId(),
                     context.batchId(), context.sheetRow(), context.now());
-            if (repairOpening) {
+            if (lossOpening) {
+                scraps.openLoss(scrap, asset.lossFacts(), context.businessDate());
+            } else if (repairOpening) {
                 scraps.openRepair(scrap);
             } else {
                 scraps.open(scrap);

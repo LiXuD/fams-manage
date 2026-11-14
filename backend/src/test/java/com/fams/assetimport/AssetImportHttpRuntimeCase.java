@@ -246,6 +246,7 @@ class AssetImportHttpRuntimeCase {
         openingPendingScrapFollowsRealApprovalAndRollback(template.body(), warehouse, assetAdmin, worker);
         openingRepairAndFactoryFollowExistingProcessing(template.body(), warehouse, assetAdmin, worker);
         openingRepairScrapRetainsBorrowingAndCanRestoreOrRollBack(template.body(), warehouse, assetAdmin, worker);
+        openingLossScrapFollowsRealWriteOff(template.body(), warehouse, assetAdmin, worker);
         var ledgerPage = request("GET", "/assets?page=1&pageSize=50", null,
                 warehouse, null, null);
         assertEquals(200, ledgerPage.statusCode(), body(ledgerPage));
@@ -553,7 +554,7 @@ class AssetImportHttpRuntimeCase {
                 "http-import-scrap-invalid", List.of(wrongOpening, missingReason, repairOpening), 0, 3);
         String report = body(request("GET", "/asset-import-batches/" + invalid + "/rows?status=ERROR"
                 + "&page=1&pageSize=20", null, warehouse, null, null));
-        assertTrue(report.contains("UNSUPPORTED_PRE_SCRAP_STATE"), report);
+        assertTrue(report.contains("遗失责任依据"), report);
         assertTrue(report.contains("维修前状态"), report);
         assertTrue(report.contains("报废原因"), report);
         assertTrue(report.contains("REQUIRED"), report);
@@ -750,6 +751,87 @@ class AssetImportHttpRuntimeCase {
                 + " JOIN fams_asset_import_publication p ON p.asset_id=l.asset_id"
                 + " WHERE p.batch_id=? AND l.released_at IS NULL", Integer.class, reversible));
         System.out.println("D6_23_INITIAL_REPAIR_SCRAP rejected_restored=1 executed=1 rolled_back=1");
+    }
+
+    private void openingLossScrapFollowsRealWriteOff(byte[] template, Session warehouse, Session administrator,
+            AssetImportWorker worker) throws Exception {
+        var lost = new java.util.HashMap<>(Map.ofEntries(
+                Map.entry(0, "HTTP-INITIAL-LOSS"), Map.entry(1, "Opening lost asset"), Map.entry(2, "CAT-1"),
+                Map.entry(3, "ROOT"), Map.entry(4, "M1"), Map.entry(5, "piece"), Map.entry(7, "待报废"),
+                Map.entry(9, "LOC-1"), Map.entry(10, "ROOT"), Map.entry(11, "E3"),
+                Map.entry(12, "2026-09-01"), Map.entry(13, "2099-12-31"), Map.entry(14, "借出"),
+                Map.entry(15, "上线前已确认遗失"), Map.entry(16, "实物无法找回"), Map.entry(17, "遗失核销"),
+                Map.entry(36, "2026-09-11T09:00:00+08:00"), Map.entry(37, "使用部门"),
+                Map.entry(38, "2026-09-12T09:00:00+08:00"), Map.entry(39, "纸质遗失认定单及保管责任已核对")));
+        var reject = new java.util.HashMap<>(lost);
+        reject.put(0, "HTTP-INITIAL-LOSS-REJECT");
+        var undo = new java.util.HashMap<>(lost);
+        undo.put(0, "HTTP-INITIAL-LOSS-UNDO");
+        String batch = publishScrapBatch(template, warehouse, administrator, worker,
+                "http-opening-loss-scrap", List.of(lost, reject), 2, 0);
+        var rows = db.queryForList("SELECT * FROM fams_scrap_request WHERE initial_batch_id=? ORDER BY initial_sheet_row", batch);
+        var source = rows.getFirst();
+        long id = ((Number) source.get("id")).longValue();
+        long asset = ((Number) source.get("asset_id")).longValue();
+        long lossId = ((Number) source.get("source_business_id")).longValue();
+        var loss = db.queryForMap("SELECT * FROM fams_loss_report WHERE id=?", lossId);
+        assertEquals("CONFIRMED_LOST", loss.get("report_status"));
+        assertEquals(null, loss.get("approval_snapshot_json"));
+        assertEquals(batch, JSON.readTree(loss.get("confirmation_snapshot_json").toString())
+                .path("initialSource").path("batchId").asText());
+        assertEquals("OPEN", db.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=?", String.class, asset));
+        var decision = request("POST", "/scrap-requests/" + id + "/decision",
+                JSON.writeValueAsBytes(Map.of("assetVersion", 0, "lockVersion", 0, "result", "APPROVE",
+                        "reason", "核对期初认定后批准核销", "approvedDisposition", "遗失核销")),
+                administrator, "application/json", UUID.randomUUID().toString(), 0L);
+        assertEquals(200, decision.statusCode(), body(decision));
+        var claim = request("POST", "/scrap-requests/" + id + "/claim",
+                JSON.writeValueAsBytes(Map.of("assetVersion", 0, "lockVersion", 0)),
+                warehouse, "application/json", UUID.randomUUID().toString(), 1L);
+        assertEquals(200, claim.statusCode(), body(claim));
+        var execution = request("POST", "/scrap-requests/" + id + "/execute-loss",
+                JSON.writeValueAsBytes(Map.of("assetVersion", 0, "lockVersion", 0, "ownershipVersion", 1,
+                        "evidence", "已核对期初遗失记录和原借用责任")),
+                warehouse, "application/json", UUID.randomUUID().toString(), 2L);
+        assertEquals(200, execution.statusCode(), body(execution));
+        assertEquals("LOST_TERMINATED", db.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=?",
+                String.class, asset));
+        assertEquals("LOSS_WRITTEN_OFF", db.queryForObject("SELECT disposition_status FROM fams_scrap_disposition WHERE request_id=?",
+                String.class, id));
+        assertEquals(loss, db.queryForMap("SELECT * FROM fams_loss_report WHERE id=?", lossId));
+
+        var rejected = rows.getLast();
+        var rejectedAsset = rejected.get("asset_id");
+        var retained = db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=?", rejectedAsset);
+        var refusal = request("POST", "/scrap-requests/" + rejected.get("id") + "/decision",
+                JSON.writeValueAsBytes(Map.of("assetVersion", 0, "lockVersion", 0, "result", "REJECT",
+                        "reason", "现阶段继续追查遗失")), administrator, "application/json", UUID.randomUUID().toString(), 0L);
+        assertEquals(200, refusal.statusCode(), body(refusal));
+        assertEquals("REJECTED", JSON.readTree(body(refusal)).path("status").asText());
+        assertEquals("BORROWED/LOST", db.queryForObject(
+                "SELECT CONCAT(lifecycle_status,'/',exception_status) FROM fams_asset WHERE id=?", String.class, rejectedAsset));
+        assertEquals(retained, db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=?", rejectedAsset));
+
+        String reversible = publishScrapBatch(template, warehouse, administrator, worker,
+                "http-opening-loss-scrap-undo", List.of(undo), 1, 0);
+        assertEquals(200, request("POST", "/asset-import-batches/" + reversible + "/rollback",
+                JSON.writeValueAsBytes(Map.of("reason", "未办理的期初遗失批次撤回")), warehouse,
+                "application/json", null).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + reversible + "/rollback-decision",
+                JSON.writeValueAsBytes(Map.of("approved", true, "reason", "逐项核实未发生后续办理")),
+                administrator, "application/json", null).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + reversible + "/rollback-execute",
+                null, warehouse, null, null).statusCode());
+        worker.poll();
+        assertEquals("ROLLED_BACK", db.queryForObject("SELECT batch_status FROM fams_asset_import_batch WHERE id=?",
+                String.class, reversible));
+        assertEquals("CANCELLED", db.queryForObject("""
+                SELECT l.report_status FROM fams_loss_report l JOIN fams_scrap_request s ON s.source_business_id=l.id
+                WHERE s.initial_batch_id=? AND s.source_type='LOSS'
+                """, String.class, reversible));
+        assertEquals("VOID", db.queryForObject("SELECT relation_status FROM fams_loan WHERE initial_batch_id=?",
+                String.class, reversible));
+        System.out.println("D6_23_INITIAL_LOSS_SCRAP written_off=1 rejected_restored=1 rolled_back=1");
     }
 
     private Map<Integer, String> openingRepairRow(String code, boolean factory) {

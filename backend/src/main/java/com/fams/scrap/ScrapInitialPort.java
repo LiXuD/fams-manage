@@ -3,7 +3,9 @@ package com.fams.scrap;
 import com.fams.business.InitialScrapPort;
 import com.fams.asset.AssetScrapPort;
 import com.fams.loan.LoanRepairPort;
+import com.fams.loss.LossInitialPort;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,12 +27,14 @@ public class ScrapInitialPort implements InitialScrapPort {
     private final ObjectMapper json;
     private final AssetScrapPort assets;
     private final LoanRepairPort loans;
+    private final LossInitialPort losses;
 
-    ScrapInitialPort(JdbcTemplate db, ObjectMapper json, AssetScrapPort assets, LoanRepairPort loans) {
+    ScrapInitialPort(JdbcTemplate db, ObjectMapper json, AssetScrapPort assets, LoanRepairPort loans, LossInitialPort losses) {
         this.db = db;
         this.json = json;
         this.assets = assets;
         this.loans = loans;
+        this.losses = losses;
     }
 
     @Override
@@ -121,6 +125,58 @@ public class ScrapInitialPort implements InitialScrapPort {
     }
 
     @Override
+    public void openLoss(Opening opening, LossFacts facts, LocalDate businessDate) {
+        var loss = losses.open(opening, facts, businessDate);
+        if (db.update("""
+                UPDATE fams_asset SET exception_status='LOST'
+                WHERE id=? AND lifecycle_status=? AND card_stage='ACTIVE' AND version=0 AND exception_status='NORMAL'
+                """, opening.asset(), opening.beforeLifecycle()) != 1) {
+            throw new IllegalStateException("ASSET_IMPORT_INITIAL_LOSS_INVALID");
+        }
+        var custody = json.readTree(loss.custodyJson());
+        var source = new LinkedHashMap<>(assets.lossSource(opening.asset(), 0, opening.beforeLifecycle(), custody));
+        var proof = new LinkedHashMap<String, Object>();
+        proof.put("reportId", Long.toString(loss.id()));
+        proof.put("reportVersion", 0);
+        proof.put("confirmedAt", facts.confirmedAt());
+        proof.put("confirmation", json.readTree(loss.confirmationJson()));
+        var loan = loans.open(opening.asset());
+        if ("BORROWED".equals(opening.beforeLifecycle())) {
+            if (loan == null) {
+                throw new IllegalStateException("ASSET_IMPORT_INITIAL_LOSS_INVALID");
+            }
+            proof.put("loanId", Long.toString(loan.id()));
+            proof.put("loanVersion", loan.version());
+        } else if (loan != null) {
+            throw new IllegalStateException("ASSET_IMPORT_INITIAL_LOSS_INVALID");
+        }
+        source.put("lossEvidence", proof);
+        source.put("initialSource", custody.path("initialSource"));
+        db.update("""
+                INSERT INTO fams_scrap_request(asset_id,creator_account_id,source_type,source_business_id,
+                    source_snapshot_json,reason,observed_condition,proposed_disposition,asset_version,
+                    initial_batch_id,initial_sheet_row,created_at,updated_at)
+                VALUES (?,?,'LOSS',?,?,?,?,?,0,?,?,?,?)
+                """, opening.asset(), opening.actorId(), loss.id(), json.writeValueAsString(source),
+                opening.reason(), opening.observedCondition(), opening.proposedDisposition(), opening.batch().toString(),
+                opening.row(), opening.time(), opening.time());
+        long id = java.util.Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
+        if (db.update("""
+                UPDATE fams_asset SET lifecycle_status='PENDING_SCRAP' WHERE id=? AND version=0 AND exception_status='LOST'
+                """, opening.asset()) != 1) {
+            throw new IllegalStateException("ASSET_IMPORT_INITIAL_LOSS_INVALID");
+        }
+        db.update("INSERT INTO fams_asset_business_lock(asset_id,business_type,business_id,business_item_id,"
+                + "acquired_at) VALUES (?,'SCRAP',?,?,?)", opening.asset(), id, id, opening.time());
+        db.update("INSERT INTO fams_todo(pool_type,business_type,business_id,todo_type,todo_status,opened_at)"
+                + " VALUES ('ASSET_ADMIN','SCRAP',?,'APPROVAL','OPEN',?)", id, opening.time());
+        event(id, "SCRAP_INITIAL_OPENED", opening.actorId(), opening.time(), Map.of(
+                "batchId", opening.batch().toString(), "sheetRow", Integer.toString(opening.row()),
+                "beforeLifecycle", opening.beforeLifecycle(), "reportId", Long.toString(loss.id()),
+                "reason", opening.reason()));
+    }
+
+    @Override
     public void assertReversible(long asset, UUID batch) {
         guarded(asset, batch);
     }
@@ -132,6 +188,10 @@ public class ScrapInitialPort implements InitialScrapPort {
             return;
         }
         long id = ((Number) request.get("id")).longValue();
+        if ("LOSS".equals(request.get("source_type"))) {
+            losses.cancel(((Number) request.get("source_business_id")).longValue(), asset,
+                    ((Number) request.get("creator_account_id")).longValue(), time);
+        }
         db.update("UPDATE fams_scrap_request SET request_status='CANCELLED',version=version+1,updated_at=?"
                 + " WHERE id=?", time, id);
         if (db.update("UPDATE fams_asset_business_lock SET released_at=?,release_reason='SCRAP_INITIAL_ROLLED_BACK',"
@@ -152,7 +212,7 @@ public class ScrapInitialPort implements InitialScrapPort {
             return Map.of();
         }
         var request = rows.getFirst();
-        if (rows.size() != 1 || !List.of("STANDALONE", "REPAIR").contains(request.get("source_type"))
+        if (rows.size() != 1 || !List.of("STANDALONE", "REPAIR", "LOSS").contains(request.get("source_type"))
                 || !"PENDING_ADMIN_DECISION".equals(request.get("request_status"))
                 || ((Number) request.get("version")).longValue() != 0) {
             throw new IllegalStateException("ASSET_IMPORT_ROLLBACK_DOWNSTREAM");

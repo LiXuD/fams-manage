@@ -1,6 +1,7 @@
 package com.fams.assetimport;
 
 import com.fams.business.InitialRepairPort;
+import com.fams.business.InitialScrapPort;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -36,7 +37,8 @@ public final class AssetImportPreflight {
                            Long employeeId, java.time.LocalDate borrowedDate,
                            java.time.LocalDate expectedReturnDate, String preScrapState,
                            String scrapReason, String scrapCondition, String proposedDisposition,
-                           String preRepairState, InitialRepairPort.Facts repairFacts) { }
+                           String preRepairState, InitialRepairPort.Facts repairFacts,
+                           InitialScrapPort.LossFacts lossFacts) { }
     public record Result(List<ReadyRow> ready, List<AssetImportWorkbook.CellError> errors) {
         public Result {
             ready = List.copyOf(ready);
@@ -62,7 +64,9 @@ public final class AssetImportPreflight {
             Map.entry("factoryPhone", "厂家联系电话"), Map.entry("factoryDestination", "厂家实物去向"),
             Map.entry("factoryDispatchedAt", "实际寄出时刻"), Map.entry("factoryDispatchEvidence", "寄出依据"),
             Map.entry("factoryDue", "预计收回日期"), Map.entry("factoryCostPolicy", "返厂费用规则"),
-            Map.entry("factoryCostLimit", "返厂费用限额"), Map.entry("factoryRoundNumber", "当前返厂轮次"));
+            Map.entry("factoryCostLimit", "返厂费用限额"), Map.entry("factoryRoundNumber", "当前返厂轮次"),
+            Map.entry("lossLastSeenAt", "最后见到时刻"), Map.entry("lossLastLocation", "最后见到地点"),
+            Map.entry("lossConfirmedAt", "确认遗失时刻"), Map.entry("lossEvidence", "遗失责任依据"));
 
     private AssetImportPreflight() { }
 
@@ -134,6 +138,7 @@ public final class AssetImportPreflight {
             String custodyState = state;
             String preRepairState = null;
             InitialRepairPort.Facts repair = null;
+            InitialScrapPort.LossFacts loss = null;
             boolean pendingScrap = "待报废".equals(state);
             if (pendingScrap) {
                 preScrapState = required(row, mapping, "preScrapState", errors);
@@ -152,7 +157,11 @@ public final class AssetImportPreflight {
                 repair = repairFacts(row, mapping, catalog, "返厂维修".equals(state), now, errors);
             }
             if (pendingScrap) {
-                if (!repairOpening && !List.of("在库", "在用个人", "在用公用").contains(preScrapState)) {
+                proposedDisposition = required(row, mapping, "proposedDisposition", errors);
+                boolean lossDisposition = List.of("遗失核销", "LOSS_WRITTEN_OFF").contains(proposedDisposition);
+                if (lossDisposition && List.of("在库", "在用个人", "在用公用", "借出").contains(preScrapState)) {
+                    loss = lossFacts(row, mapping, now, errors);
+                } else if (lossDisposition || !repairOpening && !List.of("在库", "在用个人", "在用公用").contains(preScrapState)) {
                     if (!preScrapState.isBlank()) {
                         errors.add(error(row, mapping, "preScrapState", preScrapState,
                                 "UNSUPPORTED_PRE_SCRAP_STATE"));
@@ -161,7 +170,6 @@ public final class AssetImportPreflight {
                 }
                 scrapReason = required(row, mapping, "scrapReason", errors);
                 scrapCondition = required(row, mapping, "scrapCondition", errors);
-                proposedDisposition = required(row, mapping, "proposedDisposition", errors);
                 limit(row, mapping, "scrapReason", scrapReason, 2000, errors);
                 limit(row, mapping, "scrapCondition", scrapCondition, 2000, errors);
                 limit(row, mapping, "proposedDisposition", proposedDisposition, 500, errors);
@@ -190,10 +198,21 @@ public final class AssetImportPreflight {
                 ready.add(new ReadyRow(row.sheetRow(), code, name, category, organization, model, unit,
                         serial, state, warehouse, location, usingOrganization, employee,
                         borrowedDate, expectedReturnDate, preScrapState, scrapReason, scrapCondition,
-                        proposedDisposition, preRepairState, repair));
+                        proposedDisposition, preRepairState, repair, loss));
             }
         }
         return new Result(List.copyOf(ready), List.copyOf(errors));
+    }
+
+    private static InitialScrapPort.LossFacts lossFacts(AssetImportWorkbook.DataRow row,
+            Map<String, String> mapping, Instant now, List<AssetImportWorkbook.CellError> errors) {
+        Instant lastSeen = instant(row, mapping, "lossLastSeenAt", errors);
+        Instant confirmed = instant(row, mapping, "lossConfirmedAt", errors);
+        if (confirmed != null && (confirmed.isAfter(now) || lastSeen != null && lastSeen.isAfter(confirmed))) {
+            errors.add(error(row, mapping, "lossConfirmedAt", confirmed.toString(), "INITIAL_LOSS_TIME_INVALID"));
+        }
+        return new InitialScrapPort.LossFacts(lastSeen, repairText(row, mapping, "lossLastLocation", 500, errors),
+                confirmed, repairText(row, mapping, "lossEvidence", 2000, errors));
     }
 
     private static InitialRepairPort.Facts repairFacts(AssetImportWorkbook.DataRow row, Map<String, String> mapping,
