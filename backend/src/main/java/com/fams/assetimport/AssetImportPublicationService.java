@@ -81,7 +81,8 @@ public class AssetImportPublicationService {
         Map<String, String> selected = AssetImportPreflight.columns(source, mapping);
         Set<String> codes = identifiers(source, selected.get("assetCode"));
         Set<String> serials = identifiers(source, selected.get("serialNumber"));
-        var checked = AssetImportPreflight.check(source, mapping, catalog.snapshot(codes, serials));
+        var now = clock.instant();
+        var checked = AssetImportPreflight.check(source, mapping, catalog.snapshot(codes, serials), now);
         List<Integer> savedReady = db.queryForList("SELECT sheet_row FROM fams_asset_import_row "
                 + "WHERE batch_id=? AND row_status='READY' ORDER BY sheet_row", Integer.class,
                 batchId.toString());
@@ -91,7 +92,6 @@ public class AssetImportPublicationService {
         }
         String username = db.queryForObject("SELECT username FROM fams_system_account WHERE id=?",
                 String.class, claim.actorId());
-        var now = clock.instant();
         var timezone = masterData.currentZone();
         LocalDate businessDate = LocalDate.ofInstant(now, timezone);
         long parameterId = masterData.currentParameterVersionId();

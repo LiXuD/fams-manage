@@ -85,7 +85,7 @@ public final class AssetImportPreflight {
     }
 
     public static Result check(AssetImportWorkbook.Parsed parsed, Map<String, String> selectedColumns,
-            Catalog catalog) {
+            Catalog catalog, Instant now) {
         if (catalog == null) { throw new IllegalArgumentException("ASSET_IMPORT_CATALOG_MISSING"); }
         Map<String, String> mapping = columns(parsed, selectedColumns);
         List<ReadyRow> ready = new ArrayList<>();
@@ -144,7 +144,7 @@ public final class AssetImportPreflight {
                     }
                     custodyState = null;
                 }
-                repair = repairFacts(row, mapping, catalog, "返厂维修".equals(state), errors);
+                repair = repairFacts(row, mapping, catalog, "返厂维修".equals(state), now, errors);
             }
             if ("待报废".equals(state)) {
                 preScrapState = required(row, mapping, "preScrapState", errors);
@@ -195,7 +195,7 @@ public final class AssetImportPreflight {
     }
 
     private static InitialRepairPort.Facts repairFacts(AssetImportWorkbook.DataRow row, Map<String, String> mapping,
-            Catalog catalog, boolean factory, List<AssetImportWorkbook.CellError> errors) {
+            Catalog catalog, boolean factory, Instant now, List<AssetImportWorkbook.CellError> errors) {
         String stage = required(row, mapping, "repairStage", errors);
         if (!stage.isBlank() && !(factory ? "已寄出".equals(stage) : List.of("原地维修", "移出接修").contains(stage))) {
             errors.add(error(row, mapping, "repairStage", stage, "UNSUPPORTED_INITIAL_REPAIR_STAGE"));
@@ -210,15 +210,18 @@ public final class AssetImportPreflight {
         if (occurred != null && accepted != null && accepted.isBefore(occurred)) {
             errors.add(error(row, mapping, "repairAcceptedAt", accepted.toString(), "INITIAL_REPAIR_TIME_ORDER_INVALID"));
         }
+        if (accepted != null && accepted.isAfter(now)) {
+            errors.add(error(row, mapping, "repairAcceptedAt", accepted.toString(), "INITIAL_REPAIR_TIME_IN_FUTURE"));
+        }
         String evidence = repairText(row, mapping, "repairEvidence", 2000, errors);
         Long place = "移出接修".equals(stage) || factory && !value(row, mapping, "repairLocation").isBlank()
                 ? reference(row, mapping, "repairLocation", catalog.locations(), null, errors) : null;
         return new InitialRepairPort.Facts(stage, fault, impact, occurred, accepted, place, evidence,
-                factory ? factoryFacts(row, mapping, accepted, errors) : null);
+                factory ? factoryFacts(row, mapping, accepted, now, errors) : null);
     }
 
     private static InitialRepairPort.Factory factoryFacts(AssetImportWorkbook.DataRow row, Map<String, String> mapping,
-            Instant accepted, List<AssetImportWorkbook.CellError> errors) {
+            Instant accepted, Instant now, List<AssetImportWorkbook.CellError> errors) {
         String number = required(row, mapping, "factoryRoundNumber", errors);
         int round = 0;
         if (number.matches("[1-9][0-9]{0,8}")) {
@@ -233,6 +236,9 @@ public final class AssetImportPreflight {
         Instant dispatch = instant(row, mapping, "factoryDispatchedAt", errors);
         if (accepted != null && dispatch != null && dispatch.isBefore(accepted)) {
             errors.add(error(row, mapping, "factoryDispatchedAt", dispatch.toString(), "INITIAL_REPAIR_TIME_ORDER_INVALID"));
+        }
+        if (dispatch != null && dispatch.isAfter(now)) {
+            errors.add(error(row, mapping, "factoryDispatchedAt", dispatch.toString(), "INITIAL_REPAIR_TIME_IN_FUTURE"));
         }
         var due = date(row, mapping, "factoryDue", errors);
         String evidence = repairText(row, mapping, "factoryDispatchEvidence", 2000, errors);
