@@ -85,7 +85,22 @@ jobs:
           rtk proxy git show "$BASE_SHA:$spec" > "$RUNNER_TEMP/fams-base-contract.yaml"
           normalized_base="$RUNNER_TEMP/fams-base-normalized.yaml"
           rtk proxy python3 scripts/normalize-ci-contract.py "$RUNNER_TEMP/fams-base-contract.yaml" "$normalized_base"
-          rtk proxy oasdiff breaking --fail-on ERR "$normalized_base" "$spec"
+          options=()
+          if [[ "$BASE_SHA" == 455ba00410cbef5b807769b3ba5c251a5ac93f8f ]]; then
+            rtk proxy python3 - "$spec" <<'PY'
+          import sys
+          from pathlib import Path
+          import yaml
+
+          csrf = yaml.safe_load(Path(sys.argv[1]).read_text(encoding="utf-8"))["components"]["parameters"]["CsrfToken"]
+          wire = {key: value for key, value in csrf.items() if key != "description"}
+          if wire != {"name": "X-CSRF-Token", "in": "header", "required": True,
+                      "schema": {"type": "string", "minLength": 16}}:
+              sys.exit("Historical CSRF exceptions require the reviewed header schema.")
+          PY
+            options+=(--err-ignore contracts/compatibility/455ba00-csrf.txt)
+          fi
+          rtk proxy oasdiff breaking --fail-on ERR "${options[@]}" "$normalized_base" "$spec"
       - name: Validate contract, examples and generated types
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: rtk proxy python3 -u scripts/verify-d6-02c.py
