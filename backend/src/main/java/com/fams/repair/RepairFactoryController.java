@@ -176,6 +176,21 @@ public class RepairFactoryController {
         return retry(() -> factory.recordParts(actor, id, round, version, key, input));
     }
 
+    @GetMapping("/rounds/{round}/replacements")
+    Map<String, Object> replacements(@PathVariable @Positive long id, @PathVariable @Positive long round) {
+        return factory.replacements(actors.capture(), id, round);
+    }
+
+    @PostMapping("/rounds/{round}/replacements")
+    Map<String, Object> recordReplacement(@PathVariable @Positive long id,
+            @PathVariable @Positive long round,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody RepairFactoryInput.ReplacementFact input) {
+        var actor = actors.capture();
+        return retry(() -> factory.recordReplacement(actor, id, round, version, key, input));
+    }
+
     private Map<String, Object> retry(Supplier<Map<String, Object>> command) {
         try {
             return command.get();

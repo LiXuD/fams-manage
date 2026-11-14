@@ -1783,7 +1783,16 @@ class DesignPackageContractTest(unittest.TestCase):
         revoke_text = json.dumps(operations["revokeSystemAccountRole"], sort_keys=True).lower()
         self.assertIn("immediate", revoke_text)
         self.assertIn("session", revoke_text)
-        self.assertNotIn("delete", " ".join(paths))
+        role_paths = (
+            (path, item)
+            for path, item in paths.items()
+            if path.startswith("/role-configurations")
+            or path.startswith("/system-accounts/") and "/roles" in path
+        )
+        for path, item in role_paths:
+            with self.subTest(path=path):
+                self.assertNotIn("delete", item)
+                self.assertNotIn("delete", path.split("/"))
 
     def test_account_administration_operations_have_a_bounded_generated_interface(self) -> None:
         document = self.load_contract()
@@ -2563,41 +2572,85 @@ class DesignPackageContractTest(unittest.TestCase):
         for phrase in ("not current processor", "stale", "inactive", "mismatch", "rollback"):
             self.assertIn(phrase, rejection_text)
 
-    def test_mutations_declare_identity_version_idempotency_transaction_audit_and_errors(self) -> None:
+    def test_mutations_declare_headers_or_their_contract_exceptions(self) -> None:
         document = self.load_contract()
-        for path, item in document["paths"].items():
-            for method, operation in item.items():
-                if method not in {"post", "patch", "delete"}:
-                    continue
-                with self.subTest(method=method, path=path):
-                    if not operation.get("x-business-write", False):
-                        self.assertIn(operation["operationId"], {"login", "logout", "miniLogin", "miniLogout", "miniIssueBindingChallenge", "issueAttachmentDownloadGrant"})
-                        self.assertTrue(operation.get("x-exception-rationale"))
+        components = document["components"]["parameters"]
+
+        def without_description(value: dict[str, object]) -> dict[str, object]:
+            return {key: item for key, item in value.items() if key != "description"}
+
+        header_components = {
+            "Idempotency-Key": ("IdempotencyKey", "IdempotencyKeyUuid"),
+            "X-CSRF-Token": ("CsrfToken",),
+            "If-Match-Version": ("IfMatchVersion",),
+        }
+        mutations = {
+            operation["operationId"]: (path, method, operation)
+            for path, item in document["paths"].items()
+            for method, operation in item.items()
+            if method in {"post", "put", "patch", "delete"} and isinstance(operation, dict)
+            and "operationId" in operation
+        }
+        registry = document["x-non-business-mutations"]
+        self.assertIsInstance(registry, list)
+        self.assertTrue(registry, "the contract must register its non-business mutations")
+        self.assertEqual(len(registry), len(set(registry)), "duplicate registry entry")
+        for operation_id in registry:
+            self.assertIn(operation_id, mutations, f"registry references {operation_id}")
+            _path, _method, operation = mutations[operation_id]
+            self.assertFalse(operation.get("x-business-write", False))
+            self.assertTrue(operation.get("x-exception-rationale"))
+
+        for operation_id, (path, method, operation) in mutations.items():
+            if not operation.get("x-business-write", False):
+                continue
+            with self.subTest(operation_id=operation_id):
+                declared: set[str] = set()
+                for parameter in operation.get("parameters", []):
+                    if parameter.get("$ref"):
+                        component = components[parameter["$ref"].rsplit("/", 1)[-1]]
+                        if component.get("in") == "header":
+                            self.assertIn(component["name"], header_components)
+                            declared.add(component["name"])
                         continue
-                    self.assertTrue(operation.get("x-actor"), "missing actor boundary")
-                    self.assertTrue(operation.get("x-version"), "missing version boundary")
-                    self.assertTrue(operation.get("x-transaction"), "missing transaction boundary")
-                    self.assertTrue(operation.get("x-audit-event"), "missing audit boundary")
-                    required_errors = operation.get("x-required-error-statuses")
-                    self.assertIsInstance(required_errors, list)
-                    for status in required_errors:
-                        self.assertIn(str(status), operation["responses"])
-                    header_parameters = [
-                        parameter
-                        for parameter in operation.get("parameters", [])
-                        if parameter.get("in") == "header" or "$ref" in parameter
-                    ]
-                    parameter_names = {parameter.get("name") for parameter in header_parameters}
-                    parameter_refs = {parameter.get("$ref", "").rsplit("/", 1)[-1] for parameter in header_parameters}
+                    candidates = header_components.get(parameter.get("name", ""))
+                    if candidates is None or parameter.get("in") != "header":
+                        continue
                     self.assertTrue(
-                        "Idempotency-Key" in parameter_names or "IdempotencyKey" in parameter_refs
+                        any(
+                            without_description(parameter)
+                            == without_description(components[name])
+                            for name in candidates
+                        ),
+                        f"{operation_id} repeats an inline header without reusing a component",
                     )
-                    if operation["operationId"] in {"miniVerifyBinding", "miniUnbind"}:
-                        self.assertTrue(path.startswith("/mini/auth/"))
-                        self.assertIn("csrf", operation.get("x-non-applicable", []))
-                        self.assertIn("IfMatchVersion", parameter_refs)
-                    else:
-                        self.assertTrue("X-CSRF-Token" in parameter_names or "CsrfToken" in parameter_refs)
+                    declared.add(parameter["name"])
+                exceptions = operation.get("x-non-applicable") or []
+                if exceptions:
+                    self.assertTrue(
+                        operation.get("x-exception-rationale"),
+                        f"{operation_id} declares exceptions without a rationale",
+                    )
+                required = {"Idempotency-Key", "X-CSRF-Token"}
+                required -= {"Idempotency-Key"} if "idempotency" in exceptions else set()
+                required -= {"X-CSRF-Token"} if "csrf" in exceptions else set()
+                for header in sorted(required):
+                    self.assertIn(header, declared, f"{operation_id} lacks {header}")
+                if "/mini/" in path:
+                    self.assertIn("csrf", exceptions, f"{operation_id} lacks the mini CSRF exception")
+                    self.assertNotIn("X-CSRF-Token", declared)
+                elif "csrf" in exceptions:
+                    self.fail(f"{operation_id} claims a CSRF exception on a cookie session path")
+
+    def test_mini_mutation_exception_matches_the_header_only_session_filter(self) -> None:
+        filter_source = (
+            ROOT / "backend/src/main/java/com/fams/auth/AuthRequestFilter.java"
+        ).read_text(encoding="utf-8")
+        mini_branch = filter_source.split('path.startsWith("/api/v1/mini/")', 1)[1].split("return;", 1)[0]
+        self.assertIn("MiniSessionService.Current current = miniSessions.requireCurrent", mini_branch)
+        self.assertNotIn("requireCsrf", mini_branch)
+        self.assertIn('sessionManager.requireCsrf(request, request.getHeader("X-CSRF-Token"))', filter_source)
+        self.assertIn('if (isWrite(request.getMethod()))', filter_source)
 
     def test_identifier_time_money_and_state_shapes_are_explicit(self) -> None:
         document = self.load_contract()

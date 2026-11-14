@@ -545,18 +545,125 @@ class HandoverHttpTest {
     void missingBorrowReturnRetainsResponsibilityAndTransfersToLostReportWithoutFakeReceipt() throws Exception {
         receivedBorrow();
         var value = approvedReturn(employee);
-        var response = returnCall(warehouse, "/" + value.path("id").asText() + "/inspect",
-                returnInspection("MISSING", null), key(), 2L);
-        assertEquals(200, response.statusCode(), response.body());
-        var asset = jdbc.queryForMap("SELECT * FROM fams_asset WHERE id=?", base + 50);
-        assertEquals("BORROWED", asset.get("lifecycle_status"));
-        assertEquals("SEARCHING", asset.get("exception_status"));
-        assertEquals(base + 10, ((Number) asset.get("responsible_employee_id")).longValue());
-        assertEquals("OPEN", jdbc.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=?", String.class, base + 50));
-        assertEquals(1, count("SELECT COUNT(*) FROM fams_return_followup WHERE asset_id=? AND business_type='LOST_REPORT'", base + 50));
-        assertEquals("RETURN_LOST_REPORT", jdbc.queryForObject("SELECT business_type FROM fams_asset_business_lock WHERE asset_id=?"
-                + " AND released_at IS NULL", String.class, base + 50));
-        assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_timeline_event WHERE asset_id=? AND event_type='RETURN_ACCEPTED'", base + 50));
+        String id = value.path("id").asText(), suffix = "/" + id;
+        var lock = jdbc.queryForMap("SELECT * FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50);
+        var facts = java.util.Map.of("lastSeenAt", java.time.Instant.now().minusSeconds(3600)
+                .truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString(),
+                "lastLocation", "借用现场原登记位置", "circumstances", "已检查借用现场并询问原保管人仍未找到");
+        var input = (tools.jackson.databind.node.ObjectNode) JSON.readTree(returnInspection("MISSING", null));
+        input.set("missingLoss", JSON.valueToTree(facts));
+        String body = input.toString(), originalKey = key();
+        try {
+            jdbc.execute("CREATE TRIGGER d621_return_loss_audit_failure BEFORE INSERT ON fams_audit_event FOR"
+                    + " EACH ROW BEGIN IF NEW.resource_id=" + id + " AND NEW.action='RETURN_INSPECTED' THEN SIGNAL"
+                    + " SQLSTATE '45000' SET MESSAGE_TEXT='owned return loss rollback'; END IF; END");
+            try {
+                assertEquals(500, returnCall(warehouse, suffix + "/inspect", body, originalKey, 2L).statusCode());
+            } finally {
+                jdbc.execute("DROP TRIGGER d621_return_loss_audit_failure");
+            }
+            assertEquals(lock, jdbc.queryForMap("SELECT * FROM fams_asset_business_lock WHERE id=?", lock.get("id")));
+            assertEquals(0, count("SELECT COUNT(*) FROM fams_loss_report WHERE asset_id=?", base + 50));
+            assertEquals(0, count("SELECT COUNT(*) FROM fams_return_followup WHERE asset_id=?", base + 50));
+            var response = returnCall(warehouse, suffix + "/inspect", body, originalKey, 2L);
+            assertEquals(200, response.statusCode(), response.body());
+            assertEquals(JSON.readTree(response.body()), JSON.readTree(returnCall(warehouse, suffix + "/inspect", body,
+                    originalKey, 2L).body()));
+            var asset = jdbc.queryForMap("SELECT * FROM fams_asset WHERE id=?", base + 50);
+            assertEquals("BORROWED", asset.get("lifecycle_status"));
+            assertEquals("NORMAL", asset.get("exception_status"));
+            assertEquals(base + 10, ((Number) asset.get("responsible_employee_id")).longValue());
+            var loan = jdbc.queryForMap("SELECT * FROM fams_loan WHERE asset_id=?", base + 50);
+            assertEquals("OPEN", loan.get("relation_status"));
+            var original = jdbc.queryForMap("SELECT * FROM fams_asset_return WHERE id=?", Long.parseLong(id));
+            assertEquals("TRANSFERRED", original.get("return_status"));
+            var opened = jdbc.queryForMap("SELECT * FROM fams_loss_report WHERE asset_id=?", base + 50);
+            assertEquals("PENDING_ADMIN_DECISION", opened.get("report_status"));
+            assertEquals("LOST_REPORT", jdbc.queryForObject("SELECT business_type FROM fams_asset_business_lock WHERE id=?"
+                    + " AND released_at IS NULL", String.class, lock.get("id")));
+            String report = opened.get("id").toString();
+            var rejected = http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+                    + "/api/v1/loss-reports/" + report + "/decision")).header("Cookie", admin.cookie())
+                    .header("X-CSRF-Token", admin.csrf()).header("Idempotency-Key", key())
+                    .header("If-Match-Version", "0").header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString("{\"result\":\"REJECT\",\"reason\":\"补充最后见到和查找依据\"}")).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, rejected.statusCode(), rejected.body());
+            assertEquals("RETURN_LOST_REPORT", jdbc.queryForObject("SELECT business_type FROM fams_asset_business_lock WHERE id=?"
+                    + " AND released_at IS NULL", String.class, lock.get("id")));
+            var detail = http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+                    + "/api/v1/asset-returns" + suffix)).header("Cookie", warehouse.cookie()).GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, detail.statusCode(), detail.body());
+            var followup = JSON.readTree(detail.body()).path("followups").get(0);
+            assertEquals("PENDING", followup.path("followupStatus").asText());
+            assertEquals("REJECTED", followup.path("lossReport").path("status").asText());
+            var list = http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+                    + "/api/v1/asset-returns?page=1&pageSize=20")).header("Cookie", employee.cookie()).GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, list.statusCode(), list.body());
+            assertEquals("REJECTED", JSON.readTree(list.body()).path("items").get(0)
+                    .path("returnLossReport").path("status").asText());
+            var retry = JSON.writeValueAsString(java.util.Map.of("assetVersion", asset.get("version"),
+                    "lockVersion", followup.path("missingLossLockVersion").asLong(), "facts", facts));
+            var reopened = returnCall(warehouse, suffix + "/missing-loss", retry, key(), followup.path("version").asLong());
+            assertEquals(200, reopened.statusCode(), reopened.body());
+            assertEquals(2, count("SELECT COUNT(*) FROM fams_loss_report WHERE asset_id=?", base + 50));
+            assertEquals("LOST_REPORT", jdbc.queryForObject("SELECT business_type FROM fams_asset_business_lock WHERE id=?"
+                    + " AND released_at IS NULL", String.class, lock.get("id")));
+            assertEquals(original, jdbc.queryForMap("SELECT * FROM fams_asset_return WHERE id=?", Long.parseLong(id)));
+            assertEquals(loan, jdbc.queryForMap("SELECT * FROM fams_loan WHERE asset_id=?", base + 50));
+            assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_timeline_event WHERE asset_id=?"
+                    + " AND event_type='RETURN_ACCEPTED'", base + 50));
+        } finally {
+            cleanupReturnLossReports();
+        }
+    }
+
+    @Test
+    void existingMissingReturnWithTemporaryLockCanOpenFormalReport() throws Exception {
+        receivedBorrow();
+        var value = approvedReturn(employee);
+        long returnId = value.path("id").asLong(), assetId = base + 50;
+        var original = jdbc.queryForMap("SELECT * FROM fams_asset_return WHERE id=?", returnId);
+        jdbc.update("UPDATE fams_asset_return SET return_status='TRANSFERRED',inspection_result='MISSING',"
+                + "inspection_reason='原验收发现实物缺失',completed_at=NOW(3),version=version+1 WHERE id=?", returnId);
+        jdbc.update("UPDATE fams_asset SET exception_status='SEARCHING',version=version+1 WHERE id=?", assetId);
+        jdbc.update("INSERT INTO fams_return_followup(return_id,asset_id,loan_id,business_type,processor_account_id,"
+                + "reason,created_at) VALUES (?,?,?,'LOST_REPORT',?,'原验收发现实物缺失',NOW(3))",
+                returnId, assetId, original.get("loan_id"), original.get("processor_account_id"));
+        long followup = jdbc.queryForObject("SELECT id FROM fams_return_followup WHERE return_id=?", Long.class, returnId);
+        jdbc.update("UPDATE fams_asset_business_lock SET business_type='RETURN_LOST_REPORT',business_id=?,business_item_id=?"
+                + " WHERE asset_id=? AND released_at IS NULL", followup, followup, assetId);
+        var originalTransferred = jdbc.queryForMap("SELECT * FROM fams_asset_return WHERE id=?", returnId);
+        long lock = jdbc.queryForObject("SELECT id FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL",
+                Long.class, assetId);
+        try {
+            var body = JSON.writeValueAsString(java.util.Map.of("assetVersion", 2, "lockVersion", 0, "facts",
+                    java.util.Map.of("lastSeenAt", java.time.Instant.now().minusSeconds(3600)
+                            .truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString(),
+                            "lastLocation", "借用现场原登记位置", "circumstances", "重新检查借用现场及保管人登记后仍未找到")));
+            var response = returnCall(warehouse, "/" + returnId + "/missing-loss", body, key(), 0L);
+            assertEquals(200, response.statusCode(), response.body());
+            assertEquals("LOST_REPORT", jdbc.queryForObject("SELECT business_type FROM fams_asset_business_lock WHERE id=?"
+                    + " AND released_at IS NULL", String.class, lock));
+            assertEquals("NORMAL", jdbc.queryForObject("SELECT exception_status FROM fams_asset WHERE id=?", String.class, assetId));
+            assertEquals(originalTransferred, jdbc.queryForMap("SELECT * FROM fams_asset_return WHERE id=?", returnId));
+            assertEquals("OPEN", jdbc.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=?", String.class, assetId));
+        } finally {
+            cleanupReturnLossReports();
+        }
+    }
+
+    private void cleanupReturnLossReports() {
+        jdbc.update("DELETE FROM fams_asset_business_lock WHERE asset_id=? AND business_type='LOST_REPORT'", base + 50);
+        jdbc.update("DELETE FROM fams_todo WHERE business_type='LOST_REPORT' AND business_id IN"
+                + " (SELECT id FROM fams_loss_report WHERE asset_id=?)", base + 50);
+        for (String table : java.util.List.of("fams_loss_receipt", "fams_loss_event", "fams_loss_return_source")) {
+            jdbc.update("DELETE FROM " + table + " WHERE report_id IN (SELECT id FROM fams_loss_report WHERE asset_id=?)",
+                    base + 50);
+        }
+        jdbc.update("DELETE FROM fams_loss_report WHERE asset_id=?", base + 50);
     }
 
     @Test

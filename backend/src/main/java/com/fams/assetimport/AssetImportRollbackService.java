@@ -225,9 +225,17 @@ public class AssetImportRollbackService {
             Integer changes = db.queryForObject("SELECT COUNT(*) FROM fams_asset_timeline_event "
                     + "WHERE asset_id IN (" + markers + ") AND event_type<>'ASSET_INITIAL_IMPORTED'",
                     Integer.class, part.toArray());
-            Integer locks = db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock "
-                    + "WHERE asset_id IN (" + markers + ") AND released_at IS NULL",
-                    Integer.class, part.toArray());
+            // The batch owns its opening locks. Its downstream guards prove those records are untouched.
+            List<Object> lockArgs = new ArrayList<>(part);
+            lockArgs.add(batchId.toString());
+            lockArgs.add(batchId.toString());
+            Integer locks = db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock l "
+                    + "WHERE l.asset_id IN (" + markers + ") AND l.released_at IS NULL AND NOT EXISTS ("
+                    + "SELECT 1 FROM fams_scrap_request r WHERE r.id=l.business_id"
+                    + " AND l.business_type='SCRAP' AND r.initial_batch_id=?) AND NOT EXISTS ("
+                    + "SELECT 1 FROM fams_repair_request r WHERE r.id=l.business_id"
+                    + " AND l.business_type='REPAIR' AND r.initial_batch_id=?)",
+                    Integer.class, lockArgs.toArray());
             if (changes == null || changes != 0 || locks == null || locks != 0) {
                 throw new IllegalStateException("ASSET_IMPORT_ROLLBACK_DOWNSTREAM");
             }

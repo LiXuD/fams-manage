@@ -92,15 +92,17 @@ public class AssetImportPublicationService {
         String username = db.queryForObject("SELECT username FROM fams_system_account WHERE id=?",
                 String.class, claim.actorId());
         var now = clock.instant();
-        LocalDate businessDate = LocalDate.ofInstant(now, masterData.currentZone());
+        var timezone = masterData.currentZone();
+        LocalDate businessDate = LocalDate.ofInstant(now, timezone);
         long parameterId = masterData.currentParameterVersionId();
         for (var row : checked.ready()) {
             var input = new AssetInitialPublicationPort.InitialAsset(row.assetCode(), row.name(),
                     row.categoryId(), row.organizationId(), row.model(), row.unit(), row.serialNumber(),
                     row.state(), row.warehouseId(), row.locationId(), row.usingOrganizationId(), row.employeeId(),
-                    row.borrowedDate(), row.expectedReturnDate());
+                    row.borrowedDate(), row.expectedReturnDate(), row.preScrapState(), row.scrapReason(),
+                    row.scrapCondition(), row.proposedDisposition(), row.preRepairState(), row.repairFacts());
             var context = new AssetInitialPublicationPort.Context(batchId, row.sheetRow(), claim.actorId(),
-                    username, parameterId, businessDate, now);
+                    username, parameterId, businessDate, now, administratorId, timezone.getId());
             var created = assets.create(input, context);
             db.update("INSERT INTO fams_asset_import_publication (batch_id,sheet_row,asset_id,asset_code,"
                     + "published_at) VALUES (?,?,?,?,?)", batchId.toString(), row.sheetRow(),

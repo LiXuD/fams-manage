@@ -142,6 +142,43 @@ public final class RepairFactoryInput {
         }
     }
 
+    public record ReplacementFact(
+            @NotNull @PositiveOrZero Long roundVersion,
+            @NotNull @PositiveOrZero Long assetVersion,
+            @NotNull @PositiveOrZero Long ownershipVersion,
+            @NotNull @PositiveOrZero Long lockVersion,
+            @NotBlank @Pattern(regexp = "FACTORY_RETAINED|FACTORY_DESTROYED|CONTINUES_REPAIR")
+                    String originalDisposition,
+            @NotNull Instant observedAt,
+            @NotNull @Size(min = 1, max = 14) List<@NotNull UUID> evidenceIds,
+            @NotBlank @Size(min = 10, max = 1000) String reason,
+            @NotNull @jakarta.validation.Valid
+                    com.fams.product.contract.model.AssetCreateRequest newAsset,
+            @NotNull LocalDate businessDate,
+            @NotNull @Positive Long warehouseId,
+            @NotNull @PositiveOrZero Long warehouseVersion,
+            @NotNull @Positive Long locationId,
+            @NotNull @PositiveOrZero Long locationVersion,
+            @NotNull @jakarta.validation.constraints.AssertTrue Boolean replacementPhysicalIdentityChecked) {
+        private static final tools.jackson.databind.ObjectMapper SNAPSHOT_JSON =
+                new tools.jackson.databind.ObjectMapper();
+
+        public ReplacementFact {
+            evidenceIds = evidenceIds == null ? null : List.copyOf(evidenceIds);
+            newAsset = copyAsset(newAsset);
+        }
+
+        public com.fams.product.contract.model.AssetCreateRequest newAsset() {
+            return copyAsset(newAsset);
+        }
+
+        private static com.fams.product.contract.model.AssetCreateRequest copyAsset(
+                com.fams.product.contract.model.AssetCreateRequest value) {
+            return value == null ? null : SNAPSHOT_JSON.convertValue(
+                    value, com.fams.product.contract.model.AssetCreateRequest.class);
+        }
+    }
+
     public record MoneyFact(
             @NotNull @PositiveOrZero Long roundVersion,
             @NotNull @PositiveOrZero Long assetVersion,

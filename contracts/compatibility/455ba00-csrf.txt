@@ -1,0 +1,40 @@
+# D6-03B: corrections to the contract at baseline 455ba00410cbef5b807769b3ba5c251a5ac93f8f.
+# The existing AuthRequestFilter requires X-CSRF-Token on these PC writes.
+# AuthProductConfiguration already issues 32-byte unpadded base64url tokens.
+POST /inventory-late/tasks/{task}/observations/{observation}/damage-repair added the new required `header` request parameter `x-csrf-token`
+POST /inventory-observations/calibrations added the new required `header` request parameter `x-csrf-token`
+POST /inventory-observations/tasks/{taskId}/events added the new required `header` request parameter `x-csrf-token`
+POST /inventory-observations/tasks/{taskId}/events/{eventId}/photos added the new required `header` request parameter `x-csrf-token`
+POST /inventory-observations/tasks/{taskId}/events/{eventId}/photos/{objectId}/download-grant added the new required `header` request parameter `x-csrf-token`
+POST /inventory-observations/tasks/{taskId}/identification added the new required `header` request parameter `x-csrf-token`
+POST /inventory-readiness/tasks/{task}/items/{item}/unobserved added the new required `header` request parameter `x-csrf-token`
+POST /inventory-readiness/tasks/{task}/waiting-review added the new required `header` request parameter `x-csrf-token`
+POST /inventory-repair-evidence/{repair}/observations/{observation}/photos/{object}/download-grant added the new required `header` request parameter `x-csrf-token`
+POST /inventory-reviews/tasks/{task}/findings/{observation}/decisions added the new required `header` request parameter `x-csrf-token`
+POST /inventory-reviews/tasks/{task}/findings/{observation}/time-decisions added the new required `header` request parameter `x-csrf-token`
+POST /inventory-sealing/tasks/{task}/seal added the new required `header` request parameter `x-csrf-token`
+POST /inventory-synchronization/tasks/{task}/declarations added the new required `header` request parameter `x-csrf-token`
+POST /requisitions for the `header` request parameter `x-csrf-token`, the minLength was set to `16`
+PATCH /requisitions/{id} for the `header` request parameter `x-csrf-token`, the minLength was set to `16`
+POST /requisitions/{id}/cancel for the `header` request parameter `x-csrf-token`, the minLength was set to `16`
+POST /requisitions/{id}/changes for the `header` request parameter `x-csrf-token`, the minLength was set to `16`
+POST /requisitions/{id}/claim for the `header` request parameter `x-csrf-token`, the minLength was set to `16`
+POST /requisitions/{id}/decision for the `header` request parameter `x-csrf-token`, the minLength was set to `16`
+POST /requisitions/{id}/demands/{demandId}/allocations for the `header` request parameter `x-csrf-token`, the minLength was set to `16`
+POST /requisitions/{id}/demands/{demandId}/followup for the `header` request parameter `x-csrf-token`, the minLength was set to `16`
+POST /requisitions/{id}/demands/{demandId}/unfulfillable for the `header` request parameter `x-csrf-token`, the minLength was set to `16`
+POST /requisitions/{id}/dispute for the `header` request parameter `x-csrf-token`, the minLength was set to `16`
+POST /requisitions/{id}/submit for the `header` request parameter `x-csrf-token`, the minLength was set to `16`
+POST /transfers added the new required `header` request parameter `x-csrf-token`
+POST /transfers/receipts/{itemId}/grant added the new required `header` request parameter `x-csrf-token`
+POST /transfers/receipts/{itemId}/receive added the new required `header` request parameter `x-csrf-token`
+POST /transfers/receipts/{itemId}/refuse added the new required `header` request parameter `x-csrf-token`
+POST /transfers/{id}/cancel added the new required `header` request parameter `x-csrf-token`
+POST /transfers/{id}/claim added the new required `header` request parameter `x-csrf-token`
+POST /transfers/{id}/decision added the new required `header` request parameter `x-csrf-token`
+POST /transfers/{id}/items/{itemId}/cancel added the new required `header` request parameter `x-csrf-token`
+POST /transfers/{id}/items/{itemId}/deliver added the new required `header` request parameter `x-csrf-token`
+POST /transfers/{id}/items/{itemId}/recover added the new required `header` request parameter `x-csrf-token`
+POST /transfers/{id}/items/{itemId}/recovery added the new required `header` request parameter `x-csrf-token`
+POST /transfers/{id}/items/{itemId}/verify added the new required `header` request parameter `x-csrf-token`
+POST /transfers/{id}/submit added the new required `header` request parameter `x-csrf-token`

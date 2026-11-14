@@ -1,0 +1,198 @@
+{
+  "web_url": "http://127.0.0.1:61941",
+  "api_port": 61939,
+  "candidate": "885dc46",
+  "closure_capture": "automatic on committed COMPLETED status",
+  "artifact_sha256": "ab8c0918e7b3081a5316b6761ea4ccfba9b4136ade7317824aceafcd5d8bd066",
+  "admin_username": "owned20admin",
+  "employee_username": "owned20employee",
+  "warehouse_username": "owned20warehouse",
+  "asset_code": "OWNED20-983010",
+  "original_serial": "OWNED20-SERIAL-983010",
+  "initial_custody": "PERSONAL\t983000\t983002\t983099\n",
+  "scanner_version": "ClamAV 1.4.6/28129/Sun Sep 20 06:26:26 2026",
+  "container": "fams-d6-20c1-fixed-browser-28080805bb89b975",
+  "actual_committing_jvm_pid": 59571,
+  "actual_committing_process_group_killed": 59570,
+  "new_process_group": 62784,
+  "original_receipt_replayed": true,
+  "rounds_and_header_unchanged_after_replay": true,
+  "before_closure": {
+    "locks": 1,
+    "parts": 2,
+    "rounds": 1,
+    "scopes": 1,
+    "repairs": 1,
+    "received": 1,
+    "cancelled": 0,
+    "lifecycle": "UNDER_REPAIR",
+    "dispatched": 1
+  },
+  "originals": [
+    {
+      "round": "1",
+      "object": "32f0a8fa-bdb8-44f3-8755-c1cd8b9f07c5",
+      "sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "purpose": "FACTORY_ACK",
+      "read_sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "bytes": 68
+    },
+    {
+      "round": "1",
+      "object": "c4f0e027-53be-4936-9131-3902153b749c",
+      "sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "purpose": "PARTS_CHANGE",
+      "read_sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "bytes": 68
+    },
+    {
+      "round": "1",
+      "object": "a21e502f-f481-4900-8f1e-fc516e414554",
+      "sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "purpose": "RECEIPT",
+      "read_sha256": "7e8a86157d328b13622253cb6a0063b0cc90366f668a6e4080b39d65a9dad8f0",
+      "bytes": 68
+    }
+  ],
+  "first_complete_fact_unchanged_after_second": true,
+  "first_complete_fact_sha256": "0d109e9683a55c8f1e796e9ce82ca004c470c169b4ac71639957ceb68b386b12",
+  "expected_calendar_dates": [
+    "2026-11-01"
+  ],
+  "business_side_effects_unchanged": {
+    "repair_events": {
+      "rows": 13,
+      "sha256": "5f13bd87d0c94c4bbf49c124501996b7f4b0fd577f6054db8219251f1361a8d9"
+    },
+    "factory_events": {
+      "rows": 9,
+      "sha256": "e6270b55260071872374cbee9698a1230febd8739a3b977ca3746240c33e43e5"
+    },
+    "factory_audits": {
+      "rows": 13,
+      "sha256": "dbd15f5abc72386fbf97ff0639b947d31b7504565f800a70f87619b6eaf5d674"
+    },
+    "repair_todos": {
+      "rows": 5,
+      "sha256": "a158990b534c2cbf898a2f1b018b2e35f3c34bcf9050d4964437a9b70044ddbd"
+    },
+    "permanent_receipts": {
+      "rows": 12,
+      "sha256": "d31fda2522a5308d10d70e4efcc968c4a29ab557686a59d0c0b99e8fc39af560"
+    },
+    "asset_locks": {
+      "rows": 1,
+      "sha256": "2db2c22a0eba684d87f5b443975c6e0dfbeb5bdd1bfe0d880a24b2d1f7e6c025"
+    },
+    "asset_card": {
+      "rows": 1,
+      "sha256": "584895b9897ead79b1a583ecace7f31367669ffb31af8e178007dbe50cf84262"
+    },
+    "asset_timeline": {
+      "rows": 5,
+      "sha256": "655d3659730e8147b075986a5270291e2940561dac99ee221c26d9c4388cfafb"
+    },
+    "parts": {
+      "rows": 2,
+      "sha256": "b8d2c5e379c168d70e9c4a8a9a7dce1d05e6b953dd8946a5510ab7360b07eed9"
+    },
+    "evidence": {
+      "rows": 3,
+      "sha256": "5880e0f9cd57b2bc416a22f127941ffff3dee8f2b2ee0ba664a82cafc266ba56"
+    },
+    "quotes": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "costs": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "scopes": {
+      "rows": 1,
+      "sha256": "415e7e5c339f73043582c31ac6090f1399fa7f84642828728b50ccad5aa9b575"
+    }
+  },
+  "replay_body_source": "Complete persisted typed PartsFact; equivalent F1 canonical request, not a raw transport-byte claim",
+  "after_real_separate_inbound": {
+    "locks": 0,
+    "parts": 2,
+    "rounds": 1,
+    "scopes": 1,
+    "repairs": 1,
+    "received": 1,
+    "cancelled": 0,
+    "lifecycle": "IN_STOCK",
+    "dispatched": 1
+  },
+  "original_rounds_immutable": true,
+  "asset_dates_unchanged": true,
+  "original_card_identity_unchanged": true,
+  "status": "FIXED_PC_JVM_AND_SEPARATE_INBOUND_PASS_INDEPENDENT_REVIEW_PENDING",
+  "runtimeCommand": "rtk proxy python3 output/d6-20c1-browser-runtime-885dc46.py",
+  "uploadFormRecovery": {
+    "manualRefreshRequired": false,
+    "firstFactSaved": true,
+    "nextFactFormRecovered": true,
+    "firstRowCapturedBeforeSecond": true
+  },
+  "employeePrivacy": {
+    "privateReasonAbsent": true,
+    "partsContentAbsent": true,
+    "vendorContactAbsent": true,
+    "logoutClearedView": true
+  },
+  "browser": {
+    "errors": 0,
+    "warnings": 0,
+    "ownedTabClosed": true
+  },
+  "cleanup": {
+    "runtimeExit": 0,
+    "ownedMysqlClamAvAndPhotoRootRemoved": true,
+    "sharedMysqlUntouched": "fams-d6-03a-625409ba1409fdb7-mysql-1"
+  },
+  "limitations": [
+    "Synthetic 68-byte PNG and owned accounts; no physical shipment, real invoice, device or production proof.",
+    "C1 is IN_REVIEW; C2, D, independent review, remote CI, QA and production remain open."
+  ],
+  "priorStartupFailure": "output/d6-20c1-885dc46-pc-start-failure.json",
+  "uiArtifacts": [
+    {
+      "path": "output/d6-20c1-885dc46-upload-form-enabled.png",
+      "sha256": "f1afbf84036092991191805c9081e0ef8a924587f01ef777a490005c9fdc96c0"
+    },
+    {
+      "path": "output/d6-20c1-885dc46-upload-form-enabled-dom.txt",
+      "sha256": "33f1945c20a0e1bdf0823b65b8894de59d582af84a55421e49bc6e19e11561f1"
+    },
+    {
+      "path": "output/d6-20c1-885dc46-two-observations.png",
+      "sha256": "9f6e9362c53a6f06845032100e1a21820d128239b0192bc122e5abbbaf60dc95"
+    },
+    {
+      "path": "output/d6-20c1-885dc46-two-observations-dom.txt",
+      "sha256": "8ec5c67aa0d64c8cd37d023923aeb2892c844a00f0ec18c4652627559ff9fb9e"
+    },
+    {
+      "path": "output/d6-20c1-885dc46-completed-parts.png",
+      "sha256": "6a78af5a3bb421e2b3ae1544310c8854e4eb626d9a509a47765eb8ac78a95889"
+    },
+    {
+      "path": "output/d6-20c1-885dc46-completed.png",
+      "sha256": "b518bfc783d213dce71cb4483e6d31cc37d7a9d52a5646f9ec8d3d43d2ec2e9f"
+    },
+    {
+      "path": "output/d6-20c1-885dc46-completed-dom.txt",
+      "sha256": "8b408fa13ae6d8609fb2f6305d912848ab93bea5e1705d71ff710ecc42e07669"
+    },
+    {
+      "path": "output/d6-20c1-885dc46-employee.png",
+      "sha256": "e6e536ac3a917a896040bbf4b056e11515ad16e8861dce7e99b549c745d912cd"
+    },
+    {
+      "path": "output/d6-20c1-885dc46-employee-dom.txt",
+      "sha256": "3d7c23784bb49d1347995085eca17190c4d950a9c26c3af962031fce0d659930"
+    }
+  ]
+}

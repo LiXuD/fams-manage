@@ -381,6 +381,7 @@ public class RepairService {
         boolean pending = "PENDING_ADMIN_DECISION".equals(row.get("repair_status"));
         boolean processing =
                 "WAREHOUSE_PROCESSING".equals(row.get("repair_status"))
+                        && !locks.isEmpty()
                         && current.has(Role.WAREHOUSE_OPERATOR)
                         && java.util.Objects.equals(
                                 current.id(), nullable(row.get("processor_account_id")));
@@ -426,6 +427,8 @@ public class RepairService {
                                 json.readTree(row.get("source_snapshot_json").toString())
                                         .path("lifecycle")
                                         .asText());
+        actions.put("requestScrap", processing && row.get("accepted_at") != null && outstanding == null
+                && noCostHandling(row.get("allowed_method")));
         actions.put("deliverReturn", processing && away && outstanding == null && returnable);
         actions.put("changeReturnTarget", processing && away && outstanding == null && returnable);
         actions.put(
@@ -439,7 +442,7 @@ public class RepairService {
                 "reassign",
                 current.has(Role.ASSET_ADMIN)
                         && "WAREHOUSE_PROCESSING".equals(row.get("repair_status"))
-                        && row.get("processor_account_id") != null);
+                        && !locks.isEmpty() && row.get("processor_account_id") != null);
         actions.put(
                 "proxyReturn",
                 processing
@@ -457,6 +460,7 @@ public class RepairService {
             if (Boolean.TRUE.equals(factorySummary.get("followupOpen"))) {
                 for (var action :
                         List.of(
+                                "requestScrap",
                                 "acceptInPlace",
                                 "completeInPlace",
                                 "acceptAway",
@@ -470,6 +474,13 @@ public class RepairService {
                     actions.put(action, false);
                 }
             }
+        }
+        actions.put("requestLoss", Boolean.TRUE.equals(actions.get("requestScrap")));
+        var reports = db.queryForList("SELECT JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.reportId'))"
+                + " FROM fams_repair_event WHERE repair_id=? AND action='REPAIR_LOSS_HANDED_OFF' ORDER BY id DESC LIMIT 1",
+                String.class, id);
+        if (!reports.isEmpty()) {
+            result.put("latestLossReportId", reports.getFirst());
         }
         result.put("actions", actions);
         return result;
@@ -495,9 +506,35 @@ public class RepairService {
     }
 
     public Map<String, Object> submit(Actor actor, UUID key, RepairInput.Submission input) {
+        return submitSource(actor, key, input, null);
+    }
+
+    Map<String, Object> submitLossRecovery(
+            Actor actor, UUID key, RepairInput.Submission input, LossRepairPort.Source loss) {
+        return submitSource(actor, key, input, loss);
+    }
+
+    private Map<String, Object> submitSource(
+            Actor actor, UUID key, RepairInput.Submission input, LossRepairPort.Source loss) {
+        return submitSource(actor, key, input, loss, null);
+    }
+
+    Map<String, Object> submitClosedLossRecovery(
+            Actor actor, UUID key, RepairInput.Submission input, LossRepairPort.Source loss,
+            long recoveryId) {
+        return submitSource(actor, key, input, loss, recoveryId);
+    }
+
+    private Map<String, Object> submitSource(
+            Actor actor, UUID key, RepairInput.Submission input, LossRepairPort.Source loss,
+            Long recoveryId) {
         var current = actors.revalidateLocked(actor);
-        String fingerprint = hash("SUBMIT", 0, input);
-        var prior = replay(actor, current, "SUBMIT", key, fingerprint);
+        String operation = loss == null ? "SUBMIT" : "LOSS_RECOVERY:" + loss.reportId();
+        String fingerprint =
+                hash(operation, 0, loss == null ? input : recoveryId == null
+                        ? Map.of("input", input, "source", loss)
+                        : Map.of("input", input, "source", loss, "recoveryId", recoveryId));
+        var prior = replay(actor, current, operation, key, fingerprint);
         if (prior != null) {
             return prior;
         }
@@ -506,7 +543,25 @@ public class RepairService {
                 || input.occurredAt().isAfter(clock.instant().plusSeconds(2))) {
             throw new RepairFailure(400, "REPAIR_FAULT_INVALID");
         }
-        String source = assets.submission(current, input.assetId(), input.assetVersion());
+        String source =
+                loss == null
+                        ? assets.submission(current, input.assetId(), input.assetVersion())
+                        : assets.lossRecoverySubmission(
+                                current,
+                                input.assetId(),
+                                input.assetVersion(),
+                                Long.parseLong(loss.reportId()),
+                                recoveryId == null ? Long.parseLong(loss.reportId()) : recoveryId,
+                                loss.lockVersion());
+        if (loss != null) {
+            var linked = (tools.jackson.databind.node.ObjectNode) json.readTree(source);
+            linked.set("lossRecovery", json.valueToTree(loss));
+            if (recoveryId != null) {
+                ((tools.jackson.databind.node.ObjectNode) linked.get("lossRecovery"))
+                        .put("recoveryId", Long.toString(recoveryId));
+            }
+            source = json.writeValueAsString(linked);
+        }
         var snapshot = json.readTree(source);
         var loan = loans.open(input.assetId());
         boolean borrowed = "BORROWED".equals(snapshot.path("lifecycle").asText());
@@ -559,17 +614,40 @@ public class RepairService {
         long id =
                 java.util.Objects.requireNonNull(
                         db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
-        db.update(
-                "INSERT INTO"
-                    + " fams_asset_business_lock(asset_id,business_type,business_id,business_item_id,acquired_at)"
-                    + " VALUES (?,'REPAIR',?,?,?)",
-                input.assetId(),
-                id,
-                id,
-                now);
+        if (loss == null) {
+            db.update(
+                    "INSERT INTO"
+                        + " fams_asset_business_lock(asset_id,business_type,business_id,business_item_id,acquired_at)"
+                        + " VALUES (?,'REPAIR',?,?,?)",
+                    input.assetId(),
+                    id,
+                    id,
+                    now);
+        } else if (db.update(
+                        "UPDATE fams_asset_business_lock SET"
+                            + " business_type='REPAIR',business_id=?,business_item_id=?,lock_version=lock_version+1"
+                            + " WHERE asset_id=? AND business_type='LOST_REPORT' AND business_id=?"
+                            + " AND business_item_id=? AND lock_version=? AND released_at IS NULL",
+                        id,
+                        id,
+                        input.assetId(),
+                        loss.reportId(),
+                        recoveryId == null ? Long.valueOf(loss.reportId()) : recoveryId,
+                        loss.lockVersion())
+                != 1) {
+            throw new RepairFailure(409, "REPAIR_LOSS_LOCK_CHANGED");
+        }
         todo(id, "APPROVAL", "ASSET_ADMIN", null);
-        audit(actor, current, header(id), "REPAIR_SUBMITTED", 0, 0, input, role(current));
-        return remember(current, "SUBMIT", key, fingerprint, header(id));
+        audit(
+                actor,
+                current,
+                header(id),
+                "REPAIR_SUBMITTED",
+                0,
+                0,
+                loss == null ? input : Map.of("input", input, "source", loss),
+                role(current));
+        return remember(current, operation, key, fingerprint, header(id));
     }
 
     public Map<String, Object> decide(
@@ -865,6 +943,221 @@ public class RepairService {
                 input,
                 Role.WAREHOUSE_OPERATOR.name());
         return remember(current, operation, key, fingerprint, header(id));
+    }
+
+    public record ScrapSource(long repairId, long assetId, long repairVersion, long processorAccountId,
+            String originalSnapshot, String contextJson, LoanRepairPort.Context borrowing) {}
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ScrapSource scrapSource(Actor actor, long id, long version, long assetVersion, long ownership, long lockVersion) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.WAREHOUSE_OPERATOR);
+        var row = header(id);
+        owner(actor, current, row);
+        physicalGuard(actor, current, row, version, assetVersion, ownership, lockVersion);
+        if (row.get("accepted_at") == null) {
+            throw new RepairFailure(409, "REPAIR_PHYSICAL_ACCEPTANCE_REQUIRED");
+        }
+        long asset = number(row, "asset_id");
+        var borrowing = loans.open(asset);
+        loans.requireIdentity(asset, originalLoan(row), borrowing == null ? null : borrowing.version());
+        var context = new LinkedHashMap<String, Object>();
+        context.put("acceptedAt", wire(row.get("accepted_at")));
+        context.put("approval", json.readTree(row.get("approval_snapshot_json").toString()));
+        context.put("physicalHandling", wire(db.queryForList("SELECT * FROM fams_repair_physical_handling WHERE repair_id=?", id)));
+        context.put("approvedReturnTarget", wire(approvedTarget(row)));
+        context.put("ownershipVersion", ownership);
+        return new ScrapSource(id, asset, version, current.id(), row.get("source_snapshot_json").toString(),
+                json.writeValueAsString(context), borrowing);
+    }
+
+    public record LossSource(long repairId, long assetId, long repairVersion, long processorAccountId,
+            Instant acceptedAt, String contextJson) {}
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public LossSource lossSource(Actor actor, long id, long version, long assetVersion, long ownership, long lockVersion) {
+        var source = scrapSource(actor, id, version, assetVersion, ownership, lockVersion);
+        var row = header(id);
+        return new LossSource(id, source.assetId(), version, source.processorAccountId(),
+                Instant.parse(wire(row.get("accepted_at")).toString()), source.contextJson());
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void handoffToLoss(Actor actor, Current current, LossSource source, long report, long lockVersion) {
+        if (db.update("UPDATE fams_asset_business_lock SET business_type='LOST_REPORT',business_id=?,business_item_id=?,"
+                + "lock_version=lock_version+1 WHERE asset_id=? AND business_type='REPAIR' AND business_id=?"
+                + " AND business_item_id=? AND lock_version=? AND released_at IS NULL", report, report, source.assetId(),
+                source.repairId(), source.repairId(), lockVersion) != 1) {
+            throw new RepairFailure(409, "REPAIR_LOCK_CHANGED");
+        }
+        db.update("UPDATE fams_repair_request SET version=version+1,updated_at=? WHERE id=?", now(), source.repairId());
+        closeTodos(source.repairId());
+        audit(actor, current, Map.of("id", source.repairId()), "REPAIR_LOSS_HANDED_OFF",
+                source.repairVersion(), source.repairVersion() + 1, Map.of("reportId", Long.toString(report)),
+                Role.WAREHOUSE_OPERATOR.name());
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void resumeFromLoss(Actor actor, Current current, long repairId, long assetId, long processor,
+            long report, long lossItem, Long assetVersion) {
+        var row = header(repairId);
+        if (!"WAREHOUSE_PROCESSING".equals(row.get("repair_status")) || number(row, "asset_id") != assetId
+                || !java.util.Objects.equals(row.get("processor_account_id"), processor)) {
+            throw new RepairFailure(409, "REPAIR_LOSS_SOURCE_CHANGED");
+        }
+        var borrowing = loans.open(assetId);
+        loans.requireIdentity(assetId, originalLoan(row), borrowing == null ? null : borrowing.version());
+        if (db.update("UPDATE fams_asset_business_lock SET business_type='REPAIR',business_id=?,business_item_id=?,"
+                + "lock_version=lock_version+1 WHERE asset_id=? AND business_type='LOST_REPORT' AND business_id=?"
+                + " AND business_item_id=? AND released_at IS NULL", repairId, repairId, assetId, report, lossItem) != 1) {
+            throw new RepairFailure(409, "REPAIR_LOCK_CHANGED");
+        }
+        long before = number(row, "version");
+        long resumedAssetVersion = assetVersion == null ? number(row, "asset_version") : assetVersion.longValue();
+        db.update("UPDATE fams_repair_request SET asset_version=?,version=version+1,updated_at=? WHERE id=?",
+                resumedAssetVersion, now(), repairId);
+        todo(repairId, "PROCESS", "WAREHOUSE_OPERATOR", processor);
+        audit(actor, current, row, "REPAIR_LOSS_RETURNED", before, before + 1, Map.of("reportId", Long.toString(report)),
+                current.has(Role.WAREHOUSE_OPERATOR) ? Role.WAREHOUSE_OPERATOR.name() : Role.ASSET_ADMIN.name());
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ScrapSource factoryScrapSource(Actor actor, long id, long round, long replacement, long version,
+            long roundVersion, long assetVersion, long ownership, long lockVersion) {
+        var proof = factoryOperations.scrapEvidence(actor, id, round, replacement, version, roundVersion,
+                assetVersion, ownership, lockVersion);
+        var row = header(id);
+        long asset = number(row, "asset_id");
+        var borrowing = loans.open(asset);
+        loans.requireIdentity(asset, originalLoan(row), borrowing == null ? null : borrowing.version());
+        return new ScrapSource(id, asset, version, number(row, "processor_account_id"),
+                row.get("source_snapshot_json").toString(), json.writeValueAsString(proof), borrowing);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean matchesFactoryScrapEvidence(long repair, long asset, RepairFactoryService.ScrapEvidence expected) {
+        return expected != null && expected.equals(factoryOperations.replacementScrapEvidence(
+                repair, expected.roundId(), expected.replacementId(), asset));
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void requireFactoryScrapEvidenceObjects(Current current, long repair, RepairFactoryService.ScrapEvidence proof) {
+        factoryOperations.requireScrapEvidenceObjects(current, repair, proof);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void handoffToScrap(Actor actor, Current current, ScrapSource source, long scrap, long lockVersion, long nextAssetVersion) {
+        transferScrapLock(source.assetId(), source.repairId(), scrap, lockVersion, true);
+        db.update("UPDATE fams_repair_request SET asset_version=?,version=version+1,updated_at=? WHERE id=?",
+                nextAssetVersion, now(), source.repairId());
+        closeTodos(source.repairId());
+        audit(actor, current, Map.of("id", source.repairId()), "REPAIR_SCRAP_HANDED_OFF",
+                source.repairVersion(), source.repairVersion() + 1, Map.of("scrapId", Long.toString(scrap)), Role.WAREHOUSE_OPERATOR.name());
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean canRestoreFromScrap(long repair, long version, long asset, long assetVersion, long processor,
+            LoanRepairPort.Context borrowing) {
+        var row = header(repair);
+        return matchesScrapHandoff(row, version, asset, assetVersion, processor)
+                && activeScrapProcessor(processor)
+                && java.util.Objects.equals(loans.open(asset), borrowing);
+    }
+
+    private boolean activeScrapProcessor(long processor) {
+        return !db.queryForList("SELECT a.id FROM fams_system_account a JOIN fams_account_role r ON r.account_id=a.id"
+                        + " JOIN fams_employee e ON e.id=a.employee_id JOIN fams_organization o ON o.id=e.organization_id"
+                        + " WHERE a.id=? AND a.status='ENABLED' AND r.role_code='WAREHOUSE_OPERATOR'"
+                        + " AND e.status='ACTIVE' AND o.status='ACTIVE' FOR UPDATE", processor).isEmpty();
+    }
+
+    public record FactoryLossScrap(long repairId, long repairVersion, long roundId, long roundVersion,
+            long processorAccountId, LoanRepairPort.Context borrowing) {}
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public FactoryLossScrap factoryLossScrap(long repair, long round, long asset, long processor) {
+        var row = header(repair);
+        if (!"WAREHOUSE_PROCESSING".equals(row.get("repair_status")) || number(row, "asset_id") != asset
+                || !java.util.Objects.equals(row.get("processor_account_id"), processor) || !activeScrapProcessor(processor)) {
+            return null;
+        }
+        Long roundVersion = factoryOperations.dispatchedLossScrapVersion(repair, round, asset);
+        if (roundVersion == null) {
+            return null;
+        }
+        var borrowing = loans.open(asset);
+        var original = originalLoan(row);
+        if (original == null ? borrowing != null : borrowing == null || original.id() != borrowing.id()
+                || original.borrowerEmployeeId() != borrowing.borrowerEmployeeId()
+                || original.organizationId() != borrowing.organizationId()) {
+            return null;
+        }
+        return new FactoryLossScrap(repair, number(row, "version"), round, roundVersion, processor, borrowing);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void closeFromFactoryLossScrap(Actor actor, Current current, FactoryLossScrap source,
+            long assetVersion, long scrap) {
+        var row = header(source.repairId());
+        if (current.id() != source.processorAccountId()
+                || !source.equals(factoryLossScrap(source.repairId(), source.roundId(), number(row, "asset_id"),
+                        source.processorAccountId()))) {
+            throw new RepairFailure(409, "REPAIR_SCRAP_SOURCE_CHANGED");
+        }
+        finishFromScrap(actor, current, row, source.repairVersion(), assetVersion, scrap);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void restoreFromScrap(Actor actor, Current current, long repair, long version, long asset, long scrap,
+            long lockVersion, long nextAssetVersion, long processor, boolean factory) {
+        transferScrapLock(asset, repair, scrap, lockVersion, false);
+        db.update("UPDATE fams_repair_request SET asset_version=?,version=version+1,updated_at=? WHERE id=?",
+                nextAssetVersion, now(), repair);
+        todo(repair, factory ? "FACTORY_RETURN" : "PROCESS", "WAREHOUSE_OPERATOR", processor);
+        audit(actor, current, Map.of("id", repair), "REPAIR_SCRAP_RETURNED", version, version + 1,
+                Map.of("scrapId", Long.toString(scrap)), Role.ASSET_ADMIN.name());
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void closeFromScrap(Actor actor, Current current, long repair, long version, long asset, long assetVersion,
+            long scrap, LoanRepairPort.Context borrowing) {
+        var row = header(repair);
+        if (!matchesScrapHandoff(row, version, asset, assetVersion, current.id())
+                || !java.util.Objects.equals(loans.open(asset), borrowing)) {
+            throw new RepairFailure(409, "REPAIR_SCRAP_SOURCE_CHANGED");
+        }
+        finishFromScrap(actor, current, row, version, assetVersion, scrap);
+    }
+
+    private void finishFromScrap(Actor actor, Current current, Map<String, Object> row, long version,
+            long assetVersion, long scrap) {
+        long repair = number(row, "id");
+        db.update("UPDATE fams_repair_request SET repair_status='COMPLETED',completed_at=?,asset_version=?,"
+                + "version=version+1,updated_at=? WHERE id=?", now(), assetVersion + 1, now(), repair);
+        var origin = returnOrigin(repair);
+        if (origin != null) {
+            returned.progress(number(origin, "followup_id"), repair, "COMPLETED", null);
+        }
+        closeCollaborations(repair);
+        closeTodos(repair);
+        audit(actor, current, row, "REPAIR_CLOSED_BY_SCRAP", version, version + 1,
+                Map.of("scrapId", Long.toString(scrap)), Role.WAREHOUSE_OPERATOR.name());
+    }
+
+    private boolean matchesScrapHandoff(Map<String, Object> row, long version, long asset, long assetVersion, long processor) {
+        return "WAREHOUSE_PROCESSING".equals(row.get("repair_status")) && number(row, "version") == version
+                && number(row, "asset_id") == asset && number(row, "asset_version") == assetVersion
+                && java.util.Objects.equals(row.get("processor_account_id"), processor);
+    }
+
+    private void transferScrapLock(long asset, long repair, long scrap, long lockVersion, boolean toScrap) {
+        long from = toScrap ? repair : scrap, to = toScrap ? scrap : repair;
+        if (db.update("UPDATE fams_asset_business_lock SET business_type=?,business_id=?,business_item_id=?,lock_version=lock_version+1"
+                + " WHERE asset_id=? AND business_type=? AND business_id=? AND business_item_id=?"
+                + " AND lock_version=? AND released_at IS NULL", toScrap ? "SCRAP" : "REPAIR", to, to, asset,
+                toScrap ? "REPAIR" : "SCRAP", from, from, lockVersion) != 1) {
+            throw new RepairFailure(409, "REPAIR_SCRAP_LOCK_CHANGED");
+        }
     }
 
     public Map<String, Object> physicalCatalog(Actor actor, String kind, int page, int size) {

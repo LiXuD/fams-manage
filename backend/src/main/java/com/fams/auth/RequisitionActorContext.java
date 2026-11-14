@@ -81,15 +81,20 @@ public final class RequisitionActorContext {
     }
 
     public Current revalidateLocked(Actor actor) {
-        return revalidateBusinessIdentity(actor, false);
+        return revalidateBusinessIdentity(actor, false, false);
     }
 
     /** Repair invitation owners must separately authorize the participant and minimal fields. */
     public Current revalidateRepairParticipantLocked(Actor actor) {
-        return revalidateBusinessIdentity(actor, true);
+        return revalidateBusinessIdentity(actor, true, false);
     }
 
-    private Current revalidateBusinessIdentity(Actor actor, boolean repairParticipant) {
+    /** The caller must enforce the current audit organization grant on every record. */
+    public Current revalidateScrapReaderLocked(Actor actor) {
+        return revalidateBusinessIdentity(actor, false, true);
+    }
+
+    private Current revalidateBusinessIdentity(Actor actor, boolean repairParticipant, boolean scrapReader) {
         if (db.queryForList("SELECT id FROM fams_system_account WHERE id=? FOR UPDATE", actor.id())
                 .isEmpty()) {
             throw AuthOperationException.sessionInvalid();
@@ -114,6 +119,7 @@ public final class RequisitionActorContext {
                         role ->
                                 role == Role.EMPLOYEE
                                         || repairParticipant && role == Role.TECH_ASSISTANT
+                                        || scrapReader && role == Role.AUDIT_READ_ONLY
                                         || role == Role.DEPARTMENT_ASSET_MANAGER
                                         || role == Role.ASSET_ADMIN
                                         || role == Role.WAREHOUSE_OPERATOR)) {

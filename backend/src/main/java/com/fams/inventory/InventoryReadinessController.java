@@ -63,6 +63,17 @@ class InventoryReadinessController {
         return readiness.record(actors.capture(), task, item, version, key, input);
     }
 
+    @PostMapping("/tasks/{task}/items/{item}/missing/{reason}/loss")
+    Map<String, Object> reportMissing(
+            @PathVariable @Positive long task,
+            @PathVariable @Positive long item,
+            @PathVariable @Positive long reason,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @Valid @RequestBody InventoryReadinessService.MissingLossInput input) {
+        return readiness.reportMissing(actors.capture(), task, item, reason, version, key, input);
+    }
+
     @PostMapping("/tasks/{task}/waiting-review")
     Map<String, Object> waiting(
             @PathVariable @Positive long task,

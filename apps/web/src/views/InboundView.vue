@@ -160,6 +160,7 @@ onMounted(load);
     </section>
     <section v-if="selected" class="asset-panel" aria-label="入库单详情">
       <h2>{{ selected.receiptNumber }} · {{ selected.status }}</h2>
+      <p v-if="selected.factoryReplacement">换机来源入库 · 原机资产 {{ selected.factoryReplacement.originalAssetId }} · 返厂轮次 {{ selected.factoryReplacement.roundId }}。新机独立验收入库；旧机责任及原机实际收回另行办理。</p>
       <p v-if="selected.currentProcessor">当前处理人：{{ selected.currentProcessor.processor.username }}</p>
       <p v-if="selected.decision">管理员决定：{{ selected.decision.result }}</p>
       <div class="asset-actions">

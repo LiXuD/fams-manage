@@ -30,7 +30,12 @@ class AssetReturnController {
     record Decision(@NotNull Boolean approved, @NotBlank @Size(max = 1000) String reason) {}
     record Inspection(@NotBlank String result, @Size(max = 256) String observedCode,
             @NotBlank @Size(max = 1000) String reason, Long warehouseId, Long warehouseVersion,
-            Long locationId, Long locationVersion, @Min(0) long assetVersion, @Min(0) long lockVersion) {}
+            Long locationId, Long locationVersion, @Min(0) long assetVersion, @Min(0) long lockVersion,
+            @Valid @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+            MissingLoss missingLoss) {}
+    record MissingLoss(@NotNull java.time.Instant lastSeenAt, @NotBlank @Size(max = 500) String lastLocation,
+            @NotBlank @Size(min = 10, max = 2000) String circumstances) {}
+    record MissingRetry(@Min(0) long assetVersion, @Min(0) long lockVersion, @NotNull @Valid MissingLoss facts) {}
 
     private final AssetReturnService service;
     private final RequisitionActorContext actors;
@@ -38,6 +43,13 @@ class AssetReturnController {
     AssetReturnController(AssetReturnService service, RequisitionActorContext actors) {
         this.service = service;
         this.actors = actors;
+    }
+
+    @PostMapping("/{id}/missing-loss")
+    Map<String, Object> retryMissingLoss(@PathVariable long id,
+            @RequestHeader("If-Match-Version") @Min(0) long version,
+            @RequestHeader("Idempotency-Key") String key, @Valid @RequestBody MissingRetry input) {
+        return service.retryMissingLoss(actors.capture(), id, version, key, input);
     }
 
     @GetMapping
@@ -74,6 +86,14 @@ class AssetReturnController {
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
             @Valid @RequestBody Decision input) {
         return service.decide(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/{id}/resubmit-loss")
+    Map<String, Object> resubmitLoss(@PathVariable long id,
+            @RequestHeader("If-Match-Version") @Min(0) long version,
+            @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
+            @Valid @RequestBody Decision input) {
+        return service.resubmitLossRecovery(actors.capture(), id, version, key, input.reason());
     }
 
     @PostMapping("/{id}/claim")

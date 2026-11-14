@@ -219,6 +219,58 @@ class AssetImportPreflightTest {
         assertEquals("REFERENCE_NAME_AMBIGUOUS", ambiguous.errors().getFirst().reason());
     }
 
+    @Test
+    void pendingScrapOpeningRequiresLawfulPreScrapStateAndFullScrapFacts() {
+        var columns = new java.util.ArrayList<>(COLUMNS);
+        columns.add("借出日期");
+        columns.add("预计归还日");
+        columns.add("报废前状态");
+        columns.add("报废原因");
+        columns.add("报废前现状");
+        columns.add("建议处置方式");
+        var values = new HashMap<>(row(2, "A-1", "CAT-1", "LOC-1", "待报废").values());
+        values.put("报废前状态", "在库");
+        values.put("报废原因", "上线前已确认无法修复");
+        values.put("报废前现状", "实物已放置在待报废区");
+        values.put("建议处置方式", "待处置保管");
+        var result = AssetImportPreflight.check(new AssetImportWorkbook.Parsed(columns,
+                List.of(new AssetImportWorkbook.DataRow(2, values)), List.of()), Map.of(), catalog());
+        assertTrue(result.errors().isEmpty(), result.errors().toString());
+        var ready = result.ready().getFirst();
+        assertEquals("待报废", ready.state());
+        assertEquals("在库", ready.preScrapState());
+        assertEquals(1L, ready.warehouseId());
+        assertEquals("待处置保管", ready.proposedDisposition());
+        values.put("报废前状态", "借出");
+        var wrongOpening = AssetImportPreflight.check(new AssetImportWorkbook.Parsed(columns,
+                List.of(new AssetImportWorkbook.DataRow(2, values)), List.of()), Map.of(), catalog());
+        assertTrue(wrongOpening.ready().isEmpty());
+        assertEquals("UNSUPPORTED_PRE_SCRAP_STATE", wrongOpening.errors().getFirst().reason());
+        values.put("报废前状态", "在用个人");
+        var usage = AssetImportPreflight.check(new AssetImportWorkbook.Parsed(columns,
+                List.of(new AssetImportWorkbook.DataRow(2, values)), List.of()), Map.of(), catalog());
+        assertTrue(usage.errors().stream().anyMatch(e -> e.column().equals("使用组织编码")
+                && e.reason().equals("REQUIRED")), usage.errors().toString());
+        values.put("报废前状态", "在库");
+        values.put("报废原因", "上".repeat(2001));
+        assertEquals("FIELD_TOO_LONG", AssetImportPreflight.check(new AssetImportWorkbook.Parsed(columns,
+                List.of(new AssetImportWorkbook.DataRow(2, values)), List.of()), Map.of(), catalog())
+                .errors().getFirst().reason());
+        values.put("报废原因", "");
+        var missing = AssetImportPreflight.check(new AssetImportWorkbook.Parsed(columns,
+                List.of(new AssetImportWorkbook.DataRow(2, values)), List.of()), Map.of(), catalog());
+        assertEquals("REQUIRED", missing.errors().getFirst().reason());
+        assertEquals("报废原因", missing.errors().getFirst().column());
+        values.put("报废原因", "上线前已确认无法修复");
+        values.put("资产状态", "维修中");
+        var openingWithoutEvidence = AssetImportPreflight.check(
+                new AssetImportWorkbook.Parsed(columns, List.of(new AssetImportWorkbook.DataRow(2, values)),
+                        List.of()), Map.of(), catalog());
+        assertTrue(openingWithoutEvidence.ready().isEmpty());
+        assertEquals("REQUIRED", openingWithoutEvidence.errors().getFirst().reason());
+        assertEquals("维修前状态", openingWithoutEvidence.errors().getFirst().column());
+    }
+
     private AssetImportPreflight.Catalog catalog() {
         return new AssetImportPreflight.Catalog(
                 List.of(ref(1, "CAT-1", "办公", "ACTIVE", null),

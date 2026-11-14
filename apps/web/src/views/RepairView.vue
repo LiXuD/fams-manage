@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { RouterLink, useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import RepairCollaborationPanel from "./RepairCollaborationPanel.vue";
 import RepairPhysicalPanel from "./RepairPhysicalPanel.vue";
@@ -13,6 +13,11 @@ import RepairFactoryPanel from "./RepairFactoryPanel.vue";
 import { factoryEventNames, factoryRoundStates, factoryScopeStates } from "@/repair/factory-api";
 import { useSessionStore } from "@/auth/sessionStore";
 import { RepairApiError, repairProblem, repairRequest, repairStates, type Repair, type RepairAsset, type RepairMutation, type RepairPhoto } from "@/repair/api";
+import { ScrapApiError, scrapRequest, type ScrapIntent } from "@/scrap/api";
+import { LossApiError, lossRequest, type LossIntent } from "@/loss/api";
+type PageMutation = RepairMutation | ((ScrapIntent | LossIntent) & { repairSourceId: string; lossSource?: true });
+const lossLastSeen = ref(""), lossLocation = ref(""), lossCircumstances = ref("");
+const scrapReason = ref(""), scrapCondition = ref(""), scrapMethod = ref(""), scrapReceiptId = ref("");
 const session = useSessionStore(), route = useRoute();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, route.params.id]));
 const rows = ref<Repair[]>([]), total = ref(0), page = ref(1), detail = ref<Repair | null>(null);
@@ -23,7 +28,7 @@ const factoryCostPolicy = ref("NO_COST"), factoryCostLimit = ref("");
 const moneyPattern = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/;
 const observedCode = ref(""), evidence = ref(""), confirmedPlace = ref(false), neverLeft = ref(false);
 const selectedFile = ref<File | null>(null), preview = ref(""), previewName = ref("");
-const pending = ref<RepairMutation | null>(null), confirmation = ref<RepairMutation | null>(null);
+const pending = ref<PageMutation | null>(null), confirmation = ref<PageMutation | null>(null);
 const busy = ref(false), error = ref(""), notice = ref("");
 const collaborationLocked = ref(false);
 const physicalLocked = ref(false);
@@ -34,17 +39,20 @@ const sourceLocked = ref(false);
 const factoryLocked = ref(false);
 const locked = computed(() => busy.value || !!pending.value || !!confirmation.value || collaborationLocked.value || physicalLocked.value || returnLocked.value || targetChangeLocked.value || reassignmentLocked.value || sourceLocked.value || factoryLocked.value);
 const eventNames: Record<string, string> = { REPAIR_SUBMITTED: "已提交报修", REPAIR_DECIDED: "管理员已决定", REPAIR_CLAIMED: "库管已领取", REPAIR_CONTROLLED_REASSIGNMENT: "管理员已受控转派",
+  REPAIR_SCRAP_HANDED_OFF: "已移交关联报废", REPAIR_SCRAP_RETURNED: "报废驳回后继续维修", REPAIR_CLOSED_BY_SCRAP: "已执行报废并结束维修",
   REPAIR_ACCEPTED_IN_PLACE: "已受理原地维修", REPAIR_COMPLETED_IN_PLACE: "已核对原地恢复", REPAIR_CANCELLED: "已取消", REPAIR_FAULT_PHOTO_ADDED: "已补充故障照片", REPAIR_CONFLICT_REJECTED: "旧操作已拒绝",
   ...Object.fromEntries(Object.entries(factoryEventNames).map(([action, label]) => [`REPAIR_${action}`, label])) };
 let generation = 0, live = true, download: AbortController | null = null;
 const current = (epoch: number, owner: string) => live && generation === epoch && identity.value === owner;
 function clearPhoto() { download?.abort(); download = null; if (preview.value) URL.revokeObjectURL(preview.value); preview.value = ""; previewName.value = ""; }
 function reset() {
+  scrapReason.value = ""; scrapCondition.value = ""; scrapMethod.value = ""; scrapReceiptId.value = "";
   generation++; clearPhoto(); rows.value = []; assets.value = []; detail.value = null; pending.value = null; confirmation.value = null; selectedFile.value = null;
   fault.value = ""; reason.value = ""; approvalMethod.value = "INTERNAL_NO_COST"; factoryCostPolicy.value = "NO_COST"; factoryCostLimit.value = ""; evidence.value = ""; observedCode.value = ""; assetId.value = ""; occurredAt.value = ""; neverLeft.value = false; confirmedPlace.value = false;
   busy.value = false; factoryLocked.value = false; total.value = 0; assetTotal.value = 0; page.value = 1; assetPage.value = 1;
 }
 function failure(cause: unknown) {
+  if (cause instanceof ScrapApiError || cause instanceof LossApiError) cause = new RepairApiError(cause.status, cause.code, {});
   if (cause instanceof RepairApiError && [401, 403, 404].includes(cause.status)) reset();
   error.value = repairProblem(cause);
 }
@@ -62,6 +70,7 @@ async function load() {
 async function open(row: Repair) {
   if (locked.value) return;
   const epoch = ++generation, owner = identity.value; busy.value = true; error.value = ""; clearPhoto(); detail.value = null;
+  scrapReason.value = ""; scrapCondition.value = ""; scrapMethod.value = ""; scrapReceiptId.value = "";
   selectedFile.value = null; reason.value = ""; approvalMethod.value = "INTERNAL_NO_COST"; factoryCostPolicy.value = "NO_COST"; factoryCostLimit.value = ""; observedCode.value = ""; evidence.value = ""; confirmedPlace.value = false; neverLeft.value = false;
   try { const result = await repairRequest<Repair>(`/${row.id}`); if (current(epoch, owner)) detail.value = result; }
   catch (cause) { if (current(epoch, owner)) failure(cause); }
@@ -111,19 +120,52 @@ function prepare(action: "submit" | "approve" | "reject" | "cancel" | "claim" | 
   }
   confirmation.value = { path, key: crypto.randomUUID(), version: action === "submit" ? 0 : selected!.version, body, file };
 }
+function prepareScrap() {
+  const row = detail.value;
+  if (locked.value || !row?.actions?.requestScrap || row.lockVersion == null) return;
+  if (!scrapReason.value.trim() || !scrapCondition.value.trim() || !scrapMethod.value.trim()) {
+    error.value = "请填写关联报废原因、现状和建议处置方式。"; return;
+  }
+  error.value = "";
+  confirmation.value = Object.freeze({ path: "/from-repair/" + row.id, repairSourceId: row.id,
+    key: crypto.randomUUID(), version: row.version, summary: "提交关联报废，原维修处理权和实物事实继续保留。报废批准后由原处理库管执行。",
+    body: Object.freeze({ assetVersion: row.assetVersion, ownershipVersion: row.ownershipVersion, lockVersion: row.lockVersion,
+      reason: scrapReason.value.trim(), observedCondition: scrapCondition.value.trim(), proposedDisposition: scrapMethod.value.trim() }),
+  });
+}
+watch(() => detail.value?.id, () => {
+  lossLastSeen.value = ""; lossLocation.value = ""; lossCircumstances.value = "";
+});
+function prepareLoss() {
+  const row = detail.value;
+  if (locked.value || !row?.actions?.requestLoss || row.lockVersion == null) return;
+  const at = new Date(lossLastSeen.value);
+  if (!Number.isFinite(at.getTime()) || !lossLocation.value.trim() || lossCircumstances.value.trim().length < 10) {
+    error.value = "请填写最后见到时间、地点和实物查找情况。"; return;
+  }
+  confirmation.value = { path: "/internal-repairs/" + row.id, repairSourceId: row.id, lossSource: true,
+    key: crypto.randomUUID(), version: row.version, summary: "提交关联报失审批并移交原维修锁，保留经办人、借用和返还目标。",
+    body: { assetVersion: row.assetVersion, ownershipVersion: row.ownershipVersion, lockVersion: row.lockVersion,
+      lastSeenAt: at.toISOString(), lastLocation: lossLocation.value.trim(), circumstances: lossCircumstances.value.trim() } };
+}
 async function perform() {
   if (busy.value || !pending.value) return;
   const operation = pending.value, epoch = ++generation, owner = identity.value; busy.value = true; error.value = "";
   try {
-    const result = await repairRequest<Repair & { repairId?: string }>(operation.path, operation);
-    const id = result.repairId ?? result.id;
+    const linked = "repairSourceId" in operation;
+    const linkedLoss = linked && operation.lossSource;
+    const result = linkedLoss ? await lossRequest<{ id: string; repairId?: string }>(operation.path, operation as LossIntent)
+      : linked ? await scrapRequest<{ id: string; repairId?: string }>(operation.path, operation as ScrapIntent)
+      : await repairRequest<Repair & { repairId?: string }>(operation.path, operation);
+    const id = linked ? operation.repairSourceId : result.repairId ?? result.id;
     const selected = await repairRequest<Repair>(`/${id}`);
     const list = await repairRequest<{ items: Repair[]; total: number }>(`?page=${page.value}&pageSize=20`);
     if (current(epoch, owner)) { pending.value = null; detail.value = selected; rows.value = list.items; total.value = list.total;
       selectedFile.value = null; confirmedPlace.value = false; neverLeft.value = false; evidence.value = ""; observedCode.value = "";
-      notice.value = "本次结果已保存。批准、库管受理和实际修复分别留痕。"; clearPhoto(); }
+      if (linked && !linkedLoss) { scrapReceiptId.value = result.id; scrapReason.value = ""; scrapCondition.value = ""; scrapMethod.value = ""; }
+      notice.value = linkedLoss ? "关联报失申请已保存。" : linked ? "关联报废申请已保存。" : "本次结果已保存。批准、库管受理和实际修复分别留痕。"; clearPhoto(); }
   } catch (cause) {
-    if (current(epoch, owner)) { if (cause instanceof RepairApiError && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
+    if (current(epoch, owner)) { if ((cause instanceof RepairApiError || cause instanceof ScrapApiError || cause instanceof LossApiError) && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
   } finally { if (current(epoch, owner)) busy.value = false; }
 }
 async function confirm() { if (!confirmation.value || busy.value) return; pending.value = confirmation.value; confirmation.value = null; await perform(); }
@@ -151,7 +193,7 @@ onBeforeUnmount(() => { live = false; reset(); });
   <AppChrome><section aria-label="报修与维修" class="repair-page"><h1>报修与维修</h1><p>为本人责任资产或本部门公用资产报修。管理员批准处理范围后，由唯一处理库管核实实物并办理。</p>
     <p v-if="error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p><button :disabled="busy || !!confirmation || factoryLocked" @click="load">刷新并核对当前结果</button>
     <button v-if="pending" :disabled="busy" @click="perform">重试原报修操作</button>
-    <section v-if="confirmation" aria-label="确认本次报修办理"><p>请核对本次资产、实际依据及处理范围。批准不会自动领取，原地关闭须确认已恢复且实物从未离开原保管人。</p><p v-if="(confirmation.body as Record<string, unknown> | undefined)?.allowedMethod === 'INTERNAL_OR_FACTORY'">返厂费用范围：{{ (confirmation.body as Record<string, unknown>).factoryCostPolicy === 'UNLIMITED' ? '不限费用' : (confirmation.body as Record<string, unknown>).factoryCostPolicy === 'LIMITED' ? '所有轮次累计限额 ' + (confirmation.body as Record<string, unknown>).factoryCostLimit + ' 元' : '无费用' }}</p><button :disabled="busy" @click="confirm">确认保存本次办理</button><button :disabled="busy" @click="confirmation = null">返回修改</button></section>
+    <section v-if="confirmation" aria-label="确认本次报修办理"><p v-if="'repairSourceId' in confirmation">{{ confirmation.summary }}</p><p v-else>请核对本次资产、实际依据及处理范围。批准不会自动领取，原地关闭须确认已恢复且实物从未离开原保管人。</p><p v-if="(confirmation.body as Record<string, unknown> | undefined)?.allowedMethod === 'INTERNAL_OR_FACTORY'">返厂费用范围：{{ (confirmation.body as Record<string, unknown>).factoryCostPolicy === 'UNLIMITED' ? '不限费用' : (confirmation.body as Record<string, unknown>).factoryCostPolicy === 'LIMITED' ? '所有轮次累计限额 ' + (confirmation.body as Record<string, unknown>).factoryCostLimit + ' 元' : '无费用' }}</p><button :disabled="busy" @click="confirm">确认保存本次办理</button><button :disabled="busy" @click="confirmation = null">返回修改</button></section>
     <RepairReturnSourcePanel v-if="session.user?.roles.includes('ASSET_ADMIN') && !detail" :blocked="busy || !!pending || !!confirmation || factoryLocked" @created="detail=$event;load()" @busy-change="sourceLocked=$event" />
     <section><h2>提交报修</h2><button :disabled="locked" @click="loadAssets()">查找可报修资产</button>
       <label v-for="asset in assets" :key="asset.id"><input v-model="assetId" type="radio" :value="asset.id" :disabled="locked">{{ asset.assetCode }} · {{ asset.name }} · {{ asset.locationName || '位置待核实' }}</label>
@@ -162,6 +204,7 @@ onBeforeUnmount(() => { live = false; reset(); });
       <button :disabled="locked || page === 1" @click="paginate(-1)">上一页报修</button>第 {{ page }} 页 / 共 {{ total }} 条<button :disabled="locked || page * 20 >= total" @click="paginate(1)">下一页报修</button>
     </section>
     <section v-if="detail" aria-label="当前报修详情"><h2>{{ detail.source.assetCode }} · {{ detail.source.name }}</h2><p>{{ repairStates[detail.status] }} · {{ detail.fault }} · 实际发生 {{ new Date(detail.occurredAt).toLocaleString() }}</p>
+      <p v-if="detail.source.initialSource">期初承接 {{detail.source.initialSource.batchId}} · 第 {{detail.source.initialSource.sheetRow}} 行 · {{detail.source.initialSource.stage}}。{{detail.source.initialSource.evidence}}<template v-if="detail.source.initialSource.factoryDestination"> · 厂家去向 {{detail.source.initialSource.factoryDestination}}</template></p>
       <p v-if="detail.returnOrigin">来自损坏归还 {{ detail.returnOrigin.returnId }}，源后续 {{ detail.returnOrigin.followupId }}；原借用 {{ detail.returnOrigin.closedLoanId || '无' }} 已关闭，实际接修和验收入库后才结束源义务。</p>
       <p>提交时位置：{{ detail.source.locationName || '待核实' }}。原责任与借用作为返回依据保留；实物离开过或原目标失效时，不能直接原地恢复。</p>
       <section><h3>原始故障照片</h3><p v-if="!detail.photosAvailable">照片服务暂不可用，请联系管理员。</p><ul><li v-for="photo in detail.photos" :key="photo.objectId">{{ photo.filename }}<button :disabled="locked || photo.scanStatus !== 'CLEAN'" @click="readPhoto(photo)">读取故障照片 {{ photo.filename }}</button></li></ul>
@@ -169,10 +212,26 @@ onBeforeUnmount(() => { live = false; reset(); });
         <figure v-if="preview"><img :src="preview" :alt="`故障照片：${previewName}`"><figcaption>{{ previewName }}</figcaption><button @click="clearPhoto">关闭故障照片</button></figure>
       </section>
       <fieldset v-if="detail.actions?.approve || detail.actions?.cancel" :disabled="locked"><label>本次决定原因<textarea v-model="reason" maxlength="1000" /></label><template v-if="detail.actions.approve"><label>本次批准处理方式<select v-model="approvalMethod" aria-label="本次批准处理方式"><option value="INTERNAL_NO_COST">仅内部无费用处理</option><option value="INTERNAL_OR_FACTORY">内部或必要时返厂</option></select></label><template v-if="approvalMethod === 'INTERNAL_OR_FACTORY'"><label>本维修所有返厂轮次费用约束<select v-model="factoryCostPolicy" aria-label="本次返厂费用约束"><option value="NO_COST">无费用</option><option value="LIMITED">所有轮次累计限额</option><option value="UNLIMITED">不限费用</option></select></label><label v-if="factoryCostPolicy === 'LIMITED'">所有轮次累计正限额（元）<input v-model="factoryCostLimit" inputmode="decimal" maxlength="15"></label></template><p>一次批准所选范围及明确费用约束。批准不等于已领取、接修或寄出。</p><button @click="prepare('approve')">{{ approvalMethod === 'INTERNAL_OR_FACTORY' ? '批准内部或必要时返厂' : '批准内部无费用处理' }}</button><button @click="prepare('reject')">驳回无效报修</button></template><button v-if="detail.actions.cancel" @click="prepare('cancel')">取消尚未批准的报修</button></fieldset>
+      <RouterLink v-if="detail.latestLossReportId" :to="'/loss-reports/' + detail.latestLossReportId">查看维修关联报失</RouterLink>
+      <fieldset v-if="detail.actions?.requestLoss" :disabled="locked">
+        <legend>内部维修实物缺失</legend>
+        <label>最后见到时间<input v-model="lossLastSeen" type="datetime-local" /></label>
+        <label>最后见到地点<input v-model="lossLocation" maxlength="500" /></label>
+        <label>实物查找情况<textarea v-model="lossCircumstances" maxlength="2000" /></label>
+        <button @click="prepareLoss">核对维修关联报失</button>
+      </fieldset>
+      <RouterLink v-if="scrapReceiptId" :to="'/scrap-requests/' + scrapReceiptId">查看维修关联报废</RouterLink>
+      <fieldset v-if="detail.actions?.requestScrap" :disabled="locked">
+        <legend>从维修发起关联报废</legend>
+        <label>维修关联报废原因<textarea v-model="scrapReason" maxlength="2000"/></label>
+        <label>报废实物现状<textarea v-model="scrapCondition" maxlength="2000"/></label>
+        <label>建议报废处置方式<input v-model="scrapMethod" maxlength="500"/></label>
+        <button @click="prepareScrap">核对维修关联报废</button>
+      </fieldset>
       <button v-if="detail.actions?.claim" :disabled="locked" @click="prepare('claim')">领取维修处理</button>
       <fieldset v-if="detail.actions?.acceptInPlace || detail.actions?.completeInPlace" :disabled="locked"><h3>{{ detail.actions.completeInPlace ? '核对已恢复并原地关闭' : '现场核实并受理原地维修' }}</h3><label>现场核对的资产编码<input v-model="observedCode" maxlength="2048"></label><label><input v-model="confirmedPlace" type="checkbox">已现场核对实物仍在 {{ detail.source.locationName || '原位置' }}</label><label><input v-model="neverLeft" type="checkbox">实物从未离开原保管人，本次按原地处理核实</label><label>实际处理及核实依据<textarea v-model="evidence" maxlength="2000" /></label><button v-if="detail.actions.acceptInPlace" @click="prepare('accept')">核对受理原地维修</button><button v-if="detail.actions.completeInPlace" @click="prepare('complete')">确认已恢复并原地关闭</button></fieldset>
       <section v-if="detail.inventoryEvidence?.length" aria-label="原始盘点损坏证据"><h3>原始盘点损坏证据</h3><p>保留原始事件照片；损坏核实和发现时间以盘点复核记录为准。</p><div v-for="origin in detail.inventoryEvidence" :key="origin.observationId"><p>盘点 {{ origin.taskId }} · 原始证据 {{ origin.observationId }}</p><RepairInventoryPhoto v-for="photo in origin.photoIds" :key="`${detail.id}:${detail.version}:${origin.observationId}:${photo}`" :repair-id="detail.id" :observation-id="origin.observationId" :object-id="photo" :blocked="locked" @invalidated="reset" /></div></section>
-      <section v-if="detail.factorySummary" aria-label="返厂进度摘要"><h3>返厂进度</h3><p v-if="detail.factorySummary.scope">范围：{{ factoryScopeStates[detail.factorySummary.scope.scopeStatus] }}</p><p>实际寄出 {{ detail.factorySummary.actualDispatchCount }} 次</p><p v-if="detail.factorySummary.round">第 {{ detail.factorySummary.round.roundNumber }} 轮 · {{ factoryRoundStates[detail.factorySummary.round.roundStatus] }} · 预计收回 {{ detail.factorySummary.round.expectedReturnDate }}<span v-if="detail.factorySummary.round.dispatchedAt"> · 实际寄出 {{ new Date(detail.factorySummary.round.dispatchedAt).toLocaleString() }}</span><span v-if="detail.factorySummary.round.receivedAt"> · 实际收回 {{ new Date(detail.factorySummary.round.receivedAt).toLocaleString() }}</span></p></section>
+      <section v-if="detail.factorySummary" aria-label="返厂进度摘要"><h3>返厂进度</h3><p v-if="detail.factorySummary.scope">范围：{{ factoryScopeStates[detail.factorySummary.scope.scopeStatus] }}</p><p>实际寄出 {{ detail.factorySummary.actualDispatchCount }} 次</p><p v-if="detail.factorySummary.round">第 {{ detail.factorySummary.round.roundNumber }} 轮 · {{ factoryRoundStates[detail.factorySummary.round.roundStatus] ?? detail.factorySummary.round.roundStatus }} · 预计收回 {{ detail.factorySummary.round.expectedReturnDate }}<span v-if="detail.factorySummary.round.dispatchedAt"> · 实际寄出 {{ new Date(detail.factorySummary.round.dispatchedAt).toLocaleString() }}</span><span v-if="detail.factorySummary.round.receivedAt"> · 实际收回 {{ new Date(detail.factorySummary.round.receivedAt).toLocaleString() }}</span></p></section>
       <RepairFactoryPanel v-if="session.user?.roles.includes('ASSET_ADMIN') || session.user?.roles.includes('WAREHOUSE_OPERATOR') && detail.processorAccountId === session.user.id" :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || physicalLocked || returnLocked || targetChangeLocked || reassignmentLocked || sourceLocked" @changed="load" @invalidated="reset" @busy-change="factoryLocked=$event" />
       <RepairReassignmentPanel :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || physicalLocked || returnLocked || targetChangeLocked || factoryLocked" @changed="load" @invalidated="reset" @busy-change="reassignmentLocked = $event" />
       <RepairPhysicalPanel :repair="detail" :blocked="busy || !!pending || !!confirmation || collaborationLocked || returnLocked || targetChangeLocked || reassignmentLocked || factoryLocked" @changed="load" @invalidated="reset" @busy-change="physicalLocked = $event" />

@@ -1,0 +1,388 @@
+package com.fams.scrap;
+
+import com.fams.asset.AssetHandoverPort;
+import com.fams.asset.AssetScrapPort;
+import com.fams.auth.RequisitionActorContext;
+import com.fams.auth.RequisitionActorContext.Actor;
+import com.fams.auth.RequisitionActorContext.Current;
+import com.fams.auth.Role;
+
+import org.springframework.context.annotation.Profile;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import tools.jackson.databind.ObjectMapper;
+
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+
+@Service
+@Profile("fams-product")
+@Transactional
+public class ScrapReadService {
+    private static final String SCOPE = " FROM fams_scrap_request r JOIN fams_asset a ON a.id=r.asset_id"
+            + " WHERE (? OR r.creator_account_id=?"
+            + " OR (? AND EXISTS (SELECT 1 FROM fams_account_authorization aa"
+            + " JOIN fams_account_data_scope ds ON ds.authorization_id=aa.id"
+            + " JOIN fams_account_scope_organization os ON os.data_scope_id=ds.id"
+            + " WHERE aa.account_id=? AND aa.role_code='AUDIT_READ_ONLY' AND aa.superseded_at IS NULL"
+            + " AND aa.authorization_status='ACTIVE' AND ds.scope_type='SPECIFIED_ORGANIZATIONS'"
+            + " AND CAST(os.organization_id AS CHAR)=COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(r.source_snapshot_json,'$.using_organization_id')),"
+            + " 'null'),CAST(a.owning_organization_id AS CHAR))))"
+            + " OR (? AND CAST(JSON_UNQUOTE(JSON_EXTRACT(r.source_snapshot_json,'$.responsible_employee_id')) AS UNSIGNED)=?)"
+            + " OR (? AND CAST(JSON_UNQUOTE(JSON_EXTRACT(r.source_snapshot_json,'$.using_organization_id')) AS UNSIGNED)=?)"
+            + " OR (? AND (JSON_UNQUOTE(JSON_EXTRACT(r.decision_snapshot_json,'$.decision.result'))='APPROVE'"
+            + " OR EXISTS (SELECT 1 FROM fams_scrap_correction c WHERE c.request_id=r.id"
+            + " AND (c.correction_status='WAITING_WAREHOUSE_CLAIM'"
+            + " OR (c.processor_account_id=? AND c.correction_status IN ('PROCESSING','COMPLETED')))))))";
+    private final JdbcTemplate db;
+    private final ObjectMapper json;
+    private final RequisitionActorContext actors;
+    private final AssetScrapPort assets;
+    private final Clock clock;
+
+    public ScrapReadService(JdbcTemplate db, ObjectMapper json, RequisitionActorContext actors,
+            AssetScrapPort assets, Clock clock) {
+        this.db = db;
+        this.json = json;
+        this.actors = actors;
+        this.assets = assets;
+        this.clock = clock;
+    }
+
+    public Map<String, Object> eligible(Actor actor, int page, int size) {
+        return assets.eligible(actors.revalidateLocked(actor), page, size);
+    }
+
+    public Map<String, Object> list(Actor actor, int page, int size) {
+        var current = actors.revalidateScrapReaderLocked(actor);
+        Object[] scope = scope(current);
+        var args = new ArrayList<Object>(Arrays.asList(scope));
+        args.add(size);
+        args.add(((long) page - 1) * size);
+        return Map.of("items", db.queryForList("SELECT r.*" + SCOPE
+                        + " ORDER BY r.id DESC LIMIT ? OFFSET ?", args.toArray()).stream()
+                        .map(row -> view(current, row)).toList(),
+                "total", Objects.requireNonNull(db.queryForObject("SELECT COUNT(*)" + SCOPE, Long.class, scope)),
+                "page", page, "pageSize", size, "canListOverdueDispositions", canListOverdue(current));
+    }
+
+    public Map<String, Object> overdueDispositions(Actor actor, int page, int size) {
+        var current = actors.revalidateLocked(actor);
+        if (!canListOverdue(current)) {
+            throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_FOLLOW_UP_FORBIDDEN", 403);
+        }
+        String settings = db.queryForObject("SELECT v.snapshot_json FROM fams_business_parameter_state s"
+                + " JOIN fams_business_parameter_version v ON v.id=s.current_version_id"
+                + " WHERE s.singleton_id=1 AND v.status='ACTIVE'", String.class);
+        LocalDate today = LocalDate.now(clock.withZone(ZoneId.of(json.readTree(settings).path("timezone").asText())));
+        String where = " FROM fams_scrap_disposition d JOIN fams_scrap_request r ON r.id=d.request_id"
+                + " WHERE d.disposition_status='PENDING_DISPOSITION' AND r.request_status='EXECUTED'"
+                + " AND d.due_date<? AND (? OR d.processor_account_id=?)";
+        boolean administrator = current.has(Role.ASSET_ADMIN);
+        var items = db.queryForList("SELECT r.*" + where + " ORDER BY d.due_date,d.request_id LIMIT ? OFFSET ?",
+                today, administrator, current.id(), size, ((long) page - 1) * size).stream()
+                .map(row -> view(current, row)).toList();
+        return Map.of("items", items, "total", Objects.requireNonNull(db.queryForObject("SELECT COUNT(*)" + where,
+                        Long.class, today, administrator, current.id())),
+                "page", page, "pageSize", size, "businessDate", today, "canListOverdueDispositions", true);
+    }
+
+    private static boolean canListOverdue(Current current) {
+        return current.has(Role.ASSET_ADMIN) || current.has(Role.WAREHOUSE_OPERATOR);
+    }
+
+    public Map<String, Object> get(Actor actor, long id) {
+        var current = actors.revalidateScrapReaderLocked(actor);
+        var row = visible(current, id);
+        var result = view(current, row);
+        result.put("history", db.queryForList("SELECT id,action,actor_username,occurred_at"
+                + " FROM fams_scrap_event WHERE request_id=? ORDER BY id DESC LIMIT 100", id));
+        return result;
+    }
+
+    public Map<String, Object> catalog(Actor actor, long id, String kind, int page, int size) {
+        var current = actors.revalidateLocked(actor);
+        var row = visible(current, id);
+        boolean processing = "PROCESSING".equals(row.get("request_status"))
+                && Objects.equals(row.get("processor_account_id"), current.id());
+        boolean disposing = "employee".equals(kind) && "EXECUTED".equals(row.get("request_status"))
+                && !db.queryForList("SELECT request_id FROM fams_scrap_disposition WHERE request_id=?"
+                        + " AND processor_account_id=? AND disposition_status='PENDING_DISPOSITION'", id, current.id()).isEmpty();
+        boolean correctionTarget = "bin".equals(kind) && current.has(Role.ASSET_ADMIN)
+                && "RESTORE_REQUIRED".equals(row.get("request_status")) && "STANDALONE".equals(row.get("source_type"))
+                && db.queryForList("SELECT id FROM fams_scrap_correction WHERE request_id=?"
+                        + " AND active_guard=1", id).isEmpty();
+        boolean reversalTarget = "bin".equals(kind) && mayRequestReversal(current, row)
+                && db.queryForList("SELECT id FROM fams_scrap_reversal WHERE request_id=?"
+                        + " AND active_guard=1", id).isEmpty()
+                && !db.queryForList("SELECT request_id FROM fams_scrap_disposition WHERE request_id=?"
+                        + " AND disposition_status='PENDING_DISPOSITION'", id).isEmpty();
+        boolean recoveryTarget = ("bin".equals(kind) || "location".equals(kind) || "employee".equals(kind))
+                && mayRequestRecovery(current, row)
+                && db.queryForList("SELECT id FROM fams_scrap_recovery WHERE request_id=?"
+                        + " AND (active_guard=1 OR recovery_status='COMPLETED')", id).isEmpty()
+                && !db.queryForList("SELECT request_id FROM fams_scrap_disposition WHERE request_id=?"
+                        + " AND disposition_status='LOSS_WRITTEN_OFF'", id).isEmpty();
+        if (!correctionTarget && !reversalTarget && !recoveryTarget
+                && (!current.has(Role.WAREHOUSE_OPERATOR) || !(processing || disposing))) {
+            throw new AssetHandoverPort.Failure("SCRAP_PROCESSOR_REQUIRED", 403);
+        }
+        String from = switch (kind) {
+            case "location" -> " FROM fams_location a LEFT JOIN fams_warehouse p ON p.id=a.warehouse_id"
+                    + " WHERE a.status='ACTIVE' AND (a.warehouse_id IS NULL OR p.status='ACTIVE')";
+            case "bin" -> " FROM fams_location a JOIN fams_warehouse p ON p.id=a.warehouse_id"
+                    + " WHERE a.status='ACTIVE' AND a.location_type='BIN' AND p.status='ACTIVE'";
+            case "employee" -> " FROM fams_employee a JOIN fams_organization p ON p.id=a.organization_id"
+                    + " WHERE a.status='ACTIVE' AND p.status='ACTIVE'";
+            default -> throw new AssetHandoverPort.Failure("SCRAP_CATALOG_INVALID", 400);
+        };
+        var rows = db.queryForList("SELECT a.id,a.name,a.version" + from + " ORDER BY a.id LIMIT ? OFFSET ?",
+                size, ((long) page - 1) * size).stream().map(item -> Map.of(
+                        "id", item.get("id").toString(), "name", item.get("name"), "version", item.get("version"))).toList();
+        return Map.of("items", rows, "total", Objects.requireNonNull(db.queryForObject(
+                "SELECT COUNT(*)" + from, Long.class)), "page", page, "pageSize", size);
+    }
+
+    private static boolean mayRequestReversal(Current actor, Map<String, Object> row) {
+        return "EXECUTED".equals(row.get("request_status")) && ScrapReviewService.physicalSource(row.get("source_type"))
+                && (actor.has(Role.ASSET_ADMIN) || actor.has(Role.WAREHOUSE_OPERATOR)
+                        || Objects.equals(actor.id(), row.get("creator_account_id")));
+    }
+
+    /** Recovery follows a loss write-off, so administrators, warehouse operators and the original applicant register it. */
+    private static boolean mayRequestRecovery(Current actor, Map<String, Object> row) {
+        return "EXECUTED".equals(row.get("request_status"))
+                && (actor.has(Role.ASSET_ADMIN) || actor.has(Role.WAREHOUSE_OPERATOR)
+                        || Objects.equals(actor.id(), row.get("creator_account_id")));
+    }
+
+    private Map<String, Object> visible(Current current, long id) {
+        var args = new ArrayList<Object>(Arrays.asList(scope(current)));
+        args.add(id);
+        var rows = db.queryForList("SELECT r.*" + SCOPE + " AND r.id=?", args.toArray());
+        if (rows.isEmpty()) {
+            throw new AssetHandoverPort.Failure("SCRAP_NOT_FOUND", 404);
+        }
+        return rows.getFirst();
+    }
+
+    private Object[] scope(Current actor) {
+        return new Object[] {actor.has(Role.ASSET_ADMIN), auditOnly(actor) ? null : actor.id(),
+                actor.has(Role.AUDIT_READ_ONLY), actor.id(),
+                actor.has(Role.EMPLOYEE), actor.employeeId(),
+                actor.has(Role.DEPARTMENT_ASSET_MANAGER), actor.organizationId(),
+                actor.has(Role.WAREHOUSE_OPERATOR), actor.id()};
+    }
+
+    private static boolean auditOnly(Current actor) {
+        return actor.has(Role.AUDIT_READ_ONLY) && !actor.has(Role.ASSET_ADMIN)
+                && !actor.has(Role.WAREHOUSE_OPERATOR) && !actor.has(Role.DEPARTMENT_ASSET_MANAGER)
+                && !actor.has(Role.EMPLOYEE);
+    }
+
+    private Map<String, Object> view(Current actor, Map<String, Object> row) {
+        var result = new LinkedHashMap<String, Object>();
+        long id = ((Number) row.get("id")).longValue();
+        result.put("id", Long.toString(id));
+        result.put("assetId", row.get("asset_id").toString());
+        result.put("sourceType", row.get("source_type"));
+        result.put("sourceBusinessId", row.get("source_business_id") == null ? null : row.get("source_business_id").toString());
+        result.put("version", row.get("version"));
+        result.put("assetVersion", row.get("asset_version"));
+        result.put("ownershipVersion", row.get("ownership_version"));
+        result.put("processorAccountId", row.get("processor_account_id") == null
+                ? null : row.get("processor_account_id").toString());
+        result.put("status", row.get("request_status"));
+        result.put("reason", row.get("reason"));
+        result.put("observedCondition", row.get("observed_condition"));
+        result.put("proposedDisposition", row.get("proposed_disposition"));
+        var source = json.readTree(row.get("source_snapshot_json").toString());
+        result.put("source", Map.of("assetCode", source.path("asset_code").asText(),
+                "name", source.path("name").asText(), "serialNumber", source.path("serial_number").asText("")));
+        result.put("initialSource", row.get("initial_batch_id") == null ? null
+                : Map.of("batchId", row.get("initial_batch_id").toString(),
+                        "sheetRow", row.get("initial_sheet_row")));
+        var decision = row.get("decision_snapshot_json") == null
+                ? null : json.readTree(row.get("decision_snapshot_json").toString());
+        if (decision instanceof tools.jackson.databind.node.ObjectNode object) {
+            object.remove("attachmentEvidence");
+        }
+        result.put("decision", decision);
+        boolean lossSource = "LOSS".equals(row.get("source_type"));
+        boolean factory = "FACTORY_REPLACEMENT".equals(row.get("source_type"));
+        if (factory) {
+            result.put("factoryDisposition", source.path("repairEvidence").path("context").path("method").asText());
+        }
+        var execution = row.get("execution_snapshot_json") == null
+                ? null : json.readTree(row.get("execution_snapshot_json").toString());
+        result.put("execution", lossSource && execution != null
+                ? Map.of("writtenOffAt", execution.path("writtenOffAt").asText()) : execution);
+        var locks = db.queryForList("SELECT lock_version FROM fams_asset_business_lock"
+                + " WHERE asset_id=? AND business_type='SCRAP' AND business_id=?"
+                + " AND business_item_id=? AND released_at IS NULL", row.get("asset_id"), id, id);
+        result.put("lockVersion", locks.isEmpty() ? null : locks.getFirst().get("lock_version"));
+        boolean owner = actor.has(Role.WAREHOUSE_OPERATOR)
+                && Objects.equals(actor.id(), row.get("processor_account_id"));
+        var dispositions = db.queryForList("SELECT disposition_status,DATE_FORMAT(due_date,'%Y-%m-%d') due_date,version,custody_snapshot_json,"
+                + "completion_snapshot_json,processor_account_id FROM fams_scrap_disposition WHERE request_id=?", id);
+        Map<String, Object> disposition = dispositions.isEmpty() ? null : new LinkedHashMap<>(dispositions.getFirst());
+        boolean canDispose = disposition != null && actor.has(Role.WAREHOUSE_OPERATOR)
+                && Objects.equals(disposition.get("processor_account_id"), actor.id())
+                && "EXECUTED".equals(row.get("request_status")) && ScrapReviewService.physicalSource(row.get("source_type"))
+                && "PENDING_DISPOSITION".equals(disposition.get("disposition_status"));
+        if (disposition != null) {
+            disposition.remove("processor_account_id");
+            if (lossSource || factory) {
+                disposition.remove("custody_snapshot_json");
+            }
+            Object completion = disposition.remove("completion_snapshot_json");
+            if (completion != null && "DISPOSED".equals(disposition.get("disposition_status"))) {
+                var snapshot = json.readTree(completion.toString());
+                var facts = snapshot.path("facts");
+                disposition.put("completion", factory ? Map.of("occurredAt", facts.path("occurredAt").asText(),
+                        "method", facts.path("method").asText()) : Map.of("occurredAt", facts.path("occurredAt").asText(),
+                        "method", facts.path("method").asText(), "recipient", facts.path("recipient").asText(),
+                        "operatorName", snapshot.path("operatorName").asText()));
+            }
+        }
+        result.put("disposition", disposition);
+        var correctionRows = db.queryForList("SELECT c.id,c.correction_status,c.processor_account_id,c.asset_version,"
+                + "c.lock_version,c.target_location_id,c.target_location_version,c.ownership_version,c.version,"
+                + "c.reason,l.name AS target_location_name"
+                + " FROM fams_scrap_correction c JOIN fams_location l ON l.id=c.target_location_id"
+                + " WHERE c.request_id=? AND (c.active_guard=1 OR c.correction_status='COMPLETED')"
+                + " ORDER BY c.active_guard DESC,c.id DESC LIMIT 1", id);
+        var correction = correctionRows.isEmpty() ? null : correctionView(correctionRows.getFirst());
+        var reversalRows = db.queryForList("SELECT r.id,r.reversal_status,r.processor_account_id,r.asset_version,"
+                + "r.target_location_id,r.target_location_version,r.ownership_version,r.version,r.reason,"
+                + "l.name AS target_location_name"
+                + " FROM fams_scrap_reversal r JOIN fams_location l ON l.id=r.target_location_id"
+                + " WHERE r.request_id=? AND (r.active_guard=1 OR r.reversal_status='COMPLETED')"
+                + " ORDER BY r.active_guard DESC,r.id DESC LIMIT 1", id);
+        var reversal = reversalRows.isEmpty() ? null : reversalView(reversalRows.getFirst());
+        var recoveryRows = db.queryForList("SELECT r.id,r.recovery_status,r.processor_account_id,r.asset_version,"
+                + "r.reason,DATE_FORMAT(r.found_at,'%Y-%m-%dT%H:%i:%s.%f') found_at,"
+                + "r.temporary_location_id,r.temporary_location_version,t.name AS temporary_location_name,"
+                + "r.temporary_custodian_employee_id,e.name AS temporary_custodian_name,"
+                + "r.target_location_id,r.target_location_version,l.name AS target_location_name,"
+                + "r.ownership_version,r.version"
+                + " FROM fams_scrap_recovery r JOIN fams_location l ON l.id=r.target_location_id"
+                + " JOIN fams_location t ON t.id=r.temporary_location_id"
+                + " JOIN fams_employee e ON e.id=r.temporary_custodian_employee_id"
+                + " WHERE r.request_id=? AND (r.active_guard=1 OR r.recovery_status='COMPLETED')"
+                + " ORDER BY r.active_guard DESC,r.id DESC LIMIT 1", id);
+        var recovery = recoveryRows.isEmpty() ? null : recoveryView(recoveryRows.getFirst());
+        boolean writtenOff = disposition != null && "LOSS_WRITTEN_OFF".equals(disposition.get("disposition_status"));
+        boolean pendingDisposal = disposition != null
+                && "PENDING_DISPOSITION".equals(disposition.get("disposition_status"));
+        boolean correctionPending = correction != null && "PENDING_ADMIN_DECISION".equals(correction.get("status"));
+        boolean correctionClaimable = correction != null && "WAITING_WAREHOUSE_CLAIM".equals(correction.get("status"));
+        boolean correctionProcessor = correction != null && actor.has(Role.WAREHOUSE_OPERATOR)
+                && !correctionRows.isEmpty() && Objects.equals(actor.id(),
+                        correctionRows.getFirst().get("processor_account_id"));
+        var actions = new LinkedHashMap<String, Object>();
+        actions.put("decide", actor.has(Role.ASSET_ADMIN) && "PENDING_ADMIN_DECISION".equals(row.get("request_status")));
+        actions.put("cancel", !locks.isEmpty() && ScrapReviewService.mayCancel(actor, row));
+        actions.put("claim", actor.has(Role.WAREHOUSE_OPERATOR)
+                && "WAITING_WAREHOUSE_CLAIM".equals(row.get("request_status")));
+        actions.put("execute", owner && "PROCESSING".equals(row.get("request_status"))
+                && ScrapReviewService.physicalSource(row.get("source_type")));
+        actions.put("executeLoss", owner && "PROCESSING".equals(row.get("request_status")) && lossSource);
+        actions.put("executeFactory", owner && "PROCESSING".equals(row.get("request_status")) && factory);
+        actions.put("dispose", canDispose);
+        actions.put("initiateCorrection", actor.has(Role.ASSET_ADMIN)
+                && "RESTORE_REQUIRED".equals(row.get("request_status"))
+                && "STANDALONE".equals(row.get("source_type")) && correction == null);
+        actions.put("decideCorrection", correctionPending && actor.has(Role.ASSET_ADMIN));
+        actions.put("claimCorrection", correctionClaimable && actor.has(Role.WAREHOUSE_OPERATOR));
+        actions.put("executeCorrection", correctionProcessor && "PROCESSING".equals(correction.get("status")));
+        actions.put("initiateReversal", reversal == null && pendingDisposal
+                && ScrapReadService.mayRequestReversal(actor, row));
+        actions.put("decideReversal", reversal != null
+                && "PENDING_ADMIN_DECISION".equals(reversal.get("status")) && actor.has(Role.ASSET_ADMIN));
+        actions.put("claimReversal", reversal != null
+                && "WAITING_WAREHOUSE_CLAIM".equals(reversal.get("status")) && actor.has(Role.WAREHOUSE_OPERATOR));
+        actions.put("executeReversal", reversal != null && actor.has(Role.WAREHOUSE_OPERATOR)
+                && Objects.equals(actor.id(), reversalRows.getFirst().get("processor_account_id"))
+                && "PROCESSING".equals(reversal.get("status")));
+        actions.put("initiateRecovery", recovery == null && writtenOff && mayRequestRecovery(actor, row));
+        actions.put("decideRecovery", recovery != null
+                && "PENDING_ADMIN_DECISION".equals(recovery.get("status")) && actor.has(Role.ASSET_ADMIN));
+        actions.put("claimRecovery", recovery != null
+                && "WAITING_WAREHOUSE_CLAIM".equals(recovery.get("status")) && actor.has(Role.WAREHOUSE_OPERATOR));
+        actions.put("executeRecovery", recovery != null && actor.has(Role.WAREHOUSE_OPERATOR)
+                && Objects.equals(actor.id(), recoveryRows.getFirst().get("processor_account_id"))
+                && "PROCESSING".equals(recovery.get("status")));
+        if (auditOnly(actor)) {
+            actions.replaceAll((action, allowed) -> false);
+        }
+        result.put("actions", actions);
+        result.put("correction", correction);
+        result.put("reversal", reversal);
+        result.put("recovery", recovery);
+        return result;
+    }
+
+    private Map<String, Object> recoveryView(Map<String, Object> row) {
+        var result = new LinkedHashMap<String, Object>();
+        result.put("id", row.get("id").toString());
+        result.put("status", row.get("recovery_status"));
+        result.put("version", row.get("version"));
+        result.put("assetVersion", row.get("asset_version"));
+        result.put("foundAt", row.get("found_at"));
+        result.put("temporaryLocationId", row.get("temporary_location_id").toString());
+        result.put("temporaryLocationVersion", row.get("temporary_location_version"));
+        result.put("temporaryLocationName", row.get("temporary_location_name"));
+        result.put("temporaryCustodianEmployeeId", row.get("temporary_custodian_employee_id").toString());
+        result.put("temporaryCustodianName", row.get("temporary_custodian_name"));
+        result.put("targetLocationId", row.get("target_location_id").toString());
+        result.put("targetLocationVersion", row.get("target_location_version"));
+        result.put("targetLocationName", row.get("target_location_name"));
+        result.put("ownershipVersion", row.get("ownership_version"));
+        result.put("processorAccountId", row.get("processor_account_id") == null
+                ? null : row.get("processor_account_id").toString());
+        result.put("reason", row.get("reason"));
+        return result;
+    }
+
+    private Map<String, Object> reversalView(Map<String, Object> row) {
+        var result = new LinkedHashMap<String, Object>();
+        result.put("id", row.get("id").toString());
+        result.put("status", row.get("reversal_status"));
+        result.put("version", row.get("version"));
+        result.put("assetVersion", row.get("asset_version"));
+        result.put("targetLocationId", row.get("target_location_id").toString());
+        result.put("targetLocationVersion", row.get("target_location_version"));
+        result.put("targetLocationName", row.get("target_location_name"));
+        result.put("ownershipVersion", row.get("ownership_version"));
+        result.put("processorAccountId", row.get("processor_account_id") == null
+                ? null : row.get("processor_account_id").toString());
+        result.put("reason", row.get("reason"));
+        return result;
+    }
+
+    private Map<String, Object> correctionView(Map<String, Object> row) {
+        var result = new LinkedHashMap<String, Object>();
+        result.put("id", row.get("id").toString());
+        result.put("status", row.get("correction_status"));
+        result.put("version", row.get("version"));
+        result.put("assetVersion", row.get("asset_version"));
+        result.put("lockVersion", row.get("lock_version"));
+        result.put("targetLocationId", row.get("target_location_id").toString());
+        result.put("targetLocationVersion", row.get("target_location_version"));
+        result.put("targetLocationName", row.get("target_location_name"));
+        result.put("ownershipVersion", row.get("ownership_version"));
+        result.put("processorAccountId", row.get("processor_account_id") == null
+                ? null : row.get("processor_account_id").toString());
+        result.put("reason", row.get("reason"));
+        return result;
+    }
+}

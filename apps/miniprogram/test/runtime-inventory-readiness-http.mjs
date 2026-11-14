@@ -7,6 +7,8 @@ const port = process.env.FAMS_TEST_API_PORT, task = process.env.FAMS_TEST_INVENT
 const first = process.env.FAMS_TEST_READINESS_FIRST, second = process.env.FAMS_TEST_READINESS_SECOND;
 assert.match(port ?? "", /^[0-9]{1,5}$/); for (const value of [task, first, second]) assert.match(value ?? "", /^[1-9][0-9]*$/);
 const saved = JSON.parse(process.env.FAMS_TEST_MINI_GRANT), writes = []; let drop = true;
+const lossReason = process.env.FAMS_TEST_READINESS_LOSS_REASON;
+let opened = "";
 const sessions = new MiniSessionClient("https://readiness-test.invalid", {
     readSession: () => saved, writeSession() { throw new Error("No new login allowed"); }, removeSession() {}, clearIdentityData() {},
     async request(input) {
@@ -24,21 +26,44 @@ const sessions = new MiniSessionClient("https://readiness-test.invalid", {
         return value;
     },
 });
-const page = createInventoryReadinessPage(() => ({ sessions, createKey: () => randomUUID(), confirm: async () => true }));
+const page = createInventoryReadinessPage(() => ({ sessions, createKey: () => randomUUID(), confirm: async () => true, navigate: url => { opened = url; } }));
 page.data = structuredClone(page.data); page.setData = value => Object.assign(page.data, value);
 const select = id => ({ currentTarget: { dataset: { id } } });
 const field = (name, value) => ({ currentTarget: { dataset: { field: name } }, detail: { value } });
-page.onLoad({ taskId: task }); await page.onShow(); assert.equal(page.data.error, ""); assert.equal(page.data.view.missingCount, 2);
-page.onSelect(select(first)); page.onField(field("reason", "现场封闭暂未取得实盘观察")); page.onField(field("evidence", "现场负责人员说明及访问受限记录，保留明确未盘依据"));
-await page.onSave(); assert.equal(page.data.retry, true); assert.equal(writes.length, 1);
-page.onHide(); assert.equal(page.data.view, null); await page.onShow(); assert.equal(page.data.view.notObservedCount, 1);
-await page.onRetry(); assert.equal(page.data.retry, false); assert.equal(writes.length, 2); assert.deepEqual(writes[0], writes[1]);
-page.onSelect(select(second)); page.onKind({ detail: { value: "2" } });
-page.onField(field("reason", "现场暂未找到该实物，后续继续查找")); page.onField(field("evidence", "现场房间及保管登记已核对，保留未找到线索并继续真实后续"));
-await page.onSave(); assert.equal(page.data.error, ""); assert.equal(page.data.view.missingCount, 0); assert.equal(page.data.view.notObservedCount, 2);
-assert.equal(page.data.view.items.find(row => row.item.id === second).physicalMissingOpen, true);
-page.onField(field("waitingReason", "全部应盘项目已有结果或明确未盘原因，进入差异复核")); await page.onWaiting();
-assert.equal(page.data.error, ""); assert.equal(page.data.view.task.task_status, "WAITING_REVIEW"); assert.equal(writes.length, 4);
-page.onUnload();
-console.log(JSON.stringify({ nativeUnobservedOriginalReplyRecovered: true, originalKeyPayloadVersionRetained: true,
-    explicitWaitingReview: true, physicalMissingStillOpen: true, noNormalAcceptanceClaimed: true }));
+page.onLoad({ taskId: task }); await page.onShow(); assert.equal(page.data.error, "");
+if (lossReason) {
+    const source = () => page.data.view.items.find(row => row.item.id === first).missingLosses.find(row => row.reasonId === lossReason);
+    assert.equal(source().report.status, "REJECTED");
+    page.onSelectLoss({ currentTarget: { dataset: { item: first, reason: lossReason } } });
+    const lastSeen = new Date(Date.now() - 3_600_000);
+    const part = value => String(value).padStart(2, "0");
+    page.onField(field("lossDate", [lastSeen.getFullYear(), part(lastSeen.getMonth() + 1), part(lastSeen.getDate())].join("-")));
+    page.onField(field("lossTime", [part(lastSeen.getHours()), part(lastSeen.getMinutes())].join(":")));
+    page.onField(field("lossLocation", "原登记仓位"));
+    page.onField(field("lossCircumstances", "已与保管人核对并搜索原登记位置仍未找到"));
+    await page.onReportLoss(); assert.equal(page.data.retry, true); assert.equal(writes.length, 1);
+    page.onHide(); await page.onShow();
+    assert.equal(source().report.status, "PENDING_ADMIN_DECISION");
+    await page.onRetry();
+    assert.equal(page.data.retry, false); assert.equal(writes.length, 2); assert.deepEqual(writes[0], writes[1]);
+    const reportId = source().report.reportId;
+    page.onOpenLoss(select(reportId));
+    assert.equal(opened, "/pages/loss-reports/index?id=" + reportId);
+    page.onUnload();
+    console.log(JSON.stringify({ reportId, originalKeyPayloadVersionRetained: true, linkedReportOpens: true }));
+} else {
+    assert.equal(page.data.view.missingCount, 2);
+    page.onSelect(select(first)); page.onField(field("reason", "现场封闭暂未取得实盘观察")); page.onField(field("evidence", "现场负责人员说明及访问受限记录，保留明确未盘依据"));
+    await page.onSave(); assert.equal(page.data.retry, true); assert.equal(writes.length, 1);
+    page.onHide(); assert.equal(page.data.view, null); await page.onShow(); assert.equal(page.data.view.notObservedCount, 1);
+    await page.onRetry(); assert.equal(page.data.retry, false); assert.equal(writes.length, 2); assert.deepEqual(writes[0], writes[1]);
+    page.onSelect(select(second)); page.onKind({ detail: { value: "2" } });
+    page.onField(field("reason", "现场暂未找到该实物，后续继续查找")); page.onField(field("evidence", "现场房间及保管登记已核对，保留未找到线索并继续真实后续"));
+    await page.onSave(); assert.equal(page.data.error, ""); assert.equal(page.data.view.missingCount, 0); assert.equal(page.data.view.notObservedCount, 2);
+    assert.equal(page.data.view.items.find(row => row.item.id === second).physicalMissingOpen, true);
+    page.onField(field("waitingReason", "全部应盘项目已有结果或明确未盘原因，进入差异复核")); await page.onWaiting();
+    assert.equal(page.data.error, ""); assert.equal(page.data.view.task.task_status, "WAITING_REVIEW"); assert.equal(writes.length, 4);
+    page.onUnload();
+    console.log(JSON.stringify({ nativeUnobservedOriginalReplyRecovered: true, originalKeyPayloadVersionRetained: true,
+        explicitWaitingReview: true, physicalMissingStillOpen: true, noNormalAcceptanceClaimed: true }));
+}

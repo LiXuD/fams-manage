@@ -95,7 +95,6 @@ async function perform() {
 async function confirm() { if (busy.value || props.blocked || pending.value || !confirmation.value) return; pending.value = confirmation.value; confirmation.value = null; await perform(); }
 watch(identity, () => { reset(); error.value = ""; notice.value = ""; }, { immediate: true, flush: "sync" });
 watch(canRead, value => { if (!value) { reset(); error.value = ""; notice.value = ""; } }, { flush: "sync" });
-watch([() => props.repair.version, () => props.round.version], () => { if (header.value?.version !== props.repair.version || roundData.value?.version !== props.round.version) stale.value = true; });
 onBeforeUnmount(() => { live = false; reset(); emit("busy-change", false); });
 </script>
 <template>

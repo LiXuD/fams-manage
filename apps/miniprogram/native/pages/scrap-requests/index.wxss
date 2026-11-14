@@ -1,0 +1,6 @@
+.page { padding: 24rpx; }
+.card { margin: 24rpx 0; padding: 24rpx; background: #fff; border-radius: 12rpx; }
+.title { font-size: 36rpx; font-weight: bold; }
+.error { color: #b42318; }
+input, textarea, picker { margin: 16rpx 0; padding: 12rpx; border: 1rpx solid #d9e0e8; }
+button { margin: 16rpx 0; }

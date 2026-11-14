@@ -6,6 +6,8 @@ import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 
+import com.fams.loss.InventoryLossPort;
+
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -25,29 +27,44 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import com.fams.asset.AssetHandoverPort;
+import com.fams.loss.LossFailure;
+import com.fams.loss.LossInput;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 
 /** Missing evidence remains explicit and never becomes a successful physical observation. */
 @Service
 @Profile("fams-product")
 @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = InventoryReviewConflict.class)
 public class InventoryReadinessService {
+    public record MissingLossInput(
+            @NotNull @PositiveOrZero Long assetVersion,
+            @NotNull Instant lastSeenAt,
+            @NotBlank @Size(max = 500) String lastLocation,
+            @NotBlank @Size(min = 10, max = 2000) String circumstances) {}
+
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final RequisitionActorContext actors;
     private final AssetInventoryReviewPort assets;
     private final Clock clock;
+    private final InventoryLossPort losses;
 
     public InventoryReadinessService(
             JdbcTemplate db,
             ObjectMapper json,
             RequisitionActorContext actors,
             AssetInventoryReviewPort assets,
-            Clock clock) {
+            Clock clock, InventoryLossPort losses) {
         this.db = db;
         this.json = json;
         this.actors = actors;
         this.assets = assets;
         this.clock = clock;
+        this.losses = losses;
     }
 
     public Map<String, Object> detail(Actor actor, long taskId, int page, int size) {
@@ -73,6 +90,16 @@ public class InventoryReadinessService {
                 assets.contexts(
                         items.stream().map(row -> number(row, "asset_id")).toList(),
                         instant(task.get("published_at")));
+        var missingReasons = items.isEmpty() ? List.<Map<String, Object>>of()
+                : new org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate(db).queryForList("""
+                    SELECT id,item_id,recheck_generation,reason FROM fams_inventory_unobserved_reason
+                    WHERE task_id=:task AND item_id IN (:items) AND reason_kind='ASSET_NOT_FOUND'
+                    ORDER BY item_id,recheck_generation
+                    """, Map.of("task", taskId, "items",
+                        items.stream().map(row -> number(row, "id")).toList()));
+        var progress = losses.progress(missingReasons.stream().map(row -> number(row, "id")).toList());
+        var byItem = missingReasons.stream().collect(java.util.stream.Collectors.groupingBy(
+                row -> number(row, "item_id")));
         var rows =
                 items.stream()
                         .map(
@@ -93,9 +120,23 @@ public class InventoryReadinessService {
                                                     && "IN_PROGRESS".equals(task.get("task_status"))
                                                     && row.get("review_status") == null
                                                     && number(row, "valid_raw_count") == 0);
-                                    value.put(
-                                            "physicalMissingOpen",
-                                            "ASSET_NOT_FOUND".equals(row.get("reason_kind")));
+                                    var reasons = byItem.getOrDefault(number(row, "id"), List.of());
+                                    value.put("physicalMissingOpen", reasons.stream().anyMatch(reason -> {
+                                        var report = progress.get(number(reason, "id"));
+                                        return report == null || !report.transferred();
+                                    }));
+                                    value.put("missingLosses", reasons.stream().map(reason -> {
+                                        var report = progress.get(number(reason, "id"));
+                                        var entry = new LinkedHashMap<String, Object>();
+                                        entry.put("reasonId", reason.get("id").toString());
+                                        entry.put("generation", reason.get("recheck_generation"));
+                                        entry.put("reason", reason.get("reason"));
+                                        entry.put("report", report);
+                                        entry.put("canSubmit", context != null
+                                                && List.of("IN_PROGRESS", "WAITING_REVIEW").contains(task.get("task_status"))
+                                                && (report == null || report.canRetry()));
+                                        return entry;
+                                    }).toList());
                                     return value;
                                 })
                         .toList();
@@ -256,6 +297,55 @@ public class InventoryReadinessService {
                         "physicalMissingOpen",
                         "ASSET_NOT_FOUND".equals(input.kind()));
         audit(actor, current, task, "INVENTORY_NOT_OBSERVED", version + 1, response);
+        save(current, taskId, operation, key, digest, response);
+        return response;
+    }
+
+    public Map<String, Object> reportMissing(Actor actor, long taskId, long itemId, long reasonId,
+            long version, UUID key, MissingLossInput input) {
+        var current = admin(actor);
+        var task = task(taskId);
+        String operation = "MISSING_LOSS:" + reasonId;
+        String digest = hash(version + ":" + itemId + ":" + json.writeValueAsString(input));
+        var prior = original(actor, current, task, operation, key, digest);
+        if (prior != null) {
+            return prior;
+        }
+        if (number(task, "version") != version
+                || !List.of("IN_PROGRESS", "WAITING_REVIEW").contains(task.get("task_status"))) {
+            conflict(actor, current, task, "INVENTORY_READINESS_CONTEXT_CHANGED", Map.of());
+        }
+        var reasons = db.queryForList("""
+                SELECT recheck_generation FROM fams_inventory_unobserved_reason
+                WHERE id=? AND task_id=? AND item_id=? AND reason_kind='ASSET_NOT_FOUND' FOR SHARE
+                """, reasonId, taskId, itemId);
+        if (reasons.isEmpty()) {
+            throw new InventoryFailure(404, "INVENTORY_MISSING_REASON_NOT_FOUND");
+        }
+        var report = losses.progress(List.of(reasonId)).get(reasonId);
+        if (report != null && !report.canRetry()) {
+            throw new InventoryFailure(409, "INVENTORY_MISSING_ALREADY_LINKED");
+        }
+        if (input.circumstances().strip().length() < 10) {
+            throw new InventoryFailure(400, "INVENTORY_MISSING_LOSS_BASIS_REQUIRED");
+        }
+        var source = new InventoryLossPort.Source(taskId, itemId, reasonId,
+                number(reasons.getFirst(), "recheck_generation"));
+        String reportId;
+        try {
+            reportId = losses.submit(actor, source, new LossInput.Submission(
+                    number(item(taskId, itemId), "asset_id"), input.assetVersion(), input.lastSeenAt(),
+                    input.lastLocation(), input.circumstances()));
+        } catch (LossFailure failure) {
+            throw new InventoryFailure(failure.status(), failure.getMessage());
+        } catch (AssetHandoverPort.Failure failure) {
+            throw new InventoryFailure(failure.status(), failure.getMessage());
+        }
+        db.update("UPDATE fams_inventory_task SET version=version+1,updated_at=? WHERE id=?", now(), taskId);
+        var response = Map.<String, Object>of("taskId", Long.toString(taskId),
+                "itemId", Long.toString(itemId), "reasonId", Long.toString(reasonId),
+                "reportId", reportId, "version", version + 1);
+        audit(actor, current, task, "INVENTORY_MISSING_REPORTED", version + 1, response);
         save(current, taskId, operation, key, digest, response);
         return response;
     }

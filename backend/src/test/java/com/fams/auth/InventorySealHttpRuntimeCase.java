@@ -455,24 +455,50 @@ class InventorySealHttpRuntimeCase {
                         java.time.LocalDate.class));
         var frozen =
                 db.queryForList("SELECT * FROM fams_inventory_sealed_report WHERE task_id=947000");
-        long sealedVersion = version();
+        var sealedTask = db.queryForMap("SELECT * FROM fams_inventory_task WHERE id=947000");
+        var originalObservations =
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_observation WHERE task_id=947000 ORDER BY id");
+        var frozenItems = ok(call("GET", "/report/items", null, null, 0, false));
+        var frozenEvidence = ok(call("GET", "/report/evidence", null, null, 0, false));
+        var frozenSynchronization =
+                ok(call("GET", "/report/synchronization", null, null, 0, false));
         token =
                 sessions.start(
                                 new MiniWechatIdentityPort.Identity("seal-app", "seal-executor"),
                                 UUID.randomUUID())
                         .sessionToken();
-        assertEquals("LATE_REVIEW", observe("947010").path("outcome").asText());
+        assertEquals("LATE_REVIEW", observe("947010", "UNKNOWN").path("outcome").asText());
+        var observations =
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_observation WHERE task_id=947000 ORDER BY id");
+        assertEquals(originalObservations.size() + 1, observations.size());
+        assertEquals(originalObservations, observations.subList(0, originalObservations.size()));
+        assertEquals(
+                1,
+                db.queryForObject(
+                        """
+                        SELECT COUNT(*) FROM fams_inventory_late_case c
+                        JOIN fams_todo t ON t.business_type='INVENTORY_LATE'
+                          AND t.business_id=c.observation_id AND t.todo_status='OPEN'
+                        WHERE c.task_id=947000 AND c.observation_id=?
+                        """,
+                        Integer.class,
+                        observations.getLast().get("id")));
         assertEquals(
                 expected,
                 db.queryForObject(
                         "SELECT last_inventory_business_date FROM fams_asset WHERE id=947010",
                         java.time.LocalDate.class));
-        assertEquals(sealedVersion, version());
+        assertEquals(sealedTask, db.queryForMap("SELECT * FROM fams_inventory_task WHERE id=947000"));
         assertEquals(
                 frozen,
                 db.queryForList("SELECT * FROM fams_inventory_sealed_report WHERE task_id=947000"));
+        assertEquals(2, frozenEvidence.path("total").asInt());
+        assertEquals(frozenItems, ok(call("GET", "/report/items", null, null, 0, false)));
+        assertEquals(frozenEvidence, ok(call("GET", "/report/evidence", null, null, 0, false)));
         assertEquals(
-                2, ok(call("GET", "/report/evidence", null, null, 0, false)).path("total").asInt());
+                frozenSynchronization, ok(call("GET", "/report/synchronization", null, null, 0, false)));
     }
 
     @Test

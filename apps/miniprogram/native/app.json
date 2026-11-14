@@ -12,6 +12,8 @@
     "pages/proxy-confirmations/index",
     "pages/business-result-notices/index",
     "pages/business-result-reviews/index",
+    "pages/messages/index",
+    "pages/exceptions/index",
     "pages/target-changes/index",
     "pages/inventory-tasks/index",
     "pages/inventory-collection/index",
@@ -26,7 +28,10 @@
     "pages/repairs/index",
     "pages/repair-return-sources/index",
     "pages/repair-inventory-evidence/index",
-    "pages/repair-factory/index"
+    "pages/repair-factory/index",
+    "pages/repair-replacement/index",
+    "pages/loss-reports/index",
+    "pages/scrap-requests/index"
   ],
   "window": {
     "navigationBarTitleText": "企业资产",

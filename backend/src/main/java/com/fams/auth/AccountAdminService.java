@@ -1,5 +1,7 @@
 package com.fams.auth;
 
+import org.springframework.context.ApplicationEventPublisher;
+
 import java.text.Normalizer;
 import java.time.Clock;
 import java.time.Duration;
@@ -46,6 +48,7 @@ class AccountAdminService {
     private final AuthApplicationService authService;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
     AccountAdminService(
             AccountAdminMapper mapper,
@@ -53,13 +56,15 @@ class AccountAdminService {
             AuthPayloadFingerprint payloadFingerprint,
             AuthApplicationService authService,
             ObjectMapper objectMapper,
-            Clock clock) {
+            Clock clock,
+            ApplicationEventPublisher events) {
         this.mapper = mapper;
         this.passwordEncoder = passwordEncoder;
         this.payloadFingerprint = payloadFingerprint;
         this.authService = authService;
         this.objectMapper = objectMapper;
         this.clock = clock;
+        this.events = events;
     }
 
     PageSystemAccount listAccounts(int page, int pageSize) {
@@ -209,6 +214,7 @@ class AccountAdminService {
                 SecurityEventType.ACCOUNT_STATUS_CHANGED,
                 requestId,
                 "TARGET_ACCOUNT=" + accountId + ";ACTION=" + action.name());
+        events.publishEvent(new WorkforceAvailabilityChanged());
         return result;
     }
 
@@ -312,6 +318,9 @@ class AccountAdminService {
                 grant ? SecurityEventType.ACCOUNT_ROLE_GRANTED : SecurityEventType.ACCOUNT_ROLE_REVOKED,
                 requestId,
                 "TARGET_ACCOUNT=" + accountId + ";ROLE=" + role.name());
+        if (role == Role.ASSET_ADMIN || role == Role.WAREHOUSE_OPERATOR) {
+            events.publishEvent(new WorkforceAvailabilityChanged());
+        }
         return result;
     }
 

@@ -65,9 +65,6 @@ public class InventorySealEvidence {
                     || raw.stream().anyMatch(row -> !"EXPIRED".equals(row.get("outcome")))) {
                 fail("INVENTORY_SEAL_UNOBSERVED_EVIDENCE_CHANGED");
             }
-            if ("ASSET_NOT_FOUND".equals(reasons.getFirst().get("reason_kind"))) {
-                fail("INVENTORY_SEAL_PHYSICAL_MISSING_OPEN");
-            }
             return;
         }
         if (!"ACCEPTED".equals(review.get("review_status"))

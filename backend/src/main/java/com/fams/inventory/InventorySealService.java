@@ -7,6 +7,8 @@ import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 
+import com.fams.loss.InventoryLossPort;
+
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -40,6 +42,7 @@ public class InventorySealService {
             Map<Long, AssetInventoryReviewPort.Context> contexts,
             List<Map<String, Object>> observations,
             List<Map<String, Object>> synchronization,
+            Map<Long, InventoryLossPort.Progress> lossProgress,
             String synchronizationDigest,
             List<Map<String, String>> blockers) {}
 
@@ -51,6 +54,7 @@ public class InventorySealService {
     private final InventorySealEvidence evidence;
     private final InventorySynchronizationService synchronization;
     private final Clock clock;
+    private final InventoryLossPort losses;
 
     public InventorySealService(
             JdbcTemplate db,
@@ -60,7 +64,7 @@ public class InventorySealService {
             AssetInventorySealPort dates,
             InventorySealEvidence evidence,
             InventorySynchronizationService synchronization,
-            Clock clock) {
+            Clock clock, InventoryLossPort losses) {
         this.db = db;
         this.json = json;
         this.actors = actors;
@@ -69,6 +73,7 @@ public class InventorySealService {
         this.evidence = evidence;
         this.synchronization = synchronization;
         this.clock = clock;
+        this.losses = losses;
     }
 
     public Map<String, Object> preflight(Actor actor, long taskId) {
@@ -190,13 +195,19 @@ public class InventorySealService {
                                     "SELECT * FROM fams_inventory_selection_event WHERE item_id=?"
                                             + " ORDER BY recheck_generation,review_version",
                                     item.get("id"))));
-            packet.put(
-                    "unobservedHistory",
-                    wire(
-                            db.queryForList(
-                                    "SELECT * FROM fams_inventory_unobserved_reason WHERE item_id=?"
-                                            + " ORDER BY recheck_generation",
-                                    item.get("id"))));
+            var unobservedHistory = db.queryForList(
+                    "SELECT * FROM fams_inventory_unobserved_reason WHERE item_id=?"
+                            + " ORDER BY recheck_generation",
+                    item.get("id"));
+            packet.put("unobservedHistory", wire(unobservedHistory));
+            var reports = unobservedHistory.stream()
+                    .filter(row -> evaluation.lossProgress().containsKey(number(row, "id")))
+                    .map(row -> Map.of("reasonId", row.get("id").toString(), "report",
+                            evaluation.lossProgress().get(number(row, "id"))))
+                    .toList();
+            if (!reports.isEmpty()) {
+                packet.put("missingLosses", reports);
+            }
             var change = changes.get(number(item, "asset_id"));
             packet.put("dateChange", change == null ? null : dateChange(change));
             frozenItems.add(packet);
@@ -385,14 +396,14 @@ public class InventorySealService {
         if (!"WAITING_REVIEW".equals(task.get("task_status"))) {
             blockers.add(Map.of("code", "INVENTORY_SEAL_WAITING_REVIEW_REQUIRED"));
         }
-        long missingHistory =
-                Objects.requireNonNull(
-                        db.queryForObject(
-                                "SELECT COUNT(*) FROM fams_inventory_unobserved_reason WHERE"
-                                        + " task_id=? AND reason_kind='ASSET_NOT_FOUND'",
-                                Long.class,
-                                task.get("id")));
-        if (missingHistory > 0) {
+        var missingReasons = db.queryForList(
+                "SELECT id FROM fams_inventory_unobserved_reason WHERE task_id=? AND reason_kind='ASSET_NOT_FOUND'",
+                Long.class, task.get("id"));
+        var lossProgress = losses.progress(missingReasons);
+        if (missingReasons.stream().anyMatch(id -> {
+            var report = lossProgress.get(id);
+            return report == null || !report.transferred();
+        })) {
             blockers.add(Map.of("code", "INVENTORY_SEAL_PHYSICAL_MISSING_OPEN"));
         }
         var items =
@@ -481,6 +492,7 @@ public class InventorySealService {
                 contexts,
                 observations,
                 roster,
+                lossProgress,
                 hash(json.writeValueAsString(roster)),
                 blockers);
     }

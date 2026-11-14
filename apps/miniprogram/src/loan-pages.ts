@@ -6,6 +6,7 @@ interface Data {
     busy: boolean; error: string; notice: string; retryable: boolean; loans: Loan[]; returns: AssetReturn[];
     returnProgress: AssetReturn | null; selected: Loan | null; assets: ReturnAssetChoice[]; selectedAsset: ReturnAssetChoice | null;
     reason: string; dueDate: string; page: number; total: number;
+    missingDate?: string; missingTime?: string; missingLocation?: string; missingCircumstances?: string;
 }
 interface Context { data: Data; setData(data: Partial<Data>): void }
 interface Input { detail: { value: string } }
@@ -71,12 +72,65 @@ export function createLoanPage(getServices: () => MiniServices) {
         async onReturnProgress(this: Context, event: Selection) {
             if (!services || !live || this.data.busy || pending || identity !== JSON.stringify(services.sessions.identity)
                 || !this.data.returns.some(row => row.id === event.currentTarget.dataset.id)) return;
-            const current = generation; this.setData({ busy: true, error: "", returnProgress: null });
+            const current = generation; this.setData({ busy: true, error: "", returnProgress: null,
+                missingDate: "", missingTime: "", missingLocation: "", missingCircumstances: "" });
             try {
                 const result = await services.sessions.request("GET", "/api/v1/mini/asset-returns/" + event.currentTarget.dataset.id) as AssetReturn;
                 if (live && generation === current && identity === JSON.stringify(services.sessions.identity)) this.setData({ returnProgress: result });
             } catch (error) { if (live && generation === current) this.setData({ error: message(error), returnProgress: null }); }
             finally { if (live && generation === current) this.setData({ busy: false }); }
+        },
+        onMissingField(this: Context, event: { currentTarget: { dataset: { field: string } }; detail: { value: string } }) {
+            const field = event.currentTarget.dataset.field;
+            if (!this.data.busy && !pending && ["missingDate", "missingTime", "missingLocation", "missingCircumstances"].includes(field)) {
+                this.setData({ [field]: event.detail.value });
+            }
+        },
+        async onReportMissing(this: Context) {
+            if (!services || !live || this.data.busy || pending || identity !== JSON.stringify(services.sessions.identity)) return;
+            const row = this.data.returnProgress;
+            const followup = row?.followups?.find(item => item.businessType === "LOST_REPORT" && item.missingLossLockVersion != null);
+            if (!row?.asset || (!row.canReportMissing && !followup)) return;
+            const lastSeenAt = new Date(this.data.missingDate + "T" + this.data.missingTime);
+            const lastLocation = this.data.missingLocation?.trim(), circumstances = this.data.missingCircumstances?.trim();
+            const reason = this.data.reason.trim();
+            if (!Number.isFinite(lastSeenAt.getTime()) || !lastLocation || !circumstances || circumstances.length < 10 || (!followup && !reason)) {
+                this.setData({ error: "请填写验收说明、最后见到时间与地点及查找情况。" });
+                return;
+            }
+            const current = generation;
+            this.setData({ busy: true });
+            try {
+                if (!await services.confirm("归还实物缺失", `报失 ${row.asset.assetCode}。原归还及借用责任保留。`)
+                    || !live || generation !== current || identity !== JSON.stringify(services.sessions.identity)) return;
+            } catch {
+                if (live && generation === current) this.setData({ error: "确认未完成，请重新核对。" });
+                return;
+            } finally {
+                if (live && generation === current) this.setData({ busy: false });
+            }
+            const facts = { lastSeenAt: lastSeenAt.toISOString(), lastLocation, circumstances };
+            if (followup && followup.version != null) {
+                await mutate(this, `/api/v1/mini/asset-returns/${row.id}/missing-loss`, followup.version,
+                    { assetVersion: row.asset.version, lockVersion: followup.missingLossLockVersion, facts });
+            } else {
+                await mutate(this, `/api/v1/mini/asset-returns/${row.id}/inspect`, row.version,
+                    { result: "MISSING", reason, assetVersion: row.asset.version, lockVersion: row.lockVersion, missingLoss: facts });
+            }
+            if (live && generation === current && !pending) this.setData({ returnProgress: null });
+        },
+        onOpenMissingLoss(this: Context, event: Selection) {
+            const report = event.currentTarget.dataset.id;
+            if (!services || !live || this.data.busy || pending || identity !== JSON.stringify(services.sessions.identity)
+                || !/^[1-9][0-9]*$/.test(report) || !this.data.returnProgress?.followups?.some(item => item.lossReport?.reportId === report)) return;
+            services.navigate("/pages/loss-reports/index?id=" + report);
+        },
+        async onResubmitLossReturn(this: Context) {
+            if(!services||!live||this.data.busy||pending||identity!==JSON.stringify(services.sessions.identity))return;
+            const row=this.data.returnProgress;
+            if(!row?.lossRecovery||row.returnStatus!=="REJECTED"||!this.data.reason.trim())return;
+            await mutate(this,`/api/v1/mini/asset-returns/${row.id}/resubmit-loss`,row.version,{approved:false,reason:this.data.reason.trim()});
+            this.setData({returnProgress:null});
         },
         onReason(this: Context, event: Input) { if (!this.data.busy && !pending) this.setData({ reason: event.detail.value }); },
         onDueDate(this: Context, event: Input) { if (!this.data.busy && !pending) this.setData({ dueDate: event.detail.value }); },

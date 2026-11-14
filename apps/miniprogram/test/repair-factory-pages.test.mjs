@@ -252,3 +252,48 @@ test("explicit limited replacement scope keeps cumulative limit as an exact stri
     f.page.onField(field("reason", "申请本维修所有轮次累计费用限额")); f.page.onCostPolicy({ detail: { value: "1" } }); f.page.onField(field("costLimit", "105.01"));
     f.page.onPrepare(event({ action: "requestCostScope" })); await f.page.onConfirm(); assert.equal(writes(f)[0].body.costLimit, "105.01"); assert.equal(writes(f)[0].body.costPolicy, "LIMITED");
 });
+
+test("factory loss submits the guarded original round and retries the same intent", async () => {
+    const f = fixture("receive"), request = f.sessions.request, routes = [];
+    let lost = true;
+    f.services.navigate = path => routes.push(path);
+    f.sessions.request = async (...args) => {
+        const result = await request(...args);
+        if (args[0] !== "POST") return result;
+        if (lost) {
+            lost = false;
+            f.detail.lockVersion = null;
+            throw Error("committed reply lost");
+        }
+        return { id: "9007199254740997" };
+    };
+    await f.page.onShow();
+    for (const [name, value] of Object.entries({
+        lossDate: "2026-10-30", lossTime: "10:20", lossLocation: "厂家返厂检修点", lossCircumstances: "已核实厂家库房和运单仍无法找到原机"
+    })) f.page.onField(field(name, value));
+    f.page.onPrepare(event({ action: "reportLoss" }));
+    assert.equal(writes(f).length, 0);
+    assert.match(f.page.data.confirmation, /保留原轮次实际寄出记录/);
+    await f.page.onConfirm();
+    assert.equal(f.page.data.retry, true);
+    await f.page.onRetry();
+    assert.deepEqual(writes(f)[0], writes(f)[1]);
+    assert.equal(writes(f)[0].path, "/api/v1/mini/loss-reports/factory/9/rounds/" + roundId);
+    assert.deepEqual(writes(f)[0].body, {
+        assetVersion: 7, ownershipVersion: 2, lockVersion: 3, roundVersion: 10,
+        lastLocation: "厂家返厂检修点", circumstances: "已核实厂家库房和运单仍无法找到原机",
+        lastSeenAt: new Date("2026-10-30T10:20:00").toISOString()
+    });
+    assert.equal(writes(f)[0].mutation.version, 5);
+    f.page.onLinkedLoss();
+    assert.deepEqual(routes, ["/pages/loss-reports/index?id=9007199254740997"]);
+});
+
+test("native repair summary labels retired opening rounds and retains unknown states", () => {
+    const markup = readFileSync(new URL("../native/pages/repairs/index.wxml", import.meta.url), "utf8");
+    const source = markup.match(/<wxs module="labels">([\s\S]*?)<\/wxs>/)?.[1];
+    assert.ok(source);
+    const labels = new Function("module", source + "; return module.exports;")({ exports: {} });
+    assert.equal(labels.state("INITIAL_RETIRED"), "期初批次已撤销");
+    assert.equal(labels.state("FUTURE_ROUND_STATE"), "FUTURE_ROUND_STATE");
+});
