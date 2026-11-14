@@ -4,6 +4,7 @@ import com.fams.business.InitialScrapPort;
 import com.fams.asset.AssetScrapPort;
 import com.fams.loan.LoanRepairPort;
 import com.fams.loss.LossInitialPort;
+import com.fams.repair.RepairService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -28,13 +29,16 @@ public class ScrapInitialPort implements InitialScrapPort {
     private final AssetScrapPort assets;
     private final LoanRepairPort loans;
     private final LossInitialPort losses;
+    private final RepairService repairs;
 
-    ScrapInitialPort(JdbcTemplate db, ObjectMapper json, AssetScrapPort assets, LoanRepairPort loans, LossInitialPort losses) {
+    ScrapInitialPort(JdbcTemplate db, ObjectMapper json, AssetScrapPort assets, LoanRepairPort loans,
+            LossInitialPort losses, RepairService repairs) {
         this.db = db;
         this.json = json;
         this.assets = assets;
         this.loans = loans;
         this.losses = losses;
+        this.repairs = repairs;
     }
 
     @Override
@@ -126,7 +130,9 @@ public class ScrapInitialPort implements InitialScrapPort {
 
     @Override
     public void openLoss(Opening opening, LossFacts facts, LocalDate businessDate) {
-        var loss = losses.open(opening, facts, businessDate);
+        var factory = "FACTORY_REPAIR".equals(opening.beforeLifecycle()) ? initialFactoryLoss(opening, facts) : null;
+        var loss = losses.open(opening, facts, businessDate, factory == null ? null : factory.repairId(),
+                factory == null ? null : factory.roundId());
         if (db.update("""
                 UPDATE fams_asset SET exception_status='LOST'
                 WHERE id=? AND lifecycle_status=? AND card_stage='ACTIVE' AND version=0 AND exception_status='NORMAL'
@@ -147,6 +153,8 @@ public class ScrapInitialPort implements InitialScrapPort {
             }
             proof.put("loanId", Long.toString(loan.id()));
             proof.put("loanVersion", loan.version());
+        } else if (factory != null) {
+            proof.put("factoryRepair", factory);
         } else if (loan != null) {
             throw new IllegalStateException("ASSET_IMPORT_INITIAL_LOSS_INVALID");
         }
@@ -155,11 +163,12 @@ public class ScrapInitialPort implements InitialScrapPort {
         db.update("""
                 INSERT INTO fams_scrap_request(asset_id,creator_account_id,source_type,source_business_id,
                     source_snapshot_json,reason,observed_condition,proposed_disposition,asset_version,
-                    initial_batch_id,initial_sheet_row,created_at,updated_at)
-                VALUES (?,?,'LOSS',?,?,?,?,?,0,?,?,?,?)
+                    initial_batch_id,initial_sheet_row,created_at,updated_at,processor_account_id,ownership_version)
+                VALUES (?,?,'LOSS',?,?,?,?,?,0,?,?,?,?,?,?)
                 """, opening.asset(), opening.actorId(), loss.id(), json.writeValueAsString(source),
                 opening.reason(), opening.observedCondition(), opening.proposedDisposition(), opening.batch().toString(),
-                opening.row(), opening.time(), opening.time());
+                opening.row(), opening.time(), opening.time(), factory == null ? null : opening.actorId(),
+                factory == null ? 0 : 1);
         long id = java.util.Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
         if (db.update("""
                 UPDATE fams_asset SET lifecycle_status='PENDING_SCRAP' WHERE id=? AND version=0 AND exception_status='LOST'
@@ -174,6 +183,29 @@ public class ScrapInitialPort implements InitialScrapPort {
                 "batchId", opening.batch().toString(), "sheetRow", Integer.toString(opening.row()),
                 "beforeLifecycle", opening.beforeLifecycle(), "reportId", Long.toString(loss.id()),
                 "reason", opening.reason()));
+    }
+
+    private RepairService.FactoryLossScrap initialFactoryLoss(Opening opening, LossFacts facts) {
+        var row = db.queryForMap("""
+                SELECT r.id AS repair_id,f.id AS round_id FROM fams_repair_request r
+                JOIN fams_repair_factory_round f ON f.repair_id=r.id AND f.asset_id=r.asset_id
+                WHERE r.initial_batch_id=? AND r.initial_sheet_row=? AND r.asset_id=?
+                  AND r.version=0 AND f.initial_source AND f.version=0 AND f.dispatched_at<=?
+                FOR UPDATE
+                """, opening.batch().toString(), opening.row(), opening.asset(), facts.lastSeenAt());
+        long repair = ((Number) row.get("repair_id")).longValue();
+        var factory = repairs.factoryLossScrap(repair, ((Number) row.get("round_id")).longValue(),
+                opening.asset(), opening.actorId());
+        if (factory == null || db.update("""
+                UPDATE fams_asset_business_lock SET released_at=?,release_reason='INITIAL_FACTORY_LOSS'
+                WHERE asset_id=? AND business_type='REPAIR' AND business_id=? AND business_item_id=?
+                  AND lock_version=0 AND released_at IS NULL
+                """, opening.time(), opening.asset(), repair, repair) != 1) {
+            throw new IllegalStateException("ASSET_IMPORT_INITIAL_LOSS_INVALID");
+        }
+        db.update("UPDATE fams_todo SET todo_status='CLOSED',closed_at=? WHERE business_type='REPAIR'"
+                + " AND business_id=? AND closed_at IS NULL", opening.time(), repair);
+        return factory;
     }
 
     @Override

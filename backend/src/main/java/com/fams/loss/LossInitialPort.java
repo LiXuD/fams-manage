@@ -33,9 +33,12 @@ public class LossInitialPort {
         this.json = json;
     }
 
-    public Confirmed open(Opening opening, LossFacts facts, LocalDate businessDate) {
-        Map<String, Object> custody = new LinkedHashMap<>(assets.initialLossSnapshot(opening.asset()));
-        if (!List.of("BORROWED", "IN_STOCK", "IN_USE").contains(opening.beforeLifecycle())
+    public Confirmed open(Opening opening, LossFacts facts, LocalDate businessDate, Long repair, Long round) {
+        boolean factory = "FACTORY_REPAIR".equals(opening.beforeLifecycle());
+        Map<String, Object> custody = new LinkedHashMap<>(factory
+                ? assets.factorySubmission(opening.asset(), 0) : assets.initialLossSnapshot(opening.asset()));
+        if (factory && (repair == null || round == null)
+                || !List.of("BORROWED", "IN_STOCK", "IN_USE", "FACTORY_REPAIR").contains(opening.beforeLifecycle())
                 || !opening.beforeLifecycle().equals(custody.get("lifecycle"))
                 || facts.lastSeenAt().isAfter(facts.confirmedAt()) || facts.confirmedAt().isAfter(opening.time())) {
             throw new IllegalStateException("ASSET_IMPORT_INITIAL_LOSS_INVALID");
@@ -43,6 +46,10 @@ public class LossInitialPort {
         var provenance = Map.of("batchId", opening.batch().toString(), "sheetRow", opening.row(),
                 "businessDate", businessDate, "operatorAccountId", Long.toString(opening.actorId()));
         custody.put("initialSource", provenance);
+        if (factory) {
+            custody.put("factorySource", Map.of("repairId", Long.toString(repair), "roundId", Long.toString(round),
+                    "processorAccountId", Long.toString(opening.actorId())));
+        }
         var confirmation = Map.<String, Object>of("initialSource", provenance, "confirmedAt", facts.confirmedAt(),
                 "responsibilityEvidence", facts.evidence());
         String custodyJson = json.writeValueAsString(custody);

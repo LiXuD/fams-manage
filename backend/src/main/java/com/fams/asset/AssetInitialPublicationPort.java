@@ -136,7 +136,7 @@ public class AssetInitialPublicationPort {
         }
         if (pendingScrap) {
             var scrap = new com.fams.business.InitialScrapPort.Opening(id,
-                    repairOpening ? "UNDER_REPAIR" : custodyLifecycle,
+                    repairOpening ? asset.repairFacts().factory() != null ? "FACTORY_REPAIR" : "UNDER_REPAIR" : custodyLifecycle,
                     asset.scrapReason().strip(), asset.scrapCondition().strip(),
                     asset.proposedDisposition().strip(), context.actorId(),
                     context.batchId(), context.sheetRow(), context.now());

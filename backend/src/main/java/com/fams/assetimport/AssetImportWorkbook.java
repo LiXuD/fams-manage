@@ -97,6 +97,7 @@ public final class AssetImportWorkbook {
             help.createRow(9).createCell(0).setCellValue("返厂维修填写阶段已寄出、当前返厂轮次、厂家、联系人、联系电话、厂家实物去向、实际寄出时刻、寄出依据和预计收回日期；费用规则 NO_COST/LIMITED/UNLIMITED，LIMITED 填正金额。");
             help.createRow(10).createCell(0).setCellValue("维修时刻用含时区的文本，例如 2026-09-12T09:30:00+08:00；预计收回日期用 YYYY-MM-DD。");
             help.createRow(11).createCell(0).setCellValue("遗失核销填写报废前保管状态（含借出）、最后见到时刻及地点、确认遗失时刻及责任依据；借出须填写原借用资料。");
+            help.createRow(12).createCell(0).setCellValue("返厂资产确认遗失时，报废前状态填返厂维修、建议处置方式填遗失核销。保留维修与寄出资料，最后见到时刻不得早于寄出时刻。");
             workbook.write(output);
             return output.toByteArray();
         } catch (IOException failure) {

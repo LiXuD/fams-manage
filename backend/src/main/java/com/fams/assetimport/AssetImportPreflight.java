@@ -144,7 +144,8 @@ public final class AssetImportPreflight {
                 preScrapState = required(row, mapping, "preScrapState", errors);
                 custodyState = preScrapState;
             }
-            boolean repairOpening = "维修中".equals(custodyState) || "返厂维修".equals(state);
+            boolean factoryOpening = "返厂维修".equals(custodyState);
+            boolean repairOpening = "维修中".equals(custodyState) || factoryOpening;
             if (repairOpening) {
                 preRepairState = required(row, mapping, "preRepairState", errors);
                 custodyState = preRepairState;
@@ -154,14 +155,19 @@ public final class AssetImportPreflight {
                     }
                     custodyState = null;
                 }
-                repair = repairFacts(row, mapping, catalog, "返厂维修".equals(state), now, errors);
+                repair = repairFacts(row, mapping, catalog, factoryOpening, now, errors);
             }
             if (pendingScrap) {
                 proposedDisposition = required(row, mapping, "proposedDisposition", errors);
                 boolean lossDisposition = List.of("遗失核销", "LOSS_WRITTEN_OFF").contains(proposedDisposition);
-                if (lossDisposition && List.of("在库", "在用个人", "在用公用", "借出").contains(preScrapState)) {
+                if (lossDisposition && (factoryOpening || List.of("在库", "在用个人", "在用公用", "借出").contains(preScrapState))) {
                     loss = lossFacts(row, mapping, now, errors);
-                } else if (lossDisposition || !repairOpening && !List.of("在库", "在用个人", "在用公用").contains(preScrapState)) {
+                    if (factoryOpening && loss.lastSeenAt() != null && repair.factory().dispatchedAt() != null
+                            && loss.lastSeenAt().isBefore(repair.factory().dispatchedAt())) {
+                        errors.add(error(row, mapping, "lossLastSeenAt", loss.lastSeenAt().toString(), "INITIAL_LOSS_TIME_INVALID"));
+                    }
+                } else if (lossDisposition || factoryOpening
+                        || !repairOpening && !List.of("在库", "在用个人", "在用公用").contains(preScrapState)) {
                     if (!preScrapState.isBlank()) {
                         errors.add(error(row, mapping, "preScrapState", preScrapState,
                                 "UNSUPPORTED_PRE_SCRAP_STATE"));
