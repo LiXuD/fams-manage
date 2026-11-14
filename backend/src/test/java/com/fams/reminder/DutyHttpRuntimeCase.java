@@ -463,6 +463,24 @@ class DutyHttpRuntimeCase {
                 VALUES (931000,9007199254740993,
                     '{"subjects":[{"dimension":"LOCATION"},{"dimension":"CONFLICT"}]}',REPEAT('0',64))
                 """);
+        db.update("UPDATE fams_inventory_task SET task_status='WAITING_REVIEW',expected_count=2 WHERE id=931001");
+        db.update("""
+                INSERT INTO fams_inventory_item_review (item_id,recheck_generation,task_id,observation_id,
+                    review_status,verified_observed_at,reviewed_asset_version,reason,evidence,
+                    reviewer_account_id,reviewer_username,reviewed_at)
+                SELECT id,recheck_generation,task_id,9007199254740993,'ACCEPTED',NOW(3),0,
+                    'Verified fixture','fixture',931003,'duty3',NOW(3)
+                FROM fams_inventory_item WHERE task_id=931001
+                """);
+        String progress = "/operations-reports/inventory-progress";
+        assertEquals(403, code(get(warehouse, progress)));
+        var active = ok(get(administrator, progress + "?before=931002&pageSize=1"));
+        assertEquals("931001", active.path("items").get(0).path("taskId").asText());
+        assertEquals(2, active.path("items").get(0).path("expected").asInt());
+        assertEquals(1, active.path("items").get(0).path("accepted").asInt());
+        db.update("UPDATE fams_inventory_item SET recheck_generation=1 WHERE task_id=931001");
+        assertEquals(0, ok(get(administrator, progress + "?before=931002")).path("items").get(0).path("accepted").asInt());
+        assertTrue(ok(get(administrator, progress + "?before=931001")).path("items").isEmpty());
         var path = "/operations-reports/inventory";
         var window = "?from=2026-11-01&toExclusive=2026-12-01";
         assertEquals(403, code(get(warehouse, path + window)));

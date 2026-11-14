@@ -30,6 +30,15 @@ class SealedInventoryReportController {
         this.reports = reports;
     }
 
+    @GetMapping("/api/v1/operations-reports/inventory-progress")
+    ResponseEntity<SealedInventoryReportService.ProgressPage> progress(
+            @RequestParam(required = false) @Positive Long before,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
+        actors.requireAssetAdmin();
+        return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .body(reports.progress(before, pageSize));
+    }
+
     @GetMapping("/api/v1/operations-reports/inventory")
     ResponseEntity<SealedInventoryReportService.Page> list(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,

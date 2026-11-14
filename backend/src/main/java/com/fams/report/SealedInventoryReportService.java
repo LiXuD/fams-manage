@@ -80,6 +80,27 @@ class SealedInventoryReportService {
                 Timestamp.from(until.atStartOfDay().toInstant(ZoneOffset.UTC)), before, before, limit);
     }
 
+    ProgressPage progress(Long before, int pageSize) {
+        var rows = db.query("""
+                SELECT t.id,t.name,t.task_status,t.due_at,t.expected_count,
+                    (SELECT COUNT(*) FROM fams_inventory_item i JOIN fams_inventory_item_review r
+                        ON r.item_id=i.id AND r.recheck_generation=i.recheck_generation
+                        WHERE i.task_id=t.id AND r.task_id=t.id AND r.review_status='ACCEPTED') AS accepted
+                FROM fams_inventory_task t
+                WHERE t.task_status IN ('READY','IN_PROGRESS','WAITING_REVIEW') AND (? IS NULL OR t.id<?)
+                ORDER BY t.id DESC LIMIT ?
+                """, (row, index) -> new Progress(row.getString("id"), row.getString("name"),
+                        row.getString("task_status"), row.getTimestamp("due_at").toInstant(),
+                        row.getLong("expected_count"), row.getLong("accepted")), before, before, pageSize + 1);
+        if (rows.size() <= pageSize) {
+            return new ProgressPage(rows, null);
+        }
+        return new ProgressPage(List.copyOf(rows.subList(0, pageSize)), rows.get(pageSize - 1).taskId());
+    }
+
+    record Progress(String taskId, String name, String status, Instant dueAt, long expected, long accepted) {}
+    record ProgressPage(List<Progress> items, String nextBefore) {}
+
     record Task(String taskId, String name, Instant sealedAt, long expected, long accepted,
                 long notObserved, long differenceEvidence, long conflictEvidence) {}
     record Page(List<Task> items, String nextBefore) {}

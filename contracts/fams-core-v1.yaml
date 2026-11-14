@@ -9533,6 +9533,41 @@ paths:
         '400': { description: Invalid or oversized UTC window. }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /operations-reports/inventory-progress:
+    get:
+      tags: [Reports]
+      operationId: listActiveInventoryProgress
+      summary: List current inventory tasks with accepted observations in the current recheck generation.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - { name: before, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: Current ready, in-progress and waiting-review tasks.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextBefore]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [taskId, name, status, dueAt, expected, accepted]
+                      properties:
+                        taskId: { $ref: '#/components/schemas/Id' }
+                        name: { type: string }
+                        status: { type: string, enum: [READY, IN_PROGRESS, WAITING_REVIEW] }
+                        dueAt: { type: string, format: date-time }
+                        expected: { type: integer, format: int64, minimum: 0 }
+                        accepted: { type: integer, format: int64, minimum: 0 }
+                  nextBefore: { type: string, nullable: true, pattern: '^[1-9][0-9]*$' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /operations-reports/inventory:
     get:
       tags: [Reports]
