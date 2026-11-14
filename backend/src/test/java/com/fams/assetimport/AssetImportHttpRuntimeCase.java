@@ -243,6 +243,11 @@ class AssetImportHttpRuntimeCase {
         long publishedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - publishedStarted);
         assertEquals("PUBLISHED", JSON.readTree(body(request("GET", "/asset-import-batches/" + id,
                 null, warehouse, null, null))).get("status").asText());
+        String linkedRestartMarker = System.getenv("D6_23_IMPORT_COMMITTED_MARKER");
+        if (linkedRestartMarker != null) {
+            holdAfterLinkedPublication(template.body(), warehouse, assetAdmin, worker, Path.of(linkedRestartMarker));
+            return;
+        }
         openingPendingScrapFollowsRealApprovalAndRollback(template.body(), warehouse, assetAdmin, worker);
         openingRepairAndFactoryFollowExistingProcessing(template.body(), warehouse, assetAdmin, worker);
         openingRepairScrapRetainsBorrowingAndCanRestoreOrRollBack(template.body(), warehouse, assetAdmin, worker);
@@ -968,6 +973,86 @@ class AssetImportHttpRuntimeCase {
         assertEquals("CANCELLED", db.queryForObject("SELECT request_status FROM fams_scrap_request WHERE initial_batch_id=?",
                 String.class, reversible));
         System.out.println("D6_23_INITIAL_FACTORY_DISPOSITION retained=1 destroyed=1 wrong_time_rejected=2 restored=1 rolled_back=1");
+    }
+
+    private void holdAfterLinkedPublication(byte[] template, Session warehouse, Session administrator,
+            AssetImportWorker worker, Path marker) throws Exception {
+        var repair = openingRepairRow("D623-RECOVERY-REPAIR", false);
+        var lost = openingRepairRow("D623-RECOVERY-LOST", false);
+        var factoryLost = openingRepairRow("D623-RECOVERY-FACTORY-LOST", true);
+        var retained = openingRepairRow("D623-RECOVERY-RETAINED", true);
+        var destroyed = openingRepairRow("D623-RECOVERY-DESTROYED", true);
+        for (var row : List.of(repair, lost, factoryLost, retained, destroyed)) {
+            row.putAll(Map.of(7, "待报废", 15, "核对期初报废原因", 16, "按原凭证核对责任事实"));
+        }
+        repair.putAll(Map.of(14, "维修中", 17, "待处置保管"));
+        for (var row : List.of(lost, factoryLost)) {
+            row.putAll(Map.of(14, row == lost ? "借出" : "返厂维修", 17, "遗失核销",
+                    36, "2026-09-13T09:00:00+08:00", 37, "最后核对地点",
+                    38, "2026-09-14T09:00:00+08:00", 39, "保管与遗失责任原始凭证已核对"));
+        }
+        for (var row : List.of(retained, destroyed)) {
+            row.putAll(Map.of(14, "返厂维修", 17, row == retained ? "FACTORY_RETAINED" : "FACTORY_DESTROYED",
+                    40, "2026-09-13T09:00:00.123+08:00", 41, "厂家原始处置记录已核对"));
+        }
+        String batch = publishScrapBatch(template, warehouse, administrator, worker, "d623-linked-recovery",
+                List.of(repair, lost, factoryLost, retained, destroyed), 5, 0);
+        var snapshot = linkedPublicationSnapshot(batch);
+        assertEquals(5, snapshot.get("publication").size());
+        assertEquals(5, snapshot.get("scrap").size());
+        assertEquals(4, snapshot.get("repair").size());
+        assertEquals(3, snapshot.get("rounds").size());
+        assertEquals(2, snapshot.get("loans").size());
+        assertEquals(2, snapshot.get("loss").size());
+        assertEquals(2, snapshot.get("factoryDisposition").size());
+        assertEquals(5, snapshot.get("locks").size());
+        assertEquals(7, snapshot.get("todos").size());
+        assertEquals(1, snapshot.get("jobs").size());
+        assertEquals("SUCCEEDED", snapshot.get("jobs").getFirst().get("job_status"));
+        assertEquals(1, ((Number) snapshot.get("jobs").getFirst().get("execution_generation")).intValue());
+        Path stagedMarker = marker.resolveSibling("publication-in-progress.json");
+        Files.writeString(stagedMarker, JSON.writeValueAsString(Map.of("batchId", batch, "snapshot", snapshot)));
+        Files.move(stagedMarker, marker, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        TimeUnit.MINUTES.sleep(5);
+    }
+
+    @Test
+    void restartedJvmPreservesCommittedLinkedPublication() throws Exception {
+        var marker = JSON.readTree(Files.readString(Path.of(required("D6_23_IMPORT_REPLAY_MARKER"))));
+        String batch = marker.path("batchId").asText();
+        var before = marker.path("snapshot");
+        assertEquals("PUBLISHED", db.queryForObject("SELECT batch_status FROM fams_asset_import_batch WHERE id=?",
+                String.class, batch));
+        assertEquals(before, JSON.readTree(JSON.writeValueAsString(linkedPublicationSnapshot(batch))));
+        var worker = new AssetImportWorker(jobs, publication, rollbacks);
+        worker.poll();
+        worker.poll();
+        assertEquals(before, JSON.readTree(JSON.writeValueAsString(linkedPublicationSnapshot(batch))));
+        System.out.println("D6_23_LINKED_IMPORT_RESTART published=5 generation=1 snapshots_unchanged=true");
+    }
+
+    private Map<String, List<Map<String, Object>>> linkedPublicationSnapshot(String batch) {
+        String assets = "(SELECT asset_id FROM fams_asset_import_publication WHERE batch_id=?)";
+        var result = new java.util.LinkedHashMap<String, List<Map<String, Object>>>();
+        result.put("publication", db.queryForList("SELECT * FROM fams_asset_import_publication WHERE batch_id=? ORDER BY sheet_row", batch));
+        result.put("scrap", db.queryForList("SELECT * FROM fams_scrap_request WHERE initial_batch_id=? ORDER BY id", batch));
+        result.put("repair", db.queryForList("SELECT * FROM fams_repair_request WHERE initial_batch_id=? ORDER BY id", batch));
+        result.put("loans", db.queryForList("SELECT * FROM fams_loan WHERE initial_batch_id=? ORDER BY id", batch));
+        result.put("rounds", db.queryForList("SELECT * FROM fams_repair_factory_round WHERE asset_id IN " + assets + " ORDER BY id", batch));
+        result.put("loss", db.queryForList("SELECT * FROM fams_loss_report WHERE asset_id IN " + assets + " ORDER BY id", batch));
+        result.put("factoryDisposition", db.queryForList("SELECT d.* FROM fams_initial_factory_disposition d"
+                + " JOIN fams_repair_factory_round r ON r.id=d.round_id WHERE r.asset_id IN " + assets + " ORDER BY d.id", batch));
+        result.put("locks", db.queryForList("SELECT * FROM fams_asset_business_lock WHERE released_at IS NULL"
+                + " AND asset_id IN " + assets + " ORDER BY id", batch));
+        result.put("todos", db.queryForList("""
+                SELECT * FROM fams_todo WHERE closed_at IS NULL AND
+                  ((business_type='SCRAP' AND business_id IN (SELECT id FROM fams_scrap_request WHERE initial_batch_id=?))
+                    OR (business_type='LOST_REPORT' AND business_id IN (SELECT id FROM fams_loss_report WHERE asset_id IN
+                      (SELECT asset_id FROM fams_asset_import_publication WHERE batch_id=?))))
+                ORDER BY id
+                """, batch, batch));
+        result.put("jobs", db.queryForList("SELECT * FROM fams_durable_job WHERE job_kind='ASSET_IMPORT' AND business_reference=?", batch));
+        return result;
     }
 
     private Map<Integer, String> openingRepairRow(String code, boolean factory) {
