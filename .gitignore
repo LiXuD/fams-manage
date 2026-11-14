@@ -54,6 +54,7 @@ docs/superpowers/designs/2026-09-06-fams-ui/figma-native/*verification-output.tx
 /.aoci/
 /.gitnexus/
 /.claude/
+/.qoder/
 /.codex/
 /.mcp.json
 /CLAUDE.md

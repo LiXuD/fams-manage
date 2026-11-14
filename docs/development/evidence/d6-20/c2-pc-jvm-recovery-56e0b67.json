@@ -1,0 +1,231 @@
+{
+  "web_url": "http://127.0.0.1:59088",
+  "api_port": 59086,
+  "candidate": "56e0b67",
+  "closure_capture": "automatic on replacement inbound COMPLETED with old responsibility retained",
+  "artifact_sha256": "c24063fa6a775249384c57caff8a8c82a8ebdcb13768c5624b227a439eec0537",
+  "admin_username": "owned20admin",
+  "employee_username": "owned20employee",
+  "warehouse_username": "owned20warehouse",
+  "asset_code": "OWNED20-983010",
+  "original_serial": "OWNED20-SERIAL-983010",
+  "initial_custody": "PERSONAL\t983000\t983002\t983099\n",
+  "scanner_version": "ClamAV 1.4.6/28129/Sun Sep 20 06:26:26 2026",
+  "container": "fams-d6-20c2-fixed-browser-c66204baca127d97",
+  "actual_committing_jvm_pid": 69498,
+  "actual_committing_process_group_killed": 69497,
+  "new_process_group": 70873,
+  "original_receipt_replayed": true,
+  "before_independent_inbound": {
+    "rounds": 1,
+    "repairs": 1,
+    "newStage": "DRAFT",
+    "oldLocks": 1,
+    "received": 0,
+    "dispatched": 1,
+    "assetOrigins": 1,
+    "newLifecycle": "WAITING_INBOUND",
+    "oldLifecycle": "FACTORY_REPAIR",
+    "replacements": 1,
+    "inboundStatus": "DRAFT",
+    "inboundOrigins": 1
+  },
+  "originals": [
+    {
+      "round": "1",
+      "object": "38d83042-ec6c-48e0-9e18-31317bd58089",
+      "sha256": "6ced18aea50f40663a8cf39950b70ae365f9a2d8a951c33e162b4bed275024f7",
+      "purpose": "FACTORY_ACK",
+      "read_sha256": "6ced18aea50f40663a8cf39950b70ae365f9a2d8a951c33e162b4bed275024f7",
+      "bytes": 8937
+    },
+    {
+      "round": "1",
+      "object": "678af9f1-f035-4517-85f0-8aa340f7b15d",
+      "sha256": "fface47800efdea1f01144fe72aa4aef8a82dd67d7f2eeee631e7b4b90b7d3f0",
+      "purpose": "REPLACEMENT",
+      "read_sha256": "fface47800efdea1f01144fe72aa4aef8a82dd67d7f2eeee631e7b4b90b7d3f0",
+      "bytes": 9004
+    }
+  ],
+  "original_card_complete_row_unchanged": true,
+  "business_side_effects_unchanged": {
+    "fams_asset": {
+      "rows": 2,
+      "sha256": "dc85eb3772744e3bfce284c2448dd0477d7fc8506ed9d9b38ffbbb15c46a860d"
+    },
+    "fams_asset_business_lock": {
+      "rows": 1,
+      "sha256": "2e84afc982bd121244c49486ba7e57d55fec7c59d54e17dcde13efe50b398b82"
+    },
+    "fams_asset_factory_replacement_origin": {
+      "rows": 1,
+      "sha256": "82eee355f4958e1fe53ee2f2681540a1b17abf2ba427a7e17f146436aad38d88"
+    },
+    "fams_asset_tag": {
+      "rows": 1,
+      "sha256": "f44bffcf3f2f0614cba50b1e137dcc1cc91538cdc8e10e50886cdc9acfe2b65f"
+    },
+    "fams_asset_tag_history": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_asset_timeline_event": {
+      "rows": 4,
+      "sha256": "4e739675939c730079b9f3e7011e49108b3ef770e623b5650bdad0496c6ea3f4"
+    },
+    "fams_idempotency_record": {
+      "rows": 2,
+      "sha256": "5278d07be82ae28d7b7de3837158bda405fcdf97eacc4f8070d90d2fb1505f63"
+    },
+    "fams_inbound_acceptance": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_inbound_approval_scope_item": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_inbound_decision": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_inbound_factory_replacement_origin": {
+      "rows": 1,
+      "sha256": "415c629341051c5cd03eea92d8b677178aca7a15abd493dd3be948f74035a86d"
+    },
+    "fams_inbound_processing_ownership": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_inbound_receipt": {
+      "rows": 1,
+      "sha256": "d0accfe35e64106bba2804a5da8e863059f8bb5287b5418d8968590218635c59"
+    },
+    "fams_inbound_receipt_item": {
+      "rows": 1,
+      "sha256": "09fb7725741f3b96716cefe86181b76884112f345f34dce99cb2511ee4b1520d"
+    },
+    "fams_loan": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_number_allocation": {
+      "rows": 2,
+      "sha256": "89bf71f3ed17a2c8cad530a1baa2ebb730f7b111c2617d8a0d5d6d4931e87e5c"
+    },
+    "fams_number_sequence": {
+      "rows": 2,
+      "sha256": "89f69589079e098213cfb0d5f39851e14486e68f89e0abbba6f10da3195a7218"
+    },
+    "fams_numbering_rule": {
+      "rows": 2,
+      "sha256": "9cb919ca2faf50db4289a0b1121e05d7e59dc5f4ecfdd52db52f56f7544f86ae"
+    },
+    "fams_repair_approved_return_target": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_collaboration_attachment": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_decision": {
+      "rows": 1,
+      "sha256": "f9b30c9205fdadde560cbe64b426ca7b8057cdac99ae0648558440dd47b6d1fa"
+    },
+    "fams_repair_event": {
+      "rows": 10,
+      "sha256": "dd28b319de23bee1f8dffb78f1a4e07eb69d2d8fa7b76d5d1a69f4fbfb5ab0cc"
+    },
+    "fams_repair_factory_cost": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_factory_event": {
+      "rows": 6,
+      "sha256": "edc95a866e8d8bfefd616d5ae476e74c425beca38a9c0e4a10e800d143c43860"
+    },
+    "fams_repair_factory_evidence": {
+      "rows": 2,
+      "sha256": "40f75121dcbdb247c730a8a8012f571ecffe69426760665472221f763f5f52c6"
+    },
+    "fams_repair_factory_parts_change": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_factory_quote": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_factory_replacement": {
+      "rows": 1,
+      "sha256": "9f12f15d6bd01530e92e3adfde46324b8c942228cab50cd17dc3601cacb9f7d2"
+    },
+    "fams_repair_factory_round": {
+      "rows": 1,
+      "sha256": "79a1fc86ef11c1b558ca50ab99b01490c462014ac309acef705b751cca7e56a3"
+    },
+    "fams_repair_factory_scope": {
+      "rows": 1,
+      "sha256": "00ecc18d2c5ecfc6290c20d0b1ee88d4d99bd890565eea28c23b0c7e95b2cf1d"
+    },
+    "fams_repair_inbound": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_inventory_evidence": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_invitation": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_opinion": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_photo": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_physical_handling": {
+      "rows": 1,
+      "sha256": "9d80a780cf77518dad8513c665f4cab8f7ec9a74be88b40dfce7db54d482e30f"
+    },
+    "fams_repair_proxy_return_evidence": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_receipt": {
+      "rows": 9,
+      "sha256": "c1864aeac4c2c5f677c74edcbae77df9d8c9af46ca964b61e44c0e9ca9934ce0"
+    },
+    "fams_repair_request": {
+      "rows": 1,
+      "sha256": "b4c253cf0a00ba4aea1b2eed25613cdde70468da26ecd5be59d9f86c81e7858b"
+    },
+    "fams_repair_return_handover": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_return_origin": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_return_recollection": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_todo": {
+      "rows": 5,
+      "sha256": "f4f3dd4662871d1adb3cf09b0fc0adb4afdc959361dc360207a7c6b62826b2b1"
+    },
+    "business_audits": {
+      "rows": 11,
+      "sha256": "8a7816a5c521868b9ce8943662e03675f5ae87dcff03d2ebd16fd84be19b8c5d"
+    }
+  },
+  "replay_body_source": "Complete persisted typed ReplacementFact; equivalent canonical F1 request, not a raw transport-byte claim"
+}

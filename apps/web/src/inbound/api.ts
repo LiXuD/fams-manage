@@ -20,6 +20,7 @@ export interface InboundReceipt {
   items: InboundItem[];
   currentProcessor?: { processor: { id: string; username: string } };
   decision?: { result: string; comment?: string };
+  factoryReplacement?: { sourceId: string; originalAssetId: string; replacementAssetId: string; repairId: string; roundId: string };
 }
 interface Page<T> { page: number; pageSize: number; total: number; items: T[] }
 

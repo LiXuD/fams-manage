@@ -1,0 +1,193 @@
+{
+  "candidate": "f2f7b1bb07a96fa3f1db34ba47e866a2de3d9965",
+  "featureCommit": "1e95d57c832a154aab240afa36c6dd74128c829f",
+  "scope": "D6-20D / D6-21B2b5 factory missing original and recovery to original repair",
+  "productGate": {
+    "exit": 0,
+    "requiredJavaTests": 519,
+    "webTests": 221,
+    "miniTests": 331,
+    "checkstyle": 0,
+    "spotbugs": 0,
+    "lineCoverage": {
+      "covered": 21680,
+      "total": 23312
+    },
+    "branchCoverage": {
+      "covered": 7664,
+      "total": 10142
+    },
+    "applicationRestartPassed": true,
+    "mysqlSameVolumeRestartPassed": true,
+    "log": "factory-f2f7b1b-product-gate.txt",
+    "sha256": "12ac53c82f3b81aa2c9afd1f20c38a9907d23164c9718c1c7c29a348bc62c81d"
+  },
+  "actualPC": {
+    "journey": {
+      "candidate": "f2f7b1b",
+      "runtimeContainer": "fams-d6-22-f2f7b1b-browser-7e18ff2b9d82d83b",
+      "repairId": "1",
+      "reportId": "1",
+      "roundId": "1",
+      "events": [
+        {
+          "role": "employee",
+          "path": "/api/v1/auth/login",
+          "status": 200
+        },
+        {
+          "role": "administrator",
+          "path": "/api/v1/auth/login",
+          "status": 200
+        },
+        {
+          "role": "warehouse",
+          "path": "/api/v1/auth/login",
+          "status": 200
+        },
+        {
+          "role": "employee",
+          "path": "/api/v1/repairs",
+          "status": 200
+        },
+        {
+          "role": "administrator",
+          "path": "/api/v1/repairs/1/decision",
+          "status": 200
+        },
+        {
+          "role": "warehouse",
+          "path": "/api/v1/repairs/1/claim",
+          "status": 200
+        },
+        {
+          "role": "warehouse",
+          "path": "/api/v1/repairs/1/accept-away",
+          "status": 200
+        },
+        {
+          "role": "warehouse",
+          "path": "/api/v1/repairs/1/factory/rounds",
+          "status": 200
+        },
+        {
+          "role": "warehouse",
+          "path": "/api/v1/repairs/1/factory/rounds/1/evidence",
+          "status": 200
+        },
+        {
+          "role": "warehouse",
+          "path": "/api/v1/repairs/1/factory/rounds/1/dispatch",
+          "status": 200
+        },
+        {
+          "role": "warehouse",
+          "path": "/api/v1/loss-reports/factory/1/rounds/1",
+          "status": 200
+        },
+        {
+          "role": "warehouse",
+          "path": "/api/v1/loss-reports/1/photos",
+          "status": 200
+        },
+        {
+          "role": "administrator",
+          "path": "/api/v1/loss-reports/1/decision",
+          "status": 200
+        },
+        {
+          "role": "warehouse",
+          "path": "/api/v1/loss-reports/1/claim",
+          "status": 200
+        },
+        {
+          "role": "warehouse",
+          "path": "/api/v1/loss-reports/1/search",
+          "status": 200
+        },
+        {
+          "role": "warehouse",
+          "path": "/api/v1/loss-reports/1/confirm-lost",
+          "status": 200
+        },
+        {
+          "role": "warehouse",
+          "path": "/api/v1/loss-reports/1/factory-recovery-requests",
+          "status": 200
+        },
+        {
+          "role": "administrator",
+          "path": "/api/v1/loss-reports/recoveries/1/decision",
+          "status": 200
+        },
+        {
+          "role": "warehouse",
+          "path": "/api/v1/loss-reports/recoveries/1/claim",
+          "status": 200
+        },
+        {
+          "role": "warehouse",
+          "path": "/api/v1/loss-reports/recoveries/1/execute-to-factory",
+          "status": 200
+        },
+        {
+          "role": "warehouse",
+          "path": "/api/v1/repairs/1/factory/rounds/1/evidence",
+          "status": 200
+        },
+        {
+          "role": "warehouse",
+          "path": "/api/v1/repairs/1/factory/rounds/1/receive-original",
+          "status": 200
+        }
+      ]
+    },
+    "committingJvmRecovery": {
+      "candidate": "f2f7b1b",
+      "artifactSha256": "197bd1d3ad844c892e32aa105f8cd2db4e91d5dcbbb75164c54e6bcfdb531d7c",
+      "sameLock": "2",
+      "sameRepair": "1",
+      "committingJvm": 76964,
+      "originalReceiptReplayed": true,
+      "roundAndHistoricalConfirmationUnchanged": true
+    },
+    "final": {
+      "actualOriginalReceived": true,
+      "repairLockRetained": true,
+      "candidate": "f2f7b1b"
+    },
+    "realScanner": "ClamAV 1.4.6/28129",
+    "cleanup": {
+      "ownedApplicationAndViteStopped": true,
+      "ownedMysqlAndClamdContainersAbsent": true
+    }
+  },
+  "failedAttempts": [
+    {
+      "candidate": "1e95d57",
+      "stage": "Java blocking quality",
+      "reason": "Three Spring constructor injection EI_EXPOSE_REP2 reports",
+      "resolvedIn": "f2f7b1b"
+    },
+    {
+      "stage": "PC attempt 1",
+      "reason": "Exact label selection did not match the location select"
+    },
+    {
+      "stage": "PC attempt 2",
+      "reason": "Script expected a superseded no-cost scope control"
+    },
+    {
+      "stage": "PC attempt 3",
+      "reason": "Chromium rejected a noncanonical zero-second datetime string"
+    }
+  ],
+  "limitations": [
+    "Factory slice awaits independent review.",
+    "D6-20D and D6-21B2b5 retain scrap-source requirements.",
+    "Gate and PC proof apply to f2f7b1b, not later scrap execution or frontend commits.",
+    "Native 331 tests prove handlers and adapters. Real WeChat/device validation remains scheduled separately.",
+    "PC uploaded and scanned originals. This journey did not additionally verify restricted download bytes.",
+    "Remote CI, formal QA and production acceptance remain unverified."
+  ]
+}

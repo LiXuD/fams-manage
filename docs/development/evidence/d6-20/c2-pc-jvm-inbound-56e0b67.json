@@ -1,0 +1,327 @@
+{
+  "web_url": "http://127.0.0.1:55358",
+  "api_port": 55356,
+  "candidate": "56e0b67",
+  "closure_capture": "automatic on replacement inbound COMPLETED with old responsibility retained",
+  "artifact_sha256": "c24063fa6a775249384c57caff8a8c82a8ebdcb13768c5624b227a439eec0537",
+  "admin_username": "owned20admin",
+  "employee_username": "owned20employee",
+  "warehouse_username": "owned20warehouse",
+  "asset_code": "OWNED20-983010",
+  "original_serial": "OWNED20-SERIAL-983010",
+  "initial_custody": "PERSONAL\t983000\t983002\t983099\n",
+  "scanner_version": "ClamAV 1.4.6/28129/Sun Sep 20 06:26:26 2026",
+  "container": "fams-d6-20c2-fixed-browser-6c2084599298a545",
+  "actual_committing_jvm_pid": 84212,
+  "actual_committing_process_group_killed": 84211,
+  "new_process_group": 85962,
+  "original_receipt_replayed": true,
+  "before_independent_inbound": {
+    "rounds": 1,
+    "repairs": 1,
+    "newStage": "DRAFT",
+    "oldLocks": 1,
+    "received": 0,
+    "dispatched": 1,
+    "assetOrigins": 1,
+    "newLifecycle": "WAITING_INBOUND",
+    "oldLifecycle": "FACTORY_REPAIR",
+    "replacements": 1,
+    "inboundStatus": "DRAFT",
+    "inboundOrigins": 1
+  },
+  "originals": [
+    {
+      "round": "1",
+      "object": "7ea3c9e1-14af-4627-bffa-d5674544eca9",
+      "sha256": "6ced18aea50f40663a8cf39950b70ae365f9a2d8a951c33e162b4bed275024f7",
+      "purpose": "FACTORY_ACK",
+      "read_sha256": "6ced18aea50f40663a8cf39950b70ae365f9a2d8a951c33e162b4bed275024f7",
+      "bytes": 8937
+    },
+    {
+      "round": "1",
+      "object": "208a5ad8-8e56-428c-9597-b17c8a39c55f",
+      "sha256": "fface47800efdea1f01144fe72aa4aef8a82dd67d7f2eeee631e7b4b90b7d3f0",
+      "purpose": "REPLACEMENT",
+      "read_sha256": "fface47800efdea1f01144fe72aa4aef8a82dd67d7f2eeee631e7b4b90b7d3f0",
+      "bytes": 9004
+    }
+  ],
+  "original_card_complete_row_unchanged": true,
+  "business_side_effects_unchanged": {
+    "fams_asset": {
+      "rows": 2,
+      "sha256": "7aca5054613cc8e94a58eaeabac57b6289420fa1993d102892a918c49ba1fe91"
+    },
+    "fams_asset_business_lock": {
+      "rows": 1,
+      "sha256": "8b27491a34318e50847476a62188a67d8c0f5855cdb55353477df570f36955f4"
+    },
+    "fams_asset_factory_replacement_origin": {
+      "rows": 1,
+      "sha256": "bb1482348513de30fabe1444c00dce0e838329445d48d62989ad347c04a8f78b"
+    },
+    "fams_asset_tag": {
+      "rows": 1,
+      "sha256": "7a6d87b48eb89f77c665a3bbf90d614b64ebd79ff8e10d0a51a10c2531204cb0"
+    },
+    "fams_asset_tag_history": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_asset_timeline_event": {
+      "rows": 4,
+      "sha256": "3839d198ae83276c00eb771647384d9f9c4dbb925edc4cdefad3f25c0c99e316"
+    },
+    "fams_idempotency_record": {
+      "rows": 2,
+      "sha256": "94ef8da1b50f475e6e70c274ada647ce476966ed1f5e111ec7474dc518722502"
+    },
+    "fams_inbound_acceptance": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_inbound_approval_scope_item": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_inbound_decision": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_inbound_factory_replacement_origin": {
+      "rows": 1,
+      "sha256": "2c7a9ee433e9d6eb652bf8583725e3c91f762d33279c0707ec0f93a9a0062604"
+    },
+    "fams_inbound_processing_ownership": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_inbound_receipt": {
+      "rows": 1,
+      "sha256": "ae7435e999687a62b30c8a3516abd298ab0b652fe2b56ed97bf55dfe1e946dc2"
+    },
+    "fams_inbound_receipt_item": {
+      "rows": 1,
+      "sha256": "55a382ec0281698b2f95ddccf3aa0f119ecc5d0866428fbb2cd72c45d703e7b4"
+    },
+    "fams_loan": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_number_allocation": {
+      "rows": 2,
+      "sha256": "e54cb804422145d49bb9a88c92550126bb07a956a59287dbf96308e56c508dab"
+    },
+    "fams_number_sequence": {
+      "rows": 2,
+      "sha256": "0b06b7e7c690c9ee330e5b546865f9dd27bff6b00ea7509bc31fab2ae5f03f08"
+    },
+    "fams_numbering_rule": {
+      "rows": 2,
+      "sha256": "92824a7182317e8cdb922634d00710ba911255e99c8636c6e3e1d2a649319f25"
+    },
+    "fams_repair_approved_return_target": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_collaboration_attachment": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_decision": {
+      "rows": 1,
+      "sha256": "548863a408e56c383713ba125b6fba2aa3b3c9edc6eda732ed078583bc236a1f"
+    },
+    "fams_repair_event": {
+      "rows": 10,
+      "sha256": "751ac3f6271f1113250982901bcc27cfe9b849011f8b6d63fdc362f92b453491"
+    },
+    "fams_repair_factory_cost": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_factory_event": {
+      "rows": 6,
+      "sha256": "e05d7ca0e1d396f90f5e7b8f8a541541160e17363db56f00b50557b4bffdae20"
+    },
+    "fams_repair_factory_evidence": {
+      "rows": 2,
+      "sha256": "9970f365aa3a1918a454074cea309d7a8db950f632f47c5c096432f649275dfa"
+    },
+    "fams_repair_factory_parts_change": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_factory_quote": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_factory_replacement": {
+      "rows": 1,
+      "sha256": "70f56f7774b1c9bbcc7d84768fbabd65678679d2629c75b7257a6a7f3e804e70"
+    },
+    "fams_repair_factory_round": {
+      "rows": 1,
+      "sha256": "fbca80133ab4e73233f1ef3dd976e8a57d406ff4be0aa7cf36fcdb0693a29d43"
+    },
+    "fams_repair_factory_scope": {
+      "rows": 1,
+      "sha256": "1af25a722893868956e71dd2583983f594287a684c7fca688a9dec01ad2b9868"
+    },
+    "fams_repair_inbound": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_inventory_evidence": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_invitation": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_opinion": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_photo": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_physical_handling": {
+      "rows": 1,
+      "sha256": "9a2db9f34012414b272626547cc0f559b231b027420993521b5b75fdf6fcf4b9"
+    },
+    "fams_repair_proxy_return_evidence": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_receipt": {
+      "rows": 9,
+      "sha256": "278ca109b42e3b9681949bd789df98bf765ed460b90cb5abe3277a355fd6ada1"
+    },
+    "fams_repair_request": {
+      "rows": 1,
+      "sha256": "04b009f798bed49c16188e540c67bc018e6024688da82f098a4b2635d02bf525"
+    },
+    "fams_repair_return_handover": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_return_origin": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_repair_return_recollection": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fams_todo": {
+      "rows": 5,
+      "sha256": "0ee6924d2ef9f5eecda64a35a3f1943511e1be5f1d6a0cb7626f448088cff179"
+    },
+    "business_audits": {
+      "rows": 11,
+      "sha256": "e66bbf4c4f8908ace61dbb11902013492a687693155d11dec8cbeb4f0685cfbb"
+    }
+  },
+  "replay_body_source": "Complete persisted typed ReplacementFact; equivalent canonical F1 request, not a raw transport-byte claim",
+  "after_real_separate_inbound": {
+    "rounds": 1,
+    "repairs": 1,
+    "newStage": "ACTIVE",
+    "oldLocks": 1,
+    "received": 0,
+    "dispatched": 1,
+    "assetOrigins": 1,
+    "newLifecycle": "IN_STOCK",
+    "oldLifecycle": "FACTORY_REPAIR",
+    "replacements": 1,
+    "inboundStatus": "COMPLETED",
+    "inboundOrigins": 1
+  },
+  "original_round_and_replacement_immutable": true,
+  "original_card_complete_row_still_unchanged": true,
+  "original_card_dates_unchanged": true,
+  "new_old_independent_identities": {
+    "sourceId": "2e2b435f-7575-488b-a288-b6f904017926",
+    "originalCode": "OWNED20-983010",
+    "originalSerial": "OWNED20-SERIAL-983010",
+    "originalAssetId": "983010",
+    "replacementSerial": "PC-REPLACEMENT-983010",
+    "replacementAssetId": "983011"
+  },
+  "bidirectional_owner_trace": {
+    "983010": {
+      "items": [
+        {
+          "sourceId": "2e2b435f-7575-488b-a288-b6f904017926",
+          "originalAssetId": "983010",
+          "replacementAssetId": "983011",
+          "repairId": "1",
+          "roundId": "1",
+          "originalAssetCode": "OWNED20-983010",
+          "replacementAssetCode": "ASSET-E-PRXA-N-00000001",
+          "originalSerialNumber": "OWNED20-SERIAL-983010",
+          "replacementSerialNumber": "PC-REPLACEMENT-983010"
+        }
+      ]
+    },
+    "983011": {
+      "items": [
+        {
+          "sourceId": "2e2b435f-7575-488b-a288-b6f904017926",
+          "originalAssetId": "983010",
+          "replacementAssetId": "983011",
+          "repairId": "1",
+          "roundId": "1",
+          "originalAssetCode": "OWNED20-983010",
+          "replacementAssetCode": "ASSET-E-PRXA-N-00000001",
+          "originalSerialNumber": "OWNED20-SERIAL-983010",
+          "replacementSerialNumber": "PC-REPLACEMENT-983010"
+        }
+      ]
+    }
+  },
+  "pcBidirectionalCardTraceVerified": true,
+  "employeePcPrivacy": {
+    "newSerialVisible": false,
+    "newNameVisible": false,
+    "privateProviderVisible": false,
+    "privateFactoryPanelVisible": false
+  },
+  "pageConsoleLogs": {
+    "chrome": [],
+    "iab": []
+  },
+  "ownedRuntimeCleanup": {
+    "runnerExit": 0,
+    "appAndViteListenersAbsent": true,
+    "photoDirectoriesAbsent": true,
+    "mysqlAndClamContainersRemoved": true,
+    "originalSharedMysqlPreserved": true,
+    "ownedBrowserTabsClosed": true
+  },
+  "harnessCorrections": [
+    "Draft lifecycle expected WAITING_INBOUND instead of IN_STOCK",
+    "Refresh final trace session after potentially long manual wait; save final SQL facts before trace reads",
+    "Allow only documentation descendants of the exact fixed functional candidate"
+  ],
+  "fixtureLimitations": [
+    "Minimal old-card SQL fixture has no old tag; opening that card reports unavailable tag after its card detail loads. Both trace directions work, and owner-created new card renders its actual tag and QR code."
+  ],
+  "screenshots": {
+    "d6-20c2-pc-inbound-completed.png": {
+      "path": "output/d6-20c2-pc-inbound-completed.png",
+      "sha256": "901585d6ee2e7f81c179256f906e14f657e9aa1facbbac5b1791232cd3731827"
+    },
+    "d6-20c2-pc-trace.png": {
+      "path": "output/d6-20c2-pc-trace.png",
+      "sha256": "4b80ba4c9e498bcebdb7a09957ed05b95b3093f88a1b31fea75c3df49fa7a183"
+    }
+  },
+  "independentReview": "PENDING",
+  "status": "IN_REVIEW"
+}

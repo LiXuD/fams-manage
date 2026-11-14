@@ -20,6 +20,21 @@ const fields = [
   { key: "warehouse", label: "仓库编码" }, { key: "location", label: "位置编码" },
   { key: "usingOrganization", label: "使用组织编码" }, { key: "employee", label: "使用人编号" },
   { key: "borrowedDate", label: "借出日期" }, { key: "expectedReturnDate", label: "预计归还日" },
+  { key: "preScrapState", label: "报废前状态" }, { key: "scrapReason", label: "报废原因" },
+  { key: "scrapCondition", label: "报废前现状" }, { key: "proposedDisposition", label: "建议处置方式" },
+  { key: "preRepairState", label: "维修前状态" }, { key: "repairStage", label: "当前维修阶段" },
+  { key: "repairFault", label: "维修故障" }, { key: "repairImpact", label: "影响程度" },
+  { key: "repairOccurredAt", label: "故障发生时刻" }, { key: "repairAcceptedAt", label: "接修时刻" },
+  { key: "repairLocation", label: "接修位置编码" }, { key: "repairEvidence", label: "维修承接依据" },
+  { key: "factoryProvider", label: "厂家名称" }, { key: "factoryContact", label: "厂家联系人" },
+  { key: "factoryPhone", label: "厂家联系电话" }, { key: "factoryDestination", label: "厂家实物去向" },
+  { key: "factoryDispatchedAt", label: "实际寄出时刻" }, { key: "factoryDispatchEvidence", label: "寄出依据" },
+  { key: "factoryDue", label: "预计收回日期" }, { key: "factoryCostPolicy", label: "返厂费用规则" },
+  { key: "factoryCostLimit", label: "返厂费用限额" }, { key: "factoryRoundNumber", label: "当前返厂轮次" },
+  { key: "lossLastSeenAt", label: "最后见到时刻" }, { key: "lossLastLocation", label: "最后见到地点" },
+  { key: "lossConfirmedAt", label: "确认遗失时刻" }, { key: "lossEvidence", label: "遗失责任依据" },
+  { key: "factoryDispositionAt", label: "厂家实际处置时刻" },
+  { key: "factoryDispositionEvidence", label: "厂家处置凭证" },
 ];
 const file = ref<File | null>(null);
 const uploadKey = ref(crypto.randomUUID());

@@ -257,6 +257,32 @@ class TransferService {
         if (replay != null) {
             return replay;
         }
+        long id = createDraft(actor, current, input, null);
+        return finish(current, "create", key, hash, detail(request(id)));
+    }
+
+    Map<String, Object> createFromLoss(Actor actor, long asset, long version,
+            AssetTransferPort.Target target, String reason, LossTransferPort.Source loss) {
+        var current = actors.revalidateLocked(actor);
+        role(current, Role.WAREHOUSE_OPERATOR);
+        long id = createDraft(actor, current, new TransferController.Draft(
+                reason, List.of(new TransferController.Item(asset, version, target))), loss);
+        var item = items(id).getFirst();
+        if (db.update("UPDATE fams_asset_business_lock SET business_type='TRANSFER',"
+                + "business_id=?,business_item_id=?,lock_version=lock_version+1"
+                + " WHERE asset_id=? AND business_type='LOST_REPORT' AND business_id=?"
+                + " AND business_item_id=? AND lock_version=? AND released_at IS NULL",
+                id, item.get("id"), asset, loss.reportId(), loss.lossItemId(), loss.lockVersion()) != 1) {
+            throw new TransferFailure("TRANSFER_LOCK_CHANGED", 409);
+        }
+        submit(id);
+        event(actor, current, id, number(item, "id"), "TRANSFER_FROM_LOSS_RECOVERY",
+                Map.of("reportId", Long.toString(loss.reportId()), "lossItemId", Long.toString(loss.lossItemId())));
+        return detail(request(id));
+    }
+
+    private long createDraft(Actor actor, Current current, TransferController.Draft input,
+            LossTransferPort.Source loss) {
         if (input.items().stream().map(TransferController.Item::assetId).distinct().count()
                 != input.items().size()) {
             throw new TransferFailure("TRANSFER_DUPLICATE_ASSET", 400);
@@ -277,12 +303,17 @@ class TransferService {
             sourceAllowed(current, source);
             var target = assets.validateTarget(source, inputItem.target());
             boolean receipt = receiptRequired(source, target);
-            Object parameter =
+            String parameter =
                     one(
                                     "SELECT snapshot_json FROM fams_business_parameter_version"
                                             + " WHERE id=?",
                                     source.get("parameter_version_id"))
-                            .get("snapshot_json");
+                            .get("snapshot_json").toString();
+            if (loss != null) {
+                var snapshot = (tools.jackson.databind.node.ObjectNode) json.readTree(parameter);
+                snapshot.set("lossRecovery", json.valueToTree(loss));
+                parameter = json.writeValueAsString(snapshot);
+            }
             db.update(
                     "INSERT INTO fams_transfer_item"
                         + " (request_id,asset_id,asset_version,source_snapshot_json,target_snapshot_json,parameter_snapshot_json,receiver_employee_id,receipt_required)"
@@ -292,7 +323,7 @@ class TransferService {
                     inputItem.assetVersion(),
                     json.writeValueAsString(source),
                     json.writeValueAsString(inputItem.target()),
-                    parameter.toString(),
+                    parameter,
                     receipt ? inputItem.target().employeeId() : null,
                     receipt);
         }
@@ -303,7 +334,7 @@ class TransferService {
                 null,
                 "TRANSFER_DRAFT_CREATED",
                 Map.of("count", input.items().size()));
-        return finish(current, "create", key, hash, detail(request(id)));
+        return id;
     }
 
     Map<String, Object> action(Actor actor, long id, long version, String key, String action) {
@@ -319,6 +350,10 @@ class TransferService {
         switch (action) {
             case "submit" -> {
                 creator(current, request);
+                if (List.of("REJECTED", "CANCELLED").contains(request.get("request_status"))) {
+                    resubmitLoss(id);
+                    break;
+                }
                 state(request, "DRAFT");
                 for (var item : items(id)) {
                     var source = source(item);
@@ -333,8 +368,7 @@ class TransferService {
                             item.get("id"),
                             now());
                 }
-                updateState(id, "PENDING_APPROVAL");
-                todo(id, "APPROVAL", "ASSET_ADMIN", null);
+                submit(id);
             }
             case "cancel" -> {
                 creator(current, request);
@@ -343,7 +377,7 @@ class TransferService {
                 }
                 if ("PENDING_APPROVAL".equals(request.get("request_status"))) {
                     for (var item : items(id)) {
-                        release(item);
+                        endWithoutFulfillment(item);
                     }
                 }
                 db.update(
@@ -379,6 +413,39 @@ class TransferService {
         return finish(current, action, key, hash, detail(request(id)));
     }
 
+    private void submit(long id) {
+        updateState(id, "PENDING_APPROVAL");
+        todo(id, "APPROVAL", "ASSET_ADMIN", null);
+    }
+
+    private void resubmitLoss(long id) {
+        var currentItems = items(id);
+        if (currentItems.size() != 1 || !lossSourced(currentItems.getFirst())) {
+            throw new TransferFailure("TRANSFER_STATE_CHANGED", 409);
+        }
+        var item = currentItems.getFirst();
+        assets.snapshot(number(item, "asset_id"), number(item, "asset_version"));
+        active(item);
+        db.update("UPDATE fams_transfer_item SET item_status='READY',destination=NULL,"
+                + "delivery_evidence=NULL,delivered_at=NULL,receipt_deadline_at=NULL,"
+                + "version=version+1 WHERE id=?", item.get("id"));
+        db.update("UPDATE fams_transfer SET decided_by=NULL,decision_reason=NULL,decided_at=NULL,"
+                + "approved_version=NULL,processor_account_id=NULL WHERE id=?", id);
+        submit(id);
+    }
+
+    private boolean lossSourced(Map<String, Object> item) {
+        return json.readTree(item.get("parameter_snapshot_json").toString()).has("lossRecovery");
+    }
+
+    private void endWithoutFulfillment(Map<String, Object> item) {
+        if (lossSourced(item)) {
+            lock(item);
+        } else {
+            release(item);
+        }
+    }
+
     Map<String, Object> decide(
             Actor actor, long id, long version, String key, TransferController.Decision input) {
         var current = actors.revalidateLocked(actor);
@@ -395,7 +462,7 @@ class TransferService {
             if (input.approved()) {
                 active(item);
             } else {
-                release(item);
+                endWithoutFulfillment(item);
             }
         }
         db.update(
@@ -856,7 +923,7 @@ class TransferService {
                 "UPDATE fams_transfer_item SET item_status='CANCELLED',version=version+1 WHERE"
                         + " id=?",
                 item.get("id"));
-        release(item);
+        endWithoutFulfillment(item);
     }
 
     private void aggregate(long id) {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AssetReturnReassignment from "@/components/AssetReturnReassignment.vue";
 import AppChrome from "@/components/AppChrome.vue";
@@ -16,6 +16,10 @@ const page = ref(1); const total = ref(0); const due = ref(""); const reason = r
 const requestId = ref(""); const requestVersion = ref(0); const assetId = ref(""); const assetVersion = ref(0);
 const returnAssets = ref<ReturnAssetChoice[]>([]);
 const borrowRequests = ref<BorrowRequestChoice[]>([]);
+const lastSeen = ref(""), lastLocation = ref(""), missingCircumstances = ref("");
+const lossStates: Record<string, string> = { PENDING_ADMIN_DECISION: "待审批", WAITING_WAREHOUSE_CLAIM: "待认领",
+  VERIFYING: "待核实", SEARCHING: "查找中", CONFIRMED_LOST: "已确认遗失", RECOVERED: "已找回",
+  REJECTED: "已驳回", CANCELLED: "已撤回" };
 const observed = ref(""); const result = ref<"NORMAL" | "DAMAGED" | "MISSING">("NORMAL");
 const warehouseId = ref(""); const locationId = ref(""); const warehouses = ref<ReturnChoice[]>([]); const locations = ref<ReturnChoice[]>([]);
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
@@ -23,7 +27,7 @@ const warehouse = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATO
 const bins = computed(() => locations.value.filter(l => l.warehouseId === warehouseId.value));
 const canInspect = computed(() => warehouse.value && selectedReturn.value?.returnStatus === "WAREHOUSE_PROCESSING"
   && selectedReturn.value.processorAccountId === session.user?.id);
-const labels: Record<string, string> = { OPEN: "借用中", RETURNED: "已归还", VOID: "期初已撤销", PENDING: "待审批",
+const labels: Record<string, string> = { OPEN: "借用中", RETURNED: "已归还", VOID: "期初已撤销", LOST_TERMINATED: "遗失终止", PENDING: "待审批",
   APPROVED: "已批准", REJECTED: "已驳回", PENDING_APPROVAL: "待管理员确认", WAITING_WAREHOUSE_CLAIM: "待库管领取",
   WAREHOUSE_PROCESSING: "待实物验收", COMPLETED: "验收完成", TRANSFERRED: "已转后续处理" };
 let pending: LoanMutation | null = null;
@@ -110,8 +114,33 @@ function inspect() {
     if (!wh || !bin || !observed.value.trim()) { error.value = "请核对实物编码并选择仓库、仓位。"; return; }
     Object.assign(body, { observedCode: observed.value.trim(), warehouseId: wh.id, warehouseVersion: wh.version,
       locationId: bin.id, locationVersion: bin.version });
+  } else {
+    const facts = missingLossFacts();
+    if (!facts) return;
+    body.missingLoss = facts;
   }
   void mutate(`/asset-returns/${row.id}/inspect`, row.version, body);
+}
+function missingLossFacts() {
+  const observedAt = new Date(lastSeen.value);
+  if (!Number.isFinite(observedAt.getTime()) || !lastLocation.value.trim() || missingCircumstances.value.trim().length < 10) {
+    error.value = "请填写最后见到时间、地点和实物查找情况。";
+    return null;
+  }
+  return { lastSeenAt: observedAt.toISOString(), lastLocation: lastLocation.value.trim(),
+    circumstances: missingCircumstances.value.trim() };
+}
+const missingContinuation = computed(() => selectedReturn.value?.followups?.find(
+  followup => followup.businessType === "LOST_REPORT" && followup.missingLossLockVersion != null));
+watch(() => selectedReturn.value?.id, () => {
+  lastSeen.value = ""; lastLocation.value = ""; missingCircumstances.value = "";
+});
+function retryMissingLoss() {
+  const row = selectedReturn.value, followup = missingContinuation.value;
+  if (!row?.asset || !followup || followup.version == null) return;
+  const facts = missingLossFacts();
+  if (facts) void mutate(`/asset-returns/${row.id}/missing-loss`, followup.version, {
+    assetVersion: row.asset.version, lockVersion: followup.missingLossLockVersion, facts });
 }
 async function catalog(kind: string) {
   const rows: ReturnChoice[] = []; let p = 1; let part: ReturnChoice[];
@@ -140,7 +169,7 @@ onMounted(async () => {
     <h2>借用记录</h2>
     <table><thead><tr><th>资产</th><th>预计归还日</th><th>状态</th><th>操作</th></tr></thead><tbody>
       <tr v-for="row in loans" :key="row.id"><td>{{ row.assetCode }} · {{ row.name }}</td><td>{{ row.expectedReturnDate }}</td>
-        <td>{{ labels[row.relationStatus] }}{{ row.overdue ? ' · 已逾期' : '' }}</td>
+        <td>{{ labels[row.relationStatus] ?? row.relationStatus }}{{ row.overdue ? ' · 已逾期' : '' }}</td>
         <td><button :disabled="busy || retryable" @click="choose(row.id)">查看 / 延期 / 归还</button></td></tr>
     </tbody></table><p v-if="!loans.length">当前范围没有借用记录。</p>
     <div v-if="selected" class="panel">
@@ -173,9 +202,11 @@ onMounted(async () => {
       </select></label>
       <button :disabled="busy || retryable" @click="proposeReturn">提请退库</button>
     </details>
-    <div v-for="row in returns" :key="row.id"><button :disabled="busy || retryable" @click="choose(row.id, true)">退还 {{ row.id }} · {{ labels[row.returnStatus] }}</button></div>
+    <div v-for="row in returns" :key="row.id"><button :disabled="busy || retryable" @click="choose(row.id, true)">退还 {{ row.id }} · {{ labels[row.returnStatus] }}<template v-if="row.returnLossReport"> · {{ row.returnLossReport.recovered ? '实物已找回' : lossStates[row.returnLossReport.status] ?? row.returnLossReport.status }}</template></button></div>
     <div v-if="selectedReturn" class="panel">
       <h3>退还 {{ selectedReturn.id }} · {{ selectedReturn.asset?.assetCode }} · {{ labels[selectedReturn.returnStatus] }}</h3><p>{{ selectedReturn.reason }}</p>
+      <p v-if="selectedReturn.lossRecovery">找回关联退库：历史报失 {{selectedReturn.lossRecovery.reportId}}。原责任和借用保留至实物验收；驳回仍保留资产锁。</p>
+      <button v-if="admin &amp;&amp; selectedReturn.lossRecovery &amp;&amp; selectedReturn.returnStatus==='REJECTED'" :disabled="busy || retryable || !reason.trim()" @click="mutate(`/asset-returns/${selectedReturn.id}/resubmit-loss`,selectedReturn.version,{approved:false,reason:reason.trim()})">补充说明并重新送审退库</button>
       <template v-if="admin && selectedReturn.returnStatus === 'PENDING_APPROVAL'"><button :disabled="busy || retryable" @click="decide(selectedReturn.id, selectedReturn.version, true, true)">批准退还</button>
         <button :disabled="busy || retryable" @click="decide(selectedReturn.id, selectedReturn.version, false, true)">驳回退还</button></template>
       <button v-if="warehouse && selectedReturn.returnStatus === 'WAITING_WAREHOUSE_CLAIM'" :disabled="busy || retryable"
@@ -189,10 +220,19 @@ onMounted(async () => {
           <label>仓库 <select v-model="warehouseId" :disabled="busy || retryable" @change="locationId = ''"><option value="">请选择</option><option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select></label>
           <label>仓位 <select v-model="locationId" :disabled="busy || retryable"><option value="">请选择</option><option v-for="l in bins" :key="l.id" :value="l.id">{{ l.name }}</option></select></label>
         </template>
-        <p v-else>实物缺失将保留借用责任，进入报失处理。</p><button :disabled="busy || retryable" @click="inspect">提交实物验收</button>
+        <p v-else>实物缺失将保留借用责任，并提交关联报失审批。</p>
+        <button v-if="result !== 'MISSING'" :disabled="busy || retryable" @click="inspect">提交实物验收</button>
       </div>
+      <fieldset v-if="(canInspect &amp;&amp; result === 'MISSING') || missingContinuation" :disabled="busy || retryable">
+        <legend>实物缺失报失依据</legend>
+        <label>最后见到时间<input v-model="lastSeen" type="datetime-local" /></label>
+        <label>最后见到地点<input v-model="lastLocation" maxlength="500" /></label>
+        <label>实物查找情况<textarea v-model="missingCircumstances" maxlength="2000" /></label>
+        <button v-if="missingContinuation" @click="retryMissingLoss">从原归还继续报失</button>
+        <button v-else @click="inspect">提交缺失验收并发起报失</button>
+      </fieldset>
       <p v-if="selectedReturn.inspectionResult">验收结果 {{ selectedReturn.inspectionResult }} · {{ selectedReturn.inspectionReason }}</p>
-      <p v-for="followup in selectedReturn.followups" :key="followup.id">后续 {{ followup.id }} · {{ followup.businessType === 'REPAIR' ? '损坏维修' : '报失处理' }} · {{ followup.followupStatus === 'CLOSED' ? '已实际完成' : followup.followupStatus === 'ACCEPTED' ? '正式处理中' : '待继续处理' }}<span v-if="followup.linkedRepairId || followup.lastRepairId"> · 正式维修 {{ followup.linkedRepairId || followup.lastRepairId }}（{{ followup.repairStatus === 'COMPLETED' ? '已验收入库' : followup.repairStatus === 'REJECTED' || followup.repairStatus === 'CANCELLED' ? '原维修未执行，源义务仍待处理' : '尚未实际完成' }}）</span></p>
+      <p v-for="followup in selectedReturn.followups" :key="followup.id">后续 {{ followup.id }} · {{ followup.businessType === 'REPAIR' ? '损坏维修' : '报失处理' }} · {{ followup.followupStatus === 'CLOSED' ? '已实际完成' : followup.followupStatus === 'ACCEPTED' ? '正式处理中' : '待继续处理' }}<span v-if="followup.linkedRepairId || followup.lastRepairId"> · 正式维修 {{ followup.linkedRepairId || followup.lastRepairId }}（{{ followup.repairStatus === 'COMPLETED' ? '已验收入库' : followup.repairStatus === 'REJECTED' || followup.repairStatus === 'CANCELLED' ? '原维修未执行，源义务仍待处理' : '尚未实际完成' }}）</span><span v-if="followup.lossReport"> · <router-link :to="'/loss-reports/' + followup.lossReport.reportId">报失 {{ followup.lossReport.reportId }}</router-link> · {{ followup.lossReport.recovered ? '实物已找回' : lossStates[followup.lossReport.status] ?? followup.lossReport.status }}<template v-if="followup.recoveryReturnStatus"> · 找回关联退还 {{ labels[followup.recoveryReturnStatus] }}</template></span></p>
     </div>
     <div><button :disabled="busy || retryable || page === 1" @click="page--; refresh()">上一页</button> {{ page }}
       <button :disabled="busy || retryable || page * 20 >= total" @click="page++; refresh()">下一页</button></div>

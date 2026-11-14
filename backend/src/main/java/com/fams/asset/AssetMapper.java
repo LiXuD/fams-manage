@@ -14,6 +14,9 @@ import org.apache.ibatis.annotations.Update;
 
 @Mapper
 interface AssetMapper {
+    @Select("SELECT COUNT(*) FROM fams_asset_factory_replacement_origin WHERE asset_id=#{id}")
+    long factoryReplacement(@Param("id") long id);
+
     @Select("SELECT a.*, " + AssetPhysicalSql.PROJECTION + " FROM fams_asset a WHERE a.id = #{id}")
     Map<String, Object> find(@Param("id") long id);
 

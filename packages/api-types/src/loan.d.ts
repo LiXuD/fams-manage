@@ -19,13 +19,18 @@ export interface LoanExtension {
   extensionStatus: "PENDING" | "APPROVED" | "REJECTED"; version: number;
   decisionReason: string | null; overdueFrom: string | null; overdueThrough: string | null;
 }
+export interface ReturnLossSummary { reportId: string; status: string; recovered: boolean; recoveryReturnId?: string | null }
 export interface AssetReturn {
+  lossRecovery?: { reportId: string; lossItemId: string; lockVersion: number; evidenceJson: string };
   id: string; assetId: string; loanId: string | null; assetVersion: number; version: number;
   proposedBy: string; responsibleEmployeeId: string; reason: string;
   returnStatus: "PENDING_APPROVAL" | "REJECTED" | "WAITING_WAREHOUSE_CLAIM" | "WAREHOUSE_PROCESSING" | "COMPLETED" | "TRANSFERRED";
   processorAccountId: string | null; inspectionResult: "NORMAL" | "DAMAGED" | "MISSING" | null;
   inspectionReason: string | null; lockVersion?: number | null;
   asset?: { id: string; assetCode: string; name: string; version: number; lifecycleStatus: string; exceptionStatus: string };
-  followups?: { id: string; businessType: string; followupStatus: string; linkedRepairId?: string | null; lastRepairId?: string | null; repairStatus?: string | null }[];
+  canReportMissing?: boolean;
+  returnLossReport?: ReturnLossSummary;
+  followups?: { id: string; businessType: string; followupStatus: string; linkedRepairId?: string | null; lastRepairId?: string | null; repairStatus?: string | null; version?: number;
+    missingLossLockVersion?: number | null; canRetryMissingLoss?: boolean; lossReport?: ReturnLossSummary | null; recoveryReturnStatus?: string }[];
 }
 export interface ReturnChoice { id: string; name: string; version: number; warehouseId?: string }

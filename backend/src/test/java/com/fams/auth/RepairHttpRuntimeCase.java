@@ -186,6 +186,13 @@ class RepairHttpRuntimeCase {
     @AfterEach
     void cleanup() throws Exception {
         db.execute("DROP TRIGGER IF EXISTS owned_repair_audit_failure");
+        String scraps = " IN (SELECT id FROM fams_scrap_request WHERE asset_id BETWEEN 951020 AND 951023)";
+        db.update("DELETE FROM fams_todo WHERE business_type='SCRAP' AND business_id" + scraps);
+        db.update("DELETE FROM fams_scrap_reversal WHERE request_id" + scraps);
+        db.update("DELETE FROM fams_scrap_disposition WHERE request_id" + scraps);
+        db.update("DELETE FROM fams_scrap_event WHERE request_id" + scraps);
+        db.update("DELETE FROM fams_scrap_receipt WHERE scrap_request_id" + scraps);
+        db.update("DELETE FROM fams_scrap_request WHERE asset_id BETWEEN 951020 AND 951023");
         db.update(
                 "DELETE FROM fams_todo WHERE business_type='REPAIR' AND business_id IN (SELECT id"
                         + " FROM fams_repair_request WHERE creator_account_id BETWEEN 951001 AND"
@@ -683,7 +690,7 @@ class RepairHttpRuntimeCase {
                         "repair_id=" + id + " AND action='REPAIR_CONFLICT_REJECTED'"));
     }
 
-    private void borrowing(boolean expired) {
+    void borrowing(boolean expired) {
         db.update(
                 "INSERT INTO"
                     + " fams_asset_import_batch(id,actor_account_id,upload_key,source_sha256,source_bytes,source_xlsx,created_at,updated_at)"
@@ -837,6 +844,241 @@ class RepairHttpRuntimeCase {
                         .statusCode());
         assertEquals("IN_USE", lifecycle(951020));
         assertEquals(2, detail(warehouse, id).path("version").asInt());
+    }
+
+    @Test
+    void repairScrapTransfersTheOriginalLockRestoresAndKeepsItsProcessor() throws Exception {
+        var submitted = submit(employee, 951020);
+        String repair = submitted.path("id").asText(), repairPath = "/" + repair;
+        ok(post(admin, repairPath + "/decision", decision(), 0, key()));
+        ok(post(warehouse, repairPath + "/claim", null, 1, key()));
+        var row = detail(warehouse, repair);
+        ok(post(warehouse, repairPath + "/accept-in-place", physical(row), row.path("version").asLong(), key()));
+        row = detail(warehouse, repair);
+        long version = row.path("version").asLong();
+        var originalRepair = db.queryForMap("SELECT * FROM fams_repair_request WHERE id=?", Long.parseLong(repair));
+        var originalAsset = db.queryForMap("SELECT * FROM fams_asset WHERE id=951020");
+        var originalLock = db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020 AND released_at IS NULL");
+        var body = JSON.createObjectNode().put("assetVersion", row.path("assetVersion").asLong())
+                .put("ownershipVersion", row.path("ownershipVersion").asLong()).put("lockVersion", row.path("lockVersion").asLong())
+                .put("reason", "原机已受理维修，确认需要申请报废").put("observedCondition", "现场原机故障无法恢复")
+                .put("proposedDisposition", "实物待处置");
+        String from = "/from-repair/" + repair, requestKey = key();
+        assertEquals(403, scrapPost(employee, from, body.toString(), version, key()).statusCode());
+        assertEquals(409, scrapPost(otherWarehouse, from, body.toString(), version, key()).statusCode());
+        db.execute("CREATE TRIGGER owned_repair_audit_failure BEFORE INSERT ON fams_audit_event"
+                + " FOR EACH ROW BEGIN IF NEW.action='SCRAP_SUBMITTED' THEN SIGNAL"
+                + " SQLSTATE '45000' SET MESSAGE_TEXT='owned repair scrap late failure'; END IF; END");
+        assertEquals(500, scrapPost(warehouse, from, body.toString(), version, requestKey).statusCode());
+        db.execute("DROP TRIGGER owned_repair_audit_failure");
+        assertEquals(originalRepair, db.queryForMap("SELECT * FROM fams_repair_request WHERE id=?", Long.parseLong(repair)));
+        assertEquals(originalAsset, db.queryForMap("SELECT * FROM fams_asset WHERE id=951020"));
+        assertEquals(originalLock, db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020 AND released_at IS NULL"));
+        var scrap = ok(scrapPost(warehouse, from, body.toString(), version, requestKey));
+        assertEquals(scrap, ok(scrapPost(warehouse, from, body.toString(), version, requestKey)));
+        String scrapPath = "/" + scrap.path("id").asText();
+        var handed = db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020 AND released_at IS NULL");
+        assertEquals(originalLock.get("id"), handed.get("id"));
+        assertEquals("SCRAP", handed.get("business_type"));
+        assertEquals("PENDING_SCRAP", lifecycle(951020));
+        assertFalse(detail(warehouse, repair).path("actions").path("completeInPlace").asBoolean(true));
+        var decision = JSON.createObjectNode().put("assetVersion", scrap.path("assetVersion").asLong())
+                .put("lockVersion", ((Number) handed.get("lock_version")).longValue())
+                .put("result", "REJECT").put("reason", "继续原维修处理");
+        var restored = ok(scrapPost(admin, scrapPath + "/decision", decision.toString(), 0, key()));
+        assertEquals("REJECTED", restored.path("status").asText());
+        assertEquals("UNDER_REPAIR", lifecycle(951020));
+        var returnedLock = db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020 AND released_at IS NULL");
+        assertEquals(originalLock.get("id"), returnedLock.get("id"));
+        assertEquals("REPAIR", returnedLock.get("business_type"));
+        row = detail(warehouse, repair);
+        assertEquals(originalRepair.get("processor_account_id").toString(), row.path("processorAccountId").asText());
+        body.put("assetVersion", row.path("assetVersion").asLong()).put("lockVersion", row.path("lockVersion").asLong());
+        var next = ok(scrapPost(warehouse, from, body.toString(), row.path("version").asLong(), key()));
+        handed = db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020 AND released_at IS NULL");
+        var approve = JSON.createObjectNode().put("assetVersion", next.path("assetVersion").asLong())
+                .put("lockVersion", ((Number) handed.get("lock_version")).longValue())
+                .put("result", "APPROVE").put("reason", "批准原维修实物报废").put("approvedDisposition", "实物待处置");
+        scrapPath = "/" + next.path("id").asText();
+        var approved = ok(scrapPost(admin, scrapPath + "/decision", approve.toString(), 0, key()));
+        assertEquals("PROCESSING", approved.path("status").asText());
+        assertEquals("951003", approved.path("processorAccountId").asText());
+        assertEquals(409, scrapPost(otherWarehouse, scrapPath + "/claim", approve.toString(), 1, key()).statusCode());
+        var execution = JSON.createObjectNode().put("assetVersion", next.path("assetVersion").asLong())
+                .put("lockVersion", ((Number) handed.get("lock_version")).longValue())
+                .put("ownershipVersion", approved.path("ownershipVersion").asLong())
+                .put("observedCode", "REP-ASSET-951020").put("observedSerial", "")
+                .put("locationId", "951001").put("locationVersion", 0).put("custodianEmployeeId", "951003")
+                .put("custodianVersion", 0).put("occurredAt", Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString())
+                .put("physicalIdentityVerified", true).put("evidence", "已经现场核对同一原机、保管位置与实际处置责任")
+                .put("dispositionMethod", "实物待处置");
+        String executeKey = key();
+        var completed = ok(scrapPost(warehouse, scrapPath + "/execute", execution.toString(), 1, executeKey));
+        assertEquals(completed, ok(scrapPost(warehouse, scrapPath + "/execute", execution.toString(), 1, executeKey)));
+        assertEquals("SCRAPPED", lifecycle(951020));
+        assertEquals("COMPLETED", detail(warehouse, repair).path("status").asText());
+        assertEquals(originalAsset.get("current_location_id"), db.queryForMap("SELECT * FROM fams_asset WHERE id=951020").get("current_location_id"));
+        assertEquals(0, count("fams_asset_business_lock", "asset_id=951020 AND released_at IS NULL"));
+        assertEquals("PENDING_DISPOSITION", db.queryForObject("SELECT disposition_status FROM fams_scrap_disposition"
+                + " WHERE request_id=?", String.class, next.path("id").asLong()));
+    }
+
+    @Test
+    void borrowedRepairScrapKeepsLoanUntilExecutionAndRollsBackLateFailure() throws Exception {
+        borrowing(false);
+        var initialLoan = db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020");
+        var submitted = submit(employee, 951020);
+        String repair = submitted.path("id").asText(), path = "/" + repair;
+        ok(post(admin, path + "/decision", decision(), 0, key()));
+        ok(post(warehouse, path + "/claim", null, 1, key()));
+        var row = detail(warehouse, repair);
+        ok(post(warehouse, path + "/accept-in-place", physical(row), row.path("version").asLong(), key()));
+        row = detail(warehouse, repair);
+        var input = JSON.createObjectNode().put("assetVersion", row.path("assetVersion").asLong())
+                .put("lockVersion", row.path("lockVersion").asLong()).put("ownershipVersion", row.path("ownershipVersion").asLong())
+                .put("reason", "借用原机维修无法恢复").put("observedCondition", "原机仍在原保管人处")
+                .put("proposedDisposition", "实物待处置");
+        var scrap = ok(scrapPost(warehouse, "/from-repair/" + repair, input.toString(), row.path("version").asLong(), key()));
+        String scrapPath = "/" + scrap.path("id").asText();
+        assertEquals(initialLoan, db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020"));
+        var lock = db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020 AND released_at IS NULL");
+        var approve = JSON.createObjectNode().put("assetVersion", scrap.path("assetVersion").asLong())
+                .put("lockVersion", ((Number) lock.get("lock_version")).longValue()).put("result", "APPROVE")
+                .put("reason", "核准关联实物报废范围").put("approvedDisposition", "实物待处置");
+        var approved = ok(scrapPost(admin, scrapPath + "/decision", approve.toString(), 0, key()));
+        var before = db.queryForMap("SELECT * FROM fams_repair_request WHERE id=?", Long.parseLong(repair));
+        var execution = JSON.createObjectNode().put("assetVersion", scrap.path("assetVersion").asLong())
+                .put("lockVersion", ((Number) lock.get("lock_version")).longValue())
+                .put("ownershipVersion", approved.path("ownershipVersion").asLong()).put("observedCode", "REP-ASSET-951020")
+                .put("locationId", "951001").put("locationVersion", 0).put("custodianEmployeeId", "951003").put("custodianVersion", 0)
+                .put("occurredAt", Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString())
+                .put("physicalIdentityVerified", true).put("evidence", "已经现场核对原借用实物及实际保管和处置责任")
+                .put("dispositionMethod", "实物待处置");
+        db.execute("CREATE TRIGGER owned_repair_audit_failure BEFORE INSERT ON fams_audit_event"
+                + " FOR EACH ROW BEGIN IF NEW.action='SCRAP_EXECUTED' THEN SIGNAL"
+                + " SQLSTATE '45000' SET MESSAGE_TEXT='owned repair closure rollback'; END IF; END");
+        String requestKey = key();
+        assertEquals(500, scrapPost(warehouse, scrapPath + "/execute", execution.toString(), 1, requestKey).statusCode());
+        db.execute("DROP TRIGGER owned_repair_audit_failure");
+        assertEquals(initialLoan, db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020"));
+        assertEquals(before, db.queryForMap("SELECT * FROM fams_repair_request WHERE id=?", Long.parseLong(repair)));
+        assertEquals("PENDING_SCRAP", lifecycle(951020));
+        var executed = ok(scrapPost(warehouse, scrapPath + "/execute", execution.toString(), 1, requestKey));
+        var terminated = db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020");
+        assertEquals("LOST_TERMINATED", terminated.get("relation_status"));
+        for (String field : List.of("borrowed_date", "original_return_date", "expected_return_date", "borrower_employee_id")) {
+            assertEquals(initialLoan.get(field), terminated.get(field));
+        }
+
+        long scrapId = scrap.path("id").asLong();
+        long assetVersion = executed.path("assetVersion").asLong();
+        var closedRepair = db.queryForMap("SELECT * FROM fams_repair_request WHERE id=?", Long.parseLong(repair));
+        var originalScrap = db.queryForMap("SELECT * FROM fams_scrap_request WHERE id=?", scrapId);
+        assertEquals("COMPLETED", detail(warehouse, repair).path("status").asText());
+        var read = ok(http.send(HttpRequest.newBuilder(URI.create(
+                        "http://127.0.0.1:" + port + "/api/v1/scrap-requests" + scrapPath))
+                .header("Cookie", warehouse.cookie()).GET().build(), HttpResponse.BodyHandlers.ofString()));
+        assertTrue(read.path("actions").path("initiateReversal").asBoolean());
+        var request = JSON.createObjectNode().put("assetVersion", assetVersion).put("locationId", "951000")
+                .put("locationVersion", 0).put("reason", "原机尚未处置，申请核实后重新验收入库");
+        ok(scrapPost(warehouse, scrapPath + "/reversals", request.toString(), executed.path("version").asLong(), key()));
+        String reversal = "/reversals/" + db.queryForObject(
+                "SELECT id FROM fams_scrap_reversal WHERE request_id=?", Long.class, scrapId);
+        var decision = JSON.createObjectNode().put("assetVersion", assetVersion)
+                .put("result", "APPROVE").put("reason", "准予原实物重新验收入库");
+        ok(scrapPost(admin, reversal + "/decision", decision.toString(), 0, key()));
+        var claim = JSON.createObjectNode().put("assetVersion", assetVersion);
+        ok(scrapPost(warehouse, reversal + "/claim", claim.toString(), 1, key()));
+        var intake = JSON.createObjectNode().put("assetVersion", assetVersion)
+                .put("ownershipVersion", executed.path("ownershipVersion").asLong()).put("locationVersion", 0)
+                .put("observedCode", "REP-ASSET-951020").put("physicalIdentityVerified", true)
+                .put("occurredAt", Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString())
+                .put("evidence", "现场核验维修关联原机及批准的有效仓位后验收入库");
+        String intakeKey = key();
+        var reversed = ok(scrapPost(warehouse, reversal + "/execute", intake.toString(), 2, intakeKey));
+        assertEquals(reversed, ok(scrapPost(warehouse, reversal + "/execute", intake.toString(), 2, intakeKey)));
+        assertEquals("IN_STOCK", lifecycle(951020));
+        assertEquals(951000L, db.queryForObject("SELECT current_location_id FROM fams_asset WHERE id=951020", Long.class));
+        assertEquals("REVERSED", db.queryForObject(
+                "SELECT disposition_status FROM fams_scrap_disposition WHERE request_id=?", String.class, scrapId));
+        assertEquals(originalScrap, db.queryForMap("SELECT * FROM fams_scrap_request WHERE id=?", scrapId));
+        assertEquals(closedRepair, db.queryForMap("SELECT * FROM fams_repair_request WHERE id=?", Long.parseLong(repair)));
+        assertEquals(terminated, db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=951020"));
+    }
+
+    @Test
+    void invalidInheritedProcessorBlocksApprovalAndKeepsRejectionFrozen() throws Exception {
+        var submitted = submit(employee, 951020);
+        String repair = submitted.path("id").asText(), path = "/" + repair;
+        ok(post(admin, path + "/decision", decision(), 0, key()));
+        ok(post(warehouse, path + "/claim", null, 1, key()));
+        var row = detail(warehouse, repair);
+        ok(post(warehouse, path + "/accept-in-place", physical(row), row.path("version").asLong(), key()));
+        row = detail(warehouse, repair);
+        var input = JSON.createObjectNode().put("assetVersion", row.path("assetVersion").asLong())
+                .put("lockVersion", row.path("lockVersion").asLong()).put("ownershipVersion", row.path("ownershipVersion").asLong())
+                .put("reason", "原维修无法恢复").put("observedCondition", "原机已受理并核对实物").put("proposedDisposition", "实物待处置");
+        var scrap = ok(scrapPost(warehouse, "/from-repair/" + repair, input.toString(), row.path("version").asLong(), key()));
+        var lock = db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020 AND released_at IS NULL");
+        db.update("UPDATE fams_system_account SET status='DISABLED' WHERE id=951003");
+        var approval = JSON.createObjectNode().put("assetVersion", scrap.path("assetVersion").asLong())
+                .put("lockVersion", ((Number) lock.get("lock_version")).longValue()).put("result", "APPROVE")
+                .put("reason", "核实原维修关联报废").put("approvedDisposition", "实物待处置");
+        String scrapPath = "/" + scrap.path("id").asText() + "/decision";
+        assertEquals(409, scrapPost(admin, scrapPath, approval.toString(), 0, key()).statusCode());
+        approval.put("result", "REJECT");
+        var frozen = ok(scrapPost(admin, scrapPath, approval.toString(), 0, key()));
+        assertEquals("RESTORE_REQUIRED", frozen.path("status").asText());
+        assertEquals("PENDING_SCRAP", lifecycle(951020));
+        assertEquals(lock, db.queryForMap("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020 AND released_at IS NULL"));
+        assertEquals(1, count("fams_todo", "business_type='SCRAP' AND todo_type='RESTORE_REQUIRED' AND closed_at IS NULL"));
+    }
+
+    @Test
+    void actualNativePagesTransferRepairToScrapAndRetainOriginalRetries() throws Exception {
+        var submitted = submit(employee, 951020);
+        String repair = submitted.path("id").asText(), path = "/" + repair;
+        ok(post(admin, path + "/decision", decision(), 0, key()));
+        ok(post(warehouse, path + "/claim", null, 1, key()));
+        var row = detail(warehouse, repair);
+        ok(post(warehouse, path + "/accept-in-place", physical(row), row.path("version").asLong(), key()));
+        var grants = new LinkedHashMap<String, Object>();
+        for (var entry : Map.of("warehouse", 951003L, "admin", 951001L).entrySet()) {
+            var identity = new MiniWechatIdentityPort.Identity("owned-native-repair-scrap", entry.getKey());
+            db.update("INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES (?,?,NOW(3))",
+                    entry.getValue(), miniSessions.identityHash(identity));
+            var grant = miniSessions.start(identity, UUID.randomUUID());
+            grants.put(entry.getKey(), Map.of("sessionToken", grant.sessionToken(),
+                    "accountId", entry.getValue().toString(), "bindingId", grant.bindingId()));
+        }
+        var script = java.nio.file.Path.of(System.getProperty("user.dir")).getParent()
+                .resolve("apps/miniprogram/test/runtime-repair-scrap-http.mjs");
+        var builder = new ProcessBuilder("rtk", "proxy", System.getProperty("fams.test.node",
+                System.getenv().getOrDefault("FAMS_TEST_NODE_EXECUTABLE", "node")), script.toString()).redirectErrorStream(true);
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_REPAIR_ID", repair);
+        builder.environment().put("FAMS_TEST_REPAIR_GRANTS", JSON.writeValueAsString(grants));
+        var process = builder.start();
+        try {
+            assertTrue(process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS));
+        } finally {
+            if (process.isAlive()) {
+                process.destroyForcibly();
+            }
+        }
+        String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        assertEquals(0, process.exitValue(), output);
+        assertTrue(output.contains("\"nativeRepairScrap\":true"), output);
+        assertEquals(1, count("fams_scrap_request", "asset_id=951020 AND request_status='EXECUTED'"));
+        assertEquals(2, count("fams_scrap_receipt", "operation LIKE 'SUBMIT_REPAIR:%' OR operation LIKE 'EXECUTE:%'"));
+    }
+
+    private HttpResponse<String> scrapPost(Session session, String path, String body, long version, String key) throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/scrap-requests" + path))
+                .header("Cookie", session.cookie()).header("X-CSRF-Token", session.csrf())
+                .header("Idempotency-Key", key).header("If-Match-Version", Long.toString(version))
+                .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(body)).build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     private JsonNode submit(Session actor, long asset) throws Exception {

@@ -1,0 +1,209 @@
+{
+  "task": "D6-21A2",
+  "date": "2026-10-29",
+  "status": "IN_REVIEW",
+  "featureCandidate": "482756e12a5a9abc921c0f47332c7a4299848864",
+  "approvedA1Head": "d0544054a0899aa8e5a47fa939620114f43b0ba7",
+  "sourceSha256": {
+    "apps/miniprogram/native/app.json": "0e74bb3e141f40539d8589cc1335dec4b8b17c96def04f1754f83f3639b425e9",
+    "apps/miniprogram/native/pages/loss-reports/index.json": "996b2a1d9c3bc6d43fee890def8ed019a429f18c616e5f8efdd31b30d5d42c99",
+    "apps/miniprogram/native/pages/loss-reports/index.wxml": "3e387ea228e23a129471f37df482c1d0014c1d802c43f224888a27d1fddf762f",
+    "apps/miniprogram/native/pages/loss-reports/index.wxss": "30bf1f147fc9217d6b0b5657ca171f1acadb10ddfeab50b626842e9d4ebd20c0",
+    "apps/miniprogram/native/pages/request-center/index.wxml": "e65e270ff1071a0e8c5ad674bf29fdeb510a83b1b097e21b3c75da062d0cb948",
+    "apps/miniprogram/src/loss-pages.ts": "dd361571ba6fb7926d4b3d62130a70003d7a1eafd163a2d685cf4456202a4a5e",
+    "apps/miniprogram/src/pages/loss-reports/index.ts": "22e14df81cb1aa3b84b3dee697671f75d1e72bef9e6b5eac771bb29f01ca25a0",
+    "apps/miniprogram/src/session.ts": "e6be9a78982879fabf4bf9db9cf531cd08ac961f8020ab9ebd0da9fe976fdf87",
+    "apps/miniprogram/test/loss-pages.test.mjs": "0a4f3c0ff3498ac76293a8eba27383e9c5b66d49252300b8774b821ae40110ea",
+    "apps/miniprogram/test/loss-session.test.mjs": "8340c044bc95264aa3eb2f1cb28cc913534c9401a6c5b32b2b99043f079fa193",
+    "apps/miniprogram/test/runtime-loss-http.mjs": "dee1ca2be57d98e7b85060f8b9488c19ced6825bf0de2ab35d0e7862aec34704",
+    "backend/src/test/java/com/fams/auth/LossHttpRuntimeCase.java": "c111715a2faf920fe1fb03630d1c8cb3692f1c79939aff1ed5270466dc1d93cd"
+  },
+  "verification": {
+    "mini": {
+      "tests": 312,
+      "newTests": 17,
+      "failures": 0,
+      "skips": 0
+    },
+    "web": {
+      "tests": 198,
+      "failures": 0
+    },
+    "javaFocused": {
+      "TEST-com.fams.architecture.FamsArchitectureTest.xml": {
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "TEST-com.fams.auth.LossHttpRuntimeCase.xml": {
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    "checkstyleViolations": 0,
+    "spotbugsBugs": 0,
+    "spotbugsErrors": 0,
+    "lint": "PASS zero warnings",
+    "typecheck": "PASS all workspaces",
+    "build": "PASS Web and native package; API_ORIGIN remains unconfigured"
+  },
+  "nativeChain": {
+    "entry": "actual src/pages/loss-reports/index.ts Page registration",
+    "path": "Page -> MiniSessionClient/createWxRuntime -> opaque HTTP -> Spring -> owned MySQL",
+    "result": "SEARCHING",
+    "assertions": [
+      "committed submit reply dropped then exact key/version/body replay after read and hide/show",
+      "committed image reply dropped; selected source changed after staging; same copied bytes/path/key/version replay",
+      "downloaded original SHA-256 matches selected original",
+      "preview deleted on hide",
+      "foreign principal cannot read detail or original metadata",
+      "one report, five events, one live lock; original IN_USE PERSONAL and responsible employee retained"
+    ],
+    "sdk": "adapter",
+    "https": "adapter from logical HTTPS origin to owned loopback",
+    "scanner": "fixture",
+    "notClaimed": [
+      "real WeChat rendering or SDK behavior",
+      "real HTTPS",
+      "device acceptance",
+      "cold-start intent restoration",
+      "new A2 JVM restart",
+      "remote CI",
+      "formal QA",
+      "production acceptance"
+    ]
+  },
+  "priorFullGate": {
+    "candidate": "eb1c09f21be1abc324ae8f609aa3ef8ee6deef6e",
+    "evidence": "docs/development/evidence/d6-21/a1-pc-jvm-review.json",
+    "note": "A1 historical full gate; not a full product gate rerun at A2",
+    "identicalGitObjects": {
+      "backend/src/main": {
+        "baseline": "62effb42858f5eaf51ac720095528bcb8c399615",
+        "candidate": "62effb42858f5eaf51ac720095528bcb8c399615"
+      },
+      "packages/api-types": {
+        "baseline": "915d9b0ebd7688561cc60aa004088da847d089c0",
+        "candidate": "915d9b0ebd7688561cc60aa004088da847d089c0"
+      },
+      "contracts": {
+        "baseline": "cfac66ffc6a70f950f5cc296679763eb06c51b3f",
+        "candidate": "cfac66ffc6a70f950f5cc296679763eb06c51b3f"
+      },
+      "config": {
+        "baseline": "7d83224182164f959f1a62dfa8d40f91e34a9d36",
+        "candidate": "7d83224182164f959f1a62dfa8d40f91e34a9d36"
+      },
+      "scripts": {
+        "baseline": "6d0c22e614311baaf2c98b56009ff60978d330e1",
+        "candidate": "6d0c22e614311baaf2c98b56009ff60978d330e1"
+      },
+      "pom.xml": {
+        "baseline": "763bd14aabbbaa81f730d559d22b887ad118cf7a",
+        "candidate": "763bd14aabbbaa81f730d559d22b887ad118cf7a"
+      },
+      "backend/pom.xml": {
+        "baseline": "d17042621ff744adb5d72d6af5aa651600722f69",
+        "candidate": "d17042621ff744adb5d72d6af5aa651600722f69"
+      },
+      "package.json": {
+        "baseline": "1e11a74f4f0fcb84bee77c702cc9744516f4ab0b",
+        "candidate": "1e11a74f4f0fcb84bee77c702cc9744516f4ab0b"
+      },
+      "package-lock.json": {
+        "baseline": "0024a17943e3c9a22f4b229727dbe982fe40bf71",
+        "candidate": "0024a17943e3c9a22f4b229727dbe982fe40bf71"
+      }
+    }
+  },
+  "gitnexus": {
+    "staged": {
+      "files": 15,
+      "symbols": 161,
+      "affected": 0,
+      "risk": "LOW"
+    },
+    "againstMain": {
+      "files": 90,
+      "symbols": 796,
+      "affected": 80,
+      "risk": "CRITICAL",
+      "includes": "prior C1/C2/A1 branch accumulation; main integration remains separate"
+    },
+    "caveat": "dynamic Page calls are under-represented; client tests and actual native chain are primary evidence"
+  },
+  "aoci": {
+    "status": "BLOCKED",
+    "aligned": false,
+    "reason": "14 pre-existing D6-15/16 PNG pending_curation entries",
+    "pendingTransactions": 0,
+    "recoveryPending": false,
+    "thirdPartyConflict": false,
+    "indexSemanticWrite": false,
+    "scopeChanged": false
+  },
+  "cleanup": {
+    "ownedCompose": "removed including named volume",
+    "nativePrivateFiles": "removed by client lifecycle/finally",
+    "preExistingSharedMySQL": "untouched"
+  },
+  "failedAttempts": [
+    {
+      "path": "output/d6-21a2-runtime.log",
+      "cause": "adapter assumed formData; online file upload has no metadata form; original six tests passed"
+    },
+    {
+      "path": "output/d6-21a2-runtime-final.log",
+      "cause": "default-cli Checkstyle incorrectly used unconfigured default over generated code; configured validate and SpotBugs execution subsequently pass"
+    }
+  ],
+  "artifacts": {
+    "output/d6-21a2-reports/TEST-com.fams.architecture.FamsArchitectureTest.xml": {
+      "sha256": "8fd88db630a1c43fe264b7fccb55f7bf65304fba8323de0ba1d5e21551069b48",
+      "bytes": 33196
+    },
+    "output/d6-21a2-reports/TEST-com.fams.auth.LossHttpRuntimeCase.xml": {
+      "sha256": "c3af2fc704c13239840e37f72e68beaf07d30a3148589508e75e9df5f33bb3ae",
+      "bytes": 73176
+    },
+    "output/d6-21a2-reports/checkstyle-result.xml": {
+      "sha256": "3b3c110fe9a2502e4ae420c3bee0418309c4299dd01783164e96850bf82776af",
+      "bytes": 83
+    },
+    "output/d6-21a2-reports/spotbugsXml.xml": {
+      "sha256": "e06b98133aef5de672038d1d6575ae264220081671d65c3991390504eaae3e08",
+      "bytes": 325751
+    },
+    "output/d6-21a2-reports/web-tests.json": {
+      "sha256": "4e0efc09564dbad86f071ad1cab9679cb5cd023e9866224efd3044ef8b0a5655",
+      "bytes": 78135
+    },
+    "output/d6-21a2-runtime-verified.log": {
+      "sha256": "e52597dd0ad472cb4fddb056fbaa98e4d41553da1138e5630fc78c74895c5fc3",
+      "bytes": 2791
+    },
+    "output/d6-21a2-clients-final.log": {
+      "sha256": "ece73c7d4d7ff45ce6741a36196d56c9f37b39eca91b3b4af9dcba830814a123",
+      "bytes": 1794
+    },
+    "output/d6-21a2-runtime.log": {
+      "sha256": "58ed348a1599dd8481ae0a682b786bd7e198c4895329678d2f9028d636e8650f",
+      "bytes": 2396
+    },
+    "output/d6-21a2-runtime-final.log": {
+      "sha256": "9b351c4bf308bede47fe9f274079b7c6a92871e153ae89dfa609a0c3725c1d3b",
+      "bytes": 3541
+    },
+    "output/d6-21a2-runtime.py": {
+      "sha256": "8a7c368855b1f66aa9aac5c01b154632741c5e5f810e5e75a88b99d7eebf3752",
+      "bytes": 935
+    },
+    "output/d6-21a2-clients.py": {
+      "sha256": "0ae23583e081c3fcc33226e1859a1b3d3c6139aa241f0b99b9e954cec982bae3",
+      "bytes": 543
+    }
+  }
+}

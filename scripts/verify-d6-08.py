@@ -65,7 +65,9 @@ def main() -> None:
             raise RuntimeError("capacity measurement or boundary output was not produced")
         print("\n".join(metrics))
         return
-    if "--restart-import" in sys.argv or "--failure-import" in sys.argv:
+    linked_restart = "--restart-linked-import" in sys.argv
+    linked_mini = "--mini-linked-import" in sys.argv
+    if linked_restart or linked_mini or "--restart-import" in sys.argv or "--failure-import" in sys.argv:
         run("./mvnw", "-pl", "backend", "-Dd6.08.job.runtime=true",
             "-Dtest=DurableJobRuntimeCase#mysqlSubmissionClaimFencingBackoffAndBusinessRollback",
             "test", env=env)
@@ -82,37 +84,55 @@ def main() -> None:
             raise RuntimeError("publication failure measurement was not produced")
         print(metrics[0])
         return
+    if linked_mini:
+        output = run("./mvnw", "-pl", "backend", "-Dd6.08.import.http.runtime=true", "-Dd6.23.mini.runtime=true",
+                     "-Dtest=AssetImportHttpRuntimeCase#warehouseUploadPreviewAndErrorRowsUseRealSessionAndMysql",
+                     "test", env=env)
+        metrics = [line.strip() for line in output.splitlines() if "D6_23_NATIVE_INITIAL_SCRAP " in line]
+        if len(metrics) != 1:
+            raise RuntimeError("native initial scrap verification did not produce its checkpoint")
+        print(metrics[0])
+        return
+    if linked_restart or "--restart-import" in sys.argv:
+        first_marker = "D6_23_IMPORT_COMMITTED_MARKER" if linked_restart else "D6_08_IMPORT_PHASE1_MARKER"
+        second_marker = "D6_23_IMPORT_REPLAY_MARKER" if linked_restart else "D6_08_IMPORT_PHASE2_MARKER"
+        second_test = ("restartedJvmPreservesCommittedLinkedPublication" if linked_restart
+                       else "processTwoPublishesClaimedImportAfterPreviousJvmExited")
+        metric = "D6_23_LINKED_IMPORT_RESTART " if linked_restart else "D6_08_IMPORT_RESTART "
         with tempfile.TemporaryDirectory(prefix="fams-d6-08-import-restart-") as temporary:
-            marker = Path(temporary) / "claimed-import"
-            env["D6_08_IMPORT_PHASE1_MARKER"] = str(marker)
-            process = subprocess.Popen(
-                ["rtk", "./mvnw", "-pl", "backend", "-Dd6.08.import.http.runtime=true",
-                 "-Dtest=AssetImportHttpRuntimeCase#warehouseUploadPreviewAndErrorRowsUseRealSessionAndMysql",
-                 "test"], cwd=ROOT, env=env, stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT, text=True, start_new_session=True)
-            try:
-                for _ in range(450):
-                    if marker.is_file():
-                        break
+            marker = Path(temporary) / "publication.json"
+            log = Path(temporary) / "initial-process.log"
+            env[first_marker] = str(marker)
+            with log.open("w", encoding="utf-8") as output:
+                process = subprocess.Popen(
+                    ["rtk", "proxy", "./mvnw", "-pl", "backend", "-Dd6.08.import.http.runtime=true",
+                     "-Dtest=AssetImportHttpRuntimeCase#warehouseUploadPreviewAndErrorRowsUseRealSessionAndMysql",
+                     "test"], cwd=ROOT, env=env, stdout=output,
+                    stderr=subprocess.STDOUT, text=True, start_new_session=True)
+                try:
+                    deadline = time.monotonic() + 180
+                    while not marker.is_file():
+                        if process.poll() is not None or time.monotonic() >= deadline:
+                            diagnostic = log.read_text(encoding="utf-8", errors="replace")
+                            diagnostic = diagnostic.replace(PASSWORD, "<redacted>").replace(ROOT_PASSWORD, "<redacted>")
+                            raise RuntimeError("import JVM did not reach the expected publication checkpoint:\n"
+                                               + "\n".join(diagnostic.splitlines()[-30:]))
+                        time.sleep(0.2)
                     if process.poll() is not None:
-                        output = process.communicate(timeout=15)[0]
-                        raise RuntimeError("import JVM exited before lease marker:\n"
-                                           + "\n".join(output.splitlines()[-30:]))
-                    time.sleep(0.2)
-                else:
-                    raise RuntimeError("import JVM did not claim the publication job")
-            finally:
-                if process.poll() is None:
-                    os.killpg(process.pid, signal.SIGKILL)
-                process.communicate(timeout=15)
-            env.pop("D6_08_IMPORT_PHASE1_MARKER")
-            env["D6_08_IMPORT_PHASE2_MARKER"] = str(marker)
-            time.sleep(4)
+                        raise RuntimeError("import JVM exited before the forced stop")
+                finally:
+                    if process.poll() is None:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    process.wait(timeout=15)
+            env.pop(first_marker)
+            env[second_marker] = str(marker)
+            if not linked_restart:
+                time.sleep(4)
             output = run("./mvnw", "-pl", "backend", "-Dd6.08.import.http.runtime=true",
-                         "-Dtest=AssetImportHttpRuntimeCase#processTwoPublishesClaimedImportAfterPreviousJvmExited",
+                         f"-Dtest=AssetImportHttpRuntimeCase#{second_test}",
                          "test", env=env)
             metrics = [line.strip() for line in output.splitlines()
-                       if "D6_08_IMPORT_RESTART " in line]
+                       if metric in line]
             if len(metrics) != 1:
                 raise RuntimeError("import restart measurement was not produced")
             print(metrics[0])
@@ -163,5 +183,5 @@ if __name__ == "__main__":
         print(f"D6-08 FAILED: {error}", file=sys.stderr)
         raise SystemExit(1)
     finally:
-        subprocess.run(["rtk", "docker", "rm", "-f", CONTAINER], cwd=ROOT,
+        subprocess.run(["rtk", "docker", "rm", "-f", "-v", CONTAINER], cwd=ROOT,
                        capture_output=True, check=False)

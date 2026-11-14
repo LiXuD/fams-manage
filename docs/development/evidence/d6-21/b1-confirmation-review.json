@@ -1,0 +1,352 @@
+{
+  "task": "D6-21B1",
+  "date": "2026-10-29",
+  "status": "IN_REVIEW",
+  "featureCandidate": "248621af0210328c30115fce786d4c18de7041ee",
+  "baseline": "fd2e8236b9083df4a576b41874f26587b7b8277e",
+  "sourceSha256": {
+    "apps/miniprogram/native/pages/loss-reports/index.wxml": "a7a891f1b9ea8930a2b440cf67dfc8f680ef94940f664443466a0e36e1c3d519",
+    "apps/miniprogram/src/loss-pages.ts": "b446a81aaa7c6a076cb4682a7b4c6822b41a4600ba5bfe1b3e2f0e6b51ecf105",
+    "apps/miniprogram/test/loss-progress-pages.test.mjs": "3ac5cf58cec9cd441a495c8359b2b80d9aee119dc6282cadbddc93c2863a9370",
+    "apps/miniprogram/test/runtime-loss-confirmation-http.mjs": "470bac292746ca6be6c6290317a0e66a05f0d011f796e856040c74e7937aaea7",
+    "apps/miniprogram/test/runtime-loss-http.mjs": "f1ab965bdddce3831d216470055b0c5da9cb5bdcbb8e7b472df0d52d7e213a16",
+    "apps/web/src/loss/api.ts": "205f8abd5c3c54f744258ce82ee41e1465512f5b10bc9efd3e4e908667e2dd9e",
+    "apps/web/src/views/LossProgressPanel.test.ts": "a3d7647fa00ffeabb037cffaef8d708e5a7e29a6d0597854396fbaefe2a17d96",
+    "apps/web/src/views/LossProgressPanel.vue": "d0c140b218d45837edcb246847e4767af83040cc4465d36038bcea291a9ff8dc",
+    "apps/web/src/views/LossProgressView.test.ts": "3fef36ef5932601f491d9f705306984d128c442bf2de5110ac565cbf993b4c78",
+    "apps/web/src/views/LossView.vue": "8d4c714f68dd48d7b4864c8dc88932f9aa6fe41b45398261501adbf91a6dd094",
+    "backend/src/main/java/com/fams/asset/AssetLossPort.java": "55336507d9d0e36e81adbf852a14e4f6446b0bb457b12581517d2eec2682cdc5",
+    "backend/src/main/java/com/fams/loan/LoanLossPort.java": "9c73ff431373f023e9752bfdc3be12b543b3622a0a30be427829ad05bc3382b9",
+    "backend/src/main/java/com/fams/loss/LossController.java": "18aac3a1513dc532130661c8c512f25faec800a5d5c5b6d3d5af513eccfbfacc",
+    "backend/src/main/java/com/fams/loss/LossInput.java": "dc8d8bd091c5075fab4b3f2a1f6518a81ec172f3d4472bcb9dbb54b1931cbddf",
+    "backend/src/main/java/com/fams/loss/LossService.java": "b9c28b299342aa7aec9c658aed3f2bdd43d7eed224cac60ea13575e6fa03a51b",
+    "backend/src/main/resources/db/migration/d6_04/V57__loss_confirmation_and_follow_up.sql": "ac96273dd38e6cbfcd89374ab163d1eb86b9b7dbb24afea53f8810a78f777a74",
+    "backend/src/test/java/com/fams/auth/LossConfirmationUpgradeRuntimeCase.java": "5ba28811a75858aec67d154f98bc3c3671e560caef82542bf28258141492fd11",
+    "backend/src/test/java/com/fams/auth/LossHttpRuntimeCase.java": "510c75ea6351b9e8b493cdb3ccb8ddbf81990481f6680dfe2c9d3ce0d4ea019d",
+    "config/spotbugs/exclude.xml": "1b42ae0d8b12b7e37b0d84447946dc4c794bed4aa9022f045c9489e3b70a34f7",
+    "contracts/fams-core-v1.yaml": "e4931aa5a4b890812d6b3a9caa7df1c3a856f744117fc47bc46bc040bdac7b92",
+    "scripts/verify-d6-03a.py": "35959d151d0c676cea75dd628653b5d463420b9bb8cf7bd6afbba28a3cb474ce"
+  },
+  "fullProductGate": {
+    "exit": 0,
+    "log": "output/d6-21b1-product-gate-248621a-rerun.log",
+    "requiredJavaTests": 489,
+    "requiredJavaFailures": 0,
+    "requiredJavaErrors": 0,
+    "requiredJavaSkipped": 0,
+    "preCleanupTerminalXmlObservation": {
+      "files": 105,
+      "tests": 610,
+      "failures": 0,
+      "errors": 0,
+      "skipped": "not separately aggregated in the terminal snapshot"
+    },
+    "fullXmlArchived": false,
+    "xmlRetentionLimitation": "Gate canonical postflight deleted target reports. Ignored retention helper compared suffix against xml rather than .xml; full XML and coverage/static XML were not copied. Full gate log and executable package retained; focused reports below retained independently. No complete XML archive claim. Helper corrected after run without rerunning passing product checks.",
+    "coverage": {
+      "lineCovered": 20405,
+      "lineTotal": 21950,
+      "linePercent": 92.96,
+      "branchCovered": 7120,
+      "branchTotal": 9445,
+      "branchPercent": 75.38
+    },
+    "checkstyle": 0,
+    "spotbugs": 0,
+    "webTests": 202,
+    "miniTests": 316,
+    "lintTypeBuild": "PASS",
+    "dependencyHighSeverityThreshold": "PASS; existing 2 moderate Vitest development advisories retained",
+    "recovery": "clean application and same-volume MySQL restart PASS",
+    "postflight": "PASS clean"
+  },
+  "focusedRawReports": {
+    "TEST-com.fams.architecture.FamsArchitectureTest.xml": {
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "TEST-com.fams.auth.LossHttpRuntimeCase.xml": {
+      "tests": 13,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "TEST-com.fams.auth.LossUpgradeRuntimeCase.xml": {
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "TEST-com.fams.auth.LossConfirmationUpgradeRuntimeCase.xml": {
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "actualPc": {
+    "authenticatedRoles": [
+      "EMPLOYEE",
+      "ASSET_ADMIN",
+      "WAREHOUSE_OPERATOR"
+    ],
+    "normalInteractiveLogin": true,
+    "flow": "report -> original upload -> approve -> exclusive claim -> SEARCHING -> CONFIRMED_LOST -> follow-up extension",
+    "missingEvidenceBlocked": true,
+    "realClamAv": "ClamAV 1.4.6/28129/Sun Sep 20 06:26:26 2026",
+    "defaultThirtyDayDate": "2026-11-28",
+    "extensionNextReviewDate": "2026-12-01",
+    "final": {
+      "events": 7,
+      "photos": 1,
+      "status": "CONFIRMED_LOST",
+      "reports": 1,
+      "exception": "LOST",
+      "lifecycle": "BORROWED",
+      "openTodos": 1,
+      "processor": 983003,
+      "activeLocks": 0,
+      "responsible": 983002
+    },
+    "originalBorrowingUnchanged": true,
+    "originalCustodyAndDatesUnchanged": true,
+    "imageStoredSha256": [
+      "7a76a31aaaa2d5b2414ef562a35d6d73fd77689649fb69cda72f4994a08873b9"
+    ],
+    "console": [],
+    "fixturesOnly": true
+  },
+  "committingJvmRecovery": {
+    "committingJvm": 43777,
+    "killedProcessGroup": 43776,
+    "restartedProcessGroup": 50093,
+    "operation": "CONFIRM_LOST:1",
+    "originalVersion": 5,
+    "originalKeyReplay": true,
+    "allOwnerBusinessRowsUnchanged": true,
+    "freshPcReadAndOriginalAfterRestart": true,
+    "laterFollowUpNextReviewDate": "2026-12-01"
+  },
+  "packageEquivalence": {
+    "candidate": "248621af0210328c30115fce786d4c18de7041ee",
+    "pcJar": {
+      "path": "output/d6-21b1-candidate-backend.jar",
+      "sha256": "29b4d04615641ef551102a7bb7108371f912e1c1d8fe11ae59a5614da6b0a450"
+    },
+    "gateJar": {
+      "path": "output/d6-21b1-248621a-gate-reports/contract-generation-probe-0.1.0-SNAPSHOT.jar",
+      "sha256": "3785bc12fd7ffcdd41cc6a1d7153f24d16d92c86c584b9051094474156437d18"
+    },
+    "allFileEntryCount": 1502,
+    "sameAllFileEntryBytes": true,
+    "sameBootInfBytes": true,
+    "differentEntries": []
+  },
+  "migration": {
+    "version": 57,
+    "oldMigrationsUnchanged": true,
+    "populatedV56Upgrade": 1,
+    "repeat": 0,
+    "allOldColumnsPreserved": true,
+    "rollback": "stop entry, retain all facts; no destructive migration rollback; binary downgrade/mixed live deployment not exercised"
+  },
+  "gitnexus": {
+    "stagedFiles": 24,
+    "changedSymbols": 134,
+    "affectedCount": 30,
+    "risk": "CRITICAL",
+    "impactWarnedBeforeEditing": true,
+    "oldLossFlowsAndModuleArchitectureRegressed": true
+  },
+  "aoci": {
+    "aligned": false,
+    "status": "BLOCKED",
+    "oldPngPendingCuration": 14,
+    "observedNewTests": [
+      "apps/web/src/views/LossProgressPanel.test.ts",
+      "apps/web/src/views/LossProgressView.test.ts"
+    ],
+    "observeFingerprintsAcknowledged": "policy_bound_auto; no scope policy change",
+    "pendingTransactions": 0,
+    "recoveryPending": false,
+    "thirdPartyConflict": false,
+    "semanticIndexWrites": false
+  },
+  "cleanup": {
+    "ownPcAppViteMySqlClamTemporaryPhotos": "removed",
+    "ownGateComposeContainerNetworkVolume": "removed",
+    "iabOwnTab": "closed",
+    "sharedExistingMySql": "untouched"
+  },
+  "notClaimed": [
+    "A2 independent review",
+    "B1 independent review",
+    "B2 recovery and its renewed approval",
+    "C linked real disposition and lock transfer",
+    "D full D6-21 joint acceptance",
+    "real WeChat SDK/HTTPS/device",
+    "formal QA",
+    "remote CI",
+    "production acceptance"
+  ],
+  "remaining": {
+    "A2": "IN_REVIEW",
+    "B": "IN_PROGRESS",
+    "B2": "NOT_STARTED",
+    "C": "NOT_STARTED",
+    "D": "NOT_STARTED",
+    "D6-21": "IN_PROGRESS"
+  },
+  "artifacts": {
+    "output/d6-21b1-product-gate-248621a-rerun.log": {
+      "bytes": 38362,
+      "sha256": "b2bb5263d394545839b18db433a5ecb23583f900f2116eabeb2bc911db3b2249"
+    },
+    "output/d6-21b1-product-gate-248621a.log": {
+      "bytes": 516,
+      "sha256": "f953081f6f663330aed46b63873217e2326ac0e05bc5736eee8111390cc9cdd8"
+    },
+    "output/d6-21b1-candidate-backend.jar": {
+      "bytes": 59269072,
+      "sha256": "29b4d04615641ef551102a7bb7108371f912e1c1d8fe11ae59a5614da6b0a450"
+    },
+    "output/d6-21b1-248621a-gate-reports/contract-generation-probe-0.1.0-SNAPSHOT.jar": {
+      "bytes": 59269072,
+      "sha256": "3785bc12fd7ffcdd41cc6a1d7153f24d16d92c86c584b9051094474156437d18"
+    },
+    "output/d6-21b1-package-equivalence.json": {
+      "bytes": 526,
+      "sha256": "39abb41827b312caf40d7702a39fbc79e2804f250f08e1c4963d01fee8261fd2"
+    },
+    "output/d6-21b1-pc-before-recovery.json": {
+      "bytes": 1507,
+      "sha256": "3d101a95fb1a60a6c2441f65e02b9d1587970a6d12ad603d8087d7c0c4ace1d7"
+    },
+    "output/d6-21b1-pc-jvm-recovery.json": {
+      "bytes": 1232,
+      "sha256": "7c1d6ea38253127467a7c8b0c7df62c0c2a8a386c614152090b38e1f9f211d78"
+    },
+    "output/d6-21b1-pc-persistence.json": {
+      "bytes": 842,
+      "sha256": "5671d6bda7b4d52ae1b2221ed1ddb2e4ebbc6e5de2f9f9a77b92b150e1155acd"
+    },
+    "output/d6-21b1-pc-default-followup.png": {
+      "bytes": 146913,
+      "sha256": "faf07590f9e4a183d4dc199e9640d51aae6095126c4b0c6c5635d74a7095cf95"
+    },
+    "output/d6-21b1-pc-followup.png": {
+      "bytes": 138112,
+      "sha256": "e6a19e68725570a742c0ff7124b439b9ac341efc2768731ed5ecf6fcd2803998"
+    },
+    "output/d6-21b1-pc-after-jvm.png": {
+      "bytes": 142067,
+      "sha256": "8b19e380f21e6305ce69f8d57c3e2dc9e36bc4bfa54276a6e3aea59f91aa608c"
+    },
+    "output/d6-21b1-pc-ui.txt": {
+      "bytes": 3159,
+      "sha256": "e28d18ea717b631422d13624b251a2026d0fe641eabe27f9d13f878c86e39922"
+    },
+    "output/d6-21b1-pc-after-jvm-ui.txt": {
+      "bytes": 3264,
+      "sha256": "d60fc57f8cc87e205e9a202ea472acca494963acabd7c8c864b13023bd1f16a3"
+    },
+    "output/d6-21b1-pc-console.json": {
+      "bytes": 2,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "output/d6-21b1-original.png": {
+      "bytes": 73,
+      "sha256": "7a76a31aaaa2d5b2414ef562a35d6d73fd77689649fb69cda72f4994a08873b9"
+    },
+    "output/d6-21b1-browser-runtime.py": {
+      "bytes": 18227,
+      "sha256": "07c897c4a321d53ffc2ce51633991c4e2c7aac20ce842b1ad416cf363c23458b"
+    },
+    "output/d6-21b1-browser-runtime-launch.log": {
+      "bytes": 1023,
+      "sha256": "f033435805e5f4a4e3aa7aa309db2a1a774f24cf5dddb40a8f86db38fdfd6321"
+    },
+    "output/d6-21b1-runtime.log": {
+      "bytes": 1786,
+      "sha256": "85dad9a2369121f79bf5437fb1c79db3f26aa15ab7fbea1ad5e5941850e56fa9"
+    },
+    "output/d6-21b1-runtime-rerun.log": {
+      "bytes": 1952,
+      "sha256": "09dd0216b659ec91cb2852b0f7060ada996b1ee089f47a3e564d95e0bc74d59f"
+    },
+    "output/d6-21b1-v57-fixture-failure.log": {
+      "bytes": 169175,
+      "sha256": "4b4f82bc441d89ed8929f6d8031eb16e7d6cb37176af2728f9be962ddbca24f2"
+    },
+    "output/d6-21b1-v57-fixture-failure.xml": {
+      "bytes": 39629,
+      "sha256": "dd04c601df6f33e66628421ea1d484ea0bb9789ca81f3655d1b77fb4e65590c0"
+    },
+    "output/d6-21b1-di-warning.log": {
+      "bytes": 161235,
+      "sha256": "3f7d3a668a1923cb7cf5b967a03b7b530382a825567a1022c4ddd1c8ba0f19c3"
+    },
+    "output/d6-21b1-di-warning.xml": {
+      "bytes": 329898,
+      "sha256": "894f4162738d1a22bf82890dbcd85c4a7dafc0eed3d2fbc20d431e47350ca8ee"
+    },
+    "output/d6-21b1-static-verified.log": {
+      "bytes": 160598,
+      "sha256": "642a310690afa0a80b25fe55689e4f9961c390a6b6a037db195b47f4f31dee38"
+    },
+    "output/d6-21b1-mini.log": {
+      "bytes": 31125,
+      "sha256": "0a70747fabbc2c4b6a5acb8439a116b58f68a17ab7d8418533a1e15289b6674b"
+    },
+    "output/d6-21b1-web-all.log": {
+      "bytes": 233,
+      "sha256": "280391e2df399a1d70a9b5aeaef6a9ef5a4fba573eb79a1f3d736595798fe332"
+    },
+    "output/d6-21b1-typecheck.log": {
+      "bytes": 215,
+      "sha256": "b96e142320d8aac2de8ed3a80470637b76b6f6d6be2a1e9b1d4883616acffa29"
+    },
+    "output/d6-21b1-lint.log": {
+      "bytes": 160,
+      "sha256": "7df5fa7a5047aaedb575f035123af5967f1ca37cb7edffba8902bc84b3138963"
+    },
+    "output/d6-21b1-web-build.log": {
+      "bytes": 815,
+      "sha256": "5c289c1b27a0f97cc631af90960963d7acb4b4578f6fcf51ea3f1fc86e58e27e"
+    },
+    "output/d6-21b1-mini-build.log": {
+      "bytes": 176,
+      "sha256": "facb1c0689b419c6de3e1df5dbe76ecc221e812249f1aca260f2014d4528ac16"
+    },
+    "output/d6-21b1-focused-reports/TEST-com.fams.architecture.FamsArchitectureTest.xml": {
+      "bytes": 33195,
+      "sha256": "1163c4f9a2e53766b29a7b86912970c1c21347e55196589796b0eaa629989956"
+    },
+    "output/d6-21b1-focused-reports/TEST-com.fams.auth.LossHttpRuntimeCase.xml": {
+      "bytes": 84379,
+      "sha256": "3d229cd44657f91a6435e369a5eb1f312f4301a52969dbda0733d1214c495a93"
+    },
+    "output/d6-21b1-focused-reports/web-tests.json": {
+      "bytes": 79797,
+      "sha256": "dea75275f14d36c5d1d8ddd60f1961659c87e3bb406072209428ee27f7a537e6"
+    },
+    "output/d6-21b1-focused-reports/spotbugsXml.xml": {
+      "bytes": 326523,
+      "sha256": "6664dc208c6688d56a6813a70a2976424f284c360f293692dbb6370723701ce2"
+    },
+    "output/d6-21b1-focused-reports/checkstyle-result.xml": {
+      "bytes": 83,
+      "sha256": "3b3c110fe9a2502e4ae420c3bee0418309c4299dd01783164e96850bf82776af"
+    },
+    "output/d6-21b1-focused-reports/TEST-com.fams.auth.LossUpgradeRuntimeCase.xml": {
+      "bytes": 45774,
+      "sha256": "79dcedb609247115b7a63f67d3555e969e397c90eee3b21d17e332fac80a5ece"
+    },
+    "output/d6-21b1-focused-reports/TEST-com.fams.auth.LossConfirmationUpgradeRuntimeCase.xml": {
+      "bytes": 35488,
+      "sha256": "0e3c645ccd0e75f40b29d85a791df95bbcd97e2419a287e3644df21f514db532"
+    }
+  }
+}

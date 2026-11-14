@@ -1,6 +1,8 @@
 package com.fams.asset;
 
 import com.fams.masterdata.AssetMasterDataPort;
+import com.fams.business.InitialRepairPort;
+import com.fams.business.InitialScrapPort;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -21,16 +23,13 @@ public class AssetInitialPublicationPort {
     public record InitialAsset(String code, String name, long categoryId, long organizationId,
                                String model, String unit, String serial, String state,
                                Long warehouseId, Long locationId, Long usingOrganizationId,
-                               Long employeeId, LocalDate borrowedDate, LocalDate expectedReturnDate) {
-        public InitialAsset(String code, String name, long categoryId, long organizationId,
-                String model, String unit, String serial, String state, Long warehouseId,
-                Long locationId, Long usingOrganizationId, Long employeeId) {
-            this(code, name, categoryId, organizationId, model, unit, serial, state, warehouseId,
-                    locationId, usingOrganizationId, employeeId, null, null);
-        }
-    }
+                               Long employeeId, LocalDate borrowedDate, LocalDate expectedReturnDate,
+                               String preScrapState, String scrapReason, String scrapCondition,
+                               String proposedDisposition, String preRepairState, InitialRepairPort.Facts repairFacts,
+                               InitialScrapPort.LossFacts lossFacts,
+                               InitialScrapPort.FactoryDisposition factoryDisposition) { }
     public record Context(UUID batchId, int sheetRow, long actorId, String username,
-                          long parameterId, LocalDate businessDate, Instant now) { }
+                          long parameterId, LocalDate businessDate, Instant now, long administratorId, String timezone) { }
     public record Created(long id, String code) { }
 
     private final AssetMapper mapper;
@@ -38,16 +37,21 @@ public class AssetInitialPublicationPort {
     private final AssetSecretCodec codec;
     private final ObjectMapper json;
     private final com.fams.business.InitialBorrowingPort loans;
+    private final com.fams.business.InitialScrapPort scraps;
+    private final InitialRepairPort repairs;
     private final java.util.List<AssetDownstreamUsePort> downstream;
 
     AssetInitialPublicationPort(AssetMapper mapper, AssetMasterDataPort masterData,
             AssetSecretCodec codec, ObjectMapper json, com.fams.business.InitialBorrowingPort loans,
+            com.fams.business.InitialScrapPort scraps, InitialRepairPort repairs,
             java.util.List<AssetDownstreamUsePort> downstream) {
         this.mapper = mapper;
         this.masterData = masterData;
         this.codec = codec;
         this.json = json;
         this.loans = loans;
+        this.scraps = scraps;
+        this.repairs = repairs;
         this.downstream = java.util.List.copyOf(downstream);
     }
 
@@ -67,7 +71,22 @@ public class AssetInitialPublicationPort {
                 || asset.name().strip().length() > 256) {
             throw new IllegalArgumentException("ASSET_IMPORT_ROW_INVALID");
         }
-        String custody = switch (asset.state()) {
+        boolean pendingScrap = "待报废".equals(asset.state());
+        boolean repairOpening = asset.repairFacts() != null;
+        boolean lossOpening = asset.lossFacts() != null;
+        String opening = repairOpening ? asset.preRepairState()
+                : pendingScrap ? asset.preScrapState() : asset.state();
+        if (asset.repairFacts() != null && "借出".equals(opening)
+                && asset.borrowedDate().isAfter(LocalDate.ofInstant(asset.repairFacts().acceptedAt(),
+                        java.time.ZoneId.of(context.timezone())))) {
+            throw new IllegalStateException("ASSET_IMPORT_INITIAL_REPAIR_BORROW_TIME_INVALID");
+        }
+        if (lossOpening && "借出".equals(opening)
+                && asset.borrowedDate().isAfter(LocalDate.ofInstant(asset.lossFacts().lastSeenAt(),
+                        java.time.ZoneId.of(context.timezone())))) {
+            throw new IllegalStateException("ASSET_IMPORT_INITIAL_LOSS_BORROW_TIME_INVALID");
+        }
+        String custody = switch (opening) {
             case "在库" -> "STORAGE";
             case "在用个人", "借出" -> "PERSONAL";
             case "在用公用" -> "SHARED";
@@ -84,8 +103,8 @@ public class AssetInitialPublicationPort {
                 ? null : asset.serial().strip());
         values.put("serialNormalized", values.get("serial") == null ? null
                 : ((String) values.get("serial")).toUpperCase(Locale.ROOT));
-        values.put("lifecycle", "STORAGE".equals(custody) ? "IN_STOCK"
-                : "借出".equals(asset.state()) ? "BORROWED" : "IN_USE");
+        String custodyLifecycle = "STORAGE".equals(custody) ? "IN_STOCK" : "借出".equals(opening) ? "BORROWED" : "IN_USE";
+        values.put("lifecycle", pendingScrap && !repairOpening && !lossOpening ? "PENDING_SCRAP" : custodyLifecycle);
         values.put("custody", custody);
         values.put("warehouseId", "STORAGE".equals(custody) ? asset.warehouseId() : null);
         values.put("locationId", asset.locationId());
@@ -106,10 +125,31 @@ public class AssetInitialPublicationPort {
         mapper.event(id, "ASSET_INITIAL_IMPORTED", context.now(), json.writeValueAsString(Map.of(
                 "batchId", context.batchId().toString(), "sheetRow", context.sheetRow(),
                 "source", "INITIAL_IMPORT")), context.actorId());
-        if ("借出".equals(asset.state())) {
+        if ("借出".equals(opening)) {
             loans.open(id, asset.employeeId(), asset.usingOrganizationId(), context.batchId(),
                     context.sheetRow(), asset.borrowedDate(), asset.expectedReturnDate(),
                     context.businessDate(), context.parameterId(), context.now());
+        }
+        if (repairOpening) {
+            repairs.open(new InitialRepairPort.Opening(id, (String) values.get("serial"), asset.repairFacts(),
+                    context.batchId(), context.sheetRow(), context.actorId(), context.username(), context.administratorId(),
+                    context.timezone(), context.now()));
+        }
+        if (pendingScrap) {
+            var scrap = new com.fams.business.InitialScrapPort.Opening(id,
+                    repairOpening ? asset.repairFacts().factory() != null ? "FACTORY_REPAIR" : "UNDER_REPAIR" : custodyLifecycle,
+                    asset.scrapReason().strip(), asset.scrapCondition().strip(),
+                    asset.proposedDisposition().strip(), context.actorId(),
+                    context.batchId(), context.sheetRow(), context.now());
+            if (lossOpening) {
+                scraps.openLoss(scrap, asset.lossFacts(), context.businessDate());
+            } else if (asset.factoryDisposition() != null) {
+                scraps.openFactoryDisposition(scrap, asset.factoryDisposition());
+            } else if (repairOpening) {
+                scraps.openRepair(scrap);
+            } else {
+                scraps.open(scrap);
+            }
         }
         return new Created(id, code);
     }
@@ -117,6 +157,8 @@ public class AssetInitialPublicationPort {
     @Transactional
     public void assertReversible(long assetId, UUID batchId) {
         loans.assertReversible(assetId, batchId);
+        scraps.assertReversible(assetId, batchId);
+        repairs.assertReversible(assetId, batchId);
         if (downstream.stream().anyMatch(port -> port.hasPublishedUse(assetId))) {
             throw new IllegalStateException("ASSET_IMPORT_ROLLBACK_DOWNSTREAM");
         }
@@ -131,7 +173,9 @@ public class AssetInitialPublicationPort {
         }
         Map<String, Object> tag = mapper.tag(assetId);
         if (tag == null) { throw new IllegalStateException("ASSET_IMPORT_ROLLBACK_DOWNSTREAM"); }
+        repairs.cancel(assetId, batchId, actorId, now);
         loans.cancel(assetId, batchId, now);
+        scraps.cancel(assetId, batchId, now);
         mapper.archiveTag(assetId, (String) tag.get("token_hash"),
                 ((LocalDateTime) tag.get("issued_at")).toInstant(ZoneOffset.UTC), now,
                 "INITIAL_IMPORT_ROLLBACK");

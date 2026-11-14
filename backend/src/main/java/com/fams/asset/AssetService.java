@@ -141,6 +141,13 @@ class AssetService {
         if (replay != null) { return replay; }
         Map<String, Object> current = visible(actor, id, true);
         checkVersion(current, expectedVersion);
+        if (mapper.factoryReplacement(id) != 0
+                && (request.getSource() != null && !"FACTORY_REPLACEMENT".equals(request.getSource())
+                    || request.getSerialNumber() != null && !java.util.Objects.equals(
+                            optional(request.getSerialNumber(), 128), text(current, "serial_number")))) {
+            throw AssetOperationException.conflict("ASSET_REPLACEMENT_ORIGIN_IMMUTABLE",
+                    "Replacement source and registered serial are immutable.");
+        }
         String stage = text(current, "card_stage");
         if ("PENDING_INBOUND".equals(stage)) {
             throw AssetOperationException.conflict("ASSET_PENDING_INBOUND",

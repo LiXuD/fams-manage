@@ -1,18 +1,18 @@
 import type { MiniServices } from "./pages.ts";
 import { MiniRequestError } from "./session.ts";
 import type { FactorySummary } from "./repair-factory-types.ts";
-interface Asset { id: string; assetCode: string; name: string; version: number; locationId: string | null; locationName: string | null }
-interface Repair { inventoryEvidence?: { taskId: string; observationId: string; photoIds: string[] }[]; id: string; source: Asset; fault: string; status: string; version: number; assetVersion: number; ownershipVersion: number; lockVersion: number;
+interface Asset { initialSource?: { batchId: string; sheetRow: number; stage: string; evidence: string; factoryDestination?: string }; id: string; assetCode: string; name: string; version: number; locationId: string | null; locationName: string | null }
+interface Repair { latestLossReportId?: string; inventoryEvidence?: { taskId: string; observationId: string; photoIds: string[] }[]; id: string; source: Asset; fault: string; status: string; version: number; assetVersion: number; ownershipVersion: number; lockVersion: number;
     loanVersion?: number | null; physicalHandling?: { occurred_at: string; evidence: string }[]; inbound?: { occurred_at: string; evidence: string }[];
     loanExpectedReturnDate?: string | null; returnHandovers?: ReturnHandover[]; returnRecollections?: { handover_id: string; occurred_at: string; evidence: string }[];
     actions: Record<string, boolean>; factorySummary?: FactorySummary; photos?: { objectId: string; filename: string; contentType: string }[];
     history?: { id: string; action: string; actor_username: string; occurred_at: string }[]; historyTotal?: number }
-interface Pending { path: string; key: string; version: number; body?: unknown; file?: string }
+interface Pending { repairSourceId?: string; lossSource?: true; path: string; key: string; version: number; body?: unknown; file?: string }
 interface PhysicalPlace { id: string; name: string; version: number; warehouse_id?: string | null; location_type?: string }
 interface ReturnTarget { employeeName: string; organizationName: string; locationName: string; employeeVersion: number; organizationVersion: number; locationVersion: number }
 interface ReturnHandover { id: string; handover_status: string; target_snapshot_json: ReturnTarget; delivered_at: string; delivery_evidence: string; receipt_at?: string; receipt_evidence?: string }
 type ReturnMode = "delivery" | "receipt" | "refusal" | "recollection";
-interface Data { rows: Repair[]; assets: Asset[]; detail: Repair | null; selectedAsset: string; assetPage: number; assetTotal: number;
+interface Data { lossDate?: string; lossTime?: string; lossLocation?: string; lossCircumstances?: string; scrapReason: string; scrapCondition: string; scrapMethod: string; scrapReceiptId: string; rows: Repair[]; assets: Asset[]; detail: Repair | null; selectedAsset: string; assetPage: number; assetTotal: number;
     approvalMethod: "INTERNAL_NO_COST" | "INTERNAL_OR_FACTORY"; approvalMethodIndex: number; factoryCostPolicyIndex: number; factoryCostPolicyLabels: string[]; factoryCostLimit: string;
     page: number; total: number; busy: boolean; retry: boolean; error: string; fault: string; impact: string; occurredAt: string;
     reason: string; observedCode: string; evidence: string; locationConfirmed: boolean; neverLeft: boolean; photoPath: string; photoName: string;
@@ -25,7 +25,7 @@ interface Reassignment { snapshot: { version: number; acceptedAt: string | null;
 interface Context { data: Data; setData(data: Partial<Data>): void }
 const costPolicies = ["NO_COST", "LIMITED", "UNLIMITED"] as const;
 const moneyPattern = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/;
-const blank = (): Data => ({ rows: [], assets: [], detail: null, selectedAsset: "", assetPage: 1, assetTotal: 0, page: 1, total: 0,
+const blank = (): Data => ({ scrapReason: "", scrapCondition: "", scrapMethod: "", scrapReceiptId: "", rows: [], assets: [], detail: null, selectedAsset: "", assetPage: 1, assetTotal: 0, page: 1, total: 0,
     approvalMethod: "INTERNAL_NO_COST", approvalMethodIndex: 0, factoryCostPolicyIndex: 0, factoryCostPolicyLabels: ["返厂无费用", "所有返厂轮次累计限额", "不限费用"], factoryCostLimit: "",
     busy: false, retry: false, error: "", fault: "", impact: "MEDIUM", occurredAt: "", reason: "", observedCode: "", evidence: "",
     locationConfirmed: false, neverLeft: false, photoPath: "", photoName: "", physicalMode: "away", physicalObservedCode: "", physicalAt: "", physicalEvidence: "",
@@ -74,11 +74,13 @@ export function createRepairPage(getServices: () => MiniServices) {
             const result = (operation.file ? await services.sessions.uploadEvidence(operation.path, operation.file, operation)
                 : await services.sessions.request("POST", operation.path, operation.body, operation)) as { id?: string; repairId?: string };
             if (!current(epoch)) return;
-            if (result.id || result.repairId) selectedId = result.id ?? result.repairId!;
+            if (operation.repairSourceId) selectedId = operation.repairSourceId;
+            else if (result.id || result.repairId) selectedId = result.id ?? result.repairId!;
             // Keep the immutable operation until the authoritative reread succeeds.
             const detail = selectedId ? await services.sessions.request("GET", `/api/v1/mini/repairs/${selectedId}`) as Repair : null;
             if (!current(epoch)) return;
-            pending = null; page.setData({ detail, retry: false, reason: "", fault: "" }); await read(page);
+            pending = null; page.setData({ detail, retry: false, reason: "", fault: "", scrapReason: "", scrapCondition: "", scrapMethod: "",
+                scrapReceiptId: operation.repairSourceId && !operation.lossSource ? result.id ?? "" : page.data.scrapReceiptId }); await read(page);
         } catch (error) { if (current(epoch)) failure(page, error); }
     };
     const confirm = async (page: Context, operation: Pending, text: string) => {
@@ -120,7 +122,7 @@ export function createRepairPage(getServices: () => MiniServices) {
             const field = event.currentTarget.dataset.field;
             if (!current(generation)) { finish(this, generation); return; }
             if (field === "factoryCostLimit" && (!this.data.detail?.actions.approve || this.data.approvalMethod !== "INTERNAL_OR_FACTORY")) return;
-            if (!this.data.busy && !pending && ["factoryCostLimit", "fault","occurredAt","reason","observedCode","evidence","physicalObservedCode","physicalAt","physicalEvidence","returnObservedCode","returnAt","returnEvidence","reassignReason","reassignEvidence"].includes(field)) this.setData({ [field]: event.detail.value });
+            if (!this.data.busy && !pending && ["scrapReason", "scrapCondition", "scrapMethod", "factoryCostLimit", "fault","occurredAt","reason","observedCode","evidence","physicalObservedCode","physicalAt","physicalEvidence","returnObservedCode","returnAt","returnEvidence","reassignReason","reassignEvidence"].includes(field)) this.setData({ [field]: event.detail.value });
         },
         onImpact(this: Context, event: { detail: { value: string } }) { const impact = ["LOW","MEDIUM","HIGH"][Number(event.detail.value)]; if (!this.data.busy && !pending && impact) this.setData({ impact }); },
         onPhysical(this: Context, event: { detail: { value: string[] } }) { if (!this.data.busy && !pending) this.setData({ neverLeft: event.detail.value.includes("neverLeft"), locationConfirmed: event.detail.value.includes("location") }); },
@@ -147,6 +149,42 @@ export function createRepairPage(getServices: () => MiniServices) {
         onPhysicalLocation(this: Context, event: { currentTarget: { dataset: { id: string } } }) {
             const row = this.data.physicalLocations.find(row => row.id === event.currentTarget.dataset.id);
             if (!this.data.busy && !pending && current(generation) && row && (this.data.physicalMode === "away" || row.location_type === "BIN" && row.warehouse_id === this.data.physicalWarehouseId)) this.setData({ physicalLocationId: row.id });
+        },
+        async onScrap(this: Context) {
+            const row = this.data.detail, data = this.data;
+            if (data.busy || pending || !current(generation) || !row?.actions.requestScrap || row.lockVersion == null) return;
+            if (!data.scrapReason.trim() || !data.scrapCondition.trim() || !data.scrapMethod.trim()) {
+                this.setData({ error: "请填写关联报废原因、实物现状和建议处置方式。" }); return;
+            }
+            await confirm(this, { path: "/api/v1/mini/scrap-requests/from-repair/" + row.id, repairSourceId: row.id,
+                key: services.createKey(), version: row.version, body: Object.freeze({
+                    assetVersion: row.assetVersion, ownershipVersion: row.ownershipVersion, lockVersion: row.lockVersion,
+                    reason: data.scrapReason.trim(), observedCondition: data.scrapCondition.trim(), proposedDisposition: data.scrapMethod.trim(),
+                }) }, "提交维修关联报废，原维修事实保留，报废批准后仍由原处理库管执行。");
+        },
+        onLossField(this: Context, event: { currentTarget: { dataset: { field: string } }; detail: { value: string } }) {
+            const field = event.currentTarget.dataset.field;
+            if (!this.data.busy && !pending && current(generation) && ["lossDate", "lossTime", "lossLocation", "lossCircumstances"].includes(field)) {
+                this.setData({ [field]: event.detail.value });
+            }
+        },
+        async onReportLoss(this: Context) {
+            const row = this.data.detail;
+            if (this.data.busy || pending || !current(generation) || !row?.actions.requestLoss || row.lockVersion == null) return;
+            const at = new Date(this.data.lossDate + "T" + this.data.lossTime);
+            const lastLocation = this.data.lossLocation?.trim(), circumstances = this.data.lossCircumstances?.trim();
+            if (!Number.isFinite(at.getTime()) || !lastLocation || !circumstances || circumstances.length < 10) {
+                this.setData({ error: "请填写最后见到时间、地点和实物查找情况。" }); return;
+            }
+            await confirm(this, { path: "/api/v1/mini/loss-reports/internal-repairs/" + row.id, lossSource: true,
+                repairSourceId: row.id, key: services.createKey(), version: row.version, body: {
+                    assetVersion: row.assetVersion, ownershipVersion: row.ownershipVersion, lockVersion: row.lockVersion,
+                    lastSeenAt: at.toISOString(), lastLocation, circumstances,
+                } }, "提交关联报失审批并移交原维修锁，保留经办人、借用和返还目标。");
+        },
+        onOpenLoss(this: Context) {
+            const id = this.data.detail?.latestLossReportId;
+            if (id && !this.data.busy && !pending && current(generation)) services.navigate("/pages/loss-reports/index?id=" + id);
         },
         async onPhysicalAction(this: Context) {
             const row = this.data.detail, mode = this.data.physicalMode;

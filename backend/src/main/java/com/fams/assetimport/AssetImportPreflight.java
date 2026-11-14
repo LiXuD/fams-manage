@@ -1,5 +1,11 @@
 package com.fams.assetimport;
 
+import com.fams.business.InitialRepairPort;
+import com.fams.business.InitialScrapPort;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -29,7 +35,11 @@ public final class AssetImportPreflight {
                            long organizationId, String model, String unit, String serialNumber,
                            String state, Long warehouseId, Long locationId, Long usingOrganizationId,
                            Long employeeId, java.time.LocalDate borrowedDate,
-                           java.time.LocalDate expectedReturnDate) { }
+                           java.time.LocalDate expectedReturnDate, String preScrapState,
+                           String scrapReason, String scrapCondition, String proposedDisposition,
+                           String preRepairState, InitialRepairPort.Facts repairFacts,
+                           InitialScrapPort.LossFacts lossFacts,
+                           InitialScrapPort.FactoryDisposition factoryDisposition) { }
     public record Result(List<ReadyRow> ready, List<AssetImportWorkbook.CellError> errors) {
         public Result {
             ready = List.copyOf(ready);
@@ -44,7 +54,21 @@ public final class AssetImportPreflight {
             Map.entry("serialNumber", "序列号"), Map.entry("state", "资产状态"),
             Map.entry("warehouse", "仓库编码"), Map.entry("location", "位置编码"),
             Map.entry("usingOrganization", "使用组织编码"), Map.entry("employee", "使用人编号"),
-            Map.entry("borrowedDate", "借出日期"), Map.entry("expectedReturnDate", "预计归还日"));
+            Map.entry("borrowedDate", "借出日期"), Map.entry("expectedReturnDate", "预计归还日"),
+            Map.entry("preScrapState", "报废前状态"), Map.entry("scrapReason", "报废原因"),
+            Map.entry("scrapCondition", "报废前现状"), Map.entry("proposedDisposition", "建议处置方式"),
+            Map.entry("preRepairState", "维修前状态"), Map.entry("repairStage", "当前维修阶段"),
+            Map.entry("repairFault", "维修故障"), Map.entry("repairImpact", "影响程度"),
+            Map.entry("repairOccurredAt", "故障发生时刻"), Map.entry("repairAcceptedAt", "接修时刻"),
+            Map.entry("repairLocation", "接修位置编码"), Map.entry("repairEvidence", "维修承接依据"),
+            Map.entry("factoryProvider", "厂家名称"), Map.entry("factoryContact", "厂家联系人"),
+            Map.entry("factoryPhone", "厂家联系电话"), Map.entry("factoryDestination", "厂家实物去向"),
+            Map.entry("factoryDispatchedAt", "实际寄出时刻"), Map.entry("factoryDispatchEvidence", "寄出依据"),
+            Map.entry("factoryDue", "预计收回日期"), Map.entry("factoryCostPolicy", "返厂费用规则"),
+            Map.entry("factoryCostLimit", "返厂费用限额"), Map.entry("factoryRoundNumber", "当前返厂轮次"),
+            Map.entry("lossLastSeenAt", "最后见到时刻"), Map.entry("lossLastLocation", "最后见到地点"),
+            Map.entry("lossConfirmedAt", "确认遗失时刻"), Map.entry("lossEvidence", "遗失责任依据"),
+            Map.entry("factoryDispositionAt", "厂家实际处置时刻"), Map.entry("factoryDispositionEvidence", "厂家处置凭证"));
 
     private AssetImportPreflight() { }
 
@@ -67,7 +91,7 @@ public final class AssetImportPreflight {
     }
 
     public static Result check(AssetImportWorkbook.Parsed parsed, Map<String, String> selectedColumns,
-            Catalog catalog) {
+            Catalog catalog, Instant now) {
         if (catalog == null) { throw new IllegalArgumentException("ASSET_IMPORT_CATALOG_MISSING"); }
         Map<String, String> mapping = columns(parsed, selectedColumns);
         List<ReadyRow> ready = new ArrayList<>();
@@ -109,15 +133,73 @@ public final class AssetImportPreflight {
             Long employee = null;
             java.time.LocalDate borrowedDate = null;
             java.time.LocalDate expectedReturnDate = null;
-            if ("在库".equals(state)) {
+            String preScrapState = null;
+            String scrapReason = null;
+            String scrapCondition = null;
+            String proposedDisposition = null;
+            String custodyState = state;
+            String preRepairState = null;
+            InitialRepairPort.Facts repair = null;
+            InitialScrapPort.LossFacts loss = null;
+            InitialScrapPort.FactoryDisposition factoryDisposition = null;
+            boolean pendingScrap = "待报废".equals(state);
+            if (pendingScrap) {
+                preScrapState = required(row, mapping, "preScrapState", errors);
+                custodyState = preScrapState;
+            }
+            boolean factoryOpening = "返厂维修".equals(custodyState);
+            boolean repairOpening = "维修中".equals(custodyState) || factoryOpening;
+            if (repairOpening) {
+                preRepairState = required(row, mapping, "preRepairState", errors);
+                custodyState = preRepairState;
+                if (!List.of("在库", "在用个人", "在用公用", "借出").contains(preRepairState)) {
+                    if (!preRepairState.isBlank()) {
+                        errors.add(error(row, mapping, "preRepairState", preRepairState, "UNSUPPORTED_PRE_REPAIR_STATE"));
+                    }
+                    custodyState = null;
+                }
+                repair = repairFacts(row, mapping, catalog, factoryOpening, now, errors);
+            }
+            if (pendingScrap) {
+                proposedDisposition = required(row, mapping, "proposedDisposition", errors);
+                boolean lossDisposition = List.of("遗失核销", "LOSS_WRITTEN_OFF").contains(proposedDisposition);
+                if (lossDisposition && (factoryOpening || List.of("在库", "在用个人", "在用公用", "借出").contains(preScrapState))) {
+                    loss = lossFacts(row, mapping, now, errors);
+                    if (factoryOpening && loss.lastSeenAt() != null && repair.factory().dispatchedAt() != null
+                            && loss.lastSeenAt().isBefore(repair.factory().dispatchedAt())) {
+                        errors.add(error(row, mapping, "lossLastSeenAt", loss.lastSeenAt().toString(), "INITIAL_LOSS_TIME_INVALID"));
+                    }
+                } else if (factoryOpening && List.of("FACTORY_RETAINED", "FACTORY_DESTROYED").contains(proposedDisposition)) {
+                    Instant occurred = instant(row, mapping, "factoryDispositionAt", errors);
+                    Instant dispatched = repair.factory().dispatchedAt();
+                    if (occurred != null && (occurred.isAfter(now) || dispatched != null && occurred.isBefore(dispatched))) {
+                        errors.add(error(row, mapping, "factoryDispositionAt", occurred.toString(), "INITIAL_FACTORY_DISPOSITION_TIME_INVALID"));
+                    }
+                    factoryDisposition = new InitialScrapPort.FactoryDisposition(proposedDisposition, occurred,
+                            repairText(row, mapping, "factoryDispositionEvidence", 2000, errors));
+                } else if (lossDisposition || factoryOpening
+                        || !repairOpening && !List.of("在库", "在用个人", "在用公用").contains(preScrapState)) {
+                    if (!preScrapState.isBlank()) {
+                        errors.add(error(row, mapping, "preScrapState", preScrapState,
+                                "UNSUPPORTED_PRE_SCRAP_STATE"));
+                    }
+                    custodyState = null;
+                }
+                scrapReason = required(row, mapping, "scrapReason", errors);
+                scrapCondition = required(row, mapping, "scrapCondition", errors);
+                limit(row, mapping, "scrapReason", scrapReason, 2000, errors);
+                limit(row, mapping, "scrapCondition", scrapCondition, 2000, errors);
+                limit(row, mapping, "proposedDisposition", proposedDisposition, 500, errors);
+            }
+            if ("在库".equals(custodyState)) {
                 warehouse = reference(row, mapping, "warehouse", catalog.warehouses(), null, errors);
                 location = reference(row, mapping, "location", catalog.locations(), warehouse, errors);
-            } else if ("在用个人".equals(state) || "在用公用".equals(state) || "借出".equals(state)) {
+            } else if ("在用个人".equals(custodyState) || "在用公用".equals(custodyState) || "借出".equals(custodyState)) {
                 usingOrganization = reference(row, mapping, "usingOrganization",
                         catalog.organizations(), null, errors);
                 employee = reference(row, mapping, "employee", catalog.employees(), usingOrganization, errors);
                 location = reference(row, mapping, "location", catalog.locations(), null, errors);
-                if ("借出".equals(state)) {
+                if ("借出".equals(custodyState)) {
                     borrowedDate = date(row, mapping, "borrowedDate", errors);
                     expectedReturnDate = date(row, mapping, "expectedReturnDate", errors);
                     if (borrowedDate != null && expectedReturnDate != null
@@ -126,16 +208,115 @@ public final class AssetImportPreflight {
                                 expectedReturnDate.toString(), "BORROW_DATE_ORDER_INVALID"));
                     }
                 }
-            } else if (!state.isBlank()) {
+            } else if (!state.isBlank() && !"待报废".equals(state) && !repairOpening) {
                 errors.add(error(row, mapping, "state", state, "UNSUPPORTED_INITIAL_STATE"));
             }
             if (errors.size() == before && !invalidRows.contains(row.sheetRow())) {
                 ready.add(new ReadyRow(row.sheetRow(), code, name, category, organization, model, unit,
                         serial, state, warehouse, location, usingOrganization, employee,
-                        borrowedDate, expectedReturnDate));
+                        borrowedDate, expectedReturnDate, preScrapState, scrapReason, scrapCondition,
+                        proposedDisposition, preRepairState, repair, loss, factoryDisposition));
             }
         }
         return new Result(List.copyOf(ready), List.copyOf(errors));
+    }
+
+    private static InitialScrapPort.LossFacts lossFacts(AssetImportWorkbook.DataRow row,
+            Map<String, String> mapping, Instant now, List<AssetImportWorkbook.CellError> errors) {
+        Instant lastSeen = instant(row, mapping, "lossLastSeenAt", errors);
+        Instant confirmed = instant(row, mapping, "lossConfirmedAt", errors);
+        if (confirmed != null && (confirmed.isAfter(now) || lastSeen != null && lastSeen.isAfter(confirmed))) {
+            errors.add(error(row, mapping, "lossConfirmedAt", confirmed.toString(), "INITIAL_LOSS_TIME_INVALID"));
+        }
+        return new InitialScrapPort.LossFacts(lastSeen, repairText(row, mapping, "lossLastLocation", 500, errors),
+                confirmed, repairText(row, mapping, "lossEvidence", 2000, errors));
+    }
+
+    private static InitialRepairPort.Facts repairFacts(AssetImportWorkbook.DataRow row, Map<String, String> mapping,
+            Catalog catalog, boolean factory, Instant now, List<AssetImportWorkbook.CellError> errors) {
+        String stage = required(row, mapping, "repairStage", errors);
+        if (!stage.isBlank() && !(factory ? "已寄出".equals(stage) : List.of("原地维修", "移出接修").contains(stage))) {
+            errors.add(error(row, mapping, "repairStage", stage, "UNSUPPORTED_INITIAL_REPAIR_STAGE"));
+        }
+        String fault = repairText(row, mapping, "repairFault", 2000, errors);
+        String impact = required(row, mapping, "repairImpact", errors);
+        if (!impact.isBlank() && !List.of("LOW", "MEDIUM", "HIGH").contains(impact)) {
+            errors.add(error(row, mapping, "repairImpact", impact, "INVALID_REPAIR_IMPACT"));
+        }
+        Instant occurred = instant(row, mapping, "repairOccurredAt", errors);
+        Instant accepted = instant(row, mapping, "repairAcceptedAt", errors);
+        if (occurred != null && accepted != null && accepted.isBefore(occurred)) {
+            errors.add(error(row, mapping, "repairAcceptedAt", accepted.toString(), "INITIAL_REPAIR_TIME_ORDER_INVALID"));
+        }
+        if (accepted != null && accepted.isAfter(now)) {
+            errors.add(error(row, mapping, "repairAcceptedAt", accepted.toString(), "INITIAL_REPAIR_TIME_IN_FUTURE"));
+        }
+        String evidence = repairText(row, mapping, "repairEvidence", 2000, errors);
+        Long place = "移出接修".equals(stage) || factory && !value(row, mapping, "repairLocation").isBlank()
+                ? reference(row, mapping, "repairLocation", catalog.locations(), null, errors) : null;
+        return new InitialRepairPort.Facts(stage, fault, impact, occurred, accepted, place, evidence,
+                factory ? factoryFacts(row, mapping, accepted, now, errors) : null);
+    }
+
+    private static InitialRepairPort.Factory factoryFacts(AssetImportWorkbook.DataRow row, Map<String, String> mapping,
+            Instant accepted, Instant now, List<AssetImportWorkbook.CellError> errors) {
+        String number = required(row, mapping, "factoryRoundNumber", errors);
+        int round = 0;
+        if (number.matches("[1-9][0-9]{0,8}")) {
+            round = Integer.parseInt(number);
+        } else if (!number.isBlank()) {
+            errors.add(error(row, mapping, "factoryRoundNumber", number, "INVALID_INITIAL_FACTORY_ROUND"));
+        }
+        String provider = repairText(row, mapping, "factoryProvider", 200, errors);
+        String contact = repairText(row, mapping, "factoryContact", 100, errors);
+        String phone = repairText(row, mapping, "factoryPhone", 64, errors);
+        String destination = repairText(row, mapping, "factoryDestination", 500, errors);
+        Instant dispatch = instant(row, mapping, "factoryDispatchedAt", errors);
+        if (accepted != null && dispatch != null && dispatch.isBefore(accepted)) {
+            errors.add(error(row, mapping, "factoryDispatchedAt", dispatch.toString(), "INITIAL_REPAIR_TIME_ORDER_INVALID"));
+        }
+        if (dispatch != null && dispatch.isAfter(now)) {
+            errors.add(error(row, mapping, "factoryDispatchedAt", dispatch.toString(), "INITIAL_REPAIR_TIME_IN_FUTURE"));
+        }
+        var due = date(row, mapping, "factoryDue", errors);
+        String evidence = repairText(row, mapping, "factoryDispatchEvidence", 2000, errors);
+        String policy = required(row, mapping, "factoryCostPolicy", errors);
+        String amount = value(row, mapping, "factoryCostLimit");
+        BigDecimal limit = null;
+        if ("LIMITED".equals(policy) && amount.matches("[0-9]{1,12}([.][0-9]{1,2})?")) {
+            limit = new BigDecimal(amount);
+        }
+        if ("NO_COST".equals(policy) && amount.isBlank()) {
+            limit = BigDecimal.ZERO;
+        } else if (!policy.isBlank()
+                && !(("UNLIMITED".equals(policy) && amount.isBlank()) || limit != null && limit.signum() > 0)) {
+            errors.add(error(row, mapping, "factoryCostPolicy", policy, "INVALID_INITIAL_FACTORY_COST_POLICY"));
+        }
+        return new InitialRepairPort.Factory(round, provider, contact, phone, destination, dispatch, evidence, due, policy, limit);
+    }
+
+    private static String repairText(AssetImportWorkbook.DataRow row, Map<String, String> mapping,
+            String field, int maximum, List<AssetImportWorkbook.CellError> errors) {
+        String result = required(row, mapping, field, errors);
+        limit(row, mapping, field, result, maximum, errors);
+        return result;
+    }
+
+    private static Instant instant(AssetImportWorkbook.DataRow row, Map<String, String> mapping,
+            String field, List<AssetImportWorkbook.CellError> errors) {
+        String raw = required(row, mapping, field, errors);
+        if (!raw.isBlank()) {
+            try {
+                Instant value = Instant.parse(raw);
+                if (value.equals(value.truncatedTo(ChronoUnit.MILLIS))) {
+                    return value;
+                }
+            } catch (java.time.format.DateTimeParseException invalid) {
+                // The cell receives the same error as an unsupported precision.
+            }
+            errors.add(error(row, mapping, field, raw, "INVALID_INITIAL_REPAIR_TIMESTAMP"));
+        }
+        return null;
     }
 
     private static Long reference(AssetImportWorkbook.DataRow row, Map<String, String> mapping,

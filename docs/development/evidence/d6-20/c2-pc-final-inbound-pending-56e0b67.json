@@ -1,0 +1,22 @@
+{
+  "candidate": "56e0b67",
+  "pcRepairApprovalClaimActualAcceptanceDispatch": true,
+  "dedicatedOriginalsScannedByRealClamAV": 2,
+  "uploadThenFormFilledWithoutManualRefresh": true,
+  "newCard": "ASSET-E-PRXA-N-00000001",
+  "newSerial": "PC-REPLACEMENT-983010",
+  "inboundReceipt": "INBOUND_RECEIPT-E-PRXI-N-00000001",
+  "inboundStatus": "WAREHOUSE_PROCESSING",
+  "separateSubmitApproveClaim": true,
+  "actualFinalInboundAccepted": false,
+  "oldLifecycle": "FACTORY_REPAIR",
+  "oldRepairLockRetained": true,
+  "originalReceivedAt": null,
+  "toolLimitations": [
+    "IAB window.prompt is not supported; switched to Chrome",
+    "Native app tool reports Mac locked and requires manual unlock"
+  ],
+  "preservedFailure": "Draft assertion incorrectly expected IN_STOCK; corrected to owner-defined WAITING_INBOUND; fresh environment rerun succeeded through committing JVM replay",
+  "independentReview": "PENDING",
+  "status": "IN_PROGRESS"
+}

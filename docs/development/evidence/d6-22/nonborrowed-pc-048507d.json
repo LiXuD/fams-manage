@@ -1,0 +1,99 @@
+{
+  "candidate": "048507d44edff1b68b63e834def17b90ddbefe47",
+  "artifactSha256": "dcb2f8625b9a5b79a7a4ff4a8d238d5d9960f46dab8a6d2e91a8ee781bd72579",
+  "scanner": "ClamAV 1.4.6/28129/Sun Sep 20 06:26:26 2026",
+  "preservedCustody": true,
+  "loanRows": 0,
+  "activeLocks": 0,
+  "writeReceipts": 2,
+  "openTodos": 0,
+  "writeOffAudit": 1,
+  "cleanLossOriginals": 1,
+  "finalStates": {
+    "scrapRequest": "EXECUTED",
+    "disposition": "LOSS_WRITTEN_OFF",
+    "assetLifecycle": "SCRAPPED",
+    "assetException": "LOST",
+    "lossReport": "CONFIRMED_LOST"
+  },
+  "date": "2026-11-06",
+  "scope": "personal in-use confirmed loss through real PC",
+  "browser": {
+    "candidate": "048507d44edff1b68b63e834def17b90ddbefe47",
+    "events": [
+      {
+        "role": "employee",
+        "route": "/api/v1/auth/login",
+        "status": 200
+      },
+      {
+        "role": "employee",
+        "route": "/api/v1/loss-reports",
+        "status": 200
+      },
+      {
+        "role": "employee",
+        "route": "/api/v1/loss-reports/{id}/photos",
+        "status": 200
+      },
+      {
+        "role": "admin",
+        "route": "/api/v1/auth/login",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "route": "/api/v1/auth/login",
+        "status": 200
+      },
+      {
+        "role": "admin",
+        "route": "/api/v1/loss-reports/{id}/decision",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "route": "/api/v1/loss-reports/{id}/claim",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "route": "/api/v1/loss-reports/{id}/search",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "route": "/api/v1/loss-reports/{id}/confirm-lost",
+        "status": 200
+      },
+      {
+        "role": "employee",
+        "route": "/api/v1/scrap-requests/from-loss/{id}",
+        "status": 200
+      },
+      {
+        "role": "admin",
+        "route": "/api/v1/scrap-requests/{id}/decision",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "route": "/api/v1/scrap-requests/{id}/claim",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "route": "/api/v1/scrap-requests/{id}/execute-loss",
+        "status": 200
+      }
+    ],
+    "errors": [],
+    "states": [
+      "applicant_returned_to_original_report_and_opened_linked_scrap",
+      "written_off_no_physical_form_and_loss_history_visible"
+    ]
+  },
+  "unauthenticatedStatus": 401,
+  "cleanupVerified": true,
+  "earlierAttempt": "Asset selector timed out before first business write. Retried with the same candidate and a fresh owned database."
+}

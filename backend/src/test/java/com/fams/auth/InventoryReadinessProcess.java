@@ -16,7 +16,7 @@ import java.nio.file.Path;
 import java.util.Map;
 
 /**
- * Owned subprocess commits or replays a unobserved reason through its own real HTTP listener and
+ * Owned subprocess commits or replays an inventory write through its own real HTTP listener and
  * shared MySQL.
  */
 public final class InventoryReadinessProcess {
@@ -60,6 +60,11 @@ public final class InventoryReadinessProcess {
             if (!task.matches("[1-9][0-9]*") || !item.matches("[1-9][0-9]*")) {
                 throw new IllegalArgumentException("Owned unobserved reason identifiers required");
             }
+            String reason = environment.get("FAMS_TEST_READINESS_LOSS_REASON");
+            if (reason != null && !reason.matches("[1-9][0-9]*")) {
+                throw new IllegalArgumentException("Owned missing reason identifier required");
+            }
+            String endpoint = reason == null ? "/unobserved" : "/missing/" + reason + "/loss";
             var request =
                     HttpRequest.newBuilder(
                                     URI.create(
@@ -69,7 +74,7 @@ public final class InventoryReadinessProcess {
                                                     + task
                                                     + "/items/"
                                                     + item
-                                                    + "/unobserved"))
+                                                    + endpoint))
                             .header("Cookie", environment.get("FAMS_TEST_READINESS_COOKIE"))
                             .header("X-CSRF-Token", environment.get("FAMS_TEST_READINESS_CSRF"))
                             .header("Idempotency-Key", environment.get("FAMS_TEST_READINESS_KEY"))

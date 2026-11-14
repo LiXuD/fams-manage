@@ -1,0 +1,207 @@
+{
+  "implementationCandidate": "99e72d13b699309469c7bcbaaf5bf41de4cc207f",
+  "baseSecondBatch": "b3e6cc9",
+  "branch": "codex/d6-21c-repair-loss",
+  "environment": {
+    "java": "21.0.7",
+    "database": "isolated MySQL 8.4",
+    "browser": "Chrome",
+    "mini": "native Page handlers, opaque session, loopback HTTP adapter"
+  },
+  "inventory": {
+    "reviewAndSealCandidate": "10aa05e",
+    "productGate": "PASS",
+    "browserMutationsHttp200": 8,
+    "acceptedObservations": 4,
+    "lateObservationsAdded": 1,
+    "supplementRecordsAdded": 1,
+    "openSupplementTodosAdded": 1,
+    "frozenReportExportBeforeAndAfterSha256": "176c7ffca6c757a104c13c05a65dcfdc8f318f25fb5e4b251f00bc43d54dc408",
+    "receivedCountAndLastInventoryDateUnchanged": true,
+    "httpTests": {
+      "review": 22,
+      "waitingReview": 10,
+      "seal": 14,
+      "late": 18
+    }
+  },
+  "loss": {
+    "inventorySourceCandidate": "5ddccc7",
+    "returnSourceCandidate": "86aefa5",
+    "internalRepairSourceCandidate": "77d1f49",
+    "httpTestsSameDatabase": {
+      "inventoryReadiness": 12,
+      "return": 3,
+      "loss": 45,
+      "factory": 47,
+      "total": 107,
+      "failures": 0
+    },
+    "browser": [
+      {
+        "inventoryTaskId": "946000",
+        "itemId": "946010",
+        "reasonId": "1",
+        "lossReportId": "1",
+        "postStatus": 200,
+        "reverseSourceVisible": true
+      },
+      {
+        "scenario": "return",
+        "sourceId": "1",
+        "status": 200,
+        "reportUrl": "/loss-reports/1"
+      },
+      {
+        "scenario": "repair",
+        "sourceId": "951300",
+        "status": 200,
+        "reportUrl": "/loss-reports/1"
+      }
+    ],
+    "miniOriginalKeyPayloadVersion": [
+      {
+        "scenario": "return",
+        "id": "1",
+        "reportId": "1",
+        "originalKeyPayloadVersionRetained": true,
+        "opened": "/pages/loss-reports/index?id=1"
+      },
+      {
+        "scenario": "repair",
+        "id": "951300",
+        "reportId": "1",
+        "originalKeyPayloadVersionRetained": true,
+        "opened": "/pages/loss-reports/index?id=1"
+      }
+    ],
+    "inventoryNativeAndJvmReplay": "PASS",
+    "committingJvmReplay": [
+      {
+        "source": "return",
+        "committingJvm": 44683,
+        "replayJvm": 44720,
+        "sameReceipt": true
+      },
+      {
+        "source": "internalRepair",
+        "committingJvm": 45258,
+        "replayJvm": 45317,
+        "sameReceipt": true
+      }
+    ],
+    "uniqueReportAndActiveLock": true
+  },
+  "opening": {
+    "integrationCommit": "9bab5ee",
+    "scrap": {
+      "published": 2,
+      "approved": 1,
+      "executed": 1,
+      "rolledBack": 1,
+      "rejectedRows": 3
+    },
+    "repairAndFactory": {
+      "published": 2,
+      "completedInPlace": 1,
+      "originalFactoryRoundReceived": 1,
+      "rolledBack": 1
+    },
+    "pcSourcePages": [
+      {
+        "batch": "b1f3cf2c-751a-434a-97c6-729d21af4f0f",
+        "mode": "scrap",
+        "ids": [
+          "1"
+        ],
+        "rendered": true
+      },
+      {
+        "batch": "37cd8fbf-b7d6-4e36-bcbe-8f8bd2fe0ade",
+        "mode": "repair",
+        "ids": [
+          "1",
+          "2"
+        ],
+        "rendered": true
+      }
+    ],
+    "miniSourcePages": {
+      "batch": "37cd8fbf-b7d6-4e36-bcbe-8f8bd2fe0ade",
+      "internal": "1",
+      "factory": "2",
+      "initialRoundNumber": 2,
+      "dispatched": true
+    },
+    "committingJvmExit": {
+      "committingJvm": 49037,
+      "recoveryJvm": 49136,
+      "repairRows": 2,
+      "loanRows": 1,
+      "factoryRoundRows": 1,
+      "jobGeneration": 1
+    },
+    "populatedV70ToV71": {
+      "migrationsApplied": 1,
+      "repeatApplied": 0,
+      "existingRepairAndDispatchedRoundUnchanged": true
+    },
+    "movedRepair": {
+      "physicalHandlingRows": 1,
+      "originalCustody": "BORROWED",
+      "ordinaryDetailHttpStatus": 200
+    }
+  },
+  "staticQuality": {
+    "checkstyleFindings": 0,
+    "spotBugsFindings": 0,
+    "javaRequiredTests": 536,
+    "javaLineCoveragePercent": 93.07,
+    "javaBranchCoveragePercent": 75.75
+  },
+  "localLogDirectory": "output/",
+  "localEvidenceFiles": {
+    "inventoryGate": "d6-third-product-gate-10aa05e.log",
+    "jointLoss": "d6-third-loss-final.log",
+    "lossJvm": "d6-third-loss-jvm-3fc0c54.log",
+    "openingJvm": "d6-third-initial-jvm-3fc0c54.log",
+    "openingPages": "d6-third-opening-moved-final.log",
+    "openingUpgrade": "d6-third-v71-upgrade-3fc0c54.log",
+    "openingMoved": "d6-third-opening-moved-final.log",
+    "nativeReturn": "d6-third-native-return-runtime.log",
+    "nativeRepair": "d6-third-native-repair-runtime.log",
+    "firstProductGate": "d6-third-product-gate-3fc0c54.log",
+    "correctedProductGateResume": "d6-third-product-gate-resume-99e72d1.log",
+    "oldWebFailure": "d6-third-web-failed-3fc0c54.json"
+  },
+  "independentReview": "PENDING",
+  "contract": {
+    "operations": 686,
+    "changedWriteOperations": 14,
+    "referencesExamplesWriteBoundariesAndTraceability": "PASS",
+    "verifierUnitTests": 97
+  },
+  "aociLinkedWorktree": {
+    "indexEntries": 0,
+    "baselineExists": false
+  },
+  "backendAndBusinessReplayCandidate": "3fc0c54696cda38b4a72de2f96037db362aa17e6",
+  "webCompatibilityFix": {
+    "path": "apps/web/src/views/LossRecoveryPanel.vue",
+    "oldFailureCount": 3,
+    "targetedRecoveryTestsPassed": 12
+  },
+  "productGate": {
+    "status": "PASS_IN_SECTIONS",
+    "javaCandidate": "3fc0c54696cda38b4a72de2f96037db362aa17e6",
+    "frontendAndRecoveryCandidate": "99e72d13b699309469c7bcbaaf5bf41de4cc207f",
+    "onlyCandidateDelta": "apps/web/src/views/LossRecoveryPanel.vue",
+    "webTestsPassed": 242,
+    "miniTestsPassed": 343,
+    "typescriptLintTypecheckAndBuilds": "PASS",
+    "dependencyIntegrity": "PASS",
+    "applicationRestart": "PASS",
+    "sameVolumeDatabaseRestart": "PASS",
+    "cleanupAndCleanPostflight": "PASS"
+  }
+}

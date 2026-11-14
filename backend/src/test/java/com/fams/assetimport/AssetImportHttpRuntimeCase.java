@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fams.auth.InitialScrapMiniSessions;
 import com.fams.job.DurableJobService;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -17,6 +18,7 @@ import java.nio.file.Path;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -28,13 +30,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.databind.ObjectMapper;
 
-@SpringBootTest(classes = AssetImportHttpRuntimeCase.TestApplication.class,
+@SpringBootTest(classes = {AssetImportHttpRuntimeCase.TestApplication.class,
+        AssetImportHttpRuntimeCase.CleanScanner.class},
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"spring.profiles.active=fams-product",
                 "fams.asset-import.worker.enabled=false",
@@ -44,6 +48,8 @@ import tools.jackson.databind.ObjectMapper;
 class AssetImportHttpRuntimeCase {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final String PASSWORD = "correct-horse-battery-staple";
+    @org.junit.jupiter.api.io.TempDir
+    static java.nio.file.Path quarantine;
     private final HttpClient http = HttpClient.newHttpClient();
 
     @Value("${local.server.port}") int port;
@@ -53,12 +59,14 @@ class AssetImportHttpRuntimeCase {
     @Autowired AssetImportReviewService reviews;
     @Autowired AssetImportPublicationService publication;
     @Autowired AssetImportRollbackService rollbacks;
+    @Autowired ApplicationContext context;
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", () -> required("D6_08_TEST_DATASOURCE_URL"));
         registry.add("spring.datasource.username", () -> required("D6_08_TEST_DATASOURCE_USERNAME"));
         registry.add("spring.datasource.password", () -> required("D6_08_TEST_DATASOURCE_PASSWORD"));
+        registry.add("fams.attachments.quarantine-root", () -> quarantine.toString());
     }
 
     @Test
@@ -238,6 +246,21 @@ class AssetImportHttpRuntimeCase {
         long publishedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - publishedStarted);
         assertEquals("PUBLISHED", JSON.readTree(body(request("GET", "/asset-import-batches/" + id,
                 null, warehouse, null, null))).get("status").asText());
+        String linkedRestartMarker = System.getenv("D6_23_IMPORT_COMMITTED_MARKER");
+        if (linkedRestartMarker != null) {
+            holdAfterLinkedPublication(template.body(), warehouse, assetAdmin, worker, Path.of(linkedRestartMarker));
+            return;
+        }
+        if (Boolean.getBoolean("d6.23.mini.runtime")) {
+            exerciseNativeLinkedPublication(template.body(), warehouse, assetAdmin, worker);
+            return;
+        }
+        openingPendingScrapFollowsRealApprovalAndRollback(template.body(), warehouse, assetAdmin, worker);
+        openingRepairAndFactoryFollowExistingProcessing(template.body(), warehouse, assetAdmin, worker);
+        openingRepairScrapRetainsBorrowingAndCanRestoreOrRollBack(template.body(), warehouse, assetAdmin, worker);
+        openingLossScrapFollowsRealWriteOff(template.body(), warehouse, assetAdmin, worker);
+        openingFactoryLossKeepsDispatchHistory(template.body(), warehouse, assetAdmin, worker);
+        openingFactoryDispositionUsesImportedProof(template.body(), warehouse, assetAdmin, worker);
         var ledgerPage = request("GET", "/assets?page=1&pageSize=50", null,
                 warehouse, null, null);
         assertEquals(200, ledgerPage.statusCode(), body(ledgerPage));
@@ -369,6 +392,784 @@ class AssetImportHttpRuntimeCase {
                 null, administrator, null, null).statusCode());
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_initialization_window "
                 + "WHERE id=? AND window_status='CLOSED'", Integer.class, windowId));
+    }
+
+    private void openingPendingScrapFollowsRealApprovalAndRollback(byte[] template,
+            Session warehouse, Session assetAdmin, AssetImportWorker worker) throws Exception {
+        long bin = db.queryForObject("SELECT id FROM fams_location WHERE code='LOC-1'", Long.class);
+        long binVersion = db.queryForObject("SELECT version FROM fams_location WHERE id=?", Long.class, bin);
+        long custodian = db.queryForObject("SELECT id FROM fams_employee WHERE employee_no_normalized='E3'",
+                Long.class);
+        long custodianVersion = db.queryForObject("SELECT version FROM fams_employee WHERE id=?",
+                Long.class, custodian);
+        var stocked = Map.ofEntries(Map.entry(0, "HTTP-SCRAP-A"), Map.entry(1, "Opening scrap A"),
+                Map.entry(2, "CAT-1"), Map.entry(3, "ROOT"), Map.entry(4, "M1"), Map.entry(5, "piece"),
+                Map.entry(7, "待报废"), Map.entry(8, "WH-1"), Map.entry(9, "LOC-1"), Map.entry(14, "在库"),
+                Map.entry(15, "上线前已确认无法修复"), Map.entry(16, "实物已放置在待报废区"),
+                Map.entry(17, "待处置保管"));
+        var personal = Map.ofEntries(Map.entry(0, "HTTP-SCRAP-B"), Map.entry(1, "Opening scrap B"),
+                Map.entry(2, "CAT-1"), Map.entry(3, "ROOT"), Map.entry(4, "M1"), Map.entry(5, "piece"),
+                Map.entry(7, "待报废"), Map.entry(9, "LOC-1"), Map.entry(10, "ROOT"), Map.entry(11, "E3"),
+                Map.entry(14, "在用个人"), Map.entry(15, "上线前已确认无法修复"),
+                Map.entry(16, "使用人仍持有实物"), Map.entry(17, "待处置保管"));
+        String batch = publishScrapBatch(template, warehouse, assetAdmin, worker,
+                "http-import-scrap-open", List.of(stocked, personal), 2, 0);
+        for (int row = 1; row <= 2; row++) {
+            var asset = db.queryForMap("SELECT a.* FROM fams_asset a JOIN fams_asset_import_publication p"
+                    + " ON p.asset_id=a.id WHERE p.batch_id=? AND p.sheet_row=?", batch, row + 1);
+            assertEquals("HTTP-SCRAP-" + (char) ('A' + row - 1), asset.get("asset_code"));
+            assertEquals("PENDING_SCRAP", asset.get("lifecycle_status"));
+            assertEquals(row == 1 ? "STORAGE" : "PERSONAL", asset.get("custody_type"));
+            assertEquals(0L, ((Number) asset.get("version")).longValue());
+            var document = db.queryForMap("SELECT * FROM fams_scrap_request WHERE initial_batch_id=?"
+                    + " AND initial_sheet_row=?", batch, row + 1);
+            long requestId = ((Number) document.get("id")).longValue();
+            assertEquals("STANDALONE", document.get("source_type"));
+            assertEquals(null, document.get("source_business_id"));
+            assertEquals("PENDING_ADMIN_DECISION", document.get("request_status"));
+            assertEquals(0L, ((Number) document.get("version")).longValue());
+            assertEquals(0L, ((Number) document.get("asset_version")).longValue());
+            assertEquals(1L, ((Number) document.get("creator_account_id")).longValue());
+            assertEquals("上线前已确认无法修复", document.get("reason"));
+            assertEquals("待处置保管", document.get("proposed_disposition"));
+            var snapshot = JSON.readTree(document.get("source_snapshot_json").toString());
+            assertEquals(row == 1 ? "IN_STOCK" : "IN_USE", snapshot.path("lifecycle_status").asText());
+            assertEquals(batch, snapshot.path("initialSource").path("batchId").asText());
+            assertEquals(Integer.toString(row + 1), snapshot.path("initialSource").path("sheetRow").asText());
+            assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=?"
+                    + " AND business_type='SCRAP' AND business_id=? AND business_item_id=?"
+                    + " AND released_at IS NULL", Integer.class, asset.get("id"), requestId, requestId));
+            assertEquals(List.of("APPROVAL"), db.queryForList("SELECT todo_type FROM fams_todo"
+                    + " WHERE business_type='SCRAP' AND business_id=? AND todo_status='OPEN'",
+                    String.class, requestId));
+            assertEquals("ASSET_ADMIN", db.queryForObject("SELECT pool_type FROM fams_todo"
+                    + " WHERE business_type='SCRAP' AND business_id=?", String.class, requestId));
+            assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_event WHERE request_id=?"
+                    + " AND action='SCRAP_INITIAL_OPENED'", Integer.class, requestId));
+            assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_receipt WHERE scrap_request_id=?",
+                    Integer.class, requestId));
+        }
+        long asset = db.queryForObject("SELECT a.id FROM fams_asset a JOIN fams_asset_import_publication p"
+                + " ON p.asset_id=a.id WHERE p.batch_id=? AND p.sheet_row=2", Long.class, batch);
+        long opening = db.queryForObject("SELECT id FROM fams_scrap_request WHERE initial_batch_id=?"
+                + " AND initial_sheet_row=2", Long.class, batch);
+        var detail = JSON.readTree(body(request("GET", "/scrap-requests/" + opening, null, assetAdmin,
+                null, null)));
+        assertEquals(batch, detail.path("initialSource").path("batchId").asText());
+        assertEquals("2", detail.path("initialSource").path("sheetRow").asText());
+        assertEquals("PENDING_ADMIN_DECISION", detail.path("status").asText());
+        assertEquals(true, detail.path("actions").path("decide").asBoolean());
+        assertEquals(0L, detail.path("lockVersion").asLong());
+        var approved = request("POST", "/scrap-requests/" + opening + "/decision",
+                ("{\"assetVersion\":0,\"lockVersion\":0,\"result\":\"APPROVE\","
+                        + "\"reason\":\"核对期初承接依据后批准处置范围\",\"approvedDisposition\":\"待处置保管\"}")
+                        .getBytes(StandardCharsets.UTF_8), assetAdmin, "application/json",
+                UUID.randomUUID().toString(), 0L);
+        assertEquals(200, approved.statusCode(), body(approved));
+        assertEquals("WAITING_WAREHOUSE_CLAIM", JSON.readTree(body(approved)).get("status").asText());
+        assertEquals(409, request("POST", "/asset-import-batches/" + batch + "/rollback",
+                "{\"reason\":\"批准之后不得整批回滚\"}".getBytes(StandardCharsets.UTF_8), warehouse,
+                "application/json", null).statusCode());
+        var claimed = request("POST", "/scrap-requests/" + opening + "/claim",
+                "{\"assetVersion\":0,\"lockVersion\":0}".getBytes(StandardCharsets.UTF_8),
+                warehouse, "application/json", UUID.randomUUID().toString(), 1L);
+        assertEquals(200, claimed.statusCode(), body(claimed));
+        var executed = request("POST", "/scrap-requests/" + opening + "/execute",
+                ("{\"assetVersion\":0,\"lockVersion\":0,\"ownershipVersion\":1,"
+                        + "\"observedCode\":\"HTTP-SCRAP-A\",\"locationId\":\"" + bin + "\","
+                        + "\"locationVersion\":" + binVersion + ",\"custodianEmployeeId\":\"" + custodian + "\","
+                        + "\"custodianVersion\":" + custodianVersion + ",\"occurredAt\":\""
+                        + Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS) + "\","
+                        + "\"physicalIdentityVerified\":true,"
+                        + "\"evidence\":\"现场核对期初承接实物与原机编码一致后按批准范围执行报废\","
+                        + "\"dispositionMethod\":\"待处置保管\"}").getBytes(StandardCharsets.UTF_8),
+                warehouse, "application/json", UUID.randomUUID().toString(), 2L);
+        assertEquals(200, executed.statusCode(), body(executed));
+        assertEquals("EXECUTED", JSON.readTree(body(executed)).get("status").asText());
+        assertEquals("SCRAPPED", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=?",
+                String.class, asset));
+        assertEquals("PENDING_DISPOSITION", db.queryForObject("SELECT disposition_status"
+                + " FROM fams_scrap_disposition WHERE request_id=?", String.class, opening));
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=?"
+                + " AND released_at IS NULL", Integer.class, asset));
+        assertEquals(List.of("DISPOSITION"), db.queryForList("SELECT todo_type FROM fams_todo"
+                + " WHERE business_type='SCRAP' AND business_id=? AND todo_status='OPEN'", String.class, opening));
+        long held = db.queryForObject("SELECT a.id FROM fams_asset a JOIN fams_asset_import_publication p"
+                + " ON p.asset_id=a.id WHERE p.batch_id=? AND p.sheet_row=3", Long.class, batch);
+        long heldRequest = db.queryForObject("SELECT id FROM fams_scrap_request WHERE initial_batch_id=?"
+                + " AND initial_sheet_row=3", Long.class, batch);
+        var rejected = request("POST", "/scrap-requests/" + heldRequest + "/decision",
+                ("{\"assetVersion\":0,\"lockVersion\":0,\"result\":\"REJECT\","
+                        + "\"reason\":\"报废前现状不足以支持核销，退回原保管关系\"}").getBytes(StandardCharsets.UTF_8),
+                assetAdmin, "application/json", UUID.randomUUID().toString(), 0L);
+        assertEquals(200, rejected.statusCode(), body(rejected));
+        assertEquals("REJECTED", JSON.readTree(body(rejected)).get("status").asText());
+        var restored = db.queryForMap("SELECT lifecycle_status,custody_type,exception_status,responsible_employee_id,"
+                + "using_organization_id,version FROM fams_asset WHERE id=?", held);
+        assertEquals("IN_USE", restored.get("lifecycle_status"));
+        assertEquals("PERSONAL", restored.get("custody_type"));
+        assertEquals("NORMAL", restored.get("exception_status"));
+        assertEquals(custodian, ((Number) restored.get("responsible_employee_id")).longValue());
+        assertEquals(1L, ((Number) restored.get("version")).longValue());
+        assertEquals("SCRAP_REJECTED", db.queryForObject("SELECT release_reason FROM fams_asset_business_lock"
+                + " WHERE asset_id=? AND business_type='SCRAP' AND business_id=?", String.class, held, heldRequest));
+        assertEquals(1L, db.queryForObject("SELECT version FROM fams_scrap_request WHERE id=?", Long.class,
+                heldRequest));
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_todo WHERE business_type='SCRAP'"
+                + " AND business_id=? AND todo_status='OPEN'", Integer.class, heldRequest));
+        var unapproved = Map.ofEntries(Map.entry(0, "HTTP-SCRAP-UNDO"), Map.entry(1, "Opening scrap undo"),
+                Map.entry(2, "CAT-1"), Map.entry(3, "ROOT"), Map.entry(4, "M1"), Map.entry(5, "piece"),
+                Map.entry(7, "待报废"), Map.entry(8, "WH-1"), Map.entry(9, "LOC-1"), Map.entry(14, "在库"),
+                Map.entry(15, "上线前重复录入"), Map.entry(16, "实物仍在待报废区"), Map.entry(17, "待处置保管"));
+        String undo = publishScrapBatch(template, warehouse, assetAdmin, worker,
+                "http-import-scrap-undo", List.of(unapproved), 1, 0);
+        var undoAsset = db.queryForMap("SELECT a.* FROM fams_asset a JOIN fams_asset_import_publication p"
+                + " ON p.asset_id=a.id WHERE p.batch_id=? AND p.sheet_row=2", undo);
+        long undoRequest = db.queryForObject("SELECT id FROM fams_scrap_request WHERE initial_batch_id=?",
+                Long.class, undo);
+        assertEquals(200, request("POST", "/asset-import-batches/" + undo + "/rollback",
+                "{\"reason\":\"整批录入错误需撤回\"}".getBytes(StandardCharsets.UTF_8), warehouse,
+                "application/json", null).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + undo + "/rollback-decision",
+                "{\"approved\":true,\"reason\":\"确认尚无后续业务\"}".getBytes(StandardCharsets.UTF_8),
+                assetAdmin, "application/json", null).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + undo + "/rollback-execute",
+                null, warehouse, null, null).statusCode());
+        worker.poll();
+        assertEquals("ROLLED_BACK", db.queryForObject("SELECT batch_status FROM fams_asset_import_batch "
+                + "WHERE id=?", String.class, undo));
+        assertEquals("CANCELLED", db.queryForObject("SELECT request_status FROM fams_scrap_request WHERE id=?",
+                String.class, undoRequest));
+        assertEquals(1L, db.queryForObject("SELECT version FROM fams_scrap_request WHERE id=?", Long.class,
+                undoRequest));
+        assertEquals("SCRAP_INITIAL_ROLLED_BACK", db.queryForObject("SELECT release_reason"
+                + " FROM fams_asset_business_lock WHERE asset_id=? AND business_type='SCRAP'", String.class,
+                undoAsset.get("id")));
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_todo WHERE business_type='SCRAP'"
+                + " AND business_id=? AND todo_status='OPEN'", Integer.class, undoRequest));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_event WHERE request_id=?"
+                + " AND action='SCRAP_INITIAL_ROLLED_BACK'", Integer.class, undoRequest));
+        assertEquals("CANCELLED", db.queryForObject("SELECT card_stage FROM fams_asset WHERE id=?",
+                String.class, undoAsset.get("id")));
+        assertEquals(null, db.queryForObject("SELECT custody_type FROM fams_asset WHERE id=?", String.class,
+                undoAsset.get("id")));
+        var wrongOpening = Map.ofEntries(Map.entry(0, "HTTP-SCRAP-BAD-1"), Map.entry(1, "Bad opening 1"),
+                Map.entry(2, "CAT-1"), Map.entry(3, "ROOT"), Map.entry(4, "M1"), Map.entry(5, "piece"),
+                Map.entry(7, "待报废"), Map.entry(8, "WH-1"), Map.entry(9, "LOC-1"), Map.entry(14, "借出"),
+                Map.entry(15, "上线前已遗失"), Map.entry(16, "实物无法核对"), Map.entry(17, "遗失核销"));
+        var missingReason = Map.ofEntries(Map.entry(0, "HTTP-SCRAP-BAD-2"), Map.entry(1, "Bad opening 2"),
+                Map.entry(2, "CAT-1"), Map.entry(3, "ROOT"), Map.entry(4, "M1"), Map.entry(5, "piece"),
+                Map.entry(7, "待报废"), Map.entry(8, "WH-1"), Map.entry(9, "LOC-1"), Map.entry(14, "在库"),
+                Map.entry(16, "实物已放置在待报废区"), Map.entry(17, "待处置保管"));
+        var repairOpening = Map.ofEntries(Map.entry(0, "HTTP-SCRAP-BAD-3"), Map.entry(1, "Bad opening 3"),
+                Map.entry(2, "CAT-1"), Map.entry(3, "ROOT"), Map.entry(4, "M1"), Map.entry(5, "piece"),
+                Map.entry(7, "维修中"), Map.entry(8, "WH-1"), Map.entry(9, "LOC-1"));
+        String invalid = publishScrapBatch(template, warehouse, assetAdmin, worker,
+                "http-import-scrap-invalid", List.of(wrongOpening, missingReason, repairOpening), 0, 3);
+        String report = body(request("GET", "/asset-import-batches/" + invalid + "/rows?status=ERROR"
+                + "&page=1&pageSize=20", null, warehouse, null, null));
+        assertTrue(report.contains("遗失责任依据"), report);
+        assertTrue(report.contains("维修前状态"), report);
+        assertTrue(report.contains("报废原因"), report);
+        assertTrue(report.contains("REQUIRED"), report);
+        System.out.println("D6_23_INITIAL_SCRAP published=2 approved=1 executed=1 rolled_back=1 rejected=3");
+    }
+
+    private void openingRepairAndFactoryFollowExistingProcessing(byte[] template, Session warehouse,
+            Session administrator, AssetImportWorker worker) throws Exception {
+        var internal = openingRepairRow("HTTP-INITIAL-REPAIR", false);
+        var factory = openingRepairRow("HTTP-INITIAL-FACTORY", true);
+        String batch = publishScrapBatch(template, warehouse, administrator, worker, "http-import-initial-repairs",
+                List.of(internal, factory), 2, 0);
+        var repair = db.queryForMap("SELECT * FROM fams_repair_request WHERE initial_batch_id=? AND initial_sheet_row=2", batch);
+        var sent = db.queryForMap("SELECT * FROM fams_repair_request WHERE initial_batch_id=? AND initial_sheet_row=3", batch);
+        long repairId = ((Number) repair.get("id")).longValue();
+        long factoryId = ((Number) sent.get("id")).longValue();
+        long repairAsset = ((Number) repair.get("asset_id")).longValue();
+        long factoryAsset = ((Number) sent.get("asset_id")).longValue();
+        assertEquals("UNDER_REPAIR", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=?", String.class, repairAsset));
+        assertEquals("FACTORY_REPAIR", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=?", String.class, factoryAsset));
+        assertEquals("WAREHOUSE_PROCESSING", repair.get("repair_status"));
+        assertEquals("WAREHOUSE_PROCESSING", sent.get("repair_status"));
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_repair_decision WHERE repair_id IN (?,?)",
+                Integer.class, repairId, factoryId));
+        var loan = db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=?", repairAsset);
+        assertEquals("OPEN", loan.get("relation_status"));
+        assertEquals("2099-12-31", loan.get("expected_return_date").toString());
+        var source = JSON.readTree(repair.get("source_snapshot_json").toString());
+        assertEquals("BORROWED", source.path("lifecycle").asText());
+        assertEquals(batch, source.path("initialSource").path("batchId").asText());
+        var round = db.queryForMap("SELECT * FROM fams_repair_factory_round WHERE repair_id=?", factoryId);
+        long roundId = ((Number) round.get("id")).longValue();
+        assertEquals("DISPATCHED", round.get("round_status"));
+        assertEquals(2, ((Number) round.get("round_number")).intValue());
+        assertEquals("原寄出凭证单号 TEST-FACTORY-01", round.get("dispatch_evidence"));
+        assertEquals(null, round.get("received_at"));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_todo WHERE business_type='REPAIR' AND business_id=?"
+                + " AND todo_type='FACTORY_RETURN' AND todo_status='OPEN'", Integer.class, factoryId));
+        var detail = request("GET", "/repairs/" + repairId, null, warehouse, null, null);
+        assertEquals(200, detail.statusCode(), body(detail));
+        assertTrue(JSON.readTree(body(detail)).path("actions").path("completeInPlace").asBoolean());
+        long place = db.queryForObject("SELECT id FROM fams_location WHERE code='LOC-1'", Long.class);
+        long placeVersion = db.queryForObject("SELECT version FROM fams_location WHERE id=?", Long.class, place);
+        var complete = request("POST", "/repairs/" + repairId + "/complete-in-place", JSON.writeValueAsBytes(Map.of(
+                "assetVersion", 0, "ownershipVersion", 0, "lockVersion", 0, "observedCode", internal.get(0),
+                "actualLocationId", Long.toString(place), "neverLeftCustodian", true,
+                "evidence", "现场核对实物与原保管关系一致并验证故障修复完成")),
+                warehouse, "application/json", UUID.randomUUID().toString(), 0L);
+        assertEquals(200, complete.statusCode(), body(complete));
+        assertEquals("BORROWED", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=?", String.class, repairAsset));
+        assertEquals(loan, db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=?", repairAsset));
+
+        String factoryPath = "/repairs/" + factoryId + "/factory/rounds/" + roundId;
+        String boundary = "initial-factory-evidence";
+        var proof = new ByteArrayOutputStream();
+        proof.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"actual.png\""
+                + "\r\nContent-Type: image/png\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+        javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(2, 2, java.awt.image.BufferedImage.TYPE_INT_RGB),
+                "png", proof);
+        proof.write(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+        var uploaded = request("POST", factoryPath + "/evidence?purpose=RECEIPT&roundVersion=0&assetVersion=0"
+                + "&ownershipVersion=0&lockVersion=0", proof.toByteArray(), warehouse,
+                "multipart/form-data; boundary=" + boundary, UUID.randomUUID().toString(), 0L);
+        assertEquals(200, uploaded.statusCode(), body(uploaded));
+        String object = JSON.readTree(body(uploaded)).path("objectId").asText();
+        long version = db.queryForObject("SELECT version FROM fams_repair_request WHERE id=?", Long.class, factoryId);
+        long roundVersion = db.queryForObject("SELECT version FROM fams_repair_factory_round WHERE id=?", Long.class, roundId);
+        var receipt = request("POST", factoryPath + "/receive-original", JSON.writeValueAsBytes(Map.ofEntries(
+                Map.entry("roundVersion", roundVersion), Map.entry("assetVersion", 0), Map.entry("ownershipVersion", 0),
+                Map.entry("lockVersion", 0), Map.entry("observedCode", factory.get(0)), Map.entry("observedSerial", factory.get(6)),
+                Map.entry("originalPhysicalIdentityChecked", true), Map.entry("actualLocationId", Long.toString(place)),
+                Map.entry("locationVersion", placeVersion), Map.entry("occurredAt", Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString()),
+                Map.entry("conditionResult", "RESTORED"), Map.entry("actualCost", "0.00"), Map.entry("evidenceIds", List.of(object)),
+                Map.entry("treatmentResult", "已核对期初原机和厂家实物收回证明"))),
+                warehouse, "application/json", UUID.randomUUID().toString(), version);
+        assertEquals(200, receipt.statusCode(), body(receipt));
+        assertEquals("RECEIVED", db.queryForObject("SELECT round_status FROM fams_repair_factory_round WHERE id=?", String.class, roundId));
+        assertEquals(round.get("dispatched_at"), db.queryForObject("SELECT dispatched_at FROM fams_repair_factory_round WHERE id=?",
+                java.time.LocalDateTime.class, roundId));
+        assertEquals("UNDER_REPAIR", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=?", String.class, factoryAsset));
+        assertEquals(409, request("POST", "/asset-import-batches/" + batch + "/rollback",
+                "{\"reason\":\"已办理的期初单据不能撤销\"}".getBytes(StandardCharsets.UTF_8), warehouse,
+                "application/json", null).statusCode());
+
+        var undo = openingRepairRow("HTTP-INITIAL-FACTORY-UNDO", true);
+        String reversible = publishScrapBatch(template, warehouse, administrator, worker, "http-import-initial-repair-undo",
+                List.of(undo), 1, 0);
+        assertEquals(200, request("POST", "/asset-import-batches/" + reversible + "/rollback",
+                "{\"reason\":\"期初未办理单据整体撤回\"}".getBytes(StandardCharsets.UTF_8), warehouse,
+                "application/json", null).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + reversible + "/rollback-decision",
+                "{\"approved\":true,\"reason\":\"未发生后续办理，核验后撤回\"}".getBytes(StandardCharsets.UTF_8),
+                administrator, "application/json", null).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + reversible + "/rollback-execute", null,
+                warehouse, null, null).statusCode());
+        worker.poll();
+        assertEquals("ROLLED_BACK", db.queryForObject("SELECT batch_status FROM fams_asset_import_batch WHERE id=?", String.class, reversible));
+        assertEquals("CANCELLED", db.queryForObject("SELECT repair_status FROM fams_repair_request WHERE initial_batch_id=?",
+                String.class, reversible));
+        assertEquals("INITIAL_RETIRED", db.queryForObject("SELECT f.round_status FROM fams_repair_factory_round f"
+                + " JOIN fams_repair_request r ON r.id=f.repair_id WHERE r.initial_batch_id=?", String.class, reversible));
+        System.out.println("D6_23_INITIAL_REPAIRS published=2 completed_in_place=1 factory_received=1 rolled_back=1");
+    }
+
+    private void openingRepairScrapRetainsBorrowingAndCanRestoreOrRollBack(byte[] template,
+            Session warehouse, Session administrator, AssetImportWorker worker) throws Exception {
+        var restore = openingRepairRow("HTTP-INITIAL-REPAIR-SCRAP-RESTORE", false);
+        var execute = openingRepairRow("HTTP-INITIAL-REPAIR-SCRAP-EXECUTE", false);
+        var undo = openingRepairRow("HTTP-INITIAL-REPAIR-SCRAP-UNDO", false);
+        for (var row : List.of(restore, execute, undo)) {
+            row.putAll(Map.of(7, "待报废", 14, "维修中", 15, "维修确认无法修复",
+                    16, "原机仍由原责任人保管", 17, "待处置保管"));
+        }
+        String batch = publishScrapBatch(template, warehouse, administrator, worker,
+                "http-opening-linked-scrap-restore", List.of(restore, execute), 2, 0);
+        var scrap = db.queryForMap("SELECT * FROM fams_scrap_request WHERE initial_batch_id=? AND initial_sheet_row=2", batch);
+        long scrapId = ((Number) scrap.get("id")).longValue();
+        long asset = ((Number) scrap.get("asset_id")).longValue();
+        long repair = ((Number) scrap.get("source_business_id")).longValue();
+        assertEquals("REPAIR", scrap.get("source_type"));
+        var loan = db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=?", asset);
+        assertEquals("OPEN", loan.get("relation_status"));
+        assertEquals("PENDING_SCRAP", db.queryForObject(
+                "SELECT lifecycle_status FROM fams_asset WHERE id=?", String.class, asset));
+        assertEquals("SCRAP", db.queryForObject("SELECT business_type FROM fams_asset_business_lock"
+                + " WHERE asset_id=? AND released_at IS NULL", String.class, asset));
+        var rejected = request("POST", "/scrap-requests/" + scrapId + "/decision",
+                JSON.writeValueAsBytes(Map.of("assetVersion", 0, "lockVersion", 0, "result", "REJECT",
+                        "reason", "原机退回维修处理")), administrator, "application/json",
+                UUID.randomUUID().toString(), 0L);
+        assertEquals(200, rejected.statusCode(), body(rejected));
+        assertEquals("REJECTED", JSON.readTree(body(rejected)).path("status").asText());
+        assertEquals("UNDER_REPAIR", db.queryForObject(
+                "SELECT lifecycle_status FROM fams_asset WHERE id=?", String.class, asset));
+        assertEquals(loan, db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=?", asset));
+        assertEquals(repair, db.queryForObject("SELECT business_id FROM fams_asset_business_lock"
+                + " WHERE asset_id=? AND business_type='REPAIR' AND released_at IS NULL", Long.class, asset));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_todo WHERE business_type='REPAIR'"
+                + " AND business_id=? AND todo_type='PROCESS' AND closed_at IS NULL", Integer.class, repair));
+        assertEquals(409, request("POST", "/asset-import-batches/" + batch + "/rollback",
+                JSON.writeValueAsBytes(Map.of("reason", "管理员已办理")), warehouse, "application/json", null).statusCode());
+
+        var execution = db.queryForMap("SELECT * FROM fams_scrap_request WHERE initial_batch_id=? AND initial_sheet_row=3", batch);
+        long executionId = ((Number) execution.get("id")).longValue();
+        long executionAsset = ((Number) execution.get("asset_id")).longValue();
+        var approved = request("POST", "/scrap-requests/" + executionId + "/decision",
+                JSON.writeValueAsBytes(Map.of("assetVersion", 0, "lockVersion", 0, "result", "APPROVE",
+                        "reason", "已确认无法修复", "approvedDisposition", "待处置保管")),
+                administrator, "application/json", UUID.randomUUID().toString(), 0L);
+        assertEquals(200, approved.statusCode(), body(approved));
+        assertEquals("PROCESSING", JSON.readTree(body(approved)).path("status").asText());
+        assertEquals("OPEN", db.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=?",
+                String.class, executionAsset));
+        long bin = db.queryForObject("SELECT id FROM fams_location WHERE code='LOC-1'", Long.class);
+        long binVersion = db.queryForObject("SELECT version FROM fams_location WHERE id=?", Long.class, bin);
+        long custodian = db.queryForObject("SELECT id FROM fams_employee WHERE employee_no_normalized='E3'", Long.class);
+        long custodianVersion = db.queryForObject("SELECT version FROM fams_employee WHERE id=?", Long.class, custodian);
+        var executed = request("POST", "/scrap-requests/" + executionId + "/execute",
+                JSON.writeValueAsBytes(Map.ofEntries(Map.entry("assetVersion", 0), Map.entry("lockVersion", 0),
+                        Map.entry("ownershipVersion", 1), Map.entry("observedCode", execute.get(0)),
+                        Map.entry("observedSerial", execute.get(6)), Map.entry("locationId", Long.toString(bin)),
+                        Map.entry("locationVersion", binVersion), Map.entry("custodianEmployeeId", Long.toString(custodian)),
+                        Map.entry("custodianVersion", custodianVersion), Map.entry("occurredAt",
+                                Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString()),
+                        Map.entry("physicalIdentityVerified", true), Map.entry("evidence", "现场核对原机编码及实物后执行"),
+                        Map.entry("dispositionMethod", "待处置保管"))),
+                warehouse, "application/json", UUID.randomUUID().toString(), 1L);
+        assertEquals(200, executed.statusCode(), body(executed));
+        assertEquals("SCRAPPED", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=?",
+                String.class, executionAsset));
+        assertEquals("COMPLETED", db.queryForObject("SELECT repair_status FROM fams_repair_request WHERE id=?",
+                String.class, execution.get("source_business_id")));
+        assertEquals("LOST_TERMINATED", db.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=?",
+                String.class, executionAsset));
+
+        String reversible = publishScrapBatch(template, warehouse, administrator, worker,
+                "http-opening-linked-scrap-undo", List.of(undo), 1, 0);
+        assertEquals(200, request("POST", "/asset-import-batches/" + reversible + "/rollback",
+                JSON.writeValueAsBytes(Map.of("reason", "期初未办理单据整体撤回")),
+                warehouse, "application/json", null).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + reversible + "/rollback-decision",
+                JSON.writeValueAsBytes(Map.of("approved", true, "reason", "未发生后续办理")),
+                administrator, "application/json", null).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + reversible + "/rollback-execute",
+                null, warehouse, null, null).statusCode());
+        worker.poll();
+        assertEquals("ROLLED_BACK", db.queryForObject("SELECT batch_status FROM fams_asset_import_batch WHERE id=?",
+                String.class, reversible));
+        assertEquals("CANCELLED", db.queryForObject("SELECT repair_status FROM fams_repair_request WHERE initial_batch_id=?",
+                String.class, reversible));
+        assertEquals("CANCELLED", db.queryForObject("SELECT request_status FROM fams_scrap_request WHERE initial_batch_id=?",
+                String.class, reversible));
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock l"
+                + " JOIN fams_asset_import_publication p ON p.asset_id=l.asset_id"
+                + " WHERE p.batch_id=? AND l.released_at IS NULL", Integer.class, reversible));
+        System.out.println("D6_23_INITIAL_REPAIR_SCRAP rejected_restored=1 executed=1 rolled_back=1");
+    }
+
+    private void openingLossScrapFollowsRealWriteOff(byte[] template, Session warehouse, Session administrator,
+            AssetImportWorker worker) throws Exception {
+        var lost = new java.util.HashMap<>(Map.ofEntries(
+                Map.entry(0, "HTTP-INITIAL-LOSS"), Map.entry(1, "Opening lost asset"), Map.entry(2, "CAT-1"),
+                Map.entry(3, "ROOT"), Map.entry(4, "M1"), Map.entry(5, "piece"), Map.entry(7, "待报废"),
+                Map.entry(9, "LOC-1"), Map.entry(10, "ROOT"), Map.entry(11, "E3"),
+                Map.entry(12, "2026-09-01"), Map.entry(13, "2099-12-31"), Map.entry(14, "借出"),
+                Map.entry(15, "上线前已确认遗失"), Map.entry(16, "实物无法找回"), Map.entry(17, "遗失核销"),
+                Map.entry(36, "2026-09-11T09:00:00+08:00"), Map.entry(37, "使用部门"),
+                Map.entry(38, "2026-09-12T09:00:00+08:00"), Map.entry(39, "纸质遗失认定单及保管责任已核对")));
+        var reject = new java.util.HashMap<>(lost);
+        reject.put(0, "HTTP-INITIAL-LOSS-REJECT");
+        var undo = new java.util.HashMap<>(lost);
+        undo.put(0, "HTTP-INITIAL-LOSS-UNDO");
+        String batch = publishScrapBatch(template, warehouse, administrator, worker,
+                "http-opening-loss-scrap", List.of(lost, reject), 2, 0);
+        var rows = db.queryForList("SELECT * FROM fams_scrap_request WHERE initial_batch_id=? ORDER BY initial_sheet_row", batch);
+        var source = rows.getFirst();
+        long id = ((Number) source.get("id")).longValue();
+        long asset = ((Number) source.get("asset_id")).longValue();
+        long lossId = ((Number) source.get("source_business_id")).longValue();
+        var loss = db.queryForMap("SELECT * FROM fams_loss_report WHERE id=?", lossId);
+        assertEquals("CONFIRMED_LOST", loss.get("report_status"));
+        assertEquals(null, loss.get("approval_snapshot_json"));
+        assertEquals(batch, JSON.readTree(loss.get("confirmation_snapshot_json").toString())
+                .path("initialSource").path("batchId").asText());
+        assertEquals("OPEN", db.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=?", String.class, asset));
+        var decision = request("POST", "/scrap-requests/" + id + "/decision",
+                JSON.writeValueAsBytes(Map.of("assetVersion", 0, "lockVersion", 0, "result", "APPROVE",
+                        "reason", "核对期初认定后批准核销", "approvedDisposition", "遗失核销")),
+                administrator, "application/json", UUID.randomUUID().toString(), 0L);
+        assertEquals(200, decision.statusCode(), body(decision));
+        var claim = request("POST", "/scrap-requests/" + id + "/claim",
+                JSON.writeValueAsBytes(Map.of("assetVersion", 0, "lockVersion", 0)),
+                warehouse, "application/json", UUID.randomUUID().toString(), 1L);
+        assertEquals(200, claim.statusCode(), body(claim));
+        var execution = request("POST", "/scrap-requests/" + id + "/execute-loss",
+                JSON.writeValueAsBytes(Map.of("assetVersion", 0, "lockVersion", 0, "ownershipVersion", 1,
+                        "evidence", "已核对期初遗失记录和原借用责任")),
+                warehouse, "application/json", UUID.randomUUID().toString(), 2L);
+        assertEquals(200, execution.statusCode(), body(execution));
+        assertEquals("LOST_TERMINATED", db.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=?",
+                String.class, asset));
+        assertEquals("LOSS_WRITTEN_OFF", db.queryForObject("SELECT disposition_status FROM fams_scrap_disposition WHERE request_id=?",
+                String.class, id));
+        assertEquals(loss, db.queryForMap("SELECT * FROM fams_loss_report WHERE id=?", lossId));
+
+        var rejected = rows.getLast();
+        var rejectedAsset = rejected.get("asset_id");
+        var retained = db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=?", rejectedAsset);
+        var refusal = request("POST", "/scrap-requests/" + rejected.get("id") + "/decision",
+                JSON.writeValueAsBytes(Map.of("assetVersion", 0, "lockVersion", 0, "result", "REJECT",
+                        "reason", "现阶段继续追查遗失")), administrator, "application/json", UUID.randomUUID().toString(), 0L);
+        assertEquals(200, refusal.statusCode(), body(refusal));
+        assertEquals("REJECTED", JSON.readTree(body(refusal)).path("status").asText());
+        assertEquals("BORROWED/LOST", db.queryForObject(
+                "SELECT CONCAT(lifecycle_status,'/',exception_status) FROM fams_asset WHERE id=?", String.class, rejectedAsset));
+        assertEquals(retained, db.queryForMap("SELECT * FROM fams_loan WHERE asset_id=?", rejectedAsset));
+
+        String reversible = publishScrapBatch(template, warehouse, administrator, worker,
+                "http-opening-loss-scrap-undo", List.of(undo), 1, 0);
+        assertEquals(200, request("POST", "/asset-import-batches/" + reversible + "/rollback",
+                JSON.writeValueAsBytes(Map.of("reason", "未办理的期初遗失批次撤回")), warehouse,
+                "application/json", null).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + reversible + "/rollback-decision",
+                JSON.writeValueAsBytes(Map.of("approved", true, "reason", "逐项核实未发生后续办理")),
+                administrator, "application/json", null).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + reversible + "/rollback-execute",
+                null, warehouse, null, null).statusCode());
+        worker.poll();
+        assertEquals("ROLLED_BACK", db.queryForObject("SELECT batch_status FROM fams_asset_import_batch WHERE id=?",
+                String.class, reversible));
+        assertEquals("CANCELLED", db.queryForObject("""
+                SELECT l.report_status FROM fams_loss_report l JOIN fams_scrap_request s ON s.source_business_id=l.id
+                WHERE s.initial_batch_id=? AND s.source_type='LOSS'
+                """, String.class, reversible));
+        assertEquals("VOID", db.queryForObject("SELECT relation_status FROM fams_loan WHERE initial_batch_id=?",
+                String.class, reversible));
+        System.out.println("D6_23_INITIAL_LOSS_SCRAP written_off=1 rejected_restored=1 rolled_back=1");
+    }
+
+    private void openingFactoryLossKeepsDispatchHistory(byte[] template, Session warehouse, Session administrator,
+            AssetImportWorker worker) throws Exception {
+        var execute = openingRepairRow("HTTP-INITIAL-FACTORY-LOSS", true);
+        var reject = openingRepairRow("HTTP-INITIAL-FACTORY-LOSS-REJECT", true);
+        var undo = openingRepairRow("HTTP-INITIAL-FACTORY-LOSS-UNDO", true);
+        for (var row : List.of(execute, reject, undo)) {
+            row.putAll(Map.of(7, "待报废", 14, "返厂维修", 15, "厂家确认寄出原机无法找回", 16, "仍未实际收回",
+                    17, "遗失核销", 36, "2026-09-13T09:00:00+08:00", 37, "厂家维修收件库",
+                    38, "2026-09-14T09:00:00+08:00", 39, "核对运单及厂家出具的遗失认定文件"));
+        }
+        String batch = publishScrapBatch(template, warehouse, administrator, worker,
+                "http-opening-factory-loss", List.of(execute, reject), 2, 0);
+        var rows = db.queryForList("SELECT * FROM fams_scrap_request WHERE initial_batch_id=? ORDER BY initial_sheet_row", batch);
+        var opening = rows.getFirst();
+        var asset = opening.get("asset_id");
+        var round = db.queryForMap("SELECT * FROM fams_repair_factory_round WHERE asset_id=?", asset);
+        assertEquals("DISPATCHED", round.get("round_status"));
+        assertEquals(null, round.get("received_at"));
+        var decision = request("POST", "/scrap-requests/" + opening.get("id") + "/decision",
+                JSON.writeValueAsBytes(Map.of("assetVersion", 0, "lockVersion", 0, "result", "APPROVE",
+                        "reason", "核实厂家遗失凭证", "approvedDisposition", "遗失核销")), administrator,
+                "application/json", UUID.randomUUID().toString(), 0L);
+        assertEquals(200, decision.statusCode(), body(decision));
+        assertEquals("PROCESSING", JSON.readTree(body(decision)).path("status").asText());
+        var execution = request("POST", "/scrap-requests/" + opening.get("id") + "/execute-loss",
+                JSON.writeValueAsBytes(Map.of("assetVersion", 0, "lockVersion", 0, "ownershipVersion", 1,
+                        "evidence", "已核对厂家凭证与寄出的原机状态")), warehouse, "application/json",
+                UUID.randomUUID().toString(), 1L);
+        assertEquals(200, execution.statusCode(), body(execution));
+        assertEquals("COMPLETED", db.queryForObject("SELECT repair_status FROM fams_repair_request WHERE asset_id=?", String.class, asset));
+        assertEquals(round, db.queryForMap("SELECT * FROM fams_repair_factory_round WHERE asset_id=?", asset));
+        var rejected = rows.getLast();
+        var refusal = request("POST", "/scrap-requests/" + rejected.get("id") + "/decision",
+                JSON.writeValueAsBytes(Map.of("assetVersion", 0, "lockVersion", 0, "result", "REJECT",
+                        "reason", "维持遗失追查责任")), administrator, "application/json", UUID.randomUUID().toString(), 0L);
+        assertEquals(200, refusal.statusCode(), body(refusal));
+        assertEquals("REJECTED", JSON.readTree(body(refusal)).path("status").asText());
+        assertEquals("FACTORY_REPAIR/LOST", db.queryForObject(
+                "SELECT CONCAT(lifecycle_status,'/',exception_status) FROM fams_asset WHERE id=?", String.class, rejected.get("asset_id")));
+        String reversible = publishScrapBatch(template, warehouse, administrator, worker,
+                "http-opening-factory-loss-undo", List.of(undo), 1, 0);
+        assertEquals(200, request("POST", "/asset-import-batches/" + reversible + "/rollback",
+                JSON.writeValueAsBytes(Map.of("reason", "撤回尚未办理的返厂遗失批次")), warehouse,
+                "application/json", null).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + reversible + "/rollback-decision",
+                JSON.writeValueAsBytes(Map.of("approved", true, "reason", "复核后同意撤回")),
+                administrator, "application/json", null).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + reversible + "/rollback-execute",
+                null, warehouse, null, null).statusCode());
+        worker.poll();
+        var retired = db.queryForMap("""
+                SELECT f.* FROM fams_repair_factory_round f JOIN fams_repair_request r ON r.id=f.repair_id
+                WHERE r.initial_batch_id=?
+                """, reversible);
+        assertEquals("INITIAL_RETIRED", retired.get("round_status"));
+        assertEquals(round.get("dispatched_at"), retired.get("dispatched_at"));
+        assertEquals(round.get("dispatch_evidence"), retired.get("dispatch_evidence"));
+        assertEquals("ROLLED_BACK", db.queryForObject("SELECT batch_status FROM fams_asset_import_batch WHERE id=?",
+                String.class, reversible));
+        System.out.println("D6_23_INITIAL_FACTORY_LOSS written_off=1 rejected_restored=1 rolled_back=1");
+    }
+
+    private void openingFactoryDispositionUsesImportedProof(byte[] template, Session warehouse, Session administrator,
+            AssetImportWorker worker) throws Exception {
+        var retained = openingRepairRow("HTTP-INITIAL-FACTORY-RETAINED", true);
+        var destroyed = openingRepairRow("HTTP-INITIAL-FACTORY-DESTROYED", true);
+        var rejected = openingRepairRow("HTTP-INITIAL-FACTORY-DISPOSITION-REJECT", true);
+        var undo = openingRepairRow("HTTP-INITIAL-FACTORY-DISPOSITION-UNDO", true);
+        for (var row : List.of(retained, destroyed, rejected, undo)) {
+            row.putAll(Map.of(7, "待报废", 14, "返厂维修", 15, "厂家确认原机处置", 16, "原机未收回",
+                    17, row == retained ? "FACTORY_RETAINED" : "FACTORY_DESTROYED",
+                    40, "2026-09-13T09:00:00.123+08:00", 41, "原厂家签字处置记录编号 FC-001"));
+        }
+        String evidenceTime = "2026-09-13T01:00:00.123Z";
+        String batch = publishScrapBatch(template, warehouse, administrator, worker,
+                "http-opening-factory-disposition", List.of(retained, destroyed, rejected), 3, 0);
+        var rows = db.queryForList("SELECT * FROM fams_scrap_request WHERE initial_batch_id=? ORDER BY initial_sheet_row", batch);
+        for (var row : rows.subList(0, 2)) {
+            var id = row.get("id");
+            var round = db.queryForMap("SELECT * FROM fams_repair_factory_round WHERE asset_id=?", row.get("asset_id"));
+            var detail = request("GET", "/scrap-requests/" + id, null, administrator, null, null);
+            assertEquals(200, detail.statusCode(), body(detail));
+            assertEquals(evidenceTime, JSON.readTree(body(detail)).path("initialFactoryDispositionAt").asText());
+            assertEquals("原厂家签字处置记录编号 FC-001",
+                    JSON.readTree(body(detail)).path("initialFactoryDispositionEvidence").asText());
+            var decision = request("POST", "/scrap-requests/" + id + "/decision",
+                    JSON.writeValueAsBytes(Map.of("assetVersion", 0, "lockVersion", 0, "result", "APPROVE",
+                            "reason", "已核对厂家处置凭证", "approvedDisposition", row.get("proposed_disposition"))),
+                    administrator, "application/json", UUID.randomUUID().toString(), 0L);
+            assertEquals(200, decision.statusCode(), body(decision));
+            var invalid = request("POST", "/scrap-requests/" + id + "/execute-factory",
+                    JSON.writeValueAsBytes(Map.of("assetVersion", 0, "lockVersion", 0, "ownershipVersion", 1,
+                            "occurredAt", "2026-09-13T01:00:00Z")), warehouse,
+                    "application/json", UUID.randomUUID().toString(), 1L);
+            assertEquals(400, invalid.statusCode(), body(invalid));
+            var execution = request("POST", "/scrap-requests/" + id + "/execute-factory",
+                    JSON.writeValueAsBytes(Map.of("assetVersion", 0, "lockVersion", 0, "ownershipVersion", 1,
+                            "occurredAt", evidenceTime)), warehouse,
+                    "application/json", UUID.randomUUID().toString(), 1L);
+            assertEquals(200, execution.statusCode(), body(execution));
+            var disposition = db.queryForMap("SELECT * FROM fams_scrap_disposition WHERE request_id=?", id);
+            assertEquals("DISPOSED", disposition.get("disposition_status"));
+            assertEquals("原厂家签字处置记录编号 FC-001", JSON.readTree(disposition.get("completion_snapshot_json").toString())
+                    .path("facts").path("initialEvidence").asText());
+            assertEquals(round, db.queryForMap("SELECT * FROM fams_repair_factory_round WHERE id=?", round.get("id")));
+            assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_repair_factory_replacement WHERE round_id=?",
+                    Integer.class, round.get("id")));
+        }
+        var refusal = request("POST", "/scrap-requests/" + rows.getLast().get("id") + "/decision",
+                JSON.writeValueAsBytes(Map.of("assetVersion", 0, "lockVersion", 0, "result", "REJECT",
+                        "reason", "退回原库管核对厂家记录")), administrator,
+                "application/json", UUID.randomUUID().toString(), 0L);
+        assertEquals(200, refusal.statusCode(), body(refusal));
+        assertEquals("REJECTED", JSON.readTree(body(refusal)).path("status").asText());
+        assertEquals("FACTORY_REPAIR", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=?",
+                String.class, rows.getLast().get("asset_id")));
+        String reversible = publishScrapBatch(template, warehouse, administrator, worker,
+                "http-opening-factory-disposition-undo", List.of(undo), 1, 0);
+        assertEquals(200, request("POST", "/asset-import-batches/" + reversible + "/rollback",
+                JSON.writeValueAsBytes(Map.of("reason", "尚未审批的期初单整批撤销")), warehouse,
+                "application/json", null).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + reversible + "/rollback-decision",
+                JSON.writeValueAsBytes(Map.of("approved", true, "reason", "核准撤销")),
+                administrator, "application/json", null).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + reversible + "/rollback-execute",
+                null, warehouse, null, null).statusCode());
+        worker.poll();
+        assertEquals("ROLLED_BACK", db.queryForObject("SELECT batch_status FROM fams_asset_import_batch WHERE id=?",
+                String.class, reversible));
+        assertEquals("CANCELLED", db.queryForObject("SELECT request_status FROM fams_scrap_request WHERE initial_batch_id=?",
+                String.class, reversible));
+        System.out.println("D6_23_INITIAL_FACTORY_DISPOSITION retained=1 destroyed=1 wrong_time_rejected=2 restored=1 rolled_back=1");
+    }
+
+    private void holdAfterLinkedPublication(byte[] template, Session warehouse, Session administrator,
+            AssetImportWorker worker, Path marker) throws Exception {
+        String batch = publishLinkedRecoveryBatch(template, warehouse, administrator, worker);
+        var snapshot = linkedPublicationSnapshot(batch);
+        assertEquals(5, snapshot.get("publication").size());
+        assertEquals(5, snapshot.get("scrap").size());
+        assertEquals(4, snapshot.get("repair").size());
+        assertEquals(3, snapshot.get("rounds").size());
+        assertEquals(2, snapshot.get("loans").size());
+        assertEquals(2, snapshot.get("loss").size());
+        assertEquals(2, snapshot.get("factoryDisposition").size());
+        assertEquals(5, snapshot.get("locks").size());
+        assertEquals(7, snapshot.get("todos").size());
+        assertEquals(1, snapshot.get("jobs").size());
+        assertEquals("SUCCEEDED", snapshot.get("jobs").getFirst().get("job_status"));
+        assertEquals(1, ((Number) snapshot.get("jobs").getFirst().get("execution_generation")).intValue());
+        Path stagedMarker = marker.resolveSibling("publication-in-progress.json");
+        Files.writeString(stagedMarker, JSON.writeValueAsString(Map.of("batchId", batch, "snapshot", snapshot)));
+        Files.move(stagedMarker, marker, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        TimeUnit.MINUTES.sleep(5);
+    }
+
+    private String publishLinkedRecoveryBatch(byte[] template, Session warehouse, Session administrator,
+            AssetImportWorker worker) throws Exception {
+        var repair = openingRepairRow("D623-RECOVERY-REPAIR", false);
+        var lost = openingRepairRow("D623-RECOVERY-LOST", false);
+        var factoryLost = openingRepairRow("D623-RECOVERY-FACTORY-LOST", true);
+        var retained = openingRepairRow("D623-RECOVERY-RETAINED", true);
+        var destroyed = openingRepairRow("D623-RECOVERY-DESTROYED", true);
+        for (var row : List.of(repair, lost, factoryLost, retained, destroyed)) {
+            row.putAll(Map.of(7, "待报废", 15, "核对期初报废原因", 16, "按原凭证核对责任事实"));
+        }
+        repair.putAll(Map.of(14, "维修中", 17, "待处置保管"));
+        for (var row : List.of(lost, factoryLost)) {
+            row.putAll(Map.of(14, row == lost ? "借出" : "返厂维修", 17, "遗失核销",
+                    36, "2026-09-13T09:00:00+08:00", 37, "最后核对地点",
+                    38, "2026-09-14T09:00:00+08:00", 39, "保管与遗失责任原始凭证已核对"));
+        }
+        for (var row : List.of(retained, destroyed)) {
+            row.putAll(Map.of(14, "返厂维修", 17, row == retained ? "FACTORY_RETAINED" : "FACTORY_DESTROYED",
+                    40, "2026-09-13T09:00:00.123+08:00", 41, "厂家原始处置记录已核对"));
+        }
+        return publishScrapBatch(template, warehouse, administrator, worker, "d623-linked-recovery",
+                List.of(repair, lost, factoryLost, retained, destroyed), 5, 0);
+    }
+
+    private void exerciseNativeLinkedPublication(byte[] template, Session warehouse, Session administrator,
+            AssetImportWorker worker) throws Exception {
+        String batch = publishLinkedRecoveryBatch(template, warehouse, administrator, worker);
+        var before = linkedPublicationSnapshot(batch);
+        var grants = InitialScrapMiniSessions.issue(context, db, Map.of("admin", 3L, "warehouse", 1L));
+        var requests = db.queryForList("""
+                SELECT CAST(s.id AS CHAR) AS id, a.asset_code AS code, s.source_type AS sourceType,
+                    s.initial_sheet_row AS sheetRow FROM fams_scrap_request s
+                    JOIN fams_asset a ON a.id=s.asset_id WHERE s.initial_batch_id=? ORDER BY s.initial_sheet_row
+                """, batch);
+        String node = System.getenv().getOrDefault("FAMS_TEST_NODE_EXECUTABLE", "node");
+        var script = Path.of(System.getProperty("user.dir")).getParent()
+                .resolve("apps/miniprogram/test/runtime-initial-linked-scrap-http.mjs");
+        var builder = new ProcessBuilder("rtk", "proxy", node, script.toString()).redirectErrorStream(true);
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_SCRAP_GRANTS", JSON.writeValueAsString(grants));
+        builder.environment().put("FAMS_TEST_INITIAL_SCRAP", JSON.writeValueAsString(Map.of("batchId", batch, "rows", requests)));
+        var process = builder.start();
+        try {
+            assertTrue(process.waitFor(45, TimeUnit.SECONDS), "Native Page did not finish");
+            var output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            assertEquals(0, process.exitValue(), output);
+            assertTrue(output.contains("D6_23_NATIVE_INITIAL_SCRAP executed=5 replayed=5"), output);
+            System.out.println(output.strip());
+        } finally {
+            if (process.isAlive()) {
+                process.destroyForcibly();
+            }
+        }
+        var after = linkedPublicationSnapshot(batch);
+        assertEquals(before.get("rounds"), after.get("rounds"));
+        assertEquals(before.get("factoryDisposition"), after.get("factoryDisposition"));
+        assertEquals(before.get("loss"), after.get("loss"));
+        assertTrue(after.get("locks").isEmpty());
+        assertTrue(after.get("repair").stream().allMatch(value -> "COMPLETED".equals(value.get("repair_status"))));
+        assertTrue(after.get("loans").stream().allMatch(value -> "LOST_TERMINATED".equals(value.get("relation_status"))));
+        assertTrue(after.get("scrap").stream().allMatch(value -> "EXECUTED".equals(value.get("request_status"))));
+        assertEquals(5, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_scrap_receipt r JOIN fams_scrap_request s ON s.id=r.scrap_request_id
+                WHERE s.initial_batch_id=? AND r.operation LIKE 'EXECUTE%'
+                """, Integer.class, batch));
+    }
+
+    @Test
+    void restartedJvmPreservesCommittedLinkedPublication() throws Exception {
+        var marker = JSON.readTree(Files.readString(Path.of(required("D6_23_IMPORT_REPLAY_MARKER"))));
+        String batch = marker.path("batchId").asText();
+        var before = marker.path("snapshot");
+        assertEquals("PUBLISHED", db.queryForObject("SELECT batch_status FROM fams_asset_import_batch WHERE id=?",
+                String.class, batch));
+        assertEquals(before, JSON.readTree(JSON.writeValueAsString(linkedPublicationSnapshot(batch))));
+        var worker = new AssetImportWorker(jobs, publication, rollbacks);
+        worker.poll();
+        worker.poll();
+        assertEquals(before, JSON.readTree(JSON.writeValueAsString(linkedPublicationSnapshot(batch))));
+        System.out.println("D6_23_LINKED_IMPORT_RESTART published=5 generation=1 snapshots_unchanged=true");
+    }
+
+    private Map<String, List<Map<String, Object>>> linkedPublicationSnapshot(String batch) {
+        String assets = "(SELECT asset_id FROM fams_asset_import_publication WHERE batch_id=?)";
+        var result = new java.util.LinkedHashMap<String, List<Map<String, Object>>>();
+        result.put("publication", db.queryForList("SELECT * FROM fams_asset_import_publication WHERE batch_id=? ORDER BY sheet_row", batch));
+        result.put("scrap", db.queryForList("SELECT * FROM fams_scrap_request WHERE initial_batch_id=? ORDER BY id", batch));
+        result.put("repair", db.queryForList("SELECT * FROM fams_repair_request WHERE initial_batch_id=? ORDER BY id", batch));
+        result.put("loans", db.queryForList("SELECT * FROM fams_loan WHERE initial_batch_id=? ORDER BY id", batch));
+        result.put("rounds", db.queryForList("SELECT * FROM fams_repair_factory_round WHERE asset_id IN " + assets + " ORDER BY id", batch));
+        result.put("loss", db.queryForList("SELECT * FROM fams_loss_report WHERE asset_id IN " + assets + " ORDER BY id", batch));
+        result.put("factoryDisposition", db.queryForList("SELECT d.* FROM fams_initial_factory_disposition d"
+                + " JOIN fams_repair_factory_round r ON r.id=d.round_id WHERE r.asset_id IN " + assets + " ORDER BY d.id", batch));
+        result.put("locks", db.queryForList("SELECT * FROM fams_asset_business_lock WHERE released_at IS NULL"
+                + " AND asset_id IN " + assets + " ORDER BY id", batch));
+        result.put("todos", db.queryForList("""
+                SELECT * FROM fams_todo WHERE closed_at IS NULL AND
+                  ((business_type='SCRAP' AND business_id IN (SELECT id FROM fams_scrap_request WHERE initial_batch_id=?))
+                    OR (business_type='LOST_REPORT' AND business_id IN (SELECT id FROM fams_loss_report WHERE asset_id IN
+                      (SELECT asset_id FROM fams_asset_import_publication WHERE batch_id=?))))
+                ORDER BY id
+                """, batch, batch));
+        result.put("jobs", db.queryForList("SELECT * FROM fams_durable_job WHERE job_kind='ASSET_IMPORT' AND business_reference=?", batch));
+        return result;
+    }
+
+    private Map<Integer, String> openingRepairRow(String code, boolean factory) {
+        var values = new java.util.HashMap<Integer, String>(Map.ofEntries(
+                Map.entry(0, code), Map.entry(1, "Opening repair"), Map.entry(2, "CAT-1"), Map.entry(3, "ROOT"),
+                Map.entry(4, "M1"), Map.entry(5, "piece"), Map.entry(6, code + "-SN"), Map.entry(9, "LOC-1"),
+                Map.entry(20, "期初已有故障和维修事实"), Map.entry(21, "MEDIUM"),
+                Map.entry(22, "2026-09-11T09:00:00+08:00"), Map.entry(23, "2026-09-11T10:00:00+08:00"),
+                Map.entry(25, "原纸质维修登记单已核验")));
+        if (factory) {
+            values.putAll(Map.ofEntries(Map.entry(7, "返厂维修"), Map.entry(8, "WH-1"), Map.entry(18, "在库"),
+                    Map.entry(19, "已寄出"), Map.entry(26, "期初记录厂家"), Map.entry(27, "厂家接收人"),
+                    Map.entry(28, "010-12345678"), Map.entry(29, "厂家维修收件库"), Map.entry(30, "2026-09-12T11:00:00+08:00"),
+                    Map.entry(31, "原寄出凭证单号 TEST-FACTORY-01"), Map.entry(32, "2026-12-31"), Map.entry(33, "NO_COST"), Map.entry(35, "2")));
+        } else {
+            values.putAll(Map.of(7, "维修中", 10, "ROOT", 11, "E3", 12, "2026-09-01", 13, "2099-12-31",
+                    18, "借出", 19, "原地维修"));
+        }
+        return values;
+    }
+
+    private String publishScrapBatch(byte[] template, Session warehouse, Session assetAdmin,
+            AssetImportWorker worker, String uploadKey, List<Map<Integer, String>> rows,
+            int ready, int errors) throws Exception {
+        var upload = request("POST", "/asset-import-batches", multipart(scrapWorkbook(template, rows)),
+                warehouse, "multipart/form-data; boundary=fams-test-boundary", uploadKey);
+        assertEquals(201, upload.statusCode(), body(upload));
+        String batch = JSON.readTree(body(upload)).get("id").asText();
+        var preview = JSON.readTree(body(request("POST", "/asset-import-batches/" + batch + "/preview",
+                "{}".getBytes(StandardCharsets.UTF_8), warehouse, "application/json", null, 0L)));
+        assertEquals(ready, preview.get("readyRows").asInt());
+        assertEquals(errors, preview.get("errorRows").asInt());
+        if (ready == 0) {
+            return batch;
+        }
+        assertEquals(200, request("POST", "/asset-import-batches/" + batch + "/review", null,
+                warehouse, null, null, 1L).statusCode());
+        assertEquals(200, request("POST", "/asset-import-batches/" + batch + "/decision",
+                ("{\"approved\":true,\"reason\":\"verified opening scrap\",\"confirmedReadyRows\":" + ready
+                        + ",\"confirmedErrorRows\":" + errors + ",\"sampleVerified\":true}")
+                        .getBytes(StandardCharsets.UTF_8), assetAdmin, "application/json", null).statusCode());
+        worker.poll();
+        assertEquals("PUBLISHED", db.queryForObject("SELECT batch_status FROM fams_asset_import_batch "
+                + "WHERE id=?", String.class, batch), () -> "job error=" + db.queryForObject(
+                "SELECT MIN(last_error_code) FROM fams_durable_job WHERE job_kind='ASSET_IMPORT'"
+                + " AND business_reference=?", String.class, batch));
+        return batch;
+    }
+
+    private byte[] scrapWorkbook(byte[] template, List<Map<Integer, String>> rows) throws Exception {
+        try (var book = new XSSFWorkbook(new ByteArrayInputStream(template));
+                var output = new ByteArrayOutputStream()) {
+            var sheet = book.getSheet("资产");
+            for (int index = 0; index < rows.size(); index++) {
+                var row = sheet.createRow(index + 1);
+                for (var cell : rows.get(index).entrySet()) {
+                    row.createCell(cell.getKey()).setCellValue(cell.getValue());
+                }
+            }
+            book.write(output);
+            return output.toByteArray();
+        }
     }
 
     private void assertInvalidImportRequestBoundaries() {
@@ -632,6 +1433,15 @@ class AssetImportHttpRuntimeCase {
     }
 
     private record Session(String cookie, String csrf) { }
+
+    @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods = false)
+    static class CleanScanner {
+        @org.springframework.context.annotation.Bean
+        @org.springframework.context.annotation.Primary
+        com.fams.attachment.MalwareScanner testImportEvidenceScanner() {
+            return file -> com.fams.attachment.MalwareScanner.Result.CLEAN;
+        }
+    }
 
     @SpringBootApplication(scanBasePackages = "com.fams")
     static class TestApplication {

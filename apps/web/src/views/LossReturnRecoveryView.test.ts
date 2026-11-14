@@ -1,0 +1,23 @@
+import {mount,flushPromises} from "@vue/test-utils";
+import {reactive} from "vue";
+import {afterEach,expect,it,vi} from "vitest";
+import LossView from "./LossView.vue";
+import LossRecoveryPanel from "./LossRecoveryPanel.vue";
+const state=vi.hoisted(()=>({session:{user:{id:"1",roles:["WAREHOUSE_OPERATOR"]},csrfToken:"csrf"}}));
+vi.mock("@/auth/sessionStore",()=>({useSessionStore:()=>state.session}));
+vi.mock("vue-router",()=>({useRoute:()=>({params:{id:"9"}})}));
+afterEach(()=>{vi.unstubAllGlobals();vi.restoreAllMocks();});
+it.each([false,true])("closed return parent retains committed original request through refresh, execution=%s",async execute=>{
+ state.session=reactive({user:{id:"1",roles:["WAREHOUSE_OPERATOR"]},csrfToken:"csrf"});
+ const attempt={id:"44",version:2,assetVersion:3,ownershipVersion:1,status:"VERIFYING",actions:{execute:true},request:{destination:"ASSET_RETURN",facts:{condition:"INTACT",stillOriginalCustodian:false}}};
+ const row={id:"9",source:{id:"90",assetCode:"ORIGINAL",name:"原机",version:3},status:"CONFIRMED_LOST",version:12,assetVersion:3,ownershipVersion:0,lockVersion:0,actions:execute?{}:{requestRecovery:true},recoveries:execute?[attempt]:[],recoveriesTotal:execute?1:0,recoveryAsset:{assetCode:"ORIGINAL",version:3,serialNumber:null,locationId:"99",locationVersion:0},photos:[],history:[]};
+ const writes:RequestInit[]=[];let lost=true;
+ const response=(body:unknown)=>({ok:true,status:200,json:async()=>structuredClone(body)}) as Response;
+ vi.stubGlobal("fetch",vi.fn(async(url:string,input:RequestInit)=>{if(input.method==="POST"){writes.push(structuredClone(input));if(lost){lost=false;row.version=99;row.actions={};throw Error("committed reply lost");}return response(row);}return response(url.endsWith("/9")?row:{items:[row],total:1});}));
+ const w=mount(LossView,{global:{stubs:{AppChrome:{template:"<main><slot/></main>"}}}});await flushPromises();
+ const intent={path:execute?"/recoveries/44/execute-to-return":"/9/return-recovery-requests",version:execute?2:12,key:"closed-damage-original",body:execute?{recovery:{assetVersion:3,ownershipVersion:1,lockVersion:0,facts:{condition:"INTACT",stillOriginalCustodian:false}},fault:"原机损坏需要维修",impact:"HIGH"}:{assetVersion:3,facts:{condition:"INTACT",stillOriginalCustodian:false}},summary:"结案后保管变化按新批准转正式归还退库"};
+ w.findComponent(LossRecoveryPanel).vm.$emit("prepare",intent);await flushPromises();expect(w.find('[role="dialog"]').exists()).toBe(true);
+ const button=(text:string)=>w.findAll("button").find(item=>item.text()===text)!;
+ await button("确认提交").trigger("click");await flushPromises();await button("只读核对最新结果").trigger("click");await flushPromises();await button("使用原请求重试").trigger("click");await flushPromises();
+ expect(writes).toHaveLength(2);expect(writes[1]).toEqual(writes[0]);expect((writes[0]!.headers as Record<string,string>)["If-Match-Version"]).toBe(String(intent.version));w.unmount();
+});

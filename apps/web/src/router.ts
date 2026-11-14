@@ -15,17 +15,22 @@ import TransferView from "@/views/TransferView.vue";
 import ProxyConfirmationView from "@/views/ProxyConfirmationView.vue";
 import BusinessResultNoticeView from "@/views/BusinessResultNoticeView.vue";
 import BusinessResultReviewView from "@/views/BusinessResultReviewView.vue";
+import MessageCenterView from "@/views/MessageCenterView.vue";
 
 import ItemTargetChangeView from "@/views/ItemTargetChangeView.vue";
 import TransferTargetChangeView from "@/views/TransferTargetChangeView.vue";
 
 import InventoryTaskView from "@/views/InventoryTaskView.vue";
+import LossView from "@/views/LossView.vue";
+import ScrapView from "@/views/ScrapView.vue";
 import RepairView from "@/views/RepairView.vue";
 import RepairAssistanceView from "@/views/RepairAssistanceView.vue";
 
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
+    { path: "/scrap-requests/:id?", name: "scrap-requests", component: ScrapView, meta: { requiresAuth: true } },
+    { path: "/loss-reports/:id?", name: "loss-reports", component: LossView, meta: { requiresAuth: true } },
     { path: "/repair-assistance/:id?", name: "repair-assistance", component: RepairAssistanceView, meta: { requiresAuth: true } },
     { path: "/repairs/:id?", name: "repairs", component: RepairView, meta: { requiresAuth: true } },
     { path: "/inventory-tasks", name: "inventory-tasks", component: InventoryTaskView, meta: { requiresAuth: true } },
@@ -34,6 +39,7 @@ export const router = createRouter({
     { path: "/business-result-reviews", name: "business-result-reviews", component: BusinessResultReviewView, meta: { requiresAuth: true } },
     { path: "/proxy-confirmations", name: "proxy-confirmations", component: ProxyConfirmationView, meta: { requiresAuth: true } },
     { path: "/business-result-notices", name: "business-result-notices", component: BusinessResultNoticeView, meta: { requiresAuth: true } },
+    { path: "/messages", name: "messages", component: MessageCenterView, meta: { requiresAuth: true } },
     { path: "/", name: "home", component: HomeView, meta: { requiresAuth: true } },
     { path: "/login", name: "login", component: LoginView },
     { path: "/password/change", name: "password-change", component: PasswordChangeView, meta: { requiresAuth: true } },

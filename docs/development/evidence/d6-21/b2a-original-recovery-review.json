@@ -1,0 +1,1011 @@
+{
+  "version": 1,
+  "task": "D6-21B2a",
+  "status": "IN_REVIEW",
+  "candidate": "256159e05ea9e957e6a9c13b4c71d0e26e280da6",
+  "parentStatus": "IN_PROGRESS",
+  "notPushed": true,
+  "quality": {
+    "command": "rtk proxy env PYTHONUNBUFFERED=1 python3 scripts/verify-product-development.py",
+    "exitCode": 0,
+    "requiredSuiteCount": 68,
+    "required": {
+      "tests": 499,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "allArchivedSuiteCount": 106,
+    "allArchived": {
+      "tests": 620,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "coverage": {
+      "BRANCH": {
+        "covered": 7284,
+        "missed": 2363,
+        "total": 9647,
+        "percent": 75.5053
+      },
+      "LINE": {
+        "covered": 20818,
+        "missed": 1563,
+        "total": 22381,
+        "percent": 93.0164
+      }
+    },
+    "checkstyleErrors": 0,
+    "spotbugsInstances": 0,
+    "webTests": 207,
+    "miniTests": 319,
+    "retainedXml": true
+  },
+  "runtime": {
+    "closedCase": {
+      "candidate": "8af7c128056c477a0a04eef13d4dfc22ac7e0294",
+      "artifactSha256": "2ba4bbfa3e6a813595de1f802126823f28c86bf2f8cc2cf9dc2ff1a7543ccbf3",
+      "actualPC": true,
+      "originalReviewDateRetained": "2026-11-29",
+      "originalBorrowingUnchanged": true,
+      "frontendCandidate": "8af7c128056c477a0a04eef13d4dfc22ac7e0294",
+      "container": "fams-d6-21b2a-r2-fixed-browser-1afc2cc71a651a8c",
+      "scanner": "ClamAV 1.4.6/28129/Sun Sep 20 06:26:26 2026",
+      "final": {
+        "events": 10,
+        "photos": 1,
+        "status": "CONFIRMED_LOST",
+        "reports": 1,
+        "exception": "NORMAL",
+        "lifecycle": "BORROWED",
+        "openTodos": 0,
+        "processor": 983003,
+        "activeLocks": 0,
+        "responsible": 983002
+      },
+      "datesUnchanged": true,
+      "custodyUnchanged": true,
+      "originalHashes": [
+        "7a76a31aaaa2d5b2414ef562a35d6d73fd77689649fb69cda72f4994a08873b9"
+      ]
+    },
+    "closedCaseFinalUiCandidate": "256159e05ea9e957e6a9c13b4c71d0e26e280da6",
+    "directCase": {
+      "candidate": "256159e05ea9e957e6a9c13b4c71d0e26e280da6",
+      "artifactSha256": "da82726cec20eb650335bb9b7382204dcd8aff41b84636e7cfe93e287cfd1d5d",
+      "actualPC": true,
+      "originalReviewDateRetained": "2026-11-06",
+      "originalBorrowingUnchanged": true,
+      "frontendCandidate": "256159e05ea9e957e6a9c13b4c71d0e26e280da6",
+      "container": "fams-d6-21b2a-searching-fixed-browser-a4f861dcbb61f464",
+      "scanner": "ClamAV 1.4.6/28129/Sun Sep 20 06:26:26 2026",
+      "final": {
+        "events": 6,
+        "photos": 1,
+        "status": "RECOVERED",
+        "reports": 1,
+        "exception": "NORMAL",
+        "lifecycle": "BORROWED",
+        "openTodos": 0,
+        "processor": 983003,
+        "activeLocks": 0,
+        "responsible": 983002
+      },
+      "datesUnchanged": true,
+      "custodyUnchanged": true,
+      "originalHashes": [
+        "7a76a31aaaa2d5b2414ef562a35d6d73fd77689649fb69cda72f4994a08873b9"
+      ]
+    },
+    "variants": {
+      "candidate": "256159e05ea9e957e6a9c13b4c71d0e26e280da6",
+      "artifactSha256": "da82726cec20eb650335bb9b7382204dcd8aff41b84636e7cfe93e287cfd1d5d",
+      "cases": [
+        {
+          "kind": "STOCK",
+          "assetId": "983011",
+          "reportId": "2",
+          "status": "RECOVERED",
+          "exception": "NORMAL",
+          "allOtherAssetColumnsUnchanged": true,
+          "disabledOriginalCustodianRejected": true,
+          "failedAttemptPreservedRows": true,
+          "originalReceiptReplayIdentical": true,
+          "actualPublicHttp": true,
+          "scanner": "ClamAV 1.4.6/28129/Sun Sep 20 06:26:26 2026"
+        },
+        {
+          "kind": "SHARED",
+          "assetId": "983012",
+          "reportId": "3",
+          "status": "RECOVERED",
+          "exception": "NORMAL",
+          "allOtherAssetColumnsUnchanged": true,
+          "disabledOriginalCustodianRejected": true,
+          "failedAttemptPreservedRows": true,
+          "originalReceiptReplayIdentical": true,
+          "actualPublicHttp": true,
+          "scanner": "ClamAV 1.4.6/28129/Sun Sep 20 06:26:26 2026"
+        }
+      ],
+      "tier": "actual public HTTP and MySQL; not PC or device UI"
+    },
+    "closedPcJarAll1513EntriesMatchFinalCandidate": true,
+    "gateJarAllEntriesMatchFinalCandidate": true,
+    "consoleErrors": [],
+    "isolatedRuntimesRemoved": true
+  },
+  "scope": {
+    "covered": "original lawful custody, registered original location and intact identity",
+    "notCompleted": [
+      "B2b changed destinations",
+      "C real linked conversions and atomic lock transfer",
+      "D remaining obligations",
+      "independent review",
+      "real WeChat SDK and HTTPS/device/SMS",
+      "remote CI",
+      "formal QA",
+      "production"
+    ],
+    "aoci": {
+      "stage": "authoring_required",
+      "policy_identity_aligned": true,
+      "budget_identity_aligned": true,
+      "observed_pending_review": 0,
+      "requires_human_review": 15,
+      "index_count": 1674,
+      "observe_count": 57,
+      "driftCounts": {
+        "missing": 81,
+        "orphan": 0,
+        "stale": 30,
+        "unbaselined": 81,
+        "warnings": 0
+      }
+    },
+    "aociMaintenanceReceipt": "output/d6-21b2a-aoci-final-maintain.json"
+  },
+  "sourceDigests": [
+    {
+      "path": "apps/miniprogram/native/pages/loss-reports/index.wxml",
+      "sha256": "b4bed2d1e5b1143d4f05e2819c26d2b7f8323e31f49380acf24fa1bb1cd95e80"
+    },
+    {
+      "path": "apps/miniprogram/src/loss-pages.ts",
+      "sha256": "ed8dabbe1464e8fa2ea6a72353bcaa7ef8f905a922f7e77ed194402a598ca1be"
+    },
+    {
+      "path": "apps/miniprogram/test/loss-recovery-pages.test.mjs",
+      "sha256": "e39cb998dcc9944611f109ba6e38fc2caa39706184bbd388a773ab395d5be342"
+    },
+    {
+      "path": "apps/miniprogram/test/runtime-loss-http.mjs",
+      "sha256": "245639696885b3d3e803a4b1a3786e71b6eae4b1afe42aa2304771a4bd55c2d9"
+    },
+    {
+      "path": "apps/miniprogram/test/runtime-loss-recovery-http.mjs",
+      "sha256": "8dc9e316f0cc0788756cf14054f6f4251f8e7ec1e7a9f1cc0910c0bc3fe8bf56"
+    },
+    {
+      "path": "apps/web/src/loss/api.ts",
+      "sha256": "6d79c036facaa221d898c6408b0bc18366bd2869a79d9904d51ace6e8f0eb18c"
+    },
+    {
+      "path": "apps/web/src/views/LossRecoveryPanel.test.ts",
+      "sha256": "2531181ed49d388adb1abbc54ce2a160f97fce905647e1c7f05c09b2686b2593"
+    },
+    {
+      "path": "apps/web/src/views/LossRecoveryPanel.vue",
+      "sha256": "b5837740fd739ae185c0ed9eba3453b00312d6e0b8540036f062c2847d8d84fd"
+    },
+    {
+      "path": "apps/web/src/views/LossView.test.ts",
+      "sha256": "528bf13cad6e6945abfdf8d59db95a5b6e359fae6813ef7e4dcdf53ffcf415b6"
+    },
+    {
+      "path": "apps/web/src/views/LossView.vue",
+      "sha256": "562793dbc15ac9c760e22d5b2212c88598b647f158ef513d218325f8a6403419"
+    },
+    {
+      "path": "backend/src/main/java/com/fams/asset/AssetLossPort.java",
+      "sha256": "cc6a8e73aa904ee0bebe0415fa46ab9220ab5cbfca7a51e282a2af3774e5bd7e"
+    },
+    {
+      "path": "backend/src/main/java/com/fams/loan/LoanLossPort.java",
+      "sha256": "b3b7281062a91da65b9910b189e274928c9177503555ba1fbb0ca1654b5b354e"
+    },
+    {
+      "path": "backend/src/main/java/com/fams/loss/LossController.java",
+      "sha256": "32efd8ead9c733169d535c3666bd8aec10777e59f7cd57f13644eec3fcd3e04f"
+    },
+    {
+      "path": "backend/src/main/java/com/fams/loss/LossErrorHandler.java",
+      "sha256": "ac5837ebb65bb7b58f24842aafc9f276cbe8032b84c3571160b7baa6aee14932"
+    },
+    {
+      "path": "backend/src/main/java/com/fams/loss/LossInput.java",
+      "sha256": "313e3fcce8bf2fe1f9e901096c7c9e084bfdf58662ac890948844e9e2e3c1aee"
+    },
+    {
+      "path": "backend/src/main/java/com/fams/loss/LossService.java",
+      "sha256": "8ae45aadad5b33f525e45b500035d3d9e8c49364eee757f42f9a0f41b76074a4"
+    },
+    {
+      "path": "backend/src/main/resources/db/migration/d6_04/V58__loss_original_recovery.sql",
+      "sha256": "384bf3e8a35a0271039bb644dfa8320015fd4a0b198ef3ada6f55b68b998e032"
+    },
+    {
+      "path": "backend/src/test/java/com/fams/auth/LossHttpRuntimeCase.java",
+      "sha256": "257f5cafeb5671e5f32b8cf524138c978ab7c495da98b075a1654a485b1b878f"
+    },
+    {
+      "path": "backend/src/test/java/com/fams/auth/LossRecoveryUpgradeRuntimeCase.java",
+      "sha256": "93986608eec51c33302c55034dfa1885dc9c9baef0e2aebad96b2708595d59f6"
+    },
+    {
+      "path": "contracts/fams-core-v1.yaml",
+      "sha256": "7bd812bb24476d4c665b57bcee2f7d5f95eabd56c7b5873d5e2ffd21add7c9a7"
+    },
+    {
+      "path": "scripts/verify-d6-03a.py",
+      "sha256": "10ff255e85825827562f32a25c721499603eb7c714eeadba6dd4f77c9399f247"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "output/d6-21b2a-product-gate-256159e.log",
+      "sha256": "c7292dec7034910fabd94327f5944d1586d1b948a3b08d51c3fbd87f58afce56",
+      "bytes": 38872
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.architecture.FamsArchitectureRulesTest.xml",
+      "sha256": "85b1c425b17ebeb60f74cb2e0943d37db3542a6336a45f6575c8cec3908cf4be",
+      "bytes": 34369
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.architecture.FamsArchitectureTest.xml",
+      "sha256": "3b190616f00ac3180c476564a1ace7f6fd56b678f6d9ce77081f1f7c9086c3b7",
+      "bytes": 34507
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.asset.AssetHttpTest.xml",
+      "sha256": "eaa686f629c401b4ef1af5e8ed5043dcb50252879eda82845226519a5a36d074",
+      "bytes": 52208
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.asset.AssetListReferenceQueryTest.xml",
+      "sha256": "9c7016a31dea3169d18e0d33437280e82bd818fef4aa0462026ef51cd082655b",
+      "bytes": 34067
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.assetimport.AssetImportBatchRuntimeCase.xml",
+      "sha256": "18f8ec61cb4dd6ed8c7d7f404c9e774f521bdd050fd9d85222d7f5434576af0e",
+      "bytes": 32830
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.assetimport.AssetImportHttpRuntimeCase.xml",
+      "sha256": "71a60123a9b15f1dd941208bf0ad9974510fe61b89076562e13ef259a10519d1",
+      "bytes": 52069
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.assetimport.AssetImportPreflightTest.xml",
+      "sha256": "964591a5bcec8366cbe0c8b61b84ad331765bbd359623df4aa076a3aa7540b6d",
+      "bytes": 35849
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.assetimport.AssetImportWorkbookTest.xml",
+      "sha256": "f3e48f07ddc0f7c70dd42686c12f4a040697ba07aa2eafa185e8717a53236e98",
+      "bytes": 34364
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.attachment.AttachmentCleanupTest.xml",
+      "sha256": "c22240ea8a8dbdaeac27eea8cd4a032a7ed6dfca6a3a5e8fe0114eff62defaaa",
+      "bytes": 36435
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.attachment.AttachmentCorrectionTest.xml",
+      "sha256": "7053d562f3884b39b892d6fb0f1c271b871ab5cf4af90e70a6c71afbafd5591f",
+      "bytes": 34244
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.attachment.AttachmentGrantSignerTest.xml",
+      "sha256": "9770c2f09ca747cdbc7e30a46771cbf745188347a469f473c573fd64c598bbfa",
+      "bytes": 34104
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.attachment.AttachmentHttpTest.xml",
+      "sha256": "608f7936aad088845c59f85105ec2201ca01cb21b069ce14fdda60a1b166d69c",
+      "bytes": 94673
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.attachment.AttachmentIdempotentUploadTest.xml",
+      "sha256": "f04820a1c46fc14d50c9f96e6fb8c4f1c0220f3dbd25f156f211be6debc851d9",
+      "bytes": 34251
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.attachment.AttachmentIntakeTest.xml",
+      "sha256": "5737bed9a4d1feb623e5c1fba1aa9b83711b5669137dc9f5fa3825ac55911210",
+      "bytes": 34881
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.attachment.AttachmentRegistryTest.xml",
+      "sha256": "9d9cf8f32e2fb7a6576f0f5608d70ee29571dceb8043dd44c234d8938e908ecb",
+      "bytes": 36406
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.attachment.AttachmentRequestBoundaryTest.xml",
+      "sha256": "627221adb8a380aaf966a5b75a38ddc35879d41ea0fb456c02f3bc5b9b888c73",
+      "bytes": 37410
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.attachment.AttachmentResultIsolationTest.xml",
+      "sha256": "03e10486fb17acccc2ba7a8658bbabdb7ffe5b4aac85e8791822ae5bfd7c5a20",
+      "bytes": 34220
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.attachment.AttachmentUploadKeysTest.xml",
+      "sha256": "6ff3702b7d00cb02aaf6a0015d581414c5994ef5b344f15f2be105d15a42a4f6",
+      "bytes": 34107
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.attachment.AttachmentUploadServiceTest.xml",
+      "sha256": "46ad209474431bc43fafe573323e1ce4dcfdf74a17375143195fdfb1bb1bef63",
+      "bytes": 34408
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.attachment.AttachmentWriterTest.xml",
+      "sha256": "f90652172a501f02d6e0d05e58b7a02c2222cd243eb7f186817090fa33403a8a",
+      "bytes": 34360
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.attachment.ClamdScannerTest.xml",
+      "sha256": "684035a4ddc71f6cd598711c9f0bf105a9867808e1888e76600e4f2bca51b459",
+      "bytes": 34195
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.AuthApplicationServiceTest.xml",
+      "sha256": "69aec98795e561a895f93093f218de6d994916d9b967d80bb37f17d0d672957e",
+      "bytes": 35009
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.AuthHttpTest.xml",
+      "sha256": "04ad4d03ee4136830ed4480b905672149c401e13d46e35b033087a16c25d7f32",
+      "bytes": 40868
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.AuthPolicyTest.xml",
+      "sha256": "c638206d63fff5e357d41889e680d1f5fcf4a5888117cefb7cf9233436787dc3",
+      "bytes": 34289
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.AuthSessionManagerTest.xml",
+      "sha256": "84d4ddf2bcbc8df724c358644e1ea0c85447007b761d4b0ef8970ea13fa676ad",
+      "bytes": 34598
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.AuthSessionRestartTest.xml",
+      "sha256": "f6e6d56d8f5816254a47afc9ca78dd462bb285efa1d38e208230f397b7e705a4",
+      "bytes": 44669
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.AuthSessionValidatorTest.xml",
+      "sha256": "5a8a3db5fa5137ebf5f920629f3508537e7a86ac6ac80ec776c21f194ab35b92",
+      "bytes": 34427
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.AuthValueObjectTest.xml",
+      "sha256": "4d09d54cbdf9c0e918ef56361a5a62f69087bceec74cbf31386c90fa7f17fa2e",
+      "bytes": 34162
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.CsrfTokenValidatorTest.xml",
+      "sha256": "e3c0a9d427a229e920704f9a2e920f1ad97d40506a4cb46bb3b0affcaa42dccd",
+      "bytes": 34039
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.HandoverHttpTest.xml",
+      "sha256": "3b5efe3e9c5fc33c602d0bfa3aa084f868210cf559d0dc405b33e0985c357056",
+      "bytes": 283965
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.HandoverUpgradeRuntimeCase.xml",
+      "sha256": "8bf09ea520ad23e3529019e915937187bb48afe59833666bbab07e303d5b617f",
+      "bytes": 35399
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventoryDifferenceUpgradeRuntimeCase.xml",
+      "sha256": "29670e83292c58ae42a15aeb3d7228d447b48e639eeb83fb5682f109a9cf5f89",
+      "bytes": 35466
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventoryEvidenceUpgradeRuntimeCase.xml",
+      "sha256": "7b3eaf3d560473534a44f604ea136a2b6023d49ca58d288f9474987f3efc31fd",
+      "bytes": 35457
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventoryFindingUpgradeRuntimeCase.xml",
+      "sha256": "ed2fb113b210342e0d640f63bcd88a7bfe54fb09629346068f8b9880f97c4f1c",
+      "bytes": 35450
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventoryLateDamageHttpRuntimeCase.xml",
+      "sha256": "ff67ef99d2024be5367fdf3c29331a2fe2acae17daf711e8e92d68cf4c39c2fc",
+      "bytes": 61049
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventoryLateDamageUpgradeRuntimeCase.xml",
+      "sha256": "2a58e938717d61b38241cb3de92e6ac4259b2808db3202133cdf44c194799d90",
+      "bytes": 35469
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventoryLateHttpRuntimeCase.xml",
+      "sha256": "7daded0f1b888926e18769034dac5c767ac11d283f14726e9ccd400dd0e2fb35",
+      "bytes": 85680
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventoryLateUpgradeRuntimeCase.xml",
+      "sha256": "e20408068646f3ea6406e88e66c30a371c967580432e92e793a4b048a70ecca0",
+      "bytes": 35431
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventoryObservationHttpRuntimeCase.xml",
+      "sha256": "60020aa2f81bfb21173c0ed536e6e5592e53607f9fcbc0b683ad5570acf0711b",
+      "bytes": 88037
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventoryObservationUpgradeRuntimeCase.xml",
+      "sha256": "0cfc17e585bf702dd531028fc386d9be2d741539027f868631deb29c32ce5e56",
+      "bytes": 35454
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventoryReadinessHttpRuntimeCase.xml",
+      "sha256": "6dc4f90bf8c8383141c684e68c8ac6486afb0f8cb8e2931b63e51db238daee96",
+      "bytes": 84579
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventoryReadinessUpgradeRuntimeCase.xml",
+      "sha256": "3eb1454244ecb1671cd600e84e7a3d4ab4192b9ffcacf1a3ac29c3b81bd128ff",
+      "bytes": 35463
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventoryRecollectionUpgradeRuntimeCase.xml",
+      "sha256": "bd3e323d279c377eeb26f87f9074d670509e1866bd3eb398acbb6d22fb9099d3",
+      "bytes": 35477
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventoryRepairHttpRuntimeCase.xml",
+      "sha256": "894383a76891c33f58b6f5603caa9ae12637eb3ff6848361362b1f2d9039f343",
+      "bytes": 61023
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventoryRepairUpgradeRuntimeCase.xml",
+      "sha256": "d55b8ef6866aa4f4346d4bd17170de2e6b17d5a40260c012a643fd504699faa0",
+      "bytes": 35435
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventoryReviewHttpRuntimeCase.xml",
+      "sha256": "e87a9da139c3a9ba7f3669f0c95b87d3810c82c98a71da68d07de2726f63250a",
+      "bytes": 154864
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventoryReviewUpgradeRuntimeCase.xml",
+      "sha256": "394d915adeea9d67283f95dfdd478aee89c8cbc815a7f56339fde3b06887467c",
+      "bytes": 35434
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventorySealHttpRuntimeCase.xml",
+      "sha256": "fdb1c12004ba68898acfbc55a29761919fa75135ede635a2dd4f6ca9f33d25c1",
+      "bytes": 62273
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventorySealUpgradeRuntimeCase.xml",
+      "sha256": "a5742ddbd0877f92b1948392854034bd233ca535bbcda793126c1401f7c03498",
+      "bytes": 35447
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventorySelectionUpgradeRuntimeCase.xml",
+      "sha256": "18df52d6c726d1c6b55b01476d50ae8154a07e6e49b1590a8dab9d180a1d1577",
+      "bytes": 35459
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventorySynchronizationHttpRuntimeCase.xml",
+      "sha256": "0af9244a3376e479145a2fd20f580dbfa3633650b601915b8300cf6301f372db",
+      "bytes": 84377
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventorySynchronizationUpgradeRuntimeCase.xml",
+      "sha256": "c6522d882e8f967d9acf0228e6a7851153f72af424735e52a90a6546ef921923",
+      "bytes": 35491
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventoryTaskHttpRuntimeCase.xml",
+      "sha256": "8e4c79b926dac9046cea04371fc3e118c8017964e5904125eae1ee0eff868e79",
+      "bytes": 38360
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.InventoryUpgradeRuntimeCase.xml",
+      "sha256": "2964d37cbe89fe2eeaa48f8967afd2266bdb3016af296196a7fde7bdbac1a123",
+      "bytes": 35434
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.LoanUpgradeRuntimeCase.xml",
+      "sha256": "0431591c4e89f3029b2b88f279c40b9e792304fada1101d633f7da6788a7bcd2",
+      "bytes": 35880
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.LossConfirmationUpgradeRuntimeCase.xml",
+      "sha256": "683555c7610c6370bee87401ee328409e12186644e9f2c3bcfd7c44e72775315",
+      "bytes": 35489
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.LossHttpRuntimeCase.xml",
+      "sha256": "05d314cc0299f96fab19a304e0263f3a0aabbaa0fd4bf9ab6b63bff4e834a068",
+      "bytes": 108636
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.LossRecoveryUpgradeRuntimeCase.xml",
+      "sha256": "3659377e3f3a28f045c7918a302c60002ce722d19d0bee137acc42514382c113",
+      "bytes": 35459
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.LossUpgradeRuntimeCase.xml",
+      "sha256": "90f842544c46f1d7ad23da44ee347810afc161893f290c568e4dcb4b5487fcd6",
+      "bytes": 35438
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.MiniAuthControllerTest.xml",
+      "sha256": "c89fe8a63277ebc229f2b98e8dd9bb468caf10d11f01451fdbb2bc62ca46aa94",
+      "bytes": 34336
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.MiniBindingHttpTest.xml",
+      "sha256": "e74a24fdb68bdf3043610fe4ec9035d124fbbca5b61ce6e6d245dd5c2890a472",
+      "bytes": 39905
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.MiniSessionHttpTest.xml",
+      "sha256": "d0d010477049520cb29ce0978fe9bc413ea0bd7011e84f16536447a44e868fad",
+      "bytes": 38313
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.MiniSessionUpgradeRuntimeCase.xml",
+      "sha256": "0b658b15881c6935685acb93394dae70db37d7daa6d1276907c8820e1ae0a75b",
+      "bytes": 39388
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.PasswordPolicyTest.xml",
+      "sha256": "da1bb3c4aa02d2e0d4d6f0adb09a3aaf122400345adfe0d26f4eb6e5ab57cb04",
+      "bytes": 34281
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.ProxyConfirmationUpgradeRuntimeCase.xml",
+      "sha256": "3ab1d04ae00fa698c8aff41b5050651d7d7b8fee6fdb0a59d27408b4e5d41c70",
+      "bytes": 37282
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.ReassignmentUpgradeRuntimeCase.xml",
+      "sha256": "6ee08fc8ca84cb7b61ca3712bb8d20607d7a81cd5bb5a3ed10c333d278608760",
+      "bytes": 35407
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RepairCollaborationHttpRuntimeCase.xml",
+      "sha256": "12a0951d808fffb721dc201381981a7d31b9626bf3a392d419cc9821f3f954ed",
+      "bytes": 61702
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RepairCollaborationUpgradeRuntimeCase.xml",
+      "sha256": "86d679dd5847e88906494bebe032c61894225f7af4c590ea4ff153a709bb0229",
+      "bytes": 35451
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RepairFactoryCostUpgradeRuntimeCase.xml",
+      "sha256": "8307c227b9be0b02deca2097eca860c862feeea20f2079402e1888cff339a37a",
+      "bytes": 49033
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RepairFactoryHttpRuntimeCase.xml",
+      "sha256": "d445f9d2976ffc6b1d26d9560fdc72e9a3ccb64b1fb8a80a5c51651fd301939d",
+      "bytes": 210737
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RepairFactoryPartsUpgradeRuntimeCase.xml",
+      "sha256": "bbba845386bdfa1587f18d898d6f024e011c6531c4ad3730df28f4f6516ff88b",
+      "bytes": 36169
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RepairFactoryReplacementUpgradeRuntimeCase.xml",
+      "sha256": "684f2d377684f9b93bddb0b41e9d0f766755c226e916f69021572ad98bc21b97",
+      "bytes": 35838
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RepairFactoryUpgradeRuntimeCase.xml",
+      "sha256": "cf7ef6a16ae77c2712410650699d4403ced959345b4ccac788077d902f6a90e7",
+      "bytes": 35095
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RepairHttpRuntimeCase.xml",
+      "sha256": "c72aecdcc89077b024c0d5747cf6058e6bad3265bb9e0dba7a80dae98179c6ec",
+      "bytes": 61766
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RepairPhysicalHttpRuntimeCase.xml",
+      "sha256": "cfd8feab7140f2cf8ef2cc5fc39073c1f08693d5a060fb64e3769e1d4e4779a1",
+      "bytes": 61081
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RepairPhysicalUpgradeRuntimeCase.xml",
+      "sha256": "a297622230ebf2758432e498af2df949f32eeebe0d1199d5d3af23fe72e220ec",
+      "bytes": 35437
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RepairProxyHttpRuntimeCase.xml",
+      "sha256": "2b01df7f562374e066ccb3f544d99199cc20a24efca89af90ac47afb609ca91e",
+      "bytes": 86728
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RepairProxyUpgradeRuntimeCase.xml",
+      "sha256": "177c85455d9452d909f4784a44ff9c41a2a0e658cecd2bfaf32a0bf0c0812f19",
+      "bytes": 35432
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RepairReassignmentHttpRuntimeCase.xml",
+      "sha256": "6618d97197e9bbdefe42d2135260c4bd7ff2f1681b14447954863034b85b2d15",
+      "bytes": 61990
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RepairReturnHttpRuntimeCase.xml",
+      "sha256": "953b2835b2566330ceadb7c26380d4a191b2c2d29d8eba37f5c1010e8da87b63",
+      "bytes": 87342
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RepairReturnSourceHttpRuntimeCase.xml",
+      "sha256": "ce1ebd68d2c690f0f9758c0a59bbd1c8101cc84708b519f5a5560cb3b6c4e20b",
+      "bytes": 85459
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RepairReturnSourceUpgradeRuntimeCase.xml",
+      "sha256": "2b31d529d594409460268e8009a29ebbe014d2322404300b19a52c8c2c0f0924",
+      "bytes": 35459
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RepairReturnTargetUpgradeRuntimeCase.xml",
+      "sha256": "e9d9bcb42086c45316ecd41afbe08c1ff211c84a4a95c9131448c8e4e67594cc",
+      "bytes": 35480
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RepairReturnUpgradeRuntimeCase.xml",
+      "sha256": "a0c1beeb0eee7c3550e098226b139e3c17cf3859662a69081cb02f87cce6a2f9",
+      "bytes": 35425
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RepairUpgradeRuntimeCase.xml",
+      "sha256": "6fec2841c05ca991440789a10bdc307b77aa43ec88ab9e6ef440347634bea8af",
+      "bytes": 35392
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RequisitionChangeUpgradeRuntimeCase.xml",
+      "sha256": "3a181aad0a60f680cfcfc712930f950d489f376a4c1112ca656b9012d38e1ac1",
+      "bytes": 35468
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RequisitionHttpTest.xml",
+      "sha256": "275ac6ab6ba2bb50a492094d9a47a28e02f48c437675708be698581a4041a1cb",
+      "bytes": 63459
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.RequisitionUpgradeRuntimeCase.xml",
+      "sha256": "0bd26ee4ebe00b6bf058779ea7be04d9be30edcd7f2d29980116f648b90e0ac3",
+      "bytes": 41972
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.ReturnReassignmentUpgradeRuntimeCase.xml",
+      "sha256": "154f0ef93d6dc30676af75309d0a5d73bab34822b48ed2afcc21868c7307904b",
+      "bytes": 35443
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.auth.TransferUpgradeRuntimeCase.xml",
+      "sha256": "c82ccb173a8c48c3e27d4d9f7691d62d7f7234b64f122a546443e3bb527f7137",
+      "bytes": 35388
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.contract.ContractProbeHttpTest.xml",
+      "sha256": "882b3456c4549a7b90bb0bd3d6517148f739c3610ebc44c24c7192a194609261",
+      "bytes": 37979
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.inbound.InboundAttachmentPortTest.xml",
+      "sha256": "c0eeccd8fa69382a2884105e5537bf367423ea154bd7b101d3303f8b7b40828b",
+      "bytes": 34481
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.inbound.InboundHttpTest.xml",
+      "sha256": "2a703c6ca181e1c85657e7208c8f7d7f111a734cbf65a7ca553059468b736b00",
+      "bytes": 69718
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.inventory.InventoryDifferenceInputTest.xml",
+      "sha256": "ce686da9c8a3152cf4d1a89b27939ecc1a0dc37b18447e0bfa3af520e36eb4dc",
+      "bytes": 34107
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.inventory.InventoryObservationTimeTest.xml",
+      "sha256": "0852c7e212f6902b832a224cbf5ebe7b31f273bdd8dd067f247d54fcae698986",
+      "bytes": 34266
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.job.DurableJobRuntimeCase.xml",
+      "sha256": "2dba89d3edc837d073fa3cbd30fd60a99eae27fd527309c03696ab75ac9c6670",
+      "bytes": 45071
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.masterdata.IdentityImportParserTest.xml",
+      "sha256": "82fb7616b9eade658af54d49a1225c59d5c935f62458b39157276bd3cd99542f",
+      "bytes": 34335
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.masterdata.IdentityMasterDataHttpTest.xml",
+      "sha256": "6ff463b1677cbf2c77e9a963d30d7bf88bbed46d511f5a8761b5aa5e7b4b21dd",
+      "bytes": 41834
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.observability.LocalObservabilityHttpTest.xml",
+      "sha256": "b9c36fe622355b354a2a7cee39df40d93a9fbaefa0d8e1d922be5e89455bdb3b",
+      "bytes": 38387
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.repair.RepairFactoryCostPolicyTest.xml",
+      "sha256": "0fb5ba806153795557db1e9f24865a254176f32880d8a72c32d62925a56f3841",
+      "bytes": 34387
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.repair.RepairFactoryPayloadsTest.xml",
+      "sha256": "71ced46971348fe68eb549491801f74df7b3ce003f7257303b9e2d070b486a85",
+      "bytes": 34386
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.repair.RepairFactoryReplacementInputTest.xml",
+      "sha256": "43a8f6c0de41569a02ee790bd3f5373cb77b6089560cf3bc7d90576ee0ef7bde",
+      "bytes": 34292
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.requisition.ProxyReceiptPayloadsTest.xml",
+      "sha256": "485c54e8b1871845c1aa13e69109f54b69dfa735615ee2dd928d45d7f8ee5d57",
+      "bytes": 33682
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.runtime.RuntimeCompatibilityHttpTest.xml",
+      "sha256": "40e9fd27d99a83529285fb2c9fa3856c4701a8b84b285c2776accca8c7b17878",
+      "bytes": 39330
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.runtime.RuntimeCompatibilityTestDatabaseTest.xml",
+      "sha256": "5a3b3fcf06a13027212f1b403857e711c607875712faa46d89268f656f7897c5",
+      "bytes": 34381
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/TEST-com.fams.transfer.TransferCalendarTest.xml",
+      "sha256": "816e5bd114dc3198694bf1cdd624965f00d17f074b2df7e9eeb60a96bdc6fed1",
+      "bytes": 34088
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/checkstyle-result.xml",
+      "sha256": "3b3c110fe9a2502e4ae420c3bee0418309c4299dd01783164e96850bf82776af",
+      "bytes": 83
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/gate-backend.jar",
+      "sha256": "a17a6919a51e6b74691b01307dda8b4d11186da08749998a9ffe78ddde02dcaa",
+      "bytes": 59299609
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/jacoco.xml",
+      "sha256": "b26776528162389585d602943aeadf9eab30e1708ebd30036bdd3b435dc240f3",
+      "bytes": 2351164
+    },
+    {
+      "path": "output/d6-21b2a-256159e-gate-reports/spotbugsXml.xml",
+      "sha256": "77087411f22812b71e9ea7a58542cf5a92be4444b9323ce27674681b87f5ea54",
+      "bytes": 328937
+    },
+    {
+      "path": "output/d6-21b2a-256159e-candidate-backend.jar",
+      "sha256": "da82726cec20eb650335bb9b7382204dcd8aff41b84636e7cfe93e287cfd1d5d",
+      "bytes": 59299609
+    },
+    {
+      "path": "output/d6-21b2a-fixed-candidate-backend.jar",
+      "sha256": "2ba4bbfa3e6a813595de1f802126823f28c86bf2f8cc2cf9dc2ff1a7543ccbf3",
+      "bytes": 59299609
+    },
+    {
+      "path": "output/d6-21b2a-pc-candidate-entry-identity.json",
+      "sha256": "387465dce5a7d5774ed2f0e9faa6daede495590fdb5f5cce7c28131b68b23dcf",
+      "bytes": 223103
+    },
+    {
+      "path": "output/d6-21b2a-gate-candidate-entry-identity.json",
+      "sha256": "d575b3c09a5dd59b989279f9b976ed5958b0f1abd990db50e25bf8d855fd32ea",
+      "bytes": 223107
+    },
+    {
+      "path": "output/d6-21b2a-runtime-verified.log",
+      "sha256": "a4bd8dc71cfc8988ceadc0992d22d0c521dbff354bb60f82303c6763ac661ea2",
+      "bytes": 1248
+    },
+    {
+      "path": "output/d6-21b2a-step-loss.log",
+      "sha256": "11ecdc54986243960d6d373d1285006e89ed403003984e828fe58a731a9bd58e",
+      "bytes": 247648
+    },
+    {
+      "path": "output/d6-21b2a-variant-http-proof.json",
+      "sha256": "c7ae029a7c13d2f21e5e8426717ffa0c21c264d3e90d1e2b3bca2508cc5d5a1f",
+      "bytes": 1073
+    },
+    {
+      "path": "output/d6-21b2a-variants.py",
+      "sha256": "f2587617e34d8e9040aab140eefbe0c02d861705695db1ed4da3d218133dc1bf",
+      "bytes": 8327
+    },
+    {
+      "path": "output/d6-21b2a-variants.log",
+      "sha256": "6be251d84c58d908acaa48cf1f029b9a20a0d200f9894889cb2d3c86c2133e41",
+      "bytes": 761
+    },
+    {
+      "path": "output/d6-21b2a-aoci-observe-ack.json",
+      "sha256": "00f2ad8d3be88a59c2327a3a485501550514075c3e2948d27cdf3917dba94732",
+      "bytes": 913
+    },
+    {
+      "path": "output/d6-21b2a-aoci-scope-summary.json",
+      "sha256": "2416555d4cdcf4511e62fb9b96ecd6d57942d52f2d77ab4d6d6bd1caa88a0050",
+      "bytes": 333
+    },
+    {
+      "path": "output/d6-21b2a-r2-browser-runtime.py",
+      "sha256": "d6fc7cd6ba0385ce27c92aed0d36ec95030204f829d8db9a0771f08ad6be81c4",
+      "bytes": 18320
+    },
+    {
+      "path": "output/d6-21b2a-r2-browser-control.log",
+      "sha256": "85f8e3a04fe7a702ea8f63fc0c83d9ff7586c721f25d6edd175bf0b058fb50a1",
+      "bytes": 1019
+    },
+    {
+      "path": "output/d6-21b2a-r2-fixed-browser-fixture.json",
+      "sha256": "dc70fe6b64189546a0902865d76c3e0e4b360718a3d1df3c73355b12a1526c69",
+      "bytes": 700
+    },
+    {
+      "path": "output/d6-21b2a-r2-pc-persistence.json",
+      "sha256": "371d8c4cd6c12224b898e001c0603c63984fe4ebe24133a30b03744c40c4eef8",
+      "bytes": 851
+    },
+    {
+      "path": "output/d6-21b2a-r2-pc-before-recovery.json",
+      "sha256": "f1decb08b1c83f69cc5e62c0a49db3aad2dfb85113f66e295b942536ee3c0b7f",
+      "bytes": 1605
+    },
+    {
+      "path": "output/d6-21b2a-r2-pc-jvm-recovery.json",
+      "sha256": "7a50c7f7465ee1d6b89108de1e5e9e65be4a9cf82d7a7243b0ae0c057ce9f9ae",
+      "bytes": 1334
+    },
+    {
+      "path": "output/d6-21b2a-searching-browser-runtime.py",
+      "sha256": "acc7ebedcbac87255062649557f7fdea44f07b5dec21afdd6d08cbca5f4501e2",
+      "bytes": 18393
+    },
+    {
+      "path": "output/d6-21b2a-searching-browser-control.log",
+      "sha256": "68296a20900bfc7b4ac65640780a69037b3af667dcdc769d462160ce5f38d7a9",
+      "bytes": 1045
+    },
+    {
+      "path": "output/d6-21b2a-searching-fixed-browser-fixture.json",
+      "sha256": "9bf1450453fcaf82de3168a7d35bb68bb3b54b63dda6f67a520bcefee3f261a5",
+      "bytes": 726
+    },
+    {
+      "path": "output/d6-21b2a-searching-pc-persistence.json",
+      "sha256": "6c01de228261bff3304918ab0e0e2c1545bb56bb9a6cd63c765bfababff568e8",
+      "bytes": 852
+    },
+    {
+      "path": "output/d6-21b2a-searching-pc-before-recovery.json",
+      "sha256": "367ce5aa9563eb4cfe3592f098059c2117bf934919ee237ec56f1cbbd66fdc55",
+      "bytes": 1607
+    },
+    {
+      "path": "output/d6-21b2a-searching-pc-jvm-recovery.json",
+      "sha256": "db914fa7ceebca5f2048d7b94715382df0bae11a70adbd01c07570d15f149e80",
+      "bytes": 1224
+    },
+    {
+      "path": "output/d6-21b2a-256159e-pc-direct-after-jvm.png",
+      "sha256": "a45aabc6f23e49ca45206548e75866913924af9d4f0566516f32b182b4811cdf",
+      "bytes": 54252
+    },
+    {
+      "path": "output/d6-21b2a-256159e-pc-direct-recovered.png",
+      "sha256": "cb89231c353072ae99ed2ab814f8f0a350a8e4f8e58c7685f18a39fb28684eba",
+      "bytes": 65210
+    },
+    {
+      "path": "output/d6-21b2a-256159e-pc-no-loss-followups.png",
+      "sha256": "0c44f6de48f55e8b3238943fd8b566fa24d7b9fc3a1d192a69bc964bfdb36f0e",
+      "bytes": 49765
+    },
+    {
+      "path": "output/d6-21b2a-256159e-pc-recovered.png",
+      "sha256": "6cc04daf2b32ad9548d9872b524727dca49e659e5fab1dd35d5dd6f0688b9494",
+      "bytes": 39441
+    },
+    {
+      "path": "output/d6-21b2a-256159e-pc-direct-recovered-ax.txt",
+      "sha256": "2be9abe502e2df0a1cc22eb93269042914dadb71ddee87d8237cf974709b07fc",
+      "bytes": 5201
+    },
+    {
+      "path": "output/d6-21b2a-256159e-pc-recovered-ax.txt",
+      "sha256": "6a67701e30a5d1a1aa58b2adc9c30aca5e3a6de2f211e51c0d7660d79e719689",
+      "bytes": 6691
+    },
+    {
+      "path": "output/d6-21b2a-r2-pc-approval-evidence.png",
+      "sha256": "d3f25b713f946cca95b3d84730d052c372c9d0d1b91652a4524285d99e7eeed5",
+      "bytes": 60709
+    },
+    {
+      "path": "output/d6-21b2a-r2-pc-wrong-machine.png",
+      "sha256": "2b1aaf8f0441e63386bf7f0ff88b03a249f11fae9111d13e13624f3d63954369",
+      "bytes": 55816
+    },
+    {
+      "path": "output/d6-21b2a-reports/TEST-com.fams.architecture.FamsArchitectureTest.xml",
+      "sha256": "9a62393a21533c0be8036e95a98c01e66b58a1bbeb4299982d5ba1af40e294ef",
+      "bytes": 33194
+    },
+    {
+      "path": "output/d6-21b2a-reports/TEST-com.fams.auth.LossHttpRuntimeCase.xml",
+      "sha256": "e71f0edd7944e21793f07f1ac18ca80df385716f00245fa6c3db07d5eed47327",
+      "bytes": 121422
+    },
+    {
+      "path": "output/d6-21b2a-reports/TEST-com.fams.auth.LossRecoveryUpgradeRuntimeCase.xml",
+      "sha256": "8825f1add251270e95da14f0a021e321876210e9f8bfc4c1c7f0e995490f5d01",
+      "bytes": 35459
+    },
+    {
+      "path": "output/d6-21b2a-reports/TEST-com.fams.auth.LossUpgradeRuntimeCase.xml",
+      "sha256": "d7367e997355c8a12e649f3489f89f99b55d193de92bf422228420a324e43cb6",
+      "bytes": 45775
+    },
+    {
+      "path": "output/d6-21b2a-reports/TEST-com.fams.auth.LossConfirmationUpgradeRuntimeCase.xml",
+      "sha256": "b82675f2ea161021dd7c8589931c7acdd632923a1010723b4d3e5c5cfd3d669d",
+      "bytes": 35489
+    }
+  ],
+  "rawXmlNote": "Complete final gate XML is retained; skipped totals, if any, remain separate from required suite zero-skip results.",
+  "documentationDigests": [
+    {
+      "path": "DESIGN-HANDOFF.md",
+      "sha256": "d15686cb7a65d915d4abb53f8ed02bc6605de36cfb9a6cf91188229bf03189f0"
+    },
+    {
+      "path": "docs/development/2026-10-30-d6-21b2a-review-handoff.md",
+      "sha256": "35bfc84fcdc8d12319431daa9af7818d2f856ef0f86857131bb67891c0e4238d"
+    },
+    {
+      "path": "docs/development/D6-21-task-card.md",
+      "sha256": "8c9c1a914ee057ff0519003574b7c926580d333267557643a395e97610429fd3"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md",
+      "sha256": "d8454a91e21cdd5bedd1e913894987d4b7ca630ee2b34dd6d9aff2e36c3f941d"
+    }
+  ]
+}

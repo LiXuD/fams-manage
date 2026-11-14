@@ -1,0 +1,166 @@
+{
+  "candidate": "326aec9ef8d6b9e6fd8c0a2bcd8f3c517d9ba27d",
+  "productGate": {
+    "command": "python3 scripts/verify-product-development.py",
+    "exit": 0,
+    "logSha256": "9ec2d89203c7ee682be0578ebc1402196833df04fc6cf4365e95d5475faeed8e",
+    "javaBlockingTests": 516,
+    "webTests": 219,
+    "miniTests": 329,
+    "checkstyleFindings": 0,
+    "spotbugsFindings": 0,
+    "lineCoverage": [
+      21278,
+      22879
+    ],
+    "branchCoverage": [
+      7500,
+      9913
+    ],
+    "sameVolumeMysqlRestartPassed": true
+  },
+  "browser": {
+    "candidate": "326aec9ef8d6b9e6fd8c0a2bcd8f3c517d9ba27d",
+    "reportId": "1",
+    "transferId": "1",
+    "events": [
+      {
+        "role": "reporter",
+        "path": "/api/v1/auth/login",
+        "status": 200
+      },
+      {
+        "role": "administrator",
+        "path": "/api/v1/auth/login",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/auth/login",
+        "status": 200
+      },
+      {
+        "role": "receiver",
+        "path": "/api/v1/auth/login",
+        "status": 200
+      },
+      {
+        "role": "reporter",
+        "path": "/api/v1/loss-reports",
+        "status": 200
+      },
+      {
+        "role": "reporter",
+        "path": "/api/v1/loss-reports/1/photos",
+        "status": 200
+      },
+      {
+        "role": "administrator",
+        "path": "/api/v1/loss-reports/1/decision",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/loss-reports/1/claim",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/loss-reports/1/search",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/loss-reports/1/confirm-lost",
+        "status": 200
+      },
+      {
+        "role": "reporter",
+        "path": "/api/v1/loss-reports/1/transfer-recovery-requests",
+        "status": 200
+      },
+      {
+        "role": "administrator",
+        "path": "/api/v1/loss-reports/recoveries/1/decision",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/loss-reports/recoveries/1/claim",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/loss-reports/recoveries/1/execute-to-transfer",
+        "status": 200
+      },
+      {
+        "role": "administrator",
+        "path": "/api/v1/transfers/1/decision",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/transfers/1/submit",
+        "status": 200
+      },
+      {
+        "role": "administrator",
+        "path": "/api/v1/transfers/1/decision",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/transfers/1/claim",
+        "status": 200
+      },
+      {
+        "role": "warehouse",
+        "path": "/api/v1/transfers/1/items/1/deliver",
+        "status": 200
+      },
+      {
+        "role": "receiver",
+        "path": "/api/v1/transfers/receipts/1/grant",
+        "status": 200
+      },
+      {
+        "role": "receiver",
+        "path": "/api/v1/transfers/receipts/1/receive",
+        "status": 200
+      }
+    ]
+  },
+  "jvmRecovery": {
+    "candidate": "326aec9ef8d6b9e6fd8c0a2bcd8f3c517d9ba27d",
+    "artifactSha256": "80c7d58853008f32a044ae09820f27b2ff5bdafcd0e180aec40c63de19ce8ee1",
+    "actualPC": true,
+    "historicConfirmationUnchanged": true,
+    "newRecoveryCompleted": true,
+    "committingJvm": 52986,
+    "originalReceiptReplayed": true,
+    "businessRowsUnchanged": true,
+    "sameLockId": "2",
+    "lockVersionBefore": "0",
+    "lockVersionAfter": "1",
+    "transferId": "1",
+    "transferStatus": "PENDING_APPROVAL",
+    "originalDatesAndCustodyUnchanged": true,
+    "scanner": "ClamAV 1.4.6/28129/Sun Sep 20 06:26:26 2026"
+  },
+  "finalPersistence": {
+    "candidate": "326aec9ef8d6b9e6fd8c0a2bcd8f3c517d9ba27d",
+    "transferCompleted": true,
+    "actualRecipientId": "983004",
+    "finalLocationId": "983099",
+    "activeLocks": 0
+  },
+  "cleanup": {
+    "ownedAppStopped": true,
+    "ownedViteStopped": true,
+    "ownedMysqlRemoved": true,
+    "ownedClamdRemoved": true,
+    "ownedOriginalRootRemoved": true
+  },
+  "scope": "PC packaged separately from the same clean candidate because the gate removed its executable artifact; binary equivalence not established. Historical D6-02C audit separately failed on pre-existing inventory download grant classification."
+}

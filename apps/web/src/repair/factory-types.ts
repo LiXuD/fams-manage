@@ -10,7 +10,7 @@ export interface FactoryScope {
 export interface FactoryRound {
     quotes?: FactoryMoneyFact[]; costFact?: FactoryMoneyFact | null; dispatchScopeId?: string | null;
   id: string; repairId: string; assetId: string; scopeId: string; roundNumber: number;
-  roundStatus: "PENDING_DISPATCH" | "DISPATCHED" | "RECEIVED" | "CANCELLED";
+  roundStatus: "PENDING_DISPATCH" | "DISPATCHED" | "RECEIVED" | "CANCELLED" | "INITIAL_RETIRED";
   providerName: string; serviceContact: string; servicePhone: string; expectedReturnDate: string;
   fault: string; createdBy: string; createdAt: string; dispatchedAt: string | null;
   dispatchedBy: string | null; dispatchEvidence: string | null; receivedAt: string | null;
@@ -40,7 +40,7 @@ export interface FactoryFile {
 }
 export interface FactoryRoundDetail extends FactoryRound {
     actions?: Record<string, boolean>;
-  evidence: { object_id: string; purpose: "FAULT" | "FACTORY_ACK" | "RECEIPT" | "QUOTE" | "COST_RECEIPT" | "PARTS_CHANGE"; content_sha256: string; uploader_account_id: number; recorded_at: string }[];
+  evidence: { object_id: string; purpose: "FAULT" | "FACTORY_ACK" | "RECEIPT" | "QUOTE" | "COST_RECEIPT" | "PARTS_CHANGE" | "REPLACEMENT"; content_sha256: string; uploader_account_id: number; recorded_at: string }[];
   files: FactoryFile[];
 }
 export interface FactoryHistory {

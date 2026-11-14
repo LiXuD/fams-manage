@@ -1,0 +1,39 @@
+{
+  "scope": "D6-21A1 independent loss through SEARCHING backend and PC worktree",
+  "java": [
+    {
+      "suite": "com.fams.architecture.FamsArchitectureTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "com.fams.auth.LossHttpRuntimeCase",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "com.fams.auth.LossUpgradeRuntimeCase",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "webFocusedTests": 5,
+  "typecheck": true,
+  "webBuild": true,
+  "checkstyle": 0,
+  "spotbugs": 0,
+  "scanner": "explicit clean scanner fixture in HTTP suite; actual ClamAV pending",
+  "ownedMysqlCleanup": true,
+  "fixedGate": "PENDING",
+  "actualPC": "PENDING",
+  "nativePage": "NOT_STARTED",
+  "independentReview": "PENDING",
+  "confirmedLossRecoveryAndConversions": "NOT_STARTED",
+  "preservedFailure": "output/d6-21a-spotbugs.log contains 7 constructor DI findings; exact seven field/constructor exclusions applied and package/static rerun clean"
+}

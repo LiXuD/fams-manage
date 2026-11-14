@@ -75,6 +75,286 @@ class RepairFactoryHttpRuntimeCase {
     int port;
 
     @Test
+    void rejectedFactoryLossRestoresOriginalDispatchedRepairLock() throws Exception {
+        String repair = approved();
+        String round = create(repair, fixture.warehouse);
+        dispatch(repair, round, fixture.warehouse);
+        var before = privateDetail(fixture.warehouse, repair);
+        var dispatched = privateRound(fixture.warehouse, repair, round);
+        long originalLock = db.queryForObject("SELECT id FROM fams_asset_business_lock"
+                + " WHERE asset_id=951020 AND released_at IS NULL", Long.class);
+        long originalVersion = before.path("lockVersion").asLong();
+        var input = guards(before);
+        input.put("roundVersion", dispatched.path("version").asLong());
+        input.put("lastSeenAt", now());
+        input.put("lastLocation", "Manufacturer dispatch location");
+        input.put("circumstances", "Manufacturer reports the dispatched original cannot be recovered");
+        String path = "/factory/" + repair + "/rounds/" + round;
+        long version = before.path("version").asLong();
+        String key = key();
+        assertEquals(403, factoryLossPost(fixture.otherWarehouse, path, version, key, input).statusCode());
+        try {
+            var reported = ok(factoryLossPost(fixture.warehouse, path, version, key, input));
+            assertEquals(reported, ok(factoryLossPost(fixture.warehouse, path, version, key, input)));
+            assertEquals("PENDING_ADMIN_DECISION", reported.path("status").asText());
+            assertEquals(originalLock, db.queryForObject("SELECT id FROM fams_asset_business_lock"
+                    + " WHERE asset_id=951020 AND business_type='LOST_REPORT' AND released_at IS NULL", Long.class));
+            assertEquals(1, activeLocks());
+            var rejected = ok(factoryLossPost(fixture.admin, "/" + reported.path("id").asText() + "/decision",
+                    reported.path("version").asLong(), key(), JSON.createObjectNode()
+                            .put("result", "REJECT").put("reason", "Continue recovery through original repair")));
+            assertEquals("REJECTED", rejected.path("status").asText());
+            assertEquals(originalVersion + 2, db.queryForObject("SELECT lock_version"
+                    + " FROM fams_asset_business_lock WHERE id=? AND business_type='REPAIR' AND released_at IS NULL",
+                    Long.class, originalLock));
+            assertEquals(dispatched, privateRound(fixture.warehouse, repair, round));
+            assertEquals("FACTORY_REPAIR", lifecycle());
+        } finally {
+            String reports = " IN (SELECT id FROM fams_loss_report WHERE asset_id=951020)";
+            db.update("DELETE FROM fams_todo WHERE business_type='LOST_REPORT' AND business_id" + reports);
+            db.update("DELETE FROM fams_loss_receipt WHERE report_id" + reports);
+            db.update("DELETE FROM fams_loss_event WHERE report_id" + reports);
+            db.update("DELETE FROM fams_loss_report WHERE asset_id=951020");
+        }
+    }
+
+    @Test
+    void searchingFactoryLossResumesOriginalRepair() throws Exception {
+        recoverDispatchedFactoryLoss(false);
+    }
+
+    @Test
+    void closedFactoryLossRequiresNewApprovalBeforeOriginalRepairResumes() throws Exception {
+        recoverDispatchedFactoryLoss(true);
+    }
+
+    private void recoverDispatchedFactoryLoss(boolean closed) throws Exception {
+        String repair = approved();
+        String round = create(repair, fixture.warehouse);
+        dispatch(repair, round, fixture.warehouse);
+        var before = privateDetail(fixture.warehouse, repair);
+        var dispatched = privateRound(fixture.warehouse, repair, round);
+        var input = guards(before);
+        input.put("roundVersion", dispatched.path("version").asLong());
+        input.put("lastSeenAt", now());
+        input.put("lastLocation", "Manufacturer dispatch location");
+        String note = "Manufacturer and original physical custody evidence checked";
+        input.put("circumstances", note);
+        String submit = "/factory/" + repair + "/rounds/" + round;
+        var report = ok(factoryLossPost(fixture.warehouse, submit, before.path("version").asLong(), key(), input));
+        String reportId = report.path("id").asText();
+        String base = "/" + reportId;
+        try {
+            var decision = JSON.createObjectNode().put("result", "APPROVE").put("reason", note);
+            assertEquals(409, factoryLossPost(fixture.admin, base + "/decision",
+                    report.path("version").asLong(), key(), decision).statusCode());
+            report = uploadFactoryLossPhoto(reportId, report.path("version").asLong());
+            report = ok(factoryLossPost(fixture.admin, base + "/decision", report.path("version").asLong(), key(), decision));
+            assertEquals(403, factoryLossPost(fixture.otherWarehouse, base + "/claim",
+                    report.path("version").asLong(), key(), null).statusCode());
+            ok(factoryLossPost(fixture.warehouse, base + "/claim", report.path("version").asLong(), key(), null));
+            report = factoryLossDetail(reportId);
+            var search = guards(report).put("custodianVerification", note).put("searchedScope", note)
+                    .put("searchedAt", now()).put("nextReviewDate",
+                            LocalDate.now(ZoneId.of("Asia/Shanghai")).plusDays(7).toString());
+            ok(factoryLossPost(fixture.warehouse, base + "/search", report.path("version").asLong(), key(), search));
+            report = factoryLossDetail(reportId);
+            assertEquals("SEARCHING", report.path("status").asText());
+            assertEquals("FACTORY_REPAIR", lifecycle());
+            String execute = base + "/recover-to-factory";
+            long version = report.path("version").asLong();
+            long ownership = report.path("ownershipVersion").asLong();
+            if (closed) {
+                var confirmation = guards(report).put("custodianVerification", note).put("searchedScope", note)
+                        .put("searchedAt", now()).put("relatedClues", note).put("inabilityReason", note)
+                        .put("responsibilityEvidence", note).put("confirmedAt", now());
+                report = ok(factoryLossPost(fixture.warehouse, base + "/confirm-lost", version, key(), confirmation));
+                assertEquals("CONFIRMED_LOST", report.path("status").asText());
+                assertEquals(0, activeLocks());
+                var requestBody = JSON.createObjectNode().put("assetVersion", report.path("assetVersion").asLong());
+                requestBody.set("facts", factoryFoundFacts(note));
+                var attempt = ok(factoryLossPost(fixture.warehouse, base + "/factory-recovery-requests",
+                        report.path("version").asLong(), key(), requestBody));
+                String attemptPath = "/recoveries/" + attempt.path("recoveryId").asText();
+                assertEquals(409, factoryLossPost(fixture.warehouse, attemptPath + "/claim",
+                        attempt.path("recoveryVersion").asLong(), key(), null).statusCode());
+                attempt = ok(factoryLossPost(fixture.admin, attemptPath + "/decision",
+                        attempt.path("recoveryVersion").asLong(), key(), decision));
+                assertEquals(403, factoryLossPost(fixture.otherWarehouse, attemptPath + "/claim",
+                        attempt.path("recoveryVersion").asLong(), key(), null).statusCode());
+                attempt = ok(factoryLossPost(fixture.warehouse, attemptPath + "/claim",
+                        attempt.path("recoveryVersion").asLong(), key(), null));
+                version = attempt.path("recoveryVersion").asLong();
+                execute = attemptPath + "/execute-to-factory";
+                report = factoryLossDetail(reportId);
+                ownership = report.path("recoveries").get(0).path("ownershipVersion").asLong();
+            }
+            long activeLock = db.queryForObject("SELECT id FROM fams_asset_business_lock"
+                    + " WHERE asset_id=951020 AND business_type='LOST_REPORT' AND released_at IS NULL", Long.class);
+            var recovery = guards(report).put("ownershipVersion", ownership);
+            recovery.set("facts", factoryFoundFacts(note));
+            String operationKey = key();
+            var recovered = ok(factoryLossPost(fixture.warehouse, execute, version, operationKey, recovery));
+            assertEquals(recovered, ok(factoryLossPost(fixture.warehouse, execute, version, operationKey, recovery)));
+            assertEquals(repair, recovered.path("repairId").asText());
+            assertEquals(closed ? "CONFIRMED_LOST" : "RECOVERED", recovered.path("status").asText());
+            assertEquals(activeLock, db.queryForObject("SELECT id FROM fams_asset_business_lock"
+                    + " WHERE asset_id=951020 AND business_type='REPAIR' AND released_at IS NULL", Long.class));
+            assertEquals(dispatched, privateRound(fixture.warehouse, repair, round));
+            assertEquals("FACTORY_REPAIR", lifecycle());
+            receive(repair, round, fixture.warehouse, "STILL_FAULTY");
+            assertEquals("UNDER_REPAIR", lifecycle());
+        } finally {
+            String owned = " IN (SELECT id FROM fams_loss_report WHERE asset_id=951020)";
+            for (String table : List.of("fams_todo", "fams_attachment", "fams_attachment_scope")) {
+                db.update("DELETE FROM " + table + " WHERE business_type='LOST_REPORT' AND business_id" + owned);
+            }
+            for (String table : List.of("fams_loss_receipt", "fams_loss_event", "fams_loss_recovery")) {
+                db.update("DELETE FROM " + table + " WHERE report_id" + owned);
+            }
+            db.update("DELETE FROM fams_loss_report WHERE asset_id=951020");
+        }
+    }
+
+    @Test
+    void confirmedFactoryLossScrapPreservesBorrowingUntilOriginalProcessorWritesItOff() throws Exception {
+        fixture.borrowing(false);
+        db.update("UPDATE fams_loan SET parameter_snapshot_json=? WHERE asset_id=951020",
+                JSON.writeValueAsString(Map.of("timezone", "Asia/Shanghai")));
+        String repair = approved(), round = create(repair, fixture.warehouse);
+        dispatch(repair, round, fixture.warehouse);
+        var detail = privateDetail(fixture.warehouse, repair);
+        String note = "Manufacturer confirmed the dispatched original cannot be recovered";
+        var submission = guards(detail).put("roundVersion", privateRound(fixture.warehouse, repair, round).path("version").asLong())
+                .put("lastSeenAt", now()).put("lastLocation", "Manufacturer dispatch location").put("circumstances", note);
+        var report = ok(factoryLossPost(fixture.warehouse, "/factory/" + repair + "/rounds/" + round,
+                detail.path("version").asLong(), key(), submission));
+        String reportId = report.path("id").asText(), path = "/" + reportId;
+        try {
+            report = uploadFactoryLossPhoto(reportId, report.path("version").asLong());
+            report = ok(factoryLossPost(fixture.admin, path + "/decision", report.path("version").asLong(), key(),
+                    JSON.createObjectNode().put("result", "APPROVE").put("reason", note)));
+            ok(factoryLossPost(fixture.warehouse, path + "/claim", report.path("version").asLong(), key(), null));
+            report = factoryLossDetail(reportId);
+            ok(factoryLossPost(fixture.warehouse, path + "/search", report.path("version").asLong(), key(),
+                    guards(report).put("custodianVerification", note).put("searchedScope", note).put("searchedAt", now())
+                            .put("nextReviewDate", LocalDate.now(ZoneId.of("Asia/Shanghai")).plusDays(7).toString())));
+            report = factoryLossDetail(reportId);
+            assertFalse(report.path("actions").path("requestScrap").asBoolean());
+            var confirmation = guards(report).put("custodianVerification", note).put("searchedScope", note)
+                    .put("searchedAt", now()).put("relatedClues", note).put("inabilityReason", note)
+                    .put("responsibilityEvidence", note).put("confirmedAt", now());
+            ok(factoryLossPost(fixture.warehouse, path + "/confirm-lost", report.path("version").asLong(), key(), confirmation));
+            report = factoryLossDetail(reportId);
+            assertTrue(report.path("actions").path("requestScrap").asBoolean());
+            assertEquals(0, activeLocks());
+            String from = "/from-loss/" + reportId;
+            var input = JSON.createObjectNode().put("assetVersion", report.path("assetVersion").asLong())
+                    .put("reason", note).put("observedCondition", "Confirmed missing original")
+                    .put("proposedDisposition", "LOSS_WRITTEN_OFF");
+            long version = report.path("version").asLong();
+            assertEquals(403, factoryScrapPost(fixture.otherWarehouse, from, version, key(), input).statusCode());
+            String submitKey = key();
+            var pending = ok(factoryScrapPost(fixture.admin, from, version, submitKey, input));
+            assertEquals(pending, ok(factoryScrapPost(fixture.admin, from, version, submitKey, input)));
+            assertFalse(factoryLossDetail(reportId).path("actions").path("requestFactoryRecovery").asBoolean());
+            assertEquals(1, activeLocks());
+            var decision = JSON.createObjectNode().put("assetVersion", pending.path("assetVersion").asLong())
+                    .put("lockVersion", 0).put("result", "REJECT").put("reason", note);
+            var rejected = ok(factoryScrapPost(fixture.admin, "/" + pending.path("id").asText() + "/decision", 0, key(), decision));
+            assertEquals("REJECTED", rejected.path("status").asText());
+            assertEquals("FACTORY_REPAIR", lifecycle());
+            assertEquals(0, activeLocks());
+            report = factoryLossDetail(reportId);
+            assertTrue(report.path("actions").path("requestFactoryRecovery").asBoolean());
+            assertEquals("CONFIRMED_LOST", report.path("status").asText());
+            assertEquals("OPEN", db.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=951020", String.class));
+            input.put("assetVersion", report.path("recoveryAsset").path("version").asLong());
+            pending = ok(factoryScrapPost(fixture.warehouse, from, version, key(), input));
+            String scrap = "/" + pending.path("id").asText();
+            decision.put("assetVersion", pending.path("assetVersion").asLong()).put("result", "APPROVE")
+                    .put("approvedDisposition", "LOSS_WRITTEN_OFF");
+            var approval = ok(factoryScrapPost(fixture.admin, scrap + "/decision", 0, key(), decision));
+            assertEquals("PROCESSING", approval.path("status").asText());
+            assertEquals("951003", approval.path("processorAccountId").asText());
+            var execute = JSON.createObjectNode().put("assetVersion", approval.path("assetVersion").asLong())
+                    .put("lockVersion", 0).put("ownershipVersion", approval.path("ownershipVersion").asLong()).put("evidence", note);
+            assertEquals(403, factoryScrapPost(fixture.otherWarehouse, scrap + "/execute-loss", 1, key(), execute).statusCode());
+            String executeKey = key();
+            db.execute("CREATE TRIGGER owned_factory_audit_failure BEFORE INSERT ON fams_audit_event FOR EACH ROW"
+                    + " BEGIN IF NEW.action='SCRAP_LOSS_WRITTEN_OFF' THEN SIGNAL SQLSTATE '45000'"
+                    + " SET MESSAGE_TEXT='Owned factory scrap late audit failure'; END IF; END");
+            assertEquals(500, factoryScrapPost(fixture.warehouse, scrap + "/execute-loss", 1, executeKey, execute).statusCode());
+            assertEquals("PENDING_SCRAP", lifecycle());
+            assertEquals("OPEN", db.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=951020", String.class));
+            assertEquals("WAREHOUSE_PROCESSING", db.queryForObject("SELECT repair_status FROM fams_repair_request WHERE id=?",
+                    String.class, repair));
+            assertEquals(1, activeLocks());
+            db.execute("DROP TRIGGER owned_factory_audit_failure");
+            var result = ok(factoryScrapPost(fixture.warehouse, scrap + "/execute-loss", 1, executeKey, execute));
+            assertEquals(result, ok(factoryScrapPost(fixture.warehouse, scrap + "/execute-loss", 1, executeKey, execute)));
+            assertEquals("SCRAPPED", lifecycle());
+            assertFalse(factoryLossDetail(reportId).path("actions").path("requestFactoryRecovery").asBoolean());
+            assertEquals("LOST_TERMINATED", db.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=951020", String.class));
+            assertEquals("COMPLETED", db.queryForObject("SELECT repair_status FROM fams_repair_request WHERE id=?", String.class, repair));
+            assertEquals("LOSS_WRITTEN_OFF", db.queryForObject("SELECT disposition_status FROM fams_scrap_disposition WHERE request_id=?",
+                    String.class, result.path("id").asText()));
+            assertEquals(0, count("SELECT COUNT(*) FROM fams_repair_factory_round WHERE received_at IS NOT NULL"));
+            assertEquals(0, activeLocks());
+        } finally {
+            String loans = " IN (SELECT id FROM fams_loan WHERE asset_id=951020)";
+            db.update("DELETE FROM fams_todo WHERE business_type='LOAN' AND business_id" + loans);
+            db.update("DELETE FROM fams_loan_reminder WHERE loan_id" + loans);
+            String owned = " IN (SELECT id FROM fams_loss_report WHERE asset_id=951020)";
+            for (String table : List.of("fams_todo", "fams_attachment", "fams_attachment_scope")) {
+                db.update("DELETE FROM " + table + " WHERE business_type='LOST_REPORT' AND business_id" + owned);
+            }
+            for (String table : List.of("fams_loss_receipt", "fams_loss_event", "fams_loss_recovery")) {
+                db.update("DELETE FROM " + table + " WHERE report_id" + owned);
+            }
+            db.update("DELETE FROM fams_loss_report WHERE asset_id=951020");
+        }
+    }
+
+    private ObjectNode factoryFoundFacts(String note) {
+        return JSON.createObjectNode().put("foundAt", now()).put("observedAssetCode", "REP-ASSET-951020")
+                .put("observedSerialNumber", "ORIGINAL-FACTORY-951020").put("locationId", "951000")
+                .put("locationVersion", 0).put("physicalIdentityVerified", true).put("condition", "DAMAGED")
+                .put("stillOriginalCustodian", false).put("evidence", note);
+    }
+
+    private JsonNode factoryLossDetail(String id) throws Exception {
+        var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/loss-reports/" + id))
+                .header("Cookie", fixture.warehouse.cookie()).GET();
+        return ok(http.send(request.build(), HttpResponse.BodyHandlers.ofString()));
+    }
+
+    private JsonNode uploadFactoryLossPhoto(String id, long version) throws Exception {
+        String boundary = "factory-loss-" + key();
+        var data = new java.io.ByteArrayOutputStream();
+        data.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"original.png\""
+                + "\r\nContent-Type: image/png\r\n\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        data.write(PNG);
+        data.write(("\r\n--" + boundary + "--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/loss-reports/" + id + "/photos"))
+                .header("Cookie", fixture.warehouse.cookie()).header("X-CSRF-Token", fixture.warehouse.csrf())
+                .header("If-Match-Version", Long.toString(version)).header("Idempotency-Key", key())
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(data.toByteArray()));
+        return ok(http.send(request.build(), HttpResponse.BodyHandlers.ofString()));
+    }
+
+    private HttpResponse<String> factoryLossPost(Session who, String path, long version,
+            String key, ObjectNode body) throws Exception {
+        var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/loss-reports" + path))
+                .header("Cookie", who.cookie()).header("X-CSRF-Token", who.csrf())
+                .header("If-Match-Version", Long.toString(version)).header("Idempotency-Key", key)
+                .header("Content-Type", "application/json")
+                .POST(body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body.toString()));
+        return http.send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    @Test
     void actualNativeFactoryPagesRoundTripOwnedOriginalsAndCloseOnlyAfterInbound()
             throws Exception {
         runNativeScenario(false);
@@ -406,6 +686,10 @@ class RepairFactoryHttpRuntimeCase {
         fixture.miniSessions = miniSessions;
         fixture.port = port;
         fixture.seed();
+        db.update("UPDATE fams_business_parameter_version SET snapshot_json=? WHERE id=951000",
+                "{\"timezone\":\"Asia/Shanghai\",\"workWeek\":[\"MONDAY\",\"TUESDAY\",\"WEDNESDAY\",\"THURSDAY\",\"FRIDAY\"],"
+                        + "\"holidays\":[],\"adjustedWorkdays\":[],\"adminDecisionDeadlineWorkdays\":2,"
+                        + "\"warehouseClaimDeadlineWorkdays\":1,\"warehouseFirstExecutionDeadlineWorkdays\":2}");
         db.update(
                 "UPDATE fams_asset SET serial_number='ORIGINAL-FACTORY-951020',"
                         + "serial_number_normalized='ORIGINAL-FACTORY-951020' WHERE id=951020");
@@ -415,6 +699,7 @@ class RepairFactoryHttpRuntimeCase {
     void cleanup() throws Exception {
         SCAN.set(MalwareScanner.Result.CLEAN);
         db.execute("DROP TRIGGER IF EXISTS owned_factory_audit_failure");
+        cleanupReplacementFacts();
         String owned =
                 " IN (SELECT id FROM fams_repair_request WHERE asset_id BETWEEN 951020 AND 951023)";
         db.update("DELETE FROM fams_repair_factory_parts_change WHERE repair_id" + owned);
@@ -448,6 +733,393 @@ class RepairFactoryHttpRuntimeCase {
             db.update("DELETE FROM " + table + " WHERE repair_id" + owned);
         }
         fixture.cleanup();
+    }
+
+    private void cleanupReplacementFacts() {
+        var origins = db.queryForList("SELECT asset_id FROM fams_asset_factory_replacement_origin"
+                + " WHERE original_asset_id BETWEEN 951020 AND 951023");
+        db.update("DELETE FROM fams_repair_factory_replacement WHERE original_asset_id BETWEEN 951020 AND 951023");
+        for (var origin : origins) {
+            long asset = ((Number) origin.get("asset_id")).longValue();
+            for (var row : db.queryForList("SELECT receipt_id FROM fams_inbound_factory_replacement_origin"
+                    + " WHERE asset_id=?", asset)) {
+                long receipt = ((Number) row.get("receipt_id")).longValue();
+                db.update("DELETE FROM fams_todo WHERE business_type='INBOUND' AND business_id=?", receipt);
+                db.update("DELETE FROM fams_inbound_acceptance WHERE asset_id=?", asset);
+                db.update("DELETE FROM fams_inbound_approval_scope_item WHERE decision_id IN"
+                        + " (SELECT id FROM fams_inbound_decision WHERE receipt_id=?)", receipt);
+                for (String table : List.of("fams_inbound_decision", "fams_inbound_processing_ownership",
+                        "fams_inbound_receipt_item", "fams_inbound_factory_replacement_origin")) {
+                    db.update("DELETE FROM " + table + " WHERE receipt_id=?", receipt);
+                }
+                db.update("DELETE FROM fams_inbound_receipt WHERE id=?", receipt);
+            }
+            db.update("DELETE FROM fams_asset_factory_replacement_origin WHERE asset_id=?", asset);
+            for (String table : List.of("fams_asset_tag_history", "fams_asset_tag",
+                    "fams_asset_timeline_event", "fams_asset_business_lock")) {
+                db.update("DELETE FROM " + table + " WHERE asset_id=?", asset);
+            }
+            db.update("DELETE FROM fams_asset WHERE id=?", asset);
+        }
+        db.update("DELETE FROM fams_idempotency_record WHERE actor_account_id BETWEEN 951001 AND 951010");
+        db.update("DELETE FROM fams_numbering_rule WHERE code_normalized IN ('OWNEDFACTORYASSET','OWNEDFACTORYINBOUND')");
+    }
+
+    @Test
+    void replacementCreatesIndependentCardAndRealInboundWithoutClosingOriginalResponsibility() throws Exception {
+        String id = approved(), round = create(id, fixture.warehouse);
+        dispatch(id, round, fixture.warehouse);
+        String object = upload(id, round, fixture.warehouse, "REPLACEMENT");
+        var input = replacementInput(id, round, object);
+        String references = path(id, "/rounds/" + round + "/replacement-references/category?page=1&pageSize=20");
+        assertEquals(200, get(fixture.warehouse, references).statusCode());
+        assertEquals(404, get(fixture.admin, references).statusCode());
+        assertEquals(403, get(fixture.employee, references).statusCode());
+        assertEquals(403, get(fixture.otherWarehouse, references).statusCode());
+        long version = privateDetail(fixture.warehouse, id).path("version").asLong();
+        String operation = path(id, "/rounds/" + round + "/replacements"), requestKey = key();
+        var old = JSON.valueToTree(db.queryForMap("SELECT * FROM fams_asset WHERE id=951020"));
+        var result = ok(post(fixture.warehouse, operation, version, requestKey, input));
+        String asset = result.path("replacementAssetId").asText();
+        String receipt = result.path("inboundReceiptId").asText();
+        assertFalse("951020".equals(asset));
+        var card = ownerOk(ownerCall(fixture.warehouse, "GET", "/assets/" + asset, null, 0));
+        assertEquals("DRAFT", card.path("cardStage").asText());
+        assertEquals("FACTORY_REPLACEMENT", card.path("source").asText());
+        assertEquals(input.path("newAsset").path("serialNumber"), card.path("serialNumber"));
+        assertFalse("REP-ASSET-951020".equals(card.path("assetCode").asText()));
+        assertEquals(result, ok(post(fixture.warehouse, operation, version, requestKey, input)));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_repair_factory_replacement"));
+        assertEquals(403, post(fixture.employee, operation, version, key(), input).statusCode());
+        assertEquals(403, get(fixture.employee, operation).statusCode());
+        assertEquals(403, post(fixture.otherWarehouse, operation, version, key(), input).statusCode());
+        var hidden = ok(get(fixture.admin, operation)).path("items").get(0);
+        assertTrue(hidden.path("replacementAssetId").isNull());
+        assertTrue(hidden.path("inbound").isNull());
+        var privateHistory = ok(get(fixture.admin, path(id, "/history?page=1&pageSize=20")));
+        assertFalse(privateHistory.toString().contains(input.path("newAsset").path("serialNumber").asText()),
+                "Unsubmitted new-card serial escaped through private factory history");
+        assertFalse(privateHistory.toString().contains("Independent replacement unit"));
+        assertEquals(404, ownerCall(fixture.admin, "GET", "/assets/" + asset, null, 0).statusCode());
+        assertEquals(404, ownerCall(fixture.admin, "GET", "/assets/" + asset + "/factory-replacements", null, 0).statusCode());
+        assertEquals(0, ownerOk(ownerCall(fixture.admin, "GET", "/assets/951020/factory-replacements", null, 0)).path("items").size());
+        var correction = JSON.createObjectNode().put("source", "ordinary purchase");
+        assertEquals(409, ownerCall(fixture.warehouse, "PATCH", "/assets/" + asset, correction, 0).statusCode());
+        correction = JSON.createObjectNode().put("serialNumber", "OTHER-SERIAL");
+        assertEquals(409, ownerCall(fixture.warehouse, "PATCH", "/assets/" + asset, correction, 0).statusCode());
+        var draft = ownerOk(ownerCall(fixture.warehouse, "GET", "/inbound-receipts/" + receipt, null, 0));
+        assertEquals(result.path("sourceId"), draft.path("factoryReplacement").path("sourceId"));
+        String inbound = "/inbound-receipts/" + receipt;
+        var submitted = ownerOk(ownerCall(fixture.warehouse, "POST", inbound + "/submit", null, 0));
+        assertEquals("PENDING_ADMIN_DECISION", submitted.path("status").asText());
+        var approved = ownerOk(ownerCall(fixture.admin, "POST", inbound + "/decision",
+                JSON.createObjectNode().put("decision", "APPROVED"), 1));
+        assertEquals("WAITING_WAREHOUSE_CLAIM", approved.path("status").asText());
+        var claimed = ownerOk(ownerCall(fixture.warehouse, "POST", inbound + "/claim", null, 2));
+        String item = claimed.path("items").get(0).path("id").asText();
+        var acceptance = JSON.createObjectNode().put("assetVersion", 1).put("lockVersion", 0)
+                .put("observedAssetCode", card.path("assetCode").asText());
+        var completed = ownerOk(ownerCall(fixture.warehouse, "POST", inbound + "/items/" + item + "/accept", acceptance, 3));
+        assertEquals("COMPLETED", completed.path("receipt").path("status").asText());
+        assertEquals("IN_STOCK", completed.path("asset").path("lifecycle").asText());
+        assertEquals(old, JSON.valueToTree(db.queryForMap("SELECT * FROM fams_asset WHERE id=951020")));
+        assertEquals("FACTORY_REPAIR", lifecycle());
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=951020 AND released_at IS NULL"));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_repair_factory_round WHERE received_at IS NOT NULL"));
+        for (String side : List.of("951020", asset)) {
+            var trace = ownerOk(ownerCall(fixture.warehouse, "GET", "/assets/" + side + "/factory-replacements", null, 0));
+            assertEquals(result.path("sourceId"), trace.path("items").get(0).path("sourceId"));
+            assertFalse(trace.toString().contains("Private named manufacturer"));
+        }
+        assertEquals("COMPLETED", ok(get(fixture.admin, operation)).path("items").get(0).path("inbound").path("status").asText());
+    }
+
+    @Test
+    void replacementRejectsInvalidIdentityEvidenceAndVersionsAndRollsBackLateAudit() throws Exception {
+        String id = approved(), round = create(id, fixture.warehouse);
+        dispatch(id, round, fixture.warehouse);
+        String object = upload(id, round, fixture.warehouse, "REPLACEMENT");
+        var input = replacementInput(id, round, object);
+        long version = privateDetail(fixture.warehouse, id).path("version").asLong();
+        String operation = path(id, "/rounds/" + round + "/replacements");
+        var invalid = input.deepCopy();
+        invalid.put("replacementPhysicalIdentityChecked", false);
+        assertEquals(400, post(fixture.warehouse, operation, version, key(), invalid).statusCode());
+        invalid = input.deepCopy();
+        invalid.withObject("/newAsset").put("serialNumber", "original-factory-951020");
+        assertEquals(409, post(fixture.warehouse, operation, version, key(), invalid).statusCode());
+        invalid = input.deepCopy();
+        invalid.remove("lockVersion");
+        assertEquals(400, post(fixture.warehouse, operation, version, key(), invalid).statusCode());
+        invalid = input.deepCopy();
+        invalid.put("assetVersion", 999);
+        assertEquals(409, post(fixture.warehouse, operation, version, key(), invalid).statusCode());
+        invalid = input.deepCopy();
+        invalid.putArray("evidenceIds").add(UUID.randomUUID().toString());
+        assertEquals(409, post(fixture.warehouse, operation, version, key(), invalid).statusCode());
+        var before = count("SELECT COUNT(*) FROM fams_asset");
+        db.execute("CREATE TRIGGER owned_factory_audit_failure BEFORE INSERT ON fams_audit_event FOR EACH ROW"
+                + " BEGIN IF NEW.action='FACTORY_REPLACEMENT_RECORDED' THEN SIGNAL SQLSTATE '45000'"
+                + " SET MESSAGE_TEXT='Owned replacement late audit failure'; END IF; END");
+        assertTrue(post(fixture.warehouse, operation, version, key(), input).statusCode() >= 500);
+        assertEquals(before, count("SELECT COUNT(*) FROM fams_asset"));
+        for (String table : List.of("fams_asset_factory_replacement_origin", "fams_inbound_factory_replacement_origin",
+                "fams_repair_factory_replacement", "fams_inbound_receipt")) {
+            assertEquals(0, count("SELECT COUNT(*) FROM " + table));
+        }
+        db.execute("DROP TRIGGER owned_factory_audit_failure");
+        ok(post(fixture.warehouse, operation, version, key(), input));
+    }
+
+    @Test
+    void concurrentReplacementHasOneCardAndCancelledDraftReapplicationKeepsOrigin() throws Exception {
+        String id = approved(), round = create(id, fixture.warehouse);
+        dispatch(id, round, fixture.warehouse);
+        String object = upload(id, round, fixture.warehouse, "REPLACEMENT");
+        var input = replacementInput(id, round, object);
+        long version = privateDetail(fixture.warehouse, id).path("version").asLong();
+        String operation = path(id, "/rounds/" + round + "/replacements");
+        try (var threads = Executors.newFixedThreadPool(2)) {
+            var first = threads.submit(() -> post(fixture.warehouse, operation, version, key(), input));
+            var second = threads.submit(() -> post(fixture.warehouse, operation, version, key(), input));
+            var replies = List.of(first.get(), second.get());
+            assertEquals(List.of(200, 409), replies.stream().map(HttpResponse::statusCode).sorted().toList());
+            var created = JSON.readTree(replies.stream().filter(r -> r.statusCode() == 200).findFirst().orElseThrow().body());
+            String asset = created.path("replacementAssetId").asText(), receipt = created.path("inboundReceiptId").asText();
+            ownerOk(ownerCall(fixture.warehouse, "POST", "/inbound-receipts/" + receipt + "/cancel",
+                    JSON.createObjectNode().put("reason", "Corrected draft reapplication"), 0));
+            var next = JSON.createObjectNode().put("businessDate", LocalDate.now().toString());
+            var item = next.putArray("items").addObject();
+            item.putObject("asset").put("id", asset).put("version", 0);
+            item.putObject("targetWarehouse").put("id", "951000").put("version", 0);
+            item.putObject("targetLocation").put("id", "951000").put("version", 0);
+            var renewed = ownerOk(ownerCall(fixture.warehouse, "POST", "/inbound-receipts", next, 0));
+            assertEquals(created.path("sourceId"), renewed.path("factoryReplacement").path("sourceId"));
+            assertEquals(1, count("SELECT COUNT(*) FROM fams_repair_factory_replacement"));
+            assertEquals(2, count("SELECT COUNT(*) FROM fams_inbound_factory_replacement_origin"));
+            assertEquals(renewed.path("id"), ok(get(fixture.warehouse, operation)).path("items").get(0).path("inbound").path("id"));
+        }
+    }
+
+    @Test
+    void destroyedOriginalCannotBeReceivedOrReportedMissing() throws Exception {
+        String id = approved(), round = create(id, fixture.warehouse);
+        dispatch(id, round, fixture.warehouse);
+        String replacement = upload(id, round, fixture.warehouse, "REPLACEMENT");
+        upload(id, round, fixture.warehouse, "RECEIPT");
+        var input = replacementInput(id, round, replacement).put("originalDisposition", "FACTORY_DESTROYED");
+        long version = privateDetail(fixture.warehouse, id).path("version").asLong();
+        ok(post(fixture.warehouse, path(id, "/rounds/" + round + "/replacements"), version, key(), input));
+        var detail = privateDetail(fixture.warehouse, id);
+        assertFalse(detail.path("actions").path("receive").asBoolean());
+        long lock = db.queryForObject("SELECT id FROM fams_asset_business_lock"
+                + " WHERE asset_id=951020 AND released_at IS NULL", Long.class);
+        version = detail.path("version").asLong();
+        var received = post(fixture.warehouse, path(id, "/rounds/" + round + "/receive-original"),
+                version, key(), movement(id, round, fixture.warehouse, true, "RESTORED"));
+        assertEquals(409, received.statusCode());
+        assertTrue(received.body().contains("REPAIR_FACTORY_ORIGINAL_ALREADY_DESTROYED"));
+        var report = guards(detail);
+        report.put("roundVersion", privateRound(fixture.warehouse, id, round).path("version").asLong());
+        report.put("lastSeenAt", now()).put("lastLocation", "Manufacturer site")
+                .put("circumstances", "Attempt to file a missing report after documented destruction");
+        var reported = factoryLossPost(fixture.warehouse, "/factory/" + id + "/rounds/" + round,
+                version, key(), report);
+        assertEquals(409, reported.statusCode());
+        assertTrue(reported.body().contains("REPAIR_FACTORY_ORIGINAL_ALREADY_DESTROYED"));
+        assertEquals(lock, db.queryForObject("SELECT id FROM fams_asset_business_lock WHERE asset_id=951020"
+                + " AND business_type='REPAIR' AND released_at IS NULL", Long.class));
+        assertEquals("DISPATCHED", db.queryForObject("SELECT round_status FROM fams_repair_factory_round WHERE id=?",
+                String.class, round));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_repair_factory_round WHERE received_at IS NOT NULL"));
+    }
+
+    @Test
+    void factoryScrapReturnsOriginalLockOnRejectionAndExecutesFromEvidence() throws Exception {
+        String repair = approved(), round = create(repair, fixture.warehouse);
+        dispatch(repair, round, fixture.warehouse);
+        String evidence = upload(repair, round, fixture.warehouse, "REPLACEMENT");
+        var replacement = replacementInput(repair, round, evidence);
+        var detail = privateDetail(fixture.warehouse, repair);
+        var recorded = ok(post(fixture.warehouse, path(repair, "/rounds/" + round + "/replacements"),
+                detail.path("version").asLong(), key(), replacement));
+        String source = "/from-factory/" + repair + "/rounds/" + round + "/replacements/"
+                + recorded.path("replacementId").asText();
+        long lock = db.queryForObject("SELECT id FROM fams_asset_business_lock WHERE asset_id=951020"
+                + " AND released_at IS NULL", Long.class);
+        detail = privateDetail(fixture.warehouse, repair);
+        long roundVersion = privateRound(fixture.warehouse, repair, round).path("version").asLong();
+        var submission = factoryScrapInput(detail, roundVersion);
+        long repairVersion = detail.path("version").asLong();
+        assertEquals(409, factoryScrapPost(fixture.warehouse, source + "0", repairVersion, key(), submission).statusCode());
+        String submitKey = key();
+        var pending = ok(factoryScrapPost(fixture.warehouse, source, repairVersion, submitKey, submission));
+        assertEquals(pending, ok(factoryScrapPost(fixture.warehouse, source, repairVersion, submitKey, submission)));
+        assertEquals("PENDING_SCRAP", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+        var decision = JSON.createObjectNode().put("assetVersion", pending.path("assetVersion").asLong())
+                .put("lockVersion", detail.path("lockVersion").asLong() + 1)
+                .put("result", "REJECT").put("reason", "Review the original manufacturer proof");
+        var rejected = ok(factoryScrapPost(fixture.admin, "/" + pending.path("id").asText() + "/decision", 0, key(), decision));
+        assertEquals("REJECTED", rejected.path("status").asText());
+        assertEquals(lock, db.queryForObject("SELECT id FROM fams_asset_business_lock WHERE asset_id=951020"
+                + " AND business_type='REPAIR' AND released_at IS NULL", Long.class));
+        assertEquals("FACTORY_REPAIR", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+        detail = privateDetail(fixture.warehouse, repair);
+        pending = ok(factoryScrapPost(fixture.warehouse, source, detail.path("version").asLong(), key(),
+                factoryScrapInput(detail, roundVersion)));
+        String request = "/" + pending.path("id").asText();
+        decision.put("assetVersion", pending.path("assetVersion").asLong())
+                .put("lockVersion", detail.path("lockVersion").asLong() + 1)
+                .put("result", "APPROVE").put("approvedDisposition", "FACTORY_DESTROYED");
+        assertEquals(409, factoryScrapPost(fixture.admin, request + "/decision", 0, key(), decision).statusCode());
+        decision.put("approvedDisposition", "FACTORY_RETAINED");
+        var approved = ok(factoryScrapPost(fixture.admin, request + "/decision", 0, key(), decision));
+        assertEquals("PROCESSING", approved.path("status").asText());
+        var execution = JSON.createObjectNode().put("assetVersion", approved.path("assetVersion").asLong())
+                .put("lockVersion", decision.path("lockVersion").asLong())
+                .put("ownershipVersion", approved.path("ownershipVersion").asLong())
+                .put("occurredAt", "2000-01-01T00:00:00Z");
+        assertEquals(403, factoryScrapPost(fixture.otherWarehouse, request + "/execute-factory", 1, key(), execution).statusCode());
+        assertEquals(400, factoryScrapPost(fixture.warehouse, request + "/execute-factory", 1, key(), execution).statusCode());
+        execution.set("occurredAt", replacement.path("observedAt"));
+        String executeKey = key();
+        var completed = ok(factoryScrapPost(fixture.warehouse, request + "/execute-factory", 1, executeKey, execution));
+        assertEquals(completed, ok(factoryScrapPost(fixture.warehouse, request + "/execute-factory", 1, executeKey, execution)));
+        assertEquals("EXECUTED", completed.path("status").asText());
+        assertEquals("DISPOSED", db.queryForObject("SELECT disposition_status FROM fams_scrap_disposition WHERE request_id=?",
+                String.class, completed.path("id").asText()));
+        assertEquals("SCRAPPED", db.queryForObject("SELECT lifecycle_status FROM fams_asset WHERE id=951020", String.class));
+        assertEquals("COMPLETED", db.queryForObject("SELECT repair_status FROM fams_repair_request WHERE id=?", String.class, repair));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_repair_factory_round WHERE received_at IS NOT NULL"));
+        assertEquals(0, activeLocks());
+    }
+
+    private ObjectNode factoryScrapInput(JsonNode detail, long roundVersion) {
+        var body = JSON.createObjectNode().put("roundVersion", roundVersion);
+        body.set("scrap", guards(detail).put("reason", "Original retained by manufacturer")
+                .put("observedCondition", "Verified manufacturer replacement evidence")
+                .put("proposedDisposition", "FACTORY_RETAINED"));
+        return body;
+    }
+
+    private HttpResponse<String> factoryScrapPost(Session session, String route, long version, String key, JsonNode input)
+            throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/scrap-requests" + route))
+                .header("Cookie", session.cookie()).header("X-CSRF-Token", session.csrf())
+                .header("Idempotency-Key", key).header("If-Match-Version", Long.toString(version))
+                .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(input.toString())).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    private ObjectNode replacementInput(String id, String round, String object) throws Exception {
+        replacementNumbering();
+        var input = guards(privateDetail(fixture.warehouse, id));
+        input.put("roundVersion", privateRound(fixture.warehouse, id, round).path("version").asLong());
+        input.put("originalDisposition", "FACTORY_RETAINED");
+        input.put("replacementPhysicalIdentityChecked", true);
+        input.put("observedAt", now());
+        input.putArray("evidenceIds").add(object);
+        input.put("reason", "Private manufacturer exchange proof, original responsibility still outstanding");
+        var asset = input.putObject("newAsset");
+        asset.put("name", "Independent replacement unit").put("serialNumber", "NEW-" + UUID.randomUUID())
+                .put("model", "Replacement model").put("unit", "台");
+        asset.putObject("category").put("id", "951000").put("version", 0);
+        asset.putObject("organization").put("id", "951000").put("version", 0);
+        input.put("businessDate", LocalDate.now().toString());
+        input.put("warehouseId", "951000").put("warehouseVersion", 0)
+                .put("locationId", "951000").put("locationVersion", 0);
+        return input;
+    }
+
+    private void replacementNumbering() {
+        for (String target : List.of("ASSET", "INBOUND_RECEIPT")) {
+            String code = "ASSET".equals(target) ? "OWNEDFACTORYASSET" : "OWNEDFACTORYINBOUND";
+            db.update("INSERT INTO fams_numbering_rule(id,code,code_normalized,target,mode,fixed_prefix,"
+                            + "date_part,sequence_length,status,version,created_at,updated_at)"
+                            + " SELECT ?,?,?,?,'ENTERPRISE',?,'NONE',8,'ACTIVE',0,NOW(3),NOW(3)"
+                            + " WHERE NOT EXISTS(SELECT id FROM fams_numbering_rule WHERE target=? AND status='ACTIVE')",
+                    "ASSET".equals(target) ? 951080 : 951081, code, code, target,
+                    "ASSET".equals(target) ? "RXA" : "RXI", target);
+        }
+    }
+
+    @Test
+    void actualNativeReplacementPageKeepsOriginalReplayAndRequiresIndependentInbound() throws Exception {
+        String id = approved(), round = create(id, fixture.warehouse);
+        dispatch(id, round, fixture.warehouse);
+        replacementNumbering();
+        var old = JSON.valueToTree(db.queryForMap("SELECT * FROM fams_asset WHERE id=951020"));
+        var grants = new LinkedHashMap<String, Object>();
+        for (var entry : Map.of("employee", 951002L, "admin", 951001L, "warehouse", 951003L).entrySet()) {
+            var identity = new MiniWechatIdentityPort.Identity("owned-replacement-native", entry.getKey());
+            db.update("INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES (?,?,NOW(3))",
+                    entry.getValue(), miniSessions.identityHash(identity));
+            var grant = miniSessions.start(identity, UUID.randomUUID());
+            grants.put(entry.getKey(), Map.of("sessionToken", grant.sessionToken(),
+                    "accountId", entry.getValue().toString(), "bindingId", grant.bindingId()));
+        }
+        var script = java.nio.file.Path.of(System.getProperty("user.dir")).getParent()
+                .resolve("apps/miniprogram/test/runtime-repair-replacement-http.mjs");
+        var builder = new ProcessBuilder("rtk", "proxy", System.getProperty("fams.test.node",
+                System.getenv().getOrDefault("FAMS_TEST_NODE_EXECUTABLE", "node")), script.toString())
+                .redirectErrorStream(true);
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_REPAIR_GRANTS", JSON.writeValueAsString(grants));
+        builder.environment().put("FAMS_TEST_REPLACEMENT_REPAIR", id);
+        builder.environment().put("FAMS_TEST_REPLACEMENT_ROUND", round);
+        var process = builder.start();
+        JsonNode result;
+        try {
+            assertTrue(process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS));
+            String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            assertEquals(0, process.exitValue(), output);
+            assertTrue(output.contains("\"nativeReplacementDraft\":true"), output);
+            assertTrue(output.contains("\"replacementOriginalReplay\":true"), output);
+            result = JSON.readTree(output.lines().filter(line -> line.startsWith("{"))
+                    .reduce((first, second) -> second).orElseThrow());
+            System.out.println(output.strip());
+        } finally {
+            if (process.isAlive()) {
+                process.descendants().forEach(ProcessHandle::destroyForcibly);
+                process.destroyForcibly();
+                assertTrue(process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS));
+            }
+        }
+        String asset = result.path("replacementAssetId").asText();
+        var card = ownerOk(ownerCall(fixture.warehouse, "GET", "/assets/" + asset, null, 0));
+        assertEquals("DRAFT", card.path("cardStage").asText());
+        String inbound = "/inbound-receipts/" + result.path("inboundReceiptId").asText();
+        ownerOk(ownerCall(fixture.warehouse, "POST", inbound + "/submit", null, 0));
+        ownerOk(ownerCall(fixture.admin, "POST", inbound + "/decision", JSON.createObjectNode().put("decision", "APPROVED"), 1));
+        var claimed = ownerOk(ownerCall(fixture.warehouse, "POST", inbound + "/claim", null, 2));
+        String item = claimed.path("items").get(0).path("id").asText();
+        var acceptance = JSON.createObjectNode().put("assetVersion", 1).put("lockVersion", 0)
+                .put("observedAssetCode", card.path("assetCode").asText());
+        var completed = ownerOk(ownerCall(fixture.warehouse, "POST", inbound + "/items/" + item + "/accept", acceptance, 3));
+        assertEquals("COMPLETED", completed.path("receipt").path("status").asText());
+        assertEquals("IN_STOCK", completed.path("asset").path("lifecycle").asText());
+        assertEquals(old, JSON.valueToTree(db.queryForMap("SELECT * FROM fams_asset WHERE id=951020")));
+        assertEquals("FACTORY_REPAIR", lifecycle());
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=951020 AND released_at IS NULL"));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_repair_factory_round WHERE received_at IS NOT NULL"));
+    }
+
+    private HttpResponse<String> ownerCall(Session actor, String method, String path, ObjectNode body, long version) throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1" + path))
+                .header("Cookie", actor.cookie()).header("X-CSRF-Token", actor.csrf())
+                .header("Idempotency-Key", key()).header("If-Match-Version", Long.toString(version))
+                .header("Content-Type", "application/json").method(method, body == null
+                        ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body.toString()))
+                .build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private JsonNode ownerOk(HttpResponse<String> response) {
+        assertTrue(response.statusCode() == 200 || response.statusCode() == 201, response.body());
+        return JSON.readTree(response.body());
+    }
+
+    private int count(String sql) {
+        return Objects.requireNonNull(db.queryForObject(sql, Integer.class));
     }
 
     @Test
@@ -2355,6 +3027,10 @@ class RepairFactoryHttpRuntimeCase {
         ok(post(fixture.warehouse, "/" + id + "/claim", 1, key(), null));
         var row = root(fixture.warehouse, id);
         var away = guards(row);
+        var openLoans = db.queryForList("SELECT version FROM fams_loan WHERE asset_id=951020 AND relation_status='OPEN'", Long.class);
+        if (!openLoans.isEmpty()) {
+            away.put("loanVersion", openLoans.getFirst().longValue());
+        }
         away.put("observedCode", "REP-ASSET-951020");
         away.put("actualLocationId", "951001");
         away.put("locationVersion", 0);

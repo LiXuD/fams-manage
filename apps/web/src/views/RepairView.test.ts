@@ -4,7 +4,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import RepairView from "./RepairView.vue";
 const state=vi.hoisted(()=>({session:{user:{id:"1",roles:["ASSET_ADMIN"]},csrfToken:"csrf"}}));
 vi.mock("@/auth/sessionStore",()=>({useSessionStore:()=>state.session}));
-vi.mock("vue-router",()=>({useRoute:()=>({params:{id:"9"}})}));
+vi.mock("vue-router",()=>({useRoute:()=>({params:{id:"9"}}),
+ RouterLink:{props:["to"],template:'<a :href="to"><slot /></a>'}}));
 const record=()=>({id:"9",source:{id:"9007199254740993",assetCode:"R-001",name:"实际故障实物",locationId:"8",locationName:"原办公室",version:6},fault:"实物无法正常启动",occurredAt:"2026-10-21T00:00:00Z",status:"PENDING_ADMIN_DECISION",version:3,assetVersion:6,ownershipVersion:1,lockVersion:2,actions:{approve:true,cancel:true},photosAvailable:true,photos:[],history:[],historyTotal:0});
 const response=(body:unknown,status=200)=>({ok:status===200,status,json:async()=>structuredClone(body)}) as Response;
 const mountPage=()=>mount(RepairView,{global:{stubs:{AppChrome:{template:"<main><slot /></main>"}}}});
@@ -38,3 +39,54 @@ it("employee repair status shows only public factory progress and never opens pr
 });
 
 it("initial factory approval explicitly confirms and freezes the cumulative fee limit",async()=>{const writes:RequestInit[]=[];const row=record();let lost=true;vi.stubGlobal("fetch",vi.fn(async(url:string,input:RequestInit)=>{if(input.method==="POST"){writes.push(input);if(lost){lost=false;row.version=71;throw new Error("lost paid scope approval");}return response(row);}return response(url.endsWith("/9")?row:{items:[row],total:1});}));const wrapper=mountPage();await flushPromises();await wrapper.find('[aria-label="本次批准处理方式"]').setValue("INTERNAL_OR_FACTORY");await wrapper.find('[aria-label="本次返厂费用约束"]').setValue("LIMITED");await wrapper.find('input[inputmode="decimal"]').setValue("105.01");await wrapper.findAll("textarea")[1]!.setValue("本维修所有返厂轮次累计不超过批准金额");await button(wrapper,"批准内部或必要时返厂").trigger("click");expect(wrapper.find('[aria-label="确认本次报修办理"]').text()).toContain("105.01");await button(wrapper,"确认保存本次办理").trigger("click");await flushPromises();await button(wrapper,"刷新并核对当前结果").trigger("click");await flushPromises();await button(wrapper,"重试原报修操作").trigger("click");await flushPromises();expect(writes[1]).toEqual(writes[0]);expect(JSON.parse(writes[0]!.body as string)).toMatchObject({factoryCostPolicy:"LIMITED",factoryCostLimit:"105.01"});wrapper.unmount();});
+
+it("submits linked scrap with the repair versions and keeps the original repair selected after retry", async () => {
+ const row = { ...record(), status: "WAREHOUSE_PROCESSING", actions: { requestScrap: true } };
+ const writes: { url: string; input: RequestInit }[] = [];
+ let lost = true;
+ vi.stubGlobal("fetch", vi.fn(async (url: string, input: RequestInit) => {
+  if (input.method === "POST") {
+   writes.push({url,input});
+   if (lost) { lost=false;row.version=4;row.actions.requestScrap=false;throw Error("committed reply lost"); }
+   return response({id:"9007199254740999"});
+  }
+  return response(url.endsWith("/9") ? row : {items:[row],total:1});
+ }));
+ const wrapper = mountPage(); await flushPromises();
+ for(const [label,value] of Object.entries({"维修关联报废原因":"原机维修后仍无法恢复","报废实物现状":"已经核实原机故障与保管事实","建议报废处置方式":"实物待处置"})) {
+  await wrapper.findAll("label").find(item=>item.text()===label)!.find("textarea,input").setValue(value);
+ }
+ await button(wrapper,"核对维修关联报废").trigger("click");
+ expect(writes).toHaveLength(0);
+ await button(wrapper,"确认保存本次办理").trigger("click");await flushPromises();
+ await button(wrapper,"刷新并核对当前结果").trigger("click");await flushPromises();
+ await button(wrapper,"重试原报修操作").trigger("click");await flushPromises();
+ expect(writes).toHaveLength(2);expect(writes[0]).toEqual(writes[1]);
+ expect(writes[0]?.url).toBe("/api/v1/scrap-requests/from-repair/9");
+ expect(writes[0]?.input.headers).toMatchObject({"If-Match-Version":"3"});
+ expect(JSON.parse(String(writes[0]?.input.body))).toMatchObject({assetVersion:6,ownershipVersion:1,lockVersion:2});
+ expect(wrapper.get('a[href="/scrap-requests/9007199254740999"]').text()).toBe("查看维修关联报废");
+ wrapper.unmount();
+});
+
+it.each([
+  ["INITIAL_RETIRED", "期初批次已撤销"],
+  ["FUTURE_ROUND_STATE", "FUTURE_ROUND_STATE"],
+])("shows the factory summary for %s", async (roundStatus, label) => {
+  state.session.user.roles = ["EMPLOYEE"];
+  const row = {
+    ...record(),
+    actions: {},
+    factorySummary: {
+      scope: null,
+      round: { id: "42", roundNumber: 2, roundStatus, dispatchedAt: "2026-10-22T01:00:00Z", receivedAt: null },
+      actualDispatchCount: 1,
+      followupOpen: false,
+    },
+  };
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => response(url.endsWith("/9") ? row : { items: [row], total: 1 })));
+  const wrapper = mountPage();
+  await flushPromises();
+  expect(wrapper.get('[aria-label="返厂进度摘要"]').text()).toContain(label);
+  wrapper.unmount();
+});

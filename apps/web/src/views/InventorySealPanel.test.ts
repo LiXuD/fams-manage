@@ -40,6 +40,25 @@ it("preserves the original UUID version payload and roster digest after a lost c
   expect(wrapper.text()).toContain("封存结果尚未确认"); await button(wrapper, "刷新封存检查与报告").trigger("click"); await flushPromises();
   await button(wrapper, "原键重试未确认封存").trigger("click"); await flushPromises(); expect(writes).toHaveLength(2); expect(writes[1]).toEqual(writes[0]); wrapper.unmount();
 });
+it("reloads preflight on a task version change without replacing a confirmed intent", async () => {
+  let view = { ...preflight(), task: { id: "9", version: 6, task_status: "IN_PROGRESS" }, missingSynchronizationCount: 0 };
+  const fetch = vi.fn(async () => response(view));
+  vi.stubGlobal("fetch", fetch);
+  const wrapper = mount(InventorySealPanel, { props: { taskId: "9", taskVersion: 6 } });
+  await flushPromises();
+  expect(wrapper.findAll("textarea")).toHaveLength(1);
+  view = preflight();
+  await wrapper.setProps({ taskVersion: 7 });
+  await flushPromises();
+  expect(wrapper.findAll("textarea")).toHaveLength(2);
+  await prepare(wrapper);
+  expect(button(wrapper, "确认封存本任务").exists()).toBe(true);
+  await wrapper.setProps({ taskVersion: 8 });
+  await flushPromises();
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(button(wrapper, "确认封存本任务").exists()).toBe(true);
+  wrapper.unmount();
+});
 it("exports all three frozen sections with the frozen header and no current asset lookup", async () => {
   const paths: string[] = [], payloads: unknown[][] = []; const clicked = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
   class ReportBlob { constructor(parts: unknown[]) { payloads.push(parts); } }
