@@ -83,7 +83,9 @@ jobs:
         run: |
           spec=contracts/fams-core-v1.yaml
           rtk proxy git show "$BASE_SHA:$spec" > "$RUNNER_TEMP/fams-base-contract.yaml"
-          rtk proxy oasdiff breaking --fail-on ERR "$RUNNER_TEMP/fams-base-contract.yaml" "$spec"
+          normalized_base="$RUNNER_TEMP/fams-base-normalized.yaml"
+          rtk proxy python3 scripts/normalize-ci-contract.py "$RUNNER_TEMP/fams-base-contract.yaml" "$normalized_base"
+          rtk proxy oasdiff breaking --fail-on ERR "$normalized_base" "$spec"
       - name: Validate contract, examples and generated types
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: rtk proxy python3 -u scripts/verify-d6-02c.py
