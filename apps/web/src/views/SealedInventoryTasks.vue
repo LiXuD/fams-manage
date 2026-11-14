@@ -39,6 +39,7 @@ async function load(before?: string) {
 <template>
   <section aria-label="封存盘点明细">
     <button type="button" :disabled="busy" @click="load()">查看封存任务明细</button>
+    <a :href="`/api/v1/operations-reports/inventory-detail.csv?${query}`">下载封存任务明细 CSV</a>
     <p v-if="busy" role="status">正在查询</p>
     <p v-if="error" role="alert">{{ error }}</p>
     <template v-if="result">

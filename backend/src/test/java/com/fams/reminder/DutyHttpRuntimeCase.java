@@ -479,6 +479,21 @@ class DutyHttpRuntimeCase {
         assertTrue(ok(get(administrator, path + window + "&before=931000")).path("items").isEmpty());
         assertTrue(ok(get(administrator, path + "?from=2026-11-01&toExclusive=2026-11-13"))
                 .path("items").isEmpty());
+        var exportPath = "/operations-reports/inventory-detail.csv";
+        assertEquals(403, code(get(warehouse, exportPath + window)));
+        assertEquals(400, code(get(administrator, exportPath + "?from=2026-12-01&toExclusive=2026-11-01")));
+        db.update("UPDATE fams_inventory_task SET name=? WHERE id=931000", "=1+1,\"盘点\"");
+        var csv = get(administrator, exportPath + window);
+        assertEquals(200, code(csv));
+        assertEquals(2, csv.body().lines().count());
+        assertTrue(csv.body().contains("931000,\"'=1+1,\"\"盘点\"\"\","));
+        assertTrue(csv.body().endsWith(",4,3,1,1,1"));
+        assertEquals(1L, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event
+                WHERE action='OPERATIONS_REPORT_EXPORTED' AND resource_type='SEALED_INVENTORY_DETAIL'
+                    AND detail_json->>'$.from'='2026-11-01' AND detail_json->>'$.toExclusive'='2026-12-01'
+                    AND detail_json->>'$.rows'='1'
+                """, Long.class));
     }
 
     private void verifyWorkbenchTodos(Session administrator, Session warehouse, Session employee) throws Exception {

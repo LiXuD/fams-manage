@@ -9564,6 +9564,26 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /operations-reports/inventory-detail.csv:
+    get:
+      tags: [Reports]
+      operationId: exportSealedInventoryReportTasks
+      summary: Download audited sealed tasks and frozen evidence counts for the UTC date window.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: toExclusive, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: UTF-8 CSV with one row per sealed task, including completion, difference and conflict counts.
+          content:
+            text/csv:
+              schema: { type: string }
+        '400': { description: Invalid or oversized UTC window. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { description: The selected window exceeds the export row limit of 10000. }
+
   /operations-reports/inventory.csv:
     get:
       tags: [Reports]
