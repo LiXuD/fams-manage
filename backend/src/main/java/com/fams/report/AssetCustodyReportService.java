@@ -54,7 +54,14 @@ class AssetCustodyReportService {
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public Distribution distribution() {
         return new Distribution(groups("using_organization_id", "fams_organization"),
-                groups("category_id", "fams_asset_category"));
+                groups("category_id", "fams_asset_category"),
+                db.query("""
+                        SELECT a.custody_type,COUNT(*) AS total FROM fams_asset a
+                        WHERE
+                        """ + EFFECTIVE + """
+                            AND a.custody_type IN ('PERSONAL','SHARED')
+                        GROUP BY a.custody_type ORDER BY a.custody_type
+                        """, (row, index) -> new CustodyGroup(row.getString("custody_type"), row.getLong("total"))));
     }
 
     private List<Group> groups(String field, String catalog) {
@@ -119,7 +126,8 @@ class AssetCustodyReportService {
 
     record Filter(Long organizationId, Long responsibleId, Long warehouseId, Long locationId,
                   String custody, LocalDate inventoryBefore, Long categoryId, String lifecycle, String exception) {}
-    record Distribution(List<Group> organizations, List<Group> categories) {}
+    record Distribution(List<Group> organizations, List<Group> categories, List<CustodyGroup> custody) {}
+    record CustodyGroup(String custodyType, long count) {}
     record Group(String id, String name, long count) {}
     record Page(List<Row> items, String nextBefore) {}
     record Row(String assetId, String assetCode, String name, String lifecycle, String exception, String custody,

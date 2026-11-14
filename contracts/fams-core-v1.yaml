@@ -8744,16 +8744,16 @@ paths:
     get:
       tags: [Reports]
       operationId: getAssetCustodyDistribution
-      summary: Count effective assets by current using department and assigned category.
+      summary: Count effective assets by using department, assigned category and personal or shared custody.
       x-actor: { required: true, roles: [ASSET_ADMIN] }
       responses:
         '200':
-          description: Two distributions with a zero ID for assets without the corresponding assignment.
+          description: Department and category groups use a zero ID for missing assignments. Custody groups exclude storage and unassigned assets.
           content:
             application/json:
               schema:
                 type: object
-                required: [organizations, categories]
+                required: [organizations, categories, custody]
                 properties:
                   organizations:
                     type: array
@@ -8767,6 +8767,14 @@ paths:
                   categories:
                     type: array
                     items: *assetDistributionGroup
+                  custody:
+                    type: array
+                    items:
+                      type: object
+                      required: [custodyType, count]
+                      properties:
+                        custodyType: { type: string, enum: [PERSONAL, SHARED] }
+                        count: { type: integer, format: int64, minimum: 1 }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 

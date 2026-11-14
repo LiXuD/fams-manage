@@ -599,6 +599,26 @@ class DutyHttpRuntimeCase {
                 assertFalse(items.toString().contains("REPORT-B"));
             }
         }
+        assertEquals(1, report.path("custody").size());
+        assertEquals("PERSONAL", report.path("custody").get(0).path("custodyType").asText());
+        assertEquals(1, report.path("custody").get(0).path("count").asInt());
+        assertEquals("9007199254740993", ok(get(administrator, list + "?custody=PERSONAL"))
+                .path("items").get(0).path("assetId").asText());
+        db.update("""
+                UPDATE fams_asset SET custody_type='SHARED',responsible_employee_id=NULL,
+                    department_responsible_employee_id=931005
+                WHERE id=9007199254740993
+                """);
+        var shared = ok(get(administrator, endpoint)).path("custody");
+        assertEquals(1, shared.size());
+        assertEquals("SHARED", shared.get(0).path("custodyType").asText());
+        assertEquals(1, shared.get(0).path("count").asInt());
+        assertEquals("9007199254740993", ok(get(administrator, list + "?custody=SHARED"))
+                .path("items").get(0).path("assetId").asText());
+        db.update("""
+                UPDATE fams_asset SET custody_type='PERSONAL',responsible_employee_id=931005,
+                    department_responsible_employee_id=NULL WHERE id=9007199254740993
+                """);
         assertEquals(400, code(get(administrator, list + "?categoryId=-1")));
         var export = get(administrator, list + ".csv?categoryId=9007199254740993&organizationId=931000");
         assertEquals(200, code(export));

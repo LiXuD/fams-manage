@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import { ref } from "vue";
 
-type Dimension = "organizationId" | "categoryId";
+type Dimension = "organizationId" | "categoryId" | "custody";
 interface Group { id: string; name: string | null; count: number }
-interface Distribution { organizations: Group[]; categories: Group[] }
+interface Distribution {
+  organizations: Group[];
+  categories: Group[];
+  custody: { custodyType: "PERSONAL" | "SHARED"; count: number }[];
+}
+const custodyLabels = { PERSONAL: "个人使用及借出", SHARED: "部门公用" };
 const emit = defineEmits<{ select: [dimension: Dimension, id: string] }>();
 const distribution = ref<Distribution>();
 const busy = ref(false);
@@ -29,7 +34,7 @@ async function load() {
 
 <template>
   <section>
-    <h3>部门与分类资产分布</h3>
+    <h3>资产分布</h3>
     <button type="button" :disabled="busy" @click="load">查询资产分布</button>
     <p v-if="error" role="alert">{{ error }}</p>
     <p v-if="busy" role="status">正在查询</p>
@@ -54,6 +59,15 @@ async function load() {
             </button>
           </li>
         </ul>
+        <h4>按保管方式</h4>
+        <ul v-if="distribution.custody.length">
+          <li v-for="group in distribution.custody" :key="group.custodyType">
+            <button type="button" @click="emit('select', 'custody', group.custodyType)">
+              {{ custodyLabels[group.custodyType] }} · {{ group.count }} 件
+            </button>
+          </li>
+        </ul>
+        <p v-else>当前没有个人保管或部门公用资产。</p>
       </template>
     </template>
   </section>
