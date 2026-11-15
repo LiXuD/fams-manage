@@ -173,6 +173,11 @@ class InventorySealHttpRuntimeCase {
 
     @AfterEach
     void cleanup() {
+        db.update("""
+                DELETE todo FROM fams_todo todo
+                JOIN fams_inventory_observation observation ON observation.id=todo.business_id
+                WHERE todo.business_type='INVENTORY_OBSERVATION' AND observation.task_id IN (947000,947100)
+                """);
         db.update(
                 "DELETE FROM fams_todo WHERE business_type='INVENTORY_LATE' AND business_id IN (SELECT observation_id FROM fams_inventory_late_case WHERE task_id IN (947000,947100))");
         db.update(
