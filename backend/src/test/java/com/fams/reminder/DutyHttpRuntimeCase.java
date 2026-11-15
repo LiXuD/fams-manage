@@ -480,7 +480,36 @@ class DutyHttpRuntimeCase {
         assertEquals("931001", active.path("items").get(0).path("taskId").asText());
         assertEquals(2, active.path("items").get(0).path("expected").asInt());
         assertEquals(1, active.path("items").get(0).path("accepted").asInt());
+        String executorPath = "/operations-reports/inventory/931001/executors";
+        assertEquals(403, code(get(warehouse, executorPath)));
+        db.update("""
+                INSERT INTO fams_inventory_review_subject (observation_id,dimension,task_id,item_id,recheck_generation)
+                SELECT 9007199254740993,'NORMAL',task_id,id,recheck_generation
+                FROM fams_inventory_item WHERE task_id=931001
+                """);
+        var current = ok(get(administrator, executorPath));
+        assertEquals("CURRENT", current.path("source").asText());
+        assertEquals(2, current.path("expected").asInt(-1));
+        assertEquals(1, current.path("counted").asInt(-1));
+        var currentExecutor = current.path("items").get(0);
+        assertEquals("931005", currentExecutor.path("executorAccountId").asText());
+        assertEquals(1, currentExecutor.path("accepted").asInt(-1));
+        assertEquals(0, currentExecutor.path("differences").asInt(-1));
+        db.update("UPDATE fams_inventory_review_subject SET dimension='LOCATION'"
+                + " WHERE task_id=931001 AND observation_id=9007199254740993");
+        assertEquals(1, ok(get(administrator, executorPath)).path("items").get(0).path("differences").asInt(-1));
+        var currentCsv = get(administrator, executorPath + ".csv");
+        assertEquals(200, code(currentCsv));
+        assertTrue(currentCsv.body().endsWith("931001,931005,1,1,1,0"));
+        assertEquals(1L, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE action='OPERATIONS_REPORT_EXPORTED'
+                    AND resource_type='CURRENT_INVENTORY_EXECUTORS' AND resource_id=931001
+                """, Long.class));
         db.update("UPDATE fams_inventory_item SET recheck_generation=1 WHERE task_id=931001");
+        var recheck = ok(get(administrator, executorPath)).path("items").get(0);
+        assertEquals(0, recheck.path("accepted").asInt(-1));
+        assertEquals(0, recheck.path("differences").asInt(-1));
+        assertEquals(1, recheck.path("notObserved").asInt(-1));
         assertEquals(0, ok(get(administrator, progress + "?before=931002")).path("items").get(0).path("accepted").asInt());
         assertTrue(ok(get(administrator, progress + "?before=931001")).path("items").isEmpty());
         var path = "/operations-reports/inventory";
@@ -535,8 +564,9 @@ class DutyHttpRuntimeCase {
         var path = "/operations-reports/inventory/931000/executors";
         assertEquals(403, code(get(warehouse, path)));
         assertEquals(403, code(get(warehouse, path + ".csv")));
-        assertEquals(404, code(get(administrator, "/operations-reports/inventory/931001/executors")));
+        assertEquals(404, code(get(administrator, "/operations-reports/inventory/999999/executors")));
         var report = ok(get(administrator, path));
+        assertEquals("SEALED", report.path("source").asText());
         assertEquals(4, report.path("expected").asInt(-1));
         assertEquals(2, report.path("counted").asInt(-1));
         var rows = report.path("items");

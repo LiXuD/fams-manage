@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -98,39 +99,66 @@ class SealedInventoryReportService {
         return new ProgressPage(List.copyOf(rows.subList(0, pageSize)), rows.get(pageSize - 1).taskId());
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public ExecutorBreakdown executors(long taskId) {
-        var counts = db.queryForList("SELECT expected_count FROM fams_inventory_sealed_report WHERE task_id=?",
+        var sealed = db.queryForList("SELECT expected_count FROM fams_inventory_sealed_report WHERE task_id=?",
                 Long.class, taskId);
-        if (counts.isEmpty()) {
-            return null;
-        }
-        var rows = db.query("""
-                WITH items AS (
+        if (!sealed.isEmpty()) {
+            var rows = executorRows("""
                     SELECT NULLIF(CAST(NULLIF(i.snapshot_json->>'$.item.executor_account_id','null') AS UNSIGNED),0)
                             AS executor_id,
                         i.snapshot_json->>'$.review.review_status' AS review_status,
-                        CAST(NULLIF(i.snapshot_json->>'$.review.observation_id','null') AS UNSIGNED) AS observation_id
-                    FROM fams_inventory_sealed_item i WHERE i.task_id=?
-                )
+                        EXISTS (SELECT 1 FROM JSON_TABLE(e.snapshot_json,'$.subjects[*]' COLUMNS (
+                            dimension VARCHAR(32) PATH '$.dimension'
+                        )) subject WHERE subject.dimension <> 'NORMAL') AS has_difference
+                    FROM fams_inventory_sealed_item i
+                    LEFT JOIN fams_inventory_sealed_evidence e ON e.task_id=i.task_id
+                        AND e.observation_id=CAST(NULLIF(i.snapshot_json->>'$.review.observation_id','null') AS UNSIGNED)
+                    WHERE i.task_id=?
+                    """, taskId);
+            return executorBreakdown(taskId, ExecutorSource.SEALED, sealed.getFirst(), rows);
+        }
+        var current = db.queryForList("""
+                SELECT expected_count FROM fams_inventory_task WHERE id=?
+                    AND task_status IN ('READY','IN_PROGRESS','WAITING_REVIEW')
+                """, Long.class, taskId);
+        if (current.isEmpty()) {
+            return null;
+        }
+        var rows = executorRows("""
+                SELECT i.executor_account_id AS executor_id,r.review_status,
+                    EXISTS (SELECT 1 FROM fams_inventory_review_subject d
+                        WHERE d.observation_id=r.observation_id AND d.task_id=i.task_id
+                          AND d.item_id=i.id AND d.recheck_generation=i.recheck_generation
+                          AND d.dimension <> 'NORMAL') AS has_difference
+                FROM fams_inventory_item i
+                LEFT JOIN fams_inventory_item_review r
+                    ON r.item_id=i.id AND r.task_id=i.task_id AND r.recheck_generation=i.recheck_generation
+                WHERE i.task_id=?
+                """, taskId);
+        return executorBreakdown(taskId, ExecutorSource.CURRENT, current.getFirst(), rows);
+    }
+
+    private List<Executor> executorRows(String items, long taskId) {
+        return db.query("WITH items AS (" + items + ") " + """
                 SELECT executor_id,COUNT(*) AS expected,
                     COUNT(CASE WHEN review_status='ACCEPTED' THEN 1 END) AS accepted,
-                    COUNT(CASE WHEN review_status='ACCEPTED' AND JSON_LENGTH(e.snapshot_json,'$.subjects')>0
-                               THEN 1 END) AS differences
-                FROM items i LEFT JOIN fams_inventory_sealed_evidence e
-                    ON e.task_id=? AND e.observation_id=i.observation_id
-                GROUP BY executor_id ORDER BY executor_id IS NULL,executor_id
+                    COUNT(CASE WHEN review_status='ACCEPTED' AND has_difference THEN 1 END) AS differences
+                FROM items GROUP BY executor_id ORDER BY executor_id IS NULL,executor_id
                 """, (row, index) -> {
                     long expected = row.getLong("expected"), accepted = row.getLong("accepted");
                     return new Executor(row.getString("executor_id"), expected, accepted,
                             row.getLong("differences"), expected - accepted);
-                }, taskId, taskId);
-        long expected = counts.getFirst();
-        long counted = rows.stream().mapToLong(Executor::expected).sum();
-        return new ExecutorBreakdown(Long.toString(taskId), expected, counted, rows);
+                }, taskId);
     }
 
-    @Transactional
+    private static ExecutorBreakdown executorBreakdown(long taskId, ExecutorSource source, long expected,
+            List<Executor> rows) {
+        long counted = rows.stream().mapToLong(Executor::expected).sum();
+        return new ExecutorBreakdown(Long.toString(taskId), source, expected, counted, rows);
+    }
+
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public String exportExecutors(AssetActorContext.Actor actor, long taskId) {
         var breakdown = executors(taskId);
         if (breakdown == null) {
@@ -139,10 +167,11 @@ class SealedInventoryReportService {
         db.update("""
                 INSERT INTO fams_audit_event (request_id,actor_account_id,actor_role,action,resource_type,
                     resource_id,occurred_at,detail_json)
-                VALUES (?,?,?,'OPERATIONS_REPORT_EXPORTED','SEALED_INVENTORY_EXECUTORS',?,?,
+                VALUES (?,?,?,'OPERATIONS_REPORT_EXPORTED',?,?,?,
                     JSON_OBJECT('rows',?,'expected',?,'counted',?))
-                """, actor.requestId(), actor.id(), actor.role(), taskId, Timestamp.from(clock.instant()),
-                breakdown.items().size(), breakdown.expected(), breakdown.counted());
+                """, actor.requestId(), actor.id(), actor.role(),
+                breakdown.source() == ExecutorSource.SEALED ? "SEALED_INVENTORY_EXECUTORS" : "CURRENT_INVENTORY_EXECUTORS",
+                taskId, Timestamp.from(clock.instant()), breakdown.items().size(), breakdown.expected(), breakdown.counted());
         // The comma-safe fields are only database IDs and integer counts.
         return "taskId,executorAccountId,expected,accepted,differences,notObserved\r\n"
                 + breakdown.items().stream().map(row -> String.join(",", breakdown.taskId(),
@@ -153,7 +182,8 @@ class SealedInventoryReportService {
     }
 
     record Executor(String executorAccountId, long expected, long accepted, long differences, long notObserved) {}
-    record ExecutorBreakdown(String taskId, long expected, long counted, List<Executor> items) {}
+    enum ExecutorSource { CURRENT, SEALED }
+    record ExecutorBreakdown(String taskId, ExecutorSource source, long expected, long counted, List<Executor> items) {}
     record Progress(String taskId, String name, String status, Instant dueAt, long expected, long accepted) {}
     record ProgressPage(List<Progress> items, String nextBefore) {}
 
