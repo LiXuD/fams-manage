@@ -5,6 +5,7 @@ import SealedInventoryTasks from "./SealedInventoryTasks.vue";
 import InventoryProgressReport from "./InventoryProgressReport.vue";
 import InventoryTraceabilityReport from "./InventoryTraceabilityReport.vue";
 import ExceptionDiscoveryReport from "./ExceptionDiscoveryReport.vue";
+import TagCoverageReport from "./TagCoverageReport.vue";
 import AssetCustodyReport from "./AssetCustodyReport.vue";
 import AssetMovementTrend from "./AssetMovementTrend.vue";
 import AssetMovementReport from "./AssetMovementReport.vue";
@@ -93,6 +94,7 @@ watch(identity, () => {
   <section>
     <h2>资产运营报表</h2>
     <InventoryProgressReport :key="identity" />
+    <TagCoverageReport :key="identity" />
     <form class="actions" @submit.prevent="load">
       <label>开始日期（UTC） <input v-model="from" required type="date"></label>
       <label>结束日期（UTC，不含当日） <input v-model="toExclusive" required type="date"></label>

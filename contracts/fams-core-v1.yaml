@@ -8246,6 +8246,55 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /assets/{assetId}/tag/placement:
+    parameters:
+      - $ref: '#/components/parameters/AssetId'
+    post:
+      tags: [Assets]
+      operationId: confirmAssetTagPlacement
+      summary: Confirm placement of an eligible asset's current physical QR label.
+      x-actor: { required: true, roles: [WAREHOUSE_OPERATOR] }
+      x-business-write: true
+      x-version: { required: true, precondition: If-Match-Version must equal the current asset version. }
+      x-transaction:
+        boundary: Lock the asset, validate the current tag, save one placement and audit, and persist the replay receipt.
+      x-audit-event: { event: ASSET_TAG_PLACEMENT_CONFIRMED }
+      x-error-codes: [ASSET_NOT_FOUND, ASSET_VERSION_CONFLICT, ASSET_TAG_NOT_ELIGIBLE, ASSET_TAG_NOT_CURRENT, ASSET_IDEMPOTENCY_CONFLICT]
+      x-invariants: >-
+        The opaque token scanned from the placed label must match the selected asset and current tag.
+        Repetition preserves the original placement. Rotation invalidates the old evidence for coverage.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyUuid'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
+      responses:
+        '200':
+          description: Original confirmation for this exact tag, with no token in the response.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [assetId, tagVersion, confirmedAt]
+                properties:
+                  assetId: { $ref: '#/components/schemas/Id' }
+                  tagVersion: { type: integer, format: int64, minimum: 0 }
+                  confirmedAt: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
   /asset-access/{token}:
     parameters:
       - $ref: '#/components/parameters/QrToken'
@@ -9734,6 +9783,45 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { description: "Task has no current, retained or sealed breakdown." }
+
+  /operations-reports/tag-coverage:
+    get:
+      tags: [Reports]
+      operationId: getAssetTagCoverage
+      summary: Count eligible assets with current placement or latest sealed inventory recognition evidence.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      responses:
+        '200':
+          description: Current eligibility and evidence totals. The two evidence categories may overlap.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [evaluatedAt, total, covered, placement, inventory, withoutTag]
+                properties:
+                  evaluatedAt: { type: string, format: date-time }
+                  total: { type: integer, format: int64, minimum: 0 }
+                  covered: { type: integer, format: int64, minimum: 0 }
+                  placement: { type: integer, format: int64, minimum: 0 }
+                  inventory: { type: integer, format: int64, minimum: 0 }
+                  withoutTag: { type: integer, format: int64, minimum: 0 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /operations-reports/tag-coverage.csv:
+    get:
+      tags: [Reports]
+      operationId: exportAssetTagCoverage
+      summary: Download audited current QR evidence and missing-evidence rows without QR tokens.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      responses:
+        '200':
+          description: One row per eligible asset with current evidence, or missing evidence status.
+          content:
+            text/csv:
+              schema: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { description: More than 10000 eligible assets. }
 
   /operations-reports/exception-discovery:
     get:

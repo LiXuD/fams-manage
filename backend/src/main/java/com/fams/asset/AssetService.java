@@ -374,6 +374,42 @@ class AssetService {
     }
 
     @Transactional
+    TagPlacement confirmTagPlacement(Actor actor, long id, long expectedVersion, String token, String key) {
+        String operation = "confirmAssetTagPlacement";
+        String hash = codec.hash(token);
+        String digest = digest(operation, id + ":" + expectedVersion + ":" + hash);
+        Map<String, Object> asset = visible(actor, id, true);
+        var prior = replay(actor.id(), operation, key, digest, TagPlacement.class);
+        if (prior != null) { return prior; }
+        checkVersion(asset, expectedVersion);
+        if (!"ACTIVE".equals(text(asset, "card_stage")) || List.of("WAITING_INBOUND", "SCRAPPED")
+                .contains(text(asset, "lifecycle_status"))) {
+            throw AssetOperationException.conflict("ASSET_TAG_NOT_ELIGIBLE", "The asset is not eligible for placement.");
+        }
+        var tag = mapper.tag(id);
+        if (tag == null || !hash.equals(text(tag, "token_hash"))) {
+            throw AssetOperationException.conflict("ASSET_TAG_NOT_CURRENT", "The scanned tag is not the current asset tag.");
+        }
+        long tagVersion = number(tag, "tag_version");
+        var issuedAt = instant(tag, "issued_at");
+        var placement = mapper.tagPlacement(id, tagVersion, issuedAt);
+        Instant confirmedAt;
+        if (placement == null) {
+            confirmedAt = now();
+            mapper.addTagPlacement(id, tagVersion, issuedAt, actor.id(), confirmedAt);
+            event(actor, id, "ASSET_TAG_PLACEMENT_CONFIRMED", "Current QR tag placement confirmed",
+                    expectedVersion, expectedVersion);
+        } else {
+            confirmedAt = instant(placement, "confirmed_at");
+        }
+        var result = new TagPlacement(Long.toString(id), tagVersion, confirmedAt);
+        record(actor.id(), operation, key, digest, 200, result, id, expectedVersion);
+        return result;
+    }
+
+    record TagPlacement(String assetId, long tagVersion, Instant confirmedAt) {}
+
+    @Transactional
     AssetTagReplacementResult replaceTag(Actor actor, long id, long expectedVersion,
             String reason, String key) {
         String operation = "replaceAssetTag";

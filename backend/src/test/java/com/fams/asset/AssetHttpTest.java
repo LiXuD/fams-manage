@@ -155,6 +155,28 @@ class AssetHttpTest {
         assertEquals(publishedToken, printSnapshot.path("tag").path("qrToken").asText());
         assertEquals(404, request("GET", "/api/v1/asset-tag-print-jobs/" + jobId,
                 null, other, Map.of()).statusCode());
+        String placement = "/api/v1/assets/" + publishedId + "/tag/placement";
+        String scanned = JSON.createObjectNode().put("token", publishedToken).toString();
+        String placementKey = java.util.UUID.randomUUID().toString();
+        assertEquals(409, request("POST", placement, scanned, warehouse,
+                writeHeaders(warehouse, placementKey, 0L)).statusCode());
+        jdbc.update("UPDATE fams_asset SET lifecycle_status='UNDER_REPAIR' WHERE id=?", Long.parseLong(publishedId));
+        assertEquals(403, request("POST", placement, scanned, admin, writeHeaders(admin, placementKey, 0L)).statusCode());
+        var confirmed = request("POST", placement, scanned, warehouse, writeHeaders(warehouse, placementKey, 0L));
+        assertEquals(200, confirmed.statusCode(), confirmed.body());
+        assertFalse(confirmed.body().contains(publishedToken));
+        assertEquals(confirmed.body(), request("POST", placement, scanned, warehouse,
+                writeHeaders(warehouse, placementKey, 0L)).body());
+        assertEquals(confirmed.body(), request("POST", placement, scanned, warehouse,
+                writeHeaders(warehouse, java.util.UUID.randomUUID().toString(), 0L)).body());
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM fams_asset_tag_placement WHERE asset_id=?",
+                Integer.class, Long.parseLong(publishedId)));
+        assertEquals(1, jdbc.queryForObject("""
+                SELECT COUNT(*) FROM fams_asset_timeline_event WHERE asset_id=?
+                    AND event_type='ASSET_TAG_PLACEMENT_CONFIRMED'
+                """, Integer.class, Long.parseLong(publishedId)));
+        assertEquals(403, request("GET", "/api/v1/operations-reports/tag-coverage",
+                null, warehouse, Map.of()).statusCode());
         HttpResponse<String> rotated = request("POST", "/api/v1/assets/" + publishedId + "/tag/replace",
                 "{\"reason\":\"Damaged\"}", warehouse,
                 writeHeaders(warehouse, "3a333333-3333-4333-8333-333333333333", 0L));
@@ -164,6 +186,8 @@ class AssetHttpTest {
                 writeHeaders(warehouse, "3a333333-3333-4333-8333-333333333333", 0L)).body());
         assertEquals(1, JSON.readTree(rotated.body()).path("assetVersion").asInt());
         String replacementToken = JSON.readTree(rotated.body()).path("tag").path("qrToken").asText();
+        assertEquals(409, request("POST", placement, scanned, warehouse,
+                writeHeaders(warehouse, java.util.UUID.randomUUID().toString(), 1L)).statusCode());
         assertNotEquals(publishedToken, replacementToken);
         assertEquals(404, request("GET", "/api/v1/asset-access/" + publishedToken,
                 null, warehouse, Map.of()).statusCode());
