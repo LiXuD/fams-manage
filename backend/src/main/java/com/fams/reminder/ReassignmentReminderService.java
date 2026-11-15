@@ -20,7 +20,18 @@ class ReassignmentReminderService {
                 SELECT t.business_type, t.business_id,
                     COALESCE(t.assignee_account_id, o.processor_account_id) AS owner_id,
                     CASE WHEN o.ownership_version = 0 THEN r.warehouse_first_execution_due_at END AS first_due,
-                    r.id IS NOT NULL AND o.unavailable_ownership_version = o.ownership_version AS declared_unavailable,
+                    (r.id IS NOT NULL AND o.unavailable_ownership_version = o.ownership_version OR EXISTS (
+                        SELECT 1
+                        FROM fams_transfer x JOIN fams_audit_event declaration
+                          ON declaration.resource_type='TRANSFER' AND declaration.resource_id=x.id
+                            AND declaration.action='TRANSFER_PROCESSOR_UNAVAILABLE'
+                            AND declaration.actor_account_id=x.processor_account_id
+                        WHERE t.business_type='TRANSFER' AND t.todo_type='EXECUTION' AND x.id=t.business_id
+                            AND x.request_status IN ('PROCESSING','WAITING_HANDOVER')
+                            AND x.processor_account_id=t.assignee_account_id
+                            AND JSON_UNQUOTE(JSON_EXTRACT(declaration.detail_json,'$.todoId'))=CAST(t.id AS CHAR)
+                            AND JSON_EXTRACT(declaration.detail_json,'$.ownershipVersion')=x.ownership_version
+                    )) AS declared_unavailable,
                     EXISTS (
                         SELECT 1
                         FROM fams_repair_request repair

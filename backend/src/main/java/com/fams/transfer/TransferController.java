@@ -61,6 +61,8 @@ class TransferController {
     record ReassignmentItem(@Min(1) long id, @Min(0) long version,
             @NotBlank String status, @Min(0) long lockVersion) {}
 
+    record Unavailability(@NotNull @Min(0) Long ownershipVersion, @NotBlank @Size(max = 1000) String reason) {}
+
     record Reassignment(
             @Min(1) long processorAccountId, @Min(0) long ownershipVersion,
             @NotBlank @Size(max = 1000) String reason,
@@ -148,6 +150,15 @@ class TransferController {
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
             @Valid @RequestBody Reassignment input) {
         return service.reassign(actors.capture(), id, version, key, input);
+    }
+
+    @PostMapping("/{id}/reassignment/unavailable")
+    Map<String, Object> declareUnavailable(
+            @PathVariable @Min(1) long id,
+            @RequestHeader("If-Match-Version") @Min(0) long version,
+            @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
+            @Valid @RequestBody Unavailability input) {
+        return service.declareUnavailable(actors.capture(), id, version, key, input);
     }
 
     @PostMapping("/{id}/items/{itemId}/{action:deliver|verify|cancel|recovery|recover}")

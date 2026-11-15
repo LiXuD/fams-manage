@@ -3984,9 +3984,22 @@ components:
 
     TransferReassignmentItem: {"type": "object", "required": ["id", "version", "status", "lockVersion"], "properties": {"id": {"$ref": "#/components/schemas/Id"}, "version": {"type": "integer", "format": "int64", "minimum": 0}, "status": {"type": "string", "enum": ["READY", "DELIVERED", "REFUSED", "RECOVERY_PENDING"]}, "lockVersion": {"type": "integer", "format": "int64", "minimum": 0}}}
 
+    TransferProcessorUnavailabilityInput:
+      type: object
+      required: [ownershipVersion, reason]
+      properties:
+        ownershipVersion: { type: integer, format: int64, minimum: 0 }
+        reason: { type: string, minLength: 1, maxLength: 1000 }
+    TransferProcessorUnavailabilityReceipt:
+      type: object
+      required: [id, version, recorded]
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        version: { type: integer, format: int64, minimum: 0 }
+        recorded: { type: boolean }
     TransferReassignmentInput: {"type": "object", "required": ["processorAccountId", "ownershipVersion", "reason", "evidence", "unsynchronizedResultsChecked", "items"], "properties": {"processorAccountId": {"$ref": "#/components/schemas/Id"}, "ownershipVersion": {"type": "integer", "format": "int64", "minimum": 0}, "reason": {"type": "string", "minLength": 1, "maxLength": 1000}, "evidence": {"type": "string", "minLength": 1, "maxLength": 1000}, "unsynchronizedResultsChecked": {"type": "boolean", "enum": [true]}, "items": {"type": "array", "minItems": 1, "maxItems": 200, "items": {"$ref": "#/components/schemas/TransferReassignmentItem"}}}}
 
-    TransferReassignmentSnapshot: {"type": "object", "required": ["id", "version", "ownershipVersion", "processorAccountId", "items", "operators"], "properties": {"id": {"$ref": "#/components/schemas/Id"}, "version": {"type": "integer", "format": "int64", "minimum": 0}, "ownershipVersion": {"type": "integer", "format": "int64", "minimum": 0}, "processorAccountId": {"$ref": "#/components/schemas/Id"}, "items": {"type": "array", "items": {"type": "object", "additionalProperties": true}}, "operators": {"type": "array", "items": {"type": "object", "required": ["id", "name"], "properties": {"id": {"$ref": "#/components/schemas/Id"}, "name": {"type": "string"}}}}}}
+    TransferReassignmentSnapshot: {"type": "object", "required": ["id", "version", "ownershipVersion", "processorAccountId", "items", "operators"], "properties": {"id": {"$ref": "#/components/schemas/Id"}, "version": {"type": "integer", "format": "int64", "minimum": 0}, "ownershipVersion": {"type": "integer", "format": "int64", "minimum": 0}, "processorAccountId": {"$ref": "#/components/schemas/Id"}, "unavailableReason": {"type": "string", "maxLength": 1000}, "items": {"type": "array", "items": {"type": "object", "additionalProperties": true}}, "operators": {"type": "array", "items": {"type": "object", "required": ["id", "name"], "properties": {"id": {"$ref": "#/components/schemas/Id"}, "name": {"type": "string"}}}}}}
 
     RequisitionProxyConfirmationSnapshot: {"type": "object", "required": ["businessId", "itemId", "assetId", "targetEmployeeId", "processorAccountId", "version", "requestVersion", "itemVersion", "assetVersion", "lockVersion", "ownershipVersion", "demandVersion", "businessType", "requestNo", "assetCode", "custodyType"], "properties": {"businessId": {"$ref": "#/components/schemas/Id"}, "itemId": {"$ref": "#/components/schemas/Id"}, "assetId": {"$ref": "#/components/schemas/Id"}, "targetEmployeeId": {"$ref": "#/components/schemas/Id"}, "processorAccountId": {"$ref": "#/components/schemas/Id"}, "version": {"type": "integer", "format": "int64", "minimum": 0}, "requestVersion": {"type": "integer", "format": "int64", "minimum": 0}, "itemVersion": {"type": "integer", "format": "int64", "minimum": 0}, "assetVersion": {"type": "integer", "format": "int64", "minimum": 0}, "lockVersion": {"type": "integer", "format": "int64", "minimum": 0}, "ownershipVersion": {"type": "integer", "format": "int64", "minimum": 0}, "demandVersion": {"type": "integer", "format": "int64", "minimum": 0}, "businessType": {"type": "string", "pattern": "^REQUISITION$"}, "requestNo": {"type": "string"}, "assetCode": {"type": "string"}, "custodyType": {"type": "string"}}}
     TransferProxyConfirmationSnapshot: {"type": "object", "required": ["businessId", "itemId", "assetId", "targetEmployeeId", "processorAccountId", "version", "itemVersion", "assetVersion", "lockVersion", "ownershipVersion", "businessType", "requestNo", "assetCode", "custodyType", "approvedVersion", "sourceSnapshot", "targetSnapshot", "parameterSnapshot"], "properties": {"businessId": {"$ref": "#/components/schemas/Id"}, "itemId": {"$ref": "#/components/schemas/Id"}, "assetId": {"$ref": "#/components/schemas/Id"}, "targetEmployeeId": {"$ref": "#/components/schemas/Id"}, "processorAccountId": {"$ref": "#/components/schemas/Id"}, "version": {"type": "integer", "format": "int64", "minimum": 0}, "itemVersion": {"type": "integer", "format": "int64", "minimum": 0}, "assetVersion": {"type": "integer", "format": "int64", "minimum": 0}, "lockVersion": {"type": "integer", "format": "int64", "minimum": 0}, "ownershipVersion": {"type": "integer", "format": "int64", "minimum": 0}, "businessType": {"type": "string", "pattern": "^TRANSFER$"}, "requestNo": {"type": "string"}, "assetCode": {"type": "string"}, "custodyType": {"type": "string"}, "approvedVersion": {"type": "integer", "format": "int64", "minimum": 0}, "sourceSnapshot": {"type": "object"}, "targetSnapshot": {"type": "object"}, "parameterSnapshot": {"type": "object"}}}
@@ -12661,6 +12674,85 @@ paths:
   /mini/transfers/{id}/reassignment:
     get: {"tags": ["Transfers"], "operationId": "miniGetTransferReassignment", "summary": "Inspect all pending physical stages and locks before reassignment", "security": [{"miniSession": []}], "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/Id"}}], "responses": {"200": {"description": "Current controlled reassignment result.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TransferReassignmentSnapshot"}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}}}
     post: {"tags": ["Transfers"], "operationId": "miniReassignTransfer", "summary": "Asset administrator explicitly reassigns whole transfer without changing custody or approved scope", "security": [{"miniSession": []}], "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/Id"}}, {"$ref": "#/components/parameters/IdempotencyKey"}, {"$ref": "#/components/parameters/IfMatchVersion"}], "responses": {"200": {"description": "Current controlled reassignment result.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Transfer"}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}}, "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TransferReassignmentInput"}}}}, "x-business-write": true, "x-actor": "Current ASSET_ADMIN only; SYSTEM_ADMIN does not confer business authority.", "x-version": "Parent, ownership, every active item and lock version; current administrator revalidated before replay.", "x-transaction": "Processor, ownership version, request version, current execution todos, event, audit and replay commit atomically. Approved scope, custody and locks are preserved.", "x-audit-event": "CONTROLLED_REASSIGNMENT", "x-error-codes": ["TRANSFER_PROCESSOR_INVALID", "TRANSFER_OWNERSHIP_CHANGED", "TRANSFER_REASSIGNMENT_SNAPSHOT_CHANGED", "TRANSFER_REASSIGNMENT_CHECK_REQUIRED", "TRANSFER_VERSION_CONFLICT", "TRANSFER_STATE_CHANGED", "TRANSFER_LOCK_CHANGED", "TRANSFER_IDEMPOTENCY_CONFLICT", "TRANSFER_WRITE_CONFLICT"], "x-required-error-statuses": [400, 401, 403, 404, 409], "x-non-applicable": ["csrf"], "x-exception-rationale": "Current opaque mini identity replaces cookie CSRF."}
+
+  /transfers/{id}/reassignment/unavailable:
+    post:
+      tags: [Transfers]
+      operationId: declareTransferProcessorUnavailable
+      summary: Record that the current transfer processor cannot continue.
+      security: [{ sessionCookie: [] }]
+      x-business-write: true
+      x-actor: { required: true, roles: [WAREHOUSE_OPERATOR], boundary: Current transfer ownership. }
+      x-version: { required: true, precondition: Match the transfer and ownership versions. }
+      x-transaction:
+        boundary: Save the declaration audit event, one active administrator todo and the idempotency receipt atomically.
+      x-audit-event: { event: TRANSFER_PROCESSOR_UNAVAILABLE }
+      x-error-codes: [TRANSFER_FORBIDDEN, TRANSFER_NOT_PROCESSOR, TRANSFER_NOT_APPROVED, TRANSFER_VERSION_CONFLICT, TRANSFER_OWNERSHIP_CHANGED, TRANSFER_STATE_CHANGED, TRANSFER_IDEMPOTENCY_CONFLICT, TRANSFER_UNAVAILABILITY_ALREADY_RECORDED]
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Id' }
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TransferProcessorUnavailabilityInput' }
+      responses:
+        '200':
+          description: The administrator follow-up is recorded.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransferProcessorUnavailabilityReceipt' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /mini/transfers/{id}/reassignment/unavailable:
+    post:
+      tags: [Transfers]
+      operationId: miniDeclareTransferProcessorUnavailable
+      summary: Record that the current transfer processor cannot continue.
+      security: [{ miniSession: [] }]
+      x-business-write: true
+      x-actor: { required: true, roles: [WAREHOUSE_OPERATOR], boundary: Current transfer ownership. }
+      x-version: { required: true, precondition: Match the transfer and ownership versions. }
+      x-transaction:
+        boundary: Save the declaration audit event, one active administrator todo and the idempotency receipt atomically.
+      x-audit-event: { event: TRANSFER_PROCESSOR_UNAVAILABLE }
+      x-error-codes: [TRANSFER_FORBIDDEN, TRANSFER_NOT_PROCESSOR, TRANSFER_NOT_APPROVED, TRANSFER_VERSION_CONFLICT, TRANSFER_OWNERSHIP_CHANGED, TRANSFER_STATE_CHANGED, TRANSFER_IDEMPOTENCY_CONFLICT, TRANSFER_UNAVAILABILITY_ALREADY_RECORDED]
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      x-non-applicable: [csrf]
+      x-exception-rationale: Current opaque mini identity replaces cookie CSRF.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Id' }
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TransferProcessorUnavailabilityInput' }
+      responses:
+        '200':
+          description: The administrator follow-up is recorded.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransferProcessorUnavailabilityReceipt' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
 
   /proxy-confirmations: {"get": {"tags": ["ProxyConfirmation"], "operationId": "listProxyConfirmations", "summary": "listProxyConfirmations", "security": [{"sessionCookie": []}], "responses": {"200": {"description": "Current authorized result.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ProxyConfirmationPage"}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}}, "parameters": [{"$ref": "#/components/parameters/Page"}, {"$ref": "#/components/parameters/PageSize"}]}, "post": {"tags": ["ProxyConfirmation"], "operationId": "createProxyConfirmation", "summary": "createProxyConfirmation", "security": [{"sessionCookie": []}], "responses": {"200": {"description": "Current authorized result.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ProxyConfirmation"}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}}, "x-business-write": true, "x-actor": "Current warehouse processor only.", "x-version": "Frozen business, ownership, asset, lock and evidence versions; current account revalidated before replay.", "x-transaction": "Versioned proposal, audit and replay commit atomically. Execution also commits normal receipt facts and exactly one result notice for the original target.", "x-audit-event": "PROXY_RECEIPT_DRAFTED", "x-error-codes": ["PROXY_RECEIPT_SCOPE_CHANGED", "PROXY_RECEIPT_VERSION_CONFLICT", "PROXY_RECEIPT_IDEMPOTENCY_CONFLICT", "PROXY_RECEIPT_ATTACHMENT_CHANGED", "PROXY_RECEIPT_NOT_PROCESSOR"], "x-required-error-statuses": [400, 401, 403, 404, 409], "parameters": [{"$ref": "#/components/parameters/CsrfToken"}, {"$ref": "#/components/parameters/IdempotencyKey"}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ProxyConfirmationDraft"}}}}}}
   /proxy-confirmations/context: {"get": {"tags": ["ProxyConfirmation"], "operationId": "getProxyConfirmationContext", "summary": "getProxyConfirmationContext", "security": [{"sessionCookie": []}], "responses": {"200": {"description": "Current authorized result.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ProxyConfirmationSnapshot"}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}}, "parameters": [{"name": "businessType", "in": "query", "required": false, "schema": {"type": "string", "enum": ["REQUISITION", "TRANSFER", "REPAIR"], "default": "REQUISITION"}}, {"name": "businessId", "in": "query", "required": true, "schema": {"$ref": "#/components/schemas/Id"}}, {"name": "itemId", "in": "query", "required": true, "schema": {"$ref": "#/components/schemas/Id"}}]}}
