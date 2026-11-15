@@ -90,6 +90,38 @@ class SealedInventoryReportController {
                         .header(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8").body(result);
     }
 
+    @GetMapping("/api/v1/operations-reports/inventory-traceability")
+    ResponseEntity<SealedInventoryReportService.TraceabilityPage> traceability(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toExclusive,
+            @RequestParam(required = false) @Positive Long before,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
+        actors.requireAssetAdmin();
+        if (!validWindow(from, toExclusive)) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .body(reports.traceability(from, toExclusive, before, pageSize));
+    }
+
+    @GetMapping("/api/v1/operations-reports/inventory-traceability.csv")
+    ResponseEntity<String> exportTraceability(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toExclusive) {
+        var actor = actors.requireAssetAdmin();
+        if (!validWindow(from, toExclusive)) {
+            return ResponseEntity.badRequest().build();
+        }
+        try {
+            return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=inventory-traceability.csv")
+                    .header(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8")
+                    .body(reports.exportTraceability(actor, from, toExclusive));
+        } catch (SealedInventoryReportService.ExportLimit failure) {
+            return ResponseEntity.unprocessableContent().body("REPORT_EXPORT_LIMIT");
+        }
+    }
+
     private static boolean validWindow(LocalDate from, LocalDate until) {
         return from.getYear() >= 1000 && until.getYear() <= 9999
                 && from.isBefore(until) && ChronoUnit.DAYS.between(from, until) <= 366;

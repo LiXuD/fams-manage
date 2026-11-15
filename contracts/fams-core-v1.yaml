@@ -9635,7 +9635,7 @@ paths:
     get:
       tags: [Reports]
       operationId: getSealedInventoryExecutors
-      summary: Read executor totals for a current or sealed inventory task.
+      summary: Read executor totals for a current, sealed or retained inventory task.
       x-actor: { required: true, roles: [ASSET_ADMIN] }
       parameters:
         - { name: taskId, in: path, required: true, schema: { $ref: '#/components/schemas/Id' } }
@@ -9649,7 +9649,7 @@ paths:
                 required: [taskId, source, expected, counted, items]
                 properties:
                   taskId: { $ref: '#/components/schemas/Id' }
-                  source: { type: string, enum: [CURRENT, SEALED] }
+                  source: { type: string, enum: [CURRENT, SEALED, RETAINED] }
                   expected: { type: integer, format: int64, minimum: 0, description: Expected count from the selected task or sealed header. }
                   counted: { type: integer, format: int64, minimum: 0, description: Number of item records included in the calculation. }
                   items:
@@ -9666,12 +9666,12 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { description: Task is neither current nor sealed. }
+        '404': { description: "Task has no current, retained or sealed breakdown." }
   /operations-reports/inventory/{taskId}/executors.csv:
     get:
       tags: [Reports]
       operationId: exportSealedInventoryExecutors
-      summary: Download an audited CSV of the current or sealed executor totals.
+      summary: Download an audited CSV of the current, sealed or retained executor totals.
       x-actor: { required: true, roles: [ASSET_ADMIN] }
       parameters:
         - { name: taskId, in: path, required: true, schema: { $ref: '#/components/schemas/Id' } }
@@ -9684,7 +9684,71 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { description: Task is neither current nor sealed. }
+        '404': { description: "Task has no current, retained or sealed breakdown." }
+
+  /operations-reports/inventory-traceability:
+    get:
+      tags: [Reports]
+      operationId: getPublishedInventoryTraceability
+      summary: Count published inventory tasks and those with complete executor evidence.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: toExclusive, in: query, required: true, schema: { type: string, format: date } }
+        - { name: before, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: UTC publication-window totals and descending task details, including published tasks subsequently cancelled or terminated.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [counts, items, nextBefore]
+                properties:
+                  counts:
+                    type: object
+                    required: [published, traceable]
+                    properties:
+                      published: { type: integer, format: int64, minimum: 0 }
+                      traceable: { type: integer, format: int64, minimum: 0 }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [taskId, name, status, publishedAt, source, expected, counted, traceable]
+                      properties:
+                        taskId: { $ref: '#/components/schemas/Id' }
+                        name: { type: string }
+                        status: { type: string }
+                        publishedAt: { type: string, format: date-time }
+                        source: { type: string, enum: [CURRENT, SEALED, RETAINED, MISSING] }
+                        expected: { type: integer, format: int64, minimum: 0 }
+                        counted: { type: integer, format: int64, minimum: 0 }
+                        traceable: { type: boolean }
+                  nextBefore: { type: string, nullable: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /operations-reports/inventory-traceability.csv:
+    get:
+      tags: [Reports]
+      operationId: exportPublishedInventoryTraceability
+      summary: Export audited inventory traceability task details.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: toExclusive, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: CSV for the same publication window and task evidence.
+          content:
+            text/csv:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { description: More than 10000 matching tasks. Narrow the window. }
 
   /operations-reports/inventory-detail.csv:
     get:

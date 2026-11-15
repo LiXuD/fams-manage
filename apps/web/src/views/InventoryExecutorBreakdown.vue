@@ -10,7 +10,7 @@ interface Executor {
 }
 interface Breakdown {
   taskId: string;
-  source: "SEALED" | "CURRENT";
+  source: "SEALED" | "CURRENT" | "RETAINED";
   expected: number;
   counted: number;
   items: Executor[];
@@ -19,6 +19,7 @@ const props = defineProps<{ taskId: string }>();
 const endpoint = computed(() => `/api/v1/operations-reports/inventory/${props.taskId}/executors`);
 const breakdown = ref<Breakdown>();
 const busy = ref(false);
+const labels = { SEALED: '封存执行人明细', CURRENT: '当前执行人明细', RETAINED: '终态保留执行人明细' };
 const error = ref("");
 
 async function load() {
@@ -39,11 +40,11 @@ onMounted(load);
 </script>
 
 <template>
-  <section :aria-label="breakdown?.source === 'SEALED' ? '封存执行人明细' : '当前执行人明细'">
+  <section :aria-label="breakdown ? labels[breakdown.source] : '执行人明细'">
     <h4>盘点任务 {{ taskId }} · 执行人明细</h4>
     <p v-if="busy" role="status">正在查询执行人明细</p>
     <p v-if="error" role="alert">{{ error }}</p>
-    <button v-if="breakdown?.source !== 'SEALED'" type="button" :disabled="busy" @click="load">刷新执行人明细</button>
+    <button v-if="!breakdown || breakdown.source === 'CURRENT'" type="button" :disabled="busy" @click="load">刷新执行人明细</button>
     <template v-if="breakdown">
       <p v-if="breakdown.expected !== breakdown.counted">
         明细仅覆盖 {{ breakdown.counted }} / {{ breakdown.expected }} 项应盘。
@@ -51,7 +52,7 @@ onMounted(load);
       <a :href="`${endpoint}.csv`">下载执行人明细 CSV</a>
       <table v-if="breakdown.items.length">
         <thead><tr><th scope="col">执行人账号</th><th scope="col">应盘</th><th scope="col">已采信</th>
-          <th scope="col">采信差异</th><th scope="col">{{ breakdown.source === 'SEALED' ? '未盘' : '未采信' }}</th>
+          <th scope="col">采信差异</th><th scope="col">{{ breakdown.source === 'CURRENT' ? '未采信' : '未盘' }}</th>
         </tr></thead>
         <tbody><tr v-for="row in breakdown.items" :key="row.executorAccountId ?? 'unassigned'">
           <td>{{ row.executorAccountId ?? '未分配' }}</td><td>{{ row.expected }}</td>

@@ -544,6 +544,7 @@ class DutyHttpRuntimeCase {
                     AND detail_json->>'$.rows'='1'
                 """, Long.class));
         verifySealedExecutors(administrator, warehouse);
+        verifyPublishedInventoryTraceability(administrator, warehouse);
     }
 
     private void verifySealedExecutors(Session administrator, Session warehouse) throws Exception {
@@ -583,6 +584,74 @@ class DutyHttpRuntimeCase {
                 SELECT COUNT(*) FROM fams_audit_event WHERE action='OPERATIONS_REPORT_EXPORTED'
                     AND resource_type='SEALED_INVENTORY_EXECUTORS' AND resource_id=931000
                     AND detail_json->>'$.counted'='2'
+                """, Long.class));
+    }
+
+    private void verifyPublishedInventoryTraceability(Session administrator, Session warehouse) throws Exception {
+        db.update("UPDATE fams_inventory_task SET published_at='2026-11-01' WHERE id IN (931000,931001)");
+        db.update("""
+                INSERT INTO fams_inventory_task (id,name,task_status,range_json,starts_at,due_at,
+                    creator_account_id,created_at,updated_at,expected_count,published_at)
+                VALUES (931010,'=Unsafe,Name','CANCELLED','{}','2026-11-04','2026-11-05',931003,NOW(3),NOW(3),1,'2026-11-04'),
+                    (931011,'Terminated','TERMINATED','{}','2026-11-04','2026-11-05',931003,NOW(3),NOW(3),1,'2026-11-04'),
+                    (931012,'Draft','DRAFT','{}','2026-11-04','2026-11-05',931003,NOW(3),NOW(3),0,NULL),
+                    (931013,'No seal','COMPLETED','{}','2026-11-04','2026-11-05',931003,NOW(3),NOW(3),1,'2026-11-04'),
+                    (931014,'Complete seal','COMPLETED','{}','2026-11-04','2026-11-05',931003,NOW(3),NOW(3),1,'2026-11-04'),
+                    (931015,'Outside','CANCELLED','{}','2026-12-01','2026-12-02',931003,NOW(3),NOW(3),0,'2026-12-01'),
+                    (931016,'Missing executor field','COMPLETED','{}','2026-11-04','2026-11-05',
+                        931003,NOW(3),NOW(3),1,'2026-11-04')
+                """);
+        db.update("""
+                INSERT INTO fams_inventory_item (id,task_id,asset_id,asset_version,snapshot_json,executor_account_id)
+                VALUES (934010,931010,9007199254740993,0,'{}',NULL),(934011,931011,9007199254740993,0,'{}',931005),
+                    (934013,931013,9007199254740993,0,'{}',931005),(934014,931014,9007199254740993,0,'{}',931005),
+                    (934016,931016,9007199254740993,0,'{}',931005)
+                """);
+        db.update("""
+                INSERT INTO fams_inventory_sealed_report (task_id,task_version,timezone_id,expected_count,
+                    accepted_count,not_observed_count,captured_count,actor_account_id,actor_username,seal_reason,
+                    sync_digest,report_sha256,snapshot_json,created_at)
+                SELECT id,1,'UTC',1,0,1,0,931003,'duty3','Fixture',REPEAT('0',64),REPEAT('1',64),'{}','2026-11-05'
+                FROM fams_inventory_task WHERE id IN (931014,931016)
+                """);
+        db.update("""
+                INSERT INTO fams_inventory_sealed_item (task_id,item_id,asset_id,recheck_generation,
+                    snapshot_json,snapshot_sha256)
+                VALUES (931014,934014,9007199254740993,0,'{"item":{"executor_account_id":null},"review":{}}',REPEAT('1',64)),
+                    (931016,934016,9007199254740993,0,'{"item":{},"review":{}}',REPEAT('2',64))
+                """);
+
+        String path = "/operations-reports/inventory-traceability";
+        String window = "?from=2026-11-01&toExclusive=2026-12-01";
+        assertEquals(403, code(get(warehouse, path + window)));
+        assertEquals(400, code(get(administrator, path + "?from=2026-12-01&toExclusive=2026-11-01")));
+        var first = ok(get(administrator, path + window + "&pageSize=1"));
+        assertEquals(7, first.path("counts").path("published").asInt(-1));
+        assertEquals(3, first.path("counts").path("traceable").asInt(-1));
+        assertEquals("931016", first.path("nextBefore").asText());
+        assertEquals(1, first.path("items").get(0).path("counted").asInt(-1));
+        assertFalse(first.path("items").get(0).path("traceable").asBoolean(true));
+        var second = ok(get(administrator, path + window + "&before=931016"));
+        assertEquals(first.path("counts"), second.path("counts"));
+        var items = second.path("items");
+        assertTrue(items.valueStream().anyMatch(row -> "CANCELLED".equals(row.path("status").asText())
+                && row.path("traceable").asBoolean()));
+        assertTrue(items.valueStream().anyMatch(row -> "TERMINATED".equals(row.path("status").asText())
+                && row.path("traceable").asBoolean()));
+        assertTrue(items.valueStream().anyMatch(row -> "931013".equals(row.path("taskId").asText())
+                && "MISSING".equals(row.path("source").asText()) && !row.path("traceable").asBoolean(true)));
+        assertEquals(404, code(get(administrator, "/operations-reports/inventory/931013/executors")));
+        var retained = ok(get(administrator, "/operations-reports/inventory/931011/executors"));
+        assertEquals("RETAINED", retained.path("source").asText());
+        assertEquals("931005", retained.path("items").get(0).path("executorAccountId").asText());
+        var csv = get(administrator, path + ".csv" + window);
+        assertEquals(200, code(csv));
+        assertEquals(8L, csv.body().lines().count());
+        assertTrue(csv.body().contains("931010,\"'=Unsafe,Name\",CANCELLED"));
+        assertEquals(1L, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE action='OPERATIONS_REPORT_EXPORTED'
+                    AND resource_type='PUBLISHED_INVENTORY_TRACEABILITY'
+                    AND detail_json->>'$.rows'='7' AND detail_json->>'$.traceable'='3'
                 """, Long.class));
     }
 
