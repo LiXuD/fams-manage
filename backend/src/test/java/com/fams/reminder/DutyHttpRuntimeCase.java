@@ -1352,6 +1352,52 @@ class DutyHttpRuntimeCase {
         assertFalse(ok(get(administrator, exceptions)).path("items").valueStream().anyMatch(row ->
                 "931009".equals(row.path("businessId").asText())
                         && "REASSIGNMENT_REQUIRED".equals(row.path("stage").asText())));
+        verifyUnavailableDeclaration(administrator, warehouse, openReminders);
+
+    }
+
+    private void verifyUnavailableDeclaration(Session administrator, Session warehouse, String openReminders)
+            throws Exception {
+        String key = UUID.randomUUID().toString();
+        String reason = "Original processor is unavailable for further acceptance";
+        assertEquals(403, code(declareUnavailable(administrator, 4, 1, reason, key)));
+        assertEquals(409, code(declareUnavailable(warehouse, 3, 1, reason, key)));
+        assertEquals(409, code(declareUnavailable(warehouse, 4, 0, reason, key)));
+        var result = ok(declareUnavailable(warehouse, 4, 1, reason, key));
+        assertTrue(result.path("recorded").asBoolean());
+        assertEquals(result, ok(declareUnavailable(warehouse, 4, 1, reason, key)));
+        assertEquals(409, code(declareUnavailable(warehouse, 4, 1, "Changed reason", key)));
+        assertEquals(result, ok(declareUnavailable(warehouse, 4, 1, reason, UUID.randomUUID().toString())));
+        assertEquals("INBOUND_UNAVAILABILITY_ALREADY_RECORDED",
+                json.readTree(declareUnavailable(warehouse, 4, 1, "Different new request", UUID.randomUUID().toString())
+                        .body()).path("code").asText());
+        assertEquals(1, db.queryForObject(openReminders, Integer.class));
+        reassignments.scan();
+        assertEquals(1, db.queryForObject(openReminders, Integer.class));
+        assertEquals(1L, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE action='INBOUND_PROCESSOR_UNAVAILABLE'
+                    AND resource_id=931009 AND actor_account_id=931004
+                """, Long.class));
+        var snapshot = ok(get(administrator, "/inbound-receipts/931009/reassignment"));
+        assertEquals(reason, snapshot.path("unavailableReason").asText());
+        assertEquals(4, snapshot.path("version").asInt(-1));
+        assertEquals(1, snapshot.path("ownershipVersion").asInt(-1));
+        assertEquals("931004", snapshot.path("processorAccountId").asText());
+        db.update("UPDATE fams_inbound_processing_ownership SET ownership_version=2 WHERE receipt_id=931009");
+        reassignments.scan();
+        assertEquals(0, db.queryForObject(openReminders, Integer.class));
+        assertFalse(ok(get(administrator, "/inbound-receipts/931009/reassignment")).has("unavailableReason"));
+    }
+
+    private HttpResponse<String> declareUnavailable(Session session, long version, long ownershipVersion,
+            String reason, String key) throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create(base() + "/inbound-receipts/931009/reassignment/unavailable"))
+                .header("Content-Type", "application/json").header("Cookie", session.cookie())
+                .header("X-CSRF-Token", session.csrf()).header("Idempotency-Key", key)
+                .header("If-Match-Version", Long.toString(version))
+                .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(
+                        Map.of("ownershipVersion", ownershipVersion, "reason", reason))))
+                .build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private void verifyImportErrorQuality(Session administrator, Session warehouse, String report) throws Exception {

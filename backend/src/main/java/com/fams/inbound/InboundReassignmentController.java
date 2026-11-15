@@ -32,6 +32,8 @@ class InboundReassignmentController {
             @NotNull Boolean unsynchronizedResultsChecked,
             @NotNull @Size(min = 1, max = 200) List<@Valid Item> items) {}
 
+    record Unavailability(@NotNull @Min(0) Long ownershipVersion, @NotBlank @Size(max = 1000) String reason) {}
+
     private final InboundReassignmentService service;
     private final RequisitionActorContext actors;
 
@@ -43,6 +45,14 @@ class InboundReassignmentController {
     @GetMapping
     Map<String, Object> inspect(@PathVariable long receiptId) {
         return service.inspect(actors.capture(), receiptId);
+    }
+
+    @PostMapping("/unavailable")
+    Map<String, Object> declareUnavailable(@PathVariable @Min(1) long receiptId,
+            @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
+            @RequestHeader("If-Match-Version") @Min(0) long version,
+            @Valid @RequestBody Unavailability input) {
+        return service.declareUnavailable(actors.capture(), receiptId, version, key, input);
     }
 
     @PostMapping

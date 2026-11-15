@@ -19,7 +19,8 @@ class ReassignmentReminderService {
             WITH owned_work AS (
                 SELECT t.business_type, t.business_id,
                     COALESCE(t.assignee_account_id, o.processor_account_id) AS owner_id,
-                    CASE WHEN o.ownership_version = 0 THEN r.warehouse_first_execution_due_at END AS first_due
+                    CASE WHEN o.ownership_version = 0 THEN r.warehouse_first_execution_due_at END AS first_due,
+                    r.id IS NOT NULL AND o.unavailable_ownership_version = o.ownership_version AS declared_unavailable
                 FROM fams_todo t
                 LEFT JOIN fams_inbound_processing_ownership o
                     ON t.business_type = 'INBOUND' AND t.todo_type = 'WAREHOUSE_EXECUTION'
@@ -35,7 +36,7 @@ class ReassignmentReminderService {
                 JOIN fams_organization g ON g.id = e.organization_id
                 LEFT JOIN fams_account_role r ON r.account_id = a.id AND r.role_code = 'WAREHOUSE_OPERATOR'
                 WHERE a.status = 'DISABLED' OR e.status <> 'ACTIVE' OR g.status <> 'ACTIVE' OR r.account_id IS NULL
-                   OR t.first_due <= ?
+                   OR t.first_due <= ? OR t.declared_unavailable
             )
             """;
 

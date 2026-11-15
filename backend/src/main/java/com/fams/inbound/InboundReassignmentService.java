@@ -7,6 +7,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -50,11 +51,15 @@ class InboundReassignmentService {
                 + "WHERE a.status='ENABLED' AND a.initial_password_required=FALSE "
                 + "AND e.status='ACTIVE' AND o.status='ACTIVE' AND r.role_code='WAREHOUSE_OPERATOR' "
                 + "AND a.id<>? ORDER BY a.id", owner.get("processor_account_id"));
-        return Map.of("id", Long.toString(id), "version", row.get("version"),
+        var result = new HashMap<String, Object>(Map.of("id", Long.toString(id), "version", row.get("version"),
                 "ownershipVersion", owner.get("ownership_version"),
                 "processorAccountId", owner.get("processor_account_id").toString(),
                 "items", checks(id), "operators", operators.stream().map(o -> Map.of(
-                        "id", o.get("id").toString(), "name", o.get("name"))).toList());
+                        "id", o.get("id").toString(), "name", o.get("name"))).toList()));
+        if (unavailabilityDeclared(owner)) {
+            result.put("unavailableReason", owner.get("unavailable_reason"));
+        }
+        return result;
     }
 
     @SuppressWarnings("unchecked")
@@ -104,7 +109,8 @@ class InboundReassignmentService {
         }
         Instant now = clock.instant().truncatedTo(ChronoUnit.MILLIS);
         db.update("UPDATE fams_inbound_processing_ownership SET processor_account_id=?,"
-                + "processor_username_snapshot=?,ownership_version=ownership_version+1 WHERE id=?",
+                + "processor_username_snapshot=?,ownership_version=ownership_version+1,"
+                + "unavailable_at=NULL,unavailable_reason=NULL,unavailable_ownership_version=NULL WHERE id=?",
                 input.processorAccountId(), targetUsername(input.processorAccountId()), owner.get("id"));
         db.update("UPDATE fams_inbound_receipt SET version=version+1,updated_at=?,updated_by=? WHERE id=?",
                 now, actor.id(), id);
@@ -130,6 +136,76 @@ class InboundReassignmentService {
                 actor.id(), key, digest, json.writeValueAsString(result), id, version + 1,
                 now, now, now.plus(24, ChronoUnit.HOURS));
         return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> declareUnavailable(Actor actor, long id, long version, String key,
+            InboundReassignmentController.Unavailability input) {
+        var current = actors.revalidateLocked(actor);
+        if (!current.has(Role.WAREHOUSE_OPERATOR)) {
+            throw new InboundFailure("INBOUND_FORBIDDEN", "Warehouse operator required", 403);
+        }
+        var row = processing(id);
+        var owner = owner(id);
+        if (number(owner, "processor_account_id") != current.id()) {
+            throw new InboundFailure("INBOUND_FORBIDDEN", "Current warehouse operator required", 403);
+        }
+        String reason = input.reason().strip();
+        String digest = digest(id, version, Map.of("ownershipVersion", input.ownershipVersion(), "reason", reason));
+        var prior = db.queryForList("""
+                SELECT payload_sha256,response_body_json FROM fams_idempotency_record
+                WHERE actor_account_id=? AND operation_id='declareInboundProcessorUnavailable'
+                    AND idempotency_key=? FOR UPDATE
+                """, actor.id(), key);
+        if (!prior.isEmpty()) {
+            if (!digest.equals(prior.getFirst().get("payload_sha256"))) {
+                throw InboundFailure.conflict("INBOUND_IDEMPOTENCY_CONFLICT");
+            }
+            return json.readValue(prior.getFirst().get("response_body_json").toString(), Map.class);
+        }
+        if (number(row, "version") != version) {
+            throw InboundFailure.conflict("INBOUND_VERSION_CONFLICT");
+        }
+        if (number(owner, "ownership_version") != input.ownershipVersion()) {
+            throw InboundFailure.conflict("INBOUND_OWNERSHIP_CHANGED");
+        }
+        Instant now = clock.instant().truncatedTo(ChronoUnit.MILLIS);
+        boolean alreadyDeclared = unavailabilityDeclared(owner);
+        if (alreadyDeclared && !reason.equals(owner.get("unavailable_reason"))) {
+            throw InboundFailure.conflict("INBOUND_UNAVAILABILITY_ALREADY_RECORDED");
+        }
+        if (!alreadyDeclared) {
+            db.update("""
+                    UPDATE fams_inbound_processing_ownership
+                    SET unavailable_at=?,unavailable_reason=?,unavailable_ownership_version=?
+                    WHERE id=?
+                    """, now, reason, input.ownershipVersion(), owner.get("id"));
+            db.update("""
+                    INSERT INTO fams_audit_event (request_id,actor_account_id,actor_role,action,resource_type,
+                        resource_id,before_version,after_version,occurred_at,detail_json)
+                    VALUES (?,?,'WAREHOUSE_OPERATOR','INBOUND_PROCESSOR_UNAVAILABLE','INBOUND',?,?,?,?,?)
+                    """, actor.requestId().toString(), actor.id(), id, version, version, now,
+                    json.writeValueAsString(Map.of("reason", reason, "ownershipVersion", input.ownershipVersion())));
+        }
+        db.update("""
+                INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at)
+                VALUES ('ASSET_ADMIN','INBOUND',?,'REASSIGNMENT_REQUIRED','OPEN',?)
+                ON DUPLICATE KEY UPDATE id=fams_todo.id
+                """, id, now);
+        var result = Map.<String, Object>of("receiptId", Long.toString(id), "recorded", true);
+        db.update("""
+                INSERT INTO fams_idempotency_record (actor_account_id,operation_id,idempotency_key,payload_sha256,
+                    result_status,http_status,response_body_json,resource_type,resource_id,
+                    resource_version,created_at,completed_at,expires_at)
+                VALUES (?,'declareInboundProcessorUnavailable',?,?,'SUCCEEDED',200,?,'INBOUND',?,?,?,?,?)
+                """, actor.id(), key, digest, json.writeValueAsString(result), id, version,
+                now, now, now.plus(24, ChronoUnit.HOURS));
+        return result;
+    }
+
+    private boolean unavailabilityDeclared(Map<String, Object> owner) {
+        return owner.get("unavailable_ownership_version") instanceof Number declared
+                && declared.longValue() == number(owner, "ownership_version");
     }
 
     private RequisitionActorContext.Current admin(Actor actor) {
