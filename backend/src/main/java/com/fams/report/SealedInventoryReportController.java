@@ -15,6 +15,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -69,6 +70,24 @@ class SealedInventoryReportController {
         } catch (SealedInventoryReportService.ExportLimit failure) {
             return ResponseEntity.unprocessableContent().body("REPORT_EXPORT_LIMIT");
         }
+    }
+
+    @GetMapping("/api/v1/operations-reports/inventory/{taskId}/executors")
+    ResponseEntity<SealedInventoryReportService.ExecutorBreakdown> executors(@PathVariable @Positive long taskId) {
+        actors.requireAssetAdmin();
+        var result = reports.executors(taskId);
+        return result == null ? ResponseEntity.notFound().build()
+                : ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store").body(result);
+    }
+
+    @GetMapping("/api/v1/operations-reports/inventory/{taskId}/executors.csv")
+    ResponseEntity<String> exportExecutors(@PathVariable @Positive long taskId) {
+        var actor = actors.requireAssetAdmin();
+        var result = reports.exportExecutors(actor, taskId);
+        return result == null ? ResponseEntity.notFound().build()
+                : ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
+                        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=inventory-executors.csv")
+                        .header(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8").body(result);
     }
 
     private static boolean validWindow(LocalDate from, LocalDate until) {

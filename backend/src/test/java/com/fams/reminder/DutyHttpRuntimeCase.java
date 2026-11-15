@@ -514,6 +514,46 @@ class DutyHttpRuntimeCase {
                     AND detail_json->>'$.from'='2026-11-01' AND detail_json->>'$.toExclusive'='2026-12-01'
                     AND detail_json->>'$.rows'='1'
                 """, Long.class));
+        verifySealedExecutors(administrator, warehouse);
+    }
+
+    private void verifySealedExecutors(Session administrator, Session warehouse) throws Exception {
+        db.update("""
+                INSERT INTO fams_inventory_item (id,task_id,asset_id,asset_version,snapshot_json,executor_account_id)
+                VALUES (934000,931000,9007199254740993,0,'{}',931005),
+                       (934001,931000,9007199254740994,0,'{}',NULL)
+                """);
+        db.update("""
+                INSERT INTO fams_inventory_sealed_item (task_id,item_id,asset_id,recheck_generation,
+                    snapshot_json,snapshot_sha256)
+                VALUES (931000,934000,9007199254740993,0,
+                    '{"item":{"executor_account_id":"9007199254741201"},"review":{
+                    "review_status":"ACCEPTED","observation_id":"9007199254740993"}}',REPEAT('1',64)),
+                    (931000,934001,9007199254740994,0,
+                    '{"item":{"executor_account_id":null},"review":{}}',REPEAT('2',64))
+                """);
+        var path = "/operations-reports/inventory/931000/executors";
+        assertEquals(403, code(get(warehouse, path)));
+        assertEquals(403, code(get(warehouse, path + ".csv")));
+        assertEquals(404, code(get(administrator, "/operations-reports/inventory/931001/executors")));
+        var report = ok(get(administrator, path));
+        assertEquals(4, report.path("expected").asInt(-1));
+        assertEquals(2, report.path("counted").asInt(-1));
+        var rows = report.path("items");
+        assertEquals(2, rows.size());
+        assertEquals("9007199254741201", rows.get(0).path("executorAccountId").asText());
+        assertEquals(1, rows.get(0).path("accepted").asInt(-1));
+        assertEquals(1, rows.get(0).path("differences").asInt(-1));
+        assertEquals(1, rows.get(1).path("notObserved").asInt(-1));
+        var csv = get(administrator, path + ".csv");
+        assertEquals(200, code(csv));
+        assertEquals("taskId,executorAccountId,expected,accepted,differences,notObserved\r\n"
+                + "931000,9007199254741201,1,1,1,0\r\n931000,,1,0,0,1", csv.body());
+        assertEquals(1L, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE action='OPERATIONS_REPORT_EXPORTED'
+                    AND resource_type='SEALED_INVENTORY_EXECUTORS' AND resource_id=931000
+                    AND detail_json->>'$.counted'='2'
+                """, Long.class));
     }
 
     private void verifyWorkbenchTodos(Session administrator, Session warehouse, Session employee) throws Exception {

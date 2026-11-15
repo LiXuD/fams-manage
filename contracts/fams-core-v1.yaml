@@ -9631,6 +9631,60 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /operations-reports/inventory/{taskId}/executors:
+    get:
+      tags: [Reports]
+      operationId: getSealedInventoryExecutors
+      summary: Read executor totals from the sealed inventory evidence.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - { name: taskId, in: path, required: true, schema: { $ref: '#/components/schemas/Id' } }
+      responses:
+        '200':
+          description: One group per frozen executor and a null group for unassigned items.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [taskId, expected, counted, items]
+                properties:
+                  taskId: { $ref: '#/components/schemas/Id' }
+                  expected: { type: integer, format: int64, minimum: 0, description: Expected count in the sealed header. }
+                  counted: { type: integer, format: int64, minimum: 0, description: Number of available sealed item snapshots. }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [executorAccountId, expected, accepted, differences, notObserved]
+                      properties:
+                        executorAccountId: { type: string, nullable: true, description: Account identifier frozen with the item. }
+                        expected: { type: integer, format: int64, minimum: 0 }
+                        accepted: { type: integer, format: int64, minimum: 0 }
+                        differences: { type: integer, format: int64, minimum: 0, description: Accepted items whose selected evidence has difference subjects. }
+                        notObserved: { type: integer, format: int64, minimum: 0 }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: Task has no sealed report. }
+  /operations-reports/inventory/{taskId}/executors.csv:
+    get:
+      tags: [Reports]
+      operationId: exportSealedInventoryExecutors
+      summary: Download an audited CSV of the sealed executor totals.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - { name: taskId, in: path, required: true, schema: { $ref: '#/components/schemas/Id' } }
+      responses:
+        '200':
+          description: CSV from the same sealed calculation used by the JSON view.
+          content:
+            text/csv:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: Task has no sealed report. }
+
   /operations-reports/inventory-detail.csv:
     get:
       tags: [Reports]

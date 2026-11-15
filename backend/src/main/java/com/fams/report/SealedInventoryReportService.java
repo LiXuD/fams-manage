@@ -98,6 +98,62 @@ class SealedInventoryReportService {
         return new ProgressPage(List.copyOf(rows.subList(0, pageSize)), rows.get(pageSize - 1).taskId());
     }
 
+    @Transactional(readOnly = true)
+    public ExecutorBreakdown executors(long taskId) {
+        var counts = db.queryForList("SELECT expected_count FROM fams_inventory_sealed_report WHERE task_id=?",
+                Long.class, taskId);
+        if (counts.isEmpty()) {
+            return null;
+        }
+        var rows = db.query("""
+                WITH items AS (
+                    SELECT NULLIF(CAST(NULLIF(i.snapshot_json->>'$.item.executor_account_id','null') AS UNSIGNED),0)
+                            AS executor_id,
+                        i.snapshot_json->>'$.review.review_status' AS review_status,
+                        CAST(NULLIF(i.snapshot_json->>'$.review.observation_id','null') AS UNSIGNED) AS observation_id
+                    FROM fams_inventory_sealed_item i WHERE i.task_id=?
+                )
+                SELECT executor_id,COUNT(*) AS expected,
+                    COUNT(CASE WHEN review_status='ACCEPTED' THEN 1 END) AS accepted,
+                    COUNT(CASE WHEN review_status='ACCEPTED' AND JSON_LENGTH(e.snapshot_json,'$.subjects')>0
+                               THEN 1 END) AS differences
+                FROM items i LEFT JOIN fams_inventory_sealed_evidence e
+                    ON e.task_id=? AND e.observation_id=i.observation_id
+                GROUP BY executor_id ORDER BY executor_id IS NULL,executor_id
+                """, (row, index) -> {
+                    long expected = row.getLong("expected"), accepted = row.getLong("accepted");
+                    return new Executor(row.getString("executor_id"), expected, accepted,
+                            row.getLong("differences"), expected - accepted);
+                }, taskId, taskId);
+        long expected = counts.getFirst();
+        long counted = rows.stream().mapToLong(Executor::expected).sum();
+        return new ExecutorBreakdown(Long.toString(taskId), expected, counted, rows);
+    }
+
+    @Transactional
+    public String exportExecutors(AssetActorContext.Actor actor, long taskId) {
+        var breakdown = executors(taskId);
+        if (breakdown == null) {
+            return null;
+        }
+        db.update("""
+                INSERT INTO fams_audit_event (request_id,actor_account_id,actor_role,action,resource_type,
+                    resource_id,occurred_at,detail_json)
+                VALUES (?,?,?,'OPERATIONS_REPORT_EXPORTED','SEALED_INVENTORY_EXECUTORS',?,?,
+                    JSON_OBJECT('rows',?,'expected',?,'counted',?))
+                """, actor.requestId(), actor.id(), actor.role(), taskId, Timestamp.from(clock.instant()),
+                breakdown.items().size(), breakdown.expected(), breakdown.counted());
+        // The comma-safe fields are only database IDs and integer counts.
+        return "taskId,executorAccountId,expected,accepted,differences,notObserved\r\n"
+                + breakdown.items().stream().map(row -> String.join(",", breakdown.taskId(),
+                        row.executorAccountId() == null ? "" : row.executorAccountId(),
+                        Long.toString(row.expected()), Long.toString(row.accepted()),
+                        Long.toString(row.differences()), Long.toString(row.notObserved())))
+                        .collect(Collectors.joining("\r\n"));
+    }
+
+    record Executor(String executorAccountId, long expected, long accepted, long differences, long notObserved) {}
+    record ExecutorBreakdown(String taskId, long expected, long counted, List<Executor> items) {}
     record Progress(String taskId, String name, String status, Instant dueAt, long expected, long accepted) {}
     record ProgressPage(List<Progress> items, String nextBefore) {}
 
