@@ -10,6 +10,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.sql.Timestamp;
+import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.Map;
@@ -51,6 +53,7 @@ class DutyHttpRuntimeCase {
     private final HttpClient http = HttpClient.newHttpClient();
 
     @Autowired JdbcTemplate db;
+    @Autowired Clock clock;
     @Autowired ObjectMapper json;
     @Autowired ConfigurationAnomalyService anomalies;
     @Autowired ReassignmentReminderService reassignments;
@@ -235,7 +238,8 @@ class DutyHttpRuntimeCase {
         assertEquals("reminder-test", deliveries.eligibleTemplate(claim));
         assertTrue(jobs.claim(NotificationDeliveryQueue.KIND, "second", java.time.Duration.ofMinutes(1)).isEmpty());
         jobs.fail(claim, "SMS_RESULT_UNKNOWN", true);
-        db.update("UPDATE fams_durable_job SET next_attempt_at=UTC_TIMESTAMP(3) WHERE id=?", claim.id().toString());
+        db.update("UPDATE fams_durable_job SET next_attempt_at=? WHERE id=?",
+                Timestamp.from(clock.instant().minusSeconds(1)), claim.id().toString());
         var retry = jobs.claim(NotificationDeliveryQueue.KIND, "second", java.time.Duration.ofMinutes(1)).orElseThrow();
         assertEquals(claim.id(), retry.id());
         org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
@@ -260,7 +264,8 @@ class DutyHttpRuntimeCase {
         var adapters = provider.getBeanProvider(MiniNotificationSmsPort.class);
         new NotificationDeliveryWorker(jobs, deliveries, adapters, "reminder-test").poll();
         assertEquals(1, calls.size());
-        db.update("UPDATE fams_durable_job SET next_attempt_at=UTC_TIMESTAMP(3) WHERE id=?", calls.getFirst());
+        db.update("UPDATE fams_durable_job SET next_attempt_at=? WHERE id=?",
+                Timestamp.from(clock.instant().minusSeconds(1)), calls.getFirst());
         new NotificationDeliveryWorker(jobs, deliveries, adapters, "reminder-test").poll();
         assertEquals(2, calls.size());
         assertEquals(calls.getFirst(), calls.getLast());
