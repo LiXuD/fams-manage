@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import type { RouteLocationRaw } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
+import ConfigurationAnomalies from "@/features/reminder/panels/ConfigurationAnomalies.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { AuthApiError } from "@/auth/api";
 import { BusinessApiError, businessMessage, businessRequest } from "@/api/business";
@@ -244,5 +245,6 @@ onBeforeUnmount(clear);
       </form>
       <p v-if="dutyError" class="fams-notice" data-state="error" role="alert"><strong>{{ dutyError }}</strong></p>
     </section>
+    <ConfigurationAnomalies v-if="administrator" />
   </AppChrome>
 </template>

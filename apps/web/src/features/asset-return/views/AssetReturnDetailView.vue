@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef } from "vue";
+import { computed, onMounted, ref, shallowRef, watch } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import AssetReturnReassignment from "@/features/asset-return/panels/AssetReturnReassignment.vue";
 import { useSessionStore } from "@/auth/sessionStore";
@@ -16,6 +16,11 @@ const session = useSessionStore();
 const selected = ref<AssetReturn | null>(null);
 const busy = shallowRef(false); const error = shallowRef(""); const notice = shallowRef(""); const retryable = shallowRef(false);
 const reason = shallowRef(""); const observed = shallowRef(""); const result = ref<"NORMAL" | "DAMAGED" | "MISSING">("NORMAL");
+const lastSeen = shallowRef(""); const lastLocation = shallowRef(""); const missingCircumstances = shallowRef("");
+/** 缺失转报失的申请态读法取自借用归还功能线，与报失域主状态词典同族但口径更短。 */
+const missingLossStates: Record<string, string> = { PENDING_ADMIN_DECISION: "待审批", WAITING_WAREHOUSE_CLAIM: "待认领",
+  VERIFYING: "待核实", SEARCHING: "查找中", CONFIRMED_LOST: "已确认遗失", RECOVERED: "已找回",
+  REJECTED: "已驳回", CANCELLED: "已撤回" };
 const warehouseId = shallowRef(""); const locationId = shallowRef(""); const warehouses = ref<ReturnChoice[]>([]); const locations = ref<ReturnChoice[]>([]);
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 const warehouse = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR"));
@@ -41,7 +46,17 @@ const followupRows = computed(() => (selected.value?.followups ?? []).map((follo
   repairTarget: followup.linkedRepairId || followup.lastRepairId || "",
   repairStatusText: followup.repairStatus === "COMPLETED" ? "已验收入库"
     : followup.repairStatus === "REJECTED" || followup.repairStatus === "CANCELLED" ? "原维修未执行，源义务仍待处理" : "尚未实际完成",
+  lossReportId: followup.lossReport?.reportId ?? "",
+  lossHref: followup.lossReport ? `/loss-reports/${followup.lossReport.reportId}` : "",
+  lossStateText: followup.lossReport
+    ? followup.lossReport.recovered ? "实物已找回" : missingLossStates[followup.lossReport.status] ?? followup.lossReport.status : "",
+  recoveryReturnText: followup.recoveryReturnStatus ? labels[followup.recoveryReturnStatus] : "",
 })));
+const missingContinuation = computed(() => selected.value?.followups?.find(
+  followup => followup.businessType === "LOST_REPORT" && followup.missingLossLockVersion != null));
+watch(() => selected.value?.id, () => {
+  lastSeen.value = ""; lastLocation.value = ""; missingCircumstances.value = "";
+});
 /** 确认式幂等提交：在途意图槽与幂等键簿记归底座；busy/retryable、URL 与文案留在本视图。 */
 const { pending, prepare: draft, confirm: adopt, settle, reset } = useConfirmedSubmit<Omit<BusinessMutation, "key">>();
 const identity = computed(() => JSON.stringify([props.id, session.user?.id, session.user?.roles, session.csrfToken]));
@@ -88,8 +103,28 @@ function inspect() {
     if (!wh || !bin || !observed.value.trim()) { error.value = "请核对实物编码并选择仓库、仓位。"; return; }
     Object.assign(body, { observedCode: observed.value.trim(), warehouseId: wh.id, warehouseVersion: wh.version,
       locationId: bin.id, locationVersion: bin.version });
+  } else {
+    const facts = missingLossFacts();
+    if (!facts) return;
+    body.missingLoss = facts;
   }
   void mutate(`/asset-returns/${row.id}/inspect`, row.version, body);
+}
+function missingLossFacts() {
+  const observedAt = new Date(lastSeen.value);
+  if (!Number.isFinite(observedAt.getTime()) || !lastLocation.value.trim() || missingCircumstances.value.trim().length < 10) {
+    error.value = "请填写最后见到时间、地点和实物查找情况。";
+    return null;
+  }
+  return { lastSeenAt: observedAt.toISOString(), lastLocation: lastLocation.value.trim(),
+    circumstances: missingCircumstances.value.trim() };
+}
+function retryMissingLoss() {
+  const row = selected.value, followup = missingContinuation.value;
+  if (!row?.asset || !followup || followup.version == null) return;
+  const facts = missingLossFacts();
+  if (facts) void mutate(`/asset-returns/${row.id}/missing-loss`, followup.version, {
+    assetVersion: row.asset.version, lockVersion: followup.missingLossLockVersion, facts });
 }
 async function catalog(kind: string) {
   const rows: ReturnChoice[] = []; let p = 1; let part: ReturnChoice[];
@@ -172,12 +207,24 @@ onMounted(async () => {
               <select class="fams-control" v-model="locationId" :disabled="formDisabled"><option value="">请选择</option><option v-for="l in bins" :key="l.id" :value="l.id">{{ l.name }}</option></select></label>
           </template>
         </div>
-        <p v-if="inspectionIsMissing" class="fams-panel-subtitle">实物缺失将保留借用责任，进入报失处理。</p>
-        <button class="fams-button" data-kind="primary" type="button" :disabled="formDisabled" @click="inspect">提交实物验收</button>
+        <p v-if="inspectionIsMissing" class="fams-panel-subtitle">实物缺失将保留借用责任，并提交关联报失审批。</p>
+        <button v-if="!inspectionIsMissing" class="fams-button" data-kind="primary" type="button" :disabled="formDisabled" @click="inspect">提交实物验收</button>
       </div>
+      <fieldset v-if="(canInspect && inspectionIsMissing) || missingContinuation" class="fams-card fams-stack" :disabled="formDisabled">
+        <h4 class="fams-panel-title">实物缺失报失依据</h4>
+        <div class="fams-field-grid">
+          <label class="fams-field"><span class="fams-field-label">最后见到时间</span><input class="fams-control" v-model="lastSeen" type="datetime-local" /></label>
+          <label class="fams-field"><span class="fams-field-label">最后见到地点</span><input class="fams-control" v-model="lastLocation" maxlength="500" /></label>
+          <label class="fams-field fams-field-wide"><span class="fams-field-label">实物查找情况</span><textarea class="fams-control" v-model="missingCircumstances" maxlength="2000" /></label>
+        </div>
+        <div class="fams-form-actions">
+          <button v-if="missingContinuation" class="fams-button" data-kind="primary" type="button" @click="retryMissingLoss">从原归还继续报失</button>
+          <button v-else class="fams-button" data-kind="primary" type="button" @click="inspect">提交缺失验收并发起报失</button>
+        </div>
+      </fieldset>
 
       <p v-if="selected.inspectionResult">验收结果 {{ inspectionLabels[selected.inspectionResult] }} · {{ selected.inspectionReason }}</p>
-      <p v-for="row in followupRows" :key="row.id">后续 {{ row.id }} · {{ row.businessTypeText }} · {{ row.followupStatusText }}<span v-if="row.hasRepair"> · 正式维修 {{ row.repairTarget }}（{{ row.repairStatusText }}）</span></p>
+      <p v-for="row in followupRows" :key="row.id">后续 {{ row.id }} · {{ row.businessTypeText }} · {{ row.followupStatusText }}<span v-if="row.hasRepair"> · 正式维修 {{ row.repairTarget }}（{{ row.repairStatusText }}）</span><span v-if="row.lossReportId"> · <router-link class="fams-button" data-kind="link" data-size="sm" :to="row.lossHref">报失 {{ row.lossReportId }}</router-link> · {{ row.lossStateText }}<template v-if="row.recoveryReturnText"> · 找回关联退还 {{ row.recoveryReturnText }}</template></span></p>
     </section>
   </AppChrome>
 </template>

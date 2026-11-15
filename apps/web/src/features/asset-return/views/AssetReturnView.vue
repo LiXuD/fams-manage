@@ -9,6 +9,14 @@ import type { AssetReturn, BusinessPage } from "@fams/api-types/loan";
 const { rows: returns, busy, error, page, total, refresh, pages } = usePagedResourceList<AssetReturn>(
   (page) => businessRequest<BusinessPage<AssetReturn>>(`/asset-returns?page=${page}&pageSize=20`),
   { problem: businessMessage });
+/** 缺失转报失的申请态读法与退还详情页同词典。 */
+const missingLossStates: Record<string, string> = { PENDING_ADMIN_DECISION: "待审批", WAITING_WAREHOUSE_CLAIM: "待认领",
+  VERIFYING: "待核实", SEARCHING: "查找中", CONFIRMED_LOST: "已确认遗失", RECOVERED: "已找回",
+  REJECTED: "已驳回", CANCELLED: "已撤回" };
+const returnRows = computed(() => returns.value.map((row) => ({ ...row,
+  lossText: row.returnLossReport
+    ? row.returnLossReport.recovered ? "实物已找回" : missingLossStates[row.returnLossReport.status] ?? row.returnLossReport.status : "",
+})));
 const prevDisabled = computed(() => busy.value || page.value === 1);
 const nextDisabled = computed(() => busy.value || page.value * 20 >= total.value);
 </script>
@@ -30,9 +38,9 @@ const nextDisabled = computed(() => busy.value || page.value * 20 >= total.value
         <table class="fams-table">
           <thead><tr><th scope="col" data-column-kind="identity">退还单</th><th scope="col">状态</th><th scope="col" data-column-kind="action">操作</th></tr></thead>
           <tbody>
-            <tr v-for="row in returns" :key="row.id">
+            <tr v-for="row in returnRows" :key="row.id">
               <th scope="row" data-column-kind="identity">{{ row.id }}</th>
-              <td><span class="fams-status">{{ labels[row.returnStatus] }}</span></td>
+              <td><span class="fams-status">{{ labels[row.returnStatus] }}</span><span v-if="row.lossText"> · {{ row.lossText }}</span></td>
               <td data-column-kind="action"><router-link class="fams-button" data-kind="link" data-size="sm"
                 :to="`/asset-returns/${row.id}`">查看 / 审批 / 验收</router-link></td>
             </tr>

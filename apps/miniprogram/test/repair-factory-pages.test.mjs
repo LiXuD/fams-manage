@@ -288,3 +288,12 @@ test("factory loss submits the guarded original round and retries the same inten
     f.page.onLinkedLoss();
     assert.deepEqual(routes, ["/pages/loss-reports/index?id=9007199254740997"]);
 });
+
+test("native repair summary labels retired opening rounds and retains unknown states", () => {
+    const markup = readFileSync(new URL("../native/pages/repairs/index.wxml", import.meta.url), "utf8");
+    const source = markup.match(/<wxs module="labels">([\s\S]*?)<\/wxs>/)?.[1];
+    assert.ok(source);
+    const labels = new Function("module", source + "; return module.exports;")({ exports: {} });
+    assert.equal(labels.state("INITIAL_RETIRED"), "期初批次已撤销");
+    assert.equal(labels.state("FUTURE_ROUND_STATE"), "FUTURE_ROUND_STATE");
+});

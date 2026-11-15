@@ -27,11 +27,21 @@ import java.util.Objects;
 @Profile("fams-product")
 @Transactional
 public class ScrapReadService {
-    private static final String SCOPE = " FROM fams_scrap_request r WHERE (? OR r.creator_account_id=?"
+    private static final String SCOPE = " FROM fams_scrap_request r JOIN fams_asset a ON a.id=r.asset_id"
+            + " WHERE (? OR r.creator_account_id=?"
+            + " OR (? AND EXISTS (SELECT 1 FROM fams_account_authorization aa"
+            + " JOIN fams_account_data_scope ds ON ds.authorization_id=aa.id"
+            + " JOIN fams_account_scope_organization os ON os.data_scope_id=ds.id"
+            + " WHERE aa.account_id=? AND aa.role_code='AUDIT_READ_ONLY' AND aa.superseded_at IS NULL"
+            + " AND aa.authorization_status='ACTIVE' AND ds.scope_type='SPECIFIED_ORGANIZATIONS'"
+            + " AND CAST(os.organization_id AS CHAR)=COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(r.source_snapshot_json,'$.using_organization_id')),"
+            + " 'null'),CAST(a.owning_organization_id AS CHAR))))"
             + " OR (? AND CAST(JSON_UNQUOTE(JSON_EXTRACT(r.source_snapshot_json,'$.responsible_employee_id')) AS UNSIGNED)=?)"
             + " OR (? AND CAST(JSON_UNQUOTE(JSON_EXTRACT(r.source_snapshot_json,'$.using_organization_id')) AS UNSIGNED)=?)"
-            + " OR (? AND r.decision_snapshot_json IS NOT NULL"
-            + " AND JSON_UNQUOTE(JSON_EXTRACT(r.decision_snapshot_json,'$.decision.result'))='APPROVE'))";
+            + " OR (? AND (JSON_UNQUOTE(JSON_EXTRACT(r.decision_snapshot_json,'$.decision.result'))='APPROVE'"
+            + " OR EXISTS (SELECT 1 FROM fams_scrap_correction c WHERE c.request_id=r.id"
+            + " AND (c.correction_status='WAITING_WAREHOUSE_CLAIM'"
+            + " OR (c.processor_account_id=? AND c.correction_status IN ('PROCESSING','COMPLETED')))))))";
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final RequisitionActorContext actors;
@@ -52,7 +62,7 @@ public class ScrapReadService {
     }
 
     public Map<String, Object> list(Actor actor, int page, int size) {
-        var current = actors.revalidateLocked(actor);
+        var current = actors.revalidateScrapReaderLocked(actor);
         Object[] scope = scope(current);
         var args = new ArrayList<Object>(Arrays.asList(scope));
         args.add(size);
@@ -90,7 +100,7 @@ public class ScrapReadService {
     }
 
     public Map<String, Object> get(Actor actor, long id) {
-        var current = actors.revalidateLocked(actor);
+        var current = actors.revalidateScrapReaderLocked(actor);
         var row = visible(current, id);
         var result = view(current, row);
         result.put("history", db.queryForList("SELECT id,action,actor_username,occurred_at"
@@ -142,7 +152,7 @@ public class ScrapReadService {
     }
 
     private static boolean mayRequestReversal(Current actor, Map<String, Object> row) {
-        return "EXECUTED".equals(row.get("request_status")) && "STANDALONE".equals(row.get("source_type"))
+        return "EXECUTED".equals(row.get("request_status")) && ScrapReviewService.physicalSource(row.get("source_type"))
                 && (actor.has(Role.ASSET_ADMIN) || actor.has(Role.WAREHOUSE_OPERATOR)
                         || Objects.equals(actor.id(), row.get("creator_account_id")));
     }
@@ -165,10 +175,17 @@ public class ScrapReadService {
     }
 
     private Object[] scope(Current actor) {
-        return new Object[] {actor.has(Role.ASSET_ADMIN) || actor.has(Role.AUDIT_READ_ONLY), actor.id(),
+        return new Object[] {actor.has(Role.ASSET_ADMIN), auditOnly(actor) ? null : actor.id(),
+                actor.has(Role.AUDIT_READ_ONLY), actor.id(),
                 actor.has(Role.EMPLOYEE), actor.employeeId(),
                 actor.has(Role.DEPARTMENT_ASSET_MANAGER), actor.organizationId(),
-                actor.has(Role.WAREHOUSE_OPERATOR)};
+                actor.has(Role.WAREHOUSE_OPERATOR), actor.id()};
+    }
+
+    private static boolean auditOnly(Current actor) {
+        return actor.has(Role.AUDIT_READ_ONLY) && !actor.has(Role.ASSET_ADMIN)
+                && !actor.has(Role.WAREHOUSE_OPERATOR) && !actor.has(Role.DEPARTMENT_ASSET_MANAGER)
+                && !actor.has(Role.EMPLOYEE);
     }
 
     private Map<String, Object> view(Current actor, Map<String, Object> row) {
@@ -241,13 +258,15 @@ public class ScrapReadService {
                 + "c.lock_version,c.target_location_id,c.target_location_version,c.ownership_version,c.version,"
                 + "c.reason,l.name AS target_location_name"
                 + " FROM fams_scrap_correction c JOIN fams_location l ON l.id=c.target_location_id"
-                + " WHERE c.request_id=? AND c.active_guard=1", id);
+                + " WHERE c.request_id=? AND (c.active_guard=1 OR c.correction_status='COMPLETED')"
+                + " ORDER BY c.active_guard DESC,c.id DESC LIMIT 1", id);
         var correction = correctionRows.isEmpty() ? null : correctionView(correctionRows.getFirst());
         var reversalRows = db.queryForList("SELECT r.id,r.reversal_status,r.processor_account_id,r.asset_version,"
                 + "r.target_location_id,r.target_location_version,r.ownership_version,r.version,r.reason,"
                 + "l.name AS target_location_name"
                 + " FROM fams_scrap_reversal r JOIN fams_location l ON l.id=r.target_location_id"
-                + " WHERE r.request_id=? AND r.active_guard=1", id);
+                + " WHERE r.request_id=? AND (r.active_guard=1 OR r.reversal_status='COMPLETED')"
+                + " ORDER BY r.active_guard DESC,r.id DESC LIMIT 1", id);
         var reversal = reversalRows.isEmpty() ? null : reversalView(reversalRows.getFirst());
         var recoveryRows = db.queryForList("SELECT r.id,r.recovery_status,r.processor_account_id,r.asset_version,"
                 + "r.reason,DATE_FORMAT(r.found_at,'%Y-%m-%dT%H:%i:%s.%f') found_at,"
@@ -258,10 +277,9 @@ public class ScrapReadService {
                 + " FROM fams_scrap_recovery r JOIN fams_location l ON l.id=r.target_location_id"
                 + " JOIN fams_location t ON t.id=r.temporary_location_id"
                 + " JOIN fams_employee e ON e.id=r.temporary_custodian_employee_id"
-                + " WHERE r.request_id=? AND r.active_guard=1", id);
+                + " WHERE r.request_id=? AND (r.active_guard=1 OR r.recovery_status='COMPLETED')"
+                + " ORDER BY r.active_guard DESC,r.id DESC LIMIT 1", id);
         var recovery = recoveryRows.isEmpty() ? null : recoveryView(recoveryRows.getFirst());
-        boolean reRegistered = !db.queryForList("SELECT id FROM fams_scrap_recovery WHERE request_id=?"
-                + " AND recovery_status='COMPLETED'", id).isEmpty();
         boolean writtenOff = disposition != null && "LOSS_WRITTEN_OFF".equals(disposition.get("disposition_status"));
         boolean pendingDisposal = disposition != null
                 && "PENDING_DISPOSITION".equals(disposition.get("disposition_status"));
@@ -295,8 +313,7 @@ public class ScrapReadService {
         actions.put("executeReversal", reversal != null && actor.has(Role.WAREHOUSE_OPERATOR)
                 && Objects.equals(actor.id(), reversalRows.getFirst().get("processor_account_id"))
                 && "PROCESSING".equals(reversal.get("status")));
-        actions.put("initiateRecovery", recovery == null && writtenOff && !reRegistered
-                && mayRequestRecovery(actor, row));
+        actions.put("initiateRecovery", recovery == null && writtenOff && mayRequestRecovery(actor, row));
         actions.put("decideRecovery", recovery != null
                 && "PENDING_ADMIN_DECISION".equals(recovery.get("status")) && actor.has(Role.ASSET_ADMIN));
         actions.put("claimRecovery", recovery != null
@@ -304,6 +321,9 @@ public class ScrapReadService {
         actions.put("executeRecovery", recovery != null && actor.has(Role.WAREHOUSE_OPERATOR)
                 && Objects.equals(actor.id(), recoveryRows.getFirst().get("processor_account_id"))
                 && "PROCESSING".equals(recovery.get("status")));
+        if (auditOnly(actor)) {
+            actions.replaceAll((action, allowed) -> false);
+        }
         result.put("actions", actions);
         result.put("correction", correction);
         result.put("reversal", reversal);

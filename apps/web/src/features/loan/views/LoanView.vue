@@ -90,7 +90,7 @@ onMounted(refresh);
             <tr v-for="row in loanRows" :key="row.id">
               <th scope="row" data-column-kind="identity">{{ row.assetCode }} · {{ row.name }}</th>
               <td>{{ row.expectedReturnDate }}</td>
-              <td><span class="fams-status" :data-tone="row.statusTone">{{ labels[row.relationStatus] }}{{ row.overdueText }}</span></td>
+              <td><span class="fams-status" :data-tone="row.statusTone">{{ labels[row.relationStatus] ?? row.relationStatus }}{{ row.overdueText }}</span></td>
               <td data-column-kind="action"><router-link class="fams-button" data-kind="link" data-size="sm"
                 :to="`/loans/${row.id}`">查看 / 延期 / 归还</router-link></td>
             </tr>

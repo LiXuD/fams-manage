@@ -34,7 +34,8 @@ public class ScrapAttachmentErrorHandler {
         return response(503, "SCRAP_ATTACHMENT_STORAGE_UNAVAILABLE", request);
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
+    @ExceptionHandler({IllegalArgumentException.class,
+        org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class})
     ResponseEntity<ErrorResponse> invalid(HttpServletRequest request) {
         return response(400, "SCRAP_ATTACHMENT_INVALID", request);
     }

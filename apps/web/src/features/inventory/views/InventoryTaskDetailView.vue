@@ -222,7 +222,7 @@ onMounted(async () => {
 
       <InventoryReviewPanel v-if="panelsVisible" :key="detail.task.id" :task-id="detail.task.id" @changed="refresh" />
       <InventoryReadinessPanel v-if="panelsVisible" :key="`readiness:${detail.task.id}`" :task-id="detail.task.id" @changed="refresh" />
-      <InventorySealPanel v-if="panelsVisible" :key="`seal:${detail.task.id}`" :task-id="detail.task.id" @changed="refresh" />
+      <InventorySealPanel v-if="panelsVisible" :key="`seal:${detail.task.id}`" :task-id="detail.task.id" :task-version="detail.task.version" @changed="refresh" />
       <InventoryLatePanel v-if="latePanelVisible" :key="`late:${detail.task.id}`" :task-id="detail.task.id" />
       <InventorySynchronizationPanel v-if="panelsVisible" :key="`sync:${detail.task.id}`" :task-id="detail.task.id" />
       <InventoryFindingPanel v-if="panelsVisible" :key="`finding:${detail.task.id}`" :task-id="detail.task.id" @changed="refresh" />

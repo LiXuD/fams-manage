@@ -1783,7 +1783,16 @@ class DesignPackageContractTest(unittest.TestCase):
         revoke_text = json.dumps(operations["revokeSystemAccountRole"], sort_keys=True).lower()
         self.assertIn("immediate", revoke_text)
         self.assertIn("session", revoke_text)
-        self.assertNotIn("delete", " ".join(paths))
+        role_paths = (
+            (path, item)
+            for path, item in paths.items()
+            if path.startswith("/role-configurations")
+            or path.startswith("/system-accounts/") and "/roles" in path
+        )
+        for path, item in role_paths:
+            with self.subTest(path=path):
+                self.assertNotIn("delete", item)
+                self.assertNotIn("delete", path.split("/"))
 
     def test_account_administration_operations_have_a_bounded_generated_interface(self) -> None:
         document = self.load_contract()

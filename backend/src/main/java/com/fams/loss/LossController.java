@@ -80,6 +80,15 @@ public class LossController {
         return retry(() -> reports.submitFactory(actor, repairId, roundId, repairVersion, key, input));
     }
 
+    @PostMapping("/internal-repairs/{repairId}")
+    Map<String, Object> submitInternalRepair(@PathVariable @Positive long repairId,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.InternalRepairSubmission input) {
+        var actor = actors.capture();
+        return retry(() -> reports.submitInternalRepair(actor, repairId, version, key, input));
+    }
+
     @PostMapping("/{id}/decision")
     Map<String, Object> decide(
             @PathVariable @Positive long id,
@@ -314,6 +323,33 @@ public class LossController {
             @Valid @RequestBody LossInput.ExplicitRecoveryExecution input) {
         var actor = actors.capture();
         return retry(() -> reports.recoverToFactory(actor, id, version, key, input, true));
+    }
+
+    @PostMapping("/{id}/internal-repair-recovery-requests")
+    Map<String, Object> requestInternalRepairRecovery(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.ReturnRecoveryRequest input) {
+        var actor = actors.capture();
+        return retry(() -> reports.requestInternalRepairRecovery(actor, id, version, key, input));
+    }
+
+    @PostMapping("/{id}/recover-to-internal-repair")
+    Map<String, Object> recoverToInternalRepair(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.ExplicitRecoveryExecution input) {
+        var actor = actors.capture();
+        return retry(() -> reports.recoverToInternalRepair(actor, id, version, key, input, false));
+    }
+
+    @PostMapping("/recoveries/{id}/execute-to-internal-repair")
+    Map<String, Object> executeRecoveryToInternalRepair(@PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody LossInput.ExplicitRecoveryExecution input) {
+        var actor = actors.capture();
+        return retry(() -> reports.recoverToInternalRepair(actor, id, version, key, input, true));
     }
 
     private Map<String, Object> retry(Supplier<Map<String, Object>> operation) {

@@ -50,6 +50,8 @@ interface AttachmentSection {
 
 const route = useRoute(), session = useSessionStore();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, route.params.id]));
+const auditOnly = computed(() => session.user?.roles.includes("AUDIT_READ_ONLY") &&
+  !session.user.roles.some(role => ["EMPLOYEE", "DEPARTMENT_ASSET_MANAGER", "WAREHOUSE_OPERATOR", "ASSET_ADMIN"].includes(role)));
 const rows = ref<ScrapRequest[]>([]), detail = ref<ScrapRequest | null>(null);
 const assets = ref<ScrapAsset[]>([]), places = ref<ScrapChoice[]>([]), people = ref<ScrapChoice[]>([]);
 const capabilities = ref<ScrapAttachmentCapabilities | null>(null);
@@ -259,7 +261,7 @@ async function load(id = detail.value?.id ?? String(route.params.id ?? ""), next
     rows.value = result.items; total.value = result.total; page.value = next; detail.value = selected; stale.value = false;
     canListOverdue.value = result.canListOverdueDispositions === true;
     businessDate.value = result.businessDate ?? "";
-    if (selected) await loadAttachments(selected, turn);
+    if (selected && !auditOnly.value) await loadAttachments(selected, turn);
   } catch (cause) { if (liveness.isCurrent(turn)) { stale.value = true; failure(cause); } }
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
@@ -614,7 +616,7 @@ onBeforeUnmount(resetView);
       <button v-if="pending" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="send">重试原报废操作</button>
     </div>
 
-    <section class="fams-panel fams-stack" aria-label="提交报废申请">
+    <section v-if="!auditOnly" class="fams-panel fams-stack" aria-label="提交报废申请">
       <div class="fams-panel-head"><h2 class="fams-panel-title">提交报废申请</h2></div>
       <div class="fams-panel-actions">
         <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked" @click="loadAssets()">查询可报废资产</button>

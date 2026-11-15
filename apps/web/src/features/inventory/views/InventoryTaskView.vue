@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { businessMessage, businessRequest } from "@/api/business";
 import { inventoryTaskStatusLabels as labels } from "@/features/inventory/api";
@@ -8,6 +9,8 @@ import { useSessionStore } from "@/auth/sessionStore";
 
 type Task = { id: string; name: string; task_status: string; starts_at: string; due_at: string; overdue?: boolean };
 const session = useSessionStore();
+const route = useRoute();
+const router = useRouter();
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 const { rows: tasks, total, page, busy, error, refresh, pages } = usePagedResourceList<Task>(
   (page) => businessRequest<{ items: Task[]; total: number }>(`/inventory-tasks?page=${page}&pageSize=20`),
@@ -26,6 +29,12 @@ const emptyHintText = computed(() => admin.value
   : "等待管理员发布盘点任务后在此处理。");
 const prevDisabled = computed(() => busy.value || page.value === 1);
 const nextDisabled = computed(() => busy.value || page.value * 20 >= total.value);
+
+// 深链入口：工作台待办与报表带 taskId 直接进任务详情。
+if (router && route) {
+  const taskId = typeof route.query.taskId === "string" ? route.query.taskId : "";
+  if (/^[1-9][0-9]*$/.test(taskId)) void router.replace({ name: "inventory-task-detail", params: { id: taskId } });
+}
 </script>
 <template>
   <AppChrome>

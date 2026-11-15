@@ -17,14 +17,20 @@ import { useObjectUrlPreview } from "@/composables/useObjectUrlPreview";
 import { provideBusyRegistry } from "@/features/repair/busyRegistry";
 import { RepairApiError, repairPhotoContent, repairProblem, repairRequest, repairStates, type Repair, type RepairMutation, type RepairPhoto } from "@/features/repair/api";
 import { ScrapApiError, scrapRequest, type ScrapIntent } from "@/features/scrap/api";
-/** 页面在确认底座里持有的意图：维修突变，或带固定来源段的关联报废意图；关联报废沿用 RepairMutation 自带幂等键。 */
-type PageMutation = RepairMutation | (Omit<ScrapIntent, "key"> & { repairSourceId: string; key: string });
+import { LossApiError, lossRequest, type LossIntent } from "@/features/loss/api";
+/** 页面在确认底座里持有的意图：维修突变，或带固定来源段的关联报废/关联报失意图；关联写路径沿用 RepairMutation 自带幂等键。 */
+type PageMutation = RepairMutation | (Omit<ScrapIntent, "key"> & { repairSourceId: string; key: string })
+  | (Omit<LossIntent, "key"> & { repairSourceId: string; lossSource: true; key: string });
 /** 关联报废写路径的固定前缀；命中它即将请求交给报废域底座。 */
 const LINKED_SCRAP_PREFIX = "/from-repair/";
 const LINKED_SCRAP_INCOMPLETE_MESSAGE = "请填写关联报废原因、现状和建议处置方式。";
 const LINKED_SCRAP_SUBMITTED_NOTICE = "关联报废申请已保存。";
 const LINKED_SCRAP_RECEIPT_LABEL = "查看维修关联报废";
 const LINKED_SCRAP_SUMMARY = "提交关联报废，原维修处理权和实物事实继续保留。报废批准后由原处理库管执行。";
+const LINKED_LOSS_INCOMPLETE_MESSAGE = "请填写最后见到时间、地点和实物查找情况。";
+const LINKED_LOSS_SUBMITTED_NOTICE = "关联报失申请已保存。";
+const LINKED_LOSS_RECEIPT_LABEL = "查看维修关联报失";
+const LINKED_LOSS_SUMMARY = "提交关联报失审批并移交原维修锁，保留经办人、借用和返还目标。";
 const DEFAULT_CONFIRMATION_TEXT = "请核对本次资产、实际依据及处理范围。批准不会自动领取，原地关闭须确认已恢复且实物从未离开原保管人。";
 const DEFAULT_SAVED_NOTICE = "本次结果已保存。批准、库管受理和实际修复分别留痕。";
 const session = useSessionStore(), route = useRoute();
@@ -37,6 +43,7 @@ const observedCode = shallowRef(""), evidence = shallowRef(""), confirmedPlace =
 const selectedFile = ref<File | null>(null), preview = useObjectUrlPreview();
 const pending = ref<PageMutation | null>(null), confirmation = ref<PageMutation | null>(null);
 const scrapReason = shallowRef(""), scrapCondition = shallowRef(""), scrapMethod = shallowRef(""), scrapReceiptId = shallowRef<string | null>(null);
+const lossLastSeen = shallowRef(""), lossLocation = shallowRef(""), lossCircumstances = shallowRef("");
 const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef("");
 /** 页内互斥：视图占 host 一位（读取、待确认、在途办理），各面板各占一位，互不逐条转发。 */
 const registry = provideBusyRegistry(), host = registry.register("host"), factoryBusy = registry.occupied("factory");
@@ -71,15 +78,17 @@ const confirmationSummaryText = computed(() => {
 });
 const showScrapReceipt = computed(() => scrapReceiptId.value !== null);
 const scrapReceiptHref = computed(() => `/scrap-requests/${scrapReceiptId.value ?? ""}`);
+const latestLossHref = computed(() => detail.value?.latestLossReportId ? `/loss-reports/${detail.value.latestLossReportId}` : "");
 const liveness = useRequestLiveness(() => [identity.value]);
 function reset() {
   liveness.invalidate(); preview.close(); detail.value = null; pending.value = null; confirmation.value = null; selectedFile.value = null;
   scrapReason.value = ""; scrapCondition.value = ""; scrapMethod.value = ""; scrapReceiptId.value = null;
+  lossLastSeen.value = ""; lossLocation.value = ""; lossCircumstances.value = "";
   reason.value = ""; approvalMethod.value = "INTERNAL_NO_COST"; factoryCostPolicy.value = "NO_COST"; factoryCostLimit.value = ""; evidence.value = ""; observedCode.value = ""; neverLeft.value = false; confirmedPlace.value = false;
   busy.value = false;
 }
 function failure(cause: unknown) {
-  if (cause instanceof ScrapApiError) cause = new RepairApiError(cause.status, cause.code, {});
+  if (cause instanceof ScrapApiError || cause instanceof LossApiError) cause = new RepairApiError(cause.status, cause.code, {});
   if (cause instanceof RepairApiError && [401, 403, 404].includes(cause.status)) reset();
   error.value = repairProblem(cause);
 }
@@ -136,22 +145,45 @@ function prepareScrap() {
       reason: scrapReason.value.trim(), observedCondition: scrapCondition.value.trim(), proposedDisposition: scrapMethod.value.trim() }),
   });
 }
+/** 关联报失只复核维修单据版本；资产/归属/持锁三个版本随体提交，写路径交报失域底座。 */
+function prepareLoss() {
+  const row = detail.value;
+  if (locked.value || !row?.actions?.requestLoss || row.lockVersion == null) return;
+  const at = new Date(lossLastSeen.value);
+  if (!Number.isFinite(at.getTime()) || !lossLocation.value.trim() || lossCircumstances.value.trim().length < 10) {
+    error.value = LINKED_LOSS_INCOMPLETE_MESSAGE; return;
+  }
+  error.value = "";
+  confirmation.value = { path: "/internal-repairs/" + row.id, repairSourceId: row.id, lossSource: true,
+    key: crypto.randomUUID(), version: row.version, summary: LINKED_LOSS_SUMMARY,
+    body: { assetVersion: row.assetVersion, ownershipVersion: row.ownershipVersion, lockVersion: row.lockVersion,
+      lastSeenAt: at.toISOString(), lastLocation: lossLocation.value.trim(), circumstances: lossCircumstances.value.trim() } };
+}
 async function perform() {
   if (busy.value || !pending.value) return;
   const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
   try {
-    const linked = "repairSourceId" in operation;
-    const result = linked
-      ? await scrapRequest<{ id: string; repairId?: string }>(operation.path, { ...operation, key: operation.key, body: operation.body ?? {} })
-      : await repairRequest<Repair & { repairId?: string }>(operation.path, operation);
-    const id = linked ? operation.repairSourceId : result.repairId ?? result.id;
+    let id: string;
+    let scrapResultId: string | null = null;
+    let savedNotice: string;
+    if ("lossSource" in operation) {
+      await lossRequest<{ id: string }>(operation.path, operation);
+      id = operation.repairSourceId; savedNotice = LINKED_LOSS_SUBMITTED_NOTICE;
+    } else if ("repairSourceId" in operation) {
+      const linkedResult = await scrapRequest<{ id: string; repairId?: string }>(operation.path, { ...operation, key: operation.key, body: operation.body ?? {} });
+      id = operation.repairSourceId; scrapResultId = linkedResult.id; savedNotice = LINKED_SCRAP_SUBMITTED_NOTICE;
+    } else {
+      const result = await repairRequest<Repair & { repairId?: string }>(operation.path, operation);
+      id = result.repairId ?? result.id; savedNotice = DEFAULT_SAVED_NOTICE;
+    }
     const selected = await repairRequest<Repair>(`/${id}`);
     if (liveness.isCurrent(turn)) { pending.value = null; detail.value = selected;
       selectedFile.value = null; confirmedPlace.value = false; neverLeft.value = false; evidence.value = ""; observedCode.value = "";
-      if (linked) { scrapReceiptId.value = result.id; scrapReason.value = ""; scrapCondition.value = ""; scrapMethod.value = ""; }
-      notice.value = linked ? LINKED_SCRAP_SUBMITTED_NOTICE : DEFAULT_SAVED_NOTICE; preview.close(); }
+      if (scrapResultId !== null) { scrapReceiptId.value = scrapResultId; scrapReason.value = ""; scrapCondition.value = ""; scrapMethod.value = ""; }
+      lossLastSeen.value = ""; lossLocation.value = ""; lossCircumstances.value = "";
+      notice.value = savedNotice; preview.close(); }
   } catch (cause) {
-    if (liveness.isCurrent(turn)) { if ((cause instanceof RepairApiError || cause instanceof ScrapApiError) && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
+    if (liveness.isCurrent(turn)) { if ((cause instanceof RepairApiError || cause instanceof ScrapApiError || cause instanceof LossApiError) && cause.status >= 400 && cause.status < 500) pending.value = null; failure(cause); }
   } finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function confirm() { if (!confirmation.value || busy.value) return; pending.value = confirmation.value; confirmation.value = null; await perform(); }
@@ -201,6 +233,7 @@ onBeforeUnmount(() => { reset(); });
           <p class="fams-panel-subtitle">{{ repairStates[detail.status] }} · {{ detail.fault }} · 实际发生 {{ occurredAtText }}</p>
         </div>
       </div>
+      <p v-if="detail.source.initialSource">期初承接 {{ detail.source.initialSource.batchId }} · 第 {{ detail.source.initialSource.sheetRow }} 行 · {{ detail.source.initialSource.stage }}。{{ detail.source.initialSource.evidence }}<template v-if="detail.source.initialSource.factoryDestination"> · 厂家去向 {{ detail.source.initialSource.factoryDestination }}</template></p>
       <p v-if="detail.returnOrigin">来自损坏归还 {{ detail.returnOrigin.returnId }}，源后续 {{ detail.returnOrigin.followupId }}；原借用 {{ detail.returnOrigin.closedLoanId || '无' }} 已关闭，实际接修和验收入库后才结束源义务。</p>
       <p>提交时位置：{{ detail.source.locationName || '待核实' }}。原责任与借用作为返回依据保留；实物离开过或原目标失效时，不能直接原地恢复。</p>
       <section class="fams-card fams-stack">
@@ -235,6 +268,16 @@ onBeforeUnmount(() => { reset(); });
           </div>
         </template>
         <button v-if="detail.actions.cancel" class="fams-button" data-kind="secondary" type="button" @click="prepare('cancel')">取消尚未批准的报修</button>
+      </fieldset>
+      <router-link v-if="latestLossHref" class="fams-button" data-kind="link" data-size="sm" :to="latestLossHref">{{ LINKED_LOSS_RECEIPT_LABEL }}</router-link>
+      <fieldset v-if="detail.actions?.requestLoss" class="fams-card fams-stack" :disabled="locked">
+        <h3 class="fams-panel-title">内部维修实物缺失</h3>
+        <div class="fams-field-grid">
+          <label class="fams-field"><span class="fams-field-label">最后见到时间</span><input class="fams-control" v-model="lossLastSeen" type="datetime-local"></label>
+          <label class="fams-field"><span class="fams-field-label">最后见到地点</span><input class="fams-control" v-model="lossLocation" maxlength="500"></label>
+          <label class="fams-field fams-field-wide"><span class="fams-field-label">实物查找情况</span><textarea class="fams-control" v-model="lossCircumstances" maxlength="2000" /></label>
+        </div>
+        <div class="fams-form-actions"><button class="fams-button" data-kind="primary" type="button" @click="prepareLoss">核对维修关联报失</button></div>
       </fieldset>
       <router-link v-if="showScrapReceipt" class="fams-button" data-kind="link" data-size="sm" :to="scrapReceiptHref">{{ LINKED_SCRAP_RECEIPT_LABEL }}</router-link>
       <fieldset v-if="detail.actions?.requestScrap" class="fams-card fams-stack" :disabled="locked">
@@ -282,7 +325,7 @@ onBeforeUnmount(() => { reset(); });
         <div class="fams-panel-head"><h3 class="fams-panel-title">返厂进度</h3></div>
         <p v-if="detail.factorySummary.scope">范围：{{ factoryScopeStates[detail.factorySummary.scope.scopeStatus] }}</p>
         <p>实际寄出 {{ detail.factorySummary.actualDispatchCount }} 次</p>
-        <p v-if="detail.factorySummary.round">第 {{ detail.factorySummary.round.roundNumber }} 轮 · {{ factoryRoundStates[detail.factorySummary.round.roundStatus] }} · 预计收回 {{ detail.factorySummary.round.expectedReturnDate }}<span v-if="detail.factorySummary.round.dispatchedAt"> · 实际寄出 {{ factoryDispatchedAtText }}</span><span v-if="detail.factorySummary.round.receivedAt"> · 实际收回 {{ factoryReceivedAtText }}</span></p>
+        <p v-if="detail.factorySummary.round">第 {{ detail.factorySummary.round.roundNumber }} 轮 · {{ factoryRoundStates[detail.factorySummary.round.roundStatus] ?? detail.factorySummary.round.roundStatus }} · 预计收回 {{ detail.factorySummary.round.expectedReturnDate }}<span v-if="detail.factorySummary.round.dispatchedAt"> · 实际寄出 {{ factoryDispatchedAtText }}</span><span v-if="detail.factorySummary.round.receivedAt"> · 实际收回 {{ factoryReceivedAtText }}</span></p>
       </section>
       <RepairFactoryPanel v-if="factoryPanelVisible" :repair="detail" @changed="load" @invalidated="reset" />
       <RepairReassignmentPanel :repair="detail" @changed="load" @invalidated="reset" />

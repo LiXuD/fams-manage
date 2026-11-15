@@ -1,5 +1,5 @@
 Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/verify-product-development.py", line 19, in <module>
+  File "<workspace>/scripts/verify-product-development.py", line 19, in <module>
 [clean worktree preflight] exit=0
 [generated output tracking preflight] exit=0
 [Compose policy model] exit=0
@@ -201,9 +201,9 @@ Traceback (most recent call last):
 [git diff check] exit=0
 [clean worktree postflight] exit=0
     gate["verify_dependency_integrity"]()
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/verify-d6-03a.py", line 1244, in verify_dependency_integrity
+  File "<workspace>/scripts/verify-d6-03a.py", line 1244, in verify_dependency_integrity
     npm_tree = require_command("npm dependency tree", ["npm", "ls", "--depth=0"])
                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/verify-d6-03a.py", line 469, in require_command
+  File "<workspace>/scripts/verify-d6-03a.py", line 469, in require_command
     raise VerificationFailure(f"{label} failed with exit {result.returncode}")
 <run_path>.VerificationFailure: npm dependency tree failed with exit 1

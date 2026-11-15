@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
+import OperationsReports from "@/features/report/panels/OperationsReports.vue";
+import WorkbenchTodos from "@/features/report/panels/WorkbenchTodos.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 
 const session = useSessionStore();
@@ -9,10 +11,32 @@ const permissionCount = computed(() => permissions.value.length);
 const authorizationVersionText = computed(() => session.permissions?.authorizationVersion ?? "—");
 const userName = computed(() => session.user?.username);
 const roleText = computed(() => session.user?.roles.join("、"));
+const warehouse = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false);
+const administrator = computed(() => session.user?.roles.includes("ASSET_ADMIN") ?? false);
+const canReadLedger = computed(() => session.hasPermission("ASSET_LEDGER_READ"));
 </script>
 
 <template>
   <AppChrome>
+    <section v-if="warehouse || administrator" class="fams-panel fams-stack" aria-labelledby="workbench-shortcuts">
+      <div class="fams-panel-head">
+        <h2 id="workbench-shortcuts" class="fams-panel-title">快捷入口</h2>
+      </div>
+      <div class="fams-inline" aria-label="工作台快捷入口">
+        <router-link v-if="warehouse && canReadLedger" class="fams-button" data-kind="secondary" data-size="sm"
+          :to="{ name: 'assets', query: { action: 'create' } }">单个建卡</router-link>
+        <router-link v-if="warehouse" class="fams-button" data-kind="secondary" data-size="sm"
+          :to="{ name: 'asset-import' }">批量导入</router-link>
+        <router-link v-if="warehouse" class="fams-button" data-kind="secondary" data-size="sm"
+          :to="{ name: 'inbound' }">建立入库单</router-link>
+        <router-link v-if="administrator" class="fams-button" data-kind="secondary" data-size="sm"
+          :to="{ name: 'asset-import-review' }">期初导入核验</router-link>
+        <router-link v-if="administrator" class="fams-button" data-kind="secondary" data-size="sm"
+          :to="{ name: 'inventory-tasks' }">创建盘点草稿</router-link>
+      </div>
+    </section>
+    <WorkbenchTodos v-if="warehouse || administrator" />
+    <OperationsReports v-if="administrator" />
     <div class="fams-metric-grid">
       <div class="fams-metric">
         <span>有效权限</span>

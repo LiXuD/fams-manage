@@ -83,15 +83,21 @@ describe("退还单详情", () => {
     f.wrapper.unmount();
   });
 
-  it("缺失实物只提交验收结果并保留责任说明", async () => {
+  it("缺失实物提交验收结果并附报失依据与责任说明", async () => {
     api.roles = ["WAREHOUSE_OPERATOR"];
     const f = await fixture(returnRow({ returnStatus: "WAREHOUSE_PROCESSING", processorAccountId: "1" }));
     await f.wrapper.find("textarea").setValue("实物未找到");
     await f.wrapper.findAll("select")[0].setValue("MISSING");
-    expect(f.wrapper.text()).toContain("实物缺失将保留借用责任，进入报失处理。");
-    f.button("提交实物验收").trigger("click"); await flushPromises();
+    expect(f.wrapper.text()).toContain("实物缺失将保留借用责任，并提交关联报失审批。");
+    expect(f.wrapper.findAll("button").some(b => b.text() === "提交实物验收")).toBe(false);
+    await f.wrapper.find("input[type=\"datetime-local\"]").setValue("2026-11-10T08:00:00");
+    await f.wrapper.find("fieldset input:not([type])").setValue("三楼走廊");
+    await f.wrapper.findAll("textarea")[1].setValue("已沿登记位置实地查找两周未见实物。");
+    f.button("提交缺失验收并发起报失").trigger("click"); await flushPromises();
     const body = (f.writes[0] as { body: Record<string, unknown> }).body;
-    expect(body).toMatchObject({ result: "MISSING", reason: "实物未找到", assetVersion: 7, lockVersion: 4 });
+    expect(body).toMatchObject({ result: "MISSING", reason: "实物未找到", assetVersion: 7, lockVersion: 4,
+      missingLoss: { lastSeenAt: new Date("2026-11-10T08:00:00").toISOString(), lastLocation: "三楼走廊",
+        circumstances: "已沿登记位置实地查找两周未见实物。" } });
     expect(Object.keys(body)).not.toContain("warehouseId");
     f.wrapper.unmount();
   });

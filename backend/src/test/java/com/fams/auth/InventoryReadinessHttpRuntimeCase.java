@@ -1,6 +1,7 @@
 package com.fams.auth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.AfterEach;
@@ -42,6 +43,8 @@ import java.util.UUID;
 class InventoryReadinessHttpRuntimeCase {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final String PASSWORD = "correct-horse-battery-staple";
+    @org.junit.jupiter.api.io.TempDir
+    static java.nio.file.Path photos;
     @Autowired JdbcTemplate db;
     @Autowired MiniSessionService sessions;
 
@@ -60,6 +63,8 @@ class InventoryReadinessHttpRuntimeCase {
         registry.add("spring.datasource.url", settings::url);
         registry.add("spring.datasource.username", settings::username);
         registry.add("spring.datasource.password", settings::password);
+        registry.add("fams.attachments.quarantine-root", () -> photos.toString());
+        registry.add("fams.test.proxy-evidence", () -> "true");
     }
 
     @BeforeEach
@@ -163,11 +168,27 @@ class InventoryReadinessHttpRuntimeCase {
                     946000 + i,
                     946000 + i);
         }
-        db.update("UPDATE fams_inventory_task SET expected_count=2 WHERE id=946000");
+        db.update("UPDATE fams_inventory_task SET expected_count=2,timezone_id='Asia/Shanghai',"
+                + "parameter_version_id=946000 WHERE id=946000");
     }
 
     @AfterEach
     void cleanup() {
+        db.update("DELETE FROM fams_attachment WHERE business_type='LOST_REPORT' AND uploader_account_id=946001");
+        db.update("DELETE FROM fams_attachment_scope WHERE business_type='LOST_REPORT' AND business_id IN"
+                + " (SELECT id FROM fams_loss_report WHERE asset_id=946010)");
+        db.update("DELETE FROM fams_todo WHERE business_type='LOST_REPORT' AND business_id IN"
+                + " (SELECT id FROM fams_loss_report WHERE asset_id=946010)");
+        db.update("DELETE FROM fams_asset_business_lock WHERE asset_id=946010 AND business_type='LOST_REPORT'");
+        for (String table : java.util.List.of("fams_loss_receipt", "fams_loss_event", "fams_loss_inventory_source")) {
+            db.update("DELETE FROM " + table + " WHERE report_id IN (SELECT id FROM fams_loss_report WHERE asset_id=946010)");
+        }
+        db.update("DELETE FROM fams_loss_report WHERE asset_id=946010");
+        db.update("DELETE FROM fams_asset_timeline_event WHERE asset_id=946010");
+        for (String table : java.util.List.of("fams_inventory_sealed_sync", "fams_inventory_sealed_evidence",
+                "fams_inventory_sealed_item", "fams_inventory_sealed_report")) {
+            db.update("DELETE FROM " + table + " WHERE task_id=946000");
+        }
         for (String table :
                 java.util.List.of(
                         "fams_inventory_unobserved_reason",
@@ -211,6 +232,136 @@ class InventoryReadinessHttpRuntimeCase {
         db.update("DELETE FROM fams_system_account WHERE id BETWEEN 946001 AND 946003");
         db.update("DELETE FROM fams_employee WHERE id BETWEEN 946001 AND 946003");
         db.update("DELETE FROM fams_organization WHERE id=946000");
+    }
+
+    @Test
+    void linksMissingReasonAtomicallyAndReopensItAfterRejection() throws Exception {
+        var missing = ok(call("POST", "/items/946010/unobserved", body("ASSET_NOT_FOUND"),
+                UUID.randomUUID().toString(), 0, false));
+        ok(call("POST", "/items/946011/unobserved", body("UNABLE_TO_OBSERVE"),
+                UUID.randomUUID().toString(), 1, false));
+        ok(call("POST", "/waiting-review", java.util.Map.of("reason", "全部应盘项已有明确原因"),
+                UUID.randomUUID().toString(), 2, false));
+        var originalReason = db.queryForMap("SELECT * FROM fams_inventory_unobserved_reason WHERE id=?",
+                missing.path("reasonId").asLong());
+        String path = "/items/946010/missing/" + missing.path("reasonId").asText() + "/loss";
+        String key = UUID.randomUUID().toString();
+        var facts = java.util.Map.of("assetVersion", 0,
+                "lastSeenAt", Instant.now().minusSeconds(3600).truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString(),
+                "lastLocation", "原登记仓位", "circumstances", "已与保管人核对并搜索原登记位置仍未找到");
+        assertEquals(403, call("POST", path, facts, UUID.randomUUID().toString(), 3, true).statusCode());
+        db.execute(
+                "CREATE TRIGGER d618_missing_loss_audit_failure BEFORE INSERT ON fams_audit_event FOR"
+                        + " EACH ROW BEGIN IF NEW.resource_id=946000 AND NEW.action='INVENTORY_MISSING_REPORTED'"
+                        + " THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='owned missing loss rollback'; END IF; END");
+        try {
+            assertEquals(500, call("POST", path, facts, key, 3, false).statusCode());
+        } finally {
+            db.execute("DROP TRIGGER d618_missing_loss_audit_failure");
+        }
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_loss_report WHERE asset_id=946010",
+                Integer.class));
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=946010",
+                Integer.class));
+        var first = ok(call("POST", path, facts, key, 3, false));
+        assertEquals(first, ok(call("POST", path, facts, key, 3, false)));
+        assertEquals(409, call("POST", path, facts, UUID.randomUUID().toString(), 4, false).statusCode());
+        String report = "/loss-reports/" + first.path("reportId").asText();
+        assertEquals(missing.path("reasonId").asText(),
+                ok(pc("GET", report, null, null, 0)).path("source").path("inventorySource").path("reasonId").asText());
+        String sealPath = "/inventory-sealing/tasks/946000";
+        assertTrue(ok(pc("GET", sealPath, null, null, 0)).path("blockers").toString()
+                .contains("INVENTORY_SEAL_PHYSICAL_MISSING_OPEN"));
+        ok(pc("POST", report + "/decision", java.util.Map.of("result", "REJECT", "reason", "需要补充最后见到依据"),
+                UUID.randomUUID().toString(), 0));
+        var rejected = ok(call("GET", "", null, null, 0, false)).path("items").get(0);
+        assertTrue(rejected.path("physicalMissingOpen").asBoolean());
+        assertTrue(rejected.path("missingLosses").get(0).path("canSubmit").asBoolean());
+        assertEquals("REJECTED", rejected.path("missingLosses").get(0).path("report").path("status").asText());
+        var second = runNativeReadiness(missing.path("reasonId").asText());
+        assertTrue(second.path("originalKeyPayloadVersionRetained").asBoolean());
+        assertTrue(second.path("linkedReportOpens").asBoolean());
+        assertNotEquals(first.path("reportId").asText(), second.path("reportId").asText());
+        assertEquals(2, db.queryForObject("SELECT COUNT(*) FROM fams_loss_inventory_source WHERE reason_id=?",
+                Integer.class, missing.path("reasonId").asLong()));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=946010"
+                + " AND business_type='LOST_REPORT' AND released_at IS NULL", Integer.class));
+        assertEquals(originalReason, db.queryForMap("SELECT * FROM fams_inventory_unobserved_reason WHERE id=?",
+                missing.path("reasonId").asLong()));
+
+        String secondReport = "/loss-reports/" + second.path("reportId").asText();
+        uploadMissingPhoto(secondReport);
+        var approved = ok(pc("POST", secondReport + "/decision", java.util.Map.of(
+                "result", "APPROVE", "reason", "批准库管按实际查找范围核实"),
+                UUID.randomUUID().toString(), 1));
+        String adminCookie = cookie, adminCsrf = csrf;
+        db.update("INSERT INTO fams_account_role(account_id,role_code,granted_at)"
+                + " VALUES (946003,'WAREHOUSE_OPERATOR',NOW(3))");
+        var warehouse = http.send(HttpRequest.newBuilder(
+                URI.create("http://127.0.0.1:" + port + "/api/v1/auth/login"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(
+                        java.util.Map.of("username", "ready3", "password", PASSWORD)))).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, warehouse.statusCode(), warehouse.body());
+        cookie = warehouse.headers().firstValue("Set-Cookie").orElseThrow().split(";", 2)[0];
+        csrf = JSON.readTree(warehouse.body()).path("csrfToken").asText();
+        var claimed = ok(pc("POST", secondReport + "/claim", null, UUID.randomUUID().toString(),
+                approved.path("version").asLong()));
+        var parameters = db.queryForMap("SELECT current_version,current_version_id"
+                + " FROM fams_business_parameter_state WHERE singleton_id=1");
+        db.update("UPDATE fams_business_parameter_state SET current_version=946000,"
+                + "current_version_id=946000 WHERE singleton_id=1");
+        JsonNode searched;
+        try {
+            searched = ok(pc("POST", secondReport + "/search", java.util.Map.of(
+                    "assetVersion", claimed.path("assetVersion").asLong(),
+                    "ownershipVersion", claimed.path("ownershipVersion").asLong(), "lockVersion", 0,
+                    "custodianVerification", "已联系实物保管人员逐项核对登记位置",
+                    "searchedScope", "检查原登记位置和临时保管区仍未找到",
+                    "searchedAt", Instant.now().minusSeconds(1).truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString(),
+                    "nextReviewDate", java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")).plusDays(2).toString()),
+                    UUID.randomUUID().toString(), claimed.path("version").asLong()));
+        } finally {
+            db.update("UPDATE fams_business_parameter_state SET current_version=?,current_version_id=?"
+                    + " WHERE singleton_id=1", parameters.get("current_version"), parameters.get("current_version_id"));
+        }
+        assertEquals("SEARCHING", searched.path("status").asText());
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_todo WHERE business_type='LOST_REPORT'"
+                + " AND business_id=? AND todo_type='SEARCH' AND todo_status='OPEN' AND assignee_account_id=946003",
+                Integer.class, second.path("reportId").asLong()));
+        cookie = adminCookie;
+        csrf = adminCsrf;
+        var preflight = ok(pc("GET", sealPath, null, null, 0));
+        assertEquals(0, preflight.path("blockerCount").asInt(), preflight.toString());
+        var sealed = ok(pc("POST", sealPath + "/seal", java.util.Map.of(
+                "reason", "报失已建立经办人和复核时限",
+                "synchronizationDigest", preflight.path("synchronizationDigest").asText(),
+                "missingSynchronizationReason", "执行人未能提供声明，保留记录并安排后续补证"),
+                UUID.randomUUID().toString(), 5));
+        assertEquals(2, sealed.path("notObservedCount").asInt());
+        assertEquals(0, sealed.path("acceptedCount").asInt());
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_asset WHERE id IN (946010,946011)"
+                + " AND last_inventory_business_date IS NOT NULL", Integer.class));
+    }
+
+    private void uploadMissingPhoto(String report) throws Exception {
+        String boundary = "missing-" + UUID.randomUUID();
+        var bytes = new java.io.ByteArrayOutputStream();
+        bytes.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\";"
+                + " filename=\"site.png\"\r\nContent-Type: image/png\r\n\r\n")
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(2, 2,
+                java.awt.image.BufferedImage.TYPE_INT_RGB), "png", bytes);
+        bytes.write(("\r\n--" + boundary + "--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var response = http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+                + "/api/v1" + report + "/photos"))
+                .header("Cookie", cookie).header("X-CSRF-Token", csrf)
+                .header("Idempotency-Key", UUID.randomUUID().toString()).header("If-Match-Version", "0")
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(bytes.toByteArray())).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode(), response.body());
     }
 
     @Test
@@ -669,52 +820,11 @@ class InventoryReadinessHttpRuntimeCase {
     @Test
     void nativeHandlerRecoversActualCommittedUnobservedReplyThenEntersWaitingWithoutClosingMissing()
             throws Exception {
-        var identity = new MiniWechatIdentityPort.Identity("readiness-app", "readiness-admin");
-        db.update(
-                "INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES"
-                        + " (946001,?,NOW(3))",
-                sessions.identityHash(identity));
-        var grant = sessions.start(identity, UUID.randomUUID());
-        var script =
-                java.nio.file.Path.of(System.getProperty("user.dir"))
-                        .getParent()
-                        .resolve("apps/miniprogram/test/runtime-inventory-readiness-http.mjs");
-        var builder = new ProcessBuilder("rtk", "proxy", "node", script.toString());
-        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
-        builder.environment().put("FAMS_TEST_INVENTORY_TASK", "946000");
-        builder.environment().put("FAMS_TEST_READINESS_FIRST", "946010");
-        builder.environment().put("FAMS_TEST_READINESS_SECOND", "946011");
-        builder.environment()
-                .put(
-                        "FAMS_TEST_MINI_GRANT",
-                        JSON.writeValueAsString(
-                                java.util.Map.of(
-                                        "sessionToken",
-                                        grant.sessionToken(),
-                                        "accountId",
-                                        grant.accountId(),
-                                        "bindingId",
-                                        grant.bindingId())));
-        var process = builder.redirectErrorStream(true).start();
-        try {
-            assertTrue(process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS));
-            String output =
-                    new String(
-                            process.getInputStream().readAllBytes(),
-                            java.nio.charset.StandardCharsets.UTF_8);
-            assertEquals(0, process.exitValue(), output);
-            var proof = JSON.readTree(output.strip());
-            assertTrue(proof.path("nativeUnobservedOriginalReplyRecovered").asBoolean());
-            assertTrue(proof.path("originalKeyPayloadVersionRetained").asBoolean());
-            assertTrue(proof.path("physicalMissingStillOpen").asBoolean());
-            System.out.println("D6-18B2a native readiness runtime proof: " + proof);
-        } finally {
-            if (process.isAlive()) {
-                process.descendants().forEach(ProcessHandle::destroyForcibly);
-                process.destroyForcibly();
-                process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
-            }
-        }
+        var proof = runNativeReadiness(null);
+        assertTrue(proof.path("nativeUnobservedOriginalReplyRecovered").asBoolean());
+        assertTrue(proof.path("originalKeyPayloadVersionRetained").asBoolean());
+        assertTrue(proof.path("physicalMissingStillOpen").asBoolean());
+        System.out.println("D6-18B2a native readiness runtime proof: " + proof);
         assertEquals(
                 2,
                 db.queryForObject(
@@ -736,6 +846,54 @@ class InventoryReadinessHttpRuntimeCase {
                 db.queryForObject(
                         "SELECT captured_result_count FROM fams_inventory_task WHERE id=946000",
                         Integer.class));
+    }
+
+    private JsonNode runNativeReadiness(String lossReason) throws Exception {
+        var identity = new MiniWechatIdentityPort.Identity("readiness-app", "readiness-admin");
+        db.update(
+                "INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES"
+                        + " (946001,?,NOW(3))",
+                sessions.identityHash(identity));
+        var grant = sessions.start(identity, UUID.randomUUID());
+        var script =
+                java.nio.file.Path.of(System.getProperty("user.dir"))
+                        .getParent()
+                        .resolve("apps/miniprogram/test/runtime-inventory-readiness-http.mjs");
+        var builder = new ProcessBuilder("rtk", "proxy", "node", script.toString());
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_INVENTORY_TASK", "946000");
+        builder.environment().put("FAMS_TEST_READINESS_FIRST", "946010");
+        builder.environment().put("FAMS_TEST_READINESS_SECOND", "946011");
+        if (lossReason != null) {
+            builder.environment().put("FAMS_TEST_READINESS_LOSS_REASON", lossReason);
+        }
+        builder.environment()
+                .put(
+                        "FAMS_TEST_MINI_GRANT",
+                        JSON.writeValueAsString(
+                                java.util.Map.of(
+                                        "sessionToken",
+                                        grant.sessionToken(),
+                                        "accountId",
+                                        grant.accountId(),
+                                        "bindingId",
+                                        grant.bindingId())));
+        var process = builder.redirectErrorStream(true).start();
+        try {
+            assertTrue(process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS));
+            String output =
+                    new String(
+                            process.getInputStream().readAllBytes(),
+                            java.nio.charset.StandardCharsets.UTF_8);
+            assertEquals(0, process.exitValue(), output);
+            return JSON.readTree(output.strip());
+        } finally {
+            if (process.isAlive()) {
+                process.descendants().forEach(ProcessHandle::destroyForcibly);
+                process.destroyForcibly();
+                process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
+            }
+        }
     }
 
     @Test
@@ -898,11 +1056,47 @@ class InventoryReadinessHttpRuntimeCase {
     @Test
     void originalUnobservedReceiptSurvivesActualCommittingJvmForcedDeathAndFreshJvm()
             throws Exception {
-        String body = JSON.writeValueAsString(body("UNABLE_TO_OBSERVE"));
+        var before = db.queryForList("SELECT * FROM fams_asset WHERE id IN (946010,946011) ORDER BY id");
+        replayFromFreshJvm(null, 0, JSON.writeValueAsString(body("UNABLE_TO_OBSERVE")));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_inventory_unobserved_reason WHERE task_id=946000",
+                Integer.class));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_inventory_item_review"
+                + " WHERE task_id=946000 AND review_status='NOT_OBSERVED'", Integer.class));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_inventory_review_receipt WHERE task_id=946000",
+                Integer.class));
+        assertEquals(0, db.queryForObject("SELECT captured_result_count FROM fams_inventory_task WHERE id=946000",
+                Integer.class));
+        assertEquals(before, db.queryForList("SELECT * FROM fams_asset WHERE id IN (946010,946011) ORDER BY id"));
+        System.out.println("D6-18B2a JVM proof: committingJvmKilled=true freshJvmOriginalReply=true"
+                + " singleUnobservedReason=true collectionAndAssetsUnchanged=true");
+    }
+
+    @Test
+    void inventoryLossReceiptSurvivesActualCommittingJvmForcedDeathAndFreshJvm() throws Exception {
+        var missing = ok(call("POST", "/items/946010/unobserved", body("ASSET_NOT_FOUND"),
+                UUID.randomUUID().toString(), 0, false));
+        String reason = missing.path("reasonId").asText();
+        var originalReason = db.queryForMap("SELECT * FROM fams_inventory_unobserved_reason WHERE id=?",
+                Long.parseLong(reason));
+        replayFromFreshJvm(reason, 1, JSON.writeValueAsString(java.util.Map.of("assetVersion", 0,
+                "lastSeenAt", Instant.now().minusSeconds(3600).truncatedTo(java.time.temporal.ChronoUnit.MILLIS).toString(),
+                "lastLocation", "原登记仓位", "circumstances", "核对原登记位置和保管人员后仍未找到实物")));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_loss_report WHERE asset_id=946010",
+                Integer.class));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_loss_inventory_source WHERE reason_id=?",
+                Integer.class, Long.parseLong(reason)));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock"
+                + " WHERE asset_id=946010 AND business_type='LOST_REPORT' AND released_at IS NULL", Integer.class));
+        assertEquals(2, db.queryForObject("SELECT COUNT(*) FROM fams_inventory_review_receipt WHERE task_id=946000",
+                Integer.class));
+        assertEquals(originalReason, db.queryForMap("SELECT * FROM fams_inventory_unobserved_reason WHERE id=?",
+                Long.parseLong(reason)));
+        System.out.println("D6-18C JVM proof: committingJvmKilled=true freshJvmOriginalReply=true"
+                + " singleReportSourceAndActiveLock=true originalReasonUnchanged=true");
+    }
+
+    private void replayFromFreshJvm(String lossReason, long version, String body) throws Exception {
         String originalKey = UUID.randomUUID().toString();
-        long version = 0;
-        var before =
-                db.queryForList("SELECT * FROM fams_asset WHERE id IN (946010,946011) ORDER BY id");
         var state = java.nio.file.Files.createTempDirectory("fams-unobserved-jvm-");
         String classpath =
                 System.getProperty(
@@ -921,6 +1115,9 @@ class InventoryReadinessHttpRuntimeCase {
                                 "com.fams.auth.InventoryReadinessProcess");
                 builder.environment().put("FAMS_TEST_READINESS_TASK", "946000");
                 builder.environment().put("FAMS_TEST_READINESS_ITEM", "946010");
+                if (lossReason != null) {
+                    builder.environment().put("FAMS_TEST_READINESS_LOSS_REASON", lossReason);
+                }
                 builder.environment().put("FAMS_TEST_READINESS_COOKIE", cookie);
                 builder.environment().put("FAMS_TEST_READINESS_CSRF", csrf);
                 builder.environment().put("FAMS_TEST_READINESS_KEY", originalKey);
@@ -968,36 +1165,6 @@ class InventoryReadinessHttpRuntimeCase {
                     assertEquals(first.path("response"), proof.path("response"));
                 }
             }
-            assertEquals(
-                    1,
-                    db.queryForObject(
-                            "SELECT COUNT(*) FROM fams_inventory_unobserved_reason WHERE"
-                                + " task_id=946000",
-                            Integer.class));
-            assertEquals(
-                    1,
-                    db.queryForObject(
-                            "SELECT COUNT(*) FROM fams_inventory_item_review WHERE task_id=946000"
-                                + " AND review_status='NOT_OBSERVED'",
-                            Integer.class));
-            assertEquals(
-                    1,
-                    db.queryForObject(
-                            "SELECT COUNT(*) FROM fams_inventory_review_receipt WHERE"
-                                + " task_id=946000",
-                            Integer.class));
-            assertEquals(
-                    0,
-                    db.queryForObject(
-                            "SELECT captured_result_count FROM fams_inventory_task WHERE id=946000",
-                            Integer.class));
-            assertEquals(
-                    before,
-                    db.queryForList(
-                            "SELECT * FROM fams_asset WHERE id IN (946010,946011) ORDER BY id"));
-            System.out.println(
-                    "D6-18B2a JVM proof: committingJvmKilled=true freshJvmOriginalReply=true"
-                        + " singleUnobservedReason=true collectionAndAssetsUnchanged=true");
         } finally {
             if (process != null && process.isAlive()) {
                 process.descendants().forEach(ProcessHandle::destroyForcibly);

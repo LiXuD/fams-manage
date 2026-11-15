@@ -333,7 +333,7 @@ onBeforeUnmount(() => { reset(); });
         <p v-if="noRouteHint">当前处理库管须先完成实际接修，再提出必要返厂的范围变更。</p>
         <h4 class="fams-panel-title">独立轮次 / 共 {{ total }} 轮</h4>
         <ul class="fams-timeline">
-          <li v-for="row in roundRows" :key="row.id"><button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked" @click="selectRound(row)">第 {{ row.roundNumber }} 轮 · {{ row.providerName }} · {{ factoryRoundStates[row.roundStatus] }}</button></li>
+          <li v-for="row in roundRows" :key="row.id"><button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked" @click="selectRound(row)">第 {{ row.roundNumber }} 轮 · {{ row.providerName }} · {{ factoryRoundStates[row.roundStatus] ?? row.roundStatus }}</button></li>
         </ul>
         <div class="fams-pagination">
           <div class="fams-pagination-actions">
@@ -343,7 +343,7 @@ onBeforeUnmount(() => { reset(); });
           </div>
         </div>
         <section v-if="selected" class="fams-card fams-stack" aria-label="所选返厂轮次">
-          <h4 class="fams-panel-title">第 {{ selected.roundNumber }} 轮 · <span class="fams-status">{{ factoryRoundStates[selected.roundStatus] }}</span></h4>
+          <h4 class="fams-panel-title">第 {{ selected.roundNumber }} 轮 · <span class="fams-status">{{ factoryRoundStates[selected.roundStatus] ?? selected.roundStatus }}</span></h4>
           <p>{{ selected.providerName }} · {{ selected.serviceContact }} · {{ selected.servicePhone }}；预计收回 {{ selected.expectedReturnDate }}。</p>
           <p>{{ selected.fault }}</p>
           <p>实际寄出 {{ dispatchText }}；实际原机收回 {{ receivedText }}。</p>

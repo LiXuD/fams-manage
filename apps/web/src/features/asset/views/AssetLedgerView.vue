@@ -1,15 +1,20 @@
 <script setup lang="ts">
 import { computed, shallowRef } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { usePagedResourceList } from "@/composables/usePagedResourceList";
 import { cardStageLabels, custodyLabel, lifecycleLabels, listAssets, type AssetCard } from "@/features/asset/api";
 
 const session = useSessionStore();
-const code = shallowRef("");
+const route = useRoute();
+const router = useRouter();
+const entryQuery = route?.query ?? {};
+const code = shallowRef(typeof entryQuery.assetCode === "string" ? entryQuery.assetCode : "");
 const nameFilter = shallowRef("");
 
 const canWrite = session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false;
+const ASSET_ID = /^[1-9][0-9]*$/;
 
 const { rows, total, page, error, restart, pages } = usePagedResourceList<AssetCard>(
   (page) => listAssets(page, code.value, nameFilter.value),
@@ -22,6 +27,13 @@ const displayRows = computed(() => rows.value.map((asset) => ({
 const hasNoRows = computed(() => rows.value.length === 0);
 const prevDisabled = computed(() => page.value <= 1);
 const nextDisabled = computed(() => page.value * 20 >= total.value);
+
+// 深链入口：报表下钻带 assetId 直接进详情，工作台快捷入口带 action=create 直接进建卡。
+if (router) {
+  const assetId = typeof entryQuery.assetId === "string" ? entryQuery.assetId : "";
+  if (ASSET_ID.test(assetId)) void router.replace({ name: "asset-detail", params: { id: assetId } });
+  else if (canWrite && entryQuery.action === "create") void router.replace({ name: "asset-new" });
+}
 </script>
 
 <template>

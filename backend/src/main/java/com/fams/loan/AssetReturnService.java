@@ -6,8 +6,11 @@ import com.fams.auth.RequisitionActorContext;
 import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
+import com.fams.business.ReturnLossOpeningPort;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,9 +33,11 @@ class AssetReturnService {
     private final AssetReturnPort assets;
     private final AssetHandoverPort handover;
     private final LoanReminderService reminders;
+    private final ObjectProvider<ReturnLossOpeningPort> lossReports;
 
     AssetReturnService(JdbcTemplate db, ObjectMapper json, Clock clock, RequisitionActorContext actors,
-            AssetReturnPort assets, AssetHandoverPort handover, LoanReminderService reminders) {
+            AssetReturnPort assets, AssetHandoverPort handover, LoanReminderService reminders,
+            ObjectProvider<ReturnLossOpeningPort> lossReports) {
         this.db = db;
         this.json = json;
         this.clock = clock;
@@ -40,6 +45,7 @@ class AssetReturnService {
         this.assets = assets;
         this.handover = handover;
         this.reminders = reminders;
+        this.lossReports = lossReports;
     }
 
     Map<String, Object> list(Actor actor, int page, int size) {
@@ -50,7 +56,27 @@ class AssetReturnService {
                 + " ORDER BY id DESC LIMIT ? OFFSET ?", size, (page - 1) * size);
         long total = java.util.Objects.requireNonNull(
                 db.queryForObject("SELECT COUNT(*) FROM fams_asset_return WHERE " + scope, Long.class), "RETURN_COUNT_MISSING");
-        return Map.of("items", items.stream().map(this::view).toList(), "total", total, "page", page, "pageSize", size);
+        var returnIds = items.stream().filter(item -> "TRANSFERRED".equals(item.get("return_status")))
+                .map(item -> number(item, "id")).toList();
+        var summaries = new java.util.HashMap<Long, ReturnLossOpeningPort.Summary>();
+        if (!returnIds.isEmpty()) {
+            var followups = new NamedParameterJdbcTemplate(db).queryForList(
+                    "SELECT id,return_id FROM fams_return_followup WHERE business_type='LOST_REPORT' AND return_id IN (:ids)",
+                    Map.of("ids", returnIds));
+            var progress = lossReports.getObject().latest(followups.stream().map(row -> number(row, "id")).toList());
+            for (var followup : followups) {
+                summaries.put(number(followup, "return_id"), progress.get(number(followup, "id")));
+            }
+        }
+        var results = items.stream().map(item -> {
+            var result = view(item);
+            var summary = summaries.get(number(item, "id"));
+            if (summary != null) {
+                result.put("returnLossReport", summary);
+            }
+            return result;
+        }).toList();
+        return Map.of("items", results, "total", total, "page", page, "pageSize", size);
     }
 
     Map<String, Object> catalog(Actor actor, String kind, int page, int size) {
@@ -91,8 +117,38 @@ class AssetReturnService {
         var locks = db.queryForList("SELECT lock_version FROM fams_asset_business_lock WHERE asset_id=?"
                 + " AND business_type='ASSET_RETURN' AND business_id=? AND released_at IS NULL", row.get("asset_id"), id);
         result.put("lockVersion", locks.isEmpty() ? null : locks.getFirst().get("lock_version"));
+        result.put("canReportMissing", !locks.isEmpty() && "WAREHOUSE_PROCESSING".equals(row.get("return_status"))
+                && current.has(Role.WAREHOUSE_OPERATOR)
+                && java.util.Objects.equals(current.id(), row.get("processor_account_id")));
         result.put("followups", db.queryForList("SELECT * FROM fams_return_followup WHERE return_id=?", id)
-                .stream().map(this::view).toList());
+                .stream().map(followup -> followupView(current, followup)).toList());
+        return result;
+    }
+
+    private Map<String, Object> followupView(Current current, Map<String, Object> row) {
+        var result = view(row);
+        if ("LOST_REPORT".equals(row.get("business_type"))) {
+            long id = number(row, "id");
+            var report = lossReports.getObject().latest(id);
+            result.put("lossReport", report);
+            if (report != null && report.recoveryReturnId() != null) {
+                var acceptance = db.queryForList("SELECT return_status FROM fams_asset_return WHERE id=?",
+                        String.class, Long.parseLong(report.recoveryReturnId()));
+                if (!acceptance.isEmpty()) {
+                    result.put("recoveryReturnStatus", acceptance.getFirst());
+                }
+            }
+            if ("PENDING".equals(row.get("followup_status")) && current.has(Role.WAREHOUSE_OPERATOR)
+                    && current.id() == number(row, "processor_account_id")) {
+                var lockVersions = db.queryForList("SELECT lock_version FROM fams_asset_business_lock"
+                        + " WHERE business_type='RETURN_LOST_REPORT' AND business_id=? AND released_at IS NULL",
+                        Long.class, id);
+                if (!lockVersions.isEmpty()) {
+                    result.put("missingLossLockVersion", lockVersions.getFirst());
+                    result.put("canRetryMissingLoss", true);
+                }
+            }
+        }
         return result;
     }
 
@@ -254,8 +310,13 @@ class AssetReturnService {
             if (input.observedCode() == null || input.observedCode().isBlank()) { throw new LoanFailure("RETURN_PHYSICAL_REQUIRED", 400); }
             handover.observedCode(number(row, "asset_id"), input.observedCode());
             target(input);
-        } else if (input.warehouseId() != null || input.locationId() != null) {
-            throw new LoanFailure("RETURN_MISSING_TARGET_INVALID", 400);
+        } else {
+            if (input.warehouseId() != null || input.locationId() != null) {
+                throw new LoanFailure("RETURN_MISSING_TARGET_INVALID", 400);
+            }
+            if (input.missingLoss() == null) {
+                throw new LoanFailure("RETURN_MISSING_LOSS_FACTS_REQUIRED", 400);
+            }
         }
         assets.inspect(number(row, "asset_id"), input.assetVersion(), input.result(), input.warehouseId(),
                 input.locationId(), current.id(), id, clock.instant());
@@ -265,17 +326,24 @@ class AssetReturnService {
                 throw new LoanFailure("RETURN_LOAN_CHANGED", 409);
             }
         }
-        boolean followup = !"NORMAL".equals(input.result());
-        release(id, followup ? "TRANSFERRED_TO_FOLLOWUP" : "RETURN_ACCEPTED");
-        if (followup) {
+        boolean damaged = "DAMAGED".equals(input.result());
+        if (!missing) {
+            release(id, damaged ? "TRANSFERRED_TO_FOLLOWUP" : "RETURN_ACCEPTED");
+        }
+        if (missing || damaged) {
             String type = missing ? "LOST_REPORT" : "REPAIR";
             db.update("INSERT INTO fams_return_followup (return_id,asset_id,loan_id,business_type,processor_account_id,reason,created_at)"
                     + " VALUES (?,?,?,?,?,?,?)", id, row.get("asset_id"), row.get("loan_id"), type, current.id(), input.reason(), now());
             long next = lastId();
-            db.update("INSERT INTO fams_asset_business_lock (asset_id,business_type,business_id,business_item_id,acquired_at)"
-                    + " VALUES (?,?,?,?,?)", row.get("asset_id"), "RETURN_" + type, next, next, now());
-            db.update("INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at)"
-                    + " VALUES ('ASSET_ADMIN',?,?,'FOLLOWUP','OPEN',?)", "RETURN_" + type, next, now());
+            if (missing) {
+                openMissing(actor, current, id, next, number(row, "asset_id"), input.assetVersion() + 1,
+                        "ASSET_RETURN", id, input.lockVersion(), input.missingLoss());
+            } else {
+                db.update("INSERT INTO fams_asset_business_lock (asset_id,business_type,business_id,business_item_id,acquired_at)"
+                        + " VALUES (?,'RETURN_REPAIR',?,?,?)", row.get("asset_id"), next, next, now());
+                db.update("INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at)"
+                        + " VALUES ('ASSET_ADMIN','RETURN_REPAIR',?,'FOLLOWUP','OPEN',?)", next, now());
+            }
         }
         db.update("UPDATE fams_asset_return SET return_status=?,inspection_result=?,inspection_reason=?,warehouse_id=?,"
                 + "location_id=?,completed_at=?,version=version+1 WHERE id=?", missing ? "TRANSFERRED" : "COMPLETED",
@@ -286,6 +354,86 @@ class AssetReturnService {
         }
         audit(actor, current, id, "RETURN_INSPECTED", version, version + 1, input);
         return finish(current, "inspect", key, hash, id);
+    }
+
+    Map<String, Object> retryMissingLoss(Actor actor, long id, long version, String key,
+            AssetReturnController.MissingRetry input) {
+        var current = actors.revalidateLocked(actor);
+        role(current, Role.WAREHOUSE_OPERATOR);
+        String hash = digest("missing-loss:" + id + ":" + version, input);
+        var prior = replay(current, "missing-loss", key, hash);
+        if (prior != null) {
+            return prior;
+        }
+        var row = request(id);
+        if (!"TRANSFERRED".equals(row.get("return_status")) || !"MISSING".equals(row.get("inspection_result"))) {
+            throw new LoanFailure("RETURN_MISSING_STATE_CHANGED", 409);
+        }
+        var followup = one("SELECT * FROM fams_return_followup WHERE return_id=? AND business_type='LOST_REPORT' FOR UPDATE", id);
+        if (current.id() != number(followup, "processor_account_id")) {
+            throw new LoanFailure("RETURN_NOT_PROCESSOR", 403);
+        }
+        checkVersion(followup, version);
+        if (!"PENDING".equals(followup.get("followup_status"))) {
+            throw new LoanFailure("RETURN_MISSING_STATE_CHANGED", 409);
+        }
+        long assetId = number(row, "asset_id");
+        long followupId = number(followup, "id");
+        var asset = one("SELECT * FROM fams_asset WHERE id=? FOR UPDATE", assetId);
+        checkVersion(asset, input.assetVersion());
+        var lock = one("SELECT lock_version FROM fams_asset_business_lock WHERE asset_id=? AND business_type='RETURN_LOST_REPORT'"
+                + " AND business_id=? AND released_at IS NULL FOR UPDATE", assetId, followupId);
+        if (number(lock, "lock_version") != input.lockVersion()) {
+            throw new LoanFailure("RETURN_LOCK_CHANGED", 409);
+        }
+        long assetVersion = input.assetVersion();
+        if ("SEARCHING".equals(asset.get("exception_status")) && lossReports.getObject().latest(followupId) == null) {
+            assetVersion = assets.prepareLegacyMissingReturn(assetId, assetVersion, id, current.id(), clock.instant());
+        }
+        long report = openMissing(actor, current, id, followupId, assetId, assetVersion,
+                "RETURN_LOST_REPORT", followupId, input.lockVersion(), input.facts());
+        audit(actor, current, id, "RETURN_MISSING_REPORTED", number(row, "version"), number(row, "version"),
+                Map.of("followupId", Long.toString(followupId), "reportId", Long.toString(report)));
+        return finish(current, "missing-loss", key, hash, id);
+    }
+
+    private long openMissing(Actor actor, Current current, long returnId, long followupId, long assetId,
+            long assetVersion, String lockType, long lockBusinessId, long lockVersion, AssetReturnController.MissingLoss input) {
+        if (input.circumstances().strip().length() < 10) {
+            throw new LoanFailure("RETURN_MISSING_LOSS_FACTS_REQUIRED", 400);
+        }
+        var facts = new ReturnLossOpeningPort.Facts(input.lastSeenAt(), input.lastLocation(), input.circumstances());
+        long reportId;
+        try {
+            reportId = lossReports.getObject().open(actor,
+                    new ReturnLossOpeningPort.Opening(returnId, followupId, assetId, assetVersion, current.id(), facts));
+        } catch (ReturnLossOpeningPort.Failure failure) {
+            throw new LoanFailure(failure.getMessage(), failure.status());
+        }
+        if (db.update("UPDATE fams_asset_business_lock SET business_type='LOST_REPORT',business_id=?,business_item_id=?,"
+                + "lock_version=lock_version+1 WHERE asset_id=? AND business_type=? AND business_id=?"
+                + " AND lock_version=? AND released_at IS NULL",
+                reportId, reportId, assetId, lockType, lockBusinessId, lockVersion) != 1) {
+            throw new LoanFailure("RETURN_LOCK_CHANGED", 409);
+        }
+        db.update("UPDATE fams_return_followup SET followup_status='ACCEPTED',version=version+1 WHERE id=?", followupId);
+        db.update("UPDATE fams_todo SET todo_status='CLOSED',closed_at=? WHERE business_type='RETURN_LOST_REPORT'"
+                + " AND business_id=? AND closed_at IS NULL", now(), followupId);
+        return reportId;
+    }
+
+    void restoreMissing(long followupId, long assetId, long reportId) {
+        var followup = one("SELECT * FROM fams_return_followup WHERE id=? AND business_type='LOST_REPORT'"
+                + " AND followup_status='ACCEPTED' AND asset_id=? FOR UPDATE", followupId, assetId);
+        if (db.update("UPDATE fams_asset_business_lock SET business_type='RETURN_LOST_REPORT',business_id=?,business_item_id=?,"
+                + "lock_version=lock_version+1 WHERE asset_id=? AND business_type='LOST_REPORT' AND business_id=?"
+                + " AND business_item_id=? AND released_at IS NULL", followupId, followupId, assetId, reportId, reportId) != 1) {
+            throw new LoanFailure("RETURN_LOCK_CHANGED", 409);
+        }
+        db.update("UPDATE fams_return_followup SET followup_status='PENDING',version=version+1 WHERE id=?", followupId);
+        db.update("INSERT INTO fams_todo (pool_type,assignee_account_id,business_type,business_id,todo_type,todo_status,opened_at)"
+                + " VALUES ('WAREHOUSE_OPERATOR',?,'RETURN_LOST_REPORT',?,'FOLLOWUP','OPEN',?)",
+                number(followup, "processor_account_id"), followupId, now());
     }
 
     private void target(AssetReturnController.Inspection input) {

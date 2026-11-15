@@ -33,9 +33,18 @@ const error = shallowRef("");
 const liveness = useRequestLiveness(() => [props.report.id, props.report.version, props.locked]);
 
 const source = computed(() => props.report.recoveryAsset ?? null);
+const internalRepair = computed(() => !!props.report.source?.internalRepairSource);
+/** 内部维修承接位的找回走独立端点与资格位；返厂分支保持原路径。 */
+const retainedDestination = computed(() => internalRepair.value ? "INTERNAL_REPAIR" : "FACTORY_REPAIR");
+const recoverRetainedAction = computed(() => internalRepair.value ? "recoverInternalRepair" : "recoverFactory");
+const requestRetainedAction = computed(() => internalRepair.value ? "requestInternalRepairRecovery" : "requestFactoryRecovery");
+const showInternalReturnNote = computed(() => !!props.report.repairId && !!props.report.source?.internalRepairSource);
 const showFactoryReturnNote = computed(() => !!props.report.repairId && !!props.report.source?.factorySource);
-const showRepairNote = computed(() => !!props.report.repairId && !props.report.source?.factorySource);
-const showDamagedSection = computed(() => !!props.report.actions?.recoverOriginal || !!props.report.actions?.requestRecovery || (props.report.recoveries ?? []).some((item) => item.actions.execute && item.request?.facts?.condition === "DAMAGED" && item.request?.destination !== "FACTORY_REPAIR"));
+const showRepairNote = computed(() => !!props.report.repairId && !props.report.source?.factorySource && !internalRepair.value);
+const factorySectionLabel = computed(() => internalRepair.value ? "内部维修实物找回" : "返厂原机找回续修");
+const factoryCheckedSuffix = computed(() => internalRepair.value ? "原维修实物" : "返厂原机");
+const factoryRequestButtonLabel = computed(() => `新建${internalRepair.value ? "内部维修" : "返厂原机"}找回申请`);
+const showDamagedSection = computed(() => !!props.report.actions?.recoverOriginal || !!props.report.actions?.requestRecovery || (props.report.recoveries ?? []).some((item) => item.actions.execute && item.request?.facts?.condition === "DAMAGED" && item.request?.destination !== "FACTORY_REPAIR" && item.request?.destination !== "INTERNAL_REPAIR"));
 const showReturnSection = computed(() => !!props.report.actions?.recoverOriginal || !!props.report.actions?.requestRecovery || (props.report.recoveries ?? []).some((item) => item.actions.execute && item.request?.destination === "ASSET_RETURN"));
 const locationsLoaded = computed(() => locationPage.value > 0);
 const locationsSummary = computed(() => `已加载${locations.value.length}/${locationTotal.value}个位置`);
@@ -50,8 +59,8 @@ const eligibleTargetLocations = computed(() => targetLocations.value.filter(plac
 const transferAttempt = computed(() => props.report.recoveries?.find(
   item => item.actions.execute && item.request?.destination === "TRANSFER"));
 const factoryAttempt = computed(() => props.report.recoveries?.find(
-  item => item.actions.execute && item.request?.destination === "FACTORY_REPAIR"));
-const showFactorySection = computed(() => !!props.report.actions?.recoverFactory || !!props.report.actions?.requestFactoryRecovery || !!factoryAttempt.value);
+  item => item.actions.execute && item.request?.destination === retainedDestination.value));
+const showFactorySection = computed(() => !!props.report.actions?.[recoverRetainedAction.value] || !!props.report.actions?.[requestRetainedAction.value] || !!factoryAttempt.value);
 const showTransferTarget = computed(() => !!props.report.actions?.recoverOriginal || !!transferAttempt.value);
 const showTransferSection = computed(() => canTransfer.value && (showTransferTarget.value || !!props.report.actions?.requestRecovery));
 /** 申请行显示模型：状态、去向与三段核实文案在此拼装，按钮可见性按申请单自身事实判定，模板只读现成字段。 */
@@ -61,6 +70,7 @@ const attemptRows = computed(() => (props.report.recoveries ?? []).map((attempt)
   const returned = attempt.request?.destination === "ASSET_RETURN";
   const transferred = attempt.request?.destination === "TRANSFER";
   const factored = attempt.request?.destination === "FACTORY_REPAIR";
+  const retained = attempt.request?.destination === "INTERNAL_REPAIR";
   return { ...attempt,
     statusText: statusLabels[attempt.status] ?? attempt.status,
     processorText: attempt.processorAccountId ?? "尚未认领",
@@ -68,14 +78,14 @@ const attemptRows = computed(() => (props.report.recoveries ?? []).map((attempt)
     observedCodeText: show(facts.observedAssetCode),
     observedSerialText: showOr(facts.observedSerialNumber, "未登记"),
     locationIdText: show(facts.locationId),
-    destinationText: returned ? "关联归还/退库，原责任待实物验收后移交" : transferred ? "关联正式调拨" : factored ? "交回原返厂维修" : "原责任恢复或维修",
+    destinationText: returned ? "关联归还/退库，原责任待实物验收后移交" : transferred ? "关联正式调拨" : factored ? "交回原返厂维修" : retained ? "交回原内部维修" : "原责任恢复或维修",
     conditionText: facts.condition === "INTACT" ? "完好" : damaged ? "损坏，批准后转正式维修" : "需关联处理",
     custodianText: facts.stillOriginalCustodian === true ? "仍由原责任人保管" : "责任需核对",
     identityText: facts.physicalIdentityVerified === true ? "已对照原机身份" : "身份待核对",
     evidenceText: show(facts.evidence),
     showReason: attempt.actions.decide || attempt.actions.cancel,
-    executeOriginalShown: attempt.actions.execute && !damaged && !returned && !transferred && !factored,
-    executeDamagedShown: attempt.actions.execute && damaged && !factored,
+    executeOriginalShown: attempt.actions.execute && !damaged && !returned && !transferred && !factored && !retained,
+    executeDamagedShown: attempt.actions.execute && damaged && !factored && !retained,
     executeReturnShown: attempt.actions.execute && returned };
 }));
 
@@ -201,10 +211,14 @@ function recoveryBody(facts: unknown, requestOnly: boolean, row: LossReport, att
 function draftOf(action: Action, attempt?: LossRecovery): { path: string; body: unknown; summary: string; version: number } {
   const row = props.report;
   if (action === "recoverFactory" || action === "requestFactoryRecovery" || action === "executeFactory") {
-    const facts = factoryFacts(), requestOnly = action === "requestFactoryRecovery";
-    return { path: requestOnly ? `/${row.id}/factory-recovery-requests` : attempt ? `/recoveries/${attempt.id}/execute-to-factory` : `/${row.id}/recover-to-factory`,
+    const facts = factoryFacts(), requestOnly = action === "requestFactoryRecovery", internal = internalRepair.value;
+    return { path: requestOnly ? `/${row.id}/${internal ? "internal-repair-recovery-requests" : "factory-recovery-requests"}`
+      : attempt ? `/recoveries/${attempt.id}/${internal ? "execute-to-internal-repair" : "execute-to-factory"}`
+        : `/${row.id}/${internal ? "recover-to-internal-repair" : "recover-to-factory"}`,
       body: recoveryBody(facts, requestOnly, row, attempt, source.value),
-      summary: requestOnly ? "提交原维修续办的找回申请，待批准和重新认领。" : "找回并把锁交回原维修。实际收回仍须在原返厂轮次办理。",
+      summary: requestOnly ? "提交原维修续办的找回申请，待批准和重新认领。"
+        : internal ? "找回并把锁交回原内部维修，后续继续按原维修办理。"
+          : "找回并把锁交回原维修。实际收回仍须在原返厂轮次办理。",
       version: attempt?.version ?? row.version };
   }
   if (action === "recoverTransfer" || action === "requestTransfer" || action === "executeTransfer") {
@@ -263,7 +277,7 @@ function matchesAttempt(action: Action, attempt: LossRecovery | undefined): bool
   if (action === "execute" || action === "executeDamaged" || action === "executeReturn" || action === "executeTransfer" || action === "executeFactory") {
     if ((attempt.request?.destination === "ASSET_RETURN") !== (action === "executeReturn")) return false;
     if ((attempt.request?.destination === "TRANSFER") !== (action === "executeTransfer")) return false;
-    if ((attempt.request?.destination === "FACTORY_REPAIR") !== (action === "executeFactory")) return false;
+    if (["FACTORY_REPAIR", "INTERNAL_REPAIR"].includes(attempt.request?.destination ?? "") !== (action === "executeFactory")) return false;
   }
   if (action === "execute" || action === "executeDamaged") {
     if ((attempt.request?.facts?.condition === "DAMAGED") !== (action === "executeDamaged")) return false;
@@ -274,7 +288,9 @@ function matchesAttempt(action: Action, attempt: LossRecovery | undefined): bool
 function prepare(action: Action, attempt?: LossRecovery) {
   if (props.locked) return;
   const row = props.report;
-  const capable = attempt ? attempt.actions[attemptCapabilities[action]] : row.actions?.[reportCapabilities[action]];
+  const capability = action === "recoverFactory" ? recoverRetainedAction.value
+    : action === "requestFactoryRecovery" ? requestRetainedAction.value : reportCapabilities[action];
+  const capable = attempt ? attempt.actions[attemptCapabilities[action]] : row.actions?.[capability];
   if (!capable || !matchesAttempt(action, attempt)) return;
   error.value = "";
   try {
@@ -293,6 +309,7 @@ function prepare(action: Action, attempt?: LossRecovery) {
     </div>
     <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
     <p v-if="report.recoveredAt">原实物已找回：{{ report.recoveredAt }}。原遗失及后续履历继续保留。</p>
+    <p v-if="showInternalReturnNote">已交回原内部维修 {{ report.repairId }}，请在原维修单继续办理。</p>
     <p v-if="showFactoryReturnNote">已交回原返厂维修 {{ report.repairId }}，请在原轮次登记实际收回。</p>
     <p v-if="showRepairNote">已关联正式维修 {{ report.repairId }}，请前往维修管理查看审批和实际办理进度。</p>
     <fieldset class="fams-card fams-stack" :disabled="locked">
@@ -365,18 +382,18 @@ function prepare(action: Action, attempt?: LossRecovery) {
           <button v-if="report.actions?.requestRecovery" class="fams-button" data-kind="secondary" type="button" @click="prepare('requestTransfer')">新建调拨找回申请</button>
         </div>
       </section>
-      <section v-if="showFactorySection" class="fams-card fams-stack" aria-label="返厂原机找回续修">
-        <h4 class="fams-panel-title">返厂原机找回续修</h4>
+      <section v-if="showFactorySection" class="fams-card fams-stack" :aria-label="factorySectionLabel">
+        <h4 class="fams-panel-title">{{ factorySectionLabel }}</h4>
         <p>填写上方原机编码、序列号、找回时间及证据。原维修继续办理实际收回。</p>
         <div class="fams-panel-actions">
           <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="loadingLocations || locked" @click="loadLocations">加载找回实物位置</button>
         </div>
         <label class="fams-field"><span class="fams-field-label">原机找回位置</span><select class="fams-control" v-model="locationIndex"><option value="">请选择实际位置</option><option v-for="place in locations" :key="place.id" :value="place.id">{{ place.name }}</option></select></label>
         <label class="fams-field"><span class="fams-field-label">找回时原机状况</span><select class="fams-control" v-model="factoryCondition"><option value="INTACT">完好</option><option value="DAMAGED">损坏</option></select></label>
-        <label class="fams-selection"><input v-model="factoryChecked" type="checkbox">已亲见并对照返厂原机</label>
+        <label class="fams-selection"><input v-model="factoryChecked" type="checkbox">已亲见并对照{{ factoryCheckedSuffix }}</label>
         <div class="fams-panel-actions">
-          <button v-if="report.actions?.recoverFactory" class="fams-button" data-kind="primary" type="button" @click="prepare('recoverFactory')">找回并交回原维修</button>
-          <button v-if="report.actions?.requestFactoryRecovery" class="fams-button" data-kind="secondary" type="button" @click="prepare('requestFactoryRecovery')">新建返厂原机找回申请</button>
+          <button v-if="report.actions?.[recoverRetainedAction]" class="fams-button" data-kind="primary" type="button" @click="prepare('recoverFactory')">找回并交回原维修</button>
+          <button v-if="report.actions?.[requestRetainedAction]" class="fams-button" data-kind="secondary" type="button" @click="prepare('requestFactoryRecovery')">{{ factoryRequestButtonLabel }}</button>
           <button v-if="factoryAttempt" class="fams-button" data-kind="primary" type="button" @click="prepare('executeFactory', factoryAttempt)">核实找回并交回原维修</button>
         </div>
       </section>

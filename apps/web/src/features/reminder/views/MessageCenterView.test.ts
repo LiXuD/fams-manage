@@ -91,7 +91,11 @@ describe("message centre", () => {
     api.duty.mockResolvedValue({ items: [dutyRow] });
     const writes: unknown[] = []; let lose = true;
     api.request.mockResolvedValue({ items: [], total: 0, unread: 0, view: "INBOX" });
-    api.duty.mockImplementation(async (_path: string, mutation?: unknown) => {
+    api.duty.mockImplementation(async (path: string, mutation?: unknown) => {
+      if (path.startsWith("/configuration-anomalies?")) {
+        return { items: [{ id: "4", type: "NO_ASSET_ADMIN", status: "OPEN",
+          detectedAt: "2026-11-10T01:00:00Z", relatedTodos: [] }], total: 1 };
+      }
       if (!mutation) return { items: [dutyRow] };
       writes.push(JSON.parse(JSON.stringify(mutation)));
       if (lose) { lose = false; throw new Error("lost committed reply"); }
@@ -99,6 +103,7 @@ describe("message centre", () => {
     });
     const wrapper = mount(MessageCenterView, { global: { stubs: { RouterLink: true } } });
     await flushPromises();
+    expect(wrapper.text()).toContain("没有有效资产管理员");
     await wrapper.find("select").setValue("ASSET_ADMIN");
     await wrapper.findAll("input")[0]!.setValue("9");
     await wrapper.findAll("input")[1]!.setValue("");

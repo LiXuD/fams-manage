@@ -362,6 +362,8 @@ onBeforeUnmount(resetView);
           <p class="fams-panel-subtitle">{{ detail.source.assetCode }} · {{ detail.source.name }}；最后见到 {{ detail.lastSeenAt }}；位置：{{ detail.lastLocation }}</p>
         </div>
       </div>
+      <p v-if="detail.source.inventorySource">盘点来源：任务 {{ detail.source.inventorySource.taskId }} · 应盘项 {{ detail.source.inventorySource.itemId }} · 未盘记录 {{ detail.source.inventorySource.reasonId }}</p>
+      <p v-if="detail.source.returnSource">归还来源：原归还 {{ detail.source.returnSource.returnId }} · 后续处理 {{ detail.source.returnSource.followupId }}</p>
       <p>{{ detail.circumstances }}</p>
       <p>{{ reviewLineText }}</p>
       <p v-if="showSearchingNote">已进入查找中，资产继续持锁。本次查找仍在处理中。</p>

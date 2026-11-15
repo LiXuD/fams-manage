@@ -56,6 +56,8 @@ class MessagesHttpRuntimeCase {
     @Test
     void inboxAndExceptionListsFollowAddressivityAndReadStateIsPerPerson() throws Exception {
         seed();
+        reminder(930913, "LOST_REPORT", 12, "LOSS_REVIEW", "SMS_FALLBACK",
+                "2026-11-09", "WAREHOUSE_OPERATOR", WAREHOUSE);
         var admin = login("msg1");
         var warehouse = login("msg2");
         var employee = login("msg3");
@@ -89,6 +91,7 @@ class MessagesHttpRuntimeCase {
                 Long.parseLong(first.split(":")[1])));
 
         assertEquals(404, read(employee, "REMINDER:930912").statusCode());
+        assertEquals(404, read(admin, "REMINDER:930913").statusCode());
         assertEquals(200, read(admin, "REMINDER:930912").statusCode());
         assertEquals(1, receiptCount(930912));
         assertEquals(404, read(admin, "TODO:930899").statusCode());

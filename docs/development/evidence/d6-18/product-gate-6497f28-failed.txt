@@ -178,7 +178,7 @@
   [INFO] Results:
   [INFO]
   [INFO] Tests run: 1, Failures: 0, Errors:Traceback (most recent call last):
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/verify-product-development.py", line 19, in <module>
+  File "<workspace>/scripts/verify-product-development.py", line 19, in <module>
  0, Skipped: 0
   [INFO]
   [INFO] ------------------------------------------------------------------------
@@ -426,8 +426,8 @@
 [git diff check] exit=0
 [clean worktree postflight] exit=0
     gate["verify_dependency_integrity"]()
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/verify-d6-03a.py", line 1310, in verify_dependency_integrity
+  File "<workspace>/scripts/verify-d6-03a.py", line 1310, in verify_dependency_integrity
     require_command(
-  File "/Users/lixd/IdeaProjects/Git/CodexProject/fams/scripts/verify-d6-03a.py", line 487, in require_command
+  File "<workspace>/scripts/verify-d6-03a.py", line 487, in require_command
     raise VerificationFailure(f"{label} failed with exit {result.returncode}")
 <run_path>.VerificationFailure: npm high-severity audit failed with exit 1

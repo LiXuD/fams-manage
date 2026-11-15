@@ -13,7 +13,7 @@ interface Preflight { task: { id: string; version: number; task_status: string }
   blockers?: { code: string; itemId?: string; observationId?: string }[]; blockerCount?: number;
   synchronization?: Row[]; synchronizationDigest?: string; missingSynchronizationCount?: number }
 interface Page { items: { snapshot_json: unknown; snapshot_sha256: string }[]; total: number }
-const props = defineProps<{ taskId: string }>(); const emit = defineEmits<{ changed: [] }>();
+const props = defineProps<{ taskId: string; taskVersion?: number }>(); const emit = defineEmits<{ changed: [] }>();
 const session = useSessionStore(); const owner = computed(() => JSON.stringify([props.taskId, session.user?.id, session.user?.roles, session.csrfToken]));
 const view = ref<Preflight | null>(null), busy = shallowRef(false), error = shallowRef(""), notice = shallowRef("");
 const reason = shallowRef(""), waiver = shallowRef("");
@@ -110,6 +110,9 @@ async function exportReport() {
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 watch(owner, () => { clear(); page.value = 1; void load(); }, { immediate: true });
+watch(() => props.taskVersion, (version) => {
+  if (!prepared.value && !pending.value && !view.value?.sealed && view.value?.task.version !== version) void load();
+});
 onBeforeUnmount(() => { clear(); });
 </script>
 <template>

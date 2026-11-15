@@ -1,6 +1,7 @@
 package com.fams.auth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fams.auth.RepairHttpRuntimeCase.Session;
 
@@ -101,6 +102,84 @@ class ScrapSubmitHttpRuntimeCase {
         db.update("DELETE FROM fams_scrap_receipt WHERE scrap_request_id" + requests);
         db.update("DELETE FROM fams_scrap_request WHERE asset_id BETWEEN 951020 AND 951023");
         fixture.cleanup();
+    }
+
+    @Test
+    void auditorReadsOnlyCurrentlyGrantedScrapOrganizations() throws Exception {
+        var json = new tools.jackson.databind.ObjectMapper();
+        var submitted = submit(fixture.employee, UUID.randomUUID().toString(), INPUT);
+        assertEquals(200, submitted.statusCode(), submitted.body());
+        String id = json.readTree(submitted.body()).path("id").asText();
+        var outside = submit(fixture.admin, UUID.randomUUID().toString(), INPUT.replace("951020", "951023"));
+        assertEquals(200, outside.statusCode(), outside.body());
+        String outsideId = json.readTree(outside.body()).path("id").asText();
+        db.update("UPDATE fams_asset SET owning_organization_id=951099 WHERE id=951023");
+        db.update("UPDATE fams_account_role SET role_code='AUDIT_READ_ONLY' WHERE account_id=951007");
+        var login = http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/auth/login"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(
+                        java.util.Map.of("username", "rep7", "password", RepairHttpRuntimeCase.PASSWORD))))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, login.statusCode(), login.body());
+        var auditor = new Session(login.headers().firstValue("Set-Cookie").orElseThrow().split(";", 2)[0],
+                json.readTree(login.body()).path("csrfToken").asText());
+        assertEquals(404, get(auditor, "/" + id).statusCode());
+        db.update("""
+                INSERT INTO fams_account_authorization (id,account_id,role_code,generation_no,authorization_status,
+                    change_reason,created_at)
+                VALUES (951007,951007,'AUDIT_READ_ONLY',1,'ACTIVE','audit fixture',NOW(3))
+                """);
+        db.update("INSERT INTO fams_account_data_scope (id,authorization_id,scope_type)"
+                + " VALUES (951007,951007,'SPECIFIED_ORGANIZATIONS')");
+        db.update("INSERT INTO fams_account_scope_organization (data_scope_id,organization_id,"
+                + "organization_version_at_grant) VALUES (951007,951000,0)");
+        var list = get(auditor, "?pageSize=1");
+        assertEquals(200, list.statusCode(), list.body());
+        var page = json.readTree(list.body());
+        assertEquals(1, page.path("total").asInt());
+        assertEquals(id, page.path("items").get(0).path("id").asText());
+        var detail = get(auditor, "/" + id);
+        assertEquals(200, detail.statusCode(), detail.body());
+        assertTrue(json.readTree(detail.body()).path("actions").valueStream().noneMatch(action -> action.asBoolean()));
+        assertEquals(404, get(auditor, "/" + outsideId).statusCode());
+        assertEquals(403, get(auditor, "/" + id + "/attachments/request").statusCode());
+        assertEquals(403, submit(auditor, UUID.randomUUID().toString(), INPUT).statusCode());
+        db.update("UPDATE fams_account_authorization SET superseded_at=NOW(3) WHERE id=951007");
+        assertEquals(404, get(auditor, "/" + id).statusCode());
+    }
+
+    @Test
+    void malformedIdempotencyKeysAreRejectedBeforeAnyScrapWrite() throws Exception {
+        String malformed = "invalid-uuid-key";
+        var json = new tools.jackson.databind.ObjectMapper();
+        var before = db.queryForMap("SELECT * FROM fams_asset WHERE id=951020");
+        var pc = submit(fixture.employee, malformed, INPUT);
+        assertEquals(400, pc.statusCode(), pc.body());
+        assertEquals("INVALID_REQUEST", json.readTree(pc.body()).path("code").asText());
+
+        var identity = new MiniWechatIdentityPort.Identity("owned-scrap-uuid", "employee");
+        db.update("INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES (?,?,NOW(3))",
+                951002L, miniSessions.identityHash(identity));
+        var session = miniSessions.start(identity, UUID.randomUUID());
+        var nativeRequest = HttpRequest.newBuilder(
+                        URI.create("http://127.0.0.1:" + port + "/api/v1/mini/scrap-requests"))
+                .header("Content-Type", "application/json")
+                .header("X-FAMS-Mini-Session", session.sessionToken())
+                .header("Idempotency-Key", malformed)
+                .POST(HttpRequest.BodyPublishers.ofString(INPUT)).build();
+        var mini = http.send(nativeRequest, HttpResponse.BodyHandlers.ofString());
+        assertEquals(400, mini.statusCode(), mini.body());
+        assertEquals("INVALID_REQUEST", json.readTree(mini.body()).path("code").asText());
+        assertEquals(before, db.queryForMap("SELECT * FROM fams_asset WHERE id=951020"));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_request", Long.class));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_receipt", Long.class));
+
+        String id = scrapId();
+        var attachment = upload(fixture.employee, id, "request", 0, malformed);
+        assertEquals(400, attachment.statusCode(), attachment.body());
+        assertEquals("SCRAP_ATTACHMENT_INVALID", json.readTree(attachment.body()).path("code").asText());
+        assertEquals(0L, db.queryForObject(
+                "SELECT COUNT(*) FROM fams_attachment WHERE business_type='SCRAP'", Long.class));
     }
 
     @Test
@@ -270,6 +349,7 @@ class ScrapSubmitHttpRuntimeCase {
                 "{\"assetVersion\":1,\"lockVersion\":0,\"result\":\"REJECT\",\"reason\":\"经核对无需报废\"}");
         assertEquals(200, frozen.statusCode(), frozen.body());
         assertEquals("RESTORE_REQUIRED", json.readTree(frozen.body()).path("status").asText());
+        assertEquals(404, get(fixture.warehouse, "/" + id).statusCode());
         String open = "{\"assetVersion\":1,\"lockVersion\":0,\"locationId\":\"951000\",\"locationVersion\":0,"
                 + "\"reason\":\"原保管人已停用，指定有效仓位重新入库\"}";
         assertEquals(403, write(fixture.other, id, "corrections", 1, UUID.randomUUID().toString(), open).statusCode());
@@ -306,6 +386,10 @@ class ScrapSubmitHttpRuntimeCase {
         var approved = write(fixture.admin, "corrections/" + cid, "decision", 0, approveKey, decide);
         assertEquals(200, approved.statusCode(), approved.body());
         assertEquals(approved.body(), write(fixture.admin, "corrections/" + cid, "decision", 0, approveKey, decide).body());
+        var shared = get(fixture.warehouse, "/" + id);
+        assertEquals(200, shared.statusCode(), shared.body());
+        assertEquals(true, json.readTree(shared.body()).path("actions").path("claimCorrection").asBoolean());
+        assertEquals(200, get(fixture.otherWarehouse, "/" + id).statusCode());
         assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_todo WHERE business_type='SCRAP'"
                 + " AND business_id=? AND todo_type='CORRECTION_CLAIM' AND todo_status='OPEN'", Long.class, id));
         String claim = "{\"assetVersion\":1,\"lockVersion\":0}";
@@ -315,6 +399,7 @@ class ScrapSubmitHttpRuntimeCase {
         var claimed = write(fixture.warehouse, "corrections/" + cid, "claim", 1, claimKey, claim);
         assertEquals(200, claimed.statusCode(), claimed.body());
         assertEquals(claimed.body(), write(fixture.warehouse, "corrections/" + cid, "claim", 1, claimKey, claim).body());
+        assertEquals(404, get(fixture.otherWarehouse, "/" + id).statusCode());
         assertEquals(409, write(fixture.otherWarehouse, "corrections/" + cid, "claim", 1,
                 UUID.randomUUID().toString(), claim).statusCode());
         var execution = json.createObjectNode().put("assetVersion", 1).put("lockVersion", 0)
@@ -361,6 +446,10 @@ class ScrapSubmitHttpRuntimeCase {
                 String.class, Long.parseLong(id)));
         assertEquals("COMPLETED", db.queryForObject("SELECT correction_status FROM fams_scrap_correction WHERE id=?",
                 String.class, Long.parseLong(cid)));
+        var corrected = json.readTree(get(fixture.warehouse, "/" + id).body());
+        assertEquals(cid, corrected.path("correction").path("id").asText());
+        assertEquals("COMPLETED", corrected.path("correction").path("status").asText());
+        assertEquals(false, corrected.path("actions").path("executeCorrection").asBoolean());
         assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock"
                 + " WHERE asset_id=951020 AND released_at IS NULL", Long.class));
         assertEquals(1L, db.queryForObject("SELECT COUNT(*) FROM fams_asset_business_lock"
@@ -520,6 +609,10 @@ class ScrapSubmitHttpRuntimeCase {
                 Long.parseLong(id)));
         assertEquals("COMPLETED", db.queryForObject("SELECT reversal_status FROM fams_scrap_reversal WHERE id=?",
                 String.class, Long.parseLong(rid)));
+        var reversed = json.readTree(get(fixture.warehouse, "/" + id).body());
+        assertEquals(rid, reversed.path("reversal").path("id").asText());
+        assertEquals("COMPLETED", reversed.path("reversal").path("status").asText());
+        assertEquals(false, reversed.path("actions").path("executeReversal").asBoolean());
         var disposal = db.queryForMap("SELECT * FROM fams_scrap_disposition WHERE request_id=?", Long.parseLong(id));
         assertEquals("REVERSED", disposal.get("disposition_status"));
         assertEquals(1L, ((Number) disposal.get("version")).longValue());

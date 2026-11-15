@@ -12,6 +12,7 @@ type NavItem = NavAccess & { label: string; path: string };
 
 const LEDGER_ROLES = ["WAREHOUSE_OPERATOR", "ASSET_ADMIN"];
 const FIELD_ROLES = ["EMPLOYEE", "DEPARTMENT_ASSET_MANAGER", "WAREHOUSE_OPERATOR", "ASSET_ADMIN"];
+const SCRAP_ROLES = [...FIELD_ROLES, "AUDIT_READ_ONLY"];
 
 /** 侧栏分组与路由 meta 的 uiGroup 同源；条目顺序即展示顺序。 */
 const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
@@ -33,7 +34,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { label: "盘点任务", path: "/inventory-tasks", roles: FIELD_ROLES },
       { label: "报修与维修", path: "/repairs", roles: FIELD_ROLES },
       { label: "报失与查找", path: "/loss-reports", roles: FIELD_ROLES },
-      { label: "报废与处置", path: "/scrap-requests", roles: FIELD_ROLES },
+      { label: "报废与处置", path: "/scrap-requests", roles: SCRAP_ROLES },
       { label: "我协助的报修", path: "/repair-assistance", roles: ["TECH_ASSISTANT"] },
       { label: "借用、延期与退还", path: "/loans", roles: FIELD_ROLES },
       { label: "退还与退库", path: "/asset-returns", roles: FIELD_ROLES },

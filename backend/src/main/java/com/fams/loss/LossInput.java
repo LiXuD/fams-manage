@@ -28,6 +28,14 @@ public final class LossInput {
             @NotBlank @Size(max = 500) String lastLocation,
             @NotBlank @Size(min = 10, max = 2000) String circumstances) {}
 
+    public record InternalRepairSubmission(
+            @NotNull @PositiveOrZero Long assetVersion,
+            @NotNull @PositiveOrZero Long ownershipVersion,
+            @NotNull @PositiveOrZero Long lockVersion,
+            @NotNull Instant lastSeenAt,
+            @NotBlank @Size(max = 500) String lastLocation,
+            @NotBlank @Size(min = 10, max = 2000) String circumstances) {}
+
     public record Decision(
             @NotBlank String result, @NotBlank @Size(min = 3, max = 1000) String reason) {}
 

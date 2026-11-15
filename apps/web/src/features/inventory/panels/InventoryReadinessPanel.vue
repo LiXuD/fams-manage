@@ -5,9 +5,11 @@ import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import type { BusinessMutation } from "@/api/business";
 import { ReviewApiError, reviewRequest } from "@/features/inventory/api";
+interface MissingLoss { reasonId: string; generation: number; reason: string; canSubmit: boolean;
+  report: { reportId: string; status: string; nextReviewDate: string | null } | null }
 interface Row { item: { id: string; recheck_generation: number; review_status?: string; reason_kind?: string; reason?: string;
   evidence?: string; actor_username?: string; recorded_at?: string; snapshot_json: { assetCode: string; name: string } };
-  current: { version: number } | null; canRecord: boolean; physicalMissingOpen: boolean }
+  current: { version: number } | null; canRecord: boolean; physicalMissingOpen: boolean; missingLosses?: MissingLoss[] }
 interface View { task: { id: string; version: number; task_status: string }; items: Row[]; total: number; missingCount: number; notObservedCount: number }
 interface History { id: string; recheck_generation: number; reason_kind: string; reason: string; evidence: string; actor_username: string; recorded_at: string }
 const props = defineProps<{ taskId: string }>(); const emit = defineEmits<{ changed: [] }>();
@@ -15,14 +17,29 @@ const session = useSessionStore(); const owner = computed(() => JSON.stringify([
 const view = ref<View | null>(null), page = shallowRef(1), busy = shallowRef(false), error = shallowRef(""), notice = shallowRef("");
 const chosen = shallowRef(""), kind = ref("UNABLE_TO_OBSERVE"), reason = shallowRef(""), evidence = shallowRef(""), waitingReason = shallowRef("");
 const history = ref<History[]>([]), historyTotal = shallowRef(0), historyItem = shallowRef(""), historyPage = shallowRef(1);
+const lossSource = shallowRef<{ itemId: string; reasonId: string } | null>(null);
+const lastSeen = shallowRef(""), lastLocation = shallowRef(""), circumstances = shallowRef("");
+/** 关联报失单状态读法取自盘点转报失功能线，与借用归还侧同词典。 */
+const lossStates: Record<string, string> = { PENDING_ADMIN_DECISION: "待审批", WAITING_WAREHOUSE_CLAIM: "待认领",
+  VERIFYING: "待核实", SEARCHING: "查找中", CONFIRMED_LOST: "已确认遗失", RECOVERED: "已找回",
+  REJECTED: "已驳回", CANCELLED: "已取消" };
 /** 确认式幂等提交：草稿/在途两槽与幂等键簿记归底座；busy/locked、URL 与文案留在本面板。 */
 const { prepared, pending, prepare: draft, confirm: adopt, abandon, fail, cancel, reset } = useConfirmedSubmit<Omit<BusinessMutation, "key">>({ failure: (cause) => cause instanceof ReviewApiError && (cause.status === 409 || cause.status === 400) });
 const confirming = computed(() => !!prepared.value), summary = shallowRef("");
 const locked = computed(() => busy.value || !!prepared.value || !!pending.value);
-interface ReadinessRow extends Row { statusText: string }
+interface ReadinessRow extends Row { statusText: string; lossRows: LossRow[] }
 interface HistoryRow extends History { roundText: string }
+interface LossRow extends MissingLoss { roundText: string; reportHref: string; reportLabel: string; nextReviewText: string; submitLabel: string }
 const rows = computed<ReadinessRow[]>(() => (view.value?.items ?? []).map(row => ({ ...row,
-  statusText: row.item.review_status === 'NOT_OBSERVED' ? '明确未盘，不计正常' : row.item.review_status === 'ACCEPTED' ? '已采信' : '待核对' })));
+  statusText: row.item.review_status === 'NOT_OBSERVED' ? '明确未盘，不计正常' : row.item.review_status === 'ACCEPTED' ? '已采信' : '待核对',
+  lossRows: (row.missingLosses ?? []).map(source => ({ ...source,
+    roundText: `第 ${source.generation + 1} 轮`,
+    reportHref: source.report ? `/loss-reports/${source.report.reportId}` : "",
+    reportLabel: source.report
+      ? `报失 ${source.report.reportId} · ${lossStates[source.report.status] ?? source.report.status}` : "",
+    nextReviewText: source.report?.nextReviewDate ? ` · 下次复核 ${source.report.nextReviewDate}` : "",
+    submitLabel: source.report ? "重新发起关联报失" : "发起关联报失" })),
+})));
 const historyRows = computed<HistoryRow[]>(() => history.value.map(record => ({ ...record, roundText: `第 ${record.recheck_generation + 1} 轮` })));
 const recordDisabled = computed(() => reason.value.trim().length < 3 || evidence.value.trim().length < 10);
 const waitingDisabled = computed(() => !!view.value?.missingCount || waitingReason.value.trim().length < 3);
@@ -34,6 +51,7 @@ const nextHistoryDisabled = computed(() => locked.value || historyPage.value * 2
 const kinds: Record<string, string> = { UNABLE_TO_OBSERVE: "无法实盘（如现场无法进入）", EVIDENCE_UNAVAILABLE: "原证据失效或无法使用，需补盘", ASSET_NOT_FOUND: "实物未找到，继续查找或正式报失" };
 const liveness = useRequestLiveness(() => [owner.value]);
 function clear() { liveness.invalidate(); view.value = null; chosen.value = ""; reason.value = ""; evidence.value = ""; waitingReason.value = "";
+  lossSource.value = null; lastSeen.value = ""; lastLocation.value = ""; circumstances.value = "";
   history.value = []; historyTotal.value = 0; historyItem.value = ""; reset(); busy.value = false; notice.value = ""; }
 function failure(cause: unknown) {
   if (cause instanceof ReviewApiError && [401, 403, 404].includes(cause.status)) { clear(); error.value = "身份、权限或任务已失效，已隐藏原资料。"; return; }
@@ -47,12 +65,33 @@ function failure(cause: unknown) {
 }
 async function load() {
   const turn = liveness.begin(); busy.value = true; error.value = ""; view.value = null; chosen.value = "";
+  lossSource.value = null;
   try { const result = await reviewRequest<View>(`/inventory-readiness/tasks/${props.taskId}?page=${page.value}&pageSize=20`);
     if (liveness.isCurrent(turn)) view.value = result;
   } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
-function choose(row: Row) { if (locked.value || !row.canRecord) return; chosen.value = row.item.id; reason.value = ""; evidence.value = ""; notice.value = ""; }
+function choose(row: Row) { if (locked.value || !row.canRecord) return; chosen.value = row.item.id; lossSource.value = null; reason.value = ""; evidence.value = ""; notice.value = ""; }
+function chooseLoss(row: Row, source: MissingLoss) {
+  if (locked.value || !source.canSubmit) return;
+  chosen.value = "";
+  lossSource.value = { itemId: row.item.id, reasonId: source.reasonId };
+  lastSeen.value = ""; lastLocation.value = ""; circumstances.value = "";
+}
+function prepareLoss() {
+  const source = lossSource.value, state = view.value;
+  const row = state?.items.find(item => item.item.id === source?.itemId);
+  const current = row?.current;
+  const observed = new Date(lastSeen.value);
+  if (locked.value || !source || !state || !row || !current || !Number.isFinite(observed.getTime())
+    || !lastLocation.value.trim() || circumstances.value.trim().length < 10) return;
+  draft(() => ({ path: `/inventory-readiness/tasks/${props.taskId}/items/${source.itemId}/missing/${source.reasonId}/loss`,
+    version: state.task.version, body: { assetVersion: current.version,
+      lastSeenAt: observed.toISOString(), lastLocation: lastLocation.value.trim(), circumstances: circumstances.value.trim() } }));
+  summary.value = `${row.item.snapshot_json.assetCode} · 提交关联报失供管理员审批。原盘点记录保留。`;
+}
+const lossOpen = computed(() => lossSource.value !== null);
+const lossFactsMissing = computed(() => !lastSeen.value || !lastLocation.value.trim() || circumstances.value.trim().length < 10);
 function prepareRecord() {
   const row = view.value?.items.find(item => item.item.id === chosen.value);
   if (locked.value || !view.value || !row?.canRecord || !row.current || reason.value.trim().length < 3 || evidence.value.trim().length < 10) return;
@@ -106,11 +145,24 @@ onBeforeUnmount(() => { clear(); });
       <p>{{ row.item.snapshot_json.assetCode }} · {{ row.item.snapshot_json.name }} · {{ row.statusText }}</p>
       <p v-if="row.item.reason_kind">{{ kinds[row.item.reason_kind] }} · {{ row.item.reason }} · {{ row.item.actor_username }}</p>
       <p v-if="row.physicalMissingOpen">实物未找到：真实查找或报失后续尚待闭环。</p>
+      <div v-for="loss in row.lossRows" :key="loss.reasonId" class="fams-stack">
+        <p>{{ loss.roundText }} · {{ loss.reason }}<router-link v-if="loss.reportHref" class="fams-button" data-kind="link" data-size="sm" :to="loss.reportHref">{{ loss.reportLabel }}</router-link><span v-if="loss.nextReviewText">{{ loss.nextReviewText }}</span></p>
+        <button v-if="loss.canSubmit" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="locked" @click="chooseLoss(row, loss)">{{ loss.submitLabel }}</button>
+      </div>
       <div class="fams-panel-actions">
         <button class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="locked || !row.canRecord" @click="choose(row)">记录 {{ row.item.snapshot_json.assetCode }} 未盘原因</button>
         <button class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="locked" @click="readHistory(row.item.id)">查看 {{ row.item.snapshot_json.assetCode }} 历次未盘原因</button>
       </div>
     </article>
+    <fieldset v-if="lossOpen" class="fams-card fams-stack" :disabled="locked">
+      <h4 class="fams-panel-title">盘亏转报失</h4>
+      <div class="fams-field-grid">
+        <label class="fams-field"><span class="fams-field-label">最后见到时间</span><input class="fams-control" v-model="lastSeen" type="datetime-local" /></label>
+        <label class="fams-field"><span class="fams-field-label">最后见到地点</span><input class="fams-control" v-model="lastLocation" maxlength="500" /></label>
+        <label class="fams-field fams-field-wide"><span class="fams-field-label">实物查找情况</span><textarea class="fams-control" v-model="circumstances" maxlength="2000" /></label>
+      </div>
+      <div class="fams-form-actions"><button class="fams-button" data-kind="primary" type="button" :disabled="lossFactsMissing" @click="prepareLoss">核对关联报失</button></div>
+    </fieldset>
     <fieldset v-if="chosen" class="fams-card fams-stack" :disabled="locked">
       <legend class="fams-panel-title">明确记录本轮未盘</legend>
       <div class="fams-field-grid">
