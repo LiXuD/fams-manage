@@ -3376,6 +3376,23 @@ components:
           $ref: '#/components/schemas/Instant'
         status:
           type: string
+    BusinessTodoReference:
+      type: object
+      additionalProperties: false
+      required: [id, kind, businessType, businessId]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        kind:
+          type: string
+        businessType:
+          type: string
+        businessId:
+          $ref: '#/components/schemas/Id'
+        parameterVersionId:
+          $ref: '#/components/schemas/Id'
+        status:
+          type: string
     ConfigurationAnomaly:
       type: object
       additionalProperties: false
@@ -3406,6 +3423,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TodoReference'
+        relatedBusinessTodos:
+          type: array
+          description: Additional open work captured for the role anomaly with its original business identity.
+          items:
+            $ref: '#/components/schemas/BusinessTodoReference'
     PageConfigurationAnomaly:
       allOf:
         - $ref: '#/components/schemas/PageMeta'

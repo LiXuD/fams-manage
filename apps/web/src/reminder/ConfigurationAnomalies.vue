@@ -4,13 +4,23 @@ import { useSessionStore } from "@/auth/sessionStore";
 import { formatProxyTime } from "@/proxy/time";
 import { dutyRequest } from "./api";
 
+interface AnomalyTodo {
+  id: string;
+  kind: string;
+  businessType?: string;
+  businessId?: string;
+  parameterVersionId?: string;
+  deadline?: string;
+}
+
 interface Anomaly {
   id: string;
   type: string;
   status: "OPEN" | "RESOLVED";
   detectedAt: string;
   resolvedAt?: string;
-  relatedTodos: { id: string; kind: string; parameterVersionId: string; deadline: string }[];
+  relatedTodos: AnomalyTodo[];
+  relatedBusinessTodos?: AnomalyTodo[];
 }
 
 const labels: Record<string, string> = {
@@ -68,9 +78,12 @@ watch(identity, () => {
       <p>发现于 {{ formatProxyTime(row.detectedAt) }}
         <template v-if="row.resolvedAt"> · 恢复于 {{ formatProxyTime(row.resolvedAt) }}</template>
       </p>
-      <ul v-if="row.relatedTodos.length">
-        <li v-for="todo in row.relatedTodos" :key="todo.id">
-          待办 {{ todo.id }} · 参数版本 {{ todo.parameterVersionId }} · 原截止 {{ formatProxyTime(todo.deadline) }}
+      <ul v-if="row.relatedTodos.length || row.relatedBusinessTodos?.length">
+        <li v-for="todo in [...row.relatedTodos, ...(row.relatedBusinessTodos ?? [])]" :key="todo.id">
+          待办 {{ todo.id }} · {{ todo.kind }}
+          <template v-if="todo.businessType && todo.businessId"> · {{ todo.businessType }} {{ todo.businessId }}</template>
+          <template v-if="todo.parameterVersionId"> · 参数版本 {{ todo.parameterVersionId }}</template>
+          <template v-if="todo.deadline"> · 原截止 {{ formatProxyTime(todo.deadline) }}</template>
         </li>
       </ul>
     </article>
