@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref } from "vue";
 
-type Dimension = "organizationId" | "categoryId" | "custody";
+type Dimension = "organizationId" | "categoryId" | "custody" | "custodyComplete";
 interface Group { id: string; name: string | null; count: number }
 interface Distribution {
   organizations: Group[];
   categories: Group[];
   custody: { custodyType: "PERSONAL" | "SHARED"; count: number }[];
+  custodyQuality?: { complete: number; effective: number; excluded: number };
 }
 const custodyLabels = { PERSONAL: "个人使用及借出", SHARED: "部门公用" };
 const emit = defineEmits<{ select: [dimension: Dimension, id: string] }>();
@@ -39,6 +40,17 @@ async function load() {
     <p v-if="error" role="alert">{{ error }}</p>
     <p v-if="busy" role="status">正在查询</p>
     <template v-if="distribution">
+      <section v-if="distribution.custodyQuality" aria-label="保管信息完整率">
+        <h4>保管信息完整率</h4>
+        <p>
+          {{ distribution.custodyQuality.effective
+            ? (distribution.custodyQuality.complete * 100 / distribution.custodyQuality.effective).toFixed(2) + "%"
+            : "暂无有效资产" }}
+          · 完整 {{ distribution.custodyQuality.complete }} / 有效 {{ distribution.custodyQuality.effective }}
+          · 排除 {{ distribution.custodyQuality.excluded }} 件
+        </p>
+        <button type="button" @click="emit('select', 'custodyComplete', 'false')">查看保管信息不完整资产</button>
+      </section>
       <p v-if="!distribution.organizations.length">当前没有有效资产。</p>
       <template v-else>
         <h4>按当前使用部门</h4>

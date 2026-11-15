@@ -605,6 +605,27 @@ class DutyHttpRuntimeCase {
         assertEquals(403, code(get(warehouse, endpoint)));
         var report = ok(get(administrator, endpoint));
         var list = "/operations-reports/assets";
+        var quality = report.path("custodyQuality");
+        assertEquals(1, quality.path("complete").asInt());
+        assertEquals(2, quality.path("effective").asInt());
+        assertEquals(1, quality.path("excluded").asInt());
+        assertEquals("REPORT-A", ok(get(administrator, list + "?custodyComplete=true"))
+                .path("items").get(0).path("assetCode").asText());
+        var incomplete = ok(get(administrator, list + "?custodyComplete=false")).path("items");
+        assertEquals(1, incomplete.size());
+        assertEquals("REPORT-C", incomplete.get(0).path("assetCode").asText());
+        assertEquals(400, code(get(administrator, list + "?custodyComplete=unknown")));
+        assertEquals(403, code(get(warehouse, list + "?custodyComplete=false")));
+        var gaps = get(administrator, list + ".csv?custodyComplete=false");
+        assertEquals(200, code(gaps));
+        assertTrue(gaps.body().contains("REPORT-C"));
+        assertFalse(gaps.body().contains("REPORT-A"));
+        assertFalse(gaps.body().contains("REPORT-B"));
+        assertEquals(1, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='ASSET_CUSTODY_REPORT'
+                    AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.custodyComplete'))='false'
+                    AND JSON_EXTRACT(detail_json,'$.rows')=1
+                """, Integer.class));
         for (var dimension : java.util.Map.of("organizations", "organizationId", "categories", "categoryId").entrySet()) {
             var groups = report.path(dimension.getKey());
             assertEquals(2, groups.size());

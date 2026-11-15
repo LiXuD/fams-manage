@@ -66,10 +66,10 @@ class AssetCustodyReportController {
                           @Positive Long locationId, @Pattern(regexp = "PERSONAL|SHARED|STORAGE") String custody,
                           @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inventoryBefore,
                           @Pattern(regexp = "IN_STOCK|IN_USE|BORROWED|UNDER_REPAIR|FACTORY_REPAIR|PENDING_SCRAP") String lifecycle,
-                          @Pattern(regexp = "NORMAL|SEARCHING|LOST") String exception) {
+                          @Pattern(regexp = "NORMAL|SEARCHING|LOST") String exception, Boolean custodyComplete) {
         AssetCustodyReportService.Filter toFilter() {
             return new AssetCustodyReportService.Filter(organizationId, responsibleId, warehouseId,
-                    locationId, custody, inventoryBefore, categoryId, lifecycle, exception);
+                    locationId, custody, inventoryBefore, categoryId, lifecycle, exception, custodyComplete);
         }
     }
 }

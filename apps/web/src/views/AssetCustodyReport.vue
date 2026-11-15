@@ -11,7 +11,7 @@ interface AssetRow {
 interface Page { items: AssetRow[]; nextBefore: string | null }
 const props = defineProps<{ lifecycleLabels: Record<string, string>; exceptionLabels: Record<string, string> }>();
 const emptyFilters = () => ({ organizationId: "", categoryId: "", responsibleId: "", warehouseId: "", locationId: "",
-  custody: "", inventoryBefore: "", lifecycle: "", exception: "" });
+  custody: "", inventoryBefore: "", lifecycle: "", exception: "", custodyComplete: "" });
 const filters = ref(emptyFilters());
 const query = computed(() => new URLSearchParams(
   Object.entries(filters.value).filter(([, value]) => value !== "")).toString());
@@ -104,6 +104,13 @@ onBeforeUnmount(() => generation++);
         </select>
       </label>
       <label>在指定日期前未盘点（含从未盘点） <input v-model="filters.inventoryBefore" type="date"></label>
+      <label>保管信息完整性
+        <select v-model="filters.custodyComplete">
+          <option value="">全部</option>
+          <option value="true">完整</option>
+          <option value="false">不完整</option>
+        </select>
+      </label>
       <button type="submit" :disabled="busy">查询保管清单</button>
     </form>
     <p v-if="error" role="alert">{{ error }}</p>

@@ -8748,7 +8748,7 @@ paths:
       x-actor: { required: true, roles: [ASSET_ADMIN] }
       responses:
         '200':
-          description: Department and category groups use a zero ID for missing assignments. Custody groups exclude storage and unassigned assets.
+          description: Department and category groups use a zero ID for missing assignments. Custody groups exclude storage and unassigned assets. Custody quality compares complete custody with all effective assets and counts excluded cards separately.
           content:
             application/json:
               schema:
@@ -8775,6 +8775,13 @@ paths:
                       properties:
                         custodyType: { type: string, enum: [PERSONAL, SHARED] }
                         count: { type: integer, format: int64, minimum: 1 }
+                  custodyQuality:
+                    type: object
+                    required: [complete, effective, excluded]
+                    properties:
+                      complete: { type: integer, format: int64, minimum: 0 }
+                      effective: { type: integer, format: int64, minimum: 0 }
+                      excluded: { type: integer, format: int64, minimum: 0 }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
@@ -8799,6 +8806,11 @@ paths:
         - &reportWarehouse { name: warehouseId, in: query, schema: { $ref: '#/components/schemas/Id' } }
         - &reportLocation { name: locationId, in: query, schema: { $ref: '#/components/schemas/Id' } }
         - &reportCustody { name: custody, in: query, schema: { type: string, enum: [PERSONAL, SHARED, STORAGE] } }
+        - &reportCustodyComplete
+          name: custodyComplete
+          in: query
+          description: Apply the same lifecycle and required custody field predicate as the custody quality counts.
+          schema: { type: boolean }
         - &reportLifecycle
           name: lifecycle
           in: query
@@ -8857,6 +8869,7 @@ paths:
         - *reportWarehouse
         - *reportLocation
         - *reportCustody
+        - *reportCustodyComplete
         - *reportInventoryBefore
         - *reportLifecycle
         - *reportException
