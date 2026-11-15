@@ -7,6 +7,7 @@ const props = defineProps<{ id: string; version: number }>();
 const emit = defineEmits<{ saved: [] }>();
 interface Snapshot {
   id: string; version: number; ownershipVersion: number; processorAccountId: string;
+  unavailableReason?: string;
   operators: { id: string; name: string }[];
   items: { id: string; version: number; status: string; assetVersion: number; lockVersion: number; assetCode: string; warehouseId: string; locationId: string }[];
 }
@@ -54,6 +55,7 @@ async function submit() {
     <button :disabled="busy" @click="inspect">加载 / 重新核对转派清单</button>
     <template v-if="snapshot">
       <p>当前处理账号 {{ snapshot.processorAccountId }} · 处理权版本 {{ snapshot.ownershipVersion }}</p>
+      <p v-if="snapshot.unavailableReason">原库管登记无法继续：{{ snapshot.unavailableReason }}</p>
       <p v-for="item in snapshot.items" :key="item.id">明细 {{ item.id }} · {{ item.assetCode }} · {{ labels[item.status] }} · 仓库 {{ item.warehouseId }} / 位置 {{ item.locationId }} · 锁版本 {{ item.lockVersion < 0 ? '已释放' : item.lockVersion }}</p>
       <label>接任库管 <select v-model="target" :disabled="busy || retryable"><option value="">请选择</option><option v-for="person in snapshot.operators" :key="person.id" :value="person.id">{{ person.name }}</option></select></label>
       <label>转派原因 <textarea v-model="reason" maxlength="1000" :disabled="busy || retryable" /></label>

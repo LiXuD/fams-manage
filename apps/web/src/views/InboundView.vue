@@ -2,6 +2,7 @@
 import { onMounted, ref } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import InboundReassignment from "@/components/InboundReassignment.vue";
+import InboundUnavailability from "@/components/InboundUnavailability.vue";
 import AttachmentPanel from "@/components/AttachmentPanel.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { activeReferences, getAsset, listAssets, type AssetCard, type AssetReference } from "@/asset/api";
@@ -179,6 +180,11 @@ onMounted(load);
           <td><button v-if="warehouseRole && selected.status === 'WAREHOUSE_PROCESSING' && item.executionStatus === 'PENDING' && selected.currentProcessor?.processor.id === session.user?.id" class="text-button" type="button" :disabled="busy" @click="accept(item)">验收入库</button></td>
         </tr></tbody>
       </table></div>
+      <InboundUnavailability v-if="warehouseRole && selected.status === 'WAREHOUSE_PROCESSING'
+          && selected.currentProcessor?.processor.id === session.user?.id
+          && selected.currentProcessor?.ownershipVersion !== undefined"
+        :key="selected.id + ':' + selected.version" :id="selected.id" :version="selected.version"
+        :ownership-version="selected.currentProcessor.ownershipVersion" :disabled="busy" />
       <InboundReassignment v-if="adminRole && selected.status === 'WAREHOUSE_PROCESSING'"
         :id="selected.id" :version="selected.version" @saved="open(selected.id); load()" />
       <AttachmentPanel :key="selected.id" :receipt="selected" :disabled="busy"

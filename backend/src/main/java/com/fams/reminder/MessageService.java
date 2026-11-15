@@ -40,6 +40,8 @@ public class MessageService {
             " SELECT 'TODO' message_kind,t.id id,t.business_type,t.business_id,t.todo_type stage,"
             + " '' object_stage,t.pool_type,t.assignee_account_id,t.opened_at moment,"
             + " CAST(NULL AS DATETIME) deadline_at FROM fams_todo t WHERE t.todo_status='OPEN' AND";
+    private static final String EXCEPTION_TODOS = TODO_COLUMNS
+            + " (t.todo_type IN" + OVERDUE_TYPES + " OR t.todo_type='REASSIGNMENT_REQUIRED')";
     private static final String REMINDER_COLUMNS =
             " SELECT 'REMINDER' message_kind,r.id id,r.business_type,r.business_id,r.reminder_type stage,"
             + " r.stage object_stage,r.recipient_pool_type pool_type,r.recipient_account_id,r.created_at moment,"
@@ -141,10 +143,10 @@ public class MessageService {
      */
     private String exceptionSql(RequisitionActorContext.Current current) {
         if (current.has(Role.ASSET_ADMIN)) {
-            return TODO_COLUMNS + " t.todo_type IN" + OVERDUE_TYPES + " UNION ALL" + REMINDER_COLUMNS
+            return EXCEPTION_TODOS + " UNION ALL" + REMINDER_COLUMNS
                     + NEWEST_OCCURRENCE + " r.reminder_type IN" + OVERDUE_TYPES;
         }
-        return TODO_COLUMNS + " t.todo_type IN" + OVERDUE_TYPES
+        return EXCEPTION_TODOS
                 + " AND (t.pool_type='WAREHOUSE_OPERATOR' OR t.assignee_account_id=?)" + " UNION ALL"
                 + REMINDER_COLUMNS + NEWEST_OCCURRENCE + " r.reminder_type IN" + OVERDUE_TYPES
                 + " AND (r.recipient_pool_type='WAREHOUSE_OPERATOR' OR r.recipient_account_id=?)";

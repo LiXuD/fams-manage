@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import InventoryExecutorBreakdown from "./InventoryExecutorBreakdown.vue";
 
 interface Task {
   taskId: string;
@@ -15,11 +16,13 @@ interface Page { items: Task[]; nextBefore: string | null }
 const props = defineProps<{ query: string }>();
 const result = ref<Page>();
 const busy = ref(false);
+const executorTask = ref<string>();
 const error = ref("");
 
 async function load(before?: string) {
   busy.value = true;
   error.value = "";
+  executorTask.value = undefined;
   try {
     const params = new URLSearchParams(props.query);
     if (before) params.set("before", before);
@@ -34,6 +37,7 @@ async function load(before?: string) {
     busy.value = false;
   }
 }
+
 </script>
 
 <template>
@@ -46,16 +50,18 @@ async function load(before?: string) {
       <p v-if="!result.items.length">该日期范围没有封存任务。</p>
       <table v-else>
         <thead><tr><th scope="col">盘点任务</th><th scope="col">封存时间</th><th scope="col">完成率</th>
-          <th scope="col">未盘</th><th scope="col">差异证据</th><th scope="col">冲突证据</th></tr></thead>
+          <th scope="col">未盘</th><th scope="col">差异证据</th><th scope="col">冲突证据</th><th scope="col">执行人</th></tr></thead>
         <tbody>
           <tr v-for="task in result.items" :key="task.taskId">
             <td><router-link :to="{ name: 'inventory-tasks', query: { taskId: task.taskId } }">{{ task.name }}</router-link></td>
             <td>{{ task.sealedAt }}</td>
             <td>{{ task.accepted }}/{{ task.expected }}（{{ (100 * task.accepted / task.expected).toFixed(1) }}%）</td>
             <td>{{ task.notObserved }}</td><td>{{ task.differenceEvidence }}</td><td>{{ task.conflictEvidence }}</td>
+            <td><button type="button" :disabled="busy" @click="executorTask = task.taskId">按执行人查看</button></td>
           </tr>
         </tbody>
       </table>
+      <InventoryExecutorBreakdown v-if="executorTask" :key="executorTask" :task-id="executorTask" />
       <button v-if="result.nextBefore" type="button" :disabled="busy" @click="load(result.nextBefore)">下一页</button>
     </template>
   </section>

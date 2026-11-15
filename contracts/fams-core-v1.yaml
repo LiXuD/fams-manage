@@ -3696,7 +3696,7 @@ components:
     RequisitionReassignmentSnapshot: {"type": "object", "required": ["id", "version", "ownershipVersion", "processorAccountId", "items", "operators"], "properties": {"id": {"$ref": "#/components/schemas/Id"}, "version": {"type": "integer", "format": "int64", "minimum": 0}, "ownershipVersion": {"type": "integer", "format": "int64", "minimum": 0}, "processorAccountId": {"$ref": "#/components/schemas/Id"}, "items": {"type": "array", "items": {"allOf": [{"$ref": "#/components/schemas/RequisitionReassignmentItem"}, {"type": "object", "required": ["assetCode"], "properties": {"assetCode": {"type": "string"}}}]}}, "operators": {"type": "array", "items": {"type": "object", "required": ["id", "name"], "properties": {"id": {"$ref": "#/components/schemas/Id"}, "name": {"type": "string"}}}}}}
     InboundReassignmentItem: {"type": "object", "required": ["id", "version", "status", "assetVersion", "lockVersion"], "properties": {"id": {"$ref": "#/components/schemas/Id"}, "version": {"type": "integer", "format": "int64", "minimum": 0}, "status": {"type": "string", "enum": ["PENDING", "ACCEPTED"]}, "assetVersion": {"type": "integer", "format": "int64", "minimum": 0}, "lockVersion": {"type": "integer", "format": "int64", "minimum": -1}}}
     InboundReassignmentInput: {"type": "object", "required": ["processorAccountId", "ownershipVersion", "reason", "evidence", "unsynchronizedResultsChecked", "items"], "properties": {"processorAccountId": {"$ref": "#/components/schemas/Id"}, "ownershipVersion": {"type": "integer", "format": "int64", "minimum": 0}, "reason": {"type": "string", "minLength": 1, "maxLength": 1000}, "evidence": {"type": "string", "minLength": 1, "maxLength": 1000}, "unsynchronizedResultsChecked": {"type": "boolean", "enum": [true]}, "items": {"type": "array", "minItems": 1, "maxItems": 200, "items": {"$ref": "#/components/schemas/InboundReassignmentItem"}}}}
-    InboundReassignmentSnapshot: {"type": "object", "required": ["id", "version", "ownershipVersion", "processorAccountId", "items", "operators"], "properties": {"id": {"$ref": "#/components/schemas/Id"}, "version": {"type": "integer", "format": "int64", "minimum": 0}, "ownershipVersion": {"type": "integer", "format": "int64", "minimum": 0}, "processorAccountId": {"$ref": "#/components/schemas/Id"}, "items": {"type": "array", "items": {"allOf": [{"$ref": "#/components/schemas/InboundReassignmentItem"}, {"type": "object", "required": ["assetCode", "warehouseId", "locationId"], "properties": {"assetCode": {"type": "string"}, "warehouseId": {"$ref": "#/components/schemas/Id"}, "locationId": {"$ref": "#/components/schemas/Id"}}}]}}, "operators": {"type": "array", "items": {"type": "object", "required": ["id", "name"], "properties": {"id": {"$ref": "#/components/schemas/Id"}, "name": {"type": "string"}}}}}}
+    InboundReassignmentSnapshot: {"type": "object", "required": ["id", "version", "ownershipVersion", "processorAccountId", "items", "operators"], "properties": {"id": {"$ref": "#/components/schemas/Id"}, "version": {"type": "integer", "format": "int64", "minimum": 0}, "ownershipVersion": {"type": "integer", "format": "int64", "minimum": 0}, "processorAccountId": {"$ref": "#/components/schemas/Id"}, "items": {"type": "array", "items": {"allOf": [{"$ref": "#/components/schemas/InboundReassignmentItem"}, {"type": "object", "required": ["assetCode", "warehouseId", "locationId"], "properties": {"assetCode": {"type": "string"}, "warehouseId": {"$ref": "#/components/schemas/Id"}, "locationId": {"$ref": "#/components/schemas/Id"}}}]}}, "operators": {"type": "array", "items": {"type": "object", "required": ["id", "name"], "properties": {"id": {"$ref": "#/components/schemas/Id"}, "name": {"type": "string"}}}}, "unavailableReason": {"type": "string", "description": "Reason recorded by the current processor for this ownership revision."}}}
     InboundProcessingOwnership:
       type: object
       additionalProperties: false
@@ -7354,6 +7354,55 @@ paths:
     get: {"tags": ["Inbound"], "operationId": "getInboundReassignment", "summary": "Inspect or explicitly transfer whole inbound ownership while preserving approval and acceptance facts", "security": [{"sessionCookie": []}], "parameters": [{"$ref": "#/components/parameters/InboundReceiptId"}], "responses": {"200": {"description": "Current inbound reassignment result", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/InboundReassignmentSnapshot"}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}}}
     post: {"tags": ["Inbound"], "operationId": "reassignInboundReceipt", "summary": "Inspect or explicitly transfer whole inbound ownership while preserving approval and acceptance facts", "security": [{"sessionCookie": []}], "parameters": [{"$ref": "#/components/parameters/InboundReceiptId"}, {"$ref": "#/components/parameters/IdempotencyKey"}, {"$ref": "#/components/parameters/CsrfToken"}, {"$ref": "#/components/parameters/IfMatchVersion"}], "responses": {"200": {"description": "Current inbound reassignment result", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/InboundReceipt"}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}}, "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/InboundReassignmentInput"}}}}, "x-business-write": true, "x-actor": "Current ASSET_ADMIN revalidated before replay; target must be an enabled warehouse operator with active employee and organization.", "x-version": "Compare receipt, ownership, all item, asset and active lock versions; -1 marks a released accepted-item lock.", "x-transaction": "Atomically update processor, ownership and receipt versions, open execution todo, audit and idempotency record. Preserve approval, accepted facts, deadlines, custody and locks.", "x-audit-event": "INBOUND_CONTROLLED_REASSIGNMENT", "x-error-codes": ["INBOUND_PROCESSOR_INVALID", "INBOUND_OWNERSHIP_CHANGED", "INBOUND_REASSIGNMENT_CHECK_REQUIRED", "INBOUND_REASSIGNMENT_SNAPSHOT_CHANGED", "INBOUND_VERSION_CONFLICT", "INBOUND_ASSET_LOCK_CONFLICT", "INBOUND_NOT_PROCESSING", "INBOUND_IDEMPOTENCY_CONFLICT"], "x-required-error-statuses": [400, 401, 403, 404, 409]}
 
+  /inbound-receipts/{receiptId}/reassignment/unavailable:
+    parameters:
+      - $ref: '#/components/parameters/InboundReceiptId'
+    post:
+      tags: [Inbound]
+      operationId: declareInboundProcessorUnavailable
+      summary: Record that the current inbound processor cannot continue.
+      x-business-write: true
+      x-actor: { required: true, roles: [WAREHOUSE_OPERATOR], boundary: Current inbound ownership. }
+      x-version:
+        required: true
+        precondition: Match the inbound receipt and ownership versions.
+      x-transaction:
+        boundary: Save the declaration, one active administrator todo, audit and idempotency receipt atomically.
+      x-audit-event: { event: INBOUND_PROCESSOR_UNAVAILABLE }
+      x-error-codes: [INBOUND_FORBIDDEN, INBOUND_VERSION_CONFLICT, INBOUND_OWNERSHIP_CHANGED, INBOUND_IDEMPOTENCY_CONFLICT, INBOUND_UNAVAILABILITY_ALREADY_RECORDED]
+      x-invariants: The declaration does not transfer ownership, change the deadline or release the asset lock.
+      x-required-error-statuses: [400, 401, 403, 404, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ownershipVersion, reason]
+              properties:
+                ownershipVersion: { type: integer, format: int64, minimum: 0 }
+                reason: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        '200':
+          description: The administrator follow-up is recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [receiptId, recorded]
+                properties:
+                  receiptId: { $ref: '#/components/schemas/Id' }
+                  recorded: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
   /inbound-receipts/{receiptId}/claim:
     parameters:
       - $ref: '#/components/parameters/InboundReceiptId'
@@ -9630,6 +9679,125 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+
+  /operations-reports/inventory/{taskId}/executors:
+    get:
+      tags: [Reports]
+      operationId: getSealedInventoryExecutors
+      summary: Read executor totals for a current, sealed or retained inventory task.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - { name: taskId, in: path, required: true, schema: { $ref: '#/components/schemas/Id' } }
+      responses:
+        '200':
+          description: One group per current or frozen executor and a null group for unassigned items. Sealed values take precedence.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [taskId, source, expected, counted, items]
+                properties:
+                  taskId: { $ref: '#/components/schemas/Id' }
+                  source: { type: string, enum: [CURRENT, SEALED, RETAINED] }
+                  expected: { type: integer, format: int64, minimum: 0, description: Expected count from the selected task or sealed header. }
+                  counted: { type: integer, format: int64, minimum: 0, description: Number of item records included in the calculation. }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [executorAccountId, expected, accepted, differences, notObserved]
+                      properties:
+                        executorAccountId: { type: string, nullable: true, description: Account identifier in the selected item data. }
+                        expected: { type: integer, format: int64, minimum: 0 }
+                        accepted: { type: integer, format: int64, minimum: 0 }
+                        differences: { type: integer, format: int64, minimum: 0, description: Accepted items whose selected evidence has non-normal subjects. }
+                        notObserved: { type: integer, format: int64, minimum: 0, description: Items without accepted evidence. For current tasks these include pending review. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: "Task has no current, retained or sealed breakdown." }
+  /operations-reports/inventory/{taskId}/executors.csv:
+    get:
+      tags: [Reports]
+      operationId: exportSealedInventoryExecutors
+      summary: Download an audited CSV of the current, sealed or retained executor totals.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - { name: taskId, in: path, required: true, schema: { $ref: '#/components/schemas/Id' } }
+      responses:
+        '200':
+          description: CSV from the same calculation used by the JSON view. The source is recorded in the audit resource type.
+          content:
+            text/csv:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { description: "Task has no current, retained or sealed breakdown." }
+
+  /operations-reports/inventory-traceability:
+    get:
+      tags: [Reports]
+      operationId: getPublishedInventoryTraceability
+      summary: Count published inventory tasks and those with complete executor evidence.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: toExclusive, in: query, required: true, schema: { type: string, format: date } }
+        - { name: before, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: UTC publication-window totals and descending task details, including published tasks subsequently cancelled or terminated.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [counts, items, nextBefore]
+                properties:
+                  counts:
+                    type: object
+                    required: [published, traceable]
+                    properties:
+                      published: { type: integer, format: int64, minimum: 0 }
+                      traceable: { type: integer, format: int64, minimum: 0 }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [taskId, name, status, publishedAt, source, expected, counted, traceable]
+                      properties:
+                        taskId: { $ref: '#/components/schemas/Id' }
+                        name: { type: string }
+                        status: { type: string }
+                        publishedAt: { type: string, format: date-time }
+                        source: { type: string, enum: [CURRENT, SEALED, RETAINED, MISSING] }
+                        expected: { type: integer, format: int64, minimum: 0 }
+                        counted: { type: integer, format: int64, minimum: 0 }
+                        traceable: { type: boolean }
+                  nextBefore: { type: string, nullable: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /operations-reports/inventory-traceability.csv:
+    get:
+      tags: [Reports]
+      operationId: exportPublishedInventoryTraceability
+      summary: Export audited inventory traceability task details.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: toExclusive, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: CSV for the same publication window and task evidence.
+          content:
+            text/csv:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { description: More than 10000 matching tasks. Narrow the window. }
 
   /operations-reports/inventory-detail.csv:
     get:
@@ -12724,8 +12892,8 @@ paths:
   /mini/scrap-requests/from-loss/{reportId}: {"post": {"operationId": "miniSubmitScrapFromLoss", "tags": ["Scrap"], "description": "Freeze an unrecovered confirmed loss. A dispatched factory original retains its repair processor and round evidence.", "security": [{"miniSession": []}], "parameters": [{"name": "reportId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/Id"}}, {"$ref": "#/components/parameters/IfMatchVersion"}, {"$ref": "#/components/parameters/IdempotencyKeyUuid"}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ScrapLossSubmission"}}}}, "responses": {"400": {"$ref": "#/components/responses/BadRequest"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "200": {"description": "Original pending scrap request receipt.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ScrapSubmissionReceipt"}}}}}, "x-business-write": true, "x-actor": "Original borrower, scoped department manager, asset administrator or current loss warehouse handler", "x-version": "Current loss report version and current asset version", "x-transaction": "Freeze confirmed evidence and original custody, preserve any original borrowing, open approval and persist the original receipt", "x-audit-event": "SCRAP_SUBMITTED", "x-error-codes": ["SCRAP_LOSS_SOURCE_FORBIDDEN", "SCRAP_LOSS_SOURCE_CHANGED", "SCRAP_ASSET_OR_LOCK_CHANGED", "LOSS_LOAN_IDENTITY_CHANGED", "SCRAP_IDEMPOTENCY_CONFLICT"], "x-required-error-statuses": [400, 401, 403, 404, 409], "x-non-applicable": ["csrf"], "x-exception-rationale": "Current opaque mini identity replaces cookie CSRF."}}
   /mini/scrap-requests/from-repair/{repairId}: {"post": {"operationId": "miniSubmitScrapFromRepair", "tags": ["Scrap"], "description": "Submit the accepted internal repair as linked scrap with continuous ownership and atomic lock transfer.", "security": [{"miniSession": []}], "parameters": [{"name": "repairId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/Id"}}, {"$ref": "#/components/parameters/IfMatchVersion"}, {"$ref": "#/components/parameters/IdempotencyKeyUuid"}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ScrapRepairSubmission"}}}}, "responses": {"400": {"$ref": "#/components/responses/BadRequest"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "200": {"description": "Original pending scrap request receipt.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ScrapSubmissionReceipt"}}}}}, "x-business-write": true, "x-actor": "Original borrower, scoped department manager, asset administrator or current loss warehouse handler", "x-version": "Current loss report version and current asset version", "x-transaction": "Validate confirmed evidence and unchanged open borrowing, freeze asset, open approval and persist an immutable receipt", "x-audit-event": "SCRAP_SUBMITTED", "x-error-codes": ["SCRAP_LOSS_SOURCE_FORBIDDEN", "SCRAP_LOSS_SOURCE_CHANGED", "SCRAP_ASSET_OR_LOCK_CHANGED", "LOSS_LOAN_IDENTITY_CHANGED", "SCRAP_IDEMPOTENCY_CONFLICT"], "x-required-error-statuses": [400, 401, 403, 404, 409], "x-non-applicable": ["csrf"], "x-exception-rationale": "Current opaque mini identity replaces cookie CSRF."}}
   /mini/scrap-requests/from-factory/{repairId}/rounds/{roundId}/replacements/{replacementId}: {"post": {"operationId": "miniSubmitScrapFromFactory", "tags": ["Scrap"], "description": "Freeze the dispatched original using the recorded factory replacement evidence and transfer its repair lock.", "security": [{"miniSession": []}], "parameters": [{"name": "repairId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/Id"}}, {"name": "roundId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/Id"}}, {"name": "replacementId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/Id"}}, {"$ref": "#/components/parameters/IfMatchVersion"}, {"$ref": "#/components/parameters/IdempotencyKeyUuid"}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ScrapFactorySubmission"}}}}, "responses": {"400": {"$ref": "#/components/responses/BadRequest"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}, "200": {"description": "Original pending scrap request receipt.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ScrapSubmissionReceipt"}}}}}, "x-business-write": true, "x-actor": "Current original repair warehouse operator", "x-version": "Repair, round, asset, ownership and active lock versions", "x-transaction": "Freeze verified manufacturer evidence and atomically transfer the existing repair lock", "x-audit-event": "SCRAP_SUBMITTED", "x-error-codes": ["REPAIR_FACTORY_SCRAP_EVIDENCE_CHANGED", "SCRAP_ASSET_CHANGED", "SCRAP_IDEMPOTENCY_CONFLICT"], "x-required-error-statuses": [400, 401, 403, 404, 409], "x-non-applicable": ["csrf"], "x-exception-rationale": "Current opaque mini identity replaces cookie CSRF."}}
-  /messages: {"get": {"tags": ["Reminder"], "operationId": "pcListMessages", "summary": "listMessages", "security": [{"sessionCookie": []}], "responses": {"200": {"description": "Current authorized result.", "content": {"application/json": {"schema": {"type": "object", "required": ["items", "total", "unread", "page", "pageSize", "view"], "properties": {"items": {"type": "array", "items": {"type": "object", "required": ["kind", "id", "businessType", "businessId", "stage", "objectStage", "poolType", "assigneeAccountId", "openedAt", "deadlineAt", "read"], "properties": {"kind": {"type": "string", "enum": ["TODO", "REMINDER"]}, "id": {"$ref": "#/components/schemas/Id"}, "businessType": {"type": "string"}, "businessId": {"$ref": "#/components/schemas/Id"}, "stage": {"type": "string"}, "objectStage": {"type": "string"}, "poolType": {"type": "string"}, "assigneeAccountId": {"type": "string"}, "openedAt": {"type": "string"}, "deadlineAt": {"type": "string"}, "read": {"type": "boolean"}}}}, "total": {"type": "integer", "format": "int64", "minimum": 0}, "unread": {"type": "integer", "format": "int64", "minimum": 0}, "page": {"type": "integer", "format": "int64", "minimum": 0}, "pageSize": {"type": "integer", "format": "int64", "minimum": 0}, "view": {"type": "string", "enum": ["INBOX", "EXCEPTION"]}}}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}}, "parameters": [{"name": "view", "in": "query", "schema": {"type": "string", "enum": ["INBOX", "EXCEPTION"], "default": "INBOX"}}, {"$ref": "#/components/parameters/Page"}, {"$ref": "#/components/parameters/PageSize"}]}}
-  /mini/messages: {"get": {"tags": ["Reminder"], "operationId": "miniListMessages", "summary": "listMessages", "security": [{"miniSession": []}], "responses": {"200": {"description": "Current authorized result.", "content": {"application/json": {"schema": {"type": "object", "required": ["items", "total", "unread", "page", "pageSize", "view"], "properties": {"items": {"type": "array", "items": {"type": "object", "required": ["kind", "id", "businessType", "businessId", "stage", "objectStage", "poolType", "assigneeAccountId", "openedAt", "deadlineAt", "read"], "properties": {"kind": {"type": "string", "enum": ["TODO", "REMINDER"]}, "id": {"$ref": "#/components/schemas/Id"}, "businessType": {"type": "string"}, "businessId": {"$ref": "#/components/schemas/Id"}, "stage": {"type": "string"}, "objectStage": {"type": "string"}, "poolType": {"type": "string"}, "assigneeAccountId": {"type": "string"}, "openedAt": {"type": "string"}, "deadlineAt": {"type": "string"}, "read": {"type": "boolean"}}}}, "total": {"type": "integer", "format": "int64", "minimum": 0}, "unread": {"type": "integer", "format": "int64", "minimum": 0}, "page": {"type": "integer", "format": "int64", "minimum": 0}, "pageSize": {"type": "integer", "format": "int64", "minimum": 0}, "view": {"type": "string", "enum": ["INBOX", "EXCEPTION"]}}}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}}, "parameters": [{"name": "view", "in": "query", "schema": {"type": "string", "enum": ["INBOX", "EXCEPTION"], "default": "INBOX"}}, {"$ref": "#/components/parameters/Page"}, {"$ref": "#/components/parameters/PageSize"}]}}
+  /messages: {"get": {"tags": ["Reminder"], "operationId": "pcListMessages", "summary": "listMessages", "security": [{"sessionCookie": []}], "responses": {"200": {"description": "Current authorized result.", "content": {"application/json": {"schema": {"type": "object", "required": ["items", "total", "unread", "page", "pageSize", "view"], "properties": {"items": {"type": "array", "items": {"type": "object", "required": ["kind", "id", "businessType", "businessId", "stage", "objectStage", "poolType", "assigneeAccountId", "openedAt", "deadlineAt", "read"], "properties": {"kind": {"type": "string", "enum": ["TODO", "REMINDER"]}, "id": {"$ref": "#/components/schemas/Id"}, "businessType": {"type": "string"}, "businessId": {"$ref": "#/components/schemas/Id"}, "stage": {"type": "string"}, "objectStage": {"type": "string"}, "poolType": {"type": "string"}, "assigneeAccountId": {"type": "string"}, "openedAt": {"type": "string"}, "deadlineAt": {"type": "string"}, "read": {"type": "boolean"}}}}, "total": {"type": "integer", "format": "int64", "minimum": 0}, "unread": {"type": "integer", "format": "int64", "minimum": 0}, "page": {"type": "integer", "format": "int64", "minimum": 0}, "pageSize": {"type": "integer", "format": "int64", "minimum": 0}, "view": {"type": "string", "enum": ["INBOX", "EXCEPTION"]}}}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}}, "parameters": [{"name": "view", "in": "query", "description": "EXCEPTION includes open reassignment tasks visible within the current business scope.", "schema": {"type": "string", "enum": ["INBOX", "EXCEPTION"], "default": "INBOX"}}, {"$ref": "#/components/parameters/Page"}, {"$ref": "#/components/parameters/PageSize"}]}}
+  /mini/messages: {"get": {"tags": ["Reminder"], "operationId": "miniListMessages", "summary": "listMessages", "security": [{"miniSession": []}], "responses": {"200": {"description": "Current authorized result.", "content": {"application/json": {"schema": {"type": "object", "required": ["items", "total", "unread", "page", "pageSize", "view"], "properties": {"items": {"type": "array", "items": {"type": "object", "required": ["kind", "id", "businessType", "businessId", "stage", "objectStage", "poolType", "assigneeAccountId", "openedAt", "deadlineAt", "read"], "properties": {"kind": {"type": "string", "enum": ["TODO", "REMINDER"]}, "id": {"$ref": "#/components/schemas/Id"}, "businessType": {"type": "string"}, "businessId": {"$ref": "#/components/schemas/Id"}, "stage": {"type": "string"}, "objectStage": {"type": "string"}, "poolType": {"type": "string"}, "assigneeAccountId": {"type": "string"}, "openedAt": {"type": "string"}, "deadlineAt": {"type": "string"}, "read": {"type": "boolean"}}}}, "total": {"type": "integer", "format": "int64", "minimum": 0}, "unread": {"type": "integer", "format": "int64", "minimum": 0}, "page": {"type": "integer", "format": "int64", "minimum": 0}, "pageSize": {"type": "integer", "format": "int64", "minimum": 0}, "view": {"type": "string", "enum": ["INBOX", "EXCEPTION"]}}}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}}, "parameters": [{"name": "view", "in": "query", "description": "EXCEPTION includes open reassignment tasks visible within the current business scope.", "schema": {"type": "string", "enum": ["INBOX", "EXCEPTION"], "default": "INBOX"}}, {"$ref": "#/components/parameters/Page"}, {"$ref": "#/components/parameters/PageSize"}]}}
   /messages/{kind}/{id}/read: {"parameters": [{"name": "kind", "in": "path", "required": true, "schema": {"type": "string", "enum": ["TODO", "REMINDER"]}}, {"name": "id", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/Id"}}], "post": {"tags": ["Reminder"], "operationId": "markMessageRead", "summary": "markMessageRead", "security": [{"sessionCookie": []}], "responses": {"200": {"description": "Current authorized result.", "content": {"application/json": {"schema": {"type": "object", "required": ["kind", "id", "read"], "properties": {"kind": {"type": "string", "enum": ["TODO", "REMINDER"]}, "id": {"$ref": "#/components/schemas/Id"}, "read": {"type": "boolean"}}}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}}, "x-business-write": true, "x-actor": "Only the account the message is addressed to, or any asset administrator; others receive 404.", "x-version": "Personal read receipt is monotonic; repeated requests are harmless.", "x-transaction": "Insert one read receipt per account and message; never change todo, reminder, lock or deadline facts.", "x-audit-event": "NONE_READ_MARKER", "x-error-codes": ["MESSAGE_KIND_INVALID", "MESSAGE_NOT_AVAILABLE", "MESSAGE_SCOPE_FORBIDDEN"], "x-required-error-statuses": [400, 401, 403, 404, 409], "parameters": [{"$ref": "#/components/parameters/CsrfToken"}, {"$ref": "#/components/parameters/IdempotencyKey"}]}}
   /mini/messages/{kind}/{id}/read: {"parameters": [{"name": "kind", "in": "path", "required": true, "schema": {"type": "string", "enum": ["TODO", "REMINDER"]}}, {"name": "id", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/Id"}}], "post": {"tags": ["Reminder"], "operationId": "miniMarkMessageRead", "summary": "markMessageRead", "security": [{"miniSession": []}], "responses": {"200": {"description": "Current authorized result.", "content": {"application/json": {"schema": {"type": "object", "required": ["kind", "id", "read"], "properties": {"kind": {"type": "string", "enum": ["TODO", "REMINDER"]}, "id": {"$ref": "#/components/schemas/Id"}, "read": {"type": "boolean"}}}}}}, "400": {"$ref": "#/components/responses/BadRequest"}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/Conflict"}}, "x-business-write": true, "x-actor": "Only the account the message is addressed to, or any asset administrator; others receive 404.", "x-version": "Personal read receipt is monotonic; repeated requests are harmless.", "x-transaction": "Insert one read receipt per account and message; never change todo, reminder, lock or deadline facts.", "x-audit-event": "NONE_READ_MARKER", "x-error-codes": ["MESSAGE_KIND_INVALID", "MESSAGE_NOT_AVAILABLE", "MESSAGE_SCOPE_FORBIDDEN"], "x-required-error-statuses": [400, 401, 403, 404, 409], "parameters": [{"$ref": "#/components/parameters/IdempotencyKey"}], "x-non-applicable": ["csrf"], "x-exception-rationale": "Current opaque mini session replaces cookie CSRF; original addressivity, read independence and idempotency rules remain authoritative."}}
   /duty-assignments: {"get": {"tags": ["Reminder"], "operationId": "listDutyAssignments", "summary": "listDutyAssignments", "security": [{"sessionCookie": []}], "description": "Notification-only duty contacts. A duty person never gains approval or processing rights.", "responses": {"200": {"description": "Current authorized result.", "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["items"], "properties": {"items": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["roleCode", "version", "primary", "backup", "effectiveAt"], "properties": {"roleCode": {"type": "string", "enum": ["ASSET_ADMIN", "WAREHOUSE_OPERATOR"]}, "version": {"$ref": "#/components/schemas/Id"}, "primary": {"type": "object", "additionalProperties": false, "required": ["id", "name", "active"], "properties": {"id": {"$ref": "#/components/schemas/Id"}, "name": {"type": "string"}, "active": {"type": "boolean", "description": "False once the account, employee or role membership is no longer effective."}}}, "backup": {"type": "object", "additionalProperties": false, "required": ["id", "name", "active"], "properties": {"id": {"$ref": "#/components/schemas/Id"}, "name": {"type": "string"}, "active": {"type": "boolean", "description": "False once the account, employee or role membership is no longer effective."}}, "nullable": true}, "effectiveAt": {"type": "string", "format": "date-time"}}}}}}}}}, "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/NotFound"}}}}

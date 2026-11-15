@@ -456,6 +456,7 @@ class DutyHttpRuntimeCase {
         verifyAssetStatusDrilldown(restored, reportWarehouse);
         verifyWorkbenchTodos(restored, reportWarehouse, login("duty5"));
         verifySealedInventoryTasks(restored, reportWarehouse);
+        verifyOverdueReassignment(restored);
     }
 
     private void verifySealedInventoryTasks(Session administrator, Session warehouse) throws Exception {
@@ -479,7 +480,36 @@ class DutyHttpRuntimeCase {
         assertEquals("931001", active.path("items").get(0).path("taskId").asText());
         assertEquals(2, active.path("items").get(0).path("expected").asInt());
         assertEquals(1, active.path("items").get(0).path("accepted").asInt());
+        String executorPath = "/operations-reports/inventory/931001/executors";
+        assertEquals(403, code(get(warehouse, executorPath)));
+        db.update("""
+                INSERT INTO fams_inventory_review_subject (observation_id,dimension,task_id,item_id,recheck_generation)
+                SELECT 9007199254740993,'NORMAL',task_id,id,recheck_generation
+                FROM fams_inventory_item WHERE task_id=931001
+                """);
+        var current = ok(get(administrator, executorPath));
+        assertEquals("CURRENT", current.path("source").asText());
+        assertEquals(2, current.path("expected").asInt(-1));
+        assertEquals(1, current.path("counted").asInt(-1));
+        var currentExecutor = current.path("items").get(0);
+        assertEquals("931005", currentExecutor.path("executorAccountId").asText());
+        assertEquals(1, currentExecutor.path("accepted").asInt(-1));
+        assertEquals(0, currentExecutor.path("differences").asInt(-1));
+        db.update("UPDATE fams_inventory_review_subject SET dimension='LOCATION'"
+                + " WHERE task_id=931001 AND observation_id=9007199254740993");
+        assertEquals(1, ok(get(administrator, executorPath)).path("items").get(0).path("differences").asInt(-1));
+        var currentCsv = get(administrator, executorPath + ".csv");
+        assertEquals(200, code(currentCsv));
+        assertTrue(currentCsv.body().endsWith("931001,931005,1,1,1,0"));
+        assertEquals(1L, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE action='OPERATIONS_REPORT_EXPORTED'
+                    AND resource_type='CURRENT_INVENTORY_EXECUTORS' AND resource_id=931001
+                """, Long.class));
         db.update("UPDATE fams_inventory_item SET recheck_generation=1 WHERE task_id=931001");
+        var recheck = ok(get(administrator, executorPath)).path("items").get(0);
+        assertEquals(0, recheck.path("accepted").asInt(-1));
+        assertEquals(0, recheck.path("differences").asInt(-1));
+        assertEquals(1, recheck.path("notObserved").asInt(-1));
         assertEquals(0, ok(get(administrator, progress + "?before=931002")).path("items").get(0).path("accepted").asInt());
         assertTrue(ok(get(administrator, progress + "?before=931001")).path("items").isEmpty());
         var path = "/operations-reports/inventory";
@@ -512,6 +542,116 @@ class DutyHttpRuntimeCase {
                 WHERE action='OPERATIONS_REPORT_EXPORTED' AND resource_type='SEALED_INVENTORY_DETAIL'
                     AND detail_json->>'$.from'='2026-11-01' AND detail_json->>'$.toExclusive'='2026-12-01'
                     AND detail_json->>'$.rows'='1'
+                """, Long.class));
+        verifySealedExecutors(administrator, warehouse);
+        verifyPublishedInventoryTraceability(administrator, warehouse);
+    }
+
+    private void verifySealedExecutors(Session administrator, Session warehouse) throws Exception {
+        db.update("""
+                INSERT INTO fams_inventory_item (id,task_id,asset_id,asset_version,snapshot_json,executor_account_id)
+                VALUES (934000,931000,9007199254740993,0,'{}',931005),
+                       (934001,931000,9007199254740994,0,'{}',NULL)
+                """);
+        db.update("""
+                INSERT INTO fams_inventory_sealed_item (task_id,item_id,asset_id,recheck_generation,
+                    snapshot_json,snapshot_sha256)
+                VALUES (931000,934000,9007199254740993,0,
+                    '{"item":{"executor_account_id":"9007199254741201"},"review":{
+                    "review_status":"ACCEPTED","observation_id":"9007199254740993"}}',REPEAT('1',64)),
+                    (931000,934001,9007199254740994,0,
+                    '{"item":{"executor_account_id":null},"review":{}}',REPEAT('2',64))
+                """);
+        var path = "/operations-reports/inventory/931000/executors";
+        assertEquals(403, code(get(warehouse, path)));
+        assertEquals(403, code(get(warehouse, path + ".csv")));
+        assertEquals(404, code(get(administrator, "/operations-reports/inventory/999999/executors")));
+        var report = ok(get(administrator, path));
+        assertEquals("SEALED", report.path("source").asText());
+        assertEquals(4, report.path("expected").asInt(-1));
+        assertEquals(2, report.path("counted").asInt(-1));
+        var rows = report.path("items");
+        assertEquals(2, rows.size());
+        assertEquals("9007199254741201", rows.get(0).path("executorAccountId").asText());
+        assertEquals(1, rows.get(0).path("accepted").asInt(-1));
+        assertEquals(1, rows.get(0).path("differences").asInt(-1));
+        assertEquals(1, rows.get(1).path("notObserved").asInt(-1));
+        var csv = get(administrator, path + ".csv");
+        assertEquals(200, code(csv));
+        assertEquals("taskId,executorAccountId,expected,accepted,differences,notObserved\r\n"
+                + "931000,9007199254741201,1,1,1,0\r\n931000,,1,0,0,1", csv.body());
+        assertEquals(1L, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE action='OPERATIONS_REPORT_EXPORTED'
+                    AND resource_type='SEALED_INVENTORY_EXECUTORS' AND resource_id=931000
+                    AND detail_json->>'$.counted'='2'
+                """, Long.class));
+    }
+
+    private void verifyPublishedInventoryTraceability(Session administrator, Session warehouse) throws Exception {
+        db.update("UPDATE fams_inventory_task SET published_at='2026-11-01' WHERE id IN (931000,931001)");
+        db.update("""
+                INSERT INTO fams_inventory_task (id,name,task_status,range_json,starts_at,due_at,
+                    creator_account_id,created_at,updated_at,expected_count,published_at)
+                VALUES (931010,'=Unsafe,Name','CANCELLED','{}','2026-11-04','2026-11-05',931003,NOW(3),NOW(3),1,'2026-11-04'),
+                    (931011,'Terminated','TERMINATED','{}','2026-11-04','2026-11-05',931003,NOW(3),NOW(3),1,'2026-11-04'),
+                    (931012,'Draft','DRAFT','{}','2026-11-04','2026-11-05',931003,NOW(3),NOW(3),0,NULL),
+                    (931013,'No seal','COMPLETED','{}','2026-11-04','2026-11-05',931003,NOW(3),NOW(3),1,'2026-11-04'),
+                    (931014,'Complete seal','COMPLETED','{}','2026-11-04','2026-11-05',931003,NOW(3),NOW(3),1,'2026-11-04'),
+                    (931015,'Outside','CANCELLED','{}','2026-12-01','2026-12-02',931003,NOW(3),NOW(3),0,'2026-12-01'),
+                    (931016,'Missing executor field','COMPLETED','{}','2026-11-04','2026-11-05',
+                        931003,NOW(3),NOW(3),1,'2026-11-04')
+                """);
+        db.update("""
+                INSERT INTO fams_inventory_item (id,task_id,asset_id,asset_version,snapshot_json,executor_account_id)
+                VALUES (934010,931010,9007199254740993,0,'{}',NULL),(934011,931011,9007199254740993,0,'{}',931005),
+                    (934013,931013,9007199254740993,0,'{}',931005),(934014,931014,9007199254740993,0,'{}',931005),
+                    (934016,931016,9007199254740993,0,'{}',931005)
+                """);
+        db.update("""
+                INSERT INTO fams_inventory_sealed_report (task_id,task_version,timezone_id,expected_count,
+                    accepted_count,not_observed_count,captured_count,actor_account_id,actor_username,seal_reason,
+                    sync_digest,report_sha256,snapshot_json,created_at)
+                SELECT id,1,'UTC',1,0,1,0,931003,'duty3','Fixture',REPEAT('0',64),REPEAT('1',64),'{}','2026-11-05'
+                FROM fams_inventory_task WHERE id IN (931014,931016)
+                """);
+        db.update("""
+                INSERT INTO fams_inventory_sealed_item (task_id,item_id,asset_id,recheck_generation,
+                    snapshot_json,snapshot_sha256)
+                VALUES (931014,934014,9007199254740993,0,'{"item":{"executor_account_id":null},"review":{}}',REPEAT('1',64)),
+                    (931016,934016,9007199254740993,0,'{"item":{},"review":{}}',REPEAT('2',64))
+                """);
+
+        String path = "/operations-reports/inventory-traceability";
+        String window = "?from=2026-11-01&toExclusive=2026-12-01";
+        assertEquals(403, code(get(warehouse, path + window)));
+        assertEquals(400, code(get(administrator, path + "?from=2026-12-01&toExclusive=2026-11-01")));
+        var first = ok(get(administrator, path + window + "&pageSize=1"));
+        assertEquals(7, first.path("counts").path("published").asInt(-1));
+        assertEquals(3, first.path("counts").path("traceable").asInt(-1));
+        assertEquals("931016", first.path("nextBefore").asText());
+        assertEquals(1, first.path("items").get(0).path("counted").asInt(-1));
+        assertFalse(first.path("items").get(0).path("traceable").asBoolean(true));
+        var second = ok(get(administrator, path + window + "&before=931016"));
+        assertEquals(first.path("counts"), second.path("counts"));
+        var items = second.path("items");
+        assertTrue(items.valueStream().anyMatch(row -> "CANCELLED".equals(row.path("status").asText())
+                && row.path("traceable").asBoolean()));
+        assertTrue(items.valueStream().anyMatch(row -> "TERMINATED".equals(row.path("status").asText())
+                && row.path("traceable").asBoolean()));
+        assertTrue(items.valueStream().anyMatch(row -> "931013".equals(row.path("taskId").asText())
+                && "MISSING".equals(row.path("source").asText()) && !row.path("traceable").asBoolean(true)));
+        assertEquals(404, code(get(administrator, "/operations-reports/inventory/931013/executors")));
+        var retained = ok(get(administrator, "/operations-reports/inventory/931011/executors"));
+        assertEquals("RETAINED", retained.path("source").asText());
+        assertEquals("931005", retained.path("items").get(0).path("executorAccountId").asText());
+        var csv = get(administrator, path + ".csv" + window);
+        assertEquals(200, code(csv));
+        assertEquals(8L, csv.body().lines().count());
+        assertTrue(csv.body().contains("931010,\"'=Unsafe,Name\",CANCELLED"));
+        assertEquals(1L, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE action='OPERATIONS_REPORT_EXPORTED'
+                    AND resource_type='PUBLISHED_INVENTORY_TRACEABILITY'
+                    AND detail_json->>'$.rows'='7' AND detail_json->>'$.traceable'='3'
                 """, Long.class));
     }
 
@@ -1157,6 +1297,107 @@ class DutyHttpRuntimeCase {
     private HttpResponse<String> get(Session session, String path) throws Exception {
         return http.send(HttpRequest.newBuilder(URI.create(base() + path))
                 .header("Cookie", session.cookie()).GET().build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private void verifyOverdueReassignment(Session administrator) throws Exception {
+        var warehouse = login("duty4");
+        db.update("""
+                INSERT INTO fams_inbound_receipt (id,receipt_no,creator_account_id,creator_username_snapshot,
+                    receipt_status,business_date,parameter_version_id,timezone_snapshot,
+                    admin_decision_deadline_workdays,warehouse_claim_deadline_workdays,
+                    warehouse_first_execution_deadline_workdays,submitted_at,warehouse_first_execution_due_at,
+                    version,created_at,updated_at,created_by,updated_by)
+                VALUES (931009,'C4-OVERDUE',931004,'duty4','WAREHOUSE_PROCESSING','2026-11-15',931000,
+                    'UTC',2,1,2,UTC_TIMESTAMP(3),DATE_ADD(UTC_TIMESTAMP(3),INTERVAL 1 HOUR),
+                    4,UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),931004,931004)
+                """);
+        db.update("""
+                INSERT INTO fams_inbound_processing_ownership
+                    (receipt_id,processor_account_id,processor_username_snapshot,ownership_version,acquired_at)
+                VALUES (931009,931004,'duty4',0,UTC_TIMESTAMP(3))
+                """);
+        db.update("""
+                INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at)
+                VALUES ('WAREHOUSE_OPERATOR','INBOUND',931009,'WAREHOUSE_EXECUTION','OPEN',UTC_TIMESTAMP(3))
+                """);
+        String openReminders = "SELECT COUNT(*) FROM fams_todo WHERE business_type='INBOUND' AND business_id=931009"
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        reassignments.scan();
+        assertEquals(0, db.queryForObject(openReminders, Integer.class));
+        db.update("UPDATE fams_inbound_receipt SET warehouse_first_execution_due_at=UTC_TIMESTAMP(3)"
+                + " - INTERVAL 1 MINUTE WHERE id=931009");
+        var deadline = db.queryForObject("SELECT warehouse_first_execution_due_at FROM fams_inbound_receipt"
+                + " WHERE id=931009", java.sql.Timestamp.class);
+        reassignments.scan();
+        reassignments.scan();
+        assertEquals(1, db.queryForObject(openReminders, Integer.class));
+        var exceptions = "/messages?view=EXCEPTION";
+        assertTrue(ok(get(administrator, exceptions)).path("items").valueStream().anyMatch(row ->
+                "931009".equals(row.path("businessId").asText())
+                        && "REASSIGNMENT_REQUIRED".equals(row.path("stage").asText())));
+        assertFalse(ok(get(warehouse, exceptions)).path("items").valueStream().anyMatch(row ->
+                "931009".equals(row.path("businessId").asText())
+                        && "REASSIGNMENT_REQUIRED".equals(row.path("stage").asText())));
+        assertEquals(WAREHOUSE, db.queryForObject(
+                "SELECT processor_account_id FROM fams_inbound_processing_ownership WHERE receipt_id=931009",
+                Long.class));
+        assertEquals(4, db.queryForObject("SELECT version FROM fams_inbound_receipt WHERE id=931009", Integer.class));
+
+        // An acceptance and a controlled transfer both advance the original ownership version.
+        db.update("UPDATE fams_inbound_processing_ownership SET ownership_version=1 WHERE receipt_id=931009");
+        reassignments.scan();
+        assertEquals(0, db.queryForObject(openReminders, Integer.class));
+        assertEquals(deadline, db.queryForObject("SELECT warehouse_first_execution_due_at FROM fams_inbound_receipt"
+                + " WHERE id=931009", java.sql.Timestamp.class));
+        assertFalse(ok(get(administrator, exceptions)).path("items").valueStream().anyMatch(row ->
+                "931009".equals(row.path("businessId").asText())
+                        && "REASSIGNMENT_REQUIRED".equals(row.path("stage").asText())));
+        verifyUnavailableDeclaration(administrator, warehouse, openReminders);
+
+    }
+
+    private void verifyUnavailableDeclaration(Session administrator, Session warehouse, String openReminders)
+            throws Exception {
+        String key = UUID.randomUUID().toString();
+        String reason = "Original processor is unavailable for further acceptance";
+        assertEquals(403, code(declareUnavailable(administrator, 4, 1, reason, key)));
+        assertEquals(409, code(declareUnavailable(warehouse, 3, 1, reason, key)));
+        assertEquals(409, code(declareUnavailable(warehouse, 4, 0, reason, key)));
+        var result = ok(declareUnavailable(warehouse, 4, 1, reason, key));
+        assertTrue(result.path("recorded").asBoolean());
+        assertEquals(result, ok(declareUnavailable(warehouse, 4, 1, reason, key)));
+        assertEquals(409, code(declareUnavailable(warehouse, 4, 1, "Changed reason", key)));
+        assertEquals(result, ok(declareUnavailable(warehouse, 4, 1, reason, UUID.randomUUID().toString())));
+        assertEquals("INBOUND_UNAVAILABILITY_ALREADY_RECORDED",
+                json.readTree(declareUnavailable(warehouse, 4, 1, "Different new request", UUID.randomUUID().toString())
+                        .body()).path("code").asText());
+        assertEquals(1, db.queryForObject(openReminders, Integer.class));
+        reassignments.scan();
+        assertEquals(1, db.queryForObject(openReminders, Integer.class));
+        assertEquals(1L, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE action='INBOUND_PROCESSOR_UNAVAILABLE'
+                    AND resource_id=931009 AND actor_account_id=931004
+                """, Long.class));
+        var snapshot = ok(get(administrator, "/inbound-receipts/931009/reassignment"));
+        assertEquals(reason, snapshot.path("unavailableReason").asText());
+        assertEquals(4, snapshot.path("version").asInt(-1));
+        assertEquals(1, snapshot.path("ownershipVersion").asInt(-1));
+        assertEquals("931004", snapshot.path("processorAccountId").asText());
+        db.update("UPDATE fams_inbound_processing_ownership SET ownership_version=2 WHERE receipt_id=931009");
+        reassignments.scan();
+        assertEquals(0, db.queryForObject(openReminders, Integer.class));
+        assertFalse(ok(get(administrator, "/inbound-receipts/931009/reassignment")).has("unavailableReason"));
+    }
+
+    private HttpResponse<String> declareUnavailable(Session session, long version, long ownershipVersion,
+            String reason, String key) throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create(base() + "/inbound-receipts/931009/reassignment/unavailable"))
+                .header("Content-Type", "application/json").header("Cookie", session.cookie())
+                .header("X-CSRF-Token", session.csrf()).header("Idempotency-Key", key)
+                .header("If-Match-Version", Long.toString(version))
+                .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(
+                        Map.of("ownershipVersion", ownershipVersion, "reason", reason))))
+                .build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private void verifyImportErrorQuality(Session administrator, Session warehouse, String report) throws Exception {
