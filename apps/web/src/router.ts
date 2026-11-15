@@ -4,6 +4,7 @@ import HomeView from "@/views/HomeView.vue";
 import LoginView from "@/views/LoginView.vue";
 import PasswordChangeView from "@/views/PasswordChangeView.vue";
 import AssetLedgerView from "@/views/AssetLedgerView.vue";
+import AssetLookupView from "@/views/AssetLookupView.vue";
 import AssetImportView from "@/views/AssetImportView.vue";
 import AssetImportReviewView from "@/views/AssetImportReviewView.vue";
 import AssetInitializationView from "@/views/AssetInitializationView.vue";
@@ -44,6 +45,7 @@ export const router = createRouter({
     { path: "/login", name: "login", component: LoginView },
     { path: "/password/change", name: "password-change", component: PasswordChangeView, meta: { requiresAuth: true } },
     { path: "/assets", name: "assets", component: AssetLedgerView, meta: { requiresAuth: true } },
+    { path: "/asset-lookup", name: "asset-lookup", component: AssetLookupView, meta: { requiresAuth: true } },
     { path: "/asset-imports", name: "asset-import", component: AssetImportView, meta: { requiresAuth: true } },
     { path: "/asset-import-reviews", name: "asset-import-review", component: AssetImportReviewView, meta: { requiresAuth: true } },
     { path: "/asset-initialization", name: "asset-initialization", component: AssetInitializationView, meta: { requiresAuth: true } },
