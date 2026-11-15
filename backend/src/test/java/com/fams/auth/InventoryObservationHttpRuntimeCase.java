@@ -253,6 +253,7 @@ class InventoryObservationHttpRuntimeCase {
                 "DELETE FROM fams_idempotency_record WHERE actor_account_id BETWEEN 933001 AND"
                         + " 933003");
         db.update("DELETE FROM fams_audit_event WHERE actor_account_id BETWEEN 933001 AND 933003");
+        db.update("DELETE FROM fams_asset_tag WHERE asset_id BETWEEN 933010 AND 933012");
         db.update("DELETE FROM fams_asset WHERE id BETWEEN 933010 AND 933012");
         db.update(
                 "UPDATE fams_business_parameter_state SET current_version=0,current_version_id=NULL"
@@ -1212,9 +1213,58 @@ class InventoryObservationHttpRuntimeCase {
                 "{\"source\":\"CODE\",\"value\":\"INV-ASSET-933010\"}"));
         assertEquals("TASK_OUTSIDE", result.path("kind").asText());
         assertTrue(result.path("snapshot").isMissingNode());
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_inventory_tag_recognition", Integer.class));
+        var token = "X".repeat(43);
+        db.update("""
+                INSERT INTO fams_asset_tag (asset_id,token_ciphertext,token_hash,tag_version,issued_at)
+                VALUES (933010,X'01',?,0,'2026-11-01')
+                """, tagHash(token));
+        var read = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+                        + "/api/v1/inventory-observations" + suffix + "?source=SCAN&value=" + token))
+                .header("Cookie", employee.cookie()).build();
+        assertEquals("ASSIGNED", ok(http.send(read, HttpResponse.BodyHandlers.ofString())).path("kind").asText());
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM fams_inventory_tag_recognition", Integer.class));
+
+        var identity = new MiniWechatIdentityPort.Identity("inventory-tag-app", "inventory-tag-employee");
+        db.update("INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES (933002,?,NOW(3))",
+                miniSessions.identityHash(identity));
+        var grant = miniSessions.start(identity, UUID.randomUUID());
+        var scan = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/mini/inventory-observations"
+                        + suffix)).header("X-FAMS-Mini-Session", grant.sessionToken())
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(JSON.createObjectNode().put("source", "SCAN")
+                        .put("value", token).toString())).build();
+        var recognized = ok(http.send(scan, HttpResponse.BodyHandlers.ofString()));
+        assertEquals("ASSIGNED", recognized.path("kind").asText());
+        assertTrue(recognized.path("tag_version").isMissingNode());
+        var firstScan = db.queryForList("SELECT * FROM fams_inventory_tag_recognition WHERE item_id=?",
+                recognized.path("itemId").asText());
+        assertEquals(1, firstScan.size());
+        assertEquals(933002, ((Number) firstScan.getFirst().get("actor_account_id")).intValue());
+        assertEquals(0, ((Number) firstScan.getFirst().get("tag_version")).intValue());
+        assertEquals(recognized, ok(http.send(scan, HttpResponse.BodyHandlers.ofString())));
+        assertEquals(firstScan, db.queryForList("SELECT * FROM fams_inventory_tag_recognition WHERE item_id=?",
+                recognized.path("itemId").asText()));
+        var newToken = "Y".repeat(43);
+        db.update("UPDATE fams_asset_tag SET token_hash=?,tag_version=1,issued_at='2026-11-02' WHERE asset_id=933010",
+                tagHash(newToken));
+        assertEquals("UNVERIFIED", ok(http.send(scan, HttpResponse.BodyHandlers.ofString())).path("kind").asText());
+        var newBody = JSON.createObjectNode().put("source", "SCAN").put("value", newToken);
+        assertEquals("ASSIGNED", ok(observationCall(employee, suffix, newBody.toString())).path("kind").asText());
+        assertEquals(java.util.List.of(0, 1), db.queryForList("SELECT tag_version FROM fams_inventory_tag_recognition"
+                + " WHERE item_id=? ORDER BY tag_version", Integer.class, recognized.path("itemId").asText()));
         assertEquals(0, db.queryForObject(
                 "SELECT COUNT(*) FROM fams_inventory_observation WHERE task_id=?",
                 Integer.class, task));
+        assertEquals(3L, db.queryForObject("SELECT version FROM fams_inventory_task WHERE id=?", Long.class, task));
+    }
+
+    private static String tagHash(String token) throws java.security.GeneralSecurityException {
+        var mac = javax.crypto.Mac.getInstance("HmacSHA256");
+        mac.init(new javax.crypto.spec.SecretKeySpec(
+                "test-idempotency-hmac-key-0123456789abcdef".getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                "HmacSHA256"));
+        return java.util.HexFormat.of().formatHex(mac.doFinal(token.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
     }
 
     @Test
