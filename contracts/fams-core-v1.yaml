@@ -9493,7 +9493,7 @@ paths:
     get:
       tags: [Reports]
       operationId: getOperationsReport
-      summary: Read sealed inventory, initial publication and current asset counts.
+      summary: Read sealed inventory, initial publication, import error quality and current asset counts.
       x-actor:
         required: true
         roles: [ASSET_ADMIN]
@@ -9534,6 +9534,17 @@ paths:
                       properties:
                         status: { type: string }
                         count: { type: integer, format: int64 }
+                  importErrorQuality:
+                    type: object
+                    description: Latest preflight failure rows from batches uploaded within the UTC window. File-level rejections are excluded.
+                    required: [locatedRows, failedRows]
+                    properties:
+                      locatedRows:
+                        type: integer
+                        format: int64
+                        minimum: 0
+                        description: Failed rows whose saved diagnostics all preserve sheet, row, field, original input and reason.
+                      failedRows: { type: integer, format: int64, minimum: 0 }
                   currentAssets:
                     type: array
                     items:

@@ -239,6 +239,7 @@ class DutyHttpRuntimeCase {
         var report = "/operations-reports?from=2026-11-01&toExclusive=2026-12-01";
         assertEquals(403, code(get(system, report)));
         assertEquals(0, ok(get(restored, report)).path("inventory").path("expected").asInt());
+        verifyImportErrorQuality(restored, login("duty4"), report);
         db.update("""
                 INSERT INTO fams_inventory_task (id,name,task_status,range_json,starts_at,due_at,timezone_id,
                     parameter_version_id,creator_account_id,created_at,updated_at,expected_count)
@@ -1156,6 +1157,35 @@ class DutyHttpRuntimeCase {
     private HttpResponse<String> get(Session session, String path) throws Exception {
         return http.send(HttpRequest.newBuilder(URI.create(base() + path))
                 .header("Cookie", session.cookie()).GET().build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private void verifyImportErrorQuality(Session administrator, Session warehouse, String report) throws Exception {
+        assertEquals(403, code(get(warehouse, report)));
+        var empty = ok(get(administrator, report)).path("importErrorQuality");
+        assertEquals(0, empty.path("failedRows").asInt(-1));
+        assertEquals(0, empty.path("locatedRows").asInt(-1));
+        db.update("""
+                INSERT INTO fams_asset_import_batch
+                    (id,actor_account_id,upload_key,source_sha256,source_bytes,source_xlsx,batch_status,
+                     preview_version,total_rows,ready_rows,error_rows,created_at,updated_at)
+                VALUES ('00000000-0000-4000-8000-000000931001',931004,'errors-a',REPEAT('0',64),
+                    1,X'00','PREVIEWED',1,3,1,2,'2026-11-01 00:00:00','2026-11-15 00:00:00'),
+                    ('00000000-0000-4000-8000-000000931002',931004,'errors-b',REPEAT('0',64),
+                    1,X'00','PREVIEWED',1,1,0,1,'2026-12-01 00:00:00','2026-12-01 00:00:00')
+                """);
+        db.update("""
+                INSERT INTO fams_asset_import_row (batch_id,sheet_row,source_json,errors_json,row_status)
+                VALUES ('00000000-0000-4000-8000-000000931001',2,'{}',
+                    '[{"sheet":"资产","sheetRow":2,"column":"编码","original":"","reason":"REQUIRED"}]','ERROR'),
+                    ('00000000-0000-4000-8000-000000931001',3,'{}',
+                    '[{"sheet":"资产","sheetRow":3,"column":"编码","reason":"REQUIRED"}]','ERROR'),
+                    ('00000000-0000-4000-8000-000000931001',4,'{}',NULL,'READY'),
+                    ('00000000-0000-4000-8000-000000931002',2,'{}',
+                    '[{"sheet":"资产","sheetRow":2,"column":"编码","original":"","reason":"REQUIRED"}]','ERROR')
+                """);
+        var quality = ok(get(administrator, report)).path("importErrorQuality");
+        assertEquals(2, quality.path("failedRows").asInt(-1));
+        assertEquals(1, quality.path("locatedRows").asInt(-1));
     }
 
     private HttpResponse<String> setAccountStatus(Session session, long id, long version, String action)
