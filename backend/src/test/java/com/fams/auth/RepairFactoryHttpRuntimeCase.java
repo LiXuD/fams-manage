@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fams.attachment.MalwareScanner;
 import com.fams.auth.RepairHttpRuntimeCase.Session;
+import com.fams.reminder.BusinessReminderService;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,11 +17,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -70,6 +74,9 @@ class RepairFactoryHttpRuntimeCase {
     final RepairHttpRuntimeCase fixture = new RepairHttpRuntimeCase();
     @Autowired JdbcTemplate db;
     @Autowired MiniSessionService miniSessions;
+    @Autowired BusinessReminderService reminders;
+    @Autowired ApplicationEventPublisher events;
+    @Autowired PlatformTransactionManager transactions;
 
     @Value("${local.server.port}")
     int port;
@@ -723,6 +730,8 @@ class RepairFactoryHttpRuntimeCase {
                             + owned
                             + ")");
         }
+        db.update("DELETE FROM fams_business_reminder WHERE business_type='REPAIR_FACTORY_ROUND'"
+                + " AND business_id IN (SELECT id FROM fams_repair_factory_round WHERE repair_id" + owned + ")");
         db.update("DELETE FROM fams_repair_factory_round WHERE repair_id" + owned);
         db.update("DELETE FROM fams_repair_factory_scope WHERE repair_id" + owned);
         for (String table :
@@ -1902,6 +1911,17 @@ class RepairFactoryHttpRuntimeCase {
         assertFalse(publicRoot.toString().contains("providerName"));
         assertFalse(publicRoot.toString().contains("actualCost"));
         dispatch(id, round, fixture.warehouse);
+        refreshFactoryFollowup();
+        assertEquals(0, repairReassignmentNotices(fixture.admin, id));
+        db.update("UPDATE fams_repair_factory_round SET expected_return_date=UTC_DATE()-INTERVAL 2 DAY WHERE id=?",
+                round);
+        refreshFactoryFollowup();
+        refreshFactoryFollowup();
+        assertEquals(1, repairReassignmentNotices(fixture.admin, id));
+        assertEquals(0, repairReassignmentNotices(fixture.warehouse, id));
+        var deadline = privateRound(fixture.warehouse, id, round).path("expectedReturnDate");
+        var lockBefore = db.queryForMap("SELECT id,lock_version FROM fams_asset_business_lock"
+                + " WHERE asset_id=951020 AND released_at IS NULL");
         var inspection = ok(get(fixture.admin, "/" + id + "/reassignment"));
         assertEquals(
                 "DISPATCHED",
@@ -1927,12 +1947,38 @@ class RepairFactoryHttpRuntimeCase {
                         root(fixture.admin, id).path("version").asLong(),
                         key(),
                         input));
+        refreshFactoryFollowup();
+        refreshFactoryFollowup();
+        assertEquals(0, repairReassignmentNotices(fixture.admin, id));
+        assertEquals(1, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_todo
+                WHERE business_type='REPAIR' AND business_id=? AND todo_type='REASSIGNMENT_REQUIRED'
+                  AND todo_status='CLOSED'
+                """, Integer.class, id));
+        assertEquals(deadline, privateRound(fixture.otherWarehouse, id, round).path("expectedReturnDate"));
+        assertEquals(lockBefore, db.queryForMap("SELECT id,lock_version FROM fams_asset_business_lock"
+                + " WHERE asset_id=951020 AND released_at IS NULL"));
         assertEquals(403, content(fixture.warehouse, id, round, object, token).statusCode());
         assertEquals(403, get(fixture.warehouse, path(id, "")).statusCode());
         assertEquals(1, activeLocks());
         receive(id, round, fixture.otherWarehouse, "RESTORED");
         assertEquals("UNDER_REPAIR", lifecycle());
         assertEquals("951004", root(fixture.admin, id).path("processorAccountId").asText());
+    }
+
+    private void refreshFactoryFollowup() {
+        reminders.scan();
+        new TransactionTemplate(transactions).executeWithoutResult(status ->
+                events.publishEvent(new WorkforceAvailabilityChanged()));
+    }
+
+    private long repairReassignmentNotices(Session session, String repairId) throws Exception {
+        return ok(ownerCall(session, "GET", "/messages?view=EXCEPTION&pageSize=100", null, 0))
+                .path("items").valueStream()
+                .filter(item -> "REPAIR".equals(item.path("businessType").asText())
+                        && repairId.equals(item.path("businessId").asText())
+                        && "REASSIGNMENT_REQUIRED".equals(item.path("stage").asText()))
+                .count();
     }
 
     @Test

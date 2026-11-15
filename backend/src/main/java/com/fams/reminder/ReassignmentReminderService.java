@@ -20,7 +20,24 @@ class ReassignmentReminderService {
                 SELECT t.business_type, t.business_id,
                     COALESCE(t.assignee_account_id, o.processor_account_id) AS owner_id,
                     CASE WHEN o.ownership_version = 0 THEN r.warehouse_first_execution_due_at END AS first_due,
-                    r.id IS NOT NULL AND o.unavailable_ownership_version = o.ownership_version AS declared_unavailable
+                    r.id IS NOT NULL AND o.unavailable_ownership_version = o.ownership_version AS declared_unavailable,
+                    EXISTS (
+                        SELECT 1
+                        FROM fams_repair_request repair
+                        JOIN fams_repair_factory_round round ON round.repair_id = repair.id
+                            AND round.round_status = 'DISPATCHED' AND round.dispatched_at <= t.opened_at
+                        JOIN fams_business_reminder notice ON notice.business_type = 'REPAIR_FACTORY_ROUND'
+                            AND notice.business_id = round.id AND notice.stage = 'FACTORY_RETURN'
+                            AND notice.reminder_type IN ('OVERDUE', 'OVERDUE_EVERY_7_DAYS')
+                        WHERE t.business_type = 'REPAIR' AND t.todo_type = 'FACTORY_RETURN'
+                            AND repair.id = t.business_id AND repair.repair_status = 'WAREHOUSE_PROCESSING'
+                            AND repair.processor_account_id = t.assignee_account_id
+                            AND NOT EXISTS (
+                                SELECT 1 FROM fams_repair_event event WHERE event.repair_id = repair.id
+                                    AND event.action = 'REPAIR_CONTROLLED_REASSIGNMENT'
+                                    AND event.occurred_at >= notice.deadline_at
+                            )
+                    ) AS factory_overdue
                 FROM fams_todo t
                 LEFT JOIN fams_inbound_processing_ownership o
                     ON t.business_type = 'INBOUND' AND t.todo_type = 'WAREHOUSE_EXECUTION'
@@ -36,7 +53,7 @@ class ReassignmentReminderService {
                 JOIN fams_organization g ON g.id = e.organization_id
                 LEFT JOIN fams_account_role r ON r.account_id = a.id AND r.role_code = 'WAREHOUSE_OPERATOR'
                 WHERE a.status = 'DISABLED' OR e.status <> 'ACTIVE' OR g.status <> 'ACTIVE' OR r.account_id IS NULL
-                   OR t.first_due <= ? OR t.declared_unavailable
+                   OR t.first_due <= ? OR t.declared_unavailable OR t.factory_overdue
             )
             """;
 
