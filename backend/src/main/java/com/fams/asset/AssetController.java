@@ -130,6 +130,18 @@ class AssetController {
                 .header("Location", "/api/v1/asset-tag-print-jobs/" + job.getJobId()).body(job);
     }
 
+    @PostMapping("/assets/{assetId}/tag/placement")
+    ResponseEntity<AssetService.TagPlacement> confirmTagPlacement(@PathVariable String assetId,
+            @RequestHeader("Idempotency-Key") java.util.UUID key,
+            @RequestHeader("If-Match-Version") @Min(0) long version,
+            @Valid @RequestBody TagPlacementRequest body) {
+        return ResponseEntity.ok(service.confirmTagPlacement(actors.requireWarehouseOperator(),
+                parseId(assetId), version, body.token(), key.toString()));
+    }
+
+    record TagPlacementRequest(@jakarta.validation.constraints.NotBlank
+            @jakarta.validation.constraints.Pattern(regexp = "[A-Za-z0-9_-]{43}") String token) {}
+
     @PostMapping("/asset-tag-print-jobs")
     ResponseEntity<AssetTagBatchPrintJob> batchPrint(
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,

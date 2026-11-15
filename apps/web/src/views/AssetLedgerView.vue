@@ -2,6 +2,7 @@
 import { onMounted, ref } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import AssetFactoryReplacementTrace from "@/components/AssetFactoryReplacementTrace.vue";
+import AssetTagPlacement from "./AssetTagPlacement.vue";
 import QRCode from "qrcode";
 import { useSessionStore } from "@/auth/sessionStore";
 import {
@@ -231,6 +232,9 @@ onMounted(() => {
         <button v-if="canWrite && selected.cardStage !== 'PENDING_INBOUND' && selected.cardStage !== 'CANCELLED'" class="secondary-button" :disabled="busy" type="button" @click="correctNotes">修正备注</button>
         <button v-if="canWrite && selected.cardStage === 'DRAFT'" class="secondary-button" :disabled="busy" type="button" @click="cancelCurrent">取消草稿</button>
         <button v-if="canWrite && selected.cardStage === 'ACTIVE'" class="secondary-button" :disabled="busy" type="button" @click="printCurrent">打印标签</button>
+        <AssetTagPlacement v-if="canWrite && selected.cardStage === 'ACTIVE'
+            && !['WAITING_INBOUND', 'SCRAPPED'].includes(selected.lifecycle)"
+          :key="selected.id + ':' + selected.version" :asset-id="selected.id" :version="selected.version" />
       </div>
       <div v-if="tag" class="asset-tag-preview"><span>{{ tag.enterpriseName }}</span><strong>{{ tag.assetName }}</strong><code>{{ tag.assetCode }}</code><img v-if="qrImage" :src="qrImage" alt="资产二维码" width="160" height="160" /><small>扫码标识仅用于定位，权限由当前会话决定</small></div>
     </section>

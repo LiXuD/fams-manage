@@ -169,6 +169,20 @@ interface AssetMapper {
     @Select("SELECT asset_id FROM fams_asset_tag WHERE token_hash = #{hash}")
     Long assetIdByTokenHash(@Param("hash") String hash);
 
+    @Select("""
+            SELECT confirmed_at FROM fams_asset_tag_placement
+            WHERE asset_id=#{assetId} AND tag_version=#{tagVersion} AND tag_issued_at=#{issuedAt}
+            """)
+    Map<String,Object> tagPlacement(@Param("assetId") long assetId, @Param("tagVersion") long tagVersion,
+            @Param("issuedAt") Instant issuedAt);
+
+    @Insert("""
+            INSERT INTO fams_asset_tag_placement (asset_id,tag_version,tag_issued_at,actor_account_id,confirmed_at)
+            VALUES (#{assetId},#{tagVersion},#{issuedAt},#{actorId},#{confirmedAt})
+            """)
+    int addTagPlacement(@Param("assetId") long assetId, @Param("tagVersion") long tagVersion,
+            @Param("issuedAt") Instant issuedAt, @Param("actorId") long actorId, @Param("confirmedAt") Instant confirmedAt);
+
     @Insert("""
             INSERT INTO fams_asset_tag(asset_id, token_ciphertext, token_hash, tag_version, issued_at)
             VALUES (#{assetId}, #{ciphertext}, #{hash}, 0, #{now})
