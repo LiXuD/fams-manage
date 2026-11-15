@@ -37,11 +37,16 @@ public class MessageService {
     private static final String OVERDUE_TYPES = "('OVERDUE','OVERDUE_EVERY_7_DAYS','UNRESOLVED_AFTER_1_WORKDAY',"
             + "'OVERDUE_UNRESOLVED_WORKDAY')";
     private static final String TODO_COLUMNS =
-            " SELECT 'TODO' message_kind,t.id id,t.business_type,t.business_id,t.todo_type stage,"
+            " SELECT 'TODO' message_kind,t.id id,"
+            + " IF(o.id IS NULL,t.business_type,'INVENTORY_TASK') business_type,"
+            + " COALESCE(o.task_id,t.business_id) business_id,t.todo_type stage,"
             + " '' object_stage,t.pool_type,t.assignee_account_id,t.opened_at moment,"
-            + " CAST(NULL AS DATETIME) deadline_at FROM fams_todo t WHERE t.todo_status='OPEN' AND";
+            + " CAST(NULL AS DATETIME) deadline_at FROM fams_todo t"
+            + " LEFT JOIN fams_inventory_observation o ON t.business_type='INVENTORY_OBSERVATION'"
+            + " AND o.id=t.business_id WHERE t.todo_status='OPEN' AND";
     private static final String EXCEPTION_TODOS = TODO_COLUMNS
-            + " (t.todo_type IN" + OVERDUE_TYPES + " OR t.todo_type='REASSIGNMENT_REQUIRED')";
+            + " (t.todo_type IN" + OVERDUE_TYPES + " OR t.todo_type IN"
+            + " ('REASSIGNMENT_REQUIRED','INVENTORY_CONFLICT','INVENTORY_DIFFERENCE'))";
     private static final String REMINDER_COLUMNS =
             " SELECT 'REMINDER' message_kind,r.id id,r.business_type,r.business_id,r.reminder_type stage,"
             + " r.stage object_stage,r.recipient_pool_type pool_type,r.recipient_account_id,r.created_at moment,"

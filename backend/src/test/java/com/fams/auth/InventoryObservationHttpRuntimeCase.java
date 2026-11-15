@@ -51,6 +51,7 @@ class InventoryObservationHttpRuntimeCase {
     int port;
 
     @Autowired JdbcTemplate db;
+    @Autowired org.springframework.scheduling.config.ScheduledTaskHolder scheduledTasks;
     @Autowired InventoryService service;
     @Autowired MiniSessionService miniSessions;
     @Autowired com.fams.attachment.AttachmentCleanupService evidenceCleanup;
@@ -155,6 +156,12 @@ class InventoryObservationHttpRuntimeCase {
 
     @AfterEach
     void cleanup() {
+        db.update("""
+                DELETE todo FROM fams_todo todo
+                JOIN fams_inventory_observation o ON o.id=todo.business_id
+                JOIN fams_inventory_task t ON t.id=o.task_id
+                WHERE todo.business_type='INVENTORY_OBSERVATION' AND t.creator_account_id=933001
+                """);
         db.update(
                 "DELETE FROM fams_todo WHERE business_type='INVENTORY_LATE' AND business_id IN (SELECT observation_id FROM fams_inventory_late_case WHERE task_id IN (SELECT id FROM fams_inventory_task WHERE creator_account_id=933001))");
         db.update(
@@ -314,6 +321,59 @@ class InventoryObservationHttpRuntimeCase {
         ((tools.jackson.databind.node.ObjectNode) changed.path("actual"))
                 .put("locationId", "933001");
         assertEquals(409, observe(employee, task, changed).statusCode());
+    }
+
+    @Test
+    void observationsSurfaceDistinctExceptionsAndCloseOnTaskTermination() throws Exception {
+        String task = prepared();
+        var difference = observation(task);
+        ((tools.jackson.databind.node.ObjectNode) difference.path("actual")).put("locationId", "933001");
+        var differenceReceipt = ok(observe(employee, task, difference));
+        assertEquals("DIFFERENCE_REVIEW", differenceReceipt.path("outcome").asText());
+        assertEquals(differenceReceipt, ok(observe(employee, task, difference)));
+        var conflict = observation(task);
+        assertEquals("CONFLICT_REVIEW", ok(observe(employee, task, conflict)).path("outcome").asText());
+
+        var exceptions = URI.create("http://127.0.0.1:" + port + "/api/v1/messages?view=EXCEPTION");
+        var adminRequest = HttpRequest.newBuilder(exceptions).header("Cookie", admin.cookie()).build();
+        var page = ok(http.send(adminRequest, HttpResponse.BodyHandlers.ofString()));
+        var stages = new java.util.HashSet<String>();
+        for (var row : page.path("items")) {
+            if (task.equals(row.path("businessId").asText())
+                    && "INVENTORY_TASK".equals(row.path("businessType").asText())) {
+                assertTrue(stages.add(row.path("stage").asText()), row.toString());
+            }
+        }
+        assertEquals(java.util.Set.of("INVENTORY_DIFFERENCE", "INVENTORY_CONFLICT"), stages);
+        var workbench = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+                        + "/api/v1/workbench/todos?scope=ASSET_ADMIN&stage=INVENTORY_CONFLICT"))
+                .header("Cookie", admin.cookie()).build();
+        var workbenchRows = ok(http.send(workbench, HttpResponse.BodyHandlers.ofString())).path("items");
+        assertEquals(1, workbenchRows.size());
+        assertEquals("INVENTORY_TASK", workbenchRows.get(0).path("businessType").asText());
+        assertEquals(task, workbenchRows.get(0).path("businessId").asText());
+        var employeeRequest = HttpRequest.newBuilder(exceptions).header("Cookie", employee.cookie()).build();
+        assertEquals(403, http.send(employeeRequest, HttpResponse.BodyHandlers.ofString()).statusCode());
+        assertEquals(2, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_todo todo JOIN fams_inventory_observation o ON o.id=todo.business_id
+                WHERE todo.business_type='INVENTORY_OBSERVATION' AND o.task_id=? AND todo.opened_at=o.received_at
+                """, Integer.class, task));
+
+        long version = db.queryForObject("SELECT version FROM fams_inventory_task WHERE id=?", Long.class, task);
+        ok(call(admin, "/" + task + "/terminate", "{\"reason\":\"fixture termination\"}", key(), version));
+        scheduledTasks.getScheduledTasks().stream()
+                .filter(scheduled -> scheduled.getTask().toString().endsWith("InventoryExceptionTodoScheduler.closeResolved"))
+                .findFirst().orElseThrow().getTask().getRunnable().run();
+        assertEquals(2, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_todo todo JOIN fams_inventory_observation o ON o.id=todo.business_id
+                WHERE todo.business_type='INVENTORY_OBSERVATION' AND o.task_id=?
+                    AND todo.todo_status='CLOSED' AND todo.closed_at IS NOT NULL
+                """, Integer.class, task));
+        var closed = ok(http.send(adminRequest, HttpResponse.BodyHandlers.ofString()));
+        for (var row : closed.path("items")) {
+            assertTrue(!task.equals(row.path("businessId").asText())
+                    || !"INVENTORY_TASK".equals(row.path("businessType").asText()), row.toString());
+        }
     }
 
     @Test

@@ -308,6 +308,14 @@ public class InventoryObservationService {
         if (terminal && !"EXPIRED".equals(outcome)) {
             late.append(task, java.util.Objects.requireNonNull(observation));
         }
+        if ("CONFLICT_REVIEW".equals(outcome) || "DIFFERENCE_REVIEW".equals(outcome)) {
+            db.update("""
+                    INSERT INTO fams_todo
+                        (pool_type,business_type,business_id,todo_type,todo_status,opened_at)
+                    VALUES ('ASSET_ADMIN','INVENTORY_OBSERVATION',?,?,'OPEN',?)
+                    """, observation, outcome.equals("CONFLICT_REVIEW") ? "INVENTORY_CONFLICT" : "INVENTORY_DIFFERENCE",
+                    timestamp(received));
+        }
         if (Boolean.TRUE.equals(receipt.get("counted"))) {
             db.update(
                     "INSERT INTO"
