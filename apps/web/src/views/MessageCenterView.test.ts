@@ -90,7 +90,6 @@ describe("message centre", () => {
     api.session.user = { id: "1", roles: ["SYSTEM_ADMIN"] };
     api.duty.mockResolvedValue({ items: [dutyRow] });
     const writes: unknown[] = []; let lose = true;
-    api.request.mockResolvedValue({ items: [], total: 0, unread: 0, view: "INBOX" });
     api.duty.mockImplementation(async (path: string, mutation?: unknown) => {
       if (path.startsWith("/configuration-anomalies?")) {
         return { items: [{ id: "4", type: "NO_ASSET_ADMIN", status: "OPEN",
@@ -104,6 +103,8 @@ describe("message centre", () => {
     const wrapper = mount(MessageCenterView, { global: { stubs: { RouterLink: true } } });
     await flushPromises();
     expect(wrapper.text()).toContain("没有有效资产管理员");
+    expect(api.request).not.toHaveBeenCalled();
+    expect(wrapper.find('[aria-label="业务消息"]').exists()).toBe(false);
     await wrapper.find("select").setValue("ASSET_ADMIN");
     await wrapper.findAll("input")[0]!.setValue("9");
     await wrapper.findAll("input")[1]!.setValue("");
@@ -118,6 +119,11 @@ describe("message centre", () => {
     expect(writes[0]).toMatchObject({ version: 1,
       body: { primaryAccountId: "9", backupAccountId: null } });
     expect(wrapper.text()).toContain("版本 2");
+    api.request.mockResolvedValue({ items: [], total: 0, unread: 0, view: "INBOX" });
+    api.session.user = { id: "1", roles: ["SYSTEM_ADMIN", "ASSET_ADMIN"] };
+    await flushPromises();
+    expect(api.request).toHaveBeenCalledWith("/messages?view=INBOX&page=1&pageSize=20");
+    expect(wrapper.find('[aria-label="业务消息"]').exists()).toBe(true);
     wrapper.unmount();
   });
   it("links scrap rows to the scrap page by business identity", async () => {

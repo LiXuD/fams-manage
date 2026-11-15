@@ -20,6 +20,7 @@ interface Summary {
   inventory: { sealedTasks: number; expected: number; accepted: number; notObserved: number };
   openingBatches: { status: string; count: number }[];
   currentAssets: { lifecycle: string; exception: string; count: number }[];
+  importErrorQuality?: { locatedRows: number; failedRows: number };
 }
 
 const lifecycleLabels: Record<string, string> = {
@@ -113,6 +114,15 @@ watch(identity, () => {
           {{ row.status === "ASSET_IMPORT_PUBLISHED" ? "已发布且仍有效" : "已整批撤销" }} {{ row.count }} 批
         </li>
       </ul>
+      <section v-if="result.importErrorQuality">
+        <h3>导入错误可定位率</h3>
+        <p v-if="result.importErrorQuality.failedRows">
+          {{ result.importErrorQuality.locatedRows }} / {{ result.importErrorQuality.failedRows }} 行 ·
+          {{ (result.importErrorQuality.locatedRows / result.importErrorQuality.failedRows * 100).toFixed(1) }}%
+        </p>
+        <p v-else>该时段没有预检失败行。</p>
+        <p>按批次上传时间筛选，取各批次当前预检。通过行和文件级拒绝不计入分母。</p>
+      </section>
       <router-link to="/asset-import-reviews">查看期初核验</router-link>
       <h3>当前有效资产</h3>
       <button type="button" @click="custodyReport?.select({})">资产总数 {{ effectiveAssetCount }} 件</button>

@@ -43,6 +43,8 @@ const segments = new Set(["REPAIR", "REPAIR_FACTORY_ROUND", "REPAIR_OPINION", "R
 const session = useSessionStore();
 const privileged = computed(() => session.user?.roles.some(
   role => ["ASSET_ADMIN", "WAREHOUSE_OPERATOR"].includes(role)) ?? false);
+const canSeeInbox = computed(() => privileged.value || (session.user?.roles.some(
+  role => role === "EMPLOYEE" || role === "DEPARTMENT_ASSET_MANAGER") ?? false));
 const view = ref<"INBOX" | "EXCEPTION">("INBOX");
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken]));
 const rows = ref<Message[]>([]); const page = ref(1); const total = ref(0); const unread = ref(0);
@@ -86,7 +88,7 @@ async function load(epoch: number, owner: string) {
 }
 const current = (epoch: number, owner: string) => live && epoch === generation && owner === identity.value;
 async function refresh(delta = 0) {
-  if (busy.value || page.value + delta < 1 || delta && pendingRead.value) return;
+  if (!canSeeInbox.value || busy.value || page.value + delta < 1 || delta && pendingRead.value) return;
   const epoch = ++generation, owner = identity.value;
   busy.value = true; error.value = ""; page.value += delta;
   try { await load(epoch, owner); } catch (cause) { if (current(epoch, owner)) failure(cause); }
@@ -152,28 +154,30 @@ onBeforeUnmount(() => { live = false; clear(); });
 <template>
   <AppChrome>
     <h1>消息中心</h1>
-    <p>站内消息与工作台待办是权威事实源；未读 {{ unread }} 条，阅读不改变业务状态，也不代替办理。</p>
-    <div class="actions">
-      <button :disabled="busy || view === 'INBOX'" @click="switchTo('INBOX')">我的消息</button>
-      <button v-if="privileged" :disabled="busy || view === 'EXCEPTION'" @click="switchTo('EXCEPTION')">异常清单</button>
-      <button :disabled="busy" @click="reload()">刷新</button>
-      <button v-if="pendingRead" :disabled="busy" @click="read(pendingRead.id)">原请求重试已读登记</button>
-    </div>
-    <p v-if="error" role="alert" class="form-error">{{ error }}</p>
-    <article v-for="message in rows" :key="message.kind + message.id">
-      <h2>{{ label(message) }} · {{ message.read ? "已读" : "未读" }}</h2>
-      <p>{{ BUSINESSES[message.businessType] ?? message.businessType }} {{ message.businessId }}
-        · {{ message.poolType }}<template v-if="message.assigneeAccountId"> · 处理账号 {{ message.assigneeAccountId }}</template></p>
-      <p>登记 {{ formatProxyTime(message.openedAt) }}<template v-if="message.deadlineAt"> · 截止 {{ formatProxyTime(message.deadlineAt) }}</template></p>
-      <router-link v-if="destination(message)" :to="destination(message)!">查看业务单据</router-link>
-      <button v-if="!message.read" :disabled="busy || !!pendingRead" @click="read(message.id)">标记已读</button>
-    </article>
-    <p v-if="!rows.length">{{ view === "EXCEPTION" ? "当前没有需要跟进的超时异常。" : "暂无站内消息。" }}</p>
-    <div class="actions">
-      <button :disabled="busy || page <= 1" @click="refresh(-1)">上一页</button>
-      <span>{{ page }} 页 / 共 {{ total }} 条</span>
-      <button :disabled="busy || page * 20 >= total" @click="refresh(1)">下一页</button>
-    </div>
+    <section v-if="canSeeInbox" aria-label="业务消息">
+      <p>站内消息与工作台待办是权威事实源；未读 {{ unread }} 条，阅读不改变业务状态，也不代替办理。</p>
+      <div class="actions">
+        <button :disabled="busy || view === 'INBOX'" @click="switchTo('INBOX')">我的消息</button>
+        <button v-if="privileged" :disabled="busy || view === 'EXCEPTION'" @click="switchTo('EXCEPTION')">异常清单</button>
+        <button :disabled="busy" @click="reload()">刷新</button>
+        <button v-if="pendingRead" :disabled="busy" @click="read(pendingRead.id)">原请求重试已读登记</button>
+      </div>
+      <p v-if="error" role="alert" class="form-error">{{ error }}</p>
+      <article v-for="message in rows" :key="message.kind + message.id">
+        <h2>{{ label(message) }} · {{ message.read ? "已读" : "未读" }}</h2>
+        <p>{{ BUSINESSES[message.businessType] ?? message.businessType }} {{ message.businessId }}
+          · {{ message.poolType }}<template v-if="message.assigneeAccountId"> · 处理账号 {{ message.assigneeAccountId }}</template></p>
+        <p>登记 {{ formatProxyTime(message.openedAt) }}<template v-if="message.deadlineAt"> · 截止 {{ formatProxyTime(message.deadlineAt) }}</template></p>
+        <router-link v-if="destination(message)" :to="destination(message)!">查看业务单据</router-link>
+        <button v-if="!message.read" :disabled="busy || !!pendingRead" @click="read(message.id)">标记已读</button>
+      </article>
+      <p v-if="!rows.length">{{ view === "EXCEPTION" ? "当前没有需要跟进的超时异常。" : "暂无站内消息。" }}</p>
+      <div class="actions">
+        <button :disabled="busy || page <= 1" @click="refresh(-1)">上一页</button>
+        <span>{{ page }} 页 / 共 {{ total }} 条</span>
+        <button :disabled="busy || page * 20 >= total" @click="refresh(1)">下一页</button>
+      </div>
+    </section>
     <section v-if="canSeeDuty">
       <h2>值班提醒</h2>
       <p>值班提醒人只接收升级通知，不取得审批权或处理权；被替换的配置保留为历史，便于追溯当时谁在值班。</p>

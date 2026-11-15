@@ -53,7 +53,32 @@ class OperationsReportService {
                 GROUP BY lifecycle_status, exception_status ORDER BY lifecycle_status, exception_status
                 """, (row, index) -> new AssetCount(row.getString("lifecycle_status"),
                 row.getString("exception_status"), row.getLong("quantity")));
-        return new Summary(start, end, clock.instant().toString(), inventory, openings, assets);
+        return new Summary(start, end, clock.instant().toString(), inventory, openings, assets,
+                importErrorQuality(from, until));
+    }
+
+    private ImportErrorQuality importErrorQuality(Timestamp from, Timestamp until) {
+        return db.queryForObject("""
+                SELECT COUNT(*) AS failed_rows, COUNT(CASE
+                    WHEN JSON_TYPE(r.errors_json) = 'ARRAY' AND JSON_LENGTH(r.errors_json) > 0
+                     AND NOT EXISTS (
+                        SELECT 1 FROM JSON_TABLE(r.errors_json, '$[*]' COLUMNS (
+                            sheet_name VARCHAR(255) PATH '$.sheet',
+                            sheet_row INT PATH '$.sheetRow',
+                            field_name VARCHAR(255) PATH '$.column',
+                            original_value JSON PATH '$.original',
+                            reason VARCHAR(255) PATH '$.reason'
+                        )) e
+                        WHERE COALESCE(TRIM(e.sheet_name), '') = ''
+                           OR COALESCE(e.sheet_row, 0) <> r.sheet_row
+                           OR COALESCE(TRIM(e.field_name), '') = ''
+                           OR COALESCE(JSON_TYPE(e.original_value), '') <> 'STRING'
+                           OR COALESCE(TRIM(e.reason), '') = ''
+                     ) THEN 1 END) AS located_rows
+                FROM fams_asset_import_batch b JOIN fams_asset_import_row r ON r.batch_id = b.id
+                WHERE b.created_at >= ? AND b.created_at < ? AND b.preview_version > 0 AND r.row_status = 'ERROR'
+                """, (row, index) -> new ImportErrorQuality(
+                row.getLong("located_rows"), row.getLong("failed_rows")), from, until);
     }
 
     @Transactional(isolation = Isolation.REPEATABLE_READ)
@@ -84,6 +109,7 @@ class OperationsReportService {
     record Inventory(long sealedTasks, long expected, long accepted, long notObserved) {}
     record Count(String status, long count) {}
     record AssetCount(String lifecycle, String exception, long count) {}
+    record ImportErrorQuality(long locatedRows, long failedRows) {}
     record Summary(LocalDate from, LocalDate toExclusive, String calculatedAt, Inventory inventory,
-                   List<Count> openingBatches, List<AssetCount> currentAssets) {}
+                   List<Count> openingBatches, List<AssetCount> currentAssets, ImportErrorQuality importErrorQuality) {}
 }
