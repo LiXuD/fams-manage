@@ -90,6 +90,9 @@ class NotificationDeliveryQueue {
                 OR (r.business_type = 'REPAIR_FACTORY_ROUND' AND r.stage = 'FACTORY_RETURN'
                     AND r.deadline_at <= ? AND EXISTS (
                         SELECT 1 FROM fams_repair_factory_round x JOIN fams_repair_request p ON p.id = x.repair_id
+                        JOIN fams_todo t ON t.business_type='REPAIR' AND t.business_id=x.repair_id
+                            AND t.todo_type='FACTORY_RETURN' AND t.todo_status='OPEN'
+                            AND t.closed_at IS NULL AND t.opened_at>=x.dispatched_at
                         WHERE x.id = r.business_id AND x.round_status = 'DISPATCHED'
                             AND p.processor_account_id = a.id
                             AND x.expected_return_date = DATE_SUB(r.notice_date, INTERVAL 1 DAY)
@@ -99,7 +102,7 @@ class NotificationDeliveryQueue {
                             SELECT MAX(n.id) FROM fams_business_reminder n
                             WHERE n.business_type = r.business_type AND n.business_id = r.business_id
                                 AND n.stage = r.stage AND n.deadline_at = r.deadline_at
-                                AND n.reminder_type IN ('DUE_TODAY','OVERDUE_EVERY_7_DAYS')
+                                AND n.reminder_type IN ('DUE_TODAY','OVERDUE','OVERDUE_EVERY_7_DAYS')
                         )
                     ))
             )

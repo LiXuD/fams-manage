@@ -54,7 +54,7 @@ class InventoryObservationController {
     @PostMapping("/tasks/{taskId}/identification")
     Map<String, Object> identifyBody(
             @PathVariable @Positive long taskId, @Valid @RequestBody Lookup input) {
-        return service.identify(actors.capture(), taskId, input.source(), input.value());
+        return service.identifyAndRecord(actors.capture(), taskId, input.source(), input.value());
     }
 
     @PostMapping("/tasks/{taskId}/events")

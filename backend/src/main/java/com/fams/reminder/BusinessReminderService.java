@@ -147,18 +147,25 @@ public class BusinessReminderService {
         each("""
              SELECT x.id,x.expected_return_date,p.timezone_id,p.processor_account_id
                FROM fams_repair_factory_round x JOIN fams_repair_request p ON p.id=x.repair_id
-              WHERE x.round_status='DISPATCHED'""",
+              WHERE x.round_status='DISPATCHED' AND EXISTS (
+                    SELECT 1 FROM fams_todo t
+                    WHERE t.business_type='REPAIR' AND t.business_id=x.repair_id AND t.todo_type='FACTORY_RETURN'
+                        AND t.todo_status='OPEN' AND t.closed_at IS NULL AND t.opened_at>=x.dispatched_at
+              )""",
                 row -> {
                     var zone = ZoneId.of(String.valueOf(row.get("timezone_id")));
                     var today = clock.instant().atZone(zone).toLocalDate();
                     var due = LocalDate.parse(String.valueOf(row.get("expected_return_date")));
+                    long daysOverdue = today.toEpochDay() - due.toEpochDay();
+                    // The first week is visible from its first day. Once a weekly bucket is due,
+                    // write only that bucket so an upgrade cannot supersede it with an older notice.
+                    var overdue = daysOverdue < 7
+                            ? new Tier("OVERDUE", due.plusDays(1))
+                            : new Tier("OVERDUE_EVERY_7_DAYS", due.plusDays(7 * (daysOverdue / 7)));
                     record("REPAIR_FACTORY_ROUND", number(row, "id"), "FACTORY_RETURN", due, endOfDay(due, zone), zone,
                             "WAREHOUSE_OPERATOR", null, today, List.of(
                                     new Tier("DUE_IN_3_DAYS", due.minusDays(3)), new Tier("DUE_TODAY", due),
-                                    // Deriving the occurrence from the due date keeps a restarted scan on the same
-                                    // weekly bucket instead of emitting a fresh notice every run.
-                                    new Tier("OVERDUE_EVERY_7_DAYS", due.plusDays(7L * Math.max(1,
-                                            (today.toEpochDay() - due.toEpochDay()) / 7)))));
+                                    overdue));
                     if (row.get("processor_account_id") instanceof Number processor) {
                         record("REPAIR_FACTORY_ROUND", number(row, "id"), "FACTORY_RETURN", due,
                                 endOfDay(due, zone), zone, "WAREHOUSE_OPERATOR", processor.longValue(), today,

@@ -34,7 +34,12 @@ class WorkbenchTodoService {
         String visible = OPEN_TODOS + scope.predicate;
         var counts = db.query("SELECT todo_type,COUNT(*) AS total" + visible + " GROUP BY todo_type ORDER BY todo_type",
                 (row, index) -> new StageCount(row.getString("todo_type"), row.getLong("total")), assigneeOrPool);
-        var rows = db.query("SELECT id,business_type,business_id,todo_type,opened_at" + visible
+        var rows = db.query("""
+                SELECT id,IF(business_type='INVENTORY_OBSERVATION','INVENTORY_TASK',business_type) business_type,
+                    IF(business_type='INVENTORY_OBSERVATION',
+                        (SELECT o.task_id FROM fams_inventory_observation o WHERE o.id=fams_todo.business_id),
+                        business_id) business_id,todo_type,opened_at
+                """ + visible
                         + " AND (? IS NULL OR todo_type=?) AND (? IS NULL OR id < ?) ORDER BY id DESC LIMIT ?",
                 (row, index) -> new Todo(row.getString("id"), row.getString("business_type"),
                         row.getString("business_id"), row.getString("todo_type"), row.getTimestamp("opened_at").toInstant()),

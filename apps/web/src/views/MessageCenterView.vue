@@ -26,7 +26,8 @@ const TODOS: Record<string, string> = { APPROVAL: "待管理员确认", CLAIM: "
   RECEIPT: "待实物接收", OPINION: "待补充技术意见", VERIFY: "待核实", SEARCH: "待查找跟进",
   HANDOVER_EXCEPTION: "交接异常待处理", RETURN_EXCEPTION: "返还异常待处理", OVERDUE: "逾期跟进",
   FACTORY_DISPATCH: "待寄出返厂", FACTORY_SCOPE_APPROVAL: "待返厂范围确认", RESTORE_REQUIRED: "待恢复保管",
-  DISPOSITION: "待实际处置", LOST_FOLLOW_UP: "待遗失跟进", REASSIGNMENT_REQUIRED: "需要转派" };
+  DISPOSITION: "待实际处置", LOST_FOLLOW_UP: "待遗失跟进", REASSIGNMENT_REQUIRED: "需要转派",
+  INVENTORY_CONFLICT: "盘点冲突待复核", INVENTORY_DIFFERENCE: "盘点差异待复核" };
 const BUSINESSES: Record<string, string> = { INBOUND: "入库单", REQUISITION: "领用申请",
   REQUISITION_ALLOCATION: "领用分配", LOAN: "借用", LOAN_EXTENSION: "借用延期", ASSET_RETURN: "退还",
   TRANSFER: "调拨", TRANSFER_ITEM: "调拨明细", REQUISITION_HANDOVER: "领用交接",
@@ -36,7 +37,7 @@ const BUSINESSES: Record<string, string> = { INBOUND: "入库单", REQUISITION: 
 const destinations: Record<string, string> = { INBOUND: "/inbound", REQUISITION: "/requisitions",
   REQUISITION_ALLOCATION: "/requisitions", LOAN: "/loans", LOAN_EXTENSION: "/loans", ASSET_RETURN: "/loans",
   TRANSFER: "/transfers", TRANSFER_ITEM: "/transfers", REQUISITION_HANDOVER: "/requisitions",
-  INVENTORY_TASK: "/inventory-tasks", LOST_REPORT: "/loss-reports", SCRAP: "/scrap-requests",
+  LOST_REPORT: "/loss-reports", SCRAP: "/scrap-requests",
   ITEM_TARGET_CHANGE: "/requisition-target-changes" };
 const segments = new Set(["REPAIR", "REPAIR_FACTORY_ROUND", "REPAIR_OPINION", "REPAIR_TECH", "PROXY_CONFIRMATION"]);
 
@@ -66,6 +67,9 @@ function label(message: Message): string {
 }
 function destination(message: Message) {
   if (segments.has(message.businessType)) return { path: `/repairs/${message.businessId}` };
+  if (message.businessType === "INVENTORY_TASK") {
+    return { path: "/inventory-tasks", query: { taskId: message.businessId } };
+  }
   const base = destinations[message.businessType];
   return base ? { path: base, query: { id: message.businessId } } : null;
 }

@@ -457,6 +457,81 @@ class DutyHttpRuntimeCase {
         verifyWorkbenchTodos(restored, reportWarehouse, login("duty5"));
         verifySealedInventoryTasks(restored, reportWarehouse);
         verifyOverdueReassignment(restored);
+        verifyExceptionDiscovery(restored, reportWarehouse);
+    }
+
+    private void verifyExceptionDiscovery(Session administrator, Session warehouse) throws Exception {
+        db.update("""
+                UPDATE fams_loan SET expected_return_date='2025-09-30', created_at='2025-09-01',
+                    parameter_snapshot_json=JSON_OBJECT('timezone','UTC'), relation_status='RETURNED',
+                    closed_at='2025-10-02' WHERE id=9007199254740993
+                """);
+        db.update("""
+                INSERT INTO fams_loan_reminder
+                    (loan_id,expected_return_date,reminder_business_date,reminder_type,overdue_from,created_at)
+                VALUES (9007199254740993,'2025-09-30','2025-10-01','OVERDUE','2025-10-01','2025-10-01 00:05:00')
+                """);
+        db.update("""
+                UPDATE fams_inventory_observation SET outcome='CONFLICT_REVIEW',received_at='2025-10-01 01:00:00'
+                WHERE id=9007199254740993
+                """);
+        db.update("""
+                UPDATE fams_repair_factory_round SET expected_return_date='2025-09-30',
+                    created_at='2025-09-28',dispatched_at='2025-09-29' WHERE id=9007199254740995
+                """);
+        db.update("""
+                INSERT INTO fams_business_reminder (business_type,business_id,stage,deadline_at,notice_date,
+                    reminder_business_date,reminder_type,recipient_pool_type,created_at)
+                VALUES ('REPAIR_FACTORY_ROUND',9007199254740995,'FACTORY_RETURN','2025-10-01','2025-10-01',
+                    '2025-10-01','OVERDUE','WAREHOUSE_OPERATOR','2025-10-01 00:05:00.001')
+                """);
+
+        var path = "/operations-reports/exception-discovery";
+        var window = "?from=2025-10-01&toExclusive=2025-10-02";
+        assertEquals(403, code(get(warehouse, path + window)));
+        assertEquals(403, code(get(warehouse, path + ".csv" + window)));
+        db.update("""
+                INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at,closed_at)
+                VALUES ('WAREHOUSE_OPERATOR','REPAIR',931001,'FACTORY_RETURN','CLOSED','2025-09-29','2025-09-30 22:00:00')
+                """);
+        assertEquals(2, ok(get(administrator, path + window)).path("total").asInt(-1));
+        var inbox = "/messages?view=EXCEPTION&pageSize=100";
+        assertFalse(ok(get(administrator, inbox)).path("items").valueStream()
+                .anyMatch(row -> "REPAIR_FACTORY_ROUND".equals(row.path("businessType").asText())));
+        db.update("""
+                INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at)
+                VALUES ('WAREHOUSE_OPERATOR','REPAIR',931001,'FACTORY_RETURN','OPEN','2025-10-01 00:00:00')
+                """);
+        assertTrue(ok(get(administrator, inbox)).path("items").valueStream()
+                .anyMatch(row -> "9007199254740995".equals(row.path("businessId").asText())
+                    && "REPAIR_FACTORY_ROUND".equals(row.path("businessType").asText())));
+        var summary = ok(get(administrator, path + window));
+        assertEquals(3, summary.path("total").asInt(-1));
+        assertEquals(1, summary.path("onTime").asInt(-1));
+        var csv = get(administrator, path + ".csv" + window);
+        assertEquals(200, code(csv));
+        assertEquals(4, csv.body().lines().count());
+        assertTrue(csv.body().contains("LOAN_OVERDUE,9007199254740993,2025-09-30,2025-10-01T00:00:00Z,"
+                + "2025-10-01T00:05:00Z,ON_TIME"));
+        assertTrue(csv.body().contains("INVENTORY_CONFLICT,9007199254740993,,2025-10-01T01:00:00Z,,MISSING"));
+        assertTrue(csv.body().contains("FACTORY_OVERDUE,9007199254740995,2025-09-30,2025-10-01T00:00:00Z,"
+                + "2025-10-01T00:05:00.001Z,LATE"));
+        assertEquals(1, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='EXCEPTION_DISCOVERY'
+                    AND detail_json->>'$.rows'='3' AND detail_json->>'$.onTime'='1'
+                """, Integer.class));
+        db.update("""
+                UPDATE fams_todo SET todo_status='CLOSED',closed_at='2025-10-01 00:03:00'
+                WHERE business_type='REPAIR' AND business_id=931001 AND todo_type='FACTORY_RETURN'
+                    AND todo_status='OPEN'
+                """);
+        assertFalse(ok(get(administrator, inbox)).path("items").valueStream()
+                .anyMatch(row -> "REPAIR_FACTORY_ROUND".equals(row.path("businessType").asText())));
+        var ended = ok(get(administrator, path + window));
+        assertEquals(3, ended.path("total").asInt(-1));
+        var endedFactory = ended.path("categories").valueStream()
+                .filter(row -> "FACTORY_OVERDUE".equals(row.path("kind").asText())).findFirst().orElseThrow();
+        assertEquals(1, endedFactory.path("missing").asInt(-1));
     }
 
     private void verifySealedInventoryTasks(Session administrator, Session warehouse) throws Exception {

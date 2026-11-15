@@ -25,6 +25,7 @@ const stages: Record<string, string> = {
   APPROVAL: "待管理员确认", ADMIN_DECISION: "待管理员确认", CLAIM: "待库管领取",
   WAREHOUSE_CLAIM: "待库管领取", FIRST_EXECUTION: "待首次执行", PROCESS: "待处理",
   RECEIPT: "待实物接收", REASSIGNMENT_REQUIRED: "需要转派", DISPOSITION: "待处置",
+  INVENTORY_CONFLICT: "盘点冲突待复核", INVENTORY_DIFFERENCE: "盘点差异待复核",
 };
 
 function destination(todo: Todo) {
