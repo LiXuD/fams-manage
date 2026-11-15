@@ -456,6 +456,7 @@ class DutyHttpRuntimeCase {
         verifyAssetStatusDrilldown(restored, reportWarehouse);
         verifyWorkbenchTodos(restored, reportWarehouse, login("duty5"));
         verifySealedInventoryTasks(restored, reportWarehouse);
+        verifyOverdueReassignment(restored);
     }
 
     private void verifySealedInventoryTasks(Session administrator, Session warehouse) throws Exception {
@@ -1157,6 +1158,61 @@ class DutyHttpRuntimeCase {
     private HttpResponse<String> get(Session session, String path) throws Exception {
         return http.send(HttpRequest.newBuilder(URI.create(base() + path))
                 .header("Cookie", session.cookie()).GET().build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private void verifyOverdueReassignment(Session administrator) throws Exception {
+        var warehouse = login("duty4");
+        db.update("""
+                INSERT INTO fams_inbound_receipt (id,receipt_no,creator_account_id,creator_username_snapshot,
+                    receipt_status,business_date,parameter_version_id,timezone_snapshot,
+                    admin_decision_deadline_workdays,warehouse_claim_deadline_workdays,
+                    warehouse_first_execution_deadline_workdays,submitted_at,warehouse_first_execution_due_at,
+                    version,created_at,updated_at,created_by,updated_by)
+                VALUES (931009,'C4-OVERDUE',931004,'duty4','WAREHOUSE_PROCESSING','2026-11-15',931000,
+                    'UTC',2,1,2,UTC_TIMESTAMP(3),DATE_ADD(UTC_TIMESTAMP(3),INTERVAL 1 HOUR),
+                    4,UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),931004,931004)
+                """);
+        db.update("""
+                INSERT INTO fams_inbound_processing_ownership
+                    (receipt_id,processor_account_id,processor_username_snapshot,ownership_version,acquired_at)
+                VALUES (931009,931004,'duty4',0,UTC_TIMESTAMP(3))
+                """);
+        db.update("""
+                INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at)
+                VALUES ('WAREHOUSE_OPERATOR','INBOUND',931009,'WAREHOUSE_EXECUTION','OPEN',UTC_TIMESTAMP(3))
+                """);
+        String openReminders = "SELECT COUNT(*) FROM fams_todo WHERE business_type='INBOUND' AND business_id=931009"
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        reassignments.scan();
+        assertEquals(0, db.queryForObject(openReminders, Integer.class));
+        db.update("UPDATE fams_inbound_receipt SET warehouse_first_execution_due_at=UTC_TIMESTAMP(3)"
+                + " - INTERVAL 1 MINUTE WHERE id=931009");
+        var deadline = db.queryForObject("SELECT warehouse_first_execution_due_at FROM fams_inbound_receipt"
+                + " WHERE id=931009", java.sql.Timestamp.class);
+        reassignments.scan();
+        reassignments.scan();
+        assertEquals(1, db.queryForObject(openReminders, Integer.class));
+        var exceptions = "/messages?view=EXCEPTION";
+        assertTrue(ok(get(administrator, exceptions)).path("items").valueStream().anyMatch(row ->
+                "931009".equals(row.path("businessId").asText())
+                        && "REASSIGNMENT_REQUIRED".equals(row.path("stage").asText())));
+        assertFalse(ok(get(warehouse, exceptions)).path("items").valueStream().anyMatch(row ->
+                "931009".equals(row.path("businessId").asText())
+                        && "REASSIGNMENT_REQUIRED".equals(row.path("stage").asText())));
+        assertEquals(WAREHOUSE, db.queryForObject(
+                "SELECT processor_account_id FROM fams_inbound_processing_ownership WHERE receipt_id=931009",
+                Long.class));
+        assertEquals(4, db.queryForObject("SELECT version FROM fams_inbound_receipt WHERE id=931009", Integer.class));
+
+        // An acceptance and a controlled transfer both advance the original ownership version.
+        db.update("UPDATE fams_inbound_processing_ownership SET ownership_version=1 WHERE receipt_id=931009");
+        reassignments.scan();
+        assertEquals(0, db.queryForObject(openReminders, Integer.class));
+        assertEquals(deadline, db.queryForObject("SELECT warehouse_first_execution_due_at FROM fams_inbound_receipt"
+                + " WHERE id=931009", java.sql.Timestamp.class));
+        assertFalse(ok(get(administrator, exceptions)).path("items").valueStream().anyMatch(row ->
+                "931009".equals(row.path("businessId").asText())
+                        && "REASSIGNMENT_REQUIRED".equals(row.path("stage").asText())));
     }
 
     private void verifyImportErrorQuality(Session administrator, Session warehouse, String report) throws Exception {
