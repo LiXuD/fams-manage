@@ -151,7 +151,8 @@ class BusinessReminderRuntimeCase {
     private void verifyFallbackMigration() {
         var remindersBefore = db.queryForList("SELECT * FROM fams_business_reminder ORDER BY id");
         var deliveriesBefore = db.queryForList("SELECT * FROM fams_notification_delivery ORDER BY reminder_id");
-        var migration = Flyway.configure().dataSource(dataSource).locations("classpath:db/migration/d6_04").load();
+        var migration = Flyway.configure().dataSource(dataSource)
+                .locations("classpath:db/migration/d6_04").target("74").load();
         assertEquals(1, migration.migrate().migrationsExecuted);
         assertEquals(0, migration.migrate().migrationsExecuted);
         assertEquals(remindersBefore, db.queryForList("SELECT * FROM fams_business_reminder ORDER BY id"));
