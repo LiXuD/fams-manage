@@ -9735,6 +9735,61 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { description: "Task has no current, retained or sealed breakdown." }
 
+  /operations-reports/exception-discovery:
+    get:
+      tags: [Reports]
+      operationId: getExceptionDiscovery
+      summary: Measure the first in-app discovery of key exceptions against five minutes.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: toExclusive, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Totals by UTC occurrence window, preserving occurrences without a first in-app entry.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [evaluatedAt, total, onTime, categories]
+                properties:
+                  evaluatedAt: { type: string, format: date-time }
+                  total: { type: integer, format: int64, minimum: 0 }
+                  onTime: { type: integer, format: int64, minimum: 0 }
+                  categories:
+                    type: array
+                    items:
+                      type: object
+                      required: [kind, onTime, late, missing, pending]
+                      properties:
+                        kind: { type: string, enum: [LOAN_OVERDUE, INVENTORY_CONFLICT, INVENTORY_DIFFERENCE, FACTORY_OVERDUE] }
+                        onTime: { type: integer, format: int64, minimum: 0 }
+                        late: { type: integer, format: int64, minimum: 0 }
+                        missing: { type: integer, format: int64, minimum: 0 }
+                        pending: { type: integer, format: int64, minimum: 0 }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /operations-reports/exception-discovery.csv:
+    get:
+      tags: [Reports]
+      operationId: exportExceptionDiscovery
+      summary: Download audited key-exception occurrence and first visibility evidence.
+      x-actor: { required: true, roles: [ASSET_ADMIN] }
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: toExclusive, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: CSV with one row per occurrence, including missing, pending and late visibility.
+          content:
+            text/csv:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { description: More than 10000 matching occurrences. Narrow the window. }
+
   /operations-reports/inventory-traceability:
     get:
       tags: [Reports]

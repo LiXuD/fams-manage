@@ -4,6 +4,7 @@ import { useSessionStore } from "@/auth/sessionStore";
 import SealedInventoryTasks from "./SealedInventoryTasks.vue";
 import InventoryProgressReport from "./InventoryProgressReport.vue";
 import InventoryTraceabilityReport from "./InventoryTraceabilityReport.vue";
+import ExceptionDiscoveryReport from "./ExceptionDiscoveryReport.vue";
 import AssetCustodyReport from "./AssetCustodyReport.vue";
 import AssetMovementTrend from "./AssetMovementTrend.vue";
 import AssetMovementReport from "./AssetMovementReport.vue";
@@ -101,6 +102,7 @@ watch(identity, () => {
     <p v-if="busy" role="status">正在查询</p>
     <div v-if="result && query === loadedQuery">
       <InventoryTraceabilityReport :key="identity + loadedQuery" :query="loadedQuery" />
+      <ExceptionDiscoveryReport :key="identity + loadedQuery" :query="loadedQuery" />
       <h3>已封存盘点</h3>
       <p>任务 {{ result.inventory.sealedTasks }} 项 · 已采信 {{ result.inventory.accepted }} /
         应盘 {{ result.inventory.expected }} · 未盘 {{ result.inventory.notObserved }}</p>
