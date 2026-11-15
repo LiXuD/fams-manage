@@ -186,7 +186,7 @@ class InventoryObservationHttpRuntimeCase {
             db.update("DELETE FROM " + table + " WHERE receipt_id" + ownedInbound);
         }
         db.update("DELETE FROM fams_inbound_receipt WHERE creator_account_id=933003");
-        db.update("DELETE FROM fams_asset_timeline_event WHERE asset_id=933012");
+        db.update("DELETE FROM fams_asset_timeline_event WHERE asset_id BETWEEN 933010 AND 933012");
         db.update("DELETE FROM fams_number_allocation WHERE namespace_key='INBOUND_RECEIPT:ENTERPRISE:FIN:NONE:'");
         db.update("DELETE FROM fams_number_sequence WHERE namespace_key='INBOUND_RECEIPT:ENTERPRISE:FIN:NONE:'");
         db.update("DELETE FROM fams_numbering_rule WHERE id=933090");
@@ -1187,6 +1187,39 @@ class InventoryObservationHttpRuntimeCase {
         assertEquals(0L, db.queryForObject(
                 "SELECT SUM(result_count) FROM fams_inventory_item WHERE task_id=?",
                 Long.class, task));
+    }
+
+    @Test
+    void assetLookupRechecksRelationshipAndRedactsLocalHistory() throws Exception {
+        db.update("""
+                UPDATE fams_asset SET lifecycle_status='IN_USE',custody_type='PERSONAL',responsible_employee_id=933002,
+                    using_organization_id=933000,storage_warehouse_id=NULL WHERE id=933010
+                """);
+        db.update("""
+                INSERT INTO fams_asset_timeline_event (asset_id,event_type,business_type,business_id,
+                    occurred_at,summary_json,actor_account_id)
+                VALUES (933010,'ASSET_TRANSFERRED','TRANSFER',933199,NOW(3),JSON_OBJECT('summary','Private context'),933001)
+                """);
+        var url = "http://127.0.0.1:" + port;
+        var query = "/asset-lookup?assetCode=INV-ASSET-933010";
+        var global = ok(http.send(HttpRequest.newBuilder(URI.create(url + "/api/v1" + query))
+                .header("Cookie", admin.cookie()).build(), HttpResponse.BodyHandlers.ofString()));
+        assertEquals("Private context", global.path("timeline").get(0).path("summary").asText());
+        assertEquals(404, http.send(HttpRequest.newBuilder(URI.create(url + "/api/v1" + query))
+                .header("Cookie", other.cookie()).build(), HttpResponse.BodyHandlers.ofString()).statusCode());
+        var identity = new MiniWechatIdentityPort.Identity("asset-lookup-app", "lookup-employee");
+        db.update("INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES (933002,?,NOW(3))",
+                miniSessions.identityHash(identity));
+        var grant = miniSessions.start(identity, UUID.randomUUID());
+        var miniRequest = HttpRequest.newBuilder(URI.create(url + "/api/v1/mini" + query))
+                .header("X-FAMS-Mini-Session", grant.sessionToken()).build();
+        var local = ok(http.send(miniRequest, HttpResponse.BodyHandlers.ofString()));
+        assertEquals("IN_USE", local.path("asset").path("lifecycle").asText());
+        assertEquals("ASSET_TRANSFERRED", local.path("timeline").get(0).path("eventType").asText());
+        assertTrue(!local.path("timeline").get(0).hasNonNull("summary"));
+        assertTrue(!local.path("timeline").get(0).hasNonNull("businessId"));
+        db.update("UPDATE fams_asset SET responsible_employee_id=933003 WHERE id=933010");
+        assertEquals(404, http.send(miniRequest, HttpResponse.BodyHandlers.ofString()).statusCode());
     }
 
     @Test

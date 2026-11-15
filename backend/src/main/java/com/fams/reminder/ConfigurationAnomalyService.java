@@ -98,6 +98,28 @@ class ConfigurationAnomalyService {
                 ON DUPLICATE KEY UPDATE deadline = fams_configuration_anomaly_todo.deadline
                 """, role, key);
         db.update("""
+                INSERT INTO fams_configuration_anomaly_business_todo
+                    (anomaly_id, todo_id, todo_type, business_type, business_id, parameter_version_id)
+                SELECT x.id, t.id, t.todo_type, t.business_type, t.business_id,
+                    COALESCE(r.parameter_version_id, q.parameter_version_id, i.parameter_version_id)
+                FROM fams_configuration_anomaly x
+                JOIN fams_todo t ON t.todo_status = 'OPEN' AND t.active_guard = 1
+                  AND (t.pool_type = ? OR (? = 'WAREHOUSE_OPERATOR' AND t.pool_type = 'WAREHOUSE'
+                    AND t.business_type = 'REQUISITION_ALLOCATION' AND t.todo_type = 'HANDOVER_EXCEPTION'))
+                LEFT JOIN fams_inbound_receipt r ON t.business_type = 'INBOUND' AND r.id = t.business_id
+                LEFT JOIN fams_requisition_allocation a ON t.business_type = 'REQUISITION_ALLOCATION'
+                  AND a.id = t.business_id
+                LEFT JOIN fams_requisition q ON q.id = CASE WHEN t.business_type = 'REQUISITION'
+                  THEN t.business_id ELSE a.request_id END
+                LEFT JOIN fams_inventory_observation o ON t.business_type = 'INVENTORY_OBSERVATION'
+                  AND o.id = t.business_id
+                LEFT JOIN fams_inventory_task i ON i.id = CASE WHEN t.business_type = 'INVENTORY_TASK'
+                  THEN t.business_id ELSE o.task_id END
+                LEFT JOIN fams_configuration_anomaly_todo e ON e.anomaly_id = x.id AND e.todo_id = t.id
+                WHERE x.dedup_key = ? AND x.active_slot = 1 AND e.todo_id IS NULL
+                ON DUPLICATE KEY UPDATE todo_id = fams_configuration_anomaly_business_todo.todo_id
+                """, role, role, key);
+        db.update("""
                 UPDATE fams_configuration_anomaly x SET x.resolved_at = GREATEST(x.last_seen_at, ?)
                 WHERE x.dedup_key = ? AND x.active_slot = 1 AND EXISTS (
                     SELECT 1 FROM fams_system_account a
@@ -131,7 +153,8 @@ class ConfigurationAnomalyService {
                     Timestamp resolved = row.getTimestamp("resolved_at");
                     return new Anomaly(Long.toString(id), row.getString("anomaly_type"),
                             resolved == null ? "OPEN" : "RESOLVED", row.getTimestamp("first_seen_at").toInstant(),
-                            resolved == null ? null : resolved.toInstant(), row.getString("dedup_key"), relatedTodos(id));
+                            resolved == null ? null : resolved.toInstant(), row.getString("dedup_key"),
+                            relatedTodos(id), relatedBusinessTodos(id));
                 }, args);
     }
 
@@ -146,12 +169,30 @@ class ConfigurationAnomalyService {
                         row.getString("todo_status")), anomalyId);
     }
 
+    private List<BusinessTodoReference> relatedBusinessTodos(long anomalyId) {
+        return db.query("""
+                SELECT e.todo_id, e.todo_type, e.business_type, e.business_id, e.parameter_version_id, t.todo_status
+                FROM fams_configuration_anomaly_business_todo e
+                LEFT JOIN fams_todo t ON t.id = e.todo_id
+                LEFT JOIN fams_configuration_anomaly_todo timed ON timed.anomaly_id = e.anomaly_id
+                  AND timed.todo_id = e.todo_id
+                WHERE e.anomaly_id = ? AND timed.todo_id IS NULL ORDER BY e.todo_id
+                """, (row, index) -> new BusinessTodoReference(row.getString("todo_id"), row.getString("todo_type"),
+                        row.getString("business_type"), row.getString("business_id"),
+                        row.getString("parameter_version_id"), row.getString("todo_status")), anomalyId);
+    }
+
     record AnomalyPage(int page, int pageSize, long total, List<Anomaly> items) {}
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     record Anomaly(String id, String type, String status, Instant detectedAt, Instant resolvedAt,
-                   String dedupKey, List<TodoReference> relatedTodos) {}
+                   String dedupKey, List<TodoReference> relatedTodos,
+                   @JsonInclude(JsonInclude.Include.NON_EMPTY) List<BusinessTodoReference> relatedBusinessTodos) {}
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     record TodoReference(String id, String kind, String parameterVersionId, Instant deadline, String status) {}
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record BusinessTodoReference(String id, String kind, String businessType, String businessId,
+                                 String parameterVersionId, String status) {}
 }

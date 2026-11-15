@@ -2,6 +2,7 @@
   "pages": [
     "pages/login/index",
     "pages/mine/index",
+    "pages/asset-lookup/index",
     "pages/request-center/index",
     "pages/requests/index",
     "pages/department-requests/index",

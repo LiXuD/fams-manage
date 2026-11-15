@@ -10,6 +10,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.sql.Timestamp;
+import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.Map;
@@ -51,6 +53,7 @@ class DutyHttpRuntimeCase {
     private final HttpClient http = HttpClient.newHttpClient();
 
     @Autowired JdbcTemplate db;
+    @Autowired Clock clock;
     @Autowired ObjectMapper json;
     @Autowired ConfigurationAnomalyService anomalies;
     @Autowired ReassignmentReminderService reassignments;
@@ -137,6 +140,16 @@ class DutyHttpRuntimeCase {
                 """);
         db.update("INSERT INTO fams_todo (id,pool_type,business_type,business_id,todo_type,todo_status,opened_at)"
                 + " VALUES (931000,'ASSET_ADMIN','INBOUND',931000,'ADMIN_DECISION','OPEN',NOW(3))");
+        db.update("""
+                INSERT INTO fams_requisition (id,request_no,creator_account_id,creator_username_snapshot,
+                    request_status,parameter_version_id,parameter_snapshot_json,created_at,updated_at)
+                VALUES (931001,'C3-REQUISITION',931004,'duty4','PENDING_ADMIN_DECISION',931000,'{}',NOW(3),NOW(3))
+                """);
+        db.update("""
+                INSERT INTO fams_todo (id,pool_type,business_type,business_id,todo_type,todo_status,opened_at,closed_at)
+                VALUES (931001,'ASSET_ADMIN','REQUISITION',931001,'ADMIN_DECISION','OPEN',NOW(3),NULL),
+                    (931002,'ASSET_ADMIN','REQUISITION',931001,'ADMIN_DECISION','CLOSED',NOW(3),NOW(3))
+                """);
         db.update("UPDATE fams_employee SET status='DISABLED' WHERE id=?", ADMIN_TWO);
         anomalies.scan();
         anomalies.scan();
@@ -151,6 +164,14 @@ class DutyHttpRuntimeCase {
         assertEquals("931000", open.path("relatedTodos").get(0).path("id").asText());
         assertEquals("931000", open.path("relatedTodos").get(0).path("parameterVersionId").asText());
         assertEquals("2026-11-17T16:00:00Z", open.path("relatedTodos").get(0).path("deadline").asText());
+        assertEquals(1, open.path("relatedTodos").size());
+        assertEquals(1, open.path("relatedBusinessTodos").size());
+        var originalRequisition = open.path("relatedBusinessTodos").get(0);
+        assertEquals("931001", originalRequisition.path("id").asText());
+        assertEquals("REQUISITION", originalRequisition.path("businessType").asText());
+        assertEquals("931001", originalRequisition.path("businessId").asText());
+        assertEquals("931000", originalRequisition.path("parameterVersionId").asText());
+        assertFalse(originalRequisition.has("deadline"));
         assertEquals(403, code(get(warehouse, path)));
         assertEquals(404, code(get(system, path + "/999999")));
 
@@ -160,18 +181,28 @@ class DutyHttpRuntimeCase {
         assertEquals("RESOLVED", resolved.path("status").asText());
         assertTrue(resolved.hasNonNull("resolvedAt"));
         assertEquals(open.path("relatedTodos"), resolved.path("relatedTodos"));
+        assertEquals(open.path("relatedBusinessTodos"), resolved.path("relatedBusinessTodos"));
         var restored = login("duty3");
         assertTrue(ok(get(restored, "/messages")).path("items").valueStream()
                 .anyMatch(item -> "931000".equals(item.path("id").asText())));
         assertEquals(403, code(get(system, "/messages")));
         assertEquals(3, db.queryForObject("SELECT version FROM fams_inbound_receipt WHERE id=931000", Integer.class));
-        assertEquals(1, count("fams_todo"));
+        assertEquals(3, count("fams_todo"));
 
         db.update("""
                 INSERT INTO fams_todo (pool_type,assignee_account_id,business_type,business_id,todo_type,todo_status,opened_at)
                 VALUES ('WAREHOUSE_OPERATOR',931004,'TRANSFER',931001,'EXECUTION','OPEN',NOW(3))
                 """);
         assertEquals(200, code(setAccountStatus(system, WAREHOUSE, 0, "DISABLE")));
+        var warehouseAnomaly = ok(get(system, path)).path("items").valueStream()
+                .filter(item -> "NO_WAREHOUSE_OPERATOR".equals(item.path("type").asText()))
+                .findFirst().orElseThrow();
+        assertEquals("OPEN", warehouseAnomaly.path("status").asText());
+        var originalTransfer = warehouseAnomaly.path("relatedBusinessTodos").get(0);
+        assertEquals("TRANSFER", originalTransfer.path("businessType").asText());
+        assertEquals("931001", originalTransfer.path("businessId").asText());
+        assertFalse(originalTransfer.has("parameterVersionId"));
+        assertFalse(originalTransfer.has("deadline"));
         assertEquals(1, db.queryForObject("""
                 SELECT COUNT(*) FROM fams_todo WHERE business_type='TRANSFER' AND business_id=931001
                     AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1
@@ -186,6 +217,9 @@ class DutyHttpRuntimeCase {
                     AND todo_type='EXECUTION' AND active_guard=1
                 """, Long.class));
         assertEquals(200, code(setAccountStatus(system, WAREHOUSE, 1, "ENABLE")));
+        var restoredWarehouseAnomaly = ok(get(system, path + "/" + warehouseAnomaly.path("id").asText()));
+        assertEquals("RESOLVED", restoredWarehouseAnomaly.path("status").asText());
+        assertEquals(warehouseAnomaly.path("relatedBusinessTodos"), restoredWarehouseAnomaly.path("relatedBusinessTodos"));
         assertEquals(1, db.queryForObject("""
                 SELECT COUNT(*) FROM fams_todo WHERE business_type='TRANSFER' AND business_id=931001
                     AND todo_type='REASSIGNMENT_REQUIRED' AND todo_status='CLOSED' AND closed_at IS NOT NULL
@@ -204,7 +238,8 @@ class DutyHttpRuntimeCase {
         assertEquals("reminder-test", deliveries.eligibleTemplate(claim));
         assertTrue(jobs.claim(NotificationDeliveryQueue.KIND, "second", java.time.Duration.ofMinutes(1)).isEmpty());
         jobs.fail(claim, "SMS_RESULT_UNKNOWN", true);
-        db.update("UPDATE fams_durable_job SET next_attempt_at=UTC_TIMESTAMP(3) WHERE id=?", claim.id().toString());
+        db.update("UPDATE fams_durable_job SET next_attempt_at=? WHERE id=?",
+                Timestamp.from(clock.instant().minusSeconds(1)), claim.id().toString());
         var retry = jobs.claim(NotificationDeliveryQueue.KIND, "second", java.time.Duration.ofMinutes(1)).orElseThrow();
         assertEquals(claim.id(), retry.id());
         org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
@@ -229,7 +264,8 @@ class DutyHttpRuntimeCase {
         var adapters = provider.getBeanProvider(MiniNotificationSmsPort.class);
         new NotificationDeliveryWorker(jobs, deliveries, adapters, "reminder-test").poll();
         assertEquals(1, calls.size());
-        db.update("UPDATE fams_durable_job SET next_attempt_at=UTC_TIMESTAMP(3) WHERE id=?", calls.getFirst());
+        db.update("UPDATE fams_durable_job SET next_attempt_at=? WHERE id=?",
+                Timestamp.from(clock.instant().minusSeconds(1)), calls.getFirst());
         new NotificationDeliveryWorker(jobs, deliveries, adapters, "reminder-test").poll();
         assertEquals(2, calls.size());
         assertEquals(calls.getFirst(), calls.getLast());

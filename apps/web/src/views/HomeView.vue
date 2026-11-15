@@ -8,11 +8,14 @@ import { useSessionStore } from "@/auth/sessionStore";
 const session = useSessionStore();
 const warehouse = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR"));
 const administrator = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
+const canLookup = computed(() => session.user?.roles.some(
+  role => ["EMPLOYEE", "DEPARTMENT_ASSET_MANAGER", "ASSET_ADMIN", "WAREHOUSE_OPERATOR"].includes(role)));
 </script>
 
 <template>
   <AppChrome>
     <div class="breadcrumb">工作台 / 当前权限</div>
+    <router-link v-if="canLookup" :to="{ name: 'asset-lookup' }">按编码查询资产</router-link>
     <section v-if="warehouse || administrator" aria-labelledby="workbench-shortcuts">
       <h2 id="workbench-shortcuts">快捷入口</h2>
       <nav class="actions" aria-label="工作台快捷入口">

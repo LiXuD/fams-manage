@@ -1682,6 +1682,33 @@ components:
       description: >-
         Opaque 256-bit base64url lookup token. It contains no asset id, asset code,
         or PII; it is only a lookup key and never grants permission.
+    AssetLookupResult:
+      type: object
+      required: [asset, page, more, timeline]
+      properties:
+        asset:
+          type: object
+          required: [id, assetCode, name, lifecycle, exception]
+          properties:
+            id: { $ref: '#/components/schemas/Id' }
+            assetCode: { type: string }
+            name: { type: string }
+            lifecycle: { $ref: '#/components/schemas/AssetLifecycle' }
+            exception: { $ref: '#/components/schemas/AssetException' }
+        page: { type: integer, minimum: 1 }
+        more: { type: boolean }
+        timeline:
+          type: array
+          items:
+            type: object
+            required: [id, eventType, occurredAt]
+            properties:
+              id: { $ref: '#/components/schemas/Id' }
+              eventType: { type: string }
+              occurredAt: { type: string, format: date-time }
+              businessType: { type: string, nullable: true }
+              businessId: { type: string, nullable: true }
+              summary: { type: string, nullable: true }
     AssetTag:
       type: object
       additionalProperties: false
@@ -3349,6 +3376,23 @@ components:
           $ref: '#/components/schemas/Instant'
         status:
           type: string
+    BusinessTodoReference:
+      type: object
+      additionalProperties: false
+      required: [id, kind, businessType, businessId]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        kind:
+          type: string
+        businessType:
+          type: string
+        businessId:
+          $ref: '#/components/schemas/Id'
+        parameterVersionId:
+          $ref: '#/components/schemas/Id'
+        status:
+          type: string
     ConfigurationAnomaly:
       type: object
       additionalProperties: false
@@ -3379,6 +3423,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TodoReference'
+        relatedBusinessTodos:
+          type: array
+          description: Additional open work captured for the role anomaly with its original business identity.
+          items:
+            $ref: '#/components/schemas/BusinessTodoReference'
     PageConfigurationAnomaly:
       allOf:
         - $ref: '#/components/schemas/PageMeta'
@@ -7690,6 +7739,47 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /asset-lookup:
+    get:
+      tags: [Assets]
+      operationId: lookupAssetByCode
+      summary: Read current asset status and chronological milestones within the actor scope.
+      x-actor: { required: true, roles: [EMPLOYEE, DEPARTMENT_ASSET_MANAGER, ASSET_ADMIN, WAREHOUSE_OPERATOR] }
+      x-data-scope: Current responsible or borrowing employee, departmental shared assets, managed department, or global asset role. Local actors receive milestone types and times.
+      parameters:
+        - { name: assetCode, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 128 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 1000000, default: 1 } }
+      responses:
+        '200':
+          description: Status and up to 30 chronological history entries.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetLookupResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /mini/asset-lookup:
+    get:
+      tags: [Assets]
+      operationId: miniLookupAssetByCode
+      summary: Read current asset status and authorized milestones with the opaque mini session.
+      security: [{ miniSession: [] }]
+      x-actor: { required: true, roles: [EMPLOYEE, DEPARTMENT_ASSET_MANAGER, ASSET_ADMIN, WAREHOUSE_OPERATOR] }
+      x-data-scope: Same business relationship checks as PC. Local actors receive milestone types and times.
+      parameters:
+        - { name: assetCode, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 128 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 1000000, default: 1 } }
+      responses:
+        '200':
+          description: Status and up to 30 chronological history entries.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssetLookupResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /assets:
     get:
       tags: [Assets]
