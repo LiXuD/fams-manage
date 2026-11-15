@@ -139,36 +139,50 @@ class ExceptionDiscoveryReportService {
 
     private void factory(Window window, Consumer<Occurrence> receive) {
         db.query("""
-                SELECT x.id,x.expected_return_date,x.dispatched_at,x.received_at,p.timezone_id,
+                SELECT x.id,x.expected_return_date,x.received_at,p.timezone_id,
                     (SELECT MIN(r.created_at) FROM fams_business_reminder r
                      WHERE r.business_type='REPAIR_FACTORY_ROUND' AND r.business_id=x.id AND r.stage='FACTORY_RETURN'
                        AND r.reminder_type IN ('OVERDUE','OVERDUE_EVERY_7_DAYS')
-                       AND (x.received_at IS NULL OR r.created_at<x.received_at)) first_seen
+                       AND r.created_at>=r.deadline_at) first_seen,
+                    (SELECT JSON_ARRAYAGG(JSON_OBJECT('since',t.opened_at,'until',t.closed_at))
+                     FROM fams_todo t WHERE t.business_type='REPAIR' AND t.business_id=x.repair_id
+                       AND t.todo_type='FACTORY_RETURN' AND t.opened_at>=x.dispatched_at
+                       AND (x.received_at IS NULL OR t.opened_at<x.received_at)) followups
                 FROM fams_repair_factory_round x JOIN fams_repair_request p ON p.id=x.repair_id
                 WHERE x.dispatched_at<? AND (x.received_at IS NULL OR x.received_at>=?)
                     AND x.expected_return_date<=?
                 """, row -> {
             var due = row.getObject("expected_return_date", LocalDate.class);
-            var occurred = later(deadline(due, row.getString("timezone_id")), instant(row.getTimestamp("dispatched_at")));
-            var end = instant(row.getTimestamp("received_at"));
-            if (end == null || occurred.isBefore(end)) {
-                record(window, receive, Kind.FACTORY_OVERDUE, row.getString("id"), due, occurred,
-                        instant(row.getTimestamp("first_seen")));
+            var dueAt = deadline(due, row.getString("timezone_id"));
+            var received = instant(row.getTimestamp("received_at"));
+            var firstNotice = instant(row.getTimestamp("first_seen"));
+            Instant occurred = null;
+            Instant seen = null;
+            for (var followup : periods(row.getString("followups"))) {
+                var start = later(dueAt, followup.since());
+                var end = factoryPeriodEnd(received, followup.until());
+                if (end != null && !start.isBefore(end)) {
+                    continue;
+                }
+                if (occurred == null) {
+                    occurred = start;
+                }
+                if (firstNotice != null) {
+                    var visible = later(start, firstNotice);
+                    if (end == null || visible.isBefore(end)) {
+                        seen = visible;
+                        break;
+                    }
+                }
+            }
+            if (occurred != null) {
+                record(window, receive, Kind.FACTORY_OVERDUE, row.getString("id"), due, occurred, seen);
             }
         }, Timestamp.from(window.until()), Timestamp.from(window.from()), window.untilDate());
     }
 
     private Instant afterLoss(Instant occurred, String periods) {
-        if (periods == null) {
-            return occurred;
-        }
-        var windows = new ArrayList<LossPeriod>();
-        for (var period : json.readTree(periods)) {
-            windows.add(new LossPeriod(jsonTime(period.path("since").asText()),
-                    period.path("until").isNull() ? null : jsonTime(period.path("until").asText())));
-        }
-        windows.sort(Comparator.comparing(LossPeriod::since));
-        for (var period : windows) {
+        for (var period : periods(periods)) {
             if (occurred.isBefore(period.since())) {
                 break;
             }
@@ -178,6 +192,23 @@ class ExceptionDiscoveryReportService {
             occurred = later(occurred, period.until());
         }
         return occurred;
+    }
+
+    private List<Period> periods(String periods) {
+        if (periods == null) {
+            return List.of();
+        }
+        var windows = new ArrayList<Period>();
+        for (var period : json.readTree(periods)) {
+            windows.add(new Period(jsonTime(period.path("since").asText()),
+                    period.path("until").isNull() ? null : jsonTime(period.path("until").asText())));
+        }
+        windows.sort(Comparator.comparing(Period::since));
+        return windows;
+    }
+
+    private static Instant factoryPeriodEnd(Instant receipt, Instant todoEnd) {
+        return todoEnd == null || receipt != null && receipt.isBefore(todoEnd) ? receipt : todoEnd;
     }
 
     private static void record(Window window, Consumer<Occurrence> receive, Kind kind, String id, LocalDate dueDate,
@@ -229,7 +260,7 @@ class ExceptionDiscoveryReportService {
         }
     }
     private record Window(Instant from, Instant until, LocalDate untilDate, Instant evaluatedAt) {}
-    private record LossPeriod(Instant since, Instant until) {}
+    private record Period(Instant since, Instant until) {}
     private record Occurrence(Kind kind, String id, LocalDate dueDate, Instant occurredAt, Instant firstSeenAt,
                               Status status) {}
     static final class ExportLimit extends RuntimeException {}

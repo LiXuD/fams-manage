@@ -189,6 +189,17 @@ class BusinessReminderRuntimeCase {
         assertFalse(notices("REPAIR_FACTORY_ROUND", 930600).contains(firstOverdue));
 
         var midnight = smsClock("2026-11-17T16:00:00Z");
+        db.update("""
+                UPDATE fams_todo SET todo_status='CLOSED',closed_at='2026-11-17 15:59:59'
+                WHERE business_type='REPAIR' AND business_id=930600 AND todo_type='FACTORY_RETURN'
+                """);
+        new BusinessReminderService(db, json, midnight).scan();
+        assertFalse(notices("REPAIR_FACTORY_ROUND", 930600).contains(firstOverdue));
+        assertEquals(0, fallbackNotices("REPAIR_FACTORY_ROUND"));
+        db.update("""
+                INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at)
+                VALUES ('WAREHOUSE_OPERATOR','REPAIR',930600,'FACTORY_RETURN','OPEN','2026-11-17 16:00:00')
+                """);
         new BusinessReminderService(db, json, midnight).scan();
         new BusinessReminderService(db, json, midnight).scan();
         assertEquals(1, notices("REPAIR_FACTORY_ROUND", 930600).stream().filter(firstOverdue::equals).count());
@@ -221,6 +232,17 @@ class BusinessReminderRuntimeCase {
                 jobs.complete(claim, "accepted", () -> { });
             } else {
                 assertEquals("FACTORY_RETURN", stage);
+                db.update("""
+                        UPDATE fams_todo SET todo_status='CLOSED',closed_at='2026-11-18 16:00:00'
+                        WHERE business_type='REPAIR' AND business_id=930600 AND todo_type='FACTORY_RETURN'
+                            AND todo_status='OPEN'
+                        """);
+                assertNull(queue.eligibleTemplate(claim));
+                db.update("""
+                        INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at)
+                        VALUES ('WAREHOUSE_OPERATOR','REPAIR',930600,'FACTORY_RETURN','OPEN','2026-11-18 16:00:00')
+                        """);
+                assertEquals("fallback-test", queue.eligibleTemplate(claim));
                 db.update("""
                         INSERT INTO fams_message_receipt (account_id,message_kind,message_id,read_at)
                         SELECT ?, 'REMINDER', MAX(id), NOW(3) FROM fams_business_reminder
@@ -350,6 +372,10 @@ class BusinessReminderRuntimeCase {
                 + " VALUES (930600,930600,930304,930600,1,'DISPATCHED','Provider','Contact','13800000000',"
                 + "'2026-11-01','Reminder fault',?,?, '2026-11-01 12:00:00','2026-11-01 13:00:00',?,"
                 + "'Reminder handoff')", snapshot(), ADMIN, ADMIN);
+        db.update("""
+                INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at)
+                VALUES ('WAREHOUSE_OPERATOR','REPAIR',930600,'FACTORY_RETURN','OPEN','2026-11-01 13:00:00')
+                """);
         db.update("INSERT INTO fams_loss_report (id,asset_id,creator_account_id,asset_version,source_snapshot_json,"
                 + "last_seen_at,last_location,circumstances,report_status,processor_account_id,next_review_date,"
                 + "created_at,updated_at) VALUES (930300,930300,?,0,?,'2026-11-01 12:00:00','Reminder place',"

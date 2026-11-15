@@ -147,7 +147,11 @@ public class BusinessReminderService {
         each("""
              SELECT x.id,x.expected_return_date,p.timezone_id,p.processor_account_id
                FROM fams_repair_factory_round x JOIN fams_repair_request p ON p.id=x.repair_id
-              WHERE x.round_status='DISPATCHED'""",
+              WHERE x.round_status='DISPATCHED' AND EXISTS (
+                    SELECT 1 FROM fams_todo t
+                    WHERE t.business_type='REPAIR' AND t.business_id=x.repair_id AND t.todo_type='FACTORY_RETURN'
+                        AND t.todo_status='OPEN' AND t.closed_at IS NULL AND t.opened_at>=x.dispatched_at
+              )""",
                 row -> {
                     var zone = ZoneId.of(String.valueOf(row.get("timezone_id")));
                     var today = clock.instant().atZone(zone).toLocalDate();

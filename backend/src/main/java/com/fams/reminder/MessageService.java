@@ -47,10 +47,19 @@ public class MessageService {
     private static final String EXCEPTION_TODOS = TODO_COLUMNS
             + " (t.todo_type IN" + OVERDUE_TYPES + " OR t.todo_type IN"
             + " ('REASSIGNMENT_REQUIRED','INVENTORY_CONFLICT','INVENTORY_DIFFERENCE'))";
+    private static final String ACTIVE_FACTORY_RETURN = """
+            (r.business_type<>'REPAIR_FACTORY_ROUND' OR r.stage<>'FACTORY_RETURN' OR EXISTS (
+                SELECT 1 FROM fams_repair_factory_round f JOIN fams_todo t
+                    ON t.business_type='REPAIR' AND t.business_id=f.repair_id AND t.todo_type='FACTORY_RETURN'
+                WHERE f.id=r.business_id AND f.round_status='DISPATCHED' AND t.todo_status='OPEN'
+                    AND t.closed_at IS NULL AND t.opened_at>=f.dispatched_at
+            ))
+            """;
     private static final String REMINDER_COLUMNS =
             " SELECT 'REMINDER' message_kind,r.id id,r.business_type,r.business_id,r.reminder_type stage,"
             + " r.stage object_stage,r.recipient_pool_type pool_type,r.recipient_account_id,r.created_at moment,"
-            + " r.deadline_at FROM fams_business_reminder r WHERE r.reminder_type<>'SMS_FALLBACK' AND";
+            + " r.deadline_at FROM fams_business_reminder r WHERE r.reminder_type<>'SMS_FALLBACK' AND "
+            + ACTIVE_FACTORY_RETURN + " AND";
     /**
      * Only the latest occurrence of an object stage is an active message; earlier ones stay as history. Escalation
      * tiers are newest-per-recipient within their own tier instead, so an escalation never displaces the ladder
@@ -175,13 +184,14 @@ public class MessageService {
     }
 
     private String addressableReminder(RequisitionActorContext.Current current, List<Object> args) {
+        String available = " r.reminder_type<>'SMS_FALLBACK' AND " + ACTIVE_FACTORY_RETURN;
         if (current.has(Role.ASSET_ADMIN)) {
-            return " r.reminder_type<>'SMS_FALLBACK'";
+            return available;
         }
         var pools = pools(current);
         args.add(current.id());
         args.addAll(pools);
-        return " r.reminder_type<>'SMS_FALLBACK' AND" + addressed("r", "recipient_account_id", "recipient_pool_type", pools);
+        return available + " AND" + addressed("r", "recipient_account_id", "recipient_pool_type", pools);
     }
 
     private static String addressed(String alias, String personColumn, String poolColumn, List<String> pools) {

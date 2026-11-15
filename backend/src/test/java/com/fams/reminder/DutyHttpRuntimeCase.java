@@ -490,6 +490,21 @@ class DutyHttpRuntimeCase {
         var window = "?from=2025-10-01&toExclusive=2025-10-02";
         assertEquals(403, code(get(warehouse, path + window)));
         assertEquals(403, code(get(warehouse, path + ".csv" + window)));
+        db.update("""
+                INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at,closed_at)
+                VALUES ('WAREHOUSE_OPERATOR','REPAIR',931001,'FACTORY_RETURN','CLOSED','2025-09-29','2025-09-30 22:00:00')
+                """);
+        assertEquals(2, ok(get(administrator, path + window)).path("total").asInt(-1));
+        var inbox = "/messages?view=EXCEPTION&pageSize=100";
+        assertFalse(ok(get(administrator, inbox)).path("items").valueStream()
+                .anyMatch(row -> "REPAIR_FACTORY_ROUND".equals(row.path("businessType").asText())));
+        db.update("""
+                INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at)
+                VALUES ('WAREHOUSE_OPERATOR','REPAIR',931001,'FACTORY_RETURN','OPEN','2025-10-01 00:00:00')
+                """);
+        assertTrue(ok(get(administrator, inbox)).path("items").valueStream()
+                .anyMatch(row -> "9007199254740995".equals(row.path("businessId").asText())
+                    && "REPAIR_FACTORY_ROUND".equals(row.path("businessType").asText())));
         var summary = ok(get(administrator, path + window));
         assertEquals(3, summary.path("total").asInt(-1));
         assertEquals(1, summary.path("onTime").asInt(-1));
@@ -505,6 +520,18 @@ class DutyHttpRuntimeCase {
                 SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='EXCEPTION_DISCOVERY'
                     AND detail_json->>'$.rows'='3' AND detail_json->>'$.onTime'='1'
                 """, Integer.class));
+        db.update("""
+                UPDATE fams_todo SET todo_status='CLOSED',closed_at='2025-10-01 00:03:00'
+                WHERE business_type='REPAIR' AND business_id=931001 AND todo_type='FACTORY_RETURN'
+                    AND todo_status='OPEN'
+                """);
+        assertFalse(ok(get(administrator, inbox)).path("items").valueStream()
+                .anyMatch(row -> "REPAIR_FACTORY_ROUND".equals(row.path("businessType").asText())));
+        var ended = ok(get(administrator, path + window));
+        assertEquals(3, ended.path("total").asInt(-1));
+        var endedFactory = ended.path("categories").valueStream()
+                .filter(row -> "FACTORY_OVERDUE".equals(row.path("kind").asText())).findFirst().orElseThrow();
+        assertEquals(1, endedFactory.path("missing").asInt(-1));
     }
 
     private void verifySealedInventoryTasks(Session administrator, Session warehouse) throws Exception {
