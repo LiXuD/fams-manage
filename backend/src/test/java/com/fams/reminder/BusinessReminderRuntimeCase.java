@@ -1,6 +1,7 @@
 package com.fams.reminder;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -183,6 +184,14 @@ class BusinessReminderRuntimeCase {
                 INSERT INTO fams_todo (pool_type,assignee_account_id,business_type,business_id,todo_type,
                     todo_status,opened_at) VALUES (? ,?,'LOAN',930700,'OVERDUE','OPEN',NOW(3))
                 """, "EMPLOYEE", EXECUTOR_ACCOUNT);
+        new BusinessReminderService(db, json, smsClock("2026-11-17T15:59:59Z")).scan();
+        var firstOverdue = "FACTORY_RETURN|OVERDUE|2026-11-18|WAREHOUSE_OPERATOR|-";
+        assertFalse(notices("REPAIR_FACTORY_ROUND", 930600).contains(firstOverdue));
+
+        var midnight = smsClock("2026-11-17T16:00:00Z");
+        new BusinessReminderService(db, json, midnight).scan();
+        new BusinessReminderService(db, json, midnight).scan();
+        assertEquals(1, notices("REPAIR_FACTORY_ROUND", 930600).stream().filter(firstOverdue::equals).count());
         scan("2026-11-18");
         assertEquals(0, fallbackNotices("LOAN"));
         assertEquals(1, fallbackNotices("REPAIR_FACTORY_ROUND"));
@@ -215,7 +224,7 @@ class BusinessReminderRuntimeCase {
                 db.update("""
                         INSERT INTO fams_message_receipt (account_id,message_kind,message_id,read_at)
                         SELECT ?, 'REMINDER', MAX(id), NOW(3) FROM fams_business_reminder
-                        WHERE business_type='REPAIR_FACTORY_ROUND' AND reminder_type='DUE_TODAY'
+                        WHERE business_type='REPAIR_FACTORY_ROUND' AND reminder_type='OVERDUE'
                         """, WAREHOUSE_ACCOUNT);
                 assertNull(queue.eligibleTemplate(claim));
                 jobs.fail(claim, "RECIPIENT_UNAVAILABLE_OR_READ", false);

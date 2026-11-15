@@ -99,7 +99,7 @@ class NotificationDeliveryQueue {
                             SELECT MAX(n.id) FROM fams_business_reminder n
                             WHERE n.business_type = r.business_type AND n.business_id = r.business_id
                                 AND n.stage = r.stage AND n.deadline_at = r.deadline_at
-                                AND n.reminder_type IN ('DUE_TODAY','OVERDUE_EVERY_7_DAYS')
+                                AND n.reminder_type IN ('DUE_TODAY','OVERDUE','OVERDUE_EVERY_7_DAYS')
                         )
                     ))
             )
