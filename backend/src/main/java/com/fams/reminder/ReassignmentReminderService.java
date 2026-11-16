@@ -65,6 +65,14 @@ class ReassignmentReminderService {
                 LEFT JOIN fams_account_role r ON r.account_id = a.id AND r.role_code = 'WAREHOUSE_OPERATOR'
                 WHERE a.status = 'DISABLED' OR e.status <> 'ACTIVE' OR g.status <> 'ACTIVE' OR r.account_id IS NULL
                    OR t.first_due <= ? OR t.declared_unavailable OR t.factory_overdue
+                UNION
+                SELECT 'REPAIR', repair.id
+                FROM fams_repair_request repair JOIN fams_audit_event declaration
+                  ON declaration.resource_type='REPAIR' AND declaration.resource_id=repair.id
+                    AND declaration.action='REPAIR_PROCESSOR_UNAVAILABLE'
+                    AND declaration.actor_account_id=repair.processor_account_id
+                    AND JSON_EXTRACT(declaration.detail_json,'$.ownershipVersion')=repair.ownership_version
+                WHERE repair.repair_status='WAREHOUSE_PROCESSING'
             )
             """;
 

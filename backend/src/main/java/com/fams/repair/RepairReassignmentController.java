@@ -37,6 +37,10 @@ public class RepairReassignmentController {
             @NotBlank @Size(min = 3, max = 1000) String reason,
             @NotBlank @Size(min = 10, max = 2000) String evidence) {}
 
+    public record Unavailability(
+            @NotNull @PositiveOrZero Long ownershipVersion,
+            @NotBlank @Size(min = 3, max = 1000) String reason) {}
+
     private final RepairService repairs;
     private final RequisitionActorContext actors;
 
@@ -48,6 +52,15 @@ public class RepairReassignmentController {
     @GetMapping("/{id}/reassignment")
     Map<String, Object> inspect(@PathVariable @Positive long id) {
         return repairs.reassignment(actors.capture(), id);
+    }
+
+    @PostMapping("/{id}/processor-unavailability")
+    Map<String, Object> declareUnavailable(
+            @PathVariable @Positive long id,
+            @RequestHeader("If-Match-Version") @PositiveOrZero long version,
+            @RequestHeader("Idempotency-Key") UUID key,
+            @Valid @RequestBody Unavailability input) {
+        return repairs.declareUnavailable(actors.capture(), id, version, key, input);
     }
 
     @PostMapping("/{id}/reassignment")

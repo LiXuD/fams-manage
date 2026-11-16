@@ -55,6 +55,7 @@ class RepairReassignmentHttpRuntimeCase {
     final HttpClient http = HttpClient.newHttpClient();
     final RepairHttpRuntimeCase fixture = new RepairHttpRuntimeCase();
     @Autowired JdbcTemplate db;
+    @Autowired org.springframework.context.ApplicationContext application;
     @Autowired MiniSessionService miniSessions;
 
     @Value("${local.server.port}")
@@ -194,6 +195,50 @@ class RepairReassignmentHttpRuntimeCase {
                                 inbound(result)))
                         .path("status")
                         .asText());
+    }
+
+    @Test
+    void unavailableAfterDeliveryRetainsReceiverTodoAndFollowsCurrentOwnership() throws Exception {
+        var row = delivered(accepted());
+        String id = row.path("id").asText(), declaration = id + "/processor-unavailability";
+        long version = row.path("version").asLong(), ownerVersion = row.path("ownershipVersion").asLong();
+        String key = key(), reason = "原库管无法继续当前维修交接";
+        String body = JSON.writeValueAsString(Map.of("ownershipVersion", ownerVersion, "reason", reason));
+        String scope = "business_type='REPAIR' AND business_id=" + id;
+        String reminder = scope + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        String event = "resource_type='REPAIR' AND resource_id=" + id + " AND action='REPAIR_PROCESSOR_UNAVAILABLE'";
+        var receiver = db.queryForMap("SELECT * FROM fams_todo WHERE " + scope + " AND pool_type='RECEIVER'");
+        var locks = db.queryForList("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020");
+        assertEquals(403, post(fixture.admin, declaration, version, key(), body).statusCode());
+        assertEquals(409, post(fixture.otherWarehouse, declaration, version, key(), body).statusCode());
+        assertEquals(409, post(fixture.warehouse, declaration, version - 1, key(), body).statusCode());
+        assertEquals(0, count("fams_todo", reminder));
+        var receipt = ok(post(fixture.warehouse, declaration, version, key, body));
+        assertTrue(receipt.path("recorded").asBoolean());
+        assertEquals(receipt, ok(post(fixture.warehouse, declaration, version, key, body)));
+        assertEquals(receipt, ok(post(fixture.warehouse, declaration, version, key(), body)));
+        assertEquals(409, post(fixture.warehouse, declaration, version, key(),
+                body.replace(reason, "新的重复登记原因")).statusCode());
+        assertEquals(1, count("fams_audit_event", event));
+        assertEquals(1, count("fams_todo", reminder));
+        assertEquals(version, detail(id).path("version").asLong());
+        var context = context(id);
+        assertEquals(reason, context.path("unavailableReason").asText());
+        assertEquals(403, get(fixture.otherWarehouse, id + "/reassignment").statusCode());
+
+        db.update("DELETE FROM fams_todo WHERE " + reminder);
+        var scanner = application.getBean("reassignmentReminderService");
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(scanner, "scan");
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(scanner, "scan");
+        assertEquals(1, count("fams_todo", reminder));
+        var transferred = ok(post(fixture.admin, id + "/reassignment", version, key(), transfer(context)));
+        assertEquals("951004", transferred.path("processorAccountId").asText());
+        assertEquals(409, post(fixture.warehouse, declaration, version, key, body).statusCode());
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(scanner, "scan");
+        assertEquals(0, count("fams_todo", reminder));
+        assertTrue(context(id).path("unavailableReason").isMissingNode());
+        assertEquals(receiver, db.queryForMap("SELECT * FROM fams_todo WHERE " + scope + " AND pool_type='RECEIVER'"));
+        assertEquals(locks, db.queryForList("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020"));
     }
 
     @Test
