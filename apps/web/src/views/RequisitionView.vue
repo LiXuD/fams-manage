@@ -24,7 +24,8 @@ const retryable = ref(false);
 const warehouse = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR"));
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 const creator = computed(() => selected.value?.creatorAccountId === session.user?.id);
-const owner = computed(() => selected.value?.ownership.find(row => !row.archivedAt)?.processorAccountId);
+const currentOwnership = computed(() => selected.value?.ownership.find(row => !row.archivedAt));
+const owner = computed(() => currentOwnership.value?.processorAccountId);
 const canExecute = computed(() => warehouse.value && (!owner.value || owner.value === session.user?.id)
   && ["WAITING_WAREHOUSE_CLAIM", "WAREHOUSE_PROCESSING", "WAITING_HANDOVER"].includes(selected.value?.requestStatus ?? ""));
 const labels: Record<string, string> = { DRAFT: "草稿", PENDING_ADMIN_DECISION: "待管理员确认", REJECTED: "已驳回",
@@ -193,7 +194,10 @@ onMounted(async () => {
         <button v-if="canExecute && !owner" :disabled="busy || retryable" @click="mutate('/' + selected.id + '/claim')">领取整单处理权</button>
         <button v-if="(creator || owner === session.user?.id) && ['WAITING_WAREHOUSE_CLAIM', 'WAREHOUSE_PROCESSING', 'WAITING_HANDOVER'].includes(selected.requestStatus)" :disabled="busy || retryable" @click="edit('change')">提请范围变更</button>
       </div>
-      <label>决定、取消、更换或核查说明<textarea v-model="reason" maxlength="1000" :disabled="busy || retryable" /></label>
+      <label>决定、取消、更换、核查或无法继续的说明<textarea v-model="reason" maxlength="1000" :disabled="busy || retryable" /></label>
+      <button v-if="canExecute && currentOwnership && owner === session.user?.id && ['WAREHOUSE_PROCESSING', 'WAITING_HANDOVER'].includes(selected.requestStatus)"
+        :disabled="busy || retryable || !reason.trim()"
+        @click="mutate('/' + selected.id + '/reassignment/unavailable', { reason: reason.trim(), ownershipVersion: currentOwnership.ownershipVersion })">登记无法继续处理</button>
       <section v-for="d in selected.demands" :key="d.id" class="req-demand">
         <h3>{{ d.categoryNameSnapshot }} · {{ d.specification }}</h3><p>{{ d.purpose }} · 期望 {{ d.expectedDate }} · {{ d.custodyType === 'PERSONAL' ? '个人使用' : '部门公用' }}</p>
         <p>申请 {{ d.requestedQuantity }} / 待分配 {{ d.pendingAllocationQuantity }} / 待交接 {{ d.pendingHandoverQuantity }} / 已完成 {{ d.completedQuantity }} / 无法满足 {{ d.unfulfillableQuantity }} / 已取消 {{ d.cancelledQuantity }}</p>

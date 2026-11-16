@@ -55,7 +55,10 @@ module.exports = {status:function(value){return names[value] || value;},reason:f
     <button wx:if="{{selected.creatorAccountId === accountId && (selected.requestStatus === 'DRAFT' || selected.requestStatus === 'REJECTED')}}" bindtap="onRevise" disabled="{{busy || retryable}}">修改草稿</button>
     <button wx:if="{{selected.creatorAccountId === accountId && selected.requestStatus === 'DRAFT'}}" class="primary" bindtap="onSubmit" disabled="{{busy || retryable}}">提交管理员确认</button>
     <button wx:if="{{selected.creatorAccountId === accountId && (selected.requestStatus === 'WAITING_WAREHOUSE_CLAIM' || selected.requestStatus === 'WAREHOUSE_PROCESSING' || selected.requestStatus === 'WAITING_HANDOVER')}}" bindtap="onChange" disabled="{{busy || retryable}}">提请范围变更</button>
-    <view class="label">取消或通知核查说明</view><input value="{{reason}}" maxlength="1000" bindinput="onReason" disabled="{{busy || retryable}}" />
+    <view class="label">取消、通知核查或无法继续的说明</view><input value="{{reason}}" maxlength="1000" bindinput="onReason" disabled="{{busy || retryable}}" />
+    <block wx:for="{{selected.ownership}}" wx:for-item="ownership" wx:key="id">
+      <button wx:if="{{accountId &amp;&amp; ownership.processorAccountId === accountId &amp;&amp; !ownership.archivedAt &amp;&amp; (selected.requestStatus === 'WAREHOUSE_PROCESSING' || selected.requestStatus === 'WAITING_HANDOVER')}}" bindtap="onDeclareUnavailable" disabled="{{busy || retryable || !reason}}">登记无法继续处理</button>
+    </block>
     <button wx:if="{{selected.creatorAccountId === accountId && (selected.requestStatus === 'DRAFT' || selected.requestStatus === 'REJECTED' || (selected.requestStatus === 'PENDING_ADMIN_DECISION' && !selected.decisions.length))}}" bindtap="onCancel" disabled="{{busy || retryable || !reason}}">取消申请</button>
     <button wx:if="{{selected.creatorAccountId === accountId}}" bindtap="onDispute" disabled="{{busy || retryable || !reason}}">通知管理员核查无法满足结果</button>
     <view class="hint">分配后仍为待交接；未交出资产不提供接收按钮。</view>

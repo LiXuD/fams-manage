@@ -59,6 +59,7 @@ class HandoverHttpTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired MiniSessionService miniSessions;
     @Autowired org.springframework.context.ApplicationEventPublisher events;
+    @Autowired org.springframework.context.ApplicationContext application;
     @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
     private long base;
     private Long extraTargetEmployee;
@@ -414,6 +415,89 @@ class HandoverHttpTest {
         jdbc.update("DELETE FROM fams_warehouse WHERE id IN (?,?)", base, base+1);
         jdbc.update("DELETE FROM fams_asset_category WHERE id=?", base);
         jdbc.update("DELETE FROM fams_organization WHERE id IN (?,?)", base, base + 1);
+    }
+
+    @Test
+    void requisitionDeclarationPreservesPhysicalHandoverAndClosesOnTransfer() throws Exception {
+        var value = allocated(2);
+        value = warehouseWrite(value, 0, "deliver", delivery(value, 0));
+        String id = value.path("id").asText(), suffix = "/" + id + "/reassignment";
+        long version = value.path("version").asLong();
+        var ownership = value.path("ownership").get(0);
+        String body = JSON.writeValueAsString(java.util.Map.of(
+                "ownershipVersion", ownership.path("ownershipVersion").asLong(), "reason", "原库管不能继续办理"));
+        var receiverTodos = jdbc.queryForList("""
+                SELECT t.* FROM fams_todo t JOIN fams_requisition_allocation a ON a.id=t.business_id
+                WHERE t.business_type='REQUISITION_ALLOCATION' AND a.request_id=? AND t.pool_type='RECEIVER'
+                """, id);
+        assertFalse(receiverTodos.isEmpty());
+        var locks = jdbc.queryForList("""
+                SELECT * FROM fams_asset_business_lock WHERE business_type='REQUISITION' AND business_id=? ORDER BY id
+                """, id);
+        String reminder = "SELECT COUNT(*) FROM fams_todo WHERE business_type='REQUISITION' AND business_id=?"
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        String requestKey = key(), path = suffix + "/unavailable";
+        assertEquals(403, call(admin, "POST", path, body, key(), version).statusCode());
+        assertEquals(403, call(other, "POST", path, body, key(), version).statusCode());
+        assertEquals(409, call(warehouse, "POST", path, body, key(), version - 1).statusCode());
+        var declared = call(warehouse, "POST", path, body, requestKey, version);
+        assertEquals(200, declared.statusCode(), declared.body());
+        assertEquals(version, JSON.readTree(declared.body()).path("version").asLong());
+        var replayed = call(warehouse, "POST", path, body, requestKey, version);
+        assertEquals(200, replayed.statusCode(), replayed.body());
+        assertEquals(JSON.readTree(declared.body()), JSON.readTree(replayed.body()));
+        assertEquals(200, call(warehouse, "POST", path, body, key(), version).statusCode());
+        assertEquals(409, call(warehouse, "POST", path, body.replace("不能继续", "改变原因"), key(), version).statusCode());
+        assertEquals(1, count(reminder, id));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='REQUISITION'"
+                + " AND resource_id=? AND action='REQUISITION_PROCESSOR_UNAVAILABLE'", id));
+        var scanner = application.getBean("reassignmentReminderService");
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(scanner, "scan");
+        assertEquals(1, count(reminder, id));
+        var snapshot = JSON.readTree(call(admin, "GET", suffix, null, null, null).body());
+        assertEquals("原库管不能继续办理", snapshot.path("unavailableReason").asText());
+        var request = JSON.createObjectNode().put("processorAccountId", Long.toString(base + 12))
+                .put("ownershipVersion", snapshot.path("ownershipVersion").asLong())
+                .put("reason", "根据登记调整经办人员").put("evidence", "已核对全部接收阶段及未同步结果")
+                .put("unsynchronizedResultsChecked", true);
+        request.set("items", snapshot.path("items"));
+        var transfer = call(admin, "POST", suffix, request.toString(), key(), version);
+        assertEquals(200, transfer.statusCode(), transfer.body());
+        assertEquals(403, call(warehouse, "POST", path, body, requestKey, version).statusCode());
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(scanner, "scan");
+        assertEquals(0, count(reminder, id));
+        assertEquals(locks, jdbc.queryForList("""
+                SELECT * FROM fams_asset_business_lock WHERE business_type='REQUISITION' AND business_id=? ORDER BY id
+                """, id));
+        assertEquals(receiverTodos, jdbc.queryForList("""
+                SELECT t.* FROM fams_todo t JOIN fams_requisition_allocation a ON a.id=t.business_id
+                WHERE t.business_type='REQUISITION_ALLOCATION' AND a.request_id=? AND t.pool_type='RECEIVER'
+                """, id));
+    }
+
+    @Test
+    void nativeBorrowDeclarationReplaysCommittedReply() throws Exception {
+        var value = allocatedDraft(1, borrowDraft("2099-12-31"));
+        String id = value.path("id").asText(), code = "borrow-declaration-" + base;
+        jdbc.update("INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES (?,?,NOW(3))",
+                base + 11, miniSessions.identityHash(new MiniWechatIdentityPort.Identity("requisition-test-app", code)));
+        var script = java.nio.file.Path.of(System.getProperty("user.dir")).getParent()
+                .resolve("apps/miniprogram/test/runtime-requisition-http.mjs");
+        var builder = new ProcessBuilder("rtk", "proxy",
+                System.getenv().getOrDefault("FAMS_TEST_NODE_EXECUTABLE", "node"), script.toString())
+                .redirectErrorStream(true);
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_WECHAT_CODE", code);
+        builder.environment().put("FAMS_TEST_REQUISITION_ID", id);
+        var process = builder.start();
+        assertTrue(process.waitFor(45, TimeUnit.SECONDS));
+        String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        assertEquals(0, process.exitValue(), output);
+        assertTrue(output.contains("Native borrow processor declaration"), output);
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='REQUISITION'"
+                + " AND resource_id=? AND action='REQUISITION_PROCESSOR_UNAVAILABLE'", id));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_todo WHERE business_type='REQUISITION' AND business_id=?"
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1", id));
     }
 
     private JsonNode allocated(int quantity) throws Exception {
