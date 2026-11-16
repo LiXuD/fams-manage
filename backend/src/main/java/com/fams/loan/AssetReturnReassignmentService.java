@@ -6,6 +6,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -49,11 +50,83 @@ class AssetReturnReassignmentService {
                 + "WHERE a.status='ENABLED' AND a.initial_password_required=FALSE "
                 + "AND e.status='ACTIVE' AND o.status='ACTIVE' AND r.role_code='WAREHOUSE_OPERATOR' "
                 + "AND a.id<>? ORDER BY a.id", owner.get("processor_account_id"));
-        return Map.of("id", Long.toString(id), "version", row.get("version"),
+        var snapshot = new LinkedHashMap<String, Object>(Map.of("id", Long.toString(id), "version", row.get("version"),
                 "ownershipVersion", owner.get("ownership_version"),
                 "processorAccountId", owner.get("processor_account_id").toString(),
                 "items", checks(id), "operators", operators.stream().map(o -> Map.of(
-                        "id", o.get("id").toString(), "name", o.get("name"))).toList());
+                        "id", o.get("id").toString(), "name", o.get("name"))).toList()));
+        var declared = unavailabilityReason(id, number(owner, "ownership_version"), number(owner, "processor_account_id"));
+        if (declared != null) { snapshot.put("unavailableReason", declared); }
+        return snapshot;
+    }
+
+    Map<String, Object> declareUnavailable(Actor actor, long id, long version, String key,
+            AssetReturnUnavailabilityController.Input input) {
+        var current = actors.revalidateLocked(actor);
+        if (!current.has(Role.WAREHOUSE_OPERATOR)) { throw new LoanFailure("RETURN_FORBIDDEN", 403); }
+        var row = processing(id);
+        if (number(row, "processor_account_id") != current.id()) { throw new LoanFailure("RETURN_FORBIDDEN", 403); }
+        if (number(row, "ownership_version") != input.ownershipVersion()) {
+            throw conflict("RETURN_OWNERSHIP_CHANGED");
+        }
+        String reason = input.reason().strip();
+        String digest = digest(id, version, List.of(input.ownershipVersion(), reason));
+        var prior = db.queryForList("""
+                SELECT payload_sha256,response_body_json FROM fams_idempotency_record
+                WHERE actor_account_id=? AND operation_id='declareAssetReturnProcessorUnavailable'
+                    AND idempotency_key=? FOR UPDATE
+                """, current.id(), key);
+        if (!prior.isEmpty()) {
+            var receipt = prior.getFirst();
+            if (!digest.equals(receipt.get("payload_sha256"))) {
+                throw conflict("RETURN_IDEMPOTENCY_CONFLICT");
+            }
+            return json.readValue(receipt.get("response_body_json").toString(),
+                    new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        }
+        if (number(row, "version") != version) {
+            throw conflict("RETURN_VERSION_CONFLICT");
+        }
+        var locks = db.queryForList("""
+                SELECT id FROM fams_asset_business_lock WHERE business_type='ASSET_RETURN' AND business_id=?
+                    AND business_item_id=? AND asset_id=? AND released_at IS NULL FOR UPDATE
+                """, id, id, row.get("asset_id"));
+        if (locks.size() != 1) { throw conflict("RETURN_ASSET_LOCK_CONFLICT"); }
+        Instant now = clock.instant().truncatedTo(ChronoUnit.MILLIS);
+        var declared = unavailabilityReason(id, input.ownershipVersion(), current.id());
+        if (declared == null) {
+            db.update("""
+                    INSERT INTO fams_audit_event (request_id,actor_account_id,actor_role,action,resource_type,
+                        resource_id,before_version,after_version,occurred_at,detail_json)
+                    VALUES (?,?,'WAREHOUSE_OPERATOR','RETURN_PROCESSOR_UNAVAILABLE','ASSET_RETURN',?,?,?,?,?)
+                    """, actor.requestId().toString(), current.id(), id, version, version, now,
+                    json.writeValueAsString(Map.of("reason", reason, "ownershipVersion", input.ownershipVersion())));
+        } else if (!reason.equals(declared)) {
+            throw conflict("RETURN_UNAVAILABILITY_ALREADY_RECORDED");
+        }
+        db.update("""
+                INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at)
+                VALUES ('ASSET_ADMIN','ASSET_RETURN',?,'REASSIGNMENT_REQUIRED','OPEN',?)
+                ON DUPLICATE KEY UPDATE id=fams_todo.id
+                """, id, now);
+        var result = returns.get(actor, id);
+        db.update("""
+                INSERT INTO fams_idempotency_record (actor_account_id,operation_id,idempotency_key,payload_sha256,
+                    result_status,http_status,response_body_json,resource_type,resource_id,resource_version,
+                    created_at,completed_at,expires_at)
+                VALUES (?,'declareAssetReturnProcessorUnavailable',?,?,'SUCCEEDED',200,?,'ASSET_RETURN',?,?,?,?,?)
+                """, current.id(), key, digest, json.writeValueAsString(result), id, version,
+                now, now, now.plus(24, ChronoUnit.HOURS));
+        return result;
+    }
+
+    private String unavailabilityReason(long id, long ownershipVersion, long processor) {
+        return db.queryForList("""
+                SELECT JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.reason'))
+                FROM fams_audit_event WHERE resource_type='ASSET_RETURN' AND resource_id=?
+                    AND action='RETURN_PROCESSOR_UNAVAILABLE' AND actor_account_id=?
+                    AND JSON_EXTRACT(detail_json,'$.ownershipVersion')=?
+                """, String.class, id, processor, ownershipVersion).stream().findFirst().orElse(null);
     }
 
     @SuppressWarnings("unchecked")
@@ -107,6 +180,11 @@ class AssetReturnReassignmentService {
         db.update("UPDATE fams_todo SET assignee_account_id=? WHERE business_type='ASSET_RETURN' "
                 + "AND business_id=? AND pool_type='WAREHOUSE_OPERATOR' AND closed_at IS NULL",
                 input.processorAccountId(), id);
+        db.update("""
+                UPDATE fams_todo SET todo_status='CLOSED',closed_at=?
+                WHERE business_type='ASSET_RETURN' AND business_id=?
+                    AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1
+                """, now, id);
         var details = Map.of("previousProcessorAccountId", owner.get("processor_account_id").toString(),
                 "processorAccountId", Long.toString(input.processorAccountId()),
                 "ownershipVersionBefore", input.ownershipVersion(),

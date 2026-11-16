@@ -10,7 +10,10 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.util.Map;
 
-@RestControllerAdvice(assignableTypes = {LoanController.class, AssetReturnController.class, AssetReturnReassignmentController.class})
+@RestControllerAdvice(assignableTypes = {
+    LoanController.class, AssetReturnController.class, AssetReturnReassignmentController.class,
+    AssetReturnUnavailabilityController.class
+})
 @Order(-100)
 class LoanErrorHandler {
     @ExceptionHandler(com.fams.asset.AssetHandoverPort.Failure.class)

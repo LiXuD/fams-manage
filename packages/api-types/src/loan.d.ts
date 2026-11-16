@@ -25,7 +25,7 @@ export interface AssetReturn {
   id: string; assetId: string; loanId: string | null; assetVersion: number; version: number;
   proposedBy: string; responsibleEmployeeId: string; reason: string;
   returnStatus: "PENDING_APPROVAL" | "REJECTED" | "WAITING_WAREHOUSE_CLAIM" | "WAREHOUSE_PROCESSING" | "COMPLETED" | "TRANSFERRED";
-  processorAccountId: string | null; inspectionResult: "NORMAL" | "DAMAGED" | "MISSING" | null;
+  processorAccountId: string | null; ownershipVersion?: number; inspectionResult: "NORMAL" | "DAMAGED" | "MISSING" | null;
   inspectionReason: string | null; lockVersion?: number | null;
   asset?: { id: string; assetCode: string; name: string; version: number; lifecycleStatus: string; exceptionStatus: string };
   canReportMissing?: boolean;

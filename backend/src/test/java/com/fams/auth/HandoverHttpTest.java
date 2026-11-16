@@ -946,6 +946,72 @@ class HandoverHttpTest {
     }
 
     @Test
+    void returnDeclarationDeduplicatesAndRetainsBorrowUntilNewOwnerInspects() throws Exception {
+        receivedBorrow();
+        var value = approvedReturn(employee);
+        String id = value.path("id").asText(), suffix = "/" + id + "/reassignment", path = suffix + "/unavailable";
+        long version = value.path("version").asLong(), ownerVersion = value.path("ownershipVersion").asLong();
+        String body = JSON.writeValueAsString(java.util.Map.of("ownershipVersion", ownerVersion, "reason", "无法继续验收设备"));
+        String active = "SELECT COUNT(*) FROM fams_todo WHERE business_type='ASSET_RETURN' AND business_id=?"
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        var lock = jdbc.queryForMap("SELECT * FROM fams_asset_business_lock WHERE business_type='ASSET_RETURN'"
+                + " AND business_id=? AND released_at IS NULL", id);
+        String requestKey = key();
+        assertEquals(403, returnCall(admin, path, body, key(), version).statusCode());
+        assertEquals(403, returnCall(other, path, body, key(), version).statusCode());
+        assertEquals(409, returnCall(warehouse, path, body, key(), version - 1).statusCode());
+        var declared = returnCall(warehouse, path, body, requestKey, version);
+        assertEquals(200, declared.statusCode(), declared.body());
+        assertEquals(JSON.readTree(declared.body()), JSON.readTree(returnCall(warehouse, path, body, requestKey, version).body()));
+        assertEquals(200, returnCall(warehouse, path, body, key(), version).statusCode());
+        assertEquals(409, returnCall(warehouse, path, body.replace("设备", "另一设备"), key(), version).statusCode());
+        assertEquals(1, count(active, id));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='ASSET_RETURN'"
+                + " AND resource_id=? AND action='RETURN_PROCESSOR_UNAVAILABLE'", id));
+        var scanner = application.getBean("reassignmentReminderService");
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(scanner, "scan");
+        assertEquals(1, count(active, id));
+        var snapshot = returnReassignmentSnapshot(admin, id);
+        assertEquals("无法继续验收设备", snapshot.path("unavailableReason").asText());
+        var reassigned = returnCall(admin, suffix, returnReassignmentBody(snapshot, base + 12), key(), version);
+        assertEquals(200, reassigned.statusCode(), reassigned.body());
+        assertEquals(403, returnCall(warehouse, path, body, requestKey, version).statusCode());
+        assertFalse(returnReassignmentSnapshot(admin, id).has("unavailableReason"));
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(scanner, "scan");
+        assertEquals(0, count(active, id));
+        assertEquals(lock, jdbc.queryForMap("SELECT * FROM fams_asset_business_lock WHERE business_type='ASSET_RETURN'"
+                + " AND business_id=? AND released_at IS NULL", id));
+        assertEquals("OPEN", jdbc.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=?", String.class, base + 50));
+        var inspected = returnCall(other, "/" + id + "/inspect", returnInspection("NORMAL", "RQ-ASSET-" + base), key(), version + 1);
+        assertEquals(200, inspected.statusCode(), inspected.body());
+        assertEquals("RETURNED", jdbc.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=?", String.class, base + 50));
+    }
+
+    @Test
+    void nativeReturnDeclarationReplaysCommittedReply() throws Exception {
+        receivedBorrow();
+        var value = approvedReturn(employee);
+        String id = value.path("id").asText(), code = "return-declaration-" + base;
+        jdbc.update("INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES (?,?,NOW(3))",
+                base + 11, miniSessions.identityHash(new MiniWechatIdentityPort.Identity("requisition-test-app", code)));
+        var script = java.nio.file.Path.of(System.getProperty("user.dir")).getParent()
+                .resolve("apps/miniprogram/test/runtime-loan-http.mjs");
+        var builder = new ProcessBuilder("rtk", "proxy",
+                System.getenv().getOrDefault("FAMS_TEST_NODE_EXECUTABLE", "node"), script.toString())
+                .redirectErrorStream(true);
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_WECHAT_CODE", code);
+        builder.environment().put("FAMS_TEST_ASSET_RETURN_ID", id);
+        var process = builder.start();
+        assertTrue(process.waitFor(45, TimeUnit.SECONDS));
+        String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        assertEquals(0, process.exitValue(), output);
+        assertTrue(output.contains("Native asset return declaration"), output);
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='ASSET_RETURN'"
+                + " AND resource_id=? AND action='RETURN_PROCESSOR_UNAVAILABLE'", id));
+    }
+
+    @Test
     void returnReassignmentRejectsDriftAndRollsBackThenTransfersDisabledOwner() throws Exception {
         receivedBorrow();
         var value = approvedReturn(employee);

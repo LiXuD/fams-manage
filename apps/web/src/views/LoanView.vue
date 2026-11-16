@@ -165,7 +165,7 @@ onMounted(async () => {
     <p v-if="error" class="form-error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p>
     <button :disabled="busy" @click="refresh">刷新</button>
     <button v-if="retryable" :disabled="busy" @click="retry">重试上次操作</button>
-    <label>操作原因 / 验收说明 <textarea v-model="reason" :disabled="busy || retryable" maxlength="1000" /></label>
+    <label>操作原因 / 验收或无法继续的说明 <textarea v-model="reason" :disabled="busy || retryable" maxlength="1000" /></label>
     <h2>借用记录</h2>
     <table><thead><tr><th>资产</th><th>预计归还日</th><th>状态</th><th>操作</th></tr></thead><tbody>
       <tr v-for="row in loans" :key="row.id"><td>{{ row.assetCode }} · {{ row.name }}</td><td>{{ row.expectedReturnDate }}</td>
@@ -213,6 +213,9 @@ onMounted(async () => {
         @click="mutate(`/asset-returns/${selectedReturn.id}/claim`, selectedReturn.version)">领取整单验收</button>
       <AssetReturnReassignment v-if="admin && selectedReturn.returnStatus === 'WAREHOUSE_PROCESSING'"
         :id="selectedReturn.id" :version="selectedReturn.version" @saved="refresh" />
+      <button v-if="canInspect && selectedReturn.lockVersion != null && selectedReturn.ownershipVersion != null"
+        :disabled="busy || retryable || !reason.trim()"
+        @click="mutate(`/asset-returns/${selectedReturn.id}/reassignment/unavailable`, selectedReturn.version, { reason: reason.trim(), ownershipVersion: selectedReturn.ownershipVersion })">登记无法继续验收</button>
       <div v-if="canInspect">
         <label>验收结果 <select v-model="result" :disabled="busy || retryable"><option value="NORMAL">正常入库</option><option value="DAMAGED">损坏转报修</option><option value="MISSING">实物缺失转报失</option></select></label>
         <template v-if="result !== 'MISSING'">

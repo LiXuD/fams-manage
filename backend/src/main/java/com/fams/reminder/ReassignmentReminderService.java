@@ -83,6 +83,14 @@ class ReassignmentReminderService {
                     AND declaration.actor_account_id=ownership.processor_account_id
                     AND JSON_EXTRACT(declaration.detail_json,'$.ownershipVersion')=ownership.ownership_version
                 WHERE requisition.request_status IN ('WAREHOUSE_PROCESSING','WAITING_HANDOVER')
+                UNION
+                SELECT 'ASSET_RETURN', returned.id
+                FROM fams_asset_return returned JOIN fams_audit_event declaration
+                  ON declaration.resource_type='ASSET_RETURN' AND declaration.resource_id=returned.id
+                    AND declaration.action='RETURN_PROCESSOR_UNAVAILABLE'
+                    AND declaration.actor_account_id=returned.processor_account_id
+                    AND JSON_EXTRACT(declaration.detail_json,'$.ownershipVersion')=returned.ownership_version
+                WHERE returned.return_status='WAREHOUSE_PROCESSING'
             )
             """;
 
