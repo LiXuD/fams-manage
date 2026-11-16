@@ -86,7 +86,7 @@ class AssetService {
                 mapper.count(actor.id(), filters), items);
     }
 
-    private Map<String, Object> filters(Map<String, String> query) {
+    Map<String, Object> filters(Map<String, String> query) {
         Map<String, Object> filters = new HashMap<>();
         for (var entry : query.entrySet()) {
             String key = entry.getKey();

@@ -1409,6 +1409,9 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/AssetTimelineEvent'
+    AssetLedgerCsv:
+      type: string
+      description: UTF-8 CSV with a byte order mark and one header row.
     AssetFilterCriteria:
       type: object
       additionalProperties: false
@@ -7908,6 +7911,54 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /assets/export.csv:
+    get:
+      tags: [Assets]
+      operationId: exportAssetLedgerCsv
+      summary: Download the filtered asset ledger as CSV.
+      x-actor:
+        required: true
+        roles: [ASSET_ADMIN, WAREHOUSE_OPERATOR]
+      x-data-scope: >-
+        Requires an active BULK_EXPORT field grant. Uses the same asset visibility and
+        supported filters as the asset ledger. Only the creator may export an unsubmitted
+        draft or a card cancelled before first submission; submitted cards follow the
+        enterprise business view.
+      x-sensitive-fields-policy: Excludes serial number, phone, notes, attachments and QR fields.
+      x-audit-event: ASSET_LEDGER_EXPORTED
+      description: Records matched row count and filter field names in the security audit.
+      parameters:
+        - $ref: '#/components/parameters/AssetCodeFilter'
+        - $ref: '#/components/parameters/AssetNameFilter'
+        - $ref: '#/components/parameters/SerialNumberFilter'
+        - $ref: '#/components/parameters/AssetCategoryFilter'
+        - $ref: '#/components/parameters/AssetLifecycleFilter'
+        - $ref: '#/components/parameters/AssetExceptionFilter'
+        - $ref: '#/components/parameters/AssetUsageModeFilter'
+        - $ref: '#/components/parameters/AssetWarehouseFilter'
+        - $ref: '#/components/parameters/AssetLocationFilter'
+        - $ref: '#/components/parameters/AssetOrganizationFilter'
+        - $ref: '#/components/parameters/AssetUsingOrganizationFilter'
+        - $ref: '#/components/parameters/AssetResponsibleEmployeeFilter'
+        - $ref: '#/components/parameters/AssetDepartmentResponsibleEmployeeFilter'
+        - $ref: '#/components/parameters/AssetInboundDateFromFilter'
+        - $ref: '#/components/parameters/AssetInboundDateToFilter'
+        - $ref: '#/components/parameters/AssetLastInventoryDateFromFilter'
+        - $ref: '#/components/parameters/AssetLastInventoryDateToFilter'
+      responses:
+        '200':
+          description: UTF-8 CSV attachment with up to 10000 scoped rows.
+          content:
+            text/csv:
+              schema: { $ref: '#/components/schemas/AssetLedgerCsv' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422':
+          description: More than 10000 scoped rows match the filters (ASSET_EXPORT_LIMIT).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
   /assets/{assetId}:
     parameters:
       - $ref: '#/components/parameters/AssetId'

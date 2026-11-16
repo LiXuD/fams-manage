@@ -57,6 +57,19 @@ export function listAssets(page = 1, code = "", name = ""): Promise<Page<AssetCa
   return request<Page<AssetCard>>("/assets?" + query);
 }
 
+export async function assetLedgerCsv(code: string, name: string): Promise<Blob> {
+  const query = new URLSearchParams();
+  if (code) query.set("assetCode", code);
+  if (name) query.set("name", name);
+  const response = await fetch("/api/v1/assets/export.csv?" + query, {
+    credentials: "include", cache: "no-store",
+  });
+  if (response.status === 403) throw new AssetApiError(403, "AUTH_FORBIDDEN", "当前账号无批量导出权限。");
+  if (response.status === 422) throw new AssetApiError(422, "ASSET_EXPORT_LIMIT", "最多导出 10000 项，请缩小查询范围。");
+  if (!response.ok) throw new AssetApiError(response.status, "ASSET_EXPORT_FAILED", "资产台账导出失败。");
+  return await response.blob();
+}
+
 export function getAsset(id: string): Promise<AssetCard> {
   return request<AssetCard>("/assets/" + encodeURIComponent(id));
 }

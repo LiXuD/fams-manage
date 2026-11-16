@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import AssetFactoryReplacementTrace from "@/components/AssetFactoryReplacementTrace.vue";
 import AssetTagPlacement from "./AssetTagPlacement.vue";
 import QRCode from "qrcode";
 import { useSessionStore } from "@/auth/sessionStore";
 import {
-  activeReferences, cancelAsset, copyAsset, createAsset, getAsset, getTag, listAssets,
+  activeReferences, assetLedgerCsv, cancelAsset, copyAsset, createAsset, getAsset, getTag, listAssets,
   reprintTag, updateAsset,
   type AssetCard, type AssetReference, type AssetTag,
 } from "@/asset/api";
@@ -21,6 +21,10 @@ const page = ref(1);
 const entryQuery = new URLSearchParams(window.location.search);
 const code = ref(entryQuery.get("assetCode") ?? "");
 const nameFilter = ref("");
+const appliedFilters = ref<{ code: string; name: string; accountId: string }>();
+const querying = ref(false);
+const exporting = ref(false);
+let queryGeneration = 0;
 const error = ref("");
 const notice = ref("");
 const busy = ref(false);
@@ -38,6 +42,7 @@ const warehouses = ref<AssetReference[]>([]);
 const locations = ref<AssetReference[]>([]);
 
 const canWrite = session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false;
+const canExport = computed(() => session.permissions?.fieldPermissions.includes("BULK_EXPORT") ?? false);
 
 function custodyLabel(asset: AssetCard): string {
   const custody = asset.currentCustody;
@@ -56,12 +61,44 @@ function selectedReference(items: AssetReference[], id: string): AssetReference 
 }
 
 async function load(): Promise<void> {
+  const turn = ++queryGeneration;
+  const accountId = session.user?.id;
+  const filters = { code: code.value.trim(), name: nameFilter.value.trim() };
+  querying.value = true;
   error.value = "";
   try {
-    const result = await listAssets(page.value, code.value, nameFilter.value);
+    const result = await listAssets(page.value, filters.code, filters.name);
+    if (turn !== queryGeneration || accountId !== session.user?.id) return;
     rows.value = result.items;
     total.value = result.total;
-  } catch (cause) { error.value = cause instanceof Error ? cause.message : "台账加载失败"; }
+    appliedFilters.value = accountId ? { ...filters, accountId } : undefined;
+  } catch (cause) {
+    if (turn !== queryGeneration || accountId !== session.user?.id) return;
+    error.value = cause instanceof Error ? cause.message : "台账加载失败";
+  } finally {
+    if (turn === queryGeneration) querying.value = false;
+  }
+}
+
+async function exportCurrent(): Promise<void> {
+  const filters = appliedFilters.value;
+  if (!canExport.value || !filters || querying.value || exporting.value || filters.accountId !== session.user?.id) return;
+  exporting.value = true;
+  error.value = "";
+  try {
+    const file = await assetLedgerCsv(filters.code, filters.name);
+    if (filters.accountId !== session.user?.id || !canExport.value) return;
+    const url = URL.createObjectURL(file);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "asset-ledger.csv";
+    try { link.click(); }
+    finally { window.setTimeout(() => URL.revokeObjectURL(url), 0); }
+  } catch (cause) {
+    if (filters.accountId === session.user?.id) {
+      error.value = cause instanceof Error ? cause.message : "资产台账导出失败。";
+    }
+  } finally { exporting.value = false; }
 }
 
 async function openCard(id: string): Promise<void> {
@@ -190,6 +227,8 @@ onMounted(() => {
         <label>资产编码<input v-model="code" placeholder="编码包含" /></label>
         <label>资产名称<input v-model="nameFilter" placeholder="名称包含" /></label>
         <button class="secondary-button" type="submit">查询</button>
+        <button v-if="canExport" class="secondary-button" type="button"
+          :disabled="querying || exporting || !appliedFilters" @click="exportCurrent">导出当前查询结果 CSV</button>
       </form>
       <div class="asset-table-wrap"><table class="asset-table">
         <thead><tr><th>资产编码</th><th>名称</th><th>型号</th><th>生命周期</th><th>建卡阶段</th><th>正式保管</th><th>实物去向</th><th>操作</th></tr></thead>
