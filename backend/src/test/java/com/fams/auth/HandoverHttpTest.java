@@ -1,6 +1,7 @@
 package com.fams.auth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.AfterEach;
@@ -57,6 +58,8 @@ class HandoverHttpTest {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired MiniSessionService miniSessions;
+    @Autowired org.springframework.context.ApplicationEventPublisher events;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
     private long base;
     private Long extraTargetEmployee;
     private Session employee;
@@ -2163,9 +2166,43 @@ class HandoverHttpTest {
         String body = reassignmentBody(snapshot, base + 12), identity = key();
         String path = "/" + row.path("id").asText() + "/reassignment";
         long version = row.path("version").asLong();
+        String declarationPath = path + "/unavailable";
+        String declaration = "{\"ownershipVersion\":0,\"reason\":\"当前处理人休假\"}";
+        assertEquals(403, transferCall(admin, "POST", declarationPath, declaration, key(), version).statusCode());
+        assertEquals(409, transferCall(other, "POST", declarationPath, declaration, key(), version).statusCode());
+        assertEquals(400, transferCall(warehouse, "POST", declarationPath, "{\"reason\":\"缺少处理权版本\"}", key(), version).statusCode());
+        assertEquals(409, transferCall(warehouse, "POST", declarationPath, declaration, key(), version - 1).statusCode());
+        String declarationKey = key();
+        var recorded = transferCall(warehouse, "POST", declarationPath, declaration, declarationKey, version);
+        assertEquals(200, recorded.statusCode(), recorded.body());
+        assertTrue(JSON.readTree(recorded.body()).path("recorded").asBoolean());
+        assertEquals(recorded.body(), transferCall(warehouse, "POST", declarationPath, declaration, declarationKey, version).body());
+        assertEquals(409, transferCall(warehouse, "POST", declarationPath,
+                declaration.replace("休假", "离职"), key(), version).statusCode());
+        var mini = http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+                + "/api/v1/mini/transfers" + declarationPath))
+                .header("X-FAMS-Mini-Session", proxyMiniLogin(base + 11, "transfer-unavailable"))
+                .header("Idempotency-Key", key()).header("If-Match-Version", Long.toString(version))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(declaration)).build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, mini.statusCode(), mini.body());
+        assertEquals(JSON.readTree(recorded.body()), JSON.readTree(mini.body()));
+        refreshTransferReminders();
+        assertEquals("当前处理人休假", reassignmentSnapshot(row).path("unavailableReason").asText());
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='TRANSFER'"
+                + " AND resource_id=? AND action='TRANSFER_PROCESSOR_UNAVAILABLE'", row.path("id").asLong()));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_todo WHERE business_type='TRANSFER'"
+                + " AND business_id=? AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1", row.path("id").asLong()));
         var response = transferCall(admin, "POST", path, body, identity, version);
         assertEquals(200, response.statusCode(), response.body());
         var changed = JSON.readTree(response.body());
+        refreshTransferReminders();
+        assertFalse(reassignmentSnapshot(changed).has("unavailableReason"));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_todo WHERE business_type='TRANSFER'"
+                + " AND business_id=? AND todo_type='REASSIGNMENT_REQUIRED' AND todo_status='CLOSED'", row.path("id").asLong()));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_todo WHERE business_type='TRANSFER'"
+                + " AND business_id=? AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1", row.path("id").asLong()));
+        assertEquals(409, transferCall(warehouse, "POST", declarationPath, declaration, declarationKey, version).statusCode());
         assertEquals(Long.toString(base + 12), changed.path("processorAccountId").asText());
         assertEquals(1, changed.path("ownershipVersion").asLong());
         assertEquals(row.path("approvedVersion"), changed.path("approvedVersion"));
@@ -2179,6 +2216,11 @@ class HandoverHttpTest {
         assertEquals(409, transferCall(warehouse, "POST", "/" + changed.path("id").asText() + transferItemPath(changed, "deliver"), transferPhysical(changed, null, false), key(), changed.path("version").asLong()).statusCode());
         changed = transferAction(other, changed, transferItemPath(changed, "deliver"), transferPhysical(changed, null, false));
         assertEquals("DELIVERED", changed.path("items").get(0).path("itemStatus").asText());
+    }
+
+    private void refreshTransferReminders() {
+        new org.springframework.transaction.support.TransactionTemplate(transactions).executeWithoutResult(status ->
+                events.publishEvent(new WorkforceAvailabilityChanged()));
     }
 
     @Test

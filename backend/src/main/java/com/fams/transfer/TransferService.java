@@ -1019,11 +1019,14 @@ class TransferService {
                     + " e.status='ACTIVE' AND o.status='ACTIVE' AND"
                     + " r.role_code='WAREHOUSE_OPERATOR' AND a.id<>? ORDER BY a.id",
                 row.get("processor_account_id"));
-        return Map.of("id", Long.toString(id), "version", row.get("version"),
+        var result = new LinkedHashMap<String, Object>(Map.of("id", Long.toString(id), "version", row.get("version"),
                 "ownershipVersion", row.get("ownership_version"),
                 "processorAccountId", row.get("processor_account_id").toString(),
                 "items", checks.stream().map(this::wire).toList(),
-                "operators", operators.stream().map(this::wire).toList());
+                "operators", operators.stream().map(this::wire).toList()));
+        var declared = unavailabilityReason(id, number(row, "ownership_version"), number(row, "processor_account_id"));
+        if (declared != null) { result.put("unavailableReason", declared); }
+        return result;
     }
 
     Map<String, Object> reassign(Actor actor, long id, long version, String key,
@@ -1080,6 +1083,11 @@ class TransferService {
         db.update("UPDATE fams_todo SET assignee_account_id=? WHERE business_type='TRANSFER'"
                 + " AND business_id=? AND pool_type='WAREHOUSE_OPERATOR' AND closed_at IS NULL",
                 input.processorAccountId(), id);
+        db.update("""
+                UPDATE fams_todo SET todo_status='CLOSED',closed_at=?
+                WHERE business_type='TRANSFER' AND business_id=? AND todo_type='REASSIGNMENT_REQUIRED'
+                    AND active_guard=1
+                """, now(), id);
         var detail = new LinkedHashMap<String, Object>();
         detail.put("previousProcessorAccountId", Long.toString(oldProcessor));
         detail.put("processorAccountId", Long.toString(input.processorAccountId()));
@@ -1091,6 +1099,62 @@ class TransferService {
         detail.put("items", checks.stream().map(this::wire).toList());
         event(actor, current, id, null, "CONTROLLED_REASSIGNMENT", detail);
         return finish(current, "reassign", key, hash, detail(request(id)));
+    }
+
+    Map<String, Object> declareUnavailable(Actor actor, long id, long version, String key,
+            TransferController.Unavailability input) {
+        var current = actors.revalidateLocked(actor);
+        role(current, Role.WAREHOUSE_OPERATOR);
+        var row = request(id);
+        processor(current, row);
+        String reason = input.reason().strip();
+        String operation = "declareUnavailable";
+        String hash = digest(operation + ":" + id + ":" + version, Map.of(
+                "ownershipVersion", input.ownershipVersion(), "reason", reason));
+        var previous = replay(current, operation, key, hash);
+        if (previous != null) { return previous; }
+        version(row, version);
+        executable(row);
+        if (number(row, "ownership_version") != input.ownershipVersion()) {
+            throw new TransferFailure("TRANSFER_OWNERSHIP_CHANGED", 409);
+        }
+        var work = db.queryForList("""
+                SELECT id FROM fams_todo WHERE business_type='TRANSFER' AND business_id=?
+                    AND pool_type='WAREHOUSE_OPERATOR' AND todo_type='EXECUTION' AND todo_status='OPEN'
+                    AND active_guard=1 AND assignee_account_id=? FOR UPDATE
+                """, Long.class, id, current.id());
+        if (work.isEmpty()) { throw new TransferFailure("TRANSFER_STATE_CHANGED", 409); }
+        String todoId = work.getFirst().toString();
+        String declared = unavailabilityReason(id, input.ownershipVersion(), current.id());
+        if (declared == null) {
+            db.update("""
+                    INSERT INTO fams_audit_event (request_id,actor_account_id,actor_role,action,resource_type,
+                        resource_id,before_version,after_version,occurred_at,detail_json)
+                    VALUES (?,?,'WAREHOUSE_OPERATOR','TRANSFER_PROCESSOR_UNAVAILABLE','TRANSFER',?,?,?,?,?)
+                    """, actor.requestId().toString(), current.id(), id, version, version, now(),
+                    json.writeValueAsString(Map.of("todoId", todoId, "reason", reason,
+                            "ownershipVersion", input.ownershipVersion())));
+        } else if (!reason.equals(declared)) {
+            throw new TransferFailure("TRANSFER_UNAVAILABILITY_ALREADY_RECORDED", 409);
+        }
+        db.update("""
+                INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at)
+                VALUES ('ASSET_ADMIN','TRANSFER',?,'REASSIGNMENT_REQUIRED','OPEN',?)
+                ON DUPLICATE KEY UPDATE id=fams_todo.id
+                """, id, now());
+        return finish(current, operation, key, hash, Map.of("id", Long.toString(id), "version", version, "recorded", true));
+    }
+
+    private String unavailabilityReason(long id, long ownershipVersion, long processor) {
+        return db.queryForList("""
+                SELECT JSON_UNQUOTE(JSON_EXTRACT(e.detail_json,'$.reason'))
+                FROM fams_audit_event e JOIN fams_todo t ON t.business_type='TRANSFER' AND t.business_id=e.resource_id
+                    AND t.todo_type='EXECUTION' AND t.todo_status='OPEN' AND t.active_guard=1
+                    AND t.assignee_account_id=e.actor_account_id
+                    AND CAST(t.id AS CHAR)=JSON_UNQUOTE(JSON_EXTRACT(e.detail_json,'$.todoId'))
+                WHERE e.resource_type='TRANSFER' AND e.resource_id=? AND e.action='TRANSFER_PROCESSOR_UNAVAILABLE'
+                    AND e.actor_account_id=? AND JSON_EXTRACT(e.detail_json,'$.ownershipVersion')=?
+                """, String.class, id, processor, ownershipVersion).stream().findFirst().orElse(null);
     }
 
     private List<Map<String, Object>> reassignmentItems(long id) {

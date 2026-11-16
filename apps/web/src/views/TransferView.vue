@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import TransferReassignment from "@/components/TransferReassignment.vue";
@@ -16,6 +16,7 @@ const receipts = ref<TransferReceipt[]>([]), receipt = ref<TransferReceipt | nul
 const draftItems = ref<{ asset: TransferAsset; target: TransferTarget }[]>([]);
 const assetId = ref(""), owning = ref(""), using = ref(""), custody = ref("PERSONAL"), employee = ref(""), warehouse = ref(""), location = ref("");
 const reason = ref(""), code = ref(""), destination = ref(""), evidence = ref(""), signer = ref(""), receivedAt = ref("");
+const unavailableReason = ref("");
 const personId = ref(""), personAssets = ref<TransferAsset[]>([]), personNotice = ref("");
 const personnelChoices = ref<TransferChoice[]>([]);
 const peopleNames = ref<Record<string, string>>({}), personTasks = ref("");
@@ -29,6 +30,7 @@ const labels: Record<string, string> = { DRAFT: "草稿", PENDING_APPROVAL: "待
   PROCESSING: "库管处理中", WAITING_HANDOVER: "待实际交接", COMPLETED: "已完成", PARTIALLY_COMPLETED: "部分完成", CANCELLED: "已取消",
   READY: "未交出", DELIVERED: "待目标人接收", REFUSED: "实物不符待核查", RECOVERY_PENDING: "待实物收回" };
 let pending: LoanMutation | null = null, grant: string | null = null;
+watch([() => selected.value?.id, () => session.user?.id], () => { unavailableReason.value = ""; });
 
 async function catalog(kind: string, org?: string) {
   const result: TransferChoice[] = []; let p = 1, part: TransferChoice[];
@@ -62,6 +64,10 @@ async function mutate(path: string, version: number, body?: unknown) {
   try {
     const result = await loanRequest<{ id: string }>(pending.path, pending);
     const action = pending.path; pending = null; retryable.value = false; notice.value = "操作已保存。";
+    if (action.endsWith("/reassignment/unavailable")) {
+      unavailableReason.value = "";
+      notice.value = "已通知资产管理员跟进转派。";
+    }
     if (action.includes("/receipts/")) { receipt.value = null; grant = null; }
     else { selected.value = await loanRequest<Transfer>("/transfers/" + result.id); await loadPeople(selected.value); }
     if (action === "/transfers") draftItems.value = [];
@@ -185,6 +191,10 @@ onMounted(async () => {
       <template v-if="admin && selected.requestStatus === 'PENDING_APPROVAL'"><button :disabled="busy || retryable" @click="decide(true)">批准调拨</button><button :disabled="busy || retryable" @click="decide(false)">驳回调拨</button></template>
       <button v-if="operator && selected.requestStatus === 'WAITING_WAREHOUSE_CLAIM'" :disabled="busy || retryable" @click="mutate(`/transfers/${selected.id}/claim`, selected.version)">领取整单调拨</button>
       <div v-if="operator && selected.processorAccountId === session.user?.id && ['PROCESSING','WAITING_HANDOVER'].includes(selected.requestStatus)">
+        <label>无法继续处理的原因 <textarea v-model="unavailableReason" :disabled="busy || retryable" maxlength="1000" /></label>
+        <button :disabled="busy || retryable || !unavailableReason.trim()"
+          @click="mutate(`/transfers/${selected.id}/reassignment/unavailable`, selected.version,
+            { ownershipVersion: selected.ownershipVersion, reason: unavailableReason.trim() })">登记无法继续处理</button>
         <label>实物编码 / 当前二维码 <input v-model="code" :disabled="busy || retryable" /></label><label>实际去向 <input v-model="destination" :disabled="busy || retryable" maxlength="500" /></label>
         <label>现场交接 / 收回依据 <textarea v-model="evidence" :disabled="busy || retryable" maxlength="1000" /></label>
         <label>目标现场实际签收人 <input v-model="signer" :disabled="busy || retryable" maxlength="200" /></label><label>现场收妥时间 <input v-model="receivedAt" type="datetime-local" :disabled="busy || retryable" /></label>
