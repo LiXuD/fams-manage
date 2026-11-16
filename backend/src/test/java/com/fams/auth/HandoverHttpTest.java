@@ -500,6 +500,93 @@ class HandoverHttpTest {
                 + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1", id));
     }
 
+    @Test
+    void firstExecutionTimeoutClosesWhenRequisitionActuallyHandsOver() throws Exception {
+        var value = allocated(2);
+        long id = value.path("id").asLong();
+        jdbc.update("UPDATE fams_requisition_ownership SET acquired_at='2026-10-02 20:00:00.000' WHERE request_id=?", id);
+        jdbc.update("UPDATE fams_requisition SET parameter_snapshot_json=? WHERE id=?", executionCalendar(), id);
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_requisition_handover h JOIN fams_requisition_allocation a"
+                + " ON a.id=h.allocation_id WHERE a.request_id=?", id));
+        String active = "SELECT COUNT(*) FROM fams_todo WHERE business_type='REQUISITION' AND business_id=?"
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        scanFirstExecutionAt("2026-10-06T23:59:59.999Z");
+        assertEquals(0, count(active, id));
+        scanFirstExecutionAt("2026-10-07T00:00:00Z");
+        scanFirstExecutionAt("2026-10-07T00:01:00Z");
+        assertEquals(1, count(active, id));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_todo t JOIN fams_requisition_allocation a ON a.id=t.business_id"
+                + " WHERE t.business_type='REQUISITION_ALLOCATION' AND a.request_id=? AND t.pool_type='RECEIVER'", id));
+        assertEquals(base + 11, jdbc.queryForObject("SELECT processor_account_id FROM fams_requisition_ownership"
+                + " WHERE request_id=? AND active_guard=1", Long.class, id));
+        warehouseWrite(value, 0, "deliver", delivery(value, 0));
+        scanFirstExecutionAt("2026-10-07T00:02:00Z");
+        assertEquals(0, count(active, id));
+        assertEquals(2, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE business_type='REQUISITION'"
+                + " AND business_id=? AND released_at IS NULL", id));
+    }
+
+    @Test
+    void firstExecutionTimeoutClosesWhenTransferIsExplicitlyReassigned() throws Exception {
+        personalTransferFixture();
+        var row = claimedTransfer(transferDraft(false, false, base + 15, base + 1, base, 0), employee);
+        long id = row.path("id").asLong();
+        jdbc.update("UPDATE fams_todo SET opened_at='2026-10-02 20:00:00.000' WHERE business_type='TRANSFER'"
+                + " AND business_id=? AND todo_type='EXECUTION' AND active_guard=1", id);
+        jdbc.update("UPDATE fams_transfer_item SET parameter_snapshot_json=? WHERE request_id=?", executionCalendar(), id);
+        String active = "SELECT COUNT(*) FROM fams_todo WHERE business_type='TRANSFER' AND business_id=?"
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        scanFirstExecutionAt("2026-10-06T23:59:59.999Z");
+        assertEquals(0, count(active, id));
+        scanFirstExecutionAt("2026-10-07T00:00:00Z");
+        assertEquals(1, count(active, id));
+        var snapshot = reassignmentSnapshot(row);
+        var transferred = transferAction(admin, row, "/reassignment", reassignmentBody(snapshot, base + 12));
+        assertEquals(Long.toString(base + 12), transferred.path("processorAccountId").asText());
+        scanFirstExecutionAt("2026-10-08T00:00:00Z");
+        assertEquals(0, count(active, id));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE business_type='TRANSFER'"
+                + " AND business_id=? AND released_at IS NULL", id));
+    }
+
+    @Test
+    void firstExecutionTimeoutClosesWhenTransferActuallyHandsOver() throws Exception {
+        personalTransferFixture();
+        var row = claimedTransfer(transferDraft(false, false, base + 15, base + 1, base, 0), employee);
+        long id = row.path("id").asLong();
+        jdbc.update("UPDATE fams_todo SET opened_at='2026-10-02 20:00:00.000' WHERE business_type='TRANSFER'"
+                + " AND business_id=? AND todo_type='EXECUTION' AND active_guard=1", id);
+        jdbc.update("UPDATE fams_transfer_item SET parameter_snapshot_json=? WHERE request_id=?", executionCalendar(), id);
+        String active = "SELECT COUNT(*) FROM fams_todo WHERE business_type='TRANSFER' AND business_id=?"
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        scanFirstExecutionAt("2026-10-07T00:00:00Z");
+        assertEquals(1, count(active, id));
+        row = transferAction(warehouse, row, transferItemPath(row, "deliver"), transferPhysical(row, null, false));
+        assertEquals("DELIVERED", row.path("items").get(0).path("itemStatus").asText());
+        scanFirstExecutionAt("2026-10-07T00:01:00Z");
+        assertEquals(0, count(active, id));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE business_type='TRANSFER'"
+                + " AND business_id=? AND released_at IS NULL", id));
+    }
+
+    private String executionCalendar() {
+        return """
+                {"timezone":"UTC","workWeek":["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY"],
+                 "adjustedWorkdays":["2026-10-03"],"holidays":["2026-10-05"],
+                 "warehouseFirstExecutionDeadlineWorkdays":2,"handoverAcceptanceDeadlineNaturalDays":3}
+                """;
+    }
+
+    private void scanFirstExecutionAt(String instant) throws Exception {
+        var scannerType = org.springframework.util.ClassUtils.getUserClass(application.getBean("reassignmentReminderService"));
+        var constructor = org.springframework.util.ReflectionUtils.accessibleConstructor(scannerType,
+                JdbcTemplate.class, java.time.Clock.class, ObjectMapper.class);
+        var scanner = org.springframework.beans.BeanUtils.instantiateClass(constructor,
+                jdbc, java.time.Clock.fixed(Instant.parse(instant), java.time.ZoneOffset.UTC), JSON);
+        new org.springframework.transaction.support.TransactionTemplate(transactions)
+                .executeWithoutResult(status -> org.springframework.test.util.ReflectionTestUtils.invokeMethod(scanner, "scan"));
+    }
+
     private JsonNode allocated(int quantity) throws Exception {
         return allocatedDraft(quantity, draft(quantity, base + 10, base));
     }
