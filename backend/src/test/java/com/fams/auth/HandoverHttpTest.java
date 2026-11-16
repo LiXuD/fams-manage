@@ -569,6 +569,58 @@ class HandoverHttpTest {
                 + " AND business_id=? AND released_at IS NULL", id));
     }
 
+    @Test
+    void firstExecutionTimeoutForReturnClosesOnControlledTransfer() throws Exception {
+        receivedBorrow();
+        var value = approvedReturn(employee);
+        String id = value.path("id").asText();
+        jdbc.update("UPDATE fams_todo SET opened_at='2026-10-02 20:00:00.000' WHERE business_type='ASSET_RETURN'"
+                + " AND business_id=? AND todo_type='INSPECTION' AND active_guard=1", id);
+        jdbc.update("UPDATE fams_asset_return SET parameter_snapshot_json=? WHERE id=?", executionCalendar(), id);
+        String active = "SELECT COUNT(*) FROM fams_todo WHERE business_type='ASSET_RETURN' AND business_id=?"
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        String locks = "SELECT * FROM fams_asset_business_lock WHERE business_type='ASSET_RETURN'"
+                + " AND business_id=? AND released_at IS NULL";
+        var original = jdbc.queryForMap(locks, id);
+        scanFirstExecutionAt("2026-10-06T23:59:59.999Z");
+        assertEquals(0, count(active, id));
+        scanFirstExecutionAt("2026-10-07T00:00:00Z");
+        scanFirstExecutionAt("2026-10-07T00:01:00Z");
+        assertEquals(1, count(active, id));
+        var context = returnReassignmentSnapshot(admin, id);
+        assertEquals(Long.toString(base + 11), context.path("processorAccountId").asText());
+        assertFalse(context.has("unavailableReason"));
+        var transferred = returnCall(admin, "/" + id + "/reassignment",
+                returnReassignmentBody(context, base + 12), key(), value.path("version").asLong());
+        assertEquals(200, transferred.statusCode(), transferred.body());
+        scanFirstExecutionAt("2026-10-07T00:02:00Z");
+        assertEquals(0, count(active, id));
+        assertEquals(original, jdbc.queryForMap(locks, id));
+        assertEquals("OPEN", jdbc.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=?",
+                String.class, base + 50));
+    }
+
+    @Test
+    void firstExecutionTimeoutForReturnClosesOnFirstPhysicalInspection() throws Exception {
+        receivedBorrow();
+        var value = approvedReturn(employee);
+        String id = value.path("id").asText();
+        jdbc.update("UPDATE fams_todo SET opened_at='2026-10-02 20:00:00.000' WHERE business_type='ASSET_RETURN'"
+                + " AND business_id=? AND todo_type='INSPECTION' AND active_guard=1", id);
+        jdbc.update("UPDATE fams_asset_return SET parameter_snapshot_json=? WHERE id=?", executionCalendar(), id);
+        String active = "SELECT COUNT(*) FROM fams_todo WHERE business_type='ASSET_RETURN' AND business_id=?"
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        scanFirstExecutionAt("2026-10-07T00:00:00Z");
+        assertEquals(1, count(active, id));
+        var inspected = returnCall(warehouse, "/" + id + "/inspect", returnInspection("NORMAL", "RQ-ASSET-" + base),
+                key(), value.path("version").asLong());
+        assertEquals(200, inspected.statusCode(), inspected.body());
+        scanFirstExecutionAt("2026-10-07T00:01:00Z");
+        assertEquals(0, count(active, id));
+        assertEquals("RETURNED", jdbc.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=?",
+                String.class, base + 50));
+    }
+
     private String executionCalendar() {
         return """
                 {"timezone":"UTC","workWeek":["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY"],

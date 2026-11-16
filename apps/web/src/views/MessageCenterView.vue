@@ -35,7 +35,7 @@ const BUSINESSES: Record<string, string> = { INBOUND: "入库单", REQUISITION: 
   LOST_REPORT: "报失单", SCRAP: "报废申请", ITEM_TARGET_CHANGE: "目标变更" };
 
 const destinations: Record<string, string> = { INBOUND: "/inbound", REQUISITION: "/requisitions",
-  REQUISITION_ALLOCATION: "/requisitions", LOAN: "/loans", LOAN_EXTENSION: "/loans", ASSET_RETURN: "/loans",
+  REQUISITION_ALLOCATION: "/requisitions", LOAN: "/loans", LOAN_EXTENSION: "/loans",
   TRANSFER: "/transfers", TRANSFER_ITEM: "/transfers", REQUISITION_HANDOVER: "/requisitions",
   LOST_REPORT: "/loss-reports", SCRAP: "/scrap-requests",
   ITEM_TARGET_CHANGE: "/requisition-target-changes" };
@@ -69,6 +69,9 @@ function destination(message: Message) {
   if (segments.has(message.businessType)) return { path: `/repairs/${message.businessId}` };
   if (message.businessType === "INVENTORY_TASK") {
     return { path: "/inventory-tasks", query: { taskId: message.businessId } };
+  }
+  if (message.businessType === "ASSET_RETURN") {
+    return { path: "/loans", query: { return: message.businessId } };
   }
   const base = destinations[message.businessType];
   return base ? { path: base, query: { id: message.businessId } } : null;

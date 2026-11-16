@@ -46,6 +46,20 @@ class ReassignmentReminderService {
                   SELECT 1 FROM fams_transfer_event event WHERE event.request_id=request.id
                     AND event.event_type IN ('TRANSFER_DELIVER','TRANSFER_VERIFY')
               )
+            UNION ALL
+            SELECT 'ASSET_RETURN', returned.id, todo.id, todo.opened_at, returned.parameter_snapshot_json
+            FROM fams_asset_return returned JOIN fams_todo todo
+              ON todo.business_type='ASSET_RETURN' AND todo.business_id=returned.id AND todo.todo_type='INSPECTION'
+                AND todo.pool_type='WAREHOUSE_OPERATOR' AND todo.active_guard=1
+                AND todo.assignee_account_id=returned.processor_account_id
+            WHERE returned.return_status='WAREHOUSE_PROCESSING' AND returned.ownership_version=0
+              AND returned.inspection_result IS NULL
+              AND EXISTS (
+                  SELECT 1 FROM fams_asset_business_lock held
+                  WHERE held.business_type='ASSET_RETURN' AND held.business_id=returned.id
+                    AND held.business_item_id=returned.id AND held.asset_id=returned.asset_id
+                    AND held.released_at IS NULL
+              )
             """;
 
     // Inbound ownership version starts at zero; the first acceptance or a controlled transfer advances it.
