@@ -17,6 +17,7 @@ import BusinessExceptionReport from "./BusinessExceptionReport.vue";
 import InventoryLateReport from "./InventoryLateReport.vue";
 import AssetTimelineReport from "./AssetTimelineReport.vue";
 import RepairOperationsReport from "./RepairOperationsReport.vue";
+import CoreBusinessSamplingReport from "./CoreBusinessSamplingReport.vue";
 
 interface Summary {
   calculatedAt: string;
@@ -44,17 +45,6 @@ const effectiveAssetCount = computed(() => result.value?.currentAssets.reduce((t
 const loadedQuery = ref("");
 const error = ref("");
 const busy = ref(false);
-const sampleCount = ref<number>();
-const missingCount = ref<number>();
-const traceability = computed(() => {
-  const total = sampleCount.value;
-  const missing = missingCount.value;
-  if (!Number.isSafeInteger(total) || !Number.isSafeInteger(missing)
-      || total === undefined || missing === undefined || total <= 0 || missing < 0 || missing > total) {
-    return "样本不足或数量无效，无法评价";
-  }
-  return `${total - missing}/${total} = ${((total - missing) / total * 100).toFixed(1)}%`;
-});
 let generation = 0;
 
 async function load() {
@@ -84,8 +74,6 @@ watch(identity, () => {
   result.value = undefined;
   error.value = "";
   busy.value = false;
-  sampleCount.value = undefined;
-  missingCount.value = undefined;
   if (session.user?.roles.includes("ASSET_ADMIN")) void load();
 }, { immediate: true, flush: "sync" });
 </script>
@@ -153,14 +141,6 @@ watch(identity, () => {
     <InventoryLateReport :key="'inventory-late:' + identity" />
     <BusinessExceptionReport :key="'business-exceptions:' + identity" />
     <InboundTimingReport :key="'inbound-timing:' + identity" />
-    <details>
-      <summary>抽样留痕率核算</summary>
-      <p>请按抽查范围和选样方法，用线下证据核实实际业务。同一笔业务只计一次，待核实线索另列。</p>
-      <div class="actions">
-        <label>核实样本数 <input v-model.number="sampleCount" type="number" min="0" step="1"></label>
-        <label>原样本漏记数 <input v-model.number="missingCount" type="number" min="0" step="1"></label>
-      </div>
-      <p>本次样本观察结果 <output>{{ traceability }}</output></p>
-    </details>
+    <CoreBusinessSamplingReport :key="identity" :from="from" :to-exclusive="toExclusive" />
   </section>
 </template>
