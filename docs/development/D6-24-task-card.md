@@ -49,7 +49,7 @@ V66 `fams_message_receipt` 以（账号、消息类别、消息号）为主键�
 
 `MessageService` 用一条 UNION ALL 同时读取两个权威事实源，不在应用层拼分页：
 
-- `INBOX`（我的消息）：`fams_todo` 中仍 OPEN 且"指派给本人或本人角色所属共享池"的待办，加上 `fams_business_reminder` 中"接收人为本人或接收池属本人角色"的提醒。提醒只取每个（对象、阶段）的最新一次发生（`id = MAX(id)`），历史提醒继续保留但不重复占用消息中心。
+- `INBOX`（我的消息）：读取仍 OPEN 且指派本人或本人共享池的待办，以及同一可见范围内的提醒。提醒取每个对象、阶段最近发生的一档。盘点完成提醒按当前执行人各自取最新一档，同时核对任务仍执行、截止一致及当前指派。改派或结束后，历史提醒和个人已读回执留存，旧提醒退出日常列表和异常清单。
 - `EXCEPTION`（异常清单）：只取档位词表中的逾期类（`OVERDUE`、`OVERDUE_EVERY_7_DAYS`、`UNRESOLVED_AFTER_1_WORKDAY`），资产管理员看全部池，库管看 `WAREHOUSE_OPERATOR` 池与本人；其他角色直接 403 `MESSAGE_SCOPE_FORBIDDEN`。借用域的逾期待办与提醒共用同一档位词表，因此 `LoanReminderService` 生成的档位待办自然进入同一清单。
 - `read`（`POST /api/v1/messages/{kind}/{id}/read`，mini 同形）：先按同一可寻址谓词 `FOR UPDATE` 校验该消息当前确属本人/本池（管理员对所有池负责），再写一条个人回执；`ON DUPLICATE KEY UPDATE message_id=message_id` 使重复请求无副作用。已读不关闭待办、不改资产锁、不改时限，符合"某人阅读不等于已处理"。
 
