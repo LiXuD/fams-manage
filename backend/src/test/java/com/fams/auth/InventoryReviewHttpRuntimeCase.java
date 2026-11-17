@@ -782,6 +782,60 @@ class InventoryReviewHttpRuntimeCase {
     }
 
     @Test
+    void locationTransferAndBookCorrectCompeteOnTheSameVersions() throws Exception {
+        String task = differenceTask(false);
+        var subjects = differences(task);
+        var transfer = (tools.jackson.databind.node.ObjectNode)
+                JSON.readTree(differenceBody(subjects, "FORMAL_TRANSFER", "LOCATION"));
+        transfer.putObject("transferTarget")
+                .put("custodyType", "STORAGE")
+                .put("warehouseId", "943000")
+                .put("locationId", "943099")
+                .putObject("referenceVersions").put("warehouse", 0).put("location", 0);
+        String bookCorrect = differenceBody(subjects, "BOOK_CORRECT", "LOCATION");
+        long version = taskVersion(task);
+        String transferKey = key();
+        String bookCorrectKey = key();
+        var ready = new java.util.concurrent.CountDownLatch(2);
+        var start = new java.util.concurrent.CountDownLatch(1);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var transferResult = pool.submit(() -> {
+                ready.countDown();
+                start.await();
+                return difference(admin, task, version, transferKey, transfer.toString());
+            });
+            var bookCorrectResult = pool.submit(() -> {
+                ready.countDown();
+                start.await();
+                return difference(other, task, version, bookCorrectKey, bookCorrect);
+            });
+            boolean bothReady = ready.await(5, java.util.concurrent.TimeUnit.SECONDS);
+            start.countDown();
+            assertTrue(bothReady);
+            var transferReply = transferResult.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            var bookCorrectReply = bookCorrectResult.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            boolean transferWon = transferReply.statusCode() == 200;
+            var winner = transferWon ? transferReply : bookCorrectReply;
+            var loser = transferWon ? bookCorrectReply : transferReply;
+            var receipt = ok(winner);
+            assertEquals(409, loser.statusCode(), loser.body());
+            var fields = JSON.readTree(loser.body()).path("fieldErrors");
+            assertEquals(transferWon ? "review1" : "review3", fields.path("processedBy").asText());
+            assertEquals(transferWon ? "FORMAL_TRANSFER" : "BOOK_CORRECT", fields.path("method").asText());
+            assertEquals(transferWon ? "PROCESSING" : "CLOSED", fields.path("result").asText());
+            assertTrue(Instant.parse(fields.path("processedAt").asText()).isAfter(Instant.EPOCH));
+            assertEquals(receipt, ok(transferWon
+                    ? difference(admin, task, version, transferKey, transfer.toString())
+                    : difference(other, task, version, bookCorrectKey, bookCorrect)));
+            assertEquals(1, count("SELECT COUNT(*) FROM fams_inventory_review_decision WHERE task_id=?", task));
+            assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE resource_id=? AND"
+                    + " action='INVENTORY_DIFFERENCE_CONFLICT_REJECTED'", task));
+            assertEquals(transferWon ? 1 : 0,
+                    count("SELECT COUNT(*) FROM fams_transfer WHERE creator_account_id=943001", null));
+        }
+    }
+
+    @Test
     void linkedFormalTransferStaysProcessingUntilRealWarehouseCompletion() throws Exception {
         String task = differenceTask(false);
         var body = JSON.readTree(differenceBody(differences(task), "FORMAL_TRANSFER", "LOCATION"));
