@@ -1328,6 +1328,7 @@ class HandoverHttpTest {
         var notice = handoverNotice("REQUISITION_ALLOCATION", allocation, base + 10, false);
         var obsoleteDeadline = handoverNotice("REQUISITION_ALLOCATION", allocation, base + 10, true);
         assertTrue(hasHandoverNotice(employee, notice));
+        assertHandoverNoticeParent(employee, notice, allocation, value.path("id").asText());
         assertFalse(hasHandoverNotice(employee, obsoleteDeadline));
         assertEquals(404, readHandoverNotice(employee, obsoleteDeadline));
         assertEquals(200, readHandoverNotice(employee, notice));
@@ -4326,6 +4327,7 @@ class HandoverHttpTest {
         assertEquals(404, readHandoverNotice(originalRecipient, initialNotice));
         long currentNotice = handoverNotice("TRANSFER_ITEM", Long.parseLong(item), base + 12, false);
         assertTrue(hasHandoverNotice(other, currentNotice));
+        assertHandoverNoticeParent(other, currentNotice, Long.parseLong(item), row.path("id").asText());
         assertFalse(hasHandoverNotice(originalRecipient, currentNotice));
         assertEquals(JSON.readTree(approved.body()), JSON.readTree(genericTargetCall(admin, "TRANSFER", "POST", "/" + change.path("id").asText() + "/decision", decision, approvalKey, 0L).body()));
         assertEquals(beforeAsset, jdbc.queryForMap("SELECT * FROM fams_asset WHERE id=?", base + 50));
@@ -4384,6 +4386,19 @@ class HandoverHttpTest {
                 .header("Cookie", session.cookie()).header("X-CSRF-Token", session.csrf())
                 .header("Idempotency-Key", key()).POST(HttpRequest.BodyPublishers.noBody()).build();
         return http.send(request, HttpResponse.BodyHandlers.ofString()).statusCode();
+    }
+
+    private void assertHandoverNoticeParent(Session session, long notice, long item, String parent) throws Exception {
+        var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/messages?view=INBOX"))
+                .header("Cookie", session.cookie()).GET().build();
+        var response = http.send(request, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode(), response.body());
+        var row = JSON.readTree(response.body()).path("items").valueStream()
+                .filter(message -> "REMINDER".equals(message.path("kind").asText()) && message.path("id").asLong() == notice)
+                .findFirst().orElseThrow();
+        assertEquals(Long.toString(item), row.path("businessId").asText());
+        assertTrue(row.path("parentBusinessId").isTextual());
+        assertEquals(parent, row.path("parentBusinessId").asText());
     }
 
     @Test

@@ -160,7 +160,21 @@ public class MessageService {
         var args = exception ? exceptionArgs(current) : inboxArgs(current);
         var paged = new ArrayList<>(args);
         paged.addAll(List.of(pageSize, (long) (page - 1) * pageSize));
-        var rows = db.queryForList("SELECT m.* FROM (" + sql + ") m"
+        var rows = db.queryForList("""
+                SELECT m.*, COALESCE(allocation.request_id, transfer.request_id, factory.repair_id,
+                    extension.loan_id, extension.request_id) parent_business_id,
+                    CASE WHEN extension.loan_id IS NOT NULL THEN 'LOAN'
+                         WHEN extension.request_id IS NOT NULL THEN 'REQUISITION' END parent_business_type
+                FROM (
+                """ + sql + """
+                ) m
+                LEFT JOIN fams_requisition_allocation allocation
+                    ON m.business_type='REQUISITION_ALLOCATION' AND allocation.id=m.business_id
+                LEFT JOIN fams_transfer_item transfer ON m.business_type='TRANSFER_ITEM' AND transfer.id=m.business_id
+                LEFT JOIN fams_repair_factory_round factory
+                    ON m.business_type='REPAIR_FACTORY_ROUND' AND factory.id=m.business_id
+                LEFT JOIN fams_loan_extension extension ON m.business_type='LOAN_EXTENSION' AND extension.id=m.business_id
+                """
                 + " ORDER BY m.moment DESC,m.id DESC LIMIT ? OFFSET ?", paged.toArray());
         var read = readIds(current.id(), rows);
         var unreadArgs = new ArrayList<>(args);
@@ -302,6 +316,8 @@ public class MessageService {
         return Map.ofEntries(Map.entry("kind", kind), Map.entry("id", row.get("id").toString()),
                 Map.entry("businessType", row.get("business_type")),
                 Map.entry("businessId", row.get("business_id").toString()),
+                Map.entry("parentBusinessId", Objects.toString(row.get("parent_business_id"), "")),
+                Map.entry("parentBusinessType", Objects.toString(row.get("parent_business_type"), "")),
                 Map.entry("stage", row.get("stage")), Map.entry("objectStage", row.get("object_stage")),
                 Map.entry("poolType", row.get("pool_type")),
                 Map.entry("assigneeAccountId", row.get("assignee_account_id") == null

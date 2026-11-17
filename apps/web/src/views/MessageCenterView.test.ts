@@ -135,4 +135,30 @@ describe("message centre", () => {
     expect(wrapper.find("a").attributes("data-destination")).toContain("8");
     wrapper.unmount();
   });
+  it("builds links with the owning business identity and suppresses unresolved handover targets", async () => {
+    const parent = "9007199254740993";
+    const rows = [
+      { ...reminder, id: "81", businessId: "31", businessType: "REQUISITION_ALLOCATION", parentBusinessId: parent },
+      { ...reminder, id: "82", businessId: "32", businessType: "TRANSFER_ITEM", parentBusinessId: "720" },
+      { ...reminder, id: "83", businessId: "33", businessType: "REPAIR_FACTORY_ROUND", parentBusinessId: "721" },
+      { ...reminder, id: "84", businessId: "34", businessType: "LOAN", },
+      { ...reminder, id: "85", businessId: "35", businessType: "LOAN_EXTENSION", parentBusinessId: "722", parentBusinessType: "REQUISITION" },
+      { ...reminder, id: "86", businessId: "36", businessType: "PROXY_CONFIRMATION" },
+      { ...reminder, id: "87", businessId: "37", businessType: "TRANSFER_ITEM" },
+    ];
+    api.request.mockResolvedValue({ items: rows, total: rows.length, unread: rows.length, view: "INBOX" });
+    const wrapper = mount(MessageCenterView, {
+      global: { stubs: { RouterLink: { props: ["to"], template: '<a :data-destination="JSON.stringify(to)"><slot /></a>' } } },
+    });
+    await flushPromises();
+    expect(wrapper.findAll("a").map(link => JSON.parse(link.attributes("data-destination")!))).toEqual([
+      { path: "/requisitions", query: { id: parent } },
+      { path: "/transfers", query: { id: "720" } },
+      { path: "/repairs/721" },
+      { path: "/loans", query: { loan: "34" } },
+      { path: "/requisitions", query: { id: "722" } },
+      { path: "/proxy-confirmations", query: { id: "36" } },
+    ]);
+    wrapper.unmount();
+  });
 });

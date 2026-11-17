@@ -12,7 +12,8 @@ import { ReminderApiError, dutyRequest, reminderMessage,
 
 interface Message {
   kind: "TODO" | "REMINDER"; id: string; businessType: string; businessId: string; stage: string;
-  objectStage: string; poolType: string; assigneeAccountId: string; openedAt: string; deadlineAt: string; read: boolean
+  objectStage: string; poolType: string; assigneeAccountId: string; openedAt: string; deadlineAt: string; read: boolean;
+  parentBusinessId?: string; parentBusinessType?: string
 }
 interface Page { items: Message[]; total: number; unread: number; view: string }
 
@@ -36,11 +37,10 @@ const BUSINESSES: Record<string, string> = { INBOUND: "入库单", REQUISITION: 
   LOST_REPORT: "报失单", SCRAP: "报废申请", ITEM_TARGET_CHANGE: "目标变更" };
 
 const destinations: Record<string, string> = { INBOUND: "/inbound", REQUISITION: "/requisitions",
-  REQUISITION_ALLOCATION: "/requisitions", LOAN: "/loans", LOAN_EXTENSION: "/loans",
-  TRANSFER: "/transfers", TRANSFER_ITEM: "/transfers", REQUISITION_HANDOVER: "/requisitions",
+  TRANSFER: "/transfers",
   LOST_REPORT: "/loss-reports", SCRAP: "/scrap-requests",
   ITEM_TARGET_CHANGE: "/requisition-target-changes" };
-const segments = new Set(["REPAIR", "REPAIR_FACTORY_ROUND", "REPAIR_OPINION", "REPAIR_TECH", "PROXY_CONFIRMATION"]);
+const repairs = new Set(["REPAIR", "REPAIR_OPINION", "REPAIR_TECH"]);
 
 const session = useSessionStore();
 const privileged = computed(() => session.user?.roles.some(
@@ -67,7 +67,23 @@ function label(message: Message): string {
   return `提醒 · ${STAGES[message.objectStage] ?? message.objectStage} ${TIERS[message.stage] ?? message.stage}`;
 }
 function destination(message: Message) {
-  if (segments.has(message.businessType)) return { path: `/repairs/${message.businessId}` };
+  const parent = /^[1-9][0-9]*$/.test(message.parentBusinessId ?? "") ? message.parentBusinessId : undefined;
+  if (repairs.has(message.businessType)) return { path: `/repairs/${message.businessId}` };
+  if (message.businessType === "REPAIR_FACTORY_ROUND") return parent ? { path: `/repairs/${parent}` } : null;
+  if (message.businessType === "PROXY_CONFIRMATION") {
+    return { path: "/proxy-confirmations", query: { id: message.businessId } };
+  }
+  if (message.businessType === "REQUISITION_ALLOCATION" || message.businessType === "TRANSFER_ITEM") {
+    return parent ? { path: message.businessType === "TRANSFER_ITEM" ? "/transfers" : "/requisitions",
+      query: { id: parent } } : null;
+  }
+  if (message.businessType === "LOAN") return { path: "/loans", query: { loan: message.businessId } };
+  if (message.businessType === "LOAN_EXTENSION") {
+    if (!parent) return null;
+    if (message.parentBusinessType === "LOAN") return { path: "/loans", query: { loan: parent } };
+    if (message.parentBusinessType === "REQUISITION") return { path: "/requisitions", query: { id: parent } };
+    return null;
+  }
   if (message.businessType === "INVENTORY_TASK") {
     return { path: "/inventory-tasks", query: { taskId: message.businessId } };
   }
