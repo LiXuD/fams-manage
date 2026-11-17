@@ -782,6 +782,48 @@ class InventoryReviewHttpRuntimeCase {
     }
 
     @Test
+    void closingLocationPreservesResponsibilityAndRejectsAStaleJointDecision() throws Exception {
+        db.update("""
+                UPDATE fams_asset
+                SET lifecycle_status='IN_USE',custody_type='PERSONAL',storage_warehouse_id=NULL,
+                    using_organization_id=943000,responsible_employee_id=
+                        CASE id WHEN 943010 THEN 943002 ELSE 943003 END
+                WHERE id IN (943010,943011)
+                """);
+        String task = prepared(true);
+        var observed = observation(task, 943010);
+        ((tools.jackson.databind.node.ObjectNode) observed.path("actual"))
+                .put("custodyType", "PERSONAL")
+                .put("locationId", "943099")
+                .put("responsibleEmployeeId", "943003");
+        assertEquals("CONFLICT_REVIEW", ok(observe(task, observed)).path("outcome").asText());
+        String observationId = db.queryForObject(
+                "SELECT CAST(id AS CHAR) FROM fams_inventory_observation WHERE client_event_id=?",
+                String.class, observed.path("eventId").asText());
+        var preparation = JSON.createObjectNode();
+        preparation.putArray("observationIds").add(observationId);
+        ok(request(admin, "POST", "/api/v1/inventory-reviews/tasks/" + task + "/differences/preparation",
+                preparation.toString(), key(), taskVersion(task)));
+
+        var subjects = differences(task);
+        var closed = ok(difference(admin, task, taskVersion(task), key(),
+                differenceBody(subjects, "BOOK_CORRECT", "LOCATION")));
+        assertEquals("CLOSED", closed.path("items").get(0).path("status").asText());
+        var rejected = difference(other, task, closed.path("version").asLong(), key(),
+                differenceBody(subjects, "BOOK_CORRECT", "RESPONSIBILITY", "LOCATION"));
+        assertEquals(409, rejected.statusCode(), rejected.body());
+        assertEquals("review1", JSON.readTree(rejected.body()).path("fieldErrors").path("processedBy").asText());
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_inventory_review_decision WHERE task_id=?", task));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_inventory_review_subject WHERE task_id=? AND"
+                + " dimension='RESPONSIBILITY' AND subject_status='OPEN' AND version=0", task));
+        assertEquals(943002L, db.queryForObject(
+                "SELECT responsible_employee_id FROM fams_asset WHERE id=943010", Long.class));
+        var responsibility = ok(difference(other, task, closed.path("version").asLong(), key(),
+                differenceBody(differences(task), "BOOK_CORRECT", "RESPONSIBILITY")));
+        assertEquals("CLOSED", responsibility.path("items").get(0).path("status").asText());
+    }
+
+    @Test
     void locationTransferAndBookCorrectCompeteOnTheSameVersions() throws Exception {
         String task = differenceTask(false);
         var subjects = differences(task);
@@ -2139,6 +2181,10 @@ class InventoryReviewHttpRuntimeCase {
     }
 
     private String prepared() throws Exception {
+        return prepared(false);
+    }
+
+    private String prepared(boolean personalCustody) throws Exception {
         Instant start =
                 Instant.now().plusSeconds(3600).truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
         String task =
@@ -2207,10 +2253,15 @@ class InventoryReviewHttpRuntimeCase {
                         key(),
                         1L));
         ok(request(admin, "POST", "/api/v1/inventory-tasks/" + task + "/start", null, key(), 2L));
-        assertEquals(
-                "ACCEPTED", ok(observe(task, observation(task, 943010))).path("outcome").asText());
-        assertEquals(
-                "ACCEPTED", ok(observe(task, observation(task, 943011))).path("outcome").asText());
+        for (long assetId : new long[] {943010, 943011}) {
+            var observed = observation(task, assetId);
+            if (personalCustody) {
+                ((tools.jackson.databind.node.ObjectNode) observed.path("actual"))
+                        .put("custodyType", "PERSONAL")
+                        .put("responsibleEmployeeId", assetId == 943010 ? "943002" : "943003");
+            }
+            assertEquals("ACCEPTED", ok(observe(task, observed)).path("outcome").asText());
+        }
         return task;
     }
 
