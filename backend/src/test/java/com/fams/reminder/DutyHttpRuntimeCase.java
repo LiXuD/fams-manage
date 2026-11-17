@@ -1028,6 +1028,14 @@ class DutyHttpRuntimeCase {
                     7,0,1,0,'REPORT-C',931001,931001,0,0,9007199254741013)
                 """);
         var endpoint = "/operations-reports/inbound-timing";
+        String receiptNumber = db.queryForObject("SELECT receipt_no FROM fams_inbound_receipt WHERE id=931000", String.class);
+        String filters = "?assetCode=REPORT-A&businessReference=";
+        assertEquals(1, ok(get(administrator, "/assets" + filters + receiptNumber)).path("total").asInt());
+        assertEquals(0, ok(get(administrator, "/assets" + filters + receiptNumber + "-extra")).path("total").asInt());
+        var historyExport = get(administrator, "/assets/export.csv" + filters + receiptNumber);
+        assertEquals(200, code(historyExport), historyExport.body());
+        assertTrue(historyExport.body().contains("REPORT-A"));
+        assertFalse(historyExport.body().contains("REPORT-C"));
         var claim = "?kind=CLAIM&receiptId=931000";
         assertEquals(403, code(get(warehouse, endpoint + claim)));
         assertEquals(403, code(get(warehouse, endpoint + ".csv" + claim)));

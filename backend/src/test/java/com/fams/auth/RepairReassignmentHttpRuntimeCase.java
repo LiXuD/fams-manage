@@ -305,14 +305,17 @@ class RepairReassignmentHttpRuntimeCase {
     @Test
     void preAcceptanceTransferHasNoFabricatedPhysicalHandling() throws Exception {
         var row = processing();
-        var context = context(row.path("id").asText());
+        String id = row.path("id").asText();
+        var context = context(id);
+        assertEquals(1, ledgerCount(id, "951003"));
+        assertEquals(0, ledgerCount(id, "951004"));
         assertTrue(context.path("snapshot").path("acceptedAt").isNull());
         assertEquals(0, context.path("snapshot").path("physicalHandling").size());
         var result =
                 ok(
                         post(
                                 fixture.admin,
-                                row.path("id").asText() + "/reassignment",
+                                id + "/reassignment",
                                 row.path("version").asLong(),
                                 key(),
                                 transfer(context)));
@@ -323,6 +326,15 @@ class RepairReassignmentHttpRuntimeCase {
                         java.sql.Timestamp.class,
                         row.path("id").asLong()));
         assertEquals("IN_USE", asset().get("lifecycle_status"));
+        assertEquals(0, ledgerCount(id, "951003"));
+        assertEquals(1, ledgerCount(id, "951004"));
+    }
+
+    private int ledgerCount(String id, String ownerId) throws Exception {
+        var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+                + "/api/v1/assets?businessReference=" + id + "&currentProcessorId=" + ownerId))
+                .header("Cookie", fixture.admin.cookie()).GET().build();
+        return ok(http.send(request, HttpResponse.BodyHandlers.ofString())).path("total").asInt();
     }
 
     @Test

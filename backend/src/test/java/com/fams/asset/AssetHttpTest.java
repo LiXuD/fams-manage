@@ -83,7 +83,7 @@ class AssetHttpTest {
         assertEquals(1, JSON.readTree(listed.body()).path("total").asInt(), listed.body());
         assertEquals(0, JSON.readTree(request("GET", "/api/v1/assets?name=Missing", null,
                 warehouse, Map.of()).body()).path("total").asInt());
-        assertEquals(400, request("GET", "/api/v1/assets?currentProcessorId=1", null,
+        assertEquals(400, request("GET", "/api/v1/assets?currentProcessorId=0", null,
                 warehouse, Map.of()).statusCode());
         assertEquals(403, request("GET", "/api/v1/assets/" + id, null,
                 admin, Map.of()).statusCode());

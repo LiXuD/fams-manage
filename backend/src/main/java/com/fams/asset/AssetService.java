@@ -113,8 +113,18 @@ class AssetService {
                     }
                 }
                 case "borrowOverdue" -> filters.put(key, borrowOverdue(value));
-                case "currentProcessorId", "businessReference",
-                        "longUninventoried" -> throw AssetOperationException.invalid(
+                case "currentProcessorId" -> {
+                    long id = businessReferenceId(value.strip());
+                    if (id == 0) {
+                        throw AssetOperationException.invalid("ASSET_FILTER_INVALID", "An account ID is invalid.");
+                    }
+                    filters.put(key, id);
+                }
+                case "businessReference" -> {
+                    String reference = required(value, 128, "ASSET_FILTER_INVALID");
+                    filters.put(key, new BusinessReference(businessReferenceId(reference), reference));
+                }
+                case "longUninventoried" -> throw AssetOperationException.invalid(
                                 "ASSET_FILTER_UNAVAILABLE",
                                 "This filter requires a later business workflow.");
                 default -> throw AssetOperationException.invalid("ASSET_FILTER_INVALID",
@@ -123,6 +133,17 @@ class AssetService {
         }
         return filters;
     }
+
+    private static long businessReferenceId(String value) {
+        if (!value.matches("[1-9][0-9]{0,18}")) { return 0; }
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException outOfRange) {
+            return 0;
+        }
+    }
+
+    record BusinessReference(long id, String number) {}
 
     private BorrowOverdue borrowOverdue(String value) {
         if (!"true".equals(value) && !"false".equals(value)) {

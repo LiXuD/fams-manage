@@ -50,19 +50,31 @@ async function request<T>(path: string, method = "GET", body?: unknown, version?
   return await response.json() as T;
 }
 
-export function listAssets(page = 1, code = "", name = "", borrowOverdue?: boolean): Promise<Page<AssetCard>> {
-  const query = new URLSearchParams({ page: String(page), pageSize: "20" });
+export interface AssetLedgerFilters {
+  borrowOverdue?: boolean;
+  currentProcessorId?: string;
+  businessReference?: string;
+}
+
+function ledgerQuery(code: string, name: string, filters: AssetLedgerFilters): URLSearchParams {
+  const query = new URLSearchParams();
   if (code.trim()) query.set("assetCode", code.trim());
   if (name.trim()) query.set("name", name.trim());
-  if (borrowOverdue !== undefined) query.set("borrowOverdue", String(borrowOverdue));
+  if (filters.borrowOverdue !== undefined) query.set("borrowOverdue", String(filters.borrowOverdue));
+  if (filters.currentProcessorId) query.set("currentProcessorId", filters.currentProcessorId);
+  if (filters.businessReference) query.set("businessReference", filters.businessReference);
+  return query;
+}
+
+export function listAssets(page = 1, code = "", name = "", filters: AssetLedgerFilters = {}): Promise<Page<AssetCard>> {
+  const query = ledgerQuery(code, name, filters);
+  query.set("page", String(page));
+  query.set("pageSize", "20");
   return request<Page<AssetCard>>("/assets?" + query);
 }
 
-export async function assetLedgerCsv(code: string, name: string, borrowOverdue?: boolean): Promise<Blob> {
-  const query = new URLSearchParams();
-  if (code) query.set("assetCode", code);
-  if (name) query.set("name", name);
-  if (borrowOverdue !== undefined) query.set("borrowOverdue", String(borrowOverdue));
+export async function assetLedgerCsv(code: string, name: string, filters: AssetLedgerFilters = {}): Promise<Blob> {
+  const query = ledgerQuery(code, name, filters);
   const response = await fetch("/api/v1/assets/export.csv?" + query, {
     credentials: "include", cache: "no-store",
   });

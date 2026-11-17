@@ -25,6 +25,8 @@ public final class AssetSearchSql {
         {"inboundDateTo", "a.inbound_business_date &lt;= #{filters.inboundDateTo}"},
         {"lastInventoryDateFrom", "a.last_inventory_business_date &gt;= #{filters.lastInventoryDateFrom}"},
         {"lastInventoryDateTo", "a.last_inventory_business_date &lt;= #{filters.lastInventoryDateTo}"},
+        {"currentProcessorId", AssetLedgerWorkflowSql.PROCESSOR},
+        {"businessReference", AssetLedgerWorkflowSql.REFERENCE},
         {"borrowOverdue", """
             EXISTS (
                 SELECT 1 FROM fams_loan l
