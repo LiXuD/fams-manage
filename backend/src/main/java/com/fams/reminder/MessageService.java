@@ -168,25 +168,24 @@ public class MessageService {
     }
 
     /**
-     * Administrators answer for every pool's overdue exception; warehouse operators see their own pool plus
-     * whatever is addressed to them personally.
+     * Administrators see every overdue exception. Warehouse operators see their shared pool and personal work.
      */
     private String exceptionSql(RequisitionActorContext.Current current) {
         if (current.has(Role.ASSET_ADMIN)) {
             return EXCEPTION_TODOS + " UNION ALL" + REMINDER_COLUMNS
                     + NEWEST_OCCURRENCE + " r.reminder_type IN" + OVERDUE_TYPES;
         }
-        return EXCEPTION_TODOS
-                + " AND (t.pool_type='WAREHOUSE_OPERATOR' OR t.assignee_account_id=?)" + " UNION ALL"
+        var sharedPool = List.of("WAREHOUSE_OPERATOR");
+        return EXCEPTION_TODOS + " AND" + addressed("t", "assignee_account_id", "pool_type", sharedPool) + " UNION ALL"
                 + REMINDER_COLUMNS + NEWEST_OCCURRENCE + " r.reminder_type IN" + OVERDUE_TYPES
-                + " AND (r.recipient_pool_type='WAREHOUSE_OPERATOR' OR r.recipient_account_id=?)";
+                + " AND" + addressed("r", "recipient_account_id", "recipient_pool_type", sharedPool);
     }
 
     private List<Object> exceptionArgs(RequisitionActorContext.Current current) {
         if (current.has(Role.ASSET_ADMIN)) {
             return List.of();
         }
-        return List.of(current.id(), current.id());
+        return List.of(current.id(), "WAREHOUSE_OPERATOR", current.id(), "WAREHOUSE_OPERATOR");
     }
 
     private String addressableTodo(RequisitionActorContext.Current current, List<Object> args) {

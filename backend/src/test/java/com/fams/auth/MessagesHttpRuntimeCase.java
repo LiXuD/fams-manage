@@ -121,6 +121,39 @@ class MessagesHttpRuntimeCase {
         assertEquals(1, second.path("items").size());
 
         verifyInventoryExecutors(admin, warehouse, employee, grant.sessionToken());
+        verifyWarehouseExceptions(admin, warehouse, grant.sessionToken());
+    }
+
+    private void verifyWarehouseExceptions(Session admin, Session warehouse, String miniToken) throws Exception {
+        var otherWarehouse = login("msg4");
+        todo(930850, "WAREHOUSE_OPERATOR", 930704L, "SCRAP", 20, "OVERDUE");
+        todo(930851, "WAREHOUSE_OPERATOR", null, "SCRAP", 21, "OVERDUE");
+        reminder(930951, "INBOUND", 22, "FIRST_EXECUTION", "OVERDUE", "2026-11-09", "WAREHOUSE_OPERATOR", 930704L);
+        reminder(930952, "INBOUND", 23, "FIRST_EXECUTION", "OVERDUE", "2026-11-09", "WAREHOUSE_OPERATOR", null);
+
+        var personal = List.of("REMINDER:930951", "TODO:930850");
+        var shared = List.of("REMINDER:930952", "TODO:930851");
+        var ownExceptions = inbox(warehouse, "EXCEPTION");
+        assertEquals(List.of("REMINDER:930912", "REMINDER:930952", "TODO:930851"), keys(ownExceptions));
+        assertEquals(3, ownExceptions.path("total").asInt());
+        assertEquals(2, ownExceptions.path("unread").asInt());
+        var miniExceptions = ok(http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+                + "/api/v1/mini/messages?view=EXCEPTION")).header("X-FAMS-Mini-Session", miniToken)
+                .GET().build(), HttpResponse.BodyHandlers.ofString()));
+        assertEquals(keys(ownExceptions), keys(miniExceptions));
+        for (var other : List.of(admin, otherWarehouse)) {
+            var visible = keys(inbox(other, "EXCEPTION"));
+            assertTrue(visible.containsAll(personal));
+            assertTrue(visible.containsAll(shared));
+        }
+        for (var item : personal) {
+            assertEquals(404, read(warehouse, item).statusCode());
+            assertEquals(200, read(otherWarehouse, item).statusCode());
+        }
+        for (var item : shared) {
+            assertEquals(200, read(warehouse, item).statusCode());
+            assertFalse(readFlags(inbox(otherWarehouse, "EXCEPTION")).contains(item));
+        }
     }
 
     private void verifyInventoryExecutors(Session admin, Session warehouse, Session employee, String miniToken)
@@ -280,7 +313,7 @@ class MessagesHttpRuntimeCase {
         db.update("INSERT INTO fams_organization (id,code,code_normalized,name,status,version,created_at,updated_at)"
                 + " VALUES (930700,'MSG','MSG','Messages','ACTIVE',0,NOW(3),NOW(3))");
         String[][] people = {{"930701", "msg1", "ASSET_ADMIN"}, {"930702", "msg2", "WAREHOUSE_OPERATOR"},
-            {"930703", "msg3", "EMPLOYEE"}};
+            {"930703", "msg3", "EMPLOYEE"}, {"930704", "msg4", "WAREHOUSE_OPERATOR"}};
         for (var person : people) {
             var id = Long.parseLong(person[0]);
             db.update("INSERT INTO fams_employee (id,employee_no,employee_no_normalized,name,organization_id,"
