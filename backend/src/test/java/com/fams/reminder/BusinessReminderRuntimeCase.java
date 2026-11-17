@@ -113,7 +113,46 @@ class BusinessReminderRuntimeCase {
         verifyCustodianSmsFallback();
         verifyFallbackMigration();
         verifyLoanAndFactorySmsFallback();
+        verifyFrozenBusinessDates();
+    }
 
+    private void verifyFrozenBusinessDates() {
+        db.update("""
+                UPDATE fams_inbound_receipt SET timezone_snapshot='Pacific/Kiritimati',
+                    warehouse_claim_due_at='2026-12-01 08:00:00' WHERE id=930202
+                """);
+        db.update("""
+                UPDATE fams_inventory_task SET task_status='IN_PROGRESS',timezone_id='Pacific/Kiritimati',
+                    due_at='2026-12-01 08:00:00' WHERE id=930401
+                """);
+        db.update("""
+                UPDATE fams_transfer_item SET parameter_snapshot_json=JSON_SET(parameter_snapshot_json,'$.timezone','America/Adak'),
+                    receipt_deadline_at='2026-12-01 18:00:00' WHERE id=930500
+                """);
+        String east = """
+                ((business_type='INBOUND' AND business_id=930202)
+                  OR (business_type='INVENTORY_TASK' AND business_id=930401))
+                AND deadline_at='2026-12-01 08:00:00'
+                """;
+        String west = """
+                business_type='TRANSFER_ITEM' AND business_id=930500
+                AND deadline_at='2026-12-01 18:00:00'
+                """;
+        new BusinessReminderService(db, json, smsClock("2026-12-01T09:59:59.999Z")).scan();
+        assertEquals(0L, overdueAt(east, "2026-12-02"));
+        var easternMidnight = smsClock("2026-12-01T10:00:00Z");
+        new BusinessReminderService(db, json, easternMidnight).scan();
+        new BusinessReminderService(db, json, easternMidnight).scan();
+        assertEquals(2L, overdueAt(east, "2026-12-02"));
+        new BusinessReminderService(db, json, smsClock("2026-12-02T09:59:59.999Z")).scan();
+        assertEquals(0L, overdueAt(west, "2026-12-02"));
+        new BusinessReminderService(db, json, smsClock("2026-12-02T10:00:00Z")).scan();
+        assertEquals(1L, overdueAt(west, "2026-12-02"));
+    }
+
+    private long overdueAt(String scope, String day) {
+        return db.queryForObject("SELECT COUNT(*) FROM fams_business_reminder WHERE " + scope
+                + " AND reminder_type='OVERDUE' AND reminder_business_date=?", Long.class, day);
     }
 
     private void verifyCustodianSmsFallback() {

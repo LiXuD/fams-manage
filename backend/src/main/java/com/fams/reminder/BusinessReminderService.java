@@ -45,17 +45,17 @@ public class BusinessReminderService {
     public void scan() {
         var zone = activeZone();
         var today = clock.instant().atZone(zone).toLocalDate();
-        inbound(today);
-        receipts(today);
-        transfers(today);
-        inventory(today, zone);
+        inbound();
+        receipts();
+        transfers();
+        inventory(zone);
         factoryReturns();
         overdueLoans();
         lossReviews(today, zone);
         dispositions(today, zone);
     }
 
-    private void inbound(LocalDate today) {
+    private void inbound() {
         each("""
              SELECT x.id,x.receipt_status,x.timezone_snapshot,x.submitted_at,x.admin_decision_due_at,
                     x.warehouse_claim_due_at,x.warehouse_first_execution_due_at,v.snapshot_json
@@ -64,6 +64,7 @@ public class BusinessReminderService {
                 row -> {
                     var status = String.valueOf(row.get("receipt_status"));
                     var zone = ZoneId.of(String.valueOf(row.get("timezone_snapshot")));
+                    var today = clock.instant().atZone(zone).toLocalDate();
                     var field = switch (status) {
                         case "PENDING_ADMIN_DECISION" -> "admin_decision_due_at";
                         case "WAITING_WAREHOUSE_CLAIM" -> "warehouse_claim_due_at";
@@ -90,7 +91,7 @@ public class BusinessReminderService {
                 });
     }
 
-    private void receipts(LocalDate today) {
+    private void receipts() {
         each("""
              SELECT x.id,h.receipt_deadline_at,h.temporary_employee_id AS employee_id,
                     q.parameter_snapshot_json AS snapshot_json
@@ -98,19 +99,21 @@ public class BusinessReminderService {
                JOIN fams_requisition_handover h ON h.allocation_id=x.id
                JOIN fams_requisition q ON q.id=x.request_id
               WHERE x.allocation_status='DELIVERED_WAITING_RECEIPT'""",
-                row -> receipt(row, "REQUISITION_ALLOCATION", today));
+                row -> receipt(row, "REQUISITION_ALLOCATION"));
     }
 
-    private void transfers(LocalDate today) {
+    private void transfers() {
         each("""
-             SELECT x.id,x.receipt_deadline_at,x.receiver_employee_id AS employee_id,x.parameter_snapshot_json
+             SELECT x.id,x.receipt_deadline_at,x.receiver_employee_id AS employee_id,
+                    x.parameter_snapshot_json AS snapshot_json
                FROM fams_transfer_item x WHERE x.item_status='DELIVERED'""",
-                row -> receipt(row, "TRANSFER_ITEM", today));
+                row -> receipt(row, "TRANSFER_ITEM"));
     }
 
-    private void receipt(Map<String, Object> row, String businessType, LocalDate today) {
+    private void receipt(Map<String, Object> row, String businessType) {
         var deadline = instant(row.get("receipt_deadline_at"));
         var zone = zone(row.get("snapshot_json"));
+        var today = clock.instant().atZone(zone).toLocalDate();
         var due = deadline.atZone(zone).toLocalDate();
         Long recipient = accountFor(row.get("employee_id"));
         record(businessType, number(row, "id"), "HANDOVER_RECEIPT", due, deadline, zone,
@@ -120,10 +123,11 @@ public class BusinessReminderService {
                         new Tier("DUE_TODAY", due), new Tier("OVERDUE", due.plusDays(1))));
     }
 
-    private void inventory(LocalDate today, ZoneId fallback) {
+    private void inventory(ZoneId fallback) {
         each("SELECT x.id,x.due_at,x.timezone_id FROM fams_inventory_task x WHERE x.task_status='IN_PROGRESS'",
                 row -> {
                     var zone = row.get("timezone_id") == null ? fallback : ZoneId.of(String.valueOf(row.get("timezone_id")));
+                    var today = clock.instant().atZone(zone).toLocalDate();
                     var deadline = instant(row.get("due_at"));
                     var due = deadline.atZone(zone).toLocalDate();
                     var tiers = List.of(new Tier("DUE_IN_3_DAYS", due.minusDays(3)),
