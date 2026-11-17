@@ -44,7 +44,6 @@ public class BusinessReminderService {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public void scan() {
         var zone = activeZone();
-        var today = clock.instant().atZone(zone).toLocalDate();
         inbound();
         receipts();
         transfers();
@@ -52,7 +51,7 @@ public class BusinessReminderService {
         factoryReturns();
         overdueLoans();
         lossReviews(zone);
-        dispositions(today, zone);
+        dispositions(zone);
     }
 
     private void inbound() {
@@ -229,14 +228,17 @@ public class BusinessReminderService {
                 });
     }
 
-    private void dispositions(LocalDate today, ZoneId zone) {
+    private void dispositions(ZoneId fallback) {
         each("""
-             SELECT x.id,d.due_date,d.processor_account_id FROM fams_scrap_disposition d
+             SELECT x.id,d.due_date,d.due_at,d.due_timezone,d.processor_account_id FROM fams_scrap_disposition d
                JOIN fams_scrap_request x ON x.id=d.request_id
               WHERE d.disposition_status='PENDING_DISPOSITION' AND x.request_status='EXECUTED'""",
                 row -> {
                     var due = LocalDate.parse(String.valueOf(row.get("due_date")));
-                    record("SCRAP", number(row, "id"), "SCRAP_DISPOSITION", due, endOfDay(due, zone), zone,
+                    var zone = row.get("due_timezone") instanceof String frozen ? ZoneId.of(frozen) : fallback;
+                    var deadline = row.get("due_at") == null ? endOfDay(due, zone) : instant(row.get("due_at"));
+                    var today = clock.instant().atZone(zone).toLocalDate();
+                    record("SCRAP", number(row, "id"), "SCRAP_DISPOSITION", due, deadline, zone,
                             "WAREHOUSE_OPERATOR", ((Number) row.get("processor_account_id")).longValue(), today,
                             List.of(new Tier("DUE_IN_3_DAYS", due.minusDays(3)), new Tier("DUE_TODAY", due),
                                     new Tier("OVERDUE", due.plusDays(1))));

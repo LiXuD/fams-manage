@@ -53,6 +53,8 @@ class BusinessReminderRuntimeCase {
     @Test
     void noticesFollowEachStageLadderAndDeduplicateByOccurrence() {
         seed();
+        verifyFallbackMigration();
+        verifyDispositionMigration();
         scan("2026-11-09");
         assertEquals(List.of("ADMIN_DECISION|UNRESOLVED_AFTER_1_WORKDAY|2026-11-09|ASSET_ADMIN|-"),
                 notices("INBOUND", 930200));
@@ -111,7 +113,6 @@ class BusinessReminderRuntimeCase {
                 notices("INVENTORY_TASK", 930401));
         assertEquals(List.of("2026-11-08", "2026-11-15"), weeklyNoticeDates());
         verifyCustodianSmsFallback();
-        verifyFallbackMigration();
         verifyLoanAndFactorySmsFallback();
         verifyFrozenBusinessDates();
     }
@@ -131,6 +132,10 @@ class BusinessReminderRuntimeCase {
                 """);
         db.update("UPDATE fams_loss_report SET next_review_date='2026-12-01' WHERE id=930300");
         db.update("""
+                UPDATE fams_scrap_disposition SET due_date='2026-12-01',due_at='2026-12-01 10:00:00',
+                    due_timezone='Pacific/Kiritimati' WHERE request_id=930301
+                """);
+        db.update("""
                 INSERT INTO fams_loss_event(report_id,action,before_version,after_version,actor_account_id,
                     actor_username,actor_role,detail_json,occurred_at)
                 VALUES (930300,'LOSS_FOLLOWED_UP',1,2,?,'rmd','WAREHOUSE_OPERATOR',
@@ -146,14 +151,17 @@ class BusinessReminderRuntimeCase {
                 AND deadline_at='2026-12-01 18:00:00'
                 """;
         String loss = "business_type='LOST_REPORT' AND business_id=930300 AND deadline_at='2026-12-01 10:00:00'";
+        String scrap = "business_type='SCRAP' AND business_id=930301 AND deadline_at='2026-12-01 10:00:00'";
         new BusinessReminderService(db, json, smsClock("2026-12-01T09:59:59.999Z")).scan();
         assertEquals(0L, overdueAt(east, "2026-12-02"));
         assertEquals(0L, overdueAt(loss, "2026-12-02"));
+        assertEquals(0L, overdueAt(scrap, "2026-12-02"));
         var easternMidnight = smsClock("2026-12-01T10:00:00Z");
         new BusinessReminderService(db, json, easternMidnight).scan();
         new BusinessReminderService(db, json, easternMidnight).scan();
         assertEquals(2L, overdueAt(east, "2026-12-02"));
         assertEquals(1L, overdueAt(loss, "2026-12-02"));
+        assertEquals(1L, overdueAt(scrap, "2026-12-02"));
         new BusinessReminderService(db, json, smsClock("2026-12-02T09:59:59.999Z")).scan();
         assertEquals(0L, overdueAt(west, "2026-12-02"));
         new BusinessReminderService(db, json, smsClock("2026-12-02T10:00:00Z")).scan();
@@ -199,6 +207,23 @@ class BusinessReminderRuntimeCase {
     }
 
     private void verifyFallbackMigration() {
+        db.update("""
+                INSERT INTO fams_business_reminder (id,business_type,business_id,stage,deadline_at,notice_date,
+                    reminder_business_date,reminder_type,recipient_pool_type,recipient_account_id,created_at)
+                VALUES (930900,'SCRAP',930301,'SCRAP_DISPOSITION','2026-11-07 00:00:00','2026-11-07',
+                    '2026-11-07','OVERDUE','WAREHOUSE_OPERATOR',?,'2026-11-07 00:00:00')
+                """, WAREHOUSE_ACCOUNT);
+        db.update("""
+                INSERT INTO fams_durable_job (id,job_kind,business_reference,actor_account_id,request_key,
+                    request_sha256,job_status,next_attempt_at,created_at,updated_at)
+                VALUES ('3fa5911c-a18e-44de-b704-778a87522fe7','NOTIFICATION_DELIVERY','930900',?,
+                    'legacy-reminder',REPEAT('0',64),'SUCCEEDED',NOW(3),NOW(3),NOW(3))
+                """, WAREHOUSE_ACCOUNT);
+        db.update("""
+                INSERT INTO fams_notification_delivery (reminder_id,recipient_account_id,channel,template_code,
+                    job_id,requested_at,accepted_at)
+                VALUES (930900,?,'SMS','legacy','3fa5911c-a18e-44de-b704-778a87522fe7',NOW(3),NOW(3))
+                """, WAREHOUSE_ACCOUNT);
         var remindersBefore = db.queryForList("SELECT * FROM fams_business_reminder ORDER BY id");
         var deliveriesBefore = db.queryForList("SELECT * FROM fams_notification_delivery ORDER BY reminder_id");
         var migration = Flyway.configure().dataSource(dataSource)
@@ -207,6 +232,29 @@ class BusinessReminderRuntimeCase {
         assertEquals(0, migration.migrate().migrationsExecuted);
         assertEquals(remindersBefore, db.queryForList("SELECT * FROM fams_business_reminder ORDER BY id"));
         assertEquals(deliveriesBefore, db.queryForList("SELECT * FROM fams_notification_delivery ORDER BY reminder_id"));
+        db.update("DELETE FROM fams_notification_delivery WHERE reminder_id=930900");
+        db.update("DELETE FROM fams_durable_job WHERE id='3fa5911c-a18e-44de-b704-778a87522fe7'");
+        db.update("DELETE FROM fams_business_reminder WHERE id=930900");
+    }
+
+    private void verifyDispositionMigration() {
+        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration/d6_04")
+                .target("83").load().migrate();
+        String original = """
+                SELECT request_id,processor_account_id,disposition_status,due_date,custody_snapshot_json,
+                    completion_snapshot_json,version,created_at,updated_at
+                FROM fams_scrap_disposition WHERE request_id=930301
+                """;
+        var before = db.queryForMap(original);
+        var migration = Flyway.configure().dataSource(dataSource).locations("classpath:db/migration/d6_04")
+                .target("84").load();
+        assertEquals(1, migration.migrate().migrationsExecuted);
+        assertEquals(0, migration.migrate().migrationsExecuted);
+        assertEquals(before, db.queryForMap(original));
+        assertEquals(1, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_scrap_disposition WHERE request_id=930301
+                    AND due_at IS NULL AND due_timezone IS NULL
+                """, Integer.class));
     }
 
     private void verifyLoanAndFactorySmsFallback() {

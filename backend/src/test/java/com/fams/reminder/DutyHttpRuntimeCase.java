@@ -1374,6 +1374,19 @@ class DutyHttpRuntimeCase {
                     AND JSON_EXTRACT(detail_json,'$.processorId')=931004
                     AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.state'))='OVERDUE'
                 """, Integer.class));
+        var frozenDeadline = date.atStartOfDay(java.time.ZoneOffset.ofHours(-12)).toInstant();
+        db.update("""
+                UPDATE fams_scrap_disposition SET due_at=?,due_timezone='-12:00'
+                WHERE request_id=9007199254740991
+                """, java.sql.Timestamp.from(frozenDeadline));
+        var stillPending = ok(get(administrator, endpoint + "?state=PENDING_DISPOSITION"));
+        assertEquals(java.util.List.of("9007199254740992", "9007199254740991"),
+                stillPending.path("items").valueStream().map(item -> item.path("requestId").asText()).toList());
+        var frozenOverdue = ok(get(administrator, endpoint + "?state=OVERDUE"));
+        assertTrue(frozenOverdue.path("items").isEmpty());
+        var frozenCsv = get(administrator, endpoint + ".csv?processorId=931004&state=OVERDUE");
+        assertEquals(200, code(frozenCsv));
+        assertEquals(1, frozenCsv.body().lines().count());
     }
 
     private void verifyLossOperationsReport(Session administrator) throws Exception {

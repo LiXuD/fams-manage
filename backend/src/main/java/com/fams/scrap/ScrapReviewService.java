@@ -1035,7 +1035,8 @@ public class ScrapReviewService {
                 + " JOIN fams_business_parameter_version v ON v.id=s.current_version_id"
                 + " WHERE s.singleton_id=1 AND v.status='ACTIVE' FOR SHARE", String.class);
         var settings = json.readTree(parameters);
-        LocalDate today = LocalDate.now(clock.withZone(ZoneId.of(settings.path("timezone").asText())));
+        ZoneId zone = ZoneId.of(settings.path("timezone").asText());
+        LocalDate today = LocalDate.now(clock.withZone(zone));
         LocalDate due = input.plannedDisposalDate() == null ? today.plusDays(30) : input.plannedDisposalDate();
         if (due.isBefore(today)) {
             throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_DATE_INVALID", 400);
@@ -1062,9 +1063,9 @@ public class ScrapReviewService {
                 + "asset_version=?,version=version+1,updated_at=? WHERE id=?",
                 execution, assetVersion, time, id);
         db.update("INSERT INTO fams_scrap_disposition(request_id,processor_account_id,disposition_status,"
-                + "due_date,custody_snapshot_json,created_at,updated_at)"
-                + " VALUES (?,?,'PENDING_DISPOSITION',?,?,?,?)",
-                id, current.id(), due, execution, time, time);
+                + "due_date,due_at,due_timezone,custody_snapshot_json,created_at,updated_at)"
+                + " VALUES (?,?,'PENDING_DISPOSITION',?,?,?,?,?,?)",
+                id, current.id(), due, due.plusDays(1).atStartOfDay(zone).toInstant(), zone.getId(), execution, time, time);
         releaseExecutedLock(id, asset, input.lockVersion(), time);
         closeTodo(id, "EXECUTE", time);
         todo(id, "DISPOSITION", "WAREHOUSE_OPERATOR", current.id(), time);

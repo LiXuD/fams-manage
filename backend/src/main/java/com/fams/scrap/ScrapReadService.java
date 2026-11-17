@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import tools.jackson.databind.ObjectMapper;
 
+import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -82,16 +83,18 @@ public class ScrapReadService {
         String settings = db.queryForObject("SELECT v.snapshot_json FROM fams_business_parameter_state s"
                 + " JOIN fams_business_parameter_version v ON v.id=s.current_version_id"
                 + " WHERE s.singleton_id=1 AND v.status='ACTIVE'", String.class);
-        LocalDate today = LocalDate.now(clock.withZone(ZoneId.of(json.readTree(settings).path("timezone").asText())));
+        var now = clock.instant();
+        LocalDate today = LocalDate.ofInstant(now, ZoneId.of(json.readTree(settings).path("timezone").asText()));
+        var cutoff = Timestamp.from(now);
         String where = " FROM fams_scrap_disposition d JOIN fams_scrap_request r ON r.id=d.request_id"
                 + " WHERE d.disposition_status='PENDING_DISPOSITION' AND r.request_status='EXECUTED'"
-                + " AND d.due_date<? AND (? OR d.processor_account_id=?)";
+                + " AND (d.due_at<=? OR (d.due_at IS NULL AND d.due_date<?)) AND (? OR d.processor_account_id=?)";
         boolean administrator = current.has(Role.ASSET_ADMIN);
         var items = db.queryForList("SELECT r.*" + where + " ORDER BY d.due_date,d.request_id LIMIT ? OFFSET ?",
-                today, administrator, current.id(), size, ((long) page - 1) * size).stream()
+                cutoff, today, administrator, current.id(), size, ((long) page - 1) * size).stream()
                 .map(row -> view(current, row)).toList();
         return Map.of("items", items, "total", Objects.requireNonNull(db.queryForObject("SELECT COUNT(*)" + where,
-                        Long.class, today, administrator, current.id())),
+                        Long.class, cutoff, today, administrator, current.id())),
                 "page", page, "pageSize", size, "businessDate", today, "canListOverdueDispositions", true);
     }
 

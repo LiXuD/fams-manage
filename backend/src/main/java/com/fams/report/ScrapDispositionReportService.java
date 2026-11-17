@@ -29,7 +29,8 @@ class ScrapDispositionReportService {
             WHERE r.request_status='EXECUTED' AND (? IS NULL OR d.processor_account_id=?)
             """;
     private static final String STATE = """
-            CASE WHEN d.disposition_status='PENDING_DISPOSITION' AND d.due_date < ?
+            CASE WHEN d.disposition_status='PENDING_DISPOSITION'
+                 AND (d.due_at<=? OR (d.due_at IS NULL AND d.due_date<?))
                  THEN 'OVERDUE' ELSE d.disposition_status END
             """;
     private final JdbcTemplate db;
@@ -44,12 +45,14 @@ class ScrapDispositionReportService {
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public Page list(Filter filter, Long before, int pageSize) {
-        var date = LocalDate.ofInstant(clock.instant(), masterData.currentZone());
+        var now = clock.instant();
+        var cutoff = Timestamp.from(now);
+        var date = LocalDate.ofInstant(now, masterData.currentZone());
         var counts = db.query("SELECT " + STATE + " AS state, COUNT(*) AS total " + FACTS
                         + " GROUP BY state ORDER BY state",
                 (row, index) -> new Count(State.valueOf(row.getString("state")), row.getLong("total")),
-                date, filter.processorId(), filter.processorId());
-        var rows = query(filter, date, before, pageSize + 1);
+                cutoff, date, filter.processorId(), filter.processorId());
+        var rows = query(filter, cutoff, date, before, pageSize + 1);
         if (rows.size() <= pageSize) {
             return new Page(date, counts, rows, null);
         }
@@ -60,7 +63,7 @@ class ScrapDispositionReportService {
     public String export(AssetActorContext.Actor actor, Filter filter) {
         var now = clock.instant();
         var date = LocalDate.ofInstant(now, masterData.currentZone());
-        var rows = query(filter, date, null, EXPORT_LIMIT + 1);
+        var rows = query(filter, Timestamp.from(now), date, null, EXPORT_LIMIT + 1);
         if (rows.size() > EXPORT_LIMIT) {
             throw new ExportLimit();
         }
@@ -79,7 +82,7 @@ class ScrapDispositionReportService {
                 .collect(Collectors.joining("\r\n"));
     }
 
-    private List<Row> query(Filter filter, LocalDate date, Long before, int limit) {
+    private List<Row> query(Filter filter, Timestamp cutoff, LocalDate date, Long before, int limit) {
         return db.query("""
                 SELECT r.id, r.asset_id, a.asset_code, employee.name AS processor, d.due_date,
                     CASE WHEN d.disposition_status='DISPOSED' THEN d.updated_at END AS disposition_recorded_at,
@@ -89,7 +92,7 @@ class ScrapDispositionReportService {
                     return new Row(row.getString("id"), row.getString("asset_id"), row.getString("asset_code"),
                             row.getString("processor"), State.valueOf(row.getString("state")),
                             row.getObject("due_date", LocalDate.class), recorded == null ? null : recorded.toInstant());
-                }, date, filter.processorId(), filter.processorId(), filter.stateName(), date, filter.stateName(),
+                }, cutoff, date, filter.processorId(), filter.processorId(), filter.stateName(), cutoff, date, filter.stateName(),
                 before, before, limit);
     }
 
