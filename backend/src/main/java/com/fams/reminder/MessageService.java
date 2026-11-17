@@ -68,8 +68,33 @@ public class MessageService {
                     )))
             ))
             """;
+    private static final String ACTIVE_HANDOVER_RECEIPT = """
+            (r.stage<>'HANDOVER_RECEIPT' OR (
+                (r.business_type='REQUISITION_ALLOCATION' AND EXISTS (
+                    SELECT 1 FROM fams_requisition_allocation a
+                    JOIN fams_requisition_handover h ON h.allocation_id=a.id
+                    LEFT JOIN fams_system_account recipient ON recipient.employee_id=h.temporary_employee_id
+                        AND recipient.status='ENABLED'
+                    WHERE a.id=r.business_id AND a.allocation_status='DELIVERED_WAITING_RECEIPT'
+                        AND h.receipt_deadline_at=r.deadline_at
+                        AND (r.reminder_type IN
+            """ + ESCALATION_TYPES + """
+                            OR r.recipient_account_id <=> recipient.id)
+                )) OR (r.business_type='TRANSFER_ITEM' AND EXISTS (
+                    SELECT 1 FROM fams_transfer_item x
+                    LEFT JOIN fams_system_account recipient ON recipient.employee_id=x.receiver_employee_id
+                        AND recipient.status='ENABLED'
+                    WHERE x.id=r.business_id AND x.item_status='DELIVERED'
+                        AND x.receipt_deadline_at=r.deadline_at
+                        AND (r.reminder_type IN
+            """ + ESCALATION_TYPES + """
+                            OR r.recipient_account_id <=> recipient.id)
+                ))
+            ))
+            """;
     private static final String ACTIVE_REMINDER = ACTIVE_FACTORY_RETURN + " AND " + ACTIVE_INVENTORY_COMPLETION
-            + " AND (r.business_type<>'INBOUND' OR " + InboundReminderState.CURRENT_STAGE + ")";
+            + " AND (r.business_type<>'INBOUND' OR " + InboundReminderState.CURRENT_STAGE + ")"
+            + " AND " + ACTIVE_HANDOVER_RECEIPT;
     private static final String ACTIVE_CUSTODIAN_REMINDER = """
             (r.business_type<>'LOST_REPORT' OR r.stage<>'LOSS_REVIEW' OR EXISTS (
                 SELECT 1 FROM fams_loss_report l JOIN fams_asset asset ON asset.id=l.asset_id
@@ -107,6 +132,7 @@ public class MessageService {
     private static final String NEWEST_OCCURRENCE =
             " r.id=(SELECT MAX(x.id) FROM fams_business_reminder x WHERE x.business_type=r.business_type"
             + " AND x.business_id=r.business_id AND x.stage=r.stage AND x.reminder_type<>'SMS_FALLBACK'"
+            + " AND (r.stage<>'HANDOVER_RECEIPT' OR x.deadline_at=r.deadline_at AND x.recipient_slot=r.recipient_slot)"
             + " AND ((x.reminder_type IN" + ESCALATION_TYPES
             + " AND x.reminder_type=r.reminder_type AND x.recipient_slot=r.recipient_slot)"
             + " OR (r.reminder_type NOT IN" + ESCALATION_TYPES + " AND x.reminder_type NOT IN" + ESCALATION_TYPES

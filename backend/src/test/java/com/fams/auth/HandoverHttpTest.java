@@ -62,6 +62,7 @@ class HandoverHttpTest {
     @Autowired org.springframework.context.ApplicationContext application;
     @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
     private long base;
+    private final java.util.ArrayList<Long> handoverNoticeFixtures = new java.util.ArrayList<>();
     private Long extraTargetEmployee;
     private Session employee;
     private Session warehouse;
@@ -242,6 +243,10 @@ class HandoverHttpTest {
 
     @AfterEach
     void removeOnlyOwnedExactFixtureRange() {
+        for (var notice : handoverNoticeFixtures) {
+            jdbc.update("DELETE FROM fams_message_receipt WHERE message_kind='REMINDER' AND message_id=?", notice);
+            jdbc.update("DELETE FROM fams_business_reminder WHERE id=?", notice);
+        }
         jdbc.update("DELETE t FROM fams_todo t JOIN fams_item_target_change c ON t.business_id=c.id WHERE t.business_type='ITEM_TARGET_CHANGE' AND c.creator_account_id BETWEEN ? AND ?", base+10, base+17);
         jdbc.update("DELETE FROM fams_item_target_change WHERE creator_account_id BETWEEN ? AND ?", base+10, base+17);
         if (base == 0) {
@@ -1319,6 +1324,13 @@ class HandoverHttpTest {
         var value = allocatedDraft(1, borrowDraft("2099-12-31"));
         assertEquals("BORROW", value.path("requestType").asText());
         value = warehouseWrite(value, 0, "deliver", delivery(value, 0));
+        long allocation = value.path("allocations").get(0).path("id").asLong();
+        var notice = handoverNotice("REQUISITION_ALLOCATION", allocation, base + 10, false);
+        var obsoleteDeadline = handoverNotice("REQUISITION_ALLOCATION", allocation, base + 10, true);
+        assertTrue(hasHandoverNotice(employee, notice));
+        assertFalse(hasHandoverNotice(employee, obsoleteDeadline));
+        assertEquals(404, readHandoverNotice(employee, obsoleteDeadline));
+        assertEquals(200, readHandoverNotice(employee, notice));
         assertEquals("IN_STOCK", jdbc.queryForObject(
                 "SELECT lifecycle_status FROM fams_asset WHERE id=?", String.class, base + 50));
         assertEquals(0, count("SELECT COUNT(*) FROM fams_loan WHERE asset_id=?", base + 50));
@@ -1326,6 +1338,10 @@ class HandoverHttpTest {
         String endpoint = path(value, 0, "receive");
         var received = call(employee, "POST", endpoint, body, identity, value.path("version").asLong());
         assertEquals(200, received.statusCode(), received.body());
+        assertFalse(hasHandoverNotice(employee, notice));
+        assertEquals(404, readHandoverNotice(employee, notice));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_message_receipt WHERE message_kind='REMINDER'"
+                + " AND message_id=? AND account_id=?", notice, base + 10));
         var repeated = call(employee, "POST", endpoint, body, identity, value.path("version").asLong());
         assertEquals(received.body(), repeated.body());
         assertEquals("BORROWED", jdbc.queryForObject(
@@ -4288,6 +4304,8 @@ class HandoverHttpTest {
         row = transferAction(warehouse, row, transferItemPath(row, "deliver"), transferPhysical(row, null, false));
         String item = row.path("items").get(0).path("id").asText();
         var originalRecipient = login(base + 15);
+        long initialNotice = handoverNotice("TRANSFER_ITEM", Long.parseLong(item), base + 15, false);
+        assertTrue(hasHandoverNotice(originalRecipient, initialNotice));
         String originalReceipt = transferReceipt(originalRecipient, row, "RQ-ASSET-" + base);
         var beforeAsset = jdbc.queryForMap("SELECT * FROM fams_asset WHERE id=?", base + 50);
         var physical = jdbc.queryForMap("SELECT destination,delivery_evidence,delivered_at,receipt_deadline_at,source_snapshot_json,parameter_snapshot_json FROM fams_transfer_item WHERE id=?", item);
@@ -4304,6 +4322,11 @@ class HandoverHttpTest {
         String approvalKey = key();
         var approved = genericTargetCall(admin, "TRANSFER", "POST", "/" + change.path("id").asText() + "/decision", decision, approvalKey, 0L);
         assertEquals(200, approved.statusCode(), approved.body());
+        assertFalse(hasHandoverNotice(originalRecipient, initialNotice));
+        assertEquals(404, readHandoverNotice(originalRecipient, initialNotice));
+        long currentNotice = handoverNotice("TRANSFER_ITEM", Long.parseLong(item), base + 12, false);
+        assertTrue(hasHandoverNotice(other, currentNotice));
+        assertFalse(hasHandoverNotice(originalRecipient, currentNotice));
         assertEquals(JSON.readTree(approved.body()), JSON.readTree(genericTargetCall(admin, "TRANSFER", "POST", "/" + change.path("id").asText() + "/decision", decision, approvalKey, 0L).body()));
         assertEquals(beforeAsset, jdbc.queryForMap("SELECT * FROM fams_asset WHERE id=?", base + 50));
         assertEquals(physical, jdbc.queryForMap("SELECT destination,delivery_evidence,delivered_at,receipt_deadline_at,source_snapshot_json,parameter_snapshot_json FROM fams_transfer_item WHERE id=?", item));
@@ -4316,11 +4339,51 @@ class HandoverHttpTest {
         String receive = transferReceipt(other, row, "RQ-ASSET-" + base);
         var received = transferCall(other, "POST", "/receipts/" + item + "/receive", receive, key(), row.path("version").asLong());
         assertEquals(200, received.statusCode(), received.body());
+        assertFalse(hasHandoverNotice(other, currentNotice));
+        assertEquals(404, readHandoverNotice(other, currentNotice));
         assertEquals(base + 12, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
         assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
         assertEquals(1, count("SELECT COUNT(*) FROM fams_transfer_event WHERE item_id=? AND event_type='TRANSFER_TARGET_CHANGED'", item));
         assertEquals(1, count("SELECT COUNT(*) FROM fams_transfer_event WHERE item_id=? AND event_type='TRANSFER_RECEIVE'", item));
         assertEquals(Long.toString(base + 15), jdbc.queryForObject("SELECT JSON_UNQUOTE(JSON_EXTRACT(source_snapshot_json,'$.target.employeeId')) FROM fams_item_target_change WHERE id=?", String.class, change.path("id").asText()));
+    }
+
+    private long handoverNotice(String businessType, long item, long account, boolean obsoleteDeadline) {
+        String source = "TRANSFER_ITEM".equals(businessType)
+                ? "fams_transfer_item WHERE id=?" : "fams_requisition_handover WHERE allocation_id=?";
+        String deadline = obsoleteDeadline ? "DATE_ADD(receipt_deadline_at, INTERVAL 1 DAY)" : "receipt_deadline_at";
+        jdbc.update("""
+                INSERT INTO fams_business_reminder (business_type,business_id,stage,deadline_at,notice_date,
+                    reminder_business_date,reminder_type,recipient_pool_type,recipient_account_id,created_at)
+                SELECT ?,?,'HANDOVER_RECEIPT',
+                """ + deadline + """
+                ,UTC_DATE()-INTERVAL 3 DAY,UTC_DATE(),'DUE_TODAY','EMPLOYEE',?,UTC_TIMESTAMP(3)
+                FROM
+                """ + source, businessType, item, account, item);
+        long notice = jdbc.queryForObject("""
+                SELECT MAX(id) FROM fams_business_reminder WHERE business_type=? AND business_id=?
+                    AND stage='HANDOVER_RECEIPT' AND recipient_account_id=?
+                    AND reminder_type='DUE_TODAY' AND notice_date=UTC_DATE()-INTERVAL 3 DAY
+                """, Long.class, businessType, item, account);
+        handoverNoticeFixtures.add(notice);
+        return notice;
+    }
+
+    private boolean hasHandoverNotice(Session session, long notice) throws Exception {
+        var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/messages?view=INBOX"))
+                .header("Cookie", session.cookie()).GET().build();
+        var response = http.send(request, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode(), response.body());
+        return JSON.readTree(response.body()).path("items").valueStream()
+                .anyMatch(message -> "REMINDER".equals(message.path("kind").asText()) && message.path("id").asLong() == notice);
+    }
+
+    private int readHandoverNotice(Session session, long notice) throws Exception {
+        var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+                + "/api/v1/messages/REMINDER/" + notice + "/read"))
+                .header("Cookie", session.cookie()).header("X-CSRF-Token", session.csrf())
+                .header("Idempotency-Key", key()).POST(HttpRequest.BodyPublishers.noBody()).build();
+        return http.send(request, HttpResponse.BodyHandlers.ofString()).statusCode();
     }
 
     @Test
