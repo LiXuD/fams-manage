@@ -51,7 +51,7 @@ public class BusinessReminderService {
         inventory(zone);
         factoryReturns();
         overdueLoans();
-        lossReviews(today, zone);
+        lossReviews(zone);
         dispositions(today, zone);
     }
 
@@ -202,12 +202,25 @@ public class BusinessReminderService {
                 });
     }
 
-    private void lossReviews(LocalDate today, ZoneId zone) {
+    private void lossReviews(ZoneId fallback) {
         each("""
-             SELECT x.id,x.next_review_date,x.processor_account_id FROM fams_loss_report x
+             SELECT x.id,x.next_review_date,x.processor_account_id,(
+                 SELECT e.detail_json FROM fams_loss_event e WHERE e.report_id=x.id
+                    AND e.action IN ('LOSS_SEARCH_STARTED','LOSS_CONFIRMED','LOSS_FOLLOWED_UP','LOSS_INITIAL_OPENED')
+                 ORDER BY e.id DESC LIMIT 1
+             ) AS schedule_event FROM fams_loss_report x
               WHERE x.report_status IN ('SEARCHING','CONFIRMED_LOST') AND x.next_review_date IS NOT NULL""",
                 row -> {
                     var due = LocalDate.parse(String.valueOf(row.get("next_review_date")));
+                    ZoneId zone = fallback;
+                    if (row.get("schedule_event") instanceof String detail) {
+                        var event = json.readTree(detail);
+                        var frozen = event.path("reviewTimezone").asText("");
+                        if (!frozen.isBlank() && due.toString().equals(event.path("reviewDate").asText())) {
+                            zone = ZoneId.of(frozen);
+                        }
+                    }
+                    var today = clock.instant().atZone(zone).toLocalDate();
                     Long processor = row.get("processor_account_id") == null
                             ? null : ((Number) row.get("processor_account_id")).longValue();
                     record("LOST_REPORT", number(row, "id"), "LOSS_REVIEW", due, endOfDay(due, zone), zone,

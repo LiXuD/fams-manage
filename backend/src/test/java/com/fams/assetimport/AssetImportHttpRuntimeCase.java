@@ -1083,6 +1083,18 @@ class AssetImportHttpRuntimeCase {
         worker.poll();
         worker.poll();
         assertEquals(before, JSON.readTree(JSON.writeValueAsString(linkedPublicationSnapshot(batch))));
+        var schedules = db.queryForList("""
+                SELECT CAST(r.next_review_date AS CHAR) AS review_date, e.detail_json
+                FROM fams_loss_report r
+                JOIN fams_asset_import_publication p ON p.asset_id=r.asset_id AND p.batch_id=?
+                JOIN fams_loss_event e ON e.report_id=r.id AND e.action='LOSS_INITIAL_OPENED'
+                """, batch);
+        assertEquals(2, schedules.size());
+        for (var schedule : schedules) {
+            var details = JSON.readTree(schedule.get("detail_json").toString());
+            assertEquals("Asia/Shanghai", details.path("reviewTimezone").asText());
+            assertEquals(schedule.get("review_date"), details.path("reviewDate").asText());
+        }
         System.out.println("D6_23_LINKED_IMPORT_RESTART published=5 generation=1 snapshots_unchanged=true");
     }
 

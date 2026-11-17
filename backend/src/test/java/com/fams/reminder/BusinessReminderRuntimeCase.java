@@ -129,6 +129,13 @@ class BusinessReminderRuntimeCase {
                 UPDATE fams_transfer_item SET parameter_snapshot_json=JSON_SET(parameter_snapshot_json,'$.timezone','America/Adak'),
                     receipt_deadline_at='2026-12-01 18:00:00' WHERE id=930500
                 """);
+        db.update("UPDATE fams_loss_report SET next_review_date='2026-12-01' WHERE id=930300");
+        db.update("""
+                INSERT INTO fams_loss_event(report_id,action,before_version,after_version,actor_account_id,
+                    actor_username,actor_role,detail_json,occurred_at)
+                VALUES (930300,'LOSS_FOLLOWED_UP',1,2,?,'rmd','WAREHOUSE_OPERATOR',
+                    JSON_OBJECT('reviewDate','2026-12-01','reviewTimezone','Pacific/Kiritimati'),'2026-11-30 02:00:00')
+                """, WAREHOUSE_ACCOUNT);
         String east = """
                 ((business_type='INBOUND' AND business_id=930202)
                   OR (business_type='INVENTORY_TASK' AND business_id=930401))
@@ -138,12 +145,15 @@ class BusinessReminderRuntimeCase {
                 business_type='TRANSFER_ITEM' AND business_id=930500
                 AND deadline_at='2026-12-01 18:00:00'
                 """;
+        String loss = "business_type='LOST_REPORT' AND business_id=930300 AND deadline_at='2026-12-01 10:00:00'";
         new BusinessReminderService(db, json, smsClock("2026-12-01T09:59:59.999Z")).scan();
         assertEquals(0L, overdueAt(east, "2026-12-02"));
+        assertEquals(0L, overdueAt(loss, "2026-12-02"));
         var easternMidnight = smsClock("2026-12-01T10:00:00Z");
         new BusinessReminderService(db, json, easternMidnight).scan();
         new BusinessReminderService(db, json, easternMidnight).scan();
         assertEquals(2L, overdueAt(east, "2026-12-02"));
+        assertEquals(1L, overdueAt(loss, "2026-12-02"));
         new BusinessReminderService(db, json, smsClock("2026-12-02T09:59:59.999Z")).scan();
         assertEquals(0L, overdueAt(west, "2026-12-02"));
         new BusinessReminderService(db, json, smsClock("2026-12-02T10:00:00Z")).scan();

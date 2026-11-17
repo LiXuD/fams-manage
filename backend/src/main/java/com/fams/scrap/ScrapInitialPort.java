@@ -129,9 +129,9 @@ public class ScrapInitialPort implements InitialScrapPort {
     }
 
     @Override
-    public void openLoss(Opening opening, LossFacts facts, LocalDate businessDate) {
+    public void openLoss(Opening opening, LossFacts facts, LocalDate businessDate, String timezone) {
         var factory = "FACTORY_REPAIR".equals(opening.beforeLifecycle()) ? initialFactoryLoss(opening, facts) : null;
-        var loss = losses.open(opening, facts, businessDate, factory == null ? null : factory.repairId(),
+        var loss = losses.open(opening, facts, businessDate, timezone, factory == null ? null : factory.repairId(),
                 factory == null ? null : factory.roundId());
         if (db.update("""
                 UPDATE fams_asset SET exception_status='LOST'

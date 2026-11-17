@@ -33,7 +33,7 @@ public class LossInitialPort {
         this.json = json;
     }
 
-    public Confirmed open(Opening opening, LossFacts facts, LocalDate businessDate, Long repair, Long round) {
+    public Confirmed open(Opening opening, LossFacts facts, LocalDate businessDate, String timezone, Long repair, Long round) {
         boolean factory = "FACTORY_REPAIR".equals(opening.beforeLifecycle());
         Map<String, Object> custody = new LinkedHashMap<>(factory
                 ? assets.factorySubmission(opening.asset(), 0) : assets.initialLossSnapshot(opening.asset()));
@@ -69,7 +69,10 @@ public class LossInitialPort {
                 INSERT INTO fams_todo(pool_type,assignee_account_id,business_type,business_id,todo_type,todo_status,opened_at)
                 VALUES ('WAREHOUSE_OPERATOR',?,'LOST_REPORT',?,'LOST_FOLLOW_UP','OPEN',?)
                 """, opening.actorId(), id, opening.time());
-        event(id, opening.actorId(), "LOSS_INITIAL_OPENED", 0, provenance, opening.time());
+        var schedule = new LinkedHashMap<String, Object>(provenance);
+        schedule.put("reviewDate", businessDate.plusDays(30).toString());
+        schedule.put("reviewTimezone", timezone);
+        event(id, opening.actorId(), "LOSS_INITIAL_OPENED", 0, schedule, opening.time());
         return new Confirmed(id, custodyJson, confirmationJson);
     }
 

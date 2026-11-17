@@ -142,7 +142,7 @@ public class AssetInitialPublicationPort {
                     asset.proposedDisposition().strip(), context.actorId(),
                     context.batchId(), context.sheetRow(), context.now());
             if (lossOpening) {
-                scraps.openLoss(scrap, asset.lossFacts(), context.businessDate());
+                scraps.openLoss(scrap, asset.lossFacts(), context.businessDate(), context.timezone());
             } else if (asset.factoryDisposition() != null) {
                 scraps.openFactoryDisposition(scrap, asset.factoryDisposition());
             } else if (repairOpening) {

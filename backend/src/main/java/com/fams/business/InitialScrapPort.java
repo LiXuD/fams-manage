@@ -15,7 +15,7 @@ public interface InitialScrapPort {
 
     void openRepair(Opening opening);
 
-    void openLoss(Opening opening, LossFacts facts, java.time.LocalDate businessDate);
+    void openLoss(Opening opening, LossFacts facts, java.time.LocalDate businessDate, String timezone);
 
     void openFactoryDisposition(Opening opening, FactoryDisposition disposition);
 
