@@ -97,7 +97,8 @@ public class MessageService {
             " SELECT 'REMINDER' message_kind,r.id id,r.business_type,r.business_id,r.reminder_type stage,"
             + " r.stage object_stage,r.recipient_pool_type pool_type,r.recipient_account_id,r.created_at moment,"
             + " r.deadline_at FROM fams_business_reminder r WHERE r.reminder_type<>'SMS_FALLBACK' AND "
-            + ACTIVE_REMINDER + " AND " + ACTIVE_CUSTODIAN_REMINDER + " AND";
+            + ACTIVE_REMINDER + " AND " + ACTIVE_CUSTODIAN_REMINDER + " AND "
+            + ReminderFollowupService.GROUP_NOTICE_VISIBLE + " AND";
     /**
      * Only the latest occurrence of an object stage is an active message; earlier ones stay as history. Escalation
      * tiers are newest per recipient within their own tier, and inventory completion has a separate ladder
@@ -223,7 +224,8 @@ public class MessageService {
     }
 
     private String addressableReminder(RequisitionActorContext.Current current, List<Object> args) {
-        String available = " r.reminder_type<>'SMS_FALLBACK' AND " + ACTIVE_REMINDER + " AND " + ACTIVE_CUSTODIAN_REMINDER;
+        String available = " r.reminder_type<>'SMS_FALLBACK' AND " + ACTIVE_REMINDER + " AND "
+                + ACTIVE_CUSTODIAN_REMINDER + " AND " + ReminderFollowupService.GROUP_NOTICE_VISIBLE;
         if (current.has(Role.ASSET_ADMIN)) {
             return available;
         }

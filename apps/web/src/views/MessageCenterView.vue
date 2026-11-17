@@ -5,6 +5,7 @@ import { AuthApiError } from "@/auth/api";
 import { formatProxyTime } from "@/proxy/time";
 import AppChrome from "@/components/AppChrome.vue";
 import ConfigurationAnomalies from "@/reminder/ConfigurationAnomalies.vue";
+import ExceptionFollowup from "@/reminder/ExceptionFollowup.vue";
 import { LoanApiError, loanMessage, loanRequest, type LoanMutation } from "@/loan/api";
 import { ReminderApiError, dutyRequest, reminderMessage,
   type DutyAssignment, type DutyList, type DutyMutation } from "@/reminder/api";
@@ -177,6 +178,10 @@ onBeforeUnmount(() => { live = false; clear(); });
         <p>登记 {{ formatProxyTime(message.openedAt) }}<template v-if="message.deadlineAt"> · 截止 {{ formatProxyTime(message.deadlineAt) }}</template></p>
         <router-link v-if="destination(message)" :to="destination(message)!">查看业务单据</router-link>
         <button v-if="!message.read" :disabled="busy || !!pendingRead" @click="read(message.id)">标记已读</button>
+        <ExceptionFollowup v-if="view === 'EXCEPTION' && session.user?.roles.includes('ASSET_ADMIN')
+          && message.kind === 'REMINDER' && ['OVERDUE', 'OVERDUE_UNRESOLVED_WORKDAY'].includes(message.stage)
+          && ['INBOUND', 'REQUISITION_ALLOCATION', 'TRANSFER_ITEM'].includes(message.businessType)"
+          :reminder-id="message.id" @saved="refresh()" />
       </article>
       <p v-if="!rows.length">{{ view === "EXCEPTION" ? "当前没有需要跟进的超时异常。" : "暂无站内消息。" }}</p>
       <div class="actions">

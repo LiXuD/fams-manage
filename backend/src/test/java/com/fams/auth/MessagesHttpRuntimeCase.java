@@ -123,6 +123,50 @@ class MessagesHttpRuntimeCase {
         verifyWarehouseExceptions(admin, warehouse, grant.sessionToken());
         verifyInventoryExecutors(admin, warehouse, employee, grant.sessionToken());
         verifyClosedCustodianReminders(admin, warehouse);
+        verifyFollowup(admin, warehouse);
+    }
+
+    private void verifyFollowup(Session admin, Session warehouse) throws Exception {
+        reminder(939801, "INBOUND", 11, "ADMIN_DECISION", "OVERDUE", "2026-11-07", "ASSET_ADMIN", null);
+        reminder(939802, "INBOUND", 11, "ADMIN_DECISION", "OVERDUE_UNRESOLVED_WORKDAY", "2026-11-09",
+                "ASSET_ADMIN", ADMIN);
+        String endpoint = "/api/v1/messages/reminders/939801/follow-up";
+        assertTrue(ok(get(admin, endpoint)).path("latest").isNull());
+        assertEquals(403, get(warehouse, endpoint).statusCode());
+        assertTrue(keys(inbox(admin, "EXCEPTION")).contains("REMINDER:939802"));
+        var key = UUID.randomUUID();
+        var next = java.time.Instant.now().plusSeconds(3600).truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        var body = json.writeValueAsString(Map.of("findings", "已联系申请人核对实物情况", "nextFollowupAt", next.toString()));
+        assertEquals(403, followup(warehouse, endpoint, key, body).statusCode());
+        var past = body.replace(next.toString(), "2000-01-01T00:00:00Z");
+        assertEquals(400, followup(admin, endpoint, key, past).statusCode());
+        var saved = ok(followup(admin, endpoint, key, body));
+        assertEquals(saved, ok(followup(admin, endpoint, key, body)));
+        assertEquals(409, followup(admin, endpoint, key, body.replace("实物", "单据")).statusCode());
+        assertEquals(saved, ok(get(admin, endpoint)).path("latest"));
+        assertFalse(keys(inbox(admin, "EXCEPTION")).contains("REMINDER:939802"));
+        assertTrue(keys(inbox(admin, "EXCEPTION")).contains("REMINDER:939801"));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_reminder_followup", Integer.class));
+        assertEquals(1, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE action='REMINDER_FOLLOWUP_RECORDED'
+                    AND resource_type='INBOUND' AND resource_id=11
+                """, Integer.class));
+        db.update("""
+                UPDATE fams_reminder_followup SET recorded_at=UTC_TIMESTAMP(3)-INTERVAL 2 HOUR,
+                    next_followup_at=UTC_TIMESTAMP(3)-INTERVAL 1 HOUR WHERE reminder_id=939801
+                """);
+        assertTrue(keys(inbox(admin, "EXCEPTION")).contains("REMINDER:939802"));
+        db.update("UPDATE fams_inbound_receipt SET receipt_status='WAITING_WAREHOUSE_CLAIM' WHERE id=11");
+        assertEquals(409, get(admin, endpoint).statusCode());
+        assertEquals(409, followup(admin, endpoint, UUID.randomUUID(), body).statusCode());
+        assertFalse(keys(inbox(admin, "EXCEPTION")).contains("REMINDER:939802"));
+    }
+
+    private HttpResponse<String> followup(Session session, String path, UUID key, String body) throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
+                .header("Cookie", session.cookie()).header("X-CSRF-Token", session.csrf())
+                .header("Idempotency-Key", key.toString()).header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private void verifyClosedCustodianReminders(Session admin, Session warehouse) throws Exception {

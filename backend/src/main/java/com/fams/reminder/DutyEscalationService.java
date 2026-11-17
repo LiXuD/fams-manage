@@ -151,7 +151,8 @@ public class DutyEscalationService {
         for (var entry : stage.cases()) {
             var today = now.atZone(entry.zone()).toLocalDate();
             if (now.isBefore(entry.unhandledAfterWorkday())
-                    || "INBOUND".equals(stage.businessType()) && reassigned(entry)) {
+                    || "INBOUND".equals(stage.businessType()) && reassigned(entry)
+                    || followupPending(stage, entry, now)) {
                 continue;
             }
             for (var administrator : administrators) {
@@ -159,6 +160,16 @@ public class DutyEscalationService {
                         "OVERDUE_UNRESOLVED_WORKDAY", entry.deadlineAt(), administrator, today);
             }
         }
+    }
+
+    private boolean followupPending(Stage stage, Case entry, Instant now) {
+        return !db.queryForList("""
+                SELECT 1 FROM fams_reminder_followup f
+                WHERE f.id=(SELECT MAX(p.id) FROM fams_reminder_followup p
+                    WHERE p.business_type=? AND p.business_id=? AND p.stage=? AND p.deadline_at=?)
+                    AND f.next_followup_at>?
+                """, stage.businessType(), entry.businessId(), stage.stage(), Timestamp.from(entry.deadlineAt()),
+                Timestamp.from(now)).isEmpty();
     }
 
     /**
