@@ -24,6 +24,7 @@ const nameFilter = ref("");
 const overdueFilter = ref("");
 const currentProcessorId = ref("");
 const businessReference = ref("");
+const inventoryBefore = ref("");
 const appliedFilters = ref<AssetLedgerFilters & { code: string; name: string; accountId: string }>();
 const querying = ref(false);
 const exporting = ref(false);
@@ -70,6 +71,7 @@ async function load(): Promise<void> {
     code: code.value.trim(), name: nameFilter.value.trim(),
     borrowOverdue: overdueFilter.value === "" ? undefined : overdueFilter.value === "true",
     currentProcessorId: currentProcessorId.value.trim(), businessReference: businessReference.value.trim(),
+    inventoryBefore: inventoryBefore.value,
   };
   querying.value = true;
   error.value = "";
@@ -235,6 +237,7 @@ onMounted(() => {
         <label>资产名称<input v-model="nameFilter" placeholder="名称包含" /></label>
         <label>当前处理库管账号 ID<input v-model="currentProcessorId" inputmode="numeric" maxlength="19" /></label>
         <label>业务单号<input v-model="businessReference" maxlength="128" /></label>
+        <label>在指定日期前未盘点（含从未盘点）<input v-model="inventoryBefore" type="date" /></label>
         <label>借用逾期<select v-model="overdueFilter">
           <option value="">全部</option>
           <option value="true">已逾期</option>

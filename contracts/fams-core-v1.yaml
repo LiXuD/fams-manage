@@ -372,10 +372,18 @@ components:
       required: false
       schema:
         type: boolean
+    AssetInventoryBeforeFilter:
+      name: inventoryBefore
+      in: query
+      required: false
+      description: Cutoff for active inventory-eligible assets. Includes assets never inventoried and dates strictly before the cutoff.
+      schema:
+        $ref: '#/components/schemas/BusinessDate'
     AssetLongUninventoriedFilter:
       name: longUninventoried
       in: query
       required: false
+      description: Requires inventoryBefore. True selects never inventoried or earlier dates; false selects dates on or after the cutoff.
       schema:
         type: boolean
     AssetTimelineEventTypeFilter:
@@ -1462,6 +1470,8 @@ components:
           $ref: '#/components/schemas/BusinessDate'
         borrowOverdue:
           type: boolean
+        inventoryBefore:
+          $ref: '#/components/schemas/BusinessDate'
         longUninventoried:
           type: boolean
     AssetSavedFilter:
@@ -8038,6 +8048,7 @@ paths:
         - $ref: '#/components/parameters/AssetLastInventoryDateFromFilter'
         - $ref: '#/components/parameters/AssetLastInventoryDateToFilter'
         - $ref: '#/components/parameters/AssetBorrowOverdueFilter'
+        - $ref: '#/components/parameters/AssetInventoryBeforeFilter'
         - $ref: '#/components/parameters/AssetLongUninventoriedFilter'
       responses:
         '200':
@@ -8128,6 +8139,11 @@ paths:
         - $ref: '#/components/parameters/AssetInboundDateToFilter'
         - $ref: '#/components/parameters/AssetLastInventoryDateFromFilter'
         - $ref: '#/components/parameters/AssetLastInventoryDateToFilter'
+        - $ref: '#/components/parameters/AssetCurrentProcessorFilter'
+        - $ref: '#/components/parameters/AssetBusinessReferenceFilter'
+        - $ref: '#/components/parameters/AssetBorrowOverdueFilter'
+        - $ref: '#/components/parameters/AssetInventoryBeforeFilter'
+        - $ref: '#/components/parameters/AssetLongUninventoriedFilter'
       responses:
         '200':
           description: UTF-8 CSV attachment with up to 10000 scoped rows.

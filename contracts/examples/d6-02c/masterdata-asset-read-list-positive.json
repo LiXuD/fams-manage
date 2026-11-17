@@ -14,6 +14,7 @@
     "lastInventoryDateFrom": "2026-08-01",
     "lastInventoryDateTo": "2026-09-14",
     "borrowOverdue": true,
+    "inventoryBefore": "2026-08-01",
     "longUninventoried": false,
     "page": 1,
     "pageSize": 20

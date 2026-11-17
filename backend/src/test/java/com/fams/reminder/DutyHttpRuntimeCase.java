@@ -14,6 +14,7 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -511,6 +512,7 @@ class DutyHttpRuntimeCase {
         verifyInventoryLateReport(restored, reportWarehouse);
         verifyBusinessExceptionReport(restored, reportWarehouse);
         verifyInboundTimingReport(restored, reportWarehouse);
+        verifyLedgerInventoryCutoff(restored, reportWarehouse);
         verifyMovementTrend(restored, reportWarehouse);
         verifyAssetDistribution(restored, reportWarehouse);
         verifyAssetStatusDrilldown(restored, reportWarehouse);
@@ -1061,6 +1063,43 @@ class DutyHttpRuntimeCase {
                     AND JSON_EXTRACT(detail_json,'$.rows')=1 AND JSON_EXTRACT(detail_json,'$.receiptId')=931000
                     AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.kind'))='CLAIM'
                 """, Integer.class));
+    }
+
+    private void verifyLedgerInventoryCutoff(Session administrator, Session warehouse) throws Exception {
+        db.update("""
+                INSERT INTO fams_asset (id,asset_code,name,lifecycle_status,exception_status,card_stage,
+                    created_business_date,last_inventory_business_date,parameter_version_id,
+                    creator_account_id,creator_username_snapshot,created_at,updated_at,created_by,updated_by)
+                VALUES (931061,'CUTOFF-NEVER','Inventory cutoff','IN_STOCK','NORMAL','ACTIVE','2026-11-01',
+                    NULL,931000,931003,'duty3',NOW(3),NOW(3),931003,931003),
+                    (931062,'CUTOFF-OLD','Inventory cutoff','IN_STOCK','NORMAL','ACTIVE','2026-11-01',
+                    '2026-11-09',931000,931003,'duty3',NOW(3),NOW(3),931003,931003),
+                    (931063,'CUTOFF-SAME','Inventory cutoff','IN_STOCK','NORMAL','ACTIVE','2026-11-01',
+                    '2026-11-10',931000,931003,'duty3',NOW(3),NOW(3),931003,931003),
+                    (931064,'CUTOFF-DRAFT','Inventory cutoff','WAITING_INBOUND','NORMAL','DRAFT','2026-11-01',
+                    NULL,931000,931003,'duty3',NOW(3),NOW(3),931003,931003),
+                    (931065,'CUTOFF-SCRAPPED','Inventory cutoff','SCRAPPED','NORMAL','ACTIVE','2026-11-01',
+                    NULL,931000,931003,'duty3',NOW(3),NOW(3),931003,931003)
+                """);
+        try {
+            String filters = "?assetCode=CUTOFF-&inventoryBefore=2026-11-10";
+            var listed = ok(get(administrator, "/assets" + filters));
+            assertEquals(2, listed.path("total").asInt());
+            assertEquals(List.of("CUTOFF-OLD", "CUTOFF-NEVER"), listed.path("items").valueStream()
+                    .map(row -> row.path("assetCode").asText()).toList());
+            var complement = ok(get(administrator, "/assets" + filters + "&longUninventoried=false"));
+            assertEquals(1, complement.path("total").asInt());
+            assertEquals("CUTOFF-SAME", complement.path("items").get(0).path("assetCode").asText());
+            assertEquals(400, code(get(administrator, "/assets?longUninventoried=true")));
+            assertEquals(400, code(get(administrator, "/assets?inventoryBefore=2026-02-30")));
+            assertEquals(403, code(get(warehouse, "/assets/export.csv" + filters)));
+            var csv = get(administrator, "/assets/export.csv" + filters);
+            assertEquals(200, code(csv), csv.body());
+            assertEquals(3, csv.body().lines().count());
+            assertTrue(csv.body().contains("CUTOFF-OLD") && csv.body().contains("CUTOFF-NEVER"));
+        } finally {
+            db.update("DELETE FROM fams_asset WHERE id BETWEEN 931061 AND 931065");
+        }
     }
 
     private void verifyBusinessExceptionReport(Session administrator, Session warehouse) throws Exception {

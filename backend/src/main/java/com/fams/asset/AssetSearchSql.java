@@ -25,6 +25,17 @@ public final class AssetSearchSql {
         {"inboundDateTo", "a.inbound_business_date &lt;= #{filters.inboundDateTo}"},
         {"lastInventoryDateFrom", "a.last_inventory_business_date &gt;= #{filters.lastInventoryDateFrom}"},
         {"lastInventoryDateTo", "a.last_inventory_business_date &lt;= #{filters.lastInventoryDateTo}"},
+        {"inventoryBefore", """
+            a.card_stage='ACTIVE' AND a.lifecycle_status NOT IN ('WAITING_INBOUND','SCRAPPED') AND
+            <choose>
+                <when test="filters.longUninventoried == false">
+                    a.last_inventory_business_date &gt;= #{filters.inventoryBefore}
+                </when>
+                <otherwise>
+                    (a.last_inventory_business_date IS NULL OR a.last_inventory_business_date &lt; #{filters.inventoryBefore})
+                </otherwise>
+            </choose>
+            """},
         {"currentProcessorId", AssetLedgerWorkflowSql.PROCESSOR},
         {"businessReference", AssetLedgerWorkflowSql.REFERENCE},
         {"borrowOverdue", """

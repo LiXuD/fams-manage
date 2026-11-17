@@ -106,7 +106,7 @@ class AssetService {
                 case "exception" -> filters.put(key, enumName(AssetException.class, value));
                 case "usageMode" -> filters.put(key, enumName(UsageMode.class, value));
                 case "inboundDateFrom", "inboundDateTo", "lastInventoryDateFrom",
-                        "lastInventoryDateTo" -> {
+                        "lastInventoryDateTo", "inventoryBefore" -> {
                     try { filters.put(key, LocalDate.parse(value)); }
                     catch (java.time.format.DateTimeParseException exception) {
                         throw AssetOperationException.invalid("ASSET_FILTER_INVALID", "A date filter is invalid.");
@@ -124,12 +124,18 @@ class AssetService {
                     String reference = required(value, 128, "ASSET_FILTER_INVALID");
                     filters.put(key, new BusinessReference(businessReferenceId(reference), reference));
                 }
-                case "longUninventoried" -> throw AssetOperationException.invalid(
-                                "ASSET_FILTER_UNAVAILABLE",
-                                "This filter requires a later business workflow.");
+                case "longUninventoried" -> {
+                    if (!"true".equals(value) && !"false".equals(value)) {
+                        throw AssetOperationException.invalid("ASSET_FILTER_INVALID", "A boolean filter is invalid.");
+                    }
+                    filters.put(key, Boolean.parseBoolean(value));
+                }
                 default -> throw AssetOperationException.invalid("ASSET_FILTER_INVALID",
                         "An unknown asset filter was supplied.");
             }
+        }
+        if (filters.containsKey("longUninventoried") && !filters.containsKey("inventoryBefore")) {
+            throw AssetOperationException.invalid("ASSET_FILTER_INVALID", "Select a cutoff date for the inventory filter.");
         }
         return filters;
     }

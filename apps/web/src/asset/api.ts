@@ -54,6 +54,7 @@ export interface AssetLedgerFilters {
   borrowOverdue?: boolean;
   currentProcessorId?: string;
   businessReference?: string;
+  inventoryBefore?: string;
 }
 
 function ledgerQuery(code: string, name: string, filters: AssetLedgerFilters): URLSearchParams {
@@ -63,6 +64,7 @@ function ledgerQuery(code: string, name: string, filters: AssetLedgerFilters): U
   if (filters.borrowOverdue !== undefined) query.set("borrowOverdue", String(filters.borrowOverdue));
   if (filters.currentProcessorId) query.set("currentProcessorId", filters.currentProcessorId);
   if (filters.businessReference) query.set("businessReference", filters.businessReference);
+  if (filters.inventoryBefore) query.set("inventoryBefore", filters.inventoryBefore);
   return query;
 }
 
