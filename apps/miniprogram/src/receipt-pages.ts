@@ -20,11 +20,13 @@ function message(error: unknown) {
 export function createReceiptPage(getServices: () => MiniServices) {
     let services: MiniServices | null = null; let live = false; let generation = 0; let identity = "";
     let grant: string | null = null;
+    let allocationId = "";
     let pending: { path: string; key: string; version: number; body: unknown } | null = null;
     const root = "/api/v1/mini/requisitions";
     const load = async (page: Context) => {
         const current = generation;
-        const result = await services!.sessions.request("GET", `${root}/receipts/pending?page=${page.data.page}&pageSize=20`) as
+        const filter = allocationId ? `&allocationId=${allocationId}` : "";
+        const result = await services!.sessions.request("GET", `${root}/receipts/pending?page=${page.data.page}&pageSize=20${filter}`) as
             { items: PendingReceipt[]; total: number };
         if (live && current === generation) page.setData({ rows: result.items, total: result.total });
     };
@@ -69,6 +71,9 @@ export function createReceiptPage(getServices: () => MiniServices) {
     return {
         data: { rows: [], selected: null, page: 1, total: 0, busy: false, error: "", notice: "",
             observedCode: "", checked: false, reason: "", retryable: false } as Data,
+        onLoad(options: { allocationId?: string } = {}) {
+            allocationId = /^[1-9][0-9]{0,18}$/.test(options.allocationId ?? "") ? options.allocationId! : "";
+        },
         async onShow(this: Context) {
             live = true; const current = ++generation;
             services = getServices(); const next = JSON.stringify(services.sessions.identity);

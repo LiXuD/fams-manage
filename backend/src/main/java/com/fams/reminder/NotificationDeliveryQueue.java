@@ -27,9 +27,12 @@ class NotificationDeliveryQueue {
                 OR (r.business_type = 'REQUISITION_ALLOCATION' AND r.stage = 'HANDOVER_RECEIPT' AND EXISTS (
                     SELECT 1 FROM fams_requisition_allocation x
                     JOIN fams_requisition_handover h ON h.allocation_id = x.id
+                    JOIN fams_requisition_demand d ON d.id = x.demand_id
+                    JOIN fams_requisition q ON q.id = x.request_id
                     WHERE x.id = r.business_id AND (r.reminder_type = 'DUTY_UNREAD_ESCALATION'
-                        OR h.temporary_employee_id = e.id)
+                        OR COALESCE(x.receipt_target_employee_id,d.target_employee_id,d.target_department_employee_id) = e.id)
                         AND x.allocation_status = 'DELIVERED_WAITING_RECEIPT'
+                        AND q.request_status = 'WAITING_HANDOVER'
                         AND h.receipt_deadline_at = r.deadline_at
                 ))
                 OR (r.business_type = 'TRANSFER_ITEM' AND r.stage = 'HANDOVER_RECEIPT' AND EXISTS (

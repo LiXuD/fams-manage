@@ -73,9 +73,13 @@ public class MessageService {
                 (r.business_type='REQUISITION_ALLOCATION' AND EXISTS (
                     SELECT 1 FROM fams_requisition_allocation a
                     JOIN fams_requisition_handover h ON h.allocation_id=a.id
-                    LEFT JOIN fams_system_account recipient ON recipient.employee_id=h.temporary_employee_id
+                    JOIN fams_requisition_demand d ON d.id=a.demand_id
+                    JOIN fams_requisition q ON q.id=a.request_id
+                    LEFT JOIN fams_system_account recipient ON recipient.employee_id=
+                        COALESCE(a.receipt_target_employee_id,d.target_employee_id,d.target_department_employee_id)
                         AND recipient.status='ENABLED'
                     WHERE a.id=r.business_id AND a.allocation_status='DELIVERED_WAITING_RECEIPT'
+                        AND q.request_status='WAITING_HANDOVER'
                         AND h.receipt_deadline_at=r.deadline_at
                         AND (r.reminder_type IN
             """ + ESCALATION_TYPES + """

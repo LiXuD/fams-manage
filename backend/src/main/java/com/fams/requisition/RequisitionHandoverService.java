@@ -62,7 +62,7 @@ class RequisitionHandoverService {
         this.loans = loans;
     }
 
-    Map<String, Object> pending(Actor actor, int page, int size) {
+    Map<String, Object> pending(Actor actor, int page, int size, Long allocationId) {
         Current current = actors.revalidateLocked(actor);
         String from =
                 " FROM fams_requisition_allocation a JOIN fams_requisition_demand d ON"
@@ -70,11 +70,11 @@ class RequisitionHandoverService {
                         + " fams_requisition_handover h ON h.allocation_id=a.id WHERE"
                         + " COALESCE(a.receipt_target_employee_id,d.target_employee_id,d.target_department_employee_id)=? AND"
                         + " a.allocation_status='DELIVERED_WAITING_RECEIPT' AND"
-                        + " r.request_status='WAITING_HANDOVER'";
+                        + " r.request_status='WAITING_HANDOVER' AND (? IS NULL OR a.id=?)";
         long total =
                 Objects.requireNonNull(
                         db.queryForObject(
-                                "SELECT COUNT(*)" + from, Long.class, current.employeeId()));
+                                "SELECT COUNT(*)" + from, Long.class, current.employeeId(), allocationId, allocationId));
         var rows =
                 db.queryForList(
                         "SELECT a.id,a.request_id,r.request_no,a.asset_snapshot_json,a.version,"
@@ -82,8 +82,10 @@ class RequisitionHandoverService {
                                 + from
                                 + " ORDER BY a.id LIMIT ? OFFSET ?",
                         current.employeeId(),
+                        allocationId,
+                        allocationId,
                         size,
-                        (page - 1) * size);
+                        ((long) page - 1) * size);
         return Map.of(
                 "items",
                 rows.stream().map(this::clean).toList(),

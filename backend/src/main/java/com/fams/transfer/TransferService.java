@@ -594,26 +594,27 @@ class TransferService {
         return finish(current, action, key, hash, detail(request(id)));
     }
 
-    Map<String, Object> pending(Actor actor, int page, int size) {
+    Map<String, Object> pending(Actor actor, int page, int size, Long itemId) {
         var current = actors.revalidateLocked(actor);
+        String scope = " WHERE i.receiver_employee_id=? AND i.item_status='DELIVERED' AND (? IS NULL OR i.id=?)";
         var rows =
                 db.queryForList(
                         "SELECT"
                             + " i.id,i.request_id,i.item_status,i.version,i.destination,i.delivered_at,i.receipt_deadline_at,a.asset_code,a.name,t.version"
                             + " AS request_version FROM fams_transfer_item i JOIN fams_transfer t"
-                            + " ON t.id=i.request_id JOIN fams_asset a ON a.id=i.asset_id WHERE"
-                            + " i.receiver_employee_id=? AND i.item_status='DELIVERED' ORDER BY"
-                            + " i.id LIMIT ? OFFSET ?",
+                            + " ON t.id=i.request_id JOIN fams_asset a ON a.id=i.asset_id" + scope
+                            + " ORDER BY i.id LIMIT ? OFFSET ?",
                         current.employeeId(),
+                        itemId,
+                        itemId,
                         size,
-                        (page - 1) * size);
+                        ((long) page - 1) * size);
         long total =
                 Objects.requireNonNull(
                         db.queryForObject(
-                                "SELECT COUNT(*) FROM fams_transfer_item WHERE"
-                                        + " receiver_employee_id=? AND item_status='DELIVERED'",
+                                "SELECT COUNT(*) FROM fams_transfer_item i" + scope,
                                 Long.class,
-                                current.employeeId()));
+                                current.employeeId(), itemId, itemId));
         return Map.of(
                 "items",
                 rows.stream().map(this::wire).toList(),

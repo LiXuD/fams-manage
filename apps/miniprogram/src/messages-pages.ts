@@ -15,7 +15,8 @@ interface Event { currentTarget: { dataset: { id: string; kind: string } } }
 
 const TIERS: Record<string, string> = { DUE_IN_3_DAYS: "提前3日", DUE_IN_1_DAY: "提前1日",
     DUE_IN_24_HOURS: "截止前24小时", DUE_TODAY: "今日到期", OVERDUE: "已逾期",
-    OVERDUE_EVERY_7_DAYS: "逾期每7日跟进", UNRESOLVED_AFTER_1_WORKDAY: "1个工作日未处理" };
+    OVERDUE_EVERY_7_DAYS: "逾期每7日跟进", UNRESOLVED_AFTER_1_WORKDAY: "1个工作日未处理",
+    DUTY_UNREAD_ESCALATION: "升级值班提醒", OVERDUE_UNRESOLVED_WORKDAY: "超时1个工作日仍未处理" };
 const STAGES: Record<string, string> = { ADMIN_DECISION: "管理员确认", WAREHOUSE_CLAIM: "库管领取",
     FIRST_EXECUTION: "首次执行", HANDOVER_RECEIPT: "实物接收", INVENTORY_COMPLETION: "盘点完成",
     FACTORY_RETURN: "返厂收回", LOSS_REVIEW: "报失复核", SCRAP_DISPOSITION: "报废处置" };
@@ -41,9 +42,15 @@ function label(row: Message): string {
     if (row.kind === "TODO") return `待办 · ${TODOS[row.stage] ?? row.stage}`;
     return `提醒 · ${STAGES[row.objectStage] ?? row.objectStage} ${TIERS[row.stage] ?? row.stage}`;
 }
-function link(row: Message): string {
+function link(row: Message, accountId: string | undefined): string {
+    if (!/^[1-9][0-9]{0,18}$/.test(row.businessId)) return "";
+    if (accountId && row.assigneeAccountId === accountId && row.poolType !== "ASSET_ADMIN"
+        && (row.objectStage === "HANDOVER_RECEIPT" || row.kind === "TODO" && row.stage === "RECEIPT")) {
+        if (row.businessType === "REQUISITION_ALLOCATION") return `/pages/receipts/index?allocationId=${row.businessId}`;
+        if (row.businessType === "TRANSFER_ITEM") return `/pages/transfer-receipts/index?itemId=${row.businessId}`;
+    }
     const base = LINKS[row.businessType];
-    return base && /^[1-9][0-9]{0,18}$/.test(row.businessId) ? `${base}?id=${row.businessId}` : "";
+    return base ? `${base}?id=${row.businessId}` : "";
 }
 
 export function createMessagesPage(getServices: () => MiniServices, view: "INBOX" | "EXCEPTION" = "INBOX") {
@@ -67,7 +74,8 @@ export function createMessagesPage(getServices: () => MiniServices, view: "INBOX
     const load = async (page: Context) => {
         const value = await services!.sessions.request("GET",
             `/api/v1/mini/messages?view=${view}&page=${page.data.page}&pageSize=20`) as { items: Message[]; total: number; unread: number };
-        return { rows: value.items.map(row => ({ ...row, rowKey: `${row.kind}:${row.id}`, label: label(row), link: link(row),
+        const accountId = services!.sessions.identity?.accountId;
+        return { rows: value.items.map(row => ({ ...row, rowKey: `${row.kind}:${row.id}`, label: label(row), link: link(row, accountId),
             businessDisplay: BUSINESSES[row.businessType] ?? row.businessType,
             openedDisplay: proxyTime(row.openedAt), deadlineDisplay: proxyTime(row.deadlineAt) })),
             total: value.total, unread: value.unread };

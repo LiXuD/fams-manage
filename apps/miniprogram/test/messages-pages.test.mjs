@@ -107,3 +107,20 @@ test("a repair todo and reminder with the same ID retain distinct destinations",
     page.onOpen(event("42", "REMINDER"));
     assert.deepEqual(routes, ["/pages/repairs/index?id=9007199254740993", "/pages/loss-reports/index?id=12"]);
 });
+
+test("receipt links keep the exact item id and only open the signed-in receiver's work", async () => {
+    const { page, services, routes } = fixture("INBOX", { accountId: "9", bindingId: "9" });
+    const base = { ...reminder, objectStage: "HANDOVER_RECEIPT", assigneeAccountId: "9", poolType: "EMPLOYEE" };
+    services.sessions.request = async () => ({ total: 4, unread: 4, items: [
+        { ...base, id: "51", businessType: "REQUISITION_ALLOCATION", businessId: "9007199254740993" },
+        { ...base, id: "52", businessType: "TRANSFER_ITEM", businessId: "9007199254740994" },
+        { ...base, id: "53", businessType: "TRANSFER_ITEM", businessId: "14", assigneeAccountId: "10" },
+        { ...base, id: "54", businessType: "TRANSFER_ITEM", businessId: "15",
+            stage: "OVERDUE_UNRESOLVED_WORKDAY", poolType: "ASSET_ADMIN" },
+    ] });
+    await page.onShow();
+    for (const id of ["51", "52", "53", "54"]) page.onOpen(event(id, "REMINDER"));
+    assert.deepEqual(routes, ["/pages/receipts/index?allocationId=9007199254740993",
+        "/pages/transfer-receipts/index?itemId=9007199254740994"]);
+    assert.match(page.data.rows[3].label, /超时1个工作日仍未处理/);
+});

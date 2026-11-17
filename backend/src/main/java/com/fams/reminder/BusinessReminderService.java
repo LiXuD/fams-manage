@@ -94,12 +94,14 @@ public class BusinessReminderService {
 
     private void receipts() {
         each("""
-             SELECT x.id,h.receipt_deadline_at,h.temporary_employee_id AS employee_id,
+             SELECT x.id,h.receipt_deadline_at,
+                    COALESCE(x.receipt_target_employee_id,d.target_employee_id,d.target_department_employee_id) AS employee_id,
                     q.parameter_snapshot_json AS snapshot_json
                FROM fams_requisition_allocation x
+               JOIN fams_requisition_demand d ON d.id=x.demand_id
                JOIN fams_requisition_handover h ON h.allocation_id=x.id
                JOIN fams_requisition q ON q.id=x.request_id
-              WHERE x.allocation_status='DELIVERED_WAITING_RECEIPT'""",
+              WHERE x.allocation_status='DELIVERED_WAITING_RECEIPT' AND q.request_status='WAITING_HANDOVER'""",
                 row -> receipt(row, "REQUISITION_ALLOCATION"));
     }
 

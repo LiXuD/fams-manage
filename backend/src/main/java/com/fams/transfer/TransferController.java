@@ -175,8 +175,9 @@ class TransferController {
     @GetMapping("/receipts/pending")
     Map<String, Object> pending(
             @RequestParam(defaultValue = "1") @Min(1) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(200) int pageSize) {
-        return service.pending(actors.capture(), page, pageSize);
+            @RequestParam(defaultValue = "20") @Min(1) @Max(200) int pageSize,
+            @RequestParam(required = false) @Min(1) Long itemId) {
+        return service.pending(actors.capture(), page, pageSize, itemId);
     }
 
     @PostMapping("/receipts/{itemId}/grant")

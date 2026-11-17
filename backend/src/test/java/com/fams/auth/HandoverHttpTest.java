@@ -4644,6 +4644,11 @@ class HandoverHttpTest {
 
     private void verifyNativeTargetHandlers(JsonNode row, boolean transfer) throws Exception {
         String type = transfer ? "TRANSFER" : "REQUISITION", prefix = "target-native-" + base;
+        long item = row.path(transfer ? "items" : "allocations").get(0).path("id").asLong();
+        jdbc.update(transfer
+                ? "UPDATE fams_transfer_item SET receipt_deadline_at=UTC_TIMESTAMP(3)+INTERVAL 3 HOUR WHERE id=?"
+                : "UPDATE fams_requisition_handover SET receipt_deadline_at=UTC_TIMESTAMP(3)+INTERVAL 3 HOUR WHERE allocation_id=?",
+                item);
         for (var entry : java.util.Map.of("warehouse", base + 11, "admin", base + 13,
                 "recipient", base + 12, "original", base + (transfer ? 15 : 10)).entrySet()) {
             jdbc.update("INSERT INTO fams_mini_binding (account_id,identity_hash,created_at) VALUES (?,?,?)",
@@ -4662,10 +4667,25 @@ class HandoverHttpTest {
         builder.environment().put("FAMS_TEST_TARGET_ORGANIZATION", Long.toString(base));
         builder.environment().put("FAMS_TEST_TARGET_CODE_PREFIX", prefix);
         builder.redirectErrorStream(true);
-        var process = builder.start();
-        assertTrue(process.waitFor(60, TimeUnit.SECONDS));
-        String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-        assertEquals(0, process.exitValue(), output);
+        var reminders = application.getBean(com.fams.reminder.BusinessReminderService.class);
+        var scanner = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+        scanner.scheduleWithFixedDelay(reminders::scan, 0, 250, TimeUnit.MILLISECONDS);
+        try {
+            var process = builder.start();
+            if (!process.waitFor(60, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                throw new IllegalStateException("Native target change and messages did not complete");
+            }
+            String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            assertEquals(0, process.exitValue(), output);
+        } finally {
+            scanner.shutdown();
+            assertTrue(scanner.awaitTermination(10, TimeUnit.SECONDS));
+            handoverNoticeFixtures.addAll(jdbc.queryForList("""
+                    SELECT id FROM fams_business_reminder WHERE business_type=? AND business_id=?
+                        AND stage='HANDOVER_RECEIPT'
+                    """, Long.class, transfer ? "TRANSFER_ITEM" : "REQUISITION_ALLOCATION", item));
+        }
         assertEquals(base + 12, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
         assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
         assertEquals(1, count("SELECT COUNT(*) FROM fams_item_target_change WHERE business_type=? AND business_id=? AND change_status='APPROVED'", type, row.path("id").asText()));
