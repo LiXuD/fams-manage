@@ -35,7 +35,9 @@ V65 `fams_business_reminder` 一行代表一次不可变的通知事实，唯一
 - 入库三段（`ADMIN_DECISION`/`WAREHOUSE_CLAIM`/`FIRST_EXECUTION`）读 `*_due_at`；管理员确认额外用 `BusinessCalendar.nthWorkday(snapshot, zone, submitted_at, 1)` 推导"1 个工作日未处理"档，因为确认截止本身可能还有数个工作日。
 - 领用交接与调拨实物接收（`HANDOVER_RECEIPT`）用快照时区的 24 小时前、当日、逾期三档；接收人经 `fams_system_account` 的 ENABLED 账号映射，映射不到或逾期责任在管理员时回退 `ASSET_ADMIN` 池。领用段以 `fams_requisition_allocation` 为分页驱动表（`business_id` 即分配行号），与既有 `REQUISITION_ALLOCATION` 待办口径一致。
 - 盘点截止（`INVENTORY_COMPLETION`）对 `DISTINCT executor_account_id` 逐人通知，无执行人时整单进管理员池；借用归还继续走已复核的 V25 `fams_loan_reminder`，本片不重复建第二条事实。
-- 返厂收回、报失复核、报废处置按 DATE 字段与 ACTIVE 参数版本的时区取当日 24:00 作为截止时刻。返厂的 `OVERDUE_EVERY_7_DAYS` 发生日由到期日推导（`due + 7×max(1,⌊(today-due)/7⌋)`）而非 `today`，因此续跑或重启仍落在同一周桶，不会每天新增一条逾期提醒。
+- 返厂收回使用轮次冻结时区。`OVERDUE_EVERY_7_DAYS` 发生日由到期日推导（`due + 7×max(1,⌊(today-due)/7⌋)`），续跑或重启仍落在同一周档。
+- 报失复核使用最近一次复核安排事件中与当前日期匹配的时区。开始查找、确认遗失、后续跟进在业务事务内保存 `reviewDate` 和 `reviewTimezone`，期初承接沿用导入快照时区。旧安排缺少时区时使用当前企业时区。`4e6c78e` 的真实 MySQL、HTTP 与架构用例 52 项通过，扫描覆盖跨午夜和重复执行。五条期初关联资产在提交后强杀并原库重启，两条期初报失事件均保留原复核日期与时区。Checkstyle 与 SpotBugs 零报告。
+- 报废处置当前仍使用企业有效时区判定逾期，处置提醒、超期清单和报表的冻结口径待接续验证。报失候选待独立复核及完整本地门禁。
 
 每档只在 `today>=noticeDate` 时写 `INSERT ... ON DUPLICATE KEY UPDATE id=id`，故同档位同发生日重跑零新增；扫描按 `x.id>? ORDER BY x.id LIMIT 200` 游标分页，JOIN 参数版本表不会放大或丢行。`BusinessReminderScheduler` 与借用扫描同为分钟级固定延迟，站内可达不依赖外部通道。
 
