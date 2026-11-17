@@ -1,6 +1,7 @@
 package com.fams.asset;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -31,6 +32,14 @@ interface AssetMapper {
     @org.apache.ibatis.annotations.SelectProvider(type = AssetSearchSql.class, method = "count")
     long count(@Param("actorId") long actorId,
             @Param("filters") Map<String, Object> filters);
+
+    @Select("""
+            SELECT DISTINCT parameter_snapshot_json->>'$.timezone'
+            FROM fams_loan
+            WHERE relation_status='OPEN' AND expected_return_date>=#{earliest}
+                AND expected_return_date<#{latest}
+            """)
+    List<String> candidateLoanTimezones(@Param("earliest") LocalDate earliest, @Param("latest") LocalDate latest);
 
     @SelectProvider(type = AssetReferenceBatchSql.class, method = "select")
     List<Map<String, Object>> referenceViews(@Param("kind") String kind,

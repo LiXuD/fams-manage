@@ -24,7 +24,17 @@ public final class AssetSearchSql {
         {"inboundDateFrom", "a.inbound_business_date &gt;= #{filters.inboundDateFrom}"},
         {"inboundDateTo", "a.inbound_business_date &lt;= #{filters.inboundDateTo}"},
         {"lastInventoryDateFrom", "a.last_inventory_business_date &gt;= #{filters.lastInventoryDateFrom}"},
-        {"lastInventoryDateTo", "a.last_inventory_business_date &lt;= #{filters.lastInventoryDateTo}"}
+        {"lastInventoryDateTo", "a.last_inventory_business_date &lt;= #{filters.lastInventoryDateTo}"},
+        {"borrowOverdue", """
+            EXISTS (
+                SELECT 1 FROM fams_loan l
+                WHERE l.open_asset_id=a.id AND a.lifecycle_status&lt;&gt;'SCRAPPED' AND a.exception_status&lt;&gt;'LOST'
+                  AND l.expected_return_date &lt; #{filters.borrowOverdue.latest}
+                  AND (l.expected_return_date &lt; #{filters.borrowOverdue.earliest}
+                    OR l.expected_return_date &lt; CAST(JSON_UNQUOTE(JSON_EXTRACT(#{filters.borrowOverdue.datesByZone},
+                       CONCAT('$.',JSON_QUOTE(l.parameter_snapshot_json->>'$.timezone')))) AS DATE))
+            ) = #{filters.borrowOverdue.expected}
+            """}
     };
 
     private AssetSearchSql() { }

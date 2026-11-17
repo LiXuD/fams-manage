@@ -21,7 +21,8 @@ const page = ref(1);
 const entryQuery = new URLSearchParams(window.location.search);
 const code = ref(entryQuery.get("assetCode") ?? "");
 const nameFilter = ref("");
-const appliedFilters = ref<{ code: string; name: string; accountId: string }>();
+const overdueFilter = ref("");
+const appliedFilters = ref<{ code: string; name: string; borrowOverdue?: boolean; accountId: string }>();
 const querying = ref(false);
 const exporting = ref(false);
 let queryGeneration = 0;
@@ -63,11 +64,14 @@ function selectedReference(items: AssetReference[], id: string): AssetReference 
 async function load(): Promise<void> {
   const turn = ++queryGeneration;
   const accountId = session.user?.id;
-  const filters = { code: code.value.trim(), name: nameFilter.value.trim() };
+  const filters = {
+    code: code.value.trim(), name: nameFilter.value.trim(),
+    borrowOverdue: overdueFilter.value === "" ? undefined : overdueFilter.value === "true",
+  };
   querying.value = true;
   error.value = "";
   try {
-    const result = await listAssets(page.value, filters.code, filters.name);
+    const result = await listAssets(page.value, filters.code, filters.name, filters.borrowOverdue);
     if (turn !== queryGeneration || accountId !== session.user?.id) return;
     rows.value = result.items;
     total.value = result.total;
@@ -86,7 +90,7 @@ async function exportCurrent(): Promise<void> {
   exporting.value = true;
   error.value = "";
   try {
-    const file = await assetLedgerCsv(filters.code, filters.name);
+    const file = await assetLedgerCsv(filters.code, filters.name, filters.borrowOverdue);
     if (filters.accountId !== session.user?.id || !canExport.value) return;
     const url = URL.createObjectURL(file);
     const link = document.createElement("a");
@@ -226,6 +230,11 @@ onMounted(() => {
       <form class="asset-filters" @submit.prevent="page = 1; load()">
         <label>资产编码<input v-model="code" placeholder="编码包含" /></label>
         <label>资产名称<input v-model="nameFilter" placeholder="名称包含" /></label>
+        <label>借用逾期<select v-model="overdueFilter">
+          <option value="">全部</option>
+          <option value="true">已逾期</option>
+          <option value="false">无逾期</option>
+        </select></label>
         <button class="secondary-button" type="submit">查询</button>
         <button v-if="canExport" class="secondary-button" type="button"
           :disabled="querying || exporting || !appliedFilters" @click="exportCurrent">导出当前查询结果 CSV</button>

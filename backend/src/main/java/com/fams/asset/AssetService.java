@@ -5,6 +5,7 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -47,6 +48,7 @@ import com.fams.product.contract.model.PageAssetTimelineEvent;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -72,6 +74,7 @@ class AssetService {
         this.enterpriseName = enterpriseName;
     }
 
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     PageAsset list(Actor actor, int page, int pageSize, Map<String, String> query) {
         if (page < 1 || pageSize < 1 || pageSize > 200) {
             throw AssetOperationException.invalid("ASSET_FILTER_INVALID", "Invalid page range.");
@@ -109,7 +112,8 @@ class AssetService {
                         throw AssetOperationException.invalid("ASSET_FILTER_INVALID", "A date filter is invalid.");
                     }
                 }
-                case "currentProcessorId", "businessReference", "borrowOverdue",
+                case "borrowOverdue" -> filters.put(key, borrowOverdue(value));
+                case "currentProcessorId", "businessReference",
                         "longUninventoried" -> throw AssetOperationException.invalid(
                                 "ASSET_FILTER_UNAVAILABLE",
                                 "This filter requires a later business workflow.");
@@ -119,6 +123,24 @@ class AssetService {
         }
         return filters;
     }
+
+    private BorrowOverdue borrowOverdue(String value) {
+        if (!"true".equals(value) && !"false".equals(value)) {
+            throw AssetOperationException.invalid("ASSET_FILTER_INVALID", "A boolean filter is invalid.");
+        }
+        Instant now = clock.instant();
+        LocalDate utcDate = now.atZone(ZoneOffset.UTC).toLocalDate();
+        // Only due dates within one day of UTC need the loan's exact local date.
+        LocalDate earliest = utcDate.minusDays(1);
+        LocalDate latest = utcDate.plusDays(1);
+        Map<String, String> datesByZone = new HashMap<>();
+        for (String name : mapper.candidateLoanTimezones(earliest, latest)) {
+            datesByZone.put(name, now.atZone(ZoneId.of(name)).toLocalDate().toString());
+        }
+        return new BorrowOverdue(Boolean.parseBoolean(value), earliest, latest, json.writeValueAsString(datesByZone));
+    }
+
+    record BorrowOverdue(boolean expected, LocalDate earliest, LocalDate latest, String datesByZone) {}
 
     private <T extends Enum<T>> String enumName(Class<T> type, String value) {
         try { return Enum.valueOf(type, value).name(); }

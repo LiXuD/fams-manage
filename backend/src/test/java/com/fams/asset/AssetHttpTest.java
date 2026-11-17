@@ -433,7 +433,7 @@ class AssetHttpTest {
         assertFalse(csv.body().contains("PRIVATE-"), csv.body());
         assertFalse(csv.body().contains("Ledger foreign draft"), csv.body());
         assertEquals(2, csv.body().lines().count());
-        assertEquals(400, request("GET", route + "?borrowOverdue=true", null, warehouse, Map.of()).statusCode());
+        assertEquals(400, request("GET", route + "?borrowOverdue=1", null, warehouse, Map.of()).statusCode());
         jdbc.update("DELETE FROM fams_account_field_permission WHERE authorization_id=1"
                 + " AND permission_code='BULK_EXPORT'");
         assertEquals(403, request("GET", route, null, warehouse, Map.of()).statusCode());

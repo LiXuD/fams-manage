@@ -412,12 +412,36 @@ class DutyHttpRuntimeCase {
         assertEquals("9007199254740993", overduePage.path("items").get(0).path("loanId").asText());
         assertEquals(earlyDate.toString(), overduePage.path("items").get(0).path("expectedReturnDate").asText());
         assertTrue(overduePage.path("nextBefore").isNull());
+        var ledger = ok(get(restored, "/assets?assetCode=REPORT-&borrowOverdue=true&pageSize=1"));
+        assertEquals(1, ledger.path("total").asInt());
+        assertEquals("REPORT-A", ledger.path("items").get(0).path("assetCode").asText());
+        var dueToday = ok(get(restored, "/assets?assetCode=REPORT-C&borrowOverdue=false"));
+        assertEquals(1, dueToday.path("total").asInt());
+        assertEquals("REPORT-C", dueToday.path("items").get(0).path("assetCode").asText());
+        var ledgerCsv = "/assets/export.csv?assetCode=REPORT-&borrowOverdue=true";
+        assertEquals(403, code(get(login("duty4"), ledgerCsv)));
+        assertEquals(403, code(get(restored, ledgerCsv)));
+        db.update("""
+                INSERT INTO fams_account_authorization (id,account_id,role_code,generation_no,
+                    authorization_status,change_reason,created_at)
+                VALUES (931003,931003,'ASSET_ADMIN',1,'ACTIVE','Ledger export fixture',NOW(3))
+                """);
+        db.update("""
+                INSERT INTO fams_account_field_permission (authorization_id,permission_code,granted_at)
+                VALUES (931003,'BULK_EXPORT',NOW(3))
+                """);
+        var eligibleCsv = get(restored, ledgerCsv);
+        assertEquals(200, code(eligibleCsv), eligibleCsv.body());
+        assertTrue(eligibleCsv.body().contains("REPORT-A"));
+        assertFalse(eligibleCsv.body().contains("REPORT-C"));
         db.update("UPDATE fams_loan SET expected_return_date='2020-02-01' WHERE id=9007199254740995");
+        assertEquals(2, ok(get(restored, "/assets?assetCode=REPORT-&borrowOverdue=true")).path("total").asInt());
         var twoOverdue = ok(get(restored, overdue + "?pageSize=1"));
         assertEquals("9007199254740995", twoOverdue.path("nextBefore").asText());
         assertEquals("9007199254740993", ok(get(restored, overdue + "?pageSize=1&before="
                 + twoOverdue.path("nextBefore").asText())).path("items").get(0).path("loanId").asText());
         db.update("UPDATE fams_asset SET exception_status='LOST' WHERE id=9007199254740992");
+        assertEquals(1, ok(get(restored, "/assets?assetCode=REPORT-&borrowOverdue=true")).path("total").asInt());
         assertTrue(ok(get(restored, overdue + "?borrowerId=931004")).path("items").isEmpty());
         var overdueCsv = get(restored, overdue + ".csv?borrowerId=931005");
         assertEquals(200, code(overdueCsv));
