@@ -55,15 +55,29 @@ public class MessageService {
                     AND t.closed_at IS NULL AND t.opened_at>=f.dispatched_at
             ))
             """;
+    private static final String ACTIVE_INVENTORY_COMPLETION = """
+            (r.business_type<>'INVENTORY_TASK' OR r.stage<>'INVENTORY_COMPLETION' OR EXISTS (
+                SELECT 1 FROM fams_inventory_task t WHERE t.id=r.business_id
+                    AND t.task_status='IN_PROGRESS' AND t.due_at=r.deadline_at
+                    AND ((r.recipient_account_id IS NOT NULL AND EXISTS (
+                        SELECT 1 FROM fams_inventory_item i WHERE i.task_id=t.id
+                            AND i.executor_account_id=r.recipient_account_id
+                    )) OR (r.recipient_account_id IS NULL AND NOT EXISTS (
+                        SELECT 1 FROM fams_inventory_item i WHERE i.task_id=t.id
+                            AND i.executor_account_id IS NOT NULL
+                    )))
+            ))
+            """;
+    private static final String ACTIVE_REMINDER = ACTIVE_FACTORY_RETURN + " AND " + ACTIVE_INVENTORY_COMPLETION;
     private static final String REMINDER_COLUMNS =
             " SELECT 'REMINDER' message_kind,r.id id,r.business_type,r.business_id,r.reminder_type stage,"
             + " r.stage object_stage,r.recipient_pool_type pool_type,r.recipient_account_id,r.created_at moment,"
             + " r.deadline_at FROM fams_business_reminder r WHERE r.reminder_type<>'SMS_FALLBACK' AND "
-            + ACTIVE_FACTORY_RETURN + " AND";
+            + ACTIVE_REMINDER + " AND";
     /**
      * Only the latest occurrence of an object stage is an active message; earlier ones stay as history. Escalation
-     * tiers are newest-per-recipient within their own tier instead, so an escalation never displaces the ladder
-     * notice that triggered it.
+     * tiers are newest per recipient within their own tier, and inventory completion has a separate ladder
+     * for every executor.
      */
     private static final String NEWEST_OCCURRENCE =
             " r.id=(SELECT MAX(x.id) FROM fams_business_reminder x WHERE x.business_type=r.business_type"
@@ -71,6 +85,8 @@ public class MessageService {
             + " AND ((x.reminder_type IN" + ESCALATION_TYPES
             + " AND x.reminder_type=r.reminder_type AND x.recipient_slot=r.recipient_slot)"
             + " OR (r.reminder_type NOT IN" + ESCALATION_TYPES + " AND x.reminder_type NOT IN" + ESCALATION_TYPES
+            + " AND (r.business_type<>'INVENTORY_TASK' OR r.stage<>'INVENTORY_COMPLETION'"
+            + " OR x.recipient_slot=r.recipient_slot)"
             + "))) AND";
 
     private final JdbcTemplate db;
@@ -184,7 +200,7 @@ public class MessageService {
     }
 
     private String addressableReminder(RequisitionActorContext.Current current, List<Object> args) {
-        String available = " r.reminder_type<>'SMS_FALLBACK' AND " + ACTIVE_FACTORY_RETURN;
+        String available = " r.reminder_type<>'SMS_FALLBACK' AND " + ACTIVE_REMINDER;
         if (current.has(Role.ASSET_ADMIN)) {
             return available;
         }

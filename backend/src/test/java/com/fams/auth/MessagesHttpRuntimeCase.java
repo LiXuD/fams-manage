@@ -2,6 +2,9 @@ package com.fams.auth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.fams.reminder.BusinessReminderService;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -44,6 +47,7 @@ class MessagesHttpRuntimeCase {
     @Autowired JdbcTemplate db;
     @Autowired MiniSessionService miniSessions;
     @Autowired ObjectMapper json;
+    @Autowired BusinessReminderService reminders;
     @Value("${local.server.port}") int port;
 
     @DynamicPropertySource
@@ -115,6 +119,67 @@ class MessagesHttpRuntimeCase {
         var second = ok(get(admin, "/api/v1/messages?page=2&pageSize=1"));
         assertFalse(keys(page).equals(keys(second)));
         assertEquals(1, second.path("items").size());
+
+        verifyInventoryExecutors(admin, warehouse, employee, grant.sessionToken());
+    }
+
+    private void verifyInventoryExecutors(Session admin, Session warehouse, Session employee, String miniToken)
+            throws Exception {
+        db.update("""
+                INSERT INTO fams_business_parameter_version (id,version,status,effective_at,actor_account_id,
+                    actor_username,snapshot_json,created_at)
+                VALUES (930920,930920,'ACTIVE','2026-11-01 12:00:00',930701,'msg1',JSON_OBJECT('timezone','UTC'),NOW(3))
+                """);
+        db.update("""
+                INSERT INTO fams_inventory_task (id,name,task_status,range_json,starts_at,due_at,timezone_id,
+                    creator_account_id,created_at,updated_at)
+                VALUES (930920,'Message inventory','IN_PROGRESS','{}','2026-11-01 12:00:00',
+                    '2026-11-08 12:00:00','UTC',930701,NOW(3),NOW(3))
+                """);
+        db.update("""
+                INSERT INTO fams_asset (id,asset_code,name,lifecycle_status,exception_status,card_stage,
+                    created_business_date,parameter_version_id,creator_account_id,creator_username_snapshot,
+                    created_at,updated_at,created_by,updated_by)
+                VALUES (930921,'MSG-A','Message asset A','IN_STOCK','NORMAL','ACTIVE',
+                        '2026-11-01',930920,930701,'msg1',NOW(3),NOW(3),930701,930701),
+                       (930922,'MSG-B','Message asset B','IN_STOCK','NORMAL','ACTIVE',
+                        '2026-11-01',930920,930701,'msg1',NOW(3),NOW(3),930701,930701)
+                """);
+        db.update("""
+                INSERT INTO fams_inventory_item (task_id,asset_id,asset_version,snapshot_json,executor_account_id)
+                VALUES (930920,930921,0,'{}',930702),(930920,930922,0,'{}',930703)
+                """);
+        reminder(930921, "INVENTORY_TASK", 930920, "INVENTORY_COMPLETION", "DUE_TODAY", "2026-11-08", "EMPLOYEE", WAREHOUSE);
+        reminder(930922, "INVENTORY_TASK", 930920, "INVENTORY_COMPLETION", "OVERDUE", "2026-11-09", "EMPLOYEE", WAREHOUSE);
+        reminder(930923, "INVENTORY_TASK", 930920, "INVENTORY_COMPLETION", "OVERDUE", "2026-11-09", "EMPLOYEE", EMPLOYEE);
+
+        assertTrue(keys(inbox(warehouse, "INBOX")).contains("REMINDER:930922"));
+        assertFalse(keys(inbox(warehouse, "INBOX")).contains("REMINDER:930921"));
+        assertTrue(keys(miniInbox(miniToken)).contains("REMINDER:930922"));
+        assertTrue(keys(inbox(employee, "INBOX")).contains("REMINDER:930923"));
+        assertFalse(keys(inbox(employee, "INBOX")).contains("REMINDER:930922"));
+        assertTrue(keys(inbox(admin, "EXCEPTION")).containsAll(List.of("REMINDER:930922", "REMINDER:930923")));
+        assertEquals(200, read(warehouse, "REMINDER:930922").statusCode());
+        assertEquals(404, read(warehouse, "REMINDER:930923").statusCode());
+
+        db.update("UPDATE fams_inventory_item SET executor_account_id=930701 WHERE task_id=930920 AND asset_id=930921");
+        assertFalse(keys(inbox(warehouse, "INBOX")).contains("REMINDER:930922"));
+        assertFalse(keys(inbox(admin, "EXCEPTION")).contains("REMINDER:930922"));
+        assertEquals(404, read(warehouse, "REMINDER:930922").statusCode());
+        assertTrue(keys(inbox(employee, "INBOX")).contains("REMINDER:930923"));
+
+        reminders.scan();
+        var replacementNotice = db.queryForObject("""
+                SELECT MAX(id) FROM fams_business_reminder
+                WHERE business_type='INVENTORY_TASK' AND business_id=930920 AND stage='INVENTORY_COMPLETION'
+                    AND reminder_type='OVERDUE' AND recipient_account_id=930701
+                """, Long.class);
+        assertTrue(keys(inbox(admin, "INBOX")).contains("REMINDER:" + replacementNotice));
+
+        db.update("UPDATE fams_inventory_task SET task_status='TERMINATED' WHERE id=930920");
+        assertFalse(keys(inbox(employee, "INBOX")).contains("REMINDER:930923"));
+        assertEquals(404, read(admin, "REMINDER:930923").statusCode());
+        assertEquals(1, receiptCount(930922));
     }
 
     private JsonNode inbox(Session session, String view) throws Exception {
@@ -250,7 +315,7 @@ class MessagesHttpRuntimeCase {
         db.update("INSERT INTO fams_business_reminder (id,business_type,business_id,stage,deadline_at,notice_date,"
                 + "reminder_business_date,reminder_type,recipient_pool_type,recipient_account_id,created_at)"
                 + " VALUES (?,?,?,?,?,?,'2026-11-09',?,?,?,NOW(3))", id, businessType, businessId, stage,
-                java.sql.Timestamp.valueOf("2026-11-08 12:00:00"), notice, type, pool, recipient);
+                java.time.LocalDateTime.parse("2026-11-08T12:00:00"), notice, type, pool, recipient);
     }
 
     @SpringBootApplication(scanBasePackages = "com.fams")
