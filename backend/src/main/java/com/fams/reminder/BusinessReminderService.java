@@ -59,7 +59,9 @@ public class BusinessReminderService {
              SELECT x.id,x.receipt_status,x.timezone_snapshot,x.submitted_at,x.admin_decision_due_at,
                     x.warehouse_claim_due_at,x.warehouse_first_execution_due_at,v.snapshot_json
                FROM fams_inbound_receipt x JOIN fams_business_parameter_version v ON v.id=x.parameter_version_id
-              WHERE x.receipt_status IN ('PENDING_ADMIN_DECISION','WAITING_WAREHOUSE_CLAIM','WAREHOUSE_PROCESSING')""",
+              WHERE x.receipt_status IN ('PENDING_ADMIN_DECISION','WAITING_WAREHOUSE_CLAIM','WAREHOUSE_PROCESSING')
+                AND (x.receipt_status<>'WAREHOUSE_PROCESSING' OR
+             """ + InboundReminderState.FIRST_ACCEPTANCE_PENDING + ")",
                 row -> {
                     var status = String.valueOf(row.get("receipt_status"));
                     var zone = ZoneId.of(String.valueOf(row.get("timezone_snapshot")));

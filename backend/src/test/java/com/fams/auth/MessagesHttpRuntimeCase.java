@@ -120,8 +120,8 @@ class MessagesHttpRuntimeCase {
         assertFalse(keys(page).equals(keys(second)));
         assertEquals(1, second.path("items").size());
 
-        verifyInventoryExecutors(admin, warehouse, employee, grant.sessionToken());
         verifyWarehouseExceptions(admin, warehouse, grant.sessionToken());
+        verifyInventoryExecutors(admin, warehouse, employee, grant.sessionToken());
         verifyClosedCustodianReminders(admin, warehouse);
     }
 
@@ -230,11 +230,6 @@ class MessagesHttpRuntimeCase {
 
     private void verifyInventoryExecutors(Session admin, Session warehouse, Session employee, String miniToken)
             throws Exception {
-        db.update("""
-                INSERT INTO fams_business_parameter_version (id,version,status,effective_at,actor_account_id,
-                    actor_username,snapshot_json,created_at)
-                VALUES (930920,930920,'ACTIVE','2026-11-01 12:00:00',930701,'msg1',JSON_OBJECT('timezone','UTC'),NOW(3))
-                """);
         db.update("""
                 INSERT INTO fams_inventory_task (id,name,task_status,range_json,starts_at,due_at,timezone_id,
                     creator_account_id,created_at,updated_at)
@@ -402,6 +397,25 @@ class MessagesHttpRuntimeCase {
             db.update("INSERT INTO fams_account_role (account_id,role_code,granted_at) VALUES (?,?,NOW(3))",
                     id, person[2]);
         }
+        db.update("""
+                INSERT INTO fams_business_parameter_version (id,version,status,effective_at,actor_account_id,
+                    actor_username,snapshot_json,created_at)
+                VALUES (930920,930920,'ACTIVE','2026-11-01 12:00:00',930701,'msg1',
+                    JSON_OBJECT('timezone','UTC','workWeek',JSON_ARRAY('MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY')),
+                    NOW(3))
+                """);
+        db.update("""
+                INSERT INTO fams_inbound_receipt (id,receipt_no,creator_account_id,creator_username_snapshot,
+                    receipt_status,business_date,parameter_version_id,timezone_snapshot,admin_decision_deadline_workdays,
+                    warehouse_claim_deadline_workdays,warehouse_first_execution_deadline_workdays,submitted_at,
+                    admin_decision_due_at,warehouse_claim_due_at,warehouse_first_execution_due_at,
+                    created_at,updated_at,created_by,updated_by)
+                SELECT f.id,CONCAT('MSG-',f.id),930701,'msg1',f.status,'2026-11-01',930920,'UTC',2,1,2,
+                    '2026-11-01 12:00:00','2026-11-08 12:00:00','2026-11-08 12:00:00','2026-11-08 12:00:00',
+                    NOW(3),NOW(3),930701,930701
+                FROM (SELECT 11 id,'PENDING_ADMIN_DECISION' status UNION ALL SELECT 12,'WAITING_WAREHOUSE_CLAIM'
+                    UNION ALL SELECT 22,'WAREHOUSE_PROCESSING' UNION ALL SELECT 23,'WAREHOUSE_PROCESSING') f
+                """);
         todo(930801, "ASSET_ADMIN", null, "INBOUND", 1, "APPROVAL");
         todo(930802, "WAREHOUSE_OPERATOR", null, "SCRAP", 2, "CLAIM");
         todo(930803, "EMPLOYEE", EMPLOYEE, "REQUISITION", 3, "RECEIPT");

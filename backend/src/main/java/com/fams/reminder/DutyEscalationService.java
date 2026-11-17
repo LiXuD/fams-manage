@@ -83,7 +83,8 @@ public class DutyEscalationService {
                            JOIN fams_business_reminder r ON r.business_type='INBOUND' AND r.business_id=x.id
                                 AND r.stage='FIRST_EXECUTION' AND r.reminder_type='OVERDUE'
                                 AND r.deadline_at=x.warehouse_first_execution_due_at
-                          WHERE x.receipt_status='WAREHOUSE_PROCESSING'""")),
+                          WHERE x.receipt_status='WAREHOUSE_PROCESSING' AND
+                         """ + InboundReminderState.FIRST_ACCEPTANCE_PENDING)),
                 // The receipt ladder is addressed to the receiving employee, who holds no duty role, so both the
                 // unread escalation and the group notice answer to the administrators responsible for the handover.
                 new Stage("REQUISITION_ALLOCATION", "HANDOVER_RECEIPT", "ASSET_ADMIN",

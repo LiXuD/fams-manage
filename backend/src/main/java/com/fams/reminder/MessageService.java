@@ -68,7 +68,8 @@ public class MessageService {
                     )))
             ))
             """;
-    private static final String ACTIVE_REMINDER = ACTIVE_FACTORY_RETURN + " AND " + ACTIVE_INVENTORY_COMPLETION;
+    private static final String ACTIVE_REMINDER = ACTIVE_FACTORY_RETURN + " AND " + ACTIVE_INVENTORY_COMPLETION
+            + " AND (r.business_type<>'INBOUND' OR " + InboundReminderState.CURRENT_STAGE + ")";
     private static final String ACTIVE_CUSTODIAN_REMINDER = """
             (r.business_type<>'LOST_REPORT' OR r.stage<>'LOSS_REVIEW' OR EXISTS (
                 SELECT 1 FROM fams_loss_report l JOIN fams_asset asset ON asset.id=l.asset_id

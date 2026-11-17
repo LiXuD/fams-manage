@@ -21,16 +21,9 @@ class NotificationDeliveryQueue {
     static final String KIND = "NOTIFICATION_SMS";
     private static final String ACTIVE_STAGE = """
             AND (
-                (r.business_type = 'INBOUND' AND EXISTS (
-                    SELECT 1 FROM fams_inbound_receipt x WHERE x.id = r.business_id AND (
-                        (r.stage = 'ADMIN_DECISION' AND x.receipt_status = 'PENDING_ADMIN_DECISION'
-                            AND x.admin_decision_due_at = r.deadline_at)
-                        OR (r.stage = 'WAREHOUSE_CLAIM' AND x.receipt_status = 'WAITING_WAREHOUSE_CLAIM'
-                            AND x.warehouse_claim_due_at = r.deadline_at)
-                        OR (r.stage = 'FIRST_EXECUTION' AND x.receipt_status = 'WAREHOUSE_PROCESSING'
-                            AND x.warehouse_first_execution_due_at = r.deadline_at)
-                    )
-                ))
+                (r.business_type = 'INBOUND' AND
+            """ + InboundReminderState.CURRENT_STAGE + """
+                )
                 OR (r.business_type = 'REQUISITION_ALLOCATION' AND r.stage = 'HANDOVER_RECEIPT' AND EXISTS (
                     SELECT 1 FROM fams_requisition_allocation x
                     JOIN fams_requisition_handover h ON h.allocation_id = x.id
