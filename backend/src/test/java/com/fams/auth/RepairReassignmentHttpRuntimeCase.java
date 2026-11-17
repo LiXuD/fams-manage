@@ -77,6 +77,12 @@ class RepairReassignmentHttpRuntimeCase {
 
     @AfterEach
     void cleanup() throws Exception {
+        db.update("""
+                DELETE FROM fams_message_receipt WHERE account_id=951001 AND message_kind='TODO'
+                    AND message_id IN (SELECT id FROM fams_todo WHERE business_type='REPAIR'
+                        AND todo_type='REASSIGNMENT_REQUIRED' AND business_id IN (
+                            SELECT id FROM fams_repair_request WHERE asset_id BETWEEN 951020 AND 951023))
+                """);
         db.execute("DROP TRIGGER IF EXISTS owned_repair_reassignment_audit_failure");
         db.execute("DROP TRIGGER IF EXISTS owned_repair_return_audit_failure");
         db.execute("DROP TRIGGER IF EXISTS owned_repair_target_audit_failure");
@@ -673,6 +679,13 @@ class RepairReassignmentHttpRuntimeCase {
                         java.nio.charset.StandardCharsets.UTF_8);
         assertEquals(0, process.exitValue(), output);
         assertTrue(output.contains("\"nativeActualReassignmentClosed\":true"), output);
+        assertEquals(1, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_message_receipt r
+                JOIN fams_todo t ON t.id=r.message_id AND r.message_kind='TODO'
+                JOIN fams_repair_request repair ON t.business_type='REPAIR' AND t.business_id=repair.id
+                WHERE r.account_id=951001 AND t.todo_type='REASSIGNMENT_REQUIRED'
+                    AND t.todo_status='CLOSED' AND repair.asset_id=951020
+                """, Integer.class));
         assertEquals("IN_STOCK", asset().get("lifecycle_status"));
         assertEquals(1, count("fams_repair_event", "action='REPAIR_CONTROLLED_REASSIGNMENT'"));
         assertEquals(

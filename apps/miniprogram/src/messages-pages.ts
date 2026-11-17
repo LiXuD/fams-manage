@@ -6,7 +6,7 @@ interface Message {
     id: string; kind: "TODO" | "REMINDER"; businessType: string; businessId: string; stage: string;
     objectStage: string; poolType: string; assigneeAccountId: string; openedAt: string; deadlineAt: string; read: boolean;
 }
-interface Row extends Message { label: string; businessDisplay: string; openedDisplay: string;
+interface Row extends Message { rowKey: string; label: string; businessDisplay: string; openedDisplay: string;
     deadlineDisplay: string; link: string }
 interface Data { rows: Row[]; page: number; total: number; unread: number; busy: boolean; retryable: boolean;
     error: string; notice: string; exception: boolean }
@@ -23,7 +23,7 @@ const TODOS: Record<string, string> = { APPROVAL: "待管理员确认", CLAIM: "
     RECEIPT: "待实物接收", OPINION: "待补充技术意见", VERIFY: "待核实", SEARCH: "待查找跟进",
     HANDOVER_EXCEPTION: "交接异常待处理", RETURN_EXCEPTION: "返还异常待处理", OVERDUE: "逾期跟进",
     FACTORY_DISPATCH: "待寄出返厂", FACTORY_SCOPE_APPROVAL: "待返厂范围确认", RESTORE_REQUIRED: "待恢复保管",
-    DISPOSITION: "待实际处置", LOST_FOLLOW_UP: "待遗失跟进",
+    DISPOSITION: "待实际处置", LOST_FOLLOW_UP: "待遗失跟进", REASSIGNMENT_REQUIRED: "需要转派",
     INVENTORY_CONFLICT: "盘点冲突待复核", INVENTORY_DIFFERENCE: "盘点差异待复核" };
 const BUSINESSES: Record<string, string> = { INBOUND: "入库单", REQUISITION: "领用申请",
     REQUISITION_ALLOCATION: "领用分配", LOAN: "借用", LOAN_EXTENSION: "借用延期", ASSET_RETURN: "退还",
@@ -31,7 +31,8 @@ const BUSINESSES: Record<string, string> = { INBOUND: "入库单", REQUISITION: 
     INVENTORY_TASK: "盘点任务", REPAIR: "报修单", REPAIR_FACTORY_ROUND: "返厂轮次",
     LOST_REPORT: "报失单", SCRAP: "报废申请", ITEM_TARGET_CHANGE: "目标变更" };
 // Deep links are only offered for the native pages that revalidate a business identity from its own query id.
-const LINKS: Record<string, string> = { SCRAP: "/pages/scrap-requests/index", LOST_REPORT: "/pages/loss-reports/index" };
+const LINKS: Record<string, string> = { SCRAP: "/pages/scrap-requests/index", LOST_REPORT: "/pages/loss-reports/index",
+    REPAIR: "/pages/repairs/index" };
 
 const empty = (exception: boolean): Data => ({ rows: [], page: 1, total: 0, unread: 0, busy: false,
     retryable: false, error: "", notice: "", exception });
@@ -42,7 +43,7 @@ function label(row: Message): string {
 }
 function link(row: Message): string {
     const base = LINKS[row.businessType];
-    return base ? `${base}?id=${row.businessId}` : "";
+    return base && /^[1-9][0-9]{0,18}$/.test(row.businessId) ? `${base}?id=${row.businessId}` : "";
 }
 
 export function createMessagesPage(getServices: () => MiniServices, view: "INBOX" | "EXCEPTION" = "INBOX") {
@@ -66,7 +67,7 @@ export function createMessagesPage(getServices: () => MiniServices, view: "INBOX
     const load = async (page: Context) => {
         const value = await services!.sessions.request("GET",
             `/api/v1/mini/messages?view=${view}&page=${page.data.page}&pageSize=20`) as { items: Message[]; total: number; unread: number };
-        return { rows: value.items.map(row => ({ ...row, label: label(row), link: link(row),
+        return { rows: value.items.map(row => ({ ...row, rowKey: `${row.kind}:${row.id}`, label: label(row), link: link(row),
             businessDisplay: BUSINESSES[row.businessType] ?? row.businessType,
             openedDisplay: proxyTime(row.openedAt), deadlineDisplay: proxyTime(row.deadlineAt) })),
             total: value.total, unread: value.unread };
@@ -127,7 +128,8 @@ export function createMessagesPage(getServices: () => MiniServices, view: "INBOX
             await perform(this);
         },
         onOpen(this: Context, event: Event) {
-            const row = this.data.rows.find(entry => entry.id === event.currentTarget.dataset.id);
+            const { id, kind } = event.currentTarget.dataset;
+            const row = this.data.rows.find(entry => entry.id === id && entry.kind === kind);
             if (!authorized(this) || !services || this.data.busy || pending || !row?.link) return;
             services.navigate(row.link);
         },

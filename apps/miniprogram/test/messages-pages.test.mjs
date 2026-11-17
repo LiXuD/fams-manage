@@ -93,3 +93,17 @@ test("only business pages that revalidate an id offer a deep link", async () => 
     await page.onOpen(event("41", "REMINDER"));
     assert.equal(routes.length, 1, "inbound reminders have no native detail page yet");
 });
+
+test("a repair todo and reminder with the same ID retain distinct destinations", async () => {
+    const { page, services, routes } = fixture("EXCEPTION");
+    services.sessions.request = async () => ({ total: 2, unread: 2, items: [
+        { ...reminder, id: todo.id, businessType: "LOST_REPORT", businessId: "12" },
+        { ...todo, businessType: "REPAIR", businessId: "9007199254740993", stage: "REASSIGNMENT_REQUIRED" },
+    ] });
+    await page.onShow();
+    assert.deepEqual(page.data.rows.map(row => row.rowKey), ["REMINDER:42", "TODO:42"]);
+    assert.equal(page.data.rows[1].label, "待办 · 需要转派");
+    page.onOpen(event("42"));
+    page.onOpen(event("42", "REMINDER"));
+    assert.deepEqual(routes, ["/pages/repairs/index?id=9007199254740993", "/pages/loss-reports/index?id=12"]);
+});
