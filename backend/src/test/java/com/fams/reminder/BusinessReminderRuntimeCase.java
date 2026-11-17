@@ -166,6 +166,11 @@ class BusinessReminderRuntimeCase {
         assertEquals(0L, overdueAt(west, "2026-12-02"));
         new BusinessReminderService(db, json, smsClock("2026-12-02T10:00:00Z")).scan();
         assertEquals(1L, overdueAt(west, "2026-12-02"));
+        var lossBefore = notices("LOST_REPORT", 930300);
+        db.update("UPDATE fams_asset SET lifecycle_status='SCRAPPED' WHERE id=930300");
+        db.update("UPDATE fams_loss_report SET next_review_date='2026-12-03' WHERE id=930300");
+        new BusinessReminderService(db, json, smsClock("2026-12-07T10:00:00Z")).scan();
+        assertEquals(lossBefore, notices("LOST_REPORT", 930300));
     }
 
     private long overdueAt(String scope, String day) {
@@ -195,8 +200,17 @@ class BusinessReminderRuntimeCase {
                     JOIN fams_business_reminder r ON r.id=d.reminder_id WHERE d.job_id=?
                     """, String.class, claim.id().toString());
             if ("LOSS_REVIEW".equals(stage)) {
+                db.update("UPDATE fams_asset SET lifecycle_status='SCRAPPED' WHERE id=930300");
+                assertNull(queue.eligibleTemplate(claim));
+                db.update("UPDATE fams_asset SET lifecycle_status='IN_STOCK' WHERE id=930300");
                 db.update("UPDATE fams_loss_report SET next_review_date='2026-11-12' WHERE id=930300");
             } else {
+                db.update("""
+                        UPDATE fams_scrap_disposition SET due_at='2026-11-07 00:00:00',due_timezone='UTC'
+                        WHERE request_id=930301
+                        """);
+                assertNull(queue.eligibleTemplate(claim));
+                db.update("UPDATE fams_scrap_disposition SET due_at=NULL,due_timezone=NULL WHERE request_id=930301");
                 db.update("UPDATE fams_scrap_disposition SET processor_account_id=? WHERE request_id=930301",
                         EXECUTOR_ACCOUNT);
             }

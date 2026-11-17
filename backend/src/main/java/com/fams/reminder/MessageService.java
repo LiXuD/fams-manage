@@ -69,11 +69,34 @@ public class MessageService {
             ))
             """;
     private static final String ACTIVE_REMINDER = ACTIVE_FACTORY_RETURN + " AND " + ACTIVE_INVENTORY_COMPLETION;
+    private static final String ACTIVE_CUSTODIAN_REMINDER = """
+            (r.business_type<>'LOST_REPORT' OR r.stage<>'LOSS_REVIEW' OR EXISTS (
+                SELECT 1 FROM fams_loss_report l JOIN fams_asset asset ON asset.id=l.asset_id
+                WHERE l.id=r.business_id AND l.report_status IN ('SEARCHING','CONFIRMED_LOST')
+                    AND asset.lifecycle_status<>'SCRAPPED' AND l.processor_account_id <=> r.recipient_account_id
+                    AND NOT EXISTS (
+                        SELECT 1 FROM fams_scrap_request s JOIN fams_scrap_disposition d ON d.request_id=s.id
+                        WHERE s.source_type='LOSS' AND s.source_business_id=l.id AND d.disposition_status='LOSS_WRITTEN_OFF'
+                    )
+                    AND l.next_review_date=CASE r.reminder_type
+                        WHEN 'DUE_IN_1_DAY' THEN DATE_ADD(r.notice_date,INTERVAL 1 DAY)
+                        WHEN 'OVERDUE' THEN DATE_SUB(r.notice_date,INTERVAL 1 DAY) END
+            )) AND (r.business_type<>'SCRAP' OR r.stage<>'SCRAP_DISPOSITION' OR EXISTS (
+                SELECT 1 FROM fams_scrap_request s JOIN fams_scrap_disposition d ON d.request_id=s.id
+                WHERE s.id=r.business_id AND s.request_status='EXECUTED'
+                    AND d.disposition_status='PENDING_DISPOSITION' AND d.processor_account_id=r.recipient_account_id
+                    AND (d.due_at IS NULL OR d.due_at=r.deadline_at)
+                    AND d.due_date=CASE r.reminder_type
+                        WHEN 'DUE_IN_3_DAYS' THEN DATE_ADD(r.notice_date,INTERVAL 3 DAY)
+                        WHEN 'DUE_TODAY' THEN r.notice_date
+                        WHEN 'OVERDUE' THEN DATE_SUB(r.notice_date,INTERVAL 1 DAY) END
+            ))
+            """;
     private static final String REMINDER_COLUMNS =
             " SELECT 'REMINDER' message_kind,r.id id,r.business_type,r.business_id,r.reminder_type stage,"
             + " r.stage object_stage,r.recipient_pool_type pool_type,r.recipient_account_id,r.created_at moment,"
             + " r.deadline_at FROM fams_business_reminder r WHERE r.reminder_type<>'SMS_FALLBACK' AND "
-            + ACTIVE_REMINDER + " AND";
+            + ACTIVE_REMINDER + " AND " + ACTIVE_CUSTODIAN_REMINDER + " AND";
     /**
      * Only the latest occurrence of an object stage is an active message; earlier ones stay as history. Escalation
      * tiers are newest per recipient within their own tier, and inventory completion has a separate ladder
@@ -199,7 +222,7 @@ public class MessageService {
     }
 
     private String addressableReminder(RequisitionActorContext.Current current, List<Object> args) {
-        String available = " r.reminder_type<>'SMS_FALLBACK' AND " + ACTIVE_REMINDER;
+        String available = " r.reminder_type<>'SMS_FALLBACK' AND " + ACTIVE_REMINDER + " AND " + ACTIVE_CUSTODIAN_REMINDER;
         if (current.has(Role.ASSET_ADMIN)) {
             return available;
         }

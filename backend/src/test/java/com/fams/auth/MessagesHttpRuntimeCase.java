@@ -60,7 +60,7 @@ class MessagesHttpRuntimeCase {
     @Test
     void inboxAndExceptionListsFollowAddressivityAndReadStateIsPerPerson() throws Exception {
         seed();
-        reminder(930913, "LOST_REPORT", 12, "LOSS_REVIEW", "SMS_FALLBACK",
+        reminder(930913, "INBOUND", 12, "WAREHOUSE_CLAIM", "SMS_FALLBACK",
                 "2026-11-09", "WAREHOUSE_OPERATOR", WAREHOUSE);
         var admin = login("msg1");
         var warehouse = login("msg2");
@@ -122,6 +122,78 @@ class MessagesHttpRuntimeCase {
 
         verifyInventoryExecutors(admin, warehouse, employee, grant.sessionToken());
         verifyWarehouseExceptions(admin, warehouse, grant.sessionToken());
+        verifyClosedCustodianReminders(admin, warehouse);
+    }
+
+    private void verifyClosedCustodianReminders(Session admin, Session warehouse) throws Exception {
+        db.update("""
+                INSERT INTO fams_loss_report (id,asset_id,creator_account_id,asset_version,source_snapshot_json,
+                    last_seen_at,last_location,circumstances,report_status,processor_account_id,next_review_date,
+                    confirmed_lost_at,created_at,updated_at)
+                VALUES (930960,930921,930701,0,'{}',UTC_TIMESTAMP()-INTERVAL 9 DAY,'fixture','fixture',
+                    'CONFIRMED_LOST',930702,UTC_DATE()-INTERVAL 4 DAY,UTC_TIMESTAMP()-INTERVAL 8 DAY,NOW(3),NOW(3))
+                """);
+        db.update("UPDATE fams_asset SET exception_status='LOST' WHERE id=930921");
+        db.update("UPDATE fams_asset SET lifecycle_status='SCRAPPED' WHERE id=930922");
+        db.update("""
+                INSERT INTO fams_scrap_request (id,asset_id,creator_account_id,source_type,source_snapshot_json,
+                    reason,observed_condition,proposed_disposition,request_status,asset_version,created_at,updated_at)
+                VALUES (930961,930922,930701,'STANDALONE','{}','fixture','fixture','fixture','EXECUTED',0,NOW(3),NOW(3))
+                """);
+        db.update("""
+                INSERT INTO fams_scrap_disposition (request_id,processor_account_id,disposition_status,
+                    due_date,due_at,due_timezone,custody_snapshot_json,created_at,updated_at)
+                VALUES (930961,930702,'PENDING_DISPOSITION',UTC_DATE()-INTERVAL 2 DAY,
+                    UTC_DATE()-INTERVAL 1 DAY,'UTC','{}',NOW(3),NOW(3))
+                """);
+        reminders.scan();
+        var firstLoss = overdueReminder("LOST_REPORT", 930960);
+        var scrap = overdueReminder("SCRAP", 930961);
+        assertTrue(keys(inbox(warehouse, "EXCEPTION")).containsAll(List.of(firstLoss, scrap)));
+        assertEquals(200, read(warehouse, firstLoss).statusCode());
+        assertEquals(200, read(warehouse, scrap).statusCode());
+
+        db.update("UPDATE fams_loss_report SET next_review_date=UTC_DATE()-INTERVAL 1 DAY WHERE id=930960");
+        assertFalse(keys(inbox(warehouse, "INBOX")).contains(firstLoss));
+        assertEquals(404, read(admin, firstLoss).statusCode());
+        reminders.scan();
+        var newLoss = overdueReminder("LOST_REPORT", 930960);
+        assertFalse(firstLoss.equals(newLoss));
+        assertTrue(keys(inbox(warehouse, "EXCEPTION")).contains(newLoss));
+
+        db.update("UPDATE fams_asset SET lifecycle_status='SCRAPPED' WHERE id=930921");
+        db.update("UPDATE fams_scrap_disposition SET disposition_status='DISPOSED' WHERE request_id=930961");
+        for (var item : List.of(newLoss, scrap)) {
+            assertFalse(keys(inbox(admin, "EXCEPTION")).contains(item));
+            assertFalse(keys(inbox(warehouse, "INBOX")).contains(item));
+            assertEquals(404, read(warehouse, item).statusCode());
+        }
+        db.update("""
+                INSERT INTO fams_scrap_request (id,asset_id,creator_account_id,source_type,source_business_id,
+                    source_snapshot_json,reason,observed_condition,proposed_disposition,request_status,asset_version,
+                    created_at,updated_at)
+                VALUES (930962,930921,930701,'LOSS',930960,'{}','fixture','fixture','fixture','EXECUTED',0,NOW(3),NOW(3))
+                """);
+        db.update("""
+                INSERT INTO fams_scrap_disposition (request_id,processor_account_id,disposition_status,
+                    custody_snapshot_json,created_at,updated_at)
+                VALUES (930962,930702,'LOSS_WRITTEN_OFF','{}',NOW(3),NOW(3))
+                """);
+        db.update("UPDATE fams_asset SET lifecycle_status='IN_STOCK' WHERE id=930921");
+        assertFalse(keys(inbox(admin, "EXCEPTION")).contains(newLoss));
+        assertEquals(404, read(warehouse, newLoss).statusCode());
+        db.update("UPDATE fams_loss_report SET next_review_date=UTC_DATE()-INTERVAL 2 DAY WHERE id=930960");
+        reminders.scan();
+        assertEquals(newLoss, overdueReminder("LOST_REPORT", 930960));
+        assertEquals(1, receiptCount(Long.parseLong(firstLoss.split(":")[1])));
+        assertEquals(1, receiptCount(Long.parseLong(scrap.split(":")[1])));
+    }
+
+    private String overdueReminder(String businessType, long businessId) {
+        return "REMINDER:" + db.queryForObject("""
+                SELECT MAX(id) FROM fams_business_reminder
+                WHERE business_type=? AND business_id=? AND reminder_type='OVERDUE'
+                """, Long.class, businessType, businessId);
     }
 
     private void verifyWarehouseExceptions(Session admin, Session warehouse, String miniToken) throws Exception {
@@ -201,6 +273,10 @@ class MessagesHttpRuntimeCase {
         assertEquals(404, read(warehouse, "REMINDER:930922").statusCode());
         assertTrue(keys(inbox(employee, "INBOX")).contains("REMINDER:930923"));
 
+        db.update("""
+                UPDATE fams_inventory_task SET starts_at=UTC_DATE()-INTERVAL 10 DAY,due_at=UTC_DATE()-INTERVAL 2 DAY
+                WHERE id=930920
+                """);
         reminders.scan();
         var replacementNotice = db.queryForObject("""
                 SELECT MAX(id) FROM fams_business_reminder
@@ -333,8 +409,8 @@ class MessagesHttpRuntimeCase {
         todo(930805, "ASSET_ADMIN", null, "TRANSFER", 5, "OVERDUE");
         reminder(930901, "INBOUND", 11, "ADMIN_DECISION", "OVERDUE", "2026-11-08", "ASSET_ADMIN", null);
         reminder(930902, "INBOUND", 11, "ADMIN_DECISION", "OVERDUE", "2026-11-09", "ASSET_ADMIN", null);
-        reminder(930911, "LOST_REPORT", 12, "LOSS_REVIEW", "OVERDUE", "2026-11-08", "WAREHOUSE_OPERATOR", WAREHOUSE);
-        reminder(930912, "LOST_REPORT", 12, "LOSS_REVIEW", "OVERDUE", "2026-11-09", "WAREHOUSE_OPERATOR", WAREHOUSE);
+        reminder(930911, "INBOUND", 12, "WAREHOUSE_CLAIM", "OVERDUE", "2026-11-08", "WAREHOUSE_OPERATOR", WAREHOUSE);
+        reminder(930912, "INBOUND", 12, "WAREHOUSE_CLAIM", "OVERDUE", "2026-11-09", "WAREHOUSE_OPERATOR", WAREHOUSE);
     }
 
     private void todo(long id, String pool, Long assignee, String businessType, long businessId, String type) {

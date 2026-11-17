@@ -207,8 +207,11 @@ public class BusinessReminderService {
                  SELECT e.detail_json FROM fams_loss_event e WHERE e.report_id=x.id
                     AND e.action IN ('LOSS_SEARCH_STARTED','LOSS_CONFIRMED','LOSS_FOLLOWED_UP','LOSS_INITIAL_OPENED')
                  ORDER BY e.id DESC LIMIT 1
-             ) AS schedule_event FROM fams_loss_report x
-              WHERE x.report_status IN ('SEARCHING','CONFIRMED_LOST') AND x.next_review_date IS NOT NULL""",
+             ) AS schedule_event FROM fams_loss_report x JOIN fams_asset asset ON asset.id=x.asset_id
+              WHERE x.report_status IN ('SEARCHING','CONFIRMED_LOST') AND x.next_review_date IS NOT NULL
+                AND asset.lifecycle_status<>'SCRAPPED'
+                AND NOT EXISTS (SELECT 1 FROM fams_scrap_request s JOIN fams_scrap_disposition d ON d.request_id=s.id
+                    WHERE s.source_type='LOSS' AND s.source_business_id=x.id AND d.disposition_status='LOSS_WRITTEN_OFF')""",
                 row -> {
                     var due = LocalDate.parse(String.valueOf(row.get("next_review_date")));
                     ZoneId zone = fallback;

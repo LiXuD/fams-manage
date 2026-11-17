@@ -50,8 +50,14 @@ class NotificationDeliveryQueue {
                         AND i.executor_account_id = a.id
                 ))
                 OR (r.business_type = 'LOST_REPORT' AND r.stage = 'LOSS_REVIEW' AND EXISTS (
-                    SELECT 1 FROM fams_loss_report x
+                    SELECT 1 FROM fams_loss_report x JOIN fams_asset asset ON asset.id = x.asset_id
                     WHERE x.id = r.business_id AND x.report_status IN ('SEARCHING','CONFIRMED_LOST')
+                        AND asset.lifecycle_status <> 'SCRAPPED'
+                        AND NOT EXISTS (
+                            SELECT 1 FROM fams_scrap_request s JOIN fams_scrap_disposition d ON d.request_id = s.id
+                            WHERE s.source_type = 'LOSS' AND s.source_business_id = x.id
+                                AND d.disposition_status = 'LOSS_WRITTEN_OFF'
+                        )
                         AND x.processor_account_id = a.id
                         AND x.next_review_date = DATE_SUB(r.notice_date, INTERVAL 1 DAY)
                 ))
@@ -60,6 +66,7 @@ class NotificationDeliveryQueue {
                     WHERE x.id = r.business_id AND x.request_status = 'EXECUTED'
                         AND d.disposition_status = 'PENDING_DISPOSITION' AND d.processor_account_id = a.id
                         AND d.due_date = DATE_SUB(r.notice_date, INTERVAL 1 DAY)
+                        AND (d.due_at IS NULL OR d.due_at = r.deadline_at)
                 ))
             )
             """;
