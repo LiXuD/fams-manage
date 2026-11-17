@@ -3020,6 +3020,7 @@ class DesignPackageContractTest(unittest.TestCase):
             "lastInventoryDateFrom",
             "lastInventoryDateTo",
             "borrowOverdue",
+            "inventoryBefore",
             "longUninventoried",
         }
         self.assertEqual(expected_criteria, set(criteria["properties"]))
