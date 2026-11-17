@@ -14,6 +14,7 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -53,6 +54,7 @@ class RepairReturnSourceHttpRuntimeCase {
     final RepairHttpRuntimeCase fixture = new RepairHttpRuntimeCase();
     @Autowired JdbcTemplate db;
     @Autowired MiniSessionService miniSessions;
+    @Autowired ApplicationContext application;
 
     @Value("${local.server.port}")
     int port;
@@ -200,6 +202,27 @@ class RepairReturnSourceHttpRuntimeCase {
         var visible = ok(get(fixture.employee, "asset-returns/" + original.get("id")));
         assertEquals(id, visible.path("followups").get(0).path("linkedRepairId").asText());
         assertEquals("COMPLETED", visible.path("followups").get(0).path("repairStatus").asText());
+    }
+
+    @Test
+    void legacyReturnRepairUsesOriginalReturnCalendarForFirstAcceptance() throws Exception {
+        String followup = damaged();
+        var frozen = JSON.readTree(returned().get("parameter_snapshot_json").toString());
+        db.update("UPDATE fams_business_parameter_version SET snapshot_json=JSON_SET(snapshot_json,"
+                + " '$.warehouseFirstExecutionDeadlineWorkdays',30) WHERE id=951000");
+        String path = "repairs/return-sources/" + followup;
+        var source = ok(get(fixture.admin, path));
+        var repair = approved(ok(post(fixture.admin, path, source.path("version").asLong(), key(), sourceBody(source))));
+        String id = repair.path("id").asText();
+        assertEquals(frozen, JSON.readTree(db.queryForObject(
+                "SELECT first_execution_parameter_snapshot_json FROM fams_repair_request WHERE id=?", String.class, id)));
+        db.update("UPDATE fams_repair_request SET first_execution_parameter_snapshot_json=NULL,"
+                + " claimed_at=UTC_TIMESTAMP(3)-INTERVAL 14 DAY WHERE id=?", id);
+        var scanner = application.getBean("reassignmentReminderService");
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(scanner, "scan");
+        assertEquals(1, count("fams_todo", "business_type='REPAIR' AND business_id=" + id
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1"));
+        assertEquals(frozen, JSON.readTree(returned().get("parameter_snapshot_json").toString()));
     }
 
     @Test

@@ -137,8 +137,8 @@ public class RepairService {
         }
         db.update(
                 "INSERT INTO fams_repair_request(asset_id,creator_account_id,asset_version,"
-                    + "source_snapshot_json,timezone_id,fault,impact,occurred_at,processor_account_id,created_at,updated_at)"
-                    + " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    + "source_snapshot_json,timezone_id,fault,impact,occurred_at,processor_account_id,created_at,updated_at,"
+                    + "first_execution_parameter_snapshot_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 source.assetId(),
                 current.id(),
                 input.assetVersion(),
@@ -149,7 +149,8 @@ public class RepairService {
                 source.inspectedAt(),
                 source.processorAccountId(),
                 now(),
-                now());
+                now(),
+                source.parametersJson());
         long id =
                 java.util.Objects.requireNonNull(
                         db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
@@ -583,10 +584,8 @@ public class RepairService {
         if (parameters.isEmpty()) {
             throw new RepairFailure(409, "REPAIR_PARAMETERS_REQUIRED");
         }
-        String zone =
-                json.readTree(parameters.getFirst().get("snapshot_json").toString())
-                        .path("timezone")
-                        .asText();
+        String parameterSnapshot = parameters.getFirst().get("snapshot_json").toString();
+        String zone = json.readTree(parameterSnapshot).path("timezone").asText();
         try {
             ZoneId.of(zone);
         } catch (java.time.DateTimeException invalid) {
@@ -595,8 +594,8 @@ public class RepairService {
         var now = now();
         db.update(
                 "INSERT INTO"
-                    + " fams_repair_request(asset_id,creator_account_id,using_organization_id,responsible_employee_id,shared_responsible_employee_id,asset_version,source_snapshot_json,loan_snapshot_json,timezone_id,fault,impact,occurred_at,created_at,updated_at)"
-                    + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    + " fams_repair_request(asset_id,creator_account_id,using_organization_id,responsible_employee_id,shared_responsible_employee_id,asset_version,source_snapshot_json,loan_snapshot_json,timezone_id,fault,impact,occurred_at,created_at,updated_at,first_execution_parameter_snapshot_json)"
+                    + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 input.assetId(),
                 current.id(),
                 reference(snapshot, "usingOrganizationId"),
@@ -610,7 +609,8 @@ public class RepairService {
                 input.impact(),
                 input.occurredAt(),
                 now,
-                now);
+                now,
+                parameterSnapshot);
         long id =
                 java.util.Objects.requireNonNull(
                         db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));

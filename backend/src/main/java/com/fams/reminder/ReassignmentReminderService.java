@@ -60,6 +60,37 @@ class ReassignmentReminderService {
                     AND held.business_item_id=returned.id AND held.asset_id=returned.asset_id
                     AND held.released_at IS NULL
               )
+            UNION ALL
+            SELECT 'REPAIR', repair.id, repair.id, repair.claimed_at,
+                CASE
+                  WHEN repair.first_execution_parameter_snapshot_json IS NOT NULL
+                    THEN repair.first_execution_parameter_snapshot_json
+                  WHEN origin.repair_id IS NOT NULL THEN source_return.parameter_snapshot_json
+                  WHEN version.effective_at < repair.created_at
+                    AND JSON_UNQUOTE(JSON_EXTRACT(version.snapshot_json,'$.timezone'))=repair.timezone_id
+                    AND EXISTS (SELECT 1 FROM fams_repair_event event
+                                WHERE event.repair_id=repair.id AND event.action='REPAIR_SUBMITTED')
+                    THEN version.snapshot_json
+                END
+            FROM fams_repair_request repair
+            LEFT JOIN fams_repair_return_origin origin ON origin.repair_id=repair.id
+            LEFT JOIN fams_return_followup followup ON followup.id=origin.followup_id
+            LEFT JOIN fams_asset_return source_return ON source_return.id=followup.return_id
+                AND source_return.asset_id=repair.asset_id AND followup.asset_id=repair.asset_id
+            LEFT JOIN fams_business_parameter_version version ON repair.first_execution_parameter_snapshot_json IS NULL
+                AND origin.repair_id IS NULL AND version.id=(
+                    SELECT last_parameters.id FROM fams_business_parameter_version last_parameters
+                    WHERE last_parameters.effective_at <= repair.created_at
+                    ORDER BY last_parameters.effective_at DESC, last_parameters.version DESC LIMIT 1
+                )
+            WHERE repair.repair_status='WAREHOUSE_PROCESSING' AND repair.ownership_version=1
+                AND repair.claimed_at IS NOT NULL AND repair.accepted_at IS NULL
+                AND repair.processor_account_id IS NOT NULL
+                AND EXISTS (
+                    SELECT 1 FROM fams_asset_business_lock held
+                    WHERE held.business_type='REPAIR' AND held.business_id=repair.id
+                        AND held.asset_id=repair.asset_id AND held.released_at IS NULL
+                )
             """;
 
     // Inbound ownership version starts at zero; the first acceptance or a controlled transfer advances it.

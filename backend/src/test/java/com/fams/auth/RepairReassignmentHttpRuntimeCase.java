@@ -56,6 +56,7 @@ class RepairReassignmentHttpRuntimeCase {
     final RepairHttpRuntimeCase fixture = new RepairHttpRuntimeCase();
     @Autowired JdbcTemplate db;
     @Autowired org.springframework.context.ApplicationContext application;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
     @Autowired MiniSessionService miniSessions;
 
     @Value("${local.server.port}")
@@ -239,6 +240,66 @@ class RepairReassignmentHttpRuntimeCase {
         assertTrue(context(id).path("unavailableReason").isMissingNode());
         assertEquals(receiver, db.queryForMap("SELECT * FROM fams_todo WHERE " + scope + " AND pool_type='RECEIVER'"));
         assertEquals(locks, db.queryForList("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020"));
+    }
+
+    @Test
+    void firstAcceptanceTimeoutUsesFrozenCalendarAndClosesOnActualAcceptance() throws Exception {
+        db.update("UPDATE fams_business_parameter_version SET snapshot_json=? WHERE id=951000", calendar());
+        var row = processing();
+        String id = row.path("id").asText();
+        assertEquals(JSON.readTree(calendar()), JSON.readTree(db.queryForObject(
+                "SELECT first_execution_parameter_snapshot_json FROM fams_repair_request WHERE id=?", String.class, id)));
+        db.update("UPDATE fams_business_parameter_version SET snapshot_json=JSON_SET(snapshot_json,"
+                + " '$.warehouseFirstExecutionDeadlineWorkdays',30) WHERE id=951000");
+        db.update("UPDATE fams_repair_request SET claimed_at='2026-10-02 20:00:00.000' WHERE id=?", id);
+        String active = "business_type='REPAIR' AND business_id=" + id
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        scanFirstAcceptanceAt("2026-10-06T23:59:59.999Z");
+        assertEquals(0, count("fams_todo", active));
+        scanFirstAcceptanceAt("2026-10-07T00:00:00Z");
+        scanFirstAcceptanceAt("2026-10-07T00:01:00Z");
+        assertEquals(1, count("fams_todo", active));
+        ok(post(fixture.warehouse, id + "/accept-away", row.path("version").asLong(), key(), away(row)));
+        scanFirstAcceptanceAt("2026-10-07T00:02:00Z");
+        assertEquals(0, count("fams_todo", active));
+        assertEquals(1, count("fams_asset_business_lock", "asset_id=951020 AND released_at IS NULL"));
+    }
+
+    @Test
+    void firstAcceptanceTimeoutForLegacyUsesHistoricalVersionAndSkipsTimestampTie() throws Exception {
+        db.update("UPDATE fams_business_parameter_version SET snapshot_json=? WHERE id=951000", calendar());
+        var row = processing();
+        String id = row.path("id").asText();
+        db.update("UPDATE fams_repair_request SET created_at='2026-10-02 20:00:00.000',"
+                + " claimed_at='2026-10-02 20:00:00.000',first_execution_parameter_snapshot_json=NULL WHERE id=?", id);
+        db.update("UPDATE fams_business_parameter_version SET effective_at='2026-10-01 00:00:00.000' WHERE id=951000");
+        String active = "business_type='REPAIR' AND business_id=" + id
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        scanFirstAcceptanceAt("2026-10-07T00:00:00Z");
+        assertEquals(1, count("fams_todo", active));
+        db.update("UPDATE fams_business_parameter_version SET effective_at='2026-10-02 20:00:00.000' WHERE id=951000");
+        scanFirstAcceptanceAt("2026-10-07T00:01:00Z");
+        assertEquals(0, count("fams_todo", active));
+        assertNull(db.queryForObject("SELECT first_execution_parameter_snapshot_json FROM fams_repair_request WHERE id=?",
+                String.class, id));
+    }
+
+    private String calendar() {
+        return """
+                {"timezone":"UTC","workWeek":["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY"],
+                 "adjustedWorkdays":["2026-10-03"],"holidays":["2026-10-05"],
+                 "warehouseFirstExecutionDeadlineWorkdays":2}
+                """;
+    }
+
+    private void scanFirstAcceptanceAt(String instant) throws Exception {
+        var scannerType = org.springframework.util.ClassUtils.getUserClass(application.getBean("reassignmentReminderService"));
+        var constructor = org.springframework.util.ReflectionUtils.accessibleConstructor(scannerType,
+                JdbcTemplate.class, java.time.Clock.class, ObjectMapper.class);
+        var scanner = org.springframework.beans.BeanUtils.instantiateClass(constructor,
+                db, java.time.Clock.fixed(Instant.parse(instant), java.time.ZoneOffset.UTC), JSON);
+        new org.springframework.transaction.support.TransactionTemplate(transactions)
+                .executeWithoutResult(status -> org.springframework.test.util.ReflectionTestUtils.invokeMethod(scanner, "scan"));
     }
 
     @Test

@@ -1327,6 +1327,8 @@ def verify_java_quality(context: RuntimeContext) -> None:
              "-Dd6.23.initial.repair.scrap.upgrade.runtime=true", "InitialRepairScrapUpgradeRuntimeCase"),
             ("inbound processor declaration V78 populated upgrade and repeat",
              "-Dd6.24.inbound.unavailability.upgrade.runtime=true", "InboundUnavailabilityUpgradeRuntimeCase"),
+            ("repair first execution calendar V83 populated upgrade and repeat",
+             "-Dd6.24.repair.first.execution.upgrade.runtime=true", "RepairFirstExecutionUpgradeRuntimeCase"),
             ("cross-domain reminder ladder V65 occurrence dedupe",
              "-Dd6.24.reminder.runtime=true", "BusinessReminderRuntimeCase"),
             ("message centre addressivity and per-person read V66",
