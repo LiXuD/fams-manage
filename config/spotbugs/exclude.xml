@@ -774,6 +774,12 @@
     </Match>
     <!-- Shared Spring collaborators are injected once and never returned. -->
     <Match>
+        <Class name="com.fams.auth.AssetLedgerExportAccess"/>
+        <Field name="accounts"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
         <Class name="com.fams.auth.ScrapSensitiveAccess"/>
         <Field name="accounts"/>
         <Method name="&lt;init&gt;"/>
