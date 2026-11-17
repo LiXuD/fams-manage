@@ -1481,6 +1481,16 @@ class DutyHttpRuntimeCase {
         assertFalse(ok(get(warehouse, exceptions)).path("items").valueStream().anyMatch(row ->
                 "931009".equals(row.path("businessId").asText())
                         && "REASSIGNMENT_REQUIRED".equals(row.path("stage").asText())));
+        var affected = "/workbench/todos?scope=ASSET_ADMIN&processorAccountId=";
+        var assigned = ok(get(administrator, affected + "931004"));
+        assertTrue(assigned.path("items").valueStream().anyMatch(row ->
+                "931009".equals(row.path("businessId").asText())
+                        && "REASSIGNMENT_REQUIRED".equals(row.path("stage").asText())));
+        assertEquals(1, assigned.path("stageCounts").size());
+        assertEquals("REASSIGNMENT_REQUIRED", assigned.path("stageCounts").get(0).path("stage").asText());
+        assertTrue(ok(get(administrator, affected + "931002")).path("items").isEmpty());
+        assertEquals(403, code(get(warehouse, affected + "931004")));
+        assertEquals(403, code(get(warehouse, "/workbench/todos?scope=MINE&processorAccountId=931004")));
         assertEquals(WAREHOUSE, db.queryForObject(
                 "SELECT processor_account_id FROM fams_inbound_processing_ownership WHERE receipt_id=931009",
                 Long.class));
@@ -1490,6 +1500,8 @@ class DutyHttpRuntimeCase {
         db.update("UPDATE fams_inbound_processing_ownership SET ownership_version=1 WHERE receipt_id=931009");
         reassignments.scan();
         assertEquals(0, db.queryForObject(openReminders, Integer.class));
+        assertFalse(ok(get(administrator, affected + "931004")).path("items").valueStream()
+                .anyMatch(row -> "931009".equals(row.path("businessId").asText())));
         assertEquals(deadline, db.queryForObject("SELECT warehouse_first_execution_due_at FROM fams_inbound_receipt"
                 + " WHERE id=931009", java.sql.Timestamp.class));
         assertFalse(ok(get(administrator, exceptions)).path("items").valueStream().anyMatch(row ->

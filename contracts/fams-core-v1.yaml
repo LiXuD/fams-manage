@@ -9140,11 +9140,15 @@ paths:
           required: true
           schema: { type: string, enum: [ASSET_ADMIN, WAREHOUSE_OPERATOR, MINE] }
         - { name: stage, in: query, schema: { type: string, pattern: '^[A-Z][A-Z0-9_]{0,39}$' } }
+        - name: processorAccountId
+          in: query
+          description: In the ASSET_ADMIN pool, restricts the result to open reassignment work for the affected warehouse operator.
+          schema: { $ref: '#/components/schemas/Id' }
         - { name: before, in: query, schema: { $ref: '#/components/schemas/Id' } }
         - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
       responses:
         '200':
-          description: Open todos in descending ID order. Shared pools exclude assigned work. Stage totals use the selected scope before stage or cursor filtering.
+          description: Open todos in descending ID order. Shared pools exclude assigned work. Stage totals apply the scope and processor filter before stage or cursor filtering.
           content:
             application/json:
               schema:

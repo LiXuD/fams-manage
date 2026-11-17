@@ -14,6 +14,8 @@ const identity = computed(() => JSON.stringify([session.user?.id, session.user?.
 const scope = ref<Scope>("MINE");
 const result = ref<Page>();
 const stage = ref("");
+const processorInput = ref("");
+const processorAccountId = ref("");
 const cursors = ref<(string | undefined)[]>([undefined]);
 const pageIndex = ref(0);
 const total = computed(() => result.value?.stageCounts.reduce((sum, row) => sum + row.count, 0) ?? 0);
@@ -35,6 +37,7 @@ function destination(todo: Todo) {
     case "INVENTORY_TASK": return { name: "inventory-tasks", query: { taskId: id } };
     case "REQUISITION": return { name: "requisitions", query: { id } };
     case "TRANSFER": return { name: "transfers", query: { id } };
+    case "ASSET_RETURN": return { name: "loans", query: { return: id } };
     case "REPAIR": return { name: "repairs", params: { id } };
     case "LOST_REPORT": return { name: "loss-reports", params: { id } };
     case "SCRAP": return { name: "scrap-requests", params: { id } };
@@ -47,6 +50,9 @@ async function load(before?: string) {
   const request = ++generation;
   const query = new URLSearchParams({ scope: scope.value });
   if (stage.value) query.set("stage", stage.value);
+  if (scope.value === "ASSET_ADMIN" && processorAccountId.value) {
+    query.set("processorAccountId", processorAccountId.value);
+  }
   if (before) query.set("before", before);
   result.value = undefined;
   busy.value = true;
@@ -72,6 +78,13 @@ function chooseStage(next: string) {
 
 function choose(next: Scope) {
   scope.value = next;
+  processorInput.value = "";
+  processorAccountId.value = "";
+  chooseStage("");
+}
+
+function applyProcessor() {
+  processorAccountId.value = processorInput.value.trim();
   chooseStage("");
 }
 
@@ -98,6 +111,12 @@ onBeforeUnmount(() => generation++);
         @click="choose(item)">{{ scopes[item] }}</button>
       <router-link :to="{ name: 'messages' }">查看消息与异常</router-link>
     </div>
+    <form v-if="scope === 'ASSET_ADMIN'" class="actions" @submit.prevent="applyProcessor">
+      <label>原库管账号 ID
+        <input v-model="processorInput" inputmode="numeric" maxlength="19" pattern="[1-9][0-9]{0,18}">
+      </label>
+      <button type="submit">筛选转派待办</button>
+    </form>
     <p v-if="busy" role="status">正在查询</p>
     <p v-if="error" role="alert">{{ error }} <button type="button" @click="load(cursors[pageIndex])">重试</button></p>
     <template v-if="result">
