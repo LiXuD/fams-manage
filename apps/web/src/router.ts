@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import { useSessionStore } from "@/auth/sessionStore";
 import HomeView from "@/views/HomeView.vue";
 import AccountAdminView from "@/views/AccountAdminView.vue";
+import BusinessParameterView from "@/views/BusinessParameterView.vue";
 import LoginView from "@/views/LoginView.vue";
 import PasswordChangeView from "@/views/PasswordChangeView.vue";
 import AssetLedgerView from "@/views/AssetLedgerView.vue";
@@ -31,6 +32,7 @@ import RepairAssistanceView from "@/views/RepairAssistanceView.vue";
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
+    { path: "/business-parameters", name: "business-parameters", component: BusinessParameterView, meta: { requiresAuth: true } },
     { path: "/system-accounts", name: "system-accounts", component: AccountAdminView, meta: { requiresAuth: true } },
     { path: "/scrap-requests/:id?", name: "scrap-requests", component: ScrapView, meta: { requiresAuth: true } },
     { path: "/loss-reports/:id?", name: "loss-reports", component: LossView, meta: { requiresAuth: true } },
