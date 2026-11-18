@@ -4,6 +4,7 @@ import HomeView from "@/views/HomeView.vue";
 import AccountAdminView from "@/views/AccountAdminView.vue";
 import BusinessParameterView from "@/views/BusinessParameterView.vue";
 import IdentityAdminView from "@/views/IdentityAdminView.vue";
+import CatalogAdminView from "@/views/CatalogAdminView.vue";
 import LoginView from "@/views/LoginView.vue";
 import PasswordChangeView from "@/views/PasswordChangeView.vue";
 import AssetLedgerView from "@/views/AssetLedgerView.vue";
@@ -33,6 +34,7 @@ import RepairAssistanceView from "@/views/RepairAssistanceView.vue";
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
+    { path: "/catalogs", name: "catalogs", component: CatalogAdminView, meta: { requiresAuth: true } },
     { path: "/identity", name: "identity", component: IdentityAdminView, meta: { requiresAuth: true } },
     { path: "/business-parameters", name: "business-parameters", component: BusinessParameterView, meta: { requiresAuth: true } },
     { path: "/system-accounts", name: "system-accounts", component: AccountAdminView, meta: { requiresAuth: true } },
