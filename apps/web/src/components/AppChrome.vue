@@ -36,6 +36,7 @@ async function handleLogout(): Promise<void> {
         <router-link v-if="session.user?.roles.includes('SYSTEM_ADMIN')" to="/identity" class="nav-item">组织与人员</router-link>
         <router-link v-if="session.user?.roles.includes('SYSTEM_ADMIN')" to="/identity-imports" class="nav-item">组织人员导入</router-link>
         <router-link v-if="session.user?.roles.includes('SYSTEM_ADMIN')" to="/catalogs" class="nav-item">资料目录</router-link>
+        <router-link v-if="session.user?.roles.includes('SYSTEM_ADMIN')" to="/numbering-rules" class="nav-item">编号规则</router-link>
         <router-link v-if="session.hasPermission('ASSET_LEDGER_READ')" to="/assets" class="nav-item">资产台账</router-link>
         <router-link v-if="session.user?.roles.includes('WAREHOUSE_OPERATOR')" to="/asset-imports"
           class="nav-item">批量导入</router-link>

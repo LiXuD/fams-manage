@@ -7,6 +7,7 @@ import IdentityAdminView from "@/views/IdentityAdminView.vue";
 import CatalogAdminView from "@/views/CatalogAdminView.vue";
 import IdentityImportView from "@/views/IdentityImportView.vue";
 import EmployeePhoneCorrectionView from "@/views/EmployeePhoneCorrectionView.vue";
+import NumberingRuleView from "@/views/NumberingRuleView.vue";
 import LoginView from "@/views/LoginView.vue";
 import PasswordChangeView from "@/views/PasswordChangeView.vue";
 import AssetLedgerView from "@/views/AssetLedgerView.vue";
@@ -36,6 +37,7 @@ import RepairAssistanceView from "@/views/RepairAssistanceView.vue";
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
+    { path: "/numbering-rules", name: "numbering-rules", component: NumberingRuleView, meta: { requiresAuth: true } },
     { path: "/employee-phone-corrections", name: "employee-phone-corrections", component: EmployeePhoneCorrectionView, meta: { requiresAuth: true } },
     { path: "/identity-imports", name: "identity-imports", component: IdentityImportView, meta: { requiresAuth: true } },
     { path: "/catalogs", name: "catalogs", component: CatalogAdminView, meta: { requiresAuth: true } },

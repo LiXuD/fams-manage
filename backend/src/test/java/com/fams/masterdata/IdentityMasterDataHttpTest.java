@@ -950,6 +950,7 @@ class IdentityMasterDataHttpTest {
         HttpResponse<String> accepted = request("POST", "/api/v1/numbering-rules", rule,
                 admin, writeHeaders("93555555-5555-4555-8555-555555555555", admin));
         assertEquals(201, accepted.statusCode(), accepted.body());
+        assertTrue(!JSON.readTree(accepted.body()).has("fixedPrefix"), accepted.body());
         String ruleId = JSON.readTree(accepted.body()).path("id").asText();
         HttpResponse<String> clearedPrefix = request("PATCH", "/api/v1/asset-categories/"
                 + categoryId, "{\"numberingPrefix\":\"\"}", admin,
