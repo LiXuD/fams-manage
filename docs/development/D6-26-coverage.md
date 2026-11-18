@@ -32,7 +32,7 @@
 | P22 | 受控转派 | `/inbound`、`/requisitions`、`/loans`、`/transfers`、`/repairs/:id?` 的域内面板 |
 | P23 | 报表与抽样 | `/` 的资管报表区，指标下钻、授权导出与抽样 |
 | P24 | 基础资料和人员交接 | `/transfers` 有人员交接入口；组织、人员、分类和库位维护页面入口缺失 |
-| P25 | 系统设置 | `/messages` 有值班及部分配置异常入口；账号启停、角色授撤、新建及密码重置已在后继 adbdfcd 接入 /system-accounts；数据范围和敏感字段已在 83d0337 通过实际 Chrome 与 MySQL 验证；业务参数维护页待补 |
+| P25 | 系统设置 | `/messages` 有值班及部分配置异常入口；账号启停、角色授撤、新建及密码重置已在后继 adbdfcd 接入 /system-accounts；数据范围和敏感字段已在 83d0337 通过实际 Chrome 与 MySQL 验证；业务参数已在 3d1a976 接入 /business-parameters 并通过实际 Chrome 和 MySQL 验证；通道、日志及全页动作仍需核对 |
 | P26 | PC 消息中心 | `/messages`，收件箱、异常、个人已读及原单下钻 |
 
 ## 小程序页面与模板
