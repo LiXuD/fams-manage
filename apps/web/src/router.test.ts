@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { router } from "./router";
 
-const NAV_GROUPS = ["总览", "资产", "业务流转", "异常与核查"];
+const NAV_GROUPS = ["总览", "资产", "业务流转", "异常与核查", "系统与主数据"];
 /** 登录与首次改密使用独立版面，不套外壳页头条。 */
 const BARE_ROUTES = new Set(["login", "password-change"]);
 /** 首屏入口三页同步加载，其余视图按路由切分。 */
@@ -19,10 +19,10 @@ describe("router 页头元数据", () => {
     }
   });
 
-  // 顺序解析 38 个路由 chunk，耗时随全量套件的 worker 竞争浮动，默认 5s 上限贴边。
+  // 顺序解析 46 个路由 chunk，耗时随全量套件的 worker 竞争浮动，默认 5s 上限贴边。
   it("除入口三页外每条路由都是可解析的懒加载工厂", async () => {
     const lazy = router.getRoutes().filter((route) => !EAGER_ROUTES.has(String(route.name)));
-    expect(lazy).toHaveLength(38);
+    expect(lazy).toHaveLength(46);
     for (const route of lazy) {
       const factory: unknown = route.components?.default;
       expect(typeof factory, `${String(route.name)} 未改为懒加载`).toBe("function");

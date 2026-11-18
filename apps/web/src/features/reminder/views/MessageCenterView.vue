@@ -120,7 +120,6 @@ const dutyRows = computed<DutyRow[]>(() => duties.value.map((duty) => ({
 const unreadText = computed(() => `未读 ${unread.value} 条`);
 const showEmpty = computed(() => rows.value.length === 0);
 const emptyText = computed(() => view.value === "EXCEPTION" ? EMPTY_EXCEPTION_TEXT : EMPTY_INBOX_TEXT);
-const listLabel = computed(() => view.value === "EXCEPTION" ? "异常清单" : "我的消息");
 const inboxDisabled = computed(() => busy.value || view.value === "INBOX");
 const exceptionDisabled = computed(() => busy.value || view.value === "EXCEPTION");
 const refreshDisabled = computed(() => busy.value);
@@ -236,7 +235,7 @@ onBeforeUnmount(clear);
       <button v-if="pendingRead" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="retryReadDisabled" @click="read(pendingRead.payload.id)">原请求重试已读登记</button>
     </div>
 
-    <section v-if="canSeeInbox" class="fams-panel fams-stack" :aria-label="listLabel">
+    <section v-if="canSeeInbox" class="fams-panel fams-stack" aria-label="业务消息">
       <p role="status">{{ unreadText }}</p>
       <article v-for="row in messageRows" :key="row.rowKey" class="fams-card fams-stack">
         <div class="fams-panel-head">

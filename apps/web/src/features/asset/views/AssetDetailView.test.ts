@@ -85,7 +85,7 @@ describe("资产详情", () => {
 
   it("在用资产给修正备注与打印标签，取消草稿只属于草稿卡", async () => {
     const active = await fixture();
-    expect(active.labels()).toEqual(["核对新旧实物换机关联", "复制建卡", "修正备注", "打印标签"]);
+    expect(active.labels()).toEqual(["核对新旧实物换机关联", "复制建卡", "修正备注", "打印标签", "确认实物贴标"]);
     active.wrapper.unmount();
     const draft = await fixture({ cardStage: "DRAFT", version: 1 });
     expect(draft.labels()).toEqual(["核对新旧实物换机关联", "复制建卡", "修正备注", "取消草稿"]);
@@ -99,7 +99,7 @@ describe("资产详情", () => {
     const f = await fixture();
     f.button("修正备注").trigger("click"); await flushPromises();
     expect(f.wrapper.find("div[role=\"group\"]").attributes("aria-label")).toBe("确认修正备注");
-    expect(f.labels()).toEqual(["核对新旧实物换机关联", "复制建卡", "修正备注", "打印标签", "确认修正备注", "返回修改"]);
+    expect(f.labels()).toEqual(["核对新旧实物换机关联", "复制建卡", "修正备注", "打印标签", "确认实物贴标", "确认修正备注", "返回修改"]);
     f.button("返回修改").trigger("click"); await flushPromises();
     f.button("复制建卡").trigger("click"); await flushPromises();
     f.button("返回修改").trigger("click"); await flushPromises();
@@ -118,7 +118,7 @@ describe("资产详情", () => {
     expect(api.update).toHaveBeenCalledWith("21", 7, { notes: "同意修正" });
     expect(f.wrapper.text()).toContain("备注已更新");
     expect(f.wrapper.text()).toContain("FA-2026-000101 · 已生效 · 版本 8");
-    expect(f.labels()).toEqual(["核对新旧实物换机关联", "复制建卡", "修正备注", "打印标签"]);
+    expect(f.labels()).toEqual(["核对新旧实物换机关联", "复制建卡", "修正备注", "打印标签", "确认实物贴标"]);
     f.wrapper.unmount();
   });
 

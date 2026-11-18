@@ -19,12 +19,13 @@ const businessReference = shallowRef("");
 const inventoryBefore = shallowRef("");
 const appliedFilters = shallowRef<AssetLedgerFilters & { code: string; name: string; accountId: string }>();
 const exporting = shallowRef(false);
+const exportError = shallowRef("");
 
 const canWrite = session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false;
 const canExport = computed(() => session.permissions?.fieldPermissions.includes("BULK_EXPORT") ?? false);
 const ASSET_ID = /^[1-9][0-9]*$/;
 
-const { rows, total, page, error, restart, pages, busy } = usePagedResourceList<AssetCard>(
+const { rows, total, page, error: requestError, restart, pages, busy } = usePagedResourceList<AssetCard>(
   async (page) => {
     const filters = {
       code: code.value.trim(), name: nameFilter.value.trim(),
@@ -38,11 +39,13 @@ const { rows, total, page, error, restart, pages, busy } = usePagedResourceList<
     return result;
   },
   { problem: (cause) => cause instanceof Error ? cause.message : "台账加载失败" });
+const error = computed(() => requestError.value || exportError.value);
 
 async function exportCurrent(): Promise<void> {
   const filters = appliedFilters.value;
   if (!canExport.value || !filters || busy.value || exporting.value || filters.accountId !== session.user?.id) return;
   exporting.value = true;
+  exportError.value = "";
   try {
     const file = await assetLedgerCsv(filters.code, filters.name, filters);
     if (filters.accountId !== session.user?.id || !canExport.value) return;
@@ -54,7 +57,7 @@ async function exportCurrent(): Promise<void> {
     finally { window.setTimeout(() => URL.revokeObjectURL(url), 0); }
   } catch (cause) {
     if (filters.accountId === session.user?.id) {
-      error.value = cause instanceof Error ? cause.message : "资产台账导出失败。";
+      exportError.value = cause instanceof Error ? cause.message : "资产台账导出失败。";
     }
   } finally { exporting.value = false; }
 }

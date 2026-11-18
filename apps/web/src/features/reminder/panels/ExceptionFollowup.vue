@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
-import { formatProxyTime } from "@/proxy/time";
+import { formatProxyTime } from "@/features/exception/time";
 
 interface Followup {
   findings: string;

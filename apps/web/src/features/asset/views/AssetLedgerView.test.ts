@@ -36,7 +36,7 @@ describe("资产台账列表", () => {
   it("只读台账一次，行操作与建卡入口指向路由", async () => {
     const f = await fixture();
     expect(api.list).toHaveBeenCalledTimes(1);
-    expect(api.list).toHaveBeenCalledWith(1, "", "");
+    expect(api.list).toHaveBeenCalledWith(1, "", "", { code: "", name: "", borrowOverdue: undefined, currentProcessorId: "", businessReference: "", inventoryBefore: "" });
     expect(f.wrapper.text()).toContain("FA-2026-000101");
     expect(f.wrapper.text()).toContain("办公笔记本 ThinkPad T14");
     expect(f.wrapper.text()).toContain("个人保管 · 责任人 9");
@@ -53,7 +53,7 @@ describe("资产台账列表", () => {
     expect(f.wrapper.findAll("a[data-destination]").map(a => a.text())).toEqual(["详情", "详情"]);
     expect(f.button("上一页").attributes("disabled")).toBeDefined();
     f.button("下一页").trigger("click"); await flushPromises();
-    expect(api.list).toHaveBeenLastCalledWith(2, "", "");
+    expect(api.list).toHaveBeenLastCalledWith(2, "", "", { code: "", name: "", borrowOverdue: undefined, currentProcessorId: "", businessReference: "", inventoryBefore: "" });
     expect(f.wrapper.text()).toContain("第 2 页");
     expect(f.wrapper.text()).toContain("共 25 项");
     f.wrapper.unmount();
@@ -65,7 +65,7 @@ describe("资产台账列表", () => {
     await f.control("ledger-code").setValue("000101");
     await f.control("ledger-name").setValue("显示器");
     await f.wrapper.find("form").trigger("submit"); await flushPromises();
-    expect(api.list).toHaveBeenLastCalledWith(1, "000101", "显示器");
+    expect(api.list).toHaveBeenLastCalledWith(1, "000101", "显示器", { code: "000101", name: "显示器", borrowOverdue: undefined, currentProcessorId: "", businessReference: "", inventoryBefore: "" });
     f.wrapper.unmount();
   });
 

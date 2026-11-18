@@ -58,7 +58,7 @@ async function declareUnavailable() {
   if (locked.value || blocked.value || !currentOperator.value || recorded.value) return;
   const trimmed = unavailableReason.value.trim();
   if (trimmed.length < 3) { error.value = "请填写无法继续处理的实际原因。"; return; }
-  prepare(() => ({ path: `/${props.repair.id}/processor-unavailability`, version: props.repair.version,
+  draft(() => ({ path: `/${props.repair.id}/processor-unavailability`, version: props.repair.version,
     body: { reason: trimmed, ownershipVersion: props.repair.ownershipVersion } }));
   if (!adopt()) return;
   await send();

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
-import AccountAuthorizationPanel from "./AccountAuthorizationPanel.vue";
+import AccountAuthorizationPanel from "../panels/AccountAuthorizationPanel.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import type { Role, SystemAccountStatus } from "@/auth/types";
 import { businessRequest as loanRequest, BusinessApiError as LoanApiError, type BusinessMutation as LoanMutation } from "@/api/business";
