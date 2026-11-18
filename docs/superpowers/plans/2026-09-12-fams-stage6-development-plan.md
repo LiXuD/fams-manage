@@ -2476,6 +2476,16 @@ Web 267 项、类型检查、lint 和构建通过，保留既有大包提示。�
 
 ### 2026-11-18 整合门禁的 npm 高危依赖阻塞
 
-固定候选 `ea93e29` 完整入口退出 1，最终停在 npm 高危审计。前序 Java、双端检查已运行，资源清理与工作树后检通过。原始日志见 `.worktrees/d6-stage6-account-settings-gate/output/d6-stage6-gate/full-ea93e29.log`。后继 `e878a7f` 已启动，结果按其实际退出继续登记。
+固定候选 `ea93e29` 完整入口退出 1，最终停在 npm 高危审计。前序 Java、双端检查已运行，资源清理与工作树后检通过。原始日志见 `.worktrees/d6-stage6-account-settings-gate/output/d6-stage6-gate/full-ea93e29.log`。后继 `e878a7f` 已结束，同在 npm 高危审计退出 1，结果见下方交接记录。
 
 当前锁定 picomatch 4.0.7，npm JSON 审计报告 12 项 high、13 项 moderate，high 由 picomatch 及依赖链关联。上游 [GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf) 标记 <=4.0.7 受影响，2026-11-17 更新时尚无已发布修复版，本机查询 registry 最新仍为 4.0.7。当前依赖审计证据见 `output/npm-audit-stage6.json`。门禁保留失败，父任务 D6-03 继续进行中。继续剩余本地功能及覆盖核对。
+
+### 2026-11-18 当前进度提交与推送交接
+
+用户要求交接并提交、推送已修改部分。当前开发分支 `codex/d6-03b-ci` 交接前为 `c5b49d7`；fetch 后与远端同分支为领先 133、落后 0。本次提交交接材料并推送同名分支，不合并 main、不修改根工作树的历史未提交内容。
+
+父任务重新统计为 17 DEV_VERIFIED、7 IN_PROGRESS、1 BLOCKED、2 NOT_STARTED，合计 27。用户再次确认长期未盘点沿用查询人指定截止日，现有 `1dc7cc8` 实现及证据符合该口径。
+
+固定 `e878a7f` 完整入口实际退出 1：保留契约、Java 553 项、Checkstyle/SpotBugs 零问题、行 93.01%/分支 75.81%、Web 267 项、小程序 347 项及类型/lint/构建通过，npm 审计失败；后续通用同卷恢复未执行。Compose 资源清理与干净工作树后检通过。完整日志与退出文件见 `.worktrees/d6-stage6-admin-pages-gate/output/d6-stage6-gate/`；不回写为完整通过。后继编号规则 `ea13045` 定向验证不替代新整合门禁或独立复核。
+
+当前范围、八个页面批次、失败边界、证据摘要及接续顺序详见 [2026-11-18 交接快照](../../development/2026-11-18-current-progress-handoff.md)。系统日志及通道仍在调查，尚无新功能代码；D6-26/27 保持未开始。

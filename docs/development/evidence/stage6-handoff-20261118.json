@@ -1,0 +1,96 @@
+{
+  "date": "2026-11-18",
+  "branch": "codex/d6-03b-ci",
+  "head_before_handoff": "c5b49d7a7989681e5d7df147129a8df2cfdc6e2b",
+  "parent_tasks": {
+    "DEV_VERIFIED": 17,
+    "IN_PROGRESS": 7,
+    "BLOCKED": 1,
+    "NOT_STARTED": 2,
+    "total": 27
+  },
+  "fixed_candidates": [
+    {
+      "candidate": "ea93e2982c2d89d32d976cec271419e5f8cafbf2",
+      "source": "83d033750813776a41d6b924a30ef357de441c35",
+      "tree": "d7ac1bc9ccfa1ac30f9be2079139f5a34aae52dc",
+      "same_tree": true,
+      "full_gate_exit": 1,
+      "failure": "npm high-severity audit",
+      "cleanup_exit": 0,
+      "clean_postflight_exit": 0
+    },
+    {
+      "candidate": "e878a7fec176a2839e922036854d4184e2bbb9f7",
+      "source": "7d92dc0db351ed0cf47966048568901d0922b879",
+      "tree": "6aedcbf9396122b83e208bcf6ca5336ef68d6d02",
+      "same_tree": true,
+      "full_gate_exit": 1,
+      "failure": "npm high-severity audit",
+      "cleanup_exit": 0,
+      "clean_postflight_exit": 0
+    }
+  ],
+  "admin_gate_passed_before_failure": {
+    "java_tests": 553,
+    "checkstyle_findings": 0,
+    "spotbugs_findings": 0,
+    "java_line_coverage_percent": 93.01,
+    "java_branch_coverage_percent": 75.81,
+    "web_tests": 267,
+    "mini_tests": 347,
+    "typecheck": true,
+    "lint": true,
+    "build": true
+  },
+  "admin_gate_generic_same_volume_recovery_executed": false,
+  "numbering_candidate": {
+    "commit": "ea13045dd1b5a0dad3e0ec0a722227183e42c901",
+    "web_tests": 270,
+    "http_and_architecture_tests": 7,
+    "complete_gate_executed": false,
+    "independent_review_complete": false
+  },
+  "evidence": [
+    {
+      "kind": "account_gate_log",
+      "local_path_from_repo_root": ".worktrees/d6-stage6-account-settings-gate/output/d6-stage6-gate/full-ea93e29.log",
+      "sha256": "366764263ad654f598452c540aa471f528d76a5843ab1124649ca73045bc353a",
+      "bytes": 73782,
+      "raw_file_pushed": false
+    },
+    {
+      "kind": "admin_gate_log",
+      "local_path_from_repo_root": ".worktrees/d6-stage6-admin-pages-gate/output/d6-stage6-gate/full-e878a7f.log",
+      "sha256": "7a000ce75144022b6af16b1fc2afb395835e5e3c621f248c3998c69a4aa8f7da",
+      "bytes": 73850,
+      "raw_file_pushed": false
+    },
+    {
+      "kind": "numbering_browser_persistence",
+      "local_path_from_repo_root": ".worktrees/d6-ci/output/d6-25-numbering-rules/browser-persistence.txt",
+      "sha256": "39fe6f3eb46f5fa9199fb2ba83b07373eb9aaa24be529430f5ed90e78e012a35",
+      "bytes": 254,
+      "raw_file_pushed": false
+    },
+    {
+      "kind": "numbering_http_exit",
+      "local_path_from_repo_root": ".worktrees/d6-ci/output/d6-25-numbering-rules/http-mysql-node24.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2,
+      "raw_file_pushed": false
+    },
+    {
+      "kind": "npm_audit",
+      "local_path_from_repo_root": ".worktrees/d6-ci/output/npm-audit-stage6.json",
+      "sha256": "afa5e2f65eb5ffb2bb15020d21c2a297dbff7831ec37353847ecc0cc13e0455f",
+      "bytes": 13755,
+      "raw_file_pushed": false
+    }
+  ],
+  "limitations": [
+    "Raw output artifacts are local and ignored; only this summary is pushed.",
+    "No remote CI, real SMS/WeChat/device, formal QA or production acceptance claim.",
+    "Root checkout historical uncommitted changes are excluded."
+  ]
+}
