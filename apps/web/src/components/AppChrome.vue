@@ -31,7 +31,7 @@ async function handleLogout(): Promise<void> {
     <div class="workspace" :class="{ 'workspace-anonymous': !session.isAuthenticated }">
       <nav v-if="session.isAuthenticated" class="sidebar" aria-label="主导航">
         <router-link to="/" class="nav-item nav-item-active">工作台</router-link>
-        <span v-if="session.hasPermission('ACCOUNT_ADMIN')" class="nav-note">账号与角色 · 后续开放</span>
+        <router-link v-if="session.user?.roles.includes('SYSTEM_ADMIN')" to="/system-accounts" class="nav-item">账号与角色</router-link>
         <router-link v-if="session.hasPermission('ASSET_LEDGER_READ')" to="/assets" class="nav-item">资产台账</router-link>
         <router-link v-if="session.user?.roles.includes('WAREHOUSE_OPERATOR')" to="/asset-imports"
           class="nav-item">批量导入</router-link>
