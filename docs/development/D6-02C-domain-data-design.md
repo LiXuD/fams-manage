@@ -211,6 +211,7 @@ OpenAPI `Asset` 到事实来源的完整映射：
 | `creator` | `creator_account_id` 与 `creator_username_snapshot`，不依赖账号当前名称 |
 | `usageMode` | `custody_type` 为 `PERSONAL/SHARED` 时同值；`STORAGE` 或无正式保管时省略 |
 | `currentCustody` | 六个正式保管列；引用版本从当前主数据行读取，按互斥组合生成一个分支 |
+| `physicalDestination` | `fams_requisition_allocation` 的活动已交出或待收回明细联查 `fams_requisition_handover`，提供临时去向、经手人、交出时间与接收截止；无匹配明细时省略 |
 | `openBusinessSummary` | 当前活动业务锁、未结单据与处理权的只读聚合；不在资产行冗余保存 |
 | `inboundBusinessDate`、`lastInventoryBusinessDate` | 两个 `DATE` 列直接输出，不做 UTC 换日 |
 
@@ -405,6 +406,7 @@ OpenAPI 入库读模型到事实来源的完整映射：
 | `adminDecisionDueAt`、`warehouseClaimDueAt`、`warehouseFirstExecutionDueAt` | 三个持久 UTC 截止时刻；不在读取时重算 |
 | `parameterVersionId`、`snapshot`、`items` | 单头冻结参数列与按 `receipt_id` 稳定排序的明细 |
 | `decision`、`currentProcessor` | 唯一决定行与最新处理权行；终态处理权仍带归档时刻 |
+| `factoryReplacement` | `fams_inbound_factory_replacement_origin` 按 `receipt_id` 提供来源、原机、新机、维修单及轮次；其他入库单省略 |
 | `cancelledAt`、`cancellationReason`、`completedAt` | 单头取消/完成事实列 |
 | `InboundReceiptSnapshot`: `parameterVersionId`、`businessDate`、`timezone` | 单头参数 ID、`business_date` 与时区；业务日期随草稿保存同步，提交后冻结 |
 | `adminDecisionDeadlineWorkdays`、`warehouseClaimDeadlineWorkdays`、`warehouseFirstExecutionDeadlineWorkdays` | 单头三个冻结工作日数 |

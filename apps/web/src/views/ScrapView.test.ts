@@ -279,7 +279,8 @@ it("runs the controlled correction from frozen invalid custody through approved 
         row.actions.claimCorrection = false; row.actions.executeCorrection = true;
         row.correction = { ...correction, version: 2, status: "PROCESSING", ownershipVersion: 1, processorAccountId: "1" };
       } else if (url.endsWith("/execute")) {
-        row.actions.executeCorrection = false; row.correction = null; row.status = "CORRECTED";
+        row.actions.executeCorrection = false; row.status = "CORRECTED";
+        row.correction = { ...correction, version: 3, status: "COMPLETED", ownershipVersion: 1, processorAccountId: "1" };
       }
       return response({ id: row.id });
     }
@@ -326,6 +327,7 @@ it("runs the controlled correction from frozen invalid custody through approved 
   expect(JSON.parse(String(writes[3]?.input.body))).toMatchObject({ assetVersion: 3, lockVersion: 5,
     ownershipVersion: 1, locationVersion: 8, observedCode: "ORIGINAL-1", physicalIdentityVerified: true });
   expect(wrapper.text()).toContain("冻结保管已受控纠正恢复");
+  expect(wrapper.text()).toContain("纠正进度 纠正已恢复在库");
   wrapper.unmount();
 });
 
@@ -350,7 +352,8 @@ it("runs the reversal of an executed but un-disposed scrap through approved bin 
         row.actions.claimReversal = false; row.actions.executeReversal = true;
         row.reversal = { ...reversal, version: 2, status: "PROCESSING", ownershipVersion: 1, processorAccountId: "1" };
       } else if (url.endsWith("/execute")) {
-        row.actions.executeReversal = false; row.reversal = null;
+        row.actions.executeReversal = false;
+        row.reversal = { ...reversal, version: 3, status: "COMPLETED", ownershipVersion: 1, processorAccountId: "1" };
         row.disposition = { ...row.disposition!, disposition_status: "REVERSED", version: 9 };
       }
       return response({ id: row.id });
@@ -398,6 +401,7 @@ it("runs the reversal of an executed but un-disposed scrap through approved bin 
   expect(JSON.parse(String(writes[3]?.input.body))).toMatchObject({ assetVersion: 3,
     ownershipVersion: 1, locationVersion: 8, observedCode: "ORIGINAL-1", physicalIdentityVerified: true });
   expect(wrapper.text()).toContain("处置进度 已因冲正撤销");
+  expect(wrapper.text()).toContain("冲正进度 冲正已恢复在库");
   wrapper.unmount();
 });
 
@@ -424,7 +428,8 @@ it("registers a post-scrap recovery and re-accepts the original card after write
         row.actions.claimRecovery = false; row.actions.executeRecovery = true;
         row.recovery = { ...recovery, version: 2, status: "PROCESSING", ownershipVersion: 1, processorAccountId: "1" };
       } else if (url.endsWith("/execute")) {
-        row.actions.executeRecovery = false; row.recovery = null;
+        row.actions.executeRecovery = false;
+        row.recovery = { ...recovery, version: 3, status: "COMPLETED", ownershipVersion: 1, processorAccountId: "1" };
       }
       return response({ id: row.id });
     }
@@ -481,7 +486,7 @@ it("registers a post-scrap recovery and re-accepts the original card after write
   expect(JSON.parse(String(writes[3]?.input.body))).toMatchObject({ assetVersion: 3, ownershipVersion: 1,
     locationVersion: 8, observedCode: "ORIGINAL-1", observedSerial: "SERIAL-1", physicalIdentityVerified: true });
   expect(wrapper.text()).toContain("处置进度 遗失核销");
-  expect(wrapper.text()).not.toContain("找回进度");
+  expect(wrapper.text()).toContain("找回进度 找回已验收入库");
   wrapper.unmount();
 });
 

@@ -10,7 +10,6 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -53,16 +52,10 @@ public class DutyEscalationService {
     }
 
     public void escalate() {
-        JsonNode active = activeSnapshot();
-        if (active == null) {
-            return;
-        }
-        var thresholds = active.path("notificationEscalationThresholds");
         var now = clock.instant();
-        var today = now.atZone(zone(active)).toLocalDate();
         var stages = List.of(
                 new Stage("INBOUND", "ADMIN_DECISION", "ASSET_ADMIN",
-                        thresholds.path("administratorUnreadHours").asInt(0), staged("""
+                        "administratorUnreadHours", staged("""
                          SELECT r.id notice_id,r.created_at notice_at,x.id business_id,
                                 x.admin_decision_due_at deadline_at,v.snapshot_json
                            FROM fams_inbound_receipt x
@@ -72,7 +65,7 @@ public class DutyEscalationService {
                                 AND r.deadline_at=x.admin_decision_due_at
                           WHERE x.receipt_status='PENDING_ADMIN_DECISION'""")),
                 new Stage("INBOUND", "WAREHOUSE_CLAIM", "WAREHOUSE_OPERATOR",
-                        thresholds.path("onDutyWarehouseOperatorUnreadHours").asInt(0), staged("""
+                        "onDutyWarehouseOperatorUnreadHours", staged("""
                          SELECT r.id notice_id,r.created_at notice_at,x.id business_id,
                                 x.warehouse_claim_due_at deadline_at,v.snapshot_json
                            FROM fams_inbound_receipt x
@@ -82,7 +75,7 @@ public class DutyEscalationService {
                                 AND r.deadline_at=x.warehouse_claim_due_at
                           WHERE x.receipt_status='WAITING_WAREHOUSE_CLAIM'""")),
                 new Stage("INBOUND", "FIRST_EXECUTION", "WAREHOUSE_OPERATOR",
-                        thresholds.path("firstExecutionOverdueNaturalDays").asInt(0), staged("""
+                        "firstExecutionOverdueNaturalDays", staged("""
                          SELECT r.id notice_id,r.created_at notice_at,x.id business_id,
                                 x.warehouse_first_execution_due_at deadline_at,v.snapshot_json
                            FROM fams_inbound_receipt x
@@ -94,7 +87,7 @@ public class DutyEscalationService {
                 // The receipt ladder is addressed to the receiving employee, who holds no duty role, so both the
                 // unread escalation and the group notice answer to the administrators responsible for the handover.
                 new Stage("REQUISITION_ALLOCATION", "HANDOVER_RECEIPT", "ASSET_ADMIN",
-                        thresholds.path("receiptDueUnreadHours").asInt(0), staged("""
+                        "receiptDueUnreadHours", staged("""
                          SELECT r.id notice_id,r.created_at notice_at,x.id business_id,
                                 h.receipt_deadline_at deadline_at,q.parameter_snapshot_json snapshot_json
                            FROM fams_requisition_allocation x
@@ -105,7 +98,7 @@ public class DutyEscalationService {
                                 AND r.reminder_type='OVERDUE' AND r.deadline_at=h.receipt_deadline_at
                           WHERE x.allocation_status='DELIVERED_WAITING_RECEIPT'""")),
                 new Stage("TRANSFER_ITEM", "HANDOVER_RECEIPT", "ASSET_ADMIN",
-                        thresholds.path("receiptDueUnreadHours").asInt(0), staged("""
+                        "receiptDueUnreadHours", staged("""
                          SELECT r.id notice_id,r.created_at notice_at,x.id business_id,
                                 x.receipt_deadline_at deadline_at,x.parameter_snapshot_json snapshot_json
                            FROM fams_transfer_item x
@@ -115,11 +108,11 @@ public class DutyEscalationService {
                           WHERE x.item_status='DELIVERED'""")));
 
         for (var stage : stages) {
-            escalateUnread(stage, today, now);
+            escalateUnread(stage, now);
         }
         var administrators = db.queryForList(EFFECTIVE_MEMBER, Long.class, "ASSET_ADMIN");
         for (var stage : stages) {
-            escalateGroup(stage, administrators, today);
+            escalateGroup(stage, administrators, now);
         }
     }
 
@@ -128,19 +121,21 @@ public class DutyEscalationService {
      * is expected to open. The first-execution threshold is the exception: it counts whole natural days past the due
      * date, matching the product's "overdue one day and unread" wording.
      */
-    private void escalateUnread(Stage stage, LocalDate today, Instant now) {
-        if (stage.threshold() <= 0) {
-            return;
-        }
+    private void escalateUnread(Stage stage, Instant now) {
         for (var entry : stage.cases()) {
+            int threshold = entry.snapshot().path("notificationEscalationThresholds").path(stage.thresholdKey()).asInt(0);
+            if (threshold <= 0) {
+                continue;
+            }
+            var today = now.atZone(entry.zone()).toLocalDate();
             var ready = "FIRST_EXECUTION".equals(stage.stage())
-                    ? !today.isBefore(entry.dueDate().plusDays(stage.threshold()))
-                    : !now.isBefore(entry.noticeAt().plusMillis(stage.threshold() * 3_600_000L));
+                    ? !today.isBefore(entry.dueDate().plusDays(threshold))
+                    : !now.isBefore(entry.noticeAt().plusMillis(threshold * 3_600_000L));
             if (!ready) {
                 continue;
             }
             for (var target : targets(stage.pool())) {
-                if (db.queryForList("SELECT" + UNREAD, Long.class, target, entry.noticeId()).isEmpty()) {
+                if (db.queryForList(UNREAD, Long.class, target, entry.noticeId()).isEmpty()) {
                     record(stage.businessType(), entry.businessId(), stage.stage(), stage.pool(),
                             "DUTY_UNREAD_ESCALATION", entry.deadlineAt(), target, today);
                 }
@@ -148,12 +143,13 @@ public class DutyEscalationService {
         }
     }
 
-    private void escalateGroup(Stage stage, List<Long> administrators, LocalDate today) {
+    private void escalateGroup(Stage stage, List<Long> administrators, Instant now) {
         if (administrators.isEmpty()) {
             return;
         }
         for (var entry : stage.cases()) {
-            if (today.isBefore(BusinessCalendar.nthWorkday(entry.snapshot(), entry.zone(), entry.deadlineAt(), 2))
+            var today = now.atZone(entry.zone()).toLocalDate();
+            if (now.isBefore(entry.unhandledAfterWorkday())
                     || "INBOUND".equals(stage.businessType()) && reassigned(entry)) {
                 continue;
             }
@@ -191,7 +187,7 @@ public class DutyEscalationService {
     private List<Long> targets(String pool) {
         var effective = db.queryForList(EFFECTIVE_MEMBER, Long.class, pool);
         var duty = db.queryForList(" SELECT primary_account_id,backup_account_id FROM fams_duty_assignment"
-                + " WHERE role_code=? AND duty_status='ACTIVE'", Map.class, pool);
+                + " WHERE role_code=? AND duty_status='ACTIVE'", pool);
         if (duty.isEmpty()) {
             return effective;
         }
@@ -221,17 +217,6 @@ public class DutyEscalationService {
         }
     }
 
-    private JsonNode activeSnapshot() {
-        var rows = db.queryForList(" SELECT snapshot_json FROM fams_business_parameter_version"
-                + " WHERE status='ACTIVE' ORDER BY version DESC LIMIT 1", String.class);
-        return rows.isEmpty() ? null : json.readTree(rows.getFirst());
-    }
-
-    private static ZoneId zone(JsonNode snapshot) {
-        var timezone = snapshot.path("timezone").asText("");
-        return timezone.isBlank() ? FALLBACK_ZONE : ZoneId.of(timezone);
-    }
-
     private static Instant instant(Object value) {
         if (value instanceof Timestamp timestamp) {
             return timestamp.toInstant();
@@ -244,11 +229,19 @@ public class DutyEscalationService {
         return ((Number) value).longValue();
     }
 
-    private record Stage(String businessType, String stage, String pool, int threshold, List<Case> cases) { }
+    private record Stage(String businessType, String stage, String pool, String thresholdKey, List<Case> cases) { }
 
     private record Case(long noticeId, long businessId, Instant deadlineAt, Instant noticeAt, JsonNode snapshot) {
         private LocalDate dueDate() {
             return deadlineAt.atZone(zone()).toLocalDate();
+        }
+
+        private Instant unhandledAfterWorkday() {
+            ZoneId zone = zone();
+            Instant dayStart = dueDate().atStartOfDay(zone).toInstant();
+            // A midnight deadline leaves that whole workday available for the grace period.
+            Instant workdayAnchor = deadlineAt.equals(dayStart) ? deadlineAt.minusNanos(1) : deadlineAt;
+            return BusinessCalendar.workdayDeadline(snapshot, zone, workdayAnchor, 1);
         }
 
         private ZoneId zone() {

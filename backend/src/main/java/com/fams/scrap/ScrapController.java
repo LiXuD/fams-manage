@@ -294,10 +294,11 @@ public class ScrapController {
         return ResponseEntity.status(failure.status()).body(new ErrorResponse(code, code, requestId, Map.of()));
     }
 
-    @ExceptionHandler(org.springframework.web.method.annotation.HandlerMethodValidationException.class)
-    ResponseEntity<ErrorResponse> invalidRequest(
-            org.springframework.web.method.annotation.HandlerMethodValidationException failure,
-            HttpServletRequest request) {
+    @ExceptionHandler({
+        org.springframework.web.method.annotation.HandlerMethodValidationException.class,
+        org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class
+    })
+    ResponseEntity<ErrorResponse> invalidRequest(HttpServletRequest request) {
         UUID requestId = request.getAttribute("fams.request.id") instanceof UUID id ? id : UUID.randomUUID();
         return ResponseEntity.badRequest().body(new ErrorResponse("INVALID_REQUEST",
                 "Request validation failed.", requestId, Map.of()));

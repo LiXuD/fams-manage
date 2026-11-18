@@ -1474,7 +1474,8 @@ class LossHttpRuntimeCase {
         assertEquals(2L, db.queryForObject("SELECT COUNT(*) FROM fams_scrap_receipt WHERE scrap_request_id=?"
                 + " AND operation=?", Long.class, id, "RECOVERY:" + id));
         var closed = ok(getScrap(employee, path));
-        org.junit.jupiter.api.Assertions.assertTrue(closed.path("recovery").isNull());
+        assertEquals(rid, closed.path("recovery").path("id").asText());
+        assertEquals("COMPLETED", closed.path("recovery").path("status").asText());
         assertEquals(false, closed.path("actions").path("initiateRecovery").asBoolean());
         assertEquals("LOSS_WRITTEN_OFF", closed.path("disposition").path("disposition_status").asText());
         assertEquals(409, postScrap(employee, path + "/recoveries", open, requestVersion, key()).statusCode());

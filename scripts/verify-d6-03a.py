@@ -1050,6 +1050,17 @@ def duty_jdbc_url(context: RuntimeContext) -> str:
     )
 
 
+def duty_escalation_database(context: RuntimeContext) -> str:
+    return auth_database(context).replace("d6-04", "d6-24c2")
+
+
+def duty_escalation_jdbc_url(context: RuntimeContext) -> str:
+    return (
+        f"jdbc:mysql://127.0.0.1:{context.mysql_port}/{duty_escalation_database(context)}"
+        "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+    )
+
+
 def provision_auth_database(context: RuntimeContext) -> None:
     database = auth_database(context)
     asset_schema = asset_database(context)
@@ -1059,6 +1070,7 @@ def provision_auth_database(context: RuntimeContext) -> None:
     reminder_schema = reminder_database(context)
     message_schema = message_database(context)
     duty_schema = duty_database(context)
+    escalation_schema = duty_escalation_database(context)
     sql = (
         f"CREATE DATABASE IF NOT EXISTS `{database}` "
         "CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; "
@@ -1076,6 +1088,8 @@ def provision_auth_database(context: RuntimeContext) -> None:
         "CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; "
         f"CREATE DATABASE IF NOT EXISTS `{duty_schema}` "
         "CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; "
+        f"CREATE DATABASE IF NOT EXISTS `{escalation_schema}` "
+        "CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; "
         "SET GLOBAL log_bin_trust_function_creators=1; "
         f"CREATE USER IF NOT EXISTS 'd6_04_runtime'@'%' IDENTIFIED BY '{context.password}'; "
         f"ALTER USER 'd6_04_runtime'@'%' IDENTIFIED BY '{context.password}'; "
@@ -1087,6 +1101,7 @@ def provision_auth_database(context: RuntimeContext) -> None:
         f"GRANT ALL PRIVILEGES ON `{reminder_schema}`.* TO 'd6_04_runtime'@'%';"
         f"GRANT ALL PRIVILEGES ON `{message_schema}`.* TO 'd6_04_runtime'@'%';"
         f"GRANT ALL PRIVILEGES ON `{duty_schema}`.* TO 'd6_04_runtime'@'%';"
+        f"GRANT ALL PRIVILEGES ON `{escalation_schema}`.* TO 'd6_04_runtime'@'%';"
     )
     require_command(
         "D6-04 authentication database provisioning",
@@ -1145,6 +1160,9 @@ def runtime_environment(context: RuntimeContext) -> dict[str, str]:
             "D6_24C_TEST_DATASOURCE_URL": duty_jdbc_url(context),
             "D6_24C_TEST_DATASOURCE_USERNAME": "d6_04_runtime",
             "D6_24C_TEST_DATASOURCE_PASSWORD": context.password,
+            "D6_24C2_TEST_DATASOURCE_URL": duty_escalation_jdbc_url(context),
+            "D6_24C2_TEST_DATASOURCE_USERNAME": "d6_04_runtime",
+            "D6_24C2_TEST_DATASOURCE_PASSWORD": context.password,
         }
     )
     return environment
@@ -1311,6 +1329,8 @@ def verify_java_quality(context: RuntimeContext) -> None:
              "-Dd6.24.messages.runtime=true", "MessagesHttpRuntimeCase"),
             ("duty chain admin-only, version-guarded and idempotent V67",
              "-Dd6.24.duty.runtime=true", "DutyHttpRuntimeCase"),
+            ("duty escalation thresholds and occurrence dedupe V68",
+             "-Dd6.24.duty.escalation.runtime=true", "DutyEscalationRuntimeCase"),
             ("scrap submission freeze, audit rollback and receipt HTTP",
              "-Dd6.22.scrap.submit.runtime=true", "ScrapSubmitHttpRuntimeCase"),
             ("actual independent loss verification HTTP", "-Dd6.21.loss.runtime=true",

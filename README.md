@@ -1,8 +1,8 @@
 # FAMS 固定资产管理系统
 
-面向企业的固定资产管理项目，包含 PC 管理端、原生微信小程序和 Java 后端。围绕资产台账、入库、领用、借用归还、调拨与人员交接构建业务流程，并提供身份权限、主数据、附件和审计能力。
+面向企业的固定资产管理项目，包含 PC 管理端、原生微信小程序和 Java 后端。覆盖资产台账、入库、领退、借还、调拨、盘点、维修、报失与报废，提供身份权限、附件和审计能力。
 
-> 项目正在第六阶段「技术开发与实现」。已完成的内部能力经过本地开发验证和用户复核；远端 CI、正式 QA、生产验收及真实短信、微信和真机联调尚未完成。当前状态与下一步以 [项目交接入口](DESIGN-HANDOFF.md) 和 [开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md) 为准。
+> 项目正在第六阶段「技术开发与实现」。本地开发验证及独立复核按交付候选记录。远端 CI、正式 QA、生产验收及真实短信、微信和真机联调尚未完成。当前状态与下一步以 [项目交接入口](DESIGN-HANDOFF.md) 和 [开发计划](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md) 为准。
 
 ## 当前能力
 
@@ -13,7 +13,10 @@
 - 小程序身份会话、短信绑定与换绑的内部实现。
 - 领用申请与审批、交出接收、借用归还、调拨和人员交接。
 
-D6-14 已通过用户复核，下一内部开发项为 D6-15。外部通道及真机验收仍按计划后置；具体子任务状态和验证证据见开发计划及 `docs/development/` 下的任务卡。
+- 盘点任务、离线采集、差异复核与封存，内部维修、返厂、报失找回与报废处置。
+- 双端消息中心与异常清单。第四批交付分支另有配置异常、停用转派、部分短信兜底和资产管理员工作台报表。
+
+主线、开发分支和固定验证候选见[当前开发基线](DESIGN-HANDOFF.md#1-当前开发基线)。
 
 ## 技术栈
 
@@ -149,7 +152,7 @@ rtk python3 scripts/verify-product-development.py
 
 该门禁要求工作区干净、锁定工具链可用且 Docker 已启动；脚本创建独有数据库运行环境，执行 Java / TypeScript 质量、依赖完整性及服务恢复验证，并在结束时清理其创建的资源。本地通过仅表示对应候选的开发验证结果，不替代远端 CI、正式 QA 或生产验收。
 
-调拨与交接的专项真实数据库 / HTTP 检查：
+调拨与交接可单独运行真实数据库和 HTTP 检查。其他业务的验证入口及证据见[开发计划执行记录](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)。
 
 ```sh
 rtk python3 scripts/verify-d6-14-runtime.py
@@ -167,7 +170,7 @@ rtk python3 scripts/verify-d6-14-runtime.py
 
 ## 项目文档
 
-- [项目阶段与交接入口](DESIGN-HANDOFF.md)
+- [项目阶段、开发基线与未完成任务](DESIGN-HANDOFF.md)
 - [产品需求 PRD V1.5](docs/superpowers/specs/2026-09-03-fixed-asset-product-design.md)
 - [信息架构与交互设计](docs/superpowers/specs/2026-09-06-fixed-asset-ia-interaction-design.md)
 - [第六阶段开发计划与任务台账](docs/superpowers/plans/2026-09-12-fams-stage6-development-plan.md)
