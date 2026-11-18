@@ -19,7 +19,7 @@ describe("identity administration", () => {
   });
   it("denies business-only administrators before loading identity data", async () => {
     mock.session.user = { id: "2", roles: ["ASSET_ADMIN"] };
-    const wrapper = mount(IdentityAdminView);
+    const wrapper = mount(IdentityAdminView, { global: { stubs: { RouterLink: true } } });
     await flushPromises();
     expect(mock.request).not.toHaveBeenCalled();
     expect(wrapper.find("table").exists()).toBe(false);
@@ -34,7 +34,7 @@ describe("identity administration", () => {
       }
       return { items: [organization], total: 1 };
     });
-    const wrapper = mount(IdentityAdminView); await flushPromises();
+    const wrapper = mount(IdentityAdminView, { global: { stubs: { RouterLink: true } } }); await flushPromises();
     await wrapper.findAll("button").find(button => button.text() === "维护")!.trigger("click");
     await wrapper.findAll('input')[1].setValue("新组织");
     await wrapper.get("form").trigger("submit"); await flushPromises();
@@ -51,7 +51,7 @@ describe("identity administration", () => {
       if (path === "/organizations/9007199254740993") return organization;
       return { items: [], total: 0 };
     });
-    const wrapper = mount(IdentityAdminView); await flushPromises();
+    const wrapper = mount(IdentityAdminView, { global: { stubs: { RouterLink: true } } }); await flushPromises();
     await wrapper.findAll("button").find(button => button.text() === "人员")!.trigger("click");
     await flushPromises();
     await wrapper.findAll("button").find(button => button.text() === "新建员工")!.trigger("click");

@@ -165,7 +165,10 @@ watch([identity, kind], () => {
           <td>{{ row.id }}</td><td>{{ row.code ?? row.employeeNo }}</td><td>{{ row.name ?? row.displayName }}</td>
           <td>{{ (row.organization ?? row.parentOrganization)?.id ?? "根组织" }}</td>
           <td>{{ row.status }}</td><td>{{ row.version }}</td>
-          <td><button :disabled="busy || !!pending" @click="open(row)">维护</button></td>
+          <td><button :disabled="busy || !!pending" @click="open(row)">维护</button>
+            <router-link v-if="kind === 'employees' && !pending && !busy"
+              :to="{ name: 'employee-phone-corrections', query: { employeeId: row.id } }">纠正手机号</router-link>
+          </td>
         </tr></tbody>
       </table>
       <p>第 {{ page }} 页，共 {{ total }} 条</p>
