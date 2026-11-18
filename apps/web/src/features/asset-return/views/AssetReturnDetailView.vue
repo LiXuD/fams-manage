@@ -27,6 +27,9 @@ const warehouse = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATO
 const bins = computed(() => locations.value.filter(l => l.warehouseId === warehouseId.value));
 const canInspect = computed(() => warehouse.value && selected.value?.returnStatus === "WAREHOUSE_PROCESSING"
   && selected.value.processorAccountId === session.user?.id);
+const canDeclareReturnUnavailable = computed(() => canInspect.value
+  && selected.value?.lockVersion != null && selected.value?.ownershipVersion != null);
+const declareReturnUnavailableDisabled = computed(() => formDisabled.value || !reason.value.trim());
 const canDecide = computed(() => admin.value && selected.value?.returnStatus === "PENDING_APPROVAL");
 const canClaim = computed(() => warehouse.value && selected.value?.returnStatus === "WAITING_WAREHOUSE_CLAIM");
 const canReassign = computed(() => admin.value && selected.value?.returnStatus === "WAREHOUSE_PROCESSING");
@@ -194,8 +197,8 @@ onMounted(async () => {
       <AssetReturnReassignment v-if="canReassign"
         :id="selected.id" :version="selected.version" @saved="refresh" />
 
-      <button v-if="canInspect && selected.lockVersion != null && selected.ownershipVersion != null"
-        class="fams-button" data-kind="secondary" type="button" :disabled="formDisabled || !reason.trim()"
+      <button v-if="canDeclareReturnUnavailable"
+        class="fams-button" data-kind="secondary" type="button" :disabled="declareReturnUnavailableDisabled"
         @click="mutate(`/asset-returns/${selected.id}/reassignment/unavailable`, selected.version, { reason: reason.trim(), ownershipVersion: selected.ownershipVersion })">登记无法继续验收</button>
 
       <div v-if="canInspect" class="fams-stack">

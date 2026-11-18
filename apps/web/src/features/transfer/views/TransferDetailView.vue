@@ -80,6 +80,7 @@ const isProcessor = computed(() => { const s = selected.value;
 const showExecuteFields = computed(() => { const s = selected.value;
   return !!operator.value && !!s && s.processorAccountId === session.user?.id
     && ["PROCESSING", "WAITING_HANDOVER"].includes(s.requestStatus); });
+const unavailableDisabled = computed(() => busy.value || retryable.value || !unavailableReason.value.trim());
 const showReassignment = computed(() => { const s = selected.value;
   return !!admin.value && !!s && ["PROCESSING", "WAITING_HANDOVER"].includes(s.requestStatus); });
 type TransferRow = TransferItem & {
@@ -184,7 +185,7 @@ onMounted(async () => {
       <div v-if="showExecuteFields" class="fams-field-grid">
         <label class="fams-field"><span class="fams-field-label">无法继续处理的原因</span>
           <textarea class="fams-control" v-model="unavailableReason" :disabled="busy || retryable" maxlength="1000" /></label>
-        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || retryable || !unavailableReason.trim()"
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="unavailableDisabled"
           @click="mutate(`/transfers/${selected.id}/reassignment/unavailable`, selected.version,
             { ownershipVersion: selected.ownershipVersion, reason: unavailableReason.trim() })">登记无法继续处理</button>
         <label class="fams-field"><span class="fams-field-label">实物编码 / 当前二维码</span>

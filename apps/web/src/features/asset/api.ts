@@ -122,6 +122,16 @@ export function reprintTag(id: string, version: number): Promise<{ jobId: string
     "POST", {}, version);
 }
 
+/**
+ * 实物贴标确认：写请求三件套（CSRF + Idempotency-Key + If-Match-Version）语义与改造前逐字一致。
+ * 幂等键由提交底座（useConfirmedSubmit）持有并原样传入，重试不换键；端点与请求体不变。
+ */
+export function confirmTagPlacement(input: { assetId: string; version: number; token: string },
+  key: string): Promise<unknown> {
+  return requestJson<unknown, AssetApiError>(`/assets/${input.assetId}/tag/placement`, profile,
+    { method: "POST", key, version: input.version, json: { token: input.token } });
+}
+
 export function activeReferences(path: string, page = 1, pageSize = 200): Promise<Page<AssetReference>> {
   return request<Page<AssetReference>>(path + "/active-references?page=" + page + "&pageSize=" + pageSize);
 }

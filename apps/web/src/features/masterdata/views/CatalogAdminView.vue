@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, shallowRef, watch } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useConfirmedSubmit, type Submission } from "@/composables/useConfirmedSubmit";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { masterDataRequest, MasterDataApiError, type MasterDataMutation } from "@/features/masterdata/api";
 
 const catalogNames = { "asset-categories": "资产分类", brands: "品牌", manufacturers: "厂商",
@@ -23,22 +25,51 @@ const referenceDefinitions: Record<Catalog, { field: ReferenceField; catalog: Ca
     { field: "warehouse", catalog: "warehouses", label: "所属仓库编号" }],
 };
 const locationTypes = { BUILDING: "楼宇", FLOOR: "楼层", ROOM: "房间", AREA: "区域", BIN: "库位" } as const;
+/** 保存意图只带路径、方法、版本与请求体；幂等键一律由 useConfirmedSubmit 底座生成，重试不换键。 */
+type CatalogIntent = Pick<MasterDataMutation, "path" | "method" | "version" | "body">;
+interface CatalogRowView extends CatalogRow { referenceLines: { field: ReferenceField; text: string }[] }
+
 const session = useSessionStore();
 const identity = computed(() => session.user?.roles.includes("SYSTEM_ADMIN") ? session.user.id : "");
-const kind = ref<Catalog>("asset-categories");
+const kind = shallowRef<Catalog>("asset-categories");
 const rows = ref<CatalogRow[]>([]);
-const page = ref(1); const total = ref(0);
-const selected = ref<CatalogRow | null>(null);
-const formOpen = ref(false);
-const code = ref(""); const name = ref(""); const description = ref("");
-const suggestedUnit = ref(""); const numberingPrefix = ref("");
-const locationType = ref("ROOM");
+const page = shallowRef(1); const total = shallowRef(0);
+const selected = shallowRef<CatalogRow | null>(null);
+const formOpen = shallowRef(false);
+const code = shallowRef(""); const name = shallowRef(""); const description = shallowRef("");
+const suggestedUnit = shallowRef(""); const numberingPrefix = shallowRef("");
+const locationType = shallowRef("ROOM");
 const references = ref<Record<ReferenceField, string>>({ parentCategory: "", defaultManufacturer: "", parentLocation: "", warehouse: "" });
 const extensions = ref<ExtensionField[]>([]);
-const reason = ref(""); const error = ref(""); const notice = ref("");
-const busy = ref(false);
-const pending = ref<MasterDataMutation | null>(null);
-let generation = 0;
+const reason = shallowRef(""); const error = shallowRef(""); const notice = shallowRef("");
+const busy = shallowRef(false);
+const liveness = useRequestLiveness(() => [identity.value, kind.value]);
+/** 确定性失败判据取本域 MasterDataApiError 的 4xx 区间：清意在途意图，允许重新起草。 */
+const deterministic = (cause: unknown): boolean => cause instanceof MasterDataApiError
+  && cause.status >= 400 && cause.status < 500;
+const { pending: pendingSave, prepare: draftSave, confirm: adoptSave, settle: settleSave,
+  fail: failSave, reset: resetSave } = useConfirmedSubmit<CatalogIntent>({ failure: deterministic });
+
+const catalogNameText = computed(() => catalogNames[kind.value]);
+const isLocations = computed(() => kind.value === "locations");
+const isCategories = computed(() => kind.value === "asset-categories");
+const activeReferences = computed(() => referenceDefinitions[kind.value]);
+const createLabel = computed(() => `新建${catalogNames[kind.value]}`);
+const formTitle = computed(() => `${selected.value ? "维护" : "新建"}${catalogNames[kind.value]}`);
+const referenceHintVisible = computed(() => !!selected.value && activeReferences.value.length > 0);
+const controlsDisabled = computed(() => busy.value || pendingSave.value !== null);
+const retryDisabled = computed(() => busy.value);
+const addExtensionDisabled = computed(() => extensions.value.length >= 32);
+const statusActionDisabled = computed(() => !reason.value.trim());
+const statusActionLabel = computed(() => selected.value?.status === "ACTIVE" ? "停用" : "启用");
+const statusActionKind = computed(() => selected.value?.status === "ACTIVE" ? "danger" : "secondary");
+const prevDisabled = computed(() => page.value <= 1 || busy.value || pendingSave.value !== null);
+const nextDisabled = computed(() => page.value * 20 >= total.value || busy.value || pendingSave.value !== null);
+const catalogRows = computed<CatalogRowView[]>(() => rows.value.map(row => ({
+  ...row,
+  referenceLines: activeReferences.value.map(definition => ({ field: definition.field,
+    text: `${definition.label} ${row[definition.field]?.id ?? "未设置"}` })),
+})));
 
 function problem(cause: unknown): string {
   if (cause instanceof MasterDataApiError) {
@@ -60,13 +91,13 @@ function open(row: CatalogRow | null): void {
 }
 
 async function load(): Promise<void> {
-  if (!identity.value || busy.value || pending.value) return;
-  const run = ++generation;
+  if (!identity.value || busy.value || pendingSave.value) return;
+  const turn = liveness.begin();
   busy.value = true; error.value = "";
   try {
     const result = await masterDataRequest<{ items: CatalogRow[]; total: number }>(
       `/${kind.value}?page=${page.value}&pageSize=20`);
-    if (run !== generation) return;
+    if (!liveness.isCurrent(turn)) return;
     rows.value = result.items; total.value = result.total;
     if (selected.value) {
       const row = result.items.find(item => item.id === selected.value?.id);
@@ -74,44 +105,45 @@ async function load(): Promise<void> {
       else { selected.value = null; formOpen.value = false; }
     }
   } catch (cause) {
-    if (run === generation) error.value = problem(cause);
+    if (liveness.isCurrent(turn)) error.value = problem(cause);
   } finally {
-    if (run === generation) busy.value = false;
+    if (liveness.isCurrent(turn)) busy.value = false;
   }
 }
 
 async function execute(): Promise<void> {
-  if (!identity.value || !pending.value || busy.value) return;
-  const run = generation;
-  const operation = pending.value;
+  if (!identity.value || !pendingSave.value || busy.value) return;
+  const operation = pendingSave.value;
+  const turn = liveness.begin();
   busy.value = true; error.value = "";
   try {
-    const result = await masterDataRequest<CatalogRow>(operation.path, operation);
-    if (run !== generation) return;
-    pending.value = null; selected.value = null; formOpen.value = false;
+    const result = await masterDataRequest<CatalogRow>(operation.payload.path,
+      { ...operation.payload, key: operation.key });
+    if (!liveness.isCurrent(turn)) return;
+    settleSave(); selected.value = null; formOpen.value = false;
     notice.value = `${result.name} 已保存，状态 ${result.status}，版本 ${result.version}。`;
     busy.value = false;
     await load();
   } catch (cause) {
-    if (run !== generation) return;
-    if (cause instanceof MasterDataApiError && cause.status >= 400 && cause.status < 500) pending.value = null;
+    if (!liveness.isCurrent(turn)) return;
+    failSave(cause);
     error.value = problem(cause);
   } finally {
-    if (run === generation) busy.value = false;
+    if (liveness.isCurrent(turn)) busy.value = false;
   }
 }
 
 async function save(): Promise<void> {
-  if (!identity.value || busy.value || pending.value || !code.value.trim() || !name.value.trim()) return;
+  if (!identity.value || busy.value || pendingSave.value || !code.value.trim() || !name.value.trim()) return;
   const row = selected.value;
-  const run = generation;
+  const turn = liveness.begin();
   const body: Record<string, unknown> = { code: code.value.trim(), name: name.value.trim(), description: description.value };
   if (kind.value === "asset-categories") {
     body.suggestedUnit = suggestedUnit.value; body.numberingPrefix = numberingPrefix.value;
     body.extensionFieldTemplate = extensions.value.map(field => ({ ...field }));
   }
   if (kind.value === "locations") body.type = locationType.value;
-  let operation: MasterDataMutation | null = null;
+  let adopted: Submission<CatalogIntent> | null = null;
   busy.value = true; error.value = "";
   try {
     for (const definition of referenceDefinitions[kind.value]) {
@@ -119,29 +151,31 @@ async function save(): Promise<void> {
       if (id && id !== row?.[definition.field]?.id) {
         if (!/^[1-9]\d*$/.test(id)) throw new MasterDataApiError(400, "CATALOG_REFERENCE_INVALID");
         const reference = await masterDataRequest<CatalogRow>(`/${definition.catalog}/${id}`);
-        if (run !== generation) return;
+        if (!liveness.isCurrent(turn)) return;
         if (reference.status !== "ACTIVE") throw new MasterDataApiError(409, "CATALOG_REFERENCE_DISABLED");
         body[definition.field] = { id: reference.id, version: reference.version };
       }
     }
     if (!window.confirm(`${row ? "更新" : "新建"}${catalogNames[kind.value]} ${name.value.trim()}`)) return;
-    operation = { path: `/${kind.value}${row ? "/" + row.id : ""}`, method: row ? "PATCH" : "POST",
-      key: crypto.randomUUID(), version: row?.version ?? 0, body };
+    draftSave(() => ({ path: `/${kind.value}${row ? "/" + row.id : ""}`,
+      method: row ? "PATCH" : "POST", version: row?.version ?? 0, body }));
+    adopted = adoptSave();
   } catch (cause) {
-    if (run === generation) error.value = problem(cause);
+    if (liveness.isCurrent(turn)) error.value = problem(cause);
   } finally {
-    if (run === generation) busy.value = false;
+    if (liveness.isCurrent(turn)) busy.value = false;
   }
-  if (operation && run === generation) { pending.value = operation; await execute(); }
+  if (adopted && liveness.isCurrent(turn)) await execute();
 }
 
 async function changeStatus(): Promise<void> {
   const row = selected.value;
-  if (!identity.value || !row || busy.value || pending.value || !reason.value.trim()) return;
+  if (!identity.value || !row || busy.value || pendingSave.value || !reason.value.trim()) return;
   const disable = row.status === "ACTIVE";
   if (!window.confirm(`${disable ? "停用" : "启用"} ${row.name}\n${reason.value.trim()}`)) return;
-  pending.value = { path: `/${kind.value}/${row.id}/${disable ? "disable" : "enable"}`, method: "POST",
-    key: crypto.randomUUID(), version: row.version, body: { reason: reason.value.trim() } };
+  draftSave(() => ({ path: `/${kind.value}/${row.id}/${disable ? "disable" : "enable"}`,
+    method: "POST", version: row.version, body: { reason: reason.value.trim() } }));
+  adoptSave();
   await execute();
 }
 
@@ -149,77 +183,97 @@ async function move(delta: number): Promise<void> {
   selected.value = null; formOpen.value = false; page.value += delta; await load();
 }
 watch([identity, kind], () => {
-  generation++; rows.value = []; page.value = 1; total.value = 0; selected.value = null; formOpen.value = false;
+  liveness.invalidate();
+  rows.value = []; page.value = 1; total.value = 0; selected.value = null; formOpen.value = false;
   code.value = ""; name.value = ""; description.value = ""; extensions.value = [];
   suggestedUnit.value = ""; numberingPrefix.value = ""; reason.value = "";
   references.value = { parentCategory: "", defaultManufacturer: "", parentLocation: "", warehouse: "" };
-  busy.value = false; pending.value = null; error.value = ""; notice.value = ""; void load();
+  busy.value = false; resetSave(); error.value = ""; notice.value = ""; void load();
 }, { immediate: true });
 </script>
 
 <template>
   <AppChrome>
-    <h1>资料目录</h1>
-    <p v-if="!identity" role="alert">只有系统管理员可以维护资料目录。</p>
+    <p v-if="!identity" class="fams-notice" data-state="noaccess" role="alert"><strong>只有系统管理员可以维护资料目录。</strong></p>
     <template v-else>
-      <p v-if="error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p>
-      <nav aria-label="目录类型">
-        <button v-for="(label, value) in catalogNames" :key="value" :disabled="busy || !!pending" @click="kind = value">{{ label }}</button>
+      <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+      <p v-if="notice" class="fams-notice" data-state="success" role="status"><strong>{{ notice }}</strong></p>
+      <nav aria-label="目录类型" class="fams-inline">
+        <button v-for="(label, value) in catalogNames" :key="value" class="fams-button" data-kind="secondary" data-size="sm"
+          type="button" :disabled="controlsDisabled" @click="kind = value">{{ label }}</button>
       </nav>
-      <h2>{{ catalogNames[kind] }}</h2>
-      <button :disabled="busy || !!pending" @click="load">刷新目录</button>
-      <button :disabled="busy || !!pending" @click="open(null)">新建{{ catalogNames[kind] }}</button>
-      <button v-if="pending" :disabled="busy" @click="execute">原请求重试保存</button>
-      <table><thead><tr><th>编号</th><th>编码</th><th>名称</th><th>关联资料</th><th>状态</th><th>版本</th><th>操作</th></tr></thead>
-        <tbody><tr v-for="row in rows" :key="row.id">
-          <td>{{ row.id }}</td><td>{{ row.code }}</td><td>{{ row.name }}</td>
-          <td><p v-for="definition in referenceDefinitions[kind]" :key="definition.field">
-            {{ definition.label }} {{ row[definition.field]?.id ?? "未设置" }}
-          </p></td><td>{{ row.status }}</td><td>{{ row.version }}</td>
-          <td><button :disabled="busy || !!pending" @click="open(row)">维护</button></td>
-        </tr></tbody>
-      </table>
-      <p>第 {{ page }} 页，共 {{ total }} 条</p>
-      <button :disabled="page <= 1 || busy || !!pending" @click="move(-1)">上一页</button>
-      <button :disabled="page * 20 >= total || busy || !!pending" @click="move(1)">下一页</button>
-      <section v-if="formOpen" aria-label="维护目录资料">
-        <h2>{{ selected ? "维护" : "新建" }}{{ catalogNames[kind] }}</h2>
-        <form @submit.prevent="save"><fieldset :disabled="busy || !!pending">
-          <label>编码<input v-model="code" maxlength="64" required /></label>
-          <label>名称<input v-model="name" maxlength="128" required /></label>
-          <label>说明<textarea v-model="description" maxlength="500" /></label>
-          <label v-for="definition in referenceDefinitions[kind]" :key="definition.field">{{ definition.label }}
-            <input v-model="references[definition.field]" inputmode="numeric" />
-          </label>
-          <p v-if="selected && referenceDefinitions[kind].length">关联编号留空保留原关系。</p>
-          <template v-if="kind === 'locations'">
-            <label for="location-type">位置类型</label><select id="location-type" v-model="locationType">
-              <option v-for="(label, value) in locationTypes" :key="value" :value="value">{{ label }}</option>
-            </select>
-          </template>
-          <template v-if="kind === 'asset-categories'">
-            <label>建议单位<input v-model="suggestedUnit" maxlength="32" /></label>
-            <label>编号前缀<input v-model="numberingPrefix" maxlength="32" /></label>
-            <fieldset><legend>扩展字段</legend>
-              <button type="button" :disabled="extensions.length >= 32"
-                @click="extensions.push({ key: '', label: '', type: 'TEXT', required: false })">添加扩展字段</button>
-              <div v-for="(field, index) in extensions" :key="index">
-                <label>字段标识<input v-model="field.key" maxlength="64" required /></label>
-                <label>字段名称<input v-model="field.label" maxlength="128" required /></label>
-                <label :for="'catalog-field-type-' + index">字段类型</label><select :id="'catalog-field-type-' + index" v-model="field.type">
-                  <option value="TEXT">文本</option><option value="NUMBER">数值</option>
-                  <option value="DATE">日期</option><option value="BOOLEAN">是/否</option>
-                </select>
-                <label><input v-model="field.required" type="checkbox" />必填</label>
-                <button type="button" @click="extensions.splice(index, 1)">移除字段</button>
-              </div>
-            </fieldset>
-          </template>
-          <button type="submit">保存资料</button>
+      <section class="fams-panel fams-stack">
+        <div class="fams-panel-head">
+          <h2 class="fams-panel-title">{{ catalogNameText }}</h2>
+          <div class="fams-panel-actions">
+            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="controlsDisabled" @click="load">刷新目录</button>
+            <button class="fams-button" data-kind="primary" data-size="sm" type="button" :disabled="controlsDisabled" @click="open(null)">{{ createLabel }}</button>
+            <button v-if="pendingSave" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="retryDisabled" @click="execute">原请求重试保存</button>
+          </div>
+        </div>
+        <div class="fams-table-scroll">
+          <table class="fams-table"><thead><tr><th scope="col" data-column-kind="identity">编号</th><th scope="col">编码</th>
+            <th scope="col">名称</th><th scope="col">关联资料</th><th scope="col">状态</th><th scope="col">版本</th>
+            <th scope="col" data-column-kind="action">操作</th></tr></thead>
+          <tbody><tr v-for="row in catalogRows" :key="row.id">
+            <td data-column-kind="identity">{{ row.id }}</td><td>{{ row.code }}</td><td>{{ row.name }}</td>
+            <td><p v-for="line in row.referenceLines" :key="line.field">{{ line.text }}</p></td>
+            <td>{{ row.status }}</td><td>{{ row.version }}</td>
+            <td data-column-kind="action"><button class="fams-button" data-kind="secondary" data-size="sm"
+              type="button" :disabled="controlsDisabled" @click="open(row)">维护</button></td>
+          </tr></tbody>
+        </table>
+        </div>
+        <div class="fams-pagination">
+          <span class="fams-pagination-summary">第 {{ page }} 页，共 {{ total }} 条</span>
+          <div class="fams-pagination-actions">
+            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled" @click="move(-1)">上一页</button>
+            <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextDisabled" @click="move(1)">下一页</button>
+          </div>
+        </div>
+      </section>
+      <section v-if="formOpen" class="fams-panel fams-stack" aria-label="维护目录资料">
+        <div class="fams-panel-head"><h2 class="fams-panel-title">{{ formTitle }}</h2></div>
+        <form @submit.prevent="save"><fieldset :disabled="controlsDisabled">
+          <div class="fams-field-grid">
+            <label class="fams-field"><span class="fams-field-label">编码</span><input class="fams-control" v-model="code" maxlength="64" required /></label>
+            <label class="fams-field"><span class="fams-field-label">名称</span><input class="fams-control" v-model="name" maxlength="128" required /></label>
+            <label class="fams-field fams-field-wide"><span class="fams-field-label">说明</span><textarea class="fams-control" v-model="description" maxlength="500" /></label>
+            <label v-for="definition in activeReferences" :key="definition.field" class="fams-field">
+              <span class="fams-field-label">{{ definition.label }}</span>
+              <input class="fams-control" v-model="references[definition.field]" inputmode="numeric" />
+            </label>
+            <p v-if="referenceHintVisible" class="fams-field-hint fams-field-wide">关联编号留空保留原关系。</p>
+            <template v-if="isLocations">
+              <label class="fams-field"><span class="fams-field-label">位置类型</span><select class="fams-control" v-model="locationType">
+                <option v-for="(label, value) in locationTypes" :key="value" :value="value">{{ label }}</option>
+              </select></label>
+            </template>
+            <template v-if="isCategories">
+              <label class="fams-field"><span class="fams-field-label">建议单位</span><input class="fams-control" v-model="suggestedUnit" maxlength="32" /></label>
+              <label class="fams-field"><span class="fams-field-label">编号前缀</span><input class="fams-control" v-model="numberingPrefix" maxlength="32" /></label>
+              <fieldset class="fams-field-wide fams-stack"><legend>扩展字段</legend>
+                <div class="fams-panel-actions"><button class="fams-button" data-kind="secondary" data-size="sm" type="button"
+                  :disabled="addExtensionDisabled" @click="extensions.push({ key: '', label: '', type: 'TEXT', required: false })">添加扩展字段</button></div>
+                <div v-for="(field, index) in extensions" :key="index" class="fams-field-grid">
+                  <label class="fams-field"><span class="fams-field-label">字段标识</span><input class="fams-control" v-model="field.key" maxlength="64" required /></label>
+                  <label class="fams-field"><span class="fams-field-label">字段名称</span><input class="fams-control" v-model="field.label" maxlength="128" required /></label>
+                  <label class="fams-field"><span class="fams-field-label">字段类型</span><select class="fams-control" v-model="field.type">
+                    <option value="TEXT">文本</option><option value="NUMBER">数值</option>
+                    <option value="DATE">日期</option><option value="BOOLEAN">是/否</option>
+                  </select></label>
+                  <label class="fams-selection"><input v-model="field.required" type="checkbox" />必填</label>
+                  <button class="fams-button" data-kind="danger" data-size="sm" type="button" @click="extensions.splice(index, 1)">移除字段</button>
+                </div>
+              </fieldset>
+            </template>
+          </div>
+          <div class="fams-form-actions"><button class="fams-button" data-kind="primary" type="submit">保存资料</button></div>
         </fieldset></form>
-        <fieldset v-if="selected" :disabled="busy || !!pending">
-          <label>状态变更原因<textarea v-model="reason" maxlength="500" /></label>
-          <button :disabled="!reason.trim()" @click="changeStatus">{{ selected.status === "ACTIVE" ? "停用" : "启用" }}</button>
+        <fieldset v-if="selected" :disabled="controlsDisabled">
+          <label class="fams-field fams-field-wide"><span class="fams-field-label">状态变更原因</span><textarea class="fams-control" v-model="reason" maxlength="500" /></label>
+          <div class="fams-form-actions"><button class="fams-button" type="button" :data-kind="statusActionKind"
+            :disabled="statusActionDisabled" @click="changeStatus">{{ statusActionLabel }}</button></div>
         </fieldset>
       </section>
     </template>

@@ -39,6 +39,9 @@ export interface RequestInit {
   prefix?: string;
   json?: unknown;
   form?: FormData;
+  /** 原文文本请求体（如 CSV 导入），与 json/form 互斥；Content-Type 由域经 textContentType 显式给出 */
+  text?: string;
+  textContentType?: string;
   /** 写操作幂等键。重试必须复用原键；缺省时新建（用于无重试语义的提交） */
   key?: string;
   version?: number;
@@ -123,6 +126,10 @@ export async function requestJson<T, E>(path: string, profile: Profile<E>, init:
       json: init.json !== undefined,
     }));
     if (init.form) body = init.form;
+    else if (init.text !== undefined) {
+      body = init.text;
+      if (init.textContentType) headers["Content-Type"] = init.textContentType;
+    }
     else if (init.json !== undefined) body = JSON.stringify(init.json);
   }
   const response = await fetch(apiUrl(path, init.prefix), {

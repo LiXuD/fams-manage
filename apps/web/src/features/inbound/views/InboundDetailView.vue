@@ -41,6 +41,10 @@ const canReceiveGoods = computed(() => warehouseRole && !!selected.value
   && selected.value.status === "WAREHOUSE_PROCESSING"
   && selected.value.currentProcessor?.processor.id === session.user?.id);
 const canReassign = computed(() => adminRole && selected.value?.status === "WAREHOUSE_PROCESSING");
+const unavailabilityTarget = computed(() => canReceiveGoods.value && selected.value
+  && selected.value.currentProcessor?.ownershipVersion !== undefined
+  ? { id: selected.value.id, version: selected.value.version,
+      ownershipVersion: selected.value.currentProcessor.ownershipVersion } : undefined);
 const itemRows = computed(() => (selected.value?.items ?? []).map((source) => ({
   ...source,
   source,
@@ -180,9 +184,9 @@ onMounted(async () => {
           <td data-column-kind="action"><button v-if="item.acceptable" class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="locked" @click="openAccept(item.source)">验收入库</button></td>
         </tr></tbody>
       </table></div>
-      <InboundUnavailability v-if="canReceiveGoods && selected.currentProcessor?.ownershipVersion !== undefined"
-        :key="selected.id + ':' + selected.version" :id="selected.id" :version="selected.version"
-        :ownership-version="selected.currentProcessor!.ownershipVersion!" :disabled="busy" />
+      <InboundUnavailability v-if="unavailabilityTarget" :key="unavailabilityTarget.id + ':' + unavailabilityTarget.version"
+        :id="unavailabilityTarget.id" :version="unavailabilityTarget.version"
+        :ownership-version="unavailabilityTarget.ownershipVersion" :disabled="busy" />
       <InboundReassignment v-if="canReassign"
         :id="selected.id" :version="selected.version" @saved="open()" />
       <AttachmentPanel :key="selected.id" :receipt="selected" :disabled="busy"

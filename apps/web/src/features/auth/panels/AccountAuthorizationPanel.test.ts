@@ -9,7 +9,7 @@ vi.mock("@/api/business", async original => ({
 }));
 const authorization = { id: "0", role: "AUDIT_READ_ONLY", status: "REVOKED", version: 3,
   dataScopes: [], fieldPermissions: [] };
-const props = { accountId: "9007199254740993", username: "auditor", role: "AUDIT_READ_ONLY" as const, blocked: false };
+const props = { accountId: "9007199254740993", username: "auditor", role: "AUDIT_READ_ONLY" as const };
 
 describe("account authorization", () => {
   beforeEach(() => {

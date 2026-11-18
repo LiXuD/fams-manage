@@ -1,34 +1,45 @@
 <script setup lang="ts">
-import { ref } from "vue";
-import { BusinessApiError as LoanApiError, businessMessage as loanMessage, businessRequest as loanRequest, type BusinessMutation as LoanMutation } from "@/api/business";
+import { computed, shallowRef } from "vue";
+import { BusinessApiError, businessMessage, businessRequest } from "@/api/business";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
 
 const props = defineProps<{ id: string; version: number; ownershipVersion: number; disabled: boolean }>();
-const reason = ref("");
-const error = ref("");
-const busy = ref(false);
-const recorded = ref(false);
-const pending = ref<LoanMutation>();
+/** 无法继续登记的在途意图：路径、版本与请求体在起草时定格，幂等键只由提交底座持有。 */
+interface UnavailabilityIntent { path: string; version: number; body: { ownershipVersion: number; reason: string } }
+
+const reason = shallowRef("");
+const error = shallowRef("");
+const busy = shallowRef(false);
+const recorded = shallowRef(false);
+const { pending, prepare, confirm: adopt, settle, fail } = useConfirmedSubmit<UnavailabilityIntent>({
+  failure: (cause) => cause instanceof BusinessApiError && cause.status >= 400 && cause.status < 500,
+});
+const formDisabled = computed(() => props.disabled || busy.value || pending.value !== null);
+const submitDisabled = computed(() => props.disabled || busy.value);
+const submitText = computed(() => (pending.value ? "原请求重试登记" : "登记无法继续"));
 
 async function declare() {
   if (busy.value || props.disabled || recorded.value) return;
-  if (!pending.value && !reason.value.trim()) {
-    error.value = "请填写无法继续的原因。";
-    return;
+  let operation = pending.value;
+  if (!operation) {
+    if (!reason.value.trim()) {
+      error.value = "请填写无法继续的原因。";
+      return;
+    }
+    prepare(() => ({ path: `/inbound-receipts/${props.id}/reassignment/unavailable`,
+      version: props.version, body: { ownershipVersion: props.ownershipVersion, reason: reason.value.trim() } }));
+    operation = adopt();
   }
-  const request = pending.value ??= {
-    path: `/inbound-receipts/${props.id}/reassignment/unavailable`,
-    key: crypto.randomUUID(), version: props.version,
-    body: { ownershipVersion: props.ownershipVersion, reason: reason.value.trim() },
-  };
+  if (!operation) return;
   error.value = "";
   busy.value = true;
   try {
-    await loanRequest(request.path, request);
+    await businessRequest(operation.payload.path, { ...operation.payload, key: operation.key });
+    settle();
     recorded.value = true;
-    pending.value = undefined;
   } catch (cause) {
-    if (cause instanceof LoanApiError && cause.status >= 400 && cause.status < 500) pending.value = undefined;
-    error.value = loanMessage(cause);
+    fail(cause);
+    error.value = businessMessage(cause);
   } finally {
     busy.value = false;
   }
@@ -36,15 +47,16 @@ async function declare() {
 </script>
 
 <template>
-  <section aria-label="登记无法继续处理">
-    <h4>无法继续处理</h4>
+  <section class="fams-card fams-stack" aria-label="登记无法继续处理">
+    <h4 class="fams-panel-title">无法继续处理</h4>
     <p v-if="recorded" role="status">已通知资产管理员核对交接。转派前处理权仍由你持有。</p>
     <form v-else @submit.prevent="declare">
-      <label>无法继续的原因 <textarea v-model="reason" required maxlength="1000" :disabled="disabled || busy || !!pending" /></label>
-      <button type="submit" :disabled="disabled || busy">
-        {{ pending ? '原请求重试登记' : '登记无法继续' }}
-      </button>
+      <label class="fams-field"><span class="fams-field-label">无法继续的原因</span>
+        <textarea class="fams-control" v-model="reason" required maxlength="1000" :disabled="formDisabled" /></label>
+      <div class="fams-panel-actions">
+        <button class="fams-button" data-kind="primary" type="submit" :disabled="submitDisabled">{{ submitText }}</button>
+      </div>
     </form>
-    <p v-if="error" role="alert">{{ error }}</p>
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
   </section>
 </template>

@@ -29,6 +29,7 @@ const busy = shallowRef(false);
 const error = shallowRef("");
 const liveness = useRequestLiveness(() => [identity.value]);
 const allStagesPressed = computed(() => !stage.value);
+const showProcessorFilter = computed(() => scope.value === "ASSET_ADMIN");
 const hasNoRows = computed(() => result.value?.items.length === 0);
 const showPrev = computed(() => pageIndex.value > 0);
 const currentCursor = computed(() => cursors.value[pageIndex.value]);
@@ -134,7 +135,7 @@ watch(identity, () => choose(available.value[0] ?? "MINE"), { immediate: true, f
         <router-link class="fams-button" data-kind="link" data-size="sm" :to="{ name: 'messages' }">查看消息与异常</router-link>
       </div>
     </div>
-    <form v-if="scope === 'ASSET_ADMIN'" class="fams-field-row" @submit.prevent="applyProcessor">
+    <form v-if="showProcessorFilter" class="fams-field-row" @submit.prevent="applyProcessor">
       <div class="fams-field">
         <label for="todos-processor">原库管账号 ID</label>
         <input id="todos-processor" class="fams-control" v-model="processorInput" inputmode="numeric" maxlength="19" pattern="[1-9][0-9]{0,18}">

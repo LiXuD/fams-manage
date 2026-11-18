@@ -81,20 +81,27 @@ INSERT INTO fams_employee (id,employee_no,employee_no_normalized,name,organizati
  (1,'E001','E001','Warehouse operator',1,'ACTIVE',0,NOW(3),NOW(3)),
  (2,'E002','E002','Asset admin',1,'ACTIVE',0,NOW(3),NOW(3)),
  (3,'E003','E003','Employee',2,'ACTIVE',0,NOW(3),NOW(3)),
- (4,'E004','E004','Second employee',2,'DISABLED',0,NOW(3),NOW(3));
+ (4,'E004','E004','Second employee',2,'DISABLED',0,NOW(3),NOW(3)),
+ (5,'E005','E005','System administrator',1,'ACTIVE',0,NOW(3),NOW(3));
 INSERT INTO fams_system_account (id,employee_id,username,username_normalized,password_hash,status,
  initial_password_required,failed_attempts,auth_epoch,authorization_version,version,created_at,updated_at) VALUES
  (1,1,'warehouse','WAREHOUSE','{hash}','ENABLED',FALSE,0,3,7,0,NOW(3),NOW(3)),
  (2,2,'admin','ADMIN','{hash}','ENABLED',FALSE,0,3,7,0,NOW(3),NOW(3)),
  (3,3,'employee','EMPLOYEE','{hash}','ENABLED',FALSE,0,3,7,0,NOW(3),NOW(3)),
- (4,4,'locked','LOCKED','{hash}','DISABLED',FALSE,0,3,7,0,NOW(3),NOW(3));
+ (4,4,'locked','LOCKED','{hash}','DISABLED',FALSE,0,3,7,0,NOW(3),NOW(3)),
+ (5,5,'sysadmin','SYSADMIN','{hash}','ENABLED',FALSE,0,3,7,0,NOW(3),NOW(3));
 INSERT INTO fams_account_role (account_id,role_code,granted_at) VALUES
  (1,'WAREHOUSE_OPERATOR',NOW(3)),(1,'ASSET_ADMIN',NOW(3)),
  (2,'ASSET_ADMIN',NOW(3)),(2,'WAREHOUSE_OPERATOR',NOW(3)),
- (3,'EMPLOYEE',NOW(3)),(4,'EMPLOYEE',NOW(3));
+ (3,'EMPLOYEE',NOW(3)),(4,'EMPLOYEE',NOW(3)),
+ (5,'SYSTEM_ADMIN',NOW(3));
 INSERT INTO fams_numbering_rule (code,code_normalized,target,mode,fixed_prefix,date_part,sequence_length,status,version,created_at,updated_at) VALUES
  ('ASSET','ASSET','ASSET','ENTERPRISE','FA','NONE',8,'ACTIVE',0,NOW(3),NOW(3)),
  ('INBOUND','INBOUND','INBOUND_RECEIPT','ENTERPRISE','IN','NONE',8,'ACTIVE',0,NOW(3),NOW(3));
+INSERT INTO fams_account_authorization (id,account_id,role_code,generation_no,authorization_status,change_reason,created_at) VALUES
+ (1,2,'ASSET_ADMIN',1,'ACTIVE','arch-ui bulk export grant',NOW(3));
+INSERT INTO fams_account_field_permission (authorization_id,permission_code,granted_at) VALUES
+ (1,'BULK_EXPORT',NOW(3));
 INSERT INTO fams_business_parameter_version (id,version,status,effective_at,actor_account_id,actor_username,snapshot_json,created_at) VALUES
  (1,1,'ACTIVE',NOW(3),2,'admin',
  '{{"timezone":"Asia/Shanghai","workWeek":["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY"],"holidays":[],"adjustedWorkdays":[],"adminDecisionDeadlineWorkdays":2,"warehouseClaimDeadlineWorkdays":1,"warehouseFirstExecutionDeadlineWorkdays":2,"handoverAcceptanceDeadlineNaturalDays":3,"notificationEscalationThresholds":{{}}}}',NOW(3));

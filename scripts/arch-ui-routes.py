@@ -61,6 +61,7 @@ PROBED = {
     "business-result-notices", "business-result-reviews", "inventory-task-detail",
     "inventory-tasks", "loans", "loss-reports", "proxy-confirmations", "requisition-target-changes",
     "requisitions", "repair-assistance", "repairs", "scrap-requests", "transfer-target-changes", "transfers",
+ "system-accounts", "business-parameters", "catalogs", "identity", "numbering-rules", "asset-lookup",
 }
 
 

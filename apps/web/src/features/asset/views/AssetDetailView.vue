@@ -37,6 +37,8 @@ const canCorrectNotes = computed(() => canWrite && selected.value !== null
   && selected.value.cardStage !== "PENDING_INBOUND" && selected.value.cardStage !== "CANCELLED");
 const canCancelDraft = computed(() => canWrite && selected.value?.cardStage === "DRAFT");
 const canPrintTag = computed(() => canWrite && selected.value?.cardStage === "ACTIVE");
+const canPlaceTag = computed(() => canPrintTag.value && !!selected.value
+  && !["WAITING_INBOUND", "SCRAPPED"].includes(selected.value.lifecycle));
 const pendingIsNotes = computed(() => pending.value === "notes");
 const pendingIsCopy = computed(() => pending.value === "copy");
 const identity = computed(() => JSON.stringify([props.id, session.user?.id, session.user?.roles, session.csrfToken]));
@@ -181,7 +183,7 @@ watch(identity, async () => {
           type="button" @click="openAction('cancel')">取消草稿</button>
         <button v-if="canPrintTag" class="fams-button" data-kind="secondary" :disabled="locked"
           type="button" @click="printCurrent">打印标签</button>
-        <AssetTagPlacement v-if="canPrintTag && !['WAITING_INBOUND', 'SCRAPPED'].includes(selected.lifecycle)"
+        <AssetTagPlacement v-if="canPlaceTag"
           :key="selected.id + ':' + selected.version" :asset-id="selected.id" :version="selected.version" />
       </div>
       <div v-if="pending" class="fams-card fams-stack" role="group" :aria-label="confirmLabels[pending]">

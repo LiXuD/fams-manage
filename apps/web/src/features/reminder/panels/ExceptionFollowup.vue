@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref, shallowRef } from "vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { BusinessApiError, businessRequest } from "@/api/business";
+import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
+import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { formatProxyTime } from "@/features/exception/time";
 
 interface Followup {
@@ -8,19 +11,27 @@ interface Followup {
   nextFollowupAt: string;
   recordedAt: string;
 }
+/** 核查登记的在途意图：核查内容与跟进时间在起草时定格，幂等键只由提交底座持有。 */
+interface FollowupIntent { findings: string; nextFollowupAt: string }
 
 const props = defineProps<{ reminderId: string }>();
 const emit = defineEmits<{ saved: [] }>();
 const session = useSessionStore();
-const open = ref(false);
-const busy = ref(false);
-const error = ref("");
-const findings = ref("");
-const nextTime = ref("");
+const open = shallowRef(false);
+const busy = shallowRef(false);
+const error = shallowRef("");
+const findings = shallowRef("");
+const nextTime = shallowRef("");
 const latest = ref<Followup | null>(null);
-const pending = ref<{ key: string; body: string } | null>(null);
-const endpoint = () => `/api/v1/messages/reminders/${props.reminderId}/follow-up`;
+const liveness = useRequestLiveness(() => [props.reminderId]);
+/** 确定性判据沿用改造前的「状态码 < 500」口径：5xx 与网络失败保留在途意图，重试不换键。 */
+const { pending, prepare, confirm: adopt, settle, fail } = useConfirmedSubmit<FollowupIntent>({
+  failure: (cause) => cause instanceof BusinessApiError && cause.status < 500,
+});
 
+const endpoint = () => `/messages/reminders/${props.reminderId}/follow-up`;
+
+/** 状态码到中文文案的映射逐字保留自改造前，读写两条路径共用。 */
 function responseError(status: number) {
   if (status === 401) return "登录已失效，请重新登录。";
   if (status === 403) return "只有资产管理员可以登记核查。";
@@ -29,19 +40,28 @@ function responseError(status: number) {
   return "暂时无法读取核查记录，请重试。";
 }
 
+const latestText = computed(() => latest.value ? {
+  headText: `最近核查 ${formatProxyTime(latest.value.recordedAt)} · 下次跟进 ${formatProxyTime(latest.value.nextFollowupAt)}`,
+  findingsText: latest.value.findings,
+} : null);
+const formDisabled = computed(() => busy.value || pending.value !== null);
+const submitText = computed(() => (pending.value ? "重试保存" : "保存核查"));
+
 async function show() {
   open.value = true;
   if (pending.value) return;
+  const turn = liveness.begin();
   busy.value = true;
   error.value = "";
   try {
-    const reply = await fetch(endpoint(), { credentials: "include" });
-    if (reply.ok) latest.value = (await reply.json() as { latest: Followup | null }).latest;
-    else error.value = responseError(reply.status);
-  } catch {
-    error.value = "暂时无法读取核查记录，请重试。";
+    const reply = await businessRequest<{ latest: Followup | null }>(endpoint());
+    if (liveness.isCurrent(turn)) latest.value = reply.latest;
+  } catch (cause) {
+    if (liveness.isCurrent(turn)) {
+      error.value = cause instanceof BusinessApiError ? responseError(cause.status) : "暂时无法读取核查记录，请重试。";
+    }
   } finally {
-    busy.value = false;
+    if (liveness.isCurrent(turn)) busy.value = false;
   }
 }
 
@@ -51,37 +71,30 @@ async function save() {
     error.value = responseError(401);
     return;
   }
-  if (!pending.value) {
+  let operation = pending.value;
+  if (!operation) {
     const next = new Date(nextTime.value);
     if (!findings.value.trim() || !(next.getTime() > Date.now())) {
       error.value = responseError(400);
       return;
     }
-    pending.value = { key: crypto.randomUUID(),
-      body: JSON.stringify({ findings: findings.value.trim(), nextFollowupAt: next.toISOString() }) };
+    prepare(() => ({ findings: findings.value.trim(), nextFollowupAt: next.toISOString() }));
+    operation = adopt();
   }
-  const request = pending.value;
+  if (!operation) return;
   busy.value = true;
   error.value = "";
   try {
-    const reply = await fetch(endpoint(), {
-      credentials: "include", method: "POST", body: request.body,
-      headers: { "Content-Type": "application/json", "Idempotency-Key": request.key, "X-CSRF-Token": csrf },
-    });
-    if (reply.ok) {
-      latest.value = await reply.json() as Followup;
-      pending.value = null;
-      findings.value = "";
-      nextTime.value = "";
-      emit("saved");
-    } else if (reply.status < 500) {
-      pending.value = null;
-      error.value = responseError(reply.status);
-    } else {
-      error.value = "保存结果尚未确认，请重试原请求。";
-    }
-  } catch {
-    error.value = "保存结果尚未确认，请重试原请求。";
+    const saved = await businessRequest<Followup>(endpoint(),
+      { path: endpoint(), key: operation.key, version: 0, body: operation.payload });
+    latest.value = saved;
+    settle();
+    findings.value = "";
+    nextTime.value = "";
+    emit("saved");
+  } catch (cause) {
+    if (cause instanceof BusinessApiError && fail(cause)) error.value = responseError(cause.status);
+    else error.value = "保存结果尚未确认，请重试原请求。";
   } finally {
     busy.value = false;
   }
@@ -89,25 +102,20 @@ async function save() {
 </script>
 
 <template>
-  <button v-if="!open" type="button" @click="show">登记核查</button>
-  <form v-else aria-label="核查记录" @submit.prevent="save">
-    <div v-if="latest">
-      <p>最近核查 {{ formatProxyTime(latest.recordedAt) }} · 下次跟进 {{ formatProxyTime(latest.nextFollowupAt) }}</p>
-      <p>{{ latest.findings }}</p>
+  <button v-if="!open" class="fams-button" data-kind="secondary" type="button" @click="show">登记核查</button>
+  <form v-else class="fams-panel fams-stack" aria-label="核查记录" @submit.prevent="save">
+    <div v-if="latestText" class="fams-card fams-stack">
+      <p>{{ latestText.headText }}</p>
+      <p>{{ latestText.findingsText }}</p>
     </div>
-    <label>核查内容<textarea v-model="findings" maxlength="1000" required :disabled="busy || !!pending" /></label>
-    <label>下次跟进时间<input v-model="nextTime" type="datetime-local" required :disabled="busy || !!pending" /></label>
-    <p v-if="error" role="alert">{{ error }}</p>
-    <div>
-      <button :disabled="busy" type="submit">{{ pending ? "重试保存" : "保存核查" }}</button>
-      <button :disabled="busy" type="button" @click="open = false">关闭</button>
+    <label class="fams-field"><span class="fams-field-label">核查内容</span>
+      <textarea class="fams-control" v-model="findings" maxlength="1000" required :disabled="formDisabled" /></label>
+    <label class="fams-field"><span class="fams-field-label">下次跟进时间</span>
+      <input class="fams-control" v-model="nextTime" type="datetime-local" required :disabled="formDisabled" /></label>
+    <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+    <div class="fams-form-actions">
+      <button class="fams-button" data-kind="primary" :disabled="busy" type="submit">{{ submitText }}</button>
+      <button class="fams-button" data-kind="secondary" :disabled="busy" type="button" @click="open = false">关闭</button>
     </div>
   </form>
 </template>
-
-<style scoped>
-form, label { display: grid; gap: 0.5rem; }
-form { margin-block: 0.75rem; }
-textarea { min-height: 4rem; }
-form button + button { margin-inline-start: 0.5rem; }
-</style>

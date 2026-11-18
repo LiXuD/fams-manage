@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { computed, reactive, shallowRef } from "vue";
 
 const props = defineProps<{ from: string; toExclusive: string }>();
 const sample = reactive({
@@ -14,7 +14,7 @@ const sample = reactive({
   missing: undefined as number | undefined,
   pending: 0,
 });
-const error = ref("");
+const error = shallowRef("");
 const counts = computed(() => {
   const { total, missing, pending } = sample;
   if (total === undefined || missing === undefined
@@ -24,6 +24,8 @@ const counts = computed(() => {
 });
 const rate = computed(() => counts.value?.total
   ? ((counts.value.matched / counts.value.total) * 100).toFixed(1) + "%" : "");
+const evidenceRequired = computed(() => (counts.value?.total ?? 0) > 0);
+const showSmallSampleHint = computed(() => !!counts.value && counts.value.total > 0 && counts.value.total < 30);
 
 function csvCell(value: string | number) {
   const raw = String(value);
@@ -75,28 +77,42 @@ function exportResult() {
 </script>
 
 <template>
-  <details>
-    <summary>抽样留痕率核算</summary>
+  <details class="fams-card fams-stack">
+    <summary class="fams-panel-title">抽样留痕率核算</summary>
     <p>从线下凭据核实实际业务。同一笔业务只计一次，待核实线索另列，补录后保留原样本结果。</p>
-    <button type="button" @click="downloadEvidenceSheet">下载抽样明细空表</button>
+    <div class="fams-inline">
+      <button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="downloadEvidenceSheet">下载抽样明细空表</button>
+    </div>
     <form @submit.prevent="exportResult">
-      <div class="actions">
-        <label>抽样开始日期（UTC） <input v-model="sample.from" required type="date"></label>
-        <label>抽样结束日期（UTC，不含当日） <input v-model="sample.toExclusive" required type="date"></label>
-        <label>抽查部门或位置 <input v-model="sample.scope" maxlength="500" required></label>
-        <label>业务类型 <input v-model="sample.businessTypes" maxlength="500" required></label>
-        <label>选样方法 <textarea v-model="sample.method" maxlength="1000" required></textarea></label>
-        <label>覆盖限制 <textarea v-model="sample.limitations" maxlength="1000" required></textarea></label>
-        <label>明细档案编号 <input v-model="sample.evidenceReference" maxlength="500" :required="(counts?.total ?? 0) > 0"></label>
-        <label>核实样本数 <input v-model.number="sample.total" required type="number" min="0" step="1"></label>
-        <label>原样本漏记数 <input v-model.number="sample.missing" required type="number" min="0" step="1"></label>
-        <label>待核实线索数 <input v-model.number="sample.pending" required type="number" min="0" step="1"></label>
+      <div class="fams-field-grid">
+        <label class="fams-field"><span class="fams-field-label">抽样开始日期（UTC）</span>
+          <input class="fams-control" v-model="sample.from" required type="date"></label>
+        <label class="fams-field"><span class="fams-field-label">抽样结束日期（UTC，不含当日）</span>
+          <input class="fams-control" v-model="sample.toExclusive" required type="date"></label>
+        <label class="fams-field"><span class="fams-field-label">抽查部门或位置</span>
+          <input class="fams-control" v-model="sample.scope" maxlength="500" required></label>
+        <label class="fams-field"><span class="fams-field-label">业务类型</span>
+          <input class="fams-control" v-model="sample.businessTypes" maxlength="500" required></label>
+        <label class="fams-field fams-field-wide"><span class="fams-field-label">选样方法</span>
+          <textarea class="fams-control" v-model="sample.method" maxlength="1000" required></textarea></label>
+        <label class="fams-field fams-field-wide"><span class="fams-field-label">覆盖限制</span>
+          <textarea class="fams-control" v-model="sample.limitations" maxlength="1000" required></textarea></label>
+        <label class="fams-field"><span class="fams-field-label">明细档案编号</span>
+          <input class="fams-control" v-model="sample.evidenceReference" maxlength="500" :required="evidenceRequired"></label>
+        <label class="fams-field"><span class="fams-field-label">核实样本数</span>
+          <input class="fams-control" v-model.number="sample.total" required type="number" min="0" step="1"></label>
+        <label class="fams-field"><span class="fams-field-label">原样本漏记数</span>
+          <input class="fams-control" v-model.number="sample.missing" required type="number" min="0" step="1"></label>
+        <label class="fams-field"><span class="fams-field-label">待核实线索数</span>
+          <input class="fams-control" v-model.number="sample.pending" required type="number" min="0" step="1"></label>
       </div>
       <p v-if="rate && counts">本次样本观察结果 <output>{{ counts.matched }}/{{ counts.total }} = {{ rate }}</output></p>
       <p v-else>样本不足或数量无效，无法评价。</p>
-      <p v-if="counts && counts.total > 0 && counts.total < 30">样本少于 30 笔，请在覆盖限制中说明核实范围。</p>
-      <p v-if="error" role="alert">{{ error }}</p>
-      <button type="submit">下载本次抽样结果 CSV</button>
+      <p v-if="showSmallSampleHint">样本少于 30 笔，请在覆盖限制中说明核实范围。</p>
+      <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+      <div class="fams-form-actions">
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="submit">下载本次抽样结果 CSV</button>
+      </div>
     </form>
   </details>
 </template>
