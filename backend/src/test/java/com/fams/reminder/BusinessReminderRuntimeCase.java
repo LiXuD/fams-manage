@@ -1,6 +1,7 @@
 package com.fams.reminder;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -52,6 +53,8 @@ class BusinessReminderRuntimeCase {
     @Test
     void noticesFollowEachStageLadderAndDeduplicateByOccurrence() {
         seed();
+        verifyFallbackMigration();
+        verifyDispositionMigration();
         scan("2026-11-09");
         assertEquals(List.of("ADMIN_DECISION|UNRESOLVED_AFTER_1_WORKDAY|2026-11-09|ASSET_ADMIN|-"),
                 notices("INBOUND", 930200));
@@ -110,9 +113,69 @@ class BusinessReminderRuntimeCase {
                 notices("INVENTORY_TASK", 930401));
         assertEquals(List.of("2026-11-08", "2026-11-15"), weeklyNoticeDates());
         verifyCustodianSmsFallback();
-        verifyFallbackMigration();
         verifyLoanAndFactorySmsFallback();
+        verifyFrozenBusinessDates();
+    }
 
+    private void verifyFrozenBusinessDates() {
+        db.update("""
+                UPDATE fams_inbound_receipt SET timezone_snapshot='Pacific/Kiritimati',
+                    warehouse_claim_due_at='2026-12-01 08:00:00' WHERE id=930202
+                """);
+        db.update("""
+                UPDATE fams_inventory_task SET task_status='IN_PROGRESS',timezone_id='Pacific/Kiritimati',
+                    due_at='2026-12-01 08:00:00' WHERE id=930401
+                """);
+        db.update("""
+                UPDATE fams_transfer_item SET parameter_snapshot_json=JSON_SET(parameter_snapshot_json,'$.timezone','America/Adak'),
+                    receipt_deadline_at='2026-12-01 18:00:00' WHERE id=930500
+                """);
+        db.update("UPDATE fams_loss_report SET next_review_date='2026-12-01' WHERE id=930300");
+        db.update("""
+                UPDATE fams_scrap_disposition SET due_date='2026-12-01',due_at='2026-12-01 10:00:00',
+                    due_timezone='Pacific/Kiritimati' WHERE request_id=930301
+                """);
+        db.update("""
+                INSERT INTO fams_loss_event(report_id,action,before_version,after_version,actor_account_id,
+                    actor_username,actor_role,detail_json,occurred_at)
+                VALUES (930300,'LOSS_FOLLOWED_UP',1,2,?,'rmd','WAREHOUSE_OPERATOR',
+                    JSON_OBJECT('reviewDate','2026-12-01','reviewTimezone','Pacific/Kiritimati'),'2026-11-30 02:00:00')
+                """, WAREHOUSE_ACCOUNT);
+        String east = """
+                ((business_type='INBOUND' AND business_id=930202)
+                  OR (business_type='INVENTORY_TASK' AND business_id=930401))
+                AND deadline_at='2026-12-01 08:00:00'
+                """;
+        String west = """
+                business_type='TRANSFER_ITEM' AND business_id=930500
+                AND deadline_at='2026-12-01 18:00:00'
+                """;
+        String loss = "business_type='LOST_REPORT' AND business_id=930300 AND deadline_at='2026-12-01 10:00:00'";
+        String scrap = "business_type='SCRAP' AND business_id=930301 AND deadline_at='2026-12-01 10:00:00'";
+        new BusinessReminderService(db, json, smsClock("2026-12-01T09:59:59.999Z")).scan();
+        assertEquals(0L, overdueAt(east, "2026-12-02"));
+        assertEquals(0L, overdueAt(loss, "2026-12-02"));
+        assertEquals(0L, overdueAt(scrap, "2026-12-02"));
+        var easternMidnight = smsClock("2026-12-01T10:00:00Z");
+        new BusinessReminderService(db, json, easternMidnight).scan();
+        new BusinessReminderService(db, json, easternMidnight).scan();
+        assertEquals(2L, overdueAt(east, "2026-12-02"));
+        assertEquals(1L, overdueAt(loss, "2026-12-02"));
+        assertEquals(1L, overdueAt(scrap, "2026-12-02"));
+        new BusinessReminderService(db, json, smsClock("2026-12-02T09:59:59.999Z")).scan();
+        assertEquals(0L, overdueAt(west, "2026-12-02"));
+        new BusinessReminderService(db, json, smsClock("2026-12-02T10:00:00Z")).scan();
+        assertEquals(1L, overdueAt(west, "2026-12-02"));
+        var lossBefore = notices("LOST_REPORT", 930300);
+        db.update("UPDATE fams_asset SET lifecycle_status='SCRAPPED' WHERE id=930300");
+        db.update("UPDATE fams_loss_report SET next_review_date='2026-12-03' WHERE id=930300");
+        new BusinessReminderService(db, json, smsClock("2026-12-07T10:00:00Z")).scan();
+        assertEquals(lossBefore, notices("LOST_REPORT", 930300));
+    }
+
+    private long overdueAt(String scope, String day) {
+        return db.queryForObject("SELECT COUNT(*) FROM fams_business_reminder WHERE " + scope
+                + " AND reminder_type='OVERDUE' AND reminder_business_date=?", Long.class, day);
     }
 
     private void verifyCustodianSmsFallback() {
@@ -137,8 +200,17 @@ class BusinessReminderRuntimeCase {
                     JOIN fams_business_reminder r ON r.id=d.reminder_id WHERE d.job_id=?
                     """, String.class, claim.id().toString());
             if ("LOSS_REVIEW".equals(stage)) {
+                db.update("UPDATE fams_asset SET lifecycle_status='SCRAPPED' WHERE id=930300");
+                assertNull(queue.eligibleTemplate(claim));
+                db.update("UPDATE fams_asset SET lifecycle_status='IN_STOCK' WHERE id=930300");
                 db.update("UPDATE fams_loss_report SET next_review_date='2026-11-12' WHERE id=930300");
             } else {
+                db.update("""
+                        UPDATE fams_scrap_disposition SET due_at='2026-11-07 00:00:00',due_timezone='UTC'
+                        WHERE request_id=930301
+                        """);
+                assertNull(queue.eligibleTemplate(claim));
+                db.update("UPDATE fams_scrap_disposition SET due_at=NULL,due_timezone=NULL WHERE request_id=930301");
                 db.update("UPDATE fams_scrap_disposition SET processor_account_id=? WHERE request_id=930301",
                         EXECUTOR_ACCOUNT);
             }
@@ -149,13 +221,54 @@ class BusinessReminderRuntimeCase {
     }
 
     private void verifyFallbackMigration() {
+        db.update("""
+                INSERT INTO fams_business_reminder (id,business_type,business_id,stage,deadline_at,notice_date,
+                    reminder_business_date,reminder_type,recipient_pool_type,recipient_account_id,created_at)
+                VALUES (930900,'SCRAP',930301,'SCRAP_DISPOSITION','2026-11-07 00:00:00','2026-11-07',
+                    '2026-11-07','OVERDUE','WAREHOUSE_OPERATOR',?,'2026-11-07 00:00:00')
+                """, WAREHOUSE_ACCOUNT);
+        db.update("""
+                INSERT INTO fams_durable_job (id,job_kind,business_reference,actor_account_id,request_key,
+                    request_sha256,job_status,next_attempt_at,created_at,updated_at)
+                VALUES ('3fa5911c-a18e-44de-b704-778a87522fe7','NOTIFICATION_DELIVERY','930900',?,
+                    'legacy-reminder',REPEAT('0',64),'SUCCEEDED',NOW(3),NOW(3),NOW(3))
+                """, WAREHOUSE_ACCOUNT);
+        db.update("""
+                INSERT INTO fams_notification_delivery (reminder_id,recipient_account_id,channel,template_code,
+                    job_id,requested_at,accepted_at)
+                VALUES (930900,?,'SMS','legacy','3fa5911c-a18e-44de-b704-778a87522fe7',NOW(3),NOW(3))
+                """, WAREHOUSE_ACCOUNT);
         var remindersBefore = db.queryForList("SELECT * FROM fams_business_reminder ORDER BY id");
         var deliveriesBefore = db.queryForList("SELECT * FROM fams_notification_delivery ORDER BY reminder_id");
-        var migration = Flyway.configure().dataSource(dataSource).locations("classpath:db/migration/d6_04").load();
+        var migration = Flyway.configure().dataSource(dataSource)
+                .locations("classpath:db/migration/d6_04").target("74").load();
         assertEquals(1, migration.migrate().migrationsExecuted);
         assertEquals(0, migration.migrate().migrationsExecuted);
         assertEquals(remindersBefore, db.queryForList("SELECT * FROM fams_business_reminder ORDER BY id"));
         assertEquals(deliveriesBefore, db.queryForList("SELECT * FROM fams_notification_delivery ORDER BY reminder_id"));
+        db.update("DELETE FROM fams_notification_delivery WHERE reminder_id=930900");
+        db.update("DELETE FROM fams_durable_job WHERE id='3fa5911c-a18e-44de-b704-778a87522fe7'");
+        db.update("DELETE FROM fams_business_reminder WHERE id=930900");
+    }
+
+    private void verifyDispositionMigration() {
+        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration/d6_04")
+                .target("83").load().migrate();
+        String original = """
+                SELECT request_id,processor_account_id,disposition_status,due_date,custody_snapshot_json,
+                    completion_snapshot_json,version,created_at,updated_at
+                FROM fams_scrap_disposition WHERE request_id=930301
+                """;
+        var before = db.queryForMap(original);
+        var migration = Flyway.configure().dataSource(dataSource).locations("classpath:db/migration/d6_04")
+                .target("84").load();
+        assertEquals(1, migration.migrate().migrationsExecuted);
+        assertEquals(0, migration.migrate().migrationsExecuted);
+        assertEquals(before, db.queryForMap(original));
+        assertEquals(1, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_scrap_disposition WHERE request_id=930301
+                    AND due_at IS NULL AND due_timezone IS NULL
+                """, Integer.class));
     }
 
     private void verifyLoanAndFactorySmsFallback() {
@@ -182,6 +295,25 @@ class BusinessReminderRuntimeCase {
                 INSERT INTO fams_todo (pool_type,assignee_account_id,business_type,business_id,todo_type,
                     todo_status,opened_at) VALUES (? ,?,'LOAN',930700,'OVERDUE','OPEN',NOW(3))
                 """, "EMPLOYEE", EXECUTOR_ACCOUNT);
+        new BusinessReminderService(db, json, smsClock("2026-11-17T15:59:59Z")).scan();
+        var firstOverdue = "FACTORY_RETURN|OVERDUE|2026-11-18|WAREHOUSE_OPERATOR|-";
+        assertFalse(notices("REPAIR_FACTORY_ROUND", 930600).contains(firstOverdue));
+
+        var midnight = smsClock("2026-11-17T16:00:00Z");
+        db.update("""
+                UPDATE fams_todo SET todo_status='CLOSED',closed_at='2026-11-17 15:59:59'
+                WHERE business_type='REPAIR' AND business_id=930600 AND todo_type='FACTORY_RETURN'
+                """);
+        new BusinessReminderService(db, json, midnight).scan();
+        assertFalse(notices("REPAIR_FACTORY_ROUND", 930600).contains(firstOverdue));
+        assertEquals(0, fallbackNotices("REPAIR_FACTORY_ROUND"));
+        db.update("""
+                INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at)
+                VALUES ('WAREHOUSE_OPERATOR','REPAIR',930600,'FACTORY_RETURN','OPEN','2026-11-17 16:00:00')
+                """);
+        new BusinessReminderService(db, json, midnight).scan();
+        new BusinessReminderService(db, json, midnight).scan();
+        assertEquals(1, notices("REPAIR_FACTORY_ROUND", 930600).stream().filter(firstOverdue::equals).count());
         scan("2026-11-18");
         assertEquals(0, fallbackNotices("LOAN"));
         assertEquals(1, fallbackNotices("REPAIR_FACTORY_ROUND"));
@@ -212,9 +344,20 @@ class BusinessReminderRuntimeCase {
             } else {
                 assertEquals("FACTORY_RETURN", stage);
                 db.update("""
+                        UPDATE fams_todo SET todo_status='CLOSED',closed_at='2026-11-18 16:00:00'
+                        WHERE business_type='REPAIR' AND business_id=930600 AND todo_type='FACTORY_RETURN'
+                            AND todo_status='OPEN'
+                        """);
+                assertNull(queue.eligibleTemplate(claim));
+                db.update("""
+                        INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at)
+                        VALUES ('WAREHOUSE_OPERATOR','REPAIR',930600,'FACTORY_RETURN','OPEN','2026-11-18 16:00:00')
+                        """);
+                assertEquals("fallback-test", queue.eligibleTemplate(claim));
+                db.update("""
                         INSERT INTO fams_message_receipt (account_id,message_kind,message_id,read_at)
                         SELECT ?, 'REMINDER', MAX(id), NOW(3) FROM fams_business_reminder
-                        WHERE business_type='REPAIR_FACTORY_ROUND' AND reminder_type='DUE_TODAY'
+                        WHERE business_type='REPAIR_FACTORY_ROUND' AND reminder_type='OVERDUE'
                         """, WAREHOUSE_ACCOUNT);
                 assertNull(queue.eligibleTemplate(claim));
                 jobs.fail(claim, "RECIPIENT_UNAVAILABLE_OR_READ", false);
@@ -340,6 +483,10 @@ class BusinessReminderRuntimeCase {
                 + " VALUES (930600,930600,930304,930600,1,'DISPATCHED','Provider','Contact','13800000000',"
                 + "'2026-11-01','Reminder fault',?,?, '2026-11-01 12:00:00','2026-11-01 13:00:00',?,"
                 + "'Reminder handoff')", snapshot(), ADMIN, ADMIN);
+        db.update("""
+                INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at)
+                VALUES ('WAREHOUSE_OPERATOR','REPAIR',930600,'FACTORY_RETURN','OPEN','2026-11-01 13:00:00')
+                """);
         db.update("INSERT INTO fams_loss_report (id,asset_id,creator_account_id,asset_version,source_snapshot_json,"
                 + "last_seen_at,last_location,circumstances,report_status,processor_account_id,next_review_date,"
                 + "created_at,updated_at) VALUES (930300,930300,?,0,?,'2026-11-01 12:00:00','Reminder place',"

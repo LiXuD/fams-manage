@@ -1,20 +1,26 @@
 <view class="page">
-  <view class="title">调拨整单处理权转派</view>
-  <view class="hint">仅当前有效资产管理员可操作。请从业务详情核对单据ID；转派保留实物阶段、正式责任及资产锁。</view>
+  <view class="title">{{declarationMode ? '调拨办理声明' : '调拨整单处理权转派'}}</view>
+  <view class="hint">{{declarationMode ? '当前办理人可登记无法继续，由资产管理员负责转派。' : '仅当前有效资产管理员可操作。请从业务详情核对单据ID；转派保留实物阶段、正式责任及资产锁。'}}</view>
   <view wx:if="{{error}}" class="error">{{error}}</view><view wx:if="{{notice}}">{{notice}}</view>
   <button disabled="{{busy || retryable}}" bindtap="onList">加载调拨清单</button>
   <view wx:for="{{rows}}" wx:key="id" class="card">
     <view>{{item.requestNo}} · {{item.requestStatus === 'PROCESSING' ? '库管处理中' : item.requestStatus === 'WAITING_HANDOVER' ? '待交接完成' : '当前不可转派'}}</view>
-    <button disabled="{{busy || retryable || (item.requestStatus !== 'PROCESSING' && item.requestStatus !== 'WAITING_HANDOVER')}}" data-id="{{item.id}}" bindtap="onOpen">核对整单转派清单</button>
+    <button disabled="{{busy || retryable || (item.requestStatus !== 'PROCESSING' && item.requestStatus !== 'WAITING_HANDOVER')}}" data-id="{{item.id}}" bindtap="onOpen">{{declarationMode ? '加载调拨单' : '核对整单转派清单'}}</button>
   </view>
   <button disabled="{{busy || retryable || page <= 1}}" bindtap="onPrevious">上一页</button>
   <view>{{page}} 页 · {{total}} 单</view>
   <button disabled="{{busy || retryable || page * 20 >= total}}" bindtap="onNext">下一页</button>
   <input disabled="{{busy || retryable}}" value="{{requestId}}" type="number" maxlength="19" bindinput="onRequest" placeholder="调拨单据ID" />
   <button disabled="{{busy}}" bindtap="onInspect">加载 / 重新核对整单</button>
-  <button wx:if="{{retryable}}" disabled="{{busy}}" bindtap="onRetry">原请求重试转派</button>
+  <button wx:if="{{retryable}}" disabled="{{busy}}" bindtap="onRetry">原请求重试</button>
+  <view wx:if="{{declarationMode && ownedTransfer}}" class="card">
+    <view>调拨 {{ownedTransfer.id}}</view>
+    <textarea disabled="{{busy || retryable}}" value="{{reason}}" maxlength="1000" bindinput="onReason" placeholder="无法继续处理的原因" />
+    <button disabled="{{busy || retryable || !reason}}" bindtap="onDeclare">登记无法继续处理</button>
+  </view>
   <view wx:if="{{snapshot}}" class="card">
     <view>当前处理账号 {{snapshot.processorAccountId}} · 处理权版本 {{snapshot.ownershipVersion}}</view>
+    <view wx:if="{{snapshot.unavailableReason}}">原库管登记无法继续：{{snapshot.unavailableReason}}</view>
     <view wx:for="{{snapshot.items}}" wx:key="id">
       <view>明细 {{item.id}} · {{item.itemStatus === 'READY' ? '未交出' : item.itemStatus === 'DELIVERED' ? '已交出待接收' : item.itemStatus === 'REFUSED' ? '实物不符待核查' : item.itemStatus === 'RECOVERY_PENDING' ? '待收回' : '已结束'}} · 锁版本 {{item.lockVersion}}</view>
       <view>实物去向 {{item.destination || '尚未交出'}} · 凭证 {{item.deliveryEvidence}}</view>

@@ -2,6 +2,7 @@ package com.fams.asset;
 
 import com.fams.masterdata.AssetMasterDataPort;
 import com.fams.business.InitialRepairPort;
+import com.fams.business.InitialScrapPort;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -24,7 +25,9 @@ public class AssetInitialPublicationPort {
                                Long warehouseId, Long locationId, Long usingOrganizationId,
                                Long employeeId, LocalDate borrowedDate, LocalDate expectedReturnDate,
                                String preScrapState, String scrapReason, String scrapCondition,
-                               String proposedDisposition, String preRepairState, InitialRepairPort.Facts repairFacts) { }
+                               String proposedDisposition, String preRepairState, InitialRepairPort.Facts repairFacts,
+                               InitialScrapPort.LossFacts lossFacts,
+                               InitialScrapPort.FactoryDisposition factoryDisposition) { }
     public record Context(UUID batchId, int sheetRow, long actorId, String username,
                           long parameterId, LocalDate businessDate, Instant now, long administratorId, String timezone) { }
     public record Created(long id, String code) { }
@@ -69,12 +72,19 @@ public class AssetInitialPublicationPort {
             throw new IllegalArgumentException("ASSET_IMPORT_ROW_INVALID");
         }
         boolean pendingScrap = "待报废".equals(asset.state());
-        String opening = pendingScrap ? asset.preScrapState()
-                : asset.repairFacts() != null ? asset.preRepairState() : asset.state();
+        boolean repairOpening = asset.repairFacts() != null;
+        boolean lossOpening = asset.lossFacts() != null;
+        String opening = repairOpening ? asset.preRepairState()
+                : pendingScrap ? asset.preScrapState() : asset.state();
         if (asset.repairFacts() != null && "借出".equals(opening)
                 && asset.borrowedDate().isAfter(LocalDate.ofInstant(asset.repairFacts().acceptedAt(),
                         java.time.ZoneId.of(context.timezone())))) {
             throw new IllegalStateException("ASSET_IMPORT_INITIAL_REPAIR_BORROW_TIME_INVALID");
+        }
+        if (lossOpening && "借出".equals(opening)
+                && asset.borrowedDate().isAfter(LocalDate.ofInstant(asset.lossFacts().lastSeenAt(),
+                        java.time.ZoneId.of(context.timezone())))) {
+            throw new IllegalStateException("ASSET_IMPORT_INITIAL_LOSS_BORROW_TIME_INVALID");
         }
         String custody = switch (opening) {
             case "在库" -> "STORAGE";
@@ -93,8 +103,8 @@ public class AssetInitialPublicationPort {
                 ? null : asset.serial().strip());
         values.put("serialNormalized", values.get("serial") == null ? null
                 : ((String) values.get("serial")).toUpperCase(Locale.ROOT));
-        values.put("lifecycle", pendingScrap ? "PENDING_SCRAP"
-                : "STORAGE".equals(custody) ? "IN_STOCK" : "借出".equals(opening) ? "BORROWED" : "IN_USE");
+        String custodyLifecycle = "STORAGE".equals(custody) ? "IN_STOCK" : "借出".equals(opening) ? "BORROWED" : "IN_USE";
+        values.put("lifecycle", pendingScrap && !repairOpening && !lossOpening ? "PENDING_SCRAP" : custodyLifecycle);
         values.put("custody", custody);
         values.put("warehouseId", "STORAGE".equals(custody) ? asset.warehouseId() : null);
         values.put("locationId", asset.locationId());
@@ -120,16 +130,26 @@ public class AssetInitialPublicationPort {
                     context.sheetRow(), asset.borrowedDate(), asset.expectedReturnDate(),
                     context.businessDate(), context.parameterId(), context.now());
         }
-        if (pendingScrap) {
-            scraps.open(new com.fams.business.InitialScrapPort.Opening(id,
-                    "STORAGE".equals(custody) ? "IN_STOCK" : "IN_USE", asset.scrapReason().strip(),
-                    asset.scrapCondition().strip(), asset.proposedDisposition().strip(), context.actorId(),
-                    context.batchId(), context.sheetRow(), context.now()));
-        }
-        if (asset.repairFacts() != null) {
+        if (repairOpening) {
             repairs.open(new InitialRepairPort.Opening(id, (String) values.get("serial"), asset.repairFacts(),
                     context.batchId(), context.sheetRow(), context.actorId(), context.username(), context.administratorId(),
                     context.timezone(), context.now()));
+        }
+        if (pendingScrap) {
+            var scrap = new com.fams.business.InitialScrapPort.Opening(id,
+                    repairOpening ? asset.repairFacts().factory() != null ? "FACTORY_REPAIR" : "UNDER_REPAIR" : custodyLifecycle,
+                    asset.scrapReason().strip(), asset.scrapCondition().strip(),
+                    asset.proposedDisposition().strip(), context.actorId(),
+                    context.batchId(), context.sheetRow(), context.now());
+            if (lossOpening) {
+                scraps.openLoss(scrap, asset.lossFacts(), context.businessDate(), context.timezone());
+            } else if (asset.factoryDisposition() != null) {
+                scraps.openFactoryDisposition(scrap, asset.factoryDisposition());
+            } else if (repairOpening) {
+                scraps.openRepair(scrap);
+            } else {
+                scraps.open(scrap);
+            }
         }
         return new Created(id, code);
     }

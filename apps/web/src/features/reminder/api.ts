@@ -12,7 +12,8 @@ export interface DutyMutation { key: string; version: number;
 /** 消息中心的一条可见行：待办与提醒共用同一形状，两类各自的档位与阶段字段只在一侧有值。 */
 export interface ReminderMessage {
   kind: "TODO" | "REMINDER"; id: string; businessType: string; businessId: string; stage: string;
-  objectStage: string; poolType: string; assigneeAccountId: string; openedAt: string; deadlineAt: string; read: boolean
+  objectStage: string; poolType: string; assigneeAccountId: string; openedAt: string; deadlineAt: string; read: boolean;
+  parentBusinessId?: string; parentBusinessType?: string
 }
 export interface ReminderPage { items: ReminderMessage[]; total: number; unread: number; view: string }
 
@@ -28,20 +29,20 @@ export const messageTodoLabels: Record<string, string> = { APPROVAL: "待管理�
   PROCESS: "待维修处理", RECEIPT: "待实物接收", OPINION: "待补充技术意见", VERIFY: "待核实", SEARCH: "待查找跟进",
   HANDOVER_EXCEPTION: "交接异常待处理", RETURN_EXCEPTION: "返还异常待处理", OVERDUE: "逾期跟进",
   FACTORY_DISPATCH: "待寄出返厂", FACTORY_SCOPE_APPROVAL: "待返厂范围确认", RESTORE_REQUIRED: "待恢复保管",
-  DISPOSITION: "待实际处置", LOST_FOLLOW_UP: "待遗失跟进", REASSIGNMENT_REQUIRED: "需要转派" };
+  DISPOSITION: "待实际处置", LOST_FOLLOW_UP: "待遗失跟进", REASSIGNMENT_REQUIRED: "需要转派",
+  INVENTORY_CONFLICT: "盘点冲突待复核", INVENTORY_DIFFERENCE: "盘点差异待复核" };
 export const messageBusinessLabels: Record<string, string> = { INBOUND: "入库单", REQUISITION: "领用申请",
   REQUISITION_ALLOCATION: "领用分配", LOAN: "借用", LOAN_EXTENSION: "借用延期", ASSET_RETURN: "退还",
   TRANSFER: "调拨", TRANSFER_ITEM: "调拨明细", REQUISITION_HANDOVER: "领用交接",
   INVENTORY_TASK: "盘点任务", REPAIR: "报修单", REPAIR_FACTORY_ROUND: "返厂轮次",
   LOST_REPORT: "报失单", SCRAP: "报废申请", ITEM_TARGET_CHANGE: "目标变更" };
 
-/** 维修及其派生单据统一落到报修详情；其余业务类型按表落到各自列表路由并带 id 查询串。 */
+/** 维修本体及技术意见/返厂轮次等分段落报修详情；派生单据（返厂轮次按父单、代确认按代确认页）由消息视图单独处理。 */
 export const messageRepairSegmentTypes: ReadonlySet<string> = new Set([
-  "REPAIR", "REPAIR_FACTORY_ROUND", "REPAIR_OPINION", "REPAIR_TECH", "PROXY_CONFIRMATION"]);
+  "REPAIR", "REPAIR_OPINION", "REPAIR_TECH"]);
 export const messageDestinations: Record<string, string> = { INBOUND: "/inbound", REQUISITION: "/requisitions",
-  REQUISITION_ALLOCATION: "/requisitions", LOAN: "/loans", LOAN_EXTENSION: "/loans", ASSET_RETURN: "/loans",
-  TRANSFER: "/transfers", TRANSFER_ITEM: "/transfers", REQUISITION_HANDOVER: "/requisitions",
-  INVENTORY_TASK: "/inventory-tasks", LOST_REPORT: "/loss-reports", SCRAP: "/scrap-requests",
+  TRANSFER: "/transfers",
+  LOST_REPORT: "/loss-reports", SCRAP: "/scrap-requests",
   ITEM_TARGET_CHANGE: "/requisition-target-changes" };
 
 export class ReminderApiError extends Error {

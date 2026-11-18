@@ -116,7 +116,7 @@ onMounted(refresh);
         <h2 id="extension-title" class="fams-panel-title">延期审批与历史</h2>
       </div>
       <label class="fams-field">
-        <span class="fams-field-label">操作原因 / 验收说明</span>
+        <span class="fams-field-label">操作原因 / 验收或无法继续的说明</span>
         <textarea class="fams-control" v-model="reason" :disabled="formDisabled" maxlength="1000" />
       </label>
       <article v-for="row in extensionRows" :key="row.id" class="fams-card fams-stack">

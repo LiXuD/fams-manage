@@ -132,6 +132,14 @@ export function createLoanPage(getServices: () => MiniServices) {
             await mutate(this,`/api/v1/mini/asset-returns/${row.id}/resubmit-loss`,row.version,{approved:false,reason:this.data.reason.trim()});
             this.setData({returnProgress:null});
         },
+        async onDeclareUnavailable(this: Context) {
+            const row = this.data.returnProgress, reason = this.data.reason.trim();
+            if (!live || !services || this.data.busy || pending || identity !== JSON.stringify(services.sessions.identity)
+                || !row?.canReportMissing || row.ownershipVersion == null || !reason
+                || row.processorAccountId !== services.sessions.identity?.accountId) return;
+            await mutate(this, `/api/v1/mini/asset-returns/${row.id}/reassignment/unavailable`, row.version,
+                { ownershipVersion: row.ownershipVersion, reason });
+        },
         onReason(this: Context, event: Input) { if (!this.data.busy && !pending) this.setData({ reason: event.detail.value }); },
         onDueDate(this: Context, event: Input) { if (!this.data.busy && !pending) this.setData({ dueDate: event.detail.value }); },
         onSelectAsset(this: Context, event: Selection) {

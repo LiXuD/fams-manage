@@ -3,6 +3,9 @@ package com.fams.inbound;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fams.reminder.BusinessReminderService;
+import com.fams.reminder.DutyEscalationService;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -45,6 +48,8 @@ class InboundHttpTest {
 
     @Value("${local.server.port}") int port;
     @Autowired JdbcTemplate jdbc;
+    @Autowired BusinessReminderService reminders;
+    @Autowired DutyEscalationService escalations;
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
@@ -316,11 +321,49 @@ class InboundHttpTest {
         assertStatus(409, call("POST", firstPath,
                 valid.replace("\"assetVersion\":1", "\"assetVersion\":0"),
                 other, headers(other, 54, 3L)));
+        long receiptNumber = Long.parseLong(id);
+        jdbc.update("""
+                UPDATE fams_inbound_receipt SET warehouse_first_execution_due_at=UTC_TIMESTAMP(3)-INTERVAL 6 DAY
+                WHERE id=?
+                """, receiptNumber);
+        reminders.scan();
+        escalations.escalate();
+        var firstNotice = jdbc.queryForObject("""
+                SELECT MAX(id) FROM fams_business_reminder WHERE business_type='INBOUND' AND business_id=?
+                    AND stage='FIRST_EXECUTION' AND reminder_type='OVERDUE'
+                """, Long.class, receiptNumber);
+        assertTrue(firstNotice != null);
+        var beforeNoticePage = JSON.readTree(assertStatus(200, call("GET", "/api/v1/messages?view=EXCEPTION",
+                null, other, Map.of())).body());
+        assertTrue(beforeNoticePage.path("items").valueStream()
+                .anyMatch(message -> firstNotice.toString().equals(message.path("id").asText())
+                        && "REMINDER".equals(message.path("kind").asText())));
         JsonNode partly = JSON.readTree(assertStatus(200, call("POST", firstPath,
                 valid, other, headers(other, 55, 3L))).body());
         assertEquals("WAREHOUSE_PROCESSING", partly.path("receipt").path("status").asText());
         assertEquals("ACCEPTED", partly.path("item").path("executionStatus").asText());
         assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE released_at IS NULL"));
+        for (var session : List.of(other, admin)) {
+            var page = JSON.readTree(assertStatus(200, call("GET", "/api/v1/messages?view=EXCEPTION",
+                    null, session, Map.of())).body());
+            assertTrue(page.path("items").valueStream().noneMatch(message -> id.equals(message.path("businessId").asText())
+                    && "FIRST_EXECUTION".equals(message.path("objectStage").asText())));
+        }
+        assertStatus(404, call("POST", "/api/v1/messages/REMINDER/" + firstNotice + "/read",
+                null, other, headers(other, 155, null)));
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM fams_business_reminder WHERE id=?",
+                Integer.class, firstNotice));
+        jdbc.update("""
+                UPDATE fams_inbound_receipt SET warehouse_first_execution_due_at=UTC_TIMESTAMP(3)-INTERVAL 7 DAY
+                WHERE id=?
+                """, receiptNumber);
+        reminders.scan();
+        escalations.escalate();
+        assertEquals(0, jdbc.queryForObject("""
+                SELECT COUNT(*) FROM fams_business_reminder r JOIN fams_inbound_receipt x
+                    ON x.id=r.business_id AND x.warehouse_first_execution_due_at=r.deadline_at
+                WHERE r.business_type='INBOUND' AND x.id=? AND r.stage='FIRST_EXECUTION'
+                """, Integer.class, receiptNumber));
         assertStatus(409, call("POST", firstPath, valid, other, headers(other, 56, 4L)));
         String secondCode = second.path("assetSnapshot").path("assetCode").asText();
         String secondValid = valid.replace(firstCode, secondCode);

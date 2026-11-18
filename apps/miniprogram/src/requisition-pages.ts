@@ -210,6 +210,15 @@ export function createRequisitionPage(getServices: () => MiniServices, initially
         async onDispute(this: Context) {
             if (this.data.selected && this.data.reason.trim()) await mutate(this, "/" + this.data.selected.id + "/dispute", { reason: this.data.reason });
         },
+        async onDeclareUnavailable(this: Context) {
+            const selected = this.data.selected, account = services?.sessions.identity?.accountId;
+            const ownership = selected?.ownership.find(row => !row.archivedAt);
+            const reason = this.data.reason.trim();
+            if (!live || !account || !selected || !reason || ownership?.processorAccountId !== account
+                || !["WAREHOUSE_PROCESSING", "WAITING_HANDOVER"].includes(selected.requestStatus)) return;
+            await mutate(this, "/" + selected.id + "/reassignment/unavailable",
+                { reason, ownershipVersion: ownership.ownershipVersion });
+        },
         async onFollowup(this: Context, event: Event) {
             if (this.data.selected) await mutate(this, `/${this.data.selected.id}/demands/${event.currentTarget.dataset.id}/followup`);
         },

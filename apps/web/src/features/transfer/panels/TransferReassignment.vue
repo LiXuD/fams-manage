@@ -28,6 +28,7 @@ const submitText = computed(() => retryable.value ? "原请求重试转派" : "�
     <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
     <template v-if="snapshot">
       <p class="fams-panel-subtitle">当前处理账号 {{ snapshot.processorAccountId }} · 处理权版本 {{ snapshot.ownershipVersion }}</p>
+      <p v-if="snapshot.unavailableReason">原库管登记无法继续：{{ snapshot.unavailableReason }}</p>
       <ul class="fams-timeline">
         <li v-for="item in snapshot.items" :key="item.id">明细 {{ item.id }} · {{ labels[item.itemStatus] }} · {{ item.destination || '尚未交出' }}<small>{{ item.deliveryEvidence }}</small></li>
       </ul>

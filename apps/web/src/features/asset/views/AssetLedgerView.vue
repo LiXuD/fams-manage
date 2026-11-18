@@ -4,7 +4,8 @@ import { useRoute, useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { usePagedResourceList } from "@/composables/usePagedResourceList";
-import { cardStageLabels, custodyLabel, lifecycleLabels, listAssets, type AssetCard } from "@/features/asset/api";
+import { assetLedgerCsv, cardStageLabels, custodyLabel, lifecycleLabels, listAssets,
+  type AssetCard, type AssetLedgerFilters } from "@/features/asset/api";
 
 const session = useSessionStore();
 const route = useRoute();
@@ -12,13 +13,51 @@ const router = useRouter();
 const entryQuery = route?.query ?? {};
 const code = shallowRef(typeof entryQuery.assetCode === "string" ? entryQuery.assetCode : "");
 const nameFilter = shallowRef("");
+const overdueFilter = shallowRef("");
+const currentProcessorId = shallowRef("");
+const businessReference = shallowRef("");
+const inventoryBefore = shallowRef("");
+const appliedFilters = shallowRef<AssetLedgerFilters & { code: string; name: string; accountId: string }>();
+const exporting = shallowRef(false);
 
 const canWrite = session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false;
+const canExport = computed(() => session.permissions?.fieldPermissions.includes("BULK_EXPORT") ?? false);
 const ASSET_ID = /^[1-9][0-9]*$/;
 
-const { rows, total, page, error, restart, pages } = usePagedResourceList<AssetCard>(
-  (page) => listAssets(page, code.value, nameFilter.value),
+const { rows, total, page, error, restart, pages, busy } = usePagedResourceList<AssetCard>(
+  async (page) => {
+    const filters = {
+      code: code.value.trim(), name: nameFilter.value.trim(),
+      borrowOverdue: overdueFilter.value === "" ? undefined : overdueFilter.value === "true",
+      currentProcessorId: currentProcessorId.value.trim(), businessReference: businessReference.value.trim(),
+      inventoryBefore: inventoryBefore.value,
+    };
+    const accountId = session.user?.id;
+    const result = await listAssets(page, filters.code, filters.name, filters);
+    appliedFilters.value = accountId ? { ...filters, accountId } : undefined;
+    return result;
+  },
   { problem: (cause) => cause instanceof Error ? cause.message : "台账加载失败" });
+
+async function exportCurrent(): Promise<void> {
+  const filters = appliedFilters.value;
+  if (!canExport.value || !filters || busy.value || exporting.value || filters.accountId !== session.user?.id) return;
+  exporting.value = true;
+  try {
+    const file = await assetLedgerCsv(filters.code, filters.name, filters);
+    if (filters.accountId !== session.user?.id || !canExport.value) return;
+    const url = URL.createObjectURL(file);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "asset-ledger.csv";
+    try { link.click(); }
+    finally { window.setTimeout(() => URL.revokeObjectURL(url), 0); }
+  } catch (cause) {
+    if (filters.accountId === session.user?.id) {
+      error.value = cause instanceof Error ? cause.message : "资产台账导出失败。";
+    }
+  } finally { exporting.value = false; }
+}
 
 const displayRows = computed(() => rows.value.map((asset) => ({
   ...asset,
@@ -54,7 +93,29 @@ if (router) {
           <label for="ledger-name">资产名称</label>
           <input id="ledger-name" class="fams-control" v-model="nameFilter" placeholder="名称包含" />
         </div>
+        <div class="fams-field">
+          <label for="ledger-processor">当前处理库管账号 ID</label>
+          <input id="ledger-processor" class="fams-control" v-model="currentProcessorId" inputmode="numeric" maxlength="19" />
+        </div>
+        <div class="fams-field">
+          <label for="ledger-business-ref">业务单号</label>
+          <input id="ledger-business-ref" class="fams-control" v-model="businessReference" maxlength="128" />
+        </div>
+        <div class="fams-field">
+          <label for="ledger-inventory-before">在指定日期前未盘点（含从未盘点）</label>
+          <input id="ledger-inventory-before" class="fams-control" v-model="inventoryBefore" type="date" />
+        </div>
+        <div class="fams-field">
+          <label for="ledger-overdue">借用逾期</label>
+          <select id="ledger-overdue" class="fams-control" v-model="overdueFilter">
+            <option value="">全部</option>
+            <option value="true">已逾期</option>
+            <option value="false">无逾期</option>
+          </select>
+        </div>
         <button class="fams-button" data-kind="secondary" type="submit">查询</button>
+        <button v-if="canExport" class="fams-button" data-kind="secondary" type="button"
+          :disabled="busy || exporting || !appliedFilters" @click="exportCurrent">导出当前查询结果 CSV</button>
       </form>
 
       <div class="fams-table-scroll">

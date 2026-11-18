@@ -20,6 +20,8 @@ const identity = computed(() => JSON.stringify([session.user?.id, session.user?.
 const scope = shallowRef<Scope>("MINE");
 const result = ref<Page>();
 const stage = shallowRef("");
+const processorInput = shallowRef("");
+const processorAccountId = shallowRef("");
 const cursors = ref<(string | undefined)[]>([undefined]);
 const pageIndex = shallowRef(0);
 const total = computed(() => result.value?.stageCounts.reduce((sum, row) => sum + row.count, 0) ?? 0);
@@ -49,6 +51,7 @@ const stages: Record<string, string> = {
   APPROVAL: "待管理员确认", ADMIN_DECISION: "待管理员确认", CLAIM: "待库管领取",
   WAREHOUSE_CLAIM: "待库管领取", FIRST_EXECUTION: "待首次执行", PROCESS: "待处理",
   RECEIPT: "待实物接收", REASSIGNMENT_REQUIRED: "需要转派", DISPOSITION: "待处置",
+  INVENTORY_CONFLICT: "盘点冲突待复核", INVENTORY_DIFFERENCE: "盘点差异待复核",
 };
 
 function destination(todo: Todo) {
@@ -58,6 +61,7 @@ function destination(todo: Todo) {
     case "INVENTORY_TASK": return { name: "inventory-tasks", query: { taskId: id } };
     case "REQUISITION": return { name: "requisitions", query: { id } };
     case "TRANSFER": return { name: "transfers", query: { id } };
+    case "ASSET_RETURN": return { name: "loans", query: { return: id } };
     case "REPAIR": return { name: "repair-detail", params: { id } };
     case "LOST_REPORT": return { name: "loss-reports", params: { id } };
     case "SCRAP": return { name: "scrap-requests", params: { id } };
@@ -70,6 +74,9 @@ async function load(before?: string) {
   const turn = liveness.begin();
   const query = new URLSearchParams({ scope: scope.value });
   if (stage.value) query.set("stage", stage.value);
+  if (scope.value === "ASSET_ADMIN" && processorAccountId.value) {
+    query.set("processorAccountId", processorAccountId.value);
+  }
   if (before) query.set("before", before);
   result.value = undefined;
   busy.value = true;
@@ -93,6 +100,13 @@ function chooseStage(next: string) {
 
 function choose(next: Scope) {
   scope.value = next;
+  processorInput.value = "";
+  processorAccountId.value = "";
+  chooseStage("");
+}
+
+function applyProcessor() {
+  processorAccountId.value = processorInput.value.trim();
   chooseStage("");
 }
 
@@ -120,6 +134,13 @@ watch(identity, () => choose(available.value[0] ?? "MINE"), { immediate: true, f
         <router-link class="fams-button" data-kind="link" data-size="sm" :to="{ name: 'messages' }">查看消息与异常</router-link>
       </div>
     </div>
+    <form v-if="scope === 'ASSET_ADMIN'" class="fams-field-row" @submit.prevent="applyProcessor">
+      <div class="fams-field">
+        <label for="todos-processor">原库管账号 ID</label>
+        <input id="todos-processor" class="fams-control" v-model="processorInput" inputmode="numeric" maxlength="19" pattern="[1-9][0-9]{0,18}">
+      </div>
+      <button class="fams-button" data-kind="secondary" type="submit">筛选转派待办</button>
+    </form>
     <p v-if="busy" role="status">正在查询</p>
     <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }} <button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="load(currentCursor)">重试</button></strong></p>
     <template v-if="result">

@@ -2,7 +2,7 @@ import type { MiniServices } from "./pages.ts";
 import { MiniRequestError } from "./session.ts";
 import type { FactorySummary } from "./repair-factory-types.ts";
 interface Asset { initialSource?: { batchId: string; sheetRow: number; stage: string; evidence: string; factoryDestination?: string }; id: string; assetCode: string; name: string; version: number; locationId: string | null; locationName: string | null }
-interface Repair { latestLossReportId?: string; inventoryEvidence?: { taskId: string; observationId: string; photoIds: string[] }[]; id: string; source: Asset; fault: string; status: string; version: number; assetVersion: number; ownershipVersion: number; lockVersion: number;
+interface Repair { latestLossReportId?: string; inventoryEvidence?: { taskId: string; observationId: string; photoIds: string[] }[]; id: string; source: Asset; fault: string; status: string; version: number; assetVersion: number; ownershipVersion: number; lockVersion: number | null; processorAccountId?: string;
     loanVersion?: number | null; physicalHandling?: { occurred_at: string; evidence: string }[]; inbound?: { occurred_at: string; evidence: string }[];
     loanExpectedReturnDate?: string | null; returnHandovers?: ReturnHandover[]; returnRecollections?: { handover_id: string; occurred_at: string; evidence: string }[];
     actions: Record<string, boolean>; factorySummary?: FactorySummary; photos?: { objectId: string; filename: string; contentType: string }[];
@@ -15,19 +15,19 @@ type ReturnMode = "delivery" | "receipt" | "refusal" | "recollection";
 interface Data { lossDate?: string; lossTime?: string; lossLocation?: string; lossCircumstances?: string; scrapReason: string; scrapCondition: string; scrapMethod: string; scrapReceiptId: string; rows: Repair[]; assets: Asset[]; detail: Repair | null; selectedAsset: string; assetPage: number; assetTotal: number;
     approvalMethod: "INTERNAL_NO_COST" | "INTERNAL_OR_FACTORY"; approvalMethodIndex: number; factoryCostPolicyIndex: number; factoryCostPolicyLabels: string[]; factoryCostLimit: string;
     page: number; total: number; busy: boolean; retry: boolean; error: string; fault: string; impact: string; occurredAt: string;
-    reason: string; observedCode: string; evidence: string; locationConfirmed: boolean; neverLeft: boolean; photoPath: string; photoName: string;
+    reason: string; unavailableReason: string; canDeclareUnavailable: boolean; observedCode: string; evidence: string; locationConfirmed: boolean; neverLeft: boolean; photoPath: string; photoName: string;
     physicalMode: "away" | "inbound"; physicalObservedCode: string; physicalAt: string; physicalEvidence: string;
     warehouses: PhysicalPlace[]; physicalLocations: PhysicalPlace[]; physicalWarehouseId: string; physicalLocationId: string;
     warehousePage: number; warehouseTotal: number; physicalLocationPage: number; physicalLocationTotal: number;
     returnMode: ReturnMode; returnTarget: ReturnTarget | null; returnObservedCode: string; returnAt: string; returnEvidence: string; returnChecked: boolean;
     returnLocations: PhysicalPlace[]; returnLocationId: string; returnLocationPage: number; returnLocationTotal: number; reassignment: Reassignment | null; reassignTarget: string; reassignReason: string; reassignEvidence: string; reassignChecked: boolean }
-interface Reassignment { snapshot: { version: number; acceptedAt: string | null; physicalHandling: unknown[]; outstandingReturn: { handover_status: string } | null }; operators: { id: string; name: string }[] }
+interface Reassignment { unavailableReason?: string; snapshot: { version: number; acceptedAt: string | null; physicalHandling: unknown[]; outstandingReturn: { handover_status: string } | null }; operators: { id: string; name: string }[] }
 interface Context { data: Data; setData(data: Partial<Data>): void }
 const costPolicies = ["NO_COST", "LIMITED", "UNLIMITED"] as const;
 const moneyPattern = /^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/;
 const blank = (): Data => ({ scrapReason: "", scrapCondition: "", scrapMethod: "", scrapReceiptId: "", rows: [], assets: [], detail: null, selectedAsset: "", assetPage: 1, assetTotal: 0, page: 1, total: 0,
     approvalMethod: "INTERNAL_NO_COST", approvalMethodIndex: 0, factoryCostPolicyIndex: 0, factoryCostPolicyLabels: ["返厂无费用", "所有返厂轮次累计限额", "不限费用"], factoryCostLimit: "",
-    busy: false, retry: false, error: "", fault: "", impact: "MEDIUM", occurredAt: "", reason: "", observedCode: "", evidence: "",
+    busy: false, retry: false, error: "", fault: "", impact: "MEDIUM", occurredAt: "", reason: "", unavailableReason: "", canDeclareUnavailable: false, observedCode: "", evidence: "",
     locationConfirmed: false, neverLeft: false, photoPath: "", photoName: "", physicalMode: "away", physicalObservedCode: "", physicalAt: "", physicalEvidence: "",
     warehouses: [], physicalLocations: [], physicalWarehouseId: "", physicalLocationId: "", warehousePage: 1, warehouseTotal: 0, physicalLocationPage: 1, physicalLocationTotal: 0,
     returnMode: "delivery", returnTarget: null, returnObservedCode: "", returnAt: "", returnEvidence: "", returnChecked: false,
@@ -55,6 +55,7 @@ export function createRepairPage(getServices: () => MiniServices) {
         const originalMethod = originalDecision?.allowedMethod;
         const originalPolicy = Math.max(0, costPolicies.findIndex(p => p === originalDecision?.factoryCostPolicy));
         const epoch = ++generation; clearPhoto(); page.setData({ busy: true, error: "", detail: null, rows: [], assets: [], photoPath: "", photoName: "",
+            unavailableReason: "", canDeclareUnavailable: false,
             approvalMethod: originalMethod === "INTERNAL_OR_FACTORY" ? "INTERNAL_OR_FACTORY" : "INTERNAL_NO_COST", approvalMethodIndex: originalMethod === "INTERNAL_OR_FACTORY" ? 1 : 0, factoryCostPolicyIndex: originalPolicy, factoryCostLimit: originalDecision?.factoryCostLimit ?? "",
             warehouses: [], physicalLocations: [], physicalWarehouseId: "", physicalLocationId: "", physicalObservedCode: "", physicalAt: "", physicalEvidence: "",
             returnTarget: null, returnObservedCode: "", returnAt: "", returnEvidence: "", returnChecked: false,
@@ -66,6 +67,8 @@ export function createRepairPage(getServices: () => MiniServices) {
             if (!current(epoch)) return;
             const detail = selectedId ? await services.sessions.request("GET", `/api/v1/mini/repairs/${selectedId}`) as Repair : null;
             if (current(epoch)) page.setData({ rows: rows.items, total: rows.total, assets: assets.items, assetTotal: assets.total, detail,
+                canDeclareUnavailable: detail?.status === "WAREHOUSE_PROCESSING" && detail.lockVersion != null && !!detail.processorAccountId
+                    && detail.processorAccountId === services.sessions.identity?.accountId,
                 selectedAsset: "", retry: !!pending, observedCode: "", evidence: "", locationConfirmed: false, neverLeft: false });
         } catch (error) { if (current(epoch)) failure(page, error); } finally { finish(page, epoch); }
     };
@@ -122,7 +125,7 @@ export function createRepairPage(getServices: () => MiniServices) {
             const field = event.currentTarget.dataset.field;
             if (!current(generation)) { finish(this, generation); return; }
             if (field === "factoryCostLimit" && (!this.data.detail?.actions.approve || this.data.approvalMethod !== "INTERNAL_OR_FACTORY")) return;
-            if (!this.data.busy && !pending && ["scrapReason", "scrapCondition", "scrapMethod", "factoryCostLimit", "fault","occurredAt","reason","observedCode","evidence","physicalObservedCode","physicalAt","physicalEvidence","returnObservedCode","returnAt","returnEvidence","reassignReason","reassignEvidence"].includes(field)) this.setData({ [field]: event.detail.value });
+            if (!this.data.busy && !pending && ["scrapReason", "scrapCondition", "scrapMethod", "factoryCostLimit", "fault","occurredAt","reason","unavailableReason","observedCode","evidence","physicalObservedCode","physicalAt","physicalEvidence","returnObservedCode","returnAt","returnEvidence","reassignReason","reassignEvidence"].includes(field)) this.setData({ [field]: event.detail.value });
         },
         onImpact(this: Context, event: { detail: { value: string } }) { const impact = ["LOW","MEDIUM","HIGH"][Number(event.detail.value)]; if (!this.data.busy && !pending && impact) this.setData({ impact }); },
         onPhysical(this: Context, event: { detail: { value: string[] } }) { if (!this.data.busy && !pending) this.setData({ neverLeft: event.detail.value.includes("neverLeft"), locationConfirmed: event.detail.value.includes("location") }); },
@@ -246,6 +249,14 @@ export function createRepairPage(getServices: () => MiniServices) {
             }
             await confirm(this, { path: `/api/v1/mini/repairs/${row.id}/return-${mode}`, key: services.createKey(), version: row.version, body },
                 "按实物事实保存本次返还办理：交出保持维修与锁，实际接收才恢复原责任和有效借用；拒收后须库管实际收回才可回库。");
+        },
+        async onDeclareUnavailable(this: Context) {
+            const row = this.data.detail;
+            if (this.data.busy || pending || !current(generation) || !row || !this.data.canDeclareUnavailable) return;
+            const reason = this.data.unavailableReason.trim();
+            if (reason.length < 3) { this.setData({ error: "请填写无法继续处理的实际原因。" }); return; }
+            await confirm(this, { path: `/api/v1/mini/repairs/${row.id}/processor-unavailability`, key: services.createKey(), version: row.version,
+                body: { reason, ownershipVersion: row.ownershipVersion } }, "登记后由资管核对并转派，当前实物办理记录和资产锁保留。");
         },
         async onReassignment(this: Context) {
             if (this.data.busy || pending || !current(generation) || !this.data.detail?.actions.reassign) return;

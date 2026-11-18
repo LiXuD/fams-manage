@@ -81,7 +81,8 @@ public class AssetImportPublicationService {
         Map<String, String> selected = AssetImportPreflight.columns(source, mapping);
         Set<String> codes = identifiers(source, selected.get("assetCode"));
         Set<String> serials = identifiers(source, selected.get("serialNumber"));
-        var checked = AssetImportPreflight.check(source, mapping, catalog.snapshot(codes, serials));
+        var now = clock.instant();
+        var checked = AssetImportPreflight.check(source, mapping, catalog.snapshot(codes, serials), now);
         List<Integer> savedReady = db.queryForList("SELECT sheet_row FROM fams_asset_import_row "
                 + "WHERE batch_id=? AND row_status='READY' ORDER BY sheet_row", Integer.class,
                 batchId.toString());
@@ -91,7 +92,6 @@ public class AssetImportPublicationService {
         }
         String username = db.queryForObject("SELECT username FROM fams_system_account WHERE id=?",
                 String.class, claim.actorId());
-        var now = clock.instant();
         var timezone = masterData.currentZone();
         LocalDate businessDate = LocalDate.ofInstant(now, timezone);
         long parameterId = masterData.currentParameterVersionId();
@@ -100,7 +100,8 @@ public class AssetImportPublicationService {
                     row.categoryId(), row.organizationId(), row.model(), row.unit(), row.serialNumber(),
                     row.state(), row.warehouseId(), row.locationId(), row.usingOrganizationId(), row.employeeId(),
                     row.borrowedDate(), row.expectedReturnDate(), row.preScrapState(), row.scrapReason(),
-                    row.scrapCondition(), row.proposedDisposition(), row.preRepairState(), row.repairFacts());
+                    row.scrapCondition(), row.proposedDisposition(), row.preRepairState(), row.repairFacts(),
+                    row.lossFacts(), row.factoryDisposition());
             var context = new AssetInitialPublicationPort.Context(batchId, row.sheetRow(), claim.actorId(),
                     username, parameterId, businessDate, now, administratorId, timezone.getId());
             var created = assets.create(input, context);

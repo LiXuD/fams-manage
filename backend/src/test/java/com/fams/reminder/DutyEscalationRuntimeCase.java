@@ -7,6 +7,9 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import javax.sql.DataSource;
+
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,7 +23,7 @@ import tools.jackson.databind.ObjectMapper;
     "spring.profiles.active=fams-product", "spring.flyway.locations=classpath:db/migration/d6_04",
     "fams.security.idempotency-hmac-key=test-idempotency-hmac-key-0123456789abcdef",
     "fams.security.employee-phone-key=test-phone-key-0123456789abcdef-extra",
-    "fams.attachments.cleanup-enabled=false", "fams.asset-import.worker.enabled=false"
+    "fams.attachments.cleanup-enabled=false", "fams.asset-import.worker.enabled=false", "spring.flyway.target=84"
 })
 @EnabledIfSystemProperty(named = "d6.24.duty.escalation.runtime", matches = "true")
 class DutyEscalationRuntimeCase {
@@ -37,12 +40,45 @@ class DutyEscalationRuntimeCase {
 
     @Autowired JdbcTemplate db;
     @Autowired ObjectMapper json;
+    @Autowired DataSource dataSource;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry properties) {
         properties.add("spring.datasource.url", () -> System.getenv("D6_24C2_TEST_DATASOURCE_URL"));
         properties.add("spring.datasource.username", () -> System.getenv("D6_24C2_TEST_DATASOURCE_USERNAME"));
         properties.add("spring.datasource.password", () -> System.getenv("D6_24C2_TEST_DATASOURCE_PASSWORD"));
+    }
+
+    private void verifyReceiptEscalationUsesTheCurrentReceiverNotice() {
+        long transferId = 944201;
+        long allocationId = 945201;
+        transfer(transferId);
+        requisition(allocationId);
+        db.update("UPDATE fams_transfer_item SET receiver_employee_id=? WHERE id=?", BACKUP, transferId);
+        db.update("UPDATE fams_requisition_allocation SET receipt_target_employee_id=? WHERE id=?",
+                BACKUP, allocationId);
+        scan("2026-11-11T16:00:00Z");
+        for (long id : List.of(transferId, allocationId)) {
+            assertEquals(List.of(), recipients(id, UNREAD));
+            assertEquals(List.of(), recipients(id, GROUP));
+        }
+
+        notice(transferId, "TRANSFER_ITEM", "HANDOVER_RECEIPT", "EMPLOYEE", BACKUP);
+        notice(allocationId, "REQUISITION_ALLOCATION", "HANDOVER_RECEIPT", "EMPLOYEE", BACKUP);
+        db.update("""
+                UPDATE fams_business_reminder SET created_at='2026-11-11 16:00:00'
+                WHERE business_id IN (?,?) AND recipient_account_id=? AND reminder_type='OVERDUE'
+                """, transferId, allocationId, BACKUP);
+
+        scan("2026-11-12T15:59:59Z");
+        for (long id : List.of(transferId, allocationId)) {
+            assertEquals(List.of(), recipients(id, UNREAD));
+            assertEquals(List.of(ADMIN, BACKUP, OTHER_ADMIN), recipients(id, GROUP));
+        }
+        scan("2026-11-12T16:00:00Z");
+        for (long id : List.of(transferId, allocationId)) {
+            assertEquals(List.of(ADMIN), recipients(id, UNREAD));
+        }
     }
 
     @Test
@@ -57,6 +93,15 @@ class DutyEscalationRuntimeCase {
         }
         inbound(946000, DISABLED_THRESHOLD, "PENDING_ADMIN_DECISION", "ADMIN_DECISION");
         markRead(ADMIN, 941000);
+        var oldNotice = db.queryForMap("SELECT * FROM fams_business_reminder WHERE business_id=941000");
+        var oldReceipt = db.queryForMap("SELECT * FROM fams_message_receipt WHERE account_id=?", ADMIN);
+        var migration = Flyway.configure().dataSource(dataSource).locations("classpath:db/migration/d6_04")
+                .target("85").load();
+        assertEquals(1, migration.migrate().migrationsExecuted);
+        assertEquals(0, migration.migrate().migrationsExecuted);
+        assertEquals(oldNotice, db.queryForMap("SELECT * FROM fams_business_reminder WHERE business_id=941000"));
+        assertEquals(oldReceipt, db.queryForMap("SELECT * FROM fams_message_receipt WHERE account_id=?", ADMIN));
+        assertEquals(0L, db.queryForObject("SELECT COUNT(*) FROM fams_reminder_followup", Long.class));
 
         scan("2026-11-09T20:00:59Z");
         assertEquals(0L, count(UNREAD));
@@ -103,6 +148,30 @@ class DutyEscalationRuntimeCase {
         scan("2026-11-10T16:01:00Z");
         assertEquals(unread, count(UNREAD));
         assertEquals(group, count(GROUP));
+
+        db.update("""
+                INSERT INTO fams_reminder_followup (reminder_id,business_type,business_id,stage,deadline_at,
+                    actor_account_id,request_key,findings,next_followup_at,recorded_at)
+                SELECT id,business_type,business_id,stage,deadline_at,?,UUID(),'已核查并预约跟进',
+                    '2026-11-12 19:00:00','2026-11-10 18:00:00'
+                FROM fams_business_reminder WHERE business_type='INBOUND' AND business_id=941000
+                    AND stage='ADMIN_DECISION' AND reminder_type='OVERDUE'
+                """, ADMIN);
+        scan("2026-11-12T18:59:59.999Z");
+        assertEquals(List.of(), resumedRecipients());
+        scan("2026-11-12T19:00:00Z");
+        assertEquals(List.of(ADMIN, BACKUP, OTHER_ADMIN), resumedRecipients());
+        scan("2026-11-12T19:00:00Z");
+        assertEquals(List.of(ADMIN, BACKUP, OTHER_ADMIN), resumedRecipients());
+        verifyReceiptEscalationUsesTheCurrentReceiverNotice();
+    }
+
+    private List<Long> resumedRecipients() {
+        return db.queryForList("""
+                SELECT recipient_account_id FROM fams_business_reminder
+                WHERE business_type='INBOUND' AND business_id=941000 AND stage='ADMIN_DECISION'
+                    AND reminder_type=? AND reminder_business_date='2026-11-13' ORDER BY recipient_account_id
+                """, Long.class, GROUP);
     }
 
     private void scan(String time) {
@@ -247,10 +316,10 @@ class DutyEscalationRuntimeCase {
         db.update("""
                 INSERT INTO fams_requisition_allocation
                     (id,request_id,demand_id,ownership_id,asset_id,asset_version_snapshot,asset_snapshot_json,
-                     business_lock_id,allocation_status,allocated_at,delivered_at,audit_event_id)
-                VALUES (?,940000,940000,940000,?,0,'{}',?,'DELIVERED_WAITING_RECEIPT',
+                     business_lock_id,receipt_target_employee_id,allocation_status,allocated_at,delivered_at,audit_event_id)
+                VALUES (?,940000,940000,940000,?,0,'{}',?,?,'DELIVERED_WAITING_RECEIPT',
                         '2026-11-06','2026-11-06',940000)
-                """, id, id, id);
+                """, id, id, id, OTHER_ADMIN);
         db.update("""
                 INSERT INTO fams_requisition_handover
                     (allocation_id,delivered_by_account_id,delivered_at,receipt_deadline_at,destination_text,

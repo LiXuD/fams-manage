@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import type { RouteLocationRaw } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import ConfigurationAnomalies from "@/features/reminder/panels/ConfigurationAnomalies.vue";
+import ExceptionFollowup from "@/features/reminder/panels/ExceptionFollowup.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { AuthApiError } from "@/auth/api";
 import { BusinessApiError, businessMessage, businessRequest } from "@/api/business";
@@ -27,13 +28,15 @@ type ReadIntent = { id: string; path: string; version: number };
 /** 值班登记的在途意图：role 决定 PUT 路径，version 取当前链版本。 */
 type DutyIntent = { role: DutyRole; version: number; body: { primaryAccountId: string; backupAccountId: string | null } };
 interface MessageRow extends ReminderMessage { rowKey: string; titleText: string; metaText: string;
-  timeText: string; to?: RouteLocationRaw }
+  timeText: string; to?: RouteLocationRaw; canFollowup: boolean }
 interface DutyRow extends DutyAssignment { poolText: string; peopleText: string; effectiveText: string }
 
 const session = useSessionStore();
 const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken]));
 const privileged = computed(() => session.user?.roles.some(
   role => ["ASSET_ADMIN", "WAREHOUSE_OPERATOR"].includes(role)) ?? false);
+const canSeeInbox = computed(() => privileged.value || (session.user?.roles.some(
+  role => role === "EMPLOYEE" || role === "DEPARTMENT_ASSET_MANAGER") ?? false));
 const administrator = computed(() => session.user?.roles.includes("SYSTEM_ADMIN") ?? false);
 const canSeeDuty = computed(() => session.user?.roles.some(
   role => ["SYSTEM_ADMIN", "ASSET_ADMIN", "WAREHOUSE_OPERATOR"].includes(role)) ?? false);
@@ -61,12 +64,37 @@ function titleOf(message: ReminderMessage): string {
   if (message.kind === "TODO") return `待办 · ${messageTodoLabels[message.stage] ?? message.stage}`;
   return `提醒 · ${messageStageLabels[message.objectStage] ?? message.objectStage} ${messageTierLabels[message.stage] ?? message.stage}`;
 }
-/** 维修及其派生单据落报修详情，其余业务类型落各自列表路由并带 id 查询串；无映射则不给链接。 */
+/** 维修分段落报修详情；派生单据按父单落宿主页，借用/退还/盘点任务等按功能线口径落各自查询串；无映射则不给链接。 */
 function destinationOf(message: ReminderMessage): RouteLocationRaw | undefined {
+  const parent = ACCOUNT_NUMBER.test(message.parentBusinessId ?? "") ? message.parentBusinessId : undefined;
   if (messageRepairSegmentTypes.has(message.businessType)) return { path: `/repairs/${message.businessId}` };
+  if (message.businessType === "REPAIR_FACTORY_ROUND") return parent ? { path: `/repairs/${parent}` } : undefined;
+  if (message.businessType === "PROXY_CONFIRMATION") {
+    return { path: "/proxy-confirmations", query: { id: message.businessId } };
+  }
+  if (message.businessType === "REQUISITION_ALLOCATION" || message.businessType === "TRANSFER_ITEM") {
+    return parent ? { path: message.businessType === "TRANSFER_ITEM" ? "/transfers" : "/requisitions",
+      query: { id: parent } } : undefined;
+  }
+  if (message.businessType === "LOAN") return { path: "/loans", query: { loan: message.businessId } };
+  if (message.businessType === "LOAN_EXTENSION") {
+    if (!parent) return undefined;
+    if (message.parentBusinessType === "LOAN") return { path: "/loans", query: { loan: parent } };
+    if (message.parentBusinessType === "REQUISITION") return { path: "/requisitions", query: { id: parent } };
+    return undefined;
+  }
+  if (message.businessType === "INVENTORY_TASK") {
+    return { path: "/inventory-tasks", query: { taskId: message.businessId } };
+  }
+  if (message.businessType === "ASSET_RETURN") {
+    return { path: "/loans", query: { return: message.businessId } };
+  }
   const base = messageDestinations[message.businessType];
   return base === undefined ? undefined : { path: base, query: { id: message.businessId } };
 }
+const FOLLOWUP_STAGES = new Set(["OVERDUE", "OVERDUE_UNRESOLVED_WORKDAY"]);
+const FOLLOWUP_BUSINESS_TYPES = new Set(["INBOUND", "REQUISITION_ALLOCATION", "TRANSFER_ITEM"]);
+const canFollowupTodos = computed(() => view.value === "EXCEPTION" && (session.user?.roles.includes("ASSET_ADMIN") ?? false));
 
 const messageRows = computed<MessageRow[]>(() => rows.value.map((message) => ({
   ...message,
@@ -78,6 +106,8 @@ const messageRows = computed<MessageRow[]>(() => rows.value.map((message) => ({
   timeText: `登记 ${formatProxyTime(message.openedAt)}`
     + (message.deadlineAt ? ` · 截止 ${formatProxyTime(message.deadlineAt)}` : ""),
   to: destinationOf(message),
+  canFollowup: canFollowupTodos.value && message.kind === "REMINDER"
+    && FOLLOWUP_STAGES.has(message.stage) && FOLLOWUP_BUSINESS_TYPES.has(message.businessType),
 })));
 const dutyRows = computed<DutyRow[]>(() => duties.value.map((duty) => ({
   ...duty,
@@ -122,7 +152,7 @@ async function load(turn: LivenessToken) {
   if (liveness.isCurrent(turn)) { rows.value = result.items; total.value = result.total; unread.value = result.unread; }
 }
 async function refresh(delta = 0) {
-  if (busy.value || page.value + delta < 1 || delta && pendingRead.value) return;
+  if (!canSeeInbox.value || busy.value || page.value + delta < 1 || delta && pendingRead.value) return;
   const turn = liveness.begin();
   busy.value = true; error.value = ""; page.value += delta;
   try { await load(turn); } catch (cause) { if (liveness.isCurrent(turn)) failure(cause); }
@@ -199,14 +229,14 @@ onBeforeUnmount(clear);
 <template>
   <AppChrome>
     <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
-    <div class="fams-panel-actions">
+    <div v-if="canSeeInbox" class="fams-panel-actions">
       <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="inboxDisabled" @click="switchTo('INBOX')">我的消息</button>
       <button v-if="privileged" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="exceptionDisabled" @click="switchTo('EXCEPTION')">异常清单</button>
       <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="refreshDisabled" @click="reload()">刷新</button>
       <button v-if="pendingRead" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="retryReadDisabled" @click="read(pendingRead.payload.id)">原请求重试已读登记</button>
     </div>
 
-    <section class="fams-panel fams-stack" :aria-label="listLabel">
+    <section v-if="canSeeInbox" class="fams-panel fams-stack" :aria-label="listLabel">
       <p role="status">{{ unreadText }}</p>
       <article v-for="row in messageRows" :key="row.rowKey" class="fams-card fams-stack">
         <div class="fams-panel-head">
@@ -218,6 +248,7 @@ onBeforeUnmount(clear);
         <p>{{ row.timeText }}</p>
         <router-link v-if="row.to" :to="row.to">查看业务单据</router-link>
         <button v-if="!row.read" class="fams-button" data-kind="secondary" type="button" :disabled="readDisabled" @click="read(row.id)">标记已读</button>
+        <ExceptionFollowup v-if="row.canFollowup" :reminder-id="row.id" @saved="refresh()" />
       </article>
       <p v-if="showEmpty">{{ emptyText }}</p>
       <div class="fams-pagination">

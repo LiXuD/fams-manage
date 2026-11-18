@@ -5,6 +5,7 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -47,6 +48,7 @@ import com.fams.product.contract.model.PageAssetTimelineEvent;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -72,6 +74,7 @@ class AssetService {
         this.enterpriseName = enterpriseName;
     }
 
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     PageAsset list(Actor actor, int page, int pageSize, Map<String, String> query) {
         if (page < 1 || pageSize < 1 || pageSize > 200) {
             throw AssetOperationException.invalid("ASSET_FILTER_INVALID", "Invalid page range.");
@@ -86,7 +89,7 @@ class AssetService {
                 mapper.count(actor.id(), filters), items);
     }
 
-    private Map<String, Object> filters(Map<String, String> query) {
+    Map<String, Object> filters(Map<String, String> query) {
         Map<String, Object> filters = new HashMap<>();
         for (var entry : query.entrySet()) {
             String key = entry.getKey();
@@ -103,22 +106,68 @@ class AssetService {
                 case "exception" -> filters.put(key, enumName(AssetException.class, value));
                 case "usageMode" -> filters.put(key, enumName(UsageMode.class, value));
                 case "inboundDateFrom", "inboundDateTo", "lastInventoryDateFrom",
-                        "lastInventoryDateTo" -> {
+                        "lastInventoryDateTo", "inventoryBefore" -> {
                     try { filters.put(key, LocalDate.parse(value)); }
                     catch (java.time.format.DateTimeParseException exception) {
                         throw AssetOperationException.invalid("ASSET_FILTER_INVALID", "A date filter is invalid.");
                     }
                 }
-                case "currentProcessorId", "businessReference", "borrowOverdue",
-                        "longUninventoried" -> throw AssetOperationException.invalid(
-                                "ASSET_FILTER_UNAVAILABLE",
-                                "This filter requires a later business workflow.");
+                case "borrowOverdue" -> filters.put(key, borrowOverdue(value));
+                case "currentProcessorId" -> {
+                    long id = businessReferenceId(value.strip());
+                    if (id == 0) {
+                        throw AssetOperationException.invalid("ASSET_FILTER_INVALID", "An account ID is invalid.");
+                    }
+                    filters.put(key, id);
+                }
+                case "businessReference" -> {
+                    String reference = required(value, 128, "ASSET_FILTER_INVALID");
+                    filters.put(key, new BusinessReference(businessReferenceId(reference), reference));
+                }
+                case "longUninventoried" -> {
+                    if (!"true".equals(value) && !"false".equals(value)) {
+                        throw AssetOperationException.invalid("ASSET_FILTER_INVALID", "A boolean filter is invalid.");
+                    }
+                    filters.put(key, Boolean.parseBoolean(value));
+                }
                 default -> throw AssetOperationException.invalid("ASSET_FILTER_INVALID",
                         "An unknown asset filter was supplied.");
             }
         }
+        if (filters.containsKey("longUninventoried") && !filters.containsKey("inventoryBefore")) {
+            throw AssetOperationException.invalid("ASSET_FILTER_INVALID", "Select a cutoff date for the inventory filter.");
+        }
         return filters;
     }
+
+    private static long businessReferenceId(String value) {
+        if (!value.matches("[1-9][0-9]{0,18}")) { return 0; }
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException outOfRange) {
+            return 0;
+        }
+    }
+
+    record BusinessReference(long id, String number) {}
+
+    private BorrowOverdue borrowOverdue(String value) {
+        if (!"true".equals(value) && !"false".equals(value)) {
+            throw AssetOperationException.invalid("ASSET_FILTER_INVALID", "A boolean filter is invalid.");
+        }
+        Instant now = clock.instant();
+        LocalDate utcDate = now.atZone(ZoneOffset.UTC).toLocalDate();
+        // Only due dates within one day of UTC need the loan's exact local date.
+        LocalDate earliest = utcDate.minusDays(1);
+        LocalDate latest = utcDate.plusDays(1);
+        Map<String, String> datesByZone = new HashMap<>();
+        for (String name : mapper.candidateLoanTimezones(earliest, latest)) {
+            datesByZone.put(name, now.atZone(ZoneId.of(name)).toLocalDate().toString());
+        }
+        return new BorrowOverdue(Boolean.parseBoolean(value), earliest, latest, json.writeValueAsString(datesByZone));
+    }
+
+    record BorrowOverdue(boolean expected, LocalDate earliest, LocalDate latest, String datesByZone) {}
 
     private <T extends Enum<T>> String enumName(Class<T> type, String value) {
         try { return Enum.valueOf(type, value).name(); }
@@ -372,6 +421,42 @@ class AssetService {
         return new AssetQrAccessResult(asset.getAssetCode(), asset.getName(),
                 asset.getLifecycle(), asset.getException(), asset.getCardStage());
     }
+
+    @Transactional
+    TagPlacement confirmTagPlacement(Actor actor, long id, long expectedVersion, String token, String key) {
+        String operation = "confirmAssetTagPlacement";
+        String hash = codec.hash(token);
+        String digest = digest(operation, id + ":" + expectedVersion + ":" + hash);
+        Map<String, Object> asset = visible(actor, id, true);
+        var prior = replay(actor.id(), operation, key, digest, TagPlacement.class);
+        if (prior != null) { return prior; }
+        checkVersion(asset, expectedVersion);
+        if (!"ACTIVE".equals(text(asset, "card_stage")) || List.of("WAITING_INBOUND", "SCRAPPED")
+                .contains(text(asset, "lifecycle_status"))) {
+            throw AssetOperationException.conflict("ASSET_TAG_NOT_ELIGIBLE", "The asset is not eligible for placement.");
+        }
+        var tag = mapper.tag(id);
+        if (tag == null || !hash.equals(text(tag, "token_hash"))) {
+            throw AssetOperationException.conflict("ASSET_TAG_NOT_CURRENT", "The scanned tag is not the current asset tag.");
+        }
+        long tagVersion = number(tag, "tag_version");
+        var issuedAt = instant(tag, "issued_at");
+        var placement = mapper.tagPlacement(id, tagVersion, issuedAt);
+        Instant confirmedAt;
+        if (placement == null) {
+            confirmedAt = now();
+            mapper.addTagPlacement(id, tagVersion, issuedAt, actor.id(), confirmedAt);
+            event(actor, id, "ASSET_TAG_PLACEMENT_CONFIRMED", "Current QR tag placement confirmed",
+                    expectedVersion, expectedVersion);
+        } else {
+            confirmedAt = instant(placement, "confirmed_at");
+        }
+        var result = new TagPlacement(Long.toString(id), tagVersion, confirmedAt);
+        record(actor.id(), operation, key, digest, 200, result, id, expectedVersion);
+        return result;
+    }
+
+    record TagPlacement(String assetId, long tagVersion, Instant confirmedAt) {}
 
     @Transactional
     AssetTagReplacementResult replaceTag(Actor actor, long id, long expectedVersion,

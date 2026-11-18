@@ -578,8 +578,9 @@ public class LossService {
         }
         lock(row, input.lockVersion());
         validTime(input.searchedAt());
+        ZoneId reviewZone = activeReviewZone();
         if (input.searchedAt().isBefore(instant(row.get("last_seen_at")))
-                || input.nextReviewDate().isBefore(today())) {
+                || input.nextReviewDate().isBefore(LocalDate.now(clock.withZone(reviewZone)))) {
             throw new LossFailure(400, "LOSS_SEARCH_DATE_INVALID");
         }
         long assetVersion =
@@ -595,7 +596,8 @@ public class LossService {
                 id);
         closeTodos(id);
         todo(id, "SEARCH", "WAREHOUSE_OPERATOR", current.id());
-        audit(actor, current, row, "LOSS_SEARCH_STARTED", version + 1, input);
+        audit(actor, current, row, "LOSS_SEARCH_STARTED", version + 1,
+                reviewAudit(input, input.nextReviewDate(), reviewZone));
         return remember(current, operation, key, hash, header(id));
     }
 
@@ -672,6 +674,8 @@ public class LossService {
                 || input.confirmedAt().isBefore(input.searchedAt())) {
             throw new LossFailure(400, "LOSS_CONFIRMATION_DATE_INVALID");
         }
+        ZoneId reviewZone = activeReviewZone();
+        LocalDate reviewDate = LocalDate.now(clock.withZone(reviewZone)).plusDays(30);
         long next =
                 assets.confirmedLost(
                         number(row, "asset_id"), input.assetVersion(), id, current.id(), now(), retainedRepairLifecycle(row));
@@ -682,14 +686,14 @@ public class LossService {
                 next,
                 input.confirmedAt(),
                 json.writeValueAsString(input),
-                today().plusDays(30),
+                reviewDate,
                 now(),
                 id);
         release(row, "LOSS_CONFIRMED");
         closeTodos(id);
         todo(id, "LOST_FOLLOW_UP", "WAREHOUSE_OPERATOR", current.id());
         loans.refreshLiability(number(row, "asset_id"));
-        audit(actor, current, row, "LOSS_CONFIRMED", version + 1, input);
+        audit(actor, current, row, "LOSS_CONFIRMED", version + 1, reviewAudit(input, reviewDate, reviewZone));
         return remember(current, operation, key, hash, header(id));
     }
 
@@ -710,12 +714,13 @@ public class LossService {
         if (input.findings().strip().length() < 10 || input.reason().strip().length() < 3) {
             throw new LossFailure(400, "LOSS_FOLLOW_UP_EVIDENCE_REQUIRED");
         }
-        LocalDate next =
-                input.nextReviewDate() == null ? today().plusDays(30) : input.nextReviewDate();
+        ZoneId reviewZone = activeReviewZone();
+        LocalDate today = LocalDate.now(clock.withZone(reviewZone));
+        LocalDate next = input.nextReviewDate() == null ? today.plusDays(30) : input.nextReviewDate();
         if (input.reviewedAt().isBefore(instant(row.get("confirmed_lost_at")))
                 || row.get("last_follow_up_at") != null
                         && input.reviewedAt().isBefore(instant(row.get("last_follow_up_at")))
-                || next.isBefore(today())) {
+                || next.isBefore(today)) {
             throw new LossFailure(400, "LOSS_REVIEW_DATE_INVALID");
         }
         assets.requireLost(number(row, "asset_id"));
@@ -726,7 +731,7 @@ public class LossService {
                 next,
                 now(),
                 id);
-        audit(actor, current, row, "LOSS_FOLLOWED_UP", version + 1, input);
+        audit(actor, current, row, "LOSS_FOLLOWED_UP", version + 1, reviewAudit(input, next, reviewZone));
         return remember(current, operation, key, hash, header(id));
     }
 
@@ -2012,15 +2017,21 @@ public class LossService {
         }
     }
 
-    private LocalDate today() {
+    private ZoneId activeReviewZone() {
         String snapshot =
                 db.queryForObject(
                         "SELECT v.snapshot_json FROM fams_business_parameter_state s JOIN"
                                 + " fams_business_parameter_version v ON v.id=s.current_version_id"
                                 + " WHERE s.singleton_id=1 AND v.status='ACTIVE' FOR SHARE",
                         String.class);
-        return LocalDate.now(
-                clock.withZone(ZoneId.of(json.readTree(snapshot).path("timezone").asText())));
+        return ZoneId.of(json.readTree(snapshot).path("timezone").asText());
+    }
+
+    private tools.jackson.databind.node.ObjectNode reviewAudit(Object input, LocalDate date, ZoneId zone) {
+        tools.jackson.databind.node.ObjectNode details = json.valueToTree(input);
+        details.put("reviewDate", date.toString());
+        details.put("reviewTimezone", zone.getId());
+        return details;
     }
 
     private Instant now() {

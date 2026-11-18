@@ -62,3 +62,29 @@ test("hiding a submitted operation retains its key for retry on same identity", 
     page.onHide(); page.onShow(); resolve({}); await saving;
     assert.equal(page.data.retryable, true); await page.onRetry(); assert.deepEqual(writes[0], writes[1]);
 });
+
+test("only the current processor can declare and a lost result reuses the same mutation", async () => {
+    let owner = "2", lost = true;
+    const writes = [];
+    const { page } = fixture(async (method, path, body, options) => {
+        if (method === "GET") {
+            assert.equal(path, "/api/v1/mini/transfers/9");
+            return { ...snapshot, requestStatus: "WAITING_HANDOVER", processorAccountId: owner };
+        }
+        writes.push(structuredClone({ path, body, key: options.key, version: options.version }));
+        if (lost) { lost = false; throw Error("lost after commit"); }
+        return { recorded: true };
+    });
+    page.onLoad({ mode: "declare" }); page.onShow(); page.onRequest({ detail: { value: "9" } });
+    await page.onInspect(); await page.onDeclare();
+    assert.equal(writes.length, 0);
+    owner = "1"; await page.onInspect();
+    page.onReason({ detail: { value: "  Shift coverage needed  " } });
+    await page.onDeclare();
+    assert.equal(page.data.retryable, true);
+    await page.onRetry();
+    assert.deepEqual(writes, [writes[0], writes[0]]);
+    assert.deepEqual(writes[0], { path: "/api/v1/mini/transfers/9/reassignment/unavailable",
+        version: 4, key: "reassignment-key-000001", body: { ownershipVersion: 1, reason: "Shift coverage needed" } });
+    assert.match(page.data.notice, /已通知资产管理员/);
+});

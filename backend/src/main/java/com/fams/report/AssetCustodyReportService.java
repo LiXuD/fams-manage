@@ -20,6 +20,18 @@ import org.springframework.transaction.annotation.Transactional;
 class AssetCustodyReportService {
     private static final int EXPORT_LIMIT = 10_000;
     private static final String EFFECTIVE = "a.card_stage = 'ACTIVE' AND a.lifecycle_status NOT IN ('WAITING_INBOUND','SCRAPPED')";
+    private static final String COMPLETE_CUSTODY = """
+            CASE WHEN a.current_location_id IS NULL THEN 0
+                 WHEN a.custody_type='STORAGE' AND a.storage_warehouse_id IS NOT NULL
+                    AND a.lifecycle_status IN ('IN_STOCK','UNDER_REPAIR','FACTORY_REPAIR','PENDING_SCRAP') THEN 1
+                 WHEN a.custody_type='PERSONAL' AND a.using_organization_id IS NOT NULL
+                    AND a.responsible_employee_id IS NOT NULL AND a.department_responsible_employee_id IS NULL
+                    AND a.lifecycle_status IN ('IN_USE','BORROWED','UNDER_REPAIR','FACTORY_REPAIR','PENDING_SCRAP') THEN 1
+                 WHEN a.custody_type='SHARED' AND a.using_organization_id IS NOT NULL
+                    AND a.department_responsible_employee_id IS NOT NULL AND a.responsible_employee_id IS NULL
+                    AND a.lifecycle_status IN ('IN_USE','UNDER_REPAIR','FACTORY_REPAIR','PENDING_SCRAP') THEN 1
+                 ELSE 0 END
+            """;
     private static final String QUERY = """
             SELECT a.id, a.asset_code, a.name, a.lifecycle_status, a.exception_status, a.custody_type,
                 a.last_inventory_business_date, u.name AS organization_name, w.name AS warehouse_name,
@@ -40,6 +52,8 @@ class AssetCustodyReportService {
                 AND (? IS NULL OR a.last_inventory_business_date IS NULL OR a.last_inventory_business_date < ?)
                 AND (? IS NULL OR a.lifecycle_status = ?)
                 AND (? IS NULL OR a.exception_status = ?)
+                AND (? IS NULL OR (""" + COMPLETE_CUSTODY + """
+                    ) = ?)
                 AND (? IS NULL OR a.id < ?)
             ORDER BY a.id DESC LIMIT ?
             """;
@@ -61,7 +75,11 @@ class AssetCustodyReportService {
                         """ + EFFECTIVE + """
                             AND a.custody_type IN ('PERSONAL','SHARED')
                         GROUP BY a.custody_type ORDER BY a.custody_type
-                        """, (row, index) -> new CustodyGroup(row.getString("custody_type"), row.getLong("total"))));
+                        """, (row, index) -> new CustodyGroup(row.getString("custody_type"), row.getLong("total"))),
+                db.queryForObject("SELECT COUNT(CASE WHEN " + EFFECTIVE + " AND (" + COMPLETE_CUSTODY + ")=1 THEN 1 END) AS complete,"
+                        + " COUNT(CASE WHEN " + EFFECTIVE + " THEN 1 END) AS effective, COUNT(*) AS total FROM fams_asset a",
+                        (row, index) -> new CustodyQuality(row.getLong("complete"), row.getLong("effective"),
+                                row.getLong("total") - row.getLong("effective"))));
     }
 
     private List<Group> groups(String field, String catalog) {
@@ -90,10 +108,12 @@ class AssetCustodyReportService {
                     resource_id,occurred_at,detail_json)
                 VALUES (?,?,?,'OPERATIONS_REPORT_EXPORTED','ASSET_CUSTODY_REPORT',0,?,
                     JSON_OBJECT('rows',?,'organizationId',?,'responsibleId',?,'warehouseId',?,
-                        'locationId',?,'custody',?,'inventoryBefore',?,'categoryId',?,'lifecycle',?,'exception',?))
+                        'locationId',?,'custody',?,'inventoryBefore',?,'categoryId',?,'lifecycle',?,'exception',?,
+                        'custodyComplete',CAST(? AS JSON)))
                 """, actor.requestId(), actor.id(), actor.role(), Timestamp.from(clock.instant()), rows.size(),
                 filter.organizationId(), filter.responsibleId(), filter.warehouseId(), filter.locationId(),
-                filter.custody(), filter.inventoryBefore(), filter.categoryId(), filter.lifecycle(), filter.exception());
+                filter.custody(), filter.inventoryBefore(), filter.categoryId(), filter.lifecycle(), filter.exception(),
+                java.util.Objects.toString(filter.custodyComplete(), null));
         return "\uFEFFassetId,assetCode,name,lifecycle,exception,custody,organization,responsible,warehouse,location,lastInventory\r\n"
                 + rows.stream().map(AssetCustodyReportService::csvRow).collect(Collectors.joining("\r\n"));
     }
@@ -110,7 +130,7 @@ class AssetCustodyReportService {
                 filter.responsibleId(), filter.warehouseId(), filter.warehouseId(), filter.locationId(),
                 filter.locationId(), filter.custody(), filter.custody(), filter.inventoryBefore(),
                 filter.inventoryBefore(), filter.lifecycle(), filter.lifecycle(),
-                filter.exception(), filter.exception(), before, before, limit);
+                filter.exception(), filter.exception(), filter.custodyComplete(), filter.custodyComplete(), before, before, limit);
     }
 
     private static String csvRow(Row row) {
@@ -125,8 +145,11 @@ class AssetCustodyReportService {
     }
 
     record Filter(Long organizationId, Long responsibleId, Long warehouseId, Long locationId,
-                  String custody, LocalDate inventoryBefore, Long categoryId, String lifecycle, String exception) {}
-    record Distribution(List<Group> organizations, List<Group> categories, List<CustodyGroup> custody) {}
+                  String custody, LocalDate inventoryBefore, Long categoryId, String lifecycle, String exception,
+                  Boolean custodyComplete) {}
+    record Distribution(List<Group> organizations, List<Group> categories, List<CustodyGroup> custody,
+                        CustodyQuality custodyQuality) {}
+    record CustodyQuality(long complete, long effective, long excluded) {}
     record CustodyGroup(String custodyType, long count) {}
     record Group(String id, String name, long count) {}
     record Page(List<Row> items, String nextBefore) {}

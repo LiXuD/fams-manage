@@ -14,10 +14,14 @@ const roleText = computed(() => session.user?.roles.join("、"));
 const warehouse = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false);
 const administrator = computed(() => session.user?.roles.includes("ASSET_ADMIN") ?? false);
 const canReadLedger = computed(() => session.hasPermission("ASSET_LEDGER_READ"));
+const canLookup = computed(() => session.user?.roles.some(
+  role => ["EMPLOYEE", "DEPARTMENT_ASSET_MANAGER", "ASSET_ADMIN", "WAREHOUSE_OPERATOR"].includes(role)) ?? false);
 </script>
 
 <template>
   <AppChrome>
+    <router-link v-if="canLookup" class="fams-button" data-kind="secondary" data-size="sm"
+      :to="{ name: 'asset-lookup' }">按编码查询资产</router-link>
     <section v-if="warehouse || administrator" class="fams-panel fams-stack" aria-labelledby="workbench-shortcuts">
       <div class="fams-panel-head">
         <h2 id="workbench-shortcuts" class="fams-panel-title">快捷入口</h2>

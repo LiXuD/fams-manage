@@ -18,7 +18,7 @@ export interface InboundReceipt {
   version: number;
   createdBy: { id: string; username: string };
   items: InboundItem[];
-  currentProcessor?: { processor: { id: string; username: string } };
+  currentProcessor?: { processor: { id: string; username: string }; ownershipVersion?: number };
   decision?: { result: string; comment?: string };
   factoryReplacement?: { sourceId: string; originalAssetId: string; replacementAssetId: string; repairId: string; roundId: string };
 }

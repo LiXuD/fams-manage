@@ -475,6 +475,7 @@ OpenAPI 入库读模型到事实来源的完整映射：
 |---|---|
 | `fams_audit_event` | `request_id`、`actor_account_id`、`actor_role`、`action`、`resource_type/id`、`before_version`、`after_version`、`occurred_at`、脱敏 `detail_json`；`request_id` 和资源时间均建索引 |
 | `fams_todo` | `pool_type`、`assignee_account_id`、`business_type/id`、`todo_type`、`todo_status`、`opened_at`、`closed_at`；共享池用业务键去重，不为每名管理员或库管复制可执行事实 |
+| `fams_repair_receipt` | 维修操作按账号、操作和幂等键保存载荷摘要及原响应。无法继续登记提交时，回执与同一处理权代次的审计及资管待办同时保存。 |
 
 共享待办是单一池事实加角色查询，不是多条可分别完成的审批任务。外部通知属于后续 D6-24；其失败不能
 回滚已提交业务，也不能删除站内待办。

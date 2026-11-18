@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +12,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class AssetImportPreflightTest {
+    private static final Instant NOW = Instant.parse("2026-06-01T04:00:00Z");
     private static final List<String> COLUMNS = List.of("资产编码", "名称", "分类编码", "所属组织编码",
             "型号", "单位", "序列号", "资产状态", "仓库编码", "位置编码", "使用组织编码", "使用人编号");
 
@@ -26,14 +28,14 @@ class AssetImportPreflightTest {
         values.put("预计归还日", "2020-02-01");
         var parsed = new AssetImportWorkbook.Parsed(columns,
                 List.of(new AssetImportWorkbook.DataRow(2, values)), List.of());
-        var result = AssetImportPreflight.check(parsed, Map.of(), catalog());
+        var result = AssetImportPreflight.check(parsed, Map.of(), catalog(), NOW);
         assertTrue(result.errors().isEmpty(), result.errors().toString());
         assertEquals(java.time.LocalDate.of(2020, 1, 1), result.ready().getFirst().borrowedDate());
         assertEquals(java.time.LocalDate.of(2020, 2, 1), result.ready().getFirst().expectedReturnDate());
         for (String invalid : List.of("", "bad-date", "2019-12-31")) {
             values.put("预计归还日", invalid);
             var rejected = AssetImportPreflight.check(new AssetImportWorkbook.Parsed(columns,
-                    List.of(new AssetImportWorkbook.DataRow(2, values)), List.of()), Map.of(), catalog());
+                    List.of(new AssetImportWorkbook.DataRow(2, values)), List.of()), Map.of(), catalog(), NOW);
             assertTrue(rejected.ready().isEmpty());
             assertTrue(rejected.errors().stream().anyMatch(e -> e.column().equals("预计归还日")));
         }
@@ -43,7 +45,7 @@ class AssetImportPreflightTest {
     void codeWinsOverNameAndLocationNameIsScopedToWarehouse() {
         var catalog = catalog();
         var result = AssetImportPreflight.check(parsed(row(2, "A-1", "CAT-1", "库位",
-                "在库")), Map.of(), catalog);
+                "在库")), Map.of(), catalog, NOW);
         assertTrue(result.errors().isEmpty());
         assertEquals(1, result.ready().getFirst().categoryId());
         assertEquals(4, result.ready().getFirst().locationId());
@@ -56,7 +58,7 @@ class AssetImportPreflightTest {
         var third = row(4, "A-3", "CAT-1", "LOC-1", "在库");
         var original = new AssetImportWorkbook.CellError(4, "名称", "=1+1", "FORMULA_NOT_ALLOWED");
         var parsed = new AssetImportWorkbook.Parsed(COLUMNS, List.of(first, second, third), List.of(original));
-        var result = AssetImportPreflight.check(parsed, Map.of(), catalog());
+        var result = AssetImportPreflight.check(parsed, Map.of(), catalog(), NOW);
         assertEquals(1, result.ready().size());
         assertEquals(2, result.errors().size());
         assertEquals("DUPLICATE_ASSET_CODE", result.errors().get(1).reason());
@@ -66,11 +68,11 @@ class AssetImportPreflightTest {
     @Test
     void inactiveCodeDoesNotFallBackToNameAndMappingMustExist() {
         var inactive = row(2, "A-2", "CAT-OFF", "LOC-1", "在库");
-        var result = AssetImportPreflight.check(parsed(inactive), Map.of(), catalog());
+        var result = AssetImportPreflight.check(parsed(inactive), Map.of(), catalog(), NOW);
         assertTrue(result.ready().isEmpty());
         assertEquals("REFERENCE_INACTIVE_OR_OUT_OF_SCOPE", result.errors().getFirst().reason());
         assertThrows(IllegalArgumentException.class, () -> AssetImportPreflight.check(
-                parsed(inactive), Map.of("name", "不存在的列"), catalog()));
+                parsed(inactive), Map.of("name", "不存在的列"), catalog(), NOW));
     }
 
     @Test
@@ -85,7 +87,7 @@ class AssetImportPreflightTest {
                 "型号", "单位", "资产状态", "仓库编码", "位置编码");
         var parsed = new AssetImportWorkbook.Parsed(columns,
                 List.of(new AssetImportWorkbook.DataRow(5, Map.copyOf(values))), List.of());
-        var result = AssetImportPreflight.check(parsed, Map.of("name", "物品名称"), catalog());
+        var result = AssetImportPreflight.check(parsed, Map.of("name", "物品名称"), catalog(), NOW);
         assertEquals(1, result.ready().size());
         assertTrue(result.errors().isEmpty());
     }
@@ -95,7 +97,7 @@ class AssetImportPreflightTest {
         Map<String, String> values = new HashMap<>(row(2, "A-4", "CAT-1", "LOC-1", "在库").values());
         values.put("单位", "x".repeat(33));
         var result = AssetImportPreflight.check(parsed(new AssetImportWorkbook.DataRow(
-                2, Map.copyOf(values))), Map.of(), catalog());
+                2, Map.copyOf(values))), Map.of(), catalog(), NOW);
         assertTrue(result.ready().isEmpty());
         assertEquals("FIELD_TOO_LONG", result.errors().getFirst().reason());
         assertEquals("资产", result.errors().getFirst().sheet());
@@ -118,7 +120,7 @@ class AssetImportPreflightTest {
         var result = AssetImportPreflight.check(new AssetImportWorkbook.Parsed(COLUMNS,
                 List.of(new AssetImportWorkbook.DataRow(2, Map.copyOf(first)),
                         new AssetImportWorkbook.DataRow(3, Map.copyOf(second))), List.of()),
-                Map.of(), scoped);
+                Map.of(), scoped, NOW);
         assertEquals(1, result.ready().size());
         assertEquals("P-1", result.ready().getFirst().assetCode());
         assertEquals("REFERENCE_INACTIVE_OR_OUT_OF_SCOPE", result.errors().getFirst().reason());
@@ -135,7 +137,7 @@ class AssetImportPreflightTest {
                 base.organizations(), base.warehouses(), base.locations(), base.employees(),
                 Set.of("EXISTING"), Set.of("ser-1"));
         var result = AssetImportPreflight.check(parsed(new AssetImportWorkbook.DataRow(2,
-                Map.copyOf(values))), Map.of(), ambiguous);
+                Map.copyOf(values))), Map.of(), ambiguous, NOW);
         assertTrue(result.ready().isEmpty());
         assertTrue(result.errors().stream().anyMatch(e -> "REFERENCE_NAME_AMBIGUOUS".equals(e.reason())));
         assertTrue(result.errors().stream().anyMatch(e -> "DUPLICATE_ASSET_CODE".equals(e.reason())));
@@ -145,7 +147,7 @@ class AssetImportPreflightTest {
     @Test
     void invalidStateAndMappingAreRejectedBeforePublication() {
         var invalid = row(2, "A-5", "UNKNOWN", "LOC-1", "已报废");
-        var result = AssetImportPreflight.check(parsed(invalid), Map.of(), catalog());
+        var result = AssetImportPreflight.check(parsed(invalid), Map.of(), catalog(), NOW);
         assertTrue(result.ready().isEmpty());
         assertTrue(result.errors().stream().anyMatch(e -> "REFERENCE_NOT_FOUND".equals(e.reason())));
         assertTrue(result.errors().stream().anyMatch(e -> "UNSUPPORTED_INITIAL_STATE".equals(e.reason())));
@@ -154,7 +156,7 @@ class AssetImportPreflightTest {
         assertThrows(IllegalArgumentException.class, () -> AssetImportPreflight.columns(
                 parsed(invalid), Map.of("assetCode", "名称")));
         assertThrows(IllegalArgumentException.class, () -> AssetImportPreflight.check(
-                parsed(invalid), Map.of(), null));
+                parsed(invalid), Map.of(), null, NOW));
     }
 
     @Test
@@ -167,7 +169,7 @@ class AssetImportPreflightTest {
         values.put("所属组织编码", "");
         values.put("资产状态", "");
         var result = AssetImportPreflight.check(parsed(new AssetImportWorkbook.DataRow(
-                2, Map.copyOf(values))), Map.of(), catalog());
+                2, Map.copyOf(values))), Map.of(), catalog(), NOW);
         assertTrue(result.ready().isEmpty());
         assertEquals(6, result.errors().stream().filter(e -> "REQUIRED".equals(e.reason())).count());
     }
@@ -181,7 +183,7 @@ class AssetImportPreflightTest {
         var result = AssetImportPreflight.check(new AssetImportWorkbook.Parsed(COLUMNS,
                 List.of(new AssetImportWorkbook.DataRow(2, Map.copyOf(first)),
                         new AssetImportWorkbook.DataRow(3, Map.copyOf(second))), List.of()),
-                Map.of(), catalog());
+                Map.of(), catalog(), NOW);
         assertEquals(1, result.ready().size());
         assertTrue(result.errors().stream().anyMatch(e -> e.sheetRow() == 3
                 && "DUPLICATE_SERIAL_NUMBER".equals(e.reason())));
@@ -194,7 +196,7 @@ class AssetImportPreflightTest {
         var cellError = new AssetImportWorkbook.CellError(2, "备注", "=SUM(1)", "FORMULA_NOT_ALLOWED");
         var source = row(2, "A-9", "CAT-1", "LOC-1", "在库");
         var result = AssetImportPreflight.check(new AssetImportWorkbook.Parsed(COLUMNS,
-                List.of(source), List.of(cellError)), Map.of(), catalog());
+                List.of(source), List.of(cellError)), Map.of(), catalog(), NOW);
         assertTrue(result.ready().isEmpty());
         assertEquals(List.of(cellError), result.errors());
     }
@@ -208,15 +210,41 @@ class AssetImportPreflightTest {
                         ref(5, "LOC-2", "同名库位", "ACTIVE", 1L)),
                 base.employees(), Set.of(), Set.of());
         var inactive = AssetImportPreflight.check(parsed(row(2, "A-10", "CAT-1", "LOC-1", "在库")),
-                Map.of(), scoped);
+                Map.of(), scoped, NOW);
         assertTrue(inactive.ready().isEmpty());
         assertTrue(inactive.errors().stream().anyMatch(e -> "REFERENCE_INACTIVE_OR_OUT_OF_SCOPE"
                 .equals(e.reason())));
         var ambiguous = AssetImportPreflight.check(parsed(row(3, "A-11", "CAT-1", "同名库位", "在库")),
                 Map.of(), new AssetImportPreflight.Catalog(base.categories(), base.organizations(),
-                        base.warehouses(), scoped.locations(), base.employees(), Set.of(), Set.of()));
+                        base.warehouses(), scoped.locations(), base.employees(), Set.of(), Set.of()), NOW);
         assertTrue(ambiguous.ready().isEmpty());
         assertEquals("REFERENCE_NAME_AMBIGUOUS", ambiguous.errors().getFirst().reason());
+    }
+
+    @Test
+    void repairOpeningRejectsFutureAcceptanceAndFutureFactoryDispatch() {
+        var internal = new HashMap<>(row(2, "R-1", "CAT-1", "LOC-1", "维修中").values());
+        internal.putAll(Map.of("维修前状态", "在库", "当前维修阶段", "原地维修",
+                "维修故障", "无法启动", "影响程度", "LOW", "维修承接依据", "交接单",
+                "故障发生时刻", NOW.minusSeconds(120).toString(), "接修时刻", NOW.plusMillis(1).toString()));
+        var factory = new HashMap<>(internal);
+        factory.putAll(Map.of("资产编码", "R-2", "资产状态", "返厂维修", "当前维修阶段", "已寄出",
+                "接修时刻", NOW.minusSeconds(60).toString(), "当前返厂轮次", "1", "厂家名称", "厂家甲",
+                "厂家联系人", "张三", "厂家联系电话", "12345678", "厂家实物去向", "维修中心"));
+        factory.putAll(Map.of("实际寄出时刻", NOW.plusMillis(1).toString(), "寄出依据", "运单",
+                "预计收回日期", "2026-06-02", "返厂费用规则", "NO_COST"));
+        var columns = List.copyOf(factory.keySet());
+        var source = new AssetImportWorkbook.Parsed(columns,
+                List.of(new AssetImportWorkbook.DataRow(2, internal),
+                        new AssetImportWorkbook.DataRow(3, factory)), List.of());
+        var result = AssetImportPreflight.check(source, Map.of(), catalog(), NOW);
+        assertTrue(result.ready().isEmpty());
+        assertEquals(List.of("接修时刻", "实际寄出时刻"),
+                result.errors().stream().map(AssetImportWorkbook.CellError::column).toList());
+        assertTrue(result.errors().stream().allMatch(e -> e.reason().equals("INITIAL_REPAIR_TIME_IN_FUTURE")));
+        var atEventTime = AssetImportPreflight.check(source, Map.of(), catalog(), NOW.plusMillis(1));
+        assertTrue(atEventTime.errors().isEmpty(), atEventTime.errors().toString());
+        assertEquals(2, atEventTime.ready().size());
     }
 
     @Test
@@ -234,7 +262,7 @@ class AssetImportPreflightTest {
         values.put("报废前现状", "实物已放置在待报废区");
         values.put("建议处置方式", "待处置保管");
         var result = AssetImportPreflight.check(new AssetImportWorkbook.Parsed(columns,
-                List.of(new AssetImportWorkbook.DataRow(2, values)), List.of()), Map.of(), catalog());
+                List.of(new AssetImportWorkbook.DataRow(2, values)), List.of()), Map.of(), catalog(), NOW);
         assertTrue(result.errors().isEmpty(), result.errors().toString());
         var ready = result.ready().getFirst();
         assertEquals("待报废", ready.state());
@@ -243,29 +271,29 @@ class AssetImportPreflightTest {
         assertEquals("待处置保管", ready.proposedDisposition());
         values.put("报废前状态", "借出");
         var wrongOpening = AssetImportPreflight.check(new AssetImportWorkbook.Parsed(columns,
-                List.of(new AssetImportWorkbook.DataRow(2, values)), List.of()), Map.of(), catalog());
+                List.of(new AssetImportWorkbook.DataRow(2, values)), List.of()), Map.of(), catalog(), NOW);
         assertTrue(wrongOpening.ready().isEmpty());
         assertEquals("UNSUPPORTED_PRE_SCRAP_STATE", wrongOpening.errors().getFirst().reason());
         values.put("报废前状态", "在用个人");
         var usage = AssetImportPreflight.check(new AssetImportWorkbook.Parsed(columns,
-                List.of(new AssetImportWorkbook.DataRow(2, values)), List.of()), Map.of(), catalog());
+                List.of(new AssetImportWorkbook.DataRow(2, values)), List.of()), Map.of(), catalog(), NOW);
         assertTrue(usage.errors().stream().anyMatch(e -> e.column().equals("使用组织编码")
                 && e.reason().equals("REQUIRED")), usage.errors().toString());
         values.put("报废前状态", "在库");
         values.put("报废原因", "上".repeat(2001));
         assertEquals("FIELD_TOO_LONG", AssetImportPreflight.check(new AssetImportWorkbook.Parsed(columns,
-                List.of(new AssetImportWorkbook.DataRow(2, values)), List.of()), Map.of(), catalog())
+                List.of(new AssetImportWorkbook.DataRow(2, values)), List.of()), Map.of(), catalog(), NOW)
                 .errors().getFirst().reason());
         values.put("报废原因", "");
         var missing = AssetImportPreflight.check(new AssetImportWorkbook.Parsed(columns,
-                List.of(new AssetImportWorkbook.DataRow(2, values)), List.of()), Map.of(), catalog());
+                List.of(new AssetImportWorkbook.DataRow(2, values)), List.of()), Map.of(), catalog(), NOW);
         assertEquals("REQUIRED", missing.errors().getFirst().reason());
         assertEquals("报废原因", missing.errors().getFirst().column());
         values.put("报废原因", "上线前已确认无法修复");
         values.put("资产状态", "维修中");
         var openingWithoutEvidence = AssetImportPreflight.check(
                 new AssetImportWorkbook.Parsed(columns, List.of(new AssetImportWorkbook.DataRow(2, values)),
-                        List.of()), Map.of(), catalog());
+                        List.of()), Map.of(), catalog(), NOW);
         assertTrue(openingWithoutEvidence.ready().isEmpty());
         assertEquals("REQUIRED", openingWithoutEvidence.errors().getFirst().reason());
         assertEquals("维修前状态", openingWithoutEvidence.errors().getFirst().column());

@@ -92,8 +92,18 @@ public class InventoryObservationService {
 
     public Map<String, Object> identify(
             RequisitionActorContext.Actor actor, long taskId, String source, String value) {
+        return identify(actor, taskId, source, value, false);
+    }
+
+    public Map<String, Object> identifyAndRecord(
+            RequisitionActorContext.Actor actor, long taskId, String source, String value) {
+        return identify(actor, taskId, source, value, true);
+    }
+
+    private Map<String, Object> identify(
+            RequisitionActorContext.Actor actor, long taskId, String source, String value, boolean recordScan) {
         var current = actors.revalidateLocked(actor);
-        task(current, taskId);
+        var task = task(current, taskId);
         if (!List.of("SCAN", "CODE").contains(source) || value.isBlank() || value.length() > 256) {
             throw new InventoryFailure(400, "INVENTORY_LOOKUP_INVALID");
         }
@@ -126,6 +136,17 @@ public class InventoryObservationService {
         if (item.get("executor_account_id") == null
                 || number(item, "executor_account_id") != current.id()) {
             return Map.of("kind", "NOT_ASSIGNED", "message", "该资产未分配给当前执行人。");
+        }
+        if (recordScan && "SCAN".equals(source)
+                && List.of("IN_PROGRESS", "WAITING_REVIEW").contains(task.get("task_status"))) {
+            db.update("""
+                    INSERT INTO fams_inventory_tag_recognition
+                        (item_id,recheck_generation,tag_version,tag_issued_at,actor_account_id,recognized_at)
+                    SELECT ?,?,t.tag_version,t.issued_at,?,? FROM fams_asset_tag t
+                    WHERE t.asset_id=? AND t.tag_version=? AND t.issued_at=?
+                    ON DUPLICATE KEY UPDATE recognized_at=fams_inventory_tag_recognition.recognized_at
+                    """, item.get("id"), item.get("recheck_generation"), current.id(), timestamp(clock.instant()),
+                    asset.get("id"), asset.get("tag_version"), asset.get("issued_at"));
         }
         return Map.of(
                 "kind",
@@ -307,6 +328,14 @@ public class InventoryObservationService {
                         input.eventId().toString());
         if (terminal && !"EXPIRED".equals(outcome)) {
             late.append(task, java.util.Objects.requireNonNull(observation));
+        }
+        if ("CONFLICT_REVIEW".equals(outcome) || "DIFFERENCE_REVIEW".equals(outcome)) {
+            db.update("""
+                    INSERT INTO fams_todo
+                        (pool_type,business_type,business_id,todo_type,todo_status,opened_at)
+                    VALUES ('ASSET_ADMIN','INVENTORY_OBSERVATION',?,?,'OPEN',?)
+                    """, observation, outcome.equals("CONFLICT_REVIEW") ? "INVENTORY_CONFLICT" : "INVENTORY_DIFFERENCE",
+                    timestamp(received));
         }
         if (Boolean.TRUE.equals(receipt.get("counted"))) {
             db.update(

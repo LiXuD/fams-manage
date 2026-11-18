@@ -137,8 +137,8 @@ public class RepairService {
         }
         db.update(
                 "INSERT INTO fams_repair_request(asset_id,creator_account_id,asset_version,"
-                    + "source_snapshot_json,timezone_id,fault,impact,occurred_at,processor_account_id,created_at,updated_at)"
-                    + " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    + "source_snapshot_json,timezone_id,fault,impact,occurred_at,processor_account_id,created_at,updated_at,"
+                    + "first_execution_parameter_snapshot_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 source.assetId(),
                 current.id(),
                 input.assetVersion(),
@@ -149,7 +149,8 @@ public class RepairService {
                 source.inspectedAt(),
                 source.processorAccountId(),
                 now(),
-                now());
+                now(),
+                source.parametersJson());
         long id =
                 java.util.Objects.requireNonNull(
                         db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
@@ -583,10 +584,8 @@ public class RepairService {
         if (parameters.isEmpty()) {
             throw new RepairFailure(409, "REPAIR_PARAMETERS_REQUIRED");
         }
-        String zone =
-                json.readTree(parameters.getFirst().get("snapshot_json").toString())
-                        .path("timezone")
-                        .asText();
+        String parameterSnapshot = parameters.getFirst().get("snapshot_json").toString();
+        String zone = json.readTree(parameterSnapshot).path("timezone").asText();
         try {
             ZoneId.of(zone);
         } catch (java.time.DateTimeException invalid) {
@@ -595,8 +594,8 @@ public class RepairService {
         var now = now();
         db.update(
                 "INSERT INTO"
-                    + " fams_repair_request(asset_id,creator_account_id,using_organization_id,responsible_employee_id,shared_responsible_employee_id,asset_version,source_snapshot_json,loan_snapshot_json,timezone_id,fault,impact,occurred_at,created_at,updated_at)"
-                    + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    + " fams_repair_request(asset_id,creator_account_id,using_organization_id,responsible_employee_id,shared_responsible_employee_id,asset_version,source_snapshot_json,loan_snapshot_json,timezone_id,fault,impact,occurred_at,created_at,updated_at,first_execution_parameter_snapshot_json)"
+                    + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 input.assetId(),
                 current.id(),
                 reference(snapshot, "usingOrganizationId"),
@@ -610,7 +609,8 @@ public class RepairService {
                 input.impact(),
                 input.occurredAt(),
                 now,
-                now);
+                now,
+                parameterSnapshot);
         long id =
                 java.util.Objects.requireNonNull(
                         db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
@@ -1876,7 +1876,65 @@ public class RepairService {
                             + " o.status='ACTIVE' AND r.role_code='WAREHOUSE_OPERATOR' AND a.id<>?"
                             + " ORDER BY a.id",
                         row.get("processor_account_id"));
-        return Map.of("snapshot", snapshot, "operators", wire(operators));
+        var result = new LinkedHashMap<String, Object>(Map.of("snapshot", snapshot, "operators", wire(operators)));
+        var declared = unavailabilityReason(id, number(row, "ownership_version"), number(row, "processor_account_id"));
+        if (declared != null) {
+            result.put("unavailableReason", declared);
+        }
+        return result;
+    }
+
+    public Map<String, Object> declareUnavailable(
+            Actor actor, long id, long version, UUID key, RepairReassignmentController.Unavailability input) {
+        var current = actors.revalidateLocked(actor);
+        require(current, Role.WAREHOUSE_OPERATOR);
+        var row = header(id);
+        visible(current, row);
+        owner(actor, current, row);
+        if (number(row, "ownership_version") != input.ownershipVersion()) {
+            reject(actor, current, row, "REPAIR_OWNERSHIP_CHANGED");
+        }
+        String reason = input.reason().strip();
+        if (reason.length() < 3) {
+            throw new RepairFailure(400, "REPAIR_UNAVAILABILITY_REASON_REQUIRED");
+        }
+        String operation = "DECLARE_UNAVAILABLE:" + id;
+        String fingerprint = hash(operation, version,
+                Map.of("ownershipVersion", input.ownershipVersion(), "reason", reason));
+        var prior = replay(actor, current, operation, key, fingerprint);
+        if (prior != null) {
+            return prior;
+        }
+        guard(actor, current, row, version, "WAREHOUSE_PROCESSING");
+        lock(row, null);
+        var declared = unavailabilityReason(id, input.ownershipVersion(), current.id());
+        if (declared == null) {
+            db.update("""
+                    INSERT INTO fams_audit_event (request_id,actor_account_id,actor_role,action,resource_type,
+                        resource_id,before_version,after_version,occurred_at,detail_json)
+                    VALUES (?,?,'WAREHOUSE_OPERATOR','REPAIR_PROCESSOR_UNAVAILABLE','REPAIR',?,?,?,?,?)
+                    """, actor.requestId().toString(), current.id(), id, version, version, now(),
+                    json.writeValueAsString(Map.of("reason", reason, "ownershipVersion", input.ownershipVersion())));
+        } else if (!reason.equals(declared)) {
+            throw new RepairFailure(409, "REPAIR_UNAVAILABILITY_ALREADY_RECORDED");
+        }
+        db.update("""
+                INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at)
+                VALUES ('ASSET_ADMIN','REPAIR',?,'REASSIGNMENT_REQUIRED','OPEN',?)
+                ON DUPLICATE KEY UPDATE id=fams_todo.id
+                """, id, now());
+        var result = Map.<String, Object>of("id", Long.toString(id), "version", version, "recorded", true);
+        saveReceipt(current, operation, key, fingerprint, id, result);
+        return result;
+    }
+
+    private String unavailabilityReason(long id, long ownershipVersion, long processor) {
+        return db.queryForList("""
+                SELECT JSON_UNQUOTE(JSON_EXTRACT(e.detail_json,'$.reason'))
+                FROM fams_audit_event e
+                WHERE e.resource_type='REPAIR' AND e.resource_id=? AND e.action='REPAIR_PROCESSOR_UNAVAILABLE'
+                    AND e.actor_account_id=? AND JSON_EXTRACT(e.detail_json,'$.ownershipVersion')=?
+                """, String.class, id, processor, ownershipVersion).stream().findFirst().orElse(null);
     }
 
     public Map<String, Object> reassign(
@@ -1947,6 +2005,11 @@ public class RepairService {
                         + " business_id=? AND pool_type='WAREHOUSE_OPERATOR' AND closed_at IS NULL",
                 input.processorAccountId(),
                 id);
+        db.update("""
+                UPDATE fams_todo SET todo_status='CLOSED',closed_at=?
+                WHERE business_type='REPAIR' AND business_id=? AND todo_type='REASSIGNMENT_REQUIRED'
+                    AND active_guard=1
+                """, now(), id);
         var origin = returnOrigin(id);
         if (origin != null) {
             returned.progress(

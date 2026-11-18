@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, shallowRef } from "vue";
 import AppChrome from "@/components/AppChrome.vue";
 import InboundReassignment from "@/features/inbound/panels/InboundReassignment.vue";
+import InboundUnavailability from "@/features/inbound/panels/InboundUnavailability.vue";
 import AttachmentPanel from "@/features/inbound/panels/AttachmentPanel.vue";
 import { useSessionStore } from "@/auth/sessionStore";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
@@ -179,6 +180,9 @@ onMounted(async () => {
           <td data-column-kind="action"><button v-if="item.acceptable" class="fams-button" data-kind="link" data-size="sm" type="button" :disabled="locked" @click="openAccept(item.source)">验收入库</button></td>
         </tr></tbody>
       </table></div>
+      <InboundUnavailability v-if="canReceiveGoods && selected.currentProcessor?.ownershipVersion !== undefined"
+        :key="selected.id + ':' + selected.version" :id="selected.id" :version="selected.version"
+        :ownership-version="selected.currentProcessor!.ownershipVersion!" :disabled="busy" />
       <InboundReassignment v-if="canReassign"
         :id="selected.id" :version="selected.version" @saved="open()" />
       <AttachmentPanel :key="selected.id" :receipt="selected" :disabled="busy"

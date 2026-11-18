@@ -18,6 +18,17 @@ const SCRAP_ROLES = [...FIELD_ROLES, "AUDIT_READ_ONLY"];
 const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   { label: "总览", items: [{ label: "工作台", path: "/" }] },
   {
+    label: "系统与主数据",
+    items: [
+      { label: "账号与角色", path: "/system-accounts", roles: ["SYSTEM_ADMIN"] },
+      { label: "业务参数", path: "/business-parameters", roles: ["SYSTEM_ADMIN"] },
+      { label: "组织与人员", path: "/identity", roles: ["SYSTEM_ADMIN"] },
+      { label: "组织人员导入", path: "/identity-imports", roles: ["SYSTEM_ADMIN"] },
+      { label: "资料目录", path: "/catalogs", roles: ["SYSTEM_ADMIN"] },
+      { label: "编号规则", path: "/numbering-rules", roles: ["SYSTEM_ADMIN"] },
+    ],
+  },
+  {
     label: "资产",
     items: [
       { label: "资产台账", path: "/assets", permission: "ASSET_LEDGER_READ" },
@@ -139,7 +150,6 @@ const navGroups = computed(() => NAV_GROUPS
 
 const layoutMode = computed(() => session.isAuthenticated ? null : "anonymous");
 
-const showAccountAdminNote = computed(() => session.hasPermission("ACCOUNT_ADMIN"));
 
 const showSessionError = computed(() => session.isAuthenticated && !!session.error && route.name !== "password-change");
 const sessionErrorText = computed(() => session.error?.message ?? "");
@@ -194,7 +204,6 @@ async function handleLogout(): Promise<void> {
               </div>
             </div>
           </div>
-          <span v-if="showAccountAdminNote" class="fams-navigation-note">账号与角色 · 后续开放</span>
         </div>
       </nav>
       <main class="fams-main">

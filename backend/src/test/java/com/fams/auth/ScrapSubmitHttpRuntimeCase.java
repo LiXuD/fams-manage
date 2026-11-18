@@ -906,9 +906,18 @@ class ScrapSubmitHttpRuntimeCase {
         var date = java.time.LocalDate.parse(json.readTree(empty.body()).path("businessDate").asText());
         assertEquals(403, get(fixture.employee, overdue).statusCode());
         assertEquals(0, json.readTree(empty.body()).path("total").asInt());
-        db.update("UPDATE fams_scrap_disposition SET due_date=? WHERE request_id=?", date, Long.parseLong(id));
-        assertEquals(0, json.readTree(get(fixture.admin, overdue).body()).path("total").asInt());
+        var schedule = db.queryForMap("""
+                SELECT CAST(due_date AS CHAR) AS due_date,due_at,due_timezone
+                FROM fams_scrap_disposition WHERE request_id=?
+                """, Long.parseLong(id));
+        var zone = java.time.ZoneId.of(schedule.get("due_timezone").toString());
+        assertEquals(date.plusDays(30).toString(), schedule.get("due_date"));
+        assertEquals(date.plusDays(31).atStartOfDay(zone).toInstant(),
+                ((java.time.LocalDateTime) schedule.get("due_at")).toInstant(java.time.ZoneOffset.UTC));
         db.update("UPDATE fams_scrap_disposition SET due_date=? WHERE request_id=?", date.minusDays(1), Long.parseLong(id));
+        assertEquals(0, json.readTree(get(fixture.admin, overdue).body()).path("total").asInt());
+        db.update("UPDATE fams_scrap_disposition SET due_at=? WHERE request_id=?",
+                java.sql.Timestamp.from(java.time.Instant.now().minusSeconds(60)), Long.parseLong(id));
         var overduePage = json.readTree(get(fixture.admin, overdue + "?page=1&pageSize=1").body());
         assertEquals(1, overduePage.path("total").asInt());
         assertEquals(id, overduePage.path("items").get(0).path("id").asText());

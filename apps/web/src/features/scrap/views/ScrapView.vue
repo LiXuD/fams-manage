@@ -524,7 +524,7 @@ function prepare(action: "submit" | "approve" | "reject" | "claim" | "execute" |
     } else if (action === "claim") summary = row.sourceType === "LOSS"
       ? "取得本单唯一处理权，核对遗失证据后执行。" : "取得本单唯一处理权，核验实物后执行。";
     else if (action === "executeFactory") {
-      const time = new Date(occurred.value);
+      const time = new Date(row.initialFactoryDispositionAt ?? occurred.value);
       if (!Number.isFinite(time.getTime())) { error.value = FACTORY_OCCURRED_REQUIRED_MESSAGE; return; }
       body = { ...body, ownershipVersion: row.ownershipVersion, occurredAt: time.toISOString() };
       summary = "依据本轮厂家证明执行 " + row.source.assetCode + " 报废并登记实际处置。";
@@ -656,7 +656,8 @@ onBeforeUnmount(resetView);
       <div class="fams-panel-head"><h2 class="fams-panel-title">{{ detailTitle }}</h2></div>
       <p>{{ detailFactsText }}</p>
       <p v-if="initialSourceText">{{ initialSourceText }}</p>
-      <a v-if="showFactoryProofLink" :href="factoryProofHref">前往原维修核对厂家凭证</a>
+      <p v-if="detail.initialFactoryDispositionEvidence">期初厂家凭证 {{ detail.initialFactoryDispositionEvidence }}</p>
+      <a v-else-if="showFactoryProofLink" :href="factoryProofHref">前往原维修核对厂家凭证</a>
       <p>{{ detailPlanText }}</p>
       <section v-if="capabilities" class="fams-card fams-stack" aria-label="报废附件">
         <p v-if="!capabilities.canRead">查看报废附件需要单独授权。</p>
@@ -828,7 +829,8 @@ onBeforeUnmount(resetView);
       </fieldset>
       <fieldset v-if="detail.actions.executeFactory" class="fams-card fams-stack" :disabled="locked || stale">
         <h3 class="fams-panel-title">按厂家凭证执行报废</h3>
-        <label class="fams-field"><span class="fams-field-label">凭证记载的实际处置时间</span><input class="fams-control" v-model="occurred" type="datetime-local" step="0.001"/></label>
+        <p v-if="detail.initialFactoryDispositionAt">凭证记载的实际处置时间 {{ detail.initialFactoryDispositionAt }}</p>
+        <label v-else class="fams-field"><span class="fams-field-label">凭证记载的实际处置时间</span><input class="fams-control" v-model="occurred" type="datetime-local" step="0.001"/></label>
         <div class="fams-panel-actions">
           <button class="fams-button" data-kind="primary" type="button" @click="prepare('executeFactory')">核对厂家凭证并执行报废</button>
         </div>

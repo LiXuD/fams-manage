@@ -12,13 +12,13 @@
   },
   "payload": {
     "name": "本组织长期未盘点",
-    "criteria": {"longUninventoried": true, "organizationId": "2001"}
+    "criteria": {"inventoryBefore": "2026-09-01", "longUninventoried": true, "organizationId": "2001"}
   },
   "response": {
     "id": "9502",
     "ownerAccountId": "7001",
     "name": "本组织长期未盘点",
-    "criteria": {"longUninventoried": true, "organizationId": "2001"},
+    "criteria": {"inventoryBefore": "2026-09-01", "longUninventoried": true, "organizationId": "2001"},
     "version": 1,
     "createdAt": "2026-09-14T05:20:00Z",
     "updatedAt": "2026-09-14T05:25:00Z"

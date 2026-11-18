@@ -10,8 +10,11 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.sql.Timestamp;
+import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -51,6 +54,7 @@ class DutyHttpRuntimeCase {
     private final HttpClient http = HttpClient.newHttpClient();
 
     @Autowired JdbcTemplate db;
+    @Autowired Clock clock;
     @Autowired ObjectMapper json;
     @Autowired ConfigurationAnomalyService anomalies;
     @Autowired ReassignmentReminderService reassignments;
@@ -137,6 +141,16 @@ class DutyHttpRuntimeCase {
                 """);
         db.update("INSERT INTO fams_todo (id,pool_type,business_type,business_id,todo_type,todo_status,opened_at)"
                 + " VALUES (931000,'ASSET_ADMIN','INBOUND',931000,'ADMIN_DECISION','OPEN',NOW(3))");
+        db.update("""
+                INSERT INTO fams_requisition (id,request_no,creator_account_id,creator_username_snapshot,
+                    request_status,parameter_version_id,parameter_snapshot_json,created_at,updated_at)
+                VALUES (931001,'C3-REQUISITION',931004,'duty4','PENDING_ADMIN_DECISION',931000,'{}',NOW(3),NOW(3))
+                """);
+        db.update("""
+                INSERT INTO fams_todo (id,pool_type,business_type,business_id,todo_type,todo_status,opened_at,closed_at)
+                VALUES (931001,'ASSET_ADMIN','REQUISITION',931001,'ADMIN_DECISION','OPEN',NOW(3),NULL),
+                    (931002,'ASSET_ADMIN','REQUISITION',931001,'ADMIN_DECISION','CLOSED',NOW(3),NOW(3))
+                """);
         db.update("UPDATE fams_employee SET status='DISABLED' WHERE id=?", ADMIN_TWO);
         anomalies.scan();
         anomalies.scan();
@@ -151,6 +165,14 @@ class DutyHttpRuntimeCase {
         assertEquals("931000", open.path("relatedTodos").get(0).path("id").asText());
         assertEquals("931000", open.path("relatedTodos").get(0).path("parameterVersionId").asText());
         assertEquals("2026-11-17T16:00:00Z", open.path("relatedTodos").get(0).path("deadline").asText());
+        assertEquals(1, open.path("relatedTodos").size());
+        assertEquals(1, open.path("relatedBusinessTodos").size());
+        var originalRequisition = open.path("relatedBusinessTodos").get(0);
+        assertEquals("931001", originalRequisition.path("id").asText());
+        assertEquals("REQUISITION", originalRequisition.path("businessType").asText());
+        assertEquals("931001", originalRequisition.path("businessId").asText());
+        assertEquals("931000", originalRequisition.path("parameterVersionId").asText());
+        assertFalse(originalRequisition.has("deadline"));
         assertEquals(403, code(get(warehouse, path)));
         assertEquals(404, code(get(system, path + "/999999")));
 
@@ -160,18 +182,28 @@ class DutyHttpRuntimeCase {
         assertEquals("RESOLVED", resolved.path("status").asText());
         assertTrue(resolved.hasNonNull("resolvedAt"));
         assertEquals(open.path("relatedTodos"), resolved.path("relatedTodos"));
+        assertEquals(open.path("relatedBusinessTodos"), resolved.path("relatedBusinessTodos"));
         var restored = login("duty3");
         assertTrue(ok(get(restored, "/messages")).path("items").valueStream()
                 .anyMatch(item -> "931000".equals(item.path("id").asText())));
         assertEquals(403, code(get(system, "/messages")));
         assertEquals(3, db.queryForObject("SELECT version FROM fams_inbound_receipt WHERE id=931000", Integer.class));
-        assertEquals(1, count("fams_todo"));
+        assertEquals(3, count("fams_todo"));
 
         db.update("""
                 INSERT INTO fams_todo (pool_type,assignee_account_id,business_type,business_id,todo_type,todo_status,opened_at)
                 VALUES ('WAREHOUSE_OPERATOR',931004,'TRANSFER',931001,'EXECUTION','OPEN',NOW(3))
                 """);
         assertEquals(200, code(setAccountStatus(system, WAREHOUSE, 0, "DISABLE")));
+        var warehouseAnomaly = ok(get(system, path)).path("items").valueStream()
+                .filter(item -> "NO_WAREHOUSE_OPERATOR".equals(item.path("type").asText()))
+                .findFirst().orElseThrow();
+        assertEquals("OPEN", warehouseAnomaly.path("status").asText());
+        var originalTransfer = warehouseAnomaly.path("relatedBusinessTodos").get(0);
+        assertEquals("TRANSFER", originalTransfer.path("businessType").asText());
+        assertEquals("931001", originalTransfer.path("businessId").asText());
+        assertFalse(originalTransfer.has("parameterVersionId"));
+        assertFalse(originalTransfer.has("deadline"));
         assertEquals(1, db.queryForObject("""
                 SELECT COUNT(*) FROM fams_todo WHERE business_type='TRANSFER' AND business_id=931001
                     AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1
@@ -186,6 +218,9 @@ class DutyHttpRuntimeCase {
                     AND todo_type='EXECUTION' AND active_guard=1
                 """, Long.class));
         assertEquals(200, code(setAccountStatus(system, WAREHOUSE, 1, "ENABLE")));
+        var restoredWarehouseAnomaly = ok(get(system, path + "/" + warehouseAnomaly.path("id").asText()));
+        assertEquals("RESOLVED", restoredWarehouseAnomaly.path("status").asText());
+        assertEquals(warehouseAnomaly.path("relatedBusinessTodos"), restoredWarehouseAnomaly.path("relatedBusinessTodos"));
         assertEquals(1, db.queryForObject("""
                 SELECT COUNT(*) FROM fams_todo WHERE business_type='TRANSFER' AND business_id=931001
                     AND todo_type='REASSIGNMENT_REQUIRED' AND todo_status='CLOSED' AND closed_at IS NOT NULL
@@ -204,7 +239,8 @@ class DutyHttpRuntimeCase {
         assertEquals("reminder-test", deliveries.eligibleTemplate(claim));
         assertTrue(jobs.claim(NotificationDeliveryQueue.KIND, "second", java.time.Duration.ofMinutes(1)).isEmpty());
         jobs.fail(claim, "SMS_RESULT_UNKNOWN", true);
-        db.update("UPDATE fams_durable_job SET next_attempt_at=UTC_TIMESTAMP(3) WHERE id=?", claim.id().toString());
+        db.update("UPDATE fams_durable_job SET next_attempt_at=? WHERE id=?",
+                Timestamp.from(clock.instant().minusSeconds(1)), claim.id().toString());
         var retry = jobs.claim(NotificationDeliveryQueue.KIND, "second", java.time.Duration.ofMinutes(1)).orElseThrow();
         assertEquals(claim.id(), retry.id());
         org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
@@ -229,7 +265,8 @@ class DutyHttpRuntimeCase {
         var adapters = provider.getBeanProvider(MiniNotificationSmsPort.class);
         new NotificationDeliveryWorker(jobs, deliveries, adapters, "reminder-test").poll();
         assertEquals(1, calls.size());
-        db.update("UPDATE fams_durable_job SET next_attempt_at=UTC_TIMESTAMP(3) WHERE id=?", calls.getFirst());
+        db.update("UPDATE fams_durable_job SET next_attempt_at=? WHERE id=?",
+                Timestamp.from(clock.instant().minusSeconds(1)), calls.getFirst());
         new NotificationDeliveryWorker(jobs, deliveries, adapters, "reminder-test").poll();
         assertEquals(2, calls.size());
         assertEquals(calls.getFirst(), calls.getLast());
@@ -239,6 +276,7 @@ class DutyHttpRuntimeCase {
         var report = "/operations-reports?from=2026-11-01&toExclusive=2026-12-01";
         assertEquals(403, code(get(system, report)));
         assertEquals(0, ok(get(restored, report)).path("inventory").path("expected").asInt());
+        verifyImportErrorQuality(restored, login("duty4"), report);
         db.update("""
                 INSERT INTO fams_inventory_task (id,name,task_status,range_json,starts_at,due_at,timezone_id,
                     parameter_version_id,creator_account_id,created_at,updated_at,expected_count)
@@ -375,12 +413,36 @@ class DutyHttpRuntimeCase {
         assertEquals("9007199254740993", overduePage.path("items").get(0).path("loanId").asText());
         assertEquals(earlyDate.toString(), overduePage.path("items").get(0).path("expectedReturnDate").asText());
         assertTrue(overduePage.path("nextBefore").isNull());
+        var ledger = ok(get(restored, "/assets?assetCode=REPORT-&borrowOverdue=true&pageSize=1"));
+        assertEquals(1, ledger.path("total").asInt());
+        assertEquals("REPORT-A", ledger.path("items").get(0).path("assetCode").asText());
+        var dueToday = ok(get(restored, "/assets?assetCode=REPORT-C&borrowOverdue=false"));
+        assertEquals(1, dueToday.path("total").asInt());
+        assertEquals("REPORT-C", dueToday.path("items").get(0).path("assetCode").asText());
+        var ledgerCsv = "/assets/export.csv?assetCode=REPORT-&borrowOverdue=true";
+        assertEquals(403, code(get(login("duty4"), ledgerCsv)));
+        assertEquals(403, code(get(restored, ledgerCsv)));
+        db.update("""
+                INSERT INTO fams_account_authorization (id,account_id,role_code,generation_no,
+                    authorization_status,change_reason,created_at)
+                VALUES (931003,931003,'ASSET_ADMIN',1,'ACTIVE','Ledger export fixture',NOW(3))
+                """);
+        db.update("""
+                INSERT INTO fams_account_field_permission (authorization_id,permission_code,granted_at)
+                VALUES (931003,'BULK_EXPORT',NOW(3))
+                """);
+        var eligibleCsv = get(restored, ledgerCsv);
+        assertEquals(200, code(eligibleCsv), eligibleCsv.body());
+        assertTrue(eligibleCsv.body().contains("REPORT-A"));
+        assertFalse(eligibleCsv.body().contains("REPORT-C"));
         db.update("UPDATE fams_loan SET expected_return_date='2020-02-01' WHERE id=9007199254740995");
+        assertEquals(2, ok(get(restored, "/assets?assetCode=REPORT-&borrowOverdue=true")).path("total").asInt());
         var twoOverdue = ok(get(restored, overdue + "?pageSize=1"));
         assertEquals("9007199254740995", twoOverdue.path("nextBefore").asText());
         assertEquals("9007199254740993", ok(get(restored, overdue + "?pageSize=1&before="
                 + twoOverdue.path("nextBefore").asText())).path("items").get(0).path("loanId").asText());
         db.update("UPDATE fams_asset SET exception_status='LOST' WHERE id=9007199254740992");
+        assertEquals(1, ok(get(restored, "/assets?assetCode=REPORT-&borrowOverdue=true")).path("total").asInt());
         assertTrue(ok(get(restored, overdue + "?borrowerId=931004")).path("items").isEmpty());
         var overdueCsv = get(restored, overdue + ".csv?borrowerId=931005");
         assertEquals(200, code(overdueCsv));
@@ -450,11 +512,88 @@ class DutyHttpRuntimeCase {
         verifyInventoryLateReport(restored, reportWarehouse);
         verifyBusinessExceptionReport(restored, reportWarehouse);
         verifyInboundTimingReport(restored, reportWarehouse);
+        verifyLedgerInventoryCutoff(restored, reportWarehouse);
         verifyMovementTrend(restored, reportWarehouse);
         verifyAssetDistribution(restored, reportWarehouse);
         verifyAssetStatusDrilldown(restored, reportWarehouse);
         verifyWorkbenchTodos(restored, reportWarehouse, login("duty5"));
         verifySealedInventoryTasks(restored, reportWarehouse);
+        verifyOverdueReassignment(restored);
+        verifyExceptionDiscovery(restored, reportWarehouse);
+    }
+
+    private void verifyExceptionDiscovery(Session administrator, Session warehouse) throws Exception {
+        db.update("""
+                UPDATE fams_loan SET expected_return_date='2025-09-30', created_at='2025-09-01',
+                    parameter_snapshot_json=JSON_OBJECT('timezone','UTC'), relation_status='RETURNED',
+                    closed_at='2025-10-02' WHERE id=9007199254740993
+                """);
+        db.update("""
+                INSERT INTO fams_loan_reminder
+                    (loan_id,expected_return_date,reminder_business_date,reminder_type,overdue_from,created_at)
+                VALUES (9007199254740993,'2025-09-30','2025-10-01','OVERDUE','2025-10-01','2025-10-01 00:05:00')
+                """);
+        db.update("""
+                UPDATE fams_inventory_observation SET outcome='CONFLICT_REVIEW',received_at='2025-10-01 01:00:00'
+                WHERE id=9007199254740993
+                """);
+        db.update("""
+                UPDATE fams_repair_factory_round SET expected_return_date='2025-09-30',
+                    created_at='2025-09-28',dispatched_at='2025-09-29' WHERE id=9007199254740995
+                """);
+        db.update("""
+                INSERT INTO fams_business_reminder (business_type,business_id,stage,deadline_at,notice_date,
+                    reminder_business_date,reminder_type,recipient_pool_type,created_at)
+                VALUES ('REPAIR_FACTORY_ROUND',9007199254740995,'FACTORY_RETURN','2025-10-01','2025-10-01',
+                    '2025-10-01','OVERDUE','WAREHOUSE_OPERATOR','2025-10-01 00:05:00.001')
+                """);
+
+        var path = "/operations-reports/exception-discovery";
+        var window = "?from=2025-10-01&toExclusive=2025-10-02";
+        assertEquals(403, code(get(warehouse, path + window)));
+        assertEquals(403, code(get(warehouse, path + ".csv" + window)));
+        db.update("""
+                INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at,closed_at)
+                VALUES ('WAREHOUSE_OPERATOR','REPAIR',931001,'FACTORY_RETURN','CLOSED','2025-09-29','2025-09-30 22:00:00')
+                """);
+        assertEquals(2, ok(get(administrator, path + window)).path("total").asInt(-1));
+        var inbox = "/messages?view=EXCEPTION&pageSize=100";
+        assertFalse(ok(get(administrator, inbox)).path("items").valueStream()
+                .anyMatch(row -> "REPAIR_FACTORY_ROUND".equals(row.path("businessType").asText())));
+        db.update("""
+                INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at)
+                VALUES ('WAREHOUSE_OPERATOR','REPAIR',931001,'FACTORY_RETURN','OPEN','2025-10-01 00:00:00')
+                """);
+        assertTrue(ok(get(administrator, inbox)).path("items").valueStream()
+                .anyMatch(row -> "9007199254740995".equals(row.path("businessId").asText())
+                    && "REPAIR_FACTORY_ROUND".equals(row.path("businessType").asText())));
+        var summary = ok(get(administrator, path + window));
+        assertEquals(3, summary.path("total").asInt(-1));
+        assertEquals(1, summary.path("onTime").asInt(-1));
+        var csv = get(administrator, path + ".csv" + window);
+        assertEquals(200, code(csv));
+        assertEquals(4, csv.body().lines().count());
+        assertTrue(csv.body().contains("LOAN_OVERDUE,9007199254740993,2025-09-30,2025-10-01T00:00:00Z,"
+                + "2025-10-01T00:05:00Z,ON_TIME"));
+        assertTrue(csv.body().contains("INVENTORY_CONFLICT,9007199254740993,,2025-10-01T01:00:00Z,,MISSING"));
+        assertTrue(csv.body().contains("FACTORY_OVERDUE,9007199254740995,2025-09-30,2025-10-01T00:00:00Z,"
+                + "2025-10-01T00:05:00.001Z,LATE"));
+        assertEquals(1, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='EXCEPTION_DISCOVERY'
+                    AND detail_json->>'$.rows'='3' AND detail_json->>'$.onTime'='1'
+                """, Integer.class));
+        db.update("""
+                UPDATE fams_todo SET todo_status='CLOSED',closed_at='2025-10-01 00:03:00'
+                WHERE business_type='REPAIR' AND business_id=931001 AND todo_type='FACTORY_RETURN'
+                    AND todo_status='OPEN'
+                """);
+        assertFalse(ok(get(administrator, inbox)).path("items").valueStream()
+                .anyMatch(row -> "REPAIR_FACTORY_ROUND".equals(row.path("businessType").asText())));
+        var ended = ok(get(administrator, path + window));
+        assertEquals(3, ended.path("total").asInt(-1));
+        var endedFactory = ended.path("categories").valueStream()
+                .filter(row -> "FACTORY_OVERDUE".equals(row.path("kind").asText())).findFirst().orElseThrow();
+        assertEquals(1, endedFactory.path("missing").asInt(-1));
     }
 
     private void verifySealedInventoryTasks(Session administrator, Session warehouse) throws Exception {
@@ -478,7 +617,36 @@ class DutyHttpRuntimeCase {
         assertEquals("931001", active.path("items").get(0).path("taskId").asText());
         assertEquals(2, active.path("items").get(0).path("expected").asInt());
         assertEquals(1, active.path("items").get(0).path("accepted").asInt());
+        String executorPath = "/operations-reports/inventory/931001/executors";
+        assertEquals(403, code(get(warehouse, executorPath)));
+        db.update("""
+                INSERT INTO fams_inventory_review_subject (observation_id,dimension,task_id,item_id,recheck_generation)
+                SELECT 9007199254740993,'NORMAL',task_id,id,recheck_generation
+                FROM fams_inventory_item WHERE task_id=931001
+                """);
+        var current = ok(get(administrator, executorPath));
+        assertEquals("CURRENT", current.path("source").asText());
+        assertEquals(2, current.path("expected").asInt(-1));
+        assertEquals(1, current.path("counted").asInt(-1));
+        var currentExecutor = current.path("items").get(0);
+        assertEquals("931005", currentExecutor.path("executorAccountId").asText());
+        assertEquals(1, currentExecutor.path("accepted").asInt(-1));
+        assertEquals(0, currentExecutor.path("differences").asInt(-1));
+        db.update("UPDATE fams_inventory_review_subject SET dimension='LOCATION'"
+                + " WHERE task_id=931001 AND observation_id=9007199254740993");
+        assertEquals(1, ok(get(administrator, executorPath)).path("items").get(0).path("differences").asInt(-1));
+        var currentCsv = get(administrator, executorPath + ".csv");
+        assertEquals(200, code(currentCsv));
+        assertTrue(currentCsv.body().endsWith("931001,931005,1,1,1,0"));
+        assertEquals(1L, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE action='OPERATIONS_REPORT_EXPORTED'
+                    AND resource_type='CURRENT_INVENTORY_EXECUTORS' AND resource_id=931001
+                """, Long.class));
         db.update("UPDATE fams_inventory_item SET recheck_generation=1 WHERE task_id=931001");
+        var recheck = ok(get(administrator, executorPath)).path("items").get(0);
+        assertEquals(0, recheck.path("accepted").asInt(-1));
+        assertEquals(0, recheck.path("differences").asInt(-1));
+        assertEquals(1, recheck.path("notObserved").asInt(-1));
         assertEquals(0, ok(get(administrator, progress + "?before=931002")).path("items").get(0).path("accepted").asInt());
         assertTrue(ok(get(administrator, progress + "?before=931001")).path("items").isEmpty());
         var path = "/operations-reports/inventory";
@@ -511,6 +679,116 @@ class DutyHttpRuntimeCase {
                 WHERE action='OPERATIONS_REPORT_EXPORTED' AND resource_type='SEALED_INVENTORY_DETAIL'
                     AND detail_json->>'$.from'='2026-11-01' AND detail_json->>'$.toExclusive'='2026-12-01'
                     AND detail_json->>'$.rows'='1'
+                """, Long.class));
+        verifySealedExecutors(administrator, warehouse);
+        verifyPublishedInventoryTraceability(administrator, warehouse);
+    }
+
+    private void verifySealedExecutors(Session administrator, Session warehouse) throws Exception {
+        db.update("""
+                INSERT INTO fams_inventory_item (id,task_id,asset_id,asset_version,snapshot_json,executor_account_id)
+                VALUES (934000,931000,9007199254740993,0,'{}',931005),
+                       (934001,931000,9007199254740994,0,'{}',NULL)
+                """);
+        db.update("""
+                INSERT INTO fams_inventory_sealed_item (task_id,item_id,asset_id,recheck_generation,
+                    snapshot_json,snapshot_sha256)
+                VALUES (931000,934000,9007199254740993,0,
+                    '{"item":{"executor_account_id":"9007199254741201"},"review":{
+                    "review_status":"ACCEPTED","observation_id":"9007199254740993"}}',REPEAT('1',64)),
+                    (931000,934001,9007199254740994,0,
+                    '{"item":{"executor_account_id":null},"review":{}}',REPEAT('2',64))
+                """);
+        var path = "/operations-reports/inventory/931000/executors";
+        assertEquals(403, code(get(warehouse, path)));
+        assertEquals(403, code(get(warehouse, path + ".csv")));
+        assertEquals(404, code(get(administrator, "/operations-reports/inventory/999999/executors")));
+        var report = ok(get(administrator, path));
+        assertEquals("SEALED", report.path("source").asText());
+        assertEquals(4, report.path("expected").asInt(-1));
+        assertEquals(2, report.path("counted").asInt(-1));
+        var rows = report.path("items");
+        assertEquals(2, rows.size());
+        assertEquals("9007199254741201", rows.get(0).path("executorAccountId").asText());
+        assertEquals(1, rows.get(0).path("accepted").asInt(-1));
+        assertEquals(1, rows.get(0).path("differences").asInt(-1));
+        assertEquals(1, rows.get(1).path("notObserved").asInt(-1));
+        var csv = get(administrator, path + ".csv");
+        assertEquals(200, code(csv));
+        assertEquals("taskId,executorAccountId,expected,accepted,differences,notObserved\r\n"
+                + "931000,9007199254741201,1,1,1,0\r\n931000,,1,0,0,1", csv.body());
+        assertEquals(1L, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE action='OPERATIONS_REPORT_EXPORTED'
+                    AND resource_type='SEALED_INVENTORY_EXECUTORS' AND resource_id=931000
+                    AND detail_json->>'$.counted'='2'
+                """, Long.class));
+    }
+
+    private void verifyPublishedInventoryTraceability(Session administrator, Session warehouse) throws Exception {
+        db.update("UPDATE fams_inventory_task SET published_at='2026-11-01' WHERE id IN (931000,931001)");
+        db.update("""
+                INSERT INTO fams_inventory_task (id,name,task_status,range_json,starts_at,due_at,
+                    creator_account_id,created_at,updated_at,expected_count,published_at)
+                VALUES (931010,'=Unsafe,Name','CANCELLED','{}','2026-11-04','2026-11-05',931003,NOW(3),NOW(3),1,'2026-11-04'),
+                    (931011,'Terminated','TERMINATED','{}','2026-11-04','2026-11-05',931003,NOW(3),NOW(3),1,'2026-11-04'),
+                    (931012,'Draft','DRAFT','{}','2026-11-04','2026-11-05',931003,NOW(3),NOW(3),0,NULL),
+                    (931013,'No seal','COMPLETED','{}','2026-11-04','2026-11-05',931003,NOW(3),NOW(3),1,'2026-11-04'),
+                    (931014,'Complete seal','COMPLETED','{}','2026-11-04','2026-11-05',931003,NOW(3),NOW(3),1,'2026-11-04'),
+                    (931015,'Outside','CANCELLED','{}','2026-12-01','2026-12-02',931003,NOW(3),NOW(3),0,'2026-12-01'),
+                    (931016,'Missing executor field','COMPLETED','{}','2026-11-04','2026-11-05',
+                        931003,NOW(3),NOW(3),1,'2026-11-04')
+                """);
+        db.update("""
+                INSERT INTO fams_inventory_item (id,task_id,asset_id,asset_version,snapshot_json,executor_account_id)
+                VALUES (934010,931010,9007199254740993,0,'{}',NULL),(934011,931011,9007199254740993,0,'{}',931005),
+                    (934013,931013,9007199254740993,0,'{}',931005),(934014,931014,9007199254740993,0,'{}',931005),
+                    (934016,931016,9007199254740993,0,'{}',931005)
+                """);
+        db.update("""
+                INSERT INTO fams_inventory_sealed_report (task_id,task_version,timezone_id,expected_count,
+                    accepted_count,not_observed_count,captured_count,actor_account_id,actor_username,seal_reason,
+                    sync_digest,report_sha256,snapshot_json,created_at)
+                SELECT id,1,'UTC',1,0,1,0,931003,'duty3','Fixture',REPEAT('0',64),REPEAT('1',64),'{}','2026-11-05'
+                FROM fams_inventory_task WHERE id IN (931014,931016)
+                """);
+        db.update("""
+                INSERT INTO fams_inventory_sealed_item (task_id,item_id,asset_id,recheck_generation,
+                    snapshot_json,snapshot_sha256)
+                VALUES (931014,934014,9007199254740993,0,'{"item":{"executor_account_id":null},"review":{}}',REPEAT('1',64)),
+                    (931016,934016,9007199254740993,0,'{"item":{},"review":{}}',REPEAT('2',64))
+                """);
+
+        String path = "/operations-reports/inventory-traceability";
+        String window = "?from=2026-11-01&toExclusive=2026-12-01";
+        assertEquals(403, code(get(warehouse, path + window)));
+        assertEquals(400, code(get(administrator, path + "?from=2026-12-01&toExclusive=2026-11-01")));
+        var first = ok(get(administrator, path + window + "&pageSize=1"));
+        assertEquals(7, first.path("counts").path("published").asInt(-1));
+        assertEquals(3, first.path("counts").path("traceable").asInt(-1));
+        assertEquals("931016", first.path("nextBefore").asText());
+        assertEquals(1, first.path("items").get(0).path("counted").asInt(-1));
+        assertFalse(first.path("items").get(0).path("traceable").asBoolean(true));
+        var second = ok(get(administrator, path + window + "&before=931016"));
+        assertEquals(first.path("counts"), second.path("counts"));
+        var items = second.path("items");
+        assertTrue(items.valueStream().anyMatch(row -> "CANCELLED".equals(row.path("status").asText())
+                && row.path("traceable").asBoolean()));
+        assertTrue(items.valueStream().anyMatch(row -> "TERMINATED".equals(row.path("status").asText())
+                && row.path("traceable").asBoolean()));
+        assertTrue(items.valueStream().anyMatch(row -> "931013".equals(row.path("taskId").asText())
+                && "MISSING".equals(row.path("source").asText()) && !row.path("traceable").asBoolean(true)));
+        assertEquals(404, code(get(administrator, "/operations-reports/inventory/931013/executors")));
+        var retained = ok(get(administrator, "/operations-reports/inventory/931011/executors"));
+        assertEquals("RETAINED", retained.path("source").asText());
+        assertEquals("931005", retained.path("items").get(0).path("executorAccountId").asText());
+        var csv = get(administrator, path + ".csv" + window);
+        assertEquals(200, code(csv));
+        assertEquals(8L, csv.body().lines().count());
+        assertTrue(csv.body().contains("931010,\"'=Unsafe,Name\",CANCELLED"));
+        assertEquals(1L, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE action='OPERATIONS_REPORT_EXPORTED'
+                    AND resource_type='PUBLISHED_INVENTORY_TRACEABILITY'
+                    AND detail_json->>'$.rows'='7' AND detail_json->>'$.traceable'='3'
                 """, Long.class));
     }
 
@@ -605,6 +883,27 @@ class DutyHttpRuntimeCase {
         assertEquals(403, code(get(warehouse, endpoint)));
         var report = ok(get(administrator, endpoint));
         var list = "/operations-reports/assets";
+        var quality = report.path("custodyQuality");
+        assertEquals(1, quality.path("complete").asInt());
+        assertEquals(2, quality.path("effective").asInt());
+        assertEquals(1, quality.path("excluded").asInt());
+        assertEquals("REPORT-A", ok(get(administrator, list + "?custodyComplete=true"))
+                .path("items").get(0).path("assetCode").asText());
+        var incomplete = ok(get(administrator, list + "?custodyComplete=false")).path("items");
+        assertEquals(1, incomplete.size());
+        assertEquals("REPORT-C", incomplete.get(0).path("assetCode").asText());
+        assertEquals(400, code(get(administrator, list + "?custodyComplete=unknown")));
+        assertEquals(403, code(get(warehouse, list + "?custodyComplete=false")));
+        var gaps = get(administrator, list + ".csv?custodyComplete=false");
+        assertEquals(200, code(gaps));
+        assertTrue(gaps.body().contains("REPORT-C"));
+        assertFalse(gaps.body().contains("REPORT-A"));
+        assertFalse(gaps.body().contains("REPORT-B"));
+        assertEquals(1, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='ASSET_CUSTODY_REPORT'
+                    AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.custodyComplete'))='false'
+                    AND JSON_EXTRACT(detail_json,'$.rows')=1
+                """, Integer.class));
         for (var dimension : java.util.Map.of("organizations", "organizationId", "categories", "categoryId").entrySet()) {
             var groups = report.path(dimension.getKey());
             assertEquals(2, groups.size());
@@ -731,6 +1030,14 @@ class DutyHttpRuntimeCase {
                     7,0,1,0,'REPORT-C',931001,931001,0,0,9007199254741013)
                 """);
         var endpoint = "/operations-reports/inbound-timing";
+        String receiptNumber = db.queryForObject("SELECT receipt_no FROM fams_inbound_receipt WHERE id=931000", String.class);
+        String filters = "?assetCode=REPORT-A&businessReference=";
+        assertEquals(1, ok(get(administrator, "/assets" + filters + receiptNumber)).path("total").asInt());
+        assertEquals(0, ok(get(administrator, "/assets" + filters + receiptNumber + "-extra")).path("total").asInt());
+        var historyExport = get(administrator, "/assets/export.csv" + filters + receiptNumber);
+        assertEquals(200, code(historyExport), historyExport.body());
+        assertTrue(historyExport.body().contains("REPORT-A"));
+        assertFalse(historyExport.body().contains("REPORT-C"));
         var claim = "?kind=CLAIM&receiptId=931000";
         assertEquals(403, code(get(warehouse, endpoint + claim)));
         assertEquals(403, code(get(warehouse, endpoint + ".csv" + claim)));
@@ -756,6 +1063,43 @@ class DutyHttpRuntimeCase {
                     AND JSON_EXTRACT(detail_json,'$.rows')=1 AND JSON_EXTRACT(detail_json,'$.receiptId')=931000
                     AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.kind'))='CLAIM'
                 """, Integer.class));
+    }
+
+    private void verifyLedgerInventoryCutoff(Session administrator, Session warehouse) throws Exception {
+        db.update("""
+                INSERT INTO fams_asset (id,asset_code,name,lifecycle_status,exception_status,card_stage,
+                    created_business_date,last_inventory_business_date,parameter_version_id,
+                    creator_account_id,creator_username_snapshot,created_at,updated_at,created_by,updated_by)
+                VALUES (931061,'CUTOFF-NEVER','Inventory cutoff','IN_STOCK','NORMAL','ACTIVE','2026-11-01',
+                    NULL,931000,931003,'duty3',NOW(3),NOW(3),931003,931003),
+                    (931062,'CUTOFF-OLD','Inventory cutoff','IN_STOCK','NORMAL','ACTIVE','2026-11-01',
+                    '2026-11-09',931000,931003,'duty3',NOW(3),NOW(3),931003,931003),
+                    (931063,'CUTOFF-SAME','Inventory cutoff','IN_STOCK','NORMAL','ACTIVE','2026-11-01',
+                    '2026-11-10',931000,931003,'duty3',NOW(3),NOW(3),931003,931003),
+                    (931064,'CUTOFF-DRAFT','Inventory cutoff','WAITING_INBOUND','NORMAL','DRAFT','2026-11-01',
+                    NULL,931000,931003,'duty3',NOW(3),NOW(3),931003,931003),
+                    (931065,'CUTOFF-SCRAPPED','Inventory cutoff','SCRAPPED','NORMAL','ACTIVE','2026-11-01',
+                    NULL,931000,931003,'duty3',NOW(3),NOW(3),931003,931003)
+                """);
+        try {
+            String filters = "?assetCode=CUTOFF-&inventoryBefore=2026-11-10";
+            var listed = ok(get(administrator, "/assets" + filters));
+            assertEquals(2, listed.path("total").asInt());
+            assertEquals(List.of("CUTOFF-OLD", "CUTOFF-NEVER"), listed.path("items").valueStream()
+                    .map(row -> row.path("assetCode").asText()).toList());
+            var complement = ok(get(administrator, "/assets" + filters + "&longUninventoried=false"));
+            assertEquals(1, complement.path("total").asInt());
+            assertEquals("CUTOFF-SAME", complement.path("items").get(0).path("assetCode").asText());
+            assertEquals(400, code(get(administrator, "/assets?longUninventoried=true")));
+            assertEquals(400, code(get(administrator, "/assets?inventoryBefore=2026-02-30")));
+            assertEquals(403, code(get(warehouse, "/assets/export.csv" + filters)));
+            var csv = get(administrator, "/assets/export.csv" + filters);
+            assertEquals(200, code(csv), csv.body());
+            assertEquals(3, csv.body().lines().count());
+            assertTrue(csv.body().contains("CUTOFF-OLD") && csv.body().contains("CUTOFF-NEVER"));
+        } finally {
+            db.update("DELETE FROM fams_asset WHERE id BETWEEN 931061 AND 931065");
+        }
     }
 
     private void verifyBusinessExceptionReport(Session administrator, Session warehouse) throws Exception {
@@ -1030,6 +1374,19 @@ class DutyHttpRuntimeCase {
                     AND JSON_EXTRACT(detail_json,'$.processorId')=931004
                     AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.state'))='OVERDUE'
                 """, Integer.class));
+        var frozenDeadline = date.atStartOfDay(java.time.ZoneOffset.ofHours(-12)).toInstant();
+        db.update("""
+                UPDATE fams_scrap_disposition SET due_at=?,due_timezone='-12:00'
+                WHERE request_id=9007199254740991
+                """, java.sql.Timestamp.from(frozenDeadline));
+        var stillPending = ok(get(administrator, endpoint + "?state=PENDING_DISPOSITION"));
+        assertEquals(java.util.List.of("9007199254740992", "9007199254740991"),
+                stillPending.path("items").valueStream().map(item -> item.path("requestId").asText()).toList());
+        var frozenOverdue = ok(get(administrator, endpoint + "?state=OVERDUE"));
+        assertTrue(frozenOverdue.path("items").isEmpty());
+        var frozenCsv = get(administrator, endpoint + ".csv?processorId=931004&state=OVERDUE");
+        assertEquals(200, code(frozenCsv));
+        assertEquals(1, frozenCsv.body().lines().count());
     }
 
     private void verifyLossOperationsReport(Session administrator) throws Exception {
@@ -1135,6 +1492,148 @@ class DutyHttpRuntimeCase {
     private HttpResponse<String> get(Session session, String path) throws Exception {
         return http.send(HttpRequest.newBuilder(URI.create(base() + path))
                 .header("Cookie", session.cookie()).GET().build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private void verifyOverdueReassignment(Session administrator) throws Exception {
+        var warehouse = login("duty4");
+        db.update("""
+                INSERT INTO fams_inbound_receipt (id,receipt_no,creator_account_id,creator_username_snapshot,
+                    receipt_status,business_date,parameter_version_id,timezone_snapshot,
+                    admin_decision_deadline_workdays,warehouse_claim_deadline_workdays,
+                    warehouse_first_execution_deadline_workdays,submitted_at,warehouse_first_execution_due_at,
+                    version,created_at,updated_at,created_by,updated_by)
+                VALUES (931009,'C4-OVERDUE',931004,'duty4','WAREHOUSE_PROCESSING','2026-11-15',931000,
+                    'UTC',2,1,2,UTC_TIMESTAMP(3),DATE_ADD(UTC_TIMESTAMP(3),INTERVAL 1 HOUR),
+                    4,UTC_TIMESTAMP(3),UTC_TIMESTAMP(3),931004,931004)
+                """);
+        db.update("""
+                INSERT INTO fams_inbound_processing_ownership
+                    (receipt_id,processor_account_id,processor_username_snapshot,ownership_version,acquired_at)
+                VALUES (931009,931004,'duty4',0,UTC_TIMESTAMP(3))
+                """);
+        db.update("""
+                INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at)
+                VALUES ('WAREHOUSE_OPERATOR','INBOUND',931009,'WAREHOUSE_EXECUTION','OPEN',UTC_TIMESTAMP(3))
+                """);
+        String openReminders = "SELECT COUNT(*) FROM fams_todo WHERE business_type='INBOUND' AND business_id=931009"
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        reassignments.scan();
+        assertEquals(0, db.queryForObject(openReminders, Integer.class));
+        db.update("UPDATE fams_inbound_receipt SET warehouse_first_execution_due_at=UTC_TIMESTAMP(3)"
+                + " - INTERVAL 1 MINUTE WHERE id=931009");
+        var deadline = db.queryForObject("SELECT warehouse_first_execution_due_at FROM fams_inbound_receipt"
+                + " WHERE id=931009", java.sql.Timestamp.class);
+        reassignments.scan();
+        reassignments.scan();
+        assertEquals(1, db.queryForObject(openReminders, Integer.class));
+        var exceptions = "/messages?view=EXCEPTION";
+        assertTrue(ok(get(administrator, exceptions)).path("items").valueStream().anyMatch(row ->
+                "931009".equals(row.path("businessId").asText())
+                        && "REASSIGNMENT_REQUIRED".equals(row.path("stage").asText())));
+        assertFalse(ok(get(warehouse, exceptions)).path("items").valueStream().anyMatch(row ->
+                "931009".equals(row.path("businessId").asText())
+                        && "REASSIGNMENT_REQUIRED".equals(row.path("stage").asText())));
+        var affected = "/workbench/todos?scope=ASSET_ADMIN&processorAccountId=";
+        var assigned = ok(get(administrator, affected + "931004"));
+        assertTrue(assigned.path("items").valueStream().anyMatch(row ->
+                "931009".equals(row.path("businessId").asText())
+                        && "REASSIGNMENT_REQUIRED".equals(row.path("stage").asText())));
+        assertEquals(1, assigned.path("stageCounts").size());
+        assertEquals("REASSIGNMENT_REQUIRED", assigned.path("stageCounts").get(0).path("stage").asText());
+        assertTrue(ok(get(administrator, affected + "931002")).path("items").isEmpty());
+        assertEquals(403, code(get(warehouse, affected + "931004")));
+        assertEquals(403, code(get(warehouse, "/workbench/todos?scope=MINE&processorAccountId=931004")));
+        assertEquals(WAREHOUSE, db.queryForObject(
+                "SELECT processor_account_id FROM fams_inbound_processing_ownership WHERE receipt_id=931009",
+                Long.class));
+        assertEquals(4, db.queryForObject("SELECT version FROM fams_inbound_receipt WHERE id=931009", Integer.class));
+
+        // An acceptance and a controlled transfer both advance the original ownership version.
+        db.update("UPDATE fams_inbound_processing_ownership SET ownership_version=1 WHERE receipt_id=931009");
+        reassignments.scan();
+        assertEquals(0, db.queryForObject(openReminders, Integer.class));
+        assertFalse(ok(get(administrator, affected + "931004")).path("items").valueStream()
+                .anyMatch(row -> "931009".equals(row.path("businessId").asText())));
+        assertEquals(deadline, db.queryForObject("SELECT warehouse_first_execution_due_at FROM fams_inbound_receipt"
+                + " WHERE id=931009", java.sql.Timestamp.class));
+        assertFalse(ok(get(administrator, exceptions)).path("items").valueStream().anyMatch(row ->
+                "931009".equals(row.path("businessId").asText())
+                        && "REASSIGNMENT_REQUIRED".equals(row.path("stage").asText())));
+        verifyUnavailableDeclaration(administrator, warehouse, openReminders);
+
+    }
+
+    private void verifyUnavailableDeclaration(Session administrator, Session warehouse, String openReminders)
+            throws Exception {
+        String key = UUID.randomUUID().toString();
+        String reason = "Original processor is unavailable for further acceptance";
+        assertEquals(403, code(declareUnavailable(administrator, 4, 1, reason, key)));
+        assertEquals(409, code(declareUnavailable(warehouse, 3, 1, reason, key)));
+        assertEquals(409, code(declareUnavailable(warehouse, 4, 0, reason, key)));
+        var result = ok(declareUnavailable(warehouse, 4, 1, reason, key));
+        assertTrue(result.path("recorded").asBoolean());
+        assertEquals(result, ok(declareUnavailable(warehouse, 4, 1, reason, key)));
+        assertEquals(409, code(declareUnavailable(warehouse, 4, 1, "Changed reason", key)));
+        assertEquals(result, ok(declareUnavailable(warehouse, 4, 1, reason, UUID.randomUUID().toString())));
+        assertEquals("INBOUND_UNAVAILABILITY_ALREADY_RECORDED",
+                json.readTree(declareUnavailable(warehouse, 4, 1, "Different new request", UUID.randomUUID().toString())
+                        .body()).path("code").asText());
+        assertEquals(1, db.queryForObject(openReminders, Integer.class));
+        reassignments.scan();
+        assertEquals(1, db.queryForObject(openReminders, Integer.class));
+        assertEquals(1L, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_audit_event WHERE action='INBOUND_PROCESSOR_UNAVAILABLE'
+                    AND resource_id=931009 AND actor_account_id=931004
+                """, Long.class));
+        var snapshot = ok(get(administrator, "/inbound-receipts/931009/reassignment"));
+        assertEquals(reason, snapshot.path("unavailableReason").asText());
+        assertEquals(4, snapshot.path("version").asInt(-1));
+        assertEquals(1, snapshot.path("ownershipVersion").asInt(-1));
+        assertEquals("931004", snapshot.path("processorAccountId").asText());
+        db.update("UPDATE fams_inbound_processing_ownership SET ownership_version=2 WHERE receipt_id=931009");
+        reassignments.scan();
+        assertEquals(0, db.queryForObject(openReminders, Integer.class));
+        assertFalse(ok(get(administrator, "/inbound-receipts/931009/reassignment")).has("unavailableReason"));
+    }
+
+    private HttpResponse<String> declareUnavailable(Session session, long version, long ownershipVersion,
+            String reason, String key) throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create(base() + "/inbound-receipts/931009/reassignment/unavailable"))
+                .header("Content-Type", "application/json").header("Cookie", session.cookie())
+                .header("X-CSRF-Token", session.csrf()).header("Idempotency-Key", key)
+                .header("If-Match-Version", Long.toString(version))
+                .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(
+                        Map.of("ownershipVersion", ownershipVersion, "reason", reason))))
+                .build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private void verifyImportErrorQuality(Session administrator, Session warehouse, String report) throws Exception {
+        assertEquals(403, code(get(warehouse, report)));
+        var empty = ok(get(administrator, report)).path("importErrorQuality");
+        assertEquals(0, empty.path("failedRows").asInt(-1));
+        assertEquals(0, empty.path("locatedRows").asInt(-1));
+        db.update("""
+                INSERT INTO fams_asset_import_batch
+                    (id,actor_account_id,upload_key,source_sha256,source_bytes,source_xlsx,batch_status,
+                     preview_version,total_rows,ready_rows,error_rows,created_at,updated_at)
+                VALUES ('00000000-0000-4000-8000-000000931001',931004,'errors-a',REPEAT('0',64),
+                    1,X'00','PREVIEWED',1,3,1,2,'2026-11-01 00:00:00','2026-11-15 00:00:00'),
+                    ('00000000-0000-4000-8000-000000931002',931004,'errors-b',REPEAT('0',64),
+                    1,X'00','PREVIEWED',1,1,0,1,'2026-12-01 00:00:00','2026-12-01 00:00:00')
+                """);
+        db.update("""
+                INSERT INTO fams_asset_import_row (batch_id,sheet_row,source_json,errors_json,row_status)
+                VALUES ('00000000-0000-4000-8000-000000931001',2,'{}',
+                    '[{"sheet":"资产","sheetRow":2,"column":"编码","original":"","reason":"REQUIRED"}]','ERROR'),
+                    ('00000000-0000-4000-8000-000000931001',3,'{}',
+                    '[{"sheet":"资产","sheetRow":3,"column":"编码","reason":"REQUIRED"}]','ERROR'),
+                    ('00000000-0000-4000-8000-000000931001',4,'{}',NULL,'READY'),
+                    ('00000000-0000-4000-8000-000000931002',2,'{}',
+                    '[{"sheet":"资产","sheetRow":2,"column":"编码","original":"","reason":"REQUIRED"}]','ERROR')
+                """);
+        var quality = ok(get(administrator, report)).path("importErrorQuality");
+        assertEquals(2, quality.path("failedRows").asInt(-1));
+        assertEquals(1, quality.path("locatedRows").asInt(-1));
     }
 
     private HttpResponse<String> setAccountStatus(Session session, long id, long version, String action)

@@ -136,7 +136,8 @@ public class AssetImportBatchService {
         Map<String, String> mapping = AssetImportPreflight.columns(parsed, selectedColumns);
         Set<String> assetCodes = identifiers(parsed, mapping.get("assetCode"));
         Set<String> serials = identifiers(parsed, mapping.get("serialNumber"));
-        var result = AssetImportPreflight.check(parsed, selectedColumns, catalog.snapshot(assetCodes, serials));
+        var result = AssetImportPreflight.check(parsed, selectedColumns, catalog.snapshot(assetCodes, serials),
+                clock.instant());
         persistRows(batchId, parsed, result);
         long version = ((Number) batch.get("preview_version")).longValue() + 1;
         int total = parsed.rows().size();

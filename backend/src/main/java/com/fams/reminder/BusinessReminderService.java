@@ -44,26 +44,28 @@ public class BusinessReminderService {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public void scan() {
         var zone = activeZone();
-        var today = clock.instant().atZone(zone).toLocalDate();
-        inbound(today);
-        receipts(today);
-        transfers(today);
-        inventory(today, zone);
+        inbound();
+        receipts();
+        transfers();
+        inventory(zone);
         factoryReturns();
         overdueLoans();
-        lossReviews(today, zone);
-        dispositions(today, zone);
+        lossReviews(zone);
+        dispositions(zone);
     }
 
-    private void inbound(LocalDate today) {
+    private void inbound() {
         each("""
              SELECT x.id,x.receipt_status,x.timezone_snapshot,x.submitted_at,x.admin_decision_due_at,
                     x.warehouse_claim_due_at,x.warehouse_first_execution_due_at,v.snapshot_json
                FROM fams_inbound_receipt x JOIN fams_business_parameter_version v ON v.id=x.parameter_version_id
-              WHERE x.receipt_status IN ('PENDING_ADMIN_DECISION','WAITING_WAREHOUSE_CLAIM','WAREHOUSE_PROCESSING')""",
+              WHERE x.receipt_status IN ('PENDING_ADMIN_DECISION','WAITING_WAREHOUSE_CLAIM','WAREHOUSE_PROCESSING')
+                AND (x.receipt_status<>'WAREHOUSE_PROCESSING' OR
+             """ + InboundReminderState.FIRST_ACCEPTANCE_PENDING + ")",
                 row -> {
                     var status = String.valueOf(row.get("receipt_status"));
                     var zone = ZoneId.of(String.valueOf(row.get("timezone_snapshot")));
+                    var today = clock.instant().atZone(zone).toLocalDate();
                     var field = switch (status) {
                         case "PENDING_ADMIN_DECISION" -> "admin_decision_due_at";
                         case "WAITING_WAREHOUSE_CLAIM" -> "warehouse_claim_due_at";
@@ -90,27 +92,31 @@ public class BusinessReminderService {
                 });
     }
 
-    private void receipts(LocalDate today) {
+    private void receipts() {
         each("""
-             SELECT x.id,h.receipt_deadline_at,h.temporary_employee_id AS employee_id,
+             SELECT x.id,h.receipt_deadline_at,
+                    COALESCE(x.receipt_target_employee_id,d.target_employee_id,d.target_department_employee_id) AS employee_id,
                     q.parameter_snapshot_json AS snapshot_json
                FROM fams_requisition_allocation x
+               JOIN fams_requisition_demand d ON d.id=x.demand_id
                JOIN fams_requisition_handover h ON h.allocation_id=x.id
                JOIN fams_requisition q ON q.id=x.request_id
-              WHERE x.allocation_status='DELIVERED_WAITING_RECEIPT'""",
-                row -> receipt(row, "REQUISITION_ALLOCATION", today));
+              WHERE x.allocation_status='DELIVERED_WAITING_RECEIPT' AND q.request_status='WAITING_HANDOVER'""",
+                row -> receipt(row, "REQUISITION_ALLOCATION"));
     }
 
-    private void transfers(LocalDate today) {
+    private void transfers() {
         each("""
-             SELECT x.id,x.receipt_deadline_at,x.receiver_employee_id AS employee_id,x.parameter_snapshot_json
+             SELECT x.id,x.receipt_deadline_at,x.receiver_employee_id AS employee_id,
+                    x.parameter_snapshot_json AS snapshot_json
                FROM fams_transfer_item x WHERE x.item_status='DELIVERED'""",
-                row -> receipt(row, "TRANSFER_ITEM", today));
+                row -> receipt(row, "TRANSFER_ITEM"));
     }
 
-    private void receipt(Map<String, Object> row, String businessType, LocalDate today) {
+    private void receipt(Map<String, Object> row, String businessType) {
         var deadline = instant(row.get("receipt_deadline_at"));
         var zone = zone(row.get("snapshot_json"));
+        var today = clock.instant().atZone(zone).toLocalDate();
         var due = deadline.atZone(zone).toLocalDate();
         Long recipient = accountFor(row.get("employee_id"));
         record(businessType, number(row, "id"), "HANDOVER_RECEIPT", due, deadline, zone,
@@ -120,10 +126,11 @@ public class BusinessReminderService {
                         new Tier("DUE_TODAY", due), new Tier("OVERDUE", due.plusDays(1))));
     }
 
-    private void inventory(LocalDate today, ZoneId fallback) {
+    private void inventory(ZoneId fallback) {
         each("SELECT x.id,x.due_at,x.timezone_id FROM fams_inventory_task x WHERE x.task_status='IN_PROGRESS'",
                 row -> {
                     var zone = row.get("timezone_id") == null ? fallback : ZoneId.of(String.valueOf(row.get("timezone_id")));
+                    var today = clock.instant().atZone(zone).toLocalDate();
                     var deadline = instant(row.get("due_at"));
                     var due = deadline.atZone(zone).toLocalDate();
                     var tiers = List.of(new Tier("DUE_IN_3_DAYS", due.minusDays(3)),
@@ -147,18 +154,25 @@ public class BusinessReminderService {
         each("""
              SELECT x.id,x.expected_return_date,p.timezone_id,p.processor_account_id
                FROM fams_repair_factory_round x JOIN fams_repair_request p ON p.id=x.repair_id
-              WHERE x.round_status='DISPATCHED'""",
+              WHERE x.round_status='DISPATCHED' AND EXISTS (
+                    SELECT 1 FROM fams_todo t
+                    WHERE t.business_type='REPAIR' AND t.business_id=x.repair_id AND t.todo_type='FACTORY_RETURN'
+                        AND t.todo_status='OPEN' AND t.closed_at IS NULL AND t.opened_at>=x.dispatched_at
+              )""",
                 row -> {
                     var zone = ZoneId.of(String.valueOf(row.get("timezone_id")));
                     var today = clock.instant().atZone(zone).toLocalDate();
                     var due = LocalDate.parse(String.valueOf(row.get("expected_return_date")));
+                    long daysOverdue = today.toEpochDay() - due.toEpochDay();
+                    // The first week is visible from its first day. Once a weekly bucket is due,
+                    // write only that bucket so an upgrade cannot supersede it with an older notice.
+                    var overdue = daysOverdue < 7
+                            ? new Tier("OVERDUE", due.plusDays(1))
+                            : new Tier("OVERDUE_EVERY_7_DAYS", due.plusDays(7 * (daysOverdue / 7)));
                     record("REPAIR_FACTORY_ROUND", number(row, "id"), "FACTORY_RETURN", due, endOfDay(due, zone), zone,
                             "WAREHOUSE_OPERATOR", null, today, List.of(
                                     new Tier("DUE_IN_3_DAYS", due.minusDays(3)), new Tier("DUE_TODAY", due),
-                                    // Deriving the occurrence from the due date keeps a restarted scan on the same
-                                    // weekly bucket instead of emitting a fresh notice every run.
-                                    new Tier("OVERDUE_EVERY_7_DAYS", due.plusDays(7L * Math.max(1,
-                                            (today.toEpochDay() - due.toEpochDay()) / 7)))));
+                                    overdue));
                     if (row.get("processor_account_id") instanceof Number processor) {
                         record("REPAIR_FACTORY_ROUND", number(row, "id"), "FACTORY_RETURN", due,
                                 endOfDay(due, zone), zone, "WAREHOUSE_OPERATOR", processor.longValue(), today,
@@ -191,12 +205,28 @@ public class BusinessReminderService {
                 });
     }
 
-    private void lossReviews(LocalDate today, ZoneId zone) {
+    private void lossReviews(ZoneId fallback) {
         each("""
-             SELECT x.id,x.next_review_date,x.processor_account_id FROM fams_loss_report x
-              WHERE x.report_status IN ('SEARCHING','CONFIRMED_LOST') AND x.next_review_date IS NOT NULL""",
+             SELECT x.id,x.next_review_date,x.processor_account_id,(
+                 SELECT e.detail_json FROM fams_loss_event e WHERE e.report_id=x.id
+                    AND e.action IN ('LOSS_SEARCH_STARTED','LOSS_CONFIRMED','LOSS_FOLLOWED_UP','LOSS_INITIAL_OPENED')
+                 ORDER BY e.id DESC LIMIT 1
+             ) AS schedule_event FROM fams_loss_report x JOIN fams_asset asset ON asset.id=x.asset_id
+              WHERE x.report_status IN ('SEARCHING','CONFIRMED_LOST') AND x.next_review_date IS NOT NULL
+                AND asset.lifecycle_status<>'SCRAPPED'
+                AND NOT EXISTS (SELECT 1 FROM fams_scrap_request s JOIN fams_scrap_disposition d ON d.request_id=s.id
+                    WHERE s.source_type='LOSS' AND s.source_business_id=x.id AND d.disposition_status='LOSS_WRITTEN_OFF')""",
                 row -> {
                     var due = LocalDate.parse(String.valueOf(row.get("next_review_date")));
+                    ZoneId zone = fallback;
+                    if (row.get("schedule_event") instanceof String detail) {
+                        var event = json.readTree(detail);
+                        var frozen = event.path("reviewTimezone").asText("");
+                        if (!frozen.isBlank() && due.toString().equals(event.path("reviewDate").asText())) {
+                            zone = ZoneId.of(frozen);
+                        }
+                    }
+                    var today = clock.instant().atZone(zone).toLocalDate();
                     Long processor = row.get("processor_account_id") == null
                             ? null : ((Number) row.get("processor_account_id")).longValue();
                     record("LOST_REPORT", number(row, "id"), "LOSS_REVIEW", due, endOfDay(due, zone), zone,
@@ -205,14 +235,17 @@ public class BusinessReminderService {
                 });
     }
 
-    private void dispositions(LocalDate today, ZoneId zone) {
+    private void dispositions(ZoneId fallback) {
         each("""
-             SELECT x.id,d.due_date,d.processor_account_id FROM fams_scrap_disposition d
+             SELECT x.id,d.due_date,d.due_at,d.due_timezone,d.processor_account_id FROM fams_scrap_disposition d
                JOIN fams_scrap_request x ON x.id=d.request_id
               WHERE d.disposition_status='PENDING_DISPOSITION' AND x.request_status='EXECUTED'""",
                 row -> {
                     var due = LocalDate.parse(String.valueOf(row.get("due_date")));
-                    record("SCRAP", number(row, "id"), "SCRAP_DISPOSITION", due, endOfDay(due, zone), zone,
+                    var zone = row.get("due_timezone") instanceof String frozen ? ZoneId.of(frozen) : fallback;
+                    var deadline = row.get("due_at") == null ? endOfDay(due, zone) : instant(row.get("due_at"));
+                    var today = clock.instant().atZone(zone).toLocalDate();
+                    record("SCRAP", number(row, "id"), "SCRAP_DISPOSITION", due, deadline, zone,
                             "WAREHOUSE_OPERATOR", ((Number) row.get("processor_account_id")).longValue(), today,
                             List.of(new Tier("DUE_IN_3_DAYS", due.minusDays(3)), new Tier("DUE_TODAY", due),
                                     new Tier("OVERDUE", due.plusDays(1))));

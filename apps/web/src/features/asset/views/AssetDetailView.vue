@@ -3,6 +3,7 @@ import { computed, ref, shallowRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import AssetFactoryReplacementTrace from "@/components/AssetFactoryReplacementTrace.vue";
+import AssetTagPlacement from "@/features/asset/panels/AssetTagPlacement.vue";
 import QRCode from "qrcode";
 import { useSessionStore } from "@/auth/sessionStore";
 import { useRequestLiveness, type LivenessToken } from "@/composables/useRequestLiveness";
@@ -180,6 +181,8 @@ watch(identity, async () => {
           type="button" @click="openAction('cancel')">取消草稿</button>
         <button v-if="canPrintTag" class="fams-button" data-kind="secondary" :disabled="locked"
           type="button" @click="printCurrent">打印标签</button>
+        <AssetTagPlacement v-if="canPrintTag && !['WAITING_INBOUND', 'SCRAPPED'].includes(selected.lifecycle)"
+          :key="selected.id + ':' + selected.version" :asset-id="selected.id" :version="selected.version" />
       </div>
       <div v-if="pending" class="fams-card fams-stack" role="group" :aria-label="confirmLabels[pending]">
         <label class="fams-field"><span class="fams-field-label">{{ fieldLabels[pending] }}</span>

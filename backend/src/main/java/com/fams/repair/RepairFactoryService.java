@@ -892,7 +892,12 @@ public class RepairFactoryService {
     private boolean originalDestroyed(long repairId, long roundId) {
         return !db.queryForList("SELECT id FROM fams_repair_factory_replacement"
                 + " WHERE repair_id=? AND round_id=? AND original_disposition='FACTORY_DESTROYED' FOR UPDATE",
-                repairId, roundId).isEmpty();
+                repairId, roundId).isEmpty()
+                || !db.queryForList("""
+                        SELECT d.id FROM fams_initial_factory_disposition d
+                        JOIN fams_repair_factory_round r ON r.id=d.round_id
+                        WHERE r.repair_id=? AND r.id=? FOR UPDATE
+                        """, repairId, roundId).isEmpty();
     }
 
     private void requireOriginalNotDestroyed(long repairId, long roundId) {
@@ -903,6 +908,7 @@ public class RepairFactoryService {
 
     private boolean replacementPhase(long id, Map<String, Object> round) {
         if (!List.of("DISPATCHED", "RECEIVED").contains(round.get("round_status"))
+                || originalDestroyed(id, number(round, "id"))
                 || !db.queryForList("SELECT id FROM fams_repair_factory_replacement"
                         + " WHERE round_id=?", round.get("id")).isEmpty()) {
             return false;

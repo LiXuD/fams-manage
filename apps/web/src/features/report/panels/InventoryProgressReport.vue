@@ -2,10 +2,12 @@
 import { computed, ref, shallowRef } from "vue";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { reportRequest } from "@/features/report/api";
+import InventoryExecutorBreakdown from "./InventoryExecutorBreakdown.vue";
 
 interface Row { taskId: string; name: string; status: string; dueAt: string; expected: number; accepted: number }
 interface Page { items: Row[]; nextBefore: string | null }
 const page = ref<Page>();
+const executorTask = ref<string>();
 const busy = shallowRef(false);
 const error = shallowRef("");
 const statuses: Record<string, string> = { READY: "待开始", IN_PROGRESS: "进行中", WAITING_REVIEW: "待复核" };
@@ -17,6 +19,7 @@ async function load(before?: string) {
   const turn = liveness.begin();
   busy.value = true;
   error.value = "";
+  executorTask.value = undefined;
   try {
     const query = before ? "?" + new URLSearchParams({ before }) : "";
     const fetched = await reportRequest<Page>("/operations-reports/inventory-progress" + query);
@@ -48,15 +51,17 @@ async function load(before?: string) {
       <div v-else class="fams-table-scroll">
         <table class="fams-table">
           <thead><tr><th scope="col" data-column-kind="identity">任务</th><th scope="col">状态</th><th scope="col">截止时间</th>
-            <th scope="col">已采信 / 应盘</th></tr></thead>
+            <th scope="col">已采信 / 应盘</th><th scope="col">执行人</th></tr></thead>
           <tbody>
             <tr v-for="task in page.items" :key="task.taskId">
               <th scope="row" data-column-kind="identity"><router-link class="fams-button" data-kind="link" data-size="sm" :to="{ name: 'inventory-tasks', query: { taskId: task.taskId } }">{{ task.name }}</router-link></th>
               <td><span class="fams-status">{{ statuses[task.status] }}</span></td><td>{{ task.dueAt }}</td><td>{{ task.accepted }}/{{ task.expected }}</td>
+              <td><button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="executorTask = task.taskId">按执行人查看</button></td>
             </tr>
           </tbody>
         </table>
       </div>
+      <InventoryExecutorBreakdown v-if="executorTask" :key="executorTask" :task-id="executorTask" />
       <div class="fams-pagination-actions">
         <button v-if="page.nextBefore" class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy" @click="load(page.nextBefore)">下一页盘点任务</button>
       </div>

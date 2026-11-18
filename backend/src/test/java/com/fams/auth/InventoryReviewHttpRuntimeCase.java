@@ -782,6 +782,102 @@ class InventoryReviewHttpRuntimeCase {
     }
 
     @Test
+    void closingLocationPreservesResponsibilityAndRejectsAStaleJointDecision() throws Exception {
+        db.update("""
+                UPDATE fams_asset
+                SET lifecycle_status='IN_USE',custody_type='PERSONAL',storage_warehouse_id=NULL,
+                    using_organization_id=943000,responsible_employee_id=
+                        CASE id WHEN 943010 THEN 943002 ELSE 943003 END
+                WHERE id IN (943010,943011)
+                """);
+        String task = prepared(true);
+        var observed = observation(task, 943010);
+        ((tools.jackson.databind.node.ObjectNode) observed.path("actual"))
+                .put("custodyType", "PERSONAL")
+                .put("locationId", "943099")
+                .put("responsibleEmployeeId", "943003");
+        assertEquals("CONFLICT_REVIEW", ok(observe(task, observed)).path("outcome").asText());
+        String observationId = db.queryForObject(
+                "SELECT CAST(id AS CHAR) FROM fams_inventory_observation WHERE client_event_id=?",
+                String.class, observed.path("eventId").asText());
+        var preparation = JSON.createObjectNode();
+        preparation.putArray("observationIds").add(observationId);
+        ok(request(admin, "POST", "/api/v1/inventory-reviews/tasks/" + task + "/differences/preparation",
+                preparation.toString(), key(), taskVersion(task)));
+
+        var subjects = differences(task);
+        var closed = ok(difference(admin, task, taskVersion(task), key(),
+                differenceBody(subjects, "BOOK_CORRECT", "LOCATION")));
+        assertEquals("CLOSED", closed.path("items").get(0).path("status").asText());
+        var rejected = difference(other, task, closed.path("version").asLong(), key(),
+                differenceBody(subjects, "BOOK_CORRECT", "RESPONSIBILITY", "LOCATION"));
+        assertEquals(409, rejected.statusCode(), rejected.body());
+        assertEquals("review1", JSON.readTree(rejected.body()).path("fieldErrors").path("processedBy").asText());
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_inventory_review_decision WHERE task_id=?", task));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_inventory_review_subject WHERE task_id=? AND"
+                + " dimension='RESPONSIBILITY' AND subject_status='OPEN' AND version=0", task));
+        assertEquals(943002L, db.queryForObject(
+                "SELECT responsible_employee_id FROM fams_asset WHERE id=943010", Long.class));
+        var responsibility = ok(difference(other, task, closed.path("version").asLong(), key(),
+                differenceBody(differences(task), "BOOK_CORRECT", "RESPONSIBILITY")));
+        assertEquals("CLOSED", responsibility.path("items").get(0).path("status").asText());
+    }
+
+    @Test
+    void locationTransferAndBookCorrectCompeteOnTheSameVersions() throws Exception {
+        String task = differenceTask(false);
+        var subjects = differences(task);
+        var transfer = (tools.jackson.databind.node.ObjectNode)
+                JSON.readTree(differenceBody(subjects, "FORMAL_TRANSFER", "LOCATION"));
+        transfer.putObject("transferTarget")
+                .put("custodyType", "STORAGE")
+                .put("warehouseId", "943000")
+                .put("locationId", "943099")
+                .putObject("referenceVersions").put("warehouse", 0).put("location", 0);
+        String bookCorrect = differenceBody(subjects, "BOOK_CORRECT", "LOCATION");
+        long version = taskVersion(task);
+        String transferKey = key();
+        String bookCorrectKey = key();
+        var ready = new java.util.concurrent.CountDownLatch(2);
+        var start = new java.util.concurrent.CountDownLatch(1);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var transferResult = pool.submit(() -> {
+                ready.countDown();
+                start.await();
+                return difference(admin, task, version, transferKey, transfer.toString());
+            });
+            var bookCorrectResult = pool.submit(() -> {
+                ready.countDown();
+                start.await();
+                return difference(other, task, version, bookCorrectKey, bookCorrect);
+            });
+            boolean bothReady = ready.await(5, java.util.concurrent.TimeUnit.SECONDS);
+            start.countDown();
+            assertTrue(bothReady);
+            var transferReply = transferResult.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            var bookCorrectReply = bookCorrectResult.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            boolean transferWon = transferReply.statusCode() == 200;
+            var winner = transferWon ? transferReply : bookCorrectReply;
+            var loser = transferWon ? bookCorrectReply : transferReply;
+            var receipt = ok(winner);
+            assertEquals(409, loser.statusCode(), loser.body());
+            var fields = JSON.readTree(loser.body()).path("fieldErrors");
+            assertEquals(transferWon ? "review1" : "review3", fields.path("processedBy").asText());
+            assertEquals(transferWon ? "FORMAL_TRANSFER" : "BOOK_CORRECT", fields.path("method").asText());
+            assertEquals(transferWon ? "PROCESSING" : "CLOSED", fields.path("result").asText());
+            assertTrue(Instant.parse(fields.path("processedAt").asText()).isAfter(Instant.EPOCH));
+            assertEquals(receipt, ok(transferWon
+                    ? difference(admin, task, version, transferKey, transfer.toString())
+                    : difference(other, task, version, bookCorrectKey, bookCorrect)));
+            assertEquals(1, count("SELECT COUNT(*) FROM fams_inventory_review_decision WHERE task_id=?", task));
+            assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE resource_id=? AND"
+                    + " action='INVENTORY_DIFFERENCE_CONFLICT_REJECTED'", task));
+            assertEquals(transferWon ? 1 : 0,
+                    count("SELECT COUNT(*) FROM fams_transfer WHERE creator_account_id=943001", null));
+        }
+    }
+
+    @Test
     void linkedFormalTransferStaysProcessingUntilRealWarehouseCompletion() throws Exception {
         String task = differenceTask(false);
         var body = JSON.readTree(differenceBody(differences(task), "FORMAL_TRANSFER", "LOCATION"));
@@ -2085,6 +2181,10 @@ class InventoryReviewHttpRuntimeCase {
     }
 
     private String prepared() throws Exception {
+        return prepared(false);
+    }
+
+    private String prepared(boolean personalCustody) throws Exception {
         Instant start =
                 Instant.now().plusSeconds(3600).truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
         String task =
@@ -2153,10 +2253,15 @@ class InventoryReviewHttpRuntimeCase {
                         key(),
                         1L));
         ok(request(admin, "POST", "/api/v1/inventory-tasks/" + task + "/start", null, key(), 2L));
-        assertEquals(
-                "ACCEPTED", ok(observe(task, observation(task, 943010))).path("outcome").asText());
-        assertEquals(
-                "ACCEPTED", ok(observe(task, observation(task, 943011))).path("outcome").asText());
+        for (long assetId : new long[] {943010, 943011}) {
+            var observed = observation(task, assetId);
+            if (personalCustody) {
+                ((tools.jackson.databind.node.ObjectNode) observed.path("actual"))
+                        .put("custodyType", "PERSONAL")
+                        .put("responsibleEmployeeId", assetId == 943010 ? "943002" : "943003");
+            }
+            assertEquals("ACCEPTED", ok(observe(task, observed)).path("outcome").asText());
+        }
         return task;
     }
 

@@ -95,6 +95,14 @@ public class AssetLossPort {
         return snapshot(locked(id, version, "NORMAL"));
     }
 
+    public Map<String, Object> initialLossSnapshot(long id) {
+        var row = locked(id, 0, "NORMAL");
+        if (!"INITIAL_IMPORT".equals(row.get("source_text"))) {
+            throw new AssetHandoverPort.Failure("LOSS_ASSET_CHANGED", 409);
+        }
+        return snapshot(row);
+    }
+
     /** Captures custody for a factory loss after the repair owner validates its active lock. */
     public Map<String, Object> factorySubmission(long id, long version) {
         return snapshot(lockFactoryAsset(id, version, "NORMAL"));

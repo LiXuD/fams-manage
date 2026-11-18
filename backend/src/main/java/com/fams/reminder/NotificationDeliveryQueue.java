@@ -21,22 +21,18 @@ class NotificationDeliveryQueue {
     static final String KIND = "NOTIFICATION_SMS";
     private static final String ACTIVE_STAGE = """
             AND (
-                (r.business_type = 'INBOUND' AND EXISTS (
-                    SELECT 1 FROM fams_inbound_receipt x WHERE x.id = r.business_id AND (
-                        (r.stage = 'ADMIN_DECISION' AND x.receipt_status = 'PENDING_ADMIN_DECISION'
-                            AND x.admin_decision_due_at = r.deadline_at)
-                        OR (r.stage = 'WAREHOUSE_CLAIM' AND x.receipt_status = 'WAITING_WAREHOUSE_CLAIM'
-                            AND x.warehouse_claim_due_at = r.deadline_at)
-                        OR (r.stage = 'FIRST_EXECUTION' AND x.receipt_status = 'WAREHOUSE_PROCESSING'
-                            AND x.warehouse_first_execution_due_at = r.deadline_at)
-                    )
-                ))
+                (r.business_type = 'INBOUND' AND
+            """ + InboundReminderState.CURRENT_STAGE + """
+                )
                 OR (r.business_type = 'REQUISITION_ALLOCATION' AND r.stage = 'HANDOVER_RECEIPT' AND EXISTS (
                     SELECT 1 FROM fams_requisition_allocation x
                     JOIN fams_requisition_handover h ON h.allocation_id = x.id
+                    JOIN fams_requisition_demand d ON d.id = x.demand_id
+                    JOIN fams_requisition q ON q.id = x.request_id
                     WHERE x.id = r.business_id AND (r.reminder_type = 'DUTY_UNREAD_ESCALATION'
-                        OR h.temporary_employee_id = e.id)
+                        OR COALESCE(x.receipt_target_employee_id,d.target_employee_id,d.target_department_employee_id) = e.id)
                         AND x.allocation_status = 'DELIVERED_WAITING_RECEIPT'
+                        AND q.request_status = 'WAITING_HANDOVER'
                         AND h.receipt_deadline_at = r.deadline_at
                 ))
                 OR (r.business_type = 'TRANSFER_ITEM' AND r.stage = 'HANDOVER_RECEIPT' AND EXISTS (
@@ -50,8 +46,14 @@ class NotificationDeliveryQueue {
                         AND i.executor_account_id = a.id
                 ))
                 OR (r.business_type = 'LOST_REPORT' AND r.stage = 'LOSS_REVIEW' AND EXISTS (
-                    SELECT 1 FROM fams_loss_report x
+                    SELECT 1 FROM fams_loss_report x JOIN fams_asset asset ON asset.id = x.asset_id
                     WHERE x.id = r.business_id AND x.report_status IN ('SEARCHING','CONFIRMED_LOST')
+                        AND asset.lifecycle_status <> 'SCRAPPED'
+                        AND NOT EXISTS (
+                            SELECT 1 FROM fams_scrap_request s JOIN fams_scrap_disposition d ON d.request_id = s.id
+                            WHERE s.source_type = 'LOSS' AND s.source_business_id = x.id
+                                AND d.disposition_status = 'LOSS_WRITTEN_OFF'
+                        )
                         AND x.processor_account_id = a.id
                         AND x.next_review_date = DATE_SUB(r.notice_date, INTERVAL 1 DAY)
                 ))
@@ -60,6 +62,7 @@ class NotificationDeliveryQueue {
                     WHERE x.id = r.business_id AND x.request_status = 'EXECUTED'
                         AND d.disposition_status = 'PENDING_DISPOSITION' AND d.processor_account_id = a.id
                         AND d.due_date = DATE_SUB(r.notice_date, INTERVAL 1 DAY)
+                        AND (d.due_at IS NULL OR d.due_at = r.deadline_at)
                 ))
             )
             """;
@@ -90,6 +93,9 @@ class NotificationDeliveryQueue {
                 OR (r.business_type = 'REPAIR_FACTORY_ROUND' AND r.stage = 'FACTORY_RETURN'
                     AND r.deadline_at <= ? AND EXISTS (
                         SELECT 1 FROM fams_repair_factory_round x JOIN fams_repair_request p ON p.id = x.repair_id
+                        JOIN fams_todo t ON t.business_type='REPAIR' AND t.business_id=x.repair_id
+                            AND t.todo_type='FACTORY_RETURN' AND t.todo_status='OPEN'
+                            AND t.closed_at IS NULL AND t.opened_at>=x.dispatched_at
                         WHERE x.id = r.business_id AND x.round_status = 'DISPATCHED'
                             AND p.processor_account_id = a.id
                             AND x.expected_return_date = DATE_SUB(r.notice_date, INTERVAL 1 DAY)
@@ -99,7 +105,7 @@ class NotificationDeliveryQueue {
                             SELECT MAX(n.id) FROM fams_business_reminder n
                             WHERE n.business_type = r.business_type AND n.business_id = r.business_id
                                 AND n.stage = r.stage AND n.deadline_at = r.deadline_at
-                                AND n.reminder_type IN ('DUE_TODAY','OVERDUE_EVERY_7_DAYS')
+                                AND n.reminder_type IN ('DUE_TODAY','OVERDUE','OVERDUE_EVERY_7_DAYS')
                         )
                     ))
             )

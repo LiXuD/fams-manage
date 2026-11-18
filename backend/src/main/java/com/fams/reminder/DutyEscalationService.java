@@ -83,7 +83,8 @@ public class DutyEscalationService {
                            JOIN fams_business_reminder r ON r.business_type='INBOUND' AND r.business_id=x.id
                                 AND r.stage='FIRST_EXECUTION' AND r.reminder_type='OVERDUE'
                                 AND r.deadline_at=x.warehouse_first_execution_due_at
-                          WHERE x.receipt_status='WAREHOUSE_PROCESSING'""")),
+                          WHERE x.receipt_status='WAREHOUSE_PROCESSING' AND
+                         """ + InboundReminderState.FIRST_ACCEPTANCE_PENDING)),
                 // The receipt ladder is addressed to the receiving employee, who holds no duty role, so both the
                 // unread escalation and the group notice answer to the administrators responsible for the handover.
                 new Stage("REQUISITION_ALLOCATION", "HANDOVER_RECEIPT", "ASSET_ADMIN",
@@ -91,20 +92,31 @@ public class DutyEscalationService {
                          SELECT r.id notice_id,r.created_at notice_at,x.id business_id,
                                 h.receipt_deadline_at deadline_at,q.parameter_snapshot_json snapshot_json
                            FROM fams_requisition_allocation x
+                           JOIN fams_requisition_demand d ON d.id=x.demand_id
                            JOIN fams_requisition_handover h ON h.allocation_id=x.id
                            JOIN fams_requisition q ON q.id=x.request_id
+                           LEFT JOIN fams_system_account receiver
+                                ON receiver.employee_id=COALESCE(x.receipt_target_employee_id,d.target_employee_id,
+                                    d.target_department_employee_id) AND receiver.status='ENABLED'
                            JOIN fams_business_reminder r ON r.business_type='REQUISITION_ALLOCATION'
                                 AND r.business_id=x.id AND r.stage='HANDOVER_RECEIPT'
                                 AND r.reminder_type='OVERDUE' AND r.deadline_at=h.receipt_deadline_at
-                          WHERE x.allocation_status='DELIVERED_WAITING_RECEIPT'""")),
+                                AND r.recipient_account_id <=> receiver.id
+                                AND r.recipient_pool_type=IF(receiver.id IS NULL,'ASSET_ADMIN','EMPLOYEE')
+                          WHERE x.allocation_status='DELIVERED_WAITING_RECEIPT'
+                            AND q.request_status='WAITING_HANDOVER'""")),
                 new Stage("TRANSFER_ITEM", "HANDOVER_RECEIPT", "ASSET_ADMIN",
                         "receiptDueUnreadHours", staged("""
                          SELECT r.id notice_id,r.created_at notice_at,x.id business_id,
                                 x.receipt_deadline_at deadline_at,x.parameter_snapshot_json snapshot_json
                            FROM fams_transfer_item x
+                           LEFT JOIN fams_system_account receiver
+                                ON receiver.employee_id=x.receiver_employee_id AND receiver.status='ENABLED'
                            JOIN fams_business_reminder r ON r.business_type='TRANSFER_ITEM'
                                 AND r.business_id=x.id AND r.stage='HANDOVER_RECEIPT'
                                 AND r.reminder_type='OVERDUE' AND r.deadline_at=x.receipt_deadline_at
+                                AND r.recipient_account_id <=> receiver.id
+                                AND r.recipient_pool_type=IF(receiver.id IS NULL,'ASSET_ADMIN','EMPLOYEE')
                           WHERE x.item_status='DELIVERED'""")));
 
         for (var stage : stages) {
@@ -150,7 +162,8 @@ public class DutyEscalationService {
         for (var entry : stage.cases()) {
             var today = now.atZone(entry.zone()).toLocalDate();
             if (now.isBefore(entry.unhandledAfterWorkday())
-                    || "INBOUND".equals(stage.businessType()) && reassigned(entry)) {
+                    || "INBOUND".equals(stage.businessType()) && reassigned(entry)
+                    || followupPending(stage, entry, now)) {
                 continue;
             }
             for (var administrator : administrators) {
@@ -158,6 +171,16 @@ public class DutyEscalationService {
                         "OVERDUE_UNRESOLVED_WORKDAY", entry.deadlineAt(), administrator, today);
             }
         }
+    }
+
+    private boolean followupPending(Stage stage, Case entry, Instant now) {
+        return !db.queryForList("""
+                SELECT 1 FROM fams_reminder_followup f
+                WHERE f.id=(SELECT MAX(p.id) FROM fams_reminder_followup p
+                    WHERE p.business_type=? AND p.business_id=? AND p.stage=? AND p.deadline_at=?)
+                    AND f.next_followup_at>?
+                """, stage.businessType(), entry.businessId(), stage.stage(), Timestamp.from(entry.deadlineAt()),
+                Timestamp.from(now)).isEmpty();
     }
 
     /**

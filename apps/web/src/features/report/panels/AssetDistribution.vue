@@ -3,12 +3,13 @@ import { computed, ref, shallowRef } from "vue";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { reportRequest } from "@/features/report/api";
 
-type Dimension = "organizationId" | "categoryId" | "custody";
+type Dimension = "organizationId" | "categoryId" | "custody" | "custodyComplete";
 interface Group { id: string; name: string | null; count: number }
 interface Distribution {
   organizations: Group[];
   categories: Group[];
   custody: { custodyType: "PERSONAL" | "SHARED"; count: number }[];
+  custodyQuality?: { complete: number; effective: number; excluded: number };
 }
 interface GroupRow extends Group { maxCount: number; nameText: string }
 interface CustodyRow { custodyType: string; count: number; label: string }
@@ -27,6 +28,14 @@ const categoryRows = computed<GroupRow[]>(() => (distribution.value?.categories 
 const custodyRows = computed<CustodyRow[]>(() => (distribution.value?.custody ?? []).map((group) => ({
   ...group, label: custodyLabels[group.custodyType],
 })));
+const custodyQuality = computed(() => distribution.value?.custodyQuality);
+const custodyQualityRate = computed(() => {
+  const quality = distribution.value?.custodyQuality;
+  if (!quality) return "";
+  return quality.effective
+    ? (quality.complete * 100 / quality.effective).toFixed(2) + "%"
+    : "暂无有效资产";
+});
 
 const liveness = useRequestLiveness();
 
@@ -60,6 +69,11 @@ async function load() {
     <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
     <p v-if="busy" role="status">正在查询</p>
     <template v-if="distribution">
+      <section v-if="custodyQuality" aria-label="保管信息完整率" class="fams-stack">
+        <h4>保管信息完整率</h4>
+        <p>{{ custodyQualityRate }} · 完整 {{ custodyQuality.complete }} / 有效 {{ custodyQuality.effective }} · 排除 {{ custodyQuality.excluded }} 件</p>
+        <button class="fams-button" data-kind="secondary" data-size="sm" type="button" @click="emit('select', 'custodyComplete', 'false')">查看保管信息不完整资产</button>
+      </section>
       <p v-if="hasNoAssets">当前没有有效资产。</p>
       <template v-else>
         <h4>按当前使用部门</h4>

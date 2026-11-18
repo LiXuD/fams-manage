@@ -1643,10 +1643,12 @@ class LossHttpRuntimeCase {
                         "SELECT * FROM fams_loan_reminder WHERE loan_id=? ORDER BY id", loanId);
         var row = searchingReport();
         String id = row.path("id").asText();
+        assertReviewSchedule(id, "LOSS_SEARCH_STARTED", row);
         String body = confirmation(row), originalKey = key();
         long version = row.path("version").asLong();
         var result = ok(post(warehouse, "/" + id + "/confirm-lost", body, version, originalKey));
         assertEquals("CONFIRMED_LOST", result.path("status").asText());
+        assertReviewSchedule(id, "LOSS_CONFIRMED", result);
         assertEquals(
                 java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"))
                         .plusDays(30)
@@ -1713,6 +1715,7 @@ class LossHttpRuntimeCase {
         var followed =
                 ok(post(warehouse, "/" + id + "/follow-up", follow, followVersion, followKey));
         assertEquals("CONFIRMED_LOST", followed.path("status").asText());
+        assertReviewSchedule(id, "LOSS_FOLLOWED_UP", followed);
         assertFalse(followed.path("lastFollowUpAt").isNull());
         assertEquals(
                 followed,
@@ -1728,6 +1731,14 @@ class LossHttpRuntimeCase {
                             + " business_id=? AND todo_type='LOST_FOLLOW_UP' AND closed_at IS NULL",
                         Long.class,
                         Long.parseLong(id)));
+    }
+
+    private void assertReviewSchedule(String id, String action, JsonNode row) {
+        var event = JSON.readTree(db.queryForObject("""
+                SELECT detail_json FROM fams_loss_event WHERE report_id=? AND action=? ORDER BY id DESC LIMIT 1
+                """, String.class, id, action));
+        assertEquals(row.path("nextReviewDate").asText(), event.path("reviewDate").asText());
+        assertEquals("Asia/Shanghai", event.path("reviewTimezone").asText());
     }
 
     @Test

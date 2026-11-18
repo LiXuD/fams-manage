@@ -7,6 +7,7 @@
     <view class="hint">已绑定当前微信。账号权限及登录有效期由企业实时管理。</view>
   </view>
   <view class="card">
+    <navigator url="/pages/asset-lookup/index">按编码查询资产</navigator>
     <navigator url="/pages/request-center/index" open-type="redirect">申请中心</navigator>
     <navigator url="/pages/requests/index" open-type="redirect">我的申请与进度</navigator>
     <navigator url="/pages/loans/index" open-type="redirect">我的借用、延期与归还</navigator>
@@ -24,6 +25,7 @@
 <navigator url="/pages/transfer-receipts/index">调拨实物接收</navigator>
 
 <navigator url="/pages/transfer-reassignment/index">调拨受控转派（资产管理员）</navigator>
+<navigator url="/pages/transfer-reassignment/index?mode=declare">登记无法继续处理调拨（当前库管）</navigator>
 
 <navigator url="/pages/proxy-confirmations/index">异常代确认（库管 / 资产管理员）</navigator>
 <navigator url="/pages/business-result-notices/index">业务结果通知与责任核查</navigator>

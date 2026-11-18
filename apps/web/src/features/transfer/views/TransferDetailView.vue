@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef } from "vue";
+import { computed, onMounted, ref, shallowRef, watch } from "vue";
 import { useRoute } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
 import TransferReassignment from "@/features/transfer/panels/TransferReassignment.vue";
@@ -18,10 +18,12 @@ const selected = ref<Transfer | null>(null);
 const organizations = ref<TransferChoice[]>([]), locations = ref<TransferChoice[]>([]);
 const peopleNames = ref<Record<string, string>>({});
 const reason = shallowRef(""), code = shallowRef(""), destination = shallowRef(""), evidence = shallowRef(""), signer = shallowRef(""), receivedAt = shallowRef("");
+const unavailableReason = shallowRef("");
 const busy = shallowRef(false), error = shallowRef(""), notice = shallowRef(""), retryable = shallowRef(false), checked = shallowRef(false);
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 const operator = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR"));
 const liveness = useRequestLiveness(() => [props.id]);
+watch([() => selected.value?.id, () => session.user?.id], () => { unavailableReason.value = ""; });
 /** 确认式幂等提交：在途意图槽与幂等键簿记归底座；busy/retryable、URL 与文案留在本视图。 */
 const { pending, prepare: draft, confirm: adopt, settle, reset } = useConfirmedSubmit<Omit<BusinessMutation, "key">>();
 
@@ -50,6 +52,10 @@ async function mutate(path: string, version: number, body?: unknown) {
   try {
     const result = await businessRequest<{ id: string }>(operation.payload.path, { ...operation.payload, key: operation.key });
     settle(); retryable.value = false; notice.value = "操作已保存。";
+    if (operation.payload.path.endsWith("/reassignment/unavailable")) {
+      unavailableReason.value = "";
+      notice.value = "已通知资产管理员跟进转派。";
+    }
     selected.value = await businessRequest<Transfer>("/transfers/" + result.id); await loadPeople(selected.value);
   } catch (e) { error.value = businessMessage(e); retryable.value = pending.value !== null; }
   finally { busy.value = false; }
@@ -176,6 +182,11 @@ onMounted(async () => {
       </div>
 
       <div v-if="showExecuteFields" class="fams-field-grid">
+        <label class="fams-field"><span class="fams-field-label">无法继续处理的原因</span>
+          <textarea class="fams-control" v-model="unavailableReason" :disabled="busy || retryable" maxlength="1000" /></label>
+        <button class="fams-button" data-kind="secondary" type="button" :disabled="busy || retryable || !unavailableReason.trim()"
+          @click="mutate(`/transfers/${selected.id}/reassignment/unavailable`, selected.version,
+            { ownershipVersion: selected.ownershipVersion, reason: unavailableReason.trim() })">登记无法继续处理</button>
         <label class="fams-field"><span class="fams-field-label">实物编码 / 当前二维码</span>
           <input class="fams-control" v-model="code" :disabled="busy || retryable" /></label>
         <label class="fams-field"><span class="fams-field-label">实际去向</span>

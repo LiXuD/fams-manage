@@ -31,7 +31,7 @@ export interface Requisition {
     decisions: Array<{ id: string; decisionResult: string; requestVersion: number; commentText?: string }>;
     unfulfillable: Array<{ id: string; demandId: string; quantity: number; reasonCode: string;
         reasonDescription?: string; inventoryQuerySummaryJson: { availableCount: number; queriedAt: string } }>;
-    ownership: Array<{ processorAccountId: string; archivedAt?: string }>;
+    ownership: Array<{ id: string; processorAccountId: string; ownershipVersion: number; archivedAt?: string | null }>;
     followups: Array<{ sourceDemandId: string; latestRequestId: string }>;
     changes?: Array<{ proposalStatus: string; proposalJson: { demands: RequisitionDemandInput[] } }>;
 }

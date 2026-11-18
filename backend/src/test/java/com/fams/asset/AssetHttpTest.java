@@ -83,7 +83,7 @@ class AssetHttpTest {
         assertEquals(1, JSON.readTree(listed.body()).path("total").asInt(), listed.body());
         assertEquals(0, JSON.readTree(request("GET", "/api/v1/assets?name=Missing", null,
                 warehouse, Map.of()).body()).path("total").asInt());
-        assertEquals(400, request("GET", "/api/v1/assets?currentProcessorId=1", null,
+        assertEquals(400, request("GET", "/api/v1/assets?currentProcessorId=0", null,
                 warehouse, Map.of()).statusCode());
         assertEquals(403, request("GET", "/api/v1/assets/" + id, null,
                 admin, Map.of()).statusCode());
@@ -155,6 +155,28 @@ class AssetHttpTest {
         assertEquals(publishedToken, printSnapshot.path("tag").path("qrToken").asText());
         assertEquals(404, request("GET", "/api/v1/asset-tag-print-jobs/" + jobId,
                 null, other, Map.of()).statusCode());
+        String placement = "/api/v1/assets/" + publishedId + "/tag/placement";
+        String scanned = JSON.createObjectNode().put("token", publishedToken).toString();
+        String placementKey = java.util.UUID.randomUUID().toString();
+        assertEquals(409, request("POST", placement, scanned, warehouse,
+                writeHeaders(warehouse, placementKey, 0L)).statusCode());
+        jdbc.update("UPDATE fams_asset SET lifecycle_status='UNDER_REPAIR' WHERE id=?", Long.parseLong(publishedId));
+        assertEquals(403, request("POST", placement, scanned, admin, writeHeaders(admin, placementKey, 0L)).statusCode());
+        var confirmed = request("POST", placement, scanned, warehouse, writeHeaders(warehouse, placementKey, 0L));
+        assertEquals(200, confirmed.statusCode(), confirmed.body());
+        assertFalse(confirmed.body().contains(publishedToken));
+        assertEquals(confirmed.body(), request("POST", placement, scanned, warehouse,
+                writeHeaders(warehouse, placementKey, 0L)).body());
+        assertEquals(confirmed.body(), request("POST", placement, scanned, warehouse,
+                writeHeaders(warehouse, java.util.UUID.randomUUID().toString(), 0L)).body());
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM fams_asset_tag_placement WHERE asset_id=?",
+                Integer.class, Long.parseLong(publishedId)));
+        assertEquals(1, jdbc.queryForObject("""
+                SELECT COUNT(*) FROM fams_asset_timeline_event WHERE asset_id=?
+                    AND event_type='ASSET_TAG_PLACEMENT_CONFIRMED'
+                """, Integer.class, Long.parseLong(publishedId)));
+        assertEquals(403, request("GET", "/api/v1/operations-reports/tag-coverage",
+                null, warehouse, Map.of()).statusCode());
         HttpResponse<String> rotated = request("POST", "/api/v1/assets/" + publishedId + "/tag/replace",
                 "{\"reason\":\"Damaged\"}", warehouse,
                 writeHeaders(warehouse, "3a333333-3333-4333-8333-333333333333", 0L));
@@ -164,6 +186,8 @@ class AssetHttpTest {
                 writeHeaders(warehouse, "3a333333-3333-4333-8333-333333333333", 0L)).body());
         assertEquals(1, JSON.readTree(rotated.body()).path("assetVersion").asInt());
         String replacementToken = JSON.readTree(rotated.body()).path("tag").path("qrToken").asText();
+        assertEquals(409, request("POST", placement, scanned, warehouse,
+                writeHeaders(warehouse, java.util.UUID.randomUUID().toString(), 1L)).statusCode());
         assertNotEquals(publishedToken, replacementToken);
         assertEquals(404, request("GET", "/api/v1/asset-access/" + publishedToken,
                 null, warehouse, Map.of()).statusCode());
@@ -190,6 +214,7 @@ class AssetHttpTest {
                 Integer.class) >= 6);
 
         exerciseReferenceAndBatchPaths(warehouse, id, publishedId);
+        verifyScopedLedgerExport(warehouse, other, admin);
     }
 
     private void exerciseReferenceAndBatchPaths(Session warehouse, String cancelledId,
@@ -377,6 +402,48 @@ class AssetHttpTest {
         assertEquals(409, request("POST", "/api/v1/assets/" + lockedId + "/cancel",
                 "{\"reason\":\"Duplicate\"}", warehouse,
                 writeHeaders(warehouse, "80333333-3333-4333-8333-333333333333", 0L)).statusCode());
+    }
+
+    private void verifyScopedLedgerExport(Session warehouse, Session other, Session admin) throws Exception {
+        String route = "/api/v1/assets/export.csv";
+        assertEquals(401, request("GET", route, null, null, Map.of()).statusCode());
+        assertEquals(403, request("GET", route, null, other, Map.of()).statusCode());
+        assertEquals(403, request("GET", route, null, admin, Map.of()).statusCode());
+
+        var owned = request("POST", "/api/v1/assets",
+                """
+                {"name":"=Ledger 设备, CSV","serialNumber":"PRIVATE-SERIAL","notes":"PRIVATE-NOTES"}
+                """, warehouse, writeHeaders(warehouse, java.util.UUID.randomUUID().toString(), null));
+        assertEquals(201, owned.statusCode(), owned.body());
+        var foreign = request("POST", "/api/v1/assets", "{\"name\":\"Ledger foreign draft\"}",
+                other, writeHeaders(other, java.util.UUID.randomUUID().toString(), null));
+        assertEquals(201, foreign.statusCode(), foreign.body());
+
+        jdbc.update("INSERT INTO fams_account_authorization(id,account_id,role_code,generation_no,"
+                + "authorization_status,change_reason,created_at)"
+                + " VALUES (1,1,'WAREHOUSE_OPERATOR',1,'ACTIVE','export fixture',NOW(3))");
+        jdbc.update("INSERT INTO fams_account_field_permission(authorization_id,permission_code,granted_at)"
+                + " VALUES (1,'BULK_EXPORT',NOW(3))");
+        var csv = request("GET", route + "?name=Ledger&lifecycle=WAITING_INBOUND&page=2&pageSize=1",
+                null, warehouse, Map.of());
+        assertEquals(200, csv.statusCode(), csv.body());
+        assertEquals("no-store", csv.headers().firstValue("Cache-Control").orElseThrow());
+        assertTrue(csv.body().startsWith("\uFEFFid,asset_code,name,"));
+        assertTrue(csv.body().contains("\"'=Ledger 设备, CSV\""), csv.body());
+        assertFalse(csv.body().contains("PRIVATE-"), csv.body());
+        assertFalse(csv.body().contains("Ledger foreign draft"), csv.body());
+        assertEquals(2, csv.body().lines().count());
+        assertEquals(400, request("GET", route + "?borrowOverdue=1", null, warehouse, Map.of()).statusCode());
+        jdbc.update("DELETE FROM fams_account_field_permission WHERE authorization_id=1"
+                + " AND permission_code='BULK_EXPORT'");
+        assertEquals(403, request("GET", route, null, warehouse, Map.of()).statusCode());
+        assertEquals(1L, jdbc.queryForObject("SELECT COUNT(*) FROM fams_security_event "
+                + "WHERE event_type='ASSET_LEDGER_EXPORTED'", Long.class));
+        String audit = jdbc.queryForObject("SELECT detail_json FROM fams_security_event "
+                + "WHERE event_type='ASSET_LEDGER_EXPORTED' AND account_id=1", String.class);
+        assertEquals(1, JSON.readTree(audit).path("rows").asInt());
+        assertTrue(audit.contains("name") && audit.contains("lifecycle"));
+        assertFalse(audit.contains("Ledger"));
     }
 
     private void seed() {

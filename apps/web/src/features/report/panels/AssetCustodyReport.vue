@@ -17,7 +17,7 @@ interface CustodyRow extends AssetRow {
 }
 const props = defineProps<{ lifecycleLabels: Record<string, string>; exceptionLabels: Record<string, string> }>();
 const emptyFilters = () => ({ organizationId: "", categoryId: "", responsibleId: "", warehouseId: "", locationId: "",
-  custody: "", inventoryBefore: "", lifecycle: "", exception: "" });
+  custody: "", inventoryBefore: "", lifecycle: "", exception: "", custodyComplete: "" });
 const filters = ref(emptyFilters());
 const query = computed(() => new URLSearchParams(
   Object.entries(filters.value).filter(([, value]) => value !== "")).toString());
@@ -141,6 +141,14 @@ watch(identity, () => {
       <div class="fams-field">
         <label for="custody-inventory-before">在指定日期前未盘点（含从未盘点）</label>
         <input id="custody-inventory-before" class="fams-control" v-model="filters.inventoryBefore" type="date">
+      </div>
+      <div class="fams-field">
+        <label for="custody-complete">保管信息完整性</label>
+        <select id="custody-complete" class="fams-control" v-model="filters.custodyComplete">
+          <option value="">全部</option>
+          <option value="true">完整</option>
+          <option value="false">不完整</option>
+        </select>
       </div>
       <button class="fams-button" data-kind="secondary" type="submit" :disabled="busy">查询保管清单</button>
     </form>

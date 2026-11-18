@@ -29,7 +29,8 @@ const retryable = shallowRef(false);
 const warehouse = computed(() => session.user?.roles.includes("WAREHOUSE_OPERATOR"));
 const admin = computed(() => session.user?.roles.includes("ASSET_ADMIN"));
 const creator = computed(() => selected.value?.creatorAccountId === session.user?.id);
-const owner = computed(() => selected.value?.ownership.find(row => !row.archivedAt)?.processorAccountId);
+const currentOwnership = computed(() => selected.value?.ownership.find(row => !row.archivedAt));
+const owner = computed(() => currentOwnership.value?.processorAccountId);
 const canExecute = computed(() => warehouse.value && (!owner.value || owner.value === session.user?.id)
   && ["WAITING_WAREHOUSE_CLAIM", "WAREHOUSE_PROCESSING", "WAITING_HANDOVER"].includes(selected.value?.requestStatus ?? ""));
 const reasonLabels: Record<string, string> = { STOCK_SHORTAGE: "库存不足", SPECIFICATION_MISMATCH: "规格不匹配",
@@ -246,9 +247,13 @@ onMounted(async () => {
       </div>
 
       <label class="fams-field">
-        <span class="fams-field-label">决定、取消、更换或核查说明</span>
+        <span class="fams-field-label">决定、取消、更换、核查或无法继续的说明</span>
         <textarea class="fams-control" v-model="reason" maxlength="1000" :disabled="busy || retryable" />
       </label>
+
+      <button v-if="canExecute && currentOwnership && owner === session.user?.id && ['WAREHOUSE_PROCESSING', 'WAITING_HANDOVER'].includes(selected.requestStatus)"
+        class="fams-button" data-kind="secondary" type="button" :disabled="busy || retryable || !reason.trim()"
+        @click="mutate('/' + selected.id + '/reassignment/unavailable', { reason: reason.trim(), ownershipVersion: currentOwnership.ownershipVersion })">登记无法继续处理</button>
 
       <article v-for="change in changeRows" :key="change.key" class="fams-card fams-stack">
         <h3>范围变更 · {{ change.statusText }}</h3>

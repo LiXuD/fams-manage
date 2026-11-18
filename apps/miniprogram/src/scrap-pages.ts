@@ -27,6 +27,8 @@ interface Scrap {
     sourceBusinessId?: string | null;
     initialSource?: { batchId: string; sheetRow: number } | null;
     factoryDisposition?: "FACTORY_RETAINED" | "FACTORY_DESTROYED";
+    initialFactoryDispositionAt?: string;
+    initialFactoryDispositionEvidence?: string;
     source: { assetCode: string; name: string; serialNumber: string };
     actions: { decide: boolean; cancel?: boolean; claim: boolean; execute: boolean; executeLoss?: boolean;
         executeFactory?: boolean; dispose?: boolean; initiateCorrection?: boolean; decideCorrection?: boolean;
@@ -382,8 +384,9 @@ export function createScrapPage(getServices: () => MiniServices) {
                 } else if (action === "claim") summary = loss
                     ? "取得本单唯一处理权，核对遗失证据后执行。" : "取得本单唯一处理权，核验实物后执行。";
                 else if (action === "executeFactory") {
-                    const actual = new Date(data.actualDate + "T" + data.actualTime);
-                    if (!Number.isFinite(actual.getTime()) || day(actual) !== data.actualDate || time(actual) !== data.actualTime) {
+                    const actual = new Date(row.initialFactoryDispositionAt ?? (data.actualDate + "T" + data.actualTime));
+                    if (!Number.isFinite(actual.getTime()) || !row.initialFactoryDispositionAt
+                        && (day(actual) !== data.actualDate || time(actual) !== data.actualTime)) {
                         page.setData({ error: "请填写厂家凭证记载的实际处置时间。" }); return;
                     }
                     body = { ...body, ownershipVersion: row.ownershipVersion, occurredAt: actual.toISOString() };

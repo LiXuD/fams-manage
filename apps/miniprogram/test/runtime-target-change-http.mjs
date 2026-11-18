@@ -5,6 +5,7 @@ import { MiniSessionClient } from "../src/session.ts";
 import { createTargetChangePage } from "../src/target-change-pages.ts";
 import { createReceiptPage } from "../src/receipt-pages.ts";
 import { createTransferReceiptPage } from "../src/transfer-receipt-pages.ts";
+import { createMessagesPage } from "../src/messages-pages.ts";
 const port = process.env.FAMS_TEST_API_PORT, business = process.env.FAMS_TEST_TARGET_BUSINESS;
 assert.match(port ?? "", /^[0-9]{1,5}$/); assert.ok(["REQUISITION", "TRANSFER"].includes(business));
 const origin = "https://requisition-test.invalid", clients = [], writes = {};
@@ -55,9 +56,37 @@ await approval.onDecision({ currentTarget: { dataset: { result: "APPROVED" } } }
 assert.equal(approval.data.retryable, true, approval.data.error); await approval.onRetry();
 assert.equal(approval.data.selected?.change_status, "APPROVED", approval.data.error); assert.deepEqual(writes.admin[0], writes.admin[1]);
 const factory = business === "TRANSFER" ? createTransferReceiptPage : createReceiptPage;
-const old = mount(factory, original); await old.onShow();
-assert.ok(!old.data.rows.some(row => row.id === process.env.FAMS_TEST_TARGET_ITEM), old.data.error);
-const receipt = mount(factory, recipient); await receipt.onShow();
+const item = process.env.FAMS_TEST_TARGET_ITEM;
+const parameter = business === "TRANSFER" ? "itemId" : "allocationId";
+const route = business === "TRANSFER" ? "/pages/transfer-receipts/index" : "/pages/receipts/index";
+const messageType = business === "TRANSFER" ? "TRANSFER_ITEM" : "REQUISITION_ALLOCATION";
+const old = mount(factory, original);
+old.onLoad({ [parameter]: item });
+await old.onShow();
+assert.equal(old.data.total, 0, old.data.error);
+assert.deepEqual(old.data.rows, []);
+const oldMessages = mount(createMessagesPage, original);
+await oldMessages.onShow();
+assert.ok(!oldMessages.data.rows.some(row => row.businessType === messageType && row.businessId === item
+    && row.objectStage === "HANDOVER_RECEIPT"), oldMessages.data.error);
+const messages = mount(createMessagesPage, recipient);
+let nextPage = "";
+recipient.navigate = value => { nextPage = value; };
+let notice;
+for (let attempt = 0; attempt < 40 && !notice; attempt++) {
+    await messages.onShow();
+    notice = messages.data.rows.find(row => row.kind === "REMINDER" && row.businessType === messageType
+        && row.businessId === item && row.objectStage === "HANDOVER_RECEIPT");
+    if (!notice) await new Promise(resolve => setTimeout(resolve, 150));
+}
+assert.ok(notice, messages.data.error);
+messages.onOpen({ currentTarget: { dataset: { id: notice.id, kind: notice.kind } } });
+assert.equal(nextPage, `${route}?${parameter}=${item}`);
+const receipt = mount(factory, recipient);
+receipt.onLoad(Object.fromEntries(new URL(nextPage, origin).searchParams));
+await receipt.onShow();
+assert.equal(receipt.data.total, 1);
+assert.equal(receipt.data.rows.length, 1);
 const row = receipt.data.rows.find(row => row.id === process.env.FAMS_TEST_TARGET_ITEM); assert.ok(row, receipt.data.error);
 await receipt.onOpen({ currentTarget: { dataset: { request: row.requestId, id: row.id } } });
 const observedCode = business === "TRANSFER" ? row.assetCode : row.assetSnapshotJson.assetCode;
@@ -65,6 +94,9 @@ assert.equal(typeof observedCode, "string");
 receipt.onCode({ detail: { value: observedCode } }); receipt.onCheck({ detail: { value: ["checked"] } });
 await receipt.onReceive(); assert.equal(receipt.data.retryable, true, receipt.data.error); await receipt.onRetry();
 assert.equal(receipt.data.rows.length, 0, receipt.data.error); assert.deepEqual(writes.recipient[0], writes.recipient[1]);
-for (const p of [page, approval, old, receipt]) { p.onHide(); p.onUnload(); }
+await messages.onRefresh();
+assert.ok(!messages.data.rows.some(row => row.kind === "REMINDER" && row.businessType === messageType
+    && row.businessId === item && row.objectStage === "HANDOVER_RECEIPT"));
+for (const p of [page, approval, old, oldMessages, messages, receipt]) { p.onHide(); p.onUnload(); }
 for (const sessions of clients) await sessions.logout();
-console.log(`${business} native target correction, original-key replay and actual new-recipient receipt PASS`);
+console.log(`${business} native target correction, message navigation, original-key replay and actual new-recipient receipt PASS`);

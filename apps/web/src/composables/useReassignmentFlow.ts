@@ -13,6 +13,8 @@ export interface ReassignmentSnapshot<TItem> {
   version: number;
   ownershipVersion: number;
   processorAccountId: string;
+  /** 原处理库管登记「无法继续办理」时后端回传的原因，供接任转派面板展示。 */
+  unavailableReason?: string;
   operators: { id: string; name: string }[];
   items: TItem[];
 }

@@ -55,6 +55,8 @@ class RepairReassignmentHttpRuntimeCase {
     final HttpClient http = HttpClient.newHttpClient();
     final RepairHttpRuntimeCase fixture = new RepairHttpRuntimeCase();
     @Autowired JdbcTemplate db;
+    @Autowired org.springframework.context.ApplicationContext application;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
     @Autowired MiniSessionService miniSessions;
 
     @Value("${local.server.port}")
@@ -75,6 +77,12 @@ class RepairReassignmentHttpRuntimeCase {
 
     @AfterEach
     void cleanup() throws Exception {
+        db.update("""
+                DELETE FROM fams_message_receipt WHERE account_id=951001 AND message_kind='TODO'
+                    AND message_id IN (SELECT id FROM fams_todo WHERE business_type='REPAIR'
+                        AND todo_type='REASSIGNMENT_REQUIRED' AND business_id IN (
+                            SELECT id FROM fams_repair_request WHERE asset_id BETWEEN 951020 AND 951023))
+                """);
         db.execute("DROP TRIGGER IF EXISTS owned_repair_reassignment_audit_failure");
         db.execute("DROP TRIGGER IF EXISTS owned_repair_return_audit_failure");
         db.execute("DROP TRIGGER IF EXISTS owned_repair_target_audit_failure");
@@ -197,16 +205,123 @@ class RepairReassignmentHttpRuntimeCase {
     }
 
     @Test
+    void unavailableAfterDeliveryRetainsReceiverTodoAndFollowsCurrentOwnership() throws Exception {
+        var row = delivered(accepted());
+        String id = row.path("id").asText(), declaration = id + "/processor-unavailability";
+        long version = row.path("version").asLong(), ownerVersion = row.path("ownershipVersion").asLong();
+        String key = key(), reason = "原库管无法继续当前维修交接";
+        String body = JSON.writeValueAsString(Map.of("ownershipVersion", ownerVersion, "reason", reason));
+        String scope = "business_type='REPAIR' AND business_id=" + id;
+        String reminder = scope + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        String event = "resource_type='REPAIR' AND resource_id=" + id + " AND action='REPAIR_PROCESSOR_UNAVAILABLE'";
+        var receiver = db.queryForMap("SELECT * FROM fams_todo WHERE " + scope + " AND pool_type='RECEIVER'");
+        var locks = db.queryForList("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020");
+        assertEquals(403, post(fixture.admin, declaration, version, key(), body).statusCode());
+        assertEquals(409, post(fixture.otherWarehouse, declaration, version, key(), body).statusCode());
+        assertEquals(409, post(fixture.warehouse, declaration, version - 1, key(), body).statusCode());
+        assertEquals(0, count("fams_todo", reminder));
+        var receipt = ok(post(fixture.warehouse, declaration, version, key, body));
+        assertTrue(receipt.path("recorded").asBoolean());
+        assertEquals(receipt, ok(post(fixture.warehouse, declaration, version, key, body)));
+        assertEquals(receipt, ok(post(fixture.warehouse, declaration, version, key(), body)));
+        assertEquals(409, post(fixture.warehouse, declaration, version, key(),
+                body.replace(reason, "新的重复登记原因")).statusCode());
+        assertEquals(1, count("fams_audit_event", event));
+        assertEquals(1, count("fams_todo", reminder));
+        assertEquals(version, detail(id).path("version").asLong());
+        var context = context(id);
+        assertEquals(reason, context.path("unavailableReason").asText());
+        assertEquals(403, get(fixture.otherWarehouse, id + "/reassignment").statusCode());
+
+        db.update("DELETE FROM fams_todo WHERE " + reminder);
+        var scanner = application.getBean("reassignmentReminderService");
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(scanner, "scan");
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(scanner, "scan");
+        assertEquals(1, count("fams_todo", reminder));
+        var transferred = ok(post(fixture.admin, id + "/reassignment", version, key(), transfer(context)));
+        assertEquals("951004", transferred.path("processorAccountId").asText());
+        assertEquals(409, post(fixture.warehouse, declaration, version, key, body).statusCode());
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(scanner, "scan");
+        assertEquals(0, count("fams_todo", reminder));
+        assertTrue(context(id).path("unavailableReason").isMissingNode());
+        assertEquals(receiver, db.queryForMap("SELECT * FROM fams_todo WHERE " + scope + " AND pool_type='RECEIVER'"));
+        assertEquals(locks, db.queryForList("SELECT * FROM fams_asset_business_lock WHERE asset_id=951020"));
+    }
+
+    @Test
+    void firstAcceptanceTimeoutUsesFrozenCalendarAndClosesOnActualAcceptance() throws Exception {
+        db.update("UPDATE fams_business_parameter_version SET snapshot_json=? WHERE id=951000", calendar());
+        var row = processing();
+        String id = row.path("id").asText();
+        assertEquals(JSON.readTree(calendar()), JSON.readTree(db.queryForObject(
+                "SELECT first_execution_parameter_snapshot_json FROM fams_repair_request WHERE id=?", String.class, id)));
+        db.update("UPDATE fams_business_parameter_version SET snapshot_json=JSON_SET(snapshot_json,"
+                + " '$.warehouseFirstExecutionDeadlineWorkdays',30) WHERE id=951000");
+        db.update("UPDATE fams_repair_request SET claimed_at='2026-10-02 20:00:00.000' WHERE id=?", id);
+        String active = "business_type='REPAIR' AND business_id=" + id
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        scanFirstAcceptanceAt("2026-10-06T23:59:59.999Z");
+        assertEquals(0, count("fams_todo", active));
+        scanFirstAcceptanceAt("2026-10-07T00:00:00Z");
+        scanFirstAcceptanceAt("2026-10-07T00:01:00Z");
+        assertEquals(1, count("fams_todo", active));
+        ok(post(fixture.warehouse, id + "/accept-away", row.path("version").asLong(), key(), away(row)));
+        scanFirstAcceptanceAt("2026-10-07T00:02:00Z");
+        assertEquals(0, count("fams_todo", active));
+        assertEquals(1, count("fams_asset_business_lock", "asset_id=951020 AND released_at IS NULL"));
+    }
+
+    @Test
+    void firstAcceptanceTimeoutForLegacyUsesHistoricalVersionAndSkipsTimestampTie() throws Exception {
+        db.update("UPDATE fams_business_parameter_version SET snapshot_json=? WHERE id=951000", calendar());
+        var row = processing();
+        String id = row.path("id").asText();
+        db.update("UPDATE fams_repair_request SET created_at='2026-10-02 20:00:00.000',"
+                + " claimed_at='2026-10-02 20:00:00.000',first_execution_parameter_snapshot_json=NULL WHERE id=?", id);
+        db.update("UPDATE fams_business_parameter_version SET effective_at='2026-10-01 00:00:00.000' WHERE id=951000");
+        String active = "business_type='REPAIR' AND business_id=" + id
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        scanFirstAcceptanceAt("2026-10-07T00:00:00Z");
+        assertEquals(1, count("fams_todo", active));
+        db.update("UPDATE fams_business_parameter_version SET effective_at='2026-10-02 20:00:00.000' WHERE id=951000");
+        scanFirstAcceptanceAt("2026-10-07T00:01:00Z");
+        assertEquals(0, count("fams_todo", active));
+        assertNull(db.queryForObject("SELECT first_execution_parameter_snapshot_json FROM fams_repair_request WHERE id=?",
+                String.class, id));
+    }
+
+    private String calendar() {
+        return """
+                {"timezone":"UTC","workWeek":["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY"],
+                 "adjustedWorkdays":["2026-10-03"],"holidays":["2026-10-05"],
+                 "warehouseFirstExecutionDeadlineWorkdays":2}
+                """;
+    }
+
+    private void scanFirstAcceptanceAt(String instant) throws Exception {
+        var scannerType = org.springframework.util.ClassUtils.getUserClass(application.getBean("reassignmentReminderService"));
+        var constructor = org.springframework.util.ReflectionUtils.accessibleConstructor(scannerType,
+                JdbcTemplate.class, java.time.Clock.class, ObjectMapper.class);
+        var scanner = org.springframework.beans.BeanUtils.instantiateClass(constructor,
+                db, java.time.Clock.fixed(Instant.parse(instant), java.time.ZoneOffset.UTC), JSON);
+        new org.springframework.transaction.support.TransactionTemplate(transactions)
+                .executeWithoutResult(status -> org.springframework.test.util.ReflectionTestUtils.invokeMethod(scanner, "scan"));
+    }
+
+    @Test
     void preAcceptanceTransferHasNoFabricatedPhysicalHandling() throws Exception {
         var row = processing();
-        var context = context(row.path("id").asText());
+        String id = row.path("id").asText();
+        var context = context(id);
+        assertEquals(1, ledgerCount(id, "951003"));
+        assertEquals(0, ledgerCount(id, "951004"));
         assertTrue(context.path("snapshot").path("acceptedAt").isNull());
         assertEquals(0, context.path("snapshot").path("physicalHandling").size());
         var result =
                 ok(
                         post(
                                 fixture.admin,
-                                row.path("id").asText() + "/reassignment",
+                                id + "/reassignment",
                                 row.path("version").asLong(),
                                 key(),
                                 transfer(context)));
@@ -217,6 +332,15 @@ class RepairReassignmentHttpRuntimeCase {
                         java.sql.Timestamp.class,
                         row.path("id").asLong()));
         assertEquals("IN_USE", asset().get("lifecycle_status"));
+        assertEquals(0, ledgerCount(id, "951003"));
+        assertEquals(1, ledgerCount(id, "951004"));
+    }
+
+    private int ledgerCount(String id, String ownerId) throws Exception {
+        var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+                + "/api/v1/assets?businessReference=" + id + "&currentProcessorId=" + ownerId))
+                .header("Cookie", fixture.admin.cookie()).GET().build();
+        return ok(http.send(request, HttpResponse.BodyHandlers.ofString())).path("total").asInt();
     }
 
     @Test
@@ -555,6 +679,13 @@ class RepairReassignmentHttpRuntimeCase {
                         java.nio.charset.StandardCharsets.UTF_8);
         assertEquals(0, process.exitValue(), output);
         assertTrue(output.contains("\"nativeActualReassignmentClosed\":true"), output);
+        assertEquals(1, db.queryForObject("""
+                SELECT COUNT(*) FROM fams_message_receipt r
+                JOIN fams_todo t ON t.id=r.message_id AND r.message_kind='TODO'
+                JOIN fams_repair_request repair ON t.business_type='REPAIR' AND t.business_id=repair.id
+                WHERE r.account_id=951001 AND t.todo_type='REASSIGNMENT_REQUIRED'
+                    AND t.todo_status='CLOSED' AND repair.asset_id=951020
+                """, Integer.class));
         assertEquals("IN_STOCK", asset().get("lifecycle_status"));
         assertEquals(1, count("fams_repair_event", "action='REPAIR_CONTROLLED_REASSIGNMENT'"));
         assertEquals(

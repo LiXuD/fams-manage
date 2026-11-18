@@ -51,11 +51,40 @@ function request<T>(path: string, method: HttpMethod = "GET", body?: unknown, ve
   return requestJson<T, AssetApiError>(path, profile, { method, json: body, version });
 }
 
-export function listAssets(page = 1, code = "", name = ""): Promise<Page<AssetCard>> {
-  const query = new URLSearchParams({ page: String(page), pageSize: "20" });
+export interface AssetLedgerFilters {
+  borrowOverdue?: boolean;
+  currentProcessorId?: string;
+  businessReference?: string;
+  inventoryBefore?: string;
+}
+
+function ledgerQuery(code: string, name: string, filters: AssetLedgerFilters): URLSearchParams {
+  const query = new URLSearchParams();
   if (code.trim()) query.set("assetCode", code.trim());
   if (name.trim()) query.set("name", name.trim());
+  if (filters.borrowOverdue !== undefined) query.set("borrowOverdue", String(filters.borrowOverdue));
+  if (filters.currentProcessorId) query.set("currentProcessorId", filters.currentProcessorId);
+  if (filters.businessReference) query.set("businessReference", filters.businessReference);
+  if (filters.inventoryBefore) query.set("inventoryBefore", filters.inventoryBefore);
+  return query;
+}
+
+export function listAssets(page = 1, code = "", name = "", filters: AssetLedgerFilters = {}): Promise<Page<AssetCard>> {
+  const query = ledgerQuery(code, name, filters);
+  query.set("page", String(page));
+  query.set("pageSize", "20");
   return request<Page<AssetCard>>("/assets?" + query);
+}
+
+export async function assetLedgerCsv(code: string, name: string, filters: AssetLedgerFilters = {}): Promise<Blob> {
+  const query = ledgerQuery(code, name, filters);
+  const response = await fetch("/api/v1/assets/export.csv?" + query, {
+    credentials: "include", cache: "no-store",
+  });
+  if (response.status === 403) throw new AssetApiError(403, "AUTH_FORBIDDEN", "当前账号无批量导出权限。");
+  if (response.status === 422) throw new AssetApiError(422, "ASSET_EXPORT_LIMIT", "最多导出 10000 项，请缩小查询范围。");
+  if (!response.ok) throw new AssetApiError(response.status, "ASSET_EXPORT_FAILED", "资产台账导出失败。");
+  return await response.blob();
 }
 
 export function getAsset(id: string): Promise<AssetCard> {

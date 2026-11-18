@@ -5,6 +5,9 @@ import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { reportRequest } from "@/features/report/api";
 import SealedInventoryTasks from "./SealedInventoryTasks.vue";
 import InventoryProgressReport from "./InventoryProgressReport.vue";
+import InventoryTraceabilityReport from "./InventoryTraceabilityReport.vue";
+import ExceptionDiscoveryReport from "./ExceptionDiscoveryReport.vue";
+import TagCoverageReport from "./TagCoverageReport.vue";
 import AssetCustodyReport from "./AssetCustodyReport.vue";
 import AssetMovementTrend from "./AssetMovementTrend.vue";
 import AssetMovementReport from "./AssetMovementReport.vue";
@@ -16,12 +19,14 @@ import BusinessExceptionReport from "./BusinessExceptionReport.vue";
 import InventoryLateReport from "./InventoryLateReport.vue";
 import AssetTimelineReport from "./AssetTimelineReport.vue";
 import RepairOperationsReport from "./RepairOperationsReport.vue";
+import CoreBusinessSamplingReport from "./CoreBusinessSamplingReport.vue";
 
 interface Summary {
   calculatedAt: string;
   inventory: { sealedTasks: number; expected: number; accepted: number; notObserved: number };
   openingBatches: { status: string; count: number }[];
   currentAssets: { lifecycle: string; exception: string; count: number }[];
+  importErrorQuality?: { locatedRows: number; failedRows: number };
 }
 interface BatchRow { key: string; statusText: string; countText: string }
 interface AssetGroupRow { key: string; label: string; lifecycle: string; exception: string }
@@ -44,12 +49,11 @@ const effectiveAssetCount = computed(() => result.value?.currentAssets.reduce((t
 const loadedQuery = shallowRef("");
 const error = shallowRef("");
 const busy = shallowRef(false);
-const sampleCount = shallowRef<number>();
-const missingCount = shallowRef<number>();
 const liveness = useRequestLiveness(() => [identity.value]);
 const showSummary = computed(() => !!result.value && query.value === loadedQuery.value);
 const inventoryCsvHref = computed(() => `/api/v1/operations-reports/inventory.csv?${loadedQuery.value}`);
 const sealedTasksKey = computed(() => identity.value + loadedQuery.value);
+const reportWindowKey = sealedTasksKey;
 const trendKey = computed(() => `movement-trend:${identity.value}`);
 const repairKey = computed(() => `repair-operations:${identity.value}`);
 const timelineKey = computed(() => `asset-timeline:${identity.value}`);
@@ -72,14 +76,12 @@ const inventorySummaryText = computed(() => `任务 ${result.value?.inventory.se
   + ` 应盘 ${result.value?.inventory.expected ?? 0} · 未盘 ${result.value?.inventory.notObserved ?? 0}`);
 const totalCountText = computed(() => `资产总数 ${effectiveAssetCount.value} 件`);
 const dataTimeText = computed(() => `数据时间 ${result.value?.calculatedAt ?? ""}`);
-const traceability = computed(() => {
-  const total = sampleCount.value;
-  const missing = missingCount.value;
-  if (!Number.isSafeInteger(total) || !Number.isSafeInteger(missing)
-      || total === undefined || missing === undefined || total <= 0 || missing < 0 || missing > total) {
-    return "样本不足或数量无效，无法评价";
-  }
-  return `${total - missing}/${total} = ${((total - missing) / total * 100).toFixed(1)}%`;
+const importErrorQuality = computed(() => result.value?.importErrorQuality);
+const importErrorQualityText = computed(() => {
+  const quality = result.value?.importErrorQuality;
+  if (!quality) return "";
+  return `${quality.locatedRows} / ${quality.failedRows} 行 · `
+    + `${(quality.locatedRows / quality.failedRows * 100).toFixed(1)}%`;
 });
 
 async function load() {
@@ -108,8 +110,6 @@ watch(identity, () => {
   result.value = undefined;
   error.value = "";
   busy.value = false;
-  sampleCount.value = undefined;
-  missingCount.value = undefined;
   if (session.user?.roles.includes("ASSET_ADMIN")) void load();
 }, { immediate: true, flush: "sync" });
 </script>
@@ -120,6 +120,7 @@ watch(identity, () => {
       <h2 class="fams-panel-title">资产运营报表</h2>
     </div>
     <InventoryProgressReport :key="identity" />
+    <TagCoverageReport :key="identity" />
     <form class="fams-field-row" @submit.prevent="load">
       <div class="fams-field">
         <label for="report-from">开始日期（UTC）</label>
@@ -134,6 +135,8 @@ watch(identity, () => {
     <p v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
     <p v-if="busy" role="status">正在查询</p>
     <div v-if="showSummary">
+      <InventoryTraceabilityReport :key="reportWindowKey" :query="loadedQuery" />
+      <ExceptionDiscoveryReport :key="reportWindowKey" :query="loadedQuery" />
       <h3>已封存盘点</h3>
       <p>{{ inventorySummaryText }}</p>
       <p>统计范围为窗口内已封存报告。未盘计入应盘，草稿、取消、终止和未封存任务排除。</p>
@@ -146,6 +149,12 @@ watch(identity, () => {
       <ul v-else class="fams-timeline">
         <li v-for="row in batchRows" :key="row.key">{{ row.statusText }} {{ row.countText }}</li>
       </ul>
+      <section v-if="importErrorQuality" class="fams-stack">
+        <h3>导入错误可定位率</h3>
+        <p v-if="importErrorQuality.failedRows">{{ importErrorQualityText }}</p>
+        <p v-else>该时段没有预检失败行。</p>
+        <p>按批次上传时间筛选，取各批次当前预检。通过行和文件级拒绝不计入分母。</p>
+      </section>
       <router-link class="fams-button" data-kind="link" data-size="sm" to="/asset-import-reviews">查看期初核验</router-link>
       <h3>当前有效资产</h3>
       <div class="fams-inline">
@@ -172,20 +181,6 @@ watch(identity, () => {
     <InventoryLateReport :key="lateKey" />
     <BusinessExceptionReport :key="exceptionsKey" />
     <InboundTimingReport :key="timingKey" />
-    <details class="fams-card fams-stack">
-      <summary>抽样留痕率核算</summary>
-      <p>请按抽查范围和选样方法，用线下证据核实实际业务。同一笔业务只计一次，待核实线索另列。</p>
-      <div class="fams-field-row">
-        <div class="fams-field">
-          <label for="traceability-sample">核实样本数</label>
-          <input id="traceability-sample" class="fams-control" v-model.number="sampleCount" type="number" min="0" step="1">
-        </div>
-        <div class="fams-field">
-          <label for="traceability-missing">原样本漏记数</label>
-          <input id="traceability-missing" class="fams-control" v-model.number="missingCount" type="number" min="0" step="1">
-        </div>
-      </div>
-      <p>本次样本观察结果 <output>{{ traceability }}</output></p>
-    </details>
+    <CoreBusinessSamplingReport :key="identity" :from="from" :to-exclusive="toExclusive" />
   </section>
 </template>

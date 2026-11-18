@@ -10,10 +10,13 @@ const emit = defineEmits<{ changed: []; invalidated: [] }>();
 /** 页内互斥：claimed 写本面板自身的占用位，blocked 读「任一其它面板在忙」。 */
 const { busy: claimed, blocked } = useBusy("reassignment");
 const session = useSessionStore();
-interface Context { snapshot: { version: number; processorAccountId: string; ownershipVersion: number; acceptedAt: string | null;
+interface Context { unavailableReason?: string; snapshot: { version: number; processorAccountId: string; ownershipVersion: number; acceptedAt: string | null;
   physicalHandling: unknown[]; outstandingReturn: { handover_status: string } | null }; operators: { id: string; name: string }[] }
-const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, props.repair.id]));
+const identity = computed(() => JSON.stringify([session.user?.id, session.user?.roles, session.csrfToken, props.repair.id, props.repair.ownershipVersion]));
 const admin = computed(() => !!session.user?.roles.includes("ASSET_ADMIN"));
+const currentOperator = computed(() => props.repair.status === "WAREHOUSE_PROCESSING" && props.repair.lockVersion != null
+  && !!session.user?.roles.includes("WAREHOUSE_OPERATOR") && props.repair.processorAccountId === session.user?.id);
+const unavailableReason = shallowRef(""), recorded = shallowRef(false);
 const context = ref<Context | null>(null), target = shallowRef(""), reason = shallowRef(""), evidence = shallowRef(""), checked = shallowRef(false), error = shallowRef("");
 const busy = shallowRef(false);
 /** 确认式幂等提交：草稿/在途两槽与幂等键簿记归底座；busy/locked、URL 与文案留在本面板。 */
@@ -21,6 +24,7 @@ const { prepared, pending, prepare: draft, confirm: adopt, settle, fail, cancel,
 const locked = computed(() => busy.value || !!prepared.value || !!pending.value);
 const liveness = useRequestLiveness(() => [identity.value]);
 function clear() { liveness.invalidate(); context.value = null; target.value = ""; reason.value = ""; evidence.value = ""; checked.value = false;
+  unavailableReason.value = ""; recorded.value = false;
   reset(); busy.value = false; }
 function failure(cause: unknown) { if (cause instanceof RepairApiError && [401, 403, 404].includes(cause.status)) { clear(); emit("invalidated"); } error.value = repairProblem(cause); }
 async function inspect() {
@@ -44,24 +48,50 @@ async function send() {
   if (busy.value || blocked.value || !pending.value) return;
   const operation = pending.value, turn = liveness.begin(); busy.value = true; error.value = "";
   try { await repairRequest(operation.payload.path, { ...operation.payload, key: operation.key });
-    if (liveness.isCurrent(turn)) { settle(); context.value = null; checked.value = false; emit("changed"); }
+    if (liveness.isCurrent(turn)) { if (operation.payload.path.endsWith("/processor-unavailability")) recorded.value = true;
+      settle(); context.value = null; checked.value = false; emit("changed"); }
   } catch (cause) { if (liveness.isCurrent(turn)) { fail(cause); failure(cause); } }
   finally { if (liveness.isCurrent(turn)) busy.value = false; }
 }
 async function confirm() { if (busy.value || blocked.value || !adopt()) return; await send(); }
+async function declareUnavailable() {
+  if (locked.value || blocked.value || !currentOperator.value || recorded.value) return;
+  const trimmed = unavailableReason.value.trim();
+  if (trimmed.length < 3) { error.value = "请填写无法继续处理的实际原因。"; return; }
+  prepare(() => ({ path: `/${props.repair.id}/processor-unavailability`, version: props.repair.version,
+    body: { reason: trimmed, ownershipVersion: props.repair.ownershipVersion } }));
+  if (!adopt()) return;
+  await send();
+}
+const isUnavailabilityPending = computed(() => pending.value?.payload.path.endsWith("/processor-unavailability") ?? false);
 watch(identity, () => { clear(); error.value = ""; }, { immediate: true, flush: "sync" });
 watch(locked, value => { claimed.value = value; }, { immediate: true, flush: "sync" });
 onBeforeUnmount(() => { clear(); });
 const physicalStageText = computed(() => { const snapshot = context.value?.snapshot; if (!snapshot) return "";
   return snapshot.outstandingReturn ? snapshot.outstandingReturn.handover_status === 'REFUSED' ? '已拒收，等待实际收回' : '已交出，等待实际接收'
     : snapshot.physicalHandling.length ? '已离开原保管人，当前库管处理' : snapshot.acceptedAt ? '已原地接修' : '尚未接修'; });
-const sectionShown = computed(() => admin.value && props.repair.status === "WAREHOUSE_PROCESSING" || !!pending.value || !!prepared.value);
+const sectionShown = computed(() => admin.value && (props.repair.status === "WAREHOUSE_PROCESSING" || !!pending.value || !!prepared.value));
 </script>
 <template>
+  <section v-if="currentOperator" class="fams-card fams-stack" aria-label="维修无法继续处理">
+    <div class="fams-panel-head">
+      <h3 class="fams-panel-title">无法继续处理</h3>
+    </div>
+    <p v-if="recorded" role="status">已登记。资管可在待办中核对并转派。</p>
+    <template v-else>
+      <p v-if="!admin && error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></p>
+      <label class="fams-field"><span class="fams-field-label">无法继续的原因</span>
+        <textarea class="fams-control" v-model="unavailableReason" maxlength="1000" :disabled="locked || blocked" /></label>
+      <div class="fams-panel-actions">
+        <button v-if="isUnavailabilityPending" class="fams-button" data-kind="secondary" type="button" :disabled="busy || blocked" @click="send">重试原维修登记</button>
+        <button v-else class="fams-button" data-kind="secondary" type="button" :disabled="locked || blocked" @click="declareUnavailable">登记无法继续处理</button>
+      </div>
+    </template>
+  </section>
   <section v-if="sectionShown" class="fams-card fams-stack" aria-label="维修受控转派">
     <div class="fams-panel-head">
       <h3 class="fams-panel-title">维修受控转派</h3>
-      <div v-if="pending" class="fams-panel-actions">
+      <div v-if="pending && !isUnavailabilityPending" class="fams-panel-actions">
         <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="busy || blocked" @click="send">重试原维修转派</button>
       </div>
     </div>
@@ -77,6 +107,7 @@ const sectionShown = computed(() => admin.value && props.repair.status === "WARE
     </div>
     <fieldset v-if="context" class="fams-card fams-stack" :disabled="locked || blocked">
       <legend class="fams-panel-title">实物与未同步结果核对</legend>
+      <p v-if="context.unavailableReason">原库管登记原因：{{ context.unavailableReason }}</p>
       <p>当前实物阶段：{{ physicalStageText }}。</p>
       <div class="fams-field-grid">
         <label class="fams-field"><span class="fams-field-label">接任库管</span>

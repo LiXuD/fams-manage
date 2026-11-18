@@ -17,6 +17,14 @@ const InboundDetailView = () => import("@/features/inbound/views/InboundDetailVi
 const RequisitionView = () => import("@/features/requisition/views/RequisitionView.vue");
 const RequisitionDraftView = () => import("@/features/requisition/views/RequisitionDraftView.vue");
 const RequisitionDetailView = () => import("@/features/requisition/views/RequisitionDetailView.vue");
+const AccountAdminView = () => import("@/features/auth/views/AccountAdminView.vue");
+const AssetLookupView = () => import("@/features/asset/views/AssetLookupView.vue");
+const BusinessParameterView = () => import("@/features/masterdata/views/BusinessParameterView.vue");
+const CatalogAdminView = () => import("@/features/masterdata/views/CatalogAdminView.vue");
+const EmployeePhoneCorrectionView = () => import("@/features/auth/views/EmployeePhoneCorrectionView.vue");
+const IdentityAdminView = () => import("@/features/masterdata/views/IdentityAdminView.vue");
+const IdentityImportView = () => import("@/features/masterdata/views/IdentityImportView.vue");
+const NumberingRuleView = () => import("@/features/masterdata/views/NumberingRuleView.vue");
 const LoanView = () => import("@/features/loan/views/LoanView.vue");
 const LoanDetailView = () => import("@/features/loan/views/LoanDetailView.vue");
 const AssetReturnView = () => import("@/features/asset-return/views/AssetReturnView.vue");
@@ -62,6 +70,13 @@ export const router = createRouter({
     { path: "/repairs/new", name: "repair-new", component: RepairDraftView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "新建报修", uiDesc: "选择可报修资产并填写实际故障、影响程度和发生时间。提交后到报修详情等待管理员决定。" } },
     { path: "/repairs/:id", name: "repair-detail", component: RepairDetailView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "报修详情", uiDesc: "决定、领取、原地维修、返厂、返还与协作只作用于本报修单。实物证据和历史保留在原记录上。" } },
     { path: "/loss-reports/:id?", name: "loss-reports", component: LossView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "报失与查找", uiDesc: "报告找不到只冻结流转；批准核实后，由处理库管记录实际查找。原责任和借用继续保留。" } },
+    { path: "/numbering-rules", name: "numbering-rules", component: NumberingRuleView, meta: { requiresAuth: true } },
+    { path: "/employee-phone-corrections", name: "employee-phone-corrections", component: EmployeePhoneCorrectionView, meta: { requiresAuth: true } },
+    { path: "/identity-imports", name: "identity-imports", component: IdentityImportView, meta: { requiresAuth: true } },
+    { path: "/catalogs", name: "catalogs", component: CatalogAdminView, meta: { requiresAuth: true } },
+    { path: "/identity", name: "identity", component: IdentityAdminView, meta: { requiresAuth: true } },
+    { path: "/business-parameters", name: "business-parameters", component: BusinessParameterView, meta: { requiresAuth: true } },
+    { path: "/system-accounts", name: "system-accounts", component: AccountAdminView, meta: { requiresAuth: true } },
     { path: "/scrap-requests/:id?", name: "scrap-requests", component: ScrapView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "报废与处置" } },
     { path: "/inventory-tasks", name: "inventory-tasks", component: InventoryTaskView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "盘点任务", uiDesc: "发布时冻结应盘集合与责任快照。盘点不直接改变资产责任；执行人只查看自己的应盘项。" } },
     { path: "/inventory-tasks/new", name: "inventory-task-new", component: InventoryTaskDraftView, props: true, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "新建盘点草稿", uiDesc: "先划定盘点范围并保存草稿。到任务详情页预览应盘数量后再发布冻结。" } },
@@ -77,6 +92,7 @@ export const router = createRouter({
     { path: "/login", name: "login", component: LoginView },
     { path: "/password/change", name: "password-change", component: PasswordChangeView, meta: { requiresAuth: true } },
     { path: "/assets", name: "assets", component: AssetLedgerView, meta: { requiresAuth: true, uiGroup: "资产", uiTitle: "资产台账", uiDesc: "查看资产状态、建卡和标签。保管关系由正式业务流程维护。" } },
+    { path: "/asset-lookup", name: "asset-lookup", component: AssetLookupView, meta: { requiresAuth: true } },
     { path: "/assets/new", name: "asset-new", component: AssetDraftView, props: true, meta: { requiresAuth: true, uiGroup: "资产", uiTitle: "单个建卡", uiDesc: "填写资产名称与可选的型号、单位、分类、组织和计划入库仓库位置；保存后到资产详情继续办理。" } },
     { path: "/assets/:id", name: "asset-detail", component: AssetDetailView, props: true, meta: { requiresAuth: true, uiGroup: "资产", uiTitle: "资产详情", uiDesc: "复制建卡、修正备注、取消草稿与打印标签只作用于本张资产卡。保管关系由正式业务流程维护。" } },
     { path: "/asset-imports", name: "asset-import", component: AssetImportView, meta: { requiresAuth: true, uiGroup: "资产", uiTitle: "资产批量导入", uiDesc: "下载模板、上传 XLSX、映射字段并逐行预检。" } },

@@ -175,7 +175,7 @@ onMounted(async () => {
       </p>
 
       <label class="fams-field">
-        <span class="fams-field-label">操作原因 / 验收说明</span>
+        <span class="fams-field-label">操作原因 / 验收或无法继续的说明</span>
         <textarea class="fams-control" v-model="reason" :disabled="formDisabled" maxlength="1000" />
       </label>
 
@@ -193,6 +193,10 @@ onMounted(async () => {
 
       <AssetReturnReassignment v-if="canReassign"
         :id="selected.id" :version="selected.version" @saved="refresh" />
+
+      <button v-if="canInspect && selected.lockVersion != null && selected.ownershipVersion != null"
+        class="fams-button" data-kind="secondary" type="button" :disabled="formDisabled || !reason.trim()"
+        @click="mutate(`/asset-returns/${selected.id}/reassignment/unavailable`, selected.version, { reason: reason.trim(), ownershipVersion: selected.ownershipVersion })">登记无法继续验收</button>
 
       <div v-if="canInspect" class="fams-stack">
         <div class="fams-field-grid">

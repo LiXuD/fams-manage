@@ -33,6 +33,7 @@ const submitText = computed(() => (retryable.value ? "原请求重试转派" : "
     <button class="fams-button" data-kind="secondary" type="button" :disabled="busy" @click="inspect">加载 / 重新核对转派清单</button>
     <template v-if="snapshot">
       <p>当前处理账号 {{ snapshot.processorAccountId }} · 处理权版本 {{ snapshot.ownershipVersion }}</p>
+      <p v-if="snapshot.unavailableReason">原库管登记无法继续：{{ snapshot.unavailableReason }}</p>
       <p v-for="item in rows" :key="item.id">明细 {{ item.id }} · {{ item.assetCode }} · {{ labels[item.status] }} · 仓库 {{ item.warehouseId }} / 位置 {{ item.locationId }} · 锁版本 {{ item.lockVersionText }}</p>
       <div class="fams-field-grid">
         <label class="fams-field"><span class="fams-field-label">接任库管</span>

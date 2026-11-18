@@ -892,6 +892,9 @@ public class ScrapReviewService {
     }
 
     private ScrapEvidence factoryEvidence(Map<String, Object> request, tools.jackson.databind.JsonNode proof) {
+        if (request.get("initial_batch_id") != null) {
+            return initialFactoryEvidence(request);
+        }
         if (!proof.path("context").has("replacementId") || request.get("source_item_id") == null) {
             return null;
         }
@@ -899,6 +902,25 @@ public class ScrapReviewService {
         return expected.replacementId() == number(request, "source_item_id")
                 && repairs.matchesFactoryScrapEvidence(number(request, "source_business_id"),
                         number(request, "asset_id"), expected) ? expected : null;
+    }
+
+    private ScrapEvidence initialFactoryEvidence(Map<String, Object> request) {
+        var rows = db.queryForList("""
+                SELECT f.id AS round_id,f.version,f.provider_name,f.dispatched_at,d.method,d.occurred_at
+                FROM fams_initial_factory_disposition d JOIN fams_repair_factory_round f ON f.id=d.round_id
+                JOIN fams_repair_request r ON r.id=f.repair_id
+                WHERE d.id=? AND r.id=? AND f.asset_id=? AND r.initial_batch_id=? AND r.initial_sheet_row=?
+                  AND f.initial_source AND f.round_status='DISPATCHED' AND f.received_at IS NULL
+                FOR UPDATE
+                """, request.get("source_item_id"), request.get("source_business_id"), request.get("asset_id"),
+                request.get("initial_batch_id"), request.get("initial_sheet_row"));
+        if (rows.isEmpty()) {
+            return null;
+        }
+        var row = rows.getFirst();
+        return new ScrapEvidence(number(row, "round_id"), number(row, "version"), number(request, "source_item_id"),
+                row.get("method").toString(), row.get("provider_name").toString(), instant(row.get("dispatched_at")),
+                instant(row.get("occurred_at")), number(request, "creator_account_id"), "[]");
     }
 
     static boolean physicalSource(Object source) {
@@ -1013,7 +1035,8 @@ public class ScrapReviewService {
                 + " JOIN fams_business_parameter_version v ON v.id=s.current_version_id"
                 + " WHERE s.singleton_id=1 AND v.status='ACTIVE' FOR SHARE", String.class);
         var settings = json.readTree(parameters);
-        LocalDate today = LocalDate.now(clock.withZone(ZoneId.of(settings.path("timezone").asText())));
+        ZoneId zone = ZoneId.of(settings.path("timezone").asText());
+        LocalDate today = LocalDate.now(clock.withZone(zone));
         LocalDate due = input.plannedDisposalDate() == null ? today.plusDays(30) : input.plannedDisposalDate();
         if (due.isBefore(today)) {
             throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_DATE_INVALID", 400);
@@ -1040,9 +1063,9 @@ public class ScrapReviewService {
                 + "asset_version=?,version=version+1,updated_at=? WHERE id=?",
                 execution, assetVersion, time, id);
         db.update("INSERT INTO fams_scrap_disposition(request_id,processor_account_id,disposition_status,"
-                + "due_date,custody_snapshot_json,created_at,updated_at)"
-                + " VALUES (?,?,'PENDING_DISPOSITION',?,?,?,?)",
-                id, current.id(), due, execution, time, time);
+                + "due_date,due_at,due_timezone,custody_snapshot_json,created_at,updated_at)"
+                + " VALUES (?,?,'PENDING_DISPOSITION',?,?,?,?,?,?)",
+                id, current.id(), due, due.plusDays(1).atStartOfDay(zone).toInstant(), zone.getId(), execution, time, time);
         releaseExecutedLock(id, asset, input.lockVersion(), time);
         closeTodo(id, "EXECUTE", time);
         todo(id, "DISPOSITION", "WAREHOUSE_OPERATOR", current.id(), time);
@@ -1089,20 +1112,28 @@ public class ScrapReviewService {
         if (factory == null || !factory.method().equals(approval.path("approvedDisposition").asText().strip())) {
             throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_OUTSIDE_APPROVAL", 409);
         }
+        boolean initial = row.get("initial_batch_id") != null;
         if (input.occurredAt().isBefore(factory.dispatchedAt()) || input.occurredAt().isAfter(factory.observedAt())
+                || initial && !input.occurredAt().equals(factory.observedAt())
                 || !input.occurredAt().equals(input.occurredAt().truncatedTo(ChronoUnit.MILLIS))) {
             throw new AssetHandoverPort.Failure("SCRAP_FACTORY_DISPOSITION_TIME_INVALID", 400);
         }
-        repairs.requireFactoryScrapEvidenceObjects(current, repair, factory);
+        if (!initial) {
+            repairs.requireFactoryScrapEvidenceObjects(current, repair, factory);
+        }
         long assetVersion = assets.executeFactory(asset, input.assetVersion(), id, input.lockVersion(),
                 source, current.id(), time);
         if (borrowing != null) {
             loans.terminateLost(asset, borrowing.borrowerEmployeeId(), borrowing.organizationId(),
                     borrowing.id(), borrowing.version(), time);
         }
-        var facts = Map.of("occurredAt", input.occurredAt(), "method", factory.method(),
-                "recipient", factory.provider(), "evidenceIds", json.readTree(factory.evidenceIdsJson()),
-                "recordedBy", factory.recordedBy());
+        var facts = new java.util.LinkedHashMap<String, Object>(Map.of("occurredAt", input.occurredAt(), "method", factory.method(),
+                "recipient", factory.provider(), "recordedBy", factory.recordedBy()));
+        if (initial) {
+            facts.put("initialEvidence", source.path("repairEvidence").path("context").path("evidence").asText());
+        } else {
+            facts.put("evidenceIds", json.readTree(factory.evidenceIdsJson()));
+        }
         String completion = json.writeValueAsString(Map.of("facts", facts, "verifiedBy", current.id()));
         String execution = json.writeValueAsString(Map.of("executedAt", time, "method", factory.method()));
         db.update("UPDATE fams_scrap_request SET request_status='EXECUTED',execution_snapshot_json=?,"
@@ -1113,7 +1144,8 @@ public class ScrapReviewService {
         releaseExecutedLock(id, asset, input.lockVersion(), time);
         closeTodo(id, "EXECUTE", time);
         audit(actor, current, Role.WAREHOUSE_OPERATOR, id, version, "SCRAP_FACTORY_EXECUTED",
-                Map.of("method", factory.method(), "replacementId", Long.toString(factory.replacementId())), time);
+                Map.of("method", factory.method(), initial ? "initialDispositionId" : "replacementId",
+                        Long.toString(factory.replacementId())), time);
         return remember(current, operation, key, hash, new Receipt(Long.toString(id), Long.toString(asset),
                 version + 1, assetVersion, input.ownershipVersion(), "EXECUTED", Long.toString(current.id())), time);
     }

@@ -5,13 +5,23 @@ import { formatProxyTime } from "@/features/exception/time";
 import { useRequestLiveness } from "@/composables/useRequestLiveness";
 import { dutyRequest } from "@/features/reminder/api";
 
+interface AnomalyTodo {
+  id: string;
+  kind: string;
+  businessType?: string;
+  businessId?: string;
+  parameterVersionId?: string;
+  deadline?: string;
+}
+
 interface Anomaly {
   id: string;
   type: string;
   status: "OPEN" | "RESOLVED";
   detectedAt: string;
   resolvedAt?: string;
-  relatedTodos: { id: string; kind: string; parameterVersionId: string; deadline: string }[];
+  relatedTodos: AnomalyTodo[];
+  relatedBusinessTodos?: AnomalyTodo[];
 }
 interface AnomalyRow { id: string; title: string; detectedText: string; resolvedText: string; todoRows: { id: string; text: string }[] }
 
@@ -38,10 +48,13 @@ const anomalyRows = computed<AnomalyRow[]>(() => rows.value.map((row) => ({
   title: `${labels[row.type]} · ${row.status === "OPEN" ? "待恢复" : "已恢复"}`,
   detectedText: `发现于 ${formatProxyTime(row.detectedAt)}`,
   resolvedText: row.resolvedAt ? ` · 恢复于 ${formatProxyTime(row.resolvedAt)}` : "",
-  todoRows: row.relatedTodos.map((todo) => ({
-    id: todo.id,
-    text: `待办 ${todo.id} · 参数版本 ${todo.parameterVersionId} · 原截止 ${formatProxyTime(todo.deadline)}`,
-  })),
+  todoRows: [...row.relatedTodos, ...(row.relatedBusinessTodos ?? [])].map((todo) => {
+    const parts = [`待办 ${todo.id}`, todo.kind];
+    if (todo.businessType && todo.businessId) parts.push(`${todo.businessType} ${todo.businessId}`);
+    if (todo.parameterVersionId) parts.push(`参数版本 ${todo.parameterVersionId}`);
+    if (todo.deadline) parts.push(`原截止 ${formatProxyTime(todo.deadline)}`);
+    return { id: todo.id, text: parts.filter(Boolean).join(" · ") };
+  }),
 })));
 
 async function load(target = 1) {

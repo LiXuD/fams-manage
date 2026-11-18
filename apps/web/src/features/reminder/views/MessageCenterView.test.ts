@@ -90,7 +90,6 @@ describe("message centre", () => {
     api.session.user = { id: "1", roles: ["SYSTEM_ADMIN"] };
     api.duty.mockResolvedValue({ items: [dutyRow] });
     const writes: unknown[] = []; let lose = true;
-    api.request.mockResolvedValue({ items: [], total: 0, unread: 0, view: "INBOX" });
     api.duty.mockImplementation(async (path: string, mutation?: unknown) => {
       if (path.startsWith("/configuration-anomalies?")) {
         return { items: [{ id: "4", type: "NO_ASSET_ADMIN", status: "OPEN",
@@ -104,6 +103,8 @@ describe("message centre", () => {
     const wrapper = mount(MessageCenterView, { global: { stubs: { RouterLink: true } } });
     await flushPromises();
     expect(wrapper.text()).toContain("没有有效资产管理员");
+    expect(api.request).not.toHaveBeenCalled();
+    expect(wrapper.find('[aria-label="业务消息"]').exists()).toBe(false);
     await wrapper.find("select").setValue("ASSET_ADMIN");
     await wrapper.findAll("input")[0]!.setValue("9");
     await wrapper.findAll("input")[1]!.setValue("");
@@ -118,6 +119,11 @@ describe("message centre", () => {
     expect(writes[0]).toMatchObject({ version: 1,
       body: { primaryAccountId: "9", backupAccountId: null } });
     expect(wrapper.text()).toContain("版本 2");
+    api.request.mockResolvedValue({ items: [], total: 0, unread: 0, view: "INBOX" });
+    api.session.user = { id: "1", roles: ["SYSTEM_ADMIN", "ASSET_ADMIN"] };
+    await flushPromises();
+    expect(api.request).toHaveBeenCalledWith("/messages?view=INBOX&page=1&pageSize=20");
+    expect(wrapper.find('[aria-label="业务消息"]').exists()).toBe(true);
     wrapper.unmount();
   });
   it("links scrap rows to the scrap page by business identity", async () => {
@@ -127,6 +133,32 @@ describe("message centre", () => {
     await flushPromises();
     expect(wrapper.find("a").attributes("data-destination")).toContain("/scrap-requests");
     expect(wrapper.find("a").attributes("data-destination")).toContain("8");
+    wrapper.unmount();
+  });
+  it("builds links with the owning business identity and suppresses unresolved handover targets", async () => {
+    const parent = "9007199254740993";
+    const rows = [
+      { ...reminder, id: "81", businessId: "31", businessType: "REQUISITION_ALLOCATION", parentBusinessId: parent },
+      { ...reminder, id: "82", businessId: "32", businessType: "TRANSFER_ITEM", parentBusinessId: "720" },
+      { ...reminder, id: "83", businessId: "33", businessType: "REPAIR_FACTORY_ROUND", parentBusinessId: "721" },
+      { ...reminder, id: "84", businessId: "34", businessType: "LOAN", },
+      { ...reminder, id: "85", businessId: "35", businessType: "LOAN_EXTENSION", parentBusinessId: "722", parentBusinessType: "REQUISITION" },
+      { ...reminder, id: "86", businessId: "36", businessType: "PROXY_CONFIRMATION" },
+      { ...reminder, id: "87", businessId: "37", businessType: "TRANSFER_ITEM" },
+    ];
+    api.request.mockResolvedValue({ items: rows, total: rows.length, unread: rows.length, view: "INBOX" });
+    const wrapper = mount(MessageCenterView, {
+      global: { stubs: { RouterLink: { props: ["to"], template: '<a :data-destination="JSON.stringify(to)"><slot /></a>' } } },
+    });
+    await flushPromises();
+    expect(wrapper.findAll("a").map(link => JSON.parse(link.attributes("data-destination")!))).toEqual([
+      { path: "/requisitions", query: { id: parent } },
+      { path: "/transfers", query: { id: "720" } },
+      { path: "/repairs/721" },
+      { path: "/loans", query: { loan: "34" } },
+      { path: "/requisitions", query: { id: "722" } },
+      { path: "/proxy-confirmations", query: { id: "36" } },
+    ]);
     wrapper.unmount();
   });
 });

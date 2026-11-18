@@ -1,6 +1,7 @@
 package com.fams.auth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.AfterEach;
@@ -57,7 +58,11 @@ class HandoverHttpTest {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired MiniSessionService miniSessions;
+    @Autowired org.springframework.context.ApplicationEventPublisher events;
+    @Autowired org.springframework.context.ApplicationContext application;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
     private long base;
+    private final java.util.ArrayList<Long> handoverNoticeFixtures = new java.util.ArrayList<>();
     private Long extraTargetEmployee;
     private Session employee;
     private Session warehouse;
@@ -238,6 +243,10 @@ class HandoverHttpTest {
 
     @AfterEach
     void removeOnlyOwnedExactFixtureRange() {
+        for (var notice : handoverNoticeFixtures) {
+            jdbc.update("DELETE FROM fams_message_receipt WHERE message_kind='REMINDER' AND message_id=?", notice);
+            jdbc.update("DELETE FROM fams_business_reminder WHERE id=?", notice);
+        }
         jdbc.update("DELETE t FROM fams_todo t JOIN fams_item_target_change c ON t.business_id=c.id WHERE t.business_type='ITEM_TARGET_CHANGE' AND c.creator_account_id BETWEEN ? AND ?", base+10, base+17);
         jdbc.update("DELETE FROM fams_item_target_change WHERE creator_account_id BETWEEN ? AND ?", base+10, base+17);
         if (base == 0) {
@@ -411,6 +420,228 @@ class HandoverHttpTest {
         jdbc.update("DELETE FROM fams_warehouse WHERE id IN (?,?)", base, base+1);
         jdbc.update("DELETE FROM fams_asset_category WHERE id=?", base);
         jdbc.update("DELETE FROM fams_organization WHERE id IN (?,?)", base, base + 1);
+    }
+
+    @Test
+    void requisitionDeclarationPreservesPhysicalHandoverAndClosesOnTransfer() throws Exception {
+        var value = allocated(2);
+        value = warehouseWrite(value, 0, "deliver", delivery(value, 0));
+        String id = value.path("id").asText(), suffix = "/" + id + "/reassignment";
+        long version = value.path("version").asLong();
+        var ownership = value.path("ownership").get(0);
+        String body = JSON.writeValueAsString(java.util.Map.of(
+                "ownershipVersion", ownership.path("ownershipVersion").asLong(), "reason", "原库管不能继续办理"));
+        var receiverTodos = jdbc.queryForList("""
+                SELECT t.* FROM fams_todo t JOIN fams_requisition_allocation a ON a.id=t.business_id
+                WHERE t.business_type='REQUISITION_ALLOCATION' AND a.request_id=? AND t.pool_type='RECEIVER'
+                """, id);
+        assertFalse(receiverTodos.isEmpty());
+        var locks = jdbc.queryForList("""
+                SELECT * FROM fams_asset_business_lock WHERE business_type='REQUISITION' AND business_id=? ORDER BY id
+                """, id);
+        String reminder = "SELECT COUNT(*) FROM fams_todo WHERE business_type='REQUISITION' AND business_id=?"
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        String requestKey = key(), path = suffix + "/unavailable";
+        assertEquals(403, call(admin, "POST", path, body, key(), version).statusCode());
+        assertEquals(403, call(other, "POST", path, body, key(), version).statusCode());
+        assertEquals(409, call(warehouse, "POST", path, body, key(), version - 1).statusCode());
+        var declared = call(warehouse, "POST", path, body, requestKey, version);
+        assertEquals(200, declared.statusCode(), declared.body());
+        assertEquals(version, JSON.readTree(declared.body()).path("version").asLong());
+        var replayed = call(warehouse, "POST", path, body, requestKey, version);
+        assertEquals(200, replayed.statusCode(), replayed.body());
+        assertEquals(JSON.readTree(declared.body()), JSON.readTree(replayed.body()));
+        assertEquals(200, call(warehouse, "POST", path, body, key(), version).statusCode());
+        assertEquals(409, call(warehouse, "POST", path, body.replace("不能继续", "改变原因"), key(), version).statusCode());
+        assertEquals(1, count(reminder, id));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='REQUISITION'"
+                + " AND resource_id=? AND action='REQUISITION_PROCESSOR_UNAVAILABLE'", id));
+        var scanner = application.getBean("reassignmentReminderService");
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(scanner, "scan");
+        assertEquals(1, count(reminder, id));
+        var snapshot = JSON.readTree(call(admin, "GET", suffix, null, null, null).body());
+        assertEquals("原库管不能继续办理", snapshot.path("unavailableReason").asText());
+        var request = JSON.createObjectNode().put("processorAccountId", Long.toString(base + 12))
+                .put("ownershipVersion", snapshot.path("ownershipVersion").asLong())
+                .put("reason", "根据登记调整经办人员").put("evidence", "已核对全部接收阶段及未同步结果")
+                .put("unsynchronizedResultsChecked", true);
+        request.set("items", snapshot.path("items"));
+        var transfer = call(admin, "POST", suffix, request.toString(), key(), version);
+        assertEquals(200, transfer.statusCode(), transfer.body());
+        assertEquals(403, call(warehouse, "POST", path, body, requestKey, version).statusCode());
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(scanner, "scan");
+        assertEquals(0, count(reminder, id));
+        assertEquals(locks, jdbc.queryForList("""
+                SELECT * FROM fams_asset_business_lock WHERE business_type='REQUISITION' AND business_id=? ORDER BY id
+                """, id));
+        assertEquals(receiverTodos, jdbc.queryForList("""
+                SELECT t.* FROM fams_todo t JOIN fams_requisition_allocation a ON a.id=t.business_id
+                WHERE t.business_type='REQUISITION_ALLOCATION' AND a.request_id=? AND t.pool_type='RECEIVER'
+                """, id));
+    }
+
+    @Test
+    void nativeBorrowDeclarationReplaysCommittedReply() throws Exception {
+        var value = allocatedDraft(1, borrowDraft("2099-12-31"));
+        String id = value.path("id").asText(), code = "borrow-declaration-" + base;
+        jdbc.update("INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES (?,?,NOW(3))",
+                base + 11, miniSessions.identityHash(new MiniWechatIdentityPort.Identity("requisition-test-app", code)));
+        var script = java.nio.file.Path.of(System.getProperty("user.dir")).getParent()
+                .resolve("apps/miniprogram/test/runtime-requisition-http.mjs");
+        var builder = new ProcessBuilder("rtk", "proxy",
+                System.getenv().getOrDefault("FAMS_TEST_NODE_EXECUTABLE", "node"), script.toString())
+                .redirectErrorStream(true);
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_WECHAT_CODE", code);
+        builder.environment().put("FAMS_TEST_REQUISITION_ID", id);
+        var process = builder.start();
+        assertTrue(process.waitFor(45, TimeUnit.SECONDS));
+        String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        assertEquals(0, process.exitValue(), output);
+        assertTrue(output.contains("Native borrow processor declaration"), output);
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='REQUISITION'"
+                + " AND resource_id=? AND action='REQUISITION_PROCESSOR_UNAVAILABLE'", id));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_todo WHERE business_type='REQUISITION' AND business_id=?"
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1", id));
+    }
+
+    @Test
+    void firstExecutionTimeoutClosesWhenRequisitionActuallyHandsOver() throws Exception {
+        var value = allocated(2);
+        long id = value.path("id").asLong();
+        jdbc.update("UPDATE fams_requisition_ownership SET acquired_at='2026-10-02 20:00:00.000' WHERE request_id=?", id);
+        jdbc.update("UPDATE fams_requisition SET parameter_snapshot_json=? WHERE id=?", executionCalendar(), id);
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_requisition_handover h JOIN fams_requisition_allocation a"
+                + " ON a.id=h.allocation_id WHERE a.request_id=?", id));
+        String active = "SELECT COUNT(*) FROM fams_todo WHERE business_type='REQUISITION' AND business_id=?"
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        scanFirstExecutionAt("2026-10-06T23:59:59.999Z");
+        assertEquals(0, count(active, id));
+        scanFirstExecutionAt("2026-10-07T00:00:00Z");
+        scanFirstExecutionAt("2026-10-07T00:01:00Z");
+        assertEquals(1, count(active, id));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_todo t JOIN fams_requisition_allocation a ON a.id=t.business_id"
+                + " WHERE t.business_type='REQUISITION_ALLOCATION' AND a.request_id=? AND t.pool_type='RECEIVER'", id));
+        assertEquals(base + 11, jdbc.queryForObject("SELECT processor_account_id FROM fams_requisition_ownership"
+                + " WHERE request_id=? AND active_guard=1", Long.class, id));
+        warehouseWrite(value, 0, "deliver", delivery(value, 0));
+        scanFirstExecutionAt("2026-10-07T00:02:00Z");
+        assertEquals(0, count(active, id));
+        assertEquals(2, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE business_type='REQUISITION'"
+                + " AND business_id=? AND released_at IS NULL", id));
+    }
+
+    @Test
+    void firstExecutionTimeoutClosesWhenTransferIsExplicitlyReassigned() throws Exception {
+        personalTransferFixture();
+        var row = claimedTransfer(transferDraft(false, false, base + 15, base + 1, base, 0), employee);
+        long id = row.path("id").asLong();
+        jdbc.update("UPDATE fams_todo SET opened_at='2026-10-02 20:00:00.000' WHERE business_type='TRANSFER'"
+                + " AND business_id=? AND todo_type='EXECUTION' AND active_guard=1", id);
+        jdbc.update("UPDATE fams_transfer_item SET parameter_snapshot_json=? WHERE request_id=?", executionCalendar(), id);
+        String active = "SELECT COUNT(*) FROM fams_todo WHERE business_type='TRANSFER' AND business_id=?"
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        scanFirstExecutionAt("2026-10-06T23:59:59.999Z");
+        assertEquals(0, count(active, id));
+        scanFirstExecutionAt("2026-10-07T00:00:00Z");
+        assertEquals(1, count(active, id));
+        var snapshot = reassignmentSnapshot(row);
+        var transferred = transferAction(admin, row, "/reassignment", reassignmentBody(snapshot, base + 12));
+        assertEquals(Long.toString(base + 12), transferred.path("processorAccountId").asText());
+        scanFirstExecutionAt("2026-10-08T00:00:00Z");
+        assertEquals(0, count(active, id));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE business_type='TRANSFER'"
+                + " AND business_id=? AND released_at IS NULL", id));
+    }
+
+    @Test
+    void firstExecutionTimeoutClosesWhenTransferActuallyHandsOver() throws Exception {
+        personalTransferFixture();
+        var row = claimedTransfer(transferDraft(false, false, base + 15, base + 1, base, 0), employee);
+        long id = row.path("id").asLong();
+        jdbc.update("UPDATE fams_todo SET opened_at='2026-10-02 20:00:00.000' WHERE business_type='TRANSFER'"
+                + " AND business_id=? AND todo_type='EXECUTION' AND active_guard=1", id);
+        jdbc.update("UPDATE fams_transfer_item SET parameter_snapshot_json=? WHERE request_id=?", executionCalendar(), id);
+        String active = "SELECT COUNT(*) FROM fams_todo WHERE business_type='TRANSFER' AND business_id=?"
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        scanFirstExecutionAt("2026-10-07T00:00:00Z");
+        assertEquals(1, count(active, id));
+        row = transferAction(warehouse, row, transferItemPath(row, "deliver"), transferPhysical(row, null, false));
+        assertEquals("DELIVERED", row.path("items").get(0).path("itemStatus").asText());
+        scanFirstExecutionAt("2026-10-07T00:01:00Z");
+        assertEquals(0, count(active, id));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE business_type='TRANSFER'"
+                + " AND business_id=? AND released_at IS NULL", id));
+    }
+
+    @Test
+    void firstExecutionTimeoutForReturnClosesOnControlledTransfer() throws Exception {
+        receivedBorrow();
+        var value = approvedReturn(employee);
+        String id = value.path("id").asText();
+        jdbc.update("UPDATE fams_todo SET opened_at='2026-10-02 20:00:00.000' WHERE business_type='ASSET_RETURN'"
+                + " AND business_id=? AND todo_type='INSPECTION' AND active_guard=1", id);
+        jdbc.update("UPDATE fams_asset_return SET parameter_snapshot_json=? WHERE id=?", executionCalendar(), id);
+        String active = "SELECT COUNT(*) FROM fams_todo WHERE business_type='ASSET_RETURN' AND business_id=?"
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        String locks = "SELECT * FROM fams_asset_business_lock WHERE business_type='ASSET_RETURN'"
+                + " AND business_id=? AND released_at IS NULL";
+        var original = jdbc.queryForMap(locks, id);
+        scanFirstExecutionAt("2026-10-06T23:59:59.999Z");
+        assertEquals(0, count(active, id));
+        scanFirstExecutionAt("2026-10-07T00:00:00Z");
+        scanFirstExecutionAt("2026-10-07T00:01:00Z");
+        assertEquals(1, count(active, id));
+        var context = returnReassignmentSnapshot(admin, id);
+        assertEquals(Long.toString(base + 11), context.path("processorAccountId").asText());
+        assertFalse(context.has("unavailableReason"));
+        var transferred = returnCall(admin, "/" + id + "/reassignment",
+                returnReassignmentBody(context, base + 12), key(), value.path("version").asLong());
+        assertEquals(200, transferred.statusCode(), transferred.body());
+        scanFirstExecutionAt("2026-10-07T00:02:00Z");
+        assertEquals(0, count(active, id));
+        assertEquals(original, jdbc.queryForMap(locks, id));
+        assertEquals("OPEN", jdbc.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=?",
+                String.class, base + 50));
+    }
+
+    @Test
+    void firstExecutionTimeoutForReturnClosesOnFirstPhysicalInspection() throws Exception {
+        receivedBorrow();
+        var value = approvedReturn(employee);
+        String id = value.path("id").asText();
+        jdbc.update("UPDATE fams_todo SET opened_at='2026-10-02 20:00:00.000' WHERE business_type='ASSET_RETURN'"
+                + " AND business_id=? AND todo_type='INSPECTION' AND active_guard=1", id);
+        jdbc.update("UPDATE fams_asset_return SET parameter_snapshot_json=? WHERE id=?", executionCalendar(), id);
+        String active = "SELECT COUNT(*) FROM fams_todo WHERE business_type='ASSET_RETURN' AND business_id=?"
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        scanFirstExecutionAt("2026-10-07T00:00:00Z");
+        assertEquals(1, count(active, id));
+        var inspected = returnCall(warehouse, "/" + id + "/inspect", returnInspection("NORMAL", "RQ-ASSET-" + base),
+                key(), value.path("version").asLong());
+        assertEquals(200, inspected.statusCode(), inspected.body());
+        scanFirstExecutionAt("2026-10-07T00:01:00Z");
+        assertEquals(0, count(active, id));
+        assertEquals("RETURNED", jdbc.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=?",
+                String.class, base + 50));
+    }
+
+    private String executionCalendar() {
+        return """
+                {"timezone":"UTC","workWeek":["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY"],
+                 "adjustedWorkdays":["2026-10-03"],"holidays":["2026-10-05"],
+                 "warehouseFirstExecutionDeadlineWorkdays":2,"handoverAcceptanceDeadlineNaturalDays":3}
+                """;
+    }
+
+    private void scanFirstExecutionAt(String instant) throws Exception {
+        var scannerType = org.springframework.util.ClassUtils.getUserClass(application.getBean("reassignmentReminderService"));
+        var constructor = org.springframework.util.ReflectionUtils.accessibleConstructor(scannerType,
+                JdbcTemplate.class, java.time.Clock.class, ObjectMapper.class);
+        var scanner = org.springframework.beans.BeanUtils.instantiateClass(constructor,
+                jdbc, java.time.Clock.fixed(Instant.parse(instant), java.time.ZoneOffset.UTC), JSON);
+        new org.springframework.transaction.support.TransactionTemplate(transactions)
+                .executeWithoutResult(status -> org.springframework.test.util.ReflectionTestUtils.invokeMethod(scanner, "scan"));
     }
 
     private JsonNode allocated(int quantity) throws Exception {
@@ -859,6 +1090,72 @@ class HandoverHttpTest {
     }
 
     @Test
+    void returnDeclarationDeduplicatesAndRetainsBorrowUntilNewOwnerInspects() throws Exception {
+        receivedBorrow();
+        var value = approvedReturn(employee);
+        String id = value.path("id").asText(), suffix = "/" + id + "/reassignment", path = suffix + "/unavailable";
+        long version = value.path("version").asLong(), ownerVersion = value.path("ownershipVersion").asLong();
+        String body = JSON.writeValueAsString(java.util.Map.of("ownershipVersion", ownerVersion, "reason", "无法继续验收设备"));
+        String active = "SELECT COUNT(*) FROM fams_todo WHERE business_type='ASSET_RETURN' AND business_id=?"
+                + " AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1";
+        var lock = jdbc.queryForMap("SELECT * FROM fams_asset_business_lock WHERE business_type='ASSET_RETURN'"
+                + " AND business_id=? AND released_at IS NULL", id);
+        String requestKey = key();
+        assertEquals(403, returnCall(admin, path, body, key(), version).statusCode());
+        assertEquals(403, returnCall(other, path, body, key(), version).statusCode());
+        assertEquals(409, returnCall(warehouse, path, body, key(), version - 1).statusCode());
+        var declared = returnCall(warehouse, path, body, requestKey, version);
+        assertEquals(200, declared.statusCode(), declared.body());
+        assertEquals(JSON.readTree(declared.body()), JSON.readTree(returnCall(warehouse, path, body, requestKey, version).body()));
+        assertEquals(200, returnCall(warehouse, path, body, key(), version).statusCode());
+        assertEquals(409, returnCall(warehouse, path, body.replace("设备", "另一设备"), key(), version).statusCode());
+        assertEquals(1, count(active, id));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='ASSET_RETURN'"
+                + " AND resource_id=? AND action='RETURN_PROCESSOR_UNAVAILABLE'", id));
+        var scanner = application.getBean("reassignmentReminderService");
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(scanner, "scan");
+        assertEquals(1, count(active, id));
+        var snapshot = returnReassignmentSnapshot(admin, id);
+        assertEquals("无法继续验收设备", snapshot.path("unavailableReason").asText());
+        var reassigned = returnCall(admin, suffix, returnReassignmentBody(snapshot, base + 12), key(), version);
+        assertEquals(200, reassigned.statusCode(), reassigned.body());
+        assertEquals(403, returnCall(warehouse, path, body, requestKey, version).statusCode());
+        assertFalse(returnReassignmentSnapshot(admin, id).has("unavailableReason"));
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(scanner, "scan");
+        assertEquals(0, count(active, id));
+        assertEquals(lock, jdbc.queryForMap("SELECT * FROM fams_asset_business_lock WHERE business_type='ASSET_RETURN'"
+                + " AND business_id=? AND released_at IS NULL", id));
+        assertEquals("OPEN", jdbc.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=?", String.class, base + 50));
+        var inspected = returnCall(other, "/" + id + "/inspect", returnInspection("NORMAL", "RQ-ASSET-" + base), key(), version + 1);
+        assertEquals(200, inspected.statusCode(), inspected.body());
+        assertEquals("RETURNED", jdbc.queryForObject("SELECT relation_status FROM fams_loan WHERE asset_id=?", String.class, base + 50));
+    }
+
+    @Test
+    void nativeReturnDeclarationReplaysCommittedReply() throws Exception {
+        receivedBorrow();
+        var value = approvedReturn(employee);
+        String id = value.path("id").asText(), code = "return-declaration-" + base;
+        jdbc.update("INSERT INTO fams_mini_binding(account_id,identity_hash,created_at) VALUES (?,?,NOW(3))",
+                base + 11, miniSessions.identityHash(new MiniWechatIdentityPort.Identity("requisition-test-app", code)));
+        var script = java.nio.file.Path.of(System.getProperty("user.dir")).getParent()
+                .resolve("apps/miniprogram/test/runtime-loan-http.mjs");
+        var builder = new ProcessBuilder("rtk", "proxy",
+                System.getenv().getOrDefault("FAMS_TEST_NODE_EXECUTABLE", "node"), script.toString())
+                .redirectErrorStream(true);
+        builder.environment().put("FAMS_TEST_API_PORT", Integer.toString(port));
+        builder.environment().put("FAMS_TEST_WECHAT_CODE", code);
+        builder.environment().put("FAMS_TEST_ASSET_RETURN_ID", id);
+        var process = builder.start();
+        assertTrue(process.waitFor(45, TimeUnit.SECONDS));
+        String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        assertEquals(0, process.exitValue(), output);
+        assertTrue(output.contains("Native asset return declaration"), output);
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='ASSET_RETURN'"
+                + " AND resource_id=? AND action='RETURN_PROCESSOR_UNAVAILABLE'", id));
+    }
+
+    @Test
     void returnReassignmentRejectsDriftAndRollsBackThenTransfersDisabledOwner() throws Exception {
         receivedBorrow();
         var value = approvedReturn(employee);
@@ -1027,6 +1324,14 @@ class HandoverHttpTest {
         var value = allocatedDraft(1, borrowDraft("2099-12-31"));
         assertEquals("BORROW", value.path("requestType").asText());
         value = warehouseWrite(value, 0, "deliver", delivery(value, 0));
+        long allocation = value.path("allocations").get(0).path("id").asLong();
+        var notice = handoverNotice("REQUISITION_ALLOCATION", allocation, base + 10, false);
+        var obsoleteDeadline = handoverNotice("REQUISITION_ALLOCATION", allocation, base + 10, true);
+        assertTrue(hasHandoverNotice(employee, notice));
+        assertHandoverNoticeParent(employee, notice, allocation, value.path("id").asText());
+        assertFalse(hasHandoverNotice(employee, obsoleteDeadline));
+        assertEquals(404, readHandoverNotice(employee, obsoleteDeadline));
+        assertEquals(200, readHandoverNotice(employee, notice));
         assertEquals("IN_STOCK", jdbc.queryForObject(
                 "SELECT lifecycle_status FROM fams_asset WHERE id=?", String.class, base + 50));
         assertEquals(0, count("SELECT COUNT(*) FROM fams_loan WHERE asset_id=?", base + 50));
@@ -1034,6 +1339,10 @@ class HandoverHttpTest {
         String endpoint = path(value, 0, "receive");
         var received = call(employee, "POST", endpoint, body, identity, value.path("version").asLong());
         assertEquals(200, received.statusCode(), received.body());
+        assertFalse(hasHandoverNotice(employee, notice));
+        assertEquals(404, readHandoverNotice(employee, notice));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_message_receipt WHERE message_kind='REMINDER'"
+                + " AND message_id=? AND account_id=?", notice, base + 10));
         var repeated = call(employee, "POST", endpoint, body, identity, value.path("version").asLong());
         assertEquals(received.body(), repeated.body());
         assertEquals("BORROWED", jdbc.queryForObject(
@@ -2163,9 +2472,43 @@ class HandoverHttpTest {
         String body = reassignmentBody(snapshot, base + 12), identity = key();
         String path = "/" + row.path("id").asText() + "/reassignment";
         long version = row.path("version").asLong();
+        String declarationPath = path + "/unavailable";
+        String declaration = "{\"ownershipVersion\":0,\"reason\":\"当前处理人休假\"}";
+        assertEquals(403, transferCall(admin, "POST", declarationPath, declaration, key(), version).statusCode());
+        assertEquals(409, transferCall(other, "POST", declarationPath, declaration, key(), version).statusCode());
+        assertEquals(400, transferCall(warehouse, "POST", declarationPath, "{\"reason\":\"缺少处理权版本\"}", key(), version).statusCode());
+        assertEquals(409, transferCall(warehouse, "POST", declarationPath, declaration, key(), version - 1).statusCode());
+        String declarationKey = key();
+        var recorded = transferCall(warehouse, "POST", declarationPath, declaration, declarationKey, version);
+        assertEquals(200, recorded.statusCode(), recorded.body());
+        assertTrue(JSON.readTree(recorded.body()).path("recorded").asBoolean());
+        assertEquals(recorded.body(), transferCall(warehouse, "POST", declarationPath, declaration, declarationKey, version).body());
+        assertEquals(409, transferCall(warehouse, "POST", declarationPath,
+                declaration.replace("休假", "离职"), key(), version).statusCode());
+        var mini = http.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+                + "/api/v1/mini/transfers" + declarationPath))
+                .header("X-FAMS-Mini-Session", proxyMiniLogin(base + 11, "transfer-unavailable"))
+                .header("Idempotency-Key", key()).header("If-Match-Version", Long.toString(version))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(declaration)).build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, mini.statusCode(), mini.body());
+        assertEquals(JSON.readTree(recorded.body()), JSON.readTree(mini.body()));
+        refreshTransferReminders();
+        assertEquals("当前处理人休假", reassignmentSnapshot(row).path("unavailableReason").asText());
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_audit_event WHERE resource_type='TRANSFER'"
+                + " AND resource_id=? AND action='TRANSFER_PROCESSOR_UNAVAILABLE'", row.path("id").asLong()));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_todo WHERE business_type='TRANSFER'"
+                + " AND business_id=? AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1", row.path("id").asLong()));
         var response = transferCall(admin, "POST", path, body, identity, version);
         assertEquals(200, response.statusCode(), response.body());
         var changed = JSON.readTree(response.body());
+        refreshTransferReminders();
+        assertFalse(reassignmentSnapshot(changed).has("unavailableReason"));
+        assertEquals(1, count("SELECT COUNT(*) FROM fams_todo WHERE business_type='TRANSFER'"
+                + " AND business_id=? AND todo_type='REASSIGNMENT_REQUIRED' AND todo_status='CLOSED'", row.path("id").asLong()));
+        assertEquals(0, count("SELECT COUNT(*) FROM fams_todo WHERE business_type='TRANSFER'"
+                + " AND business_id=? AND todo_type='REASSIGNMENT_REQUIRED' AND active_guard=1", row.path("id").asLong()));
+        assertEquals(409, transferCall(warehouse, "POST", declarationPath, declaration, declarationKey, version).statusCode());
         assertEquals(Long.toString(base + 12), changed.path("processorAccountId").asText());
         assertEquals(1, changed.path("ownershipVersion").asLong());
         assertEquals(row.path("approvedVersion"), changed.path("approvedVersion"));
@@ -2179,6 +2522,11 @@ class HandoverHttpTest {
         assertEquals(409, transferCall(warehouse, "POST", "/" + changed.path("id").asText() + transferItemPath(changed, "deliver"), transferPhysical(changed, null, false), key(), changed.path("version").asLong()).statusCode());
         changed = transferAction(other, changed, transferItemPath(changed, "deliver"), transferPhysical(changed, null, false));
         assertEquals("DELIVERED", changed.path("items").get(0).path("itemStatus").asText());
+    }
+
+    private void refreshTransferReminders() {
+        new org.springframework.transaction.support.TransactionTemplate(transactions).executeWithoutResult(status ->
+                events.publishEvent(new WorkforceAvailabilityChanged()));
     }
 
     @Test
@@ -3957,6 +4305,8 @@ class HandoverHttpTest {
         row = transferAction(warehouse, row, transferItemPath(row, "deliver"), transferPhysical(row, null, false));
         String item = row.path("items").get(0).path("id").asText();
         var originalRecipient = login(base + 15);
+        long initialNotice = handoverNotice("TRANSFER_ITEM", Long.parseLong(item), base + 15, false);
+        assertTrue(hasHandoverNotice(originalRecipient, initialNotice));
         String originalReceipt = transferReceipt(originalRecipient, row, "RQ-ASSET-" + base);
         var beforeAsset = jdbc.queryForMap("SELECT * FROM fams_asset WHERE id=?", base + 50);
         var physical = jdbc.queryForMap("SELECT destination,delivery_evidence,delivered_at,receipt_deadline_at,source_snapshot_json,parameter_snapshot_json FROM fams_transfer_item WHERE id=?", item);
@@ -3973,6 +4323,12 @@ class HandoverHttpTest {
         String approvalKey = key();
         var approved = genericTargetCall(admin, "TRANSFER", "POST", "/" + change.path("id").asText() + "/decision", decision, approvalKey, 0L);
         assertEquals(200, approved.statusCode(), approved.body());
+        assertFalse(hasHandoverNotice(originalRecipient, initialNotice));
+        assertEquals(404, readHandoverNotice(originalRecipient, initialNotice));
+        long currentNotice = handoverNotice("TRANSFER_ITEM", Long.parseLong(item), base + 12, false);
+        assertTrue(hasHandoverNotice(other, currentNotice));
+        assertHandoverNoticeParent(other, currentNotice, Long.parseLong(item), row.path("id").asText());
+        assertFalse(hasHandoverNotice(originalRecipient, currentNotice));
         assertEquals(JSON.readTree(approved.body()), JSON.readTree(genericTargetCall(admin, "TRANSFER", "POST", "/" + change.path("id").asText() + "/decision", decision, approvalKey, 0L).body()));
         assertEquals(beforeAsset, jdbc.queryForMap("SELECT * FROM fams_asset WHERE id=?", base + 50));
         assertEquals(physical, jdbc.queryForMap("SELECT destination,delivery_evidence,delivered_at,receipt_deadline_at,source_snapshot_json,parameter_snapshot_json FROM fams_transfer_item WHERE id=?", item));
@@ -3985,11 +4341,64 @@ class HandoverHttpTest {
         String receive = transferReceipt(other, row, "RQ-ASSET-" + base);
         var received = transferCall(other, "POST", "/receipts/" + item + "/receive", receive, key(), row.path("version").asLong());
         assertEquals(200, received.statusCode(), received.body());
+        assertFalse(hasHandoverNotice(other, currentNotice));
+        assertEquals(404, readHandoverNotice(other, currentNotice));
         assertEquals(base + 12, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
         assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
         assertEquals(1, count("SELECT COUNT(*) FROM fams_transfer_event WHERE item_id=? AND event_type='TRANSFER_TARGET_CHANGED'", item));
         assertEquals(1, count("SELECT COUNT(*) FROM fams_transfer_event WHERE item_id=? AND event_type='TRANSFER_RECEIVE'", item));
         assertEquals(Long.toString(base + 15), jdbc.queryForObject("SELECT JSON_UNQUOTE(JSON_EXTRACT(source_snapshot_json,'$.target.employeeId')) FROM fams_item_target_change WHERE id=?", String.class, change.path("id").asText()));
+    }
+
+    private long handoverNotice(String businessType, long item, long account, boolean obsoleteDeadline) {
+        String source = "TRANSFER_ITEM".equals(businessType)
+                ? "fams_transfer_item WHERE id=?" : "fams_requisition_handover WHERE allocation_id=?";
+        String deadline = obsoleteDeadline ? "DATE_ADD(receipt_deadline_at, INTERVAL 1 DAY)" : "receipt_deadline_at";
+        jdbc.update("""
+                INSERT INTO fams_business_reminder (business_type,business_id,stage,deadline_at,notice_date,
+                    reminder_business_date,reminder_type,recipient_pool_type,recipient_account_id,created_at)
+                SELECT ?,?,'HANDOVER_RECEIPT',
+                """ + deadline + """
+                ,UTC_DATE()-INTERVAL 3 DAY,UTC_DATE(),'DUE_TODAY','EMPLOYEE',?,UTC_TIMESTAMP(3)
+                FROM
+                """ + source, businessType, item, account, item);
+        long notice = jdbc.queryForObject("""
+                SELECT MAX(id) FROM fams_business_reminder WHERE business_type=? AND business_id=?
+                    AND stage='HANDOVER_RECEIPT' AND recipient_account_id=?
+                    AND reminder_type='DUE_TODAY' AND notice_date=UTC_DATE()-INTERVAL 3 DAY
+                """, Long.class, businessType, item, account);
+        handoverNoticeFixtures.add(notice);
+        return notice;
+    }
+
+    private boolean hasHandoverNotice(Session session, long notice) throws Exception {
+        var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/messages?view=INBOX"))
+                .header("Cookie", session.cookie()).GET().build();
+        var response = http.send(request, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode(), response.body());
+        return JSON.readTree(response.body()).path("items").valueStream()
+                .anyMatch(message -> "REMINDER".equals(message.path("kind").asText()) && message.path("id").asLong() == notice);
+    }
+
+    private int readHandoverNotice(Session session, long notice) throws Exception {
+        var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+                + "/api/v1/messages/REMINDER/" + notice + "/read"))
+                .header("Cookie", session.cookie()).header("X-CSRF-Token", session.csrf())
+                .header("Idempotency-Key", key()).POST(HttpRequest.BodyPublishers.noBody()).build();
+        return http.send(request, HttpResponse.BodyHandlers.ofString()).statusCode();
+    }
+
+    private void assertHandoverNoticeParent(Session session, long notice, long item, String parent) throws Exception {
+        var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/v1/messages?view=INBOX"))
+                .header("Cookie", session.cookie()).GET().build();
+        var response = http.send(request, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode(), response.body());
+        var row = JSON.readTree(response.body()).path("items").valueStream()
+                .filter(message -> "REMINDER".equals(message.path("kind").asText()) && message.path("id").asLong() == notice)
+                .findFirst().orElseThrow();
+        assertEquals(Long.toString(item), row.path("businessId").asText());
+        assertTrue(row.path("parentBusinessId").isTextual());
+        assertEquals(parent, row.path("parentBusinessId").asText());
     }
 
     @Test
@@ -4235,6 +4644,11 @@ class HandoverHttpTest {
 
     private void verifyNativeTargetHandlers(JsonNode row, boolean transfer) throws Exception {
         String type = transfer ? "TRANSFER" : "REQUISITION", prefix = "target-native-" + base;
+        long item = row.path(transfer ? "items" : "allocations").get(0).path("id").asLong();
+        jdbc.update(transfer
+                ? "UPDATE fams_transfer_item SET receipt_deadline_at=UTC_TIMESTAMP(3)+INTERVAL 3 HOUR WHERE id=?"
+                : "UPDATE fams_requisition_handover SET receipt_deadline_at=UTC_TIMESTAMP(3)+INTERVAL 3 HOUR WHERE allocation_id=?",
+                item);
         for (var entry : java.util.Map.of("warehouse", base + 11, "admin", base + 13,
                 "recipient", base + 12, "original", base + (transfer ? 15 : 10)).entrySet()) {
             jdbc.update("INSERT INTO fams_mini_binding (account_id,identity_hash,created_at) VALUES (?,?,?)",
@@ -4253,10 +4667,25 @@ class HandoverHttpTest {
         builder.environment().put("FAMS_TEST_TARGET_ORGANIZATION", Long.toString(base));
         builder.environment().put("FAMS_TEST_TARGET_CODE_PREFIX", prefix);
         builder.redirectErrorStream(true);
-        var process = builder.start();
-        assertTrue(process.waitFor(60, TimeUnit.SECONDS));
-        String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-        assertEquals(0, process.exitValue(), output);
+        var reminders = application.getBean(com.fams.reminder.BusinessReminderService.class);
+        var scanner = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+        scanner.scheduleWithFixedDelay(reminders::scan, 0, 250, TimeUnit.MILLISECONDS);
+        try {
+            var process = builder.start();
+            if (!process.waitFor(60, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                throw new IllegalStateException("Native target change and messages did not complete");
+            }
+            String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            assertEquals(0, process.exitValue(), output);
+        } finally {
+            scanner.shutdown();
+            assertTrue(scanner.awaitTermination(10, TimeUnit.SECONDS));
+            handoverNoticeFixtures.addAll(jdbc.queryForList("""
+                    SELECT id FROM fams_business_reminder WHERE business_type=? AND business_id=?
+                        AND stage='HANDOVER_RECEIPT'
+                    """, Long.class, transfer ? "TRANSFER_ITEM" : "REQUISITION_ALLOCATION", item));
+        }
         assertEquals(base + 12, jdbc.queryForObject("SELECT responsible_employee_id FROM fams_asset WHERE id=?", Long.class, base + 50));
         assertEquals(0, count("SELECT COUNT(*) FROM fams_asset_business_lock WHERE asset_id=? AND released_at IS NULL", base + 50));
         assertEquals(1, count("SELECT COUNT(*) FROM fams_item_target_change WHERE business_type=? AND business_id=? AND change_status='APPROVED'", type, row.path("id").asText()));
