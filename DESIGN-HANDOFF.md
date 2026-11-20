@@ -702,3 +702,7 @@ D6-01B/03B 按用户裁定的开发阶段策略（公开仓库、main 暂不保�
 
 下一步：新候选完整产品门禁与推送后远端 required-ci（兼作 P24/P25 重点复验），随后收口 D6-24 小程序主动订阅与 D6-25 报表浏览器实跑，再统一外部联调（D6-09B/10B/12B/17C/24D）与 D6-26/27。任务明细仍以计划 §四.5 为唯一来源；独立复核、正式 QA 与生产验收未变。
 
+## 2026-11-21 后端结构批 JAVA-01（transfer 域类型化打样）
+
+用户指定的后端结构批（同 ARCH 先例），不进入 D6-01～D6-27 台账、不占用其状态。按用户三项裁决执行：深度=HTTP 响应+跨域 Port 类型化（内部行 Map、审计与幂等指纹 Map 保留）；分层=维持域垂直切片不做目录搬移；wire 逐字段等价、契约与 api-types 零改动。transfer 域 15 个端点响应改为 `TransferViews` 的 24 个 record，`AssetTransferPort` 三方法类型化（snake_case 存储形状不变），四个 Port 与 LossService 消费点同步；通用信封接口 `ProxyReceiptPort`/`TargetChangePort` 暂留 Map（三域多态，登记 JAVA-02 候选）。判据为冻结改前 `wire()` 算法的 17 条等价单测 + 产品门禁完整 Java 序列：82 步升级/运行时用例与阻塞质量全部 exit=0，726 项测试 0 失败，Checkstyle/SpotBugs 0，覆盖率 LINE 93.03%、BRANCH 75.70%。实跑曾抓出两处单测覆盖不到的真实回归（proxy 快照比较的 IntNode/LongNode 宽度敏感、MySQL EXISTS 返回 Long 而非 Boolean），均已修复并补判据。规格、证据与遗留见 [JAVA-01 批记录](docs/development/JAVA-01-transfer-typed-wire.md)及[门禁证据](docs/development/evidence/JAVA-01-java-gate.txt)。完整 99 阶段产品门禁、TS 四道、D6-02C 契约门禁全量与远端 CI 按惯例在固定候选统一重跑；各 D6 任务开放状态不变。
+

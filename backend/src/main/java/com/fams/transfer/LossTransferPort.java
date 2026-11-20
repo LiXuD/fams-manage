@@ -8,8 +8,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Map;
-
 /** Creates the formal transfer and adopts the exact active loss lock. */
 @Component
 @Profile("fams-product")
@@ -23,7 +21,7 @@ public class LossTransferPort {
         this.transfers = transfers;
     }
 
-    public Map<String, Object> create(Actor actor, long asset, long version,
+    public TransferViews.Detail create(Actor actor, long asset, long version,
             AssetTransferPort.Target target, String reason, Source source) {
         try {
             return transfers.createFromLoss(actor, asset, version, target, reason, source);

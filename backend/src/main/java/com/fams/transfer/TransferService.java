@@ -58,7 +58,7 @@ class TransferService {
         this.handover = handover;
     }
 
-    Map<String, Object> eligible(Actor actor, int page, int size) {
+    TransferViews.Page<TransferViews.EligibleAsset> eligible(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         String predicate = sourceScope(current, "a");
         String from =
@@ -79,18 +79,11 @@ class TransferService {
                         (page - 1) * size);
         long count =
                 Objects.requireNonNull(db.queryForObject("SELECT COUNT(*)" + from, Long.class));
-        return Map.of(
-                "items",
-                rows.stream().map(this::wire).toList(),
-                "total",
-                count,
-                "page",
-                page,
-                "pageSize",
-                size);
+        return new TransferViews.Page<>(
+                rows.stream().map(TransferViews::eligibleAsset).toList(), count, page, size);
     }
 
-    Map<String, Object> catalog(Actor actor, String kind, Long organization, int page, int size) {
+    TransferViews.CatalogPage catalog(Actor actor, String kind, Long organization, int page, int size) {
         var current = actors.revalidateLocked(actor);
         if ("personnel".equals(kind)) {
             role(current, Role.ASSET_ADMIN);
@@ -117,17 +110,14 @@ class TransferService {
                                     + requireOrganization(organization);
                     default -> throw new TransferFailure("TRANSFER_CATALOG_NOT_FOUND", 404);
                 };
-        return Map.of(
-                "items",
+        return new TransferViews.CatalogPage(
                 db
                         .queryForList(
                                 sql + " ORDER BY id LIMIT ? OFFSET ?", size, (page - 1) * size)
                         .stream()
-                        .map(this::wire)
+                        .map(row -> TransferViews.catalogChoice(kind, row))
                         .toList(),
-                "page",
                 page,
-                "pageSize",
                 size);
     }
 
@@ -138,7 +128,7 @@ class TransferService {
         return id;
     }
 
-    Map<String, Object> personnel(Actor actor, long employee) {
+    TransferViews.PersonnelHandover personnel(Actor actor, long employee) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.ASSET_ADMIN);
         var person =
@@ -198,24 +188,17 @@ class TransferService {
                         employee,
                         employee,
                         employee);
-        return Map.of(
-                "employee",
-                wire(person),
-                "assets",
-                rows.stream().map(this::wire).toList(),
-                "pendingReceipts",
-                receipts.stream().map(this::wire).toList(),
-                "processingTransfers",
-                processing.stream().map(this::wire).toList(),
-                "openLoans",
-                loans.stream().map(this::wire).toList(),
-                "openReturns",
-                returns.stream().map(this::wire).toList(),
-                "openRequisitions",
-                requisitions.stream().map(this::wire).toList());
+        return new TransferViews.PersonnelHandover(
+                TransferViews.employeeRef(person),
+                rows.stream().map(TransferViews::handoverAsset).toList(),
+                receipts.stream().map(TransferViews::pendingReceiptRef).toList(),
+                processing.stream().map(TransferViews::processingTransferRef).toList(),
+                loans.stream().map(TransferViews::openLoanRef).toList(),
+                returns.stream().map(TransferViews::openReturnRef).toList(),
+                requisitions.stream().map(TransferViews::openRequisitionRef).toList());
     }
 
-    Map<String, Object> list(Actor actor, int page, int size) {
+    TransferViews.Page<TransferViews.Summary> list(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         String predicate = current.globalApplicant() ? "1=1" : "creator_account_id=" + current.id();
         long total =
@@ -223,8 +206,7 @@ class TransferService {
                         db.queryForObject(
                                 "SELECT COUNT(*) FROM fams_transfer WHERE " + predicate,
                                 Long.class));
-        return Map.of(
-                "items",
+        return new TransferViews.Page<>(
                 db
                         .queryForList(
                                 "SELECT * FROM fams_transfer WHERE "
@@ -233,27 +215,24 @@ class TransferService {
                                 size,
                                 (page - 1) * size)
                         .stream()
-                        .map(this::wire)
+                        .map(TransferViews::summary)
                         .toList(),
-                "total",
                 total,
-                "page",
                 page,
-                "pageSize",
                 size);
     }
 
-    Map<String, Object> get(Actor actor, long id) {
+    TransferViews.Detail get(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         var request = request(id);
         visible(current, request);
         return detail(request);
     }
 
-    Map<String, Object> create(Actor actor, String key, TransferController.Draft input) {
+    TransferViews.Detail create(Actor actor, String key, TransferController.Draft input) {
         var current = actors.revalidateLocked(actor);
         String hash = digest("create", input);
-        var replay = replay(current, "create", key, hash);
+        var replay = replay(current, "create", key, hash, TransferViews.Detail.class);
         if (replay != null) {
             return replay;
         }
@@ -261,7 +240,7 @@ class TransferService {
         return finish(current, "create", key, hash, detail(request(id)));
     }
 
-    Map<String, Object> createFromLoss(Actor actor, long asset, long version,
+    TransferViews.Detail createFromLoss(Actor actor, long asset, long version,
             AssetTransferPort.Target target, String reason, LossTransferPort.Source loss) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);
@@ -307,7 +286,7 @@ class TransferService {
                     one(
                                     "SELECT snapshot_json FROM fams_business_parameter_version"
                                             + " WHERE id=?",
-                                    source.get("parameter_version_id"))
+                                    source.parameterVersionId())
                             .get("snapshot_json").toString();
             if (loss != null) {
                 var snapshot = (tools.jackson.databind.node.ObjectNode) json.readTree(parameter);
@@ -337,12 +316,12 @@ class TransferService {
         return id;
     }
 
-    Map<String, Object> action(Actor actor, long id, long version, String key, String action) {
+    TransferViews.Detail action(Actor actor, long id, long version, String key, String action) {
         var current = actors.revalidateLocked(actor);
         var request = request(id);
         visible(current, request);
         String hash = digest(action + ":" + id + ":" + version, Map.of());
-        var replay = replay(current, action, key, hash);
+        var replay = replay(current, action, key, hash, TransferViews.Detail.class);
         if (replay != null) {
             return replay;
         }
@@ -446,13 +425,13 @@ class TransferService {
         }
     }
 
-    Map<String, Object> decide(
+    TransferViews.Detail decide(
             Actor actor, long id, long version, String key, TransferController.Decision input) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.ASSET_ADMIN);
         var request = request(id);
         String hash = digest("decision:" + id + ":" + version, input);
-        var replay = replay(current, "decision", key, hash);
+        var replay = replay(current, "decision", key, hash, TransferViews.Detail.class);
         if (replay != null) {
             return replay;
         }
@@ -488,7 +467,7 @@ class TransferService {
         return finish(current, "decision", key, hash, detail(request(id)));
     }
 
-    Map<String, Object> physical(
+    TransferViews.Detail physical(
             Actor actor,
             long id,
             long itemId,
@@ -501,7 +480,7 @@ class TransferService {
         var request = request(id);
         processor(current, request);
         String hash = digest(action + ":" + id + ":" + itemId + ":" + version, input);
-        var replay = replay(current, action, key, hash);
+        var replay = replay(current, action, key, hash, TransferViews.Detail.class);
         if (replay != null) {
             return replay;
         }
@@ -545,7 +524,7 @@ class TransferService {
                     throw new TransferFailure("TRANSFER_ACTUAL_RECEIVER_REQUIRED", 409);
                 }
                 var target = target(item);
-                if (!Objects.equals(original.get("storage_warehouse_id"), target.warehouseId())
+                if (!Objects.equals(original.storageWarehouseId(), target.warehouseId())
                         && (input.actualReceiver() == null
                                 || input.actualReceiver().isBlank()
                                 || input.receivedAt() == null
@@ -594,7 +573,7 @@ class TransferService {
         return finish(current, action, key, hash, detail(request(id)));
     }
 
-    Map<String, Object> pending(Actor actor, int page, int size, Long itemId) {
+    TransferViews.Page<TransferViews.PendingReceipt> pending(Actor actor, int page, int size, Long itemId) {
         var current = actors.revalidateLocked(actor);
         String scope = " WHERE i.receiver_employee_id=? AND i.item_status='DELIVERED' AND (? IS NULL OR i.id=?)";
         var rows =
@@ -615,18 +594,11 @@ class TransferService {
                                 "SELECT COUNT(*) FROM fams_transfer_item i" + scope,
                                 Long.class,
                                 current.employeeId(), itemId, itemId));
-        return Map.of(
-                "items",
-                rows.stream().map(this::wire).toList(),
-                "total",
-                total,
-                "page",
-                page,
-                "pageSize",
-                size);
+        return new TransferViews.Page<>(
+                rows.stream().map(TransferViews::pendingReceipt).toList(), total, page, size);
     }
 
-    Map<String, Object> grant(Actor actor, long itemId) {
+    TransferViews.Grant grant(Actor actor, long itemId) {
         var current = actors.revalidateLocked(actor);
         var located = one("SELECT request_id FROM fams_transfer_item WHERE id=?", itemId);
         var request = request(number(located, "request_id"));
@@ -650,20 +622,15 @@ class TransferService {
                 sha(token),
                 now(),
                 Timestamp.from(clock.instant().plusSeconds(300)));
-        return Map.of(
-                "grant",
+        return new TransferViews.Grant(
                 token,
-                "itemId",
                 Long.toString(itemId),
-                "itemVersion",
-                item.get("version"),
-                "requestVersion",
-                request.get("version"),
-                "expiresAt",
+                number(item, "version"),
+                number(request, "version"),
                 clock.instant().plusSeconds(300).toString());
     }
 
-    Map<String, Object> receipt(
+    TransferViews.Item receipt(
             Actor actor,
             long itemId,
             long version,
@@ -677,7 +644,7 @@ class TransferService {
         var item = item(itemId);
         receiver(current, item);
         String hash = digest(action + ":" + itemId + ":" + version, input);
-        var replay = replay(current, action, key, hash);
+        var replay = replay(current, action, key, hash, TransferViews.Item.class);
         if (replay != null) {
             return replay;
         }
@@ -732,10 +699,10 @@ class TransferService {
                         "reason",
                         input.reason() == null ? "" : input.reason()));
         aggregate(id);
-        return finish(current, action, key, hash, wire(item(itemId)));
+        return finish(current, action, key, hash, TransferViews.item(json, item(itemId)));
     }
 
-    Map<String, Object> targetChangeContext(Actor actor, long id, long itemId) {
+    TransferViews.TargetChangeContext targetChangeContext(Actor actor, long id, long itemId) {
         var current = actors.revalidateLocked(actor);
         var request = request(id);
         if (!current.has(Role.ASSET_ADMIN)) {
@@ -751,28 +718,23 @@ class TransferService {
         var lock = one("SELECT lock_version FROM fams_asset_business_lock WHERE asset_id=?"
                 + " AND business_type='TRANSFER' AND business_id=? AND business_item_id=?"
                 + " AND released_at IS NULL FOR UPDATE", item.get("asset_id"), id, itemId);
-        var physical = new LinkedHashMap<String, Object>();
-        for (String field : List.of("destination", "delivery_evidence", "delivered_at", "receipt_deadline_at")) {
-            physical.put(field, item.get(field));
-        }
-        var result = new LinkedHashMap<String, Object>();
-        result.put("businessType", "TRANSFER");
-        result.put("businessId", Long.toString(id));
-        result.put("itemId", Long.toString(itemId));
-        result.put("version", number(request, "version"));
-        result.put("approvedVersion", number(request, "approved_version"));
-        result.put("itemVersion", number(item, "version"));
-        result.put("itemStatus", item.get("item_status"));
-        result.put("assetId", item.get("asset_id").toString());
-        result.put("assetVersion", number(item, "asset_version"));
-        result.put("assetCode", source.get("asset_code"));
-        result.put("processorAccountId", request.get("processor_account_id").toString());
-        result.put("ownershipVersion", number(request, "ownership_version"));
-        result.put("lockVersion", number(lock, "lock_version"));
-        result.put("target", targetChangeTarget(target(item)));
-        result.put("source", wire(source));
-        result.put("physical", wire(physical));
-        return result;
+        return new TransferViews.TargetChangeContext(
+                "TRANSFER",
+                Long.toString(id),
+                Long.toString(itemId),
+                number(request, "version"),
+                number(request, "approved_version"),
+                number(item, "version"),
+                (String) item.get("item_status"),
+                item.get("asset_id").toString(),
+                number(item, "asset_version"),
+                source.assetCode(),
+                request.get("processor_account_id").toString(),
+                number(request, "ownership_version"),
+                number(lock, "lock_version"),
+                TransferViews.targetWire(target(item)),
+                TransferViews.sourceView(source),
+                TransferViews.physical(item));
     }
 
     void validateChangedTarget(long id, long itemId, AssetTransferPort.Target target) {
@@ -813,19 +775,11 @@ class TransferService {
         }
     }
 
-    static Map<String, Object> targetChangeTarget(AssetTransferPort.Target target) {
-        var result = new LinkedHashMap<String, Object>();
-        result.put("owningOrganizationId", target.owningOrganizationId() == null ? null : target.owningOrganizationId().toString());
-        result.put("custodyType", target.custodyType());
-        result.put("usingOrganizationId", target.usingOrganizationId() == null ? null : target.usingOrganizationId().toString());
-        result.put("employeeId", target.employeeId() == null ? null : target.employeeId().toString());
-        result.put("warehouseId", target.warehouseId() == null ? null : target.warehouseId().toString());
-        result.put("locationId", Long.toString(target.locationId()));
-        result.put("referenceVersions", target.referenceVersions());
-        return result;
+    static TransferViews.TargetWire targetChangeTarget(AssetTransferPort.Target target) {
+        return TransferViews.targetWire(target);
     }
 
-    Map<String, Object> proxySnapshot(Actor actor, long id, long itemId, boolean executing) {
+    TransferViews.ProxySnapshot proxySnapshot(Actor actor, long id, long itemId, boolean executing) {
         var current = actors.revalidateLocked(actor);
         var request = request(id);
         if (executing) {
@@ -849,31 +803,32 @@ class TransferService {
         var lock = one("SELECT lock_version FROM fams_asset_business_lock WHERE asset_id=?"
                 + " AND business_type='TRANSFER' AND business_id=? AND business_item_id=?"
                 + " AND released_at IS NULL FOR UPDATE", item.get("asset_id"), id, itemId);
-        var result = new LinkedHashMap<String, Object>();
-        result.put("businessType", "TRANSFER");
-        result.put("businessId", Long.toString(id));
-        result.put("itemId", Long.toString(itemId));
-        result.put("requestNo", "TRANSFER-" + id);
-        result.put("version", number(request, "version"));
-        result.put("approvedVersion", number(request, "approved_version"));
-        result.put("itemVersion", number(item, "version"));
-        result.put("assetId", item.get("asset_id").toString());
-        result.put("assetVersion", number(item, "asset_version"));
-        result.put("assetCode", source.get("asset_code"));
-        result.put("targetEmployeeId", item.get("receiver_employee_id").toString());
-        result.put("custodyType", target.get("custody_type"));
-        result.put("processorAccountId", request.get("processor_account_id").toString());
-        result.put("ownershipVersion", number(request, "ownership_version"));
-        result.put("lockVersion", number(lock, "lock_version"));
-        result.put("sourceSnapshot", json.readTree(item.get("source_snapshot_json").toString()));
-        result.put("targetSnapshot", json.readTree(item.get("target_snapshot_json").toString()));
-        result.put("parameterSnapshot", json.readTree(item.get("parameter_snapshot_json").toString()));
-        return result;
+        return new TransferViews.ProxySnapshot(
+                "TRANSFER",
+                Long.toString(id),
+                Long.toString(itemId),
+                "TRANSFER-" + id,
+                number(request, "version"),
+                number(request, "approved_version"),
+                number(item, "version"),
+                item.get("asset_id").toString(),
+                number(item, "asset_version"),
+                source.assetCode(),
+                item.get("receiver_employee_id").toString(),
+                target.custodyType(),
+                request.get("processor_account_id").toString(),
+                number(request, "ownership_version"),
+                number(lock, "lock_version"),
+                json.readTree(item.get("source_snapshot_json").toString()),
+                json.readTree(item.get("target_snapshot_json").toString()),
+                json.readTree(item.get("parameter_snapshot_json").toString()));
     }
 
-    Map<String, Object> proxyReceipt(Actor actor, long id, long itemId,
+    TransferViews.ProxyReceiptResult proxyReceipt(Actor actor, long id, long itemId,
             Map<String, Object> expected, String observedCode, long confirmation) {
         var snapshot = proxySnapshot(actor, id, itemId, true);
+        // Text round-trip normalizes integral node widths: the expected map arrives from
+        // HTTP JSON (Integer) while the typed snapshot carries long components.
         if (!json.readTree(json.writeValueAsString(snapshot)).equals(
                 json.readTree(json.writeValueAsString(expected)))) {
             throw new TransferFailure("PROXY_RECEIPT_SCOPE_CHANGED", 409);
@@ -887,9 +842,9 @@ class TransferService {
         event(actor, current, id, itemId, "TRANSFER_PROXY_RECEIVED",
                 Map.of("confirmationId", Long.toString(confirmation), "observedCode", observed));
         aggregate(id);
-        return Map.of("confirmationId", Long.toString(confirmation), "requestId", Long.toString(id),
-                "itemId", Long.toString(itemId), "result", "RECEIVED", "assetCode", observed,
-                "targetEmployeeId", item.get("receiver_employee_id").toString());
+        return new TransferViews.ProxyReceiptResult(
+                Long.toString(confirmation), Long.toString(id), Long.toString(itemId),
+                "RECEIVED", observed, item.get("receiver_employee_id").toString());
     }
 
     static Instant receiptDeadline(Instant delivery, String timezone, long days) {
@@ -952,13 +907,11 @@ class TransferService {
         }
     }
 
-    private Map<String, Object> detail(Map<String, Object> request) {
+    private TransferViews.Detail detail(Map<String, Object> request) {
         long id = number(request, "id");
-        var result = new LinkedHashMap<>(wire(request));
-        var items = items(id);
-        result.put("items", items.stream().map(this::wire).toList());
-        result.put(
-                "events",
+        var rows = items(id);
+        var items = rows.stream().map(row -> TransferViews.item(json, row)).toList();
+        var events =
                 db
                         .queryForList(
                                 "SELECT"
@@ -966,47 +919,26 @@ class TransferService {
                                     + " FROM fams_transfer_event WHERE request_id=? ORDER BY id",
                                 id)
                         .stream()
-                        .map(this::wire)
-                        .toList());
-        result.put("totalQuantity", items.size());
-        result.put(
-                "completedQuantity",
-                items.stream().filter(i -> "COMPLETED".equals(i.get("item_status"))).count());
-        result.put(
-                "cancelledQuantity",
-                items.stream().filter(i -> "CANCELLED".equals(i.get("item_status"))).count());
-        result.put(
-                "pendingQuantity",
+                        .map(row -> TransferViews.event(json, row))
+                        .toList();
+        long sourceGroups =
                 items.stream()
-                        .filter(
-                                i ->
-                                        !List.of("COMPLETED", "CANCELLED")
-                                                .contains(i.get("item_status")))
-                        .count());
-        result.put(
-                "sourceGroups",
-                items.stream()
-                        .map(
-                                i ->
-                                        json.readTree(i.get("source_snapshot_json").toString())
-                                                .path("current_location_id")
-                                                .asText())
+                        .map(i -> i.sourceSnapshot().path("current_location_id").asText())
                         .distinct()
-                        .count());
-        result.put(
-                "targetGroups",
-                items.stream()
+                        .count();
+        long targetGroups =
+                rows.stream()
                         .map(i -> target(i).warehouseId() + ":" + target(i).locationId())
                         .distinct()
-                        .count());
-        return result;
+                        .count();
+        return TransferViews.detail(request, items, events, sourceGroups, targetGroups);
     }
 
-    private Map<String, Object> source(Map<String, Object> item) {
+    private AssetTransferPort.Snapshot source(Map<String, Object> item) {
         return assets.snapshot(number(item, "asset_id"), number(item, "asset_version"));
     }
 
-    Map<String, Object> reassignment(Actor actor, long id) {
+    TransferViews.ReassignmentSnapshot reassignment(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.ASSET_ADMIN);
         var row = request(id);
@@ -1020,22 +952,23 @@ class TransferService {
                     + " e.status='ACTIVE' AND o.status='ACTIVE' AND"
                     + " r.role_code='WAREHOUSE_OPERATOR' AND a.id<>? ORDER BY a.id",
                 row.get("processor_account_id"));
-        var result = new LinkedHashMap<String, Object>(Map.of("id", Long.toString(id), "version", row.get("version"),
-                "ownershipVersion", row.get("ownership_version"),
-                "processorAccountId", row.get("processor_account_id").toString(),
-                "items", checks.stream().map(this::wire).toList(),
-                "operators", operators.stream().map(this::wire).toList()));
         var declared = unavailabilityReason(id, number(row, "ownership_version"), number(row, "processor_account_id"));
-        if (declared != null) { result.put("unavailableReason", declared); }
-        return result;
+        return new TransferViews.ReassignmentSnapshot(
+                Long.toString(id),
+                number(row, "version"),
+                number(row, "ownership_version"),
+                row.get("processor_account_id").toString(),
+                checks.stream().map(check -> TransferViews.item(json, check)).toList(),
+                operators.stream().map(TransferViews::operator).toList(),
+                declared);
     }
 
-    Map<String, Object> reassign(Actor actor, long id, long version, String key,
+    TransferViews.Detail reassign(Actor actor, long id, long version, String key,
             TransferController.Reassignment input) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.ASSET_ADMIN);
         String hash = digest("reassign:" + id + ":" + version, input);
-        var previous = replay(current, "reassign", key, hash);
+        var previous = replay(current, "reassign", key, hash, TransferViews.Detail.class);
         if (previous != null) { return previous; }
         // Lock the target account before the business row, as ordinary execution does.
         var accounts = db.queryForList(
@@ -1097,12 +1030,12 @@ class TransferService {
         detail.put("reason", input.reason());
         detail.put("evidence", input.evidence());
         detail.put("unsynchronizedResultsChecked", true);
-        detail.put("items", checks.stream().map(this::wire).toList());
+        detail.put("items", checks.stream().map(check -> TransferViews.item(json, check)).toList());
         event(actor, current, id, null, "CONTROLLED_REASSIGNMENT", detail);
         return finish(current, "reassign", key, hash, detail(request(id)));
     }
 
-    Map<String, Object> declareUnavailable(Actor actor, long id, long version, String key,
+    TransferViews.UnavailableReceipt declareUnavailable(Actor actor, long id, long version, String key,
             TransferController.Unavailability input) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);
@@ -1112,7 +1045,7 @@ class TransferService {
         String operation = "declareUnavailable";
         String hash = digest(operation + ":" + id + ":" + version, Map.of(
                 "ownershipVersion", input.ownershipVersion(), "reason", reason));
-        var previous = replay(current, operation, key, hash);
+        var previous = replay(current, operation, key, hash, TransferViews.UnavailableReceipt.class);
         if (previous != null) { return previous; }
         version(row, version);
         executable(row);
@@ -1143,7 +1076,8 @@ class TransferService {
                 VALUES ('ASSET_ADMIN','TRANSFER',?,'REASSIGNMENT_REQUIRED','OPEN',?)
                 ON DUPLICATE KEY UPDATE id=fams_todo.id
                 """, id, now());
-        return finish(current, operation, key, hash, Map.of("id", Long.toString(id), "version", version, "recorded", true));
+        return finish(current, operation, key, hash,
+                new TransferViews.UnavailableReceipt(Long.toString(id), version, true));
     }
 
     private String unavailabilityReason(long id, long ownershipVersion, long processor) {
@@ -1214,16 +1148,15 @@ class TransferService {
         }
     }
 
-    private boolean receiptRequired(Map<String, Object> source, Map<String, Object> target) {
-        return !"STORAGE".equals(source.get("custody_type"))
-                && List.of(
-                                "owning_organization_id",
-                                "using_organization_id",
-                                "custody_type",
-                                "responsible_employee_id",
-                                "department_responsible_employee_id")
-                        .stream()
-                        .anyMatch(k -> !Objects.equals(source.get(k), target.get(k)));
+    private boolean receiptRequired(AssetTransferPort.Snapshot source, AssetTransferPort.Custody target) {
+        return !"STORAGE".equals(source.custodyType())
+                && (!Objects.equals(source.owningOrganizationId(), target.owningOrganizationId())
+                        || !Objects.equals(source.usingOrganizationId(), target.usingOrganizationId())
+                        || !Objects.equals(source.custodyType(), target.custodyType())
+                        || !Objects.equals(source.responsibleEmployeeId(), target.responsibleEmployeeId())
+                        || !Objects.equals(
+                                source.departmentResponsibleEmployeeId(),
+                                target.departmentResponsibleEmployeeId()));
     }
 
     private boolean receiptRequired(Map<String, Object> item) {
@@ -1247,18 +1180,18 @@ class TransferService {
                         : "");
     }
 
-    private void sourceAllowed(Current current, Map<String, Object> source) {
+    private void sourceAllowed(Current current, AssetTransferPort.Snapshot source) {
         if (current.globalApplicant()) {
             return;
         }
-        Object owner = source.get("responsible_employee_id");
+        Long owner = source.responsibleEmployeeId();
         if (owner == null) {
-            owner = source.get("department_responsible_employee_id");
+            owner = source.departmentResponsibleEmployeeId();
         }
-        if (!(owner instanceof Number value && value.longValue() == current.employeeId())
+        if (!(owner != null && owner.longValue() == current.employeeId())
                 && !(current.has(Role.DEPARTMENT_ASSET_MANAGER)
-                        && source.get("using_organization_id") instanceof Number org
-                        && org.longValue() == current.organizationId())) {
+                        && source.usingOrganizationId() != null
+                        && source.usingOrganizationId().longValue() == current.organizationId())) {
             throw new TransferFailure("TRANSFER_SOURCE_FORBIDDEN", 403);
         }
     }
@@ -1421,7 +1354,8 @@ class TransferService {
                 json.writeValueAsString(detail));
     }
 
-    private Map<String, Object> replay(Current current, String action, String key, String hash) {
+    private <T extends TransferViews.Reply> T replay(
+            Current current, String action, String key, String hash, Class<T> type) {
         var rows =
                 db.queryForList(
                         "SELECT * FROM fams_idempotency_record WHERE actor_account_id=? AND"
@@ -1440,13 +1374,11 @@ class TransferService {
         if (!hash.equals(row.get("payload_sha256"))) {
             throw new TransferFailure("TRANSFER_IDEMPOTENCY_CONFLICT", 409);
         }
-        return json.readValue(
-                row.get("response_body_json").toString(),
-                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        return json.readValue(row.get("response_body_json").toString(), type);
     }
 
-    private Map<String, Object> finish(
-            Current current, String action, String key, String hash, Map<String, Object> result) {
+    private <T extends TransferViews.Reply> T finish(
+            Current current, String action, String key, String hash, T result) {
         db.update(
                 "INSERT INTO fams_idempotency_record"
                     + " (actor_account_id,operation_id,idempotency_key,payload_sha256,result_status,http_status,response_body_json,resource_type,resource_id,resource_version,created_at,completed_at,expires_at)"
@@ -1456,9 +1388,9 @@ class TransferService {
                 key,
                 hash,
                 json.writeValueAsString(result),
-                result.containsKey("requestId") ? "TRANSFER_ITEM" : "TRANSFER",
-                result.get("id"),
-                result.get("version"),
+                result instanceof TransferViews.Item ? "TRANSFER_ITEM" : "TRANSFER",
+                result.id(),
+                result.version(),
                 now(),
                 now(),
                 Timestamp.from(clock.instant().plusSeconds(86400)));
@@ -1478,49 +1410,5 @@ class TransferService {
         } catch (NoSuchAlgorithmException error) {
             throw new IllegalStateException(error);
         }
-    }
-
-    private Map<String, Object> wire(Map<String, Object> row) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        row.forEach(
-                (key, value) -> {
-                    if ("parameter_snapshot_json".equals(key)) {
-                        return;
-                    }
-                    String field = key.endsWith("_json") ? key.substring(0, key.length() - 5) : key;
-                    String[] words = field.split("_");
-                    StringBuilder name = new StringBuilder(words[0]);
-                    for (int i = 1; i < words.length; i++) {
-                        name.append(Character.toUpperCase(words[i].charAt(0)))
-                                .append(words[i].substring(1));
-                    }
-                    Object output = value;
-                    if (value != null && key.endsWith("_json")) {
-                        output = "target_snapshot_json".equals(key)
-                                ? wireTarget(value.toString()) : json.readTree(value.toString());
-                    } else if (value instanceof Timestamp
-                            || value instanceof java.time.LocalDateTime) {
-                        output = instant(value).toString();
-                    } else if (value instanceof Number
-                            && (key.equals("id") || key.endsWith("_id") || key.endsWith("_by"))) {
-                        output = value.toString();
-                    }
-                    result.put(name.toString(), output);
-                });
-        return result;
-    }
-
-    private tools.jackson.databind.JsonNode wireTarget(String value) {
-        var node = json.readTree(value);
-        if (node instanceof tools.jackson.databind.node.ObjectNode target) {
-            for (String field : List.of("owningOrganizationId", "usingOrganizationId",
-                    "employeeId", "warehouseId", "locationId")) {
-                var identifier = target.get(field);
-                if (identifier != null && identifier.isIntegralNumber()) {
-                    target.put(field, identifier.asText());
-                }
-            }
-        }
-        return node;
     }
 }

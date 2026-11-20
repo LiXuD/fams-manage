@@ -1318,7 +1318,7 @@ public class LossService {
                 facts.observedSerialNumber(), facts.locationId(), facts.locationVersion(), report, current.id(), now());
         var linked = transfers.create(actor, assetId, next, input.target(), input.reason(),
                 new LossTransferPort.Source(report, id, recovery.lockVersion()));
-        var snapshot = Map.of("execution", input, "transferId", linked.get("id"), "destination", "TRANSFER");
+        var snapshot = Map.of("execution", input, "transferId", linked.id(), "destination", "TRANSFER");
         if (closed) {
             db.update("UPDATE fams_loss_recovery SET recovery_status='COMPLETED',execution_snapshot_json=?,"
                     + "version=version+1,updated_at=? WHERE id=?", json.writeValueAsString(snapshot), now(), id);

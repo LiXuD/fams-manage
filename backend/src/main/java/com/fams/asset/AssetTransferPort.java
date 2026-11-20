@@ -1,5 +1,7 @@
 package com.fams.asset;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -10,7 +12,6 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -32,6 +33,62 @@ public class AssetTransferPort {
         }
     }
 
+    /**
+     * Locked asset facts shared with callers. Snake_case JSON names are persisted verbatim
+     * into transfer source snapshots and asset event details.
+     */
+    public record Snapshot(
+            @JsonProperty("id") Long id,
+            @JsonProperty("version") long version,
+            @JsonProperty("asset_code") String assetCode,
+            @JsonProperty("name") String name,
+            @JsonProperty("owning_organization_id") Long owningOrganizationId,
+            @JsonProperty("custody_type") String custodyType,
+            @JsonProperty("using_organization_id") Long usingOrganizationId,
+            @JsonProperty("responsible_employee_id") Long responsibleEmployeeId,
+            @JsonProperty("department_responsible_employee_id") Long departmentResponsibleEmployeeId,
+            @JsonProperty("storage_warehouse_id") Long storageWarehouseId,
+            @JsonProperty("current_location_id") Long currentLocationId,
+            @JsonProperty("lifecycle_status") String lifecycleStatus,
+            @JsonProperty("exception_status") String exceptionStatus,
+            @JsonProperty("card_stage") String cardStage,
+            @JsonProperty("parameter_version_id") Long parameterVersionId) {
+    }
+
+    /** Validated custody change; snake_case names match the persisted after-snapshot shape. */
+    public record Custody(
+            @JsonProperty("owning_organization_id") Long owningOrganizationId,
+            @JsonProperty("custody_type") String custodyType,
+            @JsonProperty("using_organization_id") Long usingOrganizationId,
+            @JsonProperty("responsible_employee_id") Long responsibleEmployeeId,
+            @JsonProperty("department_responsible_employee_id") Long departmentResponsibleEmployeeId,
+            @JsonProperty("storage_warehouse_id") Long storageWarehouseId,
+            @JsonProperty("current_location_id") long currentLocationId) {
+    }
+
+    /** Custody plus the written asset version, as stored in transfer after-snapshots. */
+    public record After(
+            @JsonProperty("owning_organization_id") Long owningOrganizationId,
+            @JsonProperty("custody_type") String custodyType,
+            @JsonProperty("using_organization_id") Long usingOrganizationId,
+            @JsonProperty("responsible_employee_id") Long responsibleEmployeeId,
+            @JsonProperty("department_responsible_employee_id") Long departmentResponsibleEmployeeId,
+            @JsonProperty("storage_warehouse_id") Long storageWarehouseId,
+            @JsonProperty("current_location_id") long currentLocationId,
+            @JsonProperty("version") long version) {
+        public static After of(Custody custody, long version) {
+            return new After(
+                    custody.owningOrganizationId(),
+                    custody.custodyType(),
+                    custody.usingOrganizationId(),
+                    custody.responsibleEmployeeId(),
+                    custody.departmentResponsibleEmployeeId(),
+                    custody.storageWarehouseId(),
+                    custody.currentLocationId(),
+                    version);
+        }
+    }
+
     private final JdbcTemplate db;
     private final AssetMapper mapper;
     private final ObjectMapper json;
@@ -42,7 +99,7 @@ public class AssetTransferPort {
         this.json = json;
     }
 
-    public Map<String, Object> snapshot(long id, long version) {
+    public Snapshot snapshot(long id, long version) {
         var rows =
                 db.queryForList(
                         "SELECT id,version,asset_code,name,owning_organization_id,custody_type,"
@@ -61,11 +118,30 @@ public class AssetTransferPort {
                         || "IN_USE".equals(row.get("lifecycle_status")))) {
             throw new AssetHandoverPort.Failure("TRANSFER_SOURCE_CHANGED", 409);
         }
-        return row;
+        return new Snapshot(
+                ((Number) row.get("id")).longValue(),
+                ((Number) row.get("version")).longValue(),
+                (String) row.get("asset_code"),
+                (String) row.get("name"),
+                nullableId(row.get("owning_organization_id")),
+                (String) row.get("custody_type"),
+                nullableId(row.get("using_organization_id")),
+                nullableId(row.get("responsible_employee_id")),
+                nullableId(row.get("department_responsible_employee_id")),
+                nullableId(row.get("storage_warehouse_id")),
+                ((Number) row.get("current_location_id")).longValue(),
+                (String) row.get("lifecycle_status"),
+                (String) row.get("exception_status"),
+                (String) row.get("card_stage"),
+                ((Number) row.get("parameter_version_id")).longValue());
     }
 
-    public Map<String, Object> validateTarget(Map<String, Object> source, Target target) {
-        boolean stock = "IN_STOCK".equals(source.get("lifecycle_status"));
+    private static Long nullableId(Object value) {
+        return value == null ? null : ((Number) value).longValue();
+    }
+
+    public Custody validateTarget(Snapshot source, Target target) {
+        boolean stock = "IN_STOCK".equals(source.lifecycleStatus());
         if (target.referenceVersions() == null
                 || stock != "STORAGE".equals(target.custodyType())
                 || !(stock
@@ -118,24 +194,23 @@ public class AssetTransferPort {
                 throw new AssetHandoverPort.Failure("TRANSFER_SHARED_RECEIVER_INVALID", 409);
             }
         }
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("owning_organization_id", target.owningOrganizationId());
-        result.put("custody_type", target.custodyType());
-        result.put("using_organization_id", target.usingOrganizationId());
-        result.put(
-                "responsible_employee_id",
-                "PERSONAL".equals(target.custodyType()) ? target.employeeId() : null);
-        result.put(
-                "department_responsible_employee_id",
-                "SHARED".equals(target.custodyType()) ? target.employeeId() : null);
-        result.put("storage_warehouse_id", target.warehouseId());
-        result.put("current_location_id", target.locationId());
+        var result = new Custody(
+                target.owningOrganizationId(),
+                target.custodyType(),
+                target.usingOrganizationId(),
+                "PERSONAL".equals(target.custodyType()) ? target.employeeId() : null,
+                "SHARED".equals(target.custodyType()) ? target.employeeId() : null,
+                target.warehouseId(),
+                target.locationId());
         boolean changed =
-                result.entrySet().stream()
-                        .anyMatch(
-                                entry ->
-                                        !Objects.equals(
-                                                source.get(entry.getKey()), entry.getValue()));
+                !Objects.equals(source.owningOrganizationId(), result.owningOrganizationId())
+                        || !Objects.equals(source.custodyType(), result.custodyType())
+                        || !Objects.equals(source.usingOrganizationId(), result.usingOrganizationId())
+                        || !Objects.equals(source.responsibleEmployeeId(), result.responsibleEmployeeId())
+                        || !Objects.equals(
+                                source.departmentResponsibleEmployeeId(), result.departmentResponsibleEmployeeId())
+                        || !Objects.equals(source.storageWarehouseId(), result.storageWarehouseId())
+                        || !Objects.equals(source.currentLocationId(), result.currentLocationId());
         if (!changed) {
             throw new AssetHandoverPort.Failure("TRANSFER_NO_CHANGE", 400);
         }
@@ -154,7 +229,7 @@ public class AssetTransferPort {
         return rows.getFirst();
     }
 
-    public Map<String, Object> complete(
+    public After complete(
             long id, long version, Target target, long actor, long request, Instant time) {
         var before = snapshot(id, version);
         var after = validateTarget(before, target);
@@ -164,13 +239,13 @@ public class AssetTransferPort {
                             + " owning_organization_id=?,custody_type=?,using_organization_id=?,"
                             + "responsible_employee_id=?,department_responsible_employee_id=?,storage_warehouse_id=?,current_location_id=?,version=version+1,updated_by=?,updated_at=?"
                             + " WHERE id=? AND version=?",
-                        after.get("owning_organization_id"),
-                        after.get("custody_type"),
-                        after.get("using_organization_id"),
-                        after.get("responsible_employee_id"),
-                        after.get("department_responsible_employee_id"),
-                        after.get("storage_warehouse_id"),
-                        after.get("current_location_id"),
+                        after.owningOrganizationId(),
+                        after.custodyType(),
+                        after.usingOrganizationId(),
+                        after.responsibleEmployeeId(),
+                        after.departmentResponsibleEmployeeId(),
+                        after.storageWarehouseId(),
+                        after.currentLocationId(),
                         actor,
                         Timestamp.from(time),
                         id,
@@ -191,7 +266,6 @@ public class AssetTransferPort {
                                 "after",
                                 after)),
                 actor);
-        after.put("version", version + 1);
-        return after;
+        return After.of(after, version + 1);
     }
 }

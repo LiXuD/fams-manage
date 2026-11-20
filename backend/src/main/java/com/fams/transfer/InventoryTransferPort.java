@@ -10,7 +10,6 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * Inventory owns difference competition; formal approval, custody and locks stay transfer-owned.
@@ -57,12 +56,11 @@ public class InventoryTransferPort {
                                     List.of(
                                             new TransferController.Item(
                                                     assetId, assetVersion, target))));
-            long request = Long.parseLong(draft.get("id").toString());
             return link(
                     transfers.action(
                             actor,
-                            request,
-                            ((Number) draft.get("version")).longValue(),
+                            Long.parseLong(draft.id()),
+                            draft.version(),
                             operationKey + ":submit",
                             "submit"));
         } catch (TransferFailure failure) {
@@ -80,19 +78,15 @@ public class InventoryTransferPort {
         }
     }
 
-    private Link link(Map<String, Object> row) {
-        Object value = row.get("items");
-        if (!(value instanceof List<?> items)
-                || items.size() != 1
-                || !(items.getFirst() instanceof Map<?, ?> item)) {
+    private Link link(TransferViews.Detail detail) {
+        if (detail.items().size() != 1) {
             throw new IllegalStateException("Inventory transfer must have exactly one asset");
         }
+        var item = detail.items().getFirst();
         return new Link(
-                row.get("id").toString(),
-                item.get("id").toString(),
-                ((Number) row.get("version")).longValue(),
-                "REJECTED".equals(row.get("requestStatus"))
-                        ? "REJECTED"
-                        : item.get("itemStatus").toString());
+                detail.id(),
+                item.id(),
+                detail.version(),
+                "REJECTED".equals(detail.requestStatus()) ? "REJECTED" : item.itemStatus());
     }
 }

@@ -25,7 +25,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @Profile("fams-product")
@@ -81,26 +80,26 @@ class TransferController {
     }
 
     @GetMapping
-    Map<String, Object> list(
+    TransferViews.Page<TransferViews.Summary> list(
             @RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(200) int pageSize) {
         return service.list(actors.capture(), page, pageSize);
     }
 
     @GetMapping("/{id}")
-    Map<String, Object> get(@PathVariable long id) {
+    TransferViews.Detail get(@PathVariable long id) {
         return service.get(actors.capture(), id);
     }
 
     @GetMapping("/eligible-assets")
-    Map<String, Object> eligible(
+    TransferViews.Page<TransferViews.EligibleAsset> eligible(
             @RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(200) int pageSize) {
         return service.eligible(actors.capture(), page, pageSize);
     }
 
     @GetMapping("/catalog/{kind}")
-    Map<String, Object> catalog(
+    TransferViews.CatalogPage catalog(
             @PathVariable String kind,
             @RequestParam(required = false) Long organizationId,
             @RequestParam(defaultValue = "1") @Min(1) int page,
@@ -109,19 +108,19 @@ class TransferController {
     }
 
     @GetMapping("/personnel-handover")
-    Map<String, Object> personnel(@RequestParam @Min(1) long employeeId) {
+    TransferViews.PersonnelHandover personnel(@RequestParam @Min(1) long employeeId) {
         return service.personnel(actors.capture(), employeeId);
     }
 
     @PostMapping
-    Map<String, Object> create(
+    TransferViews.Detail create(
             @Valid @RequestBody Draft input,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key) {
         return service.create(actors.capture(), key, input);
     }
 
     @PostMapping("/{id}/{action:submit|cancel|claim}")
-    Map<String, Object> action(
+    TransferViews.Detail action(
             @PathVariable long id,
             @PathVariable String action,
             @RequestHeader("If-Match-Version") @Min(0) long version,
@@ -130,7 +129,7 @@ class TransferController {
     }
 
     @PostMapping("/{id}/decision")
-    Map<String, Object> decide(
+    TransferViews.Detail decide(
             @PathVariable long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
@@ -139,12 +138,12 @@ class TransferController {
     }
 
     @GetMapping("/{id}/reassignment")
-    Map<String, Object> reassignment(@PathVariable @Min(1) long id) {
+    TransferViews.ReassignmentSnapshot reassignment(@PathVariable @Min(1) long id) {
         return service.reassignment(actors.capture(), id);
     }
 
     @PostMapping("/{id}/reassignment")
-    Map<String, Object> reassign(
+    TransferViews.Detail reassign(
             @PathVariable @Min(1) long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
@@ -153,7 +152,7 @@ class TransferController {
     }
 
     @PostMapping("/{id}/reassignment/unavailable")
-    Map<String, Object> declareUnavailable(
+    TransferViews.UnavailableReceipt declareUnavailable(
             @PathVariable @Min(1) long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
@@ -162,7 +161,7 @@ class TransferController {
     }
 
     @PostMapping("/{id}/items/{itemId}/{action:deliver|verify|cancel|recovery|recover}")
-    Map<String, Object> physical(
+    TransferViews.Detail physical(
             @PathVariable long id,
             @PathVariable long itemId,
             @PathVariable String action,
@@ -173,7 +172,7 @@ class TransferController {
     }
 
     @GetMapping("/receipts/pending")
-    Map<String, Object> pending(
+    TransferViews.Page<TransferViews.PendingReceipt> pending(
             @RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(200) int pageSize,
             @RequestParam(required = false) @Min(1) Long itemId) {
@@ -181,12 +180,12 @@ class TransferController {
     }
 
     @PostMapping("/receipts/{itemId}/grant")
-    Map<String, Object> grant(@PathVariable long itemId) {
+    TransferViews.Grant grant(@PathVariable long itemId) {
         return service.grant(actors.capture(), itemId);
     }
 
     @PostMapping("/receipts/{itemId}/{action:receive|refuse}")
-    Map<String, Object> receive(
+    TransferViews.Item receive(
             @PathVariable long itemId,
             @PathVariable String action,
             @RequestHeader("If-Match-Version") @Min(0) long version,
