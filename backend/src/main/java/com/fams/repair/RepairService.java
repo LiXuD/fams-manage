@@ -1716,7 +1716,7 @@ public class RepairService {
         }
     }
 
-    public Map<String, Object> targetChangeContext(Actor actor, long id, long item) {
+    public com.fams.targetchange.TargetChangeViews.RepairContext targetChangeContext(Actor actor, long id, long item) {
         var current = actors.revalidateLocked(actor);
         var row = header(id);
         if (!current.has(Role.ASSET_ADMIN)) {
@@ -1759,28 +1759,25 @@ public class RepairService {
                             .asText());
             target.put("locationId", source.path("locationId").asText());
         }
-        var result = new LinkedHashMap<String, Object>();
-        result.put("businessType", "REPAIR");
-        result.put("businessId", Long.toString(id));
-        result.put("itemId", Long.toString(item));
-        result.put("version", row.get("version"));
-        result.put("ownershipVersion", row.get("ownership_version"));
-        result.put("processorAccountId", row.get("processor_account_id").toString());
-        result.put("assetVersion", row.get("asset_version"));
-        result.put("assetCode", source.path("assetCode").asText());
-        result.put("target", target);
-        result.put("approvedTargetId", approved == null ? null : approved.get("id").toString());
-        result.put("loanVersion", loan == null ? null : loan.version());
-        result.put("lastPhysicalTime", wire(latestPhysicalTime(row)));
-        result.put(
-                "lockVersion",
+        return new com.fams.targetchange.TargetChangeViews.RepairContext(
+                "REPAIR",
+                Long.toString(id),
+                Long.toString(item),
+                number(row, "version"),
+                number(row, "ownership_version"),
+                row.get("processor_account_id").toString(),
+                number(row, "asset_version"),
+                source.path("assetCode").asText(),
+                target,
+                approved == null ? null : approved.get("id").toString(),
+                loan == null ? null : loan.version(),
+                wire(latestPhysicalTime(row)),
                 db.queryForObject(
                         "SELECT lock_version FROM fams_asset_business_lock WHERE asset_id=? AND"
                             + " business_type='REPAIR' AND business_id=? AND released_at IS NULL",
                         Long.class,
                         item,
                         id));
-        return result;
     }
 
     public void validateChangedReturnTarget(
@@ -2136,7 +2133,7 @@ public class RepairService {
                 .isEmpty();
     }
 
-    public Map<String, Object> proxySnapshot(Actor actor, long id, long item, boolean executing) {
+    public com.fams.proxy.ProxyViews.RepairSnapshot proxySnapshot(Actor actor, long id, long item, boolean executing) {
         var current = actors.revalidateLocked(actor);
         var row = header(id);
         if (executing) {
@@ -2169,43 +2166,38 @@ public class RepairService {
         if (number(handover, "before_asset_version") != number(row, "asset_version")) {
             throw new RepairFailure(409, "REPAIR_RETURN_RECEIPT_CHANGED");
         }
-        var snapshot = new LinkedHashMap<String, Object>();
-        snapshot.put("businessType", "REPAIR");
-        snapshot.put("businessId", Long.toString(id));
-        snapshot.put("itemId", Long.toString(item));
-        snapshot.put("assetId", Long.toString(item));
-        snapshot.put("version", row.get("version"));
-        snapshot.put("ownershipVersion", row.get("ownership_version"));
-        snapshot.put("processorAccountId", row.get("processor_account_id").toString());
-        snapshot.put("assetVersion", row.get("asset_version"));
-        snapshot.put(
-                "assetCode",
+        var approved = approvedTarget(row);
+        return new com.fams.proxy.ProxyViews.RepairSnapshot(
+                "REPAIR",
+                Long.toString(id),
+                Long.toString(item),
+                Long.toString(item),
+                number(row, "version"),
+                number(row, "ownership_version"),
+                row.get("processor_account_id").toString(),
+                number(row, "asset_version"),
                 json.readTree(row.get("source_snapshot_json").toString())
                         .path("assetCode")
-                        .asText());
-        snapshot.put("handoverId", handover.get("id").toString());
-        snapshot.put("deliveredAt", wire(handover.get("delivered_at")));
-        snapshot.put("targetEmployeeId", target.get("employeeId"));
-        snapshot.put("target", target);
-        snapshot.put("loan", loanWire(loan));
-        var approved = approvedTarget(row);
-        snapshot.put("approvedTargetId", approved == null ? null : approved.get("id").toString());
-        snapshot.put(
-                "lockVersion",
+                        .asText(),
+                handover.get("id").toString(),
+                wire(handover.get("delivered_at")),
+                (String) target.get("employeeId"),
+                target,
+                loanWire(loan),
+                approved == null ? null : approved.get("id").toString(),
                 db.queryForObject(
                         "SELECT lock_version FROM fams_asset_business_lock WHERE asset_id=? AND"
                             + " business_type='REPAIR' AND business_id=? AND released_at IS NULL",
                         Long.class,
                         item,
                         id));
-        return snapshot;
     }
 
-    public Map<String, Object> proxyReceipt(
+    public com.fams.proxy.ProxyViews.RepairReceiptResult proxyReceipt(
             Actor actor,
             long id,
             long item,
-            Map<String, Object> expected,
+            com.fams.proxy.ProxyViews.ProxySnapshot expected,
             String observed,
             long confirmation,
             com.fams.proxy.ProxyReceiptPort.ExecutionEvidence proof) {
@@ -2214,11 +2206,14 @@ public class RepairService {
         var row = header(id);
         owner(actor, current, row);
         var actual = proxySnapshot(actor, id, item, true);
+        // Text round-trip keeps the pre-JAVA-04 comparison semantics verbatim: the expected
+        // snapshot comes from stored JSON (raw maps/Integer widths) while the live snapshot
+        // carries typed long components and asset-owned raw maps.
         if (!json.readTree(json.writeValueAsString(actual))
                 .equals(json.readTree(json.writeValueAsString(expected)))) {
             throw new RepairFailure(409, "PROXY_RECEIPT_SCOPE_CHANGED");
         }
-        var handover = returnHandover(id, Long.parseLong(actual.get("handoverId").toString()));
+        var handover = returnHandover(id, Long.parseLong(actual.handoverId()));
         physicalTime(proof.actualReceivedAt(), handover.get("delivered_at"));
         if (confirmation < 1
                 || proof.actualSigner() == null
@@ -2226,7 +2221,7 @@ public class RepairService {
                 || !proof.delegatedReceipt()
                         && !java.util.Objects.equals(
                                 proof.actualSignerEmployeeId(),
-                                Long.valueOf(actual.get("targetEmployeeId").toString()))
+                                Long.valueOf(actual.targetEmployeeId()))
                 || !json.readTree(proof.evidenceJson()).isArray()
                 || json.readTree(proof.evidenceJson()).isEmpty()) {
             throw new RepairFailure(400, "REPAIR_PROXY_EVIDENCE_REQUIRED");
@@ -2296,20 +2291,13 @@ public class RepairService {
                         "delegatedReceipt",
                         proof.delegatedReceipt()),
                 Role.WAREHOUSE_OPERATOR.name());
-        return Map.of(
-                "businessId",
+        return new com.fams.proxy.ProxyViews.RepairReceiptResult(
                 Long.toString(id),
-                "repairId",
                 Long.toString(id),
-                "itemId",
                 Long.toString(item),
-                "assetCode",
-                actual.get("assetCode"),
-                "targetEmployeeId",
-                actual.get("targetEmployeeId"),
-                "status",
+                actual.assetCode(),
+                actual.targetEmployeeId(),
                 "COMPLETED",
-                "version",
                 number(row, "version") + 1);
     }
 

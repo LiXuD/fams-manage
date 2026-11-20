@@ -10,7 +10,6 @@ import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import java.util.Map;
 import java.util.function.Supplier;
 
 @Component
@@ -31,11 +30,8 @@ class TransferTargetChangePort implements TargetChangePort {
     @Override public void requireProcessor(long account, long business) { translate(() -> { ownership.requireProcessor(account, business);
             return null;
         }); }
-    // The target-change envelope stays Map-typed until all business adapters are typed together.
-    @Override public Map<String, Object> context(Actor actor, long business, long item) {
-        return translate(() -> json.convertValue(
-                transfers.targetChangeContext(actor, business, item),
-                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {}));
+    @Override public com.fams.targetchange.TargetChangeViews.Context context(Actor actor, long business, long item) {
+        return translate(() -> transfers.targetChangeContext(actor, business, item));
     }
     @Override public JsonNode canonicalTarget(JsonNode input) {
         return json.valueToTree(TransferService.targetChangeTarget(decode(input)));

@@ -6,6 +6,7 @@ import com.fams.auth.RequisitionActorContext;
 import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
+import com.fams.proxy.ProxyViews;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -779,7 +780,7 @@ class TransferService {
         return TransferViews.targetWire(target);
     }
 
-    TransferViews.ProxySnapshot proxySnapshot(Actor actor, long id, long itemId, boolean executing) {
+    ProxyViews.TransferSnapshot proxySnapshot(Actor actor, long id, long itemId, boolean executing) {
         var current = actors.revalidateLocked(actor);
         var request = request(id);
         if (executing) {
@@ -803,7 +804,7 @@ class TransferService {
         var lock = one("SELECT lock_version FROM fams_asset_business_lock WHERE asset_id=?"
                 + " AND business_type='TRANSFER' AND business_id=? AND business_item_id=?"
                 + " AND released_at IS NULL FOR UPDATE", item.get("asset_id"), id, itemId);
-        return new TransferViews.ProxySnapshot(
+        return new ProxyViews.TransferSnapshot(
                 "TRANSFER",
                 Long.toString(id),
                 Long.toString(itemId),
@@ -824,11 +825,12 @@ class TransferService {
                 json.readTree(item.get("parameter_snapshot_json").toString()));
     }
 
-    TransferViews.ProxyReceiptResult proxyReceipt(Actor actor, long id, long itemId,
-            Map<String, Object> expected, String observedCode, long confirmation) {
+    ProxyViews.TransferReceiptResult proxyReceipt(Actor actor, long id, long itemId,
+            ProxyViews.ProxySnapshot expected, String observedCode, long confirmation) {
         var snapshot = proxySnapshot(actor, id, itemId, true);
-        // Text round-trip normalizes integral node widths: the expected map arrives from
-        // HTTP JSON (Integer) while the typed snapshot carries long components.
+        // Text round-trip normalizes integral node widths and keeps the pre-JAVA-04 comparison
+        // semantics verbatim: the expected snapshot arrives from stored/HTTP JSON, where small
+        // numbers deserialize as Integer while the typed snapshot carries long components.
         if (!json.readTree(json.writeValueAsString(snapshot)).equals(
                 json.readTree(json.writeValueAsString(expected)))) {
             throw new TransferFailure("PROXY_RECEIPT_SCOPE_CHANGED", 409);
@@ -842,7 +844,7 @@ class TransferService {
         event(actor, current, id, itemId, "TRANSFER_PROXY_RECEIVED",
                 Map.of("confirmationId", Long.toString(confirmation), "observedCode", observed));
         aggregate(id);
-        return new TransferViews.ProxyReceiptResult(
+        return new ProxyViews.TransferReceiptResult(
                 Long.toString(confirmation), Long.toString(id), Long.toString(itemId),
                 "RECEIVED", observed, item.get("receiver_employee_id").toString());
     }

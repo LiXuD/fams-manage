@@ -1,6 +1,7 @@
 package com.fams.requisition;
 
 import com.fams.auth.RequisitionActorContext;
+import com.fams.proxy.ProxyViews;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -65,33 +66,33 @@ class RequisitionProxyConfirmationController {
     }
 
     @GetMapping("/context")
-    Map<String, Object> context(
+    ProxyViews.ProxySnapshot context(
             @RequestParam(defaultValue = "REQUISITION") String businessType,
             @RequestParam @Min(1) long businessId, @RequestParam @Min(1) long itemId) {
         return service.context(actors.capture(), businessType, businessId, itemId);
     }
 
     @GetMapping
-    Map<String, Object> list(
+    ProxyViews.ConfirmationPage list(
             @RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         return service.list(actors.capture(), page, pageSize);
     }
 
     @GetMapping("/{id}")
-    Map<String, Object> get(@PathVariable @Min(1) long id) {
+    ProxyViews.Confirmation get(@PathVariable @Min(1) long id) {
         return service.get(actors.capture(), id);
     }
 
     @PostMapping
-    Map<String, Object> create(
+    ProxyViews.Confirmation create(
             @Valid @RequestBody Draft input,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key) {
         return service.create(actors.capture(), key, input);
     }
 
     @PostMapping("/{id}/submit")
-    Map<String, Object> submit(
+    ProxyViews.Confirmation submit(
             @PathVariable @Min(1) long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key) {
@@ -99,7 +100,7 @@ class RequisitionProxyConfirmationController {
     }
 
     @PostMapping("/{id}/decision")
-    Map<String, Object> decision(
+    ProxyViews.Confirmation decision(
             @PathVariable @Min(1) long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
@@ -108,7 +109,7 @@ class RequisitionProxyConfirmationController {
     }
 
     @PostMapping("/{id}/execute")
-    Map<String, Object> execute(
+    ProxyViews.Confirmation execute(
             @PathVariable @Min(1) long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key) {

@@ -324,7 +324,7 @@ class TransferWireShapeTest {
 
     @Test
     void proxySnapshotComparisonSurvivesPortConversionAndHttpRoundTrip() {
-        var snapshot = new TransferViews.ProxySnapshot(
+        var snapshot = new com.fams.proxy.ProxyViews.TransferSnapshot(
                 "TRANSFER", "2", "5", "TRANSFER-2", 6, 4, 1, "40", 3, "FA-1", "3",
                 "STORAGE", "12", 1, 4,
                 JSON.readTree("{\"id\":40,\"current_location_id\":9}"),

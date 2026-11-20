@@ -6,6 +6,8 @@ import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 import com.fams.masterdata.RequisitionMasterDataPort;
+import com.fams.proxy.ProxyViews;
+import com.fams.targetchange.TargetChangeViews;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -430,7 +432,7 @@ class RequisitionHandoverService {
         close(allocation, "HANDOVER_EXCEPTION");
     }
 
-    Map<String, Object> proxySnapshot(Actor actor, long request, long allocation, boolean executing) {
+    ProxyViews.RequisitionSnapshot proxySnapshot(Actor actor, long request, long allocation, boolean executing) {
         var current = actors.revalidateLocked(actor);
         var header = header(request);
         if (executing) { warehouse(current, header); }
@@ -451,29 +453,30 @@ class RequisitionHandoverService {
                 n(item, "business_lock_id"));
         var owner = one("SELECT processor_account_id,ownership_version FROM fams_requisition_ownership"
                 + " WHERE request_id=? AND archived_at IS NULL FOR UPDATE", request);
-        var result = new LinkedHashMap<String, Object>();
-        result.put("businessType", "REQUISITION");
-        result.put("businessId", Long.toString(request));
-        result.put("itemId", Long.toString(allocation));
-        result.put("requestNo", header.get("request_no"));
-        result.put("version", n(header, "version"));
-        result.put("requestVersion", n(header, "request_version"));
-        result.put("itemVersion", n(item, "version"));
-        result.put("assetId", item.get("asset_id").toString());
-        result.put("assetVersion", n(item, "asset_version_snapshot"));
-        result.put("assetCode", asset.get("asset_code"));
-        result.put("targetEmployeeId", Long.toString(target(demand)));
-        result.put("custodyType", demand.get("custody_type"));
-        result.put("lockVersion", n(lock, "lock_version"));
-        result.put("processorAccountId", owner.get("processor_account_id").toString());
-        result.put("ownershipVersion", n(owner, "ownership_version"));
-        result.put("demandVersion", n(demand, "version"));
-        return result;
+        return new ProxyViews.RequisitionSnapshot(
+                "REQUISITION",
+                Long.toString(request),
+                Long.toString(allocation),
+                (String) header.get("request_no"),
+                n(header, "version"),
+                n(header, "request_version"),
+                n(item, "version"),
+                item.get("asset_id").toString(),
+                n(item, "asset_version_snapshot"),
+                (String) asset.get("asset_code"),
+                Long.toString(target(demand)),
+                (String) demand.get("custody_type"),
+                n(lock, "lock_version"),
+                owner.get("processor_account_id").toString(),
+                n(owner, "ownership_version"),
+                n(demand, "version"));
     }
 
-    Map<String, Object> proxyReceipt(Actor actor, long request, long allocation,
-            Map<String, Object> expected, String observedCode, long confirmationId) {
+    ProxyViews.RequisitionReceiptResult proxyReceipt(Actor actor, long request, long allocation,
+            ProxyViews.ProxySnapshot expected, String observedCode, long confirmationId) {
         var snapshot = proxySnapshot(actor, request, allocation, true);
+        // Text round-trip keeps the pre-JAVA-04 comparison semantics verbatim (integral width
+        // normalization between the stored/HTTP expected snapshot and the typed live snapshot).
         if (!json.readTree(json.writeValueAsString(snapshot)).equals(json.readTree(json.writeValueAsString(expected)))) {
             throw RequisitionFailure.conflict("PROXY_RECEIPT_SCOPE_CHANGED");
         }
@@ -487,9 +490,9 @@ class RequisitionHandoverService {
         event(actor, current, "PROXY_RECEIVED", item, observed,
                 "异常代确认许可 " + confirmationId, Role.WAREHOUSE_OPERATOR);
         progress(request);
-        return Map.of("confirmationId", Long.toString(confirmationId), "requestId", Long.toString(request),
-                "allocationId", Long.toString(allocation), "result", "RECEIVED",
-                "targetEmployeeId", Long.toString(target(demand)), "assetCode", observed);
+        return new ProxyViews.RequisitionReceiptResult(
+                Long.toString(confirmationId), Long.toString(request), Long.toString(allocation),
+                "RECEIVED", Long.toString(target(demand)), observed);
     }
 
     Map<String, Object> receiptDetail(Actor actor, long request, long allocation) {
@@ -522,7 +525,7 @@ class RequisitionHandoverService {
         return result;
     }
 
-    Map<String, Object> targetChangeContext(Actor actor, long request, long allocation) {
+    TargetChangeViews.RequisitionContext targetChangeContext(Actor actor, long request, long allocation) {
         var current = actors.revalidateLocked(actor);
         var header = header(request);
         if (!current.has(Role.ASSET_ADMIN)) { warehouse(current, header); }
@@ -543,34 +546,34 @@ class RequisitionHandoverService {
                 + " WHERE request_id=? AND archived_at IS NULL FOR UPDATE", request);
         if (owner == null) { throw RequisitionFailure.conflict("REQUISITION_ALREADY_FINISHED"); }
         var demand = demand(item);
-        var target = new LinkedHashMap<String, Object>();
-        target.put("custodyType", demand.get("custody_type"));
-        target.put("organizationId", demand.get("target_organization_id").toString());
-        target.put("organizationVersion", n(demand, "organization_version_snapshot"));
-        target.put("employeeId", Long.toString(target(demand)));
-        target.put("employeeVersion", n(demand, "employee_version_snapshot"));
-        target.put("locationId", demand.get("target_location_id").toString());
-        target.put("locationVersion", n(demand, "location_version_snapshot"));
-        var snapshot = new LinkedHashMap<String, Object>();
-        snapshot.put("businessType", "REQUISITION");
-        snapshot.put("businessId", Long.toString(request));
-        snapshot.put("itemId", Long.toString(allocation));
-        snapshot.put("requestVersion", n(header, "request_version"));
-        snapshot.put("version", n(header, "version"));
-        snapshot.put("itemVersion", n(item, "version"));
-        snapshot.put("itemStatus", item.get("allocation_status"));
-        snapshot.put("demandVersion", n(demand, "version"));
-        snapshot.put("assetId", item.get("asset_id").toString());
-        snapshot.put("assetVersion", n(item, "asset_version_snapshot"));
-        snapshot.put("assetCode", asset.get("asset_code"));
-        snapshot.put("target", target);
-        snapshot.put("ownershipVersion", n(owner, "ownership_version"));
-        snapshot.put("processorAccountId", owner.get("processor_account_id").toString());
-        snapshot.put("lockVersion", n(Objects.requireNonNull(one("SELECT lock_version FROM fams_asset_business_lock WHERE id=? FOR UPDATE",
-                n(item, "business_lock_id"))), "lock_version"));
-        snapshot.put("handover", db.queryForList("SELECT delivered_at,receipt_deadline_at,destination_text"
-                + " FROM fams_requisition_handover WHERE allocation_id=?", allocation).stream().map(this::clean).toList());
-        return snapshot;
+        var target = new TargetChangeViews.RequisitionTarget(
+                (String) demand.get("custody_type"),
+                demand.get("target_organization_id").toString(),
+                n(demand, "organization_version_snapshot"),
+                Long.toString(target(demand)),
+                n(demand, "employee_version_snapshot"),
+                demand.get("target_location_id").toString(),
+                n(demand, "location_version_snapshot"));
+        return new TargetChangeViews.RequisitionContext(
+                "REQUISITION",
+                Long.toString(request),
+                Long.toString(allocation),
+                n(header, "request_version"),
+                n(header, "version"),
+                n(item, "version"),
+                (String) item.get("allocation_status"),
+                n(demand, "version"),
+                item.get("asset_id").toString(),
+                n(item, "asset_version_snapshot"),
+                (String) asset.get("asset_code"),
+                target,
+                n(owner, "ownership_version"),
+                owner.get("processor_account_id").toString(),
+                n(Objects.requireNonNull(one("SELECT lock_version FROM fams_asset_business_lock WHERE id=? FOR UPDATE",
+                        n(item, "business_lock_id"))), "lock_version"),
+                db.queryForList("SELECT delivered_at,receipt_deadline_at,destination_text"
+                        + " FROM fams_requisition_handover WHERE allocation_id=?", allocation).stream()
+                        .map(row -> TargetChangeViews.handover(json, row)).toList());
     }
 
     void validateChangedTarget(long request, long allocation, ItemTargetChangeInput.Target target) {

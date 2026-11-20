@@ -6,6 +6,7 @@ import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 import com.fams.proxy.ProxyReceiptPort;
+import com.fams.proxy.ProxyViews;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Profile;
@@ -66,11 +67,11 @@ class RequisitionProxyConfirmationService {
         this.storage = storage;
     }
 
-    Map<String, Object> context(Actor actor, String businessType, long request, long item) {
+    ProxyViews.ProxySnapshot context(Actor actor, String businessType, long request, long item) {
         return business(businessType).snapshot(actor, request, item, true);
     }
 
-    Map<String, Object> list(Actor actor, int page, int size) {
+    ProxyViews.ConfirmationPage list(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.ASSET_ADMIN) && !current.has(Role.WAREHOUSE_OPERATOR)) {
             throw RequisitionFailure.forbidden();
@@ -102,32 +103,28 @@ class RequisitionProxyConfirmationService {
                                 + " ORDER BY id DESC LIMIT ? OFFSET ?",
                         size,
                         (page - 1) * size);
-        return Map.of(
-                "items",
-                rows.stream().map(this::wire).toList(),
-                "page",
+        return new ProxyViews.ConfirmationPage(
+                rows.stream().map(row -> ProxyViews.confirmation(json, row)).toList(),
                 page,
-                "pageSize",
                 size,
-                "total",
                 total,
-                "canApprove", current.has(Role.ASSET_ADMIN),
-                "canExecute", current.has(Role.WAREHOUSE_OPERATOR));
+                current.has(Role.ASSET_ADMIN),
+                current.has(Role.WAREHOUSE_OPERATOR));
     }
 
-    Map<String, Object> get(Actor actor, long id) {
+    ProxyViews.Confirmation get(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         var row = row(id, false);
         reader(current, row);
-        return wire(row);
+        return ProxyViews.confirmation(json, row);
     }
 
-    Map<String, Object> create(
+    ProxyViews.Confirmation create(
             Actor actor, String key, RequisitionProxyConfirmationController.Draft input) {
         var current = role(actor, Role.WAREHOUSE_OPERATOR);
         String businessType = String.valueOf(input.snapshot().getOrDefault("businessType", "REQUISITION"));
         processor(current, businessType, input.businessId());
-        var prior = replay(current, "createProxyConfirmation", key, input);
+        var prior = replay(current, "createProxyConfirmation", key, input, ProxyViews.Confirmation.class);
         if (prior != null) {
             return prior;
         }
@@ -152,10 +149,10 @@ class RequisitionProxyConfirmationService {
         } else if (input.actualSignerEmployeeId() == null
                 || !input.actualSignerEmployeeId()
                         .toString()
-                        .equals(snapshot.get("targetEmployeeId"))) {
+                        .equals(snapshot.targetEmployeeId())) {
             throw invalid("PROXY_RECEIPT_SIGNER_MISMATCH");
         }
-        if (!input.observedAssetCode().equals(snapshot.get("assetCode"))) {
+        if (!input.observedAssetCode().equals(snapshot.assetCode())) {
             throw conflict("PROXY_RECEIPT_ASSET_MISMATCH");
         }
         if (input.previousConfirmationId() != null) {
@@ -200,15 +197,15 @@ class RequisitionProxyConfirmationService {
                 0,
                 0,
                 Map.of("snapshot", snapshot, "evidenceMetadata", input));
-        return finish(current, "createProxyConfirmation", key, input, id, wire(row(id, false)));
+        return finish(current, "createProxyConfirmation", key, input, id, ProxyViews.confirmation(json, row(id, false)));
     }
 
-    Map<String, Object> submit(Actor actor, long id, long version, String key) {
+    ProxyViews.Confirmation submit(Actor actor, long id, long version, String key) {
         var current = role(actor, Role.WAREHOUSE_OPERATOR);
         var hint = row(id, false);
         processor(current, hint.get("business_type").toString(), number(hint, "business_id"));
         var payload = Map.of("id", id, "version", version);
-        var prior = replay(current, "submitProxyConfirmation", key, payload);
+        var prior = replay(current, "submitProxyConfirmation", key, payload, ProxyViews.Confirmation.class);
         if (prior != null) {
             return prior;
         }
@@ -234,10 +231,10 @@ class RequisitionProxyConfirmationService {
                 version,
                 version + 1,
                 Map.of("evidence", evidence));
-        return finish(current, "submitProxyConfirmation", key, payload, id, wire(row(id, false)));
+        return finish(current, "submitProxyConfirmation", key, payload, id, ProxyViews.confirmation(json, row(id, false)));
     }
 
-    Map<String, Object> decision(
+    ProxyViews.Confirmation decision(
             Actor actor,
             long id,
             long version,
@@ -245,7 +242,7 @@ class RequisitionProxyConfirmationService {
             RequisitionProxyConfirmationController.Decision input) {
         var current = role(actor, Role.ASSET_ADMIN);
         var payload = Map.of("id", id, "version", version, "decision", input);
-        var prior = replay(current, "decideProxyConfirmation", key, payload);
+        var prior = replay(current, "decideProxyConfirmation", key, payload, ProxyViews.Confirmation.class);
         if (prior != null) {
             return prior;
         }
@@ -275,23 +272,22 @@ class RequisitionProxyConfirmationService {
                 version,
                 version + 1,
                 Map.of("decision", input));
-        return finish(current, "decideProxyConfirmation", key, payload, id, wire(row(id, false)));
+        return finish(current, "decideProxyConfirmation", key, payload, id, ProxyViews.confirmation(json, row(id, false)));
     }
 
-    Map<String, Object> execute(Actor actor, long id, long version, String key) {
+    ProxyViews.Confirmation execute(Actor actor, long id, long version, String key) {
         var current = role(actor, Role.WAREHOUSE_OPERATOR);
         var hint = row(id, false);
         processor(current, hint.get("business_type").toString(), number(hint, "business_id"));
         var payload = Map.of("id", id, "version", version);
-        var prior = replay(current, "executeProxyConfirmation", key, payload);
+        var prior = replay(current, "executeProxyConfirmation", key, payload, ProxyViews.Confirmation.class);
         if (prior != null) {
             return prior;
         }
         var row = lockedCurrent(actor, id, true);
         state(row, version, "APPROVED");
         frozen(row);
-        @SuppressWarnings("unchecked")
-        var snapshot = json.readValue(row.get("business_snapshot_json").toString(), Map.class);
+        var snapshot = json.readValue(row.get("business_snapshot_json").toString(), ProxyViews.ProxySnapshot.class);
         var result =
                 business(row.get("business_type").toString()).execute(
                         actor,
@@ -332,13 +328,13 @@ class RequisitionProxyConfirmationService {
                     + " (execution_type,execution_id,recipient_employee_id,business_type,business_id,item_id,content_json,created_at)"
                     + " VALUES ('PROXY_CONFIRMATION',?,?,?,?,?,?,?)",
                 id,
-                Long.parseLong(result.get("targetEmployeeId").toString()),
+                Long.parseLong(result.targetEmployeeId()),
                 row.get("business_type"),
                 number(row, "business_id"),
                 number(row, "item_id"),
                 json.writeValueAsString(detail),
                 now());
-        return finish(current, "executeProxyConfirmation", key, payload, id, wire(row(id, false)));
+        return finish(current, "executeProxyConfirmation", key, payload, id, ProxyViews.confirmation(json, row(id, false)));
     }
 
     private ProxyReceiptPort.ExecutionEvidence executionEvidence(Map<String, Object> row) {
@@ -369,6 +365,7 @@ class RequisitionProxyConfirmationService {
                 business(hint.get("business_type").toString()).snapshot(
                         actor, number(hint, "business_id"), number(hint, "item_id"), executing);
         var row = row(id, true);
+        // The stored snapshot is a raw JSON tree; keep the pre-JAVA-04 text round-trip comparison.
         same(snapshot, json.readTree(row.get("business_snapshot_json").toString()));
         return row;
     }
@@ -461,33 +458,6 @@ class RequisitionProxyConfirmationService {
         }
     }
 
-    private Map<String, Object> wire(Map<String, Object> row) {
-        var result = new LinkedHashMap<String, Object>();
-        row.forEach(
-                (k, v) -> {
-                    StringBuilder key = new StringBuilder();
-                    boolean upper = false;
-                    for (char c : k.toCharArray()) {
-                        if (c == '_') {
-                            upper = true;
-                        } else {
-                            key.append(upper ? Character.toUpperCase(c) : c);
-                            upper = false;
-                        }
-                    }
-                    result.put(
-                            key.toString(),
-                            v == null
-                                    ? null
-                                    : k.endsWith("_json")
-                                            ? json.readTree(v.toString())
-                                            : k.equals("id") || k.endsWith("_id")
-                                                    ? v.toString()
-                                                    : v);
-                });
-        return result;
-    }
-
     private void audit(
             Actor actor,
             Role role,
@@ -511,9 +481,8 @@ class RequisitionProxyConfirmationService {
                 json.writeValueAsString(detail));
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> replay(
-            Current current, String operation, String key, Object payload) {
+    private <T> T replay(
+            Current current, String operation, String key, Object payload, Class<T> type) {
         db.update("DELETE FROM fams_idempotency_record WHERE actor_account_id=?"
                 + " AND operation_id=? AND idempotency_key=? AND expires_at<=CURRENT_TIMESTAMP(3)",
                 current.id(), operation, key);
@@ -531,16 +500,16 @@ class RequisitionProxyConfirmationService {
         if (!ProxyReceiptPayloads.matches(json, payload, rows.getFirst().get("payload_sha256").toString())) {
             throw conflict("PROXY_RECEIPT_IDEMPOTENCY_CONFLICT");
         }
-        return json.readValue(rows.getFirst().get("response_body_json").toString(), Map.class);
+        return json.readValue(rows.getFirst().get("response_body_json").toString(), type);
     }
 
-    private Map<String, Object> finish(
+    private <T extends ProxyViews.Reply> T finish(
             Current current,
             String operation,
             String key,
             Object payload,
             long id,
-            Map<String, Object> result) {
+            T result) {
         db.update(
                 "INSERT INTO fams_idempotency_record"
                     + " (actor_account_id,operation_id,idempotency_key,payload_sha256,result_status,http_status,response_body_json,resource_type,resource_id,resource_version,created_at,completed_at,expires_at)"
@@ -551,7 +520,7 @@ class RequisitionProxyConfirmationService {
                 digest(payload),
                 json.writeValueAsString(result),
                 id,
-                result.get("version"),
+                result.version(),
                 now(),
                 now(),
                 now().plus(24, ChronoUnit.HOURS));

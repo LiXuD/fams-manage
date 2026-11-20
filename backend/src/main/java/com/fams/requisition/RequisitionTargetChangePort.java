@@ -10,7 +10,6 @@ import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import java.util.Map;
 import java.util.function.Supplier;
 
 @Component
@@ -35,7 +34,7 @@ class RequisitionTargetChangePort implements TargetChangePort {
         try { ownership.requireProcessor(account, business); }
         catch (RequisitionFailure error) { throw TargetChangeFailure.conflict("REQUISITION_OWNED_BY_ANOTHER"); }
     }
-    @Override public Map<String, Object> context(Actor actor, long business, long item) {
+    @Override public com.fams.targetchange.TargetChangeViews.Context context(Actor actor, long business, long item) {
         return translate(() -> handovers.targetChangeContext(actor, business, item));
     }
     @Override public JsonNode canonicalTarget(JsonNode input) { return json.valueToTree(decode(input)); }

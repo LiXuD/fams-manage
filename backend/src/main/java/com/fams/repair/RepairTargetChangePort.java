@@ -55,7 +55,7 @@ class RepairTargetChangePort implements TargetChangePort {
     }
 
     @Override
-    public Map<String, Object> context(Actor actor, long business, long item) {
+    public com.fams.targetchange.TargetChangeViews.Context context(Actor actor, long business, long item) {
         return translated(() -> repairs.targetChangeContext(actor, business, item));
     }
 

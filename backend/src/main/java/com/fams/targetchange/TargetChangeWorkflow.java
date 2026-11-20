@@ -18,7 +18,6 @@ import java.security.MessageDigest;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.util.HexFormat;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -43,15 +42,15 @@ public class TargetChangeWorkflow {
                 TargetChangePort::businessType, value -> value));
     }
 
-    public Map<String, Object> context(Actor actor, String type, long business, long item) {
+    public TargetChangeViews.Context context(Actor actor, String type, long business, long item) {
         return domain(type).context(actor, business, item);
     }
 
-    public Map<String, Object> list(Actor actor, String type, int page, int size) {
+    public TargetChangeViews.Page list(Actor actor, String type, int page, int size) {
         return list(actor, type, page, size, null);
     }
 
-    public Map<String, Object> list(Actor actor, String type, int page, int size, Long businessId) {
+    public TargetChangeViews.Page list(Actor actor, String type, int page, int size, Long businessId) {
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.ASSET_ADMIN) && !current.has(Role.WAREHOUSE_OPERATOR)) { throw TargetChangeFailure.forbidden(); }
         domain(type);
@@ -67,11 +66,11 @@ public class TargetChangeWorkflow {
         args.add(size);
         args.add((page - 1) * size);
         var items = db.queryForList("SELECT * FROM fams_item_target_change" + where + " ORDER BY id DESC LIMIT ? OFFSET ?", args.toArray());
-        return Map.of("items", items.stream().map(this::clean).toList(), "total", Objects.requireNonNull(total), "page", page, "pageSize", size,
-                "canApprove", current.has(Role.ASSET_ADMIN), "canExecute", current.has(Role.WAREHOUSE_OPERATOR));
+        return new TargetChangeViews.Page(items.stream().map(this::clean).toList(), Objects.requireNonNull(total), page, size,
+                current.has(Role.ASSET_ADMIN), current.has(Role.WAREHOUSE_OPERATOR));
     }
 
-    public Map<String, Object> propose(Actor actor, String type, long version, String key, TargetChangeInput.Proposal input) {
+    public TargetChangeViews.Change propose(Actor actor, String type, long version, String key, TargetChangeInput.Proposal input) {
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.WAREHOUSE_OPERATOR)) { throw TargetChangeFailure.forbidden(); }
         var business = domain(type);
@@ -79,15 +78,16 @@ public class TargetChangeWorkflow {
         // Pure target decoding precedes fingerprinting; current references are checked only after replay.
         var canonical = input.withTarget(business.canonicalTarget(input.target()));
         String operation = "REQUISITION".equals(type) ? "propose" : "propose:" + type;
-        var replay = replay(current, operation, key, version, canonical);
+        var replay = replay(current, operation, key, version, canonical, TargetChangeViews.Change.class);
         if (replay != null) { return replay; }
         var snapshot = business.context(actor, canonical.businessId(), canonical.itemId());
-        if (((Number) snapshot.get("version")).longValue() != version || !same(snapshot, canonical.snapshot())) {
+        // The proposal snapshot arrives as a raw HTTP Map; keep the pre-JAVA-04 text round-trip.
+        if (snapshot.version() != version || !same(snapshot, canonical.snapshot())) {
             throw TargetChangeFailure.conflict("TARGET_CHANGE_SCOPE_CHANGED");
         }
         business.validateTarget(canonical.businessId(), canonical.itemId(), canonical.target());
-        if (same(snapshot.get("target"), canonical.target())) { throw TargetChangeFailure.invalid("TARGET_CHANGE_UNCHANGED"); }
-        if (!snapshot.get("assetCode").equals(canonical.observedAssetCode())) { throw TargetChangeFailure.conflict("HANDOVER_ASSET_CODE_MISMATCH"); }
+        if (same(snapshot.target(), canonical.target())) { throw TargetChangeFailure.invalid("TARGET_CHANGE_UNCHANGED"); }
+        if (!snapshot.assetCode().equals(canonical.observedAssetCode())) { throw TargetChangeFailure.conflict("HANDOVER_ASSET_CODE_MISMATCH"); }
         if (!db.queryForList("SELECT id FROM fams_item_target_change WHERE business_type=?"
                 + " AND business_id=? AND item_id=? AND change_status='PENDING' FOR UPDATE", type, canonical.businessId(), canonical.itemId()).isEmpty()) {
             throw TargetChangeFailure.conflict("TARGET_CHANGE_ALREADY_PENDING");
@@ -103,12 +103,12 @@ public class TargetChangeWorkflow {
         return finish(current, operation, key, version, canonical, clean(row(id)));
     }
 
-    public Map<String, Object> decide(Actor actor, String type, long id, long version, String key, TargetChangeInput.Decision input) {
+    public TargetChangeViews.Change decide(Actor actor, String type, long id, long version, String key, TargetChangeInput.Decision input) {
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.ASSET_ADMIN)) { throw TargetChangeFailure.forbidden(); }
         var initial = row(id);
         if (!type.equals(initial.get("business_type"))) { throw TargetChangeFailure.unavailable(); }
-        var replay = replay(current, "decide:" + id, key, version, input);
+        var replay = replay(current, "decide:" + id, key, version, input, TargetChangeViews.Change.class);
         if (replay != null) { return replay; }
         long request = n(initial, "business_id"), item = n(initial, "item_id");
         var business = domain(type);
@@ -119,6 +119,7 @@ public class TargetChangeWorkflow {
         }
         if ("APPROVED".equals(input.result())) {
             var snapshot = business.context(actor, request, item);
+            // The stored source snapshot is a raw JSON tree; keep the text round-trip comparison.
             if (!same(snapshot, json.readTree(proposal.get("source_snapshot_json").toString()))) {
                 throw TargetChangeFailure.conflict("TARGET_CHANGE_SCOPE_CHANGED");
             }
@@ -139,7 +140,7 @@ public class TargetChangeWorkflow {
         return result;
     }
 
-    private Map<String, Object> replay(Current current, String operation, String key, long version, Object input) {
+    private <T> T replay(Current current, String operation, String key, long version, Object input, Class<T> type) {
         var rows = db.queryForList("SELECT * FROM fams_idempotency_record WHERE actor_account_id=? AND operation_id=?"
                 + " AND idempotency_key=? FOR UPDATE", current.id(), "targetChange:" + operation, key);
         if (rows.isEmpty()) { return null; }
@@ -149,15 +150,15 @@ public class TargetChangeWorkflow {
             return null;
         }
         if (!fingerprint(version, input).equals(row.get("payload_sha256"))) { throw TargetChangeFailure.conflict("TARGET_CHANGE_IDEMPOTENCY_CONFLICT"); }
-        return json.readValue(row.get("response_body_json").toString(), new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        return json.readValue(row.get("response_body_json").toString(), type);
     }
 
-    private Map<String, Object> finish(Current current, String operation, String key, long version, Object input, Map<String, Object> result) {
+    private <T extends TargetChangeViews.Reply> T finish(Current current, String operation, String key, long version, Object input, T result) {
         db.update("INSERT INTO fams_idempotency_record (actor_account_id,operation_id,idempotency_key,payload_sha256,"
                 + "result_status,http_status,response_body_json,resource_type,resource_id,resource_version,created_at,completed_at,expires_at)"
                 + " VALUES (?,?,?,?,'SUCCEEDED',200,?,'ITEM_TARGET_CHANGE',?,?,?,?,?)", current.id(), "targetChange:" + operation,
-                key, fingerprint(version, input), json.writeValueAsString(result), Long.parseLong(result.get("id").toString()),
-                ((Number) result.get("version")).longValue(), now(), now(), Timestamp.from(clock.instant().plusSeconds(86400)));
+                key, fingerprint(version, input), json.writeValueAsString(result), Long.parseLong(result.id()),
+                result.version(), now(), now(), Timestamp.from(clock.instant().plusSeconds(86400)));
         return result;
     }
 
@@ -176,23 +177,10 @@ public class TargetChangeWorkflow {
         if (rows.isEmpty()) { throw TargetChangeFailure.unavailable(); }
         return rows.getFirst();
     }
-    private Map<String, Object> clean(Map<String, Object> row) {
-        var result = new LinkedHashMap<String, Object>();
-        for (var entry : row.entrySet()) {
-            String key = entry.getKey();
-            Object value = entry.getValue();
-            if (value != null && key.endsWith("_json")) { value = json.readTree(value.toString()); }
-            else if (value instanceof Timestamp timestamp) { value = timestamp.toInstant().toString(); }
-            else if (value instanceof java.time.LocalDateTime time) { value = time.toInstant(java.time.ZoneOffset.UTC).toString(); }
-            else if (value != null && (key.equals("id") || key.endsWith("_id"))) { value = value.toString(); }
-            result.put(key, value);
-        }
+    private TargetChangeViews.Change clean(Map<String, Object> row) {
         var display = domain(row.get("business_type").toString()).targetDisplay(
                 json.readTree(row.get("proposed_target_json").toString()));
-        if (!display.isEmpty()) {
-            result.put("targetDisplay", display);
-        }
-        return result;
+        return TargetChangeViews.change(json, row, display);
     }
     private void audit(Actor actor, Current current, long id, String action, long before, long after) {
         db.update("INSERT INTO fams_audit_event (request_id,actor_account_id,actor_role,action,resource_type,resource_id,"

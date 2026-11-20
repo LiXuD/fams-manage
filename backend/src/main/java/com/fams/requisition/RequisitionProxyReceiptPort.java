@@ -2,12 +2,11 @@ package com.fams.requisition;
 
 import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.proxy.ProxyReceiptPort;
+import com.fams.proxy.ProxyViews;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
-
-import java.util.Map;
 
 @Component
 @Profile("fams-product")
@@ -43,12 +42,12 @@ class RequisitionProxyReceiptPort implements ProxyReceiptPort {
                 request, account).isEmpty();
     }
 
-    @Override public Map<String, Object> snapshot(Actor actor, long request, long item, boolean executing) {
+    @Override public ProxyViews.ProxySnapshot snapshot(Actor actor, long request, long item, boolean executing) {
         return handovers.proxySnapshot(actor, request, item, executing);
     }
 
-    @Override public Map<String, Object> execute(Actor actor, long request, long item,
-            Map<String, Object> expected, String observedCode, long confirmation) {
+    @Override public ProxyViews.ReceiptResult execute(Actor actor, long request, long item,
+            ProxyViews.ProxySnapshot expected, String observedCode, long confirmation) {
         return handovers.proxyReceipt(actor, request, item, expected, observedCode, confirmation);
     }
 }

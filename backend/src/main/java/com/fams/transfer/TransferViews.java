@@ -289,37 +289,7 @@ public final class TransferViews {
             long lockVersion,
             TargetWire target,
             SourceView source,
-            PhysicalView physical) {
-    }
-
-    public record ProxySnapshot(
-            String businessType,
-            String businessId,
-            String itemId,
-            String requestNo,
-            long version,
-            long approvedVersion,
-            long itemVersion,
-            String assetId,
-            long assetVersion,
-            String assetCode,
-            String targetEmployeeId,
-            String custodyType,
-            String processorAccountId,
-            long ownershipVersion,
-            long lockVersion,
-            JsonNode sourceSnapshot,
-            JsonNode targetSnapshot,
-            JsonNode parameterSnapshot) {
-    }
-
-    public record ProxyReceiptResult(
-            String confirmationId,
-            String requestId,
-            String itemId,
-            String result,
-            String assetCode,
-            String targetEmployeeId) {
+            PhysicalView physical) implements com.fams.targetchange.TargetChangeViews.Context {
     }
 
     static Summary summary(Map<String, Object> row) {

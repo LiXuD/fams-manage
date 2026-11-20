@@ -17,7 +17,7 @@ public interface TargetChangePort {
 
     void requireProcessor(long account, long business);
 
-    Map<String, Object> context(Actor actor, long business, long item);
+    TargetChangeViews.Context context(Actor actor, long business, long item);
 
     JsonNode canonicalTarget(JsonNode input);
 

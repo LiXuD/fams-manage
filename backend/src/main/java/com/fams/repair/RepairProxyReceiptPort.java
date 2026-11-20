@@ -5,11 +5,11 @@ import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.loan.LoanRepairPort;
 import com.fams.proxy.ProxyReceiptFailure;
 import com.fams.proxy.ProxyReceiptPort;
+import com.fams.proxy.ProxyViews;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
-import java.util.Map;
 import java.util.function.Supplier;
 
 @Component
@@ -50,27 +50,27 @@ public class RepairProxyReceiptPort implements ProxyReceiptPort {
     }
 
     @Override
-    public Map<String, Object> snapshot(Actor actor, long request, long item, boolean executing) {
+    public ProxyViews.ProxySnapshot snapshot(Actor actor, long request, long item, boolean executing) {
         return translated(() -> repairs.proxySnapshot(actor, request, item, executing));
     }
 
     @Override
-    public Map<String, Object> execute(
+    public ProxyViews.ReceiptResult execute(
             Actor actor,
             long request,
             long item,
-            Map<String, Object> expected,
+            ProxyViews.ProxySnapshot expected,
             String observedCode,
             long confirmation) {
         throw new ProxyReceiptFailure(400, "REPAIR_PROXY_EVIDENCE_REQUIRED");
     }
 
     @Override
-    public Map<String, Object> execute(
+    public ProxyViews.ReceiptResult execute(
             Actor actor,
             long request,
             long item,
-            Map<String, Object> expected,
+            ProxyViews.ProxySnapshot expected,
             String observedCode,
             long confirmation,
             ExecutionEvidence evidence) {

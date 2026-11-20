@@ -19,8 +19,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
-
 @RestController
 @Profile("fams-product")
 @Validated
@@ -35,7 +33,7 @@ class TargetChangeController {
     }
 
     @GetMapping("/context")
-    Map<String, Object> context(
+    TargetChangeViews.Context context(
             @RequestParam @Pattern(regexp = "REQUISITION|TRANSFER|REPAIR") String businessType,
             @RequestParam @Min(1) long businessId,
             @RequestParam @Min(1) long itemId) {
@@ -43,7 +41,7 @@ class TargetChangeController {
     }
 
     @GetMapping
-    Map<String, Object> list(
+    TargetChangeViews.Page list(
             @RequestParam @Pattern(regexp = "REQUISITION|TRANSFER|REPAIR") String businessType,
             @RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize,
@@ -52,7 +50,7 @@ class TargetChangeController {
     }
 
     @PostMapping
-    Map<String, Object> propose(
+    TargetChangeViews.Change propose(
             @RequestParam @Pattern(regexp = "REQUISITION|TRANSFER|REPAIR") String businessType,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
@@ -61,7 +59,7 @@ class TargetChangeController {
     }
 
     @PostMapping("/{id}/decision")
-    Map<String, Object> decide(
+    TargetChangeViews.Change decide(
             @RequestParam @Pattern(regexp = "REQUISITION|TRANSFER|REPAIR") String businessType,
             @PathVariable long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
