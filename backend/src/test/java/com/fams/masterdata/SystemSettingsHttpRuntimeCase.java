@@ -198,6 +198,7 @@ class SystemSettingsHttpRuntimeCase {
         db.update("DELETE FROM fams_audit_event WHERE actor_account_id BETWEEN 932000 AND 932999");
         db.update("DELETE FROM fams_security_event WHERE account_id BETWEEN 932000 AND 932999");
         db.update("DELETE FROM fams_idempotency_record WHERE resource_type='NOTIFICATION_CHANNEL_CONFIG'");
+        db.update("DELETE FROM fams_idempotency_record WHERE actor_account_id BETWEEN 932000 AND 932999");
         db.update("DELETE FROM fams_system_account WHERE id BETWEEN 932000 AND 932999");
         db.update("DELETE FROM fams_employee WHERE id BETWEEN 932000 AND 932999");
         db.update("DELETE FROM fams_organization WHERE id BETWEEN 932000 AND 932999");
