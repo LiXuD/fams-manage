@@ -59,6 +59,16 @@ class SystemSettingsHttpRuntimeCase {
     void operationLogAuthorizationMaskingPaginationAndChannelVersionChain() throws Exception {
         clean();
         seed();
+        try {
+            verifyOperationLogsAndChannelVersions();
+        } finally {
+            // Runtime cases share one compose database; leftover ACTIVE employees would
+            // shift id-ordered catalogs that later cases index by position.
+            clean();
+        }
+    }
+
+    private void verifyOperationLogsAndChannelVersions() throws Exception {
         var system = login("p25sys");
         var auditor = login("p25audit");
         var employee = login("p25employee");
