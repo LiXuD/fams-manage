@@ -70,7 +70,7 @@ public class ScrapAttachmentTransactions {
         sensitive.requireRead(actor);
     }
 
-    public Map<String, Object> capabilities(Actor actor, long id) {
+    public ScrapViews.AttachmentCapabilities capabilities(Actor actor, long id) {
         reads.get(actor, id);
         var current = actors.revalidateLocked(actor);
         var row = header(id);
@@ -79,14 +79,13 @@ public class ScrapAttachmentTransactions {
         boolean uploadDisposition = current.has(Role.WAREHOUSE_OPERATOR) && !disposition.isEmpty()
                 && Objects.equals(disposition.getFirst().get("processor_account_id"), current.id())
                 && "PENDING_DISPOSITION".equals(disposition.getFirst().get("disposition_status"));
-        var result = new java.util.LinkedHashMap<String, Object>();
-        result.put("canRead", sensitive.mayRead(actor));
-        result.put("canUploadRequest", Objects.equals(row.get("creator_account_id"), current.id())
-                && "PENDING_ADMIN_DECISION".equals(row.get("request_status")));
-        result.put("canUploadDisposition", uploadDisposition);
-        result.put("requestVersion", row.get("version"));
-        result.put("dispositionVersion", disposition.isEmpty() ? null : disposition.getFirst().get("version"));
-        return result;
+        return new ScrapViews.AttachmentCapabilities(
+                sensitive.mayRead(actor),
+                Objects.equals(row.get("creator_account_id"), current.id())
+                        && "PENDING_ADMIN_DECISION".equals(row.get("request_status")),
+                uploadDisposition,
+                ((Number) row.get("version")).longValue(),
+                disposition.isEmpty() ? null : ((Number) disposition.getFirst().get("version")).longValue());
     }
 
     private void uploader(Current actor, Map<String, Object> row, String kind) {
@@ -106,7 +105,7 @@ public class ScrapAttachmentTransactions {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public Map<String, Object> register(Actor actor, long id, String kind, long version, UUID key,
+    public ScrapViews.AttachmentReceipt register(Actor actor, long id, String kind, long version, UUID key,
             String filename, AttachmentIntake.QuarantinedAttachment attachment) {
         var current = actors.revalidateLocked(actor);
         var row = header(id);
@@ -121,7 +120,7 @@ public class ScrapAttachmentTransactions {
                 throw new AssetHandoverPort.Failure("SCRAP_IDEMPOTENCY_CONFLICT", 409);
             }
             return json.readValue(prior.getFirst().get("response_json").toString(),
-                    new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+                    ScrapViews.AttachmentReceipt.class);
         }
         if (attachment.scanResult() == MalwareScanner.Result.UNAVAILABLE) {
             throw new AssetHandoverPort.Failure("SCRAP_ATTACHMENT_SCAN_UNAVAILABLE", 503);
@@ -149,8 +148,8 @@ public class ScrapAttachmentTransactions {
             db.update("UPDATE fams_scrap_disposition SET version=version+1,updated_at=? WHERE request_id=?", time, id);
         }
         registry.register(type(kind), id, version, current.id(), filename, attachment);
-        var result = Map.<String, Object>of("id", Long.toString(id), "kind", kind,
-                "objectId", attachment.file().id().toString(), "version", version + 1);
+        var result = new ScrapViews.AttachmentReceipt(Long.toString(id), kind,
+                attachment.file().id().toString(), version + 1);
         String action = "request".equals(kind) ? "SCRAP_ATTACHMENT_ADDED" : "SCRAP_DISPOSITION_ATTACHMENT_ADDED";
         String detail = json.writeValueAsString(Map.of("objectId", attachment.file().id().toString(),
                 "sha256", attachment.file().sha256(), "kind", kind));

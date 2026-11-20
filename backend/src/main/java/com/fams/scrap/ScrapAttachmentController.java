@@ -23,7 +23,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -42,17 +41,17 @@ public class ScrapAttachmentController {
     }
 
     @GetMapping("/{id}/attachment-capabilities")
-    Map<String, Object> capabilities(@PathVariable @Positive long id) {
+    ScrapViews.AttachmentCapabilities capabilities(@PathVariable @Positive long id) {
         return photos.capabilities(actors.capture(), id);
     }
 
     @GetMapping("/{id}/attachments/{kind}")
-    java.util.List<Map<String, Object>> list(@PathVariable @Positive long id, @PathVariable String kind) {
+    java.util.List<ScrapViews.AttachmentMetadata> list(@PathVariable @Positive long id, @PathVariable String kind) {
         return photos.list(actors.capture(), id, kind);
     }
 
     @PostMapping("/{id}/attachments/{kind}")
-    Map<String, Object> upload(
+    ScrapViews.AttachmentReceipt upload(
             @PathVariable @Positive long id,
             @PathVariable String kind,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
@@ -92,7 +91,7 @@ public class ScrapAttachmentController {
     }
 
     @PostMapping("/{id}/attachments/{kind}/{object}/download-grant")
-    Map<String, Object> grant(
+    ScrapViews.AttachmentGrant grant(
             @PathVariable @Positive long id,
             @PathVariable String kind,
             @PathVariable UUID object,
@@ -100,8 +99,7 @@ public class ScrapAttachmentController {
         var grant = photos.grant(actors.capture(), id, kind, object);
         String prefix =
                 request.getRequestURI().startsWith("/api/v1/mini/") ? "/api/v1/mini" : "/api/v1";
-        return Map.of(
-                "url",
+        return new ScrapViews.AttachmentGrant(
                 prefix
                         + "/scrap-requests/"
                         + id
@@ -111,7 +109,6 @@ public class ScrapAttachmentController {
                         + object
                         + "/content?grant="
                         + grant.token(),
-                "expiresAtEpochSecond",
                 grant.expiresAtEpochSecond());
     }
 

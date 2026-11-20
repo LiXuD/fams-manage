@@ -1,0 +1,95 @@
+JAVA-03/JAVA-04 shared Java gate evidence (2026-11-21)
+Environment: JDK 21.0.7 GraalVM, Node v24.18.0 (FAMS_TEST_NODE_EXECUTABLE), MySQL 8.4.11 pinned digest, isolated compose
+Driver: scripts/verify-d6-03a.py verify_java_quality (full product-gate Java sequence), env patched via __globals__
+Both batches present in the working tree for this single combined run; surefire suites attribute per domain.
+
+[Compose policy model] exit=0
+[Compose first startup] exit=0
+[Compose repeated startup] exit=0
+[D6-04 authentication database provisioning] exit=0
+[pinned MySQL image metadata] exit=0
+[resolved Node runtime] exit=0
+[Java clean] exit=0
+[mini session V16 upgrade] exit=0
+[requisition V18 upgrade and constraints] exit=0
+[requisition V19 change upgrade] exit=0
+[requisition V20 handover upgrade] exit=0
+[loan V21 borrowing and return upgrade] exit=0
+[transfer V25 upgrade and repeat] exit=0
+[transfer V27 ownership upgrade and repeat] exit=0
+[return V28 ownership upgrade and repeat] exit=0
+[proxy confirmation V29 upgrade and repeat] exit=0
+[inventory V31 populated upgrade and repeat] exit=0
+[inventory V32 populated upgrade and repeat] exit=0
+[inventory V33 populated review upgrade and repeat] exit=0
+[inventory V34 populated difference upgrade and repeat] exit=0
+[D6-18 selection filled upgrade runtime] exit=0
+[D6-18 evidence disposition filled upgrade runtime] exit=0
+[inventory V37 populated finding links upgrade and repeat] exit=0
+[inventory V38 populated synchronization upgrade and repeat] exit=0
+[inventory V39 populated unobserved reasons upgrade and repeat] exit=0
+[inventory V40 populated sealed reports upgrade and repeat] exit=0
+[inventory V41 populated terminal supplement upgrade and repeat] exit=0
+[inventory recollection upgrade] exit=0
+[repair V43 populated upgrade and repeat] exit=0
+[repair V44 populated collaboration upgrade] exit=0
+[repair V45 populated physical custody upgrade] exit=0
+[repair V46 populated actual return upgrade] exit=0
+[repair V47 populated approved target expansion] exit=0
+[repair V48 populated proxy evidence expansion] exit=0
+[repair V49 populated damaged return source expansion] exit=0
+[inventory V50 repair source links upgrade and repeat] exit=0
+[inventory V51 independent terminal damage upgrade and repeat] exit=0
+[repair V52 populated factory rounds upgrade and repeat] exit=0
+[repair V53 populated private expense expansion and repeat] exit=0
+[repair V54 populated original parts expansion and repeat] exit=0
+[repair V55 populated independent replacement expansion and repeat] exit=0
+[loss V56 populated expansion and repeat] exit=0
+[loss V57 populated confirmation expansion and repeat] exit=0
+[loss V58 populated original recovery expansion and repeat] exit=0
+[scrap V59 populated expansion and repeat] exit=0
+[lost borrowing V60 populated expansion and repeat] exit=0
+[scrap V61 populated correction expansion and repeat] exit=0
+[scrap V62 populated reversal expansion and repeat] exit=0
+[scrap V63 populated recovery expansion and repeat] exit=0
+[initial scrap V64 populated provenance expansion and repeat] exit=0
+[initial linked scrap V75 through V77 populated expansion and repeat] exit=0
+[inbound processor declaration V78 populated upgrade and repeat] exit=0
+[repair first execution calendar V83 populated upgrade and repeat] exit=0
+[cross-domain reminder ladder V65 occurrence dedupe] exit=0
+[message centre addressivity and per-person read V66] exit=0
+[duty chain admin-only, version-guarded and idempotent V67] exit=0
+[P25 operation log authorization masking and channel version chain V86] exit=0
+[WeChat subscription one-shot quotas and in-app fallback V87] exit=0
+[duty escalation thresholds and occurrence dedupe V68] exit=0
+[scrap submission freeze, audit rollback and receipt HTTP] exit=0
+[actual independent loss verification HTTP] exit=0
+[actual factory scope rounds private evidence and receipt HTTP] exit=0
+[inventory independent terminal damage and supplemental obligations HTTP] exit=0
+[actual damaged return source adoption and native HTTP] exit=0
+[actual repair approved proxy evidence receipt and native HTTP] exit=0
+[actual repair controlled reassignment and native HTTP] exit=0
+[actual repair original receiver handover and continued borrowing HTTP] exit=0
+[actual repair physical acceptance and atomic inbound HTTP] exit=0
+[invitation scoped technical opinions and private evidence HTTP] exit=0
+[actual repair approval ownership custody rollback and photos HTTP] exit=0
+[inventory synchronization declaration and native HTTP] exit=0
+[inventory explicit unobserved reasons and waiting review HTTP] exit=0
+[inventory immutable seal dates and native HTTP] exit=0
+[inventory terminal supplemental decisions and native HTTP] exit=0
+[inventory task snapshot and assignment HTTP] exit=0
+[inventory damage formal repair source HTTP] exit=0
+[inventory collection offline receipts and photos HTTP] exit=0
+[inventory explicit review and concurrent administration HTTP] exit=0
+[durable job coverage] exit=0
+[asset import batch coverage] exit=0
+[asset import HTTP coverage] exit=0
+[Java blocking quality] exit=0
+[Compose cleanup] exit=0
+
+[JAVA01 coverage] LINE: 27163/29185 (93.07%)
+[JAVA01 coverage] BRANCH: 9863/13029 (75.70%)
+JAVA01_VERIFY_PASS
+
+Surefire aggregate: 768 tests, 0 failures, 0 errors
+Unit criteria (main agent re-run on combined tree): ScrapWireShapeTest 12, ProxyWireShapeTest 9, TargetChangeWireShapeTest 9, TransferWireShapeTest 17, LoanWireShapeTest 12, TransferCalendarTest 1 = 60/60

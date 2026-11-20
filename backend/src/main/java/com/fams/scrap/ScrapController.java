@@ -42,30 +42,30 @@ public class ScrapController {
     }
 
     @GetMapping
-    Map<String, Object> list(@RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
+    ScrapViews.RequestPage list(@RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
         return reads.list(actors.capture(), page, pageSize);
     }
 
     @GetMapping("/dispositions/overdue")
-    Map<String, Object> overdueDispositions(@RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
+    ScrapViews.RequestPage overdueDispositions(@RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
         return reads.overdueDispositions(actors.capture(), page, pageSize);
     }
 
     @GetMapping("/eligible")
-    Map<String, Object> eligible(@RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
+    ScrapViews.EligiblePage eligible(@RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
         return reads.eligible(actors.capture(), page, pageSize);
     }
 
     @GetMapping("/{id}")
-    Map<String, Object> get(@PathVariable @Positive long id) {
+    ScrapViews.Request get(@PathVariable @Positive long id) {
         return reads.get(actors.capture(), id);
     }
 
     @GetMapping("/{id}/execution-catalog/{kind}")
-    Map<String, Object> catalog(@PathVariable @Positive long id, @PathVariable String kind,
+    ScrapViews.ChoicePage catalog(@PathVariable @Positive long id, @PathVariable String kind,
             @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
             @RequestParam(defaultValue = "100") @Positive @Max(100) int pageSize) {
         return reads.catalog(actors.capture(), id, kind, page, pageSize);

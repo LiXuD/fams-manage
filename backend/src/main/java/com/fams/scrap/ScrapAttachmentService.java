@@ -15,7 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -36,7 +35,7 @@ public class ScrapAttachmentService {
         this.evidence = evidence;
     }
 
-    public Map<String, Object> upload(Actor actor, long id, String kind, long version, UUID key,
+    public ScrapViews.AttachmentReceipt upload(Actor actor, long id, String kind, long version, UUID key,
             String filename, String mime, InputStream bytes) throws IOException {
         transactions.uploader(actor, id, kind);
         var received = new AtomicReference<UUID>();
@@ -44,21 +43,22 @@ public class ScrapAttachmentService {
             received.set(attachment.file().id());
             return transactions.register(actor, id, kind, version, key, filename, attachment);
         });
-        if (!received.get().toString().equals(result.get("objectId"))) {
+        if (!received.get().toString().equals(result.objectId())) {
             storage.delete(received.get());
         }
         return result;
     }
 
     @Transactional
-    public Map<String, Object> capabilities(Actor actor, long id) {
+    public ScrapViews.AttachmentCapabilities capabilities(Actor actor, long id) {
         return transactions.capabilities(actor, id);
     }
 
     @Transactional
-    public List<Map<String, Object>> list(Actor actor, long id, String kind) {
+    public List<ScrapViews.AttachmentMetadata> list(Actor actor, long id, String kind) {
         transactions.reader(actor, id);
-        return evidence.list(ScrapAttachmentTransactions.type(kind), id);
+        return evidence.list(ScrapAttachmentTransactions.type(kind), id).stream()
+                .map(ScrapViews::attachmentMetadata).toList();
     }
 
     @Transactional
