@@ -30,7 +30,7 @@
 | P20 | 报废与处置 | `/scrap-requests/:id?`，审批、执行、处置与纠正 |
 | P21 | 交接异常和代确认 | `/proxy-confirmations`、`/business-result-reviews`，依据、批准、执行与核查 |
 | P22 | 受控转派 | `/inbound`、`/requisitions`、`/loans`、`/transfers`、`/repairs/:id?` 的域内面板 |
-| P23 | 报表与抽样 | `/` 的资管报表区，指标下钻、授权导出与抽样 |
+| P23 | 报表与抽样 | `/` 的资管报表区；14 个专题端点+汇总/分布/抽样已在实际 Chrome 完成查询、翻页、下钻与 CSV 导出，封存明细与执行人下钻已用封存 fixture 补验（记录 output/d6-25-report/browser-run.md，CSV 转义整改在 1d3a41a）；角色切换实测与抽样真实样本仍待联验 |
 | P24 | 基础资料和人员交接 | `/transfers` 有人员交接入口；组织与人员已在 29251bb 接入 /identity 并通过实际 Chrome 和 MySQL 验证；五类资料目录已在 723d355 接入 /catalogs 并通过实际 Chrome 和 MySQL 验证；身份导入已在 33f5278 接入 /identity-imports 并通过实际 Chrome、MySQL 验证；手机号纠正已在 7d92dc0 接入 /employee-phone-corrections 并通过实际 Chrome、MySQL 验证；完整动作复验继续接续 |
 | P25 | 系统设置 | `/messages` 有值班及部分配置异常入口；账号启停、角色授撤、新建及密码重置已在后继 adbdfcd 接入 /system-accounts；数据范围和敏感字段已在 83d0337 通过实际 Chrome 与 MySQL 验证；业务参数已在 3d1a976 接入 /business-parameters 并通过实际 Chrome 和 MySQL 验证；编号规则已在 ea13045 接入 /numbering-rules 并验证真实建卡分配；通知通道配置与系统操作日志只读查询已在 0518820 接入 /notification-channels、/operation-logs，并通过实际 Chrome 与隔离 MySQL 验证（管理员合并读取、脱敏、分页、审计员授权/撤权即时生效、通道版本链与审计）；全页动作复验继续接续 |
 | P26 | PC 消息中心 | `/messages`，收件箱、异常、个人已读及原单下钻 |

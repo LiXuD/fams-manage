@@ -239,3 +239,7 @@ V79 补登记现有未结差异及冲突，历史首见时间使用升级实际�
 ## 2026-11-17 实物接收改派后的逾期升级
 
 `5404e2d` 让领用和调拨的未读升级及持续未处理群提醒按当前接收人的逾期通知触发。隔离 MySQL 验证旧通知不触发，新通知按原工作日门槛生成群提醒，满 24 小时生成未读升级。消息 HTTP、升级运行时和架构共 8 项通过。固定候选 `236cb03` 已排队复跑完整门禁，独立复核待验。
+
+## 2026-11-20 微信订阅一次额度与站内兜底
+
+`1d3a41a` 落地 V87 一次授权一行一额度：fams_wechat_subscription_grant 以 request_key 幂等，投递消费后置 CONSUMED 并绑定 delivery_key；notification_delivery 渠道扩 WECHAT 并挂 grant_id。契约新增 GET /mini/subscription-visibility 与 POST /mini/subscription-grants，服务端登记核验模板配置、账号归属与业务资格。投递队列按提醒资格、有效小程序绑定与模板匹配选取 AVAILABLE 额度，worker 发送前消费，无供应商或额度不可用即终止并保留站内消息，指标区分 SMS/WECHAT。小程序六个业务页面工厂仅在用户主动点击且模板已配置时调 wx.requestSubscribeMessage，接受后登记额度，拒绝提示可继续在站内查看，无模板隐藏入口。WechatSubscriptionHttpRuntimeCase 覆盖一次额度、服务端归属、幂等重放、拒绝/未知结果重试与无供应商兜底，已登记进产品门禁；小程序 357/357、类型与构建通过，定向运行用例与 SpotBugs 复验零问题。模板占位键 thing1/time2 为临时口径，真实微信授权、模板与投递联调属 D6-09B/10B；新候选完整门禁与独立复核待执行。
