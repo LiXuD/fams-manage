@@ -31,8 +31,9 @@ ROOT = Path(__file__).resolve().parents[1]
 IMAGE = "mysql:8.4.11@sha256:3466ba4a4828aa8d46fb7c3bc16b67b781c98413cf4ea0fac6feaa6e881faa26"
 CLAMAV_IMAGE = "clamav/clamav:1.4.6"
 JAR = ROOT / "backend/target/contract-generation-probe-0.1.0-SNAPSHOT.jar"
-JAVA_HOME = "/Users/lixd/Library/Java/JavaVirtualMachines/graalvm-jdk-21.0.7/Contents/Home"
-NODE_BIN = "/Users/lixd/.nvm/versions/node/v24.18.0/bin"
+JAVA_HOME = os.environ.get("FAMS_ARCH_JAVA_HOME") or str(
+    Path.home() / "Library/Java/JavaVirtualMachines/graalvm-jdk-21.0.7/Contents/Home")
+NODE_BIN = os.environ.get("FAMS_ARCH_NODE_BIN") or str(Path.home() / ".nvm/versions/node/v24.18.0/bin")
 
 
 def checked(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:

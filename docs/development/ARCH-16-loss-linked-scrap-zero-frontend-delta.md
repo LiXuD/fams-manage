@@ -126,7 +126,7 @@ ARCH-15 记录的 266,907 字节不是同一算法，不可直接相减。本批
 ## 复现
 
 ```bash
-JAVA_HOME=/Users/lixd/Library/Java/JavaVirtualMachines/graalvm-jdk-21.0.7/Contents/Home \
+JAVA_HOME=$HOME/Library/Java/JavaVirtualMachines/graalvm-jdk-21.0.7/Contents/Home \
   ./mvnw -B -DskipTests package                                   # jar 内必须含 from-loss 映射
 unzip -p backend/target/contract-generation-probe-0.1.0-SNAPSHOT.jar \
   BOOT-INF/classes/com/fams/scrap/ScrapController.class | grep -a -o 'from-loss/{reportId}'
@@ -136,10 +136,10 @@ python3 scripts/arch-ui-routes.py --out /tmp/arch-routes-16.json      # 只走 -
 git worktree add --detach /tmp/fams-base-7b41e15 7b41e15
 ln -sfn <repo>/node_modules /tmp/fams-base-7b41e15/node_modules
 ln -sfn <repo>/apps/web/node_modules /tmp/fams-base-7b41e15/apps/web/node_modules
-(cd /tmp/fams-base-7b41e15/apps/web && PATH=/Users/lixd/.nvm/versions/node/v24.18.0/bin:$PATH \
+(cd /tmp/fams-base-7b41e15/apps/web && PATH=$HOME/.nvm/versions/node/v24.18.0/bin:$PATH \
   npx vite --port 5174 --strictPort --host 127.0.0.1)
 PW=$(python3 -c "import json;print(json.load(open('/tmp/fams-arch-stack.json'))['password'])")
-export PATH=/Users/lixd/.nvm/versions/node/v24.18.0/bin:$PATH
+export PATH=$HOME/.nvm/versions/node/v24.18.0/bin:$PATH
 node scripts/arch-ui-cdp-sweep.mjs --mode sweep --base http://127.0.0.1:5173 --routes /tmp/arch-routes-16.json --password "$PW" --out /tmp/sweep16-head-all.json --port 9431 --settle 700
 node scripts/arch-ui-cdp-sweep.mjs --mode sweep --base http://127.0.0.1:5174 --routes /tmp/arch-routes-16.json --password "$PW" --out /tmp/sweep16-base-all.json --port 9441 --settle 700
 node scripts/arch-ui-cdp-sweep.mjs --mode diff --left /tmp/sweep16-base-all.json --right /tmp/sweep16-head-all.json

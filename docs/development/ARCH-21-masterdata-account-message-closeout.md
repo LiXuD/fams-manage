@@ -185,7 +185,7 @@ python3 scripts/arch-ui-routes.py --out /tmp/arch-routes-21.json   # 65 条路�
 git worktree add --detach /tmp/fams-base-92f51f1 92f51f1        # 改前参照（合并基线修正批）
 ln -sfn <repo>/node_modules          /tmp/fams-base-92f51f1/node_modules
 ln -sfn <repo>/apps/web/node_modules /tmp/fams-base-92f51f1/apps/web/node_modules
-(cd /tmp/fams-base-92f51f1/apps/web && PATH="/Users/lixd/.nvm/versions/node/v24.18.0/bin:$PATH" npx vite --port 5174 --strictPort --host 127.0.0.1)
+(cd /tmp/fams-base-92f51f1/apps/web && PATH="$HOME/.nvm/versions/node/v24.18.0/bin:$PATH" npx vite --port 5174 --strictPort --host 127.0.0.1)
 # 先 curl 预热 worktree dev server（首次请求触发依赖预优化并重启）
 PW=$(python3 -c "import json;print(json.load(open('/tmp/fams-arch-stack.json'))['password'])")
 for T in "5174 9442 base" "5173 9471 head"; do set -- $T

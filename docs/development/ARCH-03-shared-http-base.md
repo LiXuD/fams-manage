@@ -26,7 +26,7 @@
    收紧说明：`serverCode` 经 `/^[A-Z][A-Z0-9_]{0,63}$/` 合形过滤（原 asset/inbound/repair/review 不过滤）。全仓对 `error.code` 的比较值均为大写蛇形，已实测确认，故此收紧不改变任何现有分支走向，只阻止不合形的服务端串漏进中文 UI。
 5. **不改视图**（除第 5 项专职任务：5 处裸 `fetch()` 预签名下载改走原语）。
 6. **不碰** `src/api/http.ts`、已迁移的 `inbound|loan|repair/api.ts`、`auth/api.ts`（登录/登出无会话态，走自己的 `requestJson`，是**有意的例外**，不得为凑统一而并入）、任何配置与 CSS。
-7. 每域迁移后必须跑：`rtk env PATH="/Users/lixd/.nvm/versions/node/v24.18.0/bin:$PATH" npx vue-tsc --noEmit` 与该域相关 `npx vitest run <pattern>`；**不得修改测试断言来让它通过**——若断言失败，说明请求头或错误形状变了，改回实现。
+7. 每域迁移后必须跑：`rtk env PATH="$HOME/.nvm/versions/node/v24.18.0/bin:$PATH" npx vue-tsc --noEmit` 与该域相关 `npx vitest run <pattern>`；**不得修改测试断言来让它通过**——若断言失败，说明请求头或错误形状变了，改回实现。
 
 ## 三、已完成的样板（照此办理）
 
