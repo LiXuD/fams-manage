@@ -1,9 +1,11 @@
 import type { MiniServices } from "./pages.ts";
 import { MiniRequestError } from "./session.ts";
+import { subscribeReminder, subscriptionTemplate, subscriptionUpdate } from "./subscription.ts";
 import type { PendingReceipt, ReceiptDetail } from "../../../packages/api-types/src/requisition";
 
 interface Data { rows: PendingReceipt[]; selected: ReceiptDetail | null; page: number; total: number;
-    busy: boolean; error: string; notice: string; observedCode: string; checked: boolean; reason: string; retryable: boolean }
+    busy: boolean; error: string; notice: string; observedCode: string; checked: boolean; reason: string; retryable: boolean;
+    subscriptionTemplate: string; subscriptionNotice: string }
 interface Context { data: Data; setData(value: Partial<Data>): void; onRefresh(): Promise<void> }
 interface Event { detail: { value: string | string[] }; currentTarget: { dataset: { id?: string; request?: string } } }
 function message(error: unknown) {
@@ -37,7 +39,7 @@ export function createReceiptPage(getServices: () => MiniServices) {
             const result = await services.sessions.request("POST", pending.path, pending.body, pending) as { result: string };
             if (!live || current !== generation) return;
             pending = null; grant = null;
-            page.setData({ selected: null, retryable: false, observedCode: "", checked: false,
+            page.setData({ selected: null, retryable: false, observedCode: "", checked: false, subscriptionNotice: "",
                 notice: result.result === "RECEIVED" ? "接收已确认，正式责任已更新。" : "已反馈不符，资产仍待交接，库管将核查。" });
             await load(page);
         } catch (error) {
@@ -70,7 +72,7 @@ export function createReceiptPage(getServices: () => MiniServices) {
     };
     return {
         data: { rows: [], selected: null, page: 1, total: 0, busy: false, error: "", notice: "",
-            observedCode: "", checked: false, reason: "", retryable: false } as Data,
+            observedCode: "", checked: false, reason: "", retryable: false, subscriptionTemplate: "", subscriptionNotice: "" } as Data,
         onLoad(options: { allocationId?: string } = {}) {
             allocationId = /^[1-9][0-9]{0,18}$/.test(options.allocationId ?? "") ? options.allocationId! : "";
         },
@@ -79,7 +81,8 @@ export function createReceiptPage(getServices: () => MiniServices) {
             services = getServices(); const next = JSON.stringify(services.sessions.identity);
             if (identity !== next) {
                 identity = next; pending = null; grant = null;
-                this.setData({ rows: [], selected: null, observedCode: "", checked: false, reason: "", retryable: false, page: 1 });
+                this.setData({ rows: [], selected: null, observedCode: "", checked: false, reason: "", retryable: false, page: 1,
+                    subscriptionTemplate: "", subscriptionNotice: "" });
             }
             this.setData({ busy: true, error: "" });
             try { await load(this); }
@@ -97,7 +100,20 @@ export function createReceiptPage(getServices: () => MiniServices) {
                 if (!live || current !== generation) return;
                 const credential = await services.sessions.request("POST", path + "/grant") as { grant: string };
                 if (!live || current !== generation) return;
-                grant = credential.grant; this.setData({ selected, observedCode: "", checked: false, reason: "" });
+                const template = await subscriptionTemplate(services);
+                if (!live || current !== generation) return;
+                grant = credential.grant; this.setData({ selected, observedCode: "", checked: false, reason: "",
+                    subscriptionTemplate: template, subscriptionNotice: "" });
+            } catch (error) { if (live && current === generation) this.setData({ error: message(error) }); }
+            finally { if (live && current === generation) this.setData({ busy: false }); }
+        },
+        async onSubscribeReceipt(this: Context) {
+            const selected = this.data.selected;
+            if (!services || !live || this.data.busy || pending || !selected || !this.data.subscriptionTemplate) return;
+            const current = generation; this.setData({ busy: true, error: "", subscriptionNotice: "" });
+            try {
+                const outcome = await subscribeReminder(services, { scene: "RECEIPT", businessType: "REQUISITION_ALLOCATION", businessId: selected.allocationId });
+                if (live && current === generation) this.setData(subscriptionUpdate(outcome));
             } catch (error) { if (live && current === generation) this.setData({ error: message(error) }); }
             finally { if (live && current === generation) this.setData({ busy: false }); }
         },
@@ -119,7 +135,7 @@ export function createReceiptPage(getServices: () => MiniServices) {
         async onRetry(this: Context) { await perform(this); },
         async onRefresh(this: Context) {
             if (this.data.busy) return; pending = null; grant = null;
-            this.setData({ selected: null, retryable: false, observedCode: "", checked: false });
+            this.setData({ selected: null, retryable: false, observedCode: "", checked: false, subscriptionNotice: "" });
             this.setData({ busy: true, error: "" }); const current = generation;
             try { await load(this); } catch (error) { if (live && current === generation) this.setData({ error: message(error) }); }
             finally { if (live && current === generation) this.setData({ busy: false }); }

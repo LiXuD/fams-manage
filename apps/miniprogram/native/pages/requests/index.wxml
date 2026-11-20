@@ -61,6 +61,8 @@ module.exports = {status:function(value){return names[value] || value;},reason:f
     </block>
     <button wx:if="{{selected.creatorAccountId === accountId && (selected.requestStatus === 'DRAFT' || selected.requestStatus === 'REJECTED' || (selected.requestStatus === 'PENDING_ADMIN_DECISION' && !selected.decisions.length))}}" bindtap="onCancel" disabled="{{busy || retryable || !reason}}">取消申请</button>
     <button wx:if="{{selected.creatorAccountId === accountId}}" bindtap="onDispute" disabled="{{busy || retryable || !reason}}">通知管理员核查无法满足结果</button>
+    <button wx:if="{{subscriptionTemplate && selected.creatorAccountId === accountId}}" bindtap="onSubscribeProgress" disabled="{{busy || retryable}}">订阅进度通知</button>
+    <view wx:if="{{subscriptionNotice}}" class="hint">{{subscriptionNotice}}</view>
     <view class="hint">分配后仍为待交接；未交出资产不提供接收按钮。</view>
   </view>
   <navigator url="/pages/mine/index" open-type="redirect">返回我的账号</navigator>

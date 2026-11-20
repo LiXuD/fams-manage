@@ -265,11 +265,13 @@ class DutyHttpRuntimeCase {
         });
         var adapters = provider.getBeanProvider(MiniNotificationSmsPort.class);
         new NotificationDeliveryWorker(jobs, deliveries, adapters,
+                provider.getBeanProvider(WechatSubscriptionPort.class),
                 () -> new NotificationChannelConfigPort.Templates("reminder-test", "")).poll();
         assertEquals(1, calls.size());
         db.update("UPDATE fams_durable_job SET next_attempt_at=? WHERE id=?",
                 Timestamp.from(clock.instant().minusSeconds(1)), calls.getFirst());
         new NotificationDeliveryWorker(jobs, deliveries, adapters,
+                provider.getBeanProvider(WechatSubscriptionPort.class),
                 () -> new NotificationChannelConfigPort.Templates("reminder-test", "")).poll();
         assertEquals(2, calls.size());
         assertEquals(calls.getFirst(), calls.getLast());
@@ -299,8 +301,8 @@ class DutyHttpRuntimeCase {
         assertEquals(1, inventory.path("notObserved").asInt());
         var export = get(restored, report.replace("?", "/inventory.csv?"));
         assertEquals(200, code(export));
-        assertEquals("taskId,sealedAt,expected,accepted,notObserved\r\n931000,2026-11-13T09:00:00Z,4,3,1",
-                export.body());
+        assertEquals("taskId,sealedAt,expected,accepted,notObserved\r\n"
+                + "\"931000\",\"2026-11-13T09:00:00Z\",\"4\",\"3\",\"1\"", export.body());
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM fams_audit_event"
                 + " WHERE action='OPERATIONS_REPORT_EXPORTED'", Integer.class));
 

@@ -20,6 +20,7 @@ export interface WxApi {
     request(input: { url: string; method: string; header: Record<string, string>; data?: unknown; timeout: number;
         success(reply: { statusCode: number; data: unknown }): void; fail(error: unknown): void }): void;
     scanCode?(input: { onlyFromCamera: boolean; success(reply: { result: string }): void; fail(error: unknown): void }): void;
+    requestSubscribeMessage?(input: { tmplIds: string[]; success(reply: Record<string, "accept" | "reject" | "ban">): void; fail(error: unknown): void }): void;
     login(input: { timeout: number; success(result: { code: string }): void; fail(error: unknown): void }): void;
     getStorageSync(key: string): unknown;
     setStorageSync(key: string, value: unknown): void;
@@ -40,6 +41,15 @@ export function chooseInventoryPhoto(wx: WxApi, source: "camera" | "album"): Pro
                 resolve({ path: photo.path, name: `现场照片.${extension}`, size: photo.size });
             }, fail: () => reject(new Error("照片无法读取，请重新拍摄或选择。")) });
         }, fail: () => reject(new Error("拍照或选图未完成，请重试。")) });
+    });
+}
+
+/** Tap-only subscription entry; a missing or failing wx API resolves as a refusal so the in-app fallback stays available. */
+export function requestSubscribe(wx: WxApi, templateId: string): Promise<"accept" | "reject" | "ban"> {
+    return new Promise(resolve => {
+        if (!wx.requestSubscribeMessage) { resolve("reject"); return; }
+        wx.requestSubscribeMessage({ tmplIds: [templateId],
+            success: reply => resolve(reply[templateId] ?? "reject"), fail: () => resolve("reject") });
     });
 }
 

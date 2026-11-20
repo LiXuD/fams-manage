@@ -13,6 +13,7 @@ export interface MiniServices {
     navigate(url: string): void;
     confirm(title: string, content: string): Promise<boolean>;
     scan?(): Promise<string>;
+    requestSubscribe?(templateId: string): Promise<"accept" | "reject" | "ban">;
     chooseEvidence?(): Promise<{ path: string; name: string; size: number }>;
     chooseInventoryPhoto?(source: "camera" | "album"): Promise<{ path: string; name: string; size: number }>;
     openEvidence?(path: string, filename?: string): Promise<void>;

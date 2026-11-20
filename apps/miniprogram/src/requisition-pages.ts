@@ -1,5 +1,6 @@
 import type { MiniServices } from "./pages.ts";
 import { MiniRequestError } from "./session.ts";
+import { subscribeReminder, subscriptionTemplate, subscriptionUpdate } from "./subscription.ts";
 import type { Requisition, RequisitionCatalog, RequisitionChoice, RequisitionDemandInput, RequisitionPage, RequisitionSummary }
     from "../../../packages/api-types/src/requisition";
 
@@ -12,7 +13,7 @@ interface Data {
     page: number; total: number; showForm: boolean; retryable: boolean; mode: "new" | "revise" | "change";
     categories: RequisitionChoice[]; organizations: RequisitionChoice[]; employees: RequisitionChoice[];
     locations: RequisitionChoice[]; canApplyShared: boolean; form: FormRow[]; reason: string;
-    requestType: "REQUISITION" | "BORROW"; expectedReturnDate: string;
+    requestType: "REQUISITION" | "BORROW"; expectedReturnDate: string; subscriptionTemplate: string; subscriptionNotice: string;
 }
 interface Context { data: Data; setData(value: Partial<Data>): void }
 interface Event { detail: { value: string }; currentTarget: { dataset: { index?: number; field?: string; id?: string } } }
@@ -62,7 +63,10 @@ export function createRequisitionPage(getServices: () => MiniServices, initially
         try {
             const result = await services.sessions.request(pending.method, pending.path, pending.body, pending) as Requisition;
             if (!live || generation !== current) return;
-            pending = null; page.setData({ selected: result, showForm: false, retryable: false, notice: "操作已保存。" });
+            const template = await subscriptionTemplate(services);
+            if (!live || generation !== current) return;
+            pending = null; page.setData({ selected: result, showForm: false, retryable: false, notice: "操作已保存。",
+                subscriptionTemplate: template, subscriptionNotice: "" });
             await load(page);
         } catch (error) {
             if (live && generation === current) page.setData({ error: message(error), retryable: true });
@@ -92,14 +96,16 @@ export function createRequisitionPage(getServices: () => MiniServices, initially
     return {
         data: { accountId: "", busy: false, error: "", notice: "", rows: [], selected: null, page: 1, total: 0,
             showForm: false, retryable: false, mode: "new", categories: [], organizations: [], employees: [], locations: [],
-            canApplyShared: false, form: [], reason: "", requestType: "REQUISITION", expectedReturnDate: "" } as Data,
+            canApplyShared: false, form: [], reason: "", requestType: "REQUISITION", expectedReturnDate: "",
+            subscriptionTemplate: "", subscriptionNotice: "" } as Data,
         async onShow(this: Context) {
             live = true; const current = ++generation;
             try {
                 services = getServices(); const nextIdentity = JSON.stringify(services.sessions.identity);
                 if (nextIdentity !== identity) {
                     identity = nextIdentity; pending = null;
-                    this.setData({ selected: null, rows: [], form: [], showForm: false, retryable: false, reason: "" });
+                    this.setData({ selected: null, rows: [], form: [], showForm: false, retryable: false, reason: "",
+                        subscriptionTemplate: "", subscriptionNotice: "" });
                 }
                 this.setData({ busy: true, error: "", accountId: services.sessions.identity?.accountId ?? "" });
                 const result: Record<string, RequisitionChoice[]> = {};
@@ -199,7 +205,21 @@ export function createRequisitionPage(getServices: () => MiniServices, initially
             if (!services || this.data.busy || pending) return; const current = generation; this.setData({ busy: true, error: "" });
             try {
                 const selected = await services.sessions.request("GET", path + "/" + event.currentTarget.dataset.id) as Requisition;
-                if (live && generation === current) this.setData({ selected, showForm: false });
+                const template = await subscriptionTemplate(services);
+                if (live && generation === current) this.setData({ selected, showForm: false,
+                    subscriptionTemplate: template, subscriptionNotice: "" });
+            } catch (error) { if (live && generation === current) this.setData({ error: message(error) }); }
+            finally { if (live && generation === current) this.setData({ busy: false }); }
+        },
+        async onSubscribeProgress(this: Context) {
+            const selected = this.data.selected;
+            if (!services || !live || this.data.busy || pending || identity !== JSON.stringify(services.sessions.identity)
+                || !selected || selected.creatorAccountId !== services.sessions.identity?.accountId
+                || !this.data.subscriptionTemplate) return;
+            const current = generation; this.setData({ busy: true, error: "", subscriptionNotice: "" });
+            try {
+                const outcome = await subscribeReminder(services, { scene: "PROGRESS", businessType: "REQUISITION", businessId: selected.id });
+                if (live && generation === current) this.setData(subscriptionUpdate(outcome));
             } catch (error) { if (live && generation === current) this.setData({ error: message(error) }); }
             finally { if (live && generation === current) this.setData({ busy: false }); }
         },
@@ -229,7 +249,8 @@ export function createRequisitionPage(getServices: () => MiniServices, initially
                 await load(this);
                 if (this.data.selected) {
                     const selected = await services.sessions.request("GET", path + "/" + this.data.selected.id) as Requisition;
-                    if (live && generation === current) this.setData({ selected });
+                    const template = await subscriptionTemplate(services);
+                    if (live && generation === current) this.setData({ selected, subscriptionTemplate: template, subscriptionNotice: "" });
                 }
                 if (live && generation === current) { pending = null; this.setData({ retryable: false }); }
             } catch (error) { if (live && generation === current) this.setData({ error: message(error) }); }

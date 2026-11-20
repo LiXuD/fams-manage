@@ -1,5 +1,6 @@
 package com.fams.report;
 
+import com.fams.assetimport.AssetImportWorkbook;
 import com.fams.auth.AssetActorContext;
 import java.sql.Timestamp;
 import java.time.Clock;
@@ -65,10 +66,10 @@ class TagCoverageReportService {
             if (verified) {
                 covered++;
             }
-            csv.append(row.assetId()).append(',').append(orEmpty(row.tagVersion())).append(',')
-                    .append(orEmpty(row.taskId())).append(',').append(utc(row.placement())).append(',')
-                    .append(utc(row.recognition())).append(',')
-                    .append(verified ? "COVERED" : row.tagVersion() == null ? "NO_TAG" : "EVIDENCE_MISSING")
+            csv.append(csv(row.assetId())).append(',').append(csv(row.tagVersion())).append(',')
+                    .append(csv(row.taskId())).append(',').append(csv(utc(row.placement()))).append(',')
+                    .append(csv(utc(row.recognition()))).append(',')
+                    .append(csv(verified ? "COVERED" : row.tagVersion() == null ? "NO_TAG" : "EVIDENCE_MISSING"))
                     .append("\r\n");
         }
         db.update("""
@@ -79,8 +80,8 @@ class TagCoverageReportService {
         return csv.toString();
     }
 
-    private static String orEmpty(String value) {
-        return value == null ? "" : value;
+    private static String csv(String value) {
+        return value == null ? "" : "\"" + AssetImportWorkbook.safeExportCell(value).replace("\"", "\"\"") + "\"";
     }
 
     private static String utc(Timestamp value) {

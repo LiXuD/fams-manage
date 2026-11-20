@@ -1,5 +1,6 @@
 package com.fams.report;
 
+import com.fams.assetimport.AssetImportWorkbook;
 import com.fams.auth.AssetActorContext;
 
 import java.sql.Timestamp;
@@ -86,9 +87,10 @@ class OperationsReportService {
         var rows = db.query("""
                 SELECT s.task_id, s.created_at, s.expected_count, s.accepted_count, s.not_observed_count
                 """ + INVENTORY + " ORDER BY s.created_at, s.task_id LIMIT 10001",
-                (row, index) -> String.join(",", row.getString("task_id"),
-                        row.getTimestamp("created_at").toInstant().toString(), row.getString("expected_count"),
-                        row.getString("accepted_count"), row.getString("not_observed_count")), start(start), start(end));
+                (row, index) -> String.join(",", csv(row.getString("task_id")),
+                        csv(row.getTimestamp("created_at").toInstant().toString()), csv(row.getString("expected_count")),
+                        csv(row.getString("accepted_count")), csv(row.getString("not_observed_count"))),
+                start(start), start(end));
         if (rows.size() > 10000) {
             throw new IllegalArgumentException("REPORT_EXPORT_LIMIT");
         }
@@ -104,6 +106,10 @@ class OperationsReportService {
 
     private static Timestamp start(LocalDate date) {
         return Timestamp.from(date.atStartOfDay().toInstant(ZoneOffset.UTC));
+    }
+
+    private static String csv(String value) {
+        return value == null ? "" : "\"" + AssetImportWorkbook.safeExportCell(value).replace("\"", "\"\"") + "\"";
     }
 
     record Inventory(long sealedTasks, long expected, long accepted, long notObserved) {}

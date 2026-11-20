@@ -1,12 +1,15 @@
 import type { MiniServices } from "./pages.ts";
 import { MiniRequestError } from "./session.ts";
+import { subscribeReminder, subscriptionTemplate, subscriptionUpdate } from "./subscription.ts";
 interface Task { id: string; name: string; task_status: string; starts_at: string; due_at: string; overdue?: boolean; statusLabel?: string; startsText?: string; dueText?: string }
 interface Item { id: string; assignment_version: number; snapshot_json: { assetCode: string; name: string; locationName?: string;
     responsibleEmployeeName?: string; departmentResponsibleEmployeeName?: string; custodyType?: string } }
-interface Data { canManage: boolean; tasks: Task[]; task: Task | null; items: Item[]; page: number; total: number; itemPage: number; itemTotal: number; busy: boolean; error: string }
+interface Data { canManage: boolean; tasks: Task[]; task: Task | null; items: Item[]; page: number; total: number; itemPage: number; itemTotal: number; busy: boolean; error: string;
+    subscriptionTemplate: string; subscriptionNotice: string }
 interface Context { data: Data; setData(value: Partial<Data>): void }
 interface Event { currentTarget: { dataset: { id?: string; delta?: string } } }
-const empty = (): Data => ({ canManage: false, tasks: [], task: null, items: [], page: 1, total: 0, itemPage: 1, itemTotal: 0, busy: false, error: "" });
+const empty = (): Data => ({ canManage: false, tasks: [], task: null, items: [], page: 1, total: 0, itemPage: 1, itemTotal: 0, busy: false, error: "",
+    subscriptionTemplate: "", subscriptionNotice: "" });
 const base = "/api/v1/mini/inventory-tasks";
 const statusLabels: Record<string, string> = { DRAFT: "草稿", READY: "待开始", IN_PROGRESS: "进行中", WAITING_REVIEW: "待复核", COMPLETED: "已完成", CANCELLED: "已取消", TERMINATED: "已终止" };
 function displayTime(value: string) {
@@ -31,10 +34,13 @@ export function createInventoryPage(getServices: () => MiniServices) {
         try {
             if (id) {
                 const result = await services.sessions.request("GET", `${base}/${encodeURIComponent(id)}?page=${page.data.itemPage}&pageSize=20`) as { task: Task; items: Item[]; total: number; canManage?: boolean };
-                if (current(epoch)) page.setData({ task: displayTask(result.task), items: result.items, itemTotal: result.total, canManage: result.canManage === true });
+                const template = await subscriptionTemplate(services);
+                if (current(epoch)) page.setData({ task: displayTask(result.task), items: result.items, itemTotal: result.total, canManage: result.canManage === true,
+                    subscriptionTemplate: template, subscriptionNotice: "" });
             } else {
                 const result = await services.sessions.request("GET", `${base}?page=${page.data.page}&pageSize=20`) as { items: Task[]; total: number; canManage?: boolean };
-                if (current(epoch)) page.setData({ tasks: result.items.map(displayTask), total: result.total, task: null, items: [], itemTotal: 0, canManage: result.canManage === true });
+                if (current(epoch)) page.setData({ tasks: result.items.map(displayTask), total: result.total, task: null, items: [], itemTotal: 0, canManage: result.canManage === true,
+                    subscriptionTemplate: "", subscriptionNotice: "" });
             }
         } catch (error) {
             if (live && epoch === generation && !services.sessions.identity) {
@@ -69,6 +75,16 @@ export function createInventoryPage(getServices: () => MiniServices) {
         onReview(this: Context) {
             if (this.data.busy || !this.data.canManage || !this.data.task || !current(generation)) return;
             services.navigate("/pages/inventory-reviews/index?taskId=" + encodeURIComponent(this.data.task.id));
+        },
+        async onSubscribeTask(this: Context) {
+            const task = this.data.task;
+            if (this.data.busy || !task || !current(generation) || !this.data.subscriptionTemplate) return;
+            const epoch = generation; this.setData({ busy: true, error: "", subscriptionNotice: "" });
+            try {
+                const outcome = await subscribeReminder(services, { scene: "INVENTORY_TASK", businessType: "INVENTORY_TASK", businessId: task.id });
+                if (current(epoch)) this.setData(subscriptionUpdate(outcome));
+            } catch (error) { if (current(epoch)) failure(this, error); }
+            finally { if (current(epoch)) this.setData({ busy: false }); }
         },
         async onPage(this: Context, event: Event) {
             if (this.data.busy) return;

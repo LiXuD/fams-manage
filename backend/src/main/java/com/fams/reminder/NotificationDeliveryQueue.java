@@ -19,6 +19,20 @@ import org.springframework.transaction.annotation.Transactional;
 @Profile("fams-product")
 class NotificationDeliveryQueue {
     static final String KIND = "NOTIFICATION_SMS";
+    static final String WECHAT_KIND = "NOTIFICATION_WECHAT";
+    private static final String GRANT_MATCH = """
+            ((g.business_type = 'REQUISITION' AND r.business_type = 'REQUISITION_ALLOCATION' AND EXISTS (
+                SELECT 1 FROM fams_requisition_allocation x WHERE x.id = r.business_id AND x.request_id = g.business_id))
+            OR (g.business_type = 'REPAIR' AND r.business_type = 'REPAIR_FACTORY_ROUND' AND EXISTS (
+                SELECT 1 FROM fams_repair_factory_round x WHERE x.id = r.business_id AND x.repair_id = g.business_id))
+            OR (g.business_type = r.business_type AND g.business_id = r.business_id))
+            """;
+    private static final String GRANT_AVAILABLE = """
+            SELECT 1 FROM fams_wechat_subscription_grant g
+            WHERE g.account_id = a.id AND g.status = 'AVAILABLE' AND g.template_id = ? AND
+            """ + GRANT_MATCH + """
+                AND NOT EXISTS (SELECT 1 FROM fams_notification_delivery d2 WHERE d2.grant_id = g.id)
+            """;
     private static final String ACTIVE_STAGE = """
             AND (
                 (r.business_type = 'INBOUND' AND
@@ -178,6 +192,54 @@ class NotificationDeliveryQueue {
         }
     }
 
+    @Transactional
+    public void enqueueWechat(String template) {
+        var now = clock.instant();
+        var dayAgo = Timestamp.from(now.minusSeconds(86400));
+        List<WechatRecipient> due = db.query("""
+                SELECT r.id, r.recipient_account_id, (
+                    SELECT g.id FROM fams_wechat_subscription_grant g
+                    WHERE g.account_id = a.id AND g.status = 'AVAILABLE' AND g.template_id = ? AND
+                """ + GRANT_MATCH + """
+                        AND NOT EXISTS (SELECT 1 FROM fams_notification_delivery d2 WHERE d2.grant_id = g.id)
+                    ORDER BY g.id LIMIT 1)
+                FROM fams_business_reminder r
+                JOIN fams_system_account a ON a.id = r.recipient_account_id
+                JOIN fams_employee e ON e.id = a.employee_id
+                JOIN fams_organization o ON o.id = e.organization_id
+                JOIN fams_account_role ar ON ar.account_id = a.id AND ar.role_code = r.recipient_pool_type
+                WHERE (r.reminder_type <> 'DUTY_UNREAD_ESCALATION' OR r.created_at >= ?)
+                """ + ELIGIBLE + """
+                  AND (r.reminder_type <> 'SMS_FALLBACK' OR NOT EXISTS (
+                      SELECT 1 FROM fams_business_reminder newer
+                      WHERE newer.business_type = r.business_type AND newer.business_id = r.business_id
+                          AND newer.stage = r.stage AND newer.reminder_type = r.reminder_type
+                          AND newer.recipient_slot = r.recipient_slot AND newer.id > r.id
+                  ))
+                  AND EXISTS (SELECT 1 FROM fams_mini_binding b WHERE b.account_id = a.id AND b.revoked_at IS NULL)
+                  AND EXISTS (""" + GRANT_AVAILABLE + """
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM fams_notification_delivery d
+                      WHERE d.reminder_id = r.id AND d.recipient_account_id = a.id AND d.channel = 'WECHAT'
+                  )
+                ORDER BY r.id LIMIT 100
+                """, (row, index) -> new WechatRecipient(row.getLong(1), row.getLong(2), row.getLong(3)),
+                template, dayAgo, dayAgo, Timestamp.from(now), dayAgo, template);
+        for (var recipient : due) {
+            String reference = Long.toString(recipient.reminderId());
+            String key = "wechat-reminder-" + reference;
+            var job = jobs.submit(WECHAT_KIND, reference, recipient.accountId(), key, hash(key));
+            db.update("""
+                    INSERT INTO fams_notification_delivery
+                        (reminder_id,recipient_account_id,channel,template_code,job_id,grant_id,requested_at)
+                    VALUES (?,?,'WECHAT',?,?,?,?)
+                    ON DUPLICATE KEY UPDATE reminder_id = fams_notification_delivery.reminder_id
+                    """, recipient.reminderId(), recipient.accountId(), template, job.id().toString(),
+                    recipient.grantId(), Timestamp.from(clock.instant()));
+        }
+    }
+
     String eligibleTemplate(DurableJobService.Claim claim) {
         var now = clock.instant();
         var dayAgo = Timestamp.from(now.minusSeconds(86400));
@@ -198,6 +260,60 @@ class NotificationDeliveryQueue {
                 Timestamp.from(clock.instant()), claim.id().toString());
     }
 
+    String eligibleWechatTemplate(DurableJobService.Claim claim) {
+        var now = clock.instant();
+        var dayAgo = Timestamp.from(now.minusSeconds(86400));
+        return db.query("""
+                SELECT d.template_code FROM fams_notification_delivery d
+                JOIN fams_business_reminder r ON r.id = d.reminder_id
+                JOIN fams_system_account a ON a.id = d.recipient_account_id
+                JOIN fams_employee e ON e.id = a.employee_id
+                JOIN fams_organization o ON o.id = e.organization_id
+                JOIN fams_account_role ar ON ar.account_id = a.id AND ar.role_code = r.recipient_pool_type
+                WHERE d.job_id = ? AND d.channel = 'WECHAT'
+                """ + ELIGIBLE + """
+                AND EXISTS (SELECT 1 FROM fams_mini_binding b WHERE b.account_id = a.id AND b.revoked_at IS NULL)
+                AND EXISTS (
+                    SELECT 1 FROM fams_wechat_subscription_grant g WHERE g.id = d.grant_id
+                        AND (g.status = 'AVAILABLE' OR (g.status = 'CONSUMED' AND g.delivery_key = d.job_id))
+                )
+                """, (row, index) -> row.getString(1), claim.id().toString(), dayAgo, Timestamp.from(now), dayAgo)
+                .stream().findFirst().orElse(null);
+    }
+
+    record WechatContext(Long grantId, long accountId, String businessType, long businessId, Timestamp deadline) {}
+
+    WechatContext wechatContext(DurableJobService.Claim claim) {
+        return db.query("""
+                SELECT d.grant_id, d.recipient_account_id, r.business_type, r.business_id, r.deadline_at
+                FROM fams_notification_delivery d
+                JOIN fams_business_reminder r ON r.id = d.reminder_id
+                WHERE d.job_id = ?
+                """, (row, index) -> new WechatContext(row.getObject(1, Long.class), row.getLong(2),
+                row.getString(3), row.getLong(4), row.getTimestamp(5)), claim.id().toString())
+                .stream().findFirst().orElse(null);
+    }
+
+    Long activeBinding(long accountId) {
+        return db.query("SELECT id FROM fams_mini_binding WHERE account_id = ? AND revoked_at IS NULL ORDER BY id LIMIT 1",
+                (row, index) -> row.getLong(1), accountId).stream().findFirst().orElse(null);
+    }
+
+    boolean consumeGrant(long grantId, String deliveryKey) {
+        var rows = db.query("SELECT status, delivery_key FROM fams_wechat_subscription_grant WHERE id = ?",
+                (row, index) -> new String[] {row.getString(1), row.getString(2)}, grantId);
+        if (rows.isEmpty()) {
+            return false;
+        }
+        if ("CONSUMED".equals(rows.getFirst()[0])) {
+            return deliveryKey.equals(rows.getFirst()[1]);
+        }
+        return db.update("""
+                UPDATE fams_wechat_subscription_grant SET status = 'CONSUMED', consumed_at = ?, delivery_key = ?
+                WHERE id = ? AND status = 'AVAILABLE'
+                """, Timestamp.from(clock.instant()), deliveryKey, grantId) == 1;
+    }
+
     private static String hash(String value) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
@@ -208,4 +324,6 @@ class NotificationDeliveryQueue {
     }
 
     private record Recipient(long reminderId, long accountId) {}
+
+    private record WechatRecipient(long reminderId, long accountId, long grantId) {}
 }

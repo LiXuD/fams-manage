@@ -9,6 +9,7 @@ function fixture(request) {
 }
 test('lost receipt reply preserves key, grant and original evidence; refresh does not imply receipt',async()=>{
     let lost=true;const writes=[];const {page}=fixture(async(method,path,body,options)=>{
+        if(path.includes('/subscription-visibility'))return {wechatTemplate:''};
         if(path.includes('/pending'))return {items:[detail],total:1};
         if(path.endsWith('/grant'))return {grant:'x'.repeat(43),requestVersion:4};
         writes.push({body:structuredClone(body),key:options.key,version:options.version});
@@ -23,6 +24,7 @@ test('lost receipt reply preserves key, grant and original evidence; refresh doe
 });
 test('identity switch and page hiding suppress late grant and clear receipt evidence',async()=>{
     let resolve;const {page,services}=fixture(async(method,path)=>{
+        if(path.includes('/subscription-visibility'))return {wechatTemplate:''};
         if(path.includes('/pending'))return {items:[detail],total:1};
         return new Promise(r=>resolve=r);
     });
@@ -33,6 +35,7 @@ test('identity switch and page hiding suppress late grant and clear receipt evid
 });
 test('receipt needs physical check and refusal reason; scanner failure allows manual code',async()=>{
     let writes=0;const {page}=fixture(async(method,path)=>{
+        if(path.includes('/subscription-visibility'))return {wechatTemplate:''};
         if(path.includes('/pending'))return {items:[detail],total:1};
         if(path.endsWith('/grant'))return {grant:'x'.repeat(43),requestVersion:4};writes++;return {itemStatus:'REFUSED'};
     });
@@ -43,6 +46,7 @@ test('receipt needs physical check and refusal reason; scanner failure allows ma
 });
 test('confirmation failure releases busy state and writes no receipt',async()=>{
     let writes=0;const {page,services}=fixture(async(method,path)=>{
+        if(path.includes('/subscription-visibility'))return {wechatTemplate:''};
         if(path.includes('/pending'))return {items:[detail],total:1};
         if(path.endsWith('/grant'))return {grant:'x'.repeat(43),requestVersion:4};writes++;return {itemStatus:'COMPLETED'};
     });

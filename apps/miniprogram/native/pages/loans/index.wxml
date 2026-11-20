@@ -24,6 +24,11 @@
       <textarea value="{{reason}}" bindinput="onReason" maxlength="1000" placeholder="填写延期或归还原因" disabled="{{busy || retryable}}" />
       <button bindtap="onExtend" disabled="{{busy || retryable}}">提请延期</button><button bindtap="onReturn" disabled="{{busy || retryable}}">申请归还</button>
     </view>
+    <view wx:if="{{subscriptionTemplate}}">
+      <button bindtap="onSubscribeProgress" disabled="{{busy || retryable}}">订阅进度通知</button>
+      <button bindtap="onSubscribeReturn" disabled="{{busy || retryable}}">订阅归还提醒</button>
+      <view wx:if="{{subscriptionNotice}}" class="hint">{{subscriptionNotice}}</view>
+    </view>
   </view>
   <view class="title">可退库资产</view>
   <view wx:for="{{assets}}" wx:key="id" class="card"><view>{{item.assetCode}} · {{item.name}}</view>

@@ -102,7 +102,7 @@ class OperationLogService {
                     return entry;
                 },
                 pageArguments.toArray());
-        return new PageOperationLog(page, pageSize, total == null ? 0 : total, items);
+        return new PageOperationLog(page, pageSize, total == null ? Long.valueOf(0) : total, items);
     }
 
     private boolean present(String value) {

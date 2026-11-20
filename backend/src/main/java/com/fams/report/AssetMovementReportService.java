@@ -58,9 +58,9 @@ class AssetMovementReportService {
                 filter.kind().name(), filter.from().toString(), filter.toExclusive().toString(),
                 filter.assetId(), rows.size());
         return "\uFEFFkind,factId,businessId,assetId,assetCode,occurredAt,outcome\r\n"
-                + rows.stream().map(row -> String.join(",", filter.kind().name(), row.factId(),
-                        row.businessId(), row.assetId(), csv(row.assetCode()), row.occurredAt().toString(),
-                        row.outcome())).collect(Collectors.joining("\r\n"));
+                + rows.stream().map(row -> String.join(",", csv(filter.kind().name()), csv(row.factId()),
+                        csv(row.businessId()), csv(row.assetId()), csv(row.assetCode()), csv(row.occurredAt().toString()),
+                        csv(row.outcome()))).collect(Collectors.joining("\r\n"));
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)

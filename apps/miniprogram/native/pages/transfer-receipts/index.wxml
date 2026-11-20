@@ -21,5 +21,7 @@
     <button disabled="{{busy || retryable || !checked || !observedCode}}" bindtap="onReceive">确认实物接收</button>
     <textarea disabled="{{busy || retryable}}" value="{{reason}}" maxlength="1000" bindinput="onReason" placeholder="实物不符或拒收原因" />
     <button disabled="{{busy || retryable || !checked || !observedCode || !reason}}" bindtap="onRefuse">反馈不符 / 拒收</button>
+    <button wx:if="{{subscriptionTemplate}}" disabled="{{busy || retryable}}" bindtap="onSubscribeReceipt">订阅接收提醒</button>
+    <view wx:if="{{subscriptionNotice}}">{{subscriptionNotice}}</view>
   </view>
 </view>

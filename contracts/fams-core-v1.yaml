@@ -1118,6 +1118,36 @@ components:
         bindingVersion: { type: integer, format: int64, minimum: 0 }
         idleExpiresAt: { type: string, format: date-time }
         absoluteExpiresAt: { type: string, format: date-time }
+    MiniSubscriptionVisibility:
+      type: object
+      additionalProperties: false
+      required: [wechatTemplate]
+      properties:
+        wechatTemplate:
+          type: string
+          maxLength: 80
+          description: Current ACTIVE channel version's WeChat template id; empty means unconfigured and entries stay hidden.
+    WechatSubscriptionGrantRequest:
+      type: object
+      additionalProperties: false
+      required: [templateId, scene, businessType, businessId]
+      properties:
+        templateId: { type: string, minLength: 1, maxLength: 80, pattern: '^[A-Za-z0-9_-]{1,80}$' }
+        scene: { type: string, enum: [PROGRESS, RETURN, INVENTORY_TASK, RECEIPT] }
+        businessType: { type: string, enum: [REQUISITION, LOAN, REPAIR, INVENTORY_TASK, REQUISITION_ALLOCATION, TRANSFER_ITEM, INBOUND] }
+        businessId: { $ref: '#/components/schemas/Id' }
+    WechatSubscriptionGrant:
+      type: object
+      additionalProperties: false
+      required: [id, templateId, scene, businessType, businessId, status, createdAt]
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        templateId: { type: string, minLength: 1, maxLength: 80 }
+        scene: { type: string, enum: [PROGRESS, RETURN, INVENTORY_TASK, RECEIPT] }
+        businessType: { type: string, enum: [REQUISITION, LOAN, REPAIR, INVENTORY_TASK, REQUISITION_ALLOCATION, TRANSFER_ITEM, INBOUND] }
+        businessId: { $ref: '#/components/schemas/Id' }
+        status: { type: string, enum: [AVAILABLE, CONSUMED] }
+        createdAt: { type: string, format: date-time }
     ErrorResponse:
       type: object
       required: [code, message, requestId, fieldErrors]
@@ -12770,6 +12800,53 @@ paths:
       responses:
         '204': { description: Session revoked. Cache-Control no-store. }
         '401': { $ref: '#/components/responses/Unauthorized' }
+  /mini/subscription-visibility:
+    get:
+      tags: [MiniReminder]
+      operationId: miniSubscriptionVisibility
+      summary: Read whether the current channel version configures a WeChat subscription template.
+      security: [ { miniSession: [] } ]
+      x-business-write: false
+      x-non-applicable: [version, idempotency, csrf]
+      x-exception-rationale: Read-only projection of the current ACTIVE channel version for the bound session.
+      responses:
+        '200':
+          description: Current WeChat template id; empty when unconfigured. Cache-Control no-store.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MiniSubscriptionVisibility' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /mini/subscription-grants:
+    post:
+      tags: [MiniReminder]
+      operationId: miniRegisterSubscriptionGrant
+      summary: Register one user-accepted WeChat subscription as a single send quota for the source business.
+      security: [ { miniSession: [] } ]
+      x-business-write: true
+      x-actor: "Bound mini session; the source business must belong to the current employee or account."
+      x-transaction: Validate the current template and ownership, then insert one AVAILABLE grant and audit in one short transaction; an idempotent replay returns the original grant.
+      x-audit-event: WECHAT_SUBSCRIPTION_GRANTED
+      x-error-codes: [WECHAT_SUBSCRIPTION_TEMPLATE_UNCONFIGURED, WECHAT_SUBSCRIPTION_FORBIDDEN, WECHAT_SUBSCRIPTION_KEY_CONFLICT, WECHAT_SUBSCRIPTION_REQUEST_INVALID]
+      x-required-error-statuses: [400, 401, 403, 409]
+      x-non-applicable: [csrf, version]
+      x-exception-rationale: Consent is an append-only quota, not a versioned aggregate; the opaque mini header replaces Cookie CSRF.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WechatSubscriptionGrantRequest' }
+      responses:
+        '201':
+          description: Newly registered one-time grant, or the original grant on idempotent replay.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WechatSubscriptionGrant' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /mini/auth/support:
     get:
       tags: [MiniBinding]

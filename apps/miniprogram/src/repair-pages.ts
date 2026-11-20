@@ -1,5 +1,6 @@
 import type { MiniServices } from "./pages.ts";
 import { MiniRequestError } from "./session.ts";
+import { subscribeReminder, subscriptionTemplate, subscriptionUpdate } from "./subscription.ts";
 import type { FactorySummary } from "./repair-factory-types.ts";
 interface Asset { initialSource?: { batchId: string; sheetRow: number; stage: string; evidence: string; factoryDestination?: string }; id: string; assetCode: string; name: string; version: number; locationId: string | null; locationName: string | null }
 interface Repair { latestLossReportId?: string; inventoryEvidence?: { taskId: string; observationId: string; photoIds: string[] }[]; id: string; source: Asset; fault: string; status: string; version: number; assetVersion: number; ownershipVersion: number; lockVersion: number | null; processorAccountId?: string;
@@ -20,7 +21,8 @@ interface Data { lossDate?: string; lossTime?: string; lossLocation?: string; lo
     warehouses: PhysicalPlace[]; physicalLocations: PhysicalPlace[]; physicalWarehouseId: string; physicalLocationId: string;
     warehousePage: number; warehouseTotal: number; physicalLocationPage: number; physicalLocationTotal: number;
     returnMode: ReturnMode; returnTarget: ReturnTarget | null; returnObservedCode: string; returnAt: string; returnEvidence: string; returnChecked: boolean;
-    returnLocations: PhysicalPlace[]; returnLocationId: string; returnLocationPage: number; returnLocationTotal: number; reassignment: Reassignment | null; reassignTarget: string; reassignReason: string; reassignEvidence: string; reassignChecked: boolean }
+    returnLocations: PhysicalPlace[]; returnLocationId: string; returnLocationPage: number; returnLocationTotal: number; reassignment: Reassignment | null; reassignTarget: string; reassignReason: string; reassignEvidence: string; reassignChecked: boolean;
+    subscriptionTemplate: string; subscriptionNotice: string }
 interface Reassignment { unavailableReason?: string; snapshot: { version: number; acceptedAt: string | null; physicalHandling: unknown[]; outstandingReturn: { handover_status: string } | null }; operators: { id: string; name: string }[] }
 interface Context { data: Data; setData(data: Partial<Data>): void }
 const costPolicies = ["NO_COST", "LIMITED", "UNLIMITED"] as const;
@@ -31,7 +33,8 @@ const blank = (): Data => ({ scrapReason: "", scrapCondition: "", scrapMethod: "
     locationConfirmed: false, neverLeft: false, photoPath: "", photoName: "", physicalMode: "away", physicalObservedCode: "", physicalAt: "", physicalEvidence: "",
     warehouses: [], physicalLocations: [], physicalWarehouseId: "", physicalLocationId: "", warehousePage: 1, warehouseTotal: 0, physicalLocationPage: 1, physicalLocationTotal: 0,
     returnMode: "delivery", returnTarget: null, returnObservedCode: "", returnAt: "", returnEvidence: "", returnChecked: false,
-    returnLocations: [], returnLocationId: "", returnLocationPage: 1, returnLocationTotal: 0, reassignment: null, reassignTarget: "", reassignReason: "", reassignEvidence: "", reassignChecked: false });
+    returnLocations: [], returnLocationId: "", returnLocationPage: 1, returnLocationTotal: 0, reassignment: null, reassignTarget: "", reassignReason: "", reassignEvidence: "", reassignChecked: false,
+    subscriptionTemplate: "", subscriptionNotice: "" });
 export function createRepairPage(getServices: () => MiniServices) {
     let services: MiniServices, identity = "", live = false, generation = 0, pending: Pending | null = null, selectedId = "", photo = "";
     const owner = () => JSON.stringify([services.sessions.identity, services.sessions.identityRevision]);
@@ -59,17 +62,20 @@ export function createRepairPage(getServices: () => MiniServices) {
             approvalMethod: originalMethod === "INTERNAL_OR_FACTORY" ? "INTERNAL_OR_FACTORY" : "INTERNAL_NO_COST", approvalMethodIndex: originalMethod === "INTERNAL_OR_FACTORY" ? 1 : 0, factoryCostPolicyIndex: originalPolicy, factoryCostLimit: originalDecision?.factoryCostLimit ?? "",
             warehouses: [], physicalLocations: [], physicalWarehouseId: "", physicalLocationId: "", physicalObservedCode: "", physicalAt: "", physicalEvidence: "",
             returnTarget: null, returnObservedCode: "", returnAt: "", returnEvidence: "", returnChecked: false,
-            returnLocations: [], returnLocationId: "", returnLocationPage: 1, returnLocationTotal: 0, reassignment: null, reassignTarget: "", reassignReason: "", reassignEvidence: "", reassignChecked: false });
+            returnLocations: [], returnLocationId: "", returnLocationPage: 1, returnLocationTotal: 0, reassignment: null, reassignTarget: "", reassignReason: "", reassignEvidence: "", reassignChecked: false,
+    subscriptionTemplate: "", subscriptionNotice: "" });
         try {
             const rows = await services.sessions.request("GET", `/api/v1/mini/repairs?page=${page.data.page}&pageSize=20`) as { items: Repair[]; total: number };
             if (!current(epoch)) return;
             const assets = await services.sessions.request("GET", `/api/v1/mini/repairs/eligible?page=${page.data.assetPage}&pageSize=20`) as { items: Asset[]; total: number };
             if (!current(epoch)) return;
             const detail = selectedId ? await services.sessions.request("GET", `/api/v1/mini/repairs/${selectedId}`) as Repair : null;
+            const template = detail ? await subscriptionTemplate(services) : "";
             if (current(epoch)) page.setData({ rows: rows.items, total: rows.total, assets: assets.items, assetTotal: assets.total, detail,
                 canDeclareUnavailable: detail?.status === "WAREHOUSE_PROCESSING" && detail.lockVersion != null && !!detail.processorAccountId
                     && detail.processorAccountId === services.sessions.identity?.accountId,
-                selectedAsset: "", retry: !!pending, observedCode: "", evidence: "", locationConfirmed: false, neverLeft: false });
+                selectedAsset: "", retry: !!pending, observedCode: "", evidence: "", locationConfirmed: false, neverLeft: false,
+                subscriptionTemplate: template, subscriptionNotice: "" });
         } catch (error) { if (current(epoch)) failure(page, error); } finally { finish(page, epoch); }
     };
     const send = async (page: Context, operation: Pending, epoch: number) => {
@@ -103,6 +109,15 @@ export function createRepairPage(getServices: () => MiniServices) {
         async onOpen(this: Context, event: { currentTarget: { dataset: { id: string } } }) {
             if (this.data.busy || pending || !current(generation) || !this.data.rows.some(row => row.id === event.currentTarget.dataset.id)) return;
             selectedId = event.currentTarget.dataset.id; await read(this);
+        },
+        async onSubscribeProgress(this: Context) {
+            const row = this.data.detail;
+            if (this.data.busy || pending || !current(generation) || !row || !this.data.subscriptionTemplate) return;
+            const epoch = generation; this.setData({ busy: true, error: "", subscriptionNotice: "" });
+            try {
+                const outcome = await subscribeReminder(services, { scene: "PROGRESS", businessType: "REPAIR", businessId: row.id });
+                if (current(epoch)) this.setData(subscriptionUpdate(outcome));
+            } catch (error) { if (current(epoch)) failure(this, error); } finally { finish(this, epoch); }
         },
         onFactory(this: Context) {
             if (this.data.busy || pending || !current(generation) || !this.data.detail?.actions.manageFactory) return;

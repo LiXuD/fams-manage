@@ -37,7 +37,8 @@ class NotificationDeliveryMetrics implements MeterBinder {
 
     private double measure(String expression) {
         Double value = db.queryForObject("SELECT COALESCE(" + expression
-                + ", 0) FROM fams_durable_job WHERE job_kind = ?", Double.class, NotificationDeliveryQueue.KIND);
+                + ", 0) FROM fams_durable_job WHERE job_kind IN (?, ?)", Double.class,
+                NotificationDeliveryQueue.KIND, NotificationDeliveryQueue.WECHAT_KIND);
         return value == null ? 0 : value;
     }
 }

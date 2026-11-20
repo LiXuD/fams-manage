@@ -1,7 +1,7 @@
 import { API_ORIGIN } from "./config.ts";
 import { MiniBindingClient } from "./binding.ts";
 import { MiniSessionClient } from "./session.ts";
-import { createUuid, createWxRuntime, deviceId, chooseInventoryPhoto } from "./wx-runtime.ts";
+import { createUuid, createWxRuntime, deviceId, chooseInventoryPhoto, requestSubscribe } from "./wx-runtime.ts";
 import type { MiniServices } from "./pages.ts";
 import { InventoryQueue } from "./inventory-queue.ts";
 import { createInventoryFiles, type InventoryFileRuntime } from "./inventory-files.ts";
@@ -46,6 +46,7 @@ App({
                     if (!wx.scanCode) { reject(new Error("Scanner unavailable")); return; }
                     wx.scanCode({ onlyFromCamera: true, success: result => resolve(result.result), fail: reject });
                 }),
+                requestSubscribe: templateId => requestSubscribe(wx, templateId),
                 navigate: url => wx.redirectTo({ url }),
                 confirm: (title, content) => new Promise(resolve => wx.showModal({ title, content,
                     success: result => resolve(result.confirm) })),

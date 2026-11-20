@@ -1,11 +1,12 @@
 import type { MiniServices } from "./pages.ts";
 import { MiniRequestError } from "./session.ts";
+import { subscribeReminder, subscriptionTemplate, subscriptionUpdate, type SubscriptionScene } from "./subscription.ts";
 import type { AssetReturn, BusinessPage, Loan, ReturnAssetChoice } from "../../../packages/api-types/src/loan";
 
 interface Data {
     busy: boolean; error: string; notice: string; retryable: boolean; loans: Loan[]; returns: AssetReturn[];
     returnProgress: AssetReturn | null; selected: Loan | null; assets: ReturnAssetChoice[]; selectedAsset: ReturnAssetChoice | null;
-    reason: string; dueDate: string; page: number; total: number;
+    reason: string; dueDate: string; page: number; total: number; subscriptionTemplate: string; subscriptionNotice: string;
     missingDate?: string; missingTime?: string; missingLocation?: string; missingCircumstances?: string;
 }
 interface Context { data: Data; setData(data: Partial<Data>): void }
@@ -44,7 +45,8 @@ export function createLoanPage(getServices: () => MiniServices) {
             pending = null; page.setData({ retryable: false, notice: "操作已保存，等待管理员决定。" });
             if (page.data.selected) {
                 const selected = await services.sessions.request("GET", "/api/v1/mini/loans/" + page.data.selected.id) as Loan;
-                if (live && generation === current) page.setData({ selected });
+                const template = await subscriptionTemplate(services);
+                if (live && generation === current) page.setData({ selected, subscriptionTemplate: template, subscriptionNotice: "" });
             }
             await load(page, current);
         } catch (error) {
@@ -52,15 +54,27 @@ export function createLoanPage(getServices: () => MiniServices) {
             if (live && !services.sessions.identity) services.navigate("/pages/login/index");
         } finally { if (live && generation === current) page.setData({ busy: false }); }
     };
+    const subscribe = async (page: Context, scene: SubscriptionScene) => {
+        const row = page.data.selected;
+        if (!services || !live || page.data.busy || pending || identity !== JSON.stringify(services.sessions.identity)
+            || !row || !page.data.subscriptionTemplate) return;
+        const current = generation; page.setData({ busy: true, error: "", subscriptionNotice: "" });
+        try {
+            const outcome = await subscribeReminder(services, { scene, businessType: "LOAN", businessId: row.id });
+            if (live && generation === current) page.setData(subscriptionUpdate(outcome));
+        } catch (error) { if (live && generation === current) page.setData({ error: message(error) }); }
+        finally { if (live && generation === current) page.setData({ busy: false }); }
+    };
     return {
         data: { busy: false, error: "", notice: "", retryable: false, loans: [], returns: [], selected: null,
-            assets: [], selectedAsset: null, returnProgress: null, reason: "", dueDate: "", page: 1, total: 0 } as Data,
+            assets: [], selectedAsset: null, returnProgress: null, reason: "", dueDate: "", page: 1, total: 0,
+            subscriptionTemplate: "", subscriptionNotice: "" } as Data,
         async onShow(this: Context) {
             live = true; const current = ++generation;
             services = getServices(); const next = JSON.stringify(services.sessions.identity);
             if (identity !== next) { identity = next; pending = null;
                 this.setData({ loans: [], returns: [], assets: [], selected: null, selectedAsset: null, returnProgress: null,
-                    reason: "", dueDate: "", page: 1, retryable: false }); }
+                    reason: "", dueDate: "", page: 1, retryable: false, subscriptionTemplate: "", subscriptionNotice: "" }); }
             this.setData({ busy: true, error: "" });
             try { await load(this, current); }
             catch (error) { if (live && generation === current) this.setData({ error: message(error) });
@@ -152,10 +166,14 @@ export function createLoanPage(getServices: () => MiniServices) {
             this.setData({ busy: true, error: "" }); const current = generation;
             try {
                 const selected = await services.sessions.request("GET", "/api/v1/mini/loans/" + event.currentTarget.dataset.id) as Loan;
-                if (live && generation === current) this.setData({ selected, selectedAsset: null, dueDate: "", reason: "" });
+                const template = await subscriptionTemplate(services);
+                if (live && generation === current) this.setData({ selected, selectedAsset: null, dueDate: "", reason: "",
+                    subscriptionTemplate: template, subscriptionNotice: "" });
             } catch (error) { if (live && generation === current) this.setData({ error: message(error) }); }
             finally { if (live && generation === current) this.setData({ busy: false }); }
         },
+        async onSubscribeProgress(this: Context) { await subscribe(this, "PROGRESS"); },
+        async onSubscribeReturn(this: Context) { await subscribe(this, "RETURN"); },
         async onExtend(this: Context) {
             const row = this.data.selected;
             if (!row || !this.data.dueDate || !this.data.reason.trim()) { this.setData({ error: "请选择借用并填写新的归还日期和原因。" }); return; }
@@ -178,7 +196,8 @@ export function createLoanPage(getServices: () => MiniServices) {
                 await load(this, current);
                 if (this.data.selected) {
                     const selected = await services.sessions.request("GET", "/api/v1/mini/loans/" + this.data.selected.id) as Loan;
-                    if (live && generation === current) this.setData({ selected });
+                    const template = await subscriptionTemplate(services);
+                    if (live && generation === current) this.setData({ selected, subscriptionTemplate: template, subscriptionNotice: "" });
                 }
                 if (live && generation === current) { pending = null; this.setData({ retryable: false }); }
             } catch (error) { if (live && generation === current) this.setData({ error: message(error) }); }
