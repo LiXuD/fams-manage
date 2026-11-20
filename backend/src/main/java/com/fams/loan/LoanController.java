@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
-import java.util.Map;
 
 @RestController
 @Profile("fams-product")
@@ -35,28 +34,28 @@ class LoanController {
         this.actors = actors; }
 
     @GetMapping
-    Map<String, Object> list(@RequestParam(defaultValue = "1") @Min(1) int page,
+    LoanViews.Page<LoanViews.Loan> list(@RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(200) int pageSize) {
         return service.list(actors.capture(), page, pageSize);
     }
 
     @GetMapping("/borrow-requests")
-    Map<String, Object> eligibleRequests(@RequestParam(defaultValue = "1") @Min(1) int page,
+    LoanViews.Page<LoanViews.BorrowRequestChoice> eligibleRequests(@RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(200) int pageSize) {
         return service.eligibleRequests(actors.capture(), page, pageSize);
     }
 
     @GetMapping("/{id}")
-    Map<String, Object> get(@PathVariable long id) { return service.get(actors.capture(), id); }
+    LoanViews.LoanDetail get(@PathVariable long id) { return service.get(actors.capture(), id); }
 
     @GetMapping("/extensions")
-    Map<String, Object> extensions(@RequestParam(defaultValue = "1") @Min(1) int page,
+    LoanViews.Page<LoanViews.Extension> extensions(@RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(200) int pageSize) {
         return service.extensions(actors.capture(), page, pageSize);
     }
 
     @PostMapping("/{id}/extensions")
-    Map<String, Object> propose(@PathVariable long id,
+    LoanViews.Extension propose(@PathVariable long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
             @Valid @RequestBody Extension input) {
@@ -64,7 +63,7 @@ class LoanController {
     }
 
     @PostMapping("/borrow-requests/{id}/extensions")
-    Map<String, Object> proposeBeforeReceipt(@PathVariable long id,
+    LoanViews.Extension proposeBeforeReceipt(@PathVariable long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
             @Valid @RequestBody Extension input) {
@@ -72,7 +71,7 @@ class LoanController {
     }
 
     @PostMapping("/extensions/{id}/decision")
-    Map<String, Object> decide(@PathVariable long id,
+    LoanViews.Extension decide(@PathVariable long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
             @Valid @RequestBody Decision input) {

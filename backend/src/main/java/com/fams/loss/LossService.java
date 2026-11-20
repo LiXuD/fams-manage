@@ -1252,7 +1252,7 @@ public class LossService {
         var linked = returns.create(actor, key, number(row, "asset_id"), next, input.facts().evidence(),
                 new com.fams.loan.LossReturnPort.Source(Long.toString(number(row, "id")), Long.toString(closed ? id : number(row, "id")),
                         input.lockVersion(), json.writeValueAsString(input)));
-        var snapshot = Map.of("execution", input, "returnId", linked.get("id"),
+        var snapshot = Map.of("execution", input, "returnId", linked.id(),
                 "destination", "ASSET_RETURN");
         if (closed) {
             db.update("UPDATE fams_loss_recovery SET recovery_status='COMPLETED',execution_snapshot_json=?,"

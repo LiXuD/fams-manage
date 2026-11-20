@@ -108,7 +108,7 @@ LossHttpRuntimeCase 与两个 loss 升级用例覆盖。
 
 1. **通用信封接口仍 Map**：`ProxyReceiptPort`/`TargetChangePort` 由 transfer/requisition/
    repair 三域共同实现，属多态信封。本批只在 transfer 适配器边界 `convertValue`，接口本身
-   类型化需三域同批，登记为 JAVA-02 候选。
+   类型化需三域同批，登记为后续跨域批候选（JAVA-02 已用于 loan 域）。
 2. **内部行 Map 保留**：`request()/item()/items()/one()` 等仍返回行 Map——这是用户选定的
    深度边界，不是遗漏。
 3. 契约 schema 本就比实际 wire 宽松（如 `Transfer` 未列 `decidedBy` 等键，

@@ -18,7 +18,6 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.sql.Timestamp;
 import java.time.Clock;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -48,7 +47,7 @@ class AssetReturnService {
         this.lossReports = lossReports;
     }
 
-    Map<String, Object> list(Actor actor, int page, int size) {
+    LoanViews.Page<LoanViews.AssetReturn> list(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         String scope = current.globalApplicant() ? "1=1" : "responsible_employee_id=" + current.employeeId()
                 + (current.has(Role.DEPARTMENT_ASSET_MANAGER) ? " OR using_organization_id=" + current.organizationId() : "");
@@ -68,18 +67,12 @@ class AssetReturnService {
                 summaries.put(number(followup, "return_id"), progress.get(number(followup, "id")));
             }
         }
-        var results = items.stream().map(item -> {
-            var result = view(item);
-            var summary = summaries.get(number(item, "id"));
-            if (summary != null) {
-                result.put("returnLossReport", summary);
-            }
-            return result;
-        }).toList();
-        return Map.of("items", results, "total", total, "page", page, "pageSize", size);
+        var results = items.stream()
+                .map(item -> LoanViews.assetReturn(json, item, summaries.get(number(item, "id")))).toList();
+        return new LoanViews.Page<>(results, total, page, size);
     }
 
-    Map<String, Object> catalog(Actor actor, String kind, int page, int size) {
+    LoanViews.ReturnCatalogPage catalog(Actor actor, String kind, int page, int size) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);
         String sql;
@@ -90,10 +83,11 @@ class AssetReturnService {
                     + " ON w.id=l.warehouse_id WHERE l.status='ACTIVE' AND w.status='ACTIVE' AND l.location_type='BIN'";
         } else { throw new LoanFailure("RETURN_CATALOG_NOT_FOUND", 404); }
         var rows = db.queryForList(sql + " ORDER BY id LIMIT ? OFFSET ?", size, (page - 1) * size);
-        return Map.of("items", rows.stream().map(this::view).toList(), "page", page, "pageSize", size);
+        return new LoanViews.ReturnCatalogPage(
+                rows.stream().map(row -> LoanViews.returnCatalogChoice(kind, row)).toList(), page, size);
     }
 
-    Map<String, Object> eligible(Actor actor, int page, int size) {
+    LoanViews.Page<LoanViews.ReturnAssetChoice> eligible(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         String scope = current.has(Role.ASSET_ADMIN) ? "1=1" :
                 "COALESCE(a.responsible_employee_id,a.department_responsible_employee_id)=" + current.employeeId()
@@ -104,58 +98,60 @@ class AssetReturnService {
         var rows = db.queryForList("SELECT a.id,a.asset_code,a.name,a.version,a.lifecycle_status" + from
                 + " ORDER BY a.id DESC LIMIT ? OFFSET ?", size, (page - 1) * size);
         long total = java.util.Objects.requireNonNull(db.queryForObject("SELECT COUNT(*)" + from, Long.class), "RETURN_COUNT_MISSING");
-        return Map.of("items", rows.stream().map(this::view).toList(), "total", total, "page", page, "pageSize", size);
+        return new LoanViews.Page<>(rows.stream().map(LoanViews::returnAssetChoice).toList(), total, page, size);
     }
 
-    Map<String, Object> get(Actor actor, long id) {
+    LoanViews.AssetReturnDetail get(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         var row = request(id);
         visible(current, row);
-        var result = new LinkedHashMap<>(view(row));
-        result.put("asset", view(one("SELECT id,asset_code,name,version,lifecycle_status,exception_status FROM fams_asset WHERE id=?",
-                number(row, "asset_id"))));
+        var asset = LoanViews.returnAsset(one("SELECT id,asset_code,name,version,lifecycle_status,exception_status FROM fams_asset WHERE id=?",
+                number(row, "asset_id")));
         var locks = db.queryForList("SELECT lock_version FROM fams_asset_business_lock WHERE asset_id=?"
                 + " AND business_type='ASSET_RETURN' AND business_id=? AND released_at IS NULL", row.get("asset_id"), id);
-        result.put("lockVersion", locks.isEmpty() ? null : locks.getFirst().get("lock_version"));
-        result.put("canReportMissing", !locks.isEmpty() && "WAREHOUSE_PROCESSING".equals(row.get("return_status"))
+        boolean canReportMissing = !locks.isEmpty() && "WAREHOUSE_PROCESSING".equals(row.get("return_status"))
                 && current.has(Role.WAREHOUSE_OPERATOR)
-                && java.util.Objects.equals(current.id(), row.get("processor_account_id")));
-        result.put("followups", db.queryForList("SELECT * FROM fams_return_followup WHERE return_id=?", id)
-                .stream().map(followup -> followupView(current, followup)).toList());
-        return result;
+                && java.util.Objects.equals(current.id(), row.get("processor_account_id"));
+        var followups = db.queryForList("SELECT * FROM fams_return_followup WHERE return_id=?", id)
+                .stream().map(followup -> followupView(current, followup)).toList();
+        return LoanViews.assetReturnDetail(json, row, asset,
+                locks.isEmpty() ? null : ((Number) locks.getFirst().get("lock_version")).longValue(),
+                canReportMissing, followups);
     }
 
-    private Map<String, Object> followupView(Current current, Map<String, Object> row) {
-        var result = view(row);
-        if ("LOST_REPORT".equals(row.get("business_type"))) {
-            long id = number(row, "id");
-            var report = lossReports.getObject().latest(id);
-            result.put("lossReport", report);
-            if (report != null && report.recoveryReturnId() != null) {
-                var acceptance = db.queryForList("SELECT return_status FROM fams_asset_return WHERE id=?",
-                        String.class, Long.parseLong(report.recoveryReturnId()));
-                if (!acceptance.isEmpty()) {
-                    result.put("recoveryReturnStatus", acceptance.getFirst());
-                }
-            }
-            if ("PENDING".equals(row.get("followup_status")) && current.has(Role.WAREHOUSE_OPERATOR)
-                    && current.id() == number(row, "processor_account_id")) {
-                var lockVersions = db.queryForList("SELECT lock_version FROM fams_asset_business_lock"
-                        + " WHERE business_type='RETURN_LOST_REPORT' AND business_id=? AND released_at IS NULL",
-                        Long.class, id);
-                if (!lockVersions.isEmpty()) {
-                    result.put("missingLossLockVersion", lockVersions.getFirst());
-                    result.put("canRetryMissingLoss", true);
-                }
+    private LoanViews.Followup followupView(Current current, Map<String, Object> row) {
+        if (!"LOST_REPORT".equals(row.get("business_type"))) {
+            return LoanViews.repairFollowup(row);
+        }
+        long id = number(row, "id");
+        var report = lossReports.getObject().latest(id);
+        String recoveryReturnStatus = null;
+        if (report != null && report.recoveryReturnId() != null) {
+            var acceptance = db.queryForList("SELECT return_status FROM fams_asset_return WHERE id=?",
+                    String.class, Long.parseLong(report.recoveryReturnId()));
+            if (!acceptance.isEmpty()) {
+                recoveryReturnStatus = acceptance.getFirst();
             }
         }
-        return result;
+        Long missingLossLockVersion = null;
+        Boolean canRetryMissingLoss = null;
+        if ("PENDING".equals(row.get("followup_status")) && current.has(Role.WAREHOUSE_OPERATOR)
+                && current.id() == number(row, "processor_account_id")) {
+            var lockVersions = db.queryForList("SELECT lock_version FROM fams_asset_business_lock"
+                    + " WHERE business_type='RETURN_LOST_REPORT' AND business_id=? AND released_at IS NULL",
+                    Long.class, id);
+            if (!lockVersions.isEmpty()) {
+                missingLossLockVersion = lockVersions.getFirst();
+                canRetryMissingLoss = true;
+            }
+        }
+        return LoanViews.lostReportFollowup(row, report, recoveryReturnStatus, missingLossLockVersion, canRetryMissingLoss);
     }
 
-    Map<String, Object> propose(Actor actor, String key, AssetReturnController.Proposal input) {
+    LoanViews.AssetReturn propose(Actor actor, String key, AssetReturnController.Proposal input) {
         var current = actors.revalidateLocked(actor);
         String hash = digest("propose", input);
-        var replay = replay(current, "propose", key, hash);
+        var replay = replay(current, "propose", key, hash, LoanViews.AssetReturn.class);
         if (replay != null) { return replay; }
         var asset = one("SELECT * FROM fams_asset WHERE id=? FOR UPDATE", input.assetId());
         if (asset.get("using_organization_id") == null) { throw new LoanFailure("RETURN_NOT_AVAILABLE", 409); }
@@ -190,7 +186,7 @@ class AssetReturnService {
         return finish(current, "propose", key, hash, id);
     }
 
-    Map<String, Object> proposeLossRecovery(Actor actor, String key, long assetId, long version,
+    LoanViews.AssetReturn proposeLossRecovery(Actor actor, String key, long assetId, long version,
             String reason, LossReturnPort.Source source) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);
@@ -216,15 +212,15 @@ class AssetReturnService {
         assets.adoptLossRecovery(assetId, version, Long.parseLong(source.reportId()), Long.parseLong(source.lossItemId()), source.lockVersion(), id);
         todo(id, "APPROVAL", "ASSET_ADMIN", null);
         audit(actor, current, id, "RETURN_FROM_LOSS_RECOVERY", null, 0L, source);
-        return view(request(id));
+        return LoanViews.assetReturn(json, request(id));
     }
 
-    Map<String, Object> resubmitLossRecovery(Actor actor, long id, long version, String key,
+    LoanViews.AssetReturn resubmitLossRecovery(Actor actor, long id, long version, String key,
             String reason) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.ASSET_ADMIN);
         String hash = digest("resubmit-loss:" + id + ":" + version, reason);
-        var prior = replay(current, "resubmit-loss", key, hash);
+        var prior = replay(current, "resubmit-loss", key, hash, LoanViews.AssetReturn.class);
         if (prior != null) { return prior; }
         var row = request(id);
         state(row, version, "REJECTED");
@@ -249,11 +245,11 @@ class AssetReturnService {
         }
     }
 
-    Map<String, Object> decide(Actor actor, long id, long version, String key, AssetReturnController.Decision input) {
+    LoanViews.AssetReturn decide(Actor actor, long id, long version, String key, AssetReturnController.Decision input) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.ASSET_ADMIN);
         String hash = digest("decision:" + id + ":" + version, input);
-        var replay = replay(current, "decision", key, hash);
+        var replay = replay(current, "decision", key, hash, LoanViews.AssetReturn.class);
         if (replay != null) { return replay; }
         var row = request(id);
         state(row, version, "PENDING_APPROVAL");
@@ -270,11 +266,11 @@ class AssetReturnService {
         return finish(current, "decision", key, hash, id);
     }
 
-    Map<String, Object> claim(Actor actor, long id, long version, String key) {
+    LoanViews.AssetReturn claim(Actor actor, long id, long version, String key) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);
         String hash = digest("claim:" + id + ":" + version, Map.of());
-        var replay = replay(current, "claim", key, hash);
+        var replay = replay(current, "claim", key, hash, LoanViews.AssetReturn.class);
         if (replay != null) { return replay; }
         var row = request(id);
         state(row, version, "WAITING_WAREHOUSE_CLAIM");
@@ -287,7 +283,7 @@ class AssetReturnService {
         return finish(current, "claim", key, hash, id);
     }
 
-    Map<String, Object> inspect(Actor actor, long id, long version, String key, AssetReturnController.Inspection input) {
+    LoanViews.AssetReturn inspect(Actor actor, long id, long version, String key, AssetReturnController.Inspection input) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);
         var row = request(id);
@@ -295,7 +291,7 @@ class AssetReturnService {
             throw new LoanFailure("RETURN_NOT_PROCESSOR", 403);
         }
         String hash = digest("inspect:" + id + ":" + version, input);
-        var replay = replay(current, "inspect", key, hash);
+        var replay = replay(current, "inspect", key, hash, LoanViews.AssetReturn.class);
         if (replay != null) { return replay; }
         state(row, version, "WAREHOUSE_PROCESSING");
         currentAsset(row);
@@ -356,12 +352,12 @@ class AssetReturnService {
         return finish(current, "inspect", key, hash, id);
     }
 
-    Map<String, Object> retryMissingLoss(Actor actor, long id, long version, String key,
+    LoanViews.AssetReturn retryMissingLoss(Actor actor, long id, long version, String key,
             AssetReturnController.MissingRetry input) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);
         String hash = digest("missing-loss:" + id + ":" + version, input);
-        var prior = replay(current, "missing-loss", key, hash);
+        var prior = replay(current, "missing-loss", key, hash, LoanViews.AssetReturn.class);
         if (prior != null) {
             return prior;
         }
@@ -502,7 +498,8 @@ class AssetReturnService {
                 action, id, before, after, now(), json.writeValueAsString(detail));
     }
 
-    private Map<String, Object> replay(Current current, String action, String key, String hash) {
+    private <T extends LoanViews.Reply> T replay(
+            Current current, String action, String key, String hash, Class<T> type) {
         var rows = db.queryForList("SELECT * FROM fams_idempotency_record WHERE actor_account_id=? AND operation_id=?"
                 + " AND idempotency_key=? AND expires_at>? FOR UPDATE", current.id(), "return:" + action, key, now());
         if (rows.isEmpty()) {
@@ -512,15 +509,15 @@ class AssetReturnService {
         }
         var row = rows.getFirst();
         if (!hash.equals(row.get("payload_sha256"))) { throw new LoanFailure("RETURN_IDEMPOTENCY_CONFLICT", 409); }
-        return json.readValue(row.get("response_body_json").toString(), new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        return json.readValue(row.get("response_body_json").toString(), type);
     }
 
-    private Map<String, Object> finish(Current current, String action, String key, String hash, long id) {
-        var result = view(request(id));
+    private LoanViews.AssetReturn finish(Current current, String action, String key, String hash, long id) {
+        var result = LoanViews.assetReturn(json, request(id));
         db.update("INSERT INTO fams_idempotency_record (actor_account_id,operation_id,idempotency_key,payload_sha256,"
                 + "result_status,http_status,response_body_json,resource_type,resource_id,resource_version,created_at,completed_at,expires_at)"
                 + " VALUES (?,?,?,?,'SUCCEEDED',200,?,'ASSET_RETURN',?,?,?,?,?)", current.id(), "return:" + action,
-                key, hash, json.writeValueAsString(result), id, result.get("version"), now(), now(),
+                key, hash, json.writeValueAsString(result), id, result.version(), now(), now(),
                 Timestamp.from(clock.instant().plusSeconds(86400)));
         return result;
     }
@@ -539,23 +536,5 @@ class AssetReturnService {
             return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
                     .digest((prefix + "\n" + json.writeValueAsString(input)).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         } catch (java.security.NoSuchAlgorithmException failure) { throw new IllegalStateException(failure); }
-    }
-    private Map<String, Object> view(Map<String, Object> row) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        row.forEach((key, value) -> {
-            if (key.equals("parameter_snapshot_json") || key.equals("active_asset_id")) { return; }
-            String[] words = key.split("_");
-            StringBuilder field = new StringBuilder(words[0]);
-            for (int i = 1; i < words.length; i++) { field.append(Character.toUpperCase(words[i].charAt(0))).append(words[i].substring(1)); }
-            Object wire = value;
-            if (value instanceof java.time.LocalDateTime date) { wire = date.toInstant(java.time.ZoneOffset.UTC).toString(); }
-            else if (value instanceof Timestamp date) { wire = date.toInstant().toString(); }
-            else if (value instanceof Number && (key.equals("id") || key.endsWith("_id") || key.endsWith("_by"))) { wire = value.toString(); }
-            result.put(field.toString(), wire);
-        });
-        if (row.containsKey("parameter_snapshot_json") && linkedLoss(row)) {
-            result.put("lossRecovery", json.readTree(row.get("parameter_snapshot_json").toString()).get("lossRecovery"));
-        }
-        return result;
     }
 }

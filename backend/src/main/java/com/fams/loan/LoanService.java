@@ -16,7 +16,6 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.HexFormat;
@@ -41,7 +40,7 @@ class LoanService {
         this.requests = requests;
     }
 
-    Map<String, Object> list(Actor actor, int page, int size) {
+    LoanViews.Page<LoanViews.Loan> list(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         String scope = scope(current);
         long total = java.util.Objects.requireNonNull(
@@ -49,46 +48,46 @@ class LoanService {
         var rows = db.queryForList("SELECT l.*,a.asset_code,a.name,a.lifecycle_status,a.exception_status,a.version AS current_asset_version"
                 + " FROM fams_loan l JOIN fams_asset a ON a.id=l.asset_id WHERE " + scope
                 + " ORDER BY l.id DESC LIMIT ? OFFSET ?", size, (page - 1) * size);
-        return Map.of("items", rows.stream().map(this::loanView).toList(), "total", total,
-                "page", page, "pageSize", size);
+        return new LoanViews.Page<>(rows.stream().map(row -> LoanViews.loan(json, clock, row)).toList(),
+                total, page, size);
     }
 
-    Map<String, Object> eligibleRequests(Actor actor, int page, int size) {
+    LoanViews.Page<LoanViews.BorrowRequestChoice> eligibleRequests(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
-        var result = new LinkedHashMap<>(requests.eligible(current.id(), current.has(Role.ASSET_ADMIN),
-                current.has(Role.WAREHOUSE_OPERATOR), page, size));
+        var result = requests.eligible(current.id(), current.has(Role.ASSET_ADMIN),
+                current.has(Role.WAREHOUSE_OPERATOR), page, size);
         @SuppressWarnings("unchecked")
         var rows = (List<Map<String, Object>>) result.get("items");
-        result.put("items", rows.stream().map(this::clean).toList());
-        return result;
+        return new LoanViews.Page<>(rows.stream().map(LoanViews::borrowRequestChoice).toList(),
+                ((Number) result.get("total")).longValue(),
+                ((Number) result.get("page")).intValue(),
+                ((Number) result.get("pageSize")).intValue());
     }
 
-    Map<String, Object> get(Actor actor, long id) {
+    LoanViews.LoanDetail get(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         var loan = loan(id);
         visible(current, loan);
         loan.putAll(one("SELECT asset_code,name,lifecycle_status,exception_status,version AS current_asset_version"
                 + " FROM fams_asset WHERE id=?", loan.get("asset_id")));
-        var result = new LinkedHashMap<>(loanView(loan));
-        result.put("extensions", db.queryForList("SELECT * FROM fams_loan_extension WHERE loan_id=? ORDER BY id", id)
-                .stream().map(this::clean).toList());
-        result.put("reminders", db.queryForList("SELECT * FROM fams_loan_reminder WHERE loan_id=? ORDER BY id", id)
-                .stream().map(this::clean).toList());
-        return result;
+        return LoanViews.loanDetail(json, clock, loan,
+                db.queryForList("SELECT * FROM fams_loan_extension WHERE loan_id=? ORDER BY id", id)
+                        .stream().map(LoanViews::extension).toList(),
+                db.queryForList("SELECT * FROM fams_loan_reminder WHERE loan_id=? ORDER BY id", id)
+                        .stream().map(LoanViews::reminder).toList());
     }
 
-    Map<String, Object> extensions(Actor actor, int page, int size) {
+    LoanViews.Page<LoanViews.Extension> extensions(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         String predicate = current.has(Role.ASSET_ADMIN) ? "1=1" : "proposed_by=" + current.id();
         var rows = db.queryForList("SELECT * FROM fams_loan_extension WHERE " + predicate
                 + " ORDER BY id DESC LIMIT ? OFFSET ?", size, (page - 1) * size);
         long total = java.util.Objects.requireNonNull(
                 db.queryForObject("SELECT COUNT(*) FROM fams_loan_extension WHERE " + predicate, Long.class), "LOAN_COUNT_MISSING");
-        return Map.of("items", rows.stream().map(this::clean).toList(), "total", total,
-                "page", page, "pageSize", size);
+        return new LoanViews.Page<>(rows.stream().map(LoanViews::extension).toList(), total, page, size);
     }
 
-    Map<String, Object> propose(Actor actor, long id, boolean beforeReceipt, long version,
+    LoanViews.Extension propose(Actor actor, long id, boolean beforeReceipt, long version,
             String key, LoanController.Extension input) {
         var current = actors.revalidateLocked(actor);
         String hash = digest("extend:" + id + ":" + beforeReceipt + ":" + version, input);
@@ -108,7 +107,7 @@ class LoanService {
                 throw new LoanFailure("LOAN_FORBIDDEN", 403);
             }
         }
-        var replay = replay(current, "propose", key, hash);
+        var replay = replay(current, "propose", key, hash, LoanViews.Extension.class);
         if (replay != null) { return replay; }
         target = target(id, beforeReceipt);
         checkVersion(target, version);
@@ -126,14 +125,15 @@ class LoanService {
         audit(actor, current, "LOAN_EXTENSION_PROPOSED", extension, null, 0L,
                 Map.of("reason", input.reason(), "originalReturnDate", old.toString(),
                         "requestedReturnDate", input.expectedReturnDate().toString()));
-        return finish(current, "propose", key, hash, extension);
+        return finish(current, "propose", key, hash,
+                LoanViews.extension(one("SELECT * FROM fams_loan_extension WHERE id=?", extension)));
     }
 
-    Map<String, Object> decide(Actor actor, long id, long version, String key, LoanController.Decision input) {
+    LoanViews.Extension decide(Actor actor, long id, long version, String key, LoanController.Decision input) {
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.ASSET_ADMIN)) { throw new LoanFailure("LOAN_FORBIDDEN", 403); }
         String hash = digest("decision:" + id + ":" + version, input);
-        var replay = replay(current, "decision", key, hash);
+        var replay = replay(current, "decision", key, hash, LoanViews.Extension.class);
         if (replay != null) { return replay; }
         var extension = one("SELECT * FROM fams_loan_extension WHERE id=? FOR UPDATE", id);
         checkVersion(extension, version);
@@ -164,7 +164,8 @@ class LoanService {
                 + " AND business_id=? AND closed_at IS NULL", now(), id);
         audit(actor, current, input.approved() ? "LOAN_EXTENSION_APPROVED" : "LOAN_EXTENSION_REJECTED",
                 id, version, version + 1, Map.of("reason", input.reason(), "targetId", Long.toString(targetId)));
-        return finish(current, "decision", key, hash, id);
+        return finish(current, "decision", key, hash,
+                LoanViews.extension(one("SELECT * FROM fams_loan_extension WHERE id=?", id)));
     }
 
     private Map<String, Object> requestSnapshot(long id) {
@@ -215,16 +216,8 @@ class LoanService {
                 + (current.has(Role.DEPARTMENT_ASSET_MANAGER) ? " OR l.using_organization_id=" + current.organizationId() : "");
     }
 
-    private Map<String, Object> loanView(Map<String, Object> loan) {
-        var result = new LinkedHashMap<>(clean(loan));
-        boolean open = "OPEN".equals(loan.get("relation_status")) && !"SCRAPPED".equals(loan.get("lifecycle_status"));
-        boolean lost = "LOST".equals(loan.get("exception_status"));
-        result.put("overdue", open && !lost && date(loan, "expected_return_date").isBefore(today(loan)));
-        result.put("lostLiability", open && lost);
-        return result;
-    }
-
-    private Map<String, Object> replay(Current current, String action, String key, String hash) {
+    private <T extends LoanViews.Reply> T replay(
+            Current current, String action, String key, String hash, Class<T> type) {
         var rows = db.queryForList("SELECT * FROM fams_idempotency_record WHERE actor_account_id=?"
                 + " AND operation_id=? AND idempotency_key=? FOR UPDATE", current.id(), "loan:" + action, key);
         if (rows.isEmpty()) { return null; }
@@ -238,18 +231,16 @@ class LoanService {
         }
         if (!hash.equals(row.get("payload_sha256"))) { throw new LoanFailure("LOAN_IDEMPOTENCY_CONFLICT", 409); }
         // Each response is owned by the currently revalidated proposer or administrator account.
-        return json.readValue(row.get("response_body_json").toString(),
-                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        return json.readValue(row.get("response_body_json").toString(), type);
     }
 
-    private Map<String, Object> finish(Current current, String action, String key, String hash, long id) {
-        var result = clean(one("SELECT * FROM fams_loan_extension WHERE id=?", id));
+    private <T extends LoanViews.Reply> T finish(Current current, String action, String key, String hash, T result) {
         db.update("INSERT INTO fams_idempotency_record (actor_account_id,operation_id,idempotency_key,"
                 + "payload_sha256,result_status,http_status,response_body_json,resource_type,resource_id,"
                 + "resource_version,created_at,completed_at,expires_at)"
                 + " VALUES (?,?,?,?,'SUCCEEDED',200,?,'LOAN_EXTENSION',?,?,?,?,?)",
-                current.id(), "loan:" + action, key, hash, json.writeValueAsString(result), id,
-                result.get("version"), now(), now(), Timestamp.from(clock.instant().plusSeconds(86400)));
+                current.id(), "loan:" + action, key, hash, json.writeValueAsString(result), result.id(),
+                result.version(), now(), now(), Timestamp.from(clock.instant().plusSeconds(86400)));
         return result;
     }
 
@@ -277,22 +268,5 @@ class LoanService {
             return HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
                     .digest((prefix + "\n" + json.writeValueAsString(body)).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         } catch (java.security.NoSuchAlgorithmException failure) { throw new IllegalStateException(failure); }
-    }
-
-    private Map<String, Object> clean(Map<String, Object> row) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        row.forEach((key, value) -> {
-            if ("parameter_snapshot_json".equals(key) || "pending_target".equals(key)) { return; }
-            String[] parts = key.split("_");
-        StringBuilder name = new StringBuilder(parts[0]);
-            for (int i = 1; i < parts.length; i++) { name.append(Character.toUpperCase(parts[i].charAt(0))).append(parts[i].substring(1)); }
-            Object wire = value;
-            if (value instanceof java.time.LocalDateTime time) { wire = time.toInstant(java.time.ZoneOffset.UTC).toString(); }
-            else if (value instanceof Timestamp time) { wire = time.toInstant().toString(); }
-            else if (value instanceof java.time.LocalDate || value instanceof java.sql.Date) { wire = value.toString(); }
-            else if (value instanceof Number && (key.equals("id") || key.endsWith("_id") || key.equals("proposed_by") || key.equals("decided_by"))) { wire = value.toString(); }
-            result.put(name.toString(), wire);
-        });
-        return result;
     }
 }

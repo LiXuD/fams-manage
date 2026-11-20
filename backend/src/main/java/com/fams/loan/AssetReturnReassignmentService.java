@@ -6,7 +6,6 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -40,7 +39,7 @@ class AssetReturnReassignmentService {
         this.clock = authClock;
     }
 
-    Map<String, Object> inspect(Actor actor, long id) {
+    LoanViews.ReassignmentSnapshot inspect(Actor actor, long id) {
         admin(actor);
         var row = processing(id);
         var owner = row;
@@ -50,17 +49,13 @@ class AssetReturnReassignmentService {
                 + "WHERE a.status='ENABLED' AND a.initial_password_required=FALSE "
                 + "AND e.status='ACTIVE' AND o.status='ACTIVE' AND r.role_code='WAREHOUSE_OPERATOR' "
                 + "AND a.id<>? ORDER BY a.id", owner.get("processor_account_id"));
-        var snapshot = new LinkedHashMap<String, Object>(Map.of("id", Long.toString(id), "version", row.get("version"),
-                "ownershipVersion", owner.get("ownership_version"),
-                "processorAccountId", owner.get("processor_account_id").toString(),
-                "items", checks(id), "operators", operators.stream().map(o -> Map.of(
-                        "id", o.get("id").toString(), "name", o.get("name"))).toList()));
+        var items = checks(id).stream().map(LoanViews::reassignmentItem).toList();
         var declared = unavailabilityReason(id, number(owner, "ownership_version"), number(owner, "processor_account_id"));
-        if (declared != null) { snapshot.put("unavailableReason", declared); }
-        return snapshot;
+        return LoanViews.reassignmentSnapshot(id, owner, items,
+                operators.stream().map(LoanViews::operator).toList(), declared);
     }
 
-    Map<String, Object> declareUnavailable(Actor actor, long id, long version, String key,
+    LoanViews.AssetReturnDetail declareUnavailable(Actor actor, long id, long version, String key,
             AssetReturnUnavailabilityController.Input input) {
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.WAREHOUSE_OPERATOR)) { throw new LoanFailure("RETURN_FORBIDDEN", 403); }
@@ -81,8 +76,7 @@ class AssetReturnReassignmentService {
             if (!digest.equals(receipt.get("payload_sha256"))) {
                 throw conflict("RETURN_IDEMPOTENCY_CONFLICT");
             }
-            return json.readValue(receipt.get("response_body_json").toString(),
-                    new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            return json.readValue(receipt.get("response_body_json").toString(), LoanViews.AssetReturnDetail.class);
         }
         if (number(row, "version") != version) {
             throw conflict("RETURN_VERSION_CONFLICT");
@@ -129,8 +123,7 @@ class AssetReturnReassignmentService {
                 """, String.class, id, processor, ownershipVersion).stream().findFirst().orElse(null);
     }
 
-    @SuppressWarnings("unchecked")
-    Map<String, Object> reassign(Actor actor, long id, long version, String key,
+    LoanViews.AssetReturnDetail reassign(Actor actor, long id, long version, String key,
             AssetReturnReassignmentController.Reassignment input) {
         admin(actor);
         String digest = digest(id, version, input);
@@ -140,7 +133,7 @@ class AssetReturnReassignmentService {
         if (!prior.isEmpty()) {
             if (!digest.equals(prior.getFirst().get("payload_sha256"))) {
                 throw conflict("RETURN_IDEMPOTENCY_CONFLICT"); }
-            return json.readValue(prior.getFirst().get("response_body_json").toString(), Map.class);
+            return json.readValue(prior.getFirst().get("response_body_json").toString(), LoanViews.AssetReturnDetail.class);
         }
         // Account locks precede receipt/ownership/item/asset locks, matching execution.
         var target = db.queryForList("SELECT id,employee_id,status,initial_password_required "

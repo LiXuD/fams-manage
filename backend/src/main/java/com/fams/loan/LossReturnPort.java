@@ -6,7 +6,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Map;
 import java.util.UUID;
 
 /** Return owns the formal application, approval, retained lock and physical stock acceptance. */
@@ -28,7 +27,7 @@ public class LossReturnPort {
     private final AssetReturnService returns;
     public LossReturnPort(AssetReturnService returns) { this.returns = returns; }
 
-    public Map<String, Object> create(Actor actor, UUID key, long asset, long version,
+    public LoanViews.AssetReturn create(Actor actor, UUID key, long asset, long version,
             String reason, Source source) {
         try {
             return returns.proposeLossRecovery(actor, key.toString(), asset, version, reason, source);
