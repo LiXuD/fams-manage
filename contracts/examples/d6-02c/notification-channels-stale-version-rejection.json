@@ -1,0 +1,22 @@
+{
+  "operationId": "replaceNotificationChannels",
+  "kind": "rejection",
+  "scenario": "If-Match-Version no longer equals the current configuration version",
+  "status": 409,
+  "headers": {
+    "Idempotency-Key": "notification-channels-replace-0002",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "0"
+  },
+  "payload": {
+    "smsTemplate": "SMS_REMINDER_02",
+    "wechatTemplate": ""
+  },
+  "response": {
+    "code": "NOTIFICATION_CHANNEL_VERSION_CONFLICT",
+    "message": "The current channel-configuration version changed.",
+    "requestId": "98982a10-f4c2-45ca-a186-cad4625ad2d1",
+    "fieldErrors": {}
+  },
+  "evidence": "Contract evidence only; a stale version never overwrites a newer configuration, and an empty wechatTemplate clears that channel."
+}

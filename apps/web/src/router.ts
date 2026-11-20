@@ -25,6 +25,8 @@ const EmployeePhoneCorrectionView = () => import("@/features/auth/views/Employee
 const IdentityAdminView = () => import("@/features/masterdata/views/IdentityAdminView.vue");
 const IdentityImportView = () => import("@/features/masterdata/views/IdentityImportView.vue");
 const NumberingRuleView = () => import("@/features/masterdata/views/NumberingRuleView.vue");
+const NotificationChannelView = () => import("@/features/masterdata/views/NotificationChannelView.vue");
+const OperationLogView = () => import("@/features/masterdata/views/OperationLogView.vue");
 const LoanView = () => import("@/features/loan/views/LoanView.vue");
 const LoanDetailView = () => import("@/features/loan/views/LoanDetailView.vue");
 const AssetReturnView = () => import("@/features/asset-return/views/AssetReturnView.vue");
@@ -77,6 +79,8 @@ export const router = createRouter({
     { path: "/identity", name: "identity", component: IdentityAdminView, meta: { requiresAuth: true, uiGroup: "系统与主数据", uiTitle: "组织与人员" } },
     { path: "/business-parameters", name: "business-parameters", component: BusinessParameterView, meta: { requiresAuth: true, uiGroup: "系统与主数据", uiTitle: "业务参数" } },
     { path: "/system-accounts", name: "system-accounts", component: AccountAdminView, meta: { requiresAuth: true, uiGroup: "系统与主数据", uiTitle: "账号与角色" } },
+    { path: "/notification-channels", name: "notification-channels", component: NotificationChannelView, meta: { requiresAuth: true, uiGroup: "系统与主数据", uiTitle: "通知通道", uiDesc: "维护短信与微信模板版本；站内消息必达，不受通道配置影响。" } },
+    { path: "/operation-logs", name: "operation-logs", component: OperationLogView, meta: { requiresAuth: true, uiGroup: "系统与主数据", uiTitle: "系统操作日志", uiDesc: "只读合并业务与安全审计；系统管理员按角色读取，审计只读账号需持有有效的系统操作日志授权。" } },
     { path: "/scrap-requests/:id?", name: "scrap-requests", component: ScrapView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "报废与处置" } },
     { path: "/inventory-tasks", name: "inventory-tasks", component: InventoryTaskView, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "盘点任务", uiDesc: "发布时冻结应盘集合与责任快照。盘点不直接改变资产责任；执行人只查看自己的应盘项。" } },
     { path: "/inventory-tasks/new", name: "inventory-task-new", component: InventoryTaskDraftView, props: true, meta: { requiresAuth: true, uiGroup: "业务流转", uiTitle: "新建盘点草稿", uiDesc: "先划定盘点范围并保存草稿。到任务详情页预览应盘数量后再发布冻结。" } },

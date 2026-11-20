@@ -1,0 +1,41 @@
+{
+  "operationId": "listOperationLogs",
+  "kind": "positive",
+  "status": 200,
+  "responseSchema": "PageOperationLog",
+  "query": {"page": 1, "pageSize": 20, "source": "SECURITY"},
+  "payload": {},
+  "response": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 2,
+    "items": [
+      {
+        "source": "SECURITY",
+        "eventId": "9007199254740995",
+        "eventType": "ACCOUNT_PASSWORD_RESET",
+        "actorAccountId": "7001",
+        "requestId": "98982a10-f4c2-45ca-a186-cad4625ad2d1",
+        "occurredAt": "2026-11-20T02:10:00Z",
+        "detail": {
+          "action": "ACCOUNT_PASSWORD_RESET",
+          "targetAccountId": "7010",
+          "contactPhone": "138****5678",
+          "initialPassword": "***"
+        }
+      },
+      {
+        "source": "SECURITY",
+        "eventId": "9007199254740994",
+        "eventType": "LOGIN_FAILED",
+        "requestId": "1f0e6b2a-7c4d-4e8f-9a2b-3c5d7e9f1a2b",
+        "occurredAt": "2026-11-20T02:05:00Z",
+        "detail": {
+          "username": "warehouse01",
+          "reason": "BAD_CREDENTIALS"
+        }
+      }
+    ]
+  },
+  "evidence": "Contract evidence only; merged projection ordered by occurredAt descending, phone values masked, credential-like keys redacted, and events without an account omit actorAccountId."
+}

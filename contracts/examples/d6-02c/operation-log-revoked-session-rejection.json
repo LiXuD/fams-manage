@@ -1,0 +1,15 @@
+{
+  "operationId": "listOperationLogs",
+  "kind": "rejection",
+  "scenario": "authorization revoked after the session was issued",
+  "status": 401,
+  "query": {"page": 1, "pageSize": 20},
+  "payload": {},
+  "response": {
+    "code": "AUTH_SESSION_INVALID",
+    "message": "The session is invalid.",
+    "requestId": "1f0e6b2a-7c4d-4e8f-9a2b-3c5d7e9f1a2b",
+    "fieldErrors": {}
+  },
+  "evidence": "Contract evidence only; the read transaction revalidates the account epoch and authorization version, so a revoked or disabled account's old session is rejected before any log row is returned."
+}

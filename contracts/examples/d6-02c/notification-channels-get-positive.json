@@ -1,0 +1,13 @@
+{
+  "operationId": "getNotificationChannels",
+  "kind": "positive",
+  "status": 200,
+  "responseSchema": "NotificationChannelConfig",
+  "payload": {},
+  "response": {
+    "smsTemplate": "",
+    "wechatTemplate": "",
+    "version": 0
+  },
+  "evidence": "Contract evidence only; version 0 means no configuration was ever saved, both channels are unconfigured, and updatedAt and actor fields are omitted."
+}

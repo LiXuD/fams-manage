@@ -131,9 +131,18 @@ erDiagram
 | `fams_numbering_allocation` | `rule_id`、`target_type`、`allocated_code`、`allocation_status`、`request_id`、`resource_id` | `uk_allocated_code(target_type,allocated_code)`；状态为 `RESERVED/ISSUED/GAP`；失败号保留 `GAP` 永不回收 |
 | `fams_business_parameter_version` | `effective_from`、`timezone_id`、`work_calendar_json`、各时限、`status`、`changed_from_id` | `effective_from` 唯一；创建后不可原位修改；同一时刻最多一个 `ACTIVE` |
 | `fams_configuration_anomaly` | `anomaly_type`、`status`、`first_seen_at`、`last_seen_at`、`resolved_at`、`detail_json` | 一个异常类型只保留一个未解决项；人员角色、短信或微信配置恢复后关闭而不删除 |
+| `fams_notification_channel_state` | `singleton_id`、`current_version`、`current_version_id` | 单例行锁串行化通道配置替换；`current_version` 从 0 起，0 表示从未配置 |
+| `fams_notification_channel_version` | `version`、`status`、`sms_template`、`wechat_template`、`actor_account_id`、`actor_username`、`created_at` | `version` 唯一；`active_slot` 生成列保证同一时刻最多一个 `ACTIVE`；创建后不可原位修改；模板为空串表示通道未配置，非空须匹配 `[A-Za-z0-9_-]{1,80}` |
 
 参数按单据创建时的有效版本生成快照，之后参数变更不重写既有单据时限。企业时区默认
 `Asia/Shanghai`，但存储的业务时刻始终为 UTC。
+
+通知通道配置自 V86 起以数据库为唯一来源：投递 worker、配置异常扫描与小程序订阅入口
+可见性只读当前 `ACTIVE` 版本，`fams.notification.sms-template` 与
+`fams.notification.wechat-template` 环境属性不再被消费。系统操作日志为只读合并投影：
+`fams_audit_event`（BUSINESS）与 `fams_security_event`（SECURITY）按 `occurred_at`
+倒序统一分页，不新建日志表；详情在序列化前脱敏（手机号保留前 3 后 4，
+password/token/secret/credential/hash 类键整体置 `***`），凭证与哈希材料永不返回。
 
 ## 5. 资产卡、台账与标签
 

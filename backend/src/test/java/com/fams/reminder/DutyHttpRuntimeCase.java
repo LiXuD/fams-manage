@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fams.auth.MiniNotificationSmsPort;
+import com.fams.masterdata.NotificationChannelConfigPort;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -263,11 +264,13 @@ class DutyHttpRuntimeCase {
             return calls.size() == 1 ? MiniNotificationSmsPort.Result.UNKNOWN : MiniNotificationSmsPort.Result.ACCEPTED;
         });
         var adapters = provider.getBeanProvider(MiniNotificationSmsPort.class);
-        new NotificationDeliveryWorker(jobs, deliveries, adapters, "reminder-test").poll();
+        new NotificationDeliveryWorker(jobs, deliveries, adapters,
+                () -> new NotificationChannelConfigPort.Templates("reminder-test", "")).poll();
         assertEquals(1, calls.size());
         db.update("UPDATE fams_durable_job SET next_attempt_at=? WHERE id=?",
                 Timestamp.from(clock.instant().minusSeconds(1)), calls.getFirst());
-        new NotificationDeliveryWorker(jobs, deliveries, adapters, "reminder-test").poll();
+        new NotificationDeliveryWorker(jobs, deliveries, adapters,
+                () -> new NotificationChannelConfigPort.Templates("reminder-test", "")).poll();
         assertEquals(2, calls.size());
         assertEquals(calls.getFirst(), calls.getLast());
         assertEquals(2, db.queryForObject("SELECT COUNT(*) FROM fams_notification_delivery"
@@ -1442,7 +1445,7 @@ class DutyHttpRuntimeCase {
         var sms = providers.getBeanProvider(MiniNotificationSmsPort.class);
         var wechat = providers.getBeanProvider(WechatSubscriptionPort.class);
         var check = new ConfigurationAnomalyService(db, java.time.Clock.systemUTC(), sms, wechat,
-                "reminder-test", "wechat-test");
+                () -> new NotificationChannelConfigPort.Templates("reminder-test", "wechat-test"));
         check.scan();
         assertEquals(2, openChannelAnomalies());
 

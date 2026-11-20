@@ -1,0 +1,15 @@
+{
+  "operationId": "listOperationLogs",
+  "kind": "rejection",
+  "scenario": "AUDIT_READ_ONLY without SYSTEM_OPERATION_LOG field permission",
+  "status": 403,
+  "query": {"page": 1, "pageSize": 20},
+  "payload": {},
+  "response": {
+    "code": "AUTH_FORBIDDEN",
+    "message": "The current account is not authorized for this operation.",
+    "requestId": "98982a10-f4c2-45ca-a186-cad4625ad2d1",
+    "fieldErrors": {}
+  },
+  "evidence": "Contract evidence only; the AUDIT_READ_ONLY role alone never reads the system log without an active SYSTEM_OPERATION_LOG grant."
+}

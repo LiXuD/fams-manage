@@ -2,6 +2,7 @@ package com.fams.reminder;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fams.auth.MiniNotificationSmsPort;
+import com.fams.masterdata.NotificationChannelConfigPort;
 
 import java.sql.Timestamp;
 import java.time.Clock;
@@ -9,7 +10,6 @@ import java.time.Instant;
 import java.util.List;
 
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -25,30 +25,29 @@ class ConfigurationAnomalyService {
     private final Clock clock;
     private final ObjectProvider<MiniNotificationSmsPort> sms;
     private final ObjectProvider<WechatSubscriptionPort> wechat;
-    private final String smsTemplate;
-    private final String wechatTemplate;
+    private final NotificationChannelConfigPort channels;
 
     ConfigurationAnomalyService(JdbcTemplate db, Clock clock, ObjectProvider<MiniNotificationSmsPort> sms,
             ObjectProvider<WechatSubscriptionPort> wechat,
-            @Value("${fams.notification.sms-template:}") String smsTemplate,
-            @Value("${fams.notification.wechat-template:}") String wechatTemplate) {
+            NotificationChannelConfigPort channels) {
         this.db = db;
         this.clock = clock;
         this.sms = sms;
         this.wechat = wechat;
-        this.smsTemplate = smsTemplate;
-        this.wechatTemplate = wechatTemplate;
+        this.channels = channels;
     }
 
     @Scheduled(fixedDelay = 60000, initialDelay = 60000)
     @Transactional(isolation = Isolation.READ_COMMITTED, propagation = Propagation.REQUIRES_NEW)
     public void scan() {
         Timestamp now = Timestamp.from(clock.instant());
+        var templates = channels.currentTemplates();
         reconcileRole("ASSET_ADMIN", "NO_ASSET_ADMIN", now);
         reconcileRole("WAREHOUSE_OPERATOR", "NO_WAREHOUSE_OPERATOR", now);
         reconcileChannel("SMS_CHANNEL_MISSING", sms.getIfUnique() == null
-                || !smsTemplate.matches("[A-Za-z0-9_-]{1,80}"), now);
-        reconcileChannel("WECHAT_TEMPLATE_MISSING", wechat.getIfUnique() == null || wechatTemplate.isBlank(), now);
+                || !templates.smsTemplate().matches("[A-Za-z0-9_-]{1,80}"), now);
+        reconcileChannel("WECHAT_TEMPLATE_MISSING", wechat.getIfUnique() == null
+                || templates.wechatTemplate().isBlank(), now);
     }
 
     private void reconcileChannel(String type, boolean missing, Timestamp now) {

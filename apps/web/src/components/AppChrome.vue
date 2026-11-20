@@ -26,6 +26,8 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { label: "组织人员导入", path: "/identity-imports", roles: ["SYSTEM_ADMIN"] },
       { label: "资料目录", path: "/catalogs", roles: ["SYSTEM_ADMIN"] },
       { label: "编号规则", path: "/numbering-rules", roles: ["SYSTEM_ADMIN"] },
+      { label: "通知通道", path: "/notification-channels", roles: ["SYSTEM_ADMIN"] },
+      { label: "系统操作日志", path: "/operation-logs", roles: ["SYSTEM_ADMIN", "AUDIT_READ_ONLY"] },
     ],
   },
   {

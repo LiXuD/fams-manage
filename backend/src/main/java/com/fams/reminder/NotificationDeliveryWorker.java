@@ -2,12 +2,12 @@ package com.fams.reminder;
 
 import com.fams.auth.MiniNotificationSmsPort;
 import com.fams.job.DurableJobService;
+import com.fams.masterdata.NotificationChannelConfigPort;
 
 import java.time.Duration;
 import java.util.UUID;
 
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -19,21 +19,22 @@ class NotificationDeliveryWorker {
     private final DurableJobService jobs;
     private final NotificationDeliveryQueue queue;
     private final ObjectProvider<MiniNotificationSmsPort> provider;
-    private final String template;
+    private final NotificationChannelConfigPort channels;
     private final String owner = UUID.randomUUID().toString();
 
     NotificationDeliveryWorker(DurableJobService jobs, NotificationDeliveryQueue queue,
             ObjectProvider<MiniNotificationSmsPort> provider,
-            @Value("${fams.notification.sms-template:}") String template) {
+            NotificationChannelConfigPort channels) {
         this.jobs = jobs;
         this.queue = queue;
         this.provider = provider;
-        this.template = template;
+        this.channels = channels;
     }
 
     @Scheduled(fixedDelay = 60000, initialDelay = 60000)
     void poll() {
         var sender = provider.getIfUnique();
+        String template = channels.currentTemplates().smsTemplate();
         if (sender == null || !template.matches("[A-Za-z0-9_-]{1,80}")) {
             return;
         }

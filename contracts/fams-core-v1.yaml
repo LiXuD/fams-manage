@@ -3203,6 +3203,104 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/NumberingRule'
+    OperationLogSource:
+      type: string
+      enum: [BUSINESS, SECURITY]
+      description: BUSINESS projects fams_audit_event; SECURITY projects fams_security_event.
+    OperationLogEntry:
+      type: object
+      additionalProperties: false
+      required: [source, eventId, eventType, requestId, occurredAt, detail]
+      description: >-
+        Read-only merged audit projection. Detail values are masked before
+        serialization: phone numbers keep only prefix and suffix, and any
+        password, token, secret, credential, or hash field is redacted entirely.
+        Credential and hash material is never returned. Fields without a value
+        are omitted instead of returned as null.
+      properties:
+        source:
+          $ref: '#/components/schemas/OperationLogSource'
+        eventId:
+          $ref: '#/components/schemas/Id'
+        eventType:
+          type: string
+          maxLength: 80
+        actorAccountId:
+          $ref: '#/components/schemas/Id'
+        actorRole:
+          type: string
+          maxLength: 40
+        requestId:
+          type: string
+          format: uuid
+        resourceType:
+          type: string
+          maxLength: 40
+        resourceId:
+          $ref: '#/components/schemas/Id'
+        occurredAt:
+          $ref: '#/components/schemas/Instant'
+        detail:
+          type: object
+          additionalProperties: true
+          description: Masked audit detail; empty object when the source event carried no detail.
+    PageOperationLog:
+      allOf:
+        - $ref: '#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OperationLogEntry'
+    NotificationChannelConfig:
+      type: object
+      additionalProperties: false
+      required: [smsTemplate, wechatTemplate, version]
+      description: >-
+        Current notification-channel configuration. Version 0 means no
+        configuration was ever saved: both templates are empty and updatedAt
+        and actor fields are omitted. An empty template means the channel is
+        unconfigured; delivery workers and the configuration anomaly scan read
+        only this current version.
+      properties:
+        smsTemplate:
+          type: string
+          maxLength: 80
+          pattern: '^([A-Za-z0-9_-]{1,80})?$'
+        wechatTemplate:
+          type: string
+          maxLength: 80
+          pattern: '^([A-Za-z0-9_-]{1,80})?$'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        updatedAt:
+          $ref: '#/components/schemas/Instant'
+        actorAccountId:
+          $ref: '#/components/schemas/Id'
+        actorUsername:
+          type: string
+          maxLength: 128
+    NotificationChannelConfigReplaceRequest:
+      type: object
+      additionalProperties: false
+      required: [smsTemplate, wechatTemplate]
+      description: >-
+        Complete replacement of both channel templates. An empty string clears
+        the channel configuration; a non-empty value must match the provider
+        template vocabulary [A-Za-z0-9_-]{1,80}.
+      properties:
+        smsTemplate:
+          type: string
+          maxLength: 80
+          pattern: '^([A-Za-z0-9_-]{1,80})?$'
+        wechatTemplate:
+          type: string
+          maxLength: 80
+          pattern: '^([A-Za-z0-9_-]{1,80})?$'
     BusinessParameterVersionStatus:
       type: string
       enum: [ACTIVE, SUPERSEDED]
@@ -12512,6 +12610,112 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /operation-logs:
+    get:
+      tags: [MasterData]
+      operationId: listOperationLogs
+      summary: Query the merged business and security audit log with masking and stable pagination.
+      description: >-
+        SYSTEM_ADMIN reads the system log by role; AUDIT_READ_ONLY additionally
+        requires an active authorization carrying the SYSTEM_OPERATION_LOG
+        field permission, and the role alone is not sufficient for that role.
+        Authorization is revalidated inside the read transaction, so a revoked
+        or disabled account's old session is rejected with 401 and a missing
+        field permission with 403. Detail values are masked and credential or
+        hash material is never returned.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN, AUDIT_READ_ONLY]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: source
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/OperationLogSource'
+        - name: actorAccountId
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/Id'
+        - name: occurredFrom
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/Instant'
+        - name: occurredTo
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/Instant'
+      responses:
+        '200':
+          description: Masked operation-log page ordered by occurredAt descending.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageOperationLog'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /notification-channels:
+    get:
+      tags: [MasterData]
+      operationId: getNotificationChannels
+      summary: Read the current notification-channel configuration.
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      responses:
+        '200':
+          description: Current channel configuration; version 0 when never configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationChannelConfig'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MasterData]
+      operationId: replaceNotificationChannels
+      summary: Replace both channel templates as a new immutable configuration version.
+      x-business-write: true
+      x-actor:
+        required: true
+        roles: [SYSTEM_ADMIN]
+      x-version:
+        required: true
+        precondition: If-Match-Version equals the current channel-configuration version; 0 when never configured.
+      x-transaction:
+        boundary: Validate both templates, supersede the current version, insert and activate the next version, and audit in one short transaction.
+      x-audit-event:
+        event: NOTIFICATION_CHANNEL_CONFIG_REPLACED
+      x-error-codes: [NOTIFICATION_CHANNEL_TEMPLATE_INVALID, NOTIFICATION_CHANNEL_VERSION_CONFLICT]
+      x-invariants: Configuration versions are immutable and never rewritten; delivery workers, the configuration anomaly scan, and mini subscription visibility read only the current version; an empty template means the channel is unconfigured and environment properties are no longer consulted.
+      x-required-error-statuses: [400, 401, 403, 409]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationChannelConfigReplaceRequest'
+      responses:
+        '201':
+          description: Newly activated channel-configuration version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationChannelConfig'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
 
   /mini/auth/login:

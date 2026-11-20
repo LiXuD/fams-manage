@@ -1,0 +1,25 @@
+{
+  "operationId": "replaceNotificationChannels",
+  "kind": "positive",
+  "status": 201,
+  "requestSchema": "NotificationChannelConfigReplaceRequest",
+  "responseSchema": "NotificationChannelConfig",
+  "headers": {
+    "Idempotency-Key": "notification-channels-replace-0001",
+    "X-CSRF-Token": "csrf-token-example-123456",
+    "If-Match-Version": "0"
+  },
+  "payload": {
+    "smsTemplate": "SMS_REMINDER_01",
+    "wechatTemplate": "WX_REMINDER_01"
+  },
+  "response": {
+    "smsTemplate": "SMS_REMINDER_01",
+    "wechatTemplate": "WX_REMINDER_01",
+    "version": 1,
+    "updatedAt": "2026-11-20T02:20:00Z",
+    "actorAccountId": "7001",
+    "actorUsername": "sysadmin"
+  },
+  "evidence": "Contract evidence only; the replacement activates a new immutable version, supersedes the previous one, and audits NOTIFICATION_CHANNEL_CONFIG_REPLACED in the same short transaction."
+}

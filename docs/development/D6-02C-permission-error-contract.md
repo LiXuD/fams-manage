@@ -121,6 +121,28 @@ V1 固定角色动作保持只读基线，不开放任意角色权限编辑器�
 权限；记录可见与敏感字段授权互不推导。资产管理员全部已提交申请、库管全部已批准申请属于固定共享池能力，
 独立与一般范围求并集，不能被部门范围漏掉，也不能由 `SYSTEM_ADMIN` 身份自动取得。
 
+### 3.6 P25 系统设置：操作日志与通知通道
+
+系统操作日志（`GET /operation-logs`）是 `fams_audit_event` 与 `fams_security_event` 的合并只读投影，
+按时间倒序分页。访问裁决在同一事务内实时重验会话与账号状态：
+
+- `SYSTEM_ADMIN` 按固定角色天然可读（PRD §12.1；该角色不接受字段授权配置）。
+- `AUDIT_READ_ONLY` 必须持有当前生效、含 `SYSTEM_OPERATION_LOG` 字段权限的授权，否则 403
+  `AUTH_FORBIDDEN`；其他角色一律 403。
+- 授权替换/撤销或账号停用使 `auth_epoch` 前进后，旧会话立即 401 `AUTH_SESSION_INVALID`，
+  重新登录后按新授权裁决。
+
+响应映射层统一脱敏：手机号保留前 3 后 4；键名命中 password/token/secret/credential/hash 等
+敏感词的值整体替换为 `***`；凭据与哈希原文永不出现在响应中。过滤参数（来源、操作账号、时间窗）
+非法时 400，不猜测意图。
+
+通知通道配置（`GET/POST /notification-channels`）仅 `SYSTEM_ADMIN`。配置存于 V86 数据库表
+（单例状态行 + 版本行，活跃槽唯一），替换走 `If-Match-Version` 版本守卫与 `Idempotency-Key`
+幂等：同键同载荷重放原结果，同键不同载荷 409 `MASTER_DATA_IDEMPOTENCY_CONFLICT`，旧版本 409
+`NOTIFICATION_CHANNEL_VERSION_CONFLICT`。模板非法 400 `NOTIFICATION_CHANNEL_TEMPLATE_INVALID`。
+每次替换写安全审计（`NOTIFICATION_CHANNEL_CONFIG_REPLACED`）。提醒投递 worker 与配置异常扫描
+每轮读取当前生效版本，不再使用环境属性。
+
 ## 4. 操作级权限和事务契约
 
 | 操作组 | 前置条件 | 原子事务 | 主要并发裁决 |
@@ -128,6 +150,8 @@ V1 固定角色动作保持只读基线，不开放任意角色权限编辑器�
 | 账号/角色/状态配置 | SYSTEM_ADMIN；目标员工/账号当前 | 账号/角色、认证纪元、安全审计 | 用户名唯一、账号版本、角色唯一关联 |
 | 一般范围/字段授权配置 | SYSTEM_ADMIN；目标账号角色及引用当前 | 授权头、范围明细、字段项、`auth_epoch`、审计 | 授权版本；指定范围组合；停用引用立即失效 |
 | 主数据写入 | SYSTEM_ADMIN；父级/引用当前且启用 | 聚合修改、版本、审计 | 代码唯一、树防循环、停用引用检查 |
+| 系统操作日志查询 | SYSTEM_ADMIN 天然，或 AUDIT_READ_ONLY 持当前 SYSTEM_OPERATION_LOG 授权 | 事务内会话/账号/授权实时重验；只读投影 | 撤权/停用后旧会话立即 401；无授权 403 |
+| 通知通道配置替换 | SYSTEM_ADMIN；当前版本 | 版本守卫、幂等指纹、旧版 supersede、新版激活、安全审计 | 同键同载荷重放；同键异载荷与旧版本 409 |
 | 创建资产草稿 | WAREHOUSE_OPERATOR；当前活动引用 | 永久编号、草稿、参数快照、审计 | 编码/序列号唯一；失败号不复用 |
 | 修改/复制/取消草稿 | 创建库管；DRAFT；版本当前 | 新卡或修改、版本、审计 | 创建人关系、源状态、数量及唯一键 |
 | 标签重打/换标 | WAREHOUSE_OPERATOR；ACTIVE；当前标签/资产版本 | 任务或 token 轮换、版本、审计、幂等结果 | 重打同身份；换标使旧 token 原子失效 |
@@ -178,7 +202,7 @@ V1 固定角色动作保持只读基线，不开放任意角色权限编辑器�
 | 错误族 | 代表码 | 必须保留的事实 |
 |---|---|---|
 | 认证/会话 | `AUTH_CURRENT_PASSWORD_INVALID`、`AUTH_SESSION_INVALID` | 对外不枚举账号；安全事件记录内部原因 |
-| 授权/范围 | `ASSET_LEDGER_PERMISSION_REQUIRED`、`ASSET_TAG_SCOPE_FORBIDDEN` | 不泄露受限字段或资源是否存在 |
+| 授权/范围 | `ASSET_LEDGER_PERMISSION_REQUIRED`、`ASSET_TAG_SCOPE_FORBIDDEN`、`AUTH_FORBIDDEN` | 不泄露受限字段或资源是否存在 |
 | 资源/所有者 | `ASSET_NOT_FOUND`、`ASSET_NOT_CREATOR`、`ASSET_SAVED_FILTER_NOT_FOUND` | 个人筛选非所有者与不存在返回相同结果 |
 | 字段/引用 | `ASSET_MASTER_DATA_DISABLED`、`INBOUND_WAREHOUSE_LOCATION_MISMATCH` | 返回安全字段路径；提交时重验当前引用 |
 | 唯一/版本 | `ASSET_SERIAL_NUMBER_CONFLICT`、`ASSET_VERSION_CONFLICT` | 原记录不变；允许刷新后重新表达意图 |
@@ -186,7 +210,8 @@ V1 固定角色动作保持只读基线，不开放任意角色权限编辑器�
 | 管理员竞争 | `INBOUND_DECISION_ALREADY_EFFECTIVE`、`INBOUND_CANCELLATION_ALREADY_EFFECTIVE` | 返回实际已生效结果，不产生第二决定或第二待办 |
 | 库管独占 | `INBOUND_ALREADY_CLAIMED`、`INBOUND_NOT_CURRENT_PROCESSOR` | 返回安全处理人概要和只读入口，不转移处理权 |
 | 原子失败 | `INBOUND_SUBMIT_ATOMIC_ROLLBACK`、`INBOUND_ACCEPTANCE_ATOMIC_ROLLBACK` | 明确无本次部分成功；可用原键安全重试 |
-| 幂等 | `INBOUND_IDEMPOTENCY_CONFLICT`、`ASSET_SAVED_FILTER_IDEMPOTENCY_CONFLICT` | 同键同载荷重放；不同载荷不执行 |
+| 幂等 | `INBOUND_IDEMPOTENCY_CONFLICT`、`ASSET_SAVED_FILTER_IDEMPOTENCY_CONFLICT`、`MASTER_DATA_IDEMPOTENCY_CONFLICT` | 同键同载荷重放；不同载荷不执行 |
+| 通知通道 | `NOTIFICATION_CHANNEL_VERSION_CONFLICT`、`NOTIFICATION_CHANNEL_TEMPLATE_INVALID` | 原配置不变；刷新后按当前版本重新表达意图 |
 
 失败优先级遵循最少泄露：无会话先 401；CSRF/角色/范围失败先 403；只有有权定位资源后才返回具体
 404/409。对同一有权请求，幂等已提交结果优先于后来产生的版本冲突；如果当前权限已撤销，则不重放旧
@@ -226,3 +251,5 @@ V1 固定角色动作保持只读基线，不开放任意角色权限编辑器�
 D6-04～D6-07 必须在真实 MySQL 与真实会话链路分别验证：会话失效、CSRF、当前权限、字段裁剪、
 管理员竞争、库管独占、资产锁、原子回滚、同键同载荷重放、不同载荷冲突和响应未知恢复。
 D6-02C 的 OpenAPI、示例和生成编译只能证明契约自洽，不能替代这些运行验证。
+P25 系统设置的运行验证由 `SystemSettingsHttpRuntimeCase` 承担：真实 MySQL 上覆盖日志双门槛授权、
+脱敏、时间窗分页、授权替换/撤销后的会话失效，以及通知通道版本链与幂等重放。
