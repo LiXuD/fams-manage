@@ -22,6 +22,47 @@ import java.util.UUID;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class AssetFactoryReplacementPort {
+    /** Created replacement identity read field-by-field by repair; never serialized as a whole. */
+    public record Replaced(String id, long version) {
+    }
+
+    /**
+     * Immutable replacement provenance. This record is the whole HTTP body of
+     * {@code GET /api/v1/assets/{id}/factory-replacements}; component names mirror the frozen
+     * camelCase wire keys (JAVA-09 ExecutorChoice precedent) and null serials keep explicit keys.
+     */
+    public record TraceItem(
+            String sourceId,
+            String originalAssetId,
+            String replacementAssetId,
+            String repairId,
+            String roundId,
+            String originalAssetCode,
+            String replacementAssetCode,
+            String originalSerialNumber,
+            String replacementSerialNumber) {
+
+        static TraceItem fromRow(Map<String, Object> row) {
+            return new TraceItem(
+                    (String) row.get("source_id"),
+                    row.get("original_asset_id").toString(),
+                    row.get("asset_id").toString(),
+                    row.get("repair_id").toString(),
+                    row.get("round_id").toString(),
+                    (String) row.get("original_code"),
+                    (String) row.get("replacement_code"),
+                    (String) row.get("original_serial"),
+                    (String) row.get("replacement_serial"));
+        }
+    }
+
+    /** Frozen {@code Map.of("items", ...)} envelope of the trace endpoint. */
+    public record Trace(List<TraceItem> items) {
+        public Trace {
+            items = List.copyOf(items);
+        }
+    }
+
     private final AssetService service;
     private final AssetMapper mapper;
     private final RequisitionActorContext actors;
@@ -39,7 +80,7 @@ public class AssetFactoryReplacementPort {
         this.clock = clock;
     }
 
-    public Map<String, Object> create(RequisitionActorContext.Actor actor, UUID source,
+    public Replaced create(RequisitionActorContext.Actor actor, UUID source,
             long oldAsset, long oldVersion, long repair, long round, AssetCreateRequest input) {
         try {
             return createOwned(actor, source, oldAsset, oldVersion, repair, round, input);
@@ -50,7 +91,7 @@ public class AssetFactoryReplacementPort {
         }
     }
 
-    private Map<String, Object> createOwned(RequisitionActorContext.Actor actor, UUID source,
+    private Replaced createOwned(RequisitionActorContext.Actor actor, UUID source,
             long oldAsset, long oldVersion, long repair, long round, AssetCreateRequest input) {
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.WAREHOUSE_OPERATOR)) {
@@ -89,29 +130,16 @@ public class AssetFactoryReplacementPort {
                 json.writeValueAsString(Map.of("sourceId", source.toString(), "originalAssetId",
                         Long.toString(oldAsset), "repairId", Long.toString(repair),
                         "roundId", Long.toString(round))), current.id());
-        return Map.of("id", created.getId(), "version", created.getVersion(),
-                "assetCode", created.getAssetCode());
+        return new Replaced(created.getId(), created.getVersion());
     }
 
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
-    public Map<String, Object> trace(AssetActorContext.Actor actor, long asset) {
+    public Trace trace(AssetActorContext.Actor actor, long asset) {
         service.get(actor, asset);
         var rows = db.queryForList("SELECT o.*,a.asset_code AS replacement_code FROM fams_asset_factory_replacement_origin o"
                 + " JOIN fams_asset a ON a.id=o.asset_id WHERE (o.asset_id=? OR o.original_asset_id=?)"
                 + " AND (a.card_stage NOT IN ('DRAFT','CANCELLED') OR a.creator_account_id=?)"
                 + " ORDER BY o.recorded_at,o.asset_id", asset, asset, actor.id());
-        return Map.of("items", rows.stream().map(row -> {
-            var item = new java.util.LinkedHashMap<String, Object>();
-            item.put("sourceId", row.get("source_id"));
-            item.put("originalAssetId", row.get("original_asset_id").toString());
-            item.put("replacementAssetId", row.get("asset_id").toString());
-            item.put("repairId", row.get("repair_id").toString());
-            item.put("roundId", row.get("round_id").toString());
-            item.put("originalAssetCode", row.get("original_code"));
-            item.put("replacementAssetCode", row.get("replacement_code"));
-            item.put("originalSerialNumber", row.get("original_serial"));
-            item.put("replacementSerialNumber", row.get("replacement_serial"));
-            return item;
-        }).toList());
+        return new Trace(rows.stream().map(TraceItem::fromRow).toList());
     }
 }

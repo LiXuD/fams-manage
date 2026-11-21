@@ -981,9 +981,9 @@ public class RepairFactoryService {
         UUID source = UUID.randomUUID();
         var created = replacements.create(actor, source, number(row, "asset_id"), input.assetVersion(),
                 id, roundId, input.newAsset());
-        long asset = Long.parseLong(created.get("id").toString());
+        long asset = Long.parseLong(created.id());
         var inbound = replacementInbound.create(actor, source, number(row, "asset_id"), asset,
-                ((Number) created.get("version")).longValue(), id, roundId, input.businessDate(),
+                created.version(), id, roundId, input.businessDate(),
                 input.warehouseId(), input.warehouseVersion(), input.locationId(), input.locationVersion());
         db.update("INSERT INTO fams_repair_factory_replacement(source_id,repair_id,round_id,"
                         + "original_asset_id,replacement_asset_id,inbound_receipt_id,original_disposition,"
@@ -1000,7 +1000,7 @@ public class RepairFactoryService {
         var result = reply(header(id), number(round, "scope_id"), roundId);
         result.put("replacementId", Long.toString(replacement));
         result.put("sourceId", source.toString());
-        result.put("replacementAssetId", created.get("id"));
+        result.put("replacementAssetId", created.id());
         result.put("inboundReceiptId", inbound.get("id"));
         save(current, operation, key, fingerprint, id, result);
         return result;

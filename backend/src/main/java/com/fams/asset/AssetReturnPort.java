@@ -16,6 +16,14 @@ import java.util.Map;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class AssetReturnPort {
+    /**
+     * Validated asset identity at loss-recovery adoption. The former raw row was never read,
+     * serialized or embedded by any consumer, so the record only carries the locked identity
+     * (JAVA-08 '少列即少契约' narrow-record rule).
+     */
+    public record Adopted(long id, long version) {
+    }
+
     private final JdbcTemplate db;
     private final AssetMapper mapper;
     private final ObjectMapper json;
@@ -27,7 +35,7 @@ public class AssetReturnPort {
     }
 
     /** Adopt the exact active loss item without a released or available-inventory interval. */
-    public Map<String, Object> adoptLossRecovery(long asset, long version, long report,
+    public Adopted adoptLossRecovery(long asset, long version, long report,
             long lossItem, long lockVersion, long request) {
         var rows = db.queryForList("SELECT * FROM fams_asset WHERE id=? FOR UPDATE", asset);
         if (rows.size() != 1 || ((Number) rows.getFirst().get("version")).longValue() != version
@@ -43,7 +51,9 @@ public class AssetReturnPort {
                 report, lossItem, lockVersion) != 1) {
             throw new AssetHandoverPort.Failure("RETURN_LOCK_CHANGED", 409);
         }
-        return rows.getFirst();
+        var row = rows.getFirst();
+        return new Adopted(((Number) row.get("id")).longValue(),
+                ((Number) row.get("version")).longValue());
     }
 
     public void inspect(long asset, long version, String result, Long warehouse, Long location,

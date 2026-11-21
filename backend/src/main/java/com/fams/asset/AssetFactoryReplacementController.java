@@ -7,7 +7,6 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
-import java.util.Map;
 
 @RestController
 @Profile("fams-product")
@@ -20,7 +19,7 @@ public class AssetFactoryReplacementController {
         this.actors = actors;
     }
     @GetMapping("/api/v1/assets/{id}/factory-replacements")
-    Map<String, Object> trace(@PathVariable @Positive long id) {
+    AssetFactoryReplacementPort.Trace trace(@PathVariable @Positive long id) {
         return port.trace(actors.requireRead(), id);
     }
 }

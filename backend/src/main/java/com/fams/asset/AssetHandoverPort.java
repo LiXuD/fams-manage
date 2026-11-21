@@ -1,5 +1,7 @@
 package com.fams.asset;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -10,7 +12,6 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 /** The asset domain owns formal custody writes; the caller owns approval and business locks. */
@@ -18,6 +19,37 @@ import java.util.Map;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class AssetHandoverPort {
+    /**
+     * Locked in-stock asset facts shared with requisition handover. Snake_case JSON names are
+     * persisted verbatim into {@code formal_custody_snapshot_json} (AssetTransferPort.Snapshot
+     * precedent), so every key of the former row projection is kept, explicit nulls included.
+     */
+    public record Stock(
+            @JsonProperty("id") Long id,
+            @JsonProperty("version") long version,
+            @JsonProperty("asset_code") String assetCode,
+            @JsonProperty("name") String name,
+            @JsonProperty("model") String model,
+            @JsonProperty("custody_type") String custodyType,
+            @JsonProperty("storage_warehouse_id") Long storageWarehouseId,
+            @JsonProperty("current_location_id") Long currentLocationId) {
+        static Stock fromRow(Map<String, Object> row) {
+            return new Stock(
+                    ((Number) row.get("id")).longValue(),
+                    ((Number) row.get("version")).longValue(),
+                    (String) row.get("asset_code"),
+                    (String) row.get("name"),
+                    (String) row.get("model"),
+                    (String) row.get("custody_type"),
+                    row.get("storage_warehouse_id") == null
+                            ? null
+                            : ((Number) row.get("storage_warehouse_id")).longValue(),
+                    row.get("current_location_id") == null
+                            ? null
+                            : ((Number) row.get("current_location_id")).longValue());
+        }
+    }
+
     public static final class Failure extends RuntimeException {
         private final int status;
 
@@ -44,7 +76,7 @@ public class AssetHandoverPort {
         this.json = json;
     }
 
-    public Map<String, Object> stock(long id, long version) {
+    public Stock stock(long id, long version) {
         var rows = db.queryForList("SELECT * FROM fams_asset WHERE id=? FOR UPDATE", id);
         if (rows.isEmpty()) {
             throw new Failure("ASSET_NOT_FOUND", 404);
@@ -57,21 +89,7 @@ public class AssetHandoverPort {
                 || !"STORAGE".equals(row.get("custody_type"))) {
             throw new Failure("ASSET_HANDOVER_CHANGED", 409);
         }
-        Map<String, Object> result = new LinkedHashMap<>();
-        for (String key :
-                new String[] {
-                    "id",
-                    "version",
-                    "asset_code",
-                    "name",
-                    "model",
-                    "custody_type",
-                    "storage_warehouse_id",
-                    "current_location_id"
-                }) {
-            result.put(key, row.get(key));
-        }
-        return result;
+        return Stock.fromRow(row);
     }
 
     public String observedCode(long assetId, String observed) {

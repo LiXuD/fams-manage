@@ -1,5 +1,7 @@
 package com.fams.asset;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -19,6 +21,31 @@ import java.util.Objects;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class AssetFactoryRepairPort {
+    /**
+     * Locked physical identity at factory dispatch. CamelCase JSON names are persisted verbatim
+     * into {@code fams_repair_factory_round.original_identity_json} and replayed by
+     * requireOriginal, so every key of the former projection is kept, explicit null serials
+     * included (AssetTransferPort.Snapshot precedent).
+     */
+    public record Identity(
+            @JsonProperty("assetId") String assetId,
+            @JsonProperty("version") long version,
+            @JsonProperty("assetCode") String assetCode,
+            @JsonProperty("name") String name,
+            @JsonProperty("serialNumber") String serialNumber,
+            @JsonProperty("lifecycle") String lifecycle) {
+
+        static Identity of(long asset, long version, Map<String, Object> row, String lifecycle) {
+            return new Identity(
+                    Long.toString(asset),
+                    version,
+                    (String) row.get("asset_code"),
+                    (String) row.get("name"),
+                    (String) row.get("serial_number"),
+                    lifecycle);
+        }
+    }
+
     private final JdbcTemplate db;
     private final AssetMapper mapper;
     private final AssetHandoverPort identity;
@@ -32,7 +59,7 @@ public class AssetFactoryRepairPort {
         this.json = json;
     }
 
-    public Map<String, Object> snapshot(long asset, long version, String lifecycle) {
+    public Identity snapshot(long asset, long version, String lifecycle) {
         if (!java.util.List.of("UNDER_REPAIR", "FACTORY_REPAIR").contains(lifecycle)) {
             throw new IllegalArgumentException("Unsupported factory lifecycle");
         }
@@ -47,22 +74,15 @@ public class AssetFactoryRepairPort {
                 || !"NORMAL".equals(row.get("exception_status"))) {
             throw new AssetHandoverPort.Failure("REPAIR_FACTORY_ASSET_CHANGED", 409);
         }
-        var result = new LinkedHashMap<String, Object>();
-        result.put("assetId", Long.toString(asset));
-        result.put("version", version);
-        result.put("assetCode", row.get("asset_code"));
-        result.put("name", row.get("name"));
-        result.put("serialNumber", row.get("serial_number"));
-        result.put("lifecycle", lifecycle);
-        return result;
+        return Identity.of(asset, version, row, lifecycle);
     }
 
-    public void requireOriginal(Map<String, Object> current, String originalJson) {
+    public void requireOriginal(Identity current, String originalJson) {
         var original = json.readTree(originalJson);
-        if (!Objects.equals(current.get("assetId"), original.path("assetId").asText())
-                || !Objects.equals(current.get("assetCode"), original.path("assetCode").asText())
+        if (!Objects.equals(current.assetId(), original.path("assetId").asText())
+                || !Objects.equals(current.assetCode(), original.path("assetCode").asText())
                 || !Objects.equals(
-                        current.get("serialNumber"),
+                        current.serialNumber(),
                         original.path("serialNumber").isNull()
                                 ? null
                                 : original.path("serialNumber").asText())) {
@@ -86,7 +106,7 @@ public class AssetFactoryRepairPort {
         var current = snapshot(asset, version, "UNDER_REPAIR");
         requireOriginal(current, originalJson);
         identity.observedCode(asset, observedCode);
-        String serial = (String) current.get("serialNumber");
+        String serial = current.serialNumber();
         if (serial != null
                 && (observedSerial == null
                         || !serial.strip()
@@ -139,7 +159,7 @@ public class AssetFactoryRepairPort {
         var current = snapshot(asset, version, receiving ? "FACTORY_REPAIR" : "UNDER_REPAIR");
         requireOriginal(current, originalJson);
         identity.observedCode(asset, observedCode);
-        String serial = (String) current.get("serialNumber");
+        String serial = current.serialNumber();
         if (serial != null
                 && (observedSerial == null
                         || !serial.strip()

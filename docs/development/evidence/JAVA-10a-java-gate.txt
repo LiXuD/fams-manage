@@ -1,0 +1,17 @@
+JAVA-10a Java gate evidence (2026-11-21)
+Environment: JDK 21.0.7 GraalVM, Node v24.18.0, MySQL 8.4.11 pinned digest, isolated compose
+Driver: scripts/verify-d6-03a.py verify_java_quality (full product-gate Java sequence)
+
+[inventory explicit review and concurrent administration HTTP] exit=0
+[durable job coverage] exit=0
+[asset import batch coverage] exit=0
+[asset import HTTP coverage] exit=0
+[Java blocking quality] exit=0
+[Compose cleanup] exit=0
+
+[JAVA01 coverage] LINE: 27276/29298 (93.10%)
+[JAVA01 coverage] BRANCH: 9878/13041 (75.75%)
+JAVA01_VERIFY_PASS
+
+Surefire aggregate: 797 tests, 0 failures, 0 errors
+Unit criteria (main agent re-run): six suites 59/59 incl. AssetLightPortsWireShapeTest 7/7
