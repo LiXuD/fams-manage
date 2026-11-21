@@ -4,9 +4,11 @@
   width: 100%;
   max-width: 100%;
   overflow: auto;
-  border: 1px solid var(--fams-border-default);
-  border-radius: var(--fams-radius-12);
-  background: var(--fams-bg-surface);
+  border: 1px solid var(--fams-glass-border);
+  border-radius: var(--fams-radius-20);
+  background: var(--fams-glass-surface-strong);
+  -webkit-backdrop-filter: blur(var(--fams-glass-blur)) saturate(140%);
+  backdrop-filter: blur(var(--fams-glass-blur)) saturate(140%);
 }
 
 .fams-table {
@@ -39,7 +41,7 @@
 
 .fams-table thead th {
   padding: 10px var(--fams-space-16);
-  background: var(--fams-bg-subtle);
+  background: var(--fams-glass-inset);
   color: var(--fams-text-secondary);
   font-size: 12px;
   line-height: 20px;
@@ -48,7 +50,7 @@
 }
 
 .fams-table tbody tr:hover {
-  background: var(--fams-bg-canvas);
+  background: var(--fams-bg-hover);
 }
 
 /* 说明列在横向滚动容器里保持可读宽度，避免被压成一两个字一行。 */

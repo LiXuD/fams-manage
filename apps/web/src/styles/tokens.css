@@ -21,17 +21,26 @@
   --fams-palette-red50: #fff0ef;
   --fams-palette-red700: #b4232e;
 
+  /* 暖陶色板：玻璃底座专用，行动/状态色仍走蓝系语义 */
+  --fams-clay-50: #fbf5ee;
+  --fams-clay-100: #f3e9db;
+  --fams-clay-200: #ecd0b6;
+  --fams-clay-300: #e0a97e;
+  --fams-clay-400: #cf8a55;
+  --fams-clay-700: #7a4a24;
+
   /* 语义色 */
-  --fams-bg-canvas: var(--fams-palette-gray25);
+  --fams-bg-canvas: var(--fams-clay-50);
   --fams-bg-surface: var(--fams-palette-white);
-  --fams-bg-subtle: var(--fams-palette-gray50);
-  --fams-bg-muted: var(--fams-palette-gray100);
-  --fams-text-primary: var(--fams-palette-gray900);
-  --fams-text-secondary: var(--fams-palette-gray500);
-  --fams-text-muted: var(--fams-palette-gray700);
+  --fams-bg-subtle: var(--fams-clay-100);
+  --fams-bg-muted: #e8d9c6;
+  --fams-bg-hover: rgba(224, 169, 126, 0.22);
+  --fams-text-primary: #2a1c12;
+  --fams-text-secondary: #6b5744;
+  --fams-text-muted: #4a3627;
   --fams-text-inverse: var(--fams-palette-white);
-  --fams-border-default: var(--fams-palette-gray100);
-  --fams-border-strong: var(--fams-palette-gray500);
+  --fams-border-default: #dccfbe;
+  --fams-border-strong: #8a7460;
   --fams-action-primary: var(--fams-palette-blue600);
   --fams-action-hover: var(--fams-palette-blue700);
   --fams-action-pressed: var(--fams-palette-blue800);
@@ -43,7 +52,20 @@
   --fams-status-danger: var(--fams-palette-red700);
   --fams-status-danger-bg: var(--fams-palette-red50);
   --fams-focus-ring: var(--fams-palette-blue600);
-  --fams-backdrop: rgba(24, 38, 61, 0.4);
+  --fams-backdrop: rgba(42, 26, 16, 0.45);
+
+  /* 玻璃拟态表面：磨砂卡片 + 细白描边 + 大圆角；深色压底卡用于强调层 */
+  --fams-glass-blur: 18px;
+  --fams-glass-surface: rgba(255, 255, 255, 0.55);
+  --fams-glass-surface-strong: rgba(255, 255, 255, 0.74);
+  --fams-glass-inset: rgba(255, 255, 255, 0.34);
+  --fams-glass-border: rgba(255, 255, 255, 0.6);
+  --fams-glass-border-hover: rgba(255, 255, 255, 0.92);
+  --fams-glass-glow: rgba(255, 236, 210, 0.85);
+  --fams-shadow-glass: 0 18px 48px rgba(122, 74, 36, 0.16);
+  --fams-deep-surface: rgba(46, 30, 21, 0.86);
+  --fams-deep-text: #f7ede2;
+  --fams-deep-muted: rgba(247, 237, 226, 0.72);
 
   /* 间距：4 的倍数，8 级刻度 */
   --fams-space-0: 0px;
@@ -61,6 +83,7 @@
   --fams-radius-8: 8px;
   --fams-radius-12: 12px;
   --fams-radius-16: 16px;
+  --fams-radius-20: 20px;
 
   /* 尺寸与触控目标 */
   --fams-size-24: 24px;
@@ -80,10 +103,12 @@
   --fams-shadow-surface: 0 8px 28px rgba(24, 38, 61, 0.035);
   --fams-shadow-dialog: 0 8px 40px rgba(24, 38, 61, 0.14);
 
-  /* 动效：反馈 120ms、折叠 200ms、加载 800ms 一圈 */
+  /* 动效：反馈 120ms、折叠 200ms、加载 800ms 一圈；液态位移 420ms 弹性过冲 */
   --fams-motion-feedback: 120ms;
   --fams-motion-collapse: 200ms;
   --fams-motion-ease: ease;
+  --fams-motion-liquid: 420ms;
+  --fams-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
   /* 布局常量 */
   --fams-topbar-height: var(--fams-size-64);

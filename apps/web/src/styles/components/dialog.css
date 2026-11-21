@@ -5,12 +5,14 @@
   /* base.css 的 * 重置会清掉 UA 的 margin: auto，弹窗层自己声明居中。 */
   margin: auto;
   padding: var(--fams-space-32);
-  border: 1px solid var(--fams-border-default);
-  border-radius: var(--fams-radius-16);
-  background: var(--fams-bg-surface);
+  border: 1px solid var(--fams-glass-border-hover);
+  border-radius: var(--fams-radius-20);
+  background: var(--fams-glass-surface-strong);
+  -webkit-backdrop-filter: blur(calc(var(--fams-glass-blur) + 6px)) saturate(160%);
+  backdrop-filter: blur(calc(var(--fams-glass-blur) + 6px)) saturate(160%);
   color: var(--fams-text-primary);
   font: 400 14px/1.7 var(--fams-font-stack);
-  box-shadow: var(--fams-shadow-dialog);
+  box-shadow: var(--fams-shadow-glass);
 }
 
 .fams-dialog::backdrop {

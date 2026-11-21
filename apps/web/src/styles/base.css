@@ -14,7 +14,14 @@ body {
   min-width: 320px;
   min-height: 100vh;
   min-height: 100dvh;
-  background: var(--fams-bg-canvas);
+  /* 暖陶模糊渐变底座：多层径向光斑在固定层上软化，玻璃表面透出这层色彩。 */
+  background-color: var(--fams-bg-canvas);
+  background-image:
+    radial-gradient(52rem 36rem at 8% -4%, rgba(224, 169, 126, 0.5), transparent 62%),
+    radial-gradient(46rem 34rem at 92% 4%, rgba(207, 138, 85, 0.34), transparent 64%),
+    radial-gradient(58rem 44rem at 78% 98%, rgba(236, 208, 182, 0.55), transparent 66%),
+    radial-gradient(40rem 30rem at 18% 90%, rgba(240, 190, 140, 0.36), transparent 62%);
+  background-attachment: fixed;
   color: var(--fams-text-primary);
   font: 400 14px/22px var(--fams-font-stack);
   font-synthesis: none;

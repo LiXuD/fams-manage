@@ -1,13 +1,20 @@
-/* 面板、指标与对象卡片：卡片圆角 12，表面阴影只在浮起层使用，不再叠第二圈边框。
+/* 面板、指标与对象卡片：半透明磨砂玻璃面 + 细白描边 + 20 大圆角，暖陶阴影给出浮起层。
    内边距走 --fams-pad（外层 24 → 嵌套 16 → 窄屏 12），块的纵向节奏统一由容器 gap 给出，
    面板不再自带 margin-top，否则与 .fams-main 的 gap 叠加成 40px，比 D0.4 区块间距 20—24 大一档。 */
+.fams-panel,
+.fams-card,
+.fams-metric {
+  border: 1px solid var(--fams-glass-border);
+  border-radius: var(--fams-radius-20);
+  background: var(--fams-glass-surface);
+  -webkit-backdrop-filter: blur(var(--fams-glass-blur)) saturate(150%);
+  backdrop-filter: blur(var(--fams-glass-blur)) saturate(150%);
+}
+
 .fams-panel {
   --fams-pad: var(--fams-space-24);
   padding: var(--fams-pad);
-  border: 1px solid var(--fams-border-default);
-  border-radius: var(--fams-radius-12);
-  background: var(--fams-bg-surface);
-  box-shadow: var(--fams-shadow-surface);
+  box-shadow: var(--fams-shadow-glass);
 }
 
 .fams-panel-head {
@@ -67,9 +74,6 @@ details[open] > summary {
 .fams-metric {
   min-width: 0;
   padding: var(--fams-space-16);
-  border: 1px solid var(--fams-border-default);
-  border-radius: var(--fams-radius-12);
-  background: var(--fams-bg-surface);
 }
 
 .fams-metric > span,
@@ -132,9 +136,6 @@ details[open] > summary {
   --fams-pad: var(--fams-space-24);
   min-width: 0;
   padding: var(--fams-pad);
-  border: 1px solid var(--fams-border-default);
-  border-radius: var(--fams-radius-12);
-  background: var(--fams-bg-surface);
 }
 
 .fams-card[data-state="selected"] {
@@ -147,6 +148,22 @@ details[open] > summary {
 .fams-card[role="group"] {
   border-left: 3px solid var(--fams-action-primary);
   background: var(--fams-bg-subtle);
+}
+
+/* 深色压底卡：强调层，替代老旧灰底白卡里的「重内容」块；文字随底反转。 */
+.fams-panel[data-tone="deep"],
+.fams-card[data-tone="deep"] {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: var(--fams-deep-surface);
+  color: var(--fams-deep-text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), var(--fams-shadow-glass);
+}
+
+.fams-panel[data-tone="deep"] .u-secondary,
+.fams-card[data-tone="deep"] .u-secondary,
+.fams-panel[data-tone="deep"] small,
+.fams-card[data-tone="deep"] small {
+  color: var(--fams-deep-muted);
 }
 
 /* 卡片内再套卡片时收紧一档，避免逐层叠加 24px 内边距把内容挤成窄列。 */

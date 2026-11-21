@@ -18,8 +18,10 @@
   gap: var(--fams-space-16);
   height: var(--fams-topbar-height);
   padding: 0 var(--fams-space-24);
-  border-bottom: 1px solid var(--fams-border-default);
-  background: var(--fams-bg-surface);
+  border-bottom: 1px solid var(--fams-glass-border);
+  background: var(--fams-glass-surface-strong);
+  -webkit-backdrop-filter: blur(var(--fams-glass-blur)) saturate(160%);
+  backdrop-filter: blur(var(--fams-glass-blur)) saturate(160%);
 }
 
 .fams-brand {
@@ -90,8 +92,10 @@
   max-height: calc(100dvh - var(--fams-topbar-height));
   overflow-y: auto;
   padding: var(--fams-space-16) var(--fams-space-8) var(--fams-space-24);
-  border-right: 1px solid var(--fams-border-default);
-  background: var(--fams-bg-surface);
+  border-right: 1px solid var(--fams-glass-border);
+  background: var(--fams-glass-surface);
+  -webkit-backdrop-filter: blur(var(--fams-glass-blur)) saturate(160%);
+  backdrop-filter: blur(var(--fams-glass-blur)) saturate(160%);
 }
 
 .fams-main {
@@ -150,10 +154,12 @@
 .fams-auth-card {
   width: min(420px, 100%);
   padding: var(--fams-space-32);
-  border: 1px solid var(--fams-border-default);
-  border-radius: var(--fams-radius-12);
-  background: var(--fams-bg-surface);
-  box-shadow: var(--fams-shadow-surface);
+  border: 1px solid var(--fams-glass-border);
+  border-radius: var(--fams-radius-20);
+  background: var(--fams-glass-surface-strong);
+  -webkit-backdrop-filter: blur(var(--fams-glass-blur)) saturate(160%);
+  backdrop-filter: blur(var(--fams-glass-blur)) saturate(160%);
+  box-shadow: var(--fams-shadow-glass);
   display: flex;
   flex-direction: column;
   gap: var(--fams-space-16);
