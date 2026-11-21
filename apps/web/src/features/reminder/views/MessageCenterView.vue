@@ -8,6 +8,7 @@ import { useSessionStore } from "@/auth/sessionStore";
 import { AuthApiError } from "@/auth/api";
 import { BusinessApiError, businessMessage, businessRequest } from "@/api/business";
 import { useConfirmedSubmit } from "@/composables/useConfirmedSubmit";
+import { useCountUp } from "@/composables/useCountUp";
 import { useRequestLiveness, type LivenessToken } from "@/composables/useRequestLiveness";
 import { formatProxyTime } from "@/features/exception/time";
 import { dutyRequest, ReminderApiError, reminderMessage,
@@ -117,7 +118,9 @@ const dutyRows = computed<DutyRow[]>(() => duties.value.map((duty) => ({
   effectiveText: `生效 ${formatProxyTime(duty.effectiveAt)} · 版本 ${duty.version}`,
 })));
 
-const unreadText = computed(() => `未读 ${unread.value} 条`);
+const unreadShown = useCountUp(unread);
+const totalShown = useCountUp(total);
+const unreadText = computed(() => `未读 ${unreadShown.value} 条`);
 const showEmpty = computed(() => rows.value.length === 0);
 const emptyText = computed(() => view.value === "EXCEPTION" ? EMPTY_EXCEPTION_TEXT : EMPTY_INBOX_TEXT);
 const inboxDisabled = computed(() => busy.value || view.value === "INBOX");
@@ -251,7 +254,7 @@ onBeforeUnmount(clear);
       </article>
       <p v-if="showEmpty">{{ emptyText }}</p>
       <div class="fams-pagination">
-        <span class="fams-pagination-summary">{{ page }} 页 / 共 {{ total }} 条</span>
+        <span class="fams-pagination-summary">{{ page }} 页 / 共 {{ totalShown }} 条</span>
         <div class="fams-pagination-actions">
           <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled" @click="refresh(-1)">上一页</button>
           <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="nextDisabled" @click="refresh(1)">下一页</button>

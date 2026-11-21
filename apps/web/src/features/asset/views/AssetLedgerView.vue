@@ -2,7 +2,9 @@
 import { computed, shallowRef } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppChrome from "@/components/AppChrome.vue";
+import FamsDropletFilter from "@/components/FamsDropletFilter.vue";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useCountUp } from "@/composables/useCountUp";
 import { usePagedResourceList } from "@/composables/usePagedResourceList";
 import { assetLedgerCsv, cardStageLabels, custodyLabel, lifecycleLabels, listAssets,
   type AssetCard, type AssetLedgerFilters } from "@/features/asset/api";
@@ -25,6 +27,12 @@ const canWrite = session.user?.roles.includes("WAREHOUSE_OPERATOR") ?? false;
 const canExport = computed(() => session.permissions?.fieldPermissions.includes("BULK_EXPORT") ?? false);
 const ASSET_ID = /^[1-9][0-9]*$/;
 
+const OVERDUE_OPTIONS = [
+  { value: "", label: "全部" },
+  { value: "true", label: "已逾期" },
+  { value: "false", label: "无逾期" },
+];
+
 const { rows, total, page, error: requestError, restart, pages, busy } = usePagedResourceList<AssetCard>(
   async (page) => {
     const filters = {
@@ -40,6 +48,7 @@ const { rows, total, page, error: requestError, restart, pages, busy } = usePage
   },
   { problem: (cause) => cause instanceof Error ? cause.message : "台账加载失败" });
 const error = computed(() => requestError.value || exportError.value);
+const totalShown = useCountUp(total);
 
 async function exportCurrent(): Promise<void> {
   const filters = appliedFilters.value;
@@ -87,6 +96,10 @@ if (router) {
     <section v-if="error" class="fams-notice" data-state="error" role="alert"><strong>{{ error }}</strong></section>
 
     <section class="fams-panel fams-stack" aria-label="台账筛选与列表">
+      <div class="fams-inline">
+        <FamsDropletFilter id="ledger-overdue" label="借用逾期" :options="OVERDUE_OPTIONS"
+          :model-value="overdueFilter" @update:model-value="overdueFilter = $event" @change="restart()" />
+      </div>
       <form class="fams-field-row" @submit.prevent="restart()">
         <div class="fams-field">
           <label for="ledger-code">资产编码</label>
@@ -107,14 +120,6 @@ if (router) {
         <div class="fams-field">
           <label for="ledger-inventory-before">在指定日期前未盘点（含从未盘点）</label>
           <input id="ledger-inventory-before" class="fams-control" v-model="inventoryBefore" type="date" />
-        </div>
-        <div class="fams-field">
-          <label for="ledger-overdue">借用逾期</label>
-          <select id="ledger-overdue" class="fams-control" v-model="overdueFilter">
-            <option value="">全部</option>
-            <option value="true">已逾期</option>
-            <option value="false">无逾期</option>
-          </select>
         </div>
         <button class="fams-button" data-kind="secondary" type="submit">查询</button>
         <button v-if="canExport" class="fams-button" data-kind="secondary" type="button"
@@ -156,7 +161,7 @@ if (router) {
       </div>
 
       <div class="fams-pagination">
-        <span class="fams-pagination-summary">共 {{ total }} 项</span>
+        <span class="fams-pagination-summary">共 {{ totalShown }} 项</span>
         <div class="fams-pagination-actions">
           <button class="fams-button" data-kind="secondary" data-size="sm" type="button" :disabled="prevDisabled"
             @click="pages(-1)">上一页</button>
