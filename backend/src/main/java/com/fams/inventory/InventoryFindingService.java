@@ -92,7 +92,7 @@ public class InventoryFindingService {
         if (rows.isEmpty()) {
             return Map.of("items", List.of());
         }
-        String id = rows.getFirst().get("id").toString();
+        String id = rows.getFirst().id();
         String snapshot = cards.currentSnapshot(Long.parseLong(id));
         if (snapshot == null) {
             return Map.of("items", List.of());

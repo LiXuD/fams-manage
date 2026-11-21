@@ -9,6 +9,9 @@ import com.fams.masterdata.RequisitionMasterDataPort;
 import com.fams.proxy.ProxyViews;
 import com.fams.targetchange.TargetChangeViews;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -621,12 +624,36 @@ class RequisitionHandoverService {
         var result = new LinkedHashMap<String, Object>();
         for (String[] spec : new String[][] {{"organization", target.organizationId()},
                 {"employee", target.employeeId()}, {"location", target.locationId()}}) {
-            var reference = new LinkedHashMap<>(references.current(spec[0], Long.parseLong(spec[1]), true));
-            reference.replaceAll((key, value) -> value != null && ("id".equals(key) || key.endsWith("_id"))
-                    ? value.toString() : value);
-            result.put(spec[0], reference);
+            // validateChangedTarget -> targets() has already guaranteed the row exists.
+            result.put(spec[0], ReferenceSnapshot.of(Objects.requireNonNull(
+                    references.current(spec[0], Long.parseLong(spec[1]), true),
+                    "TARGET_REFERENCE_SNAPSHOT_MISSING")));
         }
         return result;
+    }
+
+    /**
+     * Reference row persisted verbatim into approved_target_json.referenceSnapshot. The legacy
+     * map copy stringified id and *_id values and kept the snake_case keys and declaration order;
+     * this record reproduces that stored shape (JAVA-09, frozen by SmallPortsWireShapeTest).
+     */
+    record ReferenceSnapshot(
+            @JsonProperty("id") String id,
+            @JsonProperty("name") String name,
+            @JsonProperty("status") String status,
+            @JsonProperty("version") long version,
+            @JsonProperty("organization_id")
+                    @JsonInclude(JsonInclude.Include.NON_NULL)
+                    String organizationId) {
+
+        static ReferenceSnapshot of(RequisitionMasterDataPort.MasterReference row) {
+            return new ReferenceSnapshot(
+                    Long.toString(row.id()),
+                    row.name(),
+                    row.status(),
+                    row.version(),
+                    row.organizationId() == null ? null : Long.toString(row.organizationId()));
+        }
     }
 
     private Map<String, Object> legacyTargetSnapshot(tools.jackson.databind.JsonNode target) {
@@ -655,11 +682,11 @@ class RequisitionHandoverService {
                     {"location", "target_location_id", "location_version_snapshot"}
                 }) {
             var current = references.current(spec[0], n(demand, spec[1]), true);
-            if (current.isEmpty()
-                    || !"ACTIVE".equals(current.get("status"))
-                    || n(current, "version") != n(demand, spec[2])
+            if (current == null
+                    || !"ACTIVE".equals(current.status())
+                    || current.version() != n(demand, spec[2])
                     || "employee".equals(spec[0])
-                            && n(current, "organization_id")
+                            && current.organizationId()
                                     != n(demand, "target_organization_id")) {
                 throw RequisitionFailure.conflict("HANDOVER_TARGET_CHANGED");
             }

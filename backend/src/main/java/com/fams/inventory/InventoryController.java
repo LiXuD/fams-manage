@@ -1,5 +1,6 @@
 package com.fams.inventory;
 
+import com.fams.auth.InventoryExecutorPort;
 import com.fams.auth.RequisitionActorContext;
 
 import jakarta.validation.Valid;
@@ -58,7 +59,7 @@ class InventoryController {
     }
 
     @GetMapping("/executors")
-    List<Map<String, Object>> executors(
+    List<InventoryExecutorPort.ExecutorChoice> executors(
             @RequestParam(defaultValue = "1") @Min(1) @Max(1000000) int page,
             @RequestParam(defaultValue = "50") @Min(1) @Max(100) int pageSize) {
         return service.executorChoices(actors.capture(), page, pageSize);

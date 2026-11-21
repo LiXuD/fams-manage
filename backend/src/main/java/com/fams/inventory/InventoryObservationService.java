@@ -122,15 +122,15 @@ public class InventoryObservationService {
                             + " AS CHAR) AS snapshot FROM fams_inventory_item WHERE task_id=? AND"
                             + " asset_id=?",
                         taskId,
-                        asset.get("id"));
+                        asset.id());
         if (rows.isEmpty()) {
             return Map.of(
                     "kind",
                     "TASK_OUTSIDE",
                     "assetCode",
-                    asset.get("asset_code"),
+                    asset.assetCode(),
                     "name",
-                    asset.get("name"));
+                    asset.name());
         }
         var item = rows.getFirst();
         if (item.get("executor_account_id") == null
@@ -146,7 +146,7 @@ public class InventoryObservationService {
                     WHERE t.asset_id=? AND t.tag_version=? AND t.issued_at=?
                     ON DUPLICATE KEY UPDATE recognized_at=fams_inventory_tag_recognition.recognized_at
                     """, item.get("id"), item.get("recheck_generation"), current.id(), timestamp(clock.instant()),
-                    asset.get("id"), asset.get("tag_version"), asset.get("issued_at"));
+                    asset.id(), asset.tagVersion(), asset.issuedAt());
         }
         return Map.of(
                 "kind",

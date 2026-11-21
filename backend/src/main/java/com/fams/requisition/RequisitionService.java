@@ -74,10 +74,7 @@ class RequisitionService {
                 current.globalApplicant() || current.has(Role.DEPARTMENT_ASSET_MANAGER)
                         ? null
                         : current.employeeId();
-        var items =
-                references.choices(kind, employee, org, page, size).stream()
-                        .map(this::clean)
-                        .toList();
+        var items = references.choices(kind, employee, org, page, size);
         return Map.of(
                 "items",
                 items,
@@ -377,8 +374,7 @@ class RequisitionService {
                                 + number(old, "completed_quantity")
                                 + number(old, "unfulfillable_quantity")
                                 + number(old, "cancelled_quantity");
-                @SuppressWarnings("unchecked")
-                var category = (Map<String, Object>) row.get("category");
+                var category = (RequisitionMasterDataPort.MasterReference) row.get("category");
                 db.update(
                         "UPDATE fams_requisition_demand SET"
                             + " category_id=?,category_version_snapshot=?,category_name_snapshot=?,"
@@ -388,7 +384,7 @@ class RequisitionService {
                             + " WHERE id=?",
                         next.category().id(),
                         next.category().version(),
-                        text(category, "name"),
+                        category.name(),
                         next.specification(),
                         next.preferredBrand(),
                         next.preferredModel(),
@@ -846,10 +842,10 @@ class RequisitionService {
                                 "target_location_id")
                         .entrySet()) {
             var row = references.current(field.getKey(), number(source, field.getValue()), true);
-            if (row.isEmpty() || !"ACTIVE".equals(text(row, "status"))) {
+            if (row == null || !"ACTIVE".equals(row.status())) {
                 throw RequisitionFailure.conflict("REQUISITION_REFERENCE_CHANGED");
             }
-            refreshed.put(field.getKey() + "_version_snapshot", number(row, "version"));
+            refreshed.put(field.getKey() + "_version_snapshot", row.version());
         }
         Draft copied =
                 new Draft(
@@ -947,7 +943,7 @@ class RequisitionService {
             var organization = reference("organization", d.organization());
             var employee = reference("employee", d.employee());
             var location = reference("location", d.location());
-            if (number(employee, "organization_id") != d.organization().id()) {
+            if (employee.organizationId() != d.organization().id()) {
                 throw RequisitionFailure.conflict("REQUISITION_TARGET_ORGANIZATION_MISMATCH");
             }
             if (!current.globalApplicant()
@@ -973,14 +969,14 @@ class RequisitionService {
         return result;
     }
 
-    private Map<String, Object> reference(String kind, Reference reference) {
+    private RequisitionMasterDataPort.MasterReference reference(String kind, Reference reference) {
         if (reference == null) {
             throw RequisitionFailure.invalid("REQUISITION_REFERENCE_REQUIRED");
         }
         var row = references.current(kind, reference.id(), true);
-        if (row.isEmpty()
-                || !"ACTIVE".equals(text(row, "status"))
-                || number(row, "version") != reference.version()) {
+        if (row == null
+                || !"ACTIVE".equals(row.status())
+                || row.version() != reference.version()) {
             throw RequisitionFailure.conflict("REQUISITION_REFERENCE_CHANGED");
         }
         return row;
@@ -990,8 +986,7 @@ class RequisitionService {
         int line = 0;
         for (var row : resolved) {
             Demand d = (Demand) row.get("input");
-            @SuppressWarnings("unchecked")
-            var category = (Map<String, Object>) row.get("category");
+            var category = (RequisitionMasterDataPort.MasterReference) row.get("category");
             db.update(
                     "INSERT INTO fams_requisition_demand"
                         + " (request_id,line_no,category_id,category_version_snapshot,"
@@ -1003,7 +998,7 @@ class RequisitionService {
                     ++line,
                     d.category().id(),
                     d.category().version(),
-                    text(category, "name"),
+                    category.name(),
                     d.specification(),
                     d.preferredBrand(),
                     d.preferredModel(),
@@ -1082,7 +1077,7 @@ class RequisitionService {
             reference("organization", input.organization());
             var employee = reference("employee", input.employee());
             reference("location", input.location());
-            if (number(employee, "organization_id") != input.organization().id()) {
+            if (employee.organizationId() != input.organization().id()) {
                 throw RequisitionFailure.conflict("REQUISITION_TARGET_ORGANIZATION_MISMATCH");
             }
         }

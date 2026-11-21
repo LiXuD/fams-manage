@@ -491,7 +491,7 @@ public class InventoryService {
                 admin);
     }
 
-    public List<Map<String, Object>> executorChoices(Actor actor, int page, int size) {
+    public List<InventoryExecutorPort.ExecutorChoice> executorChoices(Actor actor, int page, int size) {
         admin(actor);
         return executors.choices(page, size);
     }
