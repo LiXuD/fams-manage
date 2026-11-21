@@ -82,7 +82,8 @@ public class ScrapService {
             return prior;
         }
         var source = assets.standaloneSource(current, input.assetId(), input.assetVersion());
-        return create(actor, current, "SUBMIT", key, hash, input, "STANDALONE", null, source, input, null, null);
+        return create(actor, current, "SUBMIT", key, hash, input, "STANDALONE", null,
+                new AssetScrapPort.StoredSource(source, null, null, null), input, null, null);
     }
 
     public Receipt submitFromLoss(Actor actor, long reportId, long version, UUID key, LossSubmission input) {
@@ -94,8 +95,8 @@ public class ScrapService {
             return prior;
         }
         var loss = losses.requireSubmissionEvidence(current, reportId, version);
-        var source = new LinkedHashMap<>(assets.lossSource(loss.assetId(), input.assetVersion(),
-                loss.lifecycle(), json.readTree(loss.sourceJson())));
+        var source = assets.lossSource(loss.assetId(), input.assetVersion(),
+                loss.lifecycle(), json.readTree(loss.sourceJson()));
         var proof = new LinkedHashMap<String, Object>();
         proof.put("reportId", Long.toString(reportId));
         proof.put("reportVersion", version);
@@ -104,8 +105,7 @@ public class ScrapService {
         Long processor = null;
         if ("BORROWED".equals(loss.lifecycle())) {
             var borrowing = loans.requireOpenBorrowing(loss.assetId(),
-                    ((Number) source.get("responsible_employee_id")).longValue(),
-                    ((Number) source.get("using_organization_id")).longValue());
+                    source.responsibleEmployeeId(), source.usingOrganizationId());
             proof.put("loanId", Long.toString(borrowing.id()));
             proof.put("loanVersion", borrowing.version());
         } else if (loss.factory() != null) {
@@ -120,10 +120,10 @@ public class ScrapService {
         } else {
             loans.requireRecovery(loss.assetId(), loss.lifecycle(), null, null);
         }
-        source.put("lossEvidence", proof);
         var submission = new Submission(loss.assetId(), input.assetVersion(), input.reason(),
                 input.observedCondition(), input.proposedDisposition());
-        return create(actor, current, operation, key, hash, submission, "LOSS", reportId, source, input, null, processor);
+        return create(actor, current, operation, key, hash, submission, "LOSS", reportId,
+                new AssetScrapPort.StoredSource(source, proof, null, null), input, null, processor);
     }
 
     public record RepairSubmission(@NotNull @PositiveOrZero Long assetVersion,
@@ -171,17 +171,17 @@ public class ScrapService {
     private Receipt createFromRepair(Actor actor, Current current, String operation, UUID key, String hash,
             RepairSubmission input, RepairService.ScrapSource repair, Long replacementId) {
         boolean factory = replacementId != null;
-        var source = new LinkedHashMap<>(assets.repairSource(repair.assetId(), input.assetVersion(), factory));
+        var source = assets.repairSource(repair.assetId(), input.assetVersion(), factory);
         var proof = new LinkedHashMap<String, Object>();
         proof.put("repairVersion", repair.repairVersion() + 1);
         proof.put("original", json.readTree(repair.originalSnapshot()));
         proof.put("context", json.readTree(repair.contextJson()));
         proof.put("borrowing", repair.borrowing());
-        source.put("repairEvidence", proof);
         var submission = new Submission(repair.assetId(), input.assetVersion(), input.reason(),
                 input.observedCondition(), input.proposedDisposition());
         return create(actor, current, operation, key, hash, submission, factory ? "FACTORY_REPLACEMENT" : "REPAIR",
-                repair.repairId(), source, input, new RepairLink(repair, input.lockVersion(), replacementId),
+                repair.repairId(), new AssetScrapPort.StoredSource(source, null, proof, null), input,
+                new RepairLink(repair, input.lockVersion(), replacementId),
                 repair.processorAccountId());
     }
 
@@ -202,8 +202,8 @@ public class ScrapService {
     }
 
     private Receipt create(Actor actor, Current current, String operation, UUID key, String hash,
-            Submission input, String sourceType, Long sourceId, Map<String, Object> source, Object facts,
-            RepairLink link, Long processor) {
+            Submission input, String sourceType, Long sourceId, AssetScrapPort.StoredSource source,
+            Object facts, RepairLink link, Long processor) {
         var time = clock.instant().truncatedTo(ChronoUnit.MILLIS);
         db.update(
                 "INSERT INTO fams_scrap_request(asset_id,creator_account_id,source_type,source_business_id,source_item_id,"
@@ -222,7 +222,7 @@ public class ScrapService {
         }
         long assetVersion = switch (sourceType) {
             case "LOSS" -> assets.freezeLoss(input.assetId(), input.assetVersion(), id,
-                    source.get("lifecycle_status").toString(), current.id(), time);
+                    source.row().lifecycleStatus(), current.id(), time);
             case "REPAIR", "FACTORY_REPLACEMENT" -> assets.freezeRepair(input.assetId(), input.assetVersion(), id,
                     current.id(), time, "FACTORY_REPLACEMENT".equals(sourceType));
             default -> assets.freezeStandalone(input.assetId(), input.assetVersion(), id, current.id(), time);

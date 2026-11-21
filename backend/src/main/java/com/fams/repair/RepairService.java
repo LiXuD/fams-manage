@@ -77,7 +77,7 @@ public class RepairService {
         this.factoryOperations = factoryOperations;
     }
 
-    public Map<String, Object> eligible(Actor actor, int page, int size) {
+    public AssetRepairPort.EligiblePage eligible(Actor actor, int page, int size) {
         return assets.eligible(actors.revalidateLocked(actor), page, size);
     }
 
@@ -1161,7 +1161,7 @@ public class RepairService {
         }
     }
 
-    public Map<String, Object> physicalCatalog(Actor actor, String kind, int page, int size) {
+    public AssetRepairPort.PhysicalPage physicalCatalog(Actor actor, String kind, int page, int size) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
         return assets.physicalCatalog(kind, page, size);
@@ -1380,7 +1380,7 @@ public class RepairService {
                 .isEmpty();
     }
 
-    public Map<String, Object> returnTarget(Actor actor, long id) {
+    public AssetRepairPort.ReturnTarget returnTarget(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
         var row = header(id);
@@ -1426,16 +1426,16 @@ public class RepairService {
                 input.loanVersion(),
                 LocalDate.ofInstant(clock.instant(), ZoneId.of(row.get("timezone_id").toString())));
         var target = effectiveReturnTarget(row);
-        if (number(target, "employeeVersion") != input.employeeVersion()
-                || number(target, "organizationVersion") != input.organizationVersion()
-                || number(target, "locationVersion") != input.locationVersion()) {
+        if (target.employeeVersion() != input.employeeVersion()
+                || target.organizationVersion() != input.organizationVersion()
+                || target.locationVersion() != input.locationVersion()) {
             throw new RepairFailure(409, "REPAIR_RETURN_TARGET_CHANGED");
         }
         assets.checkRepairPhysical(
                 number(row, "asset_id"),
                 input.assetVersion(),
                 input.observedCode(),
-                Long.parseLong(target.get("locationId").toString()),
+                Long.parseLong(target.locationId()),
                 input.locationVersion());
         int round =
                 java.util.Objects.requireNonNull(
@@ -1462,7 +1462,7 @@ public class RepairService {
                 id,
                 "RETURN_RECEIPT",
                 "RECEIVER",
-                Long.parseLong(target.get("receiverAccountId").toString()));
+                Long.parseLong(target.receiverAccountId()));
         advanceReturn(actor, current, row, version, "REPAIR_RETURN_DELIVERED", input);
         return remember(current, operation, key, fingerprint, header(id));
     }
@@ -1679,7 +1679,7 @@ public class RepairService {
         return targets.isEmpty() ? null : targets.getFirst();
     }
 
-    private Map<String, Object> effectiveReturnTarget(Map<String, Object> row) {
+    private AssetRepairPort.ReturnTarget effectiveReturnTarget(Map<String, Object> row) {
         var approved = approvedTarget(row);
         return approved == null
                 ? assets.returnTarget(
@@ -1808,12 +1808,12 @@ public class RepairService {
                                                 : "departmentResponsibleEmployeeId"
                                         : "employeeId")
                         .asText();
-        if (oldCustody.equals(valid.get("custodyType"))
-                && oldPerson.equals(valid.get("employeeId"))
+        if (oldCustody.equals(valid.custodyType())
+                && oldPerson.equals(valid.employeeId())
                 && old.path(original ? "usingOrganizationId" : "organizationId")
                         .asText()
-                        .equals(valid.get("organizationId"))
-                && old.path("locationId").asText().equals(valid.get("locationId"))) {
+                        .equals(valid.organizationId())
+                && old.path("locationId").asText().equals(valid.locationId())) {
             throw new RepairFailure(400, "TARGET_CHANGE_UNCHANGED");
         }
     }
@@ -1844,10 +1844,10 @@ public class RepairService {
                 id,
                 proposal,
                 json.writeValueAsString(valid),
-                valid.get("receiverAccountId"),
-                valid.get("employeeId"),
-                valid.get("organizationId"),
-                valid.get("custodyType"),
+                valid.receiverAccountId(),
+                valid.employeeId(),
+                valid.organizationId(),
+                valid.custodyType(),
                 current.id(),
                 now());
         advanceReturn(
@@ -2182,7 +2182,7 @@ public class RepairService {
                         .asText(),
                 handover.get("id").toString(),
                 wire(handover.get("delivered_at")),
-                (String) target.get("employeeId"),
+                target.employeeId(),
                 target,
                 loanWire(loan),
                 approved == null ? null : approved.get("id").toString(),

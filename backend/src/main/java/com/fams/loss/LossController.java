@@ -36,7 +36,7 @@ public class LossController {
     }
 
     @GetMapping("/eligible")
-    Map<String, Object> eligible(
+    com.fams.asset.AssetLossPort.EligiblePage eligible(
             @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
         return reports.eligible(actors.capture(), page, pageSize);
@@ -50,7 +50,7 @@ public class LossController {
     }
 
     @GetMapping("/recovery-locations")
-    Map<String, Object> recoveryLocations(
+    com.fams.asset.AssetLossPort.RecoveryLocationPage recoveryLocations(
             @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
             @RequestParam(defaultValue = "100") @Positive @Max(100) int pageSize) {
         return reports.recoveryLocations(actors.capture(), page, pageSize);

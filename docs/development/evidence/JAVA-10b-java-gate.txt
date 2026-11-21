@@ -1,0 +1,19 @@
+JAVA-10b Java gate evidence (2026-11-22)
+Environment: JDK 21.0.7 GraalVM, Node v24.18.0, MySQL 8.4.11 pinned digest, isolated compose
+Driver: scripts/verify-d6-03a.py verify_java_quality (full product-gate Java sequence)
+
+Run history and interference attribution (honest record):
+  run#1 (main tree, 10b applied): 82 steps exit=0 incl. WeChat V87; blocking quality 814 tests
+    with 1 failure = apps/miniprogram runtime-requisition-http harness stub missing services.confirm
+    (parallel miniprogram session added the call in-flight; stub patched main-agent-side, not committed).
+  run#2/#3 (main tree standalone WeChat V87): NoUniqueBeanDefinitionException MiniWechatIdentityPort
+    caused by UNTRACKED worktree file backend/src/test/java/com/fams/local/LocalMiniServerApplication.java
+    (created 02:27 by a parallel session). Not a JAVA-10b regression: HEAD-archive probe without it is green.
+  final run (rsync copy of main tree EXCLUDING that untracked WIP dir and target/):
+[Java blocking quality] exit=0
+[JAVA01 coverage] LINE: 27364/29388 (93.11%)
+[JAVA01 coverage] BRANCH: 9905/13077 (75.74%)
+JAVA01_VERIFY_PASS
+  steps exit=0: 83
+  surefire aggregate: 814 tests, 0 failures, 0 errors
+  unit criteria (main agent, main tree): 106/106 across wire-shape suites

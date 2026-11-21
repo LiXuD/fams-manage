@@ -35,21 +35,20 @@ public class LossInitialPort {
 
     public Confirmed open(Opening opening, LossFacts facts, LocalDate businessDate, String timezone, Long repair, Long round) {
         boolean factory = "FACTORY_REPAIR".equals(opening.beforeLifecycle());
-        Map<String, Object> custody = new LinkedHashMap<>(factory
-                ? assets.factorySubmission(opening.asset(), 0) : assets.initialLossSnapshot(opening.asset()));
+        AssetLossPort.Snapshot snapshot = factory
+                ? assets.factorySubmission(opening.asset(), 0) : assets.initialLossSnapshot(opening.asset());
         if (factory && (repair == null || round == null)
                 || !List.of("BORROWED", "IN_STOCK", "IN_USE", "FACTORY_REPAIR").contains(opening.beforeLifecycle())
-                || !opening.beforeLifecycle().equals(custody.get("lifecycle"))
+                || !opening.beforeLifecycle().equals(snapshot.lifecycle())
                 || facts.lastSeenAt().isAfter(facts.confirmedAt()) || facts.confirmedAt().isAfter(opening.time())) {
             throw new IllegalStateException("ASSET_IMPORT_INITIAL_LOSS_INVALID");
         }
-        var provenance = Map.of("batchId", opening.batch().toString(), "sheetRow", opening.row(),
+        var provenance = Map.<String, Object>of("batchId", opening.batch().toString(), "sheetRow", opening.row(),
                 "businessDate", businessDate, "operatorAccountId", Long.toString(opening.actorId()));
-        custody.put("initialSource", provenance);
-        if (factory) {
-            custody.put("factorySource", Map.of("repairId", Long.toString(repair), "roundId", Long.toString(round),
-                    "processorAccountId", Long.toString(opening.actorId())));
-        }
+        var custody = new AssetLossPort.StoredSource(snapshot, null,
+                factory ? Map.of("repairId", Long.toString(repair), "roundId", Long.toString(round),
+                        "processorAccountId", Long.toString(opening.actorId())) : null,
+                null, provenance);
         var confirmation = Map.<String, Object>of("initialSource", provenance, "confirmedAt", facts.confirmedAt(),
                 "responsibilityEvidence", facts.evidence());
         String custodyJson = json.writeValueAsString(custody);
@@ -60,8 +59,8 @@ public class LossInitialPort {
                     circumstances,report_status,confirmed_lost_at,confirmation_snapshot_json,processor_account_id,
                     ownership_version,next_review_date,created_at,updated_at)
                 VALUES (?,?,?,?,?,0,?,?,?,?,'CONFIRMED_LOST',?,?,?,1,?,?,?)
-                """, opening.asset(), opening.actorId(), custody.get("usingOrganizationId"), custody.get("responsibleEmployeeId"),
-                custody.get("departmentResponsibleEmployeeId"), custodyJson, facts.lastSeenAt(),
+                """, opening.asset(), opening.actorId(), snapshot.usingOrganizationId(), snapshot.responsibleEmployeeId(),
+                snapshot.departmentResponsibleEmployeeId(), custodyJson, facts.lastSeenAt(),
                 facts.lastLocation(), opening.reason(), facts.confirmedAt(), confirmationJson,
                 opening.actorId(), businessDate.plusDays(30), opening.time(), opening.time());
         long id = Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));

@@ -81,9 +81,11 @@ public final class ProxyViews {
     }
 
     /**
-     * Repair keeps the asset-owned return target and the loan summary as raw maps: both are
-     * produced by excluded packages (asset/loan) and their JDBC-derived values pass through
-     * verbatim. deliveredAt stays the raw wire() projection for the same reason.
+     * Repair keeps the asset-owned return target as a pass-through object: since JAVA-10b it
+     * carries the typed AssetRepairPort.ReturnTarget record (whose @JsonProperty names freeze
+     * the same eleven camelCase wire keys), while stored snapshots replayed from JSON still
+     * deserialize to raw maps. The loan summary stays a raw map: it is produced by an excluded
+     * package. deliveredAt stays the raw wire() projection for the same reason.
      */
     public record RepairSnapshot(
             String businessType,
@@ -98,12 +100,11 @@ public final class ProxyViews {
             String handoverId,
             Object deliveredAt,
             String targetEmployeeId,
-            Map<String, Object> target,
+            Object target,
             Map<String, Object> loan,
             String approvedTargetId,
             Long lockVersion) implements ProxySnapshot {
         public RepairSnapshot {
-            target = target == null ? null : java.util.Collections.unmodifiableMap(new LinkedHashMap<>(target));
             loan = loan == null ? null : java.util.Collections.unmodifiableMap(new LinkedHashMap<>(loan));
         }
     }

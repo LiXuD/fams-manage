@@ -37,7 +37,7 @@ public class RepairController {
     }
 
     @GetMapping("/eligible")
-    Map<String, Object> eligible(
+    com.fams.asset.AssetRepairPort.EligiblePage eligible(
             @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
         return repairs.eligible(actors.capture(), page, pageSize);
@@ -135,7 +135,7 @@ public class RepairController {
     }
 
     @GetMapping("/physical-catalog/{kind}")
-    Map<String, Object> physicalCatalog(
+    com.fams.asset.AssetRepairPort.PhysicalPage physicalCatalog(
             @PathVariable String kind,
             @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
@@ -163,7 +163,7 @@ public class RepairController {
     }
 
     @GetMapping("/{id}/return-target")
-    Map<String, Object> returnTarget(@PathVariable @Positive long id) {
+    com.fams.asset.AssetRepairPort.ReturnTarget returnTarget(@PathVariable @Positive long id) {
         return repairs.returnTarget(actors.capture(), id);
     }
 

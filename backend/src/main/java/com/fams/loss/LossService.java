@@ -80,7 +80,7 @@ public class LossService {
         this.evidence = evidence;
     }
 
-    public Map<String, Object> eligible(Actor actor, int page, int size) {
+    public AssetLossPort.EligiblePage eligible(Actor actor, int page, int size) {
         return assets.eligible(actors.revalidateLocked(actor), page, size);
     }
 
@@ -161,7 +161,7 @@ public class LossService {
                         && List.of("SEARCHING", "CONFIRMED_LOST")
                                 .contains(row.get("report_status"));
         var recoveryAsset = recoveryOpen ? assets.recoveryView(number(row, "asset_id")) : null;
-        String currentLifecycle = recoveryAsset == null ? "" : recoveryAsset.get("lifecycle").toString();
+        String currentLifecycle = recoveryAsset == null ? "" : recoveryAsset.lifecycle();
         result.put("recoveryAsset", recoveryAsset);
         var recoveries =
                 db.queryForList(
@@ -188,8 +188,8 @@ public class LossService {
                         "CONFIRMED_LOST".equals(row.get("report_status"))
                                 && recoveryOpen
                                 && applicant(current)
-                                && Boolean.TRUE.equals(recoveryAsset.get("eligible"))
-                                && !Boolean.TRUE.equals(recoveryAsset.get("locked")),
+                                && recoveryAsset.eligible()
+                                && !recoveryAsset.locked(),
                         "confirmLost",
                         "SEARCHING".equals(row.get("report_status"))
                                 && current.has(Role.WAREHOUSE_OPERATOR)
@@ -227,19 +227,18 @@ public class LossService {
                 && current.has(Role.WAREHOUSE_OPERATOR) && "SEARCHING".equals(row.get("report_status")));
         actions.put("requestFactoryRecovery", factoryProcessor != null && recoveryOpen && applicant(current)
                 && "CONFIRMED_LOST".equals(row.get("report_status"))
-                && Boolean.TRUE.equals(recoveryAsset.get("factoryScrapEligible"))
-                && !Boolean.TRUE.equals(recoveryAsset.get("locked")));
+                && recoveryAsset.factoryScrapEligible()
+                && !recoveryAsset.locked());
         actions.put("recoverInternalRepair", internal != null && internal == current.id()
                 && current.has(Role.WAREHOUSE_OPERATOR) && "SEARCHING".equals(row.get("report_status")));
         actions.put("requestInternalRepairRecovery", internal != null && recoveryOpen && applicant(current)
                 && "CONFIRMED_LOST".equals(row.get("report_status")) && "UNDER_REPAIR".equals(currentLifecycle)
-                && !Boolean.TRUE.equals(recoveryAsset.get("locked")));
+                && !recoveryAsset.locked());
         var original = json.readTree(row.get("source_snapshot_json").toString());
         actions.put("requestScrap", recoveryAsset != null && currentLifecycle.equals(original.path("lifecycle").asText())
-                && "LOST".equals(recoveryAsset.get("exceptionStatus"))
-                && (Boolean.TRUE.equals(recoveryAsset.get("eligible"))
-                        || Boolean.TRUE.equals(recoveryAsset.get("factoryScrapEligible")))
-                && !Boolean.TRUE.equals(recoveryAsset.get("locked"))
+                && "LOST".equals(recoveryAsset.exceptionStatus())
+                && (recoveryAsset.eligible() || recoveryAsset.factoryScrapEligible())
+                && !recoveryAsset.locked()
                 && LossScrapSourcePort.canSubmit(current, row)
                 && LossScrapSourcePort.confirmedScrapSource(row, original));
         result.put("actions", actions);
@@ -311,11 +310,16 @@ public class LossService {
             throw new LossFailure(400, "LOSS_FACTORY_TIME_INVALID");
         }
         var snapshot = assets.factorySubmission(source.assetId(), source.assetVersion());
-        snapshot.put("factorySource", Map.of("repairId", Long.toString(repairId), "roundId", Long.toString(roundId),
-                "processorAccountId", Long.toString(source.processorAccountId())));
+        var stored = new AssetLossPort.StoredSource(
+                snapshot,
+                null,
+                Map.of("repairId", Long.toString(repairId), "roundId", Long.toString(roundId),
+                        "processorAccountId", Long.toString(source.processorAccountId())),
+                null,
+                null);
         var submission = new LossInput.Submission(source.assetId(), source.assetVersion(),
                 input.lastSeenAt(), input.lastLocation(), input.circumstances());
-        long id = insertReport(current, submission, json.writeValueAsString(snapshot));
+        long id = insertReport(current, submission, json.writeValueAsString(stored));
         factoryRepairs.handoffToLoss(actor, source, id, input.lockVersion());
         todo(id, "APPROVAL", "ASSET_ADMIN", null);
         audit(actor, current, header(id), "LOSS_REPORTED_FROM_FACTORY", 0, input);
@@ -339,11 +343,17 @@ public class LossService {
             throw new LossFailure(400, "LOSS_INTERNAL_REPAIR_TIME_INVALID");
         }
         var snapshot = assets.internalRepairSubmission(source.assetId(), input.assetVersion());
-        snapshot.put("internalRepairSource", Map.of("repairId", Long.toString(repairId),
-                "processorAccountId", Long.toString(source.processorAccountId()), "handling", json.readTree(source.contextJson())));
+        var stored = new AssetLossPort.StoredSource(
+                snapshot,
+                null,
+                null,
+                Map.of("repairId", Long.toString(repairId),
+                        "processorAccountId", Long.toString(source.processorAccountId()),
+                        "handling", json.readTree(source.contextJson())),
+                null);
         var submission = new LossInput.Submission(source.assetId(), input.assetVersion(),
                 input.lastSeenAt(), input.lastLocation(), input.circumstances());
-        long id = insertReport(current, submission, json.writeValueAsString(snapshot));
+        long id = insertReport(current, submission, json.writeValueAsString(stored));
         internalRepairs.handoffToLoss(actor, current, source, id, input.lockVersion());
         todo(id, "APPROVAL", "ASSET_ADMIN", null);
         audit(actor, current, header(id), "LOSS_REPORTED_FROM_INTERNAL_REPAIR", 0, input);
@@ -359,12 +369,14 @@ public class LossService {
         var facts = opening.facts();
         validTime(facts.lastSeenAt());
         var snapshot = assets.returnSubmission(opening.assetId(), opening.assetVersion());
-        snapshot.put("returnSource", Map.of("returnId", Long.toString(opening.returnId()),
-                "followupId", Long.toString(opening.followupId()),
-                "processorAccountId", Long.toString(opening.processorAccountId())));
+        var stored = new AssetLossPort.StoredSource(snapshot,
+                Map.of("returnId", Long.toString(opening.returnId()),
+                        "followupId", Long.toString(opening.followupId()),
+                        "processorAccountId", Long.toString(opening.processorAccountId())),
+                null, null, null);
         var input = new LossInput.Submission(opening.assetId(), opening.assetVersion(), facts.lastSeenAt(),
                 facts.lastLocation(), facts.circumstances());
-        long id = insertReport(current, input, json.writeValueAsString(snapshot));
+        long id = insertReport(current, input, json.writeValueAsString(stored));
         todo(id, "APPROVAL", "ASSET_ADMIN", null);
         audit(actor, current, header(id), "LOSS_REPORTED_FROM_RETURN", 0, input);
         return id;
@@ -906,9 +918,9 @@ public class LossService {
                             input.facts().observedSerialNumber(), input.facts().locationId(), input.facts().locationVersion());
             loans.requireRecovery(
                     number(row, "asset_id"),
-                    asset.get("lifecycle_status").toString(),
-                    (Long) asset.get("responsible_employee_id"),
-                    (Long) asset.get("using_organization_id"));
+                    asset.lifecycleStatus(),
+                    asset.responsibleEmployeeId(),
+                    asset.usingOrganizationId());
         }
         if (!db.queryForList(
                         "SELECT id FROM fams_asset_business_lock WHERE asset_id=? AND released_at"
@@ -1169,7 +1181,7 @@ public class LossService {
         return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
     }
 
-    public Map<String, Object> recoveryLocations(Actor actor, int page, int size) {
+    public AssetLossPort.RecoveryLocationPage recoveryLocations(Actor actor, int page, int size) {
         if (!applicant(actors.revalidateLocked(actor))) { throw new LossFailure(403, "LOSS_ROLE_REQUIRED"); }
         return assets.recoveryLocations(page, size);
     }
@@ -1243,8 +1255,8 @@ public class LossService {
         returnRecoveryFacts(row, input.facts());
         var asset = assets.requireReturnRecovery(number(row, "asset_id"), input.assetVersion(),
                 closed ? "LOST" : "SEARCHING", row.get("source_snapshot_json").toString());
-        loans.requireRecovery(number(row, "asset_id"), asset.get("lifecycle_status").toString(),
-                (Long) asset.get("responsible_employee_id"), (Long) asset.get("using_organization_id"));
+        loans.requireRecovery(number(row, "asset_id"), asset.lifecycleStatus(),
+                asset.responsibleEmployeeId(), asset.usingOrganizationId());
         long next = assets.recoverForReturn(number(row, "asset_id"), input.assetVersion(),
                 closed ? "LOST" : "SEARCHING", row.get("source_snapshot_json").toString(),
                 input.facts().observedAssetCode(), input.facts().observedSerialNumber(),
@@ -1527,9 +1539,9 @@ public class LossService {
                         row.get("source_snapshot_json").toString());
         loans.requireRecovery(
                 number(row, "asset_id"),
-                asset.get("lifecycle_status").toString(),
-                (Long) asset.get("responsible_employee_id"),
-                (Long) asset.get("using_organization_id"));
+                asset.lifecycleStatus(),
+                asset.responsibleEmployeeId(),
+                asset.usingOrganizationId());
         long next =
                 assets.recoverOriginal(
                         number(row, "asset_id"),

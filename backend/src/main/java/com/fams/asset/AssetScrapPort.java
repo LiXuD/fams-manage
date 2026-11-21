@@ -1,5 +1,9 @@
 package com.fams.asset;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
+
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 
@@ -33,6 +37,71 @@ public class AssetScrapPort {
         }
     }
 
+    /**
+     * Locked scrap-source asset row: the fourteen selected snake_case columns are serialized
+     * verbatim into fams_scrap_request.source_snapshot_json. Unlike the loss/repair snapshots
+     * the legacy assembly passed raw JDBC values through (numeric ids, numeric version), so the
+     * id components are Long/long rather than String (JAVA-01/10a stored-shape rule).
+     */
+    public record SourceRow(
+            @JsonProperty("id") long id,
+            @JsonProperty("asset_code") String assetCode,
+            @JsonProperty("name") String name,
+            @JsonProperty("serial_number") String serialNumber,
+            @JsonProperty("lifecycle_status") String lifecycleStatus,
+            @JsonProperty("exception_status") String exceptionStatus,
+            @JsonProperty("card_stage") String cardStage,
+            @JsonProperty("custody_type") String custodyType,
+            @JsonProperty("storage_warehouse_id") Long storageWarehouseId,
+            @JsonProperty("current_location_id") Long currentLocationId,
+            @JsonProperty("using_organization_id") Long usingOrganizationId,
+            @JsonProperty("responsible_employee_id") Long responsibleEmployeeId,
+            @JsonProperty("department_responsible_employee_id") Long departmentResponsibleEmployeeId,
+            @JsonProperty("version") long version) {
+
+        static SourceRow fromRow(Map<String, Object> row) {
+            return new SourceRow(
+                    ((Number) row.get("id")).longValue(),
+                    (String) row.get("asset_code"),
+                    (String) row.get("name"),
+                    (String) row.get("serial_number"),
+                    (String) row.get("lifecycle_status"),
+                    (String) row.get("exception_status"),
+                    (String) row.get("card_stage"),
+                    (String) row.get("custody_type"),
+                    numberOrNull(row.get("storage_warehouse_id")),
+                    numberOrNull(row.get("current_location_id")),
+                    numberOrNull(row.get("using_organization_id")),
+                    numberOrNull(row.get("responsible_employee_id")),
+                    numberOrNull(row.get("department_responsible_employee_id")),
+                    ((Number) row.get("version")).longValue());
+        }
+
+        private static Long numberOrNull(Object value) {
+            return value == null ? null : ((Number) value).longValue();
+        }
+    }
+
+    /**
+     * Flat stored shape of fams_scrap_request.source_snapshot_json: the fourteen source-row keys
+     * plus the conditional evidence keys written by the flow that opened the request
+     * (lossEvidence for loss openings, repairEvidence for repair/factory openings,
+     * initialSource for the initial-import flows). Absent keys stay absent, matching the
+     * pre-typing LinkedHashMap that only carried the extra keys on those flows.
+     */
+    public record StoredSource(
+            @JsonUnwrapped SourceRow row,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @JsonProperty("lossEvidence")
+            Object lossEvidence,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @JsonProperty("repairEvidence")
+            Object repairEvidence,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @JsonProperty("initialSource")
+            Object initialSource) {
+    }
+
     private final JdbcTemplate db;
     private final AssetMapper mapper;
     private final ObjectMapper json;
@@ -44,7 +113,7 @@ public class AssetScrapPort {
     }
 
     /** Locks and snapshots a visible source before the application inserts the request and its lock. */
-    public Map<String, Object> standaloneSource(Current actor, long assetId, long version) {
+    public SourceRow standaloneSource(Current actor, long assetId, long version) {
         var rows = db.queryForList(
                 "SELECT id,asset_code,name,serial_number,lifecycle_status,exception_status,card_stage,"
                         + "custody_type,storage_warehouse_id,current_location_id,using_organization_id,"
@@ -77,7 +146,7 @@ public class AssetScrapPort {
                 .isEmpty()) {
             throw new AssetHandoverPort.Failure("SCRAP_ASSET_LOCKED", 409);
         }
-        return source;
+        return SourceRow.fromRow(source);
     }
 
     private static final Map<String, String> ORIGINAL_CUSTODY = Map.of(
@@ -86,14 +155,14 @@ public class AssetScrapPort {
             "responsible_employee_id", "responsibleEmployeeId",
             "department_responsible_employee_id", "departmentResponsibleEmployeeId");
 
-    public Map<String, Object> lossSource(long assetId, long version, String lifecycle, JsonNode original) {
+    public SourceRow lossSource(long assetId, long version, String lifecycle, JsonNode original) {
         var row = lockedSourceAsset(assetId, version, lifecycle, "LOST");
         if (row == null || !matchesOriginalLossCustody(json.valueToTree(row), original)
                 || !db.queryForList("SELECT id FROM fams_asset_business_lock WHERE asset_id=?"
                         + " AND released_at IS NULL FOR UPDATE", assetId).isEmpty()) {
             throw new AssetHandoverPort.Failure("SCRAP_ASSET_OR_LOCK_CHANGED", 409);
         }
-        return row;
+        return SourceRow.fromRow(row);
     }
 
     public boolean matchesOriginalLossCustody(JsonNode frozen, JsonNode original) {
@@ -120,12 +189,12 @@ public class AssetScrapPort {
         return freezeLinked(id, version, requestId, lifecycle, "LOST", actor, time);
     }
 
-    public Map<String, Object> repairSource(long asset, long version, boolean factory) {
+    public SourceRow repairSource(long asset, long version, boolean factory) {
         var row = lockedSourceAsset(asset, version, factory ? "FACTORY_REPAIR" : "UNDER_REPAIR", "NORMAL");
         if (row == null) {
             throw new AssetHandoverPort.Failure("SCRAP_ASSET_CHANGED", 409);
         }
-        return row;
+        return SourceRow.fromRow(row);
     }
 
     public long freezeRepair(long id, long version, long requestId, long actor, Instant time, boolean factory) {

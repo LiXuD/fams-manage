@@ -1,5 +1,8 @@
 package com.fams.asset;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
+
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 
@@ -24,6 +27,117 @@ import java.util.Objects;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class AssetRepairPort {
+    /**
+     * Custody snapshot projected from a locked asset row. The thirteen camelCase keys are
+     * serialized verbatim into fams_repair_request.source_snapshot_json, so every name is frozen
+     * with {@link JsonProperty} and explicit nulls stay present (JAVA-01/10a stored-shape rule).
+     * Non-version numeric ids pass through stringified, exactly as the pre-typing projection did.
+     */
+    public record Snapshot(
+            @JsonProperty("id") String id,
+            @JsonProperty("assetCode") String assetCode,
+            @JsonProperty("name") String name,
+            @JsonProperty("version") long version,
+            @JsonProperty("lifecycle") String lifecycle,
+            @JsonProperty("custodyType") String custodyType,
+            @JsonProperty("usingOrganizationId") String usingOrganizationId,
+            @JsonProperty("owningOrganizationId") String owningOrganizationId,
+            @JsonProperty("responsibleEmployeeId") String responsibleEmployeeId,
+            @JsonProperty("departmentResponsibleEmployeeId") String departmentResponsibleEmployeeId,
+            @JsonProperty("warehouseId") String warehouseId,
+            @JsonProperty("locationId") String locationId,
+            @JsonProperty("locationName") String locationName) {
+
+        static Snapshot fromRow(Map<String, Object> row) {
+            return new Snapshot(
+                    stringify(row.get("id")),
+                    stringify(row.get("asset_code")),
+                    stringify(row.get("name")),
+                    ((Number) row.get("version")).longValue(),
+                    stringify(row.get("lifecycle_status")),
+                    stringify(row.get("custody_type")),
+                    stringify(row.get("using_organization_id")),
+                    stringify(row.get("owning_organization_id")),
+                    stringify(row.get("responsible_employee_id")),
+                    stringify(row.get("department_responsible_employee_id")),
+                    stringify(row.get("storage_warehouse_id")),
+                    stringify(row.get("current_location_id")),
+                    stringify(row.get("location_name")));
+        }
+
+        /** Mirrors the legacy snapshot(): every Number except the version key became a String. */
+        private static String stringify(Object value) {
+            return value == null ? null : value.toString();
+        }
+    }
+
+    /** Eligible page envelope for repair submission pickers; keys mirror the Map.of assembly. */
+    public record EligiblePage(List<Snapshot> items, long total, int page, int pageSize) {
+        public EligiblePage {
+            items = items == null ? null : List.copyOf(items);
+        }
+    }
+
+    /**
+     * Storage envelope of the initial-import repair source: the thirteen snapshot keys plus the
+     * always-present initialSource provenance object, matching the pre-typing LinkedHashMap that
+     * was serialized verbatim into fams_repair_request.source_snapshot_json.
+     */
+    public record InitialSource(
+            @JsonUnwrapped Snapshot snapshot,
+            @JsonProperty("initialSource") Object initialSource) {
+    }
+
+    /** Warehouse picker row; three snake/identity keys as stringified by the legacy projection. */
+    public record WarehouseTarget(
+            @JsonProperty("id") String id,
+            @JsonProperty("name") String name,
+            @JsonProperty("version") long version) {
+    }
+
+    /**
+     * Location picker row; warehouse_id is stringified when present and keeps an explicit null,
+     * location_type passes through, exactly like the legacy LinkedHashMap(row) projection.
+     */
+    public record LocationTarget(
+            @JsonProperty("id") String id,
+            @JsonProperty("name") String name,
+            @JsonProperty("version") long version,
+            @JsonProperty("warehouse_id") String warehouseId,
+            @JsonProperty("location_type") String locationType) {
+    }
+
+    /**
+     * Physical catalog page: the whole response body of GET /repairs/physical-catalog/{kind}.
+     * Items carry WarehouseTarget rows for kind=warehouse and LocationTarget rows for
+     * kind=location, so the per-kind key sets stay untouched.
+     */
+    public record PhysicalPage(List<?> items, long total, int page, int pageSize) {
+        public PhysicalPage {
+            items = items == null ? null : List.copyOf(items);
+        }
+    }
+
+    /**
+     * Validated return handover target. The eleven camelCase keys are serialized verbatim into
+     * fams_repair_return_handover.target_snapshot_json and
+     * fams_repair_approved_return_target.target_json and embedded in asset event details, so
+     * every name is frozen and the stringified-id/numeric-version value shapes are preserved.
+     */
+    public record ReturnTarget(
+            @JsonProperty("custodyType") String custodyType,
+            @JsonProperty("employeeId") String employeeId,
+            @JsonProperty("employeeName") String employeeName,
+            @JsonProperty("employeeVersion") long employeeVersion,
+            @JsonProperty("organizationId") String organizationId,
+            @JsonProperty("organizationName") String organizationName,
+            @JsonProperty("organizationVersion") long organizationVersion,
+            @JsonProperty("locationId") String locationId,
+            @JsonProperty("locationName") String locationName,
+            @JsonProperty("locationVersion") long locationVersion,
+            @JsonProperty("receiverAccountId") String receiverAccountId) {
+    }
+
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final AssetMapper mapper;
@@ -37,7 +151,7 @@ public class AssetRepairPort {
         this.identity = identity;
     }
 
-    public Map<String, Object> eligible(Current actor, int page, int size) {
+    public EligiblePage eligible(Current actor, int page, int size) {
         boolean global = actor.globalApplicant(),
                 department = actor.has(Role.DEPARTMENT_ASSET_MANAGER);
         String where =
@@ -71,14 +185,10 @@ public class AssetRepairPort {
                                 actor.organizationId(),
                                 department,
                                 actor.organizationId()));
-        return Map.of(
-                "items",
-                rows.stream().map(this::snapshot).toList(),
-                "total",
+        return new EligiblePage(
+                rows.stream().map(Snapshot::fromRow).toList(),
                 total,
-                "page",
                 page,
-                "pageSize",
                 size);
     }
 
@@ -161,12 +271,12 @@ public class AssetRepairPort {
         return json.writeValueAsString(snapshot(row));
     }
 
-    public Map<String, Object> beginInitialRepair(long asset, boolean factory) {
+    public Snapshot beginInitialRepair(long asset, boolean factory) {
         var row = locked(asset, 0);
         if (!available(row) || !"INITIAL_IMPORT".equals(row.get("source_text"))) {
             throw new AssetHandoverPort.Failure("REPAIR_ASSET_CHANGED", 409);
         }
-        var source = snapshot(row);
+        var source = Snapshot.fromRow(row);
         if (db.update("UPDATE fams_asset SET lifecycle_status=? WHERE id=? AND version=0",
                 factory ? "FACTORY_REPAIR" : "UNDER_REPAIR", asset) != 1) {
             throw new AssetHandoverPort.Failure("REPAIR_ASSET_CHANGED", 409);
@@ -268,7 +378,7 @@ public class AssetRepairPort {
         return version + 1;
     }
 
-    public Map<String, Object> physicalCatalog(String kind, int page, int size) {
+    public PhysicalPage physicalCatalog(String kind, int page, int size) {
         String from =
                 switch (kind) {
                     case "warehouse" -> " FROM fams_warehouse WHERE status='ACTIVE'";
@@ -284,25 +394,32 @@ public class AssetRepairPort {
                         "SELECT " + fields + from + " ORDER BY id LIMIT ? OFFSET ?",
                         size,
                         ((long) page - 1) * size);
-        return Map.of(
-                "items",
+        boolean location = "location".equals(kind);
+        return new PhysicalPage(
                 rows.stream()
                         .map(
-                                row -> {
-                                    var result = new LinkedHashMap<String, Object>(row);
-                                    for (String field : List.of("id", "warehouse_id")) {
-                                        if (result.get(field) != null) {
-                                            result.put(field, result.get(field).toString());
-                                        }
-                                    }
-                                    return result;
-                                })
+                                row ->
+                                        location
+                                                ? new LocationTarget(
+                                                        row.get("id") == null
+                                                                ? null
+                                                                : row.get("id").toString(),
+                                                        (String) row.get("name"),
+                                                        ((Number) row.get("version")).longValue(),
+                                                        row.get("warehouse_id") == null
+                                                                ? null
+                                                                : row.get("warehouse_id")
+                                                                        .toString(),
+                                                        (String) row.get("location_type"))
+                                                : new WarehouseTarget(
+                                                        row.get("id") == null
+                                                                ? null
+                                                                : row.get("id").toString(),
+                                                        (String) row.get("name"),
+                                                        ((Number) row.get("version")).longValue()))
                         .toList(),
-                "total",
                 Objects.requireNonNull(db.queryForObject("SELECT COUNT(*)" + from, Long.class)),
-                "page",
                 page,
-                "pageSize",
                 size);
     }
 
@@ -408,7 +525,7 @@ public class AssetRepairPort {
     }
 
     /** Frozen responsibility is the target, never proof that physical receipt already happened. */
-    public Map<String, Object> returnTarget(long assetId, long version, String sourceJson) {
+    public ReturnTarget returnTarget(long assetId, long version, String sourceJson) {
         var row = locked(assetId, version);
         var source = json.readTree(sourceJson);
         if (!"UNDER_REPAIR".equals(row.get("lifecycle_status"))
@@ -444,7 +561,7 @@ public class AssetRepairPort {
                 nullable(row.get("current_location_id")));
     }
 
-    private Map<String, Object> resolveReturnTarget(
+    private ReturnTarget resolveReturnTarget(
             String custody, Long organization, Long person, Long location) {
         boolean shared = "SHARED".equals(custody);
         if (person == null || organization == null || location == null) {
@@ -483,23 +600,22 @@ public class AssetRepairPort {
         }
         long placeVersion = ((Number) places.getFirst().get("version")).longValue();
         var place = activeLocation(location, placeVersion);
-        var target = new LinkedHashMap<String, Object>();
-        target.put("custodyType", custody);
-        target.put("employeeId", person.toString());
-        target.put("employeeName", people.getFirst().get("name"));
-        target.put("employeeVersion", people.getFirst().get("version"));
-        target.put("organizationId", organization.toString());
-        target.put("organizationName", people.getFirst().get("organization_name"));
-        target.put("organizationVersion", people.getFirst().get("organization_version"));
-        target.put("locationId", location.toString());
-        target.put("locationName", place.get("name"));
-        target.put("locationVersion", placeVersion);
-        target.put("receiverAccountId", accounts.getFirst().get("id").toString());
-        return target;
+        return new ReturnTarget(
+                custody,
+                person.toString(),
+                (String) people.getFirst().get("name"),
+                ((Number) people.getFirst().get("version")).longValue(),
+                organization.toString(),
+                (String) people.getFirst().get("organization_name"),
+                ((Number) people.getFirst().get("organization_version")).longValue(),
+                location.toString(),
+                (String) place.get("name"),
+                placeVersion,
+                accounts.getFirst().get("id").toString());
     }
 
     /** Validate a separately approved target without rewriting frozen original responsibility. */
-    public Map<String, Object> approvedReturnTarget(
+    public ReturnTarget approvedReturnTarget(
             long assetId, long version, String sourceJson, String targetJson) {
         var source = json.readTree(sourceJson);
         // Identity and frozen source fields must still match even when the old employee is
@@ -549,16 +665,18 @@ public class AssetRepairPort {
         if (input.has("receiverAccountId")
                 && !input.path("receiverAccountId")
                         .asText()
-                        .equals(target.get("receiverAccountId"))) {
+                        .equals(target.receiverAccountId())) {
             throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_CHANGED", 409);
         }
-        for (String field : List.of("employeeVersion", "organizationVersion", "locationVersion")) {
-            if (!input.has(field)
-                    || input.path(field).asLong() != ((Number) target.get(field)).longValue()) {
-                throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_CHANGED", 409);
-            }
+        if (!input.has("employeeVersion")
+                || input.path("employeeVersion").asLong() != target.employeeVersion()
+                || !input.has("organizationVersion")
+                || input.path("organizationVersion").asLong() != target.organizationVersion()
+                || !input.has("locationVersion")
+                || input.path("locationVersion").asLong() != target.locationVersion()) {
+            throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_CHANGED", 409);
         }
-        var place = activeLocation(location, ((Number) target.get("locationVersion")).longValue());
+        var place = activeLocation(location, target.locationVersion());
         if ("BIN".equals(place.get("location_type"))) {
             throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_CHANGED", 409);
         }
@@ -576,17 +694,17 @@ public class AssetRepairPort {
             Instant time) {
         var target = approvedReturnTarget(assetId, version, sourceJson, targetJson);
         identity.observedCode(assetId, observed);
-        boolean shared = "SHARED".equals(target.get("custodyType"));
+        boolean shared = "SHARED".equals(target.custodyType());
         db.update(
                 "UPDATE fams_asset SET lifecycle_status=?,custody_type=?,using_organization_id=?,"
                     + "responsible_employee_id=?,department_responsible_employee_id=?,storage_warehouse_id=NULL,current_location_id=?,version=version+1,updated_by=?,updated_at=?"
                     + " WHERE id=? AND version=?",
                 json.readTree(sourceJson).path("lifecycle").asText(),
-                target.get("custodyType"),
-                target.get("organizationId"),
-                shared ? null : target.get("employeeId"),
-                shared ? target.get("employeeId") : null,
-                target.get("locationId"),
+                target.custodyType(),
+                target.organizationId(),
+                shared ? null : target.employeeId(),
+                shared ? target.employeeId() : null,
+                target.locationId(),
                 actor,
                 time,
                 assetId,
@@ -610,7 +728,7 @@ public class AssetRepairPort {
     }
 
     /** Approved exception receipt permits an offline account, never inactive responsibility. */
-    public Map<String, Object> proxyReturnTarget(
+    public ReturnTarget proxyReturnTarget(
             long assetId, long version, String sourceJson, String deliveredTargetJson) {
         var row = locked(assetId, version);
         var source = json.readTree(sourceJson);
@@ -687,19 +805,18 @@ public class AssetRepairPort {
         if ("BIN".equals(place.get("location_type"))) {
             throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_CHANGED", 409);
         }
-        var target = new LinkedHashMap<String, Object>();
-        target.put("custodyType", custody);
-        target.put("employeeId", Long.toString(person));
-        target.put("employeeName", people.getFirst().get("name"));
-        target.put("employeeVersion", people.getFirst().get("version"));
-        target.put("organizationId", Long.toString(org));
-        target.put("organizationName", people.getFirst().get("organization_name"));
-        target.put("organizationVersion", people.getFirst().get("organization_version"));
-        target.put("locationId", Long.toString(location));
-        target.put("locationName", place.get("name"));
-        target.put("locationVersion", frozen.path("locationVersion").asLong());
-        target.put("receiverAccountId", Long.toString(account));
-        return target;
+        return new ReturnTarget(
+                custody,
+                Long.toString(person),
+                (String) people.getFirst().get("name"),
+                ((Number) people.getFirst().get("version")).longValue(),
+                Long.toString(org),
+                (String) people.getFirst().get("organization_name"),
+                ((Number) people.getFirst().get("organization_version")).longValue(),
+                Long.toString(location),
+                (String) place.get("name"),
+                frozen.path("locationVersion").asLong(),
+                Long.toString(account));
     }
 
     public long closeProxyReturn(
@@ -714,17 +831,17 @@ public class AssetRepairPort {
             Instant time) {
         var target = proxyReturnTarget(assetId, version, sourceJson, targetJson);
         identity.observedCode(assetId, observed);
-        boolean shared = "SHARED".equals(target.get("custodyType"));
+        boolean shared = "SHARED".equals(target.custodyType());
         db.update(
                 "UPDATE fams_asset SET lifecycle_status=?,custody_type=?,using_organization_id=?,"
                     + "responsible_employee_id=?,department_responsible_employee_id=?,storage_warehouse_id=NULL,current_location_id=?,version=version+1,updated_by=?,updated_at=?"
                     + " WHERE id=? AND version=?",
                 json.readTree(sourceJson).path("lifecycle").asText(),
-                target.get("custodyType"),
-                target.get("organizationId"),
-                shared ? null : target.get("employeeId"),
-                shared ? target.get("employeeId") : null,
-                target.get("locationId"),
+                target.custodyType(),
+                target.organizationId(),
+                shared ? null : target.employeeId(),
+                shared ? target.employeeId() : null,
+                target.locationId(),
                 actor,
                 time,
                 assetId,
@@ -793,9 +910,9 @@ public class AssetRepairPort {
             long repair,
             Instant time) {
         var target = returnTarget(assetId, version, sourceJson);
-        if (((Number) target.get("employeeVersion")).longValue() != employeeVersion
-                || ((Number) target.get("organizationVersion")).longValue() != organizationVersion
-                || ((Number) target.get("locationVersion")).longValue() != locationVersion) {
+        if (target.employeeVersion() != employeeVersion
+                || target.organizationVersion() != organizationVersion
+                || target.locationVersion() != locationVersion) {
             throw new AssetHandoverPort.Failure("REPAIR_RETURN_TARGET_CHANGED", 409);
         }
         String lifecycle = json.readTree(sourceJson).path("lifecycle").asText();

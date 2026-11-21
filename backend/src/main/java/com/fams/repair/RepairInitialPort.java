@@ -45,7 +45,7 @@ class RepairInitialPort implements InitialRepairPort {
                 java.time.ZoneId.of(opening.timezone())))) {
             throw new IllegalStateException("ASSET_IMPORT_INITIAL_FACTORY_DATE_INVALID");
         }
-        var source = new LinkedHashMap<>(assets.beginInitialRepair(opening.assetId(), factory));
+        var snapshot = assets.beginInitialRepair(opening.assetId(), factory);
         var origin = new LinkedHashMap<String, Object>();
         origin.put("batchId", opening.batch().toString());
         origin.put("sheetRow", opening.row());
@@ -57,7 +57,7 @@ class RepairInitialPort implements InitialRepairPort {
         if (factory) {
             origin.put("factoryDestination", facts.factory().destination());
         }
-        source.put("initialSource", origin);
+        var source = new AssetRepairPort.InitialSource(snapshot, origin);
         var borrowing = loans.open(opening.assetId());
         String approval = json.writeValueAsString(Map.of("initialSource", origin, "confirmedAt", opening.now(),
                 "source", source, "allowedMethod", factory ? "INTERNAL_OR_FACTORY" : "INTERNAL_NO_COST"));
@@ -67,8 +67,8 @@ class RepairInitialPort implements InitialRepairPort {
                     fault,impact,occurred_at,repair_status,allowed_method,approval_snapshot_json,processor_account_id,
                     claimed_at,accepted_at,initial_batch_id,initial_sheet_row,created_at,updated_at)
                 VALUES (?,?,?,?,?,0,?,?,?,?,?,?,'WAREHOUSE_PROCESSING',?,?,?,?,?,?,?,?,?)
-                """, opening.assetId(), opening.operatorId(), source.get("usingOrganizationId"), source.get("responsibleEmployeeId"),
-                source.get("departmentResponsibleEmployeeId"), json.writeValueAsString(source),
+                """, opening.assetId(), opening.operatorId(), snapshot.usingOrganizationId(), snapshot.responsibleEmployeeId(),
+                snapshot.departmentResponsibleEmployeeId(), json.writeValueAsString(source),
                 borrowing == null ? null : json.writeValueAsString(borrowing), opening.timezone(), facts.fault(), facts.impact(),
                 facts.occurredAt(), factory ? "INTERNAL_OR_FACTORY" : "INTERNAL_NO_COST", approval, opening.operatorId(),
                 opening.now(), facts.acceptedAt(), opening.batch().toString(), opening.row(), opening.now(), opening.now());
@@ -86,7 +86,7 @@ class RepairInitialPort implements InitialRepairPort {
                     facts.evidence(), opening.operatorId(), opening.now());
         }
         if (factory) {
-            openFactory(opening, repair, source, approval);
+            openFactory(opening, repair, snapshot, approval);
         }
         db.update("INSERT INTO fams_asset_business_lock(asset_id,business_type,business_id,business_item_id,acquired_at)"
                 + " VALUES (?,'REPAIR',?,?,?)", opening.assetId(), repair, repair, opening.now());
@@ -96,7 +96,7 @@ class RepairInitialPort implements InitialRepairPort {
         event(repair, opening.operatorId(), opening.operatorUsername(), "REPAIR_INITIAL_OPENED", 0, 0, origin, opening.now());
     }
 
-    private void openFactory(Opening opening, long repair, Map<String, Object> source, String approval) {
+    private void openFactory(Opening opening, long repair, AssetRepairPort.Snapshot snapshot, String approval) {
         var facts = opening.facts().factory();
         String method = "NO_COST".equals(facts.costPolicy()) ? "FACTORY_NO_COST" : "FACTORY_COST_ALLOWED";
         db.update("""
@@ -110,9 +110,9 @@ class RepairInitialPort implements InitialRepairPort {
         long scope = lastId();
         var identity = new LinkedHashMap<String, Object>();
         identity.put("assetId", Long.toString(opening.assetId()));
-        identity.put("assetCode", source.get("assetCode"));
+        identity.put("assetCode", snapshot.assetCode());
         identity.put("serialNumber", opening.serialNumber());
-        identity.put("name", source.get("name"));
+        identity.put("name", snapshot.name());
         db.update("""
                 INSERT INTO fams_repair_factory_round(repair_id,asset_id,scope_id,round_number,round_status,
                     provider_name,service_contact,service_phone,expected_return_date,fault,original_identity_json,

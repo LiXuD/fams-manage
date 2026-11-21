@@ -1,5 +1,9 @@
 package com.fams.asset;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
+
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 
@@ -24,6 +28,132 @@ import java.util.Objects;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class AssetLossPort {
+    /**
+     * Custody snapshot projected from a locked asset row. The eleven camelCase keys are
+     * serialized verbatim into fams_loss_report.source_snapshot_json, so every name is frozen
+     * with {@link JsonProperty} and explicit nulls stay present (JAVA-01/10a stored-shape rule).
+     * Non-version numeric ids pass through stringified, exactly as the pre-typing projection did.
+     */
+    public record Snapshot(
+            @JsonProperty("id") String id,
+            @JsonProperty("assetCode") String assetCode,
+            @JsonProperty("name") String name,
+            @JsonProperty("version") long version,
+            @JsonProperty("lifecycle") String lifecycle,
+            @JsonProperty("custodyType") String custodyType,
+            @JsonProperty("usingOrganizationId") String usingOrganizationId,
+            @JsonProperty("responsibleEmployeeId") String responsibleEmployeeId,
+            @JsonProperty("departmentResponsibleEmployeeId") String departmentResponsibleEmployeeId,
+            @JsonProperty("warehouseId") String warehouseId,
+            @JsonProperty("locationId") String locationId) {
+
+        static Snapshot fromRow(Map<String, Object> row) {
+            return new Snapshot(
+                    stringify(row.get("id")),
+                    stringify(row.get("asset_code")),
+                    stringify(row.get("name")),
+                    ((Number) row.get("version")).longValue(),
+                    stringify(row.get("lifecycle_status")),
+                    stringify(row.get("custody_type")),
+                    stringify(row.get("using_organization_id")),
+                    stringify(row.get("responsible_employee_id")),
+                    stringify(row.get("department_responsible_employee_id")),
+                    stringify(row.get("storage_warehouse_id")),
+                    stringify(row.get("current_location_id")));
+        }
+
+        /** Mirrors the legacy snapshot(): every Number except the version key became a String. */
+        private static String stringify(Object value) {
+            return value == null ? null : value.toString();
+        }
+    }
+
+    /** Eligible page envelope for loss submission pickers; keys mirror the pre-typing Map.of assembly. */
+    public record EligiblePage(List<Snapshot> items, long total, int page, int pageSize) {
+        public EligiblePage {
+            items = items == null ? null : List.copyOf(items);
+        }
+    }
+
+    /**
+     * Flat stored shape of fams_loss_report.source_snapshot_json: the eleven snapshot keys plus
+     * the conditional handoff key written by the flow that opened the report. Absent keys stay
+     * absent (NON_NULL), matching the pre-typing LinkedHashMap that only carried the extra key
+     * on return/factory/internal-repair/initial openings.
+     */
+    public record StoredSource(
+            @JsonUnwrapped Snapshot snapshot,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @JsonProperty("returnSource")
+            Map<String, String> returnSource,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @JsonProperty("factorySource")
+            Map<String, String> factorySource,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @JsonProperty("internalRepairSource")
+            Map<String, Object> internalRepairSource,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @JsonProperty("initialSource")
+            Map<String, Object> initialSource) {
+        public StoredSource {
+            returnSource = returnSource == null ? null : Map.copyOf(returnSource);
+            factorySource = factorySource == null ? null : Map.copyOf(factorySource);
+            internalRepairSource =
+                    internalRepairSource == null ? null : Map.copyOf(internalRepairSource);
+            initialSource = initialSource == null ? null : Map.copyOf(initialSource);
+        }
+    }
+
+    /**
+     * Recovery verification view; embedded under the recoveryAsset key of the untyped loss
+     * detail response, so the eleven camelCase wire keys are frozen (JAVA-10a embedding rule).
+     */
+    public record RecoveryView(
+            @JsonProperty("assetCode") String assetCode,
+            @JsonProperty("serialNumber") String serialNumber,
+            @JsonProperty("version") long version,
+            @JsonProperty("lifecycle") String lifecycle,
+            @JsonProperty("exceptionStatus") String exceptionStatus,
+            @JsonProperty("locationId") String locationId,
+            @JsonProperty("locationVersion") Long locationVersion,
+            @JsonProperty("locationName") String locationName,
+            @JsonProperty("eligible") boolean eligible,
+            @JsonProperty("locked") boolean locked,
+            @JsonProperty("factoryScrapEligible") boolean factoryScrapEligible) {
+    }
+
+    /**
+     * Locked custody facts a loss recovery flow reads after require/validate: lifecycle plus the
+     * two numeric custodian references. Never serialized; the pre-typing raw row's other columns
+     * had no consumers (adoptLossRecovery narrow-record precedent).
+     */
+    public record RecoverySource(
+            String lifecycleStatus, Long responsibleEmployeeId, Long usingOrganizationId) {
+
+        static RecoverySource fromRow(Map<String, Object> row) {
+            return new RecoverySource(
+                    (String) row.get("lifecycle_status"),
+                    row.get("responsible_employee_id") == null
+                            ? null
+                            : ((Number) row.get("responsible_employee_id")).longValue(),
+                    row.get("using_organization_id") == null
+                            ? null
+                            : ((Number) row.get("using_organization_id")).longValue());
+        }
+    }
+
+    /** Recovery location picker row; id stringified and version numeric exactly as before typing. */
+    public record RecoveryLocation(String id, String name, long version) {
+    }
+
+    /** Recovery location page envelope; keys mirror the pre-typing Map.of assembly. */
+    public record RecoveryLocationPage(
+            List<RecoveryLocation> items, long total, int page, int pageSize) {
+        public RecoveryLocationPage {
+            items = items == null ? null : List.copyOf(items);
+        }
+    }
+
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final AssetMapper mapper;
@@ -34,7 +164,7 @@ public class AssetLossPort {
         this.mapper = mapper;
     }
 
-    public Map<String, Object> eligible(Current actor, int page, int size) {
+    public EligiblePage eligible(Current actor, int page, int size) {
         String where =
                 " FROM fams_asset a WHERE a.card_stage='ACTIVE' AND a.exception_status='NORMAL' AND"
                     + " a.lifecycle_status IN ('IN_STOCK','IN_USE','BORROWED') AND (? OR"
@@ -52,21 +182,17 @@ public class AssetLossPort {
         var args = new java.util.ArrayList<Object>(java.util.Arrays.asList(scope));
         args.add(size);
         args.add(((long) page - 1) * size);
-        return Map.of(
-                "items",
+        return new EligiblePage(
                 db
                         .queryForList(
                                 "SELECT a.*" + where + " ORDER BY a.id DESC LIMIT ? OFFSET ?",
                                 args.toArray())
                         .stream()
-                        .map(this::snapshot)
+                        .map(Snapshot::fromRow)
                         .toList(),
-                "total",
                 Objects.requireNonNull(
                         db.queryForObject("SELECT COUNT(*)" + where, Long.class, scope)),
-                "page",
                 page,
-                "pageSize",
                 size);
     }
 
@@ -91,25 +217,25 @@ public class AssetLossPort {
     }
 
     /** The return owner already holds and validates the source business lock. */
-    public Map<String, Object> returnSubmission(long id, long version) {
-        return snapshot(locked(id, version, "NORMAL"));
+    public Snapshot returnSubmission(long id, long version) {
+        return Snapshot.fromRow(locked(id, version, "NORMAL"));
     }
 
-    public Map<String, Object> initialLossSnapshot(long id) {
+    public Snapshot initialLossSnapshot(long id) {
         var row = locked(id, 0, "NORMAL");
         if (!"INITIAL_IMPORT".equals(row.get("source_text"))) {
             throw new AssetHandoverPort.Failure("LOSS_ASSET_CHANGED", 409);
         }
-        return snapshot(row);
+        return Snapshot.fromRow(row);
     }
 
     /** Captures custody for a factory loss after the repair owner validates its active lock. */
-    public Map<String, Object> factorySubmission(long id, long version) {
-        return snapshot(lockFactoryAsset(id, version, "NORMAL"));
+    public Snapshot factorySubmission(long id, long version) {
+        return Snapshot.fromRow(lockFactoryAsset(id, version, "NORMAL"));
     }
 
-    public Map<String, Object> internalRepairSubmission(long id, long version) {
-        return snapshot(lockRepairAsset(id, version, "NORMAL", "UNDER_REPAIR"));
+    public Snapshot internalRepairSubmission(long id, long version) {
+        return Snapshot.fromRow(lockRepairAsset(id, version, "NORMAL", "UNDER_REPAIR"));
     }
 
     private Map<String, Object> lockFactoryAsset(long id, long version, String exception) {
@@ -203,7 +329,7 @@ public class AssetLossPort {
         }
     }
 
-    public Map<String, Object> recoveryView(long id) {
+    public RecoveryView recoveryView(long id) {
         var row =
                 db.queryForMap(
                         "SELECT"
@@ -211,39 +337,40 @@ public class AssetLossPort {
                             + " location_name,l.version location_version FROM fams_asset a LEFT"
                             + " JOIN fams_location l ON l.id=a.current_location_id WHERE a.id=?",
                         id);
-        var view = new LinkedHashMap<String, Object>();
-        view.put("assetCode", row.get("asset_code"));
-        view.put("serialNumber", row.get("serial_number"));
-        view.put("version", row.get("version"));
-        view.put("lifecycle", row.get("lifecycle_status"));
-        view.put("exceptionStatus", row.get("exception_status"));
-        view.put(
-                "locationId",
+        return new RecoveryView(
+                (String) row.get("asset_code"),
+                (String) row.get("serial_number"),
+                ((Number) row.get("version")).longValue(),
+                (String) row.get("lifecycle_status"),
+                (String) row.get("exception_status"),
                 row.get("current_location_id") == null
                         ? null
-                        : row.get("current_location_id").toString());
-        view.put("locationVersion", row.get("location_version"));
-        view.put("locationName", row.get("location_name"));
-        view.put(
-                "eligible",
+                        : row.get("current_location_id").toString(),
+                row.get("location_version") == null
+                        ? null
+                        : ((Number) row.get("location_version")).longValue(),
+                (String) row.get("location_name"),
                 "ACTIVE".equals(row.get("card_stage"))
                         && List.of("IN_STOCK", "IN_USE", "BORROWED")
                                 .contains(row.get("lifecycle_status"))
-                        && List.of("SEARCHING", "LOST").contains(row.get("exception_status")));
-        view.put(
-                "locked",
+                        && List.of("SEARCHING", "LOST").contains(row.get("exception_status")),
                 !db.queryForList(
                                 "SELECT id FROM fams_asset_business_lock WHERE asset_id=? AND"
                                         + " released_at IS NULL",
                                 id)
-                        .isEmpty());
-        view.put("factoryScrapEligible", "ACTIVE".equals(row.get("card_stage"))
-                && "FACTORY_REPAIR".equals(row.get("lifecycle_status")) && "LOST".equals(row.get("exception_status")));
-        return view;
+                        .isEmpty(),
+                "ACTIVE".equals(row.get("card_stage"))
+                        && "FACTORY_REPAIR".equals(row.get("lifecycle_status"))
+                        && "LOST".equals(row.get("exception_status")));
     }
 
     /** Revalidate the unchanged lawful custodian; other destinations must use a linked workflow. */
-    public Map<String, Object> requireOriginalRecovery(
+    public RecoverySource requireOriginalRecovery(
+            long id, long version, String exception, String original) {
+        return RecoverySource.fromRow(requireOriginalRecoveryRow(id, version, exception, original));
+    }
+
+    private Map<String, Object> requireOriginalRecoveryRow(
             long id, long version, String exception, String original) {
         var row = locked(id, version, exception);
         var frozen = json.readTree(original);
@@ -296,7 +423,7 @@ public class AssetLossPort {
         return row;
     }
 
-    public Map<String, Object> validateOriginalRecovery(
+    public RecoverySource validateOriginalRecovery(
             long id,
             long version,
             String exception,
@@ -305,7 +432,22 @@ public class AssetLossPort {
             String observedSerial,
             long location,
             long locationVersion) {
-        var row = requireOriginalRecovery(id, version, exception, original);
+        return RecoverySource.fromRow(
+                validateOriginalRecoveryRow(
+                        id, version, exception, original, observedCode, observedSerial,
+                        location, locationVersion));
+    }
+
+    private Map<String, Object> validateOriginalRecoveryRow(
+            long id,
+            long version,
+            String exception,
+            String original,
+            String observedCode,
+            String observedSerial,
+            long location,
+            long locationVersion) {
+        var row = requireOriginalRecoveryRow(id, version, exception, original);
         String serial = row.get("serial_number") == null ? "" : row.get("serial_number").toString();
         if (!row.get("asset_code").equals(observedCode.strip())
                 || !serial.strip()
@@ -368,13 +510,17 @@ public class AssetLossPort {
     }
 
     /** Recovery to a formal return preserves recorded custody, even when its person is inactive. */
-    public Map<String, Object> requireReturnRecovery(
+    public RecoverySource requireReturnRecovery(
             long id, long version, String exception, String original) {
-        return requireLinkedRecovery(id, version, exception, original, "RETURN", List.of("IN_USE", "BORROWED"));
+        return RecoverySource.fromRow(
+                requireLinkedRecovery(id, version, exception, original, "RETURN",
+                        List.of("IN_USE", "BORROWED")));
     }
 
-    public Map<String, Object> requireTransferRecovery(long id, long version, String exception, String original) {
-        return requireLinkedRecovery(id, version, exception, original, "TRANSFER", List.of("IN_USE", "IN_STOCK"));
+    public RecoverySource requireTransferRecovery(long id, long version, String exception, String original) {
+        return RecoverySource.fromRow(
+                requireLinkedRecovery(id, version, exception, original, "TRANSFER",
+                        List.of("IN_USE", "IN_STOCK")));
     }
 
     private Map<String, Object> requireLinkedRecovery(long id, long version, String exception,
@@ -397,18 +543,20 @@ public class AssetLossPort {
         return row;
     }
 
-    public Map<String, Object> validateReturnRecovery(long id, long version, String exception,
+    public RecoverySource validateReturnRecovery(long id, long version, String exception,
             String original, String observedCode, String observedSerial, long location, long locationVersion) {
-        var row = requireReturnRecovery(id, version, exception, original);
+        var row = requireLinkedRecovery(id, version, exception, original, "RETURN",
+                List.of("IN_USE", "BORROWED"));
         verifyLinkedRecoveryFacts(row, observedCode, observedSerial, location, locationVersion);
-        return row;
+        return RecoverySource.fromRow(row);
     }
 
-    public Map<String, Object> validateTransferRecovery(long id, long version, String exception,
+    public RecoverySource validateTransferRecovery(long id, long version, String exception,
             String original, String observedCode, String observedSerial, long location, long locationVersion) {
-        var row = requireTransferRecovery(id, version, exception, original);
+        var row = requireLinkedRecovery(id, version, exception, original, "TRANSFER",
+                List.of("IN_USE", "IN_STOCK"));
         verifyLinkedRecoveryFacts(row, observedCode, observedSerial, location, locationVersion);
-        return row;
+        return RecoverySource.fromRow(row);
     }
 
     private void verifyLinkedRecoveryFacts(Map<String, Object> row, String observedCode, String observedSerial,
@@ -425,13 +573,15 @@ public class AssetLossPort {
         }
     }
 
-    public Map<String, Object> recoveryLocations(int page, int size) {
+    public RecoveryLocationPage recoveryLocations(int page, int size) {
         var items = db.queryForList("SELECT id,name,version FROM fams_location WHERE status='ACTIVE'"
                 + " ORDER BY id LIMIT ? OFFSET ?", size, ((long) page - 1) * size);
-        return Map.of("items", items.stream().map(r -> Map.of("id", r.get("id").toString(),
-                "name", r.get("name"), "version", r.get("version"))).toList(), "total",
+        return new RecoveryLocationPage(
+                items.stream().map(r -> new RecoveryLocation(r.get("id").toString(),
+                        (String) r.get("name"), ((Number) r.get("version")).longValue())).toList(),
                 Objects.requireNonNull(db.queryForObject("SELECT COUNT(*) FROM fams_location WHERE status='ACTIVE'", Long.class)),
-                "page", page, "pageSize", size);
+                page,
+                size);
     }
 
     public long recoverForReturn(long id, long version, String exception, String original,

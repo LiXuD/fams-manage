@@ -46,7 +46,7 @@ public class ScrapInitialPort implements InitialScrapPort {
         if (!"UNDER_REPAIR".equals(opening.beforeLifecycle()) || opening.row() < 2) {
             throw new IllegalStateException("ASSET_IMPORT_SCRAP_FACT_INVALID");
         }
-        var source = new LinkedHashMap<>(assets.repairSource(opening.asset(), 0, false));
+        var source = assets.repairSource(opening.asset(), 0, false);
         var repair = db.queryForMap("""
                 SELECT id,source_snapshot_json FROM fams_repair_request
                 WHERE initial_batch_id=? AND initial_sheet_row=? AND asset_id=?
@@ -59,14 +59,13 @@ public class ScrapInitialPort implements InitialScrapPort {
         proof.put("repairVersion", 0);
         proof.put("original", json.readTree(repair.get("source_snapshot_json").toString()));
         proof.put("borrowing", loans.open(opening.asset()));
-        source.put("repairEvidence", proof);
-        source.put("initialSource", initial);
+        var stored = new AssetScrapPort.StoredSource(source, null, proof, initial);
         db.update("""
                 INSERT INTO fams_scrap_request(asset_id,creator_account_id,source_type,source_business_id,
                     source_snapshot_json,reason,observed_condition,proposed_disposition,asset_version,
                     initial_batch_id,initial_sheet_row,created_at,updated_at,processor_account_id,ownership_version)
                 VALUES (?,?,'REPAIR',?,?,?,?,?,0,?,?,?,?,?,1)
-                """, opening.asset(), opening.actorId(), repairId, json.writeValueAsString(source),
+                """, opening.asset(), opening.actorId(), repairId, json.writeValueAsString(stored),
                 opening.reason(), opening.observedCondition(), opening.proposedDisposition(), opening.batch().toString(),
                 opening.row(), opening.time(), opening.time(), opening.actorId());
         long id = java.util.Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
@@ -140,7 +139,7 @@ public class ScrapInitialPort implements InitialScrapPort {
             throw new IllegalStateException("ASSET_IMPORT_INITIAL_LOSS_INVALID");
         }
         var custody = json.readTree(loss.custodyJson());
-        var source = new LinkedHashMap<>(assets.lossSource(opening.asset(), 0, opening.beforeLifecycle(), custody));
+        var source = assets.lossSource(opening.asset(), 0, opening.beforeLifecycle(), custody);
         var proof = new LinkedHashMap<String, Object>();
         proof.put("reportId", Long.toString(loss.id()));
         proof.put("reportVersion", 0);
@@ -158,14 +157,14 @@ public class ScrapInitialPort implements InitialScrapPort {
         } else if (loan != null) {
             throw new IllegalStateException("ASSET_IMPORT_INITIAL_LOSS_INVALID");
         }
-        source.put("lossEvidence", proof);
-        source.put("initialSource", custody.path("initialSource"));
+        var stored = new AssetScrapPort.StoredSource(source, proof, null,
+                custody.path("initialSource"));
         db.update("""
                 INSERT INTO fams_scrap_request(asset_id,creator_account_id,source_type,source_business_id,
                     source_snapshot_json,reason,observed_condition,proposed_disposition,asset_version,
                     initial_batch_id,initial_sheet_row,created_at,updated_at,processor_account_id,ownership_version)
                 VALUES (?,?,'LOSS',?,?,?,?,?,0,?,?,?,?,?,?)
-                """, opening.asset(), opening.actorId(), loss.id(), json.writeValueAsString(source),
+                """, opening.asset(), opening.actorId(), loss.id(), json.writeValueAsString(stored),
                 opening.reason(), opening.observedCondition(), opening.proposedDisposition(), opening.batch().toString(),
                 opening.row(), opening.time(), opening.time(), factory == null ? null : opening.actorId(),
                 factory == null ? 0 : 1);
@@ -210,7 +209,7 @@ public class ScrapInitialPort implements InitialScrapPort {
 
     @Override
     public void openFactoryDisposition(Opening opening, FactoryDisposition disposition) {
-        var source = new LinkedHashMap<>(assets.repairSource(opening.asset(), 0, true));
+        var source = assets.repairSource(opening.asset(), 0, true);
         var repair = db.queryForMap("""
                 SELECT r.id,r.source_snapshot_json,f.id AS round_id
                 FROM fams_repair_request r JOIN fams_repair_factory_round f ON f.repair_id=r.id AND f.asset_id=r.asset_id
@@ -235,14 +234,14 @@ public class ScrapInitialPort implements InitialScrapPort {
         proof.put("context", Map.of("roundId", Long.toString(((Number) round).longValue()),
                 "method", disposition.method(), "occurredAt", disposition.occurredAt().toString(),
                 "evidence", disposition.evidence()));
-        source.put("repairEvidence", proof);
-        source.put("initialSource", Map.of("batchId", opening.batch().toString(), "sheetRow", Integer.toString(opening.row())));
+        var stored = new AssetScrapPort.StoredSource(source, null, proof,
+                Map.of("batchId", opening.batch().toString(), "sheetRow", Integer.toString(opening.row())));
         db.update("""
                 INSERT INTO fams_scrap_request(asset_id,creator_account_id,source_type,source_business_id,source_item_id,
                     source_snapshot_json,reason,observed_condition,proposed_disposition,asset_version,
                     initial_batch_id,initial_sheet_row,created_at,updated_at,processor_account_id,ownership_version)
                 VALUES (?,?,'FACTORY_REPLACEMENT',?,?,?,?,?,?,0,?,?,?,?,?,1)
-                """, opening.asset(), opening.actorId(), repairId, factId, json.writeValueAsString(source),
+                """, opening.asset(), opening.actorId(), repairId, factId, json.writeValueAsString(stored),
                 opening.reason(), opening.observedCondition(), opening.proposedDisposition(), opening.batch().toString(),
                 opening.row(), opening.time(), opening.time(), opening.actorId());
         long id = java.util.Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
