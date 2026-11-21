@@ -17,6 +17,18 @@ import java.util.UUID;
 public class LossRepairPort {
     public record Source(String reportId, long lockVersion, String evidenceJson) {}
 
+    /**
+     * Narrow identity of the created repair: the only reader (LossService) consumes the view's
+     * stringified "id" for the stored recovery/execution snapshot, the audit payload and the
+     * repairId response key (JAVA-10c; RepairService.view already stringifies id).
+     */
+    public record Created(String id) {
+        public static Created fromView(Map<String, Object> view) {
+            Object id = view.get("id");
+            return new Created(id == null ? null : id.toString());
+        }
+    }
+
     public static final class Failure extends RuntimeException {
         private final int status;
 
@@ -32,10 +44,11 @@ public class LossRepairPort {
 
     private final RepairService repairs;
 
-    public Map<String, Object> createAfterConfirmation(
+    public Created createAfterConfirmation(
             Actor actor, UUID key, RepairInput.Submission input, Source source, long recoveryId) {
         try {
-            return repairs.submitClosedLossRecovery(actor, key, input, source, recoveryId);
+            return Created.fromView(
+                    repairs.submitClosedLossRecovery(actor, key, input, source, recoveryId));
         } catch (RepairFailure failure) {
             throw new Failure(failure.status(), failure.getMessage());
         }
@@ -45,10 +58,10 @@ public class LossRepairPort {
         this.repairs = repairs;
     }
 
-    public Map<String, Object> create(
+    public Created create(
             Actor actor, UUID key, RepairInput.Submission input, Source source) {
         try {
-            return repairs.submitLossRecovery(actor, key, input, source);
+            return Created.fromView(repairs.submitLossRecovery(actor, key, input, source));
         } catch (RepairFailure failure) {
             throw new Failure(failure.status(), failure.getMessage());
         }

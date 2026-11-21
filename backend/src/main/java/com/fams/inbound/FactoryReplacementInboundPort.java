@@ -20,6 +20,34 @@ import java.util.UUID;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class FactoryReplacementInboundPort {
+    /**
+     * Narrow identity of the created receipt (JAVA-10c): the whole InboundService.get document
+     * had exactly one consumer read, the stringified "id" bound into
+     * fams_repair_factory_replacement.inbound_receipt_id and embedded under
+     * inboundReceiptId in the still-untyped repair HTTP result (typed there by the inbound
+     * HTTP batch).
+     */
+    public record Receipt(String id) {
+        public static Receipt fromView(Map<String, Object> receipt) {
+            Object id = receipt.get("id");
+            return new Receipt(id == null ? null : id.toString());
+        }
+    }
+
+    /**
+     * Frozen four-key projection embedded verbatim as the "inbound" object of the still
+     * untyped repair replacementView HTTP response (JAVA-10c; key names mirror the pre-refactor
+     * Map.of, values are the InboundService.receipt wire types: String id/status/receiptNumber,
+     * numeric version).
+     */
+    public record Context(String id, long version, String status, String receiptNumber) {
+        public static Context fromView(Map<String, Object> receipt) {
+            return new Context((String) receipt.get("id"),
+                    ((Number) receipt.get("version")).longValue(),
+                    (String) receipt.get("status"), (String) receipt.get("receiptNumber"));
+        }
+    }
+
     public static final class Failure extends RuntimeException {
         private final int status;
         public Failure(String code, int status) {
@@ -39,12 +67,12 @@ public class FactoryReplacementInboundPort {
         this.db = db;
         this.clock = clock;
     }
-    public Map<String, Object> create(RequisitionActorContext.Actor actor, UUID source,
+    public Receipt create(RequisitionActorContext.Actor actor, UUID source,
             long oldAsset, long asset, long assetVersion, long repair, long round, LocalDate date,
             long warehouse, long warehouseVersion, long location, long locationVersion) {
         try {
-            return createOwned(actor, source, oldAsset, asset, assetVersion, repair, round, date,
-                    warehouse, warehouseVersion, location, locationVersion);
+            return Receipt.fromView(createOwned(actor, source, oldAsset, asset, assetVersion,
+                    repair, round, date, warehouse, warehouseVersion, location, locationVersion));
         } catch (InboundFailure failure) {
             throw new Failure(failure.code(), failure.status());
         }
@@ -70,7 +98,7 @@ public class FactoryReplacementInboundPort {
                 repair, round, current.id(), clock.instant().truncatedTo(ChronoUnit.MILLIS));
         return service.get(owner, receiptId);
     }
-    public Map<String, Object> context(RequisitionActorContext.Actor actor, String source) {
+    public Context context(RequisitionActorContext.Actor actor, String source) {
         var current = actors.revalidateLocked(actor);
         String role = current.has(Role.WAREHOUSE_OPERATOR) ? Role.WAREHOUSE_OPERATOR.name()
                 : Role.ASSET_ADMIN.name();
@@ -85,8 +113,7 @@ public class FactoryReplacementInboundPort {
             try {
                 var receipt = service.get(new InboundActorContext.Actor(current.id(), current.username(),
                         role, actor.requestId().toString()), ((Number) row.get("receipt_id")).longValue());
-                return Map.of("id", receipt.get("id"), "version", receipt.get("version"),
-                        "status", receipt.get("status"), "receiptNumber", receipt.get("receiptNumber"));
+                return Context.fromView(receipt);
             } catch (InboundFailure failure) {
                 if (failure.status() != 404) { throw new Failure(failure.code(), failure.status()); }
             }

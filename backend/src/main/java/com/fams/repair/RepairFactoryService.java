@@ -989,7 +989,7 @@ public class RepairFactoryService {
                         + "original_asset_id,replacement_asset_id,inbound_receipt_id,original_disposition,"
                         + "observed_at,evidence_ids_json,snapshot_json,recorded_by,recorded_at)"
                         + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", source.toString(), id, roundId,
-                row.get("asset_id"), asset, inbound.get("id"), input.originalDisposition(),
+                row.get("asset_id"), asset, inbound.id(), input.originalDisposition(),
                 input.observedAt(), json.writeValueAsString(input.evidenceIds()),
                 json.writeValueAsString(input), current.id(), now());
         long replacement = Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
@@ -1001,7 +1001,7 @@ public class RepairFactoryService {
         result.put("replacementId", Long.toString(replacement));
         result.put("sourceId", source.toString());
         result.put("replacementAssetId", created.id());
-        result.put("inboundReceiptId", inbound.get("id"));
+        result.put("inboundReceiptId", inbound.id());
         save(current, operation, key, fingerprint, id, result);
         return result;
     }

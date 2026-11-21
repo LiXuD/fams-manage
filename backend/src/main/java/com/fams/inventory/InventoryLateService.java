@@ -133,7 +133,7 @@ public class InventoryLateService {
                             + " 100 FOR SHARE",
                         taskId);
         for (var row : rows) {
-            evidence.append(task, number(row, "id"));
+            evidence.append(InventoryLateEvidencePort.Task.fromRow(task), number(row, "id"));
         }
         var response =
                 Map.<String, Object>of(

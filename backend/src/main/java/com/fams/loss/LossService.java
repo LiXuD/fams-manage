@@ -832,7 +832,7 @@ public class LossService {
                                 Long.toString(id),
                                 execution.lockVersion(),
                                 json.writeValueAsString(input)));
-        var snapshot = Map.of("execution", input, "repairId", repair.get("id"));
+        var snapshot = Map.of("execution", input, "repairId", repair.id());
         db.update(
                 "UPDATE fams_loss_report SET"
                     + " report_status='RECOVERED',asset_version=?,recovered_at=?,recovery_snapshot_json=?,version=version+1,updated_at=?"
@@ -845,7 +845,7 @@ public class LossService {
         closeTodos(id);
         audit(actor, current, row, "LOSS_RECOVERED_TO_REPAIR", version + 1, snapshot);
         var result = new LinkedHashMap<>(view(header(id)));
-        result.put("repairId", repair.get("id"));
+        result.put("repairId", repair.id());
         saveReceipt(current, operation, key, hash, id, result);
         return result;
     }
@@ -1167,7 +1167,7 @@ public class LossService {
                         input.fault(), input.impact(), execution.facts().foundAt()),
                 new com.fams.repair.LossRepairPort.Source(Long.toString(number(row, "id")),
                         execution.lockVersion(), json.writeValueAsString(input)), recovery);
-        var snapshot = Map.of("execution", input, "repairId", repair.get("id"),
+        var snapshot = Map.of("execution", input, "repairId", repair.id(),
                 "recoveryId", Long.toString(recovery));
         db.update("UPDATE fams_loss_recovery SET recovery_status='COMPLETED',"
                         + "execution_snapshot_json=?,version=version+1,updated_at=? WHERE id=?",

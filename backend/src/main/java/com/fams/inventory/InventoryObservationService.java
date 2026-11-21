@@ -327,7 +327,9 @@ public class InventoryObservationService {
                         taskId,
                         input.eventId().toString());
         if (terminal && !"EXPIRED".equals(outcome)) {
-            late.append(task, java.util.Objects.requireNonNull(observation));
+            late.append(
+                    InventoryLateEvidencePort.Task.fromRow(task),
+                    java.util.Objects.requireNonNull(observation));
         }
         if ("CONFLICT_REVIEW".equals(outcome) || "DIFFERENCE_REVIEW".equals(outcome)) {
             db.update("""

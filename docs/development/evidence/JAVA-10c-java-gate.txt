@@ -1,0 +1,13 @@
+JAVA-10c closing Java gate evidence (2026-11-22)
+Environment: JDK 21.0.7 GraalVM, Node v24.18.0, MySQL 8.4.11 pinned digest, isolated compose
+Tree: rsync copy of main working state, EXCLUDING parallel-session untracked WIP backend/src/test/java/com/fams/local (duplicate MiniWechatIdentityPort bean); that WIP belongs to another session and was left untouched.
+Driver: scripts/verify-d6-03a.py verify_java_quality (full product-gate Java sequence)
+
+[Java blocking quality] exit=0
+[JAVA01 coverage] LINE: 27376/29405 (93.10%)
+[JAVA01 coverage] BRANCH: 9902/13081 (75.70%)
+JAVA01_VERIFY_PASS
+steps exit=0: 83
+surefire aggregate: 819 tests, 0 failures, 0 errors
+unit criteria (main tree, 15 wire-shape suites): 111/111
+Port-batch closing note: repo-wide *Port.java public string-keyed Map surface reduced to the adjudicated residuals listed in JAVA-10c record section 6.

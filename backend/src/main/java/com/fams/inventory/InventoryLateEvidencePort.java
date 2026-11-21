@@ -23,6 +23,20 @@ import java.util.Map;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class InventoryLateEvidencePort {
+    /**
+     * Narrow task identity the evidence chain reads (JAVA-10c): id and version are BIGINT columns
+     * bound into FOR SHARE/INSERT statements verbatim as before and projected into the stored
+     * fams_inventory_late_case.snapshot_json packet keys exactly like the previous raw row Map.
+     */
+    public record Task(long id, String taskStatus, long version) {
+        public static Task fromRow(Map<String, Object> row) {
+            return new Task(
+                    ((Number) row.get("id")).longValue(),
+                    (String) row.get("task_status"),
+                    ((Number) row.get("version")).longValue());
+        }
+    }
+
     private final JdbcTemplate db;
     private final ObjectMapper json;
 
@@ -31,15 +45,15 @@ public class InventoryLateEvidencePort {
         this.json = json;
     }
 
-    public void append(Map<String, Object> task, long observationId) {
-        if (!List.of("COMPLETED", "CANCELLED", "TERMINATED").contains(task.get("task_status"))) {
+    public void append(Task task, long observationId) {
+        if (!List.of("COMPLETED", "CANCELLED", "TERMINATED").contains(task.taskStatus())) {
             throw new IllegalArgumentException("Terminal inventory task required");
         }
         var raw =
                 db.queryForMap(
                         "SELECT * FROM fams_inventory_observation WHERE task_id=? AND id=? FOR"
                                 + " SHARE",
-                        task.get("id"),
+                        task.id(),
                         observationId);
         if ("EXPIRED".equals(raw.get("outcome"))) {
             return;
@@ -58,11 +72,11 @@ public class InventoryLateEvidencePort {
                 db.queryForList(
                         "SELECT report_sha256,created_at FROM fams_inventory_sealed_report WHERE"
                                 + " task_id=? FOR SHARE",
-                        task.get("id"));
+                        task.id());
         var packet = new LinkedHashMap<String, Object>();
-        packet.put("taskId", task.get("id").toString());
-        packet.put("terminalStatus", task.get("task_status"));
-        packet.put("taskVersion", task.get("version"));
+        packet.put("taskId", Long.toString(task.id()));
+        packet.put("terminalStatus", task.taskStatus());
+        packet.put("taskVersion", task.version());
         packet.put("observationId", Long.toString(observationId));
         packet.put("classificationContext", "TERMINAL_TASK_AT_REGISTRATION");
         Long assetId =
@@ -72,7 +86,7 @@ public class InventoryLateEvidencePort {
                                 "SELECT asset_id FROM fams_inventory_item WHERE task_id=? AND id=?"
                                         + " FOR SHARE",
                                 Long.class,
-                                task.get("id"),
+                                task.id(),
                                 raw.get("item_id"));
         packet.put("assetId", assetId == null ? null : assetId.toString());
         packet.put("rawObservedAt", instant(raw.get("raw_observed_at")));
@@ -93,7 +107,7 @@ public class InventoryLateEvidencePort {
                         db.queryForList(
                                 "SELECT snapshot_json FROM fams_inventory_sealed_item WHERE"
                                         + " task_id=? AND item_id=? FOR SHARE",
-                                task.get("id"),
+                                task.id(),
                                 raw.get("item_id"));
                 if (!frozen.isEmpty()) {
                     var snapshot = json.readTree(frozen.getFirst().get("snapshot_json").toString());
@@ -114,7 +128,7 @@ public class InventoryLateEvidencePort {
                                 "SELECT * FROM fams_inventory_item_review WHERE task_id=? AND"
                                         + " item_id=? AND review_status='ACCEPTED' ORDER BY"
                                         + " recheck_generation DESC LIMIT 1 FOR SHARE",
-                                task.get("id"),
+                                task.id(),
                                 raw.get("item_id"));
                 if (!reviews.isEmpty()) {
                     acceptedId = ((Number) reviews.getFirst().get("observation_id")).longValue();
@@ -136,7 +150,7 @@ public class InventoryLateEvidencePort {
                                     + " task_id=? FOR SHARE",
                             String.class,
                             acceptedId,
-                            task.get("id"));
+                            task.id());
             kind =
                     acceptedHash != null && acceptedHash.equals(raw.get("fact_sha256"))
                             ? "FACTS_MATCH"
@@ -156,7 +170,7 @@ public class InventoryLateEvidencePort {
                     + " fams_inventory_late_case(observation_id,task_id,comparison_kind,needs_review,report_sha256,accepted_observation_id,snapshot_json,snapshot_sha256,created_at)"
                     + " VALUES (?,?,?,?,?,?,?,?,?)",
                 observationId,
-                task.get("id"),
+                task.id(),
                 kind,
                 needsReview,
                 reportHash,
