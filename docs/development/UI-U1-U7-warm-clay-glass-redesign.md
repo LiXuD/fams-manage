@@ -33,18 +33,27 @@
   - vite build：OK，`dist/assets/index-*.css 46.08 kB │ gzip 8.05 kB`（改造前基线未单列 CSS 体积，本批起以此值为对照）。
   - 全仓 eslint：apps/web 范围 0 错；唯一报错在 `apps/miniprogram/src/target-change-pages.ts`
     （并行会话在制品，两次运行报错位置漂移），不属于本系列，未处理。
-- 整页样张：`/tmp/fams-glass-shots/1440x900login.png`、`390x844login.png`。
-  登录页可见暖陶渐变、磨砂玻璃卡、细白描边与大圆角，U1 底座成立。
-- 页头契约量测（layout-probe）：**未执行**。本机 8080 为真实 Spring 后端，
-  匿名会话被路由守卫弹回 /login，探针无登录能力；契约数值（64/42、113/37）
-  待有会话环境后复测。本系列未改 `--fams-topbar-height`、`--fams-tabbar-height`、
-  `--fams-content-padding` 与页头结构，预期不变。
-- 交互回归：U2/U3/U5/U6/U7 的悬停、拖移、滚动类效果只有单测口径与代码保证，
-  未做浏览器内磁吸/倾斜数值实测。
+- 会话前提（后补，2026-11-22 同日）：8080 为 IntelliJ 真实后端（`fams_arch_ui_938d6931f10d`
+  隔离库），登录口令取自该栈的建栈记录 `/tmp/fams-followup-exception-1119.json`，
+  `admin` 真实登录 200；此前「探针无会话」的限制解除。
+- 页头契约量测（认证态，UI-02 口径：绝对文档坐标、标签条按计算高度 ≤60px 判模式）：
+  **9/9 达标**。1440×900 sidebar：chromeBottom 64、headTop 80、h1Top 106、gap 42；
+  735×872 与 390×844 tabbar：chromeBottom 113、headTop 124、h1Top 150、gap 37；
+  路由 `/assets`、`/loans`、`/transfers` 三视口全部一致。
+- 全页 CDP 回归（`scripts/arch-ui-cdp-sweep.mjs`，65 路由 × 4 角色 = **260 单元**，
+  全部真实渲染并整页截图至 `/tmp/fams-glass-sweep/`）：**零前端异常**——console 无 JS
+  错误、无 Vue 告警，问题全部为 HTTP 资源噪声：403×73（角色无该端点权限，属预期权限行为）、
+  404×70（路由清单深链到本栈不存在的记录）、500×6（`/scrap-requests/{1,2}/attachment-capabilities`
+  后端错误，前端只调用，非本系列引入）。
+- 整页样张：登录页 1440/390 + 桌面 1440 `/assets`、`/`（`/tmp/fams-glass-shots/`），
+  可见暖陶渐变、侧栏液态胶囊选中态、水滴筛选胶囊、玻璃表格壳与底部 dock。
+- 交互回归：U2/U3/U5/U6/U7 的悬停、拖移、滚动类效果有单测口径与静态样张，
+  磁吸/倾斜的动态数值仍未逐帧实测。
 
 ## 已知局限
 
 - `backdrop-filter` 玻璃层数按页面控制；低端集显设备上大面积模糊可能降帧。
 - `@property --fams-glow` 不受支持的旧浏览器退化为瞬时发光。
-- dock 与 U6 缩略条同屏时垂直位置（104px/20px）未做浏览器实测校齐。
+- dock 与 U6 缩略条同屏时垂直位置（104px/20px）在整页截图中为视口锚定产物，
+  真实滚动下的校齐未逐帧复核。
 - 深色压底卡 `[data-tone=deep]` 令牌与样式已就绪，首批消费页面留待后续批次。
