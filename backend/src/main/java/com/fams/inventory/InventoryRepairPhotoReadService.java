@@ -83,7 +83,7 @@ public class InventoryRepairPhotoReadService {
                 identity(actor, object));
     }
 
-    public java.util.List<java.util.Map<String, Object>> list(
+    public java.util.List<AttachmentEvidencePort.Metadata> list(
             Actor actor, long repair, long observation) {
         InventoryRepairPort.Evidence evidence;
         try {
@@ -99,12 +99,7 @@ public class InventoryRepairPhotoReadService {
                 .filter(
                         row ->
                                 evidence.photoIds().stream()
-                                        .anyMatch(
-                                                id ->
-                                                        id.toString()
-                                                                .equals(
-                                                                        row.get("objectId")
-                                                                                .toString())))
+                                        .anyMatch(id -> id.toString().equals(row.objectId())))
                 .toList();
     }
 

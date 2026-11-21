@@ -37,15 +37,45 @@ public class AttachmentEvidencePort {
         this.grants = new AttachmentGrantSigner(secret, clock);
     }
 
-    public java.util.List<java.util.Map<String, Object>> list(String type, long scope) {
+    /**
+     * Typed envelope of the list() projection; components mirror the SQL aliases. createdAt
+     * keeps the raw JDBC value (DATETIME(3) surfaces as Timestamp or LocalDateTime depending
+     * on the driver) so every domain projection stays driver-agnostic, exactly as before.
+     */
+    public record Metadata(
+            String objectId,
+            String filename,
+            String contentType,
+            long sizeBytes,
+            String scanStatus,
+            long businessVersion,
+            Object createdAt) {
+    }
+
+    public java.util.List<Metadata> list(String type, long scope) {
         return db.queryForList(
-                "SELECT object_id objectId,original_filename filename,content_type"
-                    + " contentType,size_bytes sizeBytes,scan_status scanStatus,business_version"
-                    + " businessVersion,created_at createdAt FROM fams_attachment WHERE"
-                    + " business_type=? AND business_id=? AND deleted_at IS NULL ORDER BY"
-                    + " created_at,object_id",
-                type,
-                scope);
+                        "SELECT object_id objectId,original_filename filename,content_type"
+                            + " contentType,size_bytes sizeBytes,scan_status scanStatus,business_version"
+                            + " businessVersion,created_at createdAt FROM fams_attachment WHERE"
+                            + " business_type=? AND business_id=? AND deleted_at IS NULL ORDER BY"
+                            + " created_at,object_id",
+                        type,
+                        scope)
+                .stream()
+                .map(AttachmentEvidencePort::fromRow)
+                .toList();
+    }
+
+    /** Single production JDBC-alias-row mapping, frozen by the wire shape oracles. */
+    public static Metadata fromRow(java.util.Map<String, Object> row) {
+        return new Metadata(
+                (String) row.get("objectId"),
+                (String) row.get("filename"),
+                (String) row.get("contentType"),
+                ((Number) row.get("sizeBytes")).longValue(),
+                (String) row.get("scanStatus"),
+                ((Number) row.get("businessVersion")).longValue(),
+                row.get("createdAt"));
     }
 
     public AttachmentGrantSigner.Grant grant(

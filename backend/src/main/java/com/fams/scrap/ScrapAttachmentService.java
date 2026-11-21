@@ -55,10 +55,9 @@ public class ScrapAttachmentService {
     }
 
     @Transactional
-    public List<ScrapViews.AttachmentMetadata> list(Actor actor, long id, String kind) {
+    public List<AttachmentEvidencePort.Metadata> list(Actor actor, long id, String kind) {
         transactions.reader(actor, id);
-        return evidence.list(ScrapAttachmentTransactions.type(kind), id).stream()
-                .map(ScrapViews::attachmentMetadata).toList();
+        return evidence.list(ScrapAttachmentTransactions.type(kind), id);
     }
 
     @Transactional

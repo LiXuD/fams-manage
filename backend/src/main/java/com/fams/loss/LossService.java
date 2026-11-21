@@ -135,7 +135,7 @@ public class LossService {
         result.put("lockVersion", locks.isEmpty() ? null : locks.getFirst().get("lock_version"));
         var photos = evidence.getIfAvailable();
         result.put("photosAvailable", photos != null);
-        result.put("photos", photos == null ? List.of() : wire(photos.list("LOST_REPORT", id)));
+        result.put("photos", photos == null ? List.of() : photoProjection(photos.list("LOST_REPORT", id)));
         result.put(
                 "history",
                 wire(
@@ -464,7 +464,7 @@ public class LossService {
         var frozen = new LinkedHashMap<String, Object>();
         frozen.put("report", view(row));
         frozen.put("reason", input.reason());
-        frozen.put("photos", photos == null ? List.of() : wire(photos.list("LOST_REPORT", id)));
+        frozen.put("photos", photos == null ? List.of() : photoProjection(photos.list("LOST_REPORT", id)));
         if (approve) {
             assets.requireSubmitted(number(row, "asset_id"), number(row, "asset_version"), retainedRepairLifecycle(row));
             if (photos == null || photos.list("LOST_REPORT", id).isEmpty()) {
@@ -1974,6 +1974,47 @@ public class LossService {
             }
         }
         return result;
+    }
+
+    /**
+     * Frozen wire() projection of the attachment list rows surfaced under the photos key
+     * (get() and the approval_snapshot_json freeze): no key matches the id stringification
+     * rule, so only createdAt is rewritten (Timestamp/LocalDateTime become ISO instant
+     * strings, anything else passes through).
+     */
+    public record Photo(
+            String objectId,
+            String filename,
+            String contentType,
+            long sizeBytes,
+            String scanStatus,
+            long businessVersion,
+            Object createdAt) {
+    }
+
+    public static List<Photo> photoProjection(List<AttachmentEvidencePort.Metadata> rows) {
+        return rows.stream()
+                .map(
+                        row ->
+                                new Photo(
+                                        row.objectId(),
+                                        row.filename(),
+                                        row.contentType(),
+                                        row.sizeBytes(),
+                                        row.scanStatus(),
+                                        row.businessVersion(),
+                                        photoTime(row.createdAt())))
+                .toList();
+    }
+
+    private static Object photoTime(Object value) {
+        if (value instanceof java.sql.Timestamp time) {
+            return time.toInstant().toString();
+        }
+        if (value instanceof java.time.LocalDateTime time) {
+            return time.toInstant(java.time.ZoneOffset.UTC).toString();
+        }
+        return value;
     }
 
     private Object wire(Object value) {

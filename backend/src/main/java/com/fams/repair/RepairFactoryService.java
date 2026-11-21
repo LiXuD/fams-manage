@@ -256,7 +256,7 @@ public class RepairFactoryService {
                                     + " round_id=? ORDER BY recorded_at,object_id",
                                 id,
                                 round)));
-        result.put("files", port == null ? List.of() : wire(port.list("REPAIR_FACTORY", round)));
+        result.put("files", port == null ? List.of() : fileProjection(port.list("REPAIR_FACTORY", round)));
         return result;
     }
 
@@ -1949,6 +1949,50 @@ public class RepairFactoryService {
                             : wire(value));
         }
         return result;
+    }
+
+    /**
+     * Frozen wire() projection of the attachment list rows surfaced under the files key:
+     * no key ends in _json and sizeBytes is a BIGINT, so only createdAt is rewritten
+     * (Timestamp/LocalDateTime/Instant become ISO instant strings via instant(), anything
+     * else passes through).
+     */
+    public record EvidenceFile(
+            String objectId,
+            String filename,
+            String contentType,
+            long sizeBytes,
+            String scanStatus,
+            long businessVersion,
+            Object createdAt) {
+    }
+
+    public static List<EvidenceFile> fileProjection(List<AttachmentEvidencePort.Metadata> rows) {
+        return rows.stream()
+                .map(
+                        row ->
+                                new EvidenceFile(
+                                        row.objectId(),
+                                        row.filename(),
+                                        row.contentType(),
+                                        row.sizeBytes(),
+                                        row.scanStatus(),
+                                        row.businessVersion(),
+                                        fileTime(row.createdAt())))
+                .toList();
+    }
+
+    private static Object fileTime(Object value) {
+        if (value instanceof java.sql.Timestamp time) {
+            return time.toInstant().toString();
+        }
+        if (value instanceof java.time.LocalDateTime time) {
+            return time.toInstant(java.time.ZoneOffset.UTC).toString();
+        }
+        if (value instanceof Instant time) {
+            return time.toString();
+        }
+        return value;
     }
 
     private Object wire(Object value) {

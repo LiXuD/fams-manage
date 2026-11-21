@@ -334,7 +334,7 @@ public class RepairService {
         result.put("lockVersion", locks.isEmpty() ? null : locks.getFirst().get("lock_version"));
         var port = evidence.getIfAvailable();
         result.put("photosAvailable", port != null);
-        result.put("photos", port == null ? List.of() : wire(port.list("REPAIR", id)));
+        result.put("photos", port == null ? List.of() : photoProjection(port.list("REPAIR", id)));
         var returnOrigin = returnOrigin(id);
         result.put(
                 "returnOrigin",
@@ -2669,6 +2669,47 @@ public class RepairService {
         result.put(
                 "source", json.readValue(row.get("source_snapshot_json").toString(), Object.class));
         return result;
+    }
+
+    /**
+     * Frozen wire() projection of the attachment list rows surfaced under the photos key:
+     * no key matches the id stringification or _json parsing rules, so only createdAt is
+     * rewritten (Timestamp/LocalDateTime become ISO instant strings, anything else passes
+     * through).
+     */
+    public record Photo(
+            String objectId,
+            String filename,
+            String contentType,
+            long sizeBytes,
+            String scanStatus,
+            long businessVersion,
+            Object createdAt) {
+    }
+
+    public static List<Photo> photoProjection(List<AttachmentEvidencePort.Metadata> rows) {
+        return rows.stream()
+                .map(
+                        row ->
+                                new Photo(
+                                        row.objectId(),
+                                        row.filename(),
+                                        row.contentType(),
+                                        row.sizeBytes(),
+                                        row.scanStatus(),
+                                        row.businessVersion(),
+                                        photoTime(row.createdAt())))
+                .toList();
+    }
+
+    private static Object photoTime(Object value) {
+        if (value instanceof java.sql.Timestamp time) {
+            return time.toInstant().toString();
+        }
+        if (value instanceof java.time.LocalDateTime time) {
+            return time.toInstant(java.time.ZoneOffset.UTC).toString();
+        }
+        return value;
     }
 
     private Object wire(Object value) {

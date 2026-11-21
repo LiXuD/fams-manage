@@ -46,7 +46,8 @@ public class ScrapAttachmentController {
     }
 
     @GetMapping("/{id}/attachments/{kind}")
-    java.util.List<ScrapViews.AttachmentMetadata> list(@PathVariable @Positive long id, @PathVariable String kind) {
+    java.util.List<com.fams.attachment.AttachmentEvidencePort.Metadata> list(
+            @PathVariable @Positive long id, @PathVariable String kind) {
         return photos.list(actors.capture(), id, kind);
     }
 

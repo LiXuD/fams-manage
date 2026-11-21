@@ -43,20 +43,7 @@ class InventoryPhotoController {
     Map<String, Object> list(@PathVariable @Positive long taskId, @PathVariable UUID eventId) {
         var items =
                 reads.list(actors.capture(), taskId, eventId).stream()
-                        .map(
-                                row -> {
-                                    var item = new java.util.LinkedHashMap<String, Object>(row);
-                                    Object created = item.get("createdAt");
-                                    if (created instanceof java.sql.Timestamp time) {
-                                        item.put("createdAt", time.toInstant().toString());
-                                    } else if (created instanceof java.time.LocalDateTime time) {
-                                        item.put(
-                                                "createdAt",
-                                                time.toInstant(java.time.ZoneOffset.UTC)
-                                                        .toString());
-                                    }
-                                    return item;
-                                })
+                        .map(InventoryPhotoReadService::photo)
                         .toList();
         return Map.of("items", items);
     }

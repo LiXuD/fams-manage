@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -56,9 +55,41 @@ public class InventoryPhotoReadService {
         return scope;
     }
 
-    public List<Map<String, Object>> list(
+    public List<AttachmentEvidencePort.Metadata> list(
             RequisitionActorContext.Actor source, long task, UUID event) {
         return attachments.list("INVENTORY_EVENT", authorize(source, task, event));
+    }
+
+    /**
+     * Frozen photo-list wire item: the pre-refactor controller copied every row key and only
+     * rewrote createdAt (Timestamp/LocalDateTime become ISO instant strings, anything else
+     * passes through). The named mapping keeps that projection field for field.
+     */
+    public record Photo(
+            String objectId,
+            String filename,
+            String contentType,
+            long sizeBytes,
+            String scanStatus,
+            long businessVersion,
+            Object createdAt) {
+    }
+
+    public static Photo photo(AttachmentEvidencePort.Metadata row) {
+        Object created = row.createdAt();
+        if (created instanceof java.sql.Timestamp time) {
+            created = time.toInstant().toString();
+        } else if (created instanceof java.time.LocalDateTime time) {
+            created = time.toInstant(java.time.ZoneOffset.UTC).toString();
+        }
+        return new Photo(
+                row.objectId(),
+                row.filename(),
+                row.contentType(),
+                row.sizeBytes(),
+                row.scanStatus(),
+                row.businessVersion(),
+                created);
     }
 
     public AttachmentGrantSigner.Grant grant(

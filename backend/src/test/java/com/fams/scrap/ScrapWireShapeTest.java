@@ -2,6 +2,7 @@ package com.fams.scrap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.fams.attachment.AttachmentEvidencePort;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 
@@ -312,10 +313,10 @@ class ScrapWireShapeTest {
         metadataRow.put("scanStatus", "CLEAN");
         metadataRow.put("businessVersion", 0L);
         metadataRow.put("createdAt", Timestamp.from(Instant.parse("2026-11-01T02:00:00Z")));
-        assertWireEquals(metadataRow, ScrapViews.attachmentMetadata(metadataRow));
+        assertWireEquals(metadataRow, AttachmentEvidencePort.fromRow(metadataRow));
         var localDateTime = new LinkedHashMap<>(metadataRow);
         localDateTime.put("createdAt", LocalDateTime.of(2026, 11, 1, 2, 0, 0));
-        assertWireEquals(localDateTime, ScrapViews.attachmentMetadata(localDateTime));
+        assertWireEquals(localDateTime, AttachmentEvidencePort.fromRow(localDateTime));
     }
 
     @Test

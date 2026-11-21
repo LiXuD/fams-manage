@@ -208,17 +208,6 @@ public final class ScrapViews {
     public record AttachmentReceipt(String id, String kind, String objectId, long version) {
     }
 
-    /** Boundary shape of AttachmentEvidencePort rows; the port envelope stays Map. */
-    public record AttachmentMetadata(
-            String objectId,
-            String filename,
-            String contentType,
-            long sizeBytes,
-            String scanStatus,
-            long businessVersion,
-            Object createdAt) {
-    }
-
     public record AttachmentGrant(String url, long expiresAtEpochSecond) {
     }
 
@@ -449,19 +438,6 @@ public final class ScrapViews {
                 }).toList();
         return new EligiblePage(items, num(envelope, "total"),
                 (int) num(envelope, "page"), (int) num(envelope, "pageSize"));
-    }
-
-    static AttachmentMetadata attachmentMetadata(Map<String, Object> row) {
-        return new AttachmentMetadata(
-                (String) row.get("objectId"),
-                (String) row.get("filename"),
-                (String) row.get("contentType"),
-                num(row, "sizeBytes"),
-                (String) row.get("scanStatus"),
-                num(row, "businessVersion"),
-                // DATETIME(3) surfaces as Timestamp or LocalDateTime depending on the driver;
-                // pass the raw value through so serialization stays driver-agnostic.
-                row.get("createdAt"));
     }
 
     private static String id(Map<String, Object> row, String key) {

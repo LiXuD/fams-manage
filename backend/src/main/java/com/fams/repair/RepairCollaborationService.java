@@ -640,22 +640,24 @@ public class RepairCollaborationService {
                         repair));
     }
 
-    private Object photoProjection(List<Map<String, Object>> photos) {
+    /**
+     * Frozen five-key projection of the attachment list rows (faultPhotos/attachments):
+     * businessVersion and createdAt never reach this wire.
+     */
+    public record Photo(
+            String objectId, String filename, String contentType, long sizeBytes, String scanStatus) {
+    }
+
+    public static List<Photo> photoProjection(List<AttachmentEvidencePort.Metadata> photos) {
         return photos.stream()
                 .map(
-                        row -> {
-                            var result = new LinkedHashMap<String, Object>();
-                            for (String field :
-                                    List.of(
-                                            "objectId",
-                                            "filename",
-                                            "contentType",
-                                            "sizeBytes",
-                                            "scanStatus")) {
-                                result.put(field, row.get(field));
-                            }
-                            return result;
-                        })
+                        row ->
+                                new Photo(
+                                        row.objectId(),
+                                        row.filename(),
+                                        row.contentType(),
+                                        row.sizeBytes(),
+                                        row.scanStatus()))
                 .toList();
     }
 
