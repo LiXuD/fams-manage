@@ -1,6 +1,7 @@
 package com.fams.loan;
 
 import com.fams.auth.RequisitionActorContext;
+import com.fams.business.BorrowRequestDatePort;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -40,7 +41,7 @@ class LoanController {
     }
 
     @GetMapping("/borrow-requests")
-    LoanViews.Page<LoanViews.BorrowRequestChoice> eligibleRequests(@RequestParam(defaultValue = "1") @Min(1) int page,
+    BorrowRequestDatePort.BorrowRequestChoicePage eligibleRequests(@RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(200) int pageSize) {
         return service.eligibleRequests(actors.capture(), page, pageSize);
     }

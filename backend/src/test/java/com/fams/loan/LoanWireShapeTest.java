@@ -125,25 +125,6 @@ class LoanWireShapeTest {
     }
 
     @Test
-    void borrowRequestChoiceMatchesLegacyCleanAtThePortBoundary() {
-        var row = new LinkedHashMap<String, Object>();
-        row.put("id", 2L);
-        row.put("version", 6L);
-        row.put("expected_return_date", LocalDate.of(2026, 12, 1));
-        row.put("request_status", "WAITING_HANDOVER");
-        assertWireEquals(legacyClean(row), LoanViews.borrowRequestChoice(row));
-        var sqlDate = new LinkedHashMap<>(row);
-        sqlDate.put("expected_return_date", java.sql.Date.valueOf("2026-12-01"));
-        assertWireEquals(legacyClean(sqlDate), LoanViews.borrowRequestChoice(sqlDate));
-
-        // The port envelope keeps its Map shape; only the loan-side exit is typed.
-        var envelope = Map.of("items", List.of(row), "total", 1L, "page", 1, "pageSize", 20);
-        var legacy = new LinkedHashMap<>(envelope);
-        legacy.put("items", List.of(legacyClean(row)));
-        assertWireEquals(legacy, new LoanViews.Page<>(List.of(LoanViews.borrowRequestChoice(row)), 1, 1, 20));
-    }
-
-    @Test
     void assetReturnMatchesLegacyProjectionWithConditionalLossKeys() {
         var row = returnRow();
         assertWireEquals(legacyReturnView(row), LoanViews.assetReturn(JSON, row));

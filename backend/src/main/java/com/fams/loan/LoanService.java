@@ -16,7 +16,6 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.List;
 import java.util.Map;
 import java.util.HexFormat;
 
@@ -52,16 +51,10 @@ class LoanService {
                 total, page, size);
     }
 
-    LoanViews.Page<LoanViews.BorrowRequestChoice> eligibleRequests(Actor actor, int page, int size) {
+    BorrowRequestDatePort.BorrowRequestChoicePage eligibleRequests(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
-        var result = requests.eligible(current.id(), current.has(Role.ASSET_ADMIN),
+        return requests.eligible(current.id(), current.has(Role.ASSET_ADMIN),
                 current.has(Role.WAREHOUSE_OPERATOR), page, size);
-        @SuppressWarnings("unchecked")
-        var rows = (List<Map<String, Object>>) result.get("items");
-        return new LoanViews.Page<>(rows.stream().map(LoanViews::borrowRequestChoice).toList(),
-                ((Number) result.get("total")).longValue(),
-                ((Number) result.get("page")).intValue(),
-                ((Number) result.get("pageSize")).intValue());
     }
 
     LoanViews.LoanDetail get(Actor actor, long id) {

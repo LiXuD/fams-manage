@@ -20,7 +20,8 @@ public class RequisitionBorrowDatePort implements com.fams.business.BorrowReques
 
     RequisitionBorrowDatePort(JdbcTemplate db) { this.db = db; }
 
-    public Map<String, Object> eligible(long account, boolean administrator, boolean warehouse, int page, int size) {
+    public com.fams.business.BorrowRequestDatePort.BorrowRequestChoicePage eligible(
+            long account, boolean administrator, boolean warehouse, int page, int size) {
         String scope = administrator ? "1=1" : "r.creator_account_id=?"
                 + (warehouse ? " OR EXISTS (SELECT 1 FROM fams_requisition_ownership o WHERE o.request_id=r.id"
                         + " AND o.processor_account_id=? AND o.archived_at IS NULL)" : "");
@@ -31,12 +32,28 @@ public class RequisitionBorrowDatePort implements com.fams.business.BorrowReques
             args.add(account);
             if (warehouse) { args.add(account); }
         }
-        Long total = db.queryForObject("SELECT COUNT(*)" + from, Long.class, args.toArray());
+        long total = java.util.Objects.requireNonNull(
+                db.queryForObject("SELECT COUNT(*)" + from, Long.class, args.toArray()), "BORROW_COUNT_MISSING");
         args.add(size);
         args.add((page - 1) * size);
         var rows = db.queryForList("SELECT r.id,r.version,r.expected_return_date,r.request_status" + from
                 + " ORDER BY r.id DESC LIMIT ? OFFSET ?", args.toArray());
-        return Map.of("items", rows, "total", total, "page", page, "pageSize", size);
+        return new com.fams.business.BorrowRequestDatePort.BorrowRequestChoicePage(
+                rows.stream().map(RequisitionBorrowDatePort::choice).toList(), total, page, size);
+    }
+
+    /** Frozen loan clean projection of the eligible SQL row (JAVA-05; was LoanViews.borrowRequestChoice). */
+    static com.fams.business.BorrowRequestDatePort.BorrowRequestChoice choice(Map<String, Object> row) {
+        return new com.fams.business.BorrowRequestDatePort.BorrowRequestChoice(
+                text(row.get("id")),
+                ((Number) row.get("version")).longValue(),
+                text(row.get("expected_return_date")),
+                (String) row.get("request_status"));
+    }
+
+    // DATE columns arrive as java.sql.Date or LocalDate; both toString to the yyyy-MM-dd wire form.
+    private static String text(Object value) {
+        return value == null ? null : value.toString();
     }
 
     public Map<String, Object> outstanding(long id) {

@@ -136,10 +136,6 @@ public final class LoanViews {
             String createdAt) {
     }
 
-    /** Boundary conversion of BorrowRequestDatePort rows; the port envelope stays Map. */
-    public record BorrowRequestChoice(String id, long version, String expectedReturnDate, String requestStatus) {
-    }
-
     public record AssetReturn(
             String id,
             String assetId,
@@ -387,12 +383,6 @@ public final class LoanViews {
                 (String) row.get("reminder_type"),
                 date(row, "overdue_from"),
                 time(row, "created_at"));
-    }
-
-    static BorrowRequestChoice borrowRequestChoice(Map<String, Object> row) {
-        return new BorrowRequestChoice(
-                id(row, "id"), num(row, "version"), date(row, "expected_return_date"),
-                (String) row.get("request_status"));
     }
 
     static AssetReturn assetReturn(ObjectMapper json, Map<String, Object> row) {
