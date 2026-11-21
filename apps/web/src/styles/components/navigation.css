@@ -26,9 +26,40 @@
 }
 
 .fams-navigation[data-mode="sidebar"] {
+  position: relative;
   flex-direction: column;
   flex-wrap: nowrap;
   gap: var(--fams-space-12);
+}
+
+.fams-navigation .fams-button {
+  position: relative;
+  z-index: 1;
+}
+
+/* 液态高亮胶囊：半透明玻璃胶囊由 useLiquidNavHighlight 落位与拉伸，
+   尺寸/位移全部走 transform，选中条目自身不再画底色。 */
+.fams-nav-liquid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: none;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform-origin: 0 0;
+  will-change: transform;
+  border-radius: 999px;
+  border: 1px solid var(--fams-glass-border-hover);
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.72), var(--fams-glass-glow));
+  box-shadow: 0 8px 22px rgba(122, 74, 36, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
+  backdrop-filter: blur(10px) saturate(150%);
+}
+
+.fams-navigation[data-mode="sidebar"] .fams-nav-liquid {
+  display: block;
 }
 
 .fams-navigation[data-mode="sidebar"] .fams-button {
@@ -38,7 +69,10 @@
 }
 
 .fams-navigation[data-mode="sidebar"] .fams-button[aria-current] {
-  box-shadow: inset 3px 0 var(--fams-action-primary);
+  background: transparent;
+  box-shadow: none;
+  color: var(--fams-action-primary);
+  font-weight: 500;
 }
 
 /* 分组：一级标题是可折叠按钮，二级条目缩进一档，层级靠字号、色阶与缩进区分。

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, reactive, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useLiquidNavHighlight } from "@/composables/useLiquidNavHighlight";
 
 const router = useRouter();
 const route = useRoute();
@@ -152,6 +153,10 @@ const navGroups = computed(() => NAV_GROUPS
 
 const layoutMode = computed(() => session.isAuthenticated ? null : "anonymous");
 
+/** 液态高亮胶囊跟随当前条目或折叠变化落位；条目与分组都由 navGroups 驱动。 */
+const navRef = ref<HTMLElement | null>(null);
+useLiquidNavHighlight(navRef, () => [route.path, navGroups.value]);
+
 
 const showSessionError = computed(() => session.isAuthenticated && !!session.error && route.name !== "password-change");
 const sessionErrorText = computed(() => session.error?.message ?? "");
@@ -190,7 +195,8 @@ async function handleLogout(): Promise<void> {
     </header>
     <div class="fams-layout" :data-mode="layoutMode">
       <nav v-if="session.isAuthenticated" class="fams-sidebar" aria-label="主导航">
-        <div class="fams-navigation" data-mode="sidebar">
+        <div ref="navRef" class="fams-navigation" data-mode="sidebar">
+          <span class="fams-nav-liquid" aria-hidden="true"></span>
           <div v-for="group in navGroups" :key="group.label" class="fams-navigation-group">
             <button class="fams-button fams-navigation-toggle" type="button" :aria-expanded="group.expanded"
               :aria-controls="group.navId" :disabled="group.collapseLocked" @click="toggleGroup(group.label)">

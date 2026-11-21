@@ -222,6 +222,11 @@
     box-shadow: inset 0 -3px var(--fams-action-primary);
   }
 
+  /* 胶囊是侧栏纵深效果，横滚标签条不启用，选中态沿用下缘蓝条。 */
+  .fams-sidebar .fams-nav-liquid {
+    display: none;
+  }
+
   /* 标签条模式没有折叠交互：只隐藏分组标题，条目拉平进同一条横向流。 */
   .fams-sidebar .fams-navigation-group {
     display: contents;
